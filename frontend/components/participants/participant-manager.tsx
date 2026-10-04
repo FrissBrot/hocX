@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -21,7 +22,7 @@ type CsvPreviewRow = { display_name: string; first_name: string | null; last_nam
 type ImportResult = { imported: ParticipantSummary[]; duplicates: string[]; errors: string[] };
 
 function parseCsvForPreview(text: string): CsvPreviewRow[] {
-  const normalized = text.replace(/^\uFEFF/, "");
+  const normalized = text.replace(/^﻿/, "");
   const lines = normalized.split(/\r?\n/);
   const firstLine = lines[0] ?? "";
   const delimiter = firstLine.split(";").length > firstLine.split(",").length ? ";" : ",";
@@ -73,8 +74,9 @@ const emptyForm: ParticipantFormState = {
 /** "Ausgetreten (seit dd.mm.yyyy)" / "Noch nicht eingetreten (ab dd.mm.yyyy)" - membership-window
  * status derived from joined_at/left_at, shown alongside the existing is_active toggle since the
  * two are independent: is_active/inactive is a manual switch, join/leave dates gate which
- * protocols' attendance rosters a participant appears in. */
-function membershipStatus(participant: ParticipantSummary): string | null {
+ * protocols' attendance rosters a participant appears in. Plain helper (no component), so `t`
+ * is passed in by the caller instead of calling useTranslations() here. */
+function membershipStatus(participant: ParticipantSummary, t: (key: string, values?: Record<string, string | number | Date>) => string): string | null {
   const today = new Date().toISOString().slice(0, 10);
   // left_at is inclusive - the participant is still a member through the end of that day
   // itself (see participant_eligible_on / the help text "Erscheint ab dem Folgetag nicht
@@ -82,15 +84,16 @@ function membershipStatus(participant: ParticipantSummary): string | null {
   // early, on left_at itself, contradicting that same help text (audit finding,
   // 2026-08-25).
   if (participant.left_at && participant.left_at < today) {
-    return `Ausgetreten seit ${formatDate(participant.left_at)}`;
+    return t("membership.leftSince", { date: formatDate(participant.left_at) });
   }
   if (participant.joined_at && participant.joined_at > today) {
-    return `Eintritt ab ${formatDate(participant.joined_at)}`;
+    return t("membership.joinsFrom", { date: formatDate(participant.joined_at) });
   }
   return null;
 }
 
 export function ParticipantManager({ initialParticipants, templates, tenantId }: ParticipantManagerProps) {
+  const t = useTranslations("participants");
   const showToast = useToast();
   const confirm = useConfirm();
   const [participants, setParticipants] = useState(initialParticipants);
@@ -116,7 +119,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       setParticipants((current) => [...current, ...(next ?? [])]);
       setHasMore((next ?? []).length === PAGE_SIZE);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Weitere Teilnehmende konnten nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.loadMoreFailed"), "error");
     } finally {
       setIsLoadingMore(false);
     }
@@ -175,7 +178,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
     } catch (error) {
       setAssignedTemplateIds([]);
       showToast(
-        error instanceof Error ? error.message : "Zugewiesene Vorlagen konnten nicht geladen werden",
+        error instanceof Error ? error.message : t("toasts.templatesLoadFailed"),
         "error"
       );
     }
@@ -186,7 +189,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
     event.preventDefault();
 
     if (form.joined_at && form.left_at && form.left_at < form.joined_at) {
-      showToast("Austrittsdatum darf nicht vor dem Eintrittsdatum liegen", "error");
+      showToast(t("toasts.leftBeforeJoined"), "error");
       return;
     }
 
@@ -212,7 +215,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
         });
         participantId = updatedParticipant.id;
         setParticipants((current) => current.map((item) => (item.id === updatedParticipant.id ? updatedParticipant : item)));
-        successMessage = `${updatedParticipant.display_name} aktualisiert`;
+        successMessage = t("toasts.updated", { name: updatedParticipant.display_name });
       } else {
         updatedParticipant = await browserApiFetch<ParticipantSummary>("/api/participants", {
           method: "POST",
@@ -220,7 +223,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
         });
         participantId = updatedParticipant.id;
         setParticipants((current) => [updatedParticipant, ...current]);
-        successMessage = `${updatedParticipant.display_name} erstellt`;
+        successMessage = t("toasts.created", { name: updatedParticipant.display_name });
       }
 
       await browserApiFetch(`/api/participants/${participantId}/templates`, {
@@ -234,25 +237,25 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       setForm(emptyForm);
       setAssignedTemplateIds([]);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Teilnehmer konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.saveFailed"), "error");
     }
   }
 
   async function deleteParticipant(participantId: string) {
     const ok = await confirm({
-      message: "Teilnehmer endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      message: t("toasts.deleteConfirmMessage"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: t("toasts.deleteConfirmLabel")
     });
     if (!ok) return;
     try {
-      const deletedName = participants.find((participant) => participant.id === participantId)?.display_name ?? "Unbenannt";
+      const deletedName = participants.find((participant) => participant.id === participantId)?.display_name ?? t("toasts.deleteUnnamed");
       await browserApiFetch(`/api/participants/${participantId}`, { method: "DELETE" });
       setParticipants((current) => current.filter((participant) => participant.id !== participantId));
       setSelectedParticipantIds((current) => current.filter((id) => id !== participantId));
-      showToast(`Teilnehmer "${deletedName}" gelöscht`, "success");
+      showToast(t("toasts.deletedSingle", { name: deletedName }), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Teilnehmer konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.deleteFailed"), "error");
     }
   }
 
@@ -261,9 +264,9 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       return;
     }
     const ok = await confirm({
-      message: `${selectedParticipantIds.length} Teilnehmer endgültig löschen? Dies kann nicht rückgängig gemacht werden.`,
+      message: t("toasts.bulkDeleteConfirmMessage", { count: selectedParticipantIds.length }),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: t("toasts.deleteConfirmLabel")
     });
     if (!ok) return;
     try {
@@ -273,9 +276,9 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       });
       setParticipants((current) => current.filter((participant) => !selectedParticipantIds.includes(participant.id)));
       setSelectedParticipantIds([]);
-      showToast("Teilnehmer gelöscht", "success");
+      showToast(t("toasts.bulkDeleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Teilnehmer konnten nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.bulkDeleteFailed"), "error");
     }
   }
 
@@ -302,7 +305,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       setCsvPreview(null);
       setImportResult(result);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "CSV-Import fehlgeschlagen", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.csvImportFailed"), "error");
       // Keeps the preview open on failure (audit F9, 2026-08-16) - a transient error
       // (network blip, brief server hiccup) shouldn't force re-selecting the file just to
       // retry the same import.
@@ -317,13 +320,13 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
     <div className="grid">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Teilnehmer</h1>
-          <p className="muted">{hasNoParticipants ? "Mitglieder und Gäste dieses Mandanten." : "Mandantenweite Personen, die später Templates und Todos zugeordnet werden können."}</p>
+          <h1 className="page-title">{t("pageTitle")}</h1>
+          <p className="muted">{hasNoParticipants ? t("pageDescriptionEmpty") : t("pageDescription")}</p>
         </div>
         {hasNoParticipants ? null : (
         <div className="table-toolbar-actions">
           <label className="button-secondary button-ghost participant-import-button">
-            CSV-Import
+            {t("csvImport")}
             <input type="file" accept=".csv,text/csv" onChange={(e) => void handleCsvFileSelected(e)} hidden />
           </label>
           <button
@@ -332,10 +335,10 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
             onClick={() => void bulkDeleteParticipants()}
             disabled={selectedParticipantIds.length === 0}
           >
-            Auswahl löschen
+            {t("deleteSelection")}
           </button>
           <button type="button" className="button-secondary" onClick={openCreate}>
-            Neuer Teilnehmer
+            {t("newParticipant")}
           </button>
         </div>
         )}
@@ -343,15 +346,15 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
 
       {hasNoParticipants ? (
         <EmptyState
-          title="Noch keine Teilnehmer erfasst"
-          description="Erfasse Mitglieder einzeln oder importiere eine bestehende Liste – danach stehen sie in Anwesenheit, Todos und Bussen zur Verfügung."
+          title={t("emptyState.title")}
+          description={t("emptyState.description")}
           actions={
             <>
               <button type="button" className="button-primary" onClick={openCreate}>
-                + Teilnehmer
+                {t("emptyState.addParticipant")}
               </button>
               <label className="button-secondary participant-import-button">
-                Liste importieren
+                {t("emptyState.importList")}
                 <input type="file" accept=".csv,text/csv" onChange={(e) => void handleCsvFileSelected(e)} hidden />
               </label>
             </>
@@ -362,7 +365,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       <div className="list-filter-row">
         <div />
         <div className="list-filter-search">
-          <SearchInput value={search} onChange={setSearch} placeholder="Teilnehmer durchsuchen" />
+          <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
         </div>
       </div>
 
@@ -370,14 +373,14 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
         className="data-table-lg"
         columns={[
           "",
-          { key: "display_name", label: "Teilnehmer", sortable: true, sortDirection: sortKey === "display_name" ? sortDirection : null, onSort: () => toggleSort("display_name") },
-          { key: "first_name", label: "Vorname", sortable: true, sortDirection: sortKey === "first_name" ? sortDirection : null, onSort: () => toggleSort("first_name") },
-          { key: "last_name", label: "Nachname", sortable: true, sortDirection: sortKey === "last_name" ? sortDirection : null, onSort: () => toggleSort("last_name") },
-          { key: "email", label: "E-Mail", sortable: true, sortDirection: sortKey === "email" ? sortDirection : null, onSort: () => toggleSort("email") },
-          { key: "is_active", label: "Status", sortable: true, sortDirection: sortKey === "is_active" ? sortDirection : null, onSort: () => toggleSort("is_active") },
-          "Aktionen",
+          { key: "display_name", label: t("columns.name"), sortable: true, sortDirection: sortKey === "display_name" ? sortDirection : null, onSort: () => toggleSort("display_name") },
+          { key: "first_name", label: t("columns.firstName"), sortable: true, sortDirection: sortKey === "first_name" ? sortDirection : null, onSort: () => toggleSort("first_name") },
+          { key: "last_name", label: t("columns.lastName"), sortable: true, sortDirection: sortKey === "last_name" ? sortDirection : null, onSort: () => toggleSort("last_name") },
+          { key: "email", label: t("columns.email"), sortable: true, sortDirection: sortKey === "email" ? sortDirection : null, onSort: () => toggleSort("email") },
+          { key: "is_active", label: t("columns.status"), sortable: true, sortDirection: sortKey === "is_active" ? sortDirection : null, onSort: () => toggleSort("is_active") },
+          t("columns.actions"),
         ]}
-        emptyMessage="Keine Teilnehmer für den aktuellen Filter gefunden."
+        emptyMessage={t("emptyFiltered")}
       >
         {filteredParticipants.map((participant) => {
           const isSelected = selectedParticipantIds.includes(participant.id);
@@ -397,15 +400,15 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
               <td>
                 <strong>{participant.display_name}</strong>
                 <div className="muted">
-                  {[participant.first_name, participant.last_name].filter(Boolean).join(" ") || (participant.email ?? "Teilnehmer")}
+                  {[participant.first_name, participant.last_name].filter(Boolean).join(" ") || (participant.email ?? t("fallbackName"))}
                 </div>
               </td>
               <td>{participant.first_name ?? "—"}</td>
               <td>{participant.last_name ?? "—"}</td>
               <td>{participant.email ?? "—"}</td>
               <td>
-                <span className="pill">{participant.is_active ? "Aktiv" : "Inaktiv"}</span>
-                {membershipStatus(participant) && <div className="muted">{membershipStatus(participant)}</div>}
+                <span className="pill">{participant.is_active ? t("statusActive") : t("statusInactive")}</span>
+                {membershipStatus(participant, t) && <div className="muted">{membershipStatus(participant, t)}</div>}
               </td>
               <td>
                 <div className="table-actions">
@@ -417,7 +420,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
                       void deleteParticipant(participant.id);
                     }}
                   >
-                    Löschen
+                    {t("delete")}
                   </button>
                 </div>
               </td>
@@ -431,10 +434,10 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       {hasMore && (
         <div className="load-more-row" ref={loadMoreSentinelRef}>
           {isLoadingMore ? (
-            <span className="muted">Lädt weitere Teilnehmer…</span>
+            <span className="muted">{t("loadingMore")}</span>
           ) : (
             <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
-              Mehr laden ({participants.length} geladen)
+              {t("loadMore", { count: participants.length })}
             </button>
           )}
         </div>
@@ -444,11 +447,11 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       <Modal
         open={csvPreview !== null}
         onClose={() => setCsvPreview(null)}
-        title="CSV-Vorschau"
-        description={`${csvPreview?.rows.length ?? 0} Einträge erkannt. Nur Vorname, Nachname, Übername und E-Mail werden importiert.`}
+        title={t("csvPreview.title")}
+        description={t("csvPreview.description", { count: csvPreview?.rows.length ?? 0 })}
       >
         <div className="grid">
-          <DataTable columns={["Anzeigename", "Vorname", "Nachname", "E-Mail"]}>
+          <DataTable columns={[t("csvPreview.displayName"), t("columns.firstName"), t("columns.lastName"), t("columns.email")]}>
             {(csvPreview?.rows ?? []).map((row, i) => (
               <tr key={i}>
                 <td><strong>{row.display_name}</strong></td>
@@ -459,9 +462,9 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
             ))}
           </DataTable>
           <div className="table-toolbar-actions">
-            <button type="button" className="button-secondary button-ghost" onClick={() => setCsvPreview(null)}>Abbrechen</button>
+            <button type="button" className="button-secondary button-ghost" onClick={() => setCsvPreview(null)}>{t("csvPreview.cancel")}</button>
             <button type="button" className="button-secondary" onClick={() => void confirmCsvImport()} disabled={importing}>
-              {importing ? "Importiere…" : `${csvPreview?.rows.length ?? 0} Einträge importieren`}
+              {importing ? t("csvPreview.importing") : t("csvPreview.importEntries", { count: csvPreview?.rows.length ?? 0 })}
             </button>
           </div>
         </div>
@@ -471,21 +474,21 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       <Modal
         open={importResult !== null}
         onClose={() => setImportResult(null)}
-        title="Import abgeschlossen"
+        title={t("importResult.title")}
         description=""
       >
         {importResult && (
           <div className="grid">
             <div className="status-row">
-              <Badge variant="success">{importResult.imported.length} importiert</Badge>
+              <Badge variant="success">{t("importResult.imported", { count: importResult.imported.length })}</Badge>
               {importResult.duplicates.length > 0 && (
-                <Badge variant="warning">{importResult.duplicates.length} Duplikate übersprungen</Badge>
+                <Badge variant="warning">{t("importResult.duplicatesSkipped", { count: importResult.duplicates.length })}</Badge>
               )}
-              {importResult.errors.length > 0 && <Badge variant="danger">{importResult.errors.length} Fehler</Badge>}
+              {importResult.errors.length > 0 && <Badge variant="danger">{t("importResult.errorsCount", { count: importResult.errors.length })}</Badge>}
             </div>
             {importResult.duplicates.length > 0 && (
               <div>
-                <div className="field-label">Übersprungen (bereits vorhanden)</div>
+                <div className="field-label">{t("importResult.skippedExisting")}</div>
                 <div className="muted" style={{ fontSize: "var(--text-base)", lineHeight: 1.7 }}>
                   {importResult.duplicates.join(", ")}
                 </div>
@@ -493,14 +496,14 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
             )}
             {importResult.errors.length > 0 && (
               <div>
-                <div className="field-label">Fehler</div>
+                <div className="field-label">{t("importResult.errorsLabel")}</div>
                 <div className="muted" style={{ fontSize: "var(--text-base)", lineHeight: 1.7 }}>
                   {importResult.errors.map((e, i) => <div key={i}>{e}</div>)}
                 </div>
               </div>
             )}
             <div className="table-toolbar-actions">
-              <button type="button" className="button-secondary" onClick={() => setImportResult(null)}>Schließen</button>
+              <button type="button" className="button-secondary" onClick={() => setImportResult(null)}>{t("importResult.close")}</button>
             </div>
           </div>
         )}
@@ -510,13 +513,13 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       <Modal
         open={showModal}
         onClose={() => setShowModal(false)}
-        title={selectedParticipant ? "Teilnehmer bearbeiten" : "Teilnehmer erstellen"}
-        description="Teilnehmer können direkt Templates zugewiesen und später in Todos ausgewählt werden."
+        title={selectedParticipant ? t("editModal.editTitle") : t("editModal.createTitle")}
+        description={t("editModal.description")}
       >
         <ModalSaveForm className="grid" onSubmit={saveParticipant}>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Anzeigename</span>
+              <span className="field-label">{t("editModal.displayName")}</span>
               <input value={form.display_name} onChange={(event) => setForm((current) => ({ ...current, display_name: event.target.value }))} required />
             </label>
             <label className="checkbox-line">
@@ -525,41 +528,41 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
                 checked={form.is_active}
                 onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))}
               />
-              Aktiv
+              {t("editModal.active")}
             </label>
           </div>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Vorname</span>
+              <span className="field-label">{t("editModal.firstName")}</span>
               <input value={form.first_name} onChange={(event) => setForm((current) => ({ ...current, first_name: event.target.value }))} />
             </label>
             <label className="field-stack">
-              <span className="field-label">Nachname</span>
+              <span className="field-label">{t("editModal.lastName")}</span>
               <input value={form.last_name} onChange={(event) => setForm((current) => ({ ...current, last_name: event.target.value }))} />
             </label>
           </div>
           <label className="field-stack">
-            <span className="field-label">E-Mail</span>
+            <span className="field-label">{t("editModal.email")}</span>
             <input value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
           </label>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Eintrittsdatum</span>
+              <span className="field-label">{t("editModal.joinedAt")}</span>
               <DateInput value={form.joined_at} onChange={(value) => setForm((current) => ({ ...current, joined_at: value }))} />
               <span className="muted" style={{ fontSize: "var(--text-sm)" }}>
-                Erscheint erst ab diesem Datum in Anwesenheitslisten. Leer = kein Beginn hinterlegt.
+                {t("editModal.joinedAtHint")}
               </span>
             </label>
             <label className="field-stack">
-              <span className="field-label">Austrittsdatum</span>
+              <span className="field-label">{t("editModal.leftAt")}</span>
               <DateInput value={form.left_at} onChange={(value) => setForm((current) => ({ ...current, left_at: value }))} />
               <span className="muted" style={{ fontSize: "var(--text-sm)" }}>
-                Erscheint ab dem Folgetag nicht mehr in Anwesenheitslisten. Leer = kein Austritt hinterlegt.
+                {t("editModal.leftAtHint")}
               </span>
             </label>
           </div>
           <div className="field-stack">
-            <span className="field-label">Templates</span>
+            <span className="field-label">{t("editModal.templates")}</span>
             <div className="participant-check-grid">
               {templates.map((template) => {
                 const checked = assignedTemplateIds.includes(template.id);
@@ -576,7 +579,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
                     />
                     <div>
                       <strong>{template.name}</strong>
-                      <div className="muted">{template.description ?? "Kein Beschreibungstext"}</div>
+                      <div className="muted">{template.description ?? t("editModal.noDescription")}</div>
                     </div>
                   </label>
                 );
@@ -585,7 +588,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
           </div>
           <div className="table-toolbar-actions">
             <button data-modal-save type="submit" className="button-secondary">
-              {selectedParticipant ? "Teilnehmer speichern" : "Teilnehmer erstellen"}
+              {selectedParticipant ? t("editModal.save") : t("editModal.create")}
             </button>
           </div>
         </ModalSaveForm>

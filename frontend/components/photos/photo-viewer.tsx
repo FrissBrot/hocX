@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
 import { LivePhotoClip } from "@/components/photos/live-photo-clip";
@@ -12,12 +13,16 @@ import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatDateTime, formatFileSize, formatWeekdayDate } from "@/lib/utils/format";
 import { FileOverviewItem, StoredFileMetadata } from "@/types/api";
 
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
 // Was ein Live Photo beim Herunterladen liefert - siehe GET /stored-files/{id}/download?part=.
-const LIVE_DOWNLOAD_OPTIONS = [
-  { part: "image", label: "Bild (JPEG)" },
-  { part: "video", label: "Video (MP4)" },
-  { part: "both", label: "Bild und Video (ZIP)" },
-];
+function liveDownloadOptions(t: TFunc) {
+  return [
+    { part: "image", label: t("downloadOptions.image") },
+    { part: "video", label: t("downloadOptions.video") },
+    { part: "both", label: t("downloadOptions.both") },
+  ];
+}
 
 export function PhotoViewer({
   items,
@@ -34,23 +39,24 @@ export function PhotoViewer({
   onToggleBest: (item: FileOverviewItem) => void;
   onTagsSaved: (id: string, tags: string[]) => void;
 }) {
+  const t = useTranslations("photos.viewer");
   const item = items[index];
   const hasFace = item.face_quality_score !== null;
   const faceMeter = (
     <PhotoMeter
-      label="Gesichtsqualität"
+      label={t("faceQualityLabel")}
       tone="face"
       value={
         item.face_analyzed_at === null
           ? null
           : item.face_quality_score !== null
-            ? describeSharpness(item.face_quality_score)
-            : "Kein Gesicht erkannt"
+            ? describeSharpness(item.face_quality_score, t)
+            : t("noFaceDetected")
       }
       fraction={item.face_quality_score !== null ? sharpnessFraction(item.face_quality_score) : null}
       title={
         item.face_quality_score !== null
-          ? `Rohwert (Schärfe des Gesichtsausschnitts, gewichtet nach Belichtung): ${item.face_quality_score.toFixed(1)}`
+          ? t("faceRawTitle", { score: item.face_quality_score.toFixed(1) })
           : undefined
       }
     />
@@ -138,7 +144,7 @@ export function PhotoViewer({
 
   function handleTagsChange(value: string) {
     setTagsValue(value);
-    const tags = value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [];
+    const tags = value ? value.split(",").map((tag) => tag.trim()).filter(Boolean) : [];
     schedule(async () => {
       const saved = await browserApiFetch<string[]>(item.tags_url, { method: "PATCH", body: JSON.stringify({ tags }) });
       onTagsSaved(item.id, saved ?? tags);
@@ -149,7 +155,7 @@ export function PhotoViewer({
     if (await flush()) onClose();
   }
 
-  const dimensions = metadata?.width && metadata?.height ? `${metadata.width} × ${metadata.height} px` : null;
+  const dimensions = metadata?.width && metadata?.height ? t("dimensionsValue", { width: metadata.width, height: metadata.height }) : null;
   const bezugParts = [item.albums[0]?.name, item.context_label].filter(Boolean);
 
   // Same SSR guard ui/lightbox-image.tsx already has for its own createPortal call -
@@ -165,7 +171,7 @@ export function PhotoViewer({
       {saveError && <p role="alert">{saveError}</p>}
       <div className="photo-viewer-header">
         <div className="photo-viewer-header-left">
-          <button type="button" className="photo-viewer-close" aria-label="Schliessen" onClick={() => void saveAndClose()}>
+          <button type="button" className="photo-viewer-close" aria-label={t("close")} onClick={() => void saveAndClose()}>
             <ActionIcon name="close" />
           </button>
           <div>
@@ -177,9 +183,9 @@ export function PhotoViewer({
           </div>
         </div>
         <div className="photo-viewer-actions">
-          <button type="button" className="pill" onClick={() => void saveAndClose()}>Galerie</button>
+          <button type="button" className="pill" onClick={() => void saveAndClose()}>{t("galleryPill")}</button>
           <button type="button" className="pill photo-viewer-pill-accent" onClick={() => onToggleBest(item)}>
-            {item.is_best ? "★ Best-of" : "☆ Best-of"}
+            {item.is_best ? t("bestOn") : t("bestOff")}
           </button>
           {item.live_video_url && (
             <div ref={downloadRef} className="photo-viewer-download">
@@ -190,12 +196,12 @@ export function PhotoViewer({
                 aria-expanded={downloadOpen}
                 onClick={() => setDownloadOpen((open) => !open)}
               >
-                Herunterladen ▾
+                {t("downloadButton")}
               </button>
               {downloadOpen && (
                 <div className="dropdown-panel dropdown-panel-down" role="menu">
                   <div className="dropdown-panel-scroll">
-                    {LIVE_DOWNLOAD_OPTIONS.map((option) => (
+                    {liveDownloadOptions(t).map((option) => (
                       <a
                         key={option.part}
                         role="menuitem"
@@ -212,7 +218,7 @@ export function PhotoViewer({
             </div>
           )}
           <a href={fileUrl} target="_blank" rel="noreferrer" className="pill photo-viewer-pill-solid">
-            Original öffnen
+            {t("openOriginal")}
           </a>
         </div>
       </div>
@@ -224,7 +230,7 @@ export function PhotoViewer({
           onMouseLeave={item.live_video_url ? () => setLiveHover(false) : undefined}
         >
           {hasPrev && (
-            <button type="button" className="photo-viewer-nav photo-viewer-nav-prev" aria-label="Vorheriges Foto" onClick={() => onIndexChange(index - 1)}>
+            <button type="button" className="photo-viewer-nav photo-viewer-nav-prev" aria-label={t("prevPhoto")} onClick={() => onIndexChange(index - 1)}>
               ‹
             </button>
           )}
@@ -247,7 +253,7 @@ export function PhotoViewer({
                 type="button"
                 className="photo-viewer-live"
                 aria-pressed={livePinned}
-                aria-label="Live Photo abspielen"
+                aria-label={t("playLivePhoto")}
                 onClick={() => setLivePinned((pinned) => !pinned)}
               >
                 LIVE
@@ -255,12 +261,12 @@ export function PhotoViewer({
             </>
           )}
           {loadingOriginal && (
-            <div className="photo-viewer-loading" role="status" aria-label="Originalbild wird geladen">
+            <div className="photo-viewer-loading" role="status" aria-label={t("originalLoading")}>
               <span className="photo-viewer-loading-spinner" aria-hidden="true" />
             </div>
           )}
           {hasNext && (
-            <button type="button" className="photo-viewer-nav photo-viewer-nav-next" aria-label="Nächstes Foto" onClick={() => onIndexChange(index + 1)}>
+            <button type="button" className="photo-viewer-nav photo-viewer-nav-next" aria-label={t("nextPhoto")} onClick={() => onIndexChange(index + 1)}>
               ›
             </button>
           )}
@@ -268,23 +274,23 @@ export function PhotoViewer({
 
         <div className="photo-viewer-sidebar">
           <div className="photo-viewer-section">
-            <div className="photo-viewer-section-title">Analyse</div>
+            <div className="photo-viewer-section-title">{t("analysisSection")}</div>
             {hasFace && faceMeter}
             <PhotoMeter
-              label={hasFace ? "Schärfe (gesamtes Bild)" : "Schärfe"}
+              label={hasFace ? t("sharpnessFullLabel") : t("sharpnessLabel")}
               tone="sharpness"
-              value={item.sharpness_score !== null ? describeSharpness(item.sharpness_score) : null}
+              value={item.sharpness_score !== null ? describeSharpness(item.sharpness_score, t) : null}
               fraction={item.sharpness_score !== null ? sharpnessFraction(item.sharpness_score) : null}
-              title={item.sharpness_score !== null ? `Rohwert (Laplace-Varianz der schärfsten Bildbereiche): ${item.sharpness_score.toFixed(1)}` : undefined}
+              title={item.sharpness_score !== null ? t("sharpnessRawTitle", { score: item.sharpness_score.toFixed(1) }) : undefined}
             />
             <PhotoMeter
-              label="Belichtung"
+              label={t("exposureLabel")}
               tone="exposure"
-              value={item.exposure_score !== null ? describeExposure(item.exposure_score) : null}
+              value={item.exposure_score !== null ? describeExposure(item.exposure_score, t) : null}
               fraction={item.exposure_score}
               title={
                 item.exposure_score !== null
-                  ? `${Math.round((1 - item.exposure_score) * 100)}% der Pixel sind ausgebrannt oder abgesoffen`
+                  ? t("exposureRawTitle", { percent: Math.round((1 - item.exposure_score) * 100) })
                   : undefined
               }
             />
@@ -292,38 +298,38 @@ export function PhotoViewer({
           </div>
 
           <div className="photo-viewer-section">
-            <div className="photo-viewer-section-title">Details</div>
+            <div className="photo-viewer-section-title">{t("detailsSection")}</div>
             <dl className="photo-viewer-details">
               {bezugParts.length > 0 && (
                 <div>
-                  <dt>Bezug</dt>
+                  <dt>{t("refLabel")}</dt>
                   <dd>{bezugParts.join(" · ")}</dd>
                 </div>
               )}
               <div>
-                <dt>Aufgenommen</dt>
+                <dt>{t("takenLabel")}</dt>
                 <dd>{formatDateTime(metadata?.exif_taken_at ?? item.created_at)}</dd>
               </div>
               {dimensions && (
                 <div>
-                  <dt>Bildmasse</dt>
+                  <dt>{t("dimensionsLabel")}</dt>
                   <dd>{dimensions}</dd>
                 </div>
               )}
               {item.file_size_bytes !== null && item.file_size_bytes !== undefined ? (
                 <div>
-                  <dt>Grösse</dt>
+                  <dt>{t("sizeLabel")}</dt>
                   <dd>{formatFileSize(item.file_size_bytes)}</dd>
                 </div>
               ) : null}
               {metadata?.exif_camera && (
                 <div>
-                  <dt>Kamera</dt>
+                  <dt>{t("cameraLabel")}</dt>
                   <dd>{metadata.exif_camera}</dd>
                 </div>
               )}
               <div>
-                <dt>Herkunft</dt>
+                <dt>{t("originLabel")}</dt>
                 <dd>{item.origin_tag}</dd>
               </div>
             </dl>
@@ -331,9 +337,9 @@ export function PhotoViewer({
 
           <div className="photo-viewer-section">
             <div className="photo-viewer-section-title">
-              Tags {saving ? <span className="muted">(speichert…)</span> : null}
+              {t("tagsSection")} {saving ? <span className="muted">{t("savingSuffix")}</span> : null}
             </div>
-            <TagInput value={tagsValue} onChange={handleTagsChange} placeholder="+ Tag" alwaysShowPlaceholder />
+            <TagInput value={tagsValue} onChange={handleTagsChange} placeholder={t("tagPlaceholder")} alwaysShowPlaceholder />
           </div>
         </div>
       </div>
@@ -355,11 +361,12 @@ function PhotoMeter({
   tone: "sharpness" | "exposure" | "face";
   title?: string;
 }) {
+  const t = useTranslations("photos.viewer");
   return (
     <div className="photo-meter-row" title={title}>
       <div className="photo-meter-label-row">
         <span className="photo-meter-label">{label}</span>
-        <span className="photo-meter-value">{value ?? "Analyse ausstehend"}</span>
+        <span className="photo-meter-value">{value ?? t("analysisPending")}</span>
       </div>
       <div className="photo-meter-bar">
         <div
@@ -380,12 +387,12 @@ function sharpnessFraction(score: number): number {
   return Math.min(1, Math.max(0, Math.log10(1 + Math.max(0, score)) / SHARPNESS_LOG_CEILING));
 }
 
-function describeSharpness(score: number): string {
-  const label = score < 50 ? "Unscharf" : score < 300 ? "Mittel" : score < 1500 ? "Scharf" : "Sehr scharf";
-  return `${label} · ${Math.round(sharpnessFraction(score) * 100)}/100`;
+function describeSharpness(score: number, t: TFunc): string {
+  const label = score < 50 ? t("sharpnessLevels.blurry") : score < 300 ? t("sharpnessLevels.medium") : score < 1500 ? t("sharpnessLevels.sharp") : t("sharpnessLevels.verySharp");
+  return t("sharpnessFormat", { label, percent: Math.round(sharpnessFraction(score) * 100) });
 }
 
-function describeExposure(score: number): string {
-  const label = score >= 0.95 ? "Gut" : score >= 0.85 ? "Leichtes Clipping" : "Starkes Clipping";
-  return `${label} · ${Math.round(score * 100)}%`;
+function describeExposure(score: number, t: TFunc): string {
+  const label = score >= 0.95 ? t("exposureLevels.good") : score >= 0.85 ? t("exposureLevels.slight") : t("exposureLevels.strong");
+  return t("exposureFormat", { label, percent: Math.round(score * 100) });
 }

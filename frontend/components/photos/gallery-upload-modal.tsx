@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { AlbumReleaseNotice } from "./album-share-release";
 import { findUploadRuleProblems, UploadTargetFields, useUploadTarget } from "@/components/files/upload-target-fields";
@@ -90,6 +91,11 @@ export function GalleryUploadModal({
   // gallery-upload-progress.tsx), so this is not the final result.
   onQueued: (job: GalleryUploadJob) => void;
 }) {
+  // "files"-Namespace: findUploadRuleProblems/UploadTargetFields liefern ihre Texte darüber
+  // (siehe components/files/upload-target-fields.tsx), unabhängig vom restlichen "photos"-
+  // Namespace dieser Datei.
+  const t = useTranslations("photos.galleryUpload");
+  const tFiles = useTranslations("files");
   const [selectedFiles, setSelectedFiles] = useState<File[]>(initialFiles ?? []);
   const previews = useFilePreviews(selectedFiles);
   const [tagsValue, setTagsValue] = useState("");
@@ -157,6 +163,7 @@ export function GalleryUploadModal({
   const ruleProblems = findUploadRuleProblems(
     selectedFiles.filter((_, index) => !clipIndexes.has(index)),
     target.rules,
+    tFiles,
     true,
   );
 
@@ -199,7 +206,7 @@ export function GalleryUploadModal({
       if (job) onQueued(job);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
+      setError(err instanceof Error ? err.message : t("uploadFailed"));
     } finally {
       setUploading(false);
       setProgress(null);
@@ -209,8 +216,8 @@ export function GalleryUploadModal({
   return (
     <Modal
       open
-      title="Bilder hochladen"
-      description="Bilder bis 100 MiB, ZIPs und gesamte Auswahl bis 10 GiB. Maximal 50 Dateien; im ZIP bis 10 000 Einträge und 20 GiB entpackt. Die Bilder werden virengeprüft."
+      title={t("title")}
+      description={t("description")}
       onClose={onClose}
       onEscape={() => selectedFiles.length ? handleUpload() : onClose()}
       className="gallery-upload-modal"
@@ -222,11 +229,11 @@ export function GalleryUploadModal({
           {sharedTargets.length > 0 && (
             <div className="gallery-upload-share-release">
               <AlbumReleaseNotice
-                message={`Die Bilder landen im geteilten Album ${sharedTargets.map((album) => `„${album.album_name}“`).join(", ")}. Ohne Freigabe sind sie dort zunächst nur für deinen Mandanten sichtbar.`}
+                message={t("shareNotice", { albums: sharedTargets.map((album) => `„${album.album_name}“`).join(", ") })}
               />
               <label className="checkbox-row">
                 <input type="checkbox" checked={releaseShared} onChange={(event) => setReleaseShared(event.target.checked)} disabled={uploading} />
-                Bilder direkt freigeben und mit allen teilen, die Zugriff auf das Album haben
+                {t("releaseCheckboxLabel")}
               </label>
             </div>
           )}
@@ -262,12 +269,12 @@ export function GalleryUploadModal({
               <UploadIcon />
             </span>
             <p className="gallery-upload-dropzone-title">
-              {isDragging ? "Zum Hochladen loslassen" : "Bilder hierher ziehen"}
+              {isDragging ? t("dropActive") : t("dropHint")}
             </p>
             <p className="muted">
-              oder <span className="gallery-upload-browse">Dateien auswählen</span>
+              {t("orText")} <span className="gallery-upload-browse">{t("browse")}</span>
             </p>
-            <div className="gallery-upload-formats" aria-label="Unterstützte Formate">
+            <div className="gallery-upload-formats" aria-label={t("formatsAriaLabel")}>
               {["JPG", "PNG", "GIF", "WebP", "BMP", "TIFF", "HEIC", "Live Photo", "ZIP"].map((format) => (
                 <span key={format}>{format}</span>
               ))}
@@ -276,17 +283,13 @@ export function GalleryUploadModal({
 
           <div>
             <div className="gallery-upload-queue-heading">
-              <span className="gallery-upload-label">Warteschlange</span>
+              <span className="gallery-upload-label">{t("queueHeading")}</span>
               <span className="gallery-upload-count">
-                {selectedFiles.length === 0
-                  ? "Keine Datei gewählt"
-                  : selectedFiles.length === 1
-                    ? "1 Datei gewählt"
-                    : `${selectedFiles.length} Dateien gewählt`}
+                {t("queueCount", { count: selectedFiles.length })}
               </span>
             </div>
             {selectedFiles.length === 0 ? (
-              <p className="gallery-upload-empty">Noch keine Dateien ausgewählt.</p>
+              <p className="gallery-upload-empty">{t("queueEmpty")}</p>
             ) : (
               <ul className="gallery-upload-file-list">
                 {selectedFiles.map((file, index) => (
@@ -308,11 +311,11 @@ export function GalleryUploadModal({
                       <span className="gallery-upload-file-status">
                         {uploading
                           ? transferDone
-                            ? "Hochgeladen, wird übernommen…"
+                            ? t("statusUploaded")
                             : progress
-                              ? `Wird hochgeladen… ${formatFileSize(fileSentBytes(index))} von ${formatFileSize(file.size)}`
-                              : "Wird hochgeladen…"
-                          : clipIndexes.has(index) ? "Live-Photo-Video, gehört zum gleichnamigen Bild" : "Bereit zum Hochladen"}
+                              ? t("statusUploadingProgress", { sent: formatFileSize(fileSentBytes(index)), total: formatFileSize(file.size) })
+                              : t("statusUploading")
+                          : clipIndexes.has(index) ? t("statusClip") : t("statusReady")}
                       </span>
                       {uploading && (progress && !transferDone
                         ? <progress className="gallery-upload-progress" value={fileSentBytes(index)} max={file.size || 1} />
@@ -323,7 +326,7 @@ export function GalleryUploadModal({
                       className="gallery-upload-remove"
                       onClick={() => removeFile(index)}
                       disabled={uploading}
-                      aria-label={`${file.name} entfernen`}
+                      aria-label={t("removeAriaLabel", { name: file.name })}
                     >
                       <CloseIcon />
                     </button>
@@ -334,8 +337,8 @@ export function GalleryUploadModal({
           </div>
 
           <div className="gallery-upload-tags">
-            <span className="gallery-upload-label">Tags für alle Bilder</span>
-            <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder="Tag hinzufügen…" />
+            <span className="gallery-upload-label">{t("tagsLabel")}</span>
+            <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder={t("tagsPlaceholder")} />
           </div>
 
           {ruleProblems.length > 0 && <p className="form-error-banner">{ruleProblems.join(" · ")}</p>}
@@ -344,16 +347,16 @@ export function GalleryUploadModal({
 
         <div className="gallery-upload-footer">
           <span className="gallery-upload-summary">
-            {selectedFiles.length} Datei{selectedFiles.length === 1 ? "" : "en"}
+            {t("summaryCount", { count: selectedFiles.length })}
             {selectedFiles.length > 0
               ? progress && !transferDone
-                ? ` · ${formatFileSize(Math.min(progress.loaded, totalBytes))} von ${formatFileSize(totalBytes)}`
+                ? ` · ${t("summaryProgress", { sent: formatFileSize(Math.min(progress.loaded, totalBytes)), total: formatFileSize(totalBytes) })}`
                 : ` · ${formatFileSize(totalBytes)}`
               : ""}
           </span>
           <div className="gallery-upload-actions">
             <button type="button" className="button-ghost" onClick={onClose} disabled={uploading}>
-              Abbrechen
+              {t("cancel")}
             </button>
             <button
               type="button"
@@ -362,10 +365,10 @@ export function GalleryUploadModal({
               disabled={uploading || selectedFiles.length === 0 || target.incomplete || ruleProblems.length > 0}
             >
               {uploading
-                ? uploadPercent !== null && !transferDone ? `Lädt hoch… ${uploadPercent} %` : "Lädt hoch…"
+                ? uploadPercent !== null && !transferDone ? t("uploadingPercent", { percent: uploadPercent }) : t("uploadingPlain")
                 : selectedFiles.length > 0
-                  ? `${photoCount} ${photoCount === 1 ? "Bild" : "Bilder"} hochladen`
-                  : "Hochladen"}
+                  ? t("uploadCount", { count: photoCount })
+                  : t("uploadPlain")}
             </button>
           </div>
         </div>

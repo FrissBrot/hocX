@@ -1,0 +1,79 @@
+{
+  "meta": {
+    "description": "Espace de travail pour procès-verbaux et modèles"
+  },
+  "save": "Enregistrer",
+  "cancel": "Annuler",
+  "delete": "Supprimer",
+  "edit": "Modifier",
+  "create": "Créer",
+  "close": "Fermer",
+  "back": "Retour",
+  "next": "Suivant",
+  "yes": "Oui",
+  "no": "Non",
+  "add": "Ajouter",
+  "remove": "Retirer",
+  "search": "Rechercher",
+  "searchPlaceholder": "Rechercher…",
+  "loading": "Chargement…",
+  "retry": "Réessayer",
+  "refresh": "Actualiser",
+  "download": "Télécharger",
+  "upload": "Téléverser",
+  "export": "Exporter",
+  "import": "Importer",
+  "actions": "Actions",
+  "select": "Sélectionner",
+  "noResults": "Aucun résultat",
+  "selectedCount": "{count, plural, one {# sélectionné} other {# sélectionnés}}",
+  "requiredField": "Champ obligatoire",
+  "optional": "Facultatif",
+  "menuToggle": "Menu",
+  "breadcrumbNav": "Fil d'Ariane",
+  "notificationsRegion": "Notifications",
+  "copyright": "Copyright © {year} hocX Project · Tous droits réservés.",
+  "connectionLost": {
+    "title": "Connexion interrompue",
+    "description": "Le serveur est actuellement inaccessible. Les données déjà confirmées sont conservées ; après reconnexion, vérifiez l'état d'enregistrement des modifications en cours."
+  },
+  "pagination": {
+    "range": "{from}–{to} sur {total}"
+  },
+  "confirm": {
+    "defaultTitle": "Veuillez confirmer",
+    "deleteTitle": "Vraiment supprimer ?",
+    "confirmLabel": "Confirmer",
+    "deleteConfirmLabel": "Supprimer",
+    "cancelLabel": "Annuler"
+  },
+  "dateField": {
+    "invalidFormat": "Veuillez saisir la date au format JJ.MM.AAAA",
+    "chooseDate": "Choisir la date"
+  },
+  "copyField": {
+    "copy": "Copier",
+    "copyWithLabel": "Copier {label}"
+  },
+  "tagInput": {
+    "addPlaceholder": "Ajouter un tag…",
+    "renameFailed": "Le renommage a échoué. Veuillez réessayer.",
+    "removeTag": "Retirer le tag {tag}",
+    "editTag": "Modifier le tag",
+    "newNamePlaceholder": "Nouveau nom…",
+    "noColor": "Aucune couleur",
+    "rename": "Renommer",
+    "colorOrRename": "Couleur / renommer",
+    "addNewTag": "+ Ajouter « {tag} »"
+  },
+  "connectivity": {
+    "offlineWithPending": "{count, plural, one {Hors ligne – # modification enregistrée localement} other {Hors ligne – # modifications enregistrées localement}}",
+    "offlineIdle": "Hors ligne – surveillance de la connexion",
+    "flushing": "{count, plural, one {Renvoi de # modification…} other {Renvoi de # modifications…}}",
+    "pendingUnsaved": "{count, plural, one {# modification pas encore enregistrée} other {# modifications pas encore enregistrées}}",
+    "reconnected": "Connexion rétablie",
+    "retryButton": "Réessayer maintenant",
+    "discardBlocked": "{count, plural, one {Abandonner la modification échouée} other {Abandonner # modifications échouées}}",
+    "leaveConfirm": "Il y a des modifications non enregistrées. Quitter la page quand même ?"
+  }
+}

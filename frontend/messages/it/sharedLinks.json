@@ -1,0 +1,49 @@
+{
+  "createModal": {
+    "createButton": "Crea link",
+    "createFailed": "Il link non può essere creato.",
+    "createdIntro": "Chiunque abbia questo link può scaricare i file senza accedere.",
+    "creatingEllipsis": "Creazione…",
+    "doneButton": "Fatto",
+    "expiryHelp": "Opzionale – senza data di scadenza il link resta attivo finché non viene revocato.",
+    "expiryLabel": "Data di scadenza",
+    "nameLabel": "Nome",
+    "shareLinkLabel": "Link di condivisione",
+    "title": "Condividi link"
+  },
+  "emptyDescription": "Usa \"Condividi\" su file, foto o un album fotografico per creare un link di download senza accesso.",
+  "emptyTitle": "Ancora nessun link",
+  "filterActive": "Attivo",
+  "filterAll": "Tutti",
+  "page": {
+    "description": "Link di download pubblici per file e foto di questa organizzazione.",
+    "title": "Link condivisi"
+  },
+  "revokeConfirm": "Revocare il link \"{name}\"? Dopo non funzionerà più.",
+  "revokeConfirmLabel": "Revoca",
+  "status": {
+    "active": "Attivo",
+    "expired": "Scaduto",
+    "revoked": "Revocato"
+  },
+  "table": {
+    "actionsLabel": "Azioni per {name}",
+    "albumScope": "Album \"{name}\"",
+    "columnCreatedBy": "Creato da",
+    "columnExpiry": "Scadenza",
+    "columnName": "Nome",
+    "columnScope": "Ambito",
+    "columnStatus": "Stato",
+    "copyLink": "Copia link",
+    "empty": "Nessun link in questa vista.",
+    "fileScope": "{count, plural, one {# file} other {# file}}",
+    "noExpiry": "Nessuna scadenza",
+    "revoke": "Revoca"
+  },
+  "toasts": {
+    "copied": "Link copiato.",
+    "copyFailed": "Impossibile copiare il link.",
+    "revokeFailed": "Impossibile revocare il link.",
+    "revoked": "Link revocato."
+  }
+}

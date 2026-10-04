@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { getMainAppUrl } from "@/lib/site-config";
 import "./tokens.css";
 import "./globals.css";
@@ -9,11 +11,12 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 export async function generateMetadata(): Promise<Metadata> {
   const baseUrl = getMainAppUrl();
   const metadataBase = baseUrl ? new URL(baseUrl) : undefined;
+  const t = await getTranslations("common.meta");
 
   return {
     metadataBase,
     title: "hocX",
-    description: "Protocol and template management workspace",
+    description: t("description"),
   };
 }
 
@@ -23,7 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
 // Request die echten Laufzeit-Werte (Domain/Version dieser konkreten Umgebung) zu lesen.
 export const dynamic = "force-dynamic";
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   // Server-seitig gelesen (nicht NEXT_PUBLIC_*), damit dasselbe, in der CI gebaute Image
   // in Test und Prod mit unterschiedlichen Domains/Versionen laufen kann, ohne dass diese
   // Werte zur Build-Zeit im Client-Bundle eingefroren werden.
@@ -32,10 +35,15 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     version: process.env.HOCX_VERSION || "dev"
   };
 
+  // Aufgeloest von i18n/request.ts (Cookie > Accept-Language > Default) - siehe dort fuer die
+  // volle Prioritaetskette inkl. der gespeicherten Benutzerpraeferenz.
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="de" className={inter.variable} suppressHydrationWarning>
-      {/* Plain <script> statt next/script: Next 16/React 19 warnt bei <Script strategy="beforeInteractive">
-          im <body> ("Encountered a script tag while rendering React component"). Das Layout ist eine
+    <html lang={locale} className={inter.variable} suppressHydrationWarning>
+      {/* Plain script statt next/script: Next 16/React 19 warnt bei Script strategy beforeInteractive
+          im body ("Encountered a script tag while rendering React component"). Das Layout ist eine
           Server Component, die Tags landen also unveraendert im initialen HTML und laufen vor der Hydration. */}
       <head>
         <script
@@ -64,7 +72,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         />
       </head>
       <body suppressHydrationWarning>
-        {children}
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   );

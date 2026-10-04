@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
 
@@ -22,6 +23,7 @@ type ConfirmFn = (options: ConfirmOptions | string) => Promise<boolean>;
 const ConfirmContext = createContext<ConfirmFn | null>(null);
 
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
+  const t = useTranslations("common.confirm");
   const [request, setRequest] = useState<ConfirmRequest | null>(null);
   const resolver = useRef<((value: boolean) => void) | null>(null);
 
@@ -37,14 +39,14 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       resolver.current = resolve;
       setRequest({
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        title: normalized.title ?? (normalized.tone === "danger" ? "Wirklich löschen?" : "Bitte bestätigen"),
+        title: normalized.title ?? (normalized.tone === "danger" ? t("deleteTitle") : t("defaultTitle")),
         message: normalized.message,
-        confirmLabel: normalized.confirmLabel ?? (normalized.tone === "danger" ? "Löschen" : "Bestätigen"),
-        cancelLabel: normalized.cancelLabel ?? "Abbrechen",
+        confirmLabel: normalized.confirmLabel ?? (normalized.tone === "danger" ? t("deleteConfirmLabel") : t("confirmLabel")),
+        cancelLabel: normalized.cancelLabel ?? t("cancelLabel"),
         tone: normalized.tone ?? "default"
       });
     });
-  }, []);
+  }, [t]);
 
   return (
     <ConfirmContext.Provider value={confirm}>

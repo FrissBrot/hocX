@@ -1,12 +1,14 @@
+import { getTranslations } from "next-intl/server";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
-import { DASHBOARD_TABS } from "@/components/ui/section-tabs";
+import { dashboardTabs } from "@/components/ui/section-tabs";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { AttendanceFineListItem, NextSessionInfo, ProtocolSummary, TodoListItem } from "@/types/api";
 
 export default async function HomePage() {
   const session = await requireSession();
+  const t = await getTranslations("nav");
   const canExcuse = ["admin", "writer"].includes(session.current_role ?? "");
 
   const [todos, fines, nextSession, protocols] = await Promise.all([
@@ -18,7 +20,7 @@ export default async function HomePage() {
 
   return (
     <AppShell initialSession={session}>
-      <RouteTabs tabs={DASHBOARD_TABS} activeHref="/" />
+      <RouteTabs tabs={dashboardTabs(t)} activeHref="/" />
       <DashboardView
         todos={todos ?? []}
         fines={fines ?? []}

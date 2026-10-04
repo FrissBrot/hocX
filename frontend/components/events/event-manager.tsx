@@ -2,6 +2,7 @@
 
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
@@ -35,15 +36,18 @@ import {
 const PAGE_SIZE = 100;
 
 type CsvTargetField = "event_date" | "event_end_date" | "tag" | "title" | "description" | "participant_count";
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
-const CSV_TARGET_FIELDS: { field: CsvTargetField; label: string; required?: boolean }[] = [
-  { field: "event_date", label: "Startdatum", required: true },
-  { field: "event_end_date", label: "Enddatum" },
-  { field: "tag", label: "Tag" },
-  { field: "title", label: "Titel", required: true },
-  { field: "description", label: "Beschreibung" },
-  { field: "participant_count", label: "Teilnehmerzahl" },
-];
+function csvTargetFields(t: TFunc): { field: CsvTargetField; label: string; required?: boolean }[] {
+  return [
+    { field: "event_date", label: t("form.startDate"), required: true },
+    { field: "event_end_date", label: t("form.endDate") },
+    { field: "tag", label: t("form.tag") },
+    { field: "title", label: t("form.title"), required: true },
+    { field: "description", label: t("columns.description") },
+    { field: "participant_count", label: t("columns.participantCount") },
+  ];
+}
 
 type OptionalColumnKey =
   | "is_cancelled"
@@ -59,20 +63,22 @@ type OptionalColumnKey =
   | "spezial_text2"
   | "spezial_text3";
 
-const OPTIONAL_COLUMNS: { key: OptionalColumnKey; label: string }[] = [
-  { key: "is_cancelled", label: "Abgesagt" },
-  { key: "participant_count", label: "Teilnehmerzahl" },
-  { key: "location", label: "Standort" },
-  { key: "organizer_ids", label: "Organisatoren" },
-  { key: "leadership_ids", label: "Leitungsteam" },
-  { key: "participant_ids", label: "Teilnehmer (Liste)" },
-  { key: "spezial1_ids", label: "Spezial 1" },
-  { key: "spezial2_ids", label: "Spezial 2" },
-  { key: "spezial3_ids", label: "Spezial 3" },
-  { key: "spezial_text1", label: "Spezial Text 1" },
-  { key: "spezial_text2", label: "Spezial Text 2" },
-  { key: "spezial_text3", label: "Spezial Text 3" },
-];
+function optionalColumns(t: TFunc): { key: OptionalColumnKey; label: string }[] {
+  return [
+    { key: "is_cancelled", label: t("columns.cancelled") },
+    { key: "participant_count", label: t("columns.participantCount") },
+    { key: "location", label: t("columns.location") },
+    { key: "organizer_ids", label: t("columns.organizers") },
+    { key: "leadership_ids", label: t("columns.leadership") },
+    { key: "participant_ids", label: t("columns.participantsList") },
+    { key: "spezial1_ids", label: t("columns.special1") },
+    { key: "spezial2_ids", label: t("columns.special2") },
+    { key: "spezial3_ids", label: t("columns.special3") },
+    { key: "spezial_text1", label: t("columns.specialText1") },
+    { key: "spezial_text2", label: t("columns.specialText2") },
+    { key: "spezial_text3", label: t("columns.specialText3") },
+  ];
+}
 
 type Props = {
   initialEvents: EventSummary[];
@@ -82,14 +88,16 @@ type Props = {
 
 type ParticipantPickerField = "organizer_ids" | "leadership_ids" | "participant_ids" | "spezial1_ids" | "spezial2_ids" | "spezial3_ids";
 
-const PARTICIPANT_ROLE_FIELDS: { field: ParticipantPickerField; label: string }[] = [
-  { field: "organizer_ids", label: "Organisatoren" },
-  { field: "leadership_ids", label: "Leitungsteam" },
-  { field: "participant_ids", label: "Teilnehmer" },
-  { field: "spezial1_ids", label: "Spezial 1" },
-  { field: "spezial2_ids", label: "Spezial 2" },
-  { field: "spezial3_ids", label: "Spezial 3" },
-];
+function participantRoleFields(t: TFunc): { field: ParticipantPickerField; label: string }[] {
+  return [
+    { field: "organizer_ids", label: t("columns.organizers") },
+    { field: "leadership_ids", label: t("columns.leadership") },
+    { field: "participant_ids", label: t("columns.participantsRole") },
+    { field: "spezial1_ids", label: t("columns.special1") },
+    { field: "spezial2_ids", label: t("columns.special2") },
+    { field: "spezial3_ids", label: t("columns.special3") },
+  ];
+}
 
 type FlatCycle = CycleInfo & { cycle_config_id: string; config_name: string };
 
@@ -139,6 +147,10 @@ function emptyForm(): EventFormState {
 }
 
 export function EventManager({ initialEvents, documentTemplates = [], availableParticipants = [] }: Props) {
+  const t = useTranslations("events");
+  const CSV_TARGET_FIELDS = useMemo(() => csvTargetFields(t), [t]);
+  const OPTIONAL_COLUMNS = useMemo(() => optionalColumns(t), [t]);
+  const PARTICIPANT_ROLE_FIELDS = useMemo(() => participantRoleFields(t), [t]);
   const showToast = useToast();
   const confirm = useConfirm();
   const [events, setEvents] = useState(initialEvents);
@@ -258,7 +270,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       setExportUrl(url);
       if (url) triggerDownload(url);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.pdfExportFailed"), "error");
     } finally {
       setExportBusy(false);
     }
@@ -295,7 +307,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     cyclesLoadedRef.current = true;
     setCyclesLoading(true);
     try {
-      const configs = cycleConfigs.length > 0 ? cycleConfigs : await browserApiFetch<CycleConfigSummary[]>("/api/cycle-configs");
+      const configs = cycleConfigs.length > 0 ? cycleConfigs : await browserApiFetch<CycleConfigSummary[]>("/api/cycle-configs"); // i18n-ok: Vergleichsoperator, kein JSX
       const cycleGroups = await Promise.all(
         (configs ?? []).map((cfg) =>
           browserApiFetch<CycleInfo[]>(`/api/cycle-configs/${cfg.id}/cycles`).then((cycles) =>
@@ -306,7 +318,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       setAvailableCycles(cycleGroups.flat());
     } catch (error) {
       cyclesLoadedRef.current = false;
-      showToast(error instanceof Error ? error.message : "Zyklen konnten nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.cyclesLoadFailed"), "error");
     } finally {
       setCyclesLoading(false);
     }
@@ -391,7 +403,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       if (previous) {
         setEvents((current) => current.map((event) => (event.id === eventId ? previous : event)));
       }
-      showToast(error instanceof Error ? error.message : "Termin konnte nicht aktualisiert werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.eventUpdateFailed"), "error");
     }
   }
 
@@ -413,11 +425,11 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   }
 
   function participantLabel(ids: string[]): string {
-    if (!ids.length) return "Auswählen…";
+    if (!ids.length) return t("selectEllipsis");
     const names = ids
       .map((id) => availableParticipants.find((p) => p.id === id)?.display_name)
       .filter(Boolean);
-    return names.length ? names.join(", ") : `${ids.length} ausgewählt`;
+    return names.length ? names.join(", ") : t("selectedCount", { count: ids.length });
   }
 
   function formatParticipantNames(ids: string[] | null | undefined): ReactNode {
@@ -425,12 +437,12 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     const names = ids
       .map((id) => availableParticipants.find((p) => p.id === id)?.display_name)
       .filter(Boolean);
-    return names.length ? names.join(", ") : <span className="muted">{ids.length} ausgewählt</span>;
+    return names.length ? names.join(", ") : <span className="muted">{t("selectedCount", { count: ids.length })}</span>;
   }
 
   const optionalColumnRenderers: Record<OptionalColumnKey, (item: EventSummary) => ReactNode> = {
     is_cancelled: (item) =>
-      item.is_cancelled ? <Badge variant="danger">Abgesagt</Badge> : <span className="muted">–</span>,
+      item.is_cancelled ? <Badge variant="danger">{t("columns.cancelled")}</Badge> : <span className="muted">–</span>,
     participant_count: (item) => item.participant_count ?? 0,
     location: (item) => item.location || <span className="muted">–</span>,
     organizer_ids: (item) => formatParticipantNames(item.organizer_ids),
@@ -495,25 +507,25 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         form.id ? current.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...current]
       );
       setModalOpen(false);
-      showToast(form.id ? "Termin gespeichert" : "Termin erstellt", "success");
+      showToast(form.id ? t("toasts.eventSaved") : t("toasts.eventCreated"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Termin konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.saveFailed"), "error");
     }
   }
 
   async function deleteEvent(eventId: string) {
     const ok = await confirm({
-      message: "Termin endgültig löschen? Das entfernt ihn aus allen Protokollen.",
+      message: t("toasts.deleteConfirmMessage"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: t("toasts.deleteConfirmLabel")
     });
     if (!ok) return;
     try {
       await browserApiFetch(`/api/events/${eventId}`, { method: "DELETE" });
       setEvents((current) => current.filter((event) => event.id !== eventId));
-      showToast("Termin gelöscht", "success");
+      showToast(t("toasts.deleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Termin konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.deleteFailed"), "error");
     }
   }
 
@@ -527,7 +539,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       });
     } catch (error) {
       setEvents((current) => current.map((event) => (event.id === item.id ? { ...event, is_cancelled: item.is_cancelled } : event)));
-      showToast(error instanceof Error ? error.message : "Termin konnte nicht aktualisiert werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.eventUpdateFailed"), "error");
     }
   }
 
@@ -544,7 +556,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       setEvents((current) => [...current, ...next]);
       setHasMore(next.length === PAGE_SIZE);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Weitere Termine konnten nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.loadMoreFailed"), "error");
     } finally {
       setIsLoadingMore(false);
     }
@@ -594,7 +606,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         setImportColumnMap(preview.resolved_map as Partial<Record<CsvTargetField, string>>);
       }
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Vorschau fehlgeschlagen");
+      setImportError(error instanceof Error ? error.message : t("toasts.previewFailed"));
       setImportPreview(null);
     } finally {
       setImportPreviewLoading(false);
@@ -630,10 +642,10 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         body,
       });
       setEvents((current) => [...imported, ...current]);
-      showToast(`${imported.length} Termine importiert`, "success");
+      showToast(t("toasts.importedCount", { count: imported.length }), "success");
       setShowImportModal(false);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "CSV-Import fehlgeschlagen", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.csvImportFailed"), "error");
     } finally {
       setImportCommitting(false);
     }
@@ -645,17 +657,17 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     <div className="grid">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Termine</h1>
-          <p className="muted">{hasNoEvents ? "Alle Termine und Anlässe dieses Mandanten." : "Alle Termine dieses Mandanten."}</p>
+          <h1 className="page-title">{t("pageTitle")}</h1>
+          <p className="muted">{hasNoEvents ? t("pageDescriptionEmpty") : t("pageDescription")}</p>
         </div>
         {hasNoEvents ? null : (
         <div className="table-toolbar-actions">
           <button type="button" className="button-secondary button-ghost" onClick={openImportModal}>
-            CSV Import
+            {t("csvImport")}
           </button>
           {landscapeTemplates.length > 0 && (
             <button type="button" className="button-secondary button-ghost" onClick={() => setExportModalOpen(true)}>
-              Export
+              {t("export")}
             </button>
           )}
           <div className="mini-menu mini-menu-compact mini-menu-end">
@@ -667,19 +679,19 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               aria-haspopup="menu"
               aria-expanded={viewMenuOpen}
             >
-              <span className="mini-menu-trigger-label">Ansicht</span>
+              <span className="mini-menu-trigger-label">{t("view")}</span>
               <span className="mini-menu-trigger-icon">⌄</span>
             </button>
             <Popover open={viewMenuOpen} onOpenChange={setViewMenuOpen} anchorRef={viewMenuTriggerRef} align="end" className="mini-menu-popover-portal">
               <div className="mini-menu-section">
-                <div className="mini-menu-section-title">Filter</div>
+                <div className="mini-menu-section-title">{t("filterSection")}</div>
                 <label className="mini-menu-option">
-                  <span>Vergangene Termine anzeigen</span>
+                  <span>{t("showPast")}</span>
                   <input type="checkbox" checked={showPast} onChange={(event) => setShowPast(event.target.checked)} />
                 </label>
                 {cycleConfigs.length > 0 && (
                   <label className="mini-menu-option">
-                    <span>Alle Zyklus-Perioden anzeigen</span>
+                    <span>{t("showAllPeriods")}</span>
                     <input
                       type="checkbox"
                       checked={showAllPeriods}
@@ -689,7 +701,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                 )}
               </div>
               <div className="mini-menu-section">
-                <div className="mini-menu-section-title">Zusätzliche Spalten</div>
+                <div className="mini-menu-section-title">{t("additionalColumns")}</div>
                 {OPTIONAL_COLUMNS.map((column) => (
                   <label key={column.key} className="mini-menu-option">
                     <span>{column.label}</span>
@@ -704,7 +716,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             </Popover>
           </div>
           <button type="button" className="button-secondary" onClick={openCreate}>
-            Neuer Termin
+            {t("newEvent")}
           </button>
         </div>
         )}
@@ -712,34 +724,34 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
       {hasNoEvents ? (
         <EmptyState
-          title="Keine Termine geplant"
-          description="Trage Anlässe ein, damit sie in Protokollen, Abgaben und im Dashboard erscheinen."
+          title={t("emptyState.title")}
+          description={t("emptyState.description")}
           actions={
             <button type="button" className="button-primary" onClick={openCreate}>
-              + Termin
+              {t("emptyState.add")}
             </button>
           }
-          hint="Termine lassen sich einem Zyklus zuordnen – so bleiben Vereinsjahre sauber getrennt."
+          hint={t("emptyState.hint")}
         />
       ) : (
       <>
       <div className="list-filter-row">
         <FilterTabs
-          options={[{ value: "all", label: "Alle" }, ...knownTags.map((tag) => ({ value: tag, label: tag }))]}
+          options={[{ value: "all", label: t("filterAll") }, ...knownTags.map((tag) => ({ value: tag, label: tag }))]}
           value={tagFilter}
           onChange={setTagFilter}
         />
         <div className="list-filter-search">
-          <SearchInput value={search} onChange={setSearch} placeholder="Termine durchsuchen" />
+          <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
         </div>
       </div>
 
       <DataTable
         className="data-table-lg"
         columns={[
-          { key: "event_date", label: "Datum", sortable: true, sortDirection: sortIndicator("event_date"), onSort: () => toggleSort("event_date") },
-          { key: "title", label: "Titel", sortable: true, sortDirection: sortIndicator("title"), onSort: () => toggleSort("title") },
-          { key: "tag", label: "Tag", sortable: true, sortDirection: sortIndicator("tag"), onSort: () => toggleSort("tag") },
+          { key: "event_date", label: t("columns.date"), sortable: true, sortDirection: sortIndicator("event_date"), onSort: () => toggleSort("event_date") },
+          { key: "title", label: t("columns.title"), sortable: true, sortDirection: sortIndicator("title"), onSort: () => toggleSort("title") },
+          { key: "tag", label: t("columns.tag"), sortable: true, sortDirection: sortIndicator("tag"), onSort: () => toggleSort("tag") },
           ...activeOptionalColumns.map((column) =>
             column.key === "participant_count"
               ? {
@@ -751,8 +763,8 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                 }
               : { key: column.key, label: column.label }
           ),
-          { key: "description", label: "Beschreibung", sortable: true, sortDirection: sortIndicator("description"), onSort: () => toggleSort("description") },
-          "Aktionen",
+          { key: "description", label: t("columns.description"), sortable: true, sortDirection: sortIndicator("description"), onSort: () => toggleSort("description") },
+          t("columns.actions"),
         ]}
       >
         {filteredEvents.map((item) => (
@@ -766,11 +778,11 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             <td>
               <strong>{item.title}</strong>
             </td>
-            <td>{item.tag ? <span className="pill">{item.tag}</span> : <span className="muted">Kein Tag</span>}</td>
+            <td>{item.tag ? <span className="pill">{item.tag}</span> : <span className="muted">{t("noTag")}</span>}</td>
             {activeOptionalColumns.map((column) => (
               <td key={column.key}>{optionalColumnRenderers[column.key](item)}</td>
             ))}
-            <td className="table-cell-wrap">{item.description ?? <span className="muted">Keine Beschreibung</span>}</td>
+            <td className="table-cell-wrap">{item.description ?? <span className="muted">{t("noDescription")}</span>}</td>
             <td>
               <div className="table-actions table-actions-start">
                 <button
@@ -781,7 +793,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                     void deleteEvent(item.id);
                   }}
                 >
-                  Löschen
+                  {t("delete")}
                 </button>
               </div>
             </td>
@@ -794,10 +806,10 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       {hasMore && (
         <div className="load-more-row" ref={loadMoreSentinelRef}>
           {isLoadingMore ? (
-            <span className="muted">Lädt weitere Termine…</span>
+            <span className="muted">{t("loadingMore")}</span>
           ) : (
             <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
-              Mehr laden ({events.length} geladen)
+              {t("loadMore", { count: events.length })}
             </button>
           )}
         </div>
@@ -806,25 +818,25 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       <Modal
         open={showImportModal}
         onClose={() => setShowImportModal(false)}
-        title="Termine aus CSV importieren"
-        description="Ordne die Spalten deiner Datei den Termin-Feldern zu und prüfe die Vorschau, bevor du importierst."
+        title={t("importModal.title")}
+        description={t("importModal.description")}
         size="wide"
       >
         <div className="grid" style={{ gap: "var(--space-4)" }}>
           {!importFile ? (
             <label className="csv-import-dropzone" style={{ cursor: "pointer" }}>
-              <strong>CSV-Datei auswählen</strong>
-              <span className="muted">Pflichtspalten: Startdatum und Titel. Trennzeichen Komma, Semikolon oder Tab.</span>
+              <strong>{t("importModal.selectFile")}</strong>
+              <span className="muted">{t("importModal.requiredColumnsHint")}</span>
               <input type="file" accept=".csv,text/csv" onChange={handleImportFileChange} hidden />
             </label>
           ) : (
             <div className="csv-import-file-row">
               <span>
                 <strong>{importFile.name}</strong>
-                <span className="muted"> · {importPreview ? `${importPreview.rows.length} Zeile(n) erkannt` : "wird gelesen…"}</span>
+                <span className="muted"> · {importPreview ? t("importModal.rowsDetected", { count: importPreview.rows.length }) : t("importModal.reading")}</span>
               </span>
               <label className="button-secondary button-ghost" style={{ width: "auto", minHeight: 0, padding: "var(--space-2) var(--space-4)", cursor: "pointer" }}>
-                Andere Datei
+                {t("importModal.otherFile")}
                 <input type="file" accept=".csv,text/csv" onChange={handleImportFileChange} hidden />
               </label>
             </div>
@@ -832,13 +844,12 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
           <details className="card import-help-card">
             <summary className="import-help-summary">
-              <span>CSV-Format anzeigen</span>
-              <span className="muted">Pflicht: Startdatum und Titel</span>
+              <span>{t("importModal.showFormat")}</span>
+              <span className="muted">{t("importModal.requiredFields")}</span>
             </summary>
             <div className="import-help-body">
               <p className="muted">
-                Unterstützte Spalten sind z. B. `Startdatum` oder `Datum`, optional `Enddatum`, `Tag`, `Titel`, `Beschreibung` und `Teilnehmerzahl`.
-                Die Spaltennamen müssen nicht exakt passen – ordne sie unten einfach den passenden Termin-Feldern zu.
+                {t("importModal.formatHelp")}
               </p>
               <pre>{`Startdatum;Enddatum;Tag;Titel;Beschreibung;Teilnehmerzahl
 2026-04-29;;Sitzung;Leiterrunde;Planung Sommerlager;8
@@ -864,20 +875,29 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                       getLabel={(column) => column}
                       value={importColumnMap[target.field] ?? null}
                       onChange={(column) => updateColumnMapping(target.field, column ?? "")}
-                      nullLabel="– nicht zuordnen –"
+                      nullLabel={t("importModal.doNotMap")}
                     />
                   </label>
                 ))}
               </div>
 
               <div className="status-row">
-                <Badge variant="success">{importPreview.valid_count} gültig</Badge>
-                {importPreview.error_count > 0 && <Badge variant="danger">{importPreview.error_count} mit Fehlern</Badge>}
-                <span className="pill">{importPreview.rows.length} Zeile(n) gesamt</span>
-                {importPreviewLoading && <span className="muted">Aktualisiere Vorschau…</span>}
+                <Badge variant="success">{t("importModal.valid", { count: importPreview.valid_count })}</Badge>
+                {importPreview.error_count > 0 && <Badge variant="danger">{t("importModal.withErrors", { count: importPreview.error_count })}</Badge>}
+                <span className="pill">{t("importModal.totalRows", { count: importPreview.rows.length })}</span>
+                {importPreviewLoading && <span className="muted">{t("importModal.updatingPreview")}</span>}
               </div>
 
-              <DataTable columns={["#", "Startdatum", "Enddatum", "Tag", "Titel", "Beschreibung", "Teilnehmer", "Status"]}>
+              <DataTable columns={[
+                t("importModal.previewColumns.number"),
+                t("importModal.previewColumns.startDate"),
+                t("importModal.previewColumns.endDate"),
+                t("importModal.previewColumns.tag"),
+                t("importModal.previewColumns.title"),
+                t("importModal.previewColumns.description"),
+                t("importModal.previewColumns.participants"),
+                t("importModal.previewColumns.status"),
+              ]}>
                 {importPreview.rows.map((row) => (
                   <tr key={row.row_number} className={row.error ? "table-row-error" : undefined}>
                     <td>{row.row_number}</td>
@@ -891,7 +911,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                       {row.error ? (
                         <Badge variant="danger">{row.error}</Badge>
                       ) : (
-                        <Badge variant="success">Gültig</Badge>
+                        <Badge variant="success">{t("importModal.rowValid")}</Badge>
                       )}
                     </td>
                   </tr>
@@ -900,7 +920,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
               <div className="table-actions" style={{ justifyContent: "flex-end" }}>
                 <button type="button" className="button-secondary button-ghost" onClick={() => setShowImportModal(false)}>
-                  Abbrechen
+                  {t("importModal.cancel")}
                 </button>
                 <button
                   type="button"
@@ -913,7 +933,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                   }
                   onClick={() => void confirmImport()}
                 >
-                  {importCommitting ? "Importiert…" : `${importPreview.valid_count} Termine importieren`}
+                  {importCommitting ? t("importModal.importing") : t("importModal.importRows", { count: importPreview.valid_count })}
                 </button>
               </div>
             </>
@@ -924,28 +944,28 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={form.id ? "Termin bearbeiten" : "Termin erstellen"}
-        description="Der Tag hilft später beim Verknüpfen mit passenden Protokollpunkten."
+        title={form.id ? t("form.editTitle") : t("form.createTitle")}
+        description={t("form.description")}
       >
         <ModalSaveForm className="grid" onSubmit={saveEvent}>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Startdatum</span>
+              <span className="field-label">{t("form.startDate")}</span>
               <DateInput value={form.event_date} onChange={(value) => setForm((current) => ({ ...current, event_date: value }))} required />
             </label>
             <label className="field-stack">
-              <span className="field-label">Enddatum</span>
+              <span className="field-label">{t("form.endDate")}</span>
               <DateInput value={form.event_end_date} onChange={(value) => setForm((current) => ({ ...current, event_end_date: value }))} />
-              <span className="field-help">Leer lassen fuer einen einzelnen Tag.</span>
+              <span className="field-help">{t("form.endDateHint")}</span>
             </label>
           </div>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Tag</span>
+              <span className="field-label">{t("form.tag")}</span>
               <input
                 value={form.tag}
                 onChange={(event) => setForm((current) => ({ ...current, tag: event.target.value }))}
-                placeholder="z. B. Sitzung, Lager, Elternabend"
+                placeholder={t("form.tagPlaceholder")}
                 list="event-tag-suggestions"
               />
               <datalist id="event-tag-suggestions">
@@ -955,12 +975,12 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               </datalist>
             </label>
             <label className="field-stack">
-              <span className="field-label">Titel</span>
+              <span className="field-label">{t("form.title")}</span>
               <input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} required />
             </label>
           </div>
           <label className="field-stack">
-            <span className="field-label">Anzahl Teilnehmer</span>
+            <span className="field-label">{t("form.participantCount")}</span>
             <input
               type="number"
               min="0"
@@ -974,33 +994,33 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               checked={form.is_cancelled}
               onChange={(event) => setForm((current) => ({ ...current, is_cancelled: event.target.checked }))}
             />
-            Termin abgesagt
+            {t("form.cancelled")}
           </label>
           <label className="field-stack">
-            <span className="field-label">Beschreibung</span>
+            <span className="field-label">{t("columns.description")}</span>
             <textarea rows={5} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} />
           </label>
           <label className="field-stack">
-            <span className="field-label">Standort</span>
-            <input value={form.location} onChange={(e) => setForm((current) => ({ ...current, location: e.target.value }))} placeholder="z. B. Gemeinschaftshaus, Sportplatz" />
+            <span className="field-label">{t("form.location")}</span>
+            <input value={form.location} onChange={(e) => setForm((current) => ({ ...current, location: e.target.value }))} placeholder={t("form.locationPlaceholder")} />
           </label>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Spezial Text 1</span>
+              <span className="field-label">{t("columns.specialText1")}</span>
               <input value={form.spezial_text1} onChange={(e) => setForm((current) => ({ ...current, spezial_text1: e.target.value }))} />
             </label>
             <label className="field-stack">
-              <span className="field-label">Spezial Text 2</span>
+              <span className="field-label">{t("columns.specialText2")}</span>
               <input value={form.spezial_text2} onChange={(e) => setForm((current) => ({ ...current, spezial_text2: e.target.value }))} />
             </label>
           </div>
           <label className="field-stack">
-            <span className="field-label">Spezial Text 3</span>
+            <span className="field-label">{t("columns.specialText3")}</span>
             <input value={form.spezial_text3} onChange={(e) => setForm((current) => ({ ...current, spezial_text3: e.target.value }))} />
           </label>
           {availableParticipants.length > 0 && (
             <div className="field-stack">
-              <span className="field-label">Personen</span>
+              <span className="field-label">{t("form.people")}</span>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-2)" }}>
                 {PARTICIPANT_ROLE_FIELDS.map(({ field, label }) => (
                   <div key={field} className="field-stack" style={{ gap: "var(--space-1)" }}>
@@ -1019,11 +1039,11 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             </div>
           )}
           <div className="field-stack">
-            <span className="field-label">Zyklen</span>
+            <span className="field-label">{t("form.cycles")}</span>
             {cyclesLoading ? (
-              <span className="muted" style={{ fontSize: "var(--text-base)" }}>Zyklen werden geladen…</span>
+              <span className="muted" style={{ fontSize: "var(--text-base)" }}>{t("form.cyclesLoading")}</span>
             ) : availableCycles.length === 0 ? (
-              <span className="muted" style={{ fontSize: "var(--text-base)" }}>Keine Zyklen verfügbar (Zyklen unter Struktur → Zyklen anlegen)</span>
+              <span className="muted" style={{ fontSize: "var(--text-base)" }}>{t("form.noCycles")}</span>
             ) : (
               <div className="cycle-chip-list">
                 {availableCycles.map((cycle) => {
@@ -1043,16 +1063,16 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                 })}
               </div>
             )}
-            <span className="field-help">Zyklen, denen dieser Termin zugeordnet werden soll. Optional.</span>
+            <span className="field-help">{t("form.cyclesHint")}</span>
           </div>
-          <button data-modal-save type="submit">{form.id ? "Termin speichern" : "Termin erstellen"}</button>
+          <button data-modal-save type="submit">{form.id ? t("form.save") : t("form.create")}</button>
         </ModalSaveForm>
       </Modal>
 
       <Modal
         open={Boolean(detailEvent)}
         onClose={() => setDetailEvent(null)}
-        title={detailEvent?.title || "Termin"}
+        title={detailEvent?.title || t("detailModal.fallbackTitle")}
         description={detailEvent ? formatDateRange(detailEvent.event_date, detailEvent.event_end_date) : undefined}
         size="wide"
       >
@@ -1076,16 +1096,16 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       <Modal
         open={Boolean(pickerField)}
         onClose={() => setPickerField(null)}
-        title={PARTICIPANT_ROLE_FIELDS.find((r) => r.field === pickerField)?.label ?? "Teilnehmer wählen"}
-        description="Mehrfachauswahl"
+        title={PARTICIPANT_ROLE_FIELDS.find((r) => r.field === pickerField)?.label ?? t("pickerModal.fallbackTitle")}
+        description={t("pickerModal.multiSelect")}
       >
         <div className="grid">
           <label className="field-stack">
-            <span className="field-label">Suche</span>
+            <span className="field-label">{t("pickerModal.search")}</span>
             <input
               value={pickerSearch}
               onChange={(e) => setPickerSearch(e.target.value)}
-              placeholder="Teilnehmer filtern"
+              placeholder={t("pickerModal.searchPlaceholder")}
             />
           </label>
           <div className="participant-check-grid">
@@ -1108,16 +1128,16 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         </div>
       </Modal>
 
-      <Modal open={exportModalOpen} title="Termine exportieren" onClose={() => setExportModalOpen(false)}>
+      <Modal open={exportModalOpen} title={t("exportModal.title")} onClose={() => setExportModalOpen(false)}>
         <div style={{ display: "grid", gap: "var(--space-5)" }}>
 
           {knownExportTags.length > 0 && (
             <div className="field-stack">
-              <span className="field-label">Tags</span>
+              <span className="field-label">{t("exportModal.tags")}</span>
               <div style={{ position: "relative" }}>
                 <input
                   className="dropdown-search-input"
-                  placeholder="Tag suchen…"
+                  placeholder={t("exportModal.tagSearchPlaceholder")}
                   value={exportTagSearch}
                   onChange={(e) => setExportTagSearch(e.target.value)}
                   onKeyDown={(e) => {
@@ -1143,7 +1163,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                         className={i === 0 ? "dropdown-option dropdown-option-active dropdown-option-row" : "dropdown-option dropdown-option-row"}
                       >
                         <span>{tag}</span>
-                        {i === 0 && <span className="dropdown-hint">Tab</span>}
+                        {i === 0 && <span className="dropdown-hint">{t("exportModal.tabHint")}</span>}
                       </button>
                     ))}
                   </div>
@@ -1167,10 +1187,10 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
           )}
 
           <div className="field-stack">
-            <span className="field-label">Zeitraum</span>
+            <span className="field-label">{t("exportModal.period")}</span>
             <div className="filter-pill-row">
               {(["all", "next-session", "until-event"] as const).map((mode) => {
-                const label = mode === "all" ? "Alle Termine" : mode === "next-session" ? "Nächste Sitzung" : "Bis Termin";
+                const label = mode === "all" ? t("exportModal.periodAll") : mode === "next-session" ? t("exportModal.periodNextSession") : t("exportModal.periodUntilEvent");
                 return (
                   <button key={mode} type="button"
                     className={`button-pill${exportDateMode === mode ? " button-pill-active" : ""}`}
@@ -1182,8 +1202,8 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             {exportDateMode === "next-session" && (
               <span className="muted" style={{ fontSize: "var(--text-sm)", paddingLeft: "2px" }}>
                 {nextSessionEvent
-                  ? `Bis ${nextSessionEvent.title} · ${formatDate(nextSessionEvent.event_date)}`
-                  : "Keine Sitzung gefunden"}
+                  ? t("exportModal.untilLabel", { title: nextSessionEvent.title, date: formatDate(nextSessionEvent.event_date) })
+                  : t("exportModal.noSessionFound")}
               </span>
             )}
             {exportDateMode === "until-event" && (
@@ -1193,7 +1213,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                 getLabel={(ev) => `${formatDate(ev.event_date)}${ev.tag ? ` · ${ev.tag}` : ""} — ${ev.title}`}
                 value={exportUntilEventId === "" ? null : exportUntilEventId}
                 onChange={(ev) => { setExportUntilEventId(ev ? ev.id : ""); setExportUrl(null); }}
-                nullLabel="— Termin wählen —"
+                nullLabel={t("exportModal.noEventChosen")}
               />
             )}
           </div>
@@ -1205,7 +1225,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               className={`pdf-icon-link pdf-icon-link-success${exportBusy || (!exportUrl && (!exportTemplateId || (exportDateMode === "until-event" && !exportUntilEventId) || (exportDateMode === "next-session" && !nextSessionEvent))) ? " pdf-icon-disabled" : ""}`}
               disabled={exportBusy || (!exportUrl && (!exportTemplateId || (exportDateMode === "until-event" && !exportUntilEventId) || (exportDateMode === "next-session" && !nextSessionEvent)))}
               onClick={() => void handlePdfClick()}
-              title={exportUrl ? "PDF erneut herunterladen" : "PDF generieren"}
+              title={exportUrl ? t("exportModal.redownloadPdf") : t("exportModal.generatePdf")}
               style={{ width: "auto", minWidth: "56px", minHeight: 0, padding: "0 var(--space-4)", display: "inline-flex", justifyContent: "center" }}
             >
               {exportBusy ? "..." : "PDF"}
@@ -1214,7 +1234,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               type="button"
               className="pdf-icon-link pdf-icon-link-soon"
               disabled
-              title="Markdown-Export – kommt bald"
+              title={t("exportModal.markdownSoon")}
               style={{ width: "auto", minWidth: "56px", minHeight: 0, padding: "0 var(--space-4)", display: "inline-flex", justifyContent: "center" }}
             >
               MD
@@ -1235,7 +1255,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                     backgroundSize: "6px 6px, 6px 6px", backgroundRepeat: "no-repeat",
                   }}
                 >
-                  {landscapeTemplates.find((t) => t.id === exportTemplateId)?.name ?? "Vorlage"}
+                  {landscapeTemplates.find((tpl) => tpl.id === exportTemplateId)?.name ?? t("exportModal.templateFallback")}
                 </button>
                 {templateDropdownOpen && (
                   <div className="dropdown-panel dropdown-panel-up" style={{ minWidth: "100%" }}>
@@ -1274,7 +1294,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               setEventContextMenu(null);
             }}
           >
-            {eventContextMenu.event.is_cancelled ? "Absage aufheben" : "Als abgesagt markieren"}
+            {eventContextMenu.event.is_cancelled ? t("contextMenu.uncancel") : t("contextMenu.markCancelled")}
           </button>
         </div>,
         document.body

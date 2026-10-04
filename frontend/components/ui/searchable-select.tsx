@@ -1,6 +1,7 @@
 "use client";
 
 import { ButtonHTMLAttributes, KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { Popover } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
@@ -20,7 +21,7 @@ type BaseProps<T> = {
     Record<`data-${string}`, unknown>;
 };
 
-type SingleProps<T, Id extends string | number> = BaseProps<T> & {
+type SingleProps<T, Id extends string | number> = BaseProps<T> & { // i18n-ok: TS-Typzeile, kein JSX-Text
   getId: (option: T) => Id;
   value: Id | null;
   onChange: (option: T | null) => void;
@@ -44,13 +45,17 @@ export function SearchableSelect<T, Id extends string | number>({
   value,
   onChange,
   nullLabel,
-  placeholder = "Auswählen",
-  searchPlaceholder = "Suchen…",
-  emptyLabel = "Keine Ergebnisse",
+  placeholder,
+  searchPlaceholder,
+  emptyLabel,
   disabled,
   className,
   triggerProps,
 }: SingleProps<T, Id>) {
+  const t = useTranslations("common");
+  const resolvedPlaceholder = placeholder ?? t("select");
+  const resolvedSearchPlaceholder = searchPlaceholder ?? t("searchPlaceholder");
+  const resolvedEmptyLabel = emptyLabel ?? t("noResults");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlighted, setHighlighted] = useState(0);
@@ -62,7 +67,7 @@ export function SearchableSelect<T, Id extends string | number>({
     ? options.filter((o) => getLabel(o).toLowerCase().includes(search.trim().toLowerCase()))
     : options;
   const selected = options.find((o) => getId(o) === value) ?? null;
-  const triggerLabel = selected ? getLabel(selected) : nullLabel ?? placeholder;
+  const triggerLabel = selected ? getLabel(selected) : nullLabel ?? resolvedPlaceholder;
 
   useEffect(() => {
     setHighlighted(0);
@@ -130,7 +135,7 @@ export function SearchableSelect<T, Id extends string | number>({
         <span className="mini-menu-trigger-icon">⌄</span>
       </button>
       <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} className="assignee-popover-portal">
-        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder={searchPlaceholder} onKeyDown={handleInputKey} />
+        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder={resolvedSearchPlaceholder} onKeyDown={handleInputKey} />
         <div className="menu-list" role="listbox" ref={listRef}>
           {nullLabel ? (
             <button
@@ -146,7 +151,7 @@ export function SearchableSelect<T, Id extends string | number>({
             </button>
           ) : null}
           {filtered.length === 0 && !nullLabel ? (
-            <span className="assignee-empty">{emptyLabel}</span>
+            <span className="assignee-empty">{resolvedEmptyLabel}</span>
           ) : (
             filtered.map((option, index) => {
               const id = getId(option);
@@ -173,7 +178,7 @@ export function SearchableSelect<T, Id extends string | number>({
   );
 }
 
-type MultiProps<T, Id extends string | number> = BaseProps<T> & {
+type MultiProps<T, Id extends string | number> = BaseProps<T> & { // i18n-ok: TS-Typzeile, kein JSX-Text
   getId: (option: T) => Id;
   values: Id[];
   onChange: (ids: Id[]) => void;
@@ -190,14 +195,18 @@ export function SearchableMultiSelect<T, Id extends string | number>({
   getLabel,
   values,
   onChange,
-  placeholder = "Auswählen",
+  placeholder,
   emptySelectionLabel,
-  searchPlaceholder = "Suchen…",
-  emptyLabel = "Keine Ergebnisse",
+  searchPlaceholder,
+  emptyLabel,
   disabled,
   className,
   triggerProps,
 }: MultiProps<T, Id>) {
+  const t = useTranslations("common");
+  const resolvedPlaceholder = placeholder ?? t("select");
+  const resolvedSearchPlaceholder = searchPlaceholder ?? t("searchPlaceholder");
+  const resolvedEmptyLabel = emptyLabel ?? t("noResults");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -208,14 +217,14 @@ export function SearchableMultiSelect<T, Id extends string | number>({
     : options;
 
   const selectedSet = new Set(values);
-  let triggerLabel = emptySelectionLabel ?? placeholder;
+  let triggerLabel = emptySelectionLabel ?? resolvedPlaceholder;
   if (values.length === 1) {
     const only = options.find((o) => getId(o) === values[0]);
     if (only) {
       triggerLabel = getLabel(only);
     }
   } else if (values.length > 1) {
-    triggerLabel = `${values.length} ausgewählt`;
+    triggerLabel = t("selectedCount", { count: values.length });
   }
 
   useEffect(() => {
@@ -250,10 +259,10 @@ export function SearchableMultiSelect<T, Id extends string | number>({
         <span className="mini-menu-trigger-icon">⌄</span>
       </button>
       <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} className="assignee-popover-portal">
-        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder={searchPlaceholder} />
+        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder={resolvedSearchPlaceholder} />
         <div className="menu-list" role="listbox">
           {filtered.length === 0 ? (
-            <span className="assignee-empty">{emptyLabel}</span>
+            <span className="assignee-empty">{resolvedEmptyLabel}</span>
           ) : (
             filtered.map((option) => {
               const id = getId(option);

@@ -29,6 +29,13 @@ Use `rg`/text search when looking for an exact string, symbol, error message,
 route, or other case where literal search is more appropriate than semantic
 retrieval.
 
+## Internationalization
+
+hocX is multilingual (see `CLAUDE.md`, section "Internationalisierung / i18n"). Never write a new
+user-visible UI string directly into a component — add a translation key for every registered
+locale instead, and run `python3 scripts/check-i18n-completeness.py` and
+`python3 scripts/check-i18n-hardcoded-text.py` before finishing any UI change.
+
 ## Working method
 
 For non-trivial changes:

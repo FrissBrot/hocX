@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 type Props = {
   offset: number;
   limit: number;
@@ -11,6 +13,7 @@ type Props = {
 // Originally lived inline in AdminErrorLog; extracted so every server-paginated
 // admin list (Benutzer, Mandanten, Domains, Fehlerprotokoll) uses the same widget.
 export function Pagination({ offset, limit, total, onOffsetChange }: Props) {
+  const t = useTranslations("common");
   if (total === 0) return null;
 
   const from = offset + 1;
@@ -18,9 +21,7 @@ export function Pagination({ offset, limit, total, onOffsetChange }: Props) {
 
   return (
     <div className="table-actions" style={{ justifyContent: "space-between" }}>
-      <span className="muted">
-        {from}–{to} von {total}
-      </span>
+      <span className="muted">{t("pagination.range", { from, to, total })}</span>
       <div className="table-actions-start">
         <button
           type="button"
@@ -28,7 +29,7 @@ export function Pagination({ offset, limit, total, onOffsetChange }: Props) {
           disabled={offset === 0}
           onClick={() => onOffsetChange(Math.max(0, offset - limit))}
         >
-          Zurück
+          {t("back")}
         </button>
         <button
           type="button"
@@ -36,7 +37,7 @@ export function Pagination({ offset, limit, total, onOffsetChange }: Props) {
           disabled={to >= total}
           onClick={() => onOffsetChange(offset + limit)}
         >
-          Weiter
+          {t("next")}
         </button>
       </div>
     </div>

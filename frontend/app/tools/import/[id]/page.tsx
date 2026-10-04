@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import { AppShell } from "@/components/ui/app-shell";
 import { WordImportWizard } from "@/components/tools/word-import-wizard";
@@ -9,6 +10,7 @@ import { ParticipantSummary, TemplateSummary } from "@/types/api";
 export default async function WordImportDocumentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const documentId = id;
+  const t = await getTranslations("tools.wordImport");
 
   const session = await requireSession();
   const [document, templates, participants] = await Promise.all([
@@ -30,7 +32,7 @@ export default async function WordImportDocumentPage({ params }: { params: Promi
         <div className="page-header">
           <div>
             <h1 className="page-title">{document.display_name}</h1>
-            <p className="muted">Vorschläge prüfen und als neues Protokoll übernehmen.</p>
+            <p className="muted">{t("documentPageIntro")}</p>
           </div>
         </div>
         <WordImportWizard templates={activeTemplates} participants={activeParticipants} documentId={documentId} />

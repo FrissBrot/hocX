@@ -1,0 +1,49 @@
+{
+  "createModal": {
+    "createButton": "Créer le lien",
+    "createFailed": "Le lien n'a pas pu être créé.",
+    "createdIntro": "Toute personne disposant de ce lien peut télécharger les fichiers sans se connecter.",
+    "creatingEllipsis": "Création…",
+    "doneButton": "Terminé",
+    "expiryHelp": "Facultatif – sans date d'expiration, le lien reste actif jusqu'à sa révocation.",
+    "expiryLabel": "Date d'expiration",
+    "nameLabel": "Nom",
+    "shareLinkLabel": "Lien de partage",
+    "title": "Partager le lien"
+  },
+  "emptyDescription": "Utilisez « Partager » sur des fichiers, photos ou un album photo pour créer un lien de téléchargement sans connexion.",
+  "emptyTitle": "Aucun lien pour l'instant",
+  "filterActive": "Actif",
+  "filterAll": "Tous",
+  "page": {
+    "description": "Liens de téléchargement publics pour les fichiers et photos de cette organisation.",
+    "title": "Liens partagés"
+  },
+  "revokeConfirm": "Révoquer le lien « {name} » ? Il ne fonctionnera plus ensuite.",
+  "revokeConfirmLabel": "Révoquer",
+  "status": {
+    "active": "Actif",
+    "expired": "Expiré",
+    "revoked": "Révoqué"
+  },
+  "table": {
+    "actionsLabel": "Actions pour {name}",
+    "albumScope": "Album « {name} »",
+    "columnCreatedBy": "Créé par",
+    "columnExpiry": "Expiration",
+    "columnName": "Nom",
+    "columnScope": "Portée",
+    "columnStatus": "Statut",
+    "copyLink": "Copier le lien",
+    "empty": "Aucun lien dans cette vue.",
+    "fileScope": "{count, plural, one {# fichier} other {# fichiers}}",
+    "noExpiry": "Pas d'expiration",
+    "revoke": "Révoquer"
+  },
+  "toasts": {
+    "copied": "Lien copié.",
+    "copyFailed": "Le lien n'a pas pu être copié.",
+    "revokeFailed": "Le lien n'a pas pu être révoqué.",
+    "revoked": "Lien révoqué."
+  }
+}

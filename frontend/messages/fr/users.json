@@ -1,0 +1,68 @@
+{
+  "pageTitle": "Utilisateurs",
+  "ownAccessOnlyHint": "Accès et rôles de cette organisation.",
+  "pageHint": "Les comptes de cette organisation et leurs rôles.",
+  "newUser": "+ Nouvel utilisateur",
+  "emptyState": {
+    "title": "Uniquement votre propre accès",
+    "description": "Invitez d'autres personnes et attribuez-leur un rôle : Admin, Rédacteur, Trésorier ou Lecteur.",
+    "invite": "+ Inviter un utilisateur"
+  },
+  "explainRoles": "Expliquer les rôles",
+  "explainRolesDescription": "Chaque compte a exactement un rôle par organisation.",
+  "tabs": {
+    "active": "Utilisateurs actifs ({count})",
+    "participants": "Participants ({count})"
+  },
+  "searchUsers": "Rechercher des utilisateurs",
+  "searchParticipants": "Rechercher des participants",
+  "columns": {
+    "displayName": "Nom affiché",
+    "name": "Nom",
+    "email": "E-mail",
+    "role": "Rôle",
+    "actions": "Actions",
+    "participantEmail": "E-mail (participant)"
+  },
+  "mfaButton": "MFA",
+  "delete": "Supprimer",
+  "close": "Fermer",
+  "editUserTitle": "Modifier l'utilisateur",
+  "createUserTitle": "Créer un utilisateur",
+  "userModalDescription": "Gérer les données du compte et le rôle.",
+  "firstName": "Prénom",
+  "lastName": "Nom",
+  "displayName": "Nom affiché",
+  "email": "E-mail",
+  "newPassword": "Nouveau mot de passe",
+  "password": "Mot de passe",
+  "passwordHelpEdit": "Ne remplir que pour changer le mot de passe. Au moins 12 caractères.",
+  "passwordHelpCreate": "Défini directement ici, au moins 12 caractères. Il n'y a pas d'e-mail d'invitation automatique - communiquez le mot de passe séparément à l'utilisateur.",
+  "role": "Rôle",
+  "active": "Actif",
+  "enableLogin": "Activer la connexion",
+  "participantAutoNote": "Ce compte a été créé automatiquement à partir d'un participant. Pour la première connexion, veuillez activer la connexion et définir un nouveau mot de passe.",
+  "cancel": "Annuler",
+  "save": "Enregistrer",
+  "enableLoginForTitle": "Activer la connexion pour {name}",
+  "enableLoginTitle": "Activer la connexion",
+  "enableLoginDescription": "Attribuez un e-mail et un mot de passe pour que ce participant puisse se connecter. Il reste lié en tant que participant.",
+  "mfaTitle": "MFA de {name}",
+  "mfaTitleFallback": "MFA",
+  "roleDescriptions": {
+    "admin": "Accès complet au sein de l'organisation, y compris la structure (modèles, cycles, paramètres) et la gestion des utilisateurs.",
+    "writer": "Travaille dans la section procès-verbaux et gère les données opérationnelles, sans modifier la structure ni les finances.",
+    "kassier": "Comme lecteur, avec en plus un accès en écriture complet aux finances et amendes.",
+    "reader": "Accès en lecture seule, peut déclencher des exports PDF et ne voit que ses propres amendes."
+  },
+  "toasts": {
+    "loginEnabled": "Connexion activée",
+    "loginEnableFailed": "La connexion n'a pas pu être activée",
+    "userSaved": "Utilisateur enregistré",
+    "userCreated": "Utilisateur créé",
+    "userSaveFailed": "L'utilisateur n'a pas pu être enregistré",
+    "deleteConfirm": "Supprimer définitivement l'utilisateur « {name} » ? Le compte et l'accès seront immédiatement perdus.",
+    "userDeleted": "Utilisateur supprimé",
+    "userDeleteFailed": "L'utilisateur n'a pas pu être supprimé"
+  }
+}

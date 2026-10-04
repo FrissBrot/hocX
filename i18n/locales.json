@@ -1,0 +1,10 @@
+{
+  "defaultLocale": "de",
+  "cookieName": "hocx_locale",
+  "locales": {
+    "de": { "label": "Deutsch", "nativeLabel": "Deutsch" },
+    "en": { "label": "Englisch", "nativeLabel": "English" },
+    "fr": { "label": "Französisch", "nativeLabel": "Français" },
+    "it": { "label": "Italienisch", "nativeLabel": "Italiano" }
+  }
+}

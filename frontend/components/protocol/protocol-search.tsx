@@ -1,6 +1,7 @@
 "use client";
 
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
@@ -102,6 +103,7 @@ export function ProtocolSearchModal({
   textDrafts,
   protocolNumber,
 }: ProtocolSearchModalProps) {
+  const t = useTranslations("protocols.search");
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -180,28 +182,28 @@ export function ProtocolSearchModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Kapitel suchen" hideHeader className="protocol-search-shell">
+    <Modal open={open} onClose={onClose} title={t("title")} hideHeader className="protocol-search-shell">
       <div className="protocol-search-field-row">
         <SearchInput
           ref={inputRef}
           value={query}
           onChange={setQuery}
           onKeyDown={handleInputKeyDown}
-          placeholder={`Kapitel oder Wort in ${protocolNumber} suchen…`}
+          placeholder={t("placeholder", { protocolNumber })}
           className="protocol-search-input"
-          aria-label="Kapitel oder Wort suchen"
+          aria-label={t("ariaLabel")}
         />
-        <span className="dropdown-hint">Esc</span>
+        <span className="dropdown-hint">Esc</span> {/* i18n-ok: Tastenname, sprachunabhaengig */}
       </div>
 
       <div className="protocol-search-section-label">
-        <span>Kapitel</span>
-        {query.trim() ? <span>{results.length} Treffer</span> : null}
+        <span>{t("sections")}</span>
+        {query.trim() ? <span>{t("resultCount", { count: results.length })}</span> : null}
       </div>
 
-      <div className="protocol-search-list" role="listbox" aria-label="Kapitel">
+      <div className="protocol-search-list" role="listbox" aria-label={t("sections")}>
         {results.length === 0 ? (
-          <div className="protocol-search-empty">Keine Treffer für „{query.trim()}“</div>
+          <div className="protocol-search-empty">{t("noResults", { query: query.trim() })}</div>
         ) : (
           results.map((result, index) => {
             const title = trimSectionName(result.element.section_name_snapshot);
@@ -241,13 +243,13 @@ export function ProtocolSearchModal({
 
       <div className="protocol-search-footer">
         <span className="protocol-search-footer-hint">
-          <span className="dropdown-hint">↑↓</span> Auswählen
+          <span className="dropdown-hint">↑↓</span> {t("hintSelect")}
         </span>
         <span className="protocol-search-footer-hint">
-          <span className="dropdown-hint">↵</span> Hinspringen
+          <span className="dropdown-hint">↵</span> {t("hintJump")}
         </span>
         <span className="protocol-search-footer-hint">
-          <span className="dropdown-hint">Esc</span> Schliessen
+          <span className="dropdown-hint">Esc</span> {/* i18n-ok: Tastenname, sprachunabhaengig */} {t("hintClose")}
         </span>
       </div>
     </Modal>

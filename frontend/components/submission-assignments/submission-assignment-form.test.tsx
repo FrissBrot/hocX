@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -12,6 +13,8 @@ import {
   slugify,
 } from "./submission-assignment-form";
 import { SubmissionLink } from "@/types/api";
+
+const t = useTranslations("submissionAssignments");
 
 const link = (overrides: Partial<SubmissionLink> = {}): SubmissionLink => ({
   id: "link-1",
@@ -46,42 +49,42 @@ function Harness({ start = initialForm, onSubmit = vi.fn() }: { start?: FormStat
 
 describe("formProblem", () => {
   it("verlangt Titel und für Termine einen Tag", () => {
-    expect(formProblem(initialForm)).toBe("Titel fehlt");
-    expect(formProblem({ ...initialForm, title: "Bilder" })).toBe("Tag-Filter fehlt");
-    expect(formProblem({ ...initialForm, title: "Bilder", tag_filter: "Scharanlass" })).toBeNull();
+    expect(formProblem(initialForm, t)).toBe("Titel fehlt");
+    expect(formProblem({ ...initialForm, title: "Bilder" }, t)).toBe("Tag-Filter fehlt");
+    expect(formProblem({ ...initialForm, title: "Bilder", tag_filter: "Scharanlass" }, t)).toBeNull();
   });
 
   it("verlangt für Listen eine Liste, für manuelle Abgaben nichts weiter", () => {
-    expect(formProblem({ ...initialForm, title: "Bilder", source_type: "list" })).toBe("Liste fehlt");
-    expect(formProblem({ ...initialForm, title: "Bilder", source_type: "manual" })).toBeNull();
+    expect(formProblem({ ...initialForm, title: "Bilder", source_type: "list" }, t)).toBe("Liste fehlt");
+    expect(formProblem({ ...initialForm, title: "Bilder", source_type: "manual" }, t)).toBeNull();
   });
 
   it("verlangt bei aktivem Zyklus-Filter mindestens einen Zyklus", () => {
     const form = { ...initialForm, title: "Bilder", tag_filter: "x", cycle_config_id: "cfg", cycle_offsets: [] };
-    expect(formProblem(form)).toMatch(/Zyklus/);
+    expect(formProblem(form, t)).toMatch(/Zyklus/);
   });
 });
 
 describe("describeAssignment", () => {
   it("beschreibt das Zeitfenster einer Termin-Abgabe", () => {
     const form = { ...initialForm, tag_filter: "Scharanlass", offset_days_before: 7, offset_days_after: 3 };
-    expect(describeAssignment(form, null)).toBe(
+    expect(describeAssignment(form, null, t)).toBe(
       "Jeder Termin mit dem Tag «Scharanlass» bekommt ein eigenes Abgabefeld. Es öffnet 7 Tage vor dem Termin und schliesst 3 Tage danach.",
     );
   });
 
   it("beschreibt Termin-Abgaben ohne Zeitfenster als offen bis zum manuellen Schliessen", () => {
-    expect(describeAssignment({ ...initialForm, tag_filter: "x" }, null)).toContain("bleibt offen, bis es manuell geschlossen wird");
+    expect(describeAssignment({ ...initialForm, tag_filter: "x" }, null, t)).toContain("bleibt offen, bis es manuell geschlossen wird");
   });
 
   it("beschreibt manuelle Abgaben mit einem einzigen Abgabefeld und optionalem Stichtag", () => {
     const manual = { ...initialForm, source_type: "manual" as const };
-    expect(describeAssignment(manual, null)).toContain("einziges Abgabefeld");
-    expect(describeAssignment({ ...manual, deadline: "2026-12-31" }, null)).toContain("bis 31.12.2026");
+    expect(describeAssignment(manual, null, t)).toContain("einziges Abgabefeld");
+    expect(describeAssignment({ ...manual, deadline: "2026-12-31" }, null, t)).toContain("bis 31.12.2026");
   });
 
   it("nennt bei Listen den Namen der Liste", () => {
-    expect(describeAssignment({ ...initialForm, source_type: "list" }, "Vorstand")).toContain("«Vorstand»");
+    expect(describeAssignment({ ...initialForm, source_type: "list" }, "Vorstand", t)).toContain("«Vorstand»");
   });
 });
 

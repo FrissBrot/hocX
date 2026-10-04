@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { CopyField } from "@/components/ui/copy-field";
 import { TotpQrCode } from "@/components/security/totp-qr-code";
 import { TotpEnrollmentStart } from "@/types/api";
@@ -30,29 +32,30 @@ export function TotpEnrollCard({
   setup,
   label,
   onLabelChange,
-  labelPlaceholder = "z.B. Diensthandy",
+  labelPlaceholder,
   code,
   onCodeChange,
   onSubmit,
   onCancel,
   busy = false,
-  submitLabel = "TOTP aktivieren",
-  submitBusyLabel = "Wird bestätigt…",
+  submitLabel,
+  submitBusyLabel,
 }: Props) {
+  const t = useTranslations("security.totpEnroll");
   return (
     <div className="grid">
       <div className="wizard-dns-block">
-        <span className="wizard-dns-label">1. QR-Code scannen</span>
+        <span className="wizard-dns-label">{t("scanStep")}</span>
         <div className="totp-qr-row">
           <TotpQrCode value={setup.provisioning_uri} />
           <div className="totp-qr-hint">
             <p className="muted">
-              Code mit einer Authenticator-App scannen, z.B. Bitwarden, 1Password oder Google Authenticator.
+              {t("scanHint")}
             </p>
             <details className="totp-manual-entry">
-              <summary>Kein Scanner zur Hand? Setup-Key manuell eingeben</summary>
+              <summary>{t("manualEntrySummary")}</summary>
               <div className="totp-manual-entry-body">
-                <CopyField label="Setup-Key" value={setup.manual_entry_key} />
+                <CopyField label={t("setupKeyLabel")} value={setup.manual_entry_key} />
               </div>
             </details>
           </div>
@@ -60,13 +63,13 @@ export function TotpEnrollCard({
       </div>
 
       <div className="wizard-dns-block">
-        <span className="wizard-dns-label">2. Code bestätigen</span>
+        <span className="wizard-dns-label">{t("confirmStep")}</span>
         <label className="field-stack">
-          <span className="field-label">Bezeichnung</span>
-          <input value={label} onChange={(event) => onLabelChange(event.target.value)} placeholder={labelPlaceholder} />
+          <span className="field-label">{t("designationLabel")}</span>
+          <input value={label} onChange={(event) => onLabelChange(event.target.value)} placeholder={labelPlaceholder ?? t("designationPlaceholder")} />
         </label>
         <label className="field-stack">
-          <span className="field-label">6-stelliger Code aus der App</span>
+          <span className="field-label">{t("codeLabel")}</span>
           <input
             value={code}
             onChange={(event) => onCodeChange(sanitizeTotpCode(event.target.value))}
@@ -79,11 +82,11 @@ export function TotpEnrollCard({
 
       <div className="table-actions table-actions-start">
         <button type="button" className="button-secondary" disabled={code.length !== 6 || busy} onClick={onSubmit}>
-          {busy ? submitBusyLabel : submitLabel}
+          {busy ? (submitBusyLabel ?? t("submitBusy")) : (submitLabel ?? t("submit"))}
         </button>
         {onCancel ? (
           <button type="button" className="button-secondary button-ghost" onClick={onCancel}>
-            Abbrechen
+            {t("cancel")}
           </button>
         ) : null}
       </div>

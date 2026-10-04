@@ -1,3 +1,5 @@
+import createNextIntlPlugin from "next-intl/plugin";
+
 // connect-src erlaubt zusaetzlich https://api.friendlycaptcha.com: components/captcha-widget.tsx
 // bindet das Friendly-Captcha-Skript zwar selbst gehostet ein (public/friendly-challenge.module.min.js),
 // das Widget loest die Proof-of-Work-Challenge aber per XHR/fetch gegen den data-puzzle-endpoint
@@ -52,6 +54,8 @@ const securityHeaders = [
 
 const apiProxyTarget = process.env.ABGABEBOX_API_PROXY_TARGET?.replace(/\/$/, "");
 
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
@@ -89,4 +93,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

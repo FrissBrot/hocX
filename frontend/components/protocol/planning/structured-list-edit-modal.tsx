@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { Modal } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { StructuredListTable } from "@/components/lists/structured-list-table";
@@ -59,33 +61,34 @@ export function StructuredListEditModal({
   onUpdateEntry,
   onDeleteEntry,
 }: StructuredListEditModalProps) {
+  const t = useTranslations("protocols");
   const listColOptions: { value: SortColumn; label: string }[] = [
     { value: "column_one", label: definition.column_one_title },
     { value: "column_two", label: definition.column_two_title },
   ];
 
   return (
-    <Modal open={open} onClose={onClose} title="Liste bearbeiten" description={definition.name} size="wide">
+    <Modal open={open} onClose={onClose} title={t("editListTitle")} description={definition.name} size="wide">
       <div className="list-block-config-bar">
         <label className="list-block-config-item">
-          <span className="list-block-config-label">Gruppieren</span>
+          <span className="list-block-config-label">{t("groupByLabel")}</span>
           <SearchableSelect
             options={listColOptions}
             getId={(o) => o.value}
             getLabel={(o) => o.label}
             value={groupByColumn || null}
-            nullLabel="Keine Gruppierung"
+            nullLabel={t("noGrouping")}
             onChange={(o) => onChangeGroupBy(o ? o.value : "")}
           />
         </label>
         <label className="list-block-config-item">
-          <span className="list-block-config-label">Sortieren</span>
+          <span className="list-block-config-label">{t("sortLabel")}</span>
           <SearchableSelect
             options={listColOptions}
             getId={(o) => o.value}
             getLabel={(o) => o.label}
             value={sortByColumn || null}
-            nullLabel="Manuell"
+            nullLabel={t("manualLabel")}
             onChange={(o) => onChangeSortBy(o ? o.value : "")}
           />
         </label>
@@ -107,7 +110,7 @@ export function StructuredListEditModal({
         availableEvents={availableEvents}
         editable
         fullWidth
-        emptyMessage="Noch keine Einträge in dieser Liste."
+        emptyMessage={t("noListEntriesYet")}
         groupByColumn={groupByColumn}
         sortByColumn={sortByColumn}
         sortDirection={sortDirection}

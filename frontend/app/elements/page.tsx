@@ -1,15 +1,17 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import { ElementDefinitionManager } from "@/components/template/element-definition-manager";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
-import { TEMPLATE_TABS } from "@/components/ui/section-tabs";
+import { templateTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { ElementDefinition, EventSummary, FinanceAccount, ParticipantSummary, StructuredListDefinition } from "@/types/api";
 
 export default async function ElementsPage({ searchParams }: { searchParams: Promise<{ create?: string }> }) {
   const { create } = await searchParams;
   const session = await requireSession();
+  const t = await getTranslations("nav");
   const canAdmin = session.current_role === "admin";
   if (!canAdmin) {
     redirect("/");
@@ -25,7 +27,7 @@ export default async function ElementsPage({ searchParams }: { searchParams: Pro
 
   return (
     <AppShell initialSession={session}>
-      <RouteTabs tabs={TEMPLATE_TABS} activeHref="/elements" />
+      <RouteTabs tabs={templateTabs(t)} activeHref="/elements" />
       <section className="panel">
         <ElementDefinitionManager
           initialDefinitions={definitions ?? []}

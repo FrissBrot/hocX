@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
+import { useTranslations } from "next-intl";
 
 type Props = {
   value: string;
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export function TotpQrCode({ value, size = 196 }: Props) {
+  const t = useTranslations("security");
   const [dataUrl, setDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -30,7 +32,7 @@ export function TotpQrCode({ value, size = 196 }: Props) {
     <div className="totp-qr-frame" style={{ width: size, height: size }}>
       {dataUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={dataUrl} alt="QR-Code zum Scannen mit der Authenticator-App" width={size} height={size} />
+        <img src={dataUrl} alt={t("qrCodeAlt")} width={size} height={size} />
       ) : (
         <div className="totp-qr-placeholder" aria-hidden="true" />
       )}

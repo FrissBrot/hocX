@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import type { CollaboratorInfo } from "@/lib/hooks/use-protocol-collaboration";
 
 const AVATAR_COLORS = ["#e07a5f", "#3d8bfd", "#588157", "#9c6ade", "#e8a33d", "#2a9d8f", "#d1495b"];
@@ -34,23 +36,25 @@ export function CollaboratorAvatar({ user }: { user: CollaboratorInfo }) {
 }
 
 export function CollaborationPresenceBar({ users, connected }: { users: CollaboratorInfo[]; connected: boolean }) {
+  const t = useTranslations("protocols.collaboration");
   return (
     <div
       className="collab-presence-bar"
-      title={connected ? undefined : "Live-Zusammenarbeit momentan nicht verbunden – deine Änderungen werden trotzdem automatisch gespeichert."}
+      title={connected ? undefined : t("offlineTitle")}
     >
       {users.map((user) => (
         <CollaboratorAvatar key={user.user_id} user={user} />
       ))}
-      {!connected && <span className="collab-presence-offline">Offline</span>}
+      {!connected && <span className="collab-presence-offline">{t("offline")}</span>}
     </div>
   );
 }
 
 export function LockBadge({ holder }: { holder: CollaboratorInfo }) {
+  const t = useTranslations("protocols.collaboration");
   return (
     <span className="collab-lock-badge" style={{ borderColor: colorForUser(holder.user_id) }}>
-      🔒 wird bearbeitet von {holder.display_name}
+      🔒 {t("editingLockedBy", { name: holder.display_name })}
     </span>
   );
 }

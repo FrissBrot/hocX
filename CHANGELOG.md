@@ -8,6 +8,15 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Hinzugefügt
+
+- Vollständige Internationalisierung (i18n) von Hauptapp, Platform-Admin und Abgabebox mit
+  next-intl: Deutsch (Default), Englisch, Französisch, Italienisch. Zentrale Locale-Konfiguration
+  in `i18n/locales.json` (siehe `CLAUDE.md`, Abschnitt „Internationalisierung / i18n"), Sprachauswahl
+  in den Benutzereinstellungen, persistente Präferenz (`app_user.preferred_language` +
+  `hocx_locale`-Cookie), automatische CI-Prüfung auf Übersetzungs-Vollständigkeit und neue hart
+  codierte UI-Texte.
+
 ### Behoben
 
 - `deploy.sh` erstellt Traefik neu, wenn sich `infra/traefik/traefik.yml` geändert hat.

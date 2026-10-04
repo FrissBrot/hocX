@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
@@ -38,26 +39,33 @@ import {
 import { ParticipantSummary, TemplateSummary } from "@/types/api";
 
 type Step = "upload" | "structure" | "review" | "done";
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
-const STEPS: { key: Step; label: string }[] = [
-  { key: "upload", label: "Datei wählen" },
-  { key: "structure", label: "Namen & Tabellen zuweisen" },
-  { key: "review", label: "Prüfen & bestätigen" },
-  { key: "done", label: "Fertig" },
-];
+function wizardSteps(t: TFunc): { key: Step; label: string }[] {
+  return [
+    { key: "upload", label: t("stepUpload") },
+    { key: "structure", label: t("stepStructure") },
+    { key: "review", label: t("stepReview") },
+    { key: "done", label: t("stepDone") },
+  ];
+}
 
-const TABLE_ROLE_OPTIONS: { value: TableRole; label: string }[] = [
-  { value: "ignore", label: "Ignorieren" },
-  { value: "attendance", label: "Anwesenheit" },
-  { value: "events", label: "Termine" },
-  { value: "list", label: "Liste" },
-  { value: "matrix", label: "Matrix" },
-];
+function tableRoleOptions(t: TFunc): { value: TableRole; label: string }[] {
+  return [
+    { value: "ignore", label: t("roleIgnore") },
+    { value: "attendance", label: t("roleAttendance") },
+    { value: "events", label: t("roleEvents") },
+    { value: "list", label: t("roleList") },
+    { value: "matrix", label: t("roleMatrix") },
+  ];
+}
 
-const TABLE_ROLE_PILL_OPTIONS = TABLE_ROLE_OPTIONS.map((option) => ({
-  ...option,
-  variant: roleBadgeVariant(option.value),
-}));
+function tableRolePillOptions(t: TFunc) {
+  return tableRoleOptions(t).map((option) => ({
+    ...option,
+    variant: roleBadgeVariant(option.value),
+  }));
+}
 
 // Lists tab: how an ambiguous document table should be resolved into target-list rows
 // when the automatic scoring (see analyze()'s grouping_strategy) picked wrong, or
@@ -69,22 +77,25 @@ const TABLE_ROLE_PILL_OPTIONS = TABLE_ROLE_OPTIONS.map((option) => ({
 // the server only ever offers a delimiter that actually occurs in that table's cells,
 // see TablePreview.available_grouping_strategies), so the option list itself is built
 // per-table from that array rather than a fixed constant.
-const LIST_GROUPING_DELIMITER_LABELS: Record<string, string> = {
-  comma: "Komma-getrennt",
-  semicolon: "Semikolon-getrennt",
-  slash: "Slash-getrennt",
-  newline: "zeilengetrennt",
-  space: "leerzeichengetrennt",
-};
+function listGroupingDelimiterLabel(delimiter: string, t: TFunc): string {
+  const known: Record<string, string> = {
+    comma: t("delimiterComma"),
+    semicolon: t("delimiterSemicolon"),
+    slash: t("delimiterSlash"),
+    newline: t("delimiterNewline"),
+    space: t("delimiterSpace"),
+  };
+  return known[delimiter] ?? delimiter;
+}
 
-function listGroupingStrategyLabel(strategy: ListGroupingStrategy): string {
-  if (strategy === "flat") return "1:1 wie im Dokument";
-  if (strategy === "swap") return "1:1, Spalten vertauscht";
-  if (strategy === "fill_down") return "Leere Zellen von oben übernehmen (Spalte 1)";
+function listGroupingStrategyLabel(strategy: ListGroupingStrategy, t: TFunc): string {
+  if (strategy === "flat") return t("groupingFlat");
+  if (strategy === "swap") return t("groupingSwap");
+  if (strategy === "fill_down") return t("groupingFillDown");
   const [prefix, delimiter] = strategy.split(":");
-  const delimiterLabel = LIST_GROUPING_DELIMITER_LABELS[delimiter] ?? delimiter;
-  if (prefix === "explode") return `Spalte 1 mehrfach (${delimiterLabel}), Spalte 2 ist die Gruppe`;
-  if (prefix === "explode_swap") return `Spalte 2 mehrfach (${delimiterLabel}), Spalte 1 ist die Gruppe`;
+  const delimiterLabel = listGroupingDelimiterLabel(delimiter, t);
+  if (prefix === "explode") return t("groupingExplode", { delimiter: delimiterLabel });
+  if (prefix === "explode_swap") return t("groupingExplodeSwap", { delimiter: delimiterLabel });
   return strategy;
 }
 
@@ -212,6 +223,7 @@ function DateEditorModal({
   onConfirm: (value: string) => void;
   busy: boolean;
 }) {
+  const t = useTranslations("tools.wordImport");
   const [draft, setDraft] = useState(initialValue);
 
   useEffect(() => {
@@ -221,19 +233,18 @@ function DateEditorModal({
   }, [open, initialValue]);
 
   return (
-    <Modal open={open} title="Protokolldatum anpassen" onClose={onCancel} onEscape={() => { if (!busy && draft) onConfirm(draft); }}>
+    <Modal open={open} title={t("adjustProtocolDateTitle")} onClose={onCancel} onEscape={() => { if (!busy && draft) onConfirm(draft); }}>
       <div className="grid" style={{ gap: "0.75rem" }}>
         <p className="muted" style={{ margin: 0 }}>
-          Das im Dokument erkannte Datum kann falsch sein - hier von Hand korrigieren. Das Dokument wird danach mit dem neuen
-          Datum neu gescannt, der Name aktualisiert sich entsprechend.
+          {t("adjustDateHint")}
         </p>
         <DateInput value={draft} onChange={setDraft} autoFocus />
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
           <button type="button" className="button-ghost" onClick={onCancel} disabled={busy}>
-            Abbrechen
+            {t("cancel")}
           </button>
           <button type="button" className="button-primary" onClick={() => onConfirm(draft)} disabled={!draft || busy}>
-            {busy ? "Wird neu gescannt…" : "Übernehmen & neu scannen"}
+            {busy ? t("rescanningEllipsis") : t("applyAndRescan")}
           </button>
         </div>
       </div>
@@ -311,15 +322,17 @@ function NamesIcon() {
   );
 }
 
-const CATEGORIES: { key: Category; label: string; Icon: typeof TableIcon }[] = [
-  { key: "tables", label: "Tabellen", Icon: TableIcon },
-  { key: "names", label: "Namen klären", Icon: NamesIcon },
-  { key: "attendance", label: "Anwesenheit", Icon: PeopleIcon },
-  { key: "events", label: "Termine", Icon: CalendarIcon },
-  { key: "lists", label: "Listen", Icon: ListIcon },
-  { key: "matrices", label: "Matrizen", Icon: MatrixIcon },
-  { key: "texts", label: "Texte", Icon: AlignIcon },
-];
+function wizardCategories(t: TFunc): { key: Category; label: string; Icon: typeof TableIcon }[] {
+  return [
+    { key: "tables", label: t("categoryTables"), Icon: TableIcon },
+    { key: "names", label: t("categoryNames"), Icon: NamesIcon },
+    { key: "attendance", label: t("categoryAttendance"), Icon: PeopleIcon },
+    { key: "events", label: t("categoryEvents"), Icon: CalendarIcon },
+    { key: "lists", label: t("categoryLists"), Icon: ListIcon },
+    { key: "matrices", label: t("categoryMatrices"), Icon: MatrixIcon },
+    { key: "texts", label: t("categoryTexts"), Icon: AlignIcon },
+  ];
+}
 
 // Categories shown in the wizard's own top-level "Namen & Tabellen zuweisen" step (see
 // Step/STEPS): table roles + recurring names, both of which change how the "Prüfen &
@@ -669,11 +682,14 @@ function decisionState(approved: boolean, stillOpenForReview: boolean): RowDecis
   return "ignore";
 }
 
-const DECISION_LABEL: Record<RowDecision, string> = {
-  take: "Übernehmen",
-  incomplete: "Unvollständig",
-  ignore: "Ignorieren",
-};
+function decisionLabel(decision: RowDecision, t: TFunc): string {
+  const labels: Record<RowDecision, string> = {
+    take: t("decisionTake"),
+    incomplete: t("decisionIncomplete"),
+    ignore: t("decisionIgnore"),
+  };
+  return labels[decision];
+}
 
 // Clicking the pill always moves it towards a settled state: "Übernehmen" and
 // "Unvollständig" both collapse to an explicit "Ignorieren" (that's the one decision a
@@ -897,11 +913,11 @@ function buildRecurringNameGroups(
     .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
 }
 
-function textSummaryLabel(text: TextDraft, target: WordImportTextTarget | undefined, linkedEvent: WordImportEventCandidate | undefined): string {
+function textSummaryLabel(text: TextDraft, target: WordImportTextTarget | undefined, linkedEvent: WordImportEventCandidate | undefined, t: TFunc): string {
   if (!target) return "";
   let label = target.label;
-  if (text.isFormBlock) label += ` · Formular (${text.formFields.length} Feld${text.formFields.length === 1 ? "" : "er"})`;
-  if (text.isEventRepeat) label += ` · pro Termin${linkedEvent ? ` → ${linkedEvent.title}` : ""}`;
+  if (text.isFormBlock) label += " · " + t("formFieldCount", { count: text.formFields.length });
+  if (text.isEventRepeat) label += " · " + (linkedEvent ? t("perEventNamed", { title: linkedEvent.title }) : t("perEvent"));
   return label;
 }
 
@@ -919,6 +935,9 @@ export function WordImportWizard({
   documentId?: string;
 }) {
   const router = useRouter();
+  const t = useTranslations("tools.wordImport");
+  const steps = wizardSteps(t);
+  const tableRolePills = tableRolePillOptions(t);
   // Queue documents live at their own URL (/tools/import/[id], mirroring /protocols/[id])
   // so opening one is a real navigation - browser back lands back on the queue overview.
   function exitToQueue() {
@@ -1071,7 +1090,7 @@ export function WordImportWizard({
         applyAnalysis(detail.analysis, draft);
         setStep(draft?.step ?? "structure");
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Dokument konnte nicht geladen werden"))
+      .catch((err) => setError(err instanceof Error ? err.message : t("documentLoadFailed")))
       .finally(() => setBusy(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId]);
@@ -1197,7 +1216,7 @@ export function WordImportWizard({
                     // indistinguishable from a clean match while collapsed, so a conflict
                     // could go unnoticed in a long, mostly-skimmed list (audit E3/F3,
                     // 2026-08-16). This icon is purely a "look inside" signal, not a block.
-                    <WarningIcon title="Titel/Datum weichen vom Dokument ab - Zeile öffnen zum Prüfen" />
+                    <WarningIcon title={t("titleDateMismatchTitle")} />
                   ) : (
                     <CheckIcon />
                   )}{" "}
@@ -1205,7 +1224,7 @@ export function WordImportWizard({
                 </span>
               ) : (
                 <span className="word-import-text-row-summary is-new">
-                  <PlusIcon /> Neu anlegen
+                  <PlusIcon /> {t("createNew")}
                 </span>
               ))}
             <button
@@ -1226,7 +1245,7 @@ export function WordImportWizard({
                 updateEventAt(index, patch);
               }}
             >
-              <CheckIcon /> {DECISION_LABEL[decision]}
+              <CheckIcon /> {decisionLabel(decision, t)}
             </button>
           </div>
         </div>
@@ -1236,7 +1255,7 @@ export function WordImportWizard({
               <div className="word-import-alert word-import-alert-block">
                 <WarningIcon />
                 <span className="word-import-alert-date">
-                  Kein Datum im Dokument erkannt - ohne Datum kann kein neuer Termin angelegt werden.
+                  {t("noDateDetectedHint")}
                   <DateInput
                     className="word-import-alert-date-picker"
                     value={entry.raw_date ?? ""}
@@ -1247,7 +1266,7 @@ export function WordImportWizard({
             )}
             <TodoAssigneeMenu
               label={linked ? `${linked.title} (${formatDateRange(linked.event_date, linked.event_end_date)})` : "🆕 Neu anlegen"}
-              nullLabel="🆕 Neu anlegen"
+              nullLabel={t("createNewEmoji")}
               activeId={entry.linked_event_id}
               participants={entry.candidates.map(
                 (candidate): AssigneeOption<string> => ({
@@ -1263,7 +1282,7 @@ export function WordImportWizard({
               <div className="word-import-alert word-import-alert-block">
                 <WarningIcon />
                 <div className="grid" style={{ gap: "var(--space-3)" }}>
-                  <span>Welchen Wert übernehmen?</span>
+                  <span>{t("whichValueToUse")}</span>
                   {titleDiffers && (
                     <div className="word-import-diff-options">
                       <label className="field-radio-option">
@@ -1273,7 +1292,7 @@ export function WordImportWizard({
                           onChange={() => updateEventField(index, { title_source: "doc" })}
                         />
                         <span>
-                          <span className="field-radio-option-label">Aus Dokument</span>
+                          <span className="field-radio-option-label">{t("fromDocument")}</span>
                           <strong>{entry.raw_title}</strong>
                         </span>
                       </label>
@@ -1284,7 +1303,7 @@ export function WordImportWizard({
                           onChange={() => updateEventField(index, { title_source: "existing" })}
                         />
                         <span>
-                          <span className="field-radio-option-label">Bestehend</span>
+                          <span className="field-radio-option-label">{t("existing")}</span>
                           <strong>{linked.title}</strong>
                         </span>
                       </label>
@@ -1299,7 +1318,7 @@ export function WordImportWizard({
                           onChange={() => updateEventField(index, { date_source: "doc" })}
                         />
                         <span>
-                          <span className="field-radio-option-label">Aus Dokument</span>
+                          <span className="field-radio-option-label">{t("fromDocument")}</span>
                           <strong>{(entry.raw_date && formatDateRange(entry.raw_date, entry.raw_end_date)) || "?"}</strong>
                         </span>
                       </label>
@@ -1310,7 +1329,7 @@ export function WordImportWizard({
                           onChange={() => updateEventField(index, { date_source: "existing" })}
                         />
                         <span>
-                          <span className="field-radio-option-label">Bestehend</span>
+                          <span className="field-radio-option-label">{t("existing")}</span>
                           <strong>{formatDateRange(linked.event_date, linked.event_end_date)}</strong>
                         </span>
                       </label>
@@ -1351,14 +1370,14 @@ export function WordImportWizard({
         .filter((id): id is string => id !== null)
     );
     const assigneeOptions: AssigneeOption<string>[] = (entry.raw_name
-      ? [{ id: CREATE_NEW_PARTICIPANT_ID, display_name: `🆕 Als neuen Teilnehmer anlegen: "${entry.raw_name}"` }, ...attendanceParticipants]
+      ? [{ id: CREATE_NEW_PARTICIPANT_ID, display_name: t("createNewParticipantNamed", { name: entry.raw_name }) }, ...attendanceParticipants]
       : attendanceParticipants
     ).filter((option) => option.id === CREATE_NEW_PARTICIPANT_ID || !takenElsewhere.has(option.id as string));
     const label = entry.createNew
-      ? `🆕 Neuer Teilnehmer: "${entry.raw_name}"`
+      ? t("newParticipantNamed", { name: entry.raw_name })
       : attendanceParticipants.find((participant) => participant.id === entry.participant_id)?.display_name ??
         participants.find((participant) => participant.id === entry.participant_id)?.display_name ??
-        "Keinen verknüpfen";
+        t("linkNone");
     return (
       <div
         className={`word-import-text-row${flagged ? " word-import-flag" : ""}${isLinked ? "" : " word-import-text-row-muted"}`}
@@ -1372,7 +1391,7 @@ export function WordImportWizard({
           onKeyDown={rowHeadKeyDown(() => toggleAttendanceExpanded(index))}
         >
           <span className="word-import-text-row-title">
-            {entry.raw_name || <span className="muted">– nicht im Dokument (Standard: abwesend) –</span>}
+            {entry.raw_name || <span className="muted">{t("notInDocumentDefaultAbsent")}</span>}
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
             {!isOpen &&
@@ -1381,9 +1400,9 @@ export function WordImportWizard({
                   <CheckIcon /> {label}
                 </span>
               ) : entry.linkedNone ? (
-                <span className="word-import-text-row-summary is-ignored">Keinen verknüpfen</span>
+                <span className="word-import-text-row-summary is-ignored">{t("linkNone")}</span>
               ) : (
-                <span className="word-import-text-row-summary is-unassigned">– nicht zugewiesen –</span>
+                <span className="word-import-text-row-summary is-unassigned">{t("notAssigned")}</span>
               ))}
             {isLinked ? (
               <span onClick={(clickEvent) => clickEvent.stopPropagation()}>
@@ -1403,7 +1422,7 @@ export function WordImportWizard({
         {isOpen && (
           <TodoAssigneeMenu
             label={label}
-            nullLabel="Keinen verknüpfen"
+            nullLabel={t("linkNone")}
             activeId={entry.createNew ? CREATE_NEW_PARTICIPANT_ID : entry.participant_id}
             participants={assigneeOptions}
             onChange={(option) =>
@@ -1442,7 +1461,7 @@ export function WordImportWizard({
             <span className="word-import-text-row-title">
               {entry.column_one_raw} → {entry.column_two_raw}
             </span>
-            <span className="word-import-text-row-summary is-ignored">übersprungen</span>
+            <span className="word-import-text-row-summary is-ignored">{t("skippedLower")}</span>
           </div>
           <p className="muted" style={{ margin: 0 }}>
             Tabelle #{entry.table_index + 1}: Vorlage hat keinen Block für diese Liste, wird nicht importiert.
@@ -1478,7 +1497,7 @@ export function WordImportWizard({
             {titleLabel}
             {!col2IsNames && entry.column_two_raw && <span className="muted"> · {entry.column_two_raw}</span>}
             {entry.group_filled && (
-              <span className="muted" title="Automatisch ergänzt (Gruppierung) – bitte prüfen" style={{ marginLeft: "var(--space-2)" }}>
+              <span className="muted" title={t("autoFilledGroupingTitle")} style={{ marginLeft: "var(--space-2)" }}>
                 ✨
               </span>
             )}
@@ -1490,7 +1509,7 @@ export function WordImportWizard({
                   {col2Differs ? (
                     // See the matching comment on the event row's summary above (audit
                     // E3/F3, 2026-08-16) - purely a "look inside" signal, not a block.
-                    <WarningIcon title="Wert weicht vom Dokument ab - Zeile öffnen zum Prüfen" />
+                    <WarningIcon title={t("valueMismatchTitle")} />
                   ) : (
                     <CheckIcon />
                   )}{" "}
@@ -1498,7 +1517,7 @@ export function WordImportWizard({
                 </span>
               ) : (
                 <span className="word-import-text-row-summary is-new">
-                  <PlusIcon /> Neu (nur in diesem Protokoll)
+                  <PlusIcon /> {t("createNewThisProtocolOnlyPlain")}
                 </span>
               ))}
             <button
@@ -1510,7 +1529,7 @@ export function WordImportWizard({
                 setLists((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
               }}
             >
-              <CheckIcon /> {DECISION_LABEL[decision]}
+              <CheckIcon /> {decisionLabel(decision, t)}
             </button>
           </div>
         </div>
@@ -1518,7 +1537,7 @@ export function WordImportWizard({
           <div className="grid" style={{ gap: "var(--space-3)" }}>
             <TodoAssigneeMenu
               label={linked ? `${linked.column_one_display} → ${linked.column_two_display}` : "🆕 Neu (nur in diesem Protokoll)"}
-              nullLabel="🆕 Neu (nur in diesem Protokoll)"
+              nullLabel={t("createNewThisProtocolOnly")}
               activeId={entry.linked_entry_id}
               participants={entry.candidates.map(
                 (candidate): AssigneeOption<string> => ({
@@ -1543,7 +1562,7 @@ export function WordImportWizard({
               <div className="grid" style={{ gap: "0.35rem", gridTemplateColumns: "1fr 1fr" }}>
                 {entry.column_one_type === "text" && (
                   <div className="field-stack">
-                    <span className="muted">Spalte 1</span>
+                    <span className="muted">{t("column1")}</span>
                     <input
                       type="text"
                       value={entry.column_one_raw}
@@ -1558,7 +1577,7 @@ export function WordImportWizard({
                 )}
                 {entry.column_two_type === "text" && (
                   <div className="field-stack">
-                    <span className="muted">Spalte 2</span>
+                    <span className="muted">{t("column2")}</span>
                     <input
                       type="text"
                       value={entry.column_two_raw}
@@ -1579,8 +1598,8 @@ export function WordImportWizard({
                   <div key={nameIndex} className="field-stack">
                     <span className="muted">{name.raw_name}</span>
                     <TodoAssigneeMenu
-                      label={participants.find((participant) => participant.id === name.participant_id)?.display_name ?? "Keinen verknüpfen"}
-                      nullLabel="Keinen verknüpfen"
+                      label={participants.find((participant) => participant.id === name.participant_id)?.display_name ?? t("linkNone")}
+                      nullLabel={t("linkNone")}
                       activeId={name.participant_id}
                       participants={participants}
                       onChange={(option) => updateListName(index, "one", nameIndex, option.id)}
@@ -1595,8 +1614,8 @@ export function WordImportWizard({
                   <div key={nameIndex} className="field-stack">
                     <span className="muted">{name.raw_name}</span>
                     <TodoAssigneeMenu
-                      label={participants.find((participant) => participant.id === name.participant_id)?.display_name ?? "Keinen verknüpfen"}
-                      nullLabel="Keinen verknüpfen"
+                      label={participants.find((participant) => participant.id === name.participant_id)?.display_name ?? t("linkNone")}
+                      nullLabel={t("linkNone")}
                       activeId={name.participant_id}
                       participants={participants}
                       onChange={(option) => updateListName(index, "two", nameIndex, option.id)}
@@ -1612,7 +1631,7 @@ export function WordImportWizard({
                 <div className="word-import-alert word-import-alert-block">
                   <WarningIcon />
                   <div className="grid" style={{ gap: "var(--space-3)" }}>
-                    <span>Spalte 2 weicht ab — welchen Wert übernehmen?</span>
+                    <span>{t("column2MismatchQuestion")}</span>
                     <div className="word-import-diff-options">
                       <label className="field-radio-option">
                         <input
@@ -1625,7 +1644,7 @@ export function WordImportWizard({
                           }
                         />
                         <span>
-                          <span className="field-radio-option-label">Aus Dokument</span>
+                          <span className="field-radio-option-label">{t("fromDocument")}</span>
                           <strong>{entry.column_two_raw}</strong>
                         </span>
                       </label>
@@ -1640,7 +1659,7 @@ export function WordImportWizard({
                           }
                         />
                         <span>
-                          <span className="field-radio-option-label">Bestehend</span>
+                          <span className="field-radio-option-label">{t("existing")}</span>
                           <strong>{linked.column_two_display}</strong>
                         </span>
                       </label>
@@ -1868,7 +1887,7 @@ export function WordImportWizard({
       applyAnalysis(result);
       setStep("structure");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Datei konnte nicht analysiert werden");
+      setError(err instanceof Error ? err.message : t("fileAnalysisFailed"));
     } finally {
       setBusy(false);
     }
@@ -1898,10 +1917,9 @@ export function WordImportWizard({
     // real review happened, still goes through with no interruption.
     if (hasReviewProgressRef.current) {
       const proceed = await confirm({
-        title: "Neu analysieren?",
-        message:
-          "Bereits geprüfte Einträge (Anwesenheit, Termine, Listen, Matrizen, Texte) werden dabei durch frische Vorschläge ersetzt und gehen verloren. Fortfahren?",
-        confirmLabel: "Neu analysieren",
+        title: t("reanalyzeConfirmTitle"),
+        message: t("reanalyzeConfirmMessage"),
+        confirmLabel: t("reanalyzeAction"),
         tone: "danger",
       });
       if (!proceed) {
@@ -1923,7 +1941,7 @@ export function WordImportWizard({
         : await analyzeWordImport(file!, templateId, effectiveDate || null, nextTableRoles);
       applyAnalysis(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Datei konnte nicht erneut analysiert werden");
+      setError(err instanceof Error ? err.message : t("fileReanalysisFailed"));
     } finally {
       setBusy(false);
       setPendingTableIndex(null);
@@ -2384,13 +2402,13 @@ export function WordImportWizard({
       // protocol when the user navigates back to them (browser back restores cached pages).
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Protokoll konnte nicht erstellt werden");
+      setError(err instanceof Error ? err.message : t("protocolCreateFailed"));
     } finally {
       setBusy(false);
     }
   }
 
-  const stepIndex = STEPS.findIndex((entry) => entry.key === step);
+  const stepIndex = steps.findIndex((entry) => entry.key === step);
   const templateName = templates.find((template) => template.id === templateId)?.name ?? "";
 
   // Matrix "events" rows (e.g. "Daten") never produce a MatrixDraft cell (see
@@ -2453,25 +2471,25 @@ export function WordImportWizard({
   return (
     <article className="card">
       <div className="wizard-steps">
-        {STEPS.map((entry, index) => (
-          <div className="wizard-step" key={entry.key} style={index === STEPS.length - 1 ? { flex: "0 0 auto" } : { flex: 1 }}>
+        {steps.map((entry, index) => (
+          <div className="wizard-step" key={entry.key} style={index === steps.length - 1 ? { flex: "0 0 auto" } : { flex: 1 }}>
             <div className={`wizard-step-dot${index === stepIndex ? " is-active" : ""}${index < stepIndex ? " is-done" : ""}`}>
               {index + 1}
             </div>
             <span className={`wizard-step-label${index === stepIndex ? " is-active" : ""}`}>{entry.label}</span>
-            {index < STEPS.length - 1 && <div className={`wizard-step-line${index < stepIndex ? " is-done" : ""}`} />}
+            {index < steps.length - 1 && <div className={`wizard-step-line${index < stepIndex ? " is-done" : ""}`} />}
           </div>
         ))}
       </div>
 
       {error && <div className="form-error-banner">{error}</div>}
 
-      {(step === "structure" || step === "review") && !analysis && busy && <p className="muted">Dokument wird geladen…</p>}
+      {(step === "structure" || step === "review") && !analysis && busy && <p className="muted">{t("documentLoading")}</p>}
 
       {step === "upload" && (
         <div className="grid word-import-narrow">
           <label className="field-stack">
-            <span className="field-label">Vorlage</span>
+            <span className="field-label">{t("templateLabel")}</span>
             <SearchableSelect
               options={templates}
               getId={(template) => template.id}
@@ -2481,7 +2499,7 @@ export function WordImportWizard({
             />
           </label>
           <label className="field-stack">
-            <span className="field-label">Word- oder PDF-Datei (.docx, .pdf)</span>
+            <span className="field-label">{t("wordOrPdfFile")}</span>
             <label
               className={`word-import-dropzone${isDragOver ? " is-dragover" : ""}`}
               onDragOver={(event) => {
@@ -2510,29 +2528,29 @@ export function WordImportWizard({
                   <span className="word-import-dropzone-icon">
                     <UploadIcon />
                   </span>
-                  <strong>Datei auswählen</strong>
-                  <span className="muted">.docx/.pdf hierher ziehen oder klicken</span>
+                  <strong>{t("chooseFile")}</strong>
+                  <span className="muted">{t("dragOrClickFile")}</span>
                 </>
               )}
               <input type="file" accept=".docx,.pdf" onChange={(event) => pickFile(event.target.files?.[0] ?? null)} hidden />
             </label>
           </label>
           <button type="button" className="button-primary" disabled={busy || !file || !templateId} onClick={() => void submitUpload()}>
-            {busy ? "…" : "Analysieren"}
+            {busy ? "…" : t("analyzeAction")}
           </button>
         </div>
       )}
 
       {(step === "structure" || step === "review") && analysis && (
         <div className="grid">
-          {analysis.profile_applied && <p className="muted">Import-Vorlage aus einem früheren Import wurde angewendet.</p>}
+          {analysis.profile_applied && <p className="muted">{t("importTemplateApplied")}</p>}
 
           <div className="word-import-filebar">
             <span className="word-import-filebar-icon">
               <DocIcon />
             </span>
             <span className="word-import-filebar-meta">
-              <strong>{fileName ?? file?.name ?? "Dokument"}</strong>
+              <strong>{fileName ?? file?.name ?? t("documentFallback")}</strong>
               <span className="muted"> · {templateName}</span>
               <span className="muted"> · </span>
               <DateFieldButton
@@ -2544,10 +2562,10 @@ export function WordImportWizard({
             <button type="button" className="button-ghost" disabled={busy} onClick={() => void reanalyze()}>
               {busy ? (
                 <span className="word-import-cell-with-spinner">
-                  <SpinnerIcon size={12} /> Neu analysieren
+                  <SpinnerIcon size={12} /> {t("reanalyzeAction")}
                 </span>
               ) : (
-                "Neu analysieren"
+                t("reanalyzeAction")
               )}
             </button>
           </div>
@@ -2556,12 +2574,12 @@ export function WordImportWizard({
             <div className="word-import-alert">
               <WarningIcon />
               <span className="word-import-alert-date">
-                Protokolldatum konnte nicht automatisch erkannt werden.
+                {t("protocolDateNotDetected")}
                 <DateFieldButton
                   className="input word-import-alert-date-input"
                   value={protocolDate}
                   onClick={() => setDateEditorOpen(true)}
-                  placeholder="Datum festlegen"
+                  placeholder={t("setDatePlaceholder")}
                 />
               </span>
             </div>
@@ -2622,15 +2640,14 @@ export function WordImportWizard({
             <div className="word-import-alert">
               <WarningIcon />
               <span>
-                {totalOpen} {totalOpen === 1 ? "Eintrag benötigt" : "Einträge benötigen"} eine manuelle Prüfung, bevor das Protokoll
-                erstellt werden kann.
+                {t("entriesNeedReview", { count: totalOpen })}
               </span>
             </div>
           )}
 
           <div className="word-import-layout">
             <nav className="word-import-nav">
-              {CATEGORIES.filter(({ key }) => (step === "structure" ? STRUCTURE_CATEGORIES : DATA_CATEGORIES).includes(key)).map(
+              {wizardCategories(t).filter(({ key }) => (step === "structure" ? STRUCTURE_CATEGORIES : DATA_CATEGORIES).includes(key)).map(
                 ({ key, label, Icon }) => {
                   const count = categoryCounts[key];
                   return (
@@ -2647,7 +2664,7 @@ export function WordImportWizard({
                       {key === "tables" ? (
                         <Badge variant="neutral">{count}</Badge>
                       ) : count > 0 ? (
-                        <Badge variant={categoryVariants[key]}>{count} offen</Badge>
+                        <Badge variant={categoryVariants[key]}>{t("countOpen", { count })}</Badge>
                       ) : null}
                     </button>
                   );
@@ -2663,13 +2680,17 @@ export function WordImportWizard({
                     setActiveCategory("attendance");
                   }}
                 >
-                  Weiter zu den Daten →
+                  {t("continueToData")}
                   {!structureReady && (
                     <span className="word-import-nav-phase-hint">
-                      erst {[tablesOpen > 0 ? `${tablesOpen} Tabelle${tablesOpen === 1 ? "" : "n"}` : null, namesOpen > 0 ? `${namesOpen} Name${namesOpen === 1 ? "" : "n"}` : null]
-                        .filter(Boolean)
-                        .join(" & ")}{" "}
-                      klären
+                      {t("clarifyFirst", {
+                        items: [
+                          tablesOpen > 0 ? t("tablesCount", { count: tablesOpen }) : null,
+                          namesOpen > 0 ? t("namesCount", { count: namesOpen }) : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" & "),
+                      })}
                     </span>
                   )}
                 </button>
@@ -2682,7 +2703,7 @@ export function WordImportWizard({
                     setActiveCategory(namesOpen > 0 ? "names" : "tables");
                   }}
                 >
-                  ← Zurück zu Namen &amp; Tabellen
+                  {t("backToNamesAndTables")}
                 </button>
               )}
             </nav>
@@ -2691,14 +2712,14 @@ export function WordImportWizard({
               {activeCategory === "tables" && (
                 <>
                   <div>
-                    <h3 className="word-import-panel-title">Erkannte Tabellen</h3>
+                    <h3 className="word-import-panel-title">{t("detectedTables")}</h3>
                     <p className={`word-import-panel-desc${busy ? " word-import-panel-desc-busy" : ""}`}>
                       {busy ? (
                         <>
-                          <SpinnerIcon /> Wird neu analysiert…
+                          <SpinnerIcon /> {t("reanalyzingEllipsis")}
                         </>
                       ) : (
-                        "Rolle pro Tabelle zuweisen — steuert, wie Zeilen unten interpretiert werden."
+                        t("assignRoleHint")
                       )}
                     </p>
                   </div>
@@ -2711,11 +2732,11 @@ export function WordImportWizard({
                     <table className="data-table">
                       <thead>
                         <tr>
-                          <th>Tabelle</th>
-                          <th>Vorschau</th>
-                          <th>Rolle</th>
-                          <th>Ziel</th>
-                          <th>Gruppierung</th>
+                          <th>{t("tableLabel")}</th>
+                          <th>{t("previewLabel")}</th>
+                          <th>{t("roleLabel")}</th>
+                          <th>{t("targetLabel")}</th>
+                          <th>{t("groupingLabel")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2730,7 +2751,7 @@ export function WordImportWizard({
                                 <span className="word-import-cell-with-spinner">
                                   <PillMenu
                                     value={current.role}
-                                    options={TABLE_ROLE_PILL_OPTIONS}
+                                    options={tableRolePills}
                                     onChange={(role) => updateTableRole(table.index, { role })}
                                   />
                                   {isPending && <SpinnerIcon size={12} />}
@@ -2744,7 +2765,7 @@ export function WordImportWizard({
                                         analysis.list_definitions.find((definition) => definition.id === current.list_definition_id)
                                           ?.name ?? "– auswählen –"
                                       }
-                                      nullLabel="– auswählen –"
+                                      nullLabel={t("chooseEllipsis")}
                                       activeId={current.list_definition_id}
                                       participants={analysis.list_definitions.map(
                                         (definition): AssigneeOption<string> => ({ id: definition.id, display_name: definition.name })
@@ -2758,7 +2779,7 @@ export function WordImportWizard({
                                       getLabel={(option) => option.title}
                                       value={current.matrix_key ?? null}
                                       onChange={(option) => updateTableRole(table.index, { matrix_key: option ? option.matrix_key : null })}
-                                      nullLabel="– auswählen –"
+                                      nullLabel={t("chooseEllipsis")}
                                     />
                                   ) : (
                                     <span className="muted">—</span>
@@ -2773,18 +2794,18 @@ export function WordImportWizard({
                                       className={table.needs_manual_grouping ? "word-import-select-warning" : undefined}
                                       options={table.available_grouping_strategies}
                                       getId={(strategy) => strategy}
-                                      getLabel={(strategy) => listGroupingStrategyLabel(strategy)}
+                                      getLabel={(strategy) => listGroupingStrategyLabel(strategy, t)}
                                       value={current.list_grouping_strategy ?? null}
                                       onChange={(strategy) =>
                                         updateTableRole(table.index, {
                                           list_grouping_strategy: (strategy ?? null) as ListGroupingStrategy | null,
                                         })
                                       }
-                                      nullLabel="Automatisch"
+                                      nullLabel={t("automatic")}
                                     />
                                     {table.needs_manual_grouping && !current.list_grouping_strategy && (
                                       <span className="muted" style={{ fontSize: "0.8em" }}>
-                                        Liste ist noch leer – bitte Gruppierung prüfen und ggf. anpassen.
+                                        {t("emptyListCheckGrouping")}
                                       </span>
                                     )}
                                   </div>
@@ -2804,24 +2825,23 @@ export function WordImportWizard({
               {activeCategory === "names" && (
                 <>
                   <div>
-                    <h3 className="word-import-panel-title">Namen klären</h3>
+                    <h3 className="word-import-panel-title">{t("clarifyNames")}</h3>
                     <p className="word-import-panel-desc">
-                      Diese Namen kommen mehrfach im Dokument vor und konnten nicht automatisch zugewiesen werden — einmal zuweisen
-                      gilt für alle Vorkommen (Anwesenheit, Listen, Matrizen, Texte), statt jede Stelle einzeln zu klären.
+                      {t("recurringNamesHint")}
                     </p>
                   </div>
                   {recurringNameGroups.length === 0 ? (
-                    <p className="muted">Keine wiederkehrenden, ungeklärten Namen gefunden.</p>
+                    <p className="muted">{t("noRecurringUnresolvedNames")}</p>
                   ) : (
                     <div className="grid" style={{ gap: "var(--space-3)" }}>
                       {recurringNameGroups.map((group) => {
                         const whereParts: string[] = [];
-                        if (group.counts.attendance) whereParts.push(`${group.counts.attendance}× Anwesenheit`);
-                        if (group.counts.list) whereParts.push(`${group.counts.list}× Liste`);
-                        if (group.counts.matrix) whereParts.push(`${group.counts.matrix}× Matrix`);
-                        if (group.counts.text) whereParts.push(`${group.counts.text}× Text`);
+                        if (group.counts.attendance) whereParts.push(t("whereCountAttendance", { count: group.counts.attendance }));
+                        if (group.counts.list) whereParts.push(t("whereCountList", { count: group.counts.list }));
+                        if (group.counts.matrix) whereParts.push(t("whereCountMatrix", { count: group.counts.matrix }));
+                        if (group.counts.text) whereParts.push(t("whereCountText", { count: group.counts.text }));
                         const menuOptions: AssigneeOption<string>[] = [
-                          { id: CREATE_NEW_PARTICIPANT_ID, display_name: `🆕 Als neuen Teilnehmer anlegen: "${group.label}"` },
+                          { id: CREATE_NEW_PARTICIPANT_ID, display_name: t("createNewParticipantNamed", { name: group.label }) },
                           ...participants,
                         ];
                         return (
@@ -2830,7 +2850,7 @@ export function WordImportWizard({
                               <span className="word-import-text-row-title">
                                 {group.label}{" "}
                                 <span className="muted" style={{ fontWeight: 400 }}>
-                                  · {group.total}× im Dokument ({whereParts.join(", ")})
+                                  · {t("occurrencesInDocument", { count: group.total, where: whereParts.join(", ") })}
                                 </span>
                               </span>
                             </div>
@@ -2855,7 +2875,7 @@ export function WordImportWizard({
                             <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center", flexWrap: "wrap" }}>
                               <TodoAssigneeMenu
                                 label="Anderen Teilnehmer wählen…"
-                                nullLabel="Keinen verknüpfen (überall)"
+                                nullLabel={t("linkNoneEverywhere")}
                                 activeId={null}
                                 participants={menuOptions}
                                 onChange={(option) => applyRecurringNameEverywhere(group.key, option.id)}
@@ -2872,12 +2892,12 @@ export function WordImportWizard({
               {activeCategory === "attendance" && (
                 <>
                   <div>
-                    <h3 className="word-import-panel-title">Anwesenheit</h3>
+                    <h3 className="word-import-panel-title">{t("attendanceLabel")}</h3>
                     <p className="word-import-panel-desc">{attendance.length} Namen im Dokument erkannt.</p>
                   </div>
                   <div className="grid" style={{ gap: "var(--space-3)" }}>
                     {attendance.map((entry, index) => renderAttendanceRow(entry, index))}
-                    {attendance.length === 0 && <p className="muted">Keine Anwesenheitstabelle erkannt bzw. zugeordnet.</p>}
+                    {attendance.length === 0 && <p className="muted">{t("noAttendanceTableDetected")}</p>}
                   </div>
                 </>
               )}
@@ -2885,12 +2905,12 @@ export function WordImportWizard({
               {activeCategory === "events" && (
                 <>
                   <div>
-                    <h3 className="word-import-panel-title">Termine</h3>
-                    <p className="word-import-panel-desc">Im Dokument erwähnte Anlässe mit bestehenden Terminen abgleichen.</p>
+                    <h3 className="word-import-panel-title">{t("eventsLabel")}</h3>
+                    <p className="word-import-panel-desc">{t("eventsDescription")}</p>
                   </div>
                   <div className="grid" style={{ gap: "var(--space-3)" }}>
                     {plainEventItems.map(({ entry, index }) => renderEventRow(entry, index))}
-                    {plainEventItems.length === 0 && <p className="muted">Keine Termin-Tabelle erkannt bzw. zugeordnet.</p>}
+                    {plainEventItems.length === 0 && <p className="muted">{t("noEventsTableDetected")}</p>}
                   </div>
                 </>
               )}
@@ -2898,12 +2918,12 @@ export function WordImportWizard({
               {activeCategory === "lists" && (
                 <>
                   <div>
-                    <h3 className="word-import-panel-title">Listen</h3>
-                    <p className="word-import-panel-desc">Erkannte Listen-Zeilen bestehenden Einträgen zuordnen.</p>
+                    <h3 className="word-import-panel-title">{t("listsLabel")}</h3>
+                    <p className="word-import-panel-desc">{t("listsDescription")}</p>
                   </div>
                   <div className="grid" style={{ gap: "var(--space-3)" }}>
                     {lists.map((entry, index) => renderListRow(entry, index))}
-                    {lists.length === 0 && <p className="muted">Keine Listen-Tabelle erkannt bzw. zugeordnet.</p>}
+                    {lists.length === 0 && <p className="muted">{t("noListsTableDetected")}</p>}
                   </div>
                 </>
               )}
@@ -2911,8 +2931,8 @@ export function WordImportWizard({
               {activeCategory === "matrices" && (
                 <>
                   <div>
-                    <h3 className="word-import-panel-title">Matrizen</h3>
-                    <p className="word-import-panel-desc">Erkannte Matrix-Daten je Spalte, wie im Protokoll-Editor.</p>
+                    <h3 className="word-import-panel-title">{t("matricesLabel")}</h3>
+                    <p className="word-import-panel-desc">{t("matricesDescription")}</p>
                   </div>
                   <div className="grid" style={{ gap: "var(--space-5)" }}>
                     {matrixCardGroups.map((group) => (
@@ -2933,11 +2953,11 @@ export function WordImportWizard({
                                 </div>
                                 {column.columnKey === null && (
                                   <div className="matrix-card-row">
-                                    <div className="matrix-card-row-label">Ziel-Spalte</div>
+                                    <div className="matrix-card-row-label">{t("targetColumn")}</div>
                                     <div className="matrix-card-row-cell">
                                       <TodoAssigneeMenu<string>
                                         label="– auswählen –"
-                                        nullLabel="– auswählen –"
+                                        nullLabel={t("chooseEllipsis")}
                                         activeId={null}
                                         participants={column.candidates.map(
                                           (candidate): AssigneeOption<string> => ({
@@ -2961,7 +2981,7 @@ export function WordImportWizard({
                                         <div className="matrix-card-row-cell">
                                           <div className="matrix-event-list">
                                             {row.items.map(({ entry, index }) => renderEventRow(entry, index))}
-                                            {row.items.length === 0 && <span className="muted">Keine Termine</span>}
+                                            {row.items.length === 0 && <span className="muted">{t("noEvents")}</span>}
                                           </div>
                                         </div>
                                       </div>
@@ -2984,9 +3004,9 @@ export function WordImportWizard({
                                                 <TodoAssigneeMenu
                                                   label={
                                                     participants.find((participant) => participant.id === name.participant_id)
-                                                      ?.display_name ?? "Keinen verknüpfen"
+                                                      ?.display_name ?? t("linkNone")
                                                   }
-                                                  nullLabel="Keinen verknüpfen"
+                                                  nullLabel={t("linkNone")}
                                                   activeId={name.participant_id}
                                                   participants={participants}
                                                   onChange={(option) => updateMatrixName(row.index, nameIndex, option.id)}
@@ -3019,7 +3039,7 @@ export function WordImportWizard({
                                               );
                                             }}
                                           >
-                                            <CheckIcon /> {DECISION_LABEL[cellDecision]}
+                                            <CheckIcon /> {decisionLabel(cellDecision, t)}
                                           </button>
                                         </div>
                                       </div>
@@ -3032,7 +3052,7 @@ export function WordImportWizard({
                         </div>
                       </div>
                     ))}
-                    {matrixCardGroups.length === 0 && <p className="muted">Keine Matrix-Tabelle erkannt bzw. zugeordnet.</p>}
+                    {matrixCardGroups.length === 0 && <p className="muted">{t("noMatrixTableDetected")}</p>}
                   </div>
                 </>
               )}
@@ -3040,8 +3060,8 @@ export function WordImportWizard({
               {activeCategory === "texts" && (
                 <>
                   <div>
-                    <h3 className="word-import-panel-title">Texte</h3>
-                    <p className="word-import-panel-desc">Erkannte Abschnitte den Blöcken der Vorlage zuordnen.</p>
+                    <h3 className="word-import-panel-title">{t("textsLabel")}</h3>
+                    <p className="word-import-panel-desc">{t("textsDescription")}</p>
                   </div>
                   <div className="grid" style={{ gap: "var(--space-3)" }}>
                     {texts.map((text, index) => {
@@ -3063,7 +3083,7 @@ export function WordImportWizard({
                       const isIgnorableNoTarget = text.template_element_id === null && !text.createNew;
                       const canDismiss = isIgnorableNoTarget || formFieldsStillOpen(text);
                       const isDismissedNoTarget = canDismiss && text.dismissed;
-                      const summaryLabel = textSummaryLabel(text, target, linkedEvent);
+                      const summaryLabel = textSummaryLabel(text, target, linkedEvent, t);
                       return (
                         <div
                           className={`word-import-text-row${flagged ? " word-import-flag" : ""}${
@@ -3088,18 +3108,18 @@ export function WordImportWizard({
                               {!isOpen &&
                                 (text.createNew ? (
                                   <span className="word-import-text-row-summary">
-                                    <CheckIcon /> Neuer Textblock in diesem Protokoll
+                                    <CheckIcon /> {t("newTextBlockInProtocol")}
                                   </span>
                                 ) : isIgnoredEvent ? (
-                                  <span className="word-import-text-row-summary is-ignored">Nicht verknüpft – wird übersprungen</span>
+                                  <span className="word-import-text-row-summary is-ignored">{t("notLinkedWillBeSkipped")}</span>
                                 ) : isDismissedNoTarget ? (
-                                  <span className="word-import-text-row-summary is-ignored">Ignoriert – wird übersprungen</span>
+                                  <span className="word-import-text-row-summary is-ignored">{t("ignoredWillBeSkipped")}</span>
                                 ) : summaryLabel ? (
                                   <span className="word-import-text-row-summary">
                                     <CheckIcon /> {summaryLabel}
                                   </span>
                                 ) : (
-                                  <span className="word-import-text-row-summary is-unassigned">– nicht zugewiesen –</span>
+                                  <span className="word-import-text-row-summary is-unassigned">{t("notAssigned")}</span>
                                 ))}
                               {canDismiss && (
                                 <button
@@ -3112,7 +3132,7 @@ export function WordImportWizard({
                                     );
                                   }}
                                 >
-                                  <CheckIcon /> {text.dismissed ? "Ignoriert" : "Ignorieren"}
+                                  <CheckIcon /> {text.dismissed ? t("ignoredPast") : t("decisionIgnore")}
                                 </button>
                               )}
                             </div>
@@ -3122,23 +3142,23 @@ export function WordImportWizard({
                               <TodoAssigneeMenu
                                 label={
                                   text.createNew
-                                    ? `🆕 Neuer Textblock: "${text.extracted_heading}"`
+                                    ? t("newTextBlockNamed", { name: text.extracted_heading })
                                     : target
-                                    ? `${target.label}${target.is_event_repeat ? " · pro Termin" : ""}${target.is_form_block ? " · Formular" : ""}`
-                                    : "– nicht zugewiesen –"
+                                    ? `${target.label}${target.is_event_repeat ? ` · ${t("perEvent")}` : ""}${target.is_form_block ? ` · ${t("formSuffix")}` : ""}`
+                                    : t("notAssigned")
                                 }
-                                nullLabel="– nicht zugewiesen –"
+                                nullLabel={t("notAssigned")}
                                 activeId={text.createNew ? CREATE_NEW_TEXT_BLOCK_ID : target ? analysis.text_targets.indexOf(target) : null}
                                 participants={[
                                   {
                                     id: CREATE_NEW_TEXT_BLOCK_ID,
-                                    display_name: `🆕 Als neuen Textblock anlegen: "${text.extracted_heading}"`,
+                                    display_name: t("createNewTextBlockNamed", { name: text.extracted_heading }),
                                   },
                                   ...analysis.text_targets.map(
                                     (candidate, candidateIndex): AssigneeOption => ({
                                       id: candidateIndex,
-                                      display_name: `${candidate.label}${candidate.is_event_repeat ? " · pro Termin" : ""}${
-                                        candidate.is_form_block ? " · Formular" : ""
+                                      display_name: `${candidate.label}${candidate.is_event_repeat ? ` · ${t("perEvent")}` : ""}${
+                                        candidate.is_form_block ? ` · ${t("formSuffix")}` : ""
                                       }`,
                                     })
                                   ),
@@ -3185,10 +3205,10 @@ export function WordImportWizard({
                               />
                               {text.isEventRepeat && (
                                 <label className="field-stack" style={{ gap: "0.25rem" }}>
-                                  <span className="muted">Aufgrund welchem Termin wird dieser Block erstellt?</span>
+                                  <span className="muted">{t("whichEventForBlock")}</span>
                                   <TodoAssigneeMenu
                                     label={linkedEvent ? `${linkedEvent.title} (${formatDate(linkedEvent.event_date)})` : "– Anlass wählen –"}
-                                    nullLabel="– nicht verknüpfen (Text wird nicht übernommen) –"
+                                    nullLabel={t("linkNoneTextDiscarded")}
                                     activeId={text.linkedEventId}
                                     participants={text.eventCandidates.map(
                                       (candidate): AssigneeOption<string> => ({
@@ -3236,7 +3256,7 @@ export function WordImportWizard({
                                               }
                                             />
                                             <span>
-                                              <span className="field-radio-option-label">Aus Dokument</span>
+                                              <span className="field-radio-option-label">{t("fromDocument")}</span>
                                               <strong>{text.content}</strong>
                                             </span>
                                           </label>
@@ -3253,7 +3273,7 @@ export function WordImportWizard({
                                               }
                                             />
                                             <span>
-                                              <span className="field-radio-option-label">Bestehend</span>
+                                              <span className="field-radio-option-label">{t("existing")}</span>
                                               <strong>{text.syncFieldExistingValue}</strong>
                                             </span>
                                           </label>
@@ -3278,8 +3298,7 @@ export function WordImportWizard({
                                   <WarningIcon />
                                   <div className="grid" style={{ gap: "0.15rem" }}>
                                     <span>
-                                      <strong>Noch nicht zugeordnet:</strong> Diese Namen brauchen eine Entscheidung (Teilnehmer wählen, neu
-                                      anlegen oder &quot;Keinen verknüpfen&quot;).
+                                      <strong>{t("notYetAssignedLabel")}</strong> {t("namesNeedDecisionHint")}
                                     </span>
                                     {formOpenNames(text).map((entry, entryIndex) => (
                                       <span key={entryIndex}>
@@ -3308,20 +3327,20 @@ export function WordImportWizard({
                                           <TodoAssigneeMenu
                                             label={
                                               field.names[0]?.create_new
-                                                ? `🆕 Neuer Teilnehmer: "${field.names[0].raw_name}"`
+                                                ? t("newParticipantNamed", { name: field.names[0].raw_name })
                                                 : participants.find((participant) => participant.id === field.names[0]?.participant_id)?.display_name ??
-                                                  (formNameOpen(field.names[0]) ? "– nicht zugeordnet –" : "Keinen verknüpfen")
+                                                  (formNameOpen(field.names[0]) ? t("notAssigned") : t("linkNone"))
                                             }
-                                            nullLabel="Keinen verknüpfen"
+                                            nullLabel={t("linkNone")}
                                             activeId={field.names[0]?.create_new ? CREATE_NEW_PARTICIPANT_ID : field.names[0]?.participant_id ?? null}
                                             participants={
                                               field.raw_value
-                                                ? [{ id: CREATE_NEW_PARTICIPANT_ID, display_name: `🆕 Als neuen Teilnehmer anlegen: "${field.raw_value}"` }, ...participants]
+                                                ? [{ id: CREATE_NEW_PARTICIPANT_ID, display_name: t("createNewParticipantNamed", { name: field.raw_value }) }, ...participants]
                                                 : participants
                                             }
                                             onChange={(option) => updateFormFieldSingleName(index, fieldIndex, option.id, field.raw_value)}
                                           />
-                                          {formNameOpen(field.names[0]) && <span className="word-import-field-open-hint">Nicht zugeordnet - bitte auswählen</span>}
+                                          {formNameOpen(field.names[0]) && <span className="word-import-field-open-hint">{t("notAssignedPleaseChoose")}</span>}
                                         </div>
                                       ) : field.row_type === "participants" ? (
                                         field.names.length > 0 ? (
@@ -3336,19 +3355,19 @@ export function WordImportWizard({
                                                 <TodoAssigneeMenu
                                                   label={
                                                     name.create_new
-                                                      ? `🆕 Neuer Teilnehmer: "${name.raw_name}"`
+                                                      ? t("newParticipantNamed", { name: name.raw_name })
                                                       : participants.find((participant) => participant.id === name.participant_id)?.display_name ??
-                                                        (formNameOpen(name) ? "– nicht zugeordnet –" : "Keinen verknüpfen")
+                                                        (formNameOpen(name) ? t("notAssigned") : t("linkNone"))
                                                   }
-                                                  nullLabel="Keinen verknüpfen"
+                                                  nullLabel={t("linkNone")}
                                                   activeId={name.create_new ? CREATE_NEW_PARTICIPANT_ID : name.participant_id}
                                                   participants={[
-                                                    { id: CREATE_NEW_PARTICIPANT_ID, display_name: `🆕 Als neuen Teilnehmer anlegen: "${name.raw_name}"` },
+                                                    { id: CREATE_NEW_PARTICIPANT_ID, display_name: t("createNewParticipantNamed", { name: name.raw_name }) },
                                                     ...participants,
                                                   ]}
                                                   onChange={(option) => updateFormFieldNameAt(index, fieldIndex, nameIndex, option.id)}
                                                 />
-                                                {formNameOpen(name) && <span className="word-import-field-open-hint">Nicht zugeordnet - bitte auswählen</span>}
+                                                {formNameOpen(name) && <span className="word-import-field-open-hint">{t("notAssignedPleaseChoose")}</span>}
                                               </div>
                                             ))}
                                           </div>
@@ -3360,7 +3379,7 @@ export function WordImportWizard({
                                       )}
                                     </div>
                                   ))}
-                                  {text.formFields.length === 0 && <span className="muted">Keine Felder in diesem Formular-Block.</span>}
+                                  {text.formFields.length === 0 && <span className="muted">{t("noFieldsInFormBlock")}</span>}
                                 </div>
                               ) : (
                                 <textarea
@@ -3378,7 +3397,7 @@ export function WordImportWizard({
                         </div>
                       );
                     })}
-                    {texts.length === 0 && <p className="muted">Keine zuordenbaren Textabschnitte erkannt.</p>}
+                    {texts.length === 0 && <p className="muted">{t("noAssignableTextSections")}</p>}
                   </div>
                 </>
               )}
@@ -3388,8 +3407,7 @@ export function WordImportWizard({
           <div className="word-import-footer">
             {totalOpen > 0 ? (
               <span className="word-import-footer-warning">
-                {totalOpen} {totalOpen === 1 ? "Warnung" : "Warnungen"} noch offen — erst wenn alle geprüft sind, kann das Protokoll
-                erstellt werden.
+                {t("warningsStillOpen", { count: totalOpen })}
               </span>
             ) : (
               <span />
@@ -3400,7 +3418,7 @@ export function WordImportWizard({
                 className="button-ghost"
                 onClick={() => (documentId ? exitToQueue() : setStep("upload"))}
               >
-                {documentId ? "Zurück zur Warteschlange" : "Abbrechen"}
+                {documentId ? t("backToQueue") : t("cancel")}
               </button>
               {step === "review" && (
                 <button
@@ -3409,7 +3427,7 @@ export function WordImportWizard({
                   disabled={busy || !protocolDate || totalOpen > 0}
                   onClick={() => void submitCommit()}
                 >
-                  {busy ? "…" : "Protokoll erstellen"}
+                  {busy ? "…" : t("createProtocolAction")}
                 </button>
               )}
             </div>
@@ -3424,7 +3442,7 @@ export function WordImportWizard({
               <CheckIcon />
             </div>
             <div>
-              <h3 style={{ margin: "0 0 var(--space-2)" }}>Protokoll erstellt</h3>
+              <h3 style={{ margin: "0 0 var(--space-2)" }}>{t("protocolCreated")}</h3>
               <p className="muted word-import-success-stats">
                 {doneSummary &&
                   `${doneSummary.attendance} Anwesenheiten, ${doneSummary.events} Termine, ${doneSummary.lists} Listeneinträge und ${doneSummary.matrices} Matrix-Werte wurden übernommen.`}
@@ -3450,11 +3468,11 @@ export function WordImportWizard({
               className="button-ghost"
               onClick={() => (documentId ? exitToQueue() : resetWizard())}
             >
-              {documentId ? "Zurück zur Warteschlange" : "Neuer Import"}
+              {documentId ? t("backToQueue") : t("newImport")}
             </button>
             <div className="wizard-footer-actions">
               <a className="button-primary" href={`/protocols/${createdProtocolId}`}>
-                Protokoll ansehen
+                {t("viewProtocol")}
               </a>
             </div>
           </div>

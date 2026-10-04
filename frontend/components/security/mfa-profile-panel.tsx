@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { TotpEnrollCard } from "@/components/security/totp-enroll-card";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { useMfaEnrollment, formatMfaDate, mfaFactorTypeLabel } from "@/lib/hooks/use-mfa-enrollment";
 import { browserSupportsPasskeys } from "@/lib/webauthn";
+import type { Locale } from "@/i18n/locale-config.generated";
 import { UserMfaOverview } from "@/types/api";
 
 type Props = {
@@ -14,6 +16,8 @@ type Props = {
 };
 
 export function MfaProfilePanel({ open }: Props) {
+  const t = useTranslations("security.mfaProfile");
+  const locale = useLocale() as Locale;
   const showToast = useToast();
   const [overview, setOverview] = useState<UserMfaOverview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -44,10 +48,10 @@ export function MfaProfilePanel({ open }: Props) {
     browserApiFetch<UserMfaOverview>("/api/users/me/mfa")
       .then((result) => setOverview(result))
       .catch((error) => {
-        showToast(error instanceof Error ? error.message : "MFA-Status konnte nicht geladen werden", "error");
+        showToast(error instanceof Error ? error.message : t("loadFailed"), "error");
       })
       .finally(() => setLoading(false));
-  }, [open, showToast]);
+  }, [open, showToast, t]);
 
   async function setPreferredMethod(factorType: "totp" | "webauthn") {
     setBusy(true);
@@ -57,9 +61,9 @@ export function MfaProfilePanel({ open }: Props) {
         body: JSON.stringify({ factor_type: factorType }),
       });
       setOverview(next);
-      showToast(`${mfaFactorTypeLabel(factorType)} ist jetzt die Standardmethode fürs Login`, "success");
+      showToast(t("setDefaultSuccess", { method: mfaFactorTypeLabel(factorType) }), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Standardmethode konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("setDefaultFailed"), "error");
     } finally {
       setBusy(false);
     }
@@ -69,46 +73,46 @@ export function MfaProfilePanel({ open }: Props) {
     <div className="grid">
       <div className="security-summary-card">
         <div>
-          <div className="eyebrow">Sicherheitsstatus</div>
+          <div className="eyebrow">{t("statusEyebrow")}</div>
           <strong>
             {loading
-              ? "MFA wird geladen…"
+              ? t("loading")
               : overview?.required
-                ? "Für dieses Konto ist MFA verpflichtend"
+                ? t("requiredStatus")
                 : overview?.has_factors
-                  ? "MFA ist aktiv"
-                  : "MFA ist optional"}
+                  ? t("activeStatus")
+                  : t("optionalStatus")}
           </strong>
           <div className="muted">
             {overview?.required
-              ? "Tenant-Admins müssen mindestens einen zweiten Faktor hinterlegen."
-              : "Du kannst TOTP oder einen Passkey hinterlegen. Danach wird MFA bei jedem Login abgefragt."}
+              ? t("requiredHint")
+              : t("optionalHint")}
           </div>
           {overview?.preferred_factor_label ? (
-            <div className="muted">Standard beim Login: {overview.preferred_factor_label}</div>
+            <div className="muted">{t("defaultMethod", { method: overview.preferred_factor_label })}</div>
           ) : null}
         </div>
         <div className="status-row">
-          <span className="pill">{overview?.factors.length ?? 0} Faktor(en)</span>
-          {overview?.preferred_factor_type ? <span className="pill">Standard: {mfaFactorTypeLabel(overview.preferred_factor_type)}</span> : null}
-          <span className="pill">{browserSupportsPasskeys() ? "Passkeys verfügbar" : "Kein Passkey-Support im Browser"}</span>
+          <span className="pill">{t("factorCount", { count: overview?.factors.length ?? 0 })}</span>
+          {overview?.preferred_factor_type ? <span className="pill">{t("defaultPill", { method: mfaFactorTypeLabel(overview.preferred_factor_type) })}</span> : null}
+          <span className="pill">{browserSupportsPasskeys() ? t("passkeysAvailable") : t("passkeysUnavailable")}</span>
         </div>
       </div>
 
       <div className="wizard-steps">
         <div className="wizard-step">
           <div className="wizard-step-dot is-done">1</div>
-          <div className="wizard-step-label is-active">Methode wählen</div>
+          <div className="wizard-step-label is-active">{t("stepChooseMethod")}</div>
         </div>
         <div className="wizard-step-line is-done" />
         <div className="wizard-step">
           <div className={`wizard-step-dot${totpSetup ? " is-active" : overview?.has_factors ? " is-done" : ""}`}>2</div>
-          <div className={`wizard-step-label${totpSetup ? " is-active" : ""}`}>Bestätigen</div>
+          <div className={`wizard-step-label${totpSetup ? " is-active" : ""}`}>{t("stepConfirm")}</div>
         </div>
         <div className="wizard-step-line" />
         <div className="wizard-step">
           <div className={`wizard-step-dot${overview?.has_factors ? " is-done" : ""}`}>3</div>
-          <div className="wizard-step-label">Fertig</div>
+          <div className="wizard-step-label">{t("stepDone")}</div>
         </div>
       </div>
 
@@ -116,26 +120,26 @@ export function MfaProfilePanel({ open }: Props) {
         <article className="security-method-card">
           <div className="security-method-header">
             <div>
-              <div className="eyebrow">Option A</div>
-              <h3>Authenticator-App mit TOTP</h3>
+              <div className="eyebrow">{t("optionA")}</div>
+              <h3>{t("totpTitle")}</h3>
             </div>
             {overview?.preferred_factor_type === "totp" ? (
-              <span className="pill">Login-Standard</span>
+              <span className="pill">{t("loginDefaultPill")}</span>
             ) : (
-              <span className="pill">Universell</span>
+              <span className="pill">{t("universalPill")}</span>
             )}
           </div>
           <p className="muted">
-            Ideal, wenn du einen zuverlässigen zweiten Faktor auf mehreren Geräten nutzen willst.
+            {t("totpDescription")}
           </p>
           {hasTotpFactor && overview?.preferred_factor_type !== "totp" ? (
             <button type="button" className="button-secondary button-ghost" disabled={busy} onClick={() => void setPreferredMethod("totp")}>
-              Als Standard fürs Login setzen
+              {t("setAsDefault")}
             </button>
           ) : null}
           {!totpSetup ? (
             <button type="button" className="button-secondary" onClick={() => void startTotp()}>
-              TOTP einrichten
+              {t("setUpTotp")}
             </button>
           ) : (
             <TotpEnrollCard
@@ -154,17 +158,17 @@ export function MfaProfilePanel({ open }: Props) {
         <article className="security-method-card">
           <div className="security-method-header">
             <div>
-              <div className="eyebrow">Option B</div>
-              <h3>Passkey / WebAuthn</h3>
+              <div className="eyebrow">{t("optionB")}</div>
+              <h3>{t("passkeyTitle")}</h3>
             </div>
             {overview?.preferred_factor_type === "webauthn" ? (
-              <span className="pill">Login-Standard</span>
+              <span className="pill">{t("loginDefaultPill")}</span>
             ) : (
-              <span className="pill">Komfortabel</span>
+              <span className="pill">{t("comfortablePill")}</span>
             )}
           </div>
           <p className="muted">
-            Nutzt die sichere Entsperrung deines Geräts. Perfekt für schnelle Logins mit Face ID, Touch ID oder Windows Hello.
+            {t("passkeyDescription")}
           </p>
           {hasPasskeyFactor && overview?.preferred_factor_type !== "webauthn" ? (
             <button
@@ -173,35 +177,35 @@ export function MfaProfilePanel({ open }: Props) {
               disabled={busy}
               onClick={() => void setPreferredMethod("webauthn")}
             >
-              Als Standard fürs Login setzen
+              {t("setAsDefault")}
             </button>
           ) : null}
           {overview?.can_add_passkey_here ? (
             <div className="grid">
               <label className="field-stack">
-                <span className="field-label">Bezeichnung</span>
+                <span className="field-label">{t("designationLabel")}</span>
                 <input
                   value={passkeyLabel}
                   onChange={(event) => setPasskeyLabel(event.target.value)}
-                  placeholder="z.B. MacBook Pro"
+                  placeholder={t("passkeyLabelPlaceholder")}
                 />
               </label>
               <button type="button" className="button-secondary" disabled={busy} onClick={() => void startPasskey()}>
-                {busy ? "Passkey wird vorbereitet…" : "Passkey hinzufügen"}
+                {busy ? t("preparingPasskey") : t("addPasskey")}
               </button>
             </div>
           ) : (
             <div className="info-note">
-              Passkeys können in hocX nur auf der Hauptdomain eingerichtet werden, weil Browser diese Technik fest an die Domain binden.
+              {t("passkeyMainDomainOnlyNote")}
             </div>
           )}
         </article>
       </div>
 
       <div className="grid">
-        <div className="field-label">Aktive Faktoren</div>
+        <div className="field-label">{t("activeFactorsLabel")}</div>
         <div className="security-factor-list">
-          {!overview?.factors.length ? <div className="selection-card muted">Noch keine MFA-Faktoren eingerichtet.</div> : null}
+          {!overview?.factors.length ? <div className="selection-card muted">{t("noFactorsYet")}</div> : null}
           {overview?.factors.map((factor) => {
             // The backend already rejects this with a 409 (delete_self_factor requires at
             // least one factor to remain when MFA is required), but the button here gave
@@ -214,20 +218,20 @@ export function MfaProfilePanel({ open }: Props) {
                     <strong>{factor.label}</strong>
                     <span className="pill">{mfaFactorTypeLabel(factor.factor_type)}</span>
                   </div>
-                  <div className="muted">Eingerichtet: {formatMfaDate(factor.created_at)}</div>
-                  <div className="muted">Zuletzt verwendet: {formatMfaDate(factor.last_used_at)}</div>
+                  <div className="muted">{t("setUpAt", { date: formatMfaDate(factor.created_at, locale) })}</div>
+                  <div className="muted">{t("lastUsedAt", { date: formatMfaDate(factor.last_used_at, locale) })}</div>
                   {isLastRequiredFactor && (
-                    <div className="muted">Letzter Pflicht-Faktor kann nicht entfernt werden.</div>
+                    <div className="muted">{t("lastRequiredFactorNote")}</div>
                   )}
                 </div>
                 <button
                   type="button"
                   className="button-secondary button-danger"
                   disabled={isLastRequiredFactor}
-                  title={isLastRequiredFactor ? "Tenant-Administratoren müssen mindestens einen MFA-Faktor behalten" : undefined}
+                  title={isLastRequiredFactor ? t("lastRequiredFactorTitle") : undefined}
                   onClick={() => void deleteFactor(factor.id, factor.label)}
                 >
-                  Entfernen
+                  {t("remove")}
                 </button>
               </article>
             );

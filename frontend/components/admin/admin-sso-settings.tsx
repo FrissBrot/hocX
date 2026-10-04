@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -30,6 +31,7 @@ function toForm(cfg: PlatformOidcConfigRead | null): PlatformOidcConfigWrite {
 }
 
 export function AdminSsoSettings({ initialConfig }: Props) {
+  const t = useTranslations("admin.sso");
   const showToast = useToast();
   const [form, setForm] = useState<PlatformOidcConfigWrite>(() => toForm(initialConfig));
   const [loading, setLoading] = useState(false);
@@ -43,9 +45,9 @@ export function AdminSsoSettings({ initialConfig }: Props) {
         body: JSON.stringify(form)
       });
       setForm(toForm(updated));
-      showToast("SSO-Konfiguration gespeichert", "success");
+      showToast(t("saved"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Fehler beim Speichern", "error");
+      showToast(error instanceof Error ? error.message : t("saveFailed"), "error");
     } finally {
       setLoading(false);
     }
@@ -53,22 +55,21 @@ export function AdminSsoSettings({ initialConfig }: Props) {
 
   return (
     <section className="card">
-      <div className="eyebrow">Single Sign-On · OpenID Connect</div>
+      <div className="eyebrow">{t("eyebrow")}</div>
       <p className="muted">
-        Externe Anmeldung (SSO) ausschließlich für den Login ins Platform-Admin-Panel konfigurieren. Mandanten-Benutzer
-        sind davon nicht betroffen und melden sich weiterhin per Passwort an.
+        {t("description")}
       </p>
       <form className="grid" onSubmit={submit}>
         <label className="field-stack">
-          <span className="field-label">SSO aktiviert</span>
+          <span className="field-label">{t("enabledLabel")}</span>
           <select value={form.enabled ? "1" : "0"} onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.value === "1" }))}>
-            <option value="0">Nein</option>
-            <option value="1">Ja</option>
+            <option value="0">{t("no")}</option>
+            <option value="1">{t("yes")}</option>
           </select>
         </label>
 
         <label className="field-stack">
-          <span className="field-label">Issuer URL</span>
+          <span className="field-label">{t("issuerUrl")}</span>
           <input
             value={form.issuer_url}
             onChange={(e) => setForm((f) => ({ ...f, issuer_url: e.target.value }))}
@@ -79,21 +80,21 @@ export function AdminSsoSettings({ initialConfig }: Props) {
 
         <div className="two-col">
           <label className="field-stack">
-            <span className="field-label">Client ID</span>
+            <span className="field-label">{t("clientId")}</span>
             <input
               value={form.client_id}
               onChange={(e) => setForm((f) => ({ ...f, client_id: e.target.value }))}
-              placeholder="my-app"
+              placeholder="my-app" // i18n-ok: Beispiel-Platzhalter, keine UI-Sprache
               disabled={!form.enabled}
             />
           </label>
           <label className="field-stack">
-            <span className="field-label">Client Secret</span>
+            <span className="field-label">{t("clientSecret")}</span>
             <input
               type="password"
               value={form.client_secret}
               onChange={(e) => setForm((f) => ({ ...f, client_secret: e.target.value }))}
-              placeholder="Leer lassen = unverändert"
+              placeholder={t("clientSecretPlaceholder")}
               autoComplete="new-password"
               disabled={!form.enabled}
             />
@@ -101,18 +102,18 @@ export function AdminSsoSettings({ initialConfig }: Props) {
         </div>
 
         <label className="field-stack">
-          <span className="field-label">Scopes</span>
+          <span className="field-label">{t("scopes")}</span>
           <input
             value={form.scopes}
             onChange={(e) => setForm((f) => ({ ...f, scopes: e.target.value }))}
-            placeholder="openid email profile"
+            placeholder="openid email profile" // i18n-ok: Beispiel-Platzhalter (OAuth-Scopes), keine UI-Sprache
             disabled={!form.enabled}
           />
         </label>
 
         <div className="table-actions table-actions-start">
           <button type="submit" className="button-secondary" disabled={loading}>
-            {loading ? "…" : "Speichern"}
+            {loading ? "…" : t("save")}
           </button>
         </div>
       </form>

@@ -1,0 +1,131 @@
+{
+  "partition": {
+    "imagesHint": "Carica le immagini tramite la pagina Foto.",
+    "unsupported": "Non supportato: {names}"
+  },
+  "modal": {
+    "title": "Carica file",
+    "description": "I file finiscono in File, vengono scansionati per virus al caricamento e possono essere collegati a un evento, una consegna o un ciclo."
+  },
+  "dropzone": {
+    "releaseToUpload": "Rilascia per caricare",
+    "dragHint": "Trascina i file qui",
+    "orText": "oppure",
+    "browse": "Scegli file",
+    "formatsAriaLabel": "Formati supportati"
+  },
+  "queue": {
+    "heading": "Coda",
+    "countNone": "Nessun file selezionato",
+    "count": "{count, plural, one {# file selezionato} other {# file selezionati}}",
+    "empty": "Nessun file ancora selezionato.",
+    "uploading": "Caricamento…",
+    "ready": "Pronto per il caricamento",
+    "removeFile": "Rimuovi {name}"
+  },
+  "tags": {
+    "label": "Tag per tutti i file",
+    "placeholder": "Aggiungi tag…"
+  },
+  "footer": {
+    "summary": "{count, plural, one {# file} other {# file}}",
+    "cancel": "Annulla",
+    "uploading": "Caricamento…",
+    "uploadCount": "{count, plural, one {Carica # file} other {Carica # file}}",
+    "upload": "Carica"
+  },
+  "errors": {
+    "uploadFailed": "Caricamento non riuscito"
+  },
+  "source": {
+    "protocol": "Verbale",
+    "wordImport": "Import Word",
+    "submission": "Consegna",
+    "upload": "Caricamento"
+  },
+  "detail": {
+    "openOriginal": "Apri originale",
+    "detailsTitle": "Dettagli",
+    "source": "Origine",
+    "reference": "Riferimento",
+    "uploadedAt": "Caricato",
+    "uploadedBy": "Caricato da",
+    "fileType": "Tipo file",
+    "unknown": "Sconosciuto",
+    "size": "Dimensione",
+    "dimensions": "Dimensioni immagine",
+    "loading": "Caricamento…",
+    "originTitle": "Provenienza",
+    "tagsTitle": "Tag",
+    "saving": "Salvataggio…",
+    "tagPlaceholder": "Aggiungi tag…",
+    "openOriginalNewTab": "Apri originale in nuova scheda"
+  },
+  "table": {
+    "columnName": "Nome",
+    "columnSource": "Origine",
+    "columnReference": "Riferimento",
+    "columnUploaded": "Caricato",
+    "columnSize": "Dimensione",
+    "empty": "Nessun file trovato.",
+    "protocolRef": "Verbale {label}",
+    "download": "Scarica",
+    "share": "Condividi"
+  },
+  "view": {
+    "title": "File",
+    "descriptionEmpty": "Tutti i documenti di questa organizzazione.",
+    "description": "Tutti i file non immagine caricati di questa organizzazione - da verbali, import Word, consegne e caricamenti diretti. Per le foto vedi la pagina separata \"Foto\".",
+    "uploadButton": "+ Carica file",
+    "emptyTitle": "Ancora nessun file",
+    "emptyDescription": "I documenti da verbali e consegne si raccoglieranno qui – oppure caricali direttamente.",
+    "emptyHint": "Ogni file viene scansionato automaticamente per virus al caricamento.",
+    "searchPlaceholder": "Cerca file",
+    "tagPlaceholder": "Scegli o digita un tag…",
+    "countFiles": "{count, plural, one {# file} other {# file}}",
+    "loadMoreLoading": "Caricamento altri file…",
+    "loadMore": "Carica altri ({count} caricati)",
+    "dropOverlayTitle": "Rilascia per caricare",
+    "dropOverlayHint": "Imposterai il caricamento in seguito.",
+    "loadError": "Impossibile caricare i file.",
+    "uploadedToast": "{count, plural, one {# file caricato.} other {# file caricati.}}"
+  },
+  "sourceOptions": {
+    "all": "Tutte le origini",
+    "protocols": "Verbali",
+    "wordImport": "Import Word",
+    "submissions": "Consegne",
+    "uploads": "Caricamenti"
+  },
+  "sortOptions": {
+    "newestFirst": "Più recenti prima",
+    "oldestFirst": "Più vecchi prima",
+    "nameAsc": "Nome (A-Z)",
+    "nameDesc": "Nome (Z-A)",
+    "sizeDesc": "Dimensione (grande-piccolo)",
+    "sizeAsc": "Dimensione (piccolo-grande)"
+  },
+  "target": {
+    "ruleType": "{filename}: tipo file '.{ext}' non consentito",
+    "ruleTooLarge": "{filename}: troppo grande (max. {maxSize} MB)",
+    "ruleMaxFiles": "È consentito un massimo di {max} file per elemento ({count} selezionati)",
+    "categoryNone": "Nessun riferimento",
+    "categoryEvent": "Evento",
+    "categorySubmissionElement": "Elemento di consegna",
+    "categoryCycle": "Ciclo",
+    "referenceLabel": "Riferimento",
+    "eventLabel": "Evento",
+    "eventPlaceholder": "Scegli evento…",
+    "assignmentLabel": "Consegna",
+    "assignmentPlaceholder": "Scegli consegna…",
+    "cycleLabel": "Ciclo",
+    "cyclePlaceholder": "Scegli ciclo…",
+    "rulesPrefix": "Regole della consegna:",
+    "rulesOnlyTypes": "solo {types}",
+    "rulesAllTypes": "tutti i tipi di file",
+    "rulesPerFile": "max. {size} MB per file",
+    "rulesMaxFiles": "max. {max} file per elemento",
+    "elementLabel": "Elemento di consegna",
+    "elementPlaceholder": "Scegli elemento…"
+  }
+}

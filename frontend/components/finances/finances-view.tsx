@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { DateInput } from "@/components/ui/date-input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ActionIcon } from "@/components/ui/action-icons";
@@ -17,6 +18,9 @@ const PAGE_SIZE = 50;
 type Props = { initialAccounts: FinanceAccount[]; canWrite: boolean };
 
 export function FinancesView({ initialAccounts, canWrite }: Props) {
+  const t = useTranslations("finances");
+  const tCommon = useTranslations("common");
+  const locale = useLocale();
   const confirm = useConfirm();
   const showToast = useToast();
   const [accounts, setAccounts] = useState(initialAccounts);
@@ -126,7 +130,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
       }
       setShowAccountForm(false);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Konto konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("saveAccountFailed"), "error");
     } finally {
       setSavingAccount(false);
     }
@@ -134,13 +138,13 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
 
   async function deleteAccount(account: FinanceAccount, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!(await confirm({ message: `Konto "${account.name}" und alle Transaktionen endgültig löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
+    if (!(await confirm({ message: t("deleteAccountConfirm", { name: account.name }), tone: "danger", confirmLabel: tCommon("delete") }))) return;
     try {
       await browserApiFetch(`/api/finance/accounts/${account.id}`, { method: "DELETE" });
       setAccounts((prev) => prev.filter((a) => a.id !== account.id));
       if (selected?.id === account.id) { setSelected(null); setTransactions([]); }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Konto konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("deleteAccountFailed"), "error");
     }
   }
 
@@ -181,7 +185,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
       setShowTxForm(false);
       setEditingTx(null);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Transaktion konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("saveTxFailed"), "error");
     } finally {
       setSavingTx(false);
     }
@@ -189,12 +193,12 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
 
   async function deleteTx(tx: FinanceTransaction) {
     if (!selected) return;
-    if (!(await confirm({ message: "Transaktion endgültig löschen?", tone: "danger", confirmLabel: "Löschen" }))) return;
+    if (!(await confirm({ message: t("deleteTxConfirm"), tone: "danger", confirmLabel: tCommon("delete") }))) return;
     try {
       await browserApiFetch(`/api/finance/transactions/${tx.id}`, { method: "DELETE" });
       await Promise.all([reloadFirstPage(selected.id), refreshAccounts(selected.id)]);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Transaktion konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("deleteTxFailed"), "error");
     }
   }
 
@@ -205,28 +209,28 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
     {canWrite && (
       <Modal
         open={showAccountForm}
-        title={editingAccount ? "Konto bearbeiten" : "Neues Konto"}
-        description="Verwalte Einnahmen und Ausgaben in einem eigenen Konto."
+        title={editingAccount ? t("editAccountTitle") : t("newAccountTitle")}
+        description={t("accountModalDescription")}
         className="finance-account-modal"
         onClose={() => setShowAccountForm(false)}
       >
         <ModalSaveForm className="grid finance-form-modal" onSubmit={(event) => { event.preventDefault(); return saveAccount(); }}>
           <label className="field-stack">
-            <span className="field-label">Name</span>
-            <input value={accountDraft.name} onChange={(e) => setAccountDraft((d) => ({ ...d, name: e.target.value }))} placeholder="z. B. Vereinskasse" required autoFocus />
+            <span className="field-label">{t("nameLabel")}</span>
+            <input value={accountDraft.name} onChange={(e) => setAccountDraft((d) => ({ ...d, name: e.target.value }))} placeholder={t("namePlaceholder")} required autoFocus />
           </label>
           <label className="field-stack">
-            <span className="field-label">Währungsbezeichnung</span>
+            <span className="field-label">{t("currencyLabel")}</span>
             <input value={accountDraft.currency_label} onChange={(e) => setAccountDraft((d) => ({ ...d, currency_label: e.target.value }))} placeholder="CHF" />
           </label>
           <label className="field-stack">
-            <span className="field-label">Beschreibung (optional)</span>
-            <textarea rows={3} value={accountDraft.description} onChange={(e) => setAccountDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Beschreibung…" />
+            <span className="field-label">{t("descriptionLabel")}</span>
+            <textarea rows={3} value={accountDraft.description} onChange={(e) => setAccountDraft((d) => ({ ...d, description: e.target.value }))} placeholder={t("descriptionPlaceholder")} />
           </label>
           <div className="modal-actions">
-            <button type="button" className="button-ghost" onClick={() => setShowAccountForm(false)}>Abbrechen</button>
+            <button type="button" className="button-ghost" onClick={() => setShowAccountForm(false)}>{tCommon("cancel")}</button>
             <button data-modal-save type="submit" className="button-primary" disabled={savingAccount || !accountDraft.name.trim()}>
-              {savingAccount ? "Speichern…" : "Speichern"}
+              {savingAccount ? t("saving") : tCommon("save")}
             </button>
           </div>
         </ModalSaveForm>
@@ -241,13 +245,13 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
       <div className="grid">
         <div className="page-header">
           <div>
-            <h1 className="page-title">Finanzen</h1>
-            <p className="muted">Konten, Transaktionen und Saldo dieses Mandanten.</p>
+            <h1 className="page-title">{t("pageTitle")}</h1>
+            <p className="muted">{t("pageDescription")}</p>
           </div>
         </div>
         <EmptyState
-          title="Noch keine Transaktionen"
-          description="Lege ein Konto an und erfasse Einnahmen und Ausgaben – der Saldo wird laufend mitgerechnet."
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
           actions={
             canWrite ? (
               <>
@@ -255,19 +259,19 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
                   type="button"
                   className="button-primary"
                   onClick={() => {
-                    showToast("Lege zuerst ein Konto an – danach kannst du Transaktionen erfassen.", "info");
+                    showToast(t("addTransactionFirstHint"), "info");
                     startCreateAccount();
                   }}
                 >
-                  + Transaktion
+                  {t("addTransaction")}
                 </button>
                 <button type="button" className="button-secondary" onClick={startCreateAccount}>
-                  Konto anlegen
+                  {t("createAccount")}
                 </button>
               </>
             ) : null
           }
-          hint="Kassierte Bussen können direkt als Transaktion auf ein Konto gebucht werden."
+          hint={t("emptyHint")}
         />
         {accountModal}
       </div>
@@ -279,8 +283,8 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
       {/* ── Account sidebar ── */}
       <aside className="finance-sidebar">
         <div className="finance-sidebar-header">
-          <span className="finance-sidebar-title">Konten</span>
-          {canWrite && <button type="button" className="button-icon-soft" onClick={startCreateAccount} title="Konto erstellen" aria-label="Konto erstellen"><ActionIcon name="add" /></button>}
+          <span className="finance-sidebar-title">{t("accountsLabel")}</span>
+          {canWrite && <button type="button" className="button-icon-soft" onClick={startCreateAccount} title={t("createAccountAria")} aria-label={t("createAccountAria")}><ActionIcon name="add" /></button>}
         </div>
 
         <div className="finance-account-list">
@@ -295,18 +299,18 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
             >
               <div className="finance-account-name">{account.name}</div>
               <div className={`finance-account-balance${account.balance < 0 ? " finance-balance-negative" : ""}`}>
-                {formatAmount(account.balance, account.currency_label)}
+                {formatAmount(account.balance, account.currency_label, locale)}
               </div>
               {account.provisional_balance > 0 ? (
                 <div className="finance-account-provisional">
-                  + {formatAmount(account.provisional_balance, account.currency_label)} provisorisch
+                  + {formatAmount(account.provisional_balance, account.currency_label, locale)} {t("provisional")}
                 </div>
               ) : null}
               {account.description ? <div className="finance-account-desc">{account.description}</div> : null}
               <div className="finance-account-actions">
-                <span className="finance-account-count">{account.transaction_count} Transaktionen</span>
-                {canWrite && <button type="button" className="button-icon-soft-sm" onClick={(e) => startEditAccount(account, e)} title="Bearbeiten" aria-label="Bearbeiten"><ActionIcon name="edit" /></button>}
-                {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={(e) => void deleteAccount(account, e)} title="Löschen" aria-label="Löschen"><ActionIcon name="delete" /></button>}
+                <span className="finance-account-count">{t("transactionCount", { count: account.transaction_count })}</span>
+                {canWrite && <button type="button" className="button-icon-soft-sm" onClick={(e) => startEditAccount(account, e)} title={tCommon("edit")} aria-label={tCommon("edit")}><ActionIcon name="edit" /></button>}
+                {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={(e) => void deleteAccount(account, e)} title={tCommon("delete")} aria-label={tCommon("delete")}><ActionIcon name="delete" /></button>}
               </div>
             </div>
           ))}
@@ -319,7 +323,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
       <main className="finance-main">
         {!selected ? (
           <div className="finance-placeholder">
-            <p className="muted">Wähle ein Konto aus der Liste, um Transaktionen anzuzeigen.</p>
+            <p className="muted">{t("selectAccountHint")}</p>
           </div>
         ) : (
           <>
@@ -327,65 +331,65 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
               <div>
                 <h2 className="finance-main-title">{selected.name}</h2>
                 <div className={`finance-main-balance${selected.balance < 0 ? " finance-balance-negative" : ""}`}>
-                  {formatAmount(selected.balance, selected.currency_label)}
+                  {formatAmount(selected.balance, selected.currency_label, locale)}
                 </div>
                 {selected.provisional_balance > 0 ? (
                   <div className="finance-account-provisional">
-                    + {formatAmount(selected.provisional_balance, selected.currency_label)} provisorisch ausstehend
+                    + {formatAmount(selected.provisional_balance, selected.currency_label, locale)} {t("provisionalPending")}
                   </div>
                 ) : null}
               </div>
-              {canWrite && <button type="button" className="button-secondary" onClick={startCreateTx}>+ Transaktion</button>}
+              {canWrite && <button type="button" className="button-secondary" onClick={startCreateTx}>{t("addTransaction")}</button>}
             </div>
 
             {canWrite && showTxForm && (
               <div className="finance-tx-form">
                 <div className="finance-tx-form-row">
                   <label className="field-stack finance-tx-field-amount">
-                    <span className="field-label">Betrag ({currency})</span>
+                    <span className="field-label">{t("amountWithCurrencyLabel", { currency })}</span>
                     <input
                       value={txDraft.amount}
                       onChange={(e) => setTxDraft((d) => ({ ...d, amount: e.target.value }))}
-                      placeholder="z. B. 50 oder -30"
+                      placeholder={t("amountPlaceholder")}
                       autoFocus
                       onKeyDown={(e) => { if (e.key === "Enter") void saveTx(); if (e.key === "Escape") setShowTxForm(false); }}
                     />
-                    <span className="finance-tx-hint">Positiv = Einnahme, negativ = Ausgabe</span>
+                    <span className="finance-tx-hint">{t("amountHint")}</span>
                   </label>
                   <label className="field-stack finance-tx-field-desc">
-                    <span className="field-label">Beschreibung</span>
+                    <span className="field-label">{t("txDescriptionLabel")}</span>
                     <input
                       value={txDraft.description}
                       onChange={(e) => setTxDraft((d) => ({ ...d, description: e.target.value }))}
-                      placeholder="Wofür?"
+                      placeholder={t("txDescriptionPlaceholder")}
                       onKeyDown={(e) => { if (e.key === "Enter") void saveTx(); if (e.key === "Escape") setShowTxForm(false); }}
                     />
                   </label>
                   <label className="field-stack finance-tx-field-date">
-                    <span className="field-label">Datum</span>
+                    <span className="field-label">{t("dateLabel")}</span>
                     <DateInput value={txDraft.transaction_date} onChange={(value) => setTxDraft((d) => ({ ...d, transaction_date: value }))} />
                   </label>
                 </div>
                 <div className="finance-form-actions">
-                  <button type="button" className="button-secondary" onClick={() => { setShowTxForm(false); setEditingTx(null); }}>Abbrechen</button>
+                  <button type="button" className="button-secondary" onClick={() => { setShowTxForm(false); setEditingTx(null); }}>{tCommon("cancel")}</button>
                   <button type="button" className="button-secondary" onClick={() => void saveTx()} disabled={savingTx || !txDraft.description.trim() || !txDraft.amount}>
-                    {savingTx ? "Speichern…" : editingTx ? "Aktualisieren" : "Hinzufügen"}
+                    {savingTx ? t("saving") : editingTx ? t("update") : tCommon("add")}
                   </button>
                 </div>
               </div>
             )}
 
             {loadingTx ? (
-              <p className="muted">Lade…</p>
+              <p className="muted">{tCommon("loading")}</p>
             ) : transactions.length === 0 ? (
-              <p className="muted finance-empty">Keine Transaktionen. Füge deine erste Transaktion hinzu.</p>
+              <p className="muted finance-empty">{t("noTransactions")}</p>
             ) : (
               <div className="finance-tx-table">
                 <div className="finance-tx-header">
-                  <span>Datum</span>
-                  <span>Beschreibung</span>
-                  <span className="finance-tx-cell-right">Betrag</span>
-                  <span className="finance-tx-cell-right">Saldo</span>
+                  <span>{t("colDate")}</span>
+                  <span>{t("colDescription")}</span>
+                  <span className="finance-tx-cell-right">{t("colAmount")}</span>
+                  <span className="finance-tx-cell-right">{t("colBalance")}</span>
                   <span></span>
                 </div>
                 {transactions.map((tx) => {
@@ -397,14 +401,14 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
                         {tx.description}
                       </span>
                       <span className={`finance-tx-amount finance-tx-cell-right${tx.amount < 0 ? " finance-amount-neg" : " finance-amount-pos"}`}>
-                        {tx.amount > 0 ? "+" : ""}{formatAmount(tx.amount, currency)}
+                        {tx.amount > 0 ? "+" : ""}{formatAmount(tx.amount, currency, locale)}
                       </span>
                       <span className={`finance-tx-running finance-tx-cell-right${running < 0 ? " finance-balance-negative" : ""}`}>
-                        {formatAmount(running, currency)}
+                        {formatAmount(running, currency, locale)}
                       </span>
                       <span className="finance-tx-actions">
-                        {canWrite && <button type="button" className="button-icon-soft-sm" onClick={() => startEditTx(tx)} title="Bearbeiten" aria-label="Bearbeiten"><ActionIcon name="edit" /></button>}
-                        {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={() => void deleteTx(tx)} title="Löschen" aria-label="Löschen"><ActionIcon name="delete" /></button>}
+                        {canWrite && <button type="button" className="button-icon-soft-sm" onClick={() => startEditTx(tx)} title={tCommon("edit")} aria-label={tCommon("edit")}><ActionIcon name="edit" /></button>}
+                        {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={() => void deleteTx(tx)} title={tCommon("delete")} aria-label={tCommon("delete")}><ActionIcon name="delete" /></button>}
                       </span>
                     </div>
                   );
@@ -415,10 +419,10 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
             {hasMoreTx && (
               <div className="load-more-row" ref={loadMoreTxSentinelRef}>
                 {isLoadingMoreTx ? (
-                  <span className="muted">Lädt weitere Transaktionen…</span>
+                  <span className="muted">{t("loadingMore")}</span>
                 ) : (
                   <button type="button" className="button-secondary button-ghost" onClick={() => void loadMoreTx()}>
-                    Mehr laden ({transactions.length} geladen)
+                    {t("loadMore", { count: transactions.length })}
                   </button>
                 )}
               </div>
@@ -434,8 +438,8 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function formatAmount(amount: number, currency: string): string {
+function formatAmount(amount: number, currency: string, locale: string): string {
   const abs = Math.abs(amount).toFixed(2);
-  const formatted = Number(abs).toLocaleString("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatted = Number(abs).toLocaleString(`${locale}-CH`, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return `${amount < 0 ? "−" : ""}${formatted} ${currency}`;
 }

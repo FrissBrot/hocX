@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
+import { useLocale } from "next-intl";
 
 declare global {
   interface Window {
@@ -19,6 +20,7 @@ type Props = {
 };
 
 export function CaptchaWidget({ sitekey, onSolved, onExpired, widgetRef }: Props) {
+  const locale = useLocale();
   const id = useId().replace(/[^a-zA-Z0-9]/g, "");
   const callbackName = `frcCallback_${id}`;
   const expiredCallbackName = `frcExpired_${id}`;
@@ -68,7 +70,7 @@ export function CaptchaWidget({ sitekey, onSolved, onExpired, widgetRef }: Props
       data-sitekey={sitekey}
       data-callback={callbackName}
       data-expired-callback={expiredCallbackName}
-      data-lang="de"
+      data-lang={locale}
       data-start="auto"
       data-puzzle-endpoint="https://api.friendlycaptcha.com/api/v1/puzzle"
       data-worker-src="/friendly-challenge.worker.min.js"

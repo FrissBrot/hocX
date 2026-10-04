@@ -1,0 +1,22 @@
+{
+  "modal": {
+    "title": "Condividi link",
+    "createFailed": "Impossibile creare il link.",
+    "createdHint": "Chiunque abbia questo link può scaricare i file senza accedere.",
+    "linkLabel": "Link di condivisione",
+    "done": "Fatto",
+    "nameLabel": "Nome",
+    "expiryLabel": "Data di scadenza",
+    "expiryHint": "Facoltativo – senza data di scadenza il link resta attivo finché non viene revocato.",
+    "cancel": "Annulla",
+    "creating": "Creazione…",
+    "create": "Crea link"
+  },
+  "publicPage": {
+    "linkUnavailable": "Link non disponibile",
+    "linkUnavailableHint": "Questo link non è valido, è scaduto o è stato revocato.",
+    "fileCount": "{count, plural, one {# file} other {# file}} da scaricare",
+    "downloadAll": "Scarica tutto",
+    "noFiles": "Nessun file disponibile."
+  }
+}

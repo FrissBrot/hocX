@@ -1,0 +1,86 @@
+{
+  "pageTitle": "Participants",
+  "pageDescriptionEmpty": "Membres et invités de cette organisation.",
+  "pageDescription": "Personnes de l'organisation pouvant ensuite être associées à des modèles et des tâches.",
+  "csvImport": "Import CSV",
+  "deleteSelection": "Supprimer la sélection",
+  "newParticipant": "Nouveau participant",
+  "emptyState": {
+    "title": "Aucun participant pour l'instant",
+    "description": "Ajoutez des membres individuellement ou importez une liste existante – ils seront alors disponibles pour les présences, tâches et amendes.",
+    "addParticipant": "+ Participant",
+    "importList": "Importer une liste"
+  },
+  "searchPlaceholder": "Rechercher des participants",
+  "columns": {
+    "name": "Participant",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "email": "E-mail",
+    "status": "Statut",
+    "actions": "Actions"
+  },
+  "emptyFiltered": "Aucun participant trouvé pour le filtre actuel.",
+  "fallbackName": "Participant",
+  "statusActive": "Actif",
+  "statusInactive": "Inactif",
+  "delete": "Supprimer",
+  "loadingMore": "Chargement d'autres participants…",
+  "loadMore": "Charger plus ({count} chargés)",
+  "csvPreview": {
+    "title": "Aperçu CSV",
+    "description": "{count} entrées détectées. Seuls le prénom, le nom, le surnom et l'e-mail sont importés.",
+    "displayName": "Nom d'affichage",
+    "cancel": "Annuler",
+    "importing": "Import en cours…",
+    "importEntries": "Importer {count} entrées"
+  },
+  "importResult": {
+    "title": "Import terminé",
+    "imported": "{count} importés",
+    "duplicatesSkipped": "{count} doublons ignorés",
+    "errorsCount": "{count} erreurs",
+    "skippedExisting": "Ignorés (déjà existants)",
+    "errorsLabel": "Erreurs",
+    "close": "Fermer"
+  },
+  "editModal": {
+    "createTitle": "Créer un participant",
+    "editTitle": "Modifier le participant",
+    "description": "Des modèles peuvent être directement attribués aux participants et sélectionnés plus tard dans les tâches.",
+    "displayName": "Nom d'affichage",
+    "active": "Actif",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "email": "E-mail",
+    "joinedAt": "Date d'entrée",
+    "joinedAtHint": "N'apparaît dans les listes de présence qu'à partir de cette date. Vide = aucun début défini.",
+    "leftAt": "Date de sortie",
+    "leftAtHint": "N'apparaît plus dans les listes de présence à partir du lendemain. Vide = aucune sortie définie.",
+    "templates": "Modèles",
+    "noDescription": "Aucun texte de description",
+    "save": "Enregistrer le participant",
+    "create": "Créer le participant"
+  },
+  "toasts": {
+    "loadMoreFailed": "Impossible de charger d'autres participants",
+    "templatesLoadFailed": "Impossible de charger les modèles attribués",
+    "leftBeforeJoined": "La date de sortie ne peut pas précéder la date d'entrée",
+    "updated": "{name} mis à jour",
+    "created": "{name} créé",
+    "saveFailed": "Le participant n'a pas pu être enregistré",
+    "deleteConfirmMessage": "Supprimer définitivement le participant ? Cette action est irréversible.",
+    "deleteConfirmLabel": "Supprimer",
+    "deletedSingle": "Participant « {name} » supprimé",
+    "deleteFailed": "Le participant n'a pas pu être supprimé",
+    "deleteUnnamed": "Sans nom",
+    "bulkDeleteConfirmMessage": "Supprimer définitivement {count} participants ? Cette action est irréversible.",
+    "bulkDeleted": "Participants supprimés",
+    "bulkDeleteFailed": "Les participants n'ont pas pu être supprimés",
+    "csvImportFailed": "Échec de l'import CSV"
+  },
+  "membership": {
+    "leftSince": "Sorti le {date}",
+    "joinsFrom": "Entrée à partir du {date}"
+  }
+}

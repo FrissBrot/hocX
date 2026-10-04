@@ -1,6 +1,6 @@
 # hocX – Hinweise für Claude Code
 
-Monorepo: `frontend/` (Next.js, Hauptapp + Plattform-Admin), `abgabebox-frontend/` (öffentliche Upload-Seite), `backend/` (FastAPI), `design/` (Design-Tokens und -Regeln). Sprache in UI-Texten und Kommentaren: Deutsch.
+Monorepo: `frontend/` (Next.js, Hauptapp + Plattform-Admin), `abgabebox-frontend/` (öffentliche Upload-Seite), `backend/` (FastAPI), `design/` (Design-Tokens und -Regeln). Kommentare und Entwicklerdokumentation: Deutsch. UI-Texte: siehe Abschnitt „Internationalisierung / i18n" unten — hocX ist mehrsprachig, kein UI-Text wird mehr direkt auf Deutsch in Komponenten geschrieben.
 
 ## Codebase-Navigation und Kontext
 
@@ -21,6 +21,55 @@ Kurzfassung, falls die Datei nicht geladen wurde:
 - Neue Optik als Klasse in `frontend/app/globals.css`, nicht als Inline-Style. Light **und** Dark prüfen.
 - Tokens nur in `design/tokens.css` ändern, danach `./scripts/sync-design-tokens.sh` (die Kopien in `frontend/app/tokens.css` und `abgabebox-frontend/app/tokens.css` nie von Hand bearbeiten).
 - Vor jedem Commit mit UI-Änderung: `python3 scripts/check-design-rules.py` muss `Design-Regeln: ok` melden. Ausnahmen nur mit `design-ok`-Kommentar in derselben Zeile und kurzer Begründung.
+
+## Internationalisierung / i18n – VERBINDLICH
+
+hocX ist eine mehrsprachige Anwendung (next-intl, ohne URL-Locale-Routing). Die aktuell unterstützten
+Sprachen werden **ausschliesslich** aus `i18n/locales.json` bestimmt (Default: `de`) — generiert via
+`python3 scripts/sync-i18n-config.py` nach `frontend/i18n/locale-config.generated.ts`,
+`abgabebox-frontend/i18n/locale-config.generated.ts` und `backend/app/core/locale_config_generated.py`
+(analog zu `design/tokens.css` + `sync-design-tokens.sh`: Quelle einmal ändern, Sync-Skript laufen
+lassen, generierte Dateien nie von Hand editieren). Eine Sprachliste wie `["de", "en", "fr", "it"]`
+darf an **keiner weiteren Stelle** im Code auftauchen — CI, Tests, Language Selector und
+Backend-Validierung lesen immer aus dieser generierten Konfiguration.
+
+Verbindliche Regeln:
+
+1. Kein neuer benutzersichtbarer UI-Text wird direkt in React-/TSX-Komponenten geschrieben.
+   Jeder neue Text braucht einen semantischen Translation Key (`participants.delete.confirmTitle`,
+   nicht `text1`) in `frontend/messages/<locale>/<namespace>.json` bzw.
+   `abgabebox-frontend/messages/<locale>/<namespace>.json`.
+2. Bei jeder neuen Funktion/UI-Änderung müssen im selben Change Übersetzungen für **alle** aktuell
+   registrierten Sprachen ergänzt werden (`python3 scripts/check-i18n-completeness.py` muss „ok"
+   melden) — auch wenn der Auftrag Mehrsprachigkeit nicht ausdrücklich erwähnt. Eine UI-Aufgabe gilt
+   nicht als abgeschlossen, solange Übersetzungen fehlen.
+3. Client-Komponenten: `useTranslations("<namespace>")` aus `next-intl`. Async Server Components
+   (`page.tsx` ohne `"use client"`): `getTranslations("<namespace>")` aus `next-intl/server`. Reine
+   Hilfsfunktionen/Modul-Konstanten ohne eigene Komponente (z.B. `section-tabs.ts`) nehmen `t` als
+   Parameter entgegen, statt selbst einen Hook aufzurufen — siehe `app-shell-nav.ts::formatRoleLabel`
+   und `section-tabs.ts` als Vorbild.
+4. Variablen und Pluralisierung immer über ICU-Syntax (`t("key", { count })` mit
+   `"{count, plural, one {...} other {...}}"`), nie String-Konkatenation.
+5. Datum/Zeit/Zahlen: `formatDateTime`/`formatTime`/`formatWeekdayDate`/`formatRappen` aus
+   `frontend/lib/utils/format.ts` nehmen optional die aktuelle UI-Locale (`useLocale()`) entgegen.
+   Ausnahme bewusst: `formatDate`/`formatDateInputValue`/`DateInput` bleiben **immer** `TT.MM.JJJJ`
+   (siehe `design/DESIGN.md` Abschnitt 6 — das ist ein festes Eingabeformat, keine Sprachfrage).
+6. Sprachauswahl persistiert für eingeloggte Nutzer in `app_user.preferred_language` (Pydantic-
+   validiert gegen die zentrale Locale-Liste, siehe `backend/app/schemas/user.py`) und wird bei
+   Login/Session-Abruf/Self-Update serverseitig in den Cookie `hocx_locale` gespiegelt
+   (`issue_locale_cookie` in `backend/app/core/security.py`) — Priorität bei der Ermittlung:
+   gespeicherte Präferenz → Cookie → Browser-Sprache → Default. Eine unbekannte/nicht unterstützte
+   Locale fällt immer auf `de` zurück, bricht nie die Anwendung.
+7. Prüfungen vor Abschluss jeder UI-Aufgabe (siehe auch Abschnitt „Prüfen" unten):
+   `python3 scripts/check-i18n-completeness.py` und `python3 scripts/check-i18n-hardcoded-text.py`
+   müssen „ok" melden. Ein echter Fund im Hardcoded-Text-Check wird übersetzt; ein False Positive
+   (kein UI-Text) wird mit `// i18n-ok: <Begründung>` in derselben Zeile markiert.
+8. Neue Sprache hinzufügen: ausschliesslich `i18n/locales.json` ergänzen, `sync-i18n-config.py`
+   laufen lassen, dann für jeden registrierten Namespace eine `messages/<neue-locale>/<namespace>.json`
+   anlegen. Language Selector, CI und Tests erkennen sie danach automatisch — kein Code in
+   Komponenten, CI-Workflows oder Testdateien wird dafür angepasst.
+9. Bei UI-Reviews explizit auf i18n-Vollständigkeit achten (fehlende Keys, hart codierte Strings,
+   fehlende Pluralregeln).
 
 ## Zentrale Fehlererfassung (verbindlich)
 
@@ -43,6 +92,7 @@ Beim Schreiben oder Ändern von Backend-Code (Routen, Services) gilt deshalb:
 Projektabhängigkeiten und Projektbefehle laufen in Containern. Auf dem Host installiertes Node/Python dient auch Dev-Tools und ist kein Grund, Frontend- oder Backend-Abhängigkeiten auf dem Host zu installieren oder Projektbefehle dorthin zu verlagern.
 
 - Typecheck/Tests Frontend: `docker compose exec frontend node_modules/.bin/tsc --noEmit` bzw. `.../vitest run`
+- i18n (vor jedem Commit mit UI-Änderung): `python3 scripts/check-i18n-completeness.py` und `python3 scripts/check-i18n-hardcoded-text.py`, nach jeder Änderung an `i18n/locales.json` zusätzlich `python3 scripts/sync-i18n-config.py`
 - E2E-Stack (eigene DB, Wegwerf-Konten): `./scripts/e2e.sh up` / `test` / `down`
 - Für visuelle Vergleiche Playwright-Screenshots gegen den E2E-Stack (`mcr.microsoft.com/playwright:v1.55.0-noble`), Light/Dark, 1440 und 390 px.
 - Zuerst die kleinste relevante Prüfung ausführen; vollständige Test- oder E2E-Suites nur, wenn sie für die Änderung sinnvoll sind.

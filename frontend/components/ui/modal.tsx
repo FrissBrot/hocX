@@ -2,6 +2,7 @@
 
 import { ComponentProps, createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
 import { ActionIcon } from "@/components/ui/action-icons";
@@ -44,6 +45,7 @@ type ModalProps = {
 };
 
 export function Modal({ open, title, description, children, onClose, onEscape, size = "default", headerActions, hideCloseButton = false, hideHeader = false, header, footer, className = "" }: ModalProps) {
+  const t = useTranslations("common");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -84,7 +86,7 @@ export function Modal({ open, title, description, children, onClose, onEscape, s
             <div className="modal-header-actions">
               {headerActions}
               {!hideCloseButton ? (
-                <button type="button" className="button-icon modal-close" onClick={onClose} aria-label="Schliessen">
+                <button type="button" className="button-icon modal-close" onClick={onClose} aria-label={t("close")}>
                   <ActionIcon name="close" />
                 </button>
               ) : null}

@@ -1,6 +1,7 @@
 "use client";
 
 import { FocusEvent, InputHTMLAttributes, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { formatDateInputValue, parseDateInputValue } from "@/lib/utils/format";
 
@@ -21,6 +22,7 @@ export function DateInput({
   max,
   ...props
 }: DateInputProps) {
+  const t = useTranslations("common");
   const [displayValue, setDisplayValue] = useState(() => formatDateInputValue(value));
   const textInputRef = useRef<HTMLInputElement | null>(null);
   const nativeInputRef = useRef<HTMLInputElement | null>(null);
@@ -44,7 +46,7 @@ export function DateInput({
     const normalized = parseDateInputValue(trimmed);
     if (!normalized) {
       if (targetInput) {
-        targetInput.setCustomValidity("Bitte Datum als TT.MM.JJJJ eingeben");
+        targetInput.setCustomValidity(t("dateField.invalidFormat"));
       }
       return;
     }
@@ -103,7 +105,7 @@ export function DateInput({
             onChange(normalized);
             return;
           }
-          event.target.setCustomValidity("Bitte Datum als TT.MM.JJJJ eingeben");
+          event.target.setCustomValidity(t("dateField.invalidFormat"));
         }}
         onBlur={handleBlur}
       />
@@ -112,8 +114,8 @@ export function DateInput({
         className="date-input-picker"
         onClick={openNativePicker}
         disabled={disabled || readOnly}
-        aria-label="Datum waehlen"
-        title="Datum waehlen"
+        aria-label={t("dateField.chooseDate")}
+        title={t("dateField.chooseDate")}
       >
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <rect x="2.25" y="3.25" width="11.5" height="10.5" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" />

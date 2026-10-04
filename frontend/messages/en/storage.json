@@ -1,0 +1,18 @@
+{
+  "categoryHints": {
+    "photos": "Gallery, protocol images and submission-box images",
+    "files": "Word imports, submission-box documents and other uploads",
+    "protocols": "Generated PDF/LaTeX exports",
+    "other": "Logos, imports and other files"
+  },
+  "quotaComposition": {
+    "fromPlan": "{size} from plan",
+    "fromPackages": "+ {size} from add-on packages"
+  },
+  "breakdown": {
+    "columnCategory": "Category",
+    "columnSize": "Size",
+    "columnShare": "Share",
+    "empty": "No files yet."
+  }
+}

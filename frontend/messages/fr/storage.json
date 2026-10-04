@@ -1,0 +1,18 @@
+{
+  "categoryHints": {
+    "photos": "Galerie, images de procès-verbaux et images de la boîte de dépôt",
+    "files": "Imports Word, documents de la boîte de dépôt et autres téléversements",
+    "protocols": "Exports PDF/LaTeX générés",
+    "other": "Logos, imports et autres fichiers"
+  },
+  "quotaComposition": {
+    "fromPlan": "{size} de l'abonnement",
+    "fromPackages": "+ {size} de forfaits complémentaires"
+  },
+  "breakdown": {
+    "columnCategory": "Catégorie",
+    "columnSize": "Taille",
+    "columnShare": "Part",
+    "empty": "Aucun fichier pour l'instant."
+  }
+}

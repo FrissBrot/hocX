@@ -141,7 +141,7 @@ def logout(
 
 
 @router.get("/session", response_model=SessionRead)
-def session(request: Request, db: Session = Depends(get_db), user: CurrentUser | None = Depends(get_optional_current_user)):
+def session(request: Request, response: Response, db: Session = Depends(get_db), user: CurrentUser | None = Depends(get_optional_current_user)):
     # bridge_redirect_url is only ever computed for a request on the main domain, for a tenant
     # with a currently-healthy custom domain (see resolve_bridge_redirect) - the frontend is
     # additionally responsible for cooldown-guarding repeated attempts (see
@@ -156,7 +156,7 @@ def session(request: Request, db: Session = Depends(get_db), user: CurrentUser |
             user.current_tenant_id,
             mfa_verified=user.mfa_verified,
         )
-    return service.session(user, bridge_redirect_url)
+    return service.session(user, response, bridge_redirect_url)
 
 
 @router.get("/bridge")

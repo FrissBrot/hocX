@@ -4,7 +4,18 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.core.locale_config_generated import SUPPORTED_LOCALES
+
+
+def _validate_preferred_language(value: str | None) -> str | None:
+    # ValueError ist hier bewusst die kuratierte Konvention (siehe CLAUDE.md, Abschnitt
+    # "Zentrale Fehlererfassung"): eine unbekannte Locale ist ein erwarteter Validierungsfehler,
+    # kein unerwarteter Serverfehler, und landet deshalb nicht in system_error_log.
+    if value is not None and value not in SUPPORTED_LOCALES:
+        raise ValueError(f"Unbekannte Sprache: {value!r} (unterstuetzt: {sorted(SUPPORTED_LOCALES)})")
+    return value
 
 class TenantRead(BaseModel):
     # Built via explicit keyword construction (tenant_service.py, auth_service.session())
@@ -83,6 +94,8 @@ class UserBase(BaseModel):
     is_active: bool = True
     external_identity_json: dict[str, Any] = Field(default_factory=dict)
 
+    _validate_preferred_language = field_validator("preferred_language")(_validate_preferred_language)
+
 
 class UserCreate(UserBase):
     password: str = Field(min_length=12)
@@ -105,10 +118,14 @@ class UserUpdate(BaseModel):
     role_code: str | None = None
     login_enabled: bool | None = None
 
+    _validate_preferred_language = field_validator("preferred_language")(_validate_preferred_language)
+
 
 class UserSelfUpdate(BaseModel):
     preferred_language: str | None = None
     protocol_accordion_enabled: bool | None = None
+
+    _validate_preferred_language = field_validator("preferred_language")(_validate_preferred_language)
 
 
 class UserPasswordChange(BaseModel):

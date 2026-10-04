@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.rate_limit import check_account_lockout, record_failed_attempt
-from app.core.security import CurrentUser, DUMMY_PASSWORD_HASH, build_current_user, issue_session_cookie, verify_password
+from app.core.security import CurrentUser, DUMMY_PASSWORD_HASH, build_current_user, issue_locale_cookie, issue_session_cookie, verify_password
 from app.models import AppUser
 from app.schemas.mfa import (
     LoginResponse,
@@ -96,6 +96,7 @@ class AuthService:
             return False
 
         issue_session_cookie(response, user_id, mfa_verified=mfa_verified)
+        issue_locale_cookie(response, user.preferred_language)
         return True
 
     def verify_login_totp(
@@ -202,9 +203,15 @@ class AuthService:
             mfa_verified=True,
         )
 
-    def session(self, user: CurrentUser | None, bridge_redirect_url: str | None = None) -> SessionRead:
+    def session(self, user: CurrentUser | None, response: Response, bridge_redirect_url: str | None = None) -> SessionRead:
         if user is None:
             return SessionRead(authenticated=False)
+
+        # Haelt den Locale-Cookie bei jedem Session-Abruf frisch, falls preferred_language auf
+        # einem anderen Geraet geaendert wurde (siehe issue_locale_cookie-Docstring) - deckt
+        # Prioritaetsstufe 1 ("explizit gespeicherte Benutzerpraeferenz") ab, ohne dass next-intl
+        # selbst einen Backend-Request braucht.
+        issue_locale_cookie(response, user.preferred_language)
 
         current_tenant = TenantRead(
             id=user.current_tenant_public_id,
@@ -241,6 +248,7 @@ class AuthService:
     ) -> LoginResponse:
         current_user = build_current_user(db, user, mfa_verified=mfa_verified)
         issue_session_cookie(response, user.id, mfa_verified=mfa_verified)
+        issue_locale_cookie(response, user.preferred_language)
         _audit.log(db, action="user.login", actor=current_user)
         bridge_redirect_url = domain_bridge_service.resolve_bridge_redirect(
             db,
@@ -249,4 +257,4 @@ class AuthService:
             current_user.current_tenant_id,
             mfa_verified=mfa_verified,
         )
-        return LoginResponse(**self.session(current_user, bridge_redirect_url).model_dump(), mfa=None)
+        return LoginResponse(**self.session(current_user, response, bridge_redirect_url).model_dump(), mfa=None)

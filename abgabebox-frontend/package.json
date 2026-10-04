@@ -11,6 +11,7 @@
   "dependencies": {
     "friendly-challenge": "^0.9.20",
     "next": "16.3.6",
+    "next-intl": "^4.14.8",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

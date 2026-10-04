@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { AlbumPhotoPicker } from "./album-photo-picker";
 import { AlbumReleaseNotice } from "./album-share-release";
@@ -13,14 +14,19 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { AlbumShareRequest, PhotoAlbum as Album, PhotoAlbumKind } from "@/types/api";
 
-const ALBUM_KIND_LABEL: Record<PhotoAlbumKind, string> = {
-  manual: "Manuell erstellt",
-  cycle: "Zyklus",
-  submission: "Abgabe",
-  submission_element: "Abgabe-Element",
-};
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
+function albumKindLabel(t: TFunc): Record<PhotoAlbumKind, string> {
+  return {
+    manual: t("kindLabel.manual"),
+    cycle: t("kindLabel.cycle"),
+    submission: t("kindLabel.submission"),
+    submission_element: t("kindLabel.submissionElement"),
+  };
+}
 
 function PendingAlbumShareRequests({ requests, onDone }: { requests: AlbumShareRequest[]; onDone: () => void }) {
+  const t = useTranslations("photos.albums");
   const toast = useToast();
   const [busyAlbumId, setBusyAlbumId] = useState<string | null>(null);
 
@@ -29,10 +35,10 @@ function PendingAlbumShareRequests({ requests, onDone }: { requests: AlbumShareR
     setBusyAlbumId(albumId);
     try {
       await browserApiFetch(`/api/files/albums/${albumId}/respond`, { method: "POST", body: JSON.stringify({ accept }) });
-      toast(accept ? "Album-Freigabe angenommen." : "Anfrage abgelehnt.", "success");
+      toast(accept ? t("pendingRequests.acceptedToast") : t("pendingRequests.rejectedToast"), "success");
       onDone();
     } catch {
-      toast("Anfrage konnte nicht beantwortet werden.", "error");
+      toast(t("pendingRequests.respondError"), "error");
     } finally {
       setBusyAlbumId(null);
     }
@@ -42,26 +48,22 @@ function PendingAlbumShareRequests({ requests, onDone }: { requests: AlbumShareR
 
   return (
     <div className="card album-share-requests">
-      <div className="eyebrow">Anfragen</div>
+      <div className="eyebrow">{t("pendingRequests.eyebrow")}</div>
       {requests.map((request) => (
         <div key={request.album_id} className="record-list-row album-share-row">
           <span className="album-share-row-name">
-            <strong>{request.owner_tenant_name}</strong> möchte das Album „{request.album_name}“ mit dir teilen.
+            <strong>{request.owner_tenant_name}</strong> {t("pendingRequests.requestText", { name: request.album_name })}
           </span>
           <button type="button" className="button-primary" disabled={busyAlbumId === request.album_id} onClick={() => void respond(request.album_id, true)}>
-            Annehmen
+            {t("pendingRequests.accept")}
           </button>
           <button type="button" className="button-ghost" disabled={busyAlbumId === request.album_id} onClick={() => void respond(request.album_id, false)}>
-            Ablehnen
+            {t("pendingRequests.reject")}
           </button>
         </div>
       ))}
     </div>
   );
-}
-
-function photoCountLabel(count: number) {
-  return count === 1 ? "1 Foto" : `${count} Fotos`;
 }
 
 export function PhotoAlbums({
@@ -75,6 +77,7 @@ export function PhotoAlbums({
   // Freigaben haben sich geändert - der Hinweis auf der Fotos-Seite lädt neu.
   onReleaseChanged?: () => void;
 } = {}) {
+  const t = useTranslations("photos.albums");
   const toast = useToast();
   const [albums, setAlbums] = useState<Album[]>([]);
   const [active, setActive] = useState<Album | null>(null);
@@ -97,7 +100,7 @@ export function PhotoAlbums({
         setAlbums(data ?? []);
         setActive((current) => (current ? data?.find((album) => album.id === current.id) ?? current : current));
       })
-      .catch(() => setError("Alben konnten nicht geladen werden."))
+      .catch(() => setError(t("loadError")))
       .finally(() => setLoading(false));
     browserApiFetch<AlbumShareRequest[]>("/api/files/album-share-requests")
       .then((data) => setPendingRequests(data ?? []))
@@ -134,11 +137,11 @@ export function PhotoAlbums({
         method: "POST",
         body: JSON.stringify({}),
       });
-      toast(`${photoCountLabel(result?.released ?? 0)} freigegeben.`, "success");
+      toast(t("releasedToast", { count: result?.released ?? 0 }), "success");
       setPendingOnly(false);
       handleReleased();
     } catch {
-      toast("Fotos konnten nicht freigegeben werden.", "error");
+      toast(t("releaseError"), "error");
     } finally {
       setReleasing(false);
     }
@@ -160,7 +163,7 @@ export function PhotoAlbums({
         setName("");
       }
     } catch {
-      setError("Album konnte nicht erstellt werden.");
+      setError(t("createError"));
     } finally { setBusy(false); }
   }
 
@@ -169,35 +172,35 @@ export function PhotoAlbums({
       <div className="grid">
         <div className="page-header">
           <div>
-            <button type="button" className="button-ghost" onClick={() => { setActive(null); setPendingOnly(false); setRevision((value) => value + 1); }}>← Alle Alben</button>
+            <button type="button" className="button-ghost" onClick={() => { setActive(null); setPendingOnly(false); setRevision((value) => value + 1); }}>{t("backToAlbums")}</button>
             <h2>{active.name}</h2>
             <p className="muted">
-              {ALBUM_KIND_LABEL[active.kind]}{active.kind !== "manual" ? " (automatisch geführt)" : ""}
-              {active.owner_tenant_name ? ` · Geteilt von ${active.owner_tenant_name}` : ""}
+              {albumKindLabel(t)[active.kind]}{active.kind !== "manual" ? t("autoManagedSuffix") : ""}
+              {active.owner_tenant_name ? t("sharedBySuffix", { name: active.owner_tenant_name }) : ""}
             </p>
             {active.shared_with.length > 0 && (
               <p className="muted">
-                Geteilt mit: {active.shared_with.map((share) => `${share.tenant_name ?? `Mandant ${share.tenant_public_id.slice(0, 8)}…`} (${share.status === "accepted" ? "aktiv" : share.status === "pending" ? "angefragt" : "abgelehnt"})`).join(", ")}
+                {t("sharedWithPrefix")}{active.shared_with.map((share) => `${share.tenant_name ?? t("unknownTenant", { id: `${share.tenant_public_id.slice(0, 8)}…` })} (${share.status === "accepted" ? t("statusActive") : share.status === "pending" ? t("statusPending") : t("statusDeclined")})`).join(", ")}
               </p>
             )}
           </div>
           <div className="table-toolbar-actions">
-            <button type="button" className="button-secondary" onClick={() => setPicking(true)}>Vorhandene Fotos hinzufügen</button>
-            <button type="button" className="button-secondary" onClick={() => setSharingLink(true)}>Link teilen</button>
+            <button type="button" className="button-secondary" onClick={() => setPicking(true)}>{t("addExistingPhotos")}</button>
+            <button type="button" className="button-secondary" onClick={() => setSharingLink(true)}>{t("shareLink")}</button>
             {!active.owner_tenant_name && (
-              <button type="button" className="button-secondary" onClick={() => setSharingTenant(true)}>Mit anderem Mandanten teilen</button>
+              <button type="button" className="button-secondary" onClick={() => setSharingTenant(true)}>{t("shareWithTenant")}</button>
             )}
           </div>
         </div>
         {active.pending_share_count > 0 && (
           <AlbumReleaseNotice
-            message={`${photoCountLabel(active.pending_share_count)} ${active.pending_share_count === 1 ? "wurde" : "wurden"} automatisch einsortiert und ${active.pending_share_count === 1 ? "ist" : "sind"} noch nicht geteilt. Erst nach deiner Freigabe ${active.pending_share_count === 1 ? "ist es" : "sind sie"} für die Partner sichtbar.`}
+            message={t("pendingNotice", { count: active.pending_share_count })}
           >
             <button type="button" className="button-ghost" onClick={() => setPendingOnly((current) => !current)}>
-              {pendingOnly ? "Alle Fotos anzeigen" : "Nur ausstehende anzeigen"}
+              {pendingOnly ? t("showAll") : t("showPendingOnly")}
             </button>
             <button type="button" className="button-secondary" disabled={releasing} onClick={() => void releaseAll(active)}>
-              {releasing ? "Wird freigegeben…" : "Alle freigeben"}
+              {releasing ? t("releasing") : t("releaseAll")}
             </button>
           </AlbumReleaseNotice>
         )}
@@ -227,11 +230,11 @@ export function PhotoAlbums({
     <div className="grid">
       {error && <p role="alert" className="form-error-banner">{error}</p>}
       <PendingAlbumShareRequests requests={pendingRequests} onDone={() => setRevision((value) => value + 1)} />
-      <div><button type="button" className="button-secondary" onClick={() => { setError(""); setCreating(true); }}>+ Album erstellen</button></div>
+      <div><button type="button" className="button-secondary" onClick={() => { setError(""); setCreating(true); }}>{t("createButton")}</button></div>
       {loading ? (
-        <p className="muted">Alben werden geladen…</p>
+        <p className="muted">{t("loadingAlbums")}</p>
       ) : albums.length === 0 ? (
-        <p className="muted">Noch keine Fotoalben vorhanden.</p>
+        <p className="muted">{t("emptyAlbums")}</p>
       ) : (
         <div className="album-grid">
           {albums.map((album) => (
@@ -249,20 +252,20 @@ export function PhotoAlbums({
               <div className="album-card-body">
                 <span className="album-card-name">{album.name}</span>
                 <span className="album-card-stats muted">
-                  {album.photo_count} {album.photo_count === 1 ? "Foto" : "Fotos"}
-                  {album.kind !== "manual" && album.best_of_count > 0 ? ` · ${album.best_of_count} Best-of` : ""}
+                  {t("photoCount", { count: album.photo_count })}
+                  {album.kind !== "manual" && album.best_of_count > 0 ? t("bestOfSuffix", { count: album.best_of_count }) : ""}
                 </span>
                 <span className="album-card-kind muted">
-                  {ALBUM_KIND_LABEL[album.kind]}{album.kind !== "manual" ? " · automatisch geführt" : ""}
+                  {albumKindLabel(t)[album.kind]}{album.kind !== "manual" ? t("autoManagedInline") : ""}
                 </span>
                 {album.owner_tenant_name ? (
-                  <Badge variant="info" className="album-card-badge">Geteilt von {album.owner_tenant_name}</Badge>
+                  <Badge variant="info" className="album-card-badge">{t("sharedByBadge", { name: album.owner_tenant_name })}</Badge>
                 ) : album.shared_with.some((share) => share.status === "accepted") ? (
-                  <Badge variant="neutral" className="album-card-badge">Geteilt</Badge>
+                  <Badge variant="neutral" className="album-card-badge">{t("sharedBadge")}</Badge>
                 ) : null}
                 {album.pending_share_count > 0 && (
                   <Badge variant="warning" dot className="album-card-badge">
-                    {album.pending_share_count} zur Freigabe
+                    {t("pendingBadge", { count: album.pending_share_count })}
                   </Badge>
                 )}
               </div>
@@ -271,10 +274,10 @@ export function PhotoAlbums({
         </div>
       )}
       {creating && (
-        <Modal open title="Fotoalbum erstellen" onClose={() => { if (!busy) setCreating(false); }}>
+        <Modal open title={t("createModalTitle")} onClose={() => { if (!busy) setCreating(false); }}>
           <ModalSaveForm className="grid" onSubmit={createAlbum}>
-            <label>Albumname<input autoFocus required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} /></label>
-            <button className="button-secondary" data-modal-save type="submit" disabled={busy || !name.trim()}>{busy ? "Wird erstellt…" : "Album erstellen"}</button>
+            <label>{t("nameLabel")}<input autoFocus required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} /></label>
+            <button className="button-secondary" data-modal-save type="submit" disabled={busy || !name.trim()}>{busy ? t("creating") : t("createSubmit")}</button>
           </ModalSaveForm>
         </Modal>
       )}

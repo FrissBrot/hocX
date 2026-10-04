@@ -1,0 +1,61 @@
+{
+  "meta": { "description": "Invia file senza accesso" },
+  "home": { "title": "Abgabebox", "hint": "Utilizza il link di consegna completo ricevuto dall'associazione." },
+  "notFound": { "title": "Non trovato", "hint": "Questa pagina non esiste o non è attualmente disponibile." },
+  "error": { "title": "Qualcosa è andato storto", "hint": "Impossibile caricare la pagina. Potrebbe trattarsi di un problema temporaneo - riprova tra poco.", "retry": "Riprova" },
+  "assignments": {
+    "disabledTitle": "Consegna non disponibile",
+    "disabledHint": "La consegna non è attualmente disponibile per questa associazione.",
+    "title": "Consegne aperte",
+    "hint": "Scegli una consegna per inviare il tuo file.",
+    "empty": "Al momento non ci sono consegne aperte.",
+    "backToOverview": "← Torna alla panoramica"
+  },
+  "elements": {
+    "title": "Elementi",
+    "hint": "Scegli il tuo elemento per caricare il file.",
+    "empty": "Al momento non ci sono elementi aperti.",
+    "windowFrom": "dal {date}",
+    "windowUntil": "fino al {date}",
+    "uploadedCount": "{count, plural, one {# file già caricato} other {# file già caricati}}",
+    "backToOverview": "← Torna alla panoramica"
+  },
+  "upload": {
+    "typeLabelDefault": "Immagini, PDF e documenti Office",
+    "dropLabelSelected": "{count, plural, one {# file selezionato} other {# file selezionati}}",
+    "dropLabelEmpty": "Seleziona un file o trascinalo qui",
+    "hintMaxFilesUnbounded": "max. 50 file per caricamento",
+    "hintMaxFilesRemaining": "{count, plural, one {max. # file aggiuntivo} other {max. # file aggiuntivi}}",
+    "hintPerFile": "{size} MiB ciascuno",
+    "hintTotal": "massimo 150 MiB in totale",
+    "removeFile": "Rimuovi",
+    "offlineNotice": "Offline – i caricamenti sono possibili solo dopo il ripristino della connessione. La selezione rimane in questa scheda.",
+    "alreadyUploaded": "{count, plural, one {Già # file caricato per questa consegna.} other {Già # file caricati per questa consegna.}}",
+    "captchaDone": "✓ Verifica di sicurezza completata",
+    "captchaVerifying": "Verifica di sicurezza in corso…",
+    "captchaRunning": "Verifica di sicurezza in corso…",
+    "captchaPlaceholder": "Verifica di sicurezza (nessun FriendlyCaptcha configurato – ambiente di test/sviluppo)",
+    "submit": "Invia",
+    "submitting": "Caricamento in corso…",
+    "successTitle": "Consegna riuscita",
+    "successCount": "{count, plural, one {# file caricato per questa consegna.} other {# file caricati per questa consegna.}}",
+    "uploadMore": "Carica un altro file",
+    "errors": {
+      "noFileSelected": "Seleziona almeno un file",
+      "offline": "Nessuna connessione internet – i file selezionati vengono mantenuti. Invia di nuovo una volta ricollegato.",
+      "captchaPending": "Verifica di sicurezza ancora in corso – attendi un momento e riprova",
+      "tooManyRequests": "Troppi tentativi – attendi un momento e riprova",
+      "captchaExpired": "La verifica di sicurezza è scaduta – è in fase di rinnovo, attendi un momento",
+      "uploadFailedGeneric": "Caricamento non riuscito",
+      "connectionLost": "Connessione interrotta durante il caricamento. Verifica se la consegna è già arrivata prima di inviare di nuovo.",
+      "tooManyFiles": "È consentito un massimo di 50 file per caricamento.",
+      "selectionTooLarge": "La selezione supera 150 MiB. Suddividila in più caricamenti.",
+      "maxFilesTotal": "È consentito un massimo di {maxFiles} file in totale ({remaining} ancora possibili)",
+      "unsupportedType": "\"{filename}\" non è supportato. Scegli un'immagine, un PDF o un documento Office.",
+      "disallowedType": "\"{filename}\" ha un formato file non consentito (consentiti: {allowed})",
+      "fileTooLarge": "\"{filename}\" è troppo grande (max. {maxFileSizeMb} MB)"
+    }
+  },
+  "language": { "label": "Lingua" },
+  "copyright": "Copyright © {year} hocX Project · Tutti i diritti riservati."
+}

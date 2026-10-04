@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { ReactNode, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { browserApiFetch } from "@/lib/api/client";
 import { ToastProvider } from "@/contexts/toast-context";
@@ -13,32 +14,34 @@ import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
 type AdminIconKey = "dashboard" | "tenants" | "pricing" | "users" | "domains" | "errors" | "pipeline" | "admins" | "sso" | "security";
 
-type AdminNavLink = { href: string; label: string; icon: AdminIconKey; badge?: "count" };
+type AdminNavLink = { href: string; labelKey: string; icon: AdminIconKey; badge?: "count" };
 
-const navGroups: { title: string | null; links: AdminNavLink[] }[] = [
-  { title: null, links: [{ href: "/admin", label: "Dashboard", icon: "dashboard" }] },
+// labelKey/titleKey sind Schluessel im "adminShell"-Namespace (frontend/messages/<locale>/adminShell.json) -
+// uebersetzt wird erst beim Rendern in AdminShell, siehe app-shell-nav.ts fuer dasselbe Muster.
+const navGroups: { titleKey: string | null; links: AdminNavLink[] }[] = [
+  { titleKey: null, links: [{ href: "/admin", labelKey: "nav.dashboard", icon: "dashboard" }] },
   {
-    title: "Mandanten",
+    titleKey: "groups.tenants",
     links: [
-      { href: "/admin/tenants", label: "Mandanten", icon: "tenants", badge: "count" },
-      { href: "/admin/plans", label: "Preise", icon: "pricing" },
-      { href: "/admin/users", label: "Benutzer", icon: "users" },
-      { href: "/admin/domains", label: "Domains", icon: "domains" },
+      { href: "/admin/tenants", labelKey: "nav.tenants", icon: "tenants", badge: "count" },
+      { href: "/admin/plans", labelKey: "nav.pricing", icon: "pricing" },
+      { href: "/admin/users", labelKey: "nav.users", icon: "users" },
+      { href: "/admin/domains", labelKey: "nav.domains", icon: "domains" },
     ],
   },
   {
-    title: "System",
+    titleKey: "groups.system",
     links: [
-      { href: "/admin/error-logs", label: "Fehlerprotokoll", icon: "errors" },
-      { href: "/admin/upload-pipeline", label: "Datei-Pipeline", icon: "pipeline" },
+      { href: "/admin/error-logs", labelKey: "nav.errorLogs", icon: "errors" },
+      { href: "/admin/upload-pipeline", labelKey: "nav.uploadPipeline", icon: "pipeline" },
     ],
   },
   {
-    title: "Zugang",
+    titleKey: "groups.access",
     links: [
-      { href: "/admin/admins", label: "Admin-Accounts", icon: "admins" },
-      { href: "/admin/sso", label: "SSO", icon: "sso" },
-      { href: "/admin/security", label: "Sicherheit", icon: "security" },
+      { href: "/admin/admins", labelKey: "nav.admins", icon: "admins" },
+      { href: "/admin/sso", labelKey: "nav.sso", icon: "sso" },
+      { href: "/admin/security", labelKey: "nav.security", icon: "security" },
     ],
   },
 ];
@@ -121,6 +124,7 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
 }
 
 export function AdminShell({ children, session }: { children: ReactNode; session: AdminSessionInfo }) {
+  const t = useTranslations("adminShell");
   const pathname = usePathname();
   const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -160,14 +164,14 @@ export function AdminShell({ children, session }: { children: ReactNode; session
             <div className="brand-mark">hX</div>
             <div>
               <div className="eyebrow">hocX</div>
-              <h2 className="sidebar-title">Platform-Admin</h2>
+              <h2 className="sidebar-title">{t("title")}</h2>
             </div>
           </div>
-          <p className="muted sidebar-copy">Mandanten und Benutzer über das ganze System verwalten.</p>
+          <p className="muted sidebar-copy">{t("tagline")}</p>
           <nav className="sidebar-nav admin-sidebar-nav">
             {navGroups.map((group) => (
-              <div className="admin-nav-group" key={group.title ?? "root"}>
-                {group.title ? <div className="admin-nav-group-title">{group.title}</div> : null}
+              <div className="admin-nav-group" key={group.titleKey ?? "root"}>
+                {group.titleKey ? <div className="admin-nav-group-title">{t(group.titleKey)}</div> : null}
                 <div className="nav-links">
                   {group.links.map((link) => (
                     <Link
@@ -177,7 +181,7 @@ export function AdminShell({ children, session }: { children: ReactNode; session
                       onClick={() => setMobileNavOpen(false)}
                     >
                       <AdminNavIcon name={link.icon} />
-                      <span className="nav-link-label">{link.label}</span>
+                      <span className="nav-link-label">{t(link.labelKey)}</span>
                       {link.badge === "count" && tenantTotal !== null ? <span className="admin-nav-count">{tenantTotal}</span> : null}
                     </Link>
                   ))}
@@ -195,7 +199,7 @@ export function AdminShell({ children, session }: { children: ReactNode; session
                 <div className="identity-subtle">{session.admin?.email}</div>
               </div>
               <button type="button" className="button-ghost admin-identity-logout" onClick={() => void logout()}>
-                Logout
+                {t("logout")}
               </button>
             </div>
             <CopyrightNotice />
@@ -208,25 +212,25 @@ export function AdminShell({ children, session }: { children: ReactNode; session
               className="button-ghost mobile-nav-toggle"
               onClick={() => setMobileNavOpen((current) => !current)}
             >
-              {mobileNavOpen ? "Schliessen" : "☰"}
+              {mobileNavOpen ? t("menuToggleClose") : "☰"}
             </button>
-            <nav className="topbar-breadcrumb admin-breadcrumb" aria-label="Brotkrumen">
+            <nav className="topbar-breadcrumb admin-breadcrumb" aria-label={t("breadcrumbNav")}>
               {activeLink && activeLink.href !== "/admin" ? (
                 <>
                   <Link href="/admin" className="topbar-breadcrumb-group">
-                    Platform-Admin
+                    {t("title")}
                   </Link>
                   <span className="topbar-breadcrumb-sep" aria-hidden="true">/</span>
-                  <span aria-current="page">{activeLink.label}</span>
+                  <span aria-current="page">{t(activeLink.labelKey)}</span>
                 </>
               ) : (
-                <span aria-current="page">Platform-Admin</span>
+                <span aria-current="page">{t("title")}</span>
               )}
             </nav>
           </header>
           {isReadOnlyAdmin && (
             <div className="admin-readonly-banner">
-              Nur-Lesezugriff (support): Änderungen sind mit diesem Account nicht möglich.
+              {t("readOnlyBanner")}
             </div>
           )}
           <div className="shell-content">{children}</div>

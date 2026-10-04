@@ -1,21 +1,32 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages, getTranslations } from "next-intl/server";
+import { LanguageSelect } from "@/components/language-select";
 import "./tokens.css";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
-export const metadata: Metadata = {
-  title: "Abgabebox",
-  description: "Dateien ohne Anmeldung einreichen",
-  icons: { icon: "/favicon.ico" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("abgabebox.meta");
+  return {
+    title: "Abgabebox",
+    description: t("description"),
+    icons: { icon: "/favicon.ico" },
+  };
+}
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+  const t = await getTranslations("abgabebox");
+
   return (
-    <html lang="de" className={inter.variable} suppressHydrationWarning>
+    <html lang={locale} className={inter.variable} suppressHydrationWarning>
       <body suppressHydrationWarning>
+        <NextIntlClientProvider locale={locale} messages={messages}>
         {/* Gleiche Theme-Logik wie die Haupt-App (frontend/app/layout.tsx): gespeicherte
             Praeferenz, sonst System. Ohne JS greift der prefers-color-scheme-Block in tokens.css. */}
         <Script
@@ -41,12 +52,14 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <header className="page-header">
             <img src="/favicon.ico" alt="hocX" />
             <span className="page-header-name">hocX</span>
+            <LanguageSelect currentLocale={locale} />
           </header>
           <main>{children}</main>
           <footer className="page-footer">
-            Copyright © 2026 hocX Project · All rights reserved.
+            {t("copyright", { year: new Date().getFullYear() })}
           </footer>
         </div>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

@@ -1,6 +1,8 @@
 "use client";
 
-import { SOURCE_BADGE_VARIANT, SOURCE_LABEL } from "./file-detail-modal";
+import { useTranslations } from "next-intl";
+
+import { SOURCE_BADGE_VARIANT, SOURCE_KEY } from "./file-detail-modal";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { browserApiBaseUrl } from "@/lib/api/client";
@@ -18,10 +20,11 @@ export function FilesTable({
   onNavigate: (href: string) => void;
   onShare: (item: FileOverviewItem) => void;
 }) {
+  const t = useTranslations("files");
   return (
     <DataTable
-      columns={["Name", "Quelle", "Bezug", "Hochgeladen", "Grösse", ""]}
-      emptyMessage="Keine Dateien gefunden."
+      columns={[t("table.columnName"), t("table.columnSource"), t("table.columnReference"), t("table.columnUploaded"), t("table.columnSize"), ""]}
+      emptyMessage={t("table.empty")}
     >
       {items.map((item) => {
         return (
@@ -32,12 +35,12 @@ export function FilesTable({
                 <span title={item.original_name}>{item.original_name}</span>
               </span>
             </td>
-            <td><Badge variant={SOURCE_BADGE_VARIANT[item.source]}>{SOURCE_LABEL[item.source]}</Badge></td>
+            <td><Badge variant={SOURCE_BADGE_VARIANT[item.source]}>{t(`source.${SOURCE_KEY[item.source]}`)}</Badge></td>
             <td onClick={(event) => item.ref_href && event.stopPropagation()}>
               {item.ref_label ? (
                 item.ref_href ? (
                   <button type="button" className="file-card-ref" onClick={() => onNavigate(item.ref_href!)}>
-                    {item.source === "protocol_image" ? `Protokoll ${item.ref_label}` : item.ref_label}
+                    {item.source === "protocol_image" ? t("table.protocolRef", { label: item.ref_label }) : item.ref_label}
                   </button>
                 ) : (
                   <span className="muted">{item.ref_label}</span>
@@ -51,10 +54,10 @@ export function FilesTable({
             <td>{item.file_size_bytes ? formatFileSize(item.file_size_bytes) : <span className="muted">–</span>}</td>
             <td className="files-table-actions" onClick={(event) => event.stopPropagation()}>
               <a href={`${browserApiBaseUrl}${item.content_url}`} target="_blank" rel="noreferrer" className="button-secondary button-ghost">
-                Download
+                {t("table.download")}
               </a>
               <button type="button" className="button-secondary button-ghost" onClick={() => onShare(item)}>
-                Teilen
+                {t("table.share")}
               </button>
             </td>
           </tr>

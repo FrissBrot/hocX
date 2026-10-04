@@ -28,6 +28,19 @@ jobs:
           bash scripts/sync-design-tokens.sh --check
           python3 scripts/check-design-rules.py
 
+      # i18n (siehe CLAUDE.md, Abschnitt "Internationalisierung / i18n"): alle drei Checks
+      # beziehen die unterstuetzten Sprachen ausschliesslich aus i18n/locales.json - eine neu
+      # registrierte Sprache wird hier automatisch erkannt, ohne dass dieser Workflow angepasst
+      # werden muss.
+      - name: i18n - zentrale Locale-Konfiguration ist aktuell generiert
+        run: python3 scripts/sync-i18n-config.py --check
+
+      - name: i18n - Translation Catalogs vollstaendig
+        run: python3 scripts/check-i18n-completeness.py
+
+      - name: i18n - keine neuen hart codierten UI-Texte
+        run: python3 scripts/check-i18n-hardcoded-text.py
+
   migration-check:
     runs-on: ubuntu-latest
     services:

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 import { listAssignments } from "@/lib/api";
 
@@ -11,12 +12,13 @@ export default async function LinkAssignmentsPage({ params }: { params: Promise<
   if (resolution.status === "not_found") {
     notFound();
   }
+  const t = await getTranslations("abgabebox.assignments");
   if (resolution.status === "feature_disabled") {
     return (
       <div className="card">
-        <h1>Abgabebox nicht verfügbar</h1>
+        <h1>{t("disabledTitle")}</h1>
         <p className="muted" style={{ margin: 0 }}>
-          Die Abgabebox ist für diesen Verein aktuell nicht verfügbar.
+          {t("disabledHint")}
         </p>
       </div>
     );
@@ -25,12 +27,12 @@ export default async function LinkAssignmentsPage({ params }: { params: Promise<
 
   return (
     <div>
-      <h1>Offene Abgaben</h1>
-      <p className="muted">Wähle eine Abgabe aus, um deine Datei einzureichen.</p>
+      <h1>{t("title")}</h1>
+      <p className="muted">{t("hint")}</p>
 
       {assignments.length === 0 ? (
         <div className="card">
-          <p className="muted" style={{ margin: 0 }}>Aktuell sind keine Abgaben offen.</p>
+          <p className="muted" style={{ margin: 0 }}>{t("empty")}</p>
         </div>
       ) : (
         assignments.map((assignment, i) => {

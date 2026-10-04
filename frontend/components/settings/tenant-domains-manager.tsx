@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { ActionMenu } from "@/components/ui/action-menu";
 import { DomainWizardModal } from "@/components/ui/domain-wizard-modal";
@@ -16,6 +17,8 @@ type Props = {
 };
 
 export function TenantDomainsManager({ initialTenant }: Props) {
+  const t = useTranslations("tenantSettings");
+  const tCommon = useTranslations("common");
   const showToast = useToast();
   const confirm = useConfirm();
   const tenantId = initialTenant.id;
@@ -51,34 +54,34 @@ export function TenantDomainsManager({ initialTenant }: Props) {
 
   async function deleteDomain(domainId: string, hostname: string) {
     const ok = await confirm({
-      message: `Domain "${hostname}" endgültig löschen? Der Zugriff über diese Adresse endet sofort.`,
+      message: t("deleteDomainConfirm", { hostname }),
       tone: "danger",
-      confirmLabel: "Löschen",
+      confirmLabel: tCommon("delete"),
     });
     if (!ok) return;
     try {
       await browserApiFetch<{ message: string }>(`/api/tenants/${tenantId}/domains/${domainId}`, { method: "DELETE" });
       await loadDomains();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Domain konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("deleteDomainFailed"), "error");
     }
   }
 
   function renderRow(d: TenantDomain) {
-    const status = domainStatus(d);
+    const status = domainStatus(d, t);
     return (
       <div key={d.id} className="tenant-domain-row">
         <TenantDomainRowContent domain={d} />
         <div className="tenant-domain-row-trailing">
           {d.status === "pending" ? (
             <button type="button" className="button-secondary" onClick={() => openWizardToResume(d)}>
-              Einrichten
+              {t("setup")}
             </button>
           ) : null}
           <span className={`record-list-row-dot record-list-row-dot-${status.variant}`} />
           <ActionMenu
-            ariaLabel={`Aktionen für ${d.domain}`}
-            items={[{ label: "Löschen", onClick: () => deleteDomain(d.id, d.domain), danger: true }]}
+            ariaLabel={t("domainActionsAriaLabel", { domain: d.domain })}
+            items={[{ label: tCommon("delete"), onClick: () => deleteDomain(d.id, d.domain), danger: true }]}
           />
         </div>
       </div>
@@ -90,34 +93,33 @@ export function TenantDomainsManager({ initialTenant }: Props) {
       {domains.length === 0 ? (
         <EmptyState
           icon="document"
-          title="Noch keine eigene Domain"
-          description="Verbinde eine Domain wie app.dein-verein.ch, damit Mitglieder hocX unter eurer Adresse erreichen. Die Verifizierung erfolgt über einen DNS-Eintrag."
+          title={t("emptyDomainTitle")}
+          description={t("emptyDomainDescription")}
           actions={
             hasCustomDomainFeature ? (
               <button type="button" className="button-primary" onClick={openWizardForNewDomain}>
-                + Domain hinzufügen
+                {t("addDomain")}
               </button>
             ) : undefined
           }
           hint={
             hasCustomDomainFeature
-              ? "Bis dahin bleibt der Mandant unter der Standard-Adresse erreichbar."
-              : "Eigene Domains müssen zum Abo dazugebucht werden (Tab «Abo & Nutzung»). Bis dahin bleibt der Mandant unter der Standard-Adresse erreichbar."
+              ? t("emptyDomainHintWithFeature")
+              : t("emptyDomainHintWithoutFeature")
           }
         />
       ) : (
         <section className="card">
-          <div className="eyebrow">Domains</div>
+          <div className="eyebrow">{t("domainsEyebrow")}</div>
           <p className="muted">
-            Eigene Domain für die hocX-App und/oder die Abgabebox. hocx.example.com bzw. die
-            Standard-Abgabebox-Domain bleiben zusätzlich immer erreichbar.
+            {t("domainsDescription")}
           </p>
 
           <div className="grid tenant-domain-list">{domains.map((d) => renderRow(d))}</div>
 
           {hasCustomDomainFeature ? (
             <button type="button" className="domain-add-trigger" onClick={openWizardForNewDomain}>
-              + Domain hinzufügen
+              {t("addDomain")}
             </button>
           ) : null}
         </section>

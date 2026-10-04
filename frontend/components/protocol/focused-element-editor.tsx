@@ -1,6 +1,7 @@
 "use client";
 
 import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
@@ -191,8 +192,8 @@ export function FocusedElementEditor({
   deleteImage: (protocolElementBlockId: string, imageId: string) => Promise<void>;
   listDefinitionsById: Map<string, StructuredListDefinition>;
   listEntriesByDefinition: Record<string, StructuredListEntry[]>;
-  createListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) => Promise<boolean>;
-  updateListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, entryId: string, payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>) => Promise<boolean>;
+  createListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) => Promise<boolean>;  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+  updateListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, entryId: string, payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>) => Promise<boolean>;  // i18n-ok: TS-Generic-Signatur, kein UI-Text
   deleteListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, entryId: string) => Promise<void>;
   refreshBlockListSnapshot: (blockId: string) => Promise<void>;
   undoBlockListSnapshot: (blockId: string) => Promise<void>;
@@ -218,6 +219,7 @@ export function FocusedElementEditor({
   updateTagColor: (tag: string, color: string) => Promise<void>;
   renameTag: (oldTag: string, newTag: string) => Promise<void>;
 }) {
+  const t = useTranslations("protocols");
   const confirm = useConfirm();
   const showToast = useToast();
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -297,7 +299,7 @@ export function FocusedElementEditor({
       })
       .catch((error) => {
         if (!cancelled) {
-          showToast(error instanceof Error ? error.message : "Termine konnten nicht geladen werden", "error");
+          showToast(error instanceof Error ? error.message : t("eventsLoadFailed"), "error");
         }
       })
       .finally(() => {
@@ -348,16 +350,16 @@ export function FocusedElementEditor({
 
   function dueMenuLabel(todo: ProtocolTodo) {
     if (todo.due_marker === "next_session") {
-      return todo.resolved_due_date ? `${formatShortDate(todo.resolved_due_date)} (Nächste Sitzung)` : "Nächste Sitzung";
+      return todo.resolved_due_date ? t("nextSessionWithDate", { date: formatShortDate(todo.resolved_due_date) }) : t("nextSession");
     }
     if (todo.due_event_id) {
-      const label = todo.resolved_due_label ?? "Termin";
+      const label = todo.resolved_due_label ?? t("eventFallback");
       return todo.resolved_due_date ? `${formatShortDate(todo.resolved_due_date)} (${label})` : label;
     }
     if (todo.due_date) {
       return formatShortDate(todo.due_date);
     }
-    return "Kein Enddatum";
+    return t("noEndDate");
   }
 
   function autoResizeTodoField(target: HTMLTextAreaElement) {
@@ -399,7 +401,7 @@ export function FocusedElementEditor({
       kind: "matrix",
       blockId,
       rowId: String(row.row_id ?? row.id ?? ""),
-      rowLabel: String(row.label ?? "Teilnehmer"),
+      rowLabel: String(row.label ?? t("participantFallback")),
       selectedIds,
       columnId,
     });
@@ -418,7 +420,7 @@ export function FocusedElementEditor({
       kind: "embedded_form",
       blockId,
       rowId: matrixRowId,
-      rowLabel: `${matrixRowLabel} · ${String(embeddedRow.label ?? "Teilnehmer")}`,
+      rowLabel: `${matrixRowLabel} · ${String(embeddedRow.label ?? t("participantFallback"))}`,
       selectedIds: Array.isArray(embeddedRow.participant_ids) ? embeddedRow.participant_ids.map(String) : [],
       columnId,
       embeddedRowId: String(embeddedRow.id ?? ""),
@@ -448,9 +450,9 @@ export function FocusedElementEditor({
   }
 
   function singleParticipantSummary(participantId: string | null | undefined): string {
-    if (!participantId) return "Teilnehmer waehlen";
+    if (!participantId) return t("chooseParticipant");
     const p = availableParticipants.find((entry) => entry.id === participantId);
-    return p?.display_name ?? "Teilnehmer waehlen";
+    return p?.display_name ?? t("chooseParticipant");
   }
 
   function formatListEntryColumnValue(value: Record<string, any> | null | undefined, valueType: string): string {
@@ -497,7 +499,7 @@ export function FocusedElementEditor({
   function multiParticipantSummary(row: Record<string, any>) {
     const selectedIds = Array.isArray(row.participant_ids) ? row.participant_ids.map(String) : [];
     if (!selectedIds.length) {
-      return "Teilnehmer waehlen";
+      return t("chooseParticipant");
     }
     const selectedParticipants = availableParticipants.filter((participant) => selectedIds.includes(participant.id));
     if (!selectedParticipants.length) {
@@ -803,7 +805,7 @@ export function FocusedElementEditor({
     }, 500);
   }
 
-  function patchNewEventDraft(blockId: string, blockConfig: Record<string, any>, patch: Partial<ProtocolEventDraft>) {
+  function patchNewEventDraft(blockId: string, blockConfig: Record<string, any>, patch: Partial<ProtocolEventDraft>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     setNewEventDrafts((current) => {
       const base = current[blockId] ?? newEventRowDraft(blockConfig);
       const nextDraft = { ...base, ...patch };
@@ -815,7 +817,7 @@ export function FocusedElementEditor({
     });
   }
 
-  function matrixEventsForRow(row: Record<string, any>, column: Record<string, any>) {
+  function matrixEventsForRow(row: Record<string, any>, column: Record<string, any>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     // New schema: event filters in row_config; old schema: directly on row
     const rc = (row.row_config && typeof row.row_config === "object" ? row.row_config : {}) as Record<string, any>;
     const tagFilters = String(row.event_tag_filter ?? rc.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
@@ -883,7 +885,7 @@ export function FocusedElementEditor({
     return String(row.template_value ?? "").trim() ? { text_value: String(row.template_value) } : {};
   }
 
-  function matrixCellValue(column: Record<string, any>, row: Record<string, any>, rowId: string) {
+  function matrixCellValue(column: Record<string, any>, row: Record<string, any>, rowId: string) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     // New schema: row_values; old schema: values
     const cellMap = asObject(column.row_values ?? column.values);
     return {
@@ -892,7 +894,7 @@ export function FocusedElementEditor({
     };
   }
 
-  function matrixEmbeddedBlockForRow(row: Record<string, any>, cell: Record<string, any>) {
+  function matrixEmbeddedBlockForRow(row: Record<string, any>, cell: Record<string, any>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     const existingEmbeddedBlock = readMatrixEmbeddedBlock(cell);
     if (existingEmbeddedBlock) {
       return existingEmbeddedBlock;
@@ -910,18 +912,19 @@ export function FocusedElementEditor({
     const embeddedConfig = asObject(row.row_config ?? row.embedded_configuration_json);
     return createMatrixEmbeddedBlock(
       configuredElementTypeId,
-      String(row.label ?? "Zeile"),
+      String(row.label ?? t("matrixEditor.defaultRowLabel")),
       protocol,
       availableParticipants,
-      embeddedConfig
+      embeddedConfig,
+      t
     );
   }
 
-  function setMatrixColumnsLocal(blockId: string, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {
+  function setMatrixColumnsLocal(blockId: string, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     setBlockConfigLocal(blockId, { ...blockConfig, columns: nextColumns });
   }
 
-  function saveMatrixColumns(blockId: string, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {
+  function saveMatrixColumns(blockId: string, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     void saveBlockConfiguration(blockId, { ...blockConfig, columns: nextColumns });
   }
 
@@ -991,20 +994,20 @@ export function FocusedElementEditor({
     updateMatrixCell(blockId, blockConfig, columnId, rowId, { embedded_block: updater(currentEmbeddedBlock) }, persist);
   }
 
-  function matrixValueSummary(row: Record<string, any>, value: Record<string, any>) {
+  function matrixValueSummary(row: Record<string, any>, value: Record<string, any>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     const rowType = matrixRowType(row);
     if (rowType === "participants") {
       return multiParticipantSummary(value);
     }
     if (rowType === "participant") {
       const participant = availableParticipants.find((entry) => entry.id === String(value.participant_id ?? ""));
-      return participant?.display_name ?? "Teilnehmer waehlen";
+      return participant?.display_name ?? t("chooseParticipant");
     }
     if (rowType === "event") {
       const eventRow = sortedAvailableEvents.find((entry) => entry.id === String(value.event_id ?? ""));
-      return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "Termin waehlen";
+      return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : t("chooseEvent");
     }
-    return String(value.text_value ?? row.template_value ?? "").trim() || "Kein Inhalt";
+    return String(value.text_value ?? row.template_value ?? "").trim() || t("noContent");
   }
 
   function nextMatrixColumnId(currentColumns: Array<Record<string, any>>) {
@@ -1025,7 +1028,7 @@ export function FocusedElementEditor({
     return "";
   }
 
-  function matrixRowCellValue(row: Record<string, any>, textValue: string): Record<string, unknown> {
+  function matrixRowCellValue(row: Record<string, any>, textValue: string): Record<string, unknown> {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     const rowType = matrixRowType(row);
     if (!textValue && rowType === "participant") return {};
     if (!textValue && rowType === "event") return {};
@@ -1254,27 +1257,27 @@ export function FocusedElementEditor({
         {element.blocks.length === 0 && element.show_when_empty && (
           isPlanningMode ? (
             <div className="editor-block-empty-placeholder-auto">
-              <span>Keine Elemente angezeigt.</span>
+              <span>{t("noElementsShown")}</span>
               <PlanningIconTrigger
-                title="Termine auswählen"
+                title={t("chooseEvents")}
                 icon="☑"
                 onClick={() => setShowEventBlockPicker(true)}
               />
             </div>
           ) : (
-            <div className="element-block-empty-hint">Keine Termine in diesem Zeitraum.</div>
+            <div className="element-block-empty-hint">{t("noEventsInRange")}</div>
           )
         )}
         {element.blocks.map((block, blockIndex) => {
           const blockTitle = visibleBlockTitle(block);
           const elementType = block.element_type_code ?? "unknown";
           const elementTypeLabel: Record<string, string> = {
-            text: "Text", static_text: "Text", display: "Anzeige", form: "Formular",
-            todo: "Aufgaben", image: "Bild", bullet_list: "Aufzählung",
-            event_list: "Termine", attendance: "Anwesenheit", matrix: "Matrix",
-            session_date: "Nächster Hock", finance_balance: "Kontostand",
-            finance_transactions: "Transaktionen", fine_list: "Bussenliste",
-            chart: "Diagramm",
+            text: t("blockTypeText"), static_text: t("blockTypeText"), display: t("blockTypeDisplay"), form: t("blockTypeForm"),
+            todo: t("blockTypeTodo"), image: t("blockTypeImage"), bullet_list: t("blockTypeBulletList"),
+            event_list: t("eventsLabel"), attendance: t("blockTypeAttendance"), matrix: t("blockTypeMatrix"),
+            session_date: t("blockTypeSessionDate"), finance_balance: t("blockTypeFinanceBalance"),
+            finance_transactions: t("blockTypeFinanceTransactions"), fine_list: t("blockTypeFineList"),
+            chart: t("blockTypeChart"),
           };
           const blockConfig = asObject(block.configuration_snapshot_json);
           // Matrix blocks lock per-cell instead (see cellFieldKey below), so the whole-block
@@ -1342,10 +1345,10 @@ export function FocusedElementEditor({
             >
               {isFirstInAutoGroup ? (
                 <>
-                  <span className="editor-block-auto-generated-label">Wiederholt sich pro Termin</span>
+                  <span className="editor-block-auto-generated-label">{t("repeatsPerEvent")}</span>
                   <div className="editor-block-auto-generated-icon">
                     <PlanningIconTrigger
-                      title="Termine auswählen"
+                      title={t("chooseEvents")}
                       icon="☑"
                       onClick={() => setShowEventBlockPicker(true)}
                     />
@@ -1354,7 +1357,7 @@ export function FocusedElementEditor({
               ) : null}
               <div className="editor-panel-header">
                 <div>
-                  <div className="eyebrow">{elementTypeLabel[elementType] ?? elementType}{isHidden ? " · ausgeblendet" : ""}</div>
+                  <div className="eyebrow">{elementTypeLabel[elementType] ?? elementType}{isHidden ? ` · ${t("hiddenSuffix")}` : ""}</div>
                   {blockTitle ? <h3>{blockTitle}</h3> : null}
                   {block.description_snapshot ? <p className="muted">{block.description_snapshot}</p> : null}
                   {blockLockHolder ? <LockBadge holder={blockLockHolder} /> : null}
@@ -1367,12 +1370,12 @@ export function FocusedElementEditor({
                     value={textDrafts[block.id] ?? ""}
                     onChange={(md) => handleTextChange(block.id, md)}
                     readOnly={!blockEditable}
-                    placeholder="Text schreiben… Fett mit **text**, kursiv mit *text*, Liste mit - oder 1."
+                    placeholder={t("textPlaceholderMarkdownHint")}
                     trackedBaseline={trackChangesActive && block.tracked_dirty ? block.tracked_baseline_content : undefined}
                   />
                   {trackChangesActive && block.tracked_dirty && block.tracked_baseline_content !== textDrafts[block.id] && (
                     <TrackedChangeHideButton
-                      title="Änderungen in diesem Textblock ausblenden"
+                      title={t("hideTextChanges")}
                       onAccept={() => void acceptTextTrackedChanges(block.id)}
                     />
                   )}
@@ -1393,7 +1396,7 @@ export function FocusedElementEditor({
                         className={`tag-filter-chip${activeTag === null ? " tag-filter-chip-active" : ""}`}
                         onClick={() => setTodoTagFilter((c) => ({ ...c, [block.id]: null }))}
                       >
-                        Alle
+                        {t("allLabel")}
                       </button>
                       {allBlockTags.map((tag) => (
                         <button
@@ -1427,7 +1430,7 @@ export function FocusedElementEditor({
                                 completed_at: isDone ? null : new Date().toISOString(),
                               }).then(bumpStatsCharts)
                             }
-                            aria-label={isDone ? "Reopen todo" : "Mark todo done"}
+                            aria-label={isDone ? t("reopenTodo") : t("markTodoDone")}
                           >
                             {isDone ? "✓" : "○"}
                           </button>
@@ -1455,7 +1458,7 @@ export function FocusedElementEditor({
                             />
                             {(isPendingDelete || isTrackedAdded || trackedBeforeTask) && (
                               <TrackedChangeHideButton
-                                title="Änderung an diesem Todo ausblenden"
+                                title={t("hideTodoChange")}
                                 onAccept={() => void acceptTodoTrackedChange(block.id, todo.id)}
                               />
                             )}
@@ -1463,7 +1466,7 @@ export function FocusedElementEditor({
                           {todoEditable && (
                           <div className="todo-inline-meta">
                             <TodoAssigneeMenu
-                              label={todo.assigned_participant_name ?? "Niemand"}
+                              label={todo.assigned_participant_name ?? t("nobody")}
                               participants={availableParticipants}
                               activeId={todo.assigned_participant_id}
                               onChange={(option) => {
@@ -1483,7 +1486,7 @@ export function FocusedElementEditor({
                               <>
                               <div className="mini-menu-section">
                                 <TodoMenuOption
-                                  label="Kein Enddatum"
+                                  label={t("noEndDate")}
                                   active={!todo.due_date && !todo.due_event_id && !todo.due_marker}
                                   onClick={() => {
                                     void updateTodo(block.id, todo.id, { due_date: null, due_event_id: null, due_marker: null });
@@ -1491,7 +1494,7 @@ export function FocusedElementEditor({
                                   }}
                                 />
                                 <TodoMenuOption
-                                  label="Freies Datum"
+                                  label={t("freeDate")}
                                   active={!!todo.due_date && !todo.due_event_id && !todo.due_marker}
                                   onClick={() => {
                                     const nextDate = todo.due_date ?? protocol.protocol_date;
@@ -1500,7 +1503,7 @@ export function FocusedElementEditor({
                                   }}
                                 />
                                 <TodoMenuOption
-                                  label="Nächste Sitzung"
+                                  label={t("nextSession")}
                                   active={todo.due_marker === "next_session"}
                                   onClick={() => {
                                     void updateTodo(block.id, todo.id, { due_date: null, due_event_id: null, due_marker: "next_session" });
@@ -1510,7 +1513,7 @@ export function FocusedElementEditor({
                               </div>
                               {todoDueEvents.length ? (
                                 <div className="mini-menu-section">
-                                  <div className="mini-menu-section-title">Termine</div>
+                                  <div className="mini-menu-section-title">{t("eventsLabel")}</div>
                                   <TodoMenuSearchList
                                     items={todoDueEvents}
                                     getKey={(event) => event.id}
@@ -1569,7 +1572,7 @@ export function FocusedElementEditor({
                               className="button-secondary button-danger todo-delete"
                               onClick={() => deleteTodo(block.id, todo.id)}
                             >
-                              Löschen
+                              {t("delete")}
                             </button>
                           )}
                         </article>
@@ -1582,16 +1585,16 @@ export function FocusedElementEditor({
                         value={newTodoTask[block.id] ?? ""}
                         onChange={(event) => setNewTodoTask((current) => ({ ...current, [block.id]: event.target.value }))}
                         onKeyDown={(e) => { if (e.key === "Enter") void addTodo(block.id); }}
-                        placeholder="Neue Aufgabe"
+                        placeholder={t("newTaskPlaceholder")}
                       />
                       <TagInput
                         value={newTodoTags[block.id] ?? ""}
                         onChange={(v) => setNewTodoTags((c) => ({ ...c, [block.id]: v }))}
                         suggestions={allBlockTags}
-                        placeholder="Tags…"
+                        placeholder={t("tagsPlaceholder")}
                       />
                       <button type="button" onClick={() => addTodo(block.id)}>
-                        + Todo
+                        {t("newTodoPlus")}
                       </button>
                     </div>
                   )}
@@ -1653,7 +1656,7 @@ export function FocusedElementEditor({
                             void saveBlockConfiguration(block.id, { ...blockConfig, bullet_items: nextItems });
                           }}
                         >
-                          Löschen
+                          {t("delete")}
                         </button>
                       </article>
                     ))}
@@ -1662,7 +1665,7 @@ export function FocusedElementEditor({
                     <input
                       value=""
                       readOnly
-                      placeholder="Neuen Bulletpoint mit dem Button hinzufügen"
+                      placeholder={t("newBulletPlaceholder")}
                     />
                     <button
                       type="button"
@@ -1671,7 +1674,7 @@ export function FocusedElementEditor({
                         void saveBlockConfiguration(block.id, { ...blockConfig, bullet_items: nextItems });
                       }}
                     >
-                      + Punkt
+                      {t("newBulletPlus")}
                     </button>
                   </div>
                 </div>
@@ -1728,12 +1731,12 @@ export function FocusedElementEditor({
                       <div className="list-snapshot-banner">
                         {isListStale && (
                           <button type="button" className="list-snapshot-refresh-button" onClick={() => void refreshBlockListSnapshot(block.id)}>
-                            ⟳ Daten aktualisieren
+                            {t("refreshDataAction")}
                           </button>
                         )}
                         {hasListUndo && (
                           <button type="button" className="list-snapshot-undo-button" onClick={() => void undoBlockListSnapshot(block.id)}>
-                            Rückgängig
+                            {t("undoAction")}
                           </button>
                         )}
                       </div>
@@ -1755,7 +1758,7 @@ export function FocusedElementEditor({
                       return (
                         <div className="grid">
                           <div className="editor-planning-toolbar">
-                            <PlanningIconTrigger title="Liste bearbeiten" onClick={() => { void refreshListEntries(linkedListId).then(() => setListEditModalBlockId(block.id)); }} />
+                            <PlanningIconTrigger title={t("editListTitle")} onClick={() => { void refreshListEntries(linkedListId).then(() => setListEditModalBlockId(block.id)); }} />
                           </div>
                           {listSnapshotBanner}
                           <StructuredListTable
@@ -1764,7 +1767,7 @@ export function FocusedElementEditor({
                             availableParticipants={availableParticipants}
                             availableEvents={availableEvents}
                             editable={false}
-                            emptyMessage="Noch keine Eintraege in dieser Liste."
+                            emptyMessage={t("noListEntriesYet")}
                             groupByColumn={linkedListGroupBy}
                             sortByColumn={linkedListSortBy}
                             sortDirection={linkedListSortDirection}
@@ -1799,7 +1802,7 @@ export function FocusedElementEditor({
                         {listSnapshotBanner}
                         <div className="list-block-config-bar">
                           <label className="list-block-config-item">
-                            <span className="list-block-config-label">Gruppieren</span>
+                            <span className="list-block-config-label">{t("groupByLabel")}</span>
                             <SearchableSelect
                               options={listColOptions}
                               getId={(o) => o.value}
@@ -1807,11 +1810,11 @@ export function FocusedElementEditor({
                               value={linkedListGroupBy || null}
                               disabled={!blockEditable}
                               onChange={(o) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_group_by: o?.value || null })}
-                              nullLabel="Keine Gruppierung"
+                              nullLabel={t("noGrouping")}
                             />
                           </label>
                           <label className="list-block-config-item">
-                            <span className="list-block-config-label">Sortieren</span>
+                            <span className="list-block-config-label">{t("sortLabel")}</span>
                             <SearchableSelect
                               options={listColOptions}
                               getId={(o) => o.value}
@@ -1819,7 +1822,7 @@ export function FocusedElementEditor({
                               value={linkedListSortBy || null}
                               disabled={!blockEditable}
                               onChange={(o) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_sort_by: o?.value || null, linked_list_sort_direction: o?.value ? linkedListSortDirection : "asc" })}
-                              nullLabel="Manuell"
+                              nullLabel={t("manualLabel")}
                             />
                           </label>
                           <label className="list-block-config-item">
@@ -1839,7 +1842,7 @@ export function FocusedElementEditor({
                           availableParticipants={availableParticipants}
                           availableEvents={availableEvents}
                           editable={blockEditable}
-                          emptyMessage="Noch keine Eintraege in dieser Liste."
+                          emptyMessage={t("noListEntriesYet")}
                           groupByColumn={linkedListGroupBy}
                           sortByColumn={linkedListSortBy}
                           sortDirection={linkedListSortDirection}
@@ -1955,12 +1958,12 @@ export function FocusedElementEditor({
                           <div className="list-snapshot-banner">
                             {rowsAreStale && (
                               <button type="button" className="list-snapshot-refresh-button" onClick={() => void refreshBlockListSnapshot(block.id)}>
-                                ⟳ Daten aktualisieren
+                                {t("refreshDataAction")}
                               </button>
                             )}
                             {rowsHaveUndo && (
                               <button type="button" className="list-snapshot-undo-button" onClick={() => void undoBlockListSnapshot(block.id)}>
-                                Rückgängig
+                                {t("undoAction")}
                               </button>
                             )}
                           </div>
@@ -1979,7 +1982,7 @@ export function FocusedElementEditor({
                             if (!entryExists) {
                               return (
                                 <div className="form-block-row" key={`${block.id}-form-${index}`}>
-                                  <div className="field-label-inline muted">Verknüpfter Listeneintrag wurde gelöscht</div>
+                                  <div className="field-label-inline muted">{t("linkedListEntryDeleted")}</div>
                                   <div />
                                 </div>
                               );
@@ -2009,7 +2012,7 @@ export function FocusedElementEditor({
                             if (!listDefinition || !listEntry) {
                               return (
                                 <div className="form-block-row" key={`${block.id}-form-${index}`}>
-                                  <div className="field-label-inline muted">Verknüpfter Listeneintrag wurde gelöscht</div>
+                                  <div className="field-label-inline muted">{t("linkedListEntryDeleted")}</div>
                                   <div />
                                 </div>
                               );
@@ -2034,7 +2037,7 @@ export function FocusedElementEditor({
                                   <div className="tracked-strike">
                                     {formatListEntryColumnValue(variableRawValue, variableValueType)}
                                     <TrackedChangeHideButton
-                                      title="Entfernte Zeile ausblenden"
+                                      title={t("hideRemovedRow")}
                                       onAccept={() => void acceptTrackedRow(block.id, String(row.id ?? index))}
                                     />
                                   </div>
@@ -2074,7 +2077,7 @@ export function FocusedElementEditor({
                                         kind: "list_entry",
                                         blockId: block.id,
                                         rowId: String(row.id ?? index),
-                                        rowLabel: aliasOrFixedValue || "Wert",
+                                        rowLabel: aliasOrFixedValue || t("valueFallback"),
                                         selectedIds: variableRawValue?.participant_id ? [String(variableRawValue.participant_id)] : [],
                                         singleSelect: true,
                                         listDefinitionId: linkedListId ?? undefined,
@@ -2083,7 +2086,7 @@ export function FocusedElementEditor({
                                       });
                                     }}
                                   >
-                                    {formatListEntryColumnValue(variableRawValue, "participant") || "Teilnehmer wählen"}
+                                    {formatListEntryColumnValue(variableRawValue, "participant") || t("chooseParticipant")}
                                   </button>
                                 ) : variableValueType === "participants" ? (
                                   <button
@@ -2099,7 +2102,7 @@ export function FocusedElementEditor({
                                         kind: "list_entry",
                                         blockId: block.id,
                                         rowId: String(row.id ?? index),
-                                        rowLabel: aliasOrFixedValue || "Wert",
+                                        rowLabel: aliasOrFixedValue || t("valueFallback"),
                                         selectedIds: Array.isArray(variableRawValue?.participant_ids) ? variableRawValue.participant_ids.map(String) : [],
                                         listDefinitionId: linkedListId ?? undefined,
                                         listEntryId: linkedListEntryId ?? undefined,
@@ -2122,7 +2125,7 @@ export function FocusedElementEditor({
                                         [variableColumnKey]: { event_id: eventRow ? eventRow.id : null },
                                       });
                                     }}
-                                    nullLabel="Termin wählen"
+                                    nullLabel={t("chooseEvent")}
                                     triggerProps={{ "data-form-input": true, onKeyDown: handleFormInputKeyDown }}
                                   />
                                 ) : (
@@ -2197,7 +2200,7 @@ export function FocusedElementEditor({
                                   nextRows[index] = { ...nextRows[index], event_id: eventRow ? eventRow.id : null };
                                   void saveBlockConfiguration(block.id, { ...blockConfig, rows: nextRows });
                                 }}
-                                nullLabel="Termin wählen"
+                                nullLabel={t("chooseEvent")}
                                 triggerProps={{ "data-form-input": true, onKeyDown: handleFormInputKeyDown }}
                               />
                             ) : (
@@ -2232,7 +2235,7 @@ export function FocusedElementEditor({
                   {matrixPlanningManageable ? (
                     <div className="editor-planning-toolbar">
                       <PlanningIconTrigger
-                        title="Spalten auswählen"
+                        title={t("chooseColumns")}
                         icon="☑"
                         onClick={() => setMatrixPickerBlockId(block.id)}
                       />
@@ -2259,7 +2262,7 @@ export function FocusedElementEditor({
                           saveMatrixColumns(block.id, blockConfig, nextColumns);
                         }}
                       >
-                        + Spalte
+                        {t("newColumnPlus")}
                       </button>
                       {(blockConfig.auto_source?.type || blockConfig.matrix_column_source) ? (
                         <button
@@ -2267,7 +2270,7 @@ export function FocusedElementEditor({
                           className="button-secondary"
                           onClick={() => generateMatrixColumns(block.id, blockConfig)}
                         >
-                          Generieren
+                          {t("generateAction")}
                         </button>
                       ) : null}
                     </div>
@@ -2279,9 +2282,9 @@ export function FocusedElementEditor({
                     if (matrixPlanningManageable && cols.length === 0) {
                       return (
                         <div className="editor-block-empty-placeholder-auto">
-                          <span>Keine Elemente angezeigt.</span>
+                          <span>{t("noElementsShown")}</span>
                           <PlanningIconTrigger
-                            title="Spalten auswählen"
+                            title={t("chooseColumns")}
                             icon="☑"
                             onClick={() => setMatrixPickerBlockId(block.id)}
                           />
@@ -2312,7 +2315,7 @@ export function FocusedElementEditor({
                                         (cur) => cur, true)}
                                       placeholder={String(column!.title_placeholder ?? `Spalte ${columnIndex + 1}`)}
                                     />
-                                    <button type="button" className="matrix-col-remove" title="Spalte entfernen" aria-label="Spalte entfernen"
+                                    <button type="button" className="matrix-col-remove" title={t("removeColumn")} aria-label={t("removeColumn")}
                                       onClick={() => saveMatrixColumns(block.id, blockConfig,
                                         matrixColumns(blockConfig).filter(e => String(e.id ?? "") !== columnId!))}>
                                       <ActionIcon name="delete" />
@@ -2390,7 +2393,7 @@ export function FocusedElementEditor({
                                           />
                                           {cellEditable ? (
                                             <div className="matrix-row-summary muted">
-                                              {embeddedBlockSummary(embeddedBlock, availableParticipants, availableEvents, protocol, column!, availableTemplates)}
+                                              {embeddedBlockSummary(embeddedBlock, availableParticipants, availableEvents, protocol, t, column!, availableTemplates)}
                                             </div>
                                           ) : null}
                                         </>
@@ -2409,7 +2412,7 @@ export function FocusedElementEditor({
                                               );
                                             })}
                                           </div>
-                                        ) : <span className="muted">Keine passenden Termine</span>
+                                        ) : <span className="muted">{t("noMatchingEvents")}</span>
                                       ) : (
                                         <div className="matrix-cell-value">
                                           {!cellEditable ? (
@@ -2425,7 +2428,7 @@ export function FocusedElementEditor({
                                                   kind: "matrix",
                                                   blockId: block.id,
                                                   rowId: rowId!,
-                                                  rowLabel: String(row.label ?? "Teilnehmer"),
+                                                  rowLabel: String(row.label ?? t("participantFallback")),
                                                   selectedIds: value.participant_id ? [String(value.participant_id)] : [],
                                                   columnId: columnId!,
                                                   singleSelect: true,
@@ -2448,7 +2451,7 @@ export function FocusedElementEditor({
                                               value={value.event_id ?? null}
                                               onChange={(ev) => updateMatrixCell(block.id, blockConfig, columnId!, rowId,
                                                 { event_id: ev ? ev.id : null }, true)}
-                                              nullLabel="Termin waehlen"
+                                              nullLabel={t("chooseEventAlt")}
                                             />
                                           ) : (
                                             <textarea rows={1} className="todo-input"
@@ -2469,7 +2472,7 @@ export function FocusedElementEditor({
                                 );
                               })}
                               {!rows.length ? (
-                                <div className="matrix-table-empty">Keine Zeilen konfiguriert.</div>
+                                <div className="matrix-table-empty">{t("noRowsConfigured")}</div>
                               ) : null}
                             </div>
                           );
@@ -2481,8 +2484,8 @@ export function FocusedElementEditor({
                     <CheckboxCandidateModal
                       open={matrixPickerBlockId === block.id}
                       onClose={() => setMatrixPickerBlockId(null)}
-                      title="Spalten auswählen"
-                      description="Spalten dieser Matrix an-/abwählen. Werte bleiben beim Abwählen erhalten."
+                      title={t("chooseColumns")}
+                      description={t("matrixColumnsToggleDescription")}
                       items={matrixCandidateItems(blockConfig)}
                       onToggle={(item, nextChecked) => toggleMatrixColumn(block.id, blockConfig, item.id, nextChecked)}
                     />
@@ -2495,7 +2498,7 @@ export function FocusedElementEditor({
                   {isPlanningMode && (
                     <div className="editor-planning-toolbar">
                       <PlanningIconTrigger
-                        title="Terminübersicht öffnen"
+                        title={t("openEventOverview")}
                         icon="🗓"
                         onClick={() => setEventOverviewBlockId(block.id)}
                       />
@@ -2505,19 +2508,19 @@ export function FocusedElementEditor({
                     <table className="data-table event-table event-table-compact">
                       <thead>
                         <tr>
-                          {editableEventColumns?.showDate ? <th>Dat.</th> : null}
-                          {editableEventColumns?.showTag ? <th>Tag</th> : null}
-                          {editableEventColumns?.showTitle ? <th>Titel</th> : null}
-                          {editableEventColumns?.showDescription ? <th>Beschreibung</th> : null}
+                          {editableEventColumns?.showDate ? <th>{t("dateAbbr")}</th> : null}
+                          {editableEventColumns?.showTag ? <th>{t("tagLabel")}</th> : null}
+                          {editableEventColumns?.showTitle ? <th>{t("titleLabel")}</th> : null}
+                          {editableEventColumns?.showDescription ? <th>{t("descriptionLabel")}</th> : null}
                           {editableEventColumns?.showParticipantCount ? <th className="event-column-count">TN</th> : null}
-                          {editableEventColumns?.showCancelled ? <th>Abgesagt</th> : null}
+                          {editableEventColumns?.showCancelled ? <th>{t("cancelledLabel")}</th> : null}
                           {eventListInlineEditable ? (
-                            <th className="event-column-actions" aria-label="Aktionen">
+                            <th className="event-column-actions" aria-label={t("actionsLabel")}>
                               <button
                                 type="button"
                                 className="button-ghost button-icon"
-                                title="Terminzeile hinzufügen"
-                                aria-label="Terminzeile hinzufügen"
+                                title={t("addEventRow")}
+                                aria-label={t("addEventRow")}
                                 disabled={showNewEventRow || creatingNewEventRow}
                                 onClick={() => {
                                   setOpenNewEventRows((current) => ({ ...current, [block.id]: true }));
@@ -2562,7 +2565,7 @@ export function FocusedElementEditor({
                                   value={forcedEventTag || newEventDraft.tag}
                                   onChange={(v) => patchNewEventDraft(block.id, blockConfig, { tag: v })}
                                   suggestions={knownEventTags}
-                                  placeholder="Tag"
+                                  placeholder={t("tagLabel")}
                                   multi={false}
                                   readOnly={Boolean(forcedEventTag) || creatingNewEventRow}
                                   tagConfig={tagConfig}
@@ -2578,7 +2581,7 @@ export function FocusedElementEditor({
                                   value={newEventDraft.title}
                                   disabled={creatingNewEventRow}
                                   onChange={(event) => patchNewEventDraft(block.id, blockConfig, { title: event.target.value })}
-                                  placeholder="Titel"
+                                  placeholder={t("titleLabel")}
                                 />
                               </td>
                             ) : null}
@@ -2589,7 +2592,7 @@ export function FocusedElementEditor({
                                   value={newEventDraft.description}
                                   disabled={creatingNewEventRow}
                                   onChange={(event) => patchNewEventDraft(block.id, blockConfig, { description: event.target.value })}
-                                  placeholder="Beschreibung"
+                                  placeholder={t("descriptionLabel")}
                                 />
                               </td>
                             ) : null}
@@ -2603,7 +2606,7 @@ export function FocusedElementEditor({
                                   disabled={creatingNewEventRow}
                                   onChange={(event) => patchNewEventDraft(block.id, blockConfig, { participant_count: event.target.value })}
                                   onFocus={(e) => e.target.select()}
-                                  placeholder="TN"
+                                  placeholder={t("participantCountAbbr")}
                                 />
                               </td>
                             ) : null}
@@ -2614,8 +2617,8 @@ export function FocusedElementEditor({
                                   <button
                                     type="button"
                                     className="button-ghost button-icon button-icon-danger"
-                                    title="Neue Terminzeile verwerfen"
-                                    aria-label="Neue Terminzeile verwerfen"
+                                    title={t("discardNewEventRow")}
+                                    aria-label={t("discardNewEventRow")}
                                     disabled={creatingNewEventRow}
                                     onClick={() => resetNewEventRow(block.id)}
                                   >
@@ -2683,7 +2686,7 @@ export function FocusedElementEditor({
                                           })
                                         }
                                         suggestions={knownEventTags}
-                                        placeholder="Tag"
+                                        placeholder={t("tagLabel")}
                                         multi={false}
                                         readOnly={Boolean(forcedEventTag)}
                                         tagConfig={tagConfig}
@@ -2767,7 +2770,7 @@ export function FocusedElementEditor({
                                 ) : null}
                                 {editableEventColumns?.showCancelled ? (
                                   <td>
-                                    {eventRow.is_cancelled ? <Badge variant="danger">Abgesagt</Badge> : <span className="muted">–</span>}
+                                    {eventRow.is_cancelled ? <Badge variant="danger">{t("cancelledLabel")}</Badge> : <span className="muted">–</span>}
                                   </td>
                                 ) : null}
                                 {eventListInlineEditable ? (
@@ -2776,13 +2779,13 @@ export function FocusedElementEditor({
                                       <button
                                         type="button"
                                         className="button-ghost button-icon button-icon-danger"
-                                        title="Termin löschen"
-                                        aria-label="Termin löschen"
+                                        title={t("deleteEvent")}
+                                        aria-label={t("deleteEvent")}
                                         onClick={async () => {
                                           const ok = await confirm({
-                                            message: `Termin "${eventRow.title}" endgültig löschen? Das entfernt ihn aus allen Protokollen.`,
+                                            message: t("deleteEventConfirmNamed", { title: eventRow.title }),
                                             tone: "danger",
-                                            confirmLabel: "Löschen"
+                                            confirmLabel: t("delete")
                                           });
                                           if (!ok) return;
                                           await deleteEventFromBlock(block.id, eventRow.id);
@@ -2799,7 +2802,7 @@ export function FocusedElementEditor({
                         ) : !showNewEventRow ? (
                           <tr>
                             <td colSpan={Number(editableEventColumns?.showDate) + Number(editableEventColumns?.showTag) + Number(editableEventColumns?.showTitle) + Number(editableEventColumns?.showDescription) + Number(editableEventColumns?.showParticipantCount) + Number(editableEventColumns?.showCancelled) + Number(eventListInlineEditable)}>
-                              <span className="muted">Keine passenden Termine.</span>
+                              <span className="muted">{t("noMatchingEventsPeriod")}</span>
                             </td>
                           </tr>
                         ) : null}
@@ -2921,7 +2924,7 @@ export function FocusedElementEditor({
                           <div className="attendance-row" key={`${block.id}-${participant.id}`}>
                             <span className="attendance-name">
                               {participant.display_name}
-                              {pendingFine ? <span className="fine-badge" title={`Busse: ${pendingFine.amount} (${pendingFine.fine_type === "late" ? "Verspätet" : "Unentschuldigt"})`}> 💰</span> : null}
+                              {pendingFine ? <span className="fine-badge" title={t("fineBadgeTitle", { amount: pendingFine.amount, type: pendingFine.fine_type === "late" ? t("fineTypeLate") : t("fineTypeAbsent") })}> 💰</span> : null}
                             </span>
                             <div className="segment-control attendance-segment-control">
                               {ATTENDANCE_OPTIONS.map((option) => (
@@ -2941,13 +2944,13 @@ export function FocusedElementEditor({
                       })}
                     </div>
                     <div className="attendance-summary">
-                      <span>{nPresent} Anwesend</span>
+                      <span>{t("countPresent", { count: nPresent })}</span>
                       <span>·</span>
-                      <span>{nLate} Verspätet</span>
+                      <span>{t("countLate", { count: nLate })}</span>
                       <span>·</span>
-                      <span>{nExcused} Entschuldigt</span>
+                      <span>{t("countExcused", { count: nExcused })}</span>
                       <span>·</span>
-                      <span>{nAbsent} Unentschuldigt</span>
+                      <span>{t("countAbsent", { count: nAbsent })}</span>
                     </div>
                   </>
                 );
@@ -2981,7 +2984,7 @@ export function FocusedElementEditor({
                             </span>
                             {blockEditable && (
                               <button type="button" className="entry-exit-toggle" onClick={() => toggleHidden(entry)}>
-                                {entry.hidden ? "Einblenden" : "Ausblenden"}
+                                {entry.hidden ? t("showAction") : t("hideAction")}
                               </button>
                             )}
                           </div>
@@ -2993,10 +2996,10 @@ export function FocusedElementEditor({
 
                 return (
                   <div className="entry-exit-block">
-                    {renderGroup("Eintritte", joins)}
-                    {renderGroup("Austritte", leaves)}
+                    {renderGroup(t("joinsLabel"), joins)}
+                    {renderGroup(t("leavesLabel"), leaves)}
                     {joins.length === 0 && leaves.length === 0 && (
-                      <p className="muted">Keine Ein- oder Austritte seit der letzten Verwendung dieses Blocks.</p>
+                      <p className="muted">{t("noEntryExitSinceLastUse")}</p>
                     )}
                   </div>
                 );
@@ -3005,7 +3008,7 @@ export function FocusedElementEditor({
               {elementType === "session_date" && (
                 <div className="session-date-block">
                   <div className="session-date-main">
-                    <span className="session-date-label">Datum</span>
+                    <span className="session-date-label">{t("dateLabel")}</span>
                     <DateInput
                       value={String(blockConfig.selected_date ?? "")}
                       readOnly={!blockEditable}
@@ -3019,18 +3022,18 @@ export function FocusedElementEditor({
                     const selectedTemplate = activeFollowupId
                       ? availableTemplates.find((t) => t.id === activeFollowupId)
                       : null;
-                    const triggerLabel = selectedTemplate?.name ?? "Wie dieses Protokoll";
+                    const triggerLabel = selectedTemplate?.name ?? t("sameAsThisProtocol");
                     const otherTemplates = availableTemplates.filter(
                       (t) => t.id !== protocol.template_id && t.status !== "archived",
                     );
                     return (
                       <div className="session-date-template">
-                        <span className="session-date-label">Folge-Template</span>
+                        <span className="session-date-label">{t("followUpTemplate")}</span>
                         <TodoMiniMenu label={triggerLabel} compact>
                           {(close) => (
                             <div className="mini-menu-section">
                               <TodoMenuOption
-                                label="Wie dieses Protokoll"
+                                label={t("sameAsThisProtocol")}
                                 active={!activeFollowupId}
                                 onClick={() => {
                                   patchBlockConfigValue(block.id, "followup_template_id", null, blockConfig);
@@ -3065,7 +3068,7 @@ export function FocusedElementEditor({
                 if (!account) {
                   return (
                     <div className="finance-block-empty">
-                      <span className="muted">Kein Konto ausgewählt. Konfiguriere diesen Block im Template.</span>
+                      <span className="muted">{t("noAccountSelected")}</span>
                     </div>
                   );
                 }
@@ -3094,7 +3097,7 @@ export function FocusedElementEditor({
                 }).slice(0, filterType === "last_n" ? lastN : undefined);
 
                 if (filtered.length === 0) {
-                  return <p className="muted">Keine Transaktionen für den gewählten Zeitraum.</p>;
+                  return <p className="muted">{t("noTransactionsInRange")}</p>;
                 }
 
                 let running = 0;
@@ -3103,10 +3106,10 @@ export function FocusedElementEditor({
                 return (
                   <div className="finance-proto-table">
                     <div className="finance-proto-header">
-                      <span>Datum</span>
-                      <span>Beschreibung</span>
-                      <span className="finance-tx-cell-right">Betrag</span>
-                      <span className="finance-tx-cell-right">Saldo</span>
+                      <span>{t("dateLabel")}</span>
+                      <span>{t("descriptionLabel")}</span>
+                      <span className="finance-tx-cell-right">{t("amountLabel")}</span>
+                      <span className="finance-tx-cell-right">{t("balanceLabel")}</span>
                     </div>
                     {withBalance.map(({ tx, running: r }) => (
                       <div key={tx.id} className="finance-proto-row">
@@ -3131,7 +3134,7 @@ export function FocusedElementEditor({
                     {/* Pending fines from earlier protocols */}
                     {pendingFines.length > 0 && (
                       <div className="fine-list-block fine-list-block-pending">
-                        <div className="fine-pending-section-header">Offene Bussen aus früheren Protokollen</div>
+                        <div className="fine-pending-section-header">{t("openFinesFromEarlierProtocols")}</div>
                         {pendingFines.map((fine) => {
                           const account = fineAccount(fine.account_id);
                           const cur = account?.currency_label ?? fine.currency_label ?? "";
@@ -3141,20 +3144,20 @@ export function FocusedElementEditor({
                               <div>
                                 <span className="fine-participant">{fine.participant_name_snapshot}</span>
                                 <span className="fine-pending-origin" style={{ display: "block" }}>
-                                  {fine.protocol_number ? `Protokoll ${fine.protocol_number}` : ""}
+                                  {fine.protocol_number ? t("protocolNumbered", { number: fine.protocol_number }) : ""}
                                   {fine.protocol_date ? ` · ${formatShortDate(fine.protocol_date)}` : ""}
                                 </span>
                               </div>
-                              <span className="fine-type-label">{fine.fine_type === "late" ? "Verspätet" : "Unentschuldigt"}</span>
+                              <span className="fine-type-label">{fine.fine_type === "late" ? t("fineTypeLate") : t("fineTypeAbsent")}</span>
                               <span className="fine-amount">{fine.amount.toFixed(2)} {cur}</span>
                               <span className="fine-status">
                                 {isCollected && (
                                   <>
-                                    <span className="todo-pending-resolved">Kassiert</span>
+                                    <span className="todo-pending-resolved">{t("collectedLabel")}</span>
                                     {fine.collected_at && (
                                       <span className="fine-collected-note" style={{ display: "block" }}>
                                         {formatDateTime(fine.collected_at)}
-                                        {fine.collected_by_display_name ? ` von ${fine.collected_by_display_name}` : ""}
+                                        {fine.collected_by_display_name ? ` ${t("byName", { name: fine.collected_by_display_name })}` : ""}
                                       </span>
                                     )}
                                   </>
@@ -3164,8 +3167,8 @@ export function FocusedElementEditor({
                                 <button
                                   type="button"
                                   className="fine-action-btn fine-collect-btn"
-                                  title="Busse kassieren"
-                                  aria-label="Busse kassieren"
+                                  title={t("collectFine")}
+                                  aria-label={t("collectFine")}
                                   onClick={async () => {
                                     try {
                                       const updated = await browserApiFetch<AttendanceFine>(
@@ -3174,7 +3177,7 @@ export function FocusedElementEditor({
                                       );
                                       if (updated) setPendingFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
                                     } catch (error) {
-                                      showToast(error instanceof Error ? error.message : "Busse konnte nicht kassiert werden", "error");
+                                      showToast(error instanceof Error ? error.message : t("fineCollectFailed"), "error");
                                     }
                                   }}
                                 >✓</button>
@@ -3183,20 +3186,20 @@ export function FocusedElementEditor({
                                 <button
                                   type="button"
                                   className="fine-action-btn fine-delete-btn"
-                                  title="Busse löschen"
-                                  aria-label="Busse löschen"
+                                  title={t("deleteFine")}
+                                  aria-label={t("deleteFine")}
                                   onClick={async () => {
                                     const ok = await confirm({
-                                      message: "Busse endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+                                      message: t("deleteFineConfirm"),
                                       tone: "danger",
-                                      confirmLabel: "Löschen"
+                                      confirmLabel: t("delete")
                                     });
                                     if (!ok) return;
                                     try {
                                       await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
                                       setPendingFines((prev) => prev.filter((f) => f.id !== fine.id));
                                     } catch (error) {
-                                      showToast(error instanceof Error ? error.message : "Busse konnte nicht gelöscht werden", "error");
+                                      showToast(error instanceof Error ? error.message : t("fineDeleteFailed"), "error");
                                     }
                                   }}
                                 ><ActionIcon name="delete" /></button>
@@ -3209,7 +3212,7 @@ export function FocusedElementEditor({
 
                     {/* Own fines (created in this protocol) */}
                     {protocolFines.length === 0 && pendingFines.length === 0 && (
-                      <p className="muted">Keine Bussen für dieses Protokoll.</p>
+                      <p className="muted">{t("noFinesForProtocol")}</p>
                     )}
                     {protocolFines.length > 0 && <div className="fine-list-block">
                     {protocolFines.map((fine) => {
@@ -3220,16 +3223,16 @@ export function FocusedElementEditor({
                       return (
                         <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isCollected ? " fine-collected" : ""}`}>
                           <span className="fine-participant">{fine.participant_name_snapshot}</span>
-                          <span className="fine-type-label">{fine.fine_type === "late" ? "Verspätet" : "Unentschuldigt"}</span>
+                          <span className="fine-type-label">{fine.fine_type === "late" ? t("fineTypeLate") : t("fineTypeAbsent")}</span>
                           <span className="fine-amount">{fine.amount.toFixed(2)} {cur}</span>
                           <span className="fine-status">
                             {isCollectedElsewhere ? (
-                              <span className="todo-closed-elsewhere-badge">Später beglichen</span>
-                            ) : isCollected ? "✓ Kassiert" : "Ausstehend"}
+                              <span className="todo-closed-elsewhere-badge">{t("settledLater")}</span>
+                            ) : isCollected ? t("collectedCheckmark") : t("pendingLabel")}
                             {isCollected && fine.collected_at && (
                               <span className="fine-collected-note" style={{ display: "block" }}>
                                 {formatDateTime(fine.collected_at)}
-                                {fine.collected_by_display_name ? ` von ${fine.collected_by_display_name}` : ""}
+                                {fine.collected_by_display_name ? ` ${t("byName", { name: fine.collected_by_display_name })}` : ""}
                               </span>
                             )}
                           </span>
@@ -3237,8 +3240,8 @@ export function FocusedElementEditor({
                             <button
                               type="button"
                               className="fine-action-btn fine-collect-btn"
-                              title="Busse kassieren"
-                              aria-label="Busse kassieren"
+                              title={t("collectFine")}
+                              aria-label={t("collectFine")}
                               onClick={async () => {
                                 try {
                                   const updated = await browserApiFetch<AttendanceFine>(
@@ -3247,7 +3250,7 @@ export function FocusedElementEditor({
                                   );
                                   if (updated) setProtocolFines((prev) => prev.map((f) => f.id === updated.id ? updated : f));
                                 } catch (error) {
-                                  showToast(error instanceof Error ? error.message : "Busse konnte nicht kassiert werden", "error");
+                                  showToast(error instanceof Error ? error.message : t("fineCollectFailed"), "error");
                                 }
                               }}
                             >✓</button>
@@ -3256,20 +3259,20 @@ export function FocusedElementEditor({
                             <button
                               type="button"
                               className="fine-action-btn fine-delete-btn"
-                              title="Busse löschen"
-                              aria-label="Busse löschen"
+                              title={t("deleteFine")}
+                              aria-label={t("deleteFine")}
                               onClick={async () => {
                                 const ok = await confirm({
-                                  message: "Busse endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+                                  message: t("deleteFineConfirm"),
                                   tone: "danger",
-                                  confirmLabel: "Löschen"
+                                  confirmLabel: t("delete")
                                 });
                                 if (!ok) return;
                                 try {
                                   await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
                                   setProtocolFines((prev) => prev.filter((f) => f.id !== fine.id));
                                 } catch (error) {
-                                  showToast(error instanceof Error ? error.message : "Busse konnte nicht gelöscht werden", "error");
+                                  showToast(error instanceof Error ? error.message : t("fineDeleteFailed"), "error");
                                 }
                               }}
                             ><ActionIcon name="delete" /></button>
@@ -3302,7 +3305,7 @@ export function FocusedElementEditor({
                       }
                     />
                     <button type="button" onClick={() => uploadImage(block.id)} disabled={!selectedFiles[block.id]}>
-                      Upload image
+                      {t("uploadImageAction")}
                     </button>
                   </div>
                   <div className="image-grid">
@@ -3311,7 +3314,7 @@ export function FocusedElementEditor({
                         <LightboxImage alt={image.title ?? image.original_name} src={`${browserApiBaseUrl}${image.content_url}`} />
                         <p className="muted">{image.original_name}</p>
                         <button type="button" onClick={() => deleteImage(block.id, image.id)}>
-                          Bild löschen
+                          {t("deleteImageAction")}
                         </button>
                       </div>
                     ))}
@@ -3361,10 +3364,10 @@ export function FocusedElementEditor({
           const evt = availableEvents.find((e) => e.id === eventId);
           return {
             id: `block-${b.id}`,
-            label: String(config.repeat_source_label ?? evt?.title ?? "Unbekannter Termin"),
+            label: String(config.repeat_source_label ?? evt?.title ?? t("unknownEvent")),
             sublabel: evt ? `${formatDate(evt.event_date)}${evt.tag ? ` · ${evt.tag}` : ""}` : undefined,
             checked: b.is_visible_snapshot,
-            groupLabel: "Bereits vorhanden",
+            groupLabel: t("alreadyPresentGroup"),
           };
         });
       function toCandidateItem(evt: EventSummary, groupLabel: string): CandidateItem {
@@ -3386,8 +3389,8 @@ export function FocusedElementEditor({
         ? availableCandidates.filter((evt) => !tagFilters.some((t) => (evt.tag ?? "").toLowerCase().includes(t)))
         : [];
       const candidateItems: CandidateItem[] = [
-        ...matchingCandidates.map((evt) => toCandidateItem(evt, "Passend zum Filter")),
-        ...otherCandidates.map((evt) => toCandidateItem(evt, "Weitere Termine")),
+        ...matchingCandidates.map((evt) => toCandidateItem(evt, t("matchingFilterGroup"))),
+        ...otherCandidates.map((evt) => toCandidateItem(evt, t("otherEventsGroup"))),
       ];
       function findCandidateEvent(item: CandidateItem): EventSummary | undefined {
         if (item.id.startsWith("block-")) {
@@ -3410,9 +3413,9 @@ export function FocusedElementEditor({
             await unhideEventBlock(blockId);
           } else {
             const ok = await confirm({
-              message: "Termin abwählen? Der Inhalt dieses Blocks (z.B. eingegebener Text) geht dabei verloren und wird beim erneuten Anhaken NICHT wiederhergestellt.",
+              message: t("uncheckEventConfirm"),
               tone: "danger",
-              confirmLabel: "Abwählen"
+              confirmLabel: t("uncheckAction")
             });
             if (!ok) return;
             await removeEventBlock(blockId);
@@ -3438,8 +3441,8 @@ export function FocusedElementEditor({
         <CheckboxCandidateModal
           open={showEventBlockPicker}
           onClose={() => setShowEventBlockPicker(false)}
-          title="Termine auswählen"
-          description="Auf einen Termin klicken, um ihn an-/abzuwählen. Passend zum Filter stehen oben, weitere Termine unten."
+          title={t("chooseEvents")}
+          description={t("chooseEventsDescription")}
           items={[...existingItems, ...candidateItems]}
           loading={eventBlockCandidatesLoading}
           onToggle={handleToggle}
@@ -3469,14 +3472,14 @@ export function FocusedElementEditor({
                   className={`button-toggle${eventBlockScope === "current" ? " button-toggle-active" : ""}`}
                   onClick={() => setEventBlockScope("current")}
                 >
-                  Aktueller Zyklus
+                  {t("currentCycleLabel")}
                 </button>
                 <button
                   type="button"
                   className={`button-toggle${eventBlockScope === "all" ? " button-toggle-active" : ""}`}
                   onClick={() => setEventBlockScope("all")}
                 >
-                  Alle Termine
+                  {t("allEventsLabel")}
                 </button>
               </div>
               {showEventBlockCreateForm ? (
@@ -3493,7 +3496,7 @@ export function FocusedElementEditor({
                     value={forcedTagForNew || eventBlockNewDraft.tag}
                     onChange={(v) => setEventBlockNewDraft((d) => ({ ...d, tag: v }))}
                     suggestions={knownEventTags}
-                    placeholder="Tag"
+                    placeholder={t("tagLabel")}
                     multi={false}
                     readOnly={Boolean(forcedTagForNew) || creatingEventBlockNew}
                     tagConfig={tagConfig}
@@ -3505,14 +3508,14 @@ export function FocusedElementEditor({
                     value={eventBlockNewDraft.title}
                     disabled={creatingEventBlockNew}
                     onChange={(e) => setEventBlockNewDraft((d) => ({ ...d, title: e.target.value }))}
-                    placeholder="Titel"
+                    placeholder={t("titleLabel")}
                   />
                   <div className="modal-actions">
                     <button type="button" className="button-ghost" disabled={creatingEventBlockNew} onClick={() => setShowEventBlockCreateForm(false)}>
-                      Abbrechen
+                      {t("cancel")}
                     </button>
                     <button type="button" className="button-primary" disabled={creatingEventBlockNew} onClick={() => void handleCreateNew()}>
-                      {creatingEventBlockNew ? "…" : "Termin anlegen"}
+                      {creatingEventBlockNew ? "…" : t("createEventAction")}
                     </button>
                   </div>
                 </div>
@@ -3523,7 +3526,7 @@ export function FocusedElementEditor({
                   style={{ justifySelf: "start" }}
                   onClick={() => setShowEventBlockCreateForm(true)}
                 >
-                  + Neuer Termin
+                  {t("newEventPlus")}
                 </button>
               )}
             </div>
@@ -3534,12 +3537,12 @@ export function FocusedElementEditor({
     <Modal
       open={Boolean(multiParticipantPicker)}
       onClose={() => closeParticipantPicker()}
-      title={multiParticipantPicker ? `Teilnehmer waehlen: ${multiParticipantPicker.rowLabel}` : "Teilnehmer waehlen"}
-      description={multiParticipantPicker?.singleSelect ? "Teilnehmer auswaehlen." : "Suche nach Teilnehmern und markiere mehrere Eintraege mit Haken."}
+      title={multiParticipantPicker ? t("chooseParticipantNamed", { label: multiParticipantPicker.rowLabel }) : t("chooseParticipant")}
+      description={multiParticipantPicker?.singleSelect ? t("chooseParticipantDescriptionSingle") : t("chooseParticipantDescriptionMulti")}
     >
       <div className="grid">
         <label className="field-stack">
-          <span className="field-label">Suche</span>
+          <span className="field-label">{t("searchLabel")}</span>
           <input
             ref={multiParticipantSearchRef}
             value={multiParticipantSearch}
@@ -3554,7 +3557,7 @@ export function FocusedElementEditor({
                 }
               }
             }}
-            placeholder="Teilnehmer suchen"
+            placeholder={t("searchParticipantsPlaceholder")}
             autoFocus
           />
         </label>
@@ -3596,7 +3599,7 @@ export function FocusedElementEditor({
                 <div>
                   <strong>{participant.display_name}</strong>
                   <div className="muted">
-                    {[participant.first_name, participant.last_name].filter(Boolean).join(" ") || participant.email || "Teilnehmer"}
+                    {[participant.first_name, participant.last_name].filter(Boolean).join(" ") || participant.email || t("participantFallback")}
                   </div>
                 </div>
               </label>

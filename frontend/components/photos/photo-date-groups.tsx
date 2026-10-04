@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 
 import { groupPhotosByDate } from "./grouping";
 import { PhotoTile } from "./photo-tile";
@@ -22,6 +23,7 @@ export function PhotoDateGroups({
   onToggleSelect: (id: string) => void;
   onToggleGroup: (ids: string[]) => void;
 }) {
+  const t = useTranslations("photos.dateGroups");
   const groups = useMemo(() => groupPhotosByDate(items), [items]);
   const selectionMode = selectedIds.size > 0;
 
@@ -50,13 +52,13 @@ export function PhotoDateGroups({
             type="button"
             className="button-ghost photo-date-header"
             aria-pressed={group.items.every((item) => selectedIds.has(item.id))}
-            title="Alle Fotos dieser Datumsgruppe markieren oder abwählen"
+            title={t("toggleGroupTitle")}
             onClick={() => onToggleGroup(group.items.map((item) => item.id))}
           >
             <span className="photo-date-weekday">{formatWeekdayDate(group.date)}</span>
             {group.contextLabel && <span className="photo-date-context">{group.contextLabel}</span>}
             <span className="photo-date-count">
-              · {group.items.length} {group.items.length === 1 ? "Foto" : "Fotos"}
+              {t("groupCount", { count: group.items.length })}
             </span>
           </button>
           <div className="photo-grid">

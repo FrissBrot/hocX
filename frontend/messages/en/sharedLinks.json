@@ -1,0 +1,49 @@
+{
+  "createModal": {
+    "createButton": "Create link",
+    "createFailed": "Link could not be created.",
+    "createdIntro": "Anyone with this link can download the files without logging in.",
+    "creatingEllipsis": "Creating…",
+    "doneButton": "Done",
+    "expiryHelp": "Optional – without an expiry date the link stays active until revoked.",
+    "expiryLabel": "Expiry date",
+    "nameLabel": "Name",
+    "shareLinkLabel": "Share link",
+    "title": "Share link"
+  },
+  "emptyDescription": "Use \"Share\" on files, photos or a photo album to create a download link without logging in.",
+  "emptyTitle": "No links yet",
+  "filterActive": "Active",
+  "filterAll": "All",
+  "page": {
+    "description": "Public download links for files and photos of this organization.",
+    "title": "Shared links"
+  },
+  "revokeConfirm": "Revoke link \"{name}\"? It will stop working afterwards.",
+  "revokeConfirmLabel": "Revoke",
+  "status": {
+    "active": "Active",
+    "expired": "Expired",
+    "revoked": "Revoked"
+  },
+  "table": {
+    "actionsLabel": "Actions for {name}",
+    "albumScope": "Album \"{name}\"",
+    "columnCreatedBy": "Created by",
+    "columnExpiry": "Expiry",
+    "columnName": "Name",
+    "columnScope": "Scope",
+    "columnStatus": "Status",
+    "copyLink": "Copy link",
+    "empty": "No links in this view.",
+    "fileScope": "{count, plural, one {# file} other {# files}}",
+    "noExpiry": "No expiry",
+    "revoke": "Revoke"
+  },
+  "toasts": {
+    "copied": "Link copied.",
+    "copyFailed": "Link could not be copied.",
+    "revokeFailed": "Link could not be revoked.",
+    "revoked": "Link revoked."
+  }
+}

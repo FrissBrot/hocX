@@ -1,22 +1,25 @@
 import { SessionInfo } from "@/types/api";
 import { NavIconKey } from "@/components/ui/nav-icons";
 
-export type NavLink = { href: string; label: string; icon: NavIconKey; match?: string[] };
-// `title: null` renders the links flat, without a group heading (used for the Dashboard).
-export type NavGroup = { title: string | null; links: NavLink[] };
+// labelKey/titleKey sind next-intl-Schluessel im "nav"-Namespace (frontend/messages/<locale>/nav.json),
+// keine fertigen Texte - uebersetzt wird erst beim Rendern (app-shell.tsx), weil buildNav selbst
+// keine React-Komponente ist und daher keinen useTranslations()-Hook aufrufen kann.
+export type NavLink = { href: string; labelKey: string; icon: NavIconKey; match?: string[] };
+// `titleKey: null` renders the links flat, without a group heading (used for the Dashboard).
+export type NavGroup = { titleKey: string | null; links: NavLink[] };
 
-export function formatRoleLabel(role: string | null | undefined): string {
+export function formatRoleLabel(role: string | null | undefined, t: (key: string) => string): string {
   switch (role) {
     case "admin":
-      return "Admin";
+      return t("roles.admin");
     case "writer":
-      return "Schreiber";
+      return t("roles.writer");
     case "kassier":
-      return "Kassier";
+      return t("roles.kassier");
     case "reader":
-      return "Leser";
+      return t("roles.reader");
     default:
-      return role ?? "Status";
+      return role ?? t("roles.status");
   }
 }
 
@@ -34,28 +37,28 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
   // `match` lists the sibling routes that share a section's tab strip (see RouteTabs), so the
   // section stays highlighted while one of its other tabs is open.
   const groups: NavGroup[] = [
-    { title: null, links: [{ href: "/", label: "Dashboard", icon: "dashboard", match: ["/statistics"] }] },
+    { titleKey: null, links: [{ href: "/", labelKey: "dashboard", icon: "dashboard", match: ["/statistics"] }] },
     {
-      title: "Arbeiten",
+      titleKey: "groups.work",
       links: [
-        { href: "/protocols", label: "Protokolle", icon: "protocols" },
-        ...(isWriter ? [{ href: "/events", label: "Termine", icon: "events" as const }] : []),
-        { href: "/todos", label: "Todos", icon: "todos" },
-        ...(isWriter && hasAbgabebox ? [{ href: "/submission-assignments", label: "Abgaben", icon: "submissions" as const }] : []),
-        ...(hasFinance ? [{ href: "/finances", label: "Finanzen", icon: "finances" as const, match: ["/fines"] }] : []),
+        { href: "/protocols", labelKey: "protocols", icon: "protocols" },
+        ...(isWriter ? [{ href: "/events", labelKey: "events", icon: "events" as const }] : []),
+        { href: "/todos", labelKey: "todos", icon: "todos" },
+        ...(isWriter && hasAbgabebox ? [{ href: "/submission-assignments", labelKey: "submissions", icon: "submissions" as const }] : []),
+        ...(hasFinance ? [{ href: "/finances", labelKey: "finances", icon: "finances" as const, match: ["/fines"] }] : []),
       ],
     },
   ];
 
   if (isWriter) {
     groups.push({
-      title: "Stammdaten",
+      titleKey: "groups.masterData",
       links: [
-        { href: "/participants", label: "Teilnehmer", icon: "participants" },
-        { href: "/lists", label: "Stammlisten", icon: "lists" },
-        { href: "/photos", label: "Fotos", icon: "photos" },
-        { href: "/files", label: "Dateien", icon: "files" },
-        { href: "/shared-links", label: "Geteilte Links", icon: "share" },
+        { href: "/participants", labelKey: "participants", icon: "participants" },
+        { href: "/lists", labelKey: "lists", icon: "lists" },
+        { href: "/photos", labelKey: "photos", icon: "photos" },
+        { href: "/files", labelKey: "files", icon: "files" },
+        { href: "/shared-links", labelKey: "sharedLinks", icon: "share" },
       ],
     });
   }
@@ -63,18 +66,18 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
   if (isAdmin) {
     groups.push(
       {
-        title: "Konfiguration",
+        titleKey: "groups.configuration",
         links: [
-          { href: "/templates", label: "Vorlagen", icon: "templates", match: ["/elements", "/settings"] },
-          { href: "/cycles", label: "Zyklen", icon: "cycles" },
+          { href: "/templates", labelKey: "templates", icon: "templates", match: ["/elements", "/settings"] },
+          { href: "/cycles", labelKey: "cycles", icon: "cycles" },
         ],
       },
       {
-        title: "Administration",
+        titleKey: "groups.administration",
         links: [
-          { href: "/users", label: "Benutzer", icon: "users" },
-          { href: "/tenant-settings", label: "Mandant-Einstellungen", icon: "tenant" },
-          { href: "/tools/import", label: "Import", icon: "tools", match: ["/tools"] },
+          { href: "/users", labelKey: "users", icon: "users" },
+          { href: "/tenant-settings", labelKey: "tenantSettings", icon: "tenant" },
+          { href: "/tools/import", labelKey: "import", icon: "tools", match: ["/tools"] },
         ],
       }
     );

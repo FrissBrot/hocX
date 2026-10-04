@@ -1,14 +1,16 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
-import { FINANCE_TABS } from "@/components/ui/section-tabs";
+import { financeTabs } from "@/components/ui/section-tabs";
 import { FinesView } from "@/components/finances/fines-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { AttendanceFineListItem, FinanceAccount } from "@/types/api";
 
 export default async function FinesPage() {
   const session = await requireSession();
+  const t = await getTranslations("nav");
   // Jede Rolle darf Bussen einsehen (Reader nur seine eigenen) - require_reader auf der
   // Backend-Route, nicht require_finance_read; entscheidend hier ist allein, ob der Mandant
   // Finanzen gebucht hat (Direktzugriffsschutz zum Nav-Link in app-shell-nav.ts).
@@ -21,7 +23,7 @@ export default async function FinesPage() {
 
   return (
     <AppShell initialSession={session}>
-      <RouteTabs tabs={FINANCE_TABS} activeHref="/fines" />
+      <RouteTabs tabs={financeTabs(t)} activeHref="/fines" />
       <section className="panel">
         <FinesView initialFines={fines} accounts={accounts} canWrite={canWrite} ownOnly={session.current_role === "reader"} />
       </section>

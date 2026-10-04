@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { CopyField } from "@/components/ui/copy-field";
 import { Modal } from "@/components/ui/modal";
@@ -20,12 +21,6 @@ type Props = {
 
 type Step = "purpose" | "dns" | "success";
 
-const STEPS: { key: Step; label: string }[] = [
-  { key: "purpose", label: "Domain" },
-  { key: "dns", label: "DNS einrichten" },
-  { key: "success", label: "Fertig" },
-];
-
 function CheckIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -35,6 +30,8 @@ function CheckIcon() {
 }
 
 export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }: Props) {
+  const t = useTranslations("tenantSettings");
+  const tCommon = useTranslations("common");
   const showToast = useToast();
   const confirm = useConfirm();
   const [step, setStep] = useState<Step>("purpose");
@@ -43,6 +40,12 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
   const [activeDomain, setActiveDomain] = useState<TenantDomain | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const STEPS: { key: Step; label: string }[] = [
+    { key: "purpose", label: t("stepDomain") },
+    { key: "dns", label: t("stepDns") },
+    { key: "success", label: t("stepDone") },
+  ];
 
   useEffect(() => {
     if (!open) return;
@@ -72,7 +75,7 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
       onChanged();
       setStep("dns");
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : "Domain konnte nicht hinzugefügt werden");
+      setErrorMsg(error instanceof Error ? error.message : t("addDomainFailed"));
     } finally {
       setBusy(false);
     }
@@ -90,7 +93,7 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
       onChanged();
       setStep("success");
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : "Verifizierung fehlgeschlagen");
+      setErrorMsg(error instanceof Error ? error.message : t("verifyFailed"));
     } finally {
       setBusy(false);
     }
@@ -102,9 +105,9 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
     // 2026-08-16) - a misclick here during DNS setup instantly discarded the domain
     // config (incl. its verification token) with no way back.
     const ok = await confirm({
-      message: `Domain "${activeDomain.domain}" endgültig löschen? Die DNS-Einrichtung muss danach neu gestartet werden.`,
+      message: t("removeDomainConfirm", { domain: activeDomain.domain }),
       tone: "danger",
-      confirmLabel: "Löschen",
+      confirmLabel: tCommon("delete"),
     });
     if (!ok) return;
     setBusy(true);
@@ -113,7 +116,7 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
       onChanged();
       onClose();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Domain konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("deleteDomainFailed"), "error");
     } finally {
       setBusy(false);
     }
@@ -127,7 +130,7 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
   const stepIndex = STEPS.findIndex((s) => s.key === step);
 
   return (
-    <Modal open={open} onClose={onClose} title="Custom Domain einrichten" description="In drei Schritten eine eigene Domain für diesen Mandanten verbinden.">
+    <Modal open={open} onClose={onClose} title={t("wizardTitle")} description={t("wizardDescription")}>
       <div className="wizard-steps">
         {STEPS.map((s, index) => (
           <div className="wizard-step" key={s.key} style={index === STEPS.length - 1 ? { flex: "0 0 auto" } : { flex: 1 }}>
@@ -146,30 +149,30 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
         <>
           <div className="wizard-purpose-grid">
             <button type="button" className={`wizard-purpose-card${purpose === "app" ? " is-selected" : ""}`} onClick={() => setPurpose("app")}>
-              <span className="wizard-purpose-title">hocX-App</span>
-              <span className="wizard-purpose-desc">Die normale hocX-Oberfläche unter der eigenen Domain aufrufen.</span>
+              <span className="wizard-purpose-title">{t("purposeApp")}</span>
+              <span className="wizard-purpose-desc">{t("wizardPurposeAppDescription")}</span>
             </button>
             <button type="button" className={`wizard-purpose-card${purpose === "abgabebox" ? " is-selected" : ""}`} onClick={() => setPurpose("abgabebox")}>
-              <span className="wizard-purpose-title">Abgabebox</span>
-              <span className="wizard-purpose-desc">Die öffentliche Abgabebox unter der eigenen Domain erreichbar machen.</span>
+              <span className="wizard-purpose-title">{t("purposeAbgabebox")}</span>
+              <span className="wizard-purpose-desc">{t("wizardPurposeAbgabeboxDescription")}</span>
             </button>
           </div>
           <label className="field-stack">
-            <span className="field-label">Domain</span>
+            <span className="field-label">{t("domainLabel")}</span>
             <input
               className="input"
               value={domainInput}
               onChange={(event) => setDomainInput(event.target.value.toLowerCase())}
-              placeholder="z.B. verein.example.ch"
+              placeholder={t("domainPlaceholder")}
               autoFocus
             />
           </label>
           <div className="wizard-footer">
             <span />
             <div className="wizard-footer-actions">
-              <button type="button" className="button-ghost" onClick={onClose}>Abbrechen</button>
+              <button type="button" className="button-ghost" onClick={onClose}>{tCommon("cancel")}</button>
               <button type="button" className="button-primary" disabled={busy || !domainInput.trim()} onClick={createDomain}>
-                {busy ? "…" : "Weiter"}
+                {busy ? "…" : t("continueLabel")}
               </button>
             </div>
           </div>
@@ -179,36 +182,35 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
       {step === "dns" && activeDomain && (
         <>
           <p className="muted">
-            Bei deinem Domain-Provider zwei Einträge für <strong>{activeDomain.domain}</strong> setzen, dann verifizieren.
-            {" "}hocx.example.com bzw. die Standard-Abgabebox-Domain bleiben zusätzlich immer erreichbar.
+            {t("dnsIntro", { domain: activeDomain.domain })}
           </p>
 
           <div className="wizard-dns-block">
-            <span className="wizard-dns-label">1. Besitznachweis · TXT-Record</span>
-            <span className="wizard-dns-sublabel">Name</span>
-            <CopyField label="TXT-Name" value={activeDomain.challenge_record_name} />
-            <span className="wizard-dns-sublabel">Wert</span>
-            <CopyField label="TXT-Wert" value={activeDomain.verification_token} />
+            <span className="wizard-dns-label">{t("dnsStep1")}</span>
+            <span className="wizard-dns-sublabel">{t("nameLabel")}</span>
+            <CopyField label={t("txtNameLabel")} value={activeDomain.challenge_record_name} />
+            <span className="wizard-dns-sublabel">{t("valueLabel")}</span>
+            <CopyField label={t("txtValueLabel")} value={activeDomain.verification_token} />
           </div>
 
           {activeDomain.target_host && (
             <div className="wizard-dns-block">
-              <span className="wizard-dns-label">2. Routing · CNAME/A-Record</span>
-              <span className="wizard-dns-sublabel">Name</span>
-              <CopyField label="CNAME/A-Name" value={activeDomain.domain} />
-              <span className="wizard-dns-sublabel">Ziel</span>
-              <CopyField label="Ziel-Host" value={activeDomain.target_host} />
+              <span className="wizard-dns-label">{t("dnsStep2")}</span>
+              <span className="wizard-dns-sublabel">{t("nameLabel")}</span>
+              <CopyField label={t("cnameNameLabel")} value={activeDomain.domain} />
+              <span className="wizard-dns-sublabel">{t("targetLabel")}</span>
+              <CopyField label={t("targetHostLabel")} value={activeDomain.target_host} />
             </div>
           )}
 
           <div className="wizard-footer">
             <button type="button" className="button-ghost wizard-remove-link" disabled={busy} onClick={removeAndClose}>
-              Domain löschen
+              {t("deleteDomainLink")}
             </button>
             <div className="wizard-footer-actions">
-              <button type="button" className="button-ghost" onClick={onClose}>Später fertigstellen</button>
+              <button type="button" className="button-ghost" onClick={onClose}>{t("finishLater")}</button>
               <button type="button" className="button-primary" disabled={busy} onClick={verify}>
-                {busy ? "Wird geprüft…" : "Jetzt verifizieren"}
+                {busy ? t("verifying") : t("verifyNow")}
               </button>
             </div>
           </div>
@@ -222,18 +224,18 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
               <CheckIcon />
             </div>
             <div>
-              <strong>{activeDomain.domain}</strong> ist aktiv.
+              {t("successActive", { domain: activeDomain.domain })}
               <p className="muted" style={{ marginTop: "var(--space-1)" }}>
                 {activeDomain.purpose === "app"
-                  ? "Die hocX-App ist ab sofort auch unter dieser Domain erreichbar."
-                  : "Die Abgabebox ist ab sofort auch unter dieser Domain erreichbar."}
+                  ? t("successAppDescription")
+                  : t("successAbgabeboxDescription")}
               </p>
             </div>
           </div>
           <div className="wizard-footer">
             <span />
             <div className="wizard-footer-actions">
-              <button type="button" className="button-primary" onClick={finish}>Fertig</button>
+              <button type="button" className="button-primary" onClick={finish}>{t("finish")}</button>
             </div>
           </div>
         </>

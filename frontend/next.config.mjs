@@ -1,3 +1,5 @@
+import createNextIntlPlugin from "next-intl/plugin";
+
 // CSP script-src erlaubt 'unsafe-inline': app/layout.tsx rendert zwei Inline-<script>-Tags
 // (Runtime-Config __HOCX_CONFIG__ + Theme-Vorab-Anwendung vor dem ersten Paint, um FOUC zu
 // vermeiden) ueber dangerouslySetInnerHTML, die auf JEDER Seite laufen muessen - auch auf
@@ -37,6 +39,10 @@ const securityHeaders = [
 ];
 
 const apiProxyTarget = process.env.FRONTEND_API_PROXY_TARGET?.replace(/\/$/, "");
+
+// Kein [locale]-Routing (next-intl ohne i18n-Routing): die Sprache ist eine Benutzer-/
+// Cookie-Praeferenz, keine URL-Segmentierung - siehe i18n/request.ts fuer die Herleitung.
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -79,4 +85,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

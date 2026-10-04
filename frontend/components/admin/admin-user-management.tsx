@@ -1,8 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
-import { ROLE_OPTIONS } from "@/components/admin/admin-tenant-settings-modal";
+import { getRoleOptions } from "@/components/admin/admin-tenant-settings-modal";
+import { locales, localeConfig } from "@/i18n/locale-config.generated";
 import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
@@ -22,10 +24,6 @@ type Props = {
 
 const PAGE_SIZE = 50;
 
-function roleLabel(roleCode: string) {
-  return ROLE_OPTIONS.find((role) => role.code === roleCode)?.label ?? roleCode;
-}
-
 function isEligible(user: UserSummary) {
   // Nur Benutzer mit freigeschaltetem Login und echter (nicht automatisch generierter
   // Teilnehmer-Platzhalter-) E-Mail sind hier relevant - Schattenaccounts ohne Login
@@ -34,6 +32,13 @@ function isEligible(user: UserSummary) {
 }
 
 export function AdminUserManagement({ initialPage, allTenants }: Props) {
+  const t = useTranslations("admin");
+  const tUm = useTranslations("admin.userManagement");
+  const roleOptions = useMemo(() => getRoleOptions(t), [t]);
+  const roleLabel = useMemo(() => {
+    const byCode = new Map(roleOptions.map((role) => [role.code, role.label]));
+    return (roleCode: string) => byCode.get(roleCode) ?? roleCode;
+  }, [roleOptions]);
   const showToast = useToast();
   const confirm = useConfirm();
   const [page, setPage] = useState(initialPage);
@@ -137,9 +142,9 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
 
       await fetchPage(offset, search);
       setUserModalOpen(false);
-      showToast(userForm.id ? "Benutzer gespeichert" : "Benutzer erstellt", "success");
+      showToast(userForm.id ? tUm("toasts.userSaved") : tUm("toasts.userCreated"), "success");
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "Benutzer konnte nicht gespeichert werden";
+      const msg = error instanceof Error ? error.message : tUm("toasts.userSaveFailed");
       setFormError(msg);
       showToast(msg, "error");
     }
@@ -158,7 +163,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
       const fallbackTarget = eligible.find((candidate) => candidate.id !== user.id);
       setMergeTargetUserId(fallbackTarget ? String(fallbackTarget.id) : "");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Benutzerliste konnte nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : tUm("toasts.userListLoadFailed"), "error");
     }
   }
 
@@ -169,9 +174,9 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
   async function mergeUsers() {
     if (!mergeSourceUserId || !mergeTargetUserId) return;
     const ok = await confirm({
-      message: "Benutzer wirklich zusammenführen? Der Quellbenutzer wird danach unwiderruflich gelöscht.",
+      message: tUm("toasts.mergeConfirm"),
       tone: "danger",
-      confirmLabel: "Jetzt mergen",
+      confirmLabel: tUm("mergeNow"),
     });
     if (!ok) return;
     try {
@@ -184,47 +189,47 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
       });
       await fetchPage(offset, search);
       setMergeModalOpen(false);
-      showToast("Benutzer zusammengeführt", "success");
+      showToast(tUm("toasts.userMerged"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Benutzer konnten nicht zusammengeführt werden", "error");
+      showToast(error instanceof Error ? error.message : tUm("toasts.mergeFailed"), "error");
     }
   }
 
   return (
     <div className="grid">
       <DataToolbar
-        title="Benutzer"
-        description="Alle Benutzer über alle Mandanten hinweg. Jedes Konto gehört genau einem Mandanten."
+        title={tUm("toolbarTitle")}
+        description={tUm("toolbarDescription")}
         actions={
           <button type="button" className="button-secondary" onClick={openNewUser}>
-            Neuer Benutzer
+            {tUm("newUser")}
           </button>
         }
       />
 
       <article className="card">
         <label className="field-stack">
-          <span className="field-label">Suche</span>
-          <SearchInput value={search} onChange={setSearch} placeholder="Benutzer durchsuchen" />
+          <span className="field-label">{tUm("searchLabel")}</span>
+          <SearchInput value={search} onChange={setSearch} placeholder={tUm("searchPlaceholder")} />
         </label>
       </article>
 
       <DataTable
-        columns={["Anzeigename", "E-Mail", "Mandant", "Rolle", "Login", "Aktionen"]}
-        emptyMessage={loading ? "Wird geladen…" : "Keine Benutzer gefunden."}
+        columns={[tUm("columns.displayName"), tUm("columns.email"), tUm("columns.tenant"), tUm("columns.role"), tUm("columns.login"), tUm("columns.actions")]}
+        emptyMessage={loading ? tUm("loading") : tUm("emptyUsers")}
       >
         {visibleUsers.map((user) => (
           <tr key={user.id} className="table-row-clickable" onClick={() => openEditUser(user)}>
             <td>
               <strong>{user.display_name}</strong>
-              {user.is_participant_account ? <div className="muted">Teilnehmer-Konto</div> : null}
+              {user.is_participant_account ? <div className="muted">{tUm("participantAccount")}</div> : null}
             </td>
             <td>{user.email}</td>
             <td>{user.tenant_name}</td>
             <td>
               <span className="pill">{roleLabel(user.role_code)}</span>
             </td>
-            <td>{user.login_enabled ? "Aktiv" : "Deaktiviert"}</td>
+            <td>{user.login_enabled ? tUm("loginActive") : tUm("loginDisabled")}</td>
             <td>
               <div className="table-actions table-actions-start">
                 <button
@@ -235,7 +240,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
                     openMfa(user);
                   }}
                 >
-                  MFA
+                  {tUm("mfaButton")}
                 </button>
                 <button
                   type="button"
@@ -245,7 +250,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
                     openMerge(user);
                   }}
                 >
-                  Merge
+                  {tUm("mergeButton")}
                 </button>
               </div>
             </td>
@@ -258,64 +263,64 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
       <Modal
         open={userModalOpen}
         onClose={() => setUserModalOpen(false)}
-        title={userForm.id ? "Benutzer bearbeiten" : "Benutzer erstellen"}
+        title={userForm.id ? tUm("editUserTitle") : tUm("createUserTitle")}
         description=""
         size="wide"
       >
         <ModalSaveForm className="grid" onSubmit={submitUser} id="user-form">
           <div className="three-col">
             <label className="field-stack">
-              <span className="field-label">Vorname</span>
+              <span className="field-label">{tUm("firstName")}</span>
               <input value={userForm.first_name} onChange={(event) => setUserForm((current) => ({ ...current, first_name: event.target.value }))} />
             </label>
             <label className="field-stack">
-              <span className="field-label">Nachname</span>
+              <span className="field-label">{tUm("lastName")}</span>
               <input value={userForm.last_name} onChange={(event) => setUserForm((current) => ({ ...current, last_name: event.target.value }))} />
             </label>
             <label className="field-stack">
-              <span className="field-label">Anzeigename</span>
+              <span className="field-label">{tUm("displayName")}</span>
               <input value={userForm.display_name} onChange={(event) => setUserForm((current) => ({ ...current, display_name: event.target.value }))} />
             </label>
           </div>
 
           <div className="three-col">
             <label className="field-stack">
-              <span className="field-label">E-Mail</span>
+              <span className="field-label">{tUm("email")}</span>
               <input value={userForm.email} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} />
             </label>
             <label className="field-stack">
-              <span className="field-label">{userForm.id ? "Neues Passwort" : "Passwort"}</span>
+              <span className="field-label">{userForm.id ? tUm("newPassword") : tUm("password")}</span>
               <input type="password" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} />
               <span className="field-help">
                 {userForm.id
-                  ? "Nur ausfüllen, um das Passwort zu ändern. Mindestens 12 Zeichen."
-                  : "Wird hier direkt vergeben, mindestens 12 Zeichen. Es gibt keine automatische Einladungs-E-Mail – das Passwort dem Benutzer separat mitteilen."}
+                  ? tUm("passwordHelpEdit")
+                  : tUm("passwordHelpCreate")}
               </span>
             </label>
             <label className="field-stack">
-              <span className="field-label">Sprache</span>
+              <span className="field-label">{tUm("language")}</span>
               <select value={userForm.preferred_language} onChange={(event) => setUserForm((current) => ({ ...current, preferred_language: event.target.value }))}>
-                <option value="de">Deutsch</option>
-                <option value="en">English</option>
-                <option value="fr">Français</option>
-                <option value="it">Italiano</option>
+                {locales.map((code) => (
+                  <option key={code} value={code}>
+                    {localeConfig[code].nativeLabel}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="checkbox-line">
               <input type="checkbox" checked={userForm.is_active} onChange={(event) => setUserForm((current) => ({ ...current, is_active: event.target.checked }))} />
-              Aktiv
+              {tUm("active")}
             </label>
           </div>
 
           <div className="two-col">
             <label className="checkbox-line">
               <input type="checkbox" checked={userForm.login_enabled} onChange={(event) => setUserForm((current) => ({ ...current, login_enabled: event.target.checked }))} />
-              Login aktivieren
+              {tUm("enableLogin")}
             </label>
             {userForm.is_participant_account ? (
               <div className="info-note">
-                Dieses Konto wurde automatisch aus einem Teilnehmer erstellt. Für den ersten Login bitte Login aktivieren
-                und ein neues Passwort setzen.
+                {tUm("participantAutoNote")}
               </div>
             ) : null}
           </div>
@@ -323,13 +328,13 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
           <div className="two-col">
             {userForm.id ? (
               <label className="field-stack">
-                <span className="field-label">Mandant</span>
+                <span className="field-label">{tUm("tenant")}</span>
                 <input value={users.find((user) => user.id === userForm.id)?.tenant_name ?? ""} readOnly />
-                <span className="field-help">Der Mandant eines Kontos steht fest und lässt sich nicht ändern.</span>
+                <span className="field-help">{tUm("tenantFixedHelp")}</span>
               </label>
             ) : (
               <label className="field-stack">
-                <span className="field-label">Mandant</span>
+                <span className="field-label">{tUm("tenant")}</span>
                 <SearchableSelect
                   options={allTenants}
                   getId={(tenant) => String(tenant.id)}
@@ -340,9 +345,9 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
               </label>
             )}
             <label className="field-stack">
-              <span className="field-label">Rolle</span>
+              <span className="field-label">{tUm("role")}</span>
               <select value={userForm.role_code} onChange={(event) => setUserForm((current) => ({ ...current, role_code: event.target.value }))}>
-                {ROLE_OPTIONS.map((role) => (
+                {roleOptions.map((role) => (
                   <option key={role.code} value={role.code}>
                     {role.label}
                   </option>
@@ -355,7 +360,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
 
           <div className="table-actions table-actions-start">
             <button data-modal-save type="submit" className="button-secondary" disabled={!isUserFormValid(userForm, { requireTenant: true })}>
-              Speichern
+              {tUm("save")}
             </button>
           </div>
         </ModalSaveForm>
@@ -364,7 +369,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
       <MfaAdminModal
         open={!!mfaModalUser}
         onClose={() => setMfaModalUser(null)}
-        title={mfaModalUser ? `MFA von ${mfaModalUser.display_name}` : "MFA"}
+        title={mfaModalUser ? t("tenantModal.mfaTitle", { name: mfaModalUser.display_name }) : t("tenantModal.mfaTitleFallback")}
         loadPath={mfaModalUser ? `/api/admin/users/${mfaModalUser.id}/mfa` : null}
         deletePathBase={mfaModalUser ? `/api/admin/users/${mfaModalUser.id}/mfa/factors` : null}
       />
@@ -372,16 +377,16 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
       <Modal
         open={mergeModalOpen}
         onClose={() => setMergeModalOpen(false)}
-        title="Benutzer zusammenführen"
-        description="Der Quellbenutzer wird in den Zielbenutzer gemergt (inkl. Rolle und Teilnehmer-Links) und danach gelöscht. Möglich nur innerhalb desselben Mandanten."
+        title={tUm("mergeUserTitle")}
+        description={tUm("mergeUserDescription")}
       >
         <div className="grid">
           <label className="field-stack">
-            <span className="field-label">Quellbenutzer</span>
+            <span className="field-label">{tUm("sourceUser")}</span>
             <input value={users.find((user) => user.id === mergeSourceUserId)?.display_name ?? ""} readOnly />
           </label>
           <label className="field-stack">
-            <span className="field-label">Zielbenutzer</span>
+            <span className="field-label">{tUm("targetUser")}</span>
             <SearchableSelect
               options={mergeCandidates.filter((user) => user.id !== mergeSourceUserId)}
               getId={(user) => String(user.id)}
@@ -392,7 +397,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
           </label>
           <div className="modal-actions">
             <button type="button" className="button-secondary" onClick={() => void mergeUsers()} disabled={!mergeTargetUserId}>
-              Jetzt mergen
+              {tUm("mergeNow")}
             </button>
           </div>
         </div>

@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { AppShell } from "@/components/ui/app-shell";
 import { WordImportQueueView } from "@/components/tools/word-import-queue-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
@@ -5,6 +7,7 @@ import { WordImportDocumentSummary } from "@/lib/api/word-import";
 import { TemplateSummary } from "@/types/api";
 
 export default async function WordImportQueuePage() {
+  const t = await getTranslations("tools.wordImport.queueView");
   const session = await requireSession();
   const [templates, documents, lastTemplate] = await Promise.all([
     backendFetchWithSession<TemplateSummary[]>("/api/templates"),
@@ -18,11 +21,9 @@ export default async function WordImportQueuePage() {
       <div className="grid">
         <div className="page-header">
           <div>
-            <h1 className="page-title">Import</h1>
+            <h1 className="page-title">{t("pageTitle")}</h1>
             <p className="muted">
-              Alte .docx-Protokolle sammeln, prüfen und importieren — jeder bestätigte Import analysiert die restlichen,
-              noch offenen Dokumente in der Warteschlange automatisch neu, um deren Vorschläge zu verbessern. Bereits
-              vorgenommene manuelle Korrekturen an diesen Dokumenten bleiben dabei erhalten.
+              {t("pageIntro")}
             </p>
           </div>
         </div>

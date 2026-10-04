@@ -5,6 +5,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { liftListItem } from "prosemirror-schema-list";
 import { useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
 
 import { TrackedChanges } from "@/components/ui/tracked-changes-extension";
 
@@ -20,6 +21,7 @@ type RichTextEditorProps = {
 };
 
 export function RichTextEditor({ value, onChange, readOnly = false, placeholder, trackedBaseline }: RichTextEditorProps) {
+  const t = useTranslations("protocols.richTextEditor");
   // Keep a stable ref so the handleKeyDown closure always sees the current editor
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   // Read via ref inside the tracked-changes plugin's decorations() callback so
@@ -139,7 +141,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
             type="button"
             className={`rich-text-btn${editor?.isActive("bold") ? " active" : ""}`}
             onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBold().run(); }}
-            title="Fett (Ctrl+B)"
+            title={t("bold")}
           >
             <strong>B</strong>
           </button>
@@ -147,7 +149,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
             type="button"
             className={`rich-text-btn${editor?.isActive("italic") ? " active" : ""}`}
             onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleItalic().run(); }}
-            title="Kursiv (Ctrl+I)"
+            title={t("italic")}
           >
             <em>I</em>
           </button>
@@ -156,7 +158,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
             type="button"
             className={`rich-text-btn${editor?.isActive("bulletList") ? " active" : ""}`}
             onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBulletList().run(); }}
-            title="Aufzählung"
+            title={t("bulletList")}
           >
             ≡
           </button>
@@ -164,7 +166,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
             type="button"
             className={`rich-text-btn${editor?.isActive("orderedList") ? " active" : ""}`}
             onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleOrderedList().run(); }}
-            title="Nummerierte Liste"
+            title={t("orderedList")}
           >
             1≡
           </button>

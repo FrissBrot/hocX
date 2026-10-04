@@ -1,0 +1,77 @@
+{
+  "meta": { "description": "Area di lavoro per verbali e modelli" },
+  "save": "Salva",
+  "cancel": "Annulla",
+  "delete": "Elimina",
+  "edit": "Modifica",
+  "create": "Crea",
+  "close": "Chiudi",
+  "back": "Indietro",
+  "next": "Avanti",
+  "yes": "Sì",
+  "no": "No",
+  "add": "Aggiungi",
+  "remove": "Rimuovi",
+  "search": "Cerca",
+  "searchPlaceholder": "Cerca…",
+  "loading": "Caricamento…",
+  "retry": "Riprova",
+  "refresh": "Aggiorna",
+  "download": "Scarica",
+  "upload": "Carica",
+  "export": "Esporta",
+  "import": "Importa",
+  "actions": "Azioni",
+  "select": "Seleziona",
+  "noResults": "Nessun risultato",
+  "selectedCount": "{count, plural, one {# selezionato} other {# selezionati}}",
+  "requiredField": "Campo obbligatorio",
+  "optional": "Facoltativo",
+  "menuToggle": "Menu",
+  "breadcrumbNav": "Percorso di navigazione",
+  "notificationsRegion": "Notifiche",
+  "copyright": "Copyright © {year} hocX Project · Tutti i diritti riservati.",
+  "connectionLost": {
+    "title": "Connessione interrotta",
+    "description": "Il server non è al momento raggiungibile. I dati già confermati vengono conservati; dopo la riconnessione controlla lo stato di salvataggio delle modifiche in corso."
+  },
+  "pagination": {
+    "range": "{from}–{to} di {total}"
+  },
+  "confirm": {
+    "defaultTitle": "Conferma richiesta",
+    "deleteTitle": "Eliminare davvero?",
+    "confirmLabel": "Conferma",
+    "deleteConfirmLabel": "Elimina",
+    "cancelLabel": "Annulla"
+  },
+  "dateField": {
+    "invalidFormat": "Inserisci la data nel formato GG.MM.AAAA",
+    "chooseDate": "Scegli la data"
+  },
+  "copyField": {
+    "copy": "Copia",
+    "copyWithLabel": "Copia {label}"
+  },
+  "tagInput": {
+    "addPlaceholder": "Aggiungi tag…",
+    "renameFailed": "Ridenominazione non riuscita. Riprova.",
+    "removeTag": "Rimuovi il tag {tag}",
+    "editTag": "Modifica tag",
+    "newNamePlaceholder": "Nuovo nome…",
+    "noColor": "Nessun colore",
+    "rename": "Rinomina",
+    "colorOrRename": "Colore / rinomina",
+    "addNewTag": "+ Aggiungi \"{tag}\""
+  },
+  "connectivity": {
+    "offlineWithPending": "{count, plural, one {Offline – # modifica salvata localmente} other {Offline – # modifiche salvate localmente}}",
+    "offlineIdle": "Offline – connessione monitorata",
+    "flushing": "{count, plural, one {Nuovo invio di # modifica…} other {Nuovo invio di # modifiche…}}",
+    "pendingUnsaved": "{count, plural, one {# modifica non ancora salvata} other {# modifiche non ancora salvate}}",
+    "reconnected": "Connessione ripristinata",
+    "retryButton": "Riprova ora",
+    "discardBlocked": "{count, plural, one {Scarta la modifica non riuscita} other {Scarta # modifiche non riuscite}}",
+    "leaveConfirm": "Ci sono modifiche non salvate. Lasciare comunque la pagina?"
+  }
+}

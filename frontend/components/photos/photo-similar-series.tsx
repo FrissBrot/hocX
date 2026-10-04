@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
@@ -18,6 +19,7 @@ export function PhotoSimilarSeries({
   tagFilter: string[];
   onDeleted?: (deletedIds: string[]) => void;
 }) {
+  const t = useTranslations("photos.similarSeries");
   const confirm = useConfirm();
   const showToast = useToast();
   const [groups, setGroups] = useState<SimilarityGroup[] | null>(null);
@@ -43,7 +45,7 @@ export function PhotoSimilarSeries({
       })
       .catch(() => {
         if (requestIdRef.current !== requestId) return;
-        setError("Ähnliche Fotos konnten nicht geladen werden.");
+        setError(t("loadError"));
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, tagKey]);
@@ -68,7 +70,7 @@ export function PhotoSimilarSeries({
       });
       updateImage(image.id, { is_best: isBest });
     } catch {
-      showToast("Best-of-Status konnte nicht geändert werden.", "error");
+      showToast(t("bestError"), "error");
     }
   }
 
@@ -77,7 +79,7 @@ export function PhotoSimilarSeries({
     if (rest.length === 0 || busyGroup) return;
     const ok = await confirm({
       tone: "danger",
-      message: `${rest.length} ${rest.length === 1 ? "Bild wird" : "Bilder werden"} endgültig gelöscht. Nur das schärfste, am besten belichtete Foto der Serie bleibt erhalten.`,
+      message: t("deleteConfirm", { count: rest.length }),
     });
     if (!ok) return;
     setBusyGroup(group.best_id);
@@ -92,17 +94,17 @@ export function PhotoSimilarSeries({
       if (result?.errors.length) {
         showToast(result.errors.join(" · "), deletedCount > 0 ? "info" : "error");
       } else {
-        showToast("Serie bereinigt - nur das beste Foto bleibt.", "success");
+        showToast(t("cleanedToast"), "success");
       }
     } catch {
-      showToast("Serie konnte nicht bereinigt werden.", "error");
+      showToast(t("cleanError"), "error");
     } finally {
       setBusyGroup(null);
     }
   }
 
   if (error) return <p className="form-error-banner">{error}</p>;
-  if (!groups) return <p className="muted">Serien werden gruppiert…</p>;
+  if (!groups) return <p className="muted">{t("loading")}</p>;
 
   const visible = groups.filter((group) => !dismissed.has(group.best_id));
   const viewerGroup = visible.find((group) => group.best_id === viewer?.groupId);
@@ -110,12 +112,10 @@ export function PhotoSimilarSeries({
   return (
     <div className="grid">
       <p className="muted">
-        Nahezu identische Aufnahmen - gleiches Bild, nur anderer Ausschnitt oder andere Qualität - werden zu Duplikat-Gruppen
-        zusammengefasst. Das schärfste, am besten belichtete Foto jeder Gruppe ist vorausgewählt - die übrigen können in einem
-        Schritt gelöscht werden.
+        {t("intro")}
       </p>
       {visible.length === 0 ? (
-        <p className="muted">Keine ähnlichen Fotos gefunden.</p>
+        <p className="muted">{t("empty")}</p>
       ) : (
         visible.map((group) => {
           const best = group.images.find((image) => image.id === group.best_id) ?? group.images[0];
@@ -126,26 +126,26 @@ export function PhotoSimilarSeries({
             <div key={group.best_id} className="photo-series-card">
               <div className="photo-series-header">
                 <div>
-                  <span className="photo-series-title">Serie um {formatTime(best.created_at)} · {description}</span>
-                  <span className="photo-series-count muted"> {group.images.length} ähnliche Fotos</span>
+                  <span className="photo-series-title">{t("seriesTitle", { time: formatTime(best.created_at), description })}</span>
+                  <span className="photo-series-count muted"> {t("similarCount", { count: group.images.length })}</span>
                 </div>
                 <div className="photo-series-actions">
                   <button type="button" className="button-ghost button-secondary" onClick={() => keepSeries(group)} disabled={busyGroup === group.best_id}>
-                    Serie behalten
+                    {t("keepSeries")}
                   </button>
                   <button
                     type="button"
                     className="button-secondary"
                     onClick={() => void keepOnlyBest(group)}
                     disabled={busyGroup === group.best_id || deletableCount === 0}
-                    title={deletableCount === 0 ? "Nur direkt hochgeladene Fotos können hier gelöscht werden." : undefined}
+                    title={deletableCount === 0 ? t("keepOnlyBestDisabledTitle") : undefined}
                   >
-                    Nur beste behalten
+                    {t("keepOnlyBest")}
                   </button>
                 </div>
               </div>
               {deletableCount < otherCount && deletableCount > 0 && (
-                <p className="muted photo-series-hint">Einige Fotos dieser Serie stammen aus Protokollen/Abgaben und werden beim Bereinigen übersprungen.</p>
+                <p className="muted photo-series-hint">{t("skippedHint")}</p>
               )}
               <div className="photo-series-strip">
                 {group.images.map((image, index) => {
@@ -156,15 +156,15 @@ export function PhotoSimilarSeries({
                       <button
                         type="button"
                         className="photo-series-thumb-wrap"
-                        aria-label={`${image.original_name} öffnen`}
+                        aria-label={t("openAriaLabel", { name: image.original_name })}
                         onClick={() => setViewer({ groupId: group.best_id, index })}
                       >
                         <img src={thumbnailUrl} alt={image.original_name} loading="lazy" decoding="async" draggable={false} />
-                        {isBest && <span className="photo-series-badge">Beste Wahl</span>}
+                        {isBest && <span className="photo-series-badge">{t("bestChoice")}</span>}
                       </button>
                       <span className="photo-series-caption muted">
-                        Schärfe {image.sharpness_score !== null ? image.sharpness_score.toFixed(1) : "–"}
-                        {isBest ? " · beste Wahl" : ""}
+                        {t("sharpnessCaption", { score: image.sharpness_score !== null ? image.sharpness_score.toFixed(1) : "–" })}
+                        {isBest ? t("bestSuffix") : ""}
                       </span>
                     </div>
                   );

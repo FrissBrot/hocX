@@ -1,0 +1,77 @@
+{
+  "meta": { "description": "Protocol and template management workspace" },
+  "save": "Save",
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "edit": "Edit",
+  "create": "Create",
+  "close": "Close",
+  "back": "Back",
+  "next": "Next",
+  "yes": "Yes",
+  "no": "No",
+  "add": "Add",
+  "remove": "Remove",
+  "search": "Search",
+  "searchPlaceholder": "Search…",
+  "loading": "Loading…",
+  "retry": "Try again",
+  "refresh": "Refresh",
+  "download": "Download",
+  "upload": "Upload",
+  "export": "Export",
+  "import": "Import",
+  "actions": "Actions",
+  "select": "Select",
+  "noResults": "No results",
+  "selectedCount": "{count, plural, one {# selected} other {# selected}}",
+  "requiredField": "Required field",
+  "optional": "Optional",
+  "menuToggle": "Menu",
+  "breadcrumbNav": "Breadcrumb",
+  "notificationsRegion": "Notifications",
+  "copyright": "Copyright © {year} hocX Project · All rights reserved.",
+  "connectionLost": {
+    "title": "Connection lost",
+    "description": "The server is currently unreachable. Already confirmed data is kept; after reconnecting, check the save status of any open changes."
+  },
+  "pagination": {
+    "range": "{from}–{to} of {total}"
+  },
+  "confirm": {
+    "defaultTitle": "Please confirm",
+    "deleteTitle": "Really delete?",
+    "confirmLabel": "Confirm",
+    "deleteConfirmLabel": "Delete",
+    "cancelLabel": "Cancel"
+  },
+  "dateField": {
+    "invalidFormat": "Please enter the date as DD.MM.YYYY",
+    "chooseDate": "Choose date"
+  },
+  "copyField": {
+    "copy": "Copy",
+    "copyWithLabel": "Copy {label}"
+  },
+  "tagInput": {
+    "addPlaceholder": "Add tag…",
+    "renameFailed": "Renaming failed. Please try again.",
+    "removeTag": "Remove tag {tag}",
+    "editTag": "Edit tag",
+    "newNamePlaceholder": "New name…",
+    "noColor": "No color",
+    "rename": "Rename",
+    "colorOrRename": "Color / rename",
+    "addNewTag": "+ Add \"{tag}\""
+  },
+  "connectivity": {
+    "offlineWithPending": "{count, plural, one {Offline – # change saved locally} other {Offline – # changes saved locally}}",
+    "offlineIdle": "Offline – monitoring connection",
+    "flushing": "{count, plural, one {Resending # change…} other {Resending # changes…}}",
+    "pendingUnsaved": "{count, plural, one {# change not yet saved} other {# changes not yet saved}}",
+    "reconnected": "Connection restored",
+    "retryButton": "Try again now",
+    "discardBlocked": "{count, plural, one {Discard failed change} other {Discard # failed changes}}",
+    "leaveConfirm": "There are unsaved changes. Leave the page anyway?"
+  }
+}

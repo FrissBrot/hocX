@@ -1,0 +1,22 @@
+{
+  "modal": {
+    "title": "Link teilen",
+    "createFailed": "Link konnte nicht erstellt werden.",
+    "createdHint": "Jede Person mit diesem Link kann die Dateien ohne Anmeldung herunterladen.",
+    "linkLabel": "Freigabe-Link",
+    "done": "Fertig",
+    "nameLabel": "Name",
+    "expiryLabel": "Ablaufdatum",
+    "expiryHint": "Optional – ohne Ablaufdatum bleibt der Link aktiv, bis er widerrufen wird.",
+    "cancel": "Abbrechen",
+    "creating": "Wird erstellt…",
+    "create": "Link erstellen"
+  },
+  "publicPage": {
+    "linkUnavailable": "Link nicht verfügbar",
+    "linkUnavailableHint": "Dieser Link ist ungültig, abgelaufen oder wurde widerrufen.",
+    "fileCount": "{count, plural, one {# Datei} other {# Dateien}} zum Herunterladen",
+    "downloadAll": "Alle herunterladen",
+    "noFiles": "Keine Dateien verfügbar."
+  }
+}

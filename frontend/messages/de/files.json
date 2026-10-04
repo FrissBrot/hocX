@@ -1,0 +1,131 @@
+{
+  "partition": {
+    "imagesHint": "Bilder bitte über die Fotos-Seite hochladen.",
+    "unsupported": "Nicht unterstützt: {names}"
+  },
+  "modal": {
+    "title": "Dateien hochladen",
+    "description": "Die Dateien landen unter Dateien, werden beim Upload virengeprüft und lassen sich mit einem Termin, einer Abgabe oder einem Zyklus verknüpfen."
+  },
+  "dropzone": {
+    "releaseToUpload": "Zum Hochladen loslassen",
+    "dragHint": "Dateien hierher ziehen",
+    "orText": "oder",
+    "browse": "Dateien auswählen",
+    "formatsAriaLabel": "Unterstützte Formate"
+  },
+  "queue": {
+    "heading": "Warteschlange",
+    "countNone": "Keine Datei gewählt",
+    "count": "{count, plural, one {# Datei gewählt} other {# Dateien gewählt}}",
+    "empty": "Noch keine Dateien ausgewählt.",
+    "uploading": "Wird hochgeladen…",
+    "ready": "Bereit zum Hochladen",
+    "removeFile": "{name} entfernen"
+  },
+  "tags": {
+    "label": "Tags für alle Dateien",
+    "placeholder": "Tag hinzufügen…"
+  },
+  "footer": {
+    "summary": "{count, plural, one {# Datei} other {# Dateien}}",
+    "cancel": "Abbrechen",
+    "uploading": "Lädt hoch…",
+    "uploadCount": "{count, plural, one {# Datei hochladen} other {# Dateien hochladen}}",
+    "upload": "Hochladen"
+  },
+  "errors": {
+    "uploadFailed": "Upload fehlgeschlagen"
+  },
+  "source": {
+    "protocol": "Protokoll",
+    "wordImport": "Word-Import",
+    "submission": "Abgabe",
+    "upload": "Upload"
+  },
+  "detail": {
+    "openOriginal": "Original öffnen",
+    "detailsTitle": "Details",
+    "source": "Quelle",
+    "reference": "Bezug",
+    "uploadedAt": "Hochgeladen",
+    "uploadedBy": "Hochgeladen von",
+    "fileType": "Dateityp",
+    "unknown": "Unbekannt",
+    "size": "Grösse",
+    "dimensions": "Bildmasse",
+    "loading": "Lädt…",
+    "originTitle": "Herkunft",
+    "tagsTitle": "Tags",
+    "saving": "Speichert…",
+    "tagPlaceholder": "Tag hinzufügen…",
+    "openOriginalNewTab": "Original in neuem Tab öffnen"
+  },
+  "table": {
+    "columnName": "Name",
+    "columnSource": "Quelle",
+    "columnReference": "Bezug",
+    "columnUploaded": "Hochgeladen",
+    "columnSize": "Grösse",
+    "empty": "Keine Dateien gefunden.",
+    "protocolRef": "Protokoll {label}",
+    "download": "Download",
+    "share": "Teilen"
+  },
+  "view": {
+    "title": "Dateien",
+    "descriptionEmpty": "Alle Dokumente dieses Mandanten.",
+    "description": "Alle hochgeladenen Nicht-Bild-Dateien dieses Mandanten - aus Protokollen, Word-Importen, Abgaben und direkten Uploads. Fotos siehe die separate \"Fotos\"-Seite.",
+    "uploadButton": "+ Dateien hochladen",
+    "emptyTitle": "Noch keine Dateien vorhanden",
+    "emptyDescription": "Dokumente aus Protokollen und Abgaben sammeln sich hier – oder lade sie direkt hoch.",
+    "emptyHint": "Jede Datei wird beim Upload automatisch auf Viren geprüft.",
+    "searchPlaceholder": "Dateien durchsuchen",
+    "tagPlaceholder": "Tag wählen oder eingeben…",
+    "countFiles": "{count, plural, one {# Datei} other {# Dateien}}",
+    "loadMoreLoading": "Lädt weitere Dateien…",
+    "loadMore": "Mehr laden ({count} geladen)",
+    "dropOverlayTitle": "Zum Hochladen loslassen",
+    "dropOverlayHint": "Danach stellst du den Upload ein.",
+    "loadError": "Dateien konnten nicht geladen werden.",
+    "uploadedToast": "{count, plural, one {# Datei hochgeladen.} other {# Dateien hochgeladen.}}"
+  },
+  "sourceOptions": {
+    "all": "Alle Quellen",
+    "protocols": "Protokolle",
+    "wordImport": "Word-Import",
+    "submissions": "Abgaben",
+    "uploads": "Uploads"
+  },
+  "sortOptions": {
+    "newestFirst": "Neueste zuerst",
+    "oldestFirst": "Älteste zuerst",
+    "nameAsc": "Name (A-Z)",
+    "nameDesc": "Name (Z-A)",
+    "sizeDesc": "Grösse (gross-klein)",
+    "sizeAsc": "Grösse (klein-gross)"
+  },
+  "target": {
+    "ruleType": "{filename}: Dateityp '.{ext}' nicht erlaubt",
+    "ruleTooLarge": "{filename}: zu gross (max. {maxSize} MB)",
+    "ruleMaxFiles": "Maximal {max} Dateien pro Element erlaubt ({count} gewählt)",
+    "categoryNone": "Kein Bezug",
+    "categoryEvent": "Termin",
+    "categorySubmissionElement": "Abgabe-Element",
+    "categoryCycle": "Zyklus",
+    "referenceLabel": "Bezug",
+    "eventLabel": "Termin",
+    "eventPlaceholder": "Termin wählen…",
+    "assignmentLabel": "Abgabe",
+    "assignmentPlaceholder": "Abgabe wählen…",
+    "cycleLabel": "Zyklus",
+    "cyclePlaceholder": "Zyklus wählen…",
+    "rulesPrefix": "Regeln der Abgabe:",
+    "rulesOnlyTypes": "nur {types}",
+    "rulesAllTypes": "alle Dateitypen",
+    "rulesPerFile": "max. {size} MB pro Datei",
+    "rulesMaxFiles": "max. {max} Dateien pro Element",
+    "elementLabel": "Abgabe-Element",
+    "elementPlaceholder": "Element wählen…"
+  }
+}

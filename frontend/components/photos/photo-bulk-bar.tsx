@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { confirmAddToSharedAlbum } from "./album-share-release";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -25,6 +26,7 @@ export function PhotoBulkBar({
   // Albumansicht des Besitzers mit noch nicht freigegebenen Fotos in der Auswahl.
   onReleaseSelected?: () => void;
 }) {
+  const t = useTranslations("photos.bulkBar");
   const confirm = useConfirm();
   const showToast = useToast();
   const [albums, setAlbums] = useState<PhotoAlbum[]>([]);
@@ -48,10 +50,10 @@ export function PhotoBulkBar({
         method: "POST",
         body: JSON.stringify({ file_ids: selectedIds }),
       });
-      showToast(`${selectedIds.length} Foto(s) zum Album hinzugefügt.`, "success");
+      showToast(t("addedToAlbumToast", { count: selectedIds.length }), "success");
       onDone();
     } catch {
-      showToast("Fotos konnten nicht zum Album hinzugefügt werden.", "error");
+      showToast(t("addToAlbumError"), "error");
     } finally {
       setBusy(false);
     }
@@ -66,12 +68,12 @@ export function PhotoBulkBar({
         method: "POST",
         body: JSON.stringify({ file_ids: selectedIds, add_tags: addTags, remove_tags: [] }),
       });
-      showToast("Tags hinzugefügt.", "success");
+      showToast(t("tagsAddedToast"), "success");
       setTaggingOpen(false);
       setTagsValue("");
       onDone();
     } catch {
-      showToast("Tags konnten nicht hinzugefügt werden.", "error");
+      showToast(t("tagsError"), "error");
     } finally {
       setBusy(false);
     }
@@ -87,13 +89,13 @@ export function PhotoBulkBar({
         )
       );
       const failed = results.filter((result) => result.status === "rejected").length;
-      if (failed > 0) showToast(`${failed} Foto(s) gehören zu keinem Album - Best-of nicht möglich.`, "info");
+      if (failed > 0) showToast(t("noAlbumToast", { count: failed }), "info");
       // Only claim success if at least one update actually went through - previously this
       // fired unconditionally, so selecting only photos outside an album showed both "0
       // möglich" and "hinzugefügt" toasts back to back, falsely telling the user the
       // action succeeded when nothing did (audit fix, 2026-09-17).
       if (failed < selectedIds.length) {
-        showToast(bestOverride === "include" ? "Zu Best-of hinzugefügt." : "Aus Best-of entfernt.", "success");
+        showToast(bestOverride === "include" ? t("markedBestToast") : t("unmarkedBestToast"), "success");
       }
       onDone();
     } finally {
@@ -105,7 +107,7 @@ export function PhotoBulkBar({
     if (busy) return;
     const ok = await confirm({
       tone: "danger",
-      message: `${selectedIds.length} ${selectedIds.length === 1 ? "Bild wird" : "Bilder werden"} endgültig gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`,
+      message: t("deleteConfirm", { count: selectedIds.length }),
     });
     if (!ok) return;
     setBusy(true);
@@ -115,11 +117,11 @@ export function PhotoBulkBar({
         body: JSON.stringify({ file_ids: selectedIds }),
       });
       const deletedCount = result?.deleted_ids.length ?? 0;
-      if (deletedCount > 0) showToast(deletedCount === 1 ? "1 Bild gelöscht." : `${deletedCount} Bilder gelöscht.`, "success");
+      if (deletedCount > 0) showToast(t("deletedToast", { count: deletedCount }), "success");
       if (result?.errors.length) showToast(result.errors.join(" · "), deletedCount > 0 ? "info" : "error");
       onDone();
     } catch {
-      showToast("Bilder konnten nicht gelöscht werden.", "error");
+      showToast(t("deleteError"), "error");
     } finally {
       setBusy(false);
     }
@@ -127,11 +129,11 @@ export function PhotoBulkBar({
 
   return (
     <div className="photo-bulk-bar">
-      <span className="pill">{selectedIds.length} ausgewählt</span>
+      <span className="pill">{t("selectedCount", { count: selectedIds.length })}</span>
       <div className="table-toolbar-actions">
         {onReleaseSelected && (
           <button type="button" className="button-secondary" onClick={onReleaseSelected} disabled={busy}>
-            Freigeben
+            {t("release")}
           </button>
         )}
         <SearchableSelect
@@ -141,42 +143,42 @@ export function PhotoBulkBar({
           getLabel={(album) => album.name}
           value={selectedAlbumId || null}
           onChange={(album) => setSelectedAlbumId(album?.id ?? "")}
-          nullLabel="Album wählen…"
+          nullLabel={t("albumPlaceholder")}
           disabled={busy}
         />
         <button type="button" className="button-ghost button-secondary" onClick={() => void addToAlbum()} disabled={busy || !selectedAlbumId}>
-          Zu Album hinzufügen
+          {t("addToAlbum")}
         </button>
         <button type="button" className="button-ghost button-secondary" onClick={() => setTaggingOpen((current) => !current)} disabled={busy}>
-          Tags hinzufügen
+          {t("addTags")}
         </button>
         <button type="button" className="button-ghost button-secondary" onClick={() => void toggleBest("include")} disabled={busy}>
-          ★ Best-of
+          {t("markBest")}
         </button>
         <button type="button" className="button-ghost button-secondary" onClick={() => void toggleBest("exclude")} disabled={busy}>
-          ☆ Best-of entfernen
+          {t("unmarkBest")}
         </button>
         <button type="button" className="button-secondary" onClick={() => setShareOpen(true)} disabled={busy}>
-          Teilen
+          {t("share")}
         </button>
         <button type="button" className="button-secondary button-danger" onClick={() => void deleteSelected()} disabled={busy}>
-          Löschen
+          {t("delete")}
         </button>
         <button type="button" className="button-ghost button-secondary" onClick={onClearSelection} disabled={busy}>
-          Auswahl aufheben
+          {t("clearSelection")}
         </button>
       </div>
       <ShareLinkModal
         open={shareOpen}
         onClose={() => setShareOpen(false)}
         fileIds={selectedIds}
-        defaultName={selectedIds.length === 1 ? "1 Foto" : `${selectedIds.length} Fotos`}
+        defaultName={t("shareDefaultName", { count: selectedIds.length })}
       />
       {taggingOpen && (
         <div className="photo-bulk-bar-tagging">
-          <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder="Tag hinzufügen…" />
+          <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder={t("tagPlaceholder")} />
           <button type="button" className="button-secondary" onClick={() => void applyTags()} disabled={busy || !tagsValue.trim()}>
-            Anwenden
+            {t("apply")}
           </button>
         </div>
       )}

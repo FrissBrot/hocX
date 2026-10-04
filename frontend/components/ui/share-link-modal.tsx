@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { CopyField } from "@/components/ui/copy-field";
 import { DateInput } from "@/components/ui/date-input";
@@ -20,6 +21,8 @@ type Props = {
 };
 
 export function ShareLinkModal({ open, onClose, fileIds, albumId, defaultName = "", onCreated }: Props) {
+  const t = useTranslations("sharedLinks");
+  const tCommon = useTranslations("common");
   const toast = useToast();
   const [name, setName] = useState(defaultName);
   const [expiresAt, setExpiresAt] = useState("");
@@ -45,7 +48,7 @@ export function ShareLinkModal({ open, onClose, fileIds, albumId, defaultName = 
         onCreated?.();
       }
     } catch (error) {
-      toast(error instanceof Error ? error.message : "Link konnte nicht erstellt werden.", "error");
+      toast(error instanceof Error ? error.message : t("createModal.createFailed"), "error");
     } finally {
       setBusy(false);
     }
@@ -59,33 +62,33 @@ export function ShareLinkModal({ open, onClose, fileIds, albumId, defaultName = 
   }
 
   return (
-    <Modal open={open} title="Link teilen" onClose={handleClose}>
+    <Modal open={open} title={t("createModal.title")} onClose={handleClose}>
       {created ? (
         <div className="grid">
-          <p className="muted">Jede Person mit diesem Link kann die Dateien ohne Anmeldung herunterladen.</p>
+          <p className="muted">{t("createModal.createdIntro")}</p>
           <label className="field-stack">
-            <span className="field-label">Freigabe-Link</span>
-            <CopyField label="Freigabe-Link" value={`${window.location.origin}${created.url}`} />
+            <span className="field-label">{t("createModal.shareLinkLabel")}</span>
+            <CopyField label={t("createModal.shareLinkLabel")} value={`${window.location.origin}${created.url}`} />
           </label>
           <div className="modal-actions">
-            <button type="button" className="button-primary" onClick={handleClose}>Fertig</button>
+            <button type="button" className="button-primary" onClick={handleClose}>{t("createModal.doneButton")}</button>
           </div>
         </div>
       ) : (
         <ModalSaveForm className="grid" onSubmit={create}>
           <label className="field-stack">
-            <span className="field-label">Name</span>
+            <span className="field-label">{t("createModal.nameLabel")}</span>
             <input autoFocus required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label className="field-stack">
-            <span className="field-label">Ablaufdatum</span>
+            <span className="field-label">{t("createModal.expiryLabel")}</span>
             <DateInput value={expiresAt} onChange={setExpiresAt} />
-            <span className="field-help">Optional – ohne Ablaufdatum bleibt der Link aktiv, bis er widerrufen wird.</span>
+            <span className="field-help">{t("createModal.expiryHelp")}</span>
           </label>
           <div className="modal-actions">
-            <button type="button" className="button-ghost" onClick={handleClose}>Abbrechen</button>
+            <button type="button" className="button-ghost" onClick={handleClose}>{tCommon("cancel")}</button>
             <button className="button-primary" data-modal-save type="submit" disabled={busy || !name.trim()}>
-              {busy ? "Wird erstellt…" : "Link erstellen"}
+              {busy ? t("createModal.creatingEllipsis") : t("createModal.createButton")}
             </button>
           </div>
         </ModalSaveForm>

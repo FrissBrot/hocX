@@ -1,6 +1,7 @@
 "use client";
 
 import { DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import {
   AdminAvatar,
@@ -19,8 +20,8 @@ import { Tabs } from "@/components/ui/tabs";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
-import { formatFileSize } from "@/lib/utils/format";
-import { CATEGORY_COLORS, CATEGORY_HINTS, formatPercent, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
+import { formatDate, formatFileSize } from "@/lib/utils/format";
+import { CATEGORY_COLORS, categoryHints, formatPercent, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
 import {
   AdminFeature,
   AdminPlan,
@@ -50,54 +51,37 @@ type TenantFormState = {
 
 const emptyTenantForm: TenantFormState = { name: "", publicSlug: "", profileImage: null, profileImageUrl: null };
 
-export const ROLE_OPTIONS: { code: string; label: string }[] = [
-  { code: "reader", label: "Reader" },
-  { code: "kassier", label: "Kassier" },
-  { code: "writer", label: "Writer" },
-  { code: "admin", label: "Admin" }
-];
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
-const CLEANUP_CATEGORIES: { key: TenantCleanupCategory; title: string; description: string }[] = [
-  {
-    key: "protocols",
-    title: "Protokolle",
-    description: "Alle Protokolle – manuell erstellte und importierte – inklusive der Word-Import-Warteschlange."
-  },
-  {
-    key: "list_entries",
-    title: "Daten aus Listen",
-    description: "Alle Einträge in allen Listen. Die Listen selbst (Name, Spalten) bleiben erhalten."
-  },
-  {
-    key: "lists_full",
-    title: "Listen komplett",
-    description: "Listen inklusive ihrer Einträge. Löscht auch Abgabebox-Konfigurationen, die an eine dieser Listen gekoppelt sind."
-  },
-  {
-    key: "events",
-    title: "Termine",
-    description: "Alle Termine/Anlässe."
-  },
-  {
-    key: "todos",
-    title: "Todos",
-    description: "Eigenständige Todos. Todos, die an ein Protokoll gebunden sind, verschwinden bereits mit „Protokolle“."
-  },
-  {
-    key: "participants",
-    title: "Teilnehmer/Personen",
-    description: "Alle angelegten Teilnehmer/Personen-Stammdaten."
-  },
-  {
-    key: "documents",
-    title: "Hochgeladene Dokumente",
-    description: "Word-/PDF-Importe und Abgabebox-Uploads, inklusive dadurch verwaister Dateien."
-  }
-];
+// `t` ist immer ein useTranslations("admin")-Translator - siehe section-tabs.ts (dashboardTabs(t)
+// etc.) fuer dasselbe Muster bei reinen Modul-Konstanten ohne eigene Komponente.
+export function getRoleOptions(t: TFunc): { code: string; label: string }[] {
+  return [
+    { code: "reader", label: t("roleOptions.reader") },
+    { code: "kassier", label: t("roleOptions.kassier") },
+    { code: "writer", label: t("roleOptions.writer") },
+    { code: "admin", label: t("roleOptions.admin") }
+  ];
+}
+
+function getCleanupCategories(t: TFunc): { key: TenantCleanupCategory; title: string; description: string }[] {
+  return [
+    { key: "protocols", title: t("tenantModal.cleanup.categories.protocols.title"), description: t("tenantModal.cleanup.categories.protocols.description") },
+    { key: "list_entries", title: t("tenantModal.cleanup.categories.list_entries.title"), description: t("tenantModal.cleanup.categories.list_entries.description") },
+    { key: "lists_full", title: t("tenantModal.cleanup.categories.lists_full.title"), description: t("tenantModal.cleanup.categories.lists_full.description") },
+    { key: "events", title: t("tenantModal.cleanup.categories.events.title"), description: t("tenantModal.cleanup.categories.events.description") },
+    { key: "todos", title: t("tenantModal.cleanup.categories.todos.title"), description: t("tenantModal.cleanup.categories.todos.description") },
+    { key: "participants", title: t("tenantModal.cleanup.categories.participants.title"), description: t("tenantModal.cleanup.categories.participants.description") },
+    { key: "documents", title: t("tenantModal.cleanup.categories.documents.title"), description: t("tenantModal.cleanup.categories.documents.description") },
+  ];
+}
 
 type SettingsTab = "stammdaten" | "abo" | "benutzer" | "aufraeumen" | "speicher";
 
 export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Props) {
+  const t = useTranslations("admin");
+  const roleOptions = useMemo(() => getRoleOptions(t), [t]);
+  const cleanupCategories = useMemo(() => getCleanupCategories(t), [t]);
   const showToast = useToast();
   const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState<SettingsTab>("stammdaten");
@@ -197,7 +181,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       setStoragePackageCatalog(result);
       setPackageToAdd((current) => current || (result[0]?.code ?? ""));
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Speicherpaket-Katalog konnte nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("tenantModal.toasts.storagePackageCatalogLoadFailed"), "error");
     }
   }
 
@@ -217,9 +201,9 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
         body: JSON.stringify({ items }),
       });
       onSaved(updated);
-      showToast(delta > 0 ? "Speicherpaket hinzugefügt" : "Speicherpaket entfernt", "success");
+      showToast(delta > 0 ? t("tenantModal.toasts.packageAdded") : t("tenantModal.toasts.packageRemoved"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Speicherpakete konnten nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("tenantModal.toasts.packagesSaveFailed"), "error");
     } finally {
       setPackagesBusy(false);
     }
@@ -230,7 +214,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       const result = await browserApiFetch<AdminFeature[]>("/api/admin/features");
       setFeatureCatalog(result);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Feature-Katalog konnte nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("tenantModal.toasts.featureCatalogLoadFailed"), "error");
     }
   }
 
@@ -239,7 +223,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       const result = await browserApiFetch<AdminPlan[]>("/api/admin/plans");
       setPlanCatalog(result);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Plan-Katalog konnte nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("tenantModal.toasts.planCatalogLoadFailed"), "error");
     }
   }
 
@@ -256,7 +240,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     addOns: addOnFeatures,
     discountPercent: subscriptionForm.discount_percent,
   });
-  const cycleUnit = subscriptionForm.billing_cycle === "monthly" ? "Monat" : "Jahr";
+  const cycleUnit = subscriptionForm.billing_cycle === "monthly" ? t("tenantModal.cycleUnit.monthly") : t("tenantModal.cycleUnit.yearly");
 
   async function submitSubscription(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -275,9 +259,9 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       });
       onSaved(updated);
       setSelectedFeatures(new Set(updated.enabled_features));
-      showToast("Abo gespeichert", "success");
+      showToast(t("tenantModal.toasts.subscriptionSaved"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Abo konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("tenantModal.toasts.subscriptionSaveFailed"), "error");
     } finally {
       setSubscriptionBusy(false);
     }
@@ -301,7 +285,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       const result = await browserApiFetch<StorageUsageRead>(`/api/admin/tenants/${tenantId}/storage`);
       setStorageUsage(result);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Speicherverbrauch konnte nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("tenantModal.toasts.storageLoadFailed"), "error");
     } finally {
       setStorageLoading(false);
     }
@@ -313,7 +297,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       const result = await browserApiFetch<TenantCleanupCounts>(`/api/admin/tenants/${tenantId}/cleanup/preview`);
       setCleanupCounts(result);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Vorschau konnte nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("tenantModal.toasts.previewLoadFailed"), "error");
     } finally {
       setCleanupLoading(false);
     }
@@ -331,10 +315,10 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     });
   }
 
-  const allCleanupSelected = CLEANUP_CATEGORIES.every((category) => cleanupSelected.has(category.key));
+  const allCleanupSelected = cleanupCategories.every((category) => cleanupSelected.has(category.key));
 
   function toggleAllCleanupCategories() {
-    setCleanupSelected(allCleanupSelected ? new Set() : new Set(CLEANUP_CATEGORIES.map((category) => category.key)));
+    setCleanupSelected(allCleanupSelected ? new Set() : new Set(cleanupCategories.map((category) => category.key)));
   }
 
   const cleanupNameMatches = !!tenant && cleanupConfirmName.trim() === tenant.name;
@@ -344,9 +328,9 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     if (!tenant || cleanupSelected.size === 0 || !cleanupNameMatches) return;
     if (
       !(await confirm({
-        message: `${cleanupSelected.size} Datenkategorie(n) von "${tenant.name}" werden unwiderruflich gelöscht. Fortfahren?`,
+        message: t("tenantModal.cleanup.confirmMessage", { count: cleanupSelected.size, tenant: tenant.name }),
         tone: "danger",
-        confirmLabel: "Endgültig löschen"
+        confirmLabel: t("tenantModal.cleanup.confirmFinalDelete")
       }))
     )
       return;
@@ -359,10 +343,10 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       setCleanupLastResult(result);
       setCleanupSelected(new Set());
       setCleanupConfirmName("");
-      showToast("Mandant aufgeräumt", "success");
+      showToast(t("tenantModal.toasts.cleanupDone"), "success");
       void loadCleanupPreview(tenant.id);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Aufräumen fehlgeschlagen", "error");
+      showToast(error instanceof Error ? error.message : t("tenantModal.toasts.cleanupFailed"), "error");
     } finally {
       setCleanupBusy(false);
     }
@@ -374,7 +358,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       const result = await browserApiFetch<AdminTenantUser[]>(`/api/admin/tenants/${tenantId}/users`);
       setTenantUsers(result);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Benutzer konnten nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("tenantModal.toasts.usersLoadFailed"), "error");
     } finally {
       setUsersLoading(false);
     }
@@ -383,7 +367,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
   function pickProfileImage(file: File | null | undefined) {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      showToast("Bitte ein Bild (PNG oder JPG) wählen", "error");
+      showToast(t("tenantModal.toasts.imagePickInvalid"), "error");
       return;
     }
     setTenantForm((current) => ({ ...current, profileImage: file }));
@@ -413,10 +397,10 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
         body: formData
       });
       setTenantForm((current) => ({ ...current, profileImage: null, profileImageUrl: updated.profile_image_url }));
-      showToast("Mandant gespeichert", "success");
+      showToast(t("tenantModal.toasts.tenantSaved"), "success");
       onSaved(updated);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Mandant konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("tenantModal.toasts.tenantSaveFailed"), "error");
     } finally {
       setTenantBusy(false);
     }
@@ -431,10 +415,10 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
         method: "PUT",
         body: JSON.stringify({ role_code: roleCode })
       });
-      showToast("Rolle geändert", "success");
+      showToast(t("tenantModal.toasts.roleChanged"), "success");
     } catch (error) {
       setTenantUsers(previous);
-      showToast(error instanceof Error ? error.message : "Rolle konnte nicht geändert werden", "error");
+      showToast(error instanceof Error ? error.message : t("tenantModal.toasts.roleChangeFailed"), "error");
     }
   }
 
@@ -442,18 +426,18 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     if (!tenant) return;
     if (
       !(await confirm({
-        message: `Benutzer "${displayName}" endgültig löschen? Das Konto gehört nur zu diesem Mandanten und ist danach weg.`,
+        message: t("tenantModal.toasts.userDeleteConfirm", { name: displayName }),
         tone: "danger",
-        confirmLabel: "Löschen"
+        confirmLabel: t("tenantModal.table.delete")
       }))
     )
       return;
     try {
       await browserApiFetch(`/api/admin/tenants/${tenant.id}/users/${userId}`, { method: "DELETE" });
       setTenantUsers((current) => current.filter((u) => u.user_id !== userId));
-      showToast("Benutzer gelöscht", "success");
+      showToast(t("tenantModal.toasts.userDeleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Benutzer konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("tenantModal.toasts.userDeleteFailed"), "error");
     }
   }
 
@@ -466,6 +450,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
   const storageTotal = storageUsage?.total_bytes ?? tenant.storage_used_bytes;
   const storageBarTotal = storageQuota !== null && storageQuota > storageTotal ? storageQuota : storageTotal;
   const visibleCategories = storageUsage?.categories.filter((category) => category.bytes > 0) ?? [];
+  const storageHints = categoryHints(useTranslations("storage"));
   const effectiveUserLimit = subscriptionForm.user_limit_override ?? selectedPlan?.included_user_limit ?? null;
   const effectiveStorageLimit =
     selectedPlan?.included_storage_bytes == null && tenant.package_storage_bytes === 0
@@ -474,7 +459,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
 
   const closeButton = (
     <button type="button" className="button-ghost" onClick={onClose}>
-      Schliessen
+      {t("tenantModal.close")}
     </button>
   );
 
@@ -483,18 +468,18 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       <div className="modal-footer-actions">
         {closeButton}
         <button type="submit" form="admin-tenant-stammdaten" className="button-primary" disabled={tenantBusy}>
-          {tenantBusy ? "Wird gespeichert…" : "Speichern"}
+          {tenantBusy ? t("tenantModal.saving") : t("tenantModal.save")}
         </button>
       </div>
     ) : activeTab === "abo" ? (
       <>
         <span className="muted">
-          {cost.totalRp === null ? "Plan ohne Preis" : `Total ${formatChfShort(cost.totalRp)} / ${cycleUnit}`}
+          {cost.totalRp === null ? t("tenantModal.planWithoutPrice") : t("tenantModal.total", { amount: formatChfShort(cost.totalRp), unit: cycleUnit })}
         </span>
         <div className="modal-footer-actions">
           {closeButton}
           <button type="submit" form="admin-tenant-abo" className="button-primary" disabled={subscriptionBusy}>
-            {subscriptionBusy ? "Wird gespeichert…" : "Abo speichern"}
+            {subscriptionBusy ? t("tenantModal.saving") : t("tenantModal.saveSubscription")}
           </button>
         </div>
       </>
@@ -506,14 +491,14 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     <Modal
       open={open}
       onClose={onClose}
-      title={`Mandant-Einstellungen – ${tenant.name}`}
+      title={t("tenantModal.title", { tenant: tenant.name })}
       size="wide"
       className="admin-tenant-modal"
       header={
         <div className="admin-modal-heading">
           <AdminAvatar name={tenant.name} imageUrl={tenant.profile_image_url} toneKey={tenant.id} size="lg" />
           <div>
-            <div className="eyebrow">Mandant-Einstellungen</div>
+            <div className="eyebrow">{t("tenantModal.eyebrow")}</div>
             <h2>{tenant.name}</h2>
           </div>
         </div>
@@ -529,26 +514,26 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
         tabs={[
           {
             id: "stammdaten",
-            label: "Stammdaten",
+            label: t("tenantModal.tabs.masterData"),
             content: (
               <form id="admin-tenant-stammdaten" className="grid admin-tenant-form" onSubmit={submitTenant}>
                 <div className="two-col">
                   <label className="field-stack">
-                    <span className="field-label">Mandantenname</span>
+                    <span className="field-label">{t("tenantModal.fields.tenantName")}</span>
                     <input value={tenantForm.name} onChange={(event) => setTenantForm((current) => ({ ...current, name: event.target.value }))} required />
                   </label>
                   <label className="field-stack">
-                    <span className="field-label">Öffentlicher Slug (Abgabebox-URL)</span>
+                    <span className="field-label">{t("tenantModal.fields.publicSlug")}</span>
                     <input
                       value={tenantForm.publicSlug}
                       onChange={(event) => setTenantForm((current) => ({ ...current, publicSlug: event.target.value.toLowerCase() }))}
-                      placeholder="z.B. musterverein"
+                      placeholder={t("tenantModal.fields.publicSlugPlaceholder")}
                       pattern="[a-z0-9-]+"
                     />
                   </label>
                 </div>
                 <div className="field-stack">
-                  <span className="field-label">Profilbild</span>
+                  <span className="field-label">{t("tenantModal.fields.profileImage")}</span>
                   <div
                     className={dropActive ? "admin-image-drop admin-image-drop-active" : "admin-image-drop"}
                     onDragOver={(event) => {
@@ -561,29 +546,29 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                     <AdminAvatar name={tenant.name} imageUrl={profilePreviewUrl ?? tenantForm.profileImageUrl} toneKey={tenant.id} size="lg" />
                     <div>
                       <div>
-                        {tenantForm.profileImage ? `${tenantForm.profileImage.name} · ` : "Bild hierher ziehen oder "}
+                        {tenantForm.profileImage ? t("tenantModal.fields.profileImageSelected", { filename: tenantForm.profileImage.name }) : t("tenantModal.fields.dragHint")}
                         <button type="button" className="admin-inline-link" onClick={() => fileInputRef.current?.click()}>
-                          {tenantForm.profileImage ? "anderes wählen" : "Datei wählen"}
+                          {tenantForm.profileImage ? t("tenantModal.fields.chooseOther") : t("tenantModal.fields.chooseFile")}
                         </button>
                       </div>
-                      <div className="muted">PNG oder JPG, quadratisch</div>
+                      <div className="muted">{t("tenantModal.fields.imageHint")}</div>
                     </div>
                     <input
                       ref={fileInputRef}
                       type="file"
                       accept="image/png,image/jpeg"
                       className="admin-image-drop-input"
-                      aria-label="Profilbild wählen"
+                      aria-label={t("tenantModal.fields.profileImageAria")}
                       onChange={(event) => pickProfileImage(event.target.files?.[0])}
                     />
                   </div>
                 </div>
                 <div className="admin-tenant-meta">
                   <span>
-                    Erstellt am <strong>{new Date(tenant.created_at).toLocaleDateString("de-CH")}</strong>
+                    {t("tenantModal.meta.createdAt")} <strong>{formatDate(tenant.created_at)}</strong>
                   </span>
                   <span>
-                    Teilnehmer <strong>{tenant.participant_count}</strong>
+                    {t("tenantModal.meta.participants")} <strong>{tenant.participant_count}</strong>
                   </span>
                 </div>
               </form>
@@ -591,13 +576,13 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
           },
           {
             id: "abo",
-            label: "Plan & Abo",
+            label: t("tenantModal.tabs.plan"),
             content: (
               <form id="admin-tenant-abo" className="admin-abo-layout" onSubmit={submitSubscription}>
                 <div className="admin-abo-main">
                   <section className="admin-form-section">
-                    <div className="admin-section-title">Plan</div>
-                    <div className="admin-plan-options" role="radiogroup" aria-label="Plan">
+                    <div className="admin-section-title">{t("tenantModal.plan.sectionTitle")}</div>
+                    <div className="admin-plan-options" role="radiogroup" aria-label={t("tenantModal.plan.ariaLabel")}>
                       {planCatalog.map((plan) => (
                         <PlanOption
                           key={plan.code}
@@ -612,7 +597,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                   </section>
 
                   <section className="admin-form-section">
-                    <div className="admin-section-title">Abrechnung</div>
+                    <div className="admin-section-title">{t("tenantModal.billing.sectionTitle")}</div>
                     <BillingCycleToggle
                       value={subscriptionForm.billing_cycle}
                       onChange={(billing_cycle) => setSubscriptionForm((current) => ({ ...current, billing_cycle }))}
@@ -620,9 +605,9 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                   </section>
 
                   <section className="admin-form-section">
-                    <div className="admin-section-title">Module</div>
+                    <div className="admin-section-title">{t("tenantModal.modules.sectionTitle")}</div>
                     {featureCatalog.length === 0 ? (
-                      <div className="muted">Keine Module im Katalog.</div>
+                      <div className="muted">{t("tenantModal.modules.empty")}</div>
                     ) : (
                       <div className="admin-module-options">
                         {featureCatalog.map((feature) => {
@@ -641,12 +626,12 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                                 <strong>{feature.name}</strong>
                                 <span className="muted">
                                   {inPlan
-                                    ? "Im Plan enthalten"
+                                    ? t("tenantModal.modules.includedInPlan")
                                     : feature.standalone_price_monthly_rp !== null
-                                      ? `Add-on · +${formatChfShort(feature.standalone_price_monthly_rp)} / Monat`
+                                      ? t("tenantModal.modules.addon", { price: formatChfShort(feature.standalone_price_monthly_rp) })
                                       : planOnly
-                                        ? "Nur in Plänen verfügbar"
-                                        : "Individuell gebucht"}
+                                        ? t("tenantModal.modules.planOnly")
+                                        : t("tenantModal.modules.individuallyBooked")}
                                 </span>
                               </span>
                             </label>
@@ -658,7 +643,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
 
                   <div className="two-col">
                     <label className="field-stack">
-                      <span className="field-label">Rabatt</span>
+                      <span className="field-label">{t("tenantModal.fields.discount")}</span>
                       <span className="admin-input-suffix">
                         <input
                           type="number"
@@ -676,21 +661,21 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                       </span>
                     </label>
                     <label className="field-stack">
-                      <span className="field-label">Interne Notiz</span>
+                      <span className="field-label">{t("tenantModal.fields.internalNote")}</span>
                       <input
                         value={subscriptionForm.billing_note ?? ""}
                         onChange={(event) => setSubscriptionForm((current) => ({ ...current, billing_note: event.target.value }))}
-                        placeholder="z.B. Vereinsrabatt bis 2027"
+                        placeholder={t("tenantModal.fields.internalNotePlaceholder")}
                       />
                     </label>
                   </div>
                   <label className="field-stack">
-                    <span className="field-label">Benutzerlimit überschreiben</span>
+                    <span className="field-label">{t("tenantModal.fields.userLimitOverride")}</span>
                     <input
                       type="number"
                       min={1}
                       value={subscriptionForm.user_limit_override ?? ""}
-                      placeholder={selectedPlan?.included_user_limit != null ? `Plan-Limit: ${selectedPlan.included_user_limit}` : "Plan-Limit: unbegrenzt"}
+                      placeholder={selectedPlan?.included_user_limit != null ? t("tenantModal.fields.userLimitPlanLimit", { limit: selectedPlan.included_user_limit }) : t("tenantModal.fields.userLimitUnlimited")}
                       onChange={(event) =>
                         setSubscriptionForm((current) => ({
                           ...current,
@@ -699,17 +684,19 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                       }
                     />
                     <span className="field-help">
-                      Leer = Plan-Limit gilt. Aktuell {tenant.user_count} Benutzer
-                      {effectiveUserLimit !== null && tenant.user_count >= effectiveUserLimit ? " – Limit erreicht oder überschritten." : "."}
+                      {t("tenantModal.fields.userLimitHelp", {
+                        count: tenant.user_count,
+                        suffix: effectiveUserLimit !== null && tenant.user_count >= effectiveUserLimit ? t("tenantModal.fields.userLimitExceeded") : "."
+                      })}
                     </span>
                   </label>
                 </div>
 
                 <aside className="admin-abo-side">
-                  <div className="admin-section-title">Kosten</div>
+                  <div className="admin-section-title">{t("tenantModal.cost.sectionTitle")}</div>
                   <div className="card admin-cost-card">
                     <div className="admin-cost-row">
-                      <span>Plan {selectedPlan?.name ?? "–"}</span>
+                      <span>{t("tenantModal.cost.plan", { name: selectedPlan?.name ?? "–" })}</span>
                       <span>{cost.planRp === null ? "–" : formatChfShort(cost.planRp)}</span>
                     </div>
                     {addOnFeatures.map((feature) => (
@@ -724,36 +711,36 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                     ))}
                     {subscriptionForm.discount_percent > 0 ? (
                       <div className="admin-cost-row">
-                        <span>Rabatt</span>
+                        <span>{t("tenantModal.cost.discount")}</span>
                         <span>– {subscriptionForm.discount_percent}%</span>
                       </div>
                     ) : null}
                     <div className="admin-cost-total">
-                      <span>Total</span>
-                      <strong>{cost.totalRp === null ? "Noch nicht festgelegt" : `${formatChfShort(cost.totalRp)}`}</strong>
+                      <span>{t("tenantModal.cost.total")}</span>
+                      <strong>{cost.totalRp === null ? t("tenantModal.cost.totalUndetermined") : `${formatChfShort(cost.totalRp)}`}</strong>
                     </div>
                     <div className="muted admin-cost-hint">
                       {cost.totalRp === null
                         ? selectedPlan && !hasPlanPrice(selectedPlan)
-                          ? "Bestandsplan ohne Preis"
-                          : "Kein Plan gewählt"
-                        : `pro ${cycleUnit}, exkl. MWST`}
+                          ? t("tenantModal.cost.existingPlanNoPrice")
+                          : t("tenantModal.cost.noPlanSelected")
+                        : t("tenantModal.cost.perUnitExclVat", { unit: cycleUnit })}
                     </div>
                   </div>
 
-                  <div className="admin-section-title">Limits nach Wechsel</div>
+                  <div className="admin-section-title">{t("tenantModal.limits.sectionTitle")}</div>
                   <dl className="admin-limit-list">
                     <div>
-                      <dt>Benutzer</dt>
-                      <dd>{effectiveUserLimit === null ? "unbegrenzt" : effectiveUserLimit}</dd>
+                      <dt>{t("tenantModal.limits.users")}</dt>
+                      <dd>{effectiveUserLimit === null ? t("tenantModal.limits.unlimited") : effectiveUserLimit}</dd>
                     </div>
                     <div>
-                      <dt>Speicher</dt>
-                      <dd>{effectiveStorageLimit === null ? "unbegrenzt" : formatFileSize(effectiveStorageLimit)}</dd>
+                      <dt>{t("tenantModal.limits.storage")}</dt>
+                      <dd>{effectiveStorageLimit === null ? t("tenantModal.limits.unlimited") : formatFileSize(effectiveStorageLimit)}</dd>
                     </div>
                   </dl>
                   <p className="muted admin-side-note">
-                    Der Mandant sieht Plan, Module und geschätzte Kosten unter Mandant-Einstellungen → Abo &amp; Nutzung.
+                    {t("tenantModal.sideNote")}
                   </p>
                 </aside>
               </form>
@@ -761,18 +748,18 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
           },
           {
             id: "benutzer",
-            label: `Benutzer (${tenantUsers.length})`,
+            label: t("tenantModal.tabs.users", { count: tenantUsers.length }),
             content: (
               <div className="grid">
                 <div className="table-shell admin-user-table">
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th>Name</th>
-                        <th>E-Mail</th>
-                        <th>Rolle</th>
-                        <th>MFA</th>
-                        <th aria-label="Aktion" />
+                        <th>{t("tenantModal.table.name")}</th>
+                        <th>{t("tenantModal.table.email")}</th>
+                        <th>{t("tenantModal.table.role")}</th>
+                        <th>{t("tenantModal.table.mfa")}</th>
+                        <th aria-label={t("tenantModal.table.actionAria")} />
                       </tr>
                     </thead>
                     <tbody>
@@ -783,14 +770,14 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                               <AdminAvatar name={u.display_name} toneKey={u.user_id} size="sm" />
                               <div>
                                 <strong>{u.display_name}</strong>
-                                {!u.login_enabled && <div className="muted admin-cell-sub">Login deaktiviert</div>}
+                                {!u.login_enabled && <div className="muted admin-cell-sub">{t("tenantModal.table.loginDisabled")}</div>}
                               </div>
                             </div>
                           </td>
                           <td className="muted">{u.email}</td>
                           <td>
-                            <select value={u.role_code} onChange={(event) => changeUserRole(u.user_id, event.target.value)} aria-label={`Rolle von ${u.display_name}`}>
-                              {ROLE_OPTIONS.map((r) => (
+                            <select value={u.role_code} onChange={(event) => changeUserRole(u.user_id, event.target.value)} aria-label={t("tenantModal.table.roleAria", { name: u.display_name })}>
+                              {roleOptions.map((r) => (
                                 <option key={r.code} value={r.code}>
                                   {r.label}
                                 </option>
@@ -799,44 +786,43 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                           </td>
                           <td>
                             <button type="button" className="button-ghost" onClick={() => setMfaModalUser(u)}>
-                              Anzeigen
+                              {t("tenantModal.table.show")}
                             </button>
                           </td>
                           <td className="admin-cell-end">
                             <button type="button" className="button-danger" onClick={() => removeUser(u.user_id, u.display_name)}>
-                              Löschen
+                              {t("tenantModal.table.delete")}
                             </button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  {!usersLoading && tenantUsers.length === 0 && <div className="table-empty muted">Dieser Mandant hat noch keine Benutzer.</div>}
+                  {!usersLoading && tenantUsers.length === 0 && <div className="table-empty muted">{t("tenantModal.table.empty")}</div>}
                 </div>
-                <p className="muted">Jedes Konto gehört genau einem Mandanten. Neue Benutzer legst du unter „Benutzer“ an und wählst dort den Mandanten.</p>
+                <p className="muted">{t("tenantModal.usersHint")}</p>
               </div>
             )
           },
           {
             id: "aufraeumen",
-            label: "Aufräumen",
+            label: t("tenantModal.tabs.cleanup"),
             content: (
               <form className="grid admin-tenant-form" onSubmit={submitCleanup}>
                 <div className="form-error-banner">
-                  Diese Aktion löscht Daten endgültig aus der Datenbank – es gibt kein Zurück. Der Mandant selbst, Vorlagen,
-                  Formularfelder und Benutzerzugriffe bleiben in jedem Fall erhalten.
+                  {t("tenantModal.cleanup.warning")}
                 </div>
 
                 <div className="field-stack">
-                  <span className="field-label">Was soll gelöscht werden?</span>
+                  <span className="field-label">{t("tenantModal.cleanup.whatLabel")}</span>
                   <label className="field-radio-option admin-cleanup-all">
                     <input type="checkbox" checked={allCleanupSelected} onChange={toggleAllCleanupCategories} />
                     <span>
-                      <strong>Alle Daten löschen</strong>
-                      <div className="muted">Wählt alle Kategorien unten auf einmal aus.</div>
+                      <strong>{t("tenantModal.cleanup.allLabel")}</strong>
+                      <div className="muted">{t("tenantModal.cleanup.allHint")}</div>
                     </span>
                   </label>
-                  {CLEANUP_CATEGORIES.map((category) => (
+                  {cleanupCategories.map((category) => (
                     <label key={category.key} className="field-radio-option">
                       <input
                         type="checkbox"
@@ -846,7 +832,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                       <span>
                         <strong>
                           {category.title}
-                          {cleanupCounts ? <span className="muted admin-cleanup-count"> – {cleanupCounts[category.key]} vorhanden</span> : null}
+                          {cleanupCounts ? <span className="muted admin-cleanup-count">{t("tenantModal.cleanup.countAvailable", { count: cleanupCounts[category.key] })}</span> : null}
                         </strong>
                         <div className="muted">{category.description}</div>
                       </span>
@@ -856,15 +842,15 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
 
                 {cleanupLastResult ? (
                   <div className="muted">
-                    Zuletzt gelöscht: {Object.entries(cleanupLastResult)
+                    {t("tenantModal.cleanup.lastDeletedPrefix")}{Object.entries(cleanupLastResult)
                       .filter(([, count]) => count > 0)
-                      .map(([key, count]) => `${CLEANUP_CATEGORIES.find((c) => c.key === key)?.title ?? key}: ${count}`)
-                      .join(", ") || "nichts (0 Treffer in den gewählten Kategorien)"}
+                      .map(([key, count]) => `${cleanupCategories.find((c) => c.key === key)?.title ?? key}: ${count}`)
+                      .join(", ") || t("tenantModal.cleanup.nothingDeleted")}
                   </div>
                 ) : null}
 
                 <label className="field-stack">
-                  <span className="field-label">Zur Bestätigung Mandantenname eintippen: „{tenant.name}“</span>
+                  <span className="field-label">{t("tenantModal.cleanup.confirmLabel", { name: tenant.name })}</span>
                   <input
                     value={cleanupConfirmName}
                     onChange={(event) => setCleanupConfirmName(event.target.value)}
@@ -879,7 +865,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                     className="button-danger"
                     disabled={cleanupSelected.size === 0 || !cleanupNameMatches || cleanupBusy || cleanupLoading}
                   >
-                    {cleanupBusy ? "Wird gelöscht…" : "Ausgewählte Daten löschen"}
+                    {cleanupBusy ? t("tenantModal.cleanup.deleting") : t("tenantModal.cleanup.deleteSelected")}
                   </button>
                 </div>
               </form>
@@ -887,7 +873,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
           },
           {
             id: "speicher",
-            label: "Speicher",
+            label: t("tenantModal.tabs.storage"),
             content: (
               <div className="grid admin-tenant-form">
                 {storageUsage ? (
@@ -895,11 +881,11 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                     <div className="admin-storage-total">
                       <span className="admin-storage-total-value">{formatFileSize(storageUsage.total_bytes)}</span>
                       <span className="muted">
-                        {storageQuota !== null
-                          ? `von ${formatFileSize(storageQuota)} belegt (${formatPercent(storageUsage.total_bytes, storageQuota)})`
-                          : "belegt · kein Speicherlimit"}
+                        {storageQuota !== null // i18n-ok: Ternary-Bedingung, kein UI-Text - der Checker liest "?" als JSX-Textende
+                          ? t("tenantModal.storage.belegt", { quota: formatFileSize(storageQuota), percent: formatPercent(storageUsage.total_bytes, storageQuota) })
+                          : t("tenantModal.storage.noLimit")}
                       </span>
-                      {storageQuota !== null && storageUsage.total_bytes > storageQuota ? <Badge variant="danger">Kontingent überschritten</Badge> : null}
+                      {storageQuota !== null && storageUsage.total_bytes > storageQuota ? <Badge variant="danger">{t("tenantModal.storage.quotaExceeded")}</Badge> : null /* i18n-ok: Vergleichsoperator > vor Ternary, kein UI-Text */}
                     </div>
                     <div className="storage-usage-bar admin-storage-usage-bar">
                       {storageBarTotal > 0
@@ -908,17 +894,17 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                               key={category.key}
                               className="storage-usage-segment"
                               style={{ width: `${(category.bytes / storageBarTotal) * 100}%`, background: CATEGORY_COLORS[category.key] }}
-                              title={`${category.label}: ${formatFileSize(category.bytes)} – ${CATEGORY_HINTS[category.key]}`}
+                              title={`${category.label}: ${formatFileSize(category.bytes)} – ${storageHints[category.key]}`}
                             />
                           ))
                         : null}
                     </div>
                     {visibleCategories.length === 0 ? (
-                      <div className="muted">Noch keine Dateien vorhanden.</div>
+                      <div className="muted">{t("tenantModal.storage.noFiles")}</div>
                     ) : (
                       <div className="admin-storage-legend">
                         {visibleCategories.map((category) => (
-                          <div key={category.key} className="admin-storage-legend-item" title={CATEGORY_HINTS[category.key]}>
+                          <div key={category.key} className="admin-storage-legend-item" title={storageHints[category.key]}>
                             <span>
                               <span className="storage-legend-dot" style={{ background: CATEGORY_COLORS[category.key] }} />
                               {category.label}
@@ -931,13 +917,13 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                     <StorageQuotaComposition planStorageBytes={tenant.plan_storage_bytes} packageStorageBytes={tenant.package_storage_bytes} />
                   </section>
                 ) : (
-                  <div className="muted">{storageLoading ? "Wird geladen…" : "Keine Daten verfügbar."}</div>
+                  <div className="muted">{storageLoading ? t("tenantModal.storage.loading") : t("tenantModal.storage.noData")}</div>
                 )}
 
                 <section className="admin-form-section">
-                  <div className="admin-section-title">Zusatz-Speicherpakete</div>
+                  <div className="admin-section-title">{t("tenantModal.storage.extraPackagesTitle")}</div>
                   {tenant.assigned_storage_packages.length === 0 ? (
-                    <div className="muted">Keine Zusatzpakete gebucht.</div>
+                    <div className="muted">{t("tenantModal.storage.noExtraPackages")}</div>
                   ) : (
                     <div className="admin-package-list">
                       {tenant.assigned_storage_packages.flatMap((pkg) =>
@@ -952,7 +938,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                               disabled={packagesBusy}
                               onClick={() => void changeStoragePackage(pkg.package_code, -1)}
                             >
-                              Entfernen
+                              {t("tenantModal.storage.remove")}
                             </button>
                           </div>
                         ))
@@ -960,10 +946,10 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                     </div>
                   )}
                   {storagePackageCatalog.length === 0 ? (
-                    <div className="muted">Keine Speicherpakete im Katalog.</div>
+                    <div className="muted">{t("tenantModal.storage.noPackagesInCatalog")}</div>
                   ) : (
                     <div className="table-actions table-actions-start">
-                      <select value={packageToAdd} onChange={(event) => setPackageToAdd(event.target.value)} aria-label="Speicherpaket">
+                      <select value={packageToAdd} onChange={(event) => setPackageToAdd(event.target.value)} aria-label={t("tenantModal.storage.packageAria")}>
                         {storagePackageCatalog.map((pkg) => (
                           <option key={pkg.code} value={pkg.code}>
                             {pkg.name} ({formatFileSize(pkg.bytes)})
@@ -976,7 +962,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                         disabled={packagesBusy || !packageToAdd}
                         onClick={() => void changeStoragePackage(packageToAdd, 1)}
                       >
-                        {packagesBusy ? "Wird gespeichert…" : "+ Paket hinzufügen"}
+                        {packagesBusy ? t("tenantModal.saving") : t("tenantModal.storage.addPackage")}
                       </button>
                     </div>
                   )}
@@ -990,7 +976,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       <MfaAdminModal
         open={!!mfaModalUser}
         onClose={() => setMfaModalUser(null)}
-        title={mfaModalUser ? `MFA von ${mfaModalUser.display_name}` : "MFA"}
+        title={mfaModalUser ? t("tenantModal.mfaTitle", { name: mfaModalUser.display_name }) : t("tenantModal.mfaTitleFallback")}
         loadPath={mfaModalUser ? `/api/admin/users/${mfaModalUser.user_id}/mfa` : null}
         deletePathBase={mfaModalUser ? `/api/admin/users/${mfaModalUser.user_id}/mfa/factors` : null}
       />

@@ -373,7 +373,7 @@ services:
       - /app/node_modules
       - /app/.next
       - ./.git:/app/.git:ro
-    command: sh -c "export HOCX_VERSION=dev-$(git -C /app rev-parse --short HEAD 2>/dev/null || echo unknown) && npm run build && rm -rf .next/standalone/public .next/standalone/.next/static && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
+    command: sh -c "export HOCX_VERSION=dev-$(git -C /app rev-parse --short HEAD 2>/dev/null || echo unknown) && npm run build && rm -rf .next/standalone/public .next/standalone/.next/static .next/standalone/messages && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && cp -r messages .next/standalone/messages && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
     healthcheck:
       # "/" liefert bei fehlender Session ein 307 nach /login statt eines 200 - curl -f
       # akzeptiert das (nur >=400 gilt als Fehler), reicht als reiner Liveness-Check.
@@ -551,7 +551,7 @@ services:
       - ./abgabebox-frontend:/app
       - /app/node_modules
       - /app/.next
-    command: sh -c "npm run build && rm -rf .next/standalone/public .next/standalone/.next/static && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
+    command: sh -c "npm run build && rm -rf .next/standalone/public .next/standalone/.next/static .next/standalone/messages && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && cp -r messages .next/standalone/messages && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/"]
       interval: 30s

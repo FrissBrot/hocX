@@ -1,6 +1,7 @@
 "use client";
 
 import { KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { Popover } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
@@ -27,8 +28,10 @@ export function TodoAssigneeMenu<Id extends string | number = number>({
   participants,
   activeId,
   onChange,
-  nullLabel = "Niemand",
+  nullLabel,
 }: Props<Id>) {
+  const t = useTranslations("todos");
+  const tCommon = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlighted, setHighlighted] = useState(0);
@@ -36,7 +39,7 @@ export function TodoAssigneeMenu<Id extends string | number = number>({
   const listRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
-  const options: AssigneeOption<Id>[] = [{ id: null, display_name: nullLabel }, ...participants];
+  const options: AssigneeOption<Id>[] = [{ id: null, display_name: nullLabel ?? t("nobodyLabel") }, ...participants];
   const filtered = search.trim()
     ? options.filter((o) => o.display_name.toLowerCase().includes(search.trim().toLowerCase()))
     : options;
@@ -98,10 +101,10 @@ export function TodoAssigneeMenu<Id extends string | number = number>({
         <span className="mini-menu-trigger-icon">⌄</span>
       </button>
       <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} className="assignee-popover-portal">
-        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder="Suchen…" onKeyDown={handleInputKey} />
+        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder={tCommon("searchPlaceholder")} onKeyDown={handleInputKey} />
         <div className="menu-list" role="listbox" ref={listRef}>
           {filtered.length === 0 ? (
-            <span className="assignee-empty">Keine Ergebnisse</span>
+            <span className="assignee-empty">{tCommon("noResults")}</span>
           ) : (
             filtered.map((option, index) => (
               <button

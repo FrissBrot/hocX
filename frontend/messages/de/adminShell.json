@@ -1,0 +1,21 @@
+{
+  "title": "Platform-Admin",
+  "tagline": "Mandanten und Benutzer über das ganze System verwalten.",
+  "groups": { "tenants": "Mandanten", "system": "System", "access": "Zugang" },
+  "nav": {
+    "dashboard": "Dashboard",
+    "tenants": "Mandanten",
+    "pricing": "Preise",
+    "users": "Benutzer",
+    "domains": "Domains",
+    "errorLogs": "Fehlerprotokoll",
+    "uploadPipeline": "Datei-Pipeline",
+    "admins": "Admin-Accounts",
+    "sso": "SSO",
+    "security": "Sicherheit"
+  },
+  "logout": "Logout",
+  "menuToggleClose": "Schliessen",
+  "breadcrumbNav": "Brotkrumen",
+  "readOnlyBanner": "Nur-Lesezugriff (support): Änderungen sind mit diesem Account nicht möglich."
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { findUploadRuleProblems, UploadTargetFields, useUploadTarget } from "./upload-target-fields";
 import { Modal } from "@/components/ui/modal";
@@ -49,15 +50,16 @@ function DocumentIcon() {
 }
 
 // Splits candidates into the ones a document upload takes and an error text for the rest
-// (null when nothing was rejected).
-function partitionDocuments(candidates: File[]): { accepted: File[]; error: string | null } {
+// (null when nothing was rejected). `t` is the "files" translator, threaded in since this is a
+// plain function outside the component (see app-shell-nav.ts::formatRoleLabel for the pattern).
+function partitionDocuments(candidates: File[], t: (key: string, values?: Record<string, string | number | Date>) => string): { accepted: File[]; error: string | null } {
   const accepted = candidates.filter((file) => DOCUMENT_EXTENSIONS.includes(extensionOf(file.name)));
   const rejected = candidates.filter((file) => !accepted.includes(file));
   if (rejected.length === 0) return { accepted, error: null };
   if (rejected.every((file) => IMAGE_EXTENSIONS.includes(extensionOf(file.name)))) {
-    return { accepted, error: "Bilder bitte über die Fotos-Seite hochladen." };
+    return { accepted, error: t("partition.imagesHint") };
   }
-  return { accepted, error: `Nicht unterstützt: ${rejected.map((file) => file.name).join(", ")}` };
+  return { accepted, error: t("partition.unsupported", { names: rejected.map((file) => file.name).join(", ") }) };
 }
 
 export function DocumentUploadModal({
@@ -75,7 +77,8 @@ export function DocumentUploadModal({
   // it can still carry per-file `errors` for the files that were rejected.
   onUploaded: (result: DocumentUploadResult) => void;
 }) {
-  const [initial] = useState(() => partitionDocuments(initialFiles ?? []));
+  const t = useTranslations("files");
+  const [initial] = useState(() => partitionDocuments(initialFiles ?? [], t));
   const [selectedFiles, setSelectedFiles] = useState<File[]>(initial.accepted);
   const [tagsValue, setTagsValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -87,7 +90,7 @@ export function DocumentUploadModal({
   function addFiles(fileList: FileList | File[]) {
     // Copy now: an <input>'s FileList is live and gets emptied by the `value = ""` reset in
     // onChange, which runs before React invokes the state updater below.
-    const { accepted, error: rejectedError } = partitionDocuments(Array.from(fileList));
+    const { accepted, error: rejectedError } = partitionDocuments(Array.from(fileList), t);
     setSelectedFiles((current) => [...current, ...accepted]);
     setError(rejectedError);
   }
@@ -99,7 +102,7 @@ export function DocumentUploadModal({
   const totalBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
   // Re-derived on every render (not only when a file is added) since the Abgabe - and with it
   // the rules - can also be picked after the files were queued.
-  const ruleProblems = findUploadRuleProblems(selectedFiles, target.rules);
+  const ruleProblems = findUploadRuleProblems(selectedFiles, target.rules, t);
   const acceptedExtensions = target.rules?.allowedExtensions.length
     ? DOCUMENT_EXTENSIONS.filter((extension) => target.rules?.allowedExtensions.includes(extension.slice(1)))
     : DOCUMENT_EXTENSIONS;
@@ -122,13 +125,13 @@ export function DocumentUploadModal({
       });
       if (!result || result.items.length === 0) {
         // Nothing was saved: stay open so the reasons stay readable next to the queue.
-        setError(result?.errors.join(" · ") || "Upload fehlgeschlagen");
+        setError(result?.errors.join(" · ") || t("errors.uploadFailed"));
         return;
       }
       onUploaded(result);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
+      setError(err instanceof Error ? err.message : t("errors.uploadFailed"));
     } finally {
       setUploading(false);
     }
@@ -137,8 +140,8 @@ export function DocumentUploadModal({
   return (
     <Modal
       open
-      title="Dateien hochladen"
-      description="Die Dateien landen unter Dateien, werden beim Upload virengeprüft und lassen sich mit einem Termin, einer Abgabe oder einem Zyklus verknüpfen."
+      title={t("modal.title")}
+      description={t("modal.description")}
       onClose={onClose}
       onEscape={() => selectedFiles.length ? handleUpload() : onClose()}
       className="gallery-upload-modal"
@@ -178,12 +181,12 @@ export function DocumentUploadModal({
               <UploadIcon />
             </span>
             <p className="gallery-upload-dropzone-title">
-              {isDragging ? "Zum Hochladen loslassen" : "Dateien hierher ziehen"}
+              {isDragging ? t("dropzone.releaseToUpload") : t("dropzone.dragHint")}
             </p>
             <p className="muted">
-              oder <span className="gallery-upload-browse">Dateien auswählen</span>
+              {t("dropzone.orText")} <span className="gallery-upload-browse">{t("dropzone.browse")}</span>
             </p>
-            <div className="gallery-upload-formats" aria-label="Unterstützte Formate">
+            <div className="gallery-upload-formats" aria-label={t("dropzone.formatsAriaLabel")}>
               {DOCUMENT_FORMATS.map((format) => (
                 <span key={format}>{format}</span>
               ))}
@@ -192,17 +195,15 @@ export function DocumentUploadModal({
 
           <div>
             <div className="gallery-upload-queue-heading">
-              <span className="gallery-upload-label">Warteschlange</span>
+              <span className="gallery-upload-label">{t("queue.heading")}</span>
               <span className="gallery-upload-count">
                 {selectedFiles.length === 0
-                  ? "Keine Datei gewählt"
-                  : selectedFiles.length === 1
-                    ? "1 Datei gewählt"
-                    : `${selectedFiles.length} Dateien gewählt`}
+                  ? t("queue.countNone")
+                  : t("queue.count", { count: selectedFiles.length })}
               </span>
             </div>
             {selectedFiles.length === 0 ? (
-              <p className="gallery-upload-empty">Noch keine Dateien ausgewählt.</p>
+              <p className="gallery-upload-empty">{t("queue.empty")}</p>
             ) : (
               <ul className="gallery-upload-file-list">
                 {selectedFiles.map((file, index) => (
@@ -218,7 +219,7 @@ export function DocumentUploadModal({
                         <span className="muted">{formatFileSize(file.size)}</span>
                       </div>
                       <span className="gallery-upload-file-status">
-                        {uploading ? "Wird hochgeladen…" : "Bereit zum Hochladen"}
+                        {uploading ? t("queue.uploading") : t("queue.ready")}
                       </span>
                       {uploading && <progress className="gallery-upload-progress" />}
                     </div>
@@ -227,7 +228,7 @@ export function DocumentUploadModal({
                       className="gallery-upload-remove"
                       onClick={() => removeFile(index)}
                       disabled={uploading}
-                      aria-label={`${file.name} entfernen`}
+                      aria-label={t("queue.removeFile", { name: file.name })}
                     >
                       <CloseIcon />
                     </button>
@@ -238,8 +239,8 @@ export function DocumentUploadModal({
           </div>
 
           <div className="gallery-upload-tags">
-            <span className="gallery-upload-label">Tags für alle Dateien</span>
-            <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder="Tag hinzufügen…" />
+            <span className="gallery-upload-label">{t("tags.label")}</span>
+            <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder={t("tags.placeholder")} />
           </div>
 
           {ruleProblems.length > 0 && <p className="form-error-banner">{ruleProblems.join(" · ")}</p>}
@@ -248,12 +249,12 @@ export function DocumentUploadModal({
 
         <div className="gallery-upload-footer">
           <span className="gallery-upload-summary">
-            {selectedFiles.length} Datei{selectedFiles.length === 1 ? "" : "en"}
+            {t("footer.summary", { count: selectedFiles.length })}
             {selectedFiles.length > 0 ? ` · ${formatFileSize(totalBytes)}` : ""}
           </span>
           <div className="gallery-upload-actions">
             <button type="button" className="button-ghost" onClick={onClose} disabled={uploading}>
-              Abbrechen
+              {t("footer.cancel")}
             </button>
             <button
               type="button"
@@ -262,10 +263,10 @@ export function DocumentUploadModal({
               disabled={uploading || selectedFiles.length === 0 || target.incomplete || ruleProblems.length > 0}
             >
               {uploading
-                ? "Lädt hoch…"
+                ? t("footer.uploading")
                 : selectedFiles.length > 0
-                  ? `${selectedFiles.length} ${selectedFiles.length === 1 ? "Datei" : "Dateien"} hochladen`
-                  : "Hochladen"}
+                  ? t("footer.uploadCount", { count: selectedFiles.length })
+                  : t("footer.upload")}
             </button>
           </div>
         </div>

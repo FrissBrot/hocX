@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, issue_session_cookie
+from app.core.security import CurrentUser, get_current_user, issue_locale_cookie, issue_session_cookie
 from app.models.entities import AppUser, UserMfaFactor
 from app.schemas.mfa import (
     PasskeyRegistrationComplete,
@@ -80,14 +80,20 @@ def get_me(
 @router.patch("/me", response_model=UserRead)
 def patch_me(
     payload: UserSelfUpdate,
+    response: Response,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     try:
-        return service.update_self(db, user, payload)
+        updated = service.update_self(db, user, payload)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Profile could not be updated") from exc
+    # Sofort wirksam ohne auf den naechsten /session-Abruf zu warten (siehe
+    # issue_locale_cookie-Docstring) - saveProfile() im Frontend ruft direkt danach ohnehin
+    # /api/auth/session ab, das haelt den Cookie zusaetzlich synchron.
+    issue_locale_cookie(response, updated.preferred_language)
+    return updated
 
 
 @router.get("/me/mfa", response_model=UserMfaRead)

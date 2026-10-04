@@ -1,0 +1,22 @@
+{
+  "modal": {
+    "title": "Partager le lien",
+    "createFailed": "Le lien n'a pas pu être créé.",
+    "createdHint": "Toute personne disposant de ce lien peut télécharger les fichiers sans se connecter.",
+    "linkLabel": "Lien de partage",
+    "done": "Terminé",
+    "nameLabel": "Nom",
+    "expiryLabel": "Date d'expiration",
+    "expiryHint": "Facultatif – sans date d'expiration, le lien reste actif jusqu'à sa révocation.",
+    "cancel": "Annuler",
+    "creating": "Création…",
+    "create": "Créer le lien"
+  },
+  "publicPage": {
+    "linkUnavailable": "Lien non disponible",
+    "linkUnavailableHint": "Ce lien est invalide, expiré ou a été révoqué.",
+    "fileCount": "{count, plural, one {# fichier} other {# fichiers}} à télécharger",
+    "downloadAll": "Tout télécharger",
+    "noFiles": "Aucun fichier disponible."
+  }
+}

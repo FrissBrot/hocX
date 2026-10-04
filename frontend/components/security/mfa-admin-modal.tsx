@@ -1,24 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Modal } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
+import { formatMfaDate, mfaFactorTypeLabel } from "@/lib/hooks/use-mfa-enrollment";
+import type { Locale } from "@/i18n/locale-config.generated";
 import { UserMfaOverview } from "@/types/api";
-
-function formatDate(value: string | null) {
-  if (!value) return "Noch nie";
-  return new Intl.DateTimeFormat("de-CH", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function factorTypeLabel(type: "totp" | "webauthn") {
-  return type === "totp" ? "TOTP" : "Passkey";
-}
 
 type Props = {
   open: boolean;
@@ -29,6 +20,8 @@ type Props = {
 };
 
 export function MfaAdminModal({ open, onClose, title, loadPath, deletePathBase }: Props) {
+  const t = useTranslations("security.mfaAdminModal");
+  const locale = useLocale() as Locale;
   const confirm = useConfirm();
   const showToast = useToast();
   const [overview, setOverview] = useState<UserMfaOverview | null>(null);
@@ -42,17 +35,17 @@ export function MfaAdminModal({ open, onClose, title, loadPath, deletePathBase }
     browserApiFetch<UserMfaOverview>(loadPath)
       .then((result) => setOverview(result))
       .catch((error) => {
-        showToast(error instanceof Error ? error.message : "MFA-Daten konnten nicht geladen werden", "error");
+        showToast(error instanceof Error ? error.message : t("loadFailed"), "error");
       })
       .finally(() => setLoading(false));
-  }, [loadPath, open, showToast]);
+  }, [loadPath, open, showToast, t]);
 
   async function deleteFactor(factorId: string, label: string) {
     if (!deletePathBase) return;
     const ok = await confirm({
-      message: `MFA-Faktor "${label}" endgültig löschen? Der Benutzer muss ihn danach neu einrichten.`,
+      message: t("deleteConfirm", { label }),
       tone: "danger",
-      confirmLabel: "Jetzt löschen",
+      confirmLabel: t("deleteNow"),
     });
     if (!ok) return;
     try {
@@ -60,9 +53,9 @@ export function MfaAdminModal({ open, onClose, title, loadPath, deletePathBase }
         method: "DELETE",
       });
       setOverview(next);
-      showToast("MFA-Faktor gelöscht", "success");
+      showToast(t("factorDeleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "MFA-Faktor konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("factorDeleteFailed"), "error");
     }
   }
 
@@ -71,43 +64,43 @@ export function MfaAdminModal({ open, onClose, title, loadPath, deletePathBase }
       open={open}
       onClose={onClose}
       title={title}
-      description="Alle hinterlegten zweiten Faktoren dieses Kontos. Löschen entspricht einem Reset der jeweiligen Option."
+      description={t("description")}
       size="wide"
     >
       <div className="grid">
         <div className="security-summary-card">
           <div>
-            <div className="eyebrow">Status</div>
-            <strong>{overview?.required ? "MFA ist für dieses Konto Pflicht" : "MFA ist für dieses Konto optional"}</strong>
+            <div className="eyebrow">{t("status")}</div>
+            <strong>{overview?.required ? t("mandatory") : t("optional")}</strong>
             <div className="muted">
-              {loading ? "Lädt…" : overview?.has_factors ? `${overview.factors.length} Faktor(en) hinterlegt` : "Noch keine Faktoren eingerichtet"}
+              {loading ? t("loading") : overview?.has_factors ? t("factorCount", { count: overview.factors.length }) : t("noFactorsYet")}
             </div>
             {overview?.preferred_factor_type ? (
-              <div className="muted">Standardmethode: {factorTypeLabel(overview.preferred_factor_type)}</div>
+              <div className="muted">{t("defaultMethod", { method: mfaFactorTypeLabel(overview.preferred_factor_type) })}</div>
             ) : null}
           </div>
         </div>
 
         <div className="security-factor-list">
           {!loading && (!overview || overview.factors.length === 0) ? (
-            <div className="selection-card muted">Keine MFA-Faktoren vorhanden.</div>
+            <div className="selection-card muted">{t("noFactors")}</div>
           ) : null}
           {overview?.factors.map((factor) => (
             <article key={factor.id} className="security-factor-card">
               <div className="security-factor-main">
                 <div className="security-factor-row">
                   <strong>{factor.label}</strong>
-                  <span className="pill">{factorTypeLabel(factor.factor_type)}</span>
+                  <span className="pill">{mfaFactorTypeLabel(factor.factor_type)}</span>
                 </div>
-                <div className="muted">Eingerichtet: {formatDate(factor.created_at)}</div>
-                <div className="muted">Zuletzt verwendet: {formatDate(factor.last_used_at)}</div>
+                <div className="muted">{t("setUpAt", { date: formatMfaDate(factor.created_at, locale) })}</div>
+                <div className="muted">{t("lastUsedAt", { date: formatMfaDate(factor.last_used_at, locale) })}</div>
               </div>
               <button
                 type="button"
                 className="button-secondary button-danger"
                 onClick={() => void deleteFactor(factor.id, factor.label)}
               >
-                Löschen
+                {t("delete")}
               </button>
             </article>
           ))}

@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
 import { useDeferredPopupSave } from "@/lib/hooks/use-deferred-popup-save";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -36,12 +38,14 @@ type ActivePanel = "notes" | "todo" | null;
 
 export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
   function SessionPanel({ protocol, participants, dueEvents = [], currentSectionName, onSessionNotesChange, onQuickTodoCreated }, ref) {
+    const t = useTranslations("protocols.sessionPanel");
+    const tCommon = useTranslations("common");
     const showToast = useToast();
     const [active, setActive] = useState<ActivePanel>(null);
     const [notes, setNotes] = useState(protocol.session_notes ?? "");
     const [notesSaveState, setNotesSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
     const [todoTask, setTodoTask] = useState("");
-    const [todoTag, setTodoTag] = useState(currentSectionName ?? "Sitzungsnotizen");
+    const [todoTag, setTodoTag] = useState(currentSectionName ?? t("defaultTag"));
     const [creatingTodo, setCreatingTodo] = useState(false);
     const [todoSaved, setTodoSaved] = useState(false);
     const [openedByHover, setOpenedByHover] = useState(false);
@@ -55,7 +59,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
       if (draft !== null && draft !== (protocol.session_notes ?? "")) {
         setNotes(draft);
         setNotesSaveState("error");
-        showToast("Lokaler Entwurf der Sitzungsnotizen wurde wiederhergestellt.", "info");
+        showToast(t("draftRestored"), "info");
       }
       const flushed = (event: Event) => {
         if ((event as CustomEvent<{ key?: string }>).detail?.key !== notesMutationKey) return;
@@ -164,14 +168,14 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
 
     type DueOption = { label: string; sub?: string; draft: DueDraft };
     const allDueOptions: DueOption[] = useMemo(() => [
-      { label: "Kein Enddatum", draft: { type: "none" } },
-      { label: "Nächster Hock", draft: { type: "next_session" } },
+      { label: t("noDueDate"), draft: { type: "none" } },
+      { label: t("nextSession"), draft: { type: "next_session" } },
       ...dueEvents.map((ev) => ({
         label: ev.title,
         sub: formatDateRange(ev.event_date, ev.event_end_date),
         draft: { type: "event" as const, eventId: ev.id, eventTitle: ev.title },
       })),
-    ], [dueEvents]);
+    ], [dueEvents, t]);
 
     const filteredDueOptions = useMemo(() => {
       const q = dueSearch.trim().toLowerCase();
@@ -183,7 +187,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
 
     function dueDraftLabel(draft: DueDraft): string {
       if (draft.type === "none") return "";
-      if (draft.type === "next_session") return "Nächster Hock";
+      if (draft.type === "next_session") return t("nextSession");
       if (draft.type === "event") return (draft as { eventTitle: string }).eventTitle;
       return "";
     }
@@ -253,7 +257,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
           `/api/protocols/${protocol.id}/quick-todos`,
           {
             method: "POST",
-            body: JSON.stringify({ task, tag: todoTag.trim() || "Sitzungsnotizen" }),
+            body: JSON.stringify({ task, tag: todoTag.trim() || t("defaultTag") }),
           }
         );
         const patch: Record<string, unknown> = {};
@@ -279,7 +283,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
         todoInputRef.current?.focus();
         return true;
       } catch (error) {
-        showToast(error instanceof Error ? error.message : "Todo konnte nicht erstellt werden", "error");
+        showToast(error instanceof Error ? error.message : t("createTodoFailed"), "error");
         return false;
       } finally {
         setCreatingTodo(false);
@@ -423,12 +427,12 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
           <div className="quick-flyout-header">
             <div className="quick-flyout-title">
               <span className="quick-flyout-title-icon"><NavIcon name="lists" /></span>
-              <span className="eyebrow">Sitzungsnotizen</span>
+              <span className="eyebrow">{t("notesTitle")}</span>
             </div>
             <button
               type="button"
               className="button-ghost quick-flyout-close"
-              aria-label="Schliessen"
+              aria-label={tCommon("close")}
               onClick={() => setActive(null)}
             >
               <ActionIcon name="close" />
@@ -441,12 +445,12 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
               className="session-panel-notes"
               value={notes}
               onChange={(e) => handleNotesChange(e.target.value)}
-              placeholder="Notizen zur Sitzung…"
+              placeholder={t("notesPlaceholder")}
               rows={9}
             />
-            {notesSaveState === "saving" && <div className="session-panel-status">Speichert…</div>}
-            {notesSaveState === "saved" && <div className="session-panel-status session-panel-status-ok">✓ Gespeichert</div>}
-            {notesSaveState === "error" && <div className="session-panel-status session-panel-status-err">Fehler beim Speichern</div>}
+            {notesSaveState === "saving" && <div className="session-panel-status">{t("saving")}</div>}
+            {notesSaveState === "saved" && <div className="session-panel-status session-panel-status-ok">✓ {t("saved")}</div>}
+            {notesSaveState === "error" && <div className="session-panel-status session-panel-status-err">{t("saveError")}</div>}
           </div>
         </div>
 
@@ -459,12 +463,12 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
           <div className="quick-flyout-header">
             <div className="quick-flyout-title">
               <span className="quick-flyout-title-icon"><NavIcon name="todos" /></span>
-              <span className="eyebrow">Schnelles Todo</span>
+              <span className="eyebrow">{t("quickTodoTitle")}</span>
             </div>
             <button
               type="button"
               className="button-ghost quick-flyout-close"
-              aria-label="Schliessen"
+              aria-label={tCommon("close")}
               onClick={() => setActive(null)}
             >
               <ActionIcon name="close" />
@@ -478,7 +482,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
               type="text"
               value={todoTask}
               onChange={(e) => setTodoTask(e.target.value)}
-              placeholder={participants.length > 0 ? "Aufgabe… (Tab: Person)" : "Aufgabe…"}
+              placeholder={participants.length > 0 ? t("taskPlaceholderWithTab") : t("taskPlaceholder")}
               onKeyDown={handleTaskKeyDown}
             />
 
@@ -490,7 +494,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
                   type="text"
                   value={assigneeSearch}
                   onChange={(e) => handleAssigneeChange(e.target.value)}
-                  placeholder="Person zuweisen…"
+                  placeholder={t("assignPlaceholder")}
                   onKeyDown={handleAssigneeKeyDown}
                   onFocus={() => { if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current); }}
                 />
@@ -529,7 +533,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
                   type="text"
                   value={dueSearch}
                   onChange={(e) => handleDueChange(e.target.value)}
-                  placeholder="Fällig…"
+                  placeholder={t("duePlaceholder")}
                   onKeyDown={handleDueKeyDown}
                   onFocus={() => { setDueFocused(true); if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current); }}
                   onBlur={() => setDueFocused(false)}
@@ -566,7 +570,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
               type="text"
               value={todoTag}
               onChange={(e) => setTodoTag(e.target.value)}
-              placeholder="Kategorie / Tag"
+              placeholder={t("tagPlaceholder")}
             />
             <button
               type="button"
@@ -574,7 +578,7 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
               disabled={creatingTodo || !todoTask.trim()}
               onClick={() => void handleCreateTodo()}
             >
-              {todoSaved ? "✓ Erstellt" : creatingTodo ? "…" : "Todo erstellen"}
+              {todoSaved ? `✓ ${t("createdBadge")}` : creatingTodo ? "…" : t("createTodoButton")}
             </button>
           </div>
         </div>

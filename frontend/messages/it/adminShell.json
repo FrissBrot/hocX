@@ -1,0 +1,21 @@
+{
+  "title": "Amministrazione piattaforma",
+  "tagline": "Gestisci organizzazioni e utenti in tutto il sistema.",
+  "groups": { "tenants": "Organizzazioni", "system": "Sistema", "access": "Accesso" },
+  "nav": {
+    "dashboard": "Dashboard",
+    "tenants": "Organizzazioni",
+    "pricing": "Prezzi",
+    "users": "Utenti",
+    "domains": "Domini",
+    "errorLogs": "Registro errori",
+    "uploadPipeline": "Pipeline file",
+    "admins": "Account amministratore",
+    "sso": "SSO",
+    "security": "Sicurezza"
+  },
+  "logout": "Disconnetti",
+  "menuToggleClose": "Chiudi",
+  "breadcrumbNav": "Percorso di navigazione",
+  "readOnlyBanner": "Accesso in sola lettura (support): con questo account non sono possibili modifiche."
+}

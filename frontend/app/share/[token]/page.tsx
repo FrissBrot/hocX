@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { backendFetch } from "@/lib/api/client";
 import { formatFileSize } from "@/lib/utils/format";
 import { PublicShare } from "@/types/api";
@@ -13,14 +15,15 @@ function FileIcon() {
 
 export default async function PublicSharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+  const t = await getTranslations("share.publicPage");
   const share = await backendFetch<PublicShare>(`/api/public/share/${token}`);
 
   if (!share) {
     return (
       <main className="public-share-page">
         <div className="card public-share-card">
-          <h1 className="page-title">Link nicht verfügbar</h1>
-          <p className="muted">Dieser Link ist ungültig, abgelaufen oder wurde widerrufen.</p>
+          <h1 className="page-title">{t("linkUnavailable")}</h1>
+          <p className="muted">{t("linkUnavailableHint")}</p>
         </div>
       </main>
     );
@@ -33,17 +36,17 @@ export default async function PublicSharePage({ params }: { params: Promise<{ to
           <div>
             <h1 className="page-title">{share.name}</h1>
             <p className="muted">
-              {share.files.length} {share.files.length === 1 ? "Datei" : "Dateien"} zum Herunterladen
+              {t("fileCount", { count: share.files.length })}
             </p>
           </div>
           {share.download_all_url ? (
             <a href={share.download_all_url} className="button-primary">
-              Alle herunterladen
+              {t("downloadAll")}
             </a>
           ) : null}
         </div>
         {share.files.length === 0 ? (
-          <p className="muted">Keine Dateien verfügbar.</p>
+          <p className="muted">{t("noFiles")}</p>
         ) : (
           <div className="public-share-grid">
             {share.files.map((file) => (

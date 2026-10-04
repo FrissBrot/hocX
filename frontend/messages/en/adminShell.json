@@ -1,0 +1,21 @@
+{
+  "title": "Platform admin",
+  "tagline": "Manage organizations and users across the whole system.",
+  "groups": { "tenants": "Organizations", "system": "System", "access": "Access" },
+  "nav": {
+    "dashboard": "Dashboard",
+    "tenants": "Organizations",
+    "pricing": "Pricing",
+    "users": "Users",
+    "domains": "Domains",
+    "errorLogs": "Error log",
+    "uploadPipeline": "File pipeline",
+    "admins": "Admin accounts",
+    "sso": "SSO",
+    "security": "Security"
+  },
+  "logout": "Log out",
+  "menuToggleClose": "Close",
+  "breadcrumbNav": "Breadcrumb",
+  "readOnlyBanner": "Read-only access (support): changes aren't possible with this account."
+}

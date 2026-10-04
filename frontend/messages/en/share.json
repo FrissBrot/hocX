@@ -1,0 +1,22 @@
+{
+  "modal": {
+    "title": "Share link",
+    "createFailed": "Link could not be created.",
+    "createdHint": "Anyone with this link can download the files without logging in.",
+    "linkLabel": "Share link",
+    "done": "Done",
+    "nameLabel": "Name",
+    "expiryLabel": "Expiry date",
+    "expiryHint": "Optional – without an expiry date the link stays active until revoked.",
+    "cancel": "Cancel",
+    "creating": "Creating…",
+    "create": "Create link"
+  },
+  "publicPage": {
+    "linkUnavailable": "Link not available",
+    "linkUnavailableHint": "This link is invalid, has expired, or was revoked.",
+    "fileCount": "{count, plural, one {# file} other {# files}} to download",
+    "downloadAll": "Download all",
+    "noFiles": "No files available."
+  }
+}

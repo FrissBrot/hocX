@@ -1,0 +1,18 @@
+{
+  "categoryHints": {
+    "photos": "Galerie, Protokoll-Bilder und Abgabebox-Bilder",
+    "files": "Word-Importe, Abgabebox-Dokumente und weitere Uploads",
+    "protocols": "Erzeugte PDF-/LaTeX-Exporte",
+    "other": "Logos, Importe und übrige Dateien"
+  },
+  "quotaComposition": {
+    "fromPlan": "{size} aus Abo",
+    "fromPackages": "+ {size} aus Zusatzpaketen"
+  },
+  "breakdown": {
+    "columnCategory": "Kategorie",
+    "columnSize": "Grösse",
+    "columnShare": "Anteil",
+    "empty": "Noch keine Dateien vorhanden."
+  }
+}

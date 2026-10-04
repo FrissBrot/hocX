@@ -32,19 +32,28 @@ describe("validateUploadFiles", () => {
     const files = [fakeFile("a.pdf", 100), fakeFile("b.pdf", 100), fakeFile("c.pdf", 100)];
     const result = validateUploadFiles(files, opts);
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain("Maximal 2");
+    if (!result.ok) {
+      expect(result.code).toBe("maxFilesTotal");
+      expect(result.params).toEqual({ maxFiles: 2, remaining: 2 });
+    }
   });
 
   it("rejects a disallowed file extension", () => {
     const result = validateUploadFiles([fakeFile("script.exe", 100)], opts);
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain("script.exe");
+    if (!result.ok) {
+      expect(result.code).toBe("unsupportedType");
+      expect(result.params).toEqual({ filename: "script.exe" });
+    }
   });
 
   it("rejects a file over the size limit", () => {
     const result = validateUploadFiles([fakeFile("gross.pdf", 6 * 1024 * 1024)], opts);
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain("5 MB");
+    if (!result.ok) {
+      expect(result.code).toBe("fileTooLarge");
+      expect(result.params).toEqual({ filename: "gross.pdf", maxFileSizeMb: 5 });
+    }
   });
 
   it("accepts a file exactly at the size limit", () => {
@@ -65,7 +74,10 @@ describe("validateUploadFiles", () => {
   it("accounts for files already uploaded in a previous session (cumulative limit)", () => {
     const result = validateUploadFiles([fakeFile("a.pdf", 100), fakeFile("b.pdf", 100)], { ...opts, alreadyUploaded: 1 });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain("1 noch möglich");
+    if (!result.ok) {
+      expect(result.code).toBe("maxFilesTotal");
+      expect(result.params).toEqual({ maxFiles: 2, remaining: 1 });
+    }
   });
 
   it("accepts exactly the remaining capacity after previous uploads", () => {

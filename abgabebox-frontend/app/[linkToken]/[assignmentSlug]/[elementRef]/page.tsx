@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 import { UploadForm } from "@/components/upload-form";
 import { getAssignmentDetail, getElement } from "@/lib/api";
@@ -20,6 +21,7 @@ export default async function ElementUploadPage({
   }
 
   const sitekey = process.env.NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY ?? "";
+  const t = await getTranslations("abgabebox.elements");
 
   return (
     <div>
@@ -38,7 +40,7 @@ export default async function ElementUploadPage({
       />
 
       <Link href={`/${linkToken}/${assignmentSlug}`} className="back-btn">
-        ← Zurück zur Übersicht
+        {t("backToOverview")}
       </Link>
     </div>
   );

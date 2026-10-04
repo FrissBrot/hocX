@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
@@ -15,6 +16,7 @@ type Props = {
 };
 
 export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props) {
+  const t = useTranslations("admin.accountManagement");
   const showToast = useToast();
   const confirm = useConfirm();
   const [admins, setAdmins] = useState(initialAdmins);
@@ -37,9 +39,9 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
       setDisplayName("");
       setPassword("");
       setRole("owner");
-      showToast("Admin-Account erstellt", "success");
+      showToast(t("toasts.created"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Admin-Account konnte nicht erstellt werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.createFailed"), "error");
     }
   }
 
@@ -51,9 +53,9 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
     // restore it (audit A3, 2026-08-16).
     if (admin.id === currentAdminId && nextRole === "support") {
       const ok = await confirm({
-        message: "Deinen eigenen Account auf Nur-Lesezugriff setzen? Du verlierst damit sofort selbst den Schreibzugriff auf dieses Panel.",
+        message: t("toasts.selfDowngradeConfirm"),
         tone: "danger",
-        confirmLabel: "Auf Nur-Lesezugriff setzen",
+        confirmLabel: t("setReadOnly"),
       });
       if (!ok) return;
     }
@@ -63,18 +65,18 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
         body: JSON.stringify({ role: nextRole }),
       });
       setAdmins((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      showToast("Admin-Account aktualisiert", "success");
+      showToast(t("toasts.updated"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Admin-Account konnte nicht aktualisiert werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.updateFailed"), "error");
     }
   }
 
   async function toggleActive(admin: PlatformAdminSummary) {
     if (admin.is_active) {
       const ok = await confirm({
-        message: `"${admin.display_name}" deaktivieren? Der Account verliert damit sofort den Zugriff auf das Platform-Admin-Panel.`,
+        message: t("toasts.deactivateConfirm", { name: admin.display_name }),
         tone: "danger",
-        confirmLabel: "Deaktivieren",
+        confirmLabel: t("deactivate"),
       });
       if (!ok) return;
     }
@@ -84,38 +86,38 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
         body: JSON.stringify({ is_active: !admin.is_active }),
       });
       setAdmins((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      showToast("Admin-Account aktualisiert", "success");
+      showToast(t("toasts.updated"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Admin-Account konnte nicht aktualisiert werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.updateFailed"), "error");
     }
   }
 
   return (
     <div className="grid">
       <DataToolbar
-        title="Admin-Accounts"
-        description="Zugang zum Platform-Admin-Panel selbst - getrennt von allen Mandanten-Benutzern."
+        title={t("title")}
+        description={t("description")}
         actions={
           <button type="button" className="button-secondary" onClick={() => setModalOpen(true)}>
-            Neuer Admin
+            {t("newAdmin")}
           </button>
         }
       />
 
-      <DataTable columns={["Name", "E-Mail", "Rolle", "Status", "Aktionen"]} emptyMessage="Keine Admin-Accounts gefunden.">
+      <DataTable columns={[t("columns.name"), t("columns.email"), t("columns.role"), t("columns.status"), t("columns.actions")]} emptyMessage={t("emptyAdmins")}>
         {admins.map((admin) => (
           <tr key={admin.id}>
             <td>
               <strong>{admin.display_name}</strong>
-              {admin.id === currentAdminId ? <div className="muted">Du</div> : null}
+              {admin.id === currentAdminId ? <div className="muted">{t("you")}</div> : null}
             </td>
             <td>{admin.email}</td>
-            <td>{admin.role === "owner" ? "Vollzugriff" : "Nur Lesezugriff"}</td>
-            <td>{admin.is_active ? "Aktiv" : "Deaktiviert"}</td>
+            <td>{admin.role === "owner" ? t("fullAccess") : t("readOnlyAccess")}</td>
+            <td>{admin.is_active ? t("active") : t("deactivated")}</td>
             <td>
               <div className="table-actions table-actions-start">
                 <button type="button" className="button-secondary" onClick={() => void toggleRole(admin)}>
-                  {admin.role === "owner" ? "Auf Nur-Lesezugriff setzen" : "Auf Vollzugriff setzen"}
+                  {admin.role === "owner" ? t("setReadOnly") : t("setFullAccess")}
                 </button>
                 <button
                   type="button"
@@ -123,7 +125,7 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
                   onClick={() => void toggleActive(admin)}
                   disabled={admin.id === currentAdminId && admin.is_active}
                 >
-                  {admin.is_active ? "Deaktivieren" : "Aktivieren"}
+                  {admin.is_active ? t("deactivate") : t("activate")}
                 </button>
               </div>
             </td>
@@ -131,30 +133,30 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
         ))}
       </DataTable>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Neuer Admin-Account" description="Legt einen weiteren Zugang zum Platform-Admin-Panel an.">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t("newAdminModalTitle")} description={t("newAdminModalDescription")}>
         <ModalSaveForm className="grid" onSubmit={submit}>
           <label className="field-stack">
-            <span className="field-label">Name</span>
+            <span className="field-label">{t("name")}</span>
             <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required />
           </label>
           <label className="field-stack">
-            <span className="field-label">E-Mail</span>
+            <span className="field-label">{t("email")}</span>
             <input value={email} onChange={(event) => setEmail(event.target.value)} required />
           </label>
           <label className="field-stack">
-            <span className="field-label">Passwort</span>
+            <span className="field-label">{t("password")}</span>
             <input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} />
           </label>
           <label className="field-stack">
-            <span className="field-label">Rolle</span>
+            <span className="field-label">{t("columns.role")}</span>
             <select value={role} onChange={(event) => setRole(event.target.value as "owner" | "support")}>
-              <option value="owner">Vollzugriff</option>
-              <option value="support">Nur Lesezugriff</option>
+              <option value="owner">{t("fullAccess")}</option>
+              <option value="support">{t("readOnlyAccess")}</option>
             </select>
           </label>
           <div className="table-actions table-actions-start">
             <button data-modal-save type="submit" className="button-secondary">
-              Erstellen
+              {t("create")}
             </button>
           </div>
         </ModalSaveForm>

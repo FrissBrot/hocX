@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.locale_config_generated import DEFAULT_LOCALE
 from app.core.security import hash_password
 from app.models import AppUser, ListDefinition, ListEntry, Participant, Role, Template
 from app.repositories.participant_repository import ParticipantRepository
@@ -40,7 +41,7 @@ class ParticipantService:
             display_name=participant.display_name,
             email=self._synthetic_email(tenant_id=participant.tenant_id, participant_id=participant.id),
             password_hash=hash_password(secret),
-            preferred_language="de",
+            preferred_language=DEFAULT_LOCALE,
             is_active=participant.is_active,
             external_identity_json={
                 "source": "participant_auto",

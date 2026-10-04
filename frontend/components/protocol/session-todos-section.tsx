@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { DateInput } from "@/components/ui/date-input";
 import { browserApiFetch } from "@/lib/api/client";
@@ -43,28 +45,29 @@ export function SessionTodosSection({
   onPendingDone: (todoId: string) => void;
   onAcceptTrackedChange?: (blockId: string, todoId: string) => void;
 }) {
+  const t = useTranslations("protocols.todos");
   const showToast = useToast();
   if (todos.length === 0 && pendingTodos.length === 0) return null;
   if (!sectionTag) return null;
 
   function sessionDueLabel(todo: ProtocolTodo) {
-    if (todo.due_marker === "next_session") return todo.resolved_due_date ? `${formatShortDate(todo.resolved_due_date)} (Nächste Sitzung)` : "Nächste Sitzung";
-    if (todo.due_event_id) { const lbl = todo.resolved_due_label ?? "Termin"; return todo.resolved_due_date ? `${formatShortDate(todo.resolved_due_date)} (${lbl})` : lbl; }
+    if (todo.due_marker === "next_session") return todo.resolved_due_date ? `${formatShortDate(todo.resolved_due_date)} (${t("nextSession")})` : t("nextSession");
+    if (todo.due_event_id) { const lbl = todo.resolved_due_label ?? t("event"); return todo.resolved_due_date ? `${formatShortDate(todo.resolved_due_date)} (${lbl})` : lbl; }
     if (todo.due_date) return formatShortDate(todo.due_date);
-    return "Kein Enddatum";
+    return t("noDueDate");
   }
 
   return (
     <section className="card editor-block-card">
       <div className="editor-panel-header">
         <div>
-          <div className="eyebrow">Todos</div>
+          <div className="eyebrow">{t("eyebrow")}</div>
           <h3>{sectionTag}</h3>
         </div>
       </div>
       {pendingTodos.length > 0 && (
         <div className="todo-list todo-list-pending">
-          <div className="todo-pending-header">Pendenzen aus früheren Protokollen</div>
+          <div className="todo-pending-header">{t("pendingHeader")}</div>
           {pendingTodos.map((todo) => {
             const isClosedElsewhere = !!todo.closed_in_protocol_id;
             const isDirectlyDone = todo.todo_status_code === "done" || todo.todo_status_code === "cancelled";
@@ -84,7 +87,7 @@ export function SessionTodosSection({
                       });
                       onPendingUpdate({ id: todo.id, closed_in_protocol_id: protocol.id });
                     } catch (error) {
-                      showToast(error instanceof Error ? error.message : "Todo konnte nicht geschlossen werden", "error");
+                      showToast(error instanceof Error ? error.message : t("closeFailed"), "error");
                     }
                   }}
                 >
@@ -94,15 +97,15 @@ export function SessionTodosSection({
                   <span className={`todo-task-text${isResolved ? " todo-task-done" : ""}`}>{todo.task}</span>
                   <div className="todo-pending-meta">
                     <span className="todo-pending-origin">
-                      {todo.protocol_number ? `Protokoll ${todo.protocol_number}` : ""}
+                      {todo.protocol_number ? t("protocolLabel", { number: todo.protocol_number }) : ""}
                       {todo.protocol_date ? ` · ${formatShortDate(todo.protocol_date)}` : ""}
                     </span>
-                    {isResolved && <span className="todo-pending-resolved">Erledigt</span>}
+                    {isResolved && <span className="todo-pending-resolved">{t("done")}</span>}
                   </div>
                   {!isReadOnly && !isResolved && (
                     <div className="todo-inline-meta">
                       <TodoAssigneeMenu
-                        label={todo.assigned_participant_name ?? "Niemand"}
+                        label={todo.assigned_participant_name ?? t("noAssignee")}
                         participants={participants}
                         activeId={todo.assigned_participant_id}
                         onChange={async (option) => {
@@ -113,7 +116,7 @@ export function SessionTodosSection({
                             });
                             onPendingUpdate({ id: todo.id, assigned_participant_id: option.id, assigned_participant_name: option.display_name });
                           } catch (error) {
-                            showToast(error instanceof Error ? error.message : "Zuweisung konnte nicht geändert werden", "error");
+                            showToast(error instanceof Error ? error.message : t("assigneeChangeFailed"), "error");
                           }
                         }}
                       />
@@ -155,12 +158,12 @@ export function SessionTodosSection({
                       onAccept={onAcceptTrackedChange ? () => onAcceptTrackedChange(todo.protocol_element_block_id, todo.id) : undefined}
                     />
                   </span>
-                  {isLocked && !isPendingDelete && <span className="todo-closed-elsewhere-badge">Später geschlossen</span>}
+                  {isLocked && !isPendingDelete && <span className="todo-closed-elsewhere-badge">{t("closedLaterBadge")}</span>}
                 </div>
                 {!isReadOnly && !isLocked && (
                   <div className="todo-inline-meta">
                     <TodoAssigneeMenu
-                      label={todo.assigned_participant_name ?? "Niemand"}
+                      label={todo.assigned_participant_name ?? t("noAssignee")}
                       participants={participants}
                       activeId={todo.assigned_participant_id}
                       onChange={(option) => void onUpdate(todo.protocol_element_block_id, todo.id, { assigned_participant_id: option.id })}
@@ -169,16 +172,16 @@ export function SessionTodosSection({
                       {(closeMenu) => (
                         <>
                           <div className="mini-menu-section">
-                            <TodoMenuOption label="Kein Enddatum" active={!todo.due_date && !todo.due_event_id && !todo.due_marker}
+                            <TodoMenuOption label={t("noDueDate")} active={!todo.due_date && !todo.due_event_id && !todo.due_marker}
                               onClick={() => { void onUpdate(todo.protocol_element_block_id, todo.id, { due_date: null, due_event_id: null, due_marker: null }); closeMenu(); }} />
-                            <TodoMenuOption label="Freies Datum" active={!!todo.due_date && !todo.due_event_id && !todo.due_marker}
+                            <TodoMenuOption label={t("freeDate")} active={!!todo.due_date && !todo.due_event_id && !todo.due_marker}
                               onClick={() => { void onUpdate(todo.protocol_element_block_id, todo.id, { due_date: todo.due_date ?? protocol.protocol_date, due_event_id: null, due_marker: null }); closeMenu(); }} />
-                            <TodoMenuOption label="Nächste Sitzung" active={todo.due_marker === "next_session"}
+                            <TodoMenuOption label={t("nextSession")} active={todo.due_marker === "next_session"}
                               onClick={() => { void onUpdate(todo.protocol_element_block_id, todo.id, { due_date: null, due_event_id: null, due_marker: "next_session" }); closeMenu(); }} />
                           </div>
                           {dueEvents.length > 0 && (
                             <div className="mini-menu-section">
-                              <div className="mini-menu-section-title">Termine</div>
+                              <div className="mini-menu-section-title">{t("events")}</div>
                               <TodoMenuSearchList
                                 items={dueEvents}
                                 getKey={(event) => event.id}
@@ -213,7 +216,7 @@ export function SessionTodosSection({
                   className="button-secondary button-danger todo-delete"
                   onClick={() => void onDelete(todo.protocol_element_block_id, todo.id)}
                 >
-                  Löschen
+                  {t("delete")}
                 </button>
               )}
             </article>

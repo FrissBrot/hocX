@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { AlbumReleaseNotice } from "./album-share-release";
 import { GalleryUploadModal } from "./gallery-upload-modal";
@@ -40,13 +41,17 @@ type Tab = "all" | "albums" | "duplicates" | "series";
 
 type SortOption = { id: string; label: string; key: SortKey; dir: "asc" | "desc" };
 
-const SORT_OPTIONS: SortOption[] = [
-  { id: "group_date:desc", label: "Neueste zuerst", key: "group_date", dir: "desc" },
-  { id: "group_date:asc", label: "Älteste zuerst", key: "group_date", dir: "asc" },
-  { id: "sharpness_score:desc", label: "Schärfe (am schärfsten zuerst)", key: "sharpness_score", dir: "desc" },
-  { id: "exposure_score:desc", label: "Belichtung (am besten zuerst)", key: "exposure_score", dir: "desc" },
-  { id: "face_quality_score:desc", label: "Gesichtsqualität (am besten zuerst)", key: "face_quality_score", dir: "desc" },
-];
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
+function sortOptions(t: TFunc): SortOption[] {
+  return [
+    { id: "group_date:desc", label: t("sortOptions.newest"), key: "group_date", dir: "desc" },
+    { id: "group_date:asc", label: t("sortOptions.oldest"), key: "group_date", dir: "asc" },
+    { id: "sharpness_score:desc", label: t("sortOptions.sharpness"), key: "sharpness_score", dir: "desc" },
+    { id: "exposure_score:desc", label: t("sortOptions.exposure"), key: "exposure_score", dir: "desc" },
+    { id: "face_quality_score:desc", label: t("sortOptions.faceQuality"), key: "face_quality_score", dir: "desc" },
+  ];
+}
 
 type Props = {
   albumId?: string;
@@ -56,14 +61,12 @@ type Props = {
   onReleased?: () => void;
 };
 
-function photoCountLabel(count: number) {
-  return count === 1 ? "1 Foto" : `${count} Fotos`;
-}
-
 export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Props) {
+  const t = useTranslations("photos.view");
   const embedded = Boolean(albumId);
   const router = useRouter();
   const showToast = useToast();
+  const SORT_OPTIONS = sortOptions(t);
 
   const [tab, setTab] = useState<Tab>("all");
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -134,7 +137,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
         setHasMore((next ?? []).length === PAGE_SIZE);
         setSelectedIds(new Set());
       } catch {
-        if (requestIdRef.current === requestId) showToast("Fotos konnten nicht geladen werden.", "error");
+        if (requestIdRef.current === requestId) showToast(t("loadError"), "error");
       } finally {
         if (requestIdRef.current === requestId) setIsReloading(false);
       }
@@ -164,11 +167,11 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
         body: JSON.stringify({ file_ids: ids }),
       });
       const released = result?.released ?? 0;
-      showToast(released > 0 ? `${photoCountLabel(released)} freigegeben.` : "Die Auswahl war bereits freigegeben.", "success");
+      showToast(released > 0 ? t("releasedToast", { count: released }) : t("alreadyReleasedToast"), "success");
       reload();
       onReleased?.();
     } catch {
-      showToast("Fotos konnten nicht freigegeben werden.", "error");
+      showToast(t("releaseError"), "error");
     }
   }
 
@@ -196,7 +199,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
     } catch {
       if (requestId === requestIdRef.current) {
         setLoadMoreFailed(true);
-        showToast("Weitere Fotos konnten nicht geladen werden. Bitte erneut versuchen.", "error");
+        showToast(t("loadMoreError"), "error");
       }
     } finally {
       loadingMoreRef.current = false;
@@ -223,7 +226,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
         setLoadMoreFailed(false);
         setSelectedIds(new Set());
       } catch {
-        if (requestIdRef.current === requestId) showToast("Fotos konnten nicht neu geladen werden.", "error");
+        if (requestIdRef.current === requestId) showToast(t("reloadError"), "error");
       }
     })();
   }
@@ -307,7 +310,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
       });
       setItems((current) => current.map((current_item) => (current_item.id === item.id ? { ...current_item, is_best: nextOverride === "include" } : current_item)));
     } catch {
-      showToast("Best-of-Status konnte nicht geändert werden.", "error");
+      showToast(t("bestError"), "error");
     }
   }
 
@@ -317,7 +320,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
       await browserApiFetch(`/api/files/${item.id}/best`, { method: "PATCH", body: JSON.stringify({ best_override: nextOverride }) });
       setItems((current) => current.map((current_item) => (current_item.id === item.id ? { ...current_item, is_best: nextOverride === "include" } : current_item)));
     } catch {
-      showToast("Dieses Foto gehört zu keinem Album - Best-of ist nur innerhalb eines Albums möglich.", "error");
+      showToast(t("bestUnscopedError"), "error");
     }
   }
 
@@ -330,7 +333,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
     setQueuedUploadId(job.id);
     // The actual result (imported items/errors) only arrives later, once the background
     // job finishes - see handleGalleryUploadJobDone, wired to GalleryUploadProgress below.
-    showToast("Wird hochgeladen und im Hintergrund verarbeitet…", "info");
+    showToast(t("uploadQueuedToast"), "info");
   }
 
   function handleGalleryUploadJobDone(job: GalleryUploadJobDetail) {
@@ -340,12 +343,12 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
       if (albumId) {
         void browserApiFetch(`/api/files/albums/${albumId}/items`, { method: "POST", body: JSON.stringify({ file_ids: uploaded.map((item) => item.id) }) })
           .then(() => syncNewItems())
-          .catch(() => showToast("Bilder hochgeladen, aber Zuordnung zum Album fehlgeschlagen.", "error"));
+          .catch(() => showToast(t("uploadAlbumAssignError"), "error"));
       } else {
         void syncNewItems();
       }
       setTagSuggestions((current) => Array.from(new Set([...current, ...uploaded.flatMap((item) => item.tags)])).sort((a, b) => a.localeCompare(b)));
-      showToast(uploaded.length === 1 ? "1 Bild hochgeladen." : `${uploaded.length} Bilder hochgeladen.`, "success");
+      showToast(t("uploadedToast", { count: uploaded.length }), "success");
     }
     if (errors.length > 0) showToast(errors.join(" · "), uploaded.length > 0 ? "info" : "error");
     if (job.error) showToast(job.error, "error");
@@ -362,30 +365,31 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
         <>
           <div className="page-header">
             <div>
-              <h1 className="page-title">Fotos</h1>
+              <h1 className="page-title">{t("pageTitle")}</h1>
               <p className="muted">
-                Alle Fotos dieses Mandanten - aus Protokollen, Abgaben und direkt hochgeladenen Galerie-Bildern.
-                {tab === "all" && ` ${items.length} geladen.`}
+                {t("description")}
+                {tab === "all" && ` ${t("loadedSuffix", { count: items.length })}`}
               </p>
             </div>
             <div className="table-toolbar-actions">
               {analysisProgress && analysisProgress.pending_images > 0 && (
-                <span className="pill">Analyse läuft · {analysisProgress.active_job_image_count || analysisProgress.pending_images} Bilder</span>
+                <span className="pill">{t("analysisPill", { count: analysisProgress.active_job_image_count || analysisProgress.pending_images })}</span>
               )}
               {galleryUploadJobs.length > 0 && (
                 <span className="pill">
-                  Galerie-Upload läuft · {galleryUploadJobs.reduce((sum, job) => sum + job.processed_files, 0)}
                   {galleryUploadJobs.every((job) => job.total_files !== null)
-                    ? ` von ${galleryUploadJobs.reduce((sum, job) => sum + (job.total_files ?? 0), 0)}`
-                    : ""}{" "}
-                  Bildern
+                    ? t("uploadPillTotal", {
+                        processed: galleryUploadJobs.reduce((sum, job) => sum + job.processed_files, 0),
+                        total: galleryUploadJobs.reduce((sum, job) => sum + (job.total_files ?? 0), 0),
+                      })
+                    : t("uploadPillNoTotal", { processed: galleryUploadJobs.reduce((sum, job) => sum + job.processed_files, 0) })}
                 </span>
               )}
               <button type="button" className="button-secondary" onClick={() => {
                 setDroppedFiles([]);
                 setUploadModalOpen(true);
               }}>
-                + Bilder hochladen
+                {t("uploadButton")}
               </button>
             </div>
           </div>
@@ -393,8 +397,8 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
             <AlbumReleaseNotice
               message={
                 pendingReleases.length === 1
-                  ? `${photoCountLabel(pendingReleaseTotal)} im geteilten Album „${pendingReleases[0].album_name}“ ${pendingReleaseTotal === 1 ? "wartet" : "warten"} noch auf deine Freigabe.`
-                  : `${photoCountLabel(pendingReleaseTotal)} in ${pendingReleases.length} geteilten Alben warten noch auf deine Freigabe.`
+                  ? t("singleAlbumNotice", { count: pendingReleaseTotal, albumName: pendingReleases[0].album_name })
+                  : t("multiAlbumNotice", { count: pendingReleaseTotal, albumCount: pendingReleases.length })
               }
             >
               {pendingReleases.slice(0, 3).map((row) => (
@@ -407,12 +411,12 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
                     setOpenAlbumId(row.album_id);
                   }}
                 >
-                  {pendingReleases.length === 1 ? "Prüfen" : `${row.album_name} (${row.pending_count})`}
+                  {pendingReleases.length === 1 ? t("reviewLink") : t("albumLinkWithCount", { name: row.album_name, count: row.pending_count })}
                 </button>
               ))}
               {pendingReleases.length > 3 && (
                 <button type="button" className="album-release-notice-link" onClick={() => setTab("albums")}>
-                  Alle Alben
+                  {t("allAlbumsLink")}
                 </button>
               )}
             </AlbumReleaseNotice>
@@ -420,17 +424,17 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
           <div className="list-filter-row list-filter-row-compact">
             <FilterTabs
               options={[
-                { value: "all", label: "Alle Fotos" },
-                { value: "albums", label: "Alben" },
-                { value: "duplicates", label: "Duplikate" },
-                { value: "series", label: "Ähnliche" },
+                { value: "all", label: t("tabs.all") },
+                { value: "albums", label: t("tabs.albums") },
+                { value: "duplicates", label: t("tabs.duplicates") },
+                { value: "series", label: t("tabs.series") },
               ]}
               value={tab}
               onChange={setTab}
             />
             {tab !== "albums" && (
               <div className="list-filter-search">
-                <SearchInput value={search} onChange={setSearch} placeholder="Fotos durchsuchen" />
+                <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
               </div>
             )}
             {tab === "all" && (
@@ -449,7 +453,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
             )}
             {tab !== "albums" && (
               <div className="list-filter-tags">
-                <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder="Tag wählen oder eingeben…" />
+                <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((tag) => tag.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder={t("tagPlaceholder")} />
               </div>
             )}
           </div>
@@ -473,7 +477,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
           {embedded && (
             <div className="list-filter-row list-filter-row-compact">
               <div className="list-filter-search">
-                <SearchInput value={search} onChange={setSearch} placeholder="Fotos durchsuchen" />
+                <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
               </div>
               <SearchableSelect
                 className="files-sort-select"
@@ -488,7 +492,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
                 }}
               />
               <div className="list-filter-tags">
-                <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder="Tag wählen oder eingeben…" />
+                <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((tag) => tag.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder={t("tagPlaceholder")} />
               </div>
             </div>
           )}
@@ -506,7 +510,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
           )}
 
           {items.length === 0 && isReloading ? (
-            <div className="photo-loading-grid" role="status" aria-label="Fotos werden geladen">
+            <div className="photo-loading-grid" role="status" aria-label={t("loadingAriaLabel")}>
               {Array.from({ length: 18 }, (_, index) => (
                 <div key={index} className="photo-tile" aria-hidden="true">
                   <div className="photo-tile-preview" style={{ aspectRatio: 4 / 3 }} />
@@ -516,8 +520,8 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
           ) : items.length === 0 && !embedded && !search.trim() && tagFilter.length === 0 ? (
             <EmptyState
               icon="image"
-              title="Noch keine Fotos vorhanden"
-              description="Sobald Bilder in Protokollen eingefügt, über eine Abgabebox eingereicht oder hier hochgeladen werden, erscheinen sie in dieser Galerie."
+              title={t("emptyTitle")}
+              description={t("emptyDescription")}
               actions={
                 <>
                   <button
@@ -528,32 +532,32 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
                       setUploadModalOpen(true);
                     }}
                   >
-                    + Bilder hochladen
+                    {t("uploadButton")}
                   </button>
                   <button type="button" className="button-secondary" onClick={() => router.push("/submission-assignments")}>
-                    Abgabebox erstellen
+                    {t("createAssignmentButton")}
                   </button>
                 </>
               }
               hint={
                 <div className="empty-state-sources">
                   <div>
-                    <strong>Aus Protokollen</strong>
-                    <span>Bilder aus dem Protokoll-Editor</span>
+                    <strong>{t("emptyHint.protocolsTitle")}</strong>
+                    <span>{t("emptyHint.protocolsDesc")}</span>
                   </div>
                   <div>
-                    <strong>Aus Abgaben</strong>
-                    <span>Einreichungen über Abgabeboxen</span>
+                    <strong>{t("emptyHint.submissionsTitle")}</strong>
+                    <span>{t("emptyHint.submissionsDesc")}</span>
                   </div>
                   <div>
-                    <strong>Direkt hochgeladen</strong>
-                    <span>Galerie-Upload</span>
+                    <strong>{t("emptyHint.uploadsTitle")}</strong>
+                    <span>{t("emptyHint.uploadsDesc")}</span>
                   </div>
                 </div>
               }
             />
           ) : items.length === 0 ? (
-            <p className="muted">Keine Fotos gefunden.</p>
+            <p className="muted">{t("noResults")}</p>
           ) : (
             <PhotoDateGroups
               items={items}
@@ -568,14 +572,14 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
           {hasMore && (
             <div className="load-more-row" ref={loadMoreSentinelRef}>
               {isLoadingMore ? (
-                <span className="photo-loading-glow" role="status" aria-label="Lädt weitere Fotos">
+                <span className="photo-loading-glow" role="status" aria-label={t("loadingMoreAriaLabel")}>
                   <span aria-hidden="true" />
                   <span aria-hidden="true" />
                   <span aria-hidden="true" />
                 </span>
               ) : (
                 <button type="button" className="button-secondary button-ghost" disabled={isReloading} onClick={() => void loadMore()}>
-                  {loadMoreFailed ? "Erneut versuchen" : `Mehr laden (${items.length} geladen)`}
+                  {loadMoreFailed ? t("retry") : t("loadMore", { count: items.length })}
                 </button>
               )}
             </div>
@@ -603,7 +607,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
         />
       )}
 
-      <FileDropOverlay active={isFileDragging} title="Zum Hochladen loslassen" hint="Bilder oder ZIP-Dateien - danach stellst du den Upload ein." />
+      <FileDropOverlay active={isFileDragging} title={t("dropOverlayTitle")} hint={t("dropOverlayHint")} />
     </div>
   );
 }

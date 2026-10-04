@@ -1,0 +1,61 @@
+{
+  "meta": { "description": "Déposer des fichiers sans connexion" },
+  "home": { "title": "Abgabebox", "hint": "Merci d'utiliser le lien de dépôt complet que vous avez reçu de l'association." },
+  "notFound": { "title": "Introuvable", "hint": "Cette page n'existe pas ou n'est actuellement pas disponible." },
+  "error": { "title": "Une erreur s'est produite", "hint": "La page n'a pas pu être chargée. Cela peut être dû à une panne temporaire - veuillez réessayer dans un instant.", "retry": "Réessayer" },
+  "assignments": {
+    "disabledTitle": "Dépôt non disponible",
+    "disabledHint": "Le dépôt n'est actuellement pas disponible pour cette association.",
+    "title": "Dépôts ouverts",
+    "hint": "Choisissez un dépôt pour envoyer votre fichier.",
+    "empty": "Il n'y a actuellement aucun dépôt ouvert.",
+    "backToOverview": "← Retour à l'aperçu"
+  },
+  "elements": {
+    "title": "Éléments",
+    "hint": "Choisissez votre élément pour téléverser le fichier.",
+    "empty": "Il n'y a actuellement aucun élément ouvert.",
+    "windowFrom": "à partir du {date}",
+    "windowUntil": "jusqu'au {date}",
+    "uploadedCount": "{count, plural, one {# fichier déjà téléversé} other {# fichiers déjà téléversés}}",
+    "backToOverview": "← Retour à l'aperçu"
+  },
+  "upload": {
+    "typeLabelDefault": "Images, PDF et documents Office",
+    "dropLabelSelected": "{count, plural, one {# fichier sélectionné} other {# fichiers sélectionnés}}",
+    "dropLabelEmpty": "Sélectionner un fichier ou le déposer ici",
+    "hintMaxFilesUnbounded": "max. 50 fichiers par envoi",
+    "hintMaxFilesRemaining": "{count, plural, one {max. # fichier supplémentaire} other {max. # fichiers supplémentaires}}",
+    "hintPerFile": "{size} MiB chacun",
+    "hintTotal": "150 MiB au total maximum",
+    "removeFile": "Retirer",
+    "offlineNotice": "Hors ligne – les envois ne sont possibles qu'une fois la connexion rétablie. Votre sélection reste dans cet onglet.",
+    "alreadyUploaded": "{count, plural, one {# fichier déjà téléversé pour ce dépôt.} other {# fichiers déjà téléversés pour ce dépôt.}}",
+    "captchaDone": "✓ Vérification de sécurité terminée",
+    "captchaVerifying": "Vérification de sécurité en cours…",
+    "captchaRunning": "Vérification de sécurité en cours…",
+    "captchaPlaceholder": "Vérification de sécurité (aucun FriendlyCaptcha configuré – environnement de test/dev)",
+    "submit": "Envoyer",
+    "submitting": "Envoi en cours…",
+    "successTitle": "Dépôt réussi",
+    "successCount": "{count, plural, one {# fichier téléversé pour ce dépôt.} other {# fichiers téléversés pour ce dépôt.}}",
+    "uploadMore": "Téléverser un autre fichier",
+    "errors": {
+      "noFileSelected": "Veuillez sélectionner au moins un fichier",
+      "offline": "Pas de connexion internet – les fichiers sélectionnés sont conservés. Veuillez renvoyer une fois reconnecté.",
+      "captchaPending": "Vérification de sécurité encore en cours – veuillez patienter un instant et réessayer",
+      "tooManyRequests": "Trop de tentatives – veuillez patienter un instant puis réessayer",
+      "captchaExpired": "La vérification de sécurité a expiré – elle est en cours de renouvellement, veuillez patienter",
+      "uploadFailedGeneric": "Échec de l'envoi",
+      "connectionLost": "Connexion interrompue pendant l'envoi. Vérifiez si le dépôt est déjà arrivé avant de renvoyer.",
+      "tooManyFiles": "Un maximum de 50 fichiers est autorisé par envoi.",
+      "selectionTooLarge": "La sélection dépasse 150 MiB. Veuillez la répartir sur plusieurs envois.",
+      "maxFilesTotal": "Un maximum de {maxFiles} fichier(s) est autorisé au total ({remaining} encore possible(s))",
+      "unsupportedType": "« {filename} » n'est pas pris en charge. Veuillez choisir une image, un PDF ou un document Office.",
+      "disallowedType": "« {filename} » a un format de fichier non autorisé (autorisés : {allowed})",
+      "fileTooLarge": "« {filename} » est trop volumineux (max. {maxFileSizeMb} Mo)"
+    }
+  },
+  "language": { "label": "Langue" },
+  "copyright": "Copyright © {year} hocX Project · Tous droits réservés."
+}

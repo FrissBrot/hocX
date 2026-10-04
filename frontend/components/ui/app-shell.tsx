@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { attemptBridgeRedirect } from "@/lib/bridge-redirect";
 import { browserApiFetch } from "@/lib/api/client";
@@ -59,6 +60,8 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
 // ToastProvider) is actually available here - AppShell itself only sets up the
 // provider and isn't a descendant of it.
 function AppShellInner({ children, initialSession = null }: { children: ReactNode; initialSession?: SessionInfo | null }) {
+  const t = useTranslations("nav");
+  const tSettings = useTranslations("settings");
   const showToast = useToast();
   const pathname = usePathname();
   const router = useRouter();
@@ -72,11 +75,11 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const [protocolExitAnimation, setProtocolExitAnimation] = useState(false);
   const [language, setLanguage] = useState("de");
   const [protocolAccordionEnabled, setProtocolAccordionEnabled] = useState(true);
-  const [sessionStatus, setSessionStatus] = useState(initialSession?.authenticated ? "Ready" : "Loading workspace...");
+  const [sessionStatus, setSessionStatus] = useState(initialSession?.authenticated ? t("sessionReady") : t("sessionLoading"));
 
   const navGroups = useMemo(() => buildNav(session), [session]);
   const activeNavGroup = useMemo(
-    () => navGroups.find((group) => group.links.some((link) => isNavLinkActive(link, pathname)))?.title ?? null,
+    () => navGroups.find((group) => group.links.some((link) => isNavLinkActive(link, pathname)))?.titleKey ?? null,
     [navGroups, pathname]
   );
   const [expandedNavGroup, setExpandedNavGroup] = useState<string | null>(null);
@@ -145,7 +148,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
         setSession(current);
         setLanguage(current.user?.preferred_language ?? "de");
         setProtocolAccordionEnabled(current.user?.protocol_accordion_enabled ?? true);
-        setSessionStatus("Ready");
+        setSessionStatus(t("sessionReady"));
       } catch {
         // Transient errors (network hiccup, backend 500, timeout) must NOT log
         // the user out. The session endpoint always returns HTTP 200 — a throw
@@ -153,7 +156,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
         // If the user truly has no session the server-side requireSession() will
         // have already redirected them before this component even mounts.
         if (!cancelled) {
-          setSessionStatus("Ready");
+          setSessionStatus(t("sessionReady"));
         }
       }
     }
@@ -162,22 +165,22 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
     return () => {
       cancelled = true;
     };
-  }, [initialSession, router]);
+  }, [initialSession, router, t]);
 
   const activeCrumb = useMemo(() => {
     for (const group of navGroups) {
       for (const link of group.links) {
         if (isNavLinkActive(link, pathname)) {
-          return { group: group.title, label: link.label };
+          return { group: group.titleKey ? t(group.titleKey) : null, label: t(link.labelKey) };
         }
       }
     }
-    return { group: null, label: "Dashboard" };
-  }, [navGroups, pathname]);
+    return { group: null, label: t("dashboard") };
+  }, [navGroups, pathname, t]);
 
-  const tenantName = session?.current_tenant?.name ?? "Mandant";
+  const tenantName = session?.current_tenant?.name ?? t("defaultTenantName");
   const userInitial = session?.user?.display_name?.slice(0, 1) ?? "U";
-  const roleLabel = formatRoleLabel(session?.current_role) || sessionStatus;
+  const roleLabel = formatRoleLabel(session?.current_role, t) || sessionStatus;
 
   function selectTheme(nextTheme: "light" | "dark" | "auto") {
     setThemePreference(nextTheme);
@@ -199,7 +202,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
       setProfileModalOpen(false);
       router.refresh();
     } catch {
-      showToast("Profil konnte nicht gespeichert werden.", "error");
+      showToast(tSettings("profileModal.saveFailed"), "error");
     }
   }
 
@@ -209,7 +212,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
       window.sessionStorage.removeItem("hocx-tenant-prompted");
       redirectToLogin(router);
     } catch {
-      showToast("Abmelden fehlgeschlagen. Bitte erneut versuchen.", "error");
+      showToast(tSettings("logoutFailed"), "error");
     }
   }
 
@@ -243,7 +246,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
               <img
                 className="brand-mark brand-mark-tenant"
                 src={session.current_tenant.profile_image_url}
-                alt={`Logo von ${tenantName}`}
+                alt={t("tenantLogoAlt", { tenant: tenantName })}
               />
             ) : (
               <div className="brand-mark">hX</div>
@@ -263,26 +266,26 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                   onClick={() => setMobileNavOpen(false)}
                 >
                   <NavIcon name={link.icon} className="nav-link-icon" />
-                  <span className="nav-link-label">{link.label}</span>
+                  <span className="nav-link-label">{t(link.labelKey)}</span>
                 </Link>
               );
-              if (group.title === null) {
+              if (group.titleKey === null) {
                 return (
                   <div className="nav-links" key="ungrouped">
                     {group.links.map(renderLink)}
                   </div>
                 );
               }
-              const isExpanded = expandedNavGroup === group.title;
+              const isExpanded = expandedNavGroup === group.titleKey;
               return (
-                <div className={`nav-group${isExpanded ? " nav-group-expanded" : ""}`} key={group.title}>
+                <div className={`nav-group${isExpanded ? " nav-group-expanded" : ""}`} key={group.titleKey}>
                   <button
                     type="button"
                     className="nav-group-label"
                     aria-expanded={isExpanded}
-                    onClick={() => setExpandedNavGroup(group.title)}
+                    onClick={() => setExpandedNavGroup(group.titleKey)}
                   >
-                    <span>{group.title}</span>
+                    <span>{t(group.titleKey)}</span>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" width={14} height={14} aria-hidden="true">
                       <path d="M9 18l6-6-6-6" />
                     </svg>
@@ -320,10 +323,10 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
           <header className="topbar">
             <div className="topbar-actions">
               <button type="button" className="button-ghost mobile-nav-toggle" onClick={() => setMobileNavOpen((current) => !current)}>
-                {mobileNavOpen ? "Schliessen" : "☰"}
+                {mobileNavOpen ? t("menuToggleClose") : "☰"}
               </button>
             </div>
-            <nav className="topbar-breadcrumb" aria-label="Brotkrumen">
+            <nav className="topbar-breadcrumb" aria-label={t("breadcrumbNav")}>
               {activeCrumb.group ? (
                 <>
                   <span className="topbar-breadcrumb-group">{activeCrumb.group}</span>
@@ -345,18 +348,18 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                     setProfileModalOpen(true);
                   }}
                 >
-                  Profil bearbeiten
+                  {t("profileEdit")}
                 </MenuItem>
                 <MenuDivider />
-                <div className="menu-header menu-header-tight">Darstellung</div>
+                <div className="menu-header menu-header-tight">{t("appearance")}</div>
                 <MenuItem selected={themeReady && themePreference === "light"} onSelect={() => selectTheme("light")}>
-                  Hell
+                  {t("themeLight")}
                 </MenuItem>
                 <MenuItem selected={themeReady && themePreference === "dark"} onSelect={() => selectTheme("dark")}>
-                  Dunkel
+                  {t("themeDark")}
                 </MenuItem>
                 <MenuItem selected={themeReady && themePreference === "auto"} onSelect={() => selectTheme("auto")}>
-                  Automatisch
+                  {t("themeAuto")}
                 </MenuItem>
                 <MenuDivider />
                 <MenuItem
@@ -366,7 +369,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                     void logout();
                   }}
                 >
-                  Abmelden
+                  {t("logout")}
                 </MenuItem>
               </Menu>
             </Popover>

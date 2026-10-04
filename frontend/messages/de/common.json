@@ -1,0 +1,77 @@
+{
+  "meta": { "description": "Arbeitsbereich für Protokolle und Vorlagen" },
+  "save": "Speichern",
+  "cancel": "Abbrechen",
+  "delete": "Löschen",
+  "edit": "Bearbeiten",
+  "create": "Erstellen",
+  "close": "Schliessen",
+  "back": "Zurück",
+  "next": "Weiter",
+  "yes": "Ja",
+  "no": "Nein",
+  "add": "Hinzufügen",
+  "remove": "Entfernen",
+  "search": "Suchen",
+  "searchPlaceholder": "Suchen…",
+  "loading": "Lädt…",
+  "retry": "Erneut versuchen",
+  "refresh": "Aktualisieren",
+  "download": "Herunterladen",
+  "upload": "Hochladen",
+  "export": "Exportieren",
+  "import": "Importieren",
+  "actions": "Aktionen",
+  "select": "Auswählen",
+  "noResults": "Keine Ergebnisse",
+  "selectedCount": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
+  "requiredField": "Pflichtfeld",
+  "optional": "Optional",
+  "menuToggle": "Menü",
+  "breadcrumbNav": "Brotkrumen",
+  "notificationsRegion": "Benachrichtigungen",
+  "copyright": "Copyright © {year} hocX Project · Alle Rechte vorbehalten.",
+  "connectionLost": {
+    "title": "Verbindung unterbrochen",
+    "description": "Der Server ist momentan nicht erreichbar. Bereits bestätigte Daten bleiben erhalten; prüfe nach dem erneuten Verbinden den Speicherstatus offener Änderungen."
+  },
+  "pagination": {
+    "range": "{from}–{to} von {total}"
+  },
+  "confirm": {
+    "defaultTitle": "Bitte bestätigen",
+    "deleteTitle": "Wirklich löschen?",
+    "confirmLabel": "Bestätigen",
+    "deleteConfirmLabel": "Löschen",
+    "cancelLabel": "Abbrechen"
+  },
+  "dateField": {
+    "invalidFormat": "Bitte Datum als TT.MM.JJJJ eingeben",
+    "chooseDate": "Datum wählen"
+  },
+  "copyField": {
+    "copy": "Kopieren",
+    "copyWithLabel": "{label} kopieren"
+  },
+  "tagInput": {
+    "addPlaceholder": "Tag hinzufügen…",
+    "renameFailed": "Umbenennen fehlgeschlagen. Bitte erneut versuchen.",
+    "removeTag": "Tag {tag} entfernen",
+    "editTag": "Tag bearbeiten",
+    "newNamePlaceholder": "Neuer Name…",
+    "noColor": "Keine Farbe",
+    "rename": "Umbenennen",
+    "colorOrRename": "Farbe / Umbenennen",
+    "addNewTag": "+ „{tag}\" hinzufügen"
+  },
+  "connectivity": {
+    "offlineWithPending": "{count, plural, one {Offline – # Änderung lokal vorgemerkt} other {Offline – # Änderungen lokal vorgemerkt}}",
+    "offlineIdle": "Offline – Verbindung wird überwacht",
+    "flushing": "{count, plural, one {# Änderung wird nachgesendet …} other {# Änderungen werden nachgesendet …}}",
+    "pendingUnsaved": "{count, plural, one {# Änderung noch nicht gespeichert} other {# Änderungen noch nicht gespeichert}}",
+    "reconnected": "Verbindung wiederhergestellt",
+    "retryButton": "Jetzt erneut versuchen",
+    "discardBlocked": "{count, plural, one {Fehlgeschlagene Änderung verwerfen} other {# fehlgeschlagene Änderungen verwerfen}}",
+    "leaveConfirm": "Es gibt noch nicht gespeicherte Änderungen. Seite trotzdem verlassen?"
+  }
+}

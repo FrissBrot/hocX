@@ -1,0 +1,49 @@
+{
+  "createModal": {
+    "createButton": "Link erstellen",
+    "createFailed": "Link konnte nicht erstellt werden.",
+    "createdIntro": "Jede Person mit diesem Link kann die Dateien ohne Anmeldung herunterladen.",
+    "creatingEllipsis": "Wird erstellt…",
+    "doneButton": "Fertig",
+    "expiryHelp": "Optional – ohne Ablaufdatum bleibt der Link aktiv, bis er widerrufen wird.",
+    "expiryLabel": "Ablaufdatum",
+    "nameLabel": "Name",
+    "shareLinkLabel": "Freigabe-Link",
+    "title": "Link teilen"
+  },
+  "emptyDescription": "Über „Teilen“ bei Dateien, Fotos oder einem Fotoalbum lässt sich ein Download-Link ohne Anmeldung erzeugen.",
+  "emptyTitle": "Noch keine Links vorhanden",
+  "filterActive": "Aktiv",
+  "filterAll": "Alle",
+  "page": {
+    "description": "Öffentliche Download-Links für Dateien und Fotos dieses Mandanten.",
+    "title": "Geteilte Links"
+  },
+  "revokeConfirm": "Link „{name}“ widerrufen? Er funktioniert danach nicht mehr.",
+  "revokeConfirmLabel": "Widerrufen",
+  "status": {
+    "active": "Aktiv",
+    "expired": "Abgelaufen",
+    "revoked": "Widerrufen"
+  },
+  "table": {
+    "actionsLabel": "Aktionen für {name}",
+    "albumScope": "Album „{name}“",
+    "columnCreatedBy": "Erstellt von",
+    "columnExpiry": "Ablauf",
+    "columnName": "Name",
+    "columnScope": "Umfang",
+    "columnStatus": "Status",
+    "copyLink": "Link kopieren",
+    "empty": "Keine Links in dieser Ansicht.",
+    "fileScope": "{count, plural, one {# Datei} other {# Dateien}}",
+    "noExpiry": "Kein Ablauf",
+    "revoke": "Widerrufen"
+  },
+  "toasts": {
+    "copied": "Link kopiert.",
+    "copyFailed": "Link konnte nicht kopiert werden.",
+    "revokeFailed": "Link konnte nicht widerrufen werden.",
+    "revoked": "Link widerrufen."
+  }
+}

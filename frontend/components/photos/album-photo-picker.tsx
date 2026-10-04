@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { confirmAddToSharedAlbum } from "./album-share-release";
 import { groupPhotosByDate } from "./grouping";
@@ -25,13 +26,10 @@ const SOURCE_BY_FILTER: Record<SourceFilter, FileOverviewSource | null> = {
   uploads: "gallery_upload",
 };
 
-function photoCountLabel(count: number) {
-  return count === 1 ? "1 Foto" : `${count} Fotos`;
-}
-
 /** Mehrfachauswahl vorhandener Fotos für ein Album. Fotos, die schon im Album sind, bleiben
  * sichtbar (gedimmt, "Im Album"), lassen sich aber nicht erneut wählen. */
 export function AlbumPhotoPicker({ album, onClose, onAdded }: { album: PhotoAlbum; onClose: () => void; onAdded: () => void }) {
+  const t = useTranslations("photos.albumPicker");
   const toast = useToast();
   const confirm = useConfirm();
   const [search, setSearch] = useState("");
@@ -75,7 +73,7 @@ export function AlbumPhotoPicker({ album, onClose, onAdded }: { album: PhotoAlbu
         setItems(next ?? []);
         setHasMore((next ?? []).length === PAGE_SIZE);
       } catch {
-        if (requestIdRef.current === requestId) toast("Fotos konnten nicht geladen werden.", "error");
+        if (requestIdRef.current === requestId) toast(t("loadError"), "error");
       } finally {
         if (requestIdRef.current === requestId) setIsReloading(false);
       }
@@ -149,11 +147,11 @@ export function AlbumPhotoPicker({ album, onClose, onAdded }: { album: PhotoAlbu
         method: "POST",
         body: JSON.stringify({ file_ids: Array.from(selectedIds) }),
       });
-      toast(count === 1 ? "1 Foto zum Album hinzugefügt." : `${count} Fotos zum Album hinzugefügt.`, "success");
+      toast(t("addedToast", { count }), "success");
       onAdded();
       onClose();
     } catch {
-      toast("Fotos konnten nicht hinzugefügt werden.", "error");
+      toast(t("addError"), "error");
       setBusy(false);
     }
   }
@@ -163,38 +161,38 @@ export function AlbumPhotoPicker({ album, onClose, onAdded }: { album: PhotoAlbu
   return (
     <Modal
       open
-      title="Fotos hinzufügen"
+      title={t("title")}
       size="wide"
       className="album-picker-modal"
       onClose={() => { if (!busy) onClose(); }}
       header={
         <div>
-          <div className="eyebrow">Album · {album.name}</div>
-          <h2>Fotos hinzufügen</h2>
+          <div className="eyebrow">{t("eyebrow", { name: album.name })}</div>
+          <h2>{t("title")}</h2>
         </div>
       }
       footer={
         <>
           <span className="album-picker-selection">
-            {selectedIds.size === 0 ? "Keine Fotos ausgewählt" : `${photoCountLabel(selectedIds.size)} ausgewählt`}
+            {t("selection", { count: selectedIds.size })}
           </span>
           <div className="modal-footer-actions">
-            <button type="button" className="button-ghost" disabled={busy} onClick={onClose}>Abbrechen</button>
+            <button type="button" className="button-ghost" disabled={busy} onClick={onClose}>{t("cancel")}</button>
             <button type="button" className="button-primary" disabled={busy || selectedIds.size === 0} onClick={() => void submit()}>
-              {busy ? "Wird hinzugefügt…" : "Hinzufügen"}
+              {busy ? t("addingButton") : t("addButton")}
             </button>
           </div>
         </>
       }
     >
       <div className="album-picker-toolbar">
-        <SearchInput className="album-picker-search" value={search} onChange={setSearch} placeholder="Name, Tag oder Termin" aria-label="Fotos durchsuchen" />
+        <SearchInput className="album-picker-search" value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} aria-label={t("searchAriaLabel")} />
         <FilterTabs
           options={[
-            { value: "all", label: "Alle" },
-            { value: "protocols", label: "Protokolle" },
-            { value: "submissions", label: "Abgaben" },
-            { value: "uploads", label: "Hochgeladen" },
+            { value: "all", label: t("filters.all") },
+            { value: "protocols", label: t("filters.protocols") },
+            { value: "submissions", label: t("filters.submissions") },
+            { value: "uploads", label: t("filters.uploads") },
           ]}
           value={sourceFilter}
           onChange={setSourceFilter}
@@ -202,18 +200,18 @@ export function AlbumPhotoPicker({ album, onClose, onAdded }: { album: PhotoAlbu
         <label className="album-picker-switch">
           <input type="checkbox" role="switch" checked={hideContained} onChange={(event) => setHideContained(event.target.checked)} />
           <span className="album-picker-switch-track" aria-hidden="true" />
-          <span>Bereits enthaltene ausblenden</span>
+          <span>{t("hideContainedLabel")}</span>
         </label>
       </div>
 
       <div className="album-picker-body">
         {items.length === 0 && isReloading ? (
-          <div className="album-picker-grid" role="status" aria-label="Fotos werden geladen">
+          <div className="album-picker-grid" role="status" aria-label={t("loadingAriaLabel")}>
             {Array.from({ length: 14 }, (_, index) => <div key={index} className="album-picker-tile album-picker-tile-skeleton" aria-hidden="true" />)}
           </div>
         ) : items.length === 0 ? (
           <p className="muted album-picker-empty">
-            {filtered ? "Keine passenden Fotos gefunden." : "Noch keine Fotos vorhanden."}
+            {filtered ? t("emptyFiltered") : t("emptyNone")}
           </p>
         ) : (
           groups.map((group) => {
@@ -223,14 +221,14 @@ export function AlbumPhotoPicker({ album, onClose, onAdded }: { album: PhotoAlbu
               <section key={group.key} className="album-picker-group">
                 <div className="album-picker-group-header">
                   <h3 className="album-picker-group-title">{formatWeekdayDate(group.date)}</h3>
-                  <span className="album-picker-group-count">{photoCountLabel(group.items.length)}</span>
+                  <span className="album-picker-group-count">{t("groupCount", { count: group.items.length })}</span>
                   <button
                     type="button"
                     className="album-picker-group-toggle"
                     disabled={selectableIds.length === 0}
                     onClick={() => toggleGroup(selectableIds)}
                   >
-                    {allSelected ? "Auswahl aufheben" : "Alle auswählen"}
+                    {allSelected ? t("deselectAll") : t("selectAll")}
                   </button>
                 </div>
                 <div className="album-picker-grid">
@@ -244,7 +242,7 @@ export function AlbumPhotoPicker({ album, onClose, onAdded }: { album: PhotoAlbu
                         role="checkbox"
                         aria-checked={contained || selected}
                         aria-disabled={contained || undefined}
-                        aria-label={contained ? `${item.original_name} (bereits im Album)` : item.original_name}
+                        aria-label={contained ? t("containedAriaLabel", { name: item.original_name }) : item.original_name}
                         className={`album-picker-tile${contained ? " album-picker-tile-contained" : ""}${selected ? " album-picker-tile-selected" : ""}`}
                         onClick={() => { if (!contained) toggle(item.id); }}
                       >
@@ -256,7 +254,7 @@ export function AlbumPhotoPicker({ album, onClose, onAdded }: { album: PhotoAlbu
                           draggable={false}
                         />
                         {contained ? (
-                          <span className="photo-tile-badge album-picker-tile-badge">Im Album</span>
+                          <span className="photo-tile-badge album-picker-tile-badge">{t("containedBadge")}</span>
                         ) : (
                           <span className="album-picker-tile-check" aria-hidden="true">
                             {selected && (
@@ -278,9 +276,9 @@ export function AlbumPhotoPicker({ album, onClose, onAdded }: { album: PhotoAlbu
         {hasMore && (
           <div className="load-more-row" ref={loadMoreSentinelRef}>
             {loadMoreFailed ? (
-              <button type="button" className="button-ghost" onClick={() => void loadMore()}>Erneut versuchen</button>
+              <button type="button" className="button-ghost" onClick={() => void loadMore()}>{t("retry")}</button>
             ) : (
-              <span className="muted">Weitere Fotos werden geladen…</span>
+              <span className="muted">{t("loadingMore")}</span>
             )}
           </div>
         )}

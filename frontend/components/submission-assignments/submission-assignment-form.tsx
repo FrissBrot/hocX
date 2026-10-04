@@ -1,6 +1,7 @@
 "use client";
 
 import { Dispatch, FormEvent, SetStateAction } from "react";
+import { useTranslations } from "next-intl";
 
 import { DateInput } from "@/components/ui/date-input";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
@@ -56,38 +57,48 @@ export const initialForm: FormState = {
   link_ids: [],
 };
 
-export const SORT_ORDER_LABEL: Record<SubmissionSortOrder, string> = {
-  alphabetical: "Alphabetisch",
-  date: "Nach Datum",
-  proximity: "Nähe zu heute",
-};
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
+export function sortOrderLabel(t: TFunc): Record<SubmissionSortOrder, string> {
+  return {
+    alphabetical: t("sortAlphabetical"),
+    date: t("sortByDate"),
+    proximity: t("sortProximity"),
+  };
+}
 
 // Termin-Felder, die als "verantwortliche Person" einer Termin-Abgabe in Frage kommen.
-const SINGLE_PARTICIPANT_EVENT_FIELDS: { value: string; label: string }[] = [
-  { value: "spezial1_ids", label: "Spezial 1" },
-  { value: "spezial2_ids", label: "Spezial 2" },
-  { value: "spezial3_ids", label: "Spezial 3" },
-];
+function singleParticipantEventFields(t: TFunc): { value: string; label: string }[] {
+  return [
+    { value: "spezial1_ids", label: t("special1") },
+    { value: "spezial2_ids", label: t("special2") },
+    { value: "spezial3_ids", label: t("special3") },
+  ];
+}
 
 // Zyklen, die ausgewählt werden können: 0 = aktueller Zyklus, -1 = vorheriger usw.
 const CYCLE_OFFSET_OPTIONS = [0, -1, -2, -3];
 
-export function cycleOffsetLabel(offset: number): string {
-  return offset === 0 ? "Aktueller Zyklus" : offset === -1 ? "Vorheriger Zyklus (−1)" : `Zyklus −${Math.abs(offset)}`;
+export function cycleOffsetLabel(offset: number, t: TFunc): string {
+  return offset === 0 ? t("currentCycle") : offset === -1 ? t("previousCycle") : t("cycleOffsetNamed", { offset: Math.abs(offset) });
 }
 
-const FILE_TYPE_GROUPS = [
-  { label: "PDF", types: ["pdf"] },
-  { label: "Office-Dateien", types: ["doc", "docx", "xls", "xlsx", "ppt", "pptx"] },
-  { label: "Bilddateien", types: ["jpg", "jpeg", "png", "gif", "webp"] },
-  { label: "Apple-Dateien", types: ["pages", "key", "numbers", "heic", "heif"] },
-];
+function fileTypeGroups(t: TFunc) {
+  return [
+    { label: "PDF", types: ["pdf"] },
+    { label: t("fileGroupOffice"), types: ["doc", "docx", "xls", "xlsx", "ppt", "pptx"] },
+    { label: t("fileGroupImages"), types: ["jpg", "jpeg", "png", "gif", "webp"] },
+    { label: t("fileGroupApple"), types: ["pages", "key", "numbers", "heic", "heif"] },
+  ];
+}
 
-const SOURCE_OPTIONS: { value: SubmissionSourceType; title: string; description: string }[] = [
-  { value: "events", title: "Termine", description: "Ein Abgabefeld pro Termin mit dem gewählten Tag, rollendes Zeitfenster." },
-  { value: "list", title: "Liste", description: "Ein Abgabefeld pro Listeneintrag, ein gemeinsamer Stichtag." },
-  { value: "manual", title: "Manuell", description: "Ein einzelnes Abgabefeld, unabhängig von Terminen und Listen." },
-];
+function sourceOptions(t: TFunc): { value: SubmissionSourceType; title: string; description: string }[] {
+  return [
+    { value: "events", title: t("sourceEvents"), description: t("sourceEventsDescription") },
+    { value: "list", title: t("sourceList"), description: t("sourceListDescription") },
+    { value: "manual", title: t("sourceManual"), description: t("sourceManualDescription") },
+  ];
+}
 
 export function slugify(title: string): string {
   return title
@@ -120,44 +131,44 @@ export function formFromAssignment(assignment: SubmissionAssignment): FormState 
 }
 
 /** Grund, warum das Formular noch nicht gespeichert werden kann (null = gültig). */
-export function formProblem(form: FormState): string | null {
-  if (!form.title.trim()) return "Titel fehlt";
+export function formProblem(form: FormState, t: TFunc): string | null {
+  if (!form.title.trim()) return t("titleMissing");
   if (form.source_type === "events") {
-    if (!form.tag_filter) return "Tag-Filter fehlt";
-    if (form.cycle_config_id && form.cycle_offsets.length === 0) return "Bitte mindestens einen Zyklus auswählen oder den Zyklus-Filter entfernen";
+    if (!form.tag_filter) return t("tagFilterMissing");
+    if (form.cycle_config_id && form.cycle_offsets.length === 0) return t("cycleSelectionMissing");
   }
-  if (form.source_type === "list" && !form.list_definition_id) return "Liste fehlt";
+  if (form.source_type === "list" && !form.list_definition_id) return t("listMissing");
   return null;
 }
 
-function deadlineSentence(deadline: string): string {
+function deadlineSentence(deadline: string, t: TFunc): string {
   return deadline
-    ? `Abgaben sind bis ${formatDateInputValue(deadline)} möglich.`
-    : "Es gibt keinen Stichtag, die Abgabe bleibt offen, bis sie manuell geschlossen wird.";
+    ? t("deadlineSentence", { date: formatDateInputValue(deadline) })
+    : t("noDeadlineSentence");
 }
 
-function windowSentence(before: number | "", after: number | ""): string {
-  if (before !== "" && after !== "") return `Es öffnet ${before} Tage vor dem Termin und schliesst ${after} Tage danach.`;
-  if (before !== "") return `Es öffnet ${before} Tage vor dem Termin und bleibt danach offen, bis es manuell geschlossen wird.`;
-  if (after !== "") return `Es ist sofort offen und schliesst ${after} Tage nach dem Termin.`;
-  return "Es bleibt offen, bis es manuell geschlossen wird.";
+function windowSentence(before: number | "", after: number | "", t: TFunc): string {
+  if (before !== "" && after !== "") return t("windowBothSentence", { before, after });
+  if (before !== "") return t("windowBeforeOnlySentence", { before });
+  if (after !== "") return t("windowAfterOnlySentence", { after });
+  return t("windowNoneSentence");
 }
 
 /** Erklärt in einem Satz, wie sich die Abgabe mit den aktuellen Einstellungen verhält. */
-export function describeAssignment(form: FormState, listName: string | null): string {
+export function describeAssignment(form: FormState, listName: string | null, t: TFunc): string {
   if (form.source_type === "events") {
     const subject = form.tag_filter
-      ? `Jeder Termin mit dem Tag «${form.tag_filter}» bekommt ein eigenes Abgabefeld.`
-      : "Jeder Termin mit dem gewählten Tag bekommt ein eigenes Abgabefeld.";
-    return `${subject} ${windowSentence(form.offset_days_before, form.offset_days_after)}`;
+      ? t("eventsSubjectTagged", { tag: form.tag_filter })
+      : t("eventsSubjectUntagged");
+    return `${subject} ${windowSentence(form.offset_days_before, form.offset_days_after, t)}`;
   }
   if (form.source_type === "list") {
     const subject = listName
-      ? `Jeder Eintrag der Liste «${listName}» bekommt ein eigenes Abgabefeld.`
-      : "Jeder Eintrag der gewählten Liste bekommt ein eigenes Abgabefeld.";
-    return `${subject} ${deadlineSentence(form.deadline)}`;
+      ? t("listSubjectNamed", { name: listName })
+      : t("listSubjectUnnamed");
+    return `${subject} ${deadlineSentence(form.deadline, t)}`;
   }
-  return `Diese Abgabe hat ein einziges Abgabefeld, unabhängig von Terminen und Listen. ${deadlineSentence(form.deadline)}`;
+  return `${t("manualSubject")} ${deadlineSentence(form.deadline, t)}`;
 }
 
 /** Öffentliche Adresse ohne Protokoll, aufgeteilt in feste Basis und den Slug der Abgabe. */
@@ -195,7 +206,8 @@ export function SubmissionAssignmentFormModal({
   onClose,
   onManageLinks,
 }: Props) {
-  const problem = formProblem(form);
+  const t = useTranslations("submissionAssignments");
+  const problem = formProblem(form, t);
   const selectedList = availableLists.find((list) => list.id === form.list_definition_id) ?? null;
   const selectedLinks = links.filter((link) => form.link_ids.includes(link.id));
   const previewLink = selectedLinks.find((link) => link.is_default) ?? selectedLinks[0] ?? null;
@@ -203,14 +215,14 @@ export function SubmissionAssignmentFormModal({
 
   const responsibleOptions =
     form.source_type === "events"
-      ? SINGLE_PARTICIPANT_EVENT_FIELDS
+      ? singleParticipantEventFields(t)
       : form.source_type === "list" && selectedList
         ? ([
             selectedList.column_one_value_type === "participant"
-              ? { value: "column_one", label: selectedList.column_one_title || "Spalte 1" }
+              ? { value: "column_one", label: selectedList.column_one_title || t("column1") }
               : null,
             selectedList.column_two_value_type === "participant"
-              ? { value: "column_two", label: selectedList.column_two_title || "Spalte 2" }
+              ? { value: "column_two", label: selectedList.column_two_title || t("column2") }
               : null,
           ].filter((option): option is { value: string; label: string } => option !== null))
         : [];
@@ -251,20 +263,20 @@ export function SubmissionAssignmentFormModal({
   }
 
   const fileTypeCount = form.allowed_file_types.length;
-  const maxFilesLabel = form.max_files_per_element === "" ? "unbegrenzt viele Dateien" : `max. ${form.max_files_per_element} ${form.max_files_per_element === 1 ? "Datei" : "Dateien"}`;
+  const maxFilesLabel = form.max_files_per_element === "" ? t("unlimitedFiles") : t("maxFilesCount", { count: form.max_files_per_element });
 
   return (
-    <Modal open={open} title={editing ? "Abgabe bearbeiten" : "Abgabe erstellen"} className="subm-edit-modal" hideCloseButton onClose={onClose}>
+    <Modal open={open} title={editing ? t("editAssignment") : t("createAssignment")} className="subm-edit-modal" hideCloseButton onClose={onClose}>
       <ModalSaveForm className="subm-edit-form" onSubmit={handleSubmit}>
         <header className="subm-edit-heading">
           <div className="subm-edit-eyebrow">
-            {editing ? "Abgabe bearbeiten" : "Neue Abgabe"}
+            {editing ? t("editAssignment") : t("newAssignment")}
             {tenantName ? <><span aria-hidden="true">·</span><span>{tenantName}</span></> : null}
           </div>
           <input
-            aria-label="Titel"
+            aria-label={t("titleLabel")}
             className="subm-edit-title"
-            placeholder="Titel der Abgabe"
+            placeholder={t("titlePlaceholder")}
             value={form.title}
             autoFocus={!editing}
             onChange={(e) => {
@@ -272,15 +284,15 @@ export function SubmissionAssignmentFormModal({
               setForm((c) => ({ ...c, title, ...(editing ? {} : { public_slug: slugify(title) }) }));
             }}
           />
-          <button type="button" className="subm-edit-close" title="Schliessen" aria-label="Schliessen" onClick={onClose}><ActionIcon name="close" /></button>
+          <button type="button" className="subm-edit-close" title={t("close")} aria-label={t("close")} onClick={onClose}><ActionIcon name="close" /></button>
         </header>
 
         <div className="subm-edit-body">
           <div className="subm-edit-main grid">
             <div className="field-stack">
-              <span className="field-label" id="subm-source-label">Verknüpfung</span>
+              <span className="field-label" id="subm-source-label">{t("linkTypeLabel")}</span>
               <div className="subm-edit-sources" role="radiogroup" aria-labelledby="subm-source-label">
-                {SOURCE_OPTIONS.map((option) => (
+                {sourceOptions(t).map((option) => (
                   <button
                     key={option.value}
                     type="button"
@@ -300,49 +312,49 @@ export function SubmissionAssignmentFormModal({
               {form.source_type === "events" ? (
                 <>
                   <div className="field-stack">
-                    <span className="field-label">Tag-Filter</span>
+                    <span className="field-label">{t("tagFilterLabel")}</span>
                     <SearchableSelect
                       options={availableTags}
                       getId={(tag) => tag}
                       getLabel={(tag) => tag}
                       value={form.tag_filter || null}
                       onChange={(tag) => setForm((c) => ({ ...c, tag_filter: tag ?? "" }))}
-                      placeholder="Tag wählen…"
-                      searchPlaceholder="Tag suchen…"
-                      emptyLabel="Keine Tags gefunden"
+                      placeholder={t("chooseTagPlaceholder")}
+                      searchPlaceholder={t("searchTagPlaceholder")}
+                      emptyLabel={t("noTagsFound")}
                     />
                   </div>
 
                   <div className="field-stack">
-                    <span className="field-label">Zeitfenster</span>
+                    <span className="field-label">{t("windowLabel")}</span>
                     <div className="subm-edit-window">
-                      <span>Öffnet</span>
+                      <span>{t("opens")}</span>
                       <input
                         type="number"
                         min={0}
-                        aria-label="Tage vor dem Termin"
+                        aria-label={t("daysBeforeEvent")}
                         placeholder="∞"
                         value={form.offset_days_before}
                         onChange={(e) => setForm((c) => ({ ...c, offset_days_before: e.target.value === "" ? "" : Number(e.target.value) }))}
                       />
-                      <span>Tage vor dem Termin und schliesst</span>
+                      <span>{t("daysBeforeEventAndCloses")}</span>
                       <input
                         type="number"
                         min={0}
-                        aria-label="Tage nach dem Termin"
+                        aria-label={t("daysAfterEvent")}
                         placeholder="∞"
                         value={form.offset_days_after}
                         onChange={(e) => setForm((c) => ({ ...c, offset_days_after: e.target.value === "" ? "" : Number(e.target.value) }))}
                       />
-                      <span>Tage danach.</span>
+                      <span>{t("daysAfterSuffix")}</span>
                     </div>
                     <span className="field-help">
-                      Feld leer lassen = auf dieser Seite unbegrenzt. Ohne beide Werte bleibt die Abgabe offen, bis sie manuell geschlossen wird.
+                      {t("windowHelp")}
                     </span>
                   </div>
 
                   <div className="field-stack">
-                    <span className="field-label">Zyklus</span>
+                    <span className="field-label">{t("cycleLabel")}</span>
                     <SearchableSelect
                       options={availableCycleConfigs}
                       getId={(cfg) => cfg.id}
@@ -356,7 +368,7 @@ export function SubmissionAssignmentFormModal({
                           cycle_offsets: cfg ? (c.cycle_offsets.length > 0 ? c.cycle_offsets : [0]) : [],
                         }))
                       }
-                      nullLabel="Alle Zyklen (kein Filter)"
+                      nullLabel={t("allCyclesNoFilter")}
                     />
                     {form.cycle_config_id ? (
                       <div className="subm-edit-chips">
@@ -368,13 +380,13 @@ export function SubmissionAssignmentFormModal({
                             aria-pressed={form.cycle_offsets.includes(offset)}
                             onClick={() => toggleCycleOffset(offset)}
                           >
-                            {cycleOffsetLabel(offset)}
+                            {cycleOffsetLabel(offset, t)}
                           </button>
                         ))}
                       </div>
                     ) : null}
                     <span className="field-help">
-                      Nur Termine berücksichtigen, die dem gewählten Zyklus (bzw. den gewählten Zyklen) zugeordnet sind. Der aktuelle Zyklus richtet sich nach dem heutigen Datum und wechselt automatisch. Ohne Auswahl werden alle Termine mit dem Tag berücksichtigt.
+                      {t("cycleHelp")}
                     </span>
                   </div>
                 </>
@@ -382,45 +394,45 @@ export function SubmissionAssignmentFormModal({
                 <>
                   {form.source_type === "list" ? (
                     <div className="field-stack">
-                      <span className="field-label">Liste</span>
+                      <span className="field-label">{t("listLabel")}</span>
                       <SearchableSelect
                         options={availableLists}
                         getId={(list) => list.id}
                         getLabel={(list) => list.name}
                         value={form.list_definition_id || null}
                         onChange={(list) => setForm((c) => ({ ...c, list_definition_id: list ? list.id : "", responsible_participant_source: "" }))}
-                        placeholder="Liste wählen…"
-                        searchPlaceholder="Liste suchen…"
-                        emptyLabel="Keine Listen gefunden"
+                        placeholder={t("chooseListPlaceholder")}
+                        searchPlaceholder={t("searchListPlaceholder")}
+                        emptyLabel={t("noListsFound")}
                       />
                     </div>
                   ) : null}
                   <div className="field-stack">
-                    <span className="field-label">Stichtag</span>
-                    <DateInput value={form.deadline} onChange={(deadline) => setForm((c) => ({ ...c, deadline }))} aria-label="Stichtag" />
-                    <span className="field-help">Leer lassen = kein Stichtag, die Abgabe bleibt offen, bis sie manuell geschlossen wird.</span>
+                    <span className="field-label">{t("deadlineLabel")}</span>
+                    <DateInput value={form.deadline} onChange={(deadline) => setForm((c) => ({ ...c, deadline }))} aria-label={t("deadlineLabel")} />
+                    <span className="field-help">{t("deadlineHelp")}</span>
                   </div>
                 </>
               )}
             </div>
 
             <label className="field-stack">
-              <span className="field-label">Beschreibung</span>
+              <span className="field-label">{t("descriptionLabel")}</span>
               <textarea
                 rows={2}
                 value={form.description}
-                placeholder="Optional – erscheint für die Abgebenden über dem Upload-Feld."
+                placeholder={t("descriptionPlaceholder")}
                 onChange={(e) => setForm((c) => ({ ...c, description: e.target.value }))}
               />
             </label>
 
             <div className="field-stack">
               <div className="subm-edit-label-row">
-                <span className="field-label">Erlaubte Dateitypen</span>
-                <span className="subm-edit-count">{fileTypeCount === 0 ? "alle erlaubt" : `${fileTypeCount} ausgewählt`}</span>
+                <span className="field-label">{t("allowedFileTypesLabel")}</span>
+                <span className="subm-edit-count">{fileTypeCount === 0 ? t("allAllowed") : t("countSelected", { count: fileTypeCount })}</span>
               </div>
               <div className="subm-edit-types">
-                {FILE_TYPE_GROUPS.map((group) => {
+                {fileTypeGroups(t).map((group) => {
                   const allSelected = group.types.every((t) => form.allowed_file_types.includes(t));
                   return (
                     <div key={group.label} className="subm-edit-type-row">
@@ -439,28 +451,28 @@ export function SubmissionAssignmentFormModal({
                         ))}
                       </div>
                       <button type="button" className="subm-edit-type-all" onClick={() => toggleFileGroup(group.types, allSelected)}>
-                        {allSelected ? "Keine" : "Alle"}
+                        {allSelected ? t("noneAction") : t("allAction")}
                       </button>
                     </div>
                   );
                 })}
               </div>
-              <span className="field-help">Ohne Auswahl sind alle Dateitypen erlaubt.</span>
+              <span className="field-help">{t("noSelectionAllTypesAllowed")}</span>
             </div>
 
             <div className={form.source_type === "manual" ? "subm-edit-grid subm-edit-grid-2" : "subm-edit-grid"}>
               <label className="field-stack">
-                <span className="field-label">Max. Dateien</span>
+                <span className="field-label">{t("maxFilesLabel")}</span>
                 <input
                   type="number"
                   min={1}
-                  placeholder="unbegrenzt"
+                  placeholder={t("unlimited")}
                   value={form.max_files_per_element}
                   onChange={(e) => setForm((c) => ({ ...c, max_files_per_element: e.target.value === "" ? "" : Number(e.target.value) }))}
                 />
               </label>
               <label className="field-stack">
-                <span className="field-label">Max. Grösse (MB)</span>
+                <span className="field-label">{t("maxSizeLabel")}</span>
                 <input
                   type="number"
                   min={1}
@@ -470,10 +482,10 @@ export function SubmissionAssignmentFormModal({
               </label>
               {form.source_type !== "manual" ? (
                 <label className="field-stack">
-                  <span className="field-label">Sortierung</span>
+                  <span className="field-label">{t("sortOrderLabel")}</span>
                   <select value={form.sort_order} onChange={(e) => setForm((c) => ({ ...c, sort_order: e.target.value as SubmissionSortOrder }))}>
-                    {(Object.keys(SORT_ORDER_LABEL) as SubmissionSortOrder[]).map((value) => (
-                      <option key={value} value={value}>{SORT_ORDER_LABEL[value]}</option>
+                    {(Object.keys(sortOrderLabel(t)) as SubmissionSortOrder[]).map((value) => (
+                      <option key={value} value={value}>{sortOrderLabel(t)[value]}</option>
                     ))}
                   </select>
                 </label>
@@ -482,19 +494,19 @@ export function SubmissionAssignmentFormModal({
 
             {responsibleOptions.length > 0 ? (
               <div className="field-stack">
-                <span className="field-label">Verantwortliche Person</span>
+                <span className="field-label">{t("responsiblePersonLabel")}</span>
                 <SearchableSelect
                   options={responsibleOptions}
                   getId={(option) => option.value}
                   getLabel={(option) => option.label}
                   value={form.responsible_participant_source || null}
                   onChange={(option) => setForm((c) => ({ ...c, responsible_participant_source: option ? option.value : "" }))}
-                  nullLabel="Keine Zuweisung"
+                  nullLabel={t("noAssignment")}
                 />
                 <span className="field-help">
                   {form.source_type === "events"
-                    ? "Terminfeld, dessen Person als zuständig für die Abgabe gilt."
-                    : "Listenspalte, deren Person als zuständig für die Abgabe gilt."}
+                    ? t("responsiblePersonHelpEvents")
+                    : t("responsiblePersonHelpList")}
                 </span>
               </div>
             ) : null}
@@ -502,19 +514,19 @@ export function SubmissionAssignmentFormModal({
 
           <aside className="subm-edit-sidebar">
             <div className="field-stack">
-              <span className="field-label">Öffentlicher Link</span>
+              <span className="field-label">{t("publicLinkLabel")}</span>
               {url ? (
                 <code className="subm-edit-url">{url.base}<strong>{url.slug}</strong></code>
               ) : (
-                <span className="field-help">Noch kein Link ausgewählt.</span>
+                <span className="field-help">{t("noLinkSelectedYet")}</span>
               )}
             </div>
 
             <div className="field-stack">
-              <span className="field-label">Erreichbar über</span>
+              <span className="field-label">{t("reachableViaLabel")}</span>
               {links.length === 0 ? (
                 <span className="field-help">
-                  Es gibt noch keinen Link – lege zuerst unter «Abgabe-Links verwalten» einen an, sonst ist diese Abgabe nicht erreichbar.
+                  {t("noLinkYetHelp")}
                 </span>
               ) : (
                 <>
@@ -523,41 +535,41 @@ export function SubmissionAssignmentFormModal({
                       <label key={link.id} className="subm-edit-link-option">
                         <input type="checkbox" checked={form.link_ids.includes(link.id)} onChange={() => toggleLink(link.id)} />
                         <span>{link.name}</span>
-                        {link.is_default ? <small>Standard</small> : null}
+                        {link.is_default ? <small>{t("defaultLabel")}</small> : null}
                       </label>
                     ))}
                   </div>
                   {form.link_ids.length === 0 ? (
-                    <span className="field-help">Kein Link ausgewählt – die Abgabe ist so über die Abgabebox nicht erreichbar.</span>
+                    <span className="field-help">{t("noLinkSelectedHelp")}</span>
                   ) : null}
                 </>
               )}
             </div>
 
             <div className="field-stack">
-              <span className="field-label">So verhält sich die Abgabe</span>
+              <span className="field-label">{t("behaviorSummaryLabel")}</span>
               <div className="subm-edit-summary">
-                <p>{describeAssignment(form, selectedList?.name ?? null)}</p>
+                <p>{describeAssignment(form, selectedList?.name ?? null, t)}</p>
               </div>
               <div className="subm-edit-chips">
                 <span className="subm-edit-tag">{maxFilesLabel}</span>
-                <span className="subm-edit-tag">max. {form.max_file_size_mb} MB</span>
-                <span className="subm-edit-tag">{fileTypeCount === 0 ? "alle Dateitypen" : `${fileTypeCount} ${fileTypeCount === 1 ? "Dateityp" : "Dateitypen"}`}</span>
+                <span className="subm-edit-tag">{t("maxSizeMb", { size: form.max_file_size_mb })}</span>
+                <span className="subm-edit-tag">{fileTypeCount === 0 ? t("allFileTypes") : t("fileTypeCount", { count: fileTypeCount })}</span>
               </div>
               <p className="subm-edit-scan">
                 <span className="subm-edit-scan-dot" aria-hidden="true" />
-                Jede Datei wird vor der Freigabe per ClamAV geprüft.
+                {t("clamavScanNote")}
               </p>
             </div>
           </aside>
         </div>
 
         <footer className="subm-edit-footer">
-          <button type="button" className="subm-edit-manage" onClick={onManageLinks}>Abgabe-Links verwalten</button>
+          <button type="button" className="subm-edit-manage" onClick={onManageLinks}>{t("manageLinksAction")}</button>
           <div className="subm-edit-actions">
-            <button type="button" className="button-secondary" onClick={onClose}>Abbrechen</button>
+            <button type="button" className="button-secondary" onClick={onClose}>{t("cancel")}</button>
             <button data-modal-save type="submit" className="button-primary" disabled={problem !== null} title={problem ?? undefined}>
-              {editing ? "Abgabe speichern" : "Abgabe erstellen"}
+              {editing ? t("saveAssignment") : t("createAssignment")}
             </button>
           </div>
         </footer>

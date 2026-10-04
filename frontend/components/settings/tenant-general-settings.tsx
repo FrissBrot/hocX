@@ -2,6 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { initials } from "@/components/protocol/collaboration-presence";
 import { domainStatus, TenantDomainRowContent } from "@/components/settings/tenant-domain-row";
@@ -22,6 +23,8 @@ type TenantFormState = {
 };
 
 export function TenantGeneralSettings({ initialTenant }: Props) {
+  const t = useTranslations("tenantSettings");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const showToast = useToast();
   const tenantId = initialTenant.id;
@@ -66,9 +69,9 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
       });
       setTenantForm((current) => ({ ...current, profileImage: null, profileImageUrl: updated.profile_image_url }));
       router.refresh();
-      showToast("Mandant gespeichert", "success");
+      showToast(t("saveSuccess"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Mandant konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("saveFailed"), "error");
     }
   }
 
@@ -77,7 +80,7 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
   return (
     <>
       <section className="card">
-        <div className="eyebrow">Stammdaten</div>
+        <div className="eyebrow">{t("masterDataEyebrow")}</div>
         <form className="grid" onSubmit={submitTenant}>
           <div className="tenant-avatar-row">
             <div className="identity-avatar tenant-avatar-preview">
@@ -89,7 +92,7 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
               )}
             </div>
             <button type="button" className="button-secondary" onClick={() => profileImageInputRef.current?.click()}>
-              Profilbild ändern
+              {t("changeProfileImage")}
             </button>
             <input
               ref={profileImageInputRef}
@@ -103,35 +106,35 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
           </div>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Mandantenname</span>
+              <span className="field-label">{t("tenantNameLabel")}</span>
               <input value={tenantForm.name} onChange={(event) => setTenantForm((current) => ({ ...current, name: event.target.value }))} required />
             </label>
             <label className="field-stack">
-              <span className="field-label">Öffentlicher Slug (Abgabebox-URL)</span>
+              <span className="field-label">{t("publicSlugLabel")}</span>
               <input
                 value={tenantForm.publicSlug}
                 onChange={(event) => setTenantForm((current) => ({ ...current, publicSlug: event.target.value.toLowerCase() }))}
-                placeholder="z.B. musterverein"
+                placeholder={t("publicSlugPlaceholder")}
                 pattern="[a-z0-9-]+"
               />
             </label>
           </div>
           <label className="field-stack">
-            <span className="field-label">Mandanten-ID</span>
-            <CopyField label="Mandanten-ID" value={initialTenant.id} />
-            <span className="field-help">Wird benötigt, um dieser Organisation z.B. ein Fotoalbum freizugeben.</span>
+            <span className="field-label">{t("tenantIdLabel")}</span>
+            <CopyField label={t("tenantIdLabel")} value={initialTenant.id} />
+            <span className="field-help">{t("tenantIdHelp")}</span>
           </label>
           {primaryDomain ? (
             <div className="tenant-domain-row">
               <TenantDomainRowContent domain={primaryDomain} />
               <div className="tenant-domain-row-trailing">
-                <span className={`record-list-row-dot record-list-row-dot-${domainStatus(primaryDomain).variant}`} />
+                <span className={`record-list-row-dot record-list-row-dot-${domainStatus(primaryDomain, t).variant}`} />
               </div>
             </div>
           ) : null}
           <div className="table-actions table-actions-start">
             <button type="submit" className="button-primary">
-              Speichern
+              {tCommon("save")}
             </button>
           </div>
         </form>

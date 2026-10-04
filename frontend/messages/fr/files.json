@@ -1,0 +1,131 @@
+{
+  "partition": {
+    "imagesHint": "Merci de téléverser les images via la page Photos.",
+    "unsupported": "Non pris en charge : {names}"
+  },
+  "modal": {
+    "title": "Téléverser des fichiers",
+    "description": "Les fichiers arrivent dans Fichiers, sont analysés contre les virus lors du téléversement et peuvent être liés à un événement, un dépôt ou un cycle."
+  },
+  "dropzone": {
+    "releaseToUpload": "Relâcher pour téléverser",
+    "dragHint": "Glisser les fichiers ici",
+    "orText": "ou",
+    "browse": "Choisir des fichiers",
+    "formatsAriaLabel": "Formats pris en charge"
+  },
+  "queue": {
+    "heading": "File d'attente",
+    "countNone": "Aucun fichier sélectionné",
+    "count": "{count, plural, one {# fichier sélectionné} other {# fichiers sélectionnés}}",
+    "empty": "Aucun fichier sélectionné pour l'instant.",
+    "uploading": "Téléversement…",
+    "ready": "Prêt à téléverser",
+    "removeFile": "Retirer {name}"
+  },
+  "tags": {
+    "label": "Tags pour tous les fichiers",
+    "placeholder": "Ajouter un tag…"
+  },
+  "footer": {
+    "summary": "{count, plural, one {# fichier} other {# fichiers}}",
+    "cancel": "Annuler",
+    "uploading": "Téléversement…",
+    "uploadCount": "{count, plural, one {Téléverser # fichier} other {Téléverser # fichiers}}",
+    "upload": "Téléverser"
+  },
+  "errors": {
+    "uploadFailed": "Échec du téléversement"
+  },
+  "source": {
+    "protocol": "Procès-verbal",
+    "wordImport": "Import Word",
+    "submission": "Dépôt",
+    "upload": "Téléversement"
+  },
+  "detail": {
+    "openOriginal": "Ouvrir l'original",
+    "detailsTitle": "Détails",
+    "source": "Source",
+    "reference": "Référence",
+    "uploadedAt": "Téléversé",
+    "uploadedBy": "Téléversé par",
+    "fileType": "Type de fichier",
+    "unknown": "Inconnu",
+    "size": "Taille",
+    "dimensions": "Dimensions de l'image",
+    "loading": "Chargement…",
+    "originTitle": "Origine",
+    "tagsTitle": "Tags",
+    "saving": "Enregistrement…",
+    "tagPlaceholder": "Ajouter un tag…",
+    "openOriginalNewTab": "Ouvrir l'original dans un nouvel onglet"
+  },
+  "table": {
+    "columnName": "Nom",
+    "columnSource": "Source",
+    "columnReference": "Référence",
+    "columnUploaded": "Téléversé",
+    "columnSize": "Taille",
+    "empty": "Aucun fichier trouvé.",
+    "protocolRef": "Procès-verbal {label}",
+    "download": "Télécharger",
+    "share": "Partager"
+  },
+  "view": {
+    "title": "Fichiers",
+    "descriptionEmpty": "Tous les documents de cette organisation.",
+    "description": "Tous les fichiers non-image téléversés de cette organisation - issus des procès-verbaux, imports Word, dépôts et téléversements directs. Voir la page « Photos » séparée pour les photos.",
+    "uploadButton": "+ Téléverser des fichiers",
+    "emptyTitle": "Aucun fichier pour l'instant",
+    "emptyDescription": "Les documents issus des procès-verbaux et dépôts se rassembleront ici – ou téléversez-les directement.",
+    "emptyHint": "Chaque fichier est automatiquement analysé contre les virus lors du téléversement.",
+    "searchPlaceholder": "Rechercher des fichiers",
+    "tagPlaceholder": "Choisir ou saisir un tag…",
+    "countFiles": "{count, plural, one {# fichier} other {# fichiers}}",
+    "loadMoreLoading": "Chargement d'autres fichiers…",
+    "loadMore": "Charger plus ({count} chargés)",
+    "dropOverlayTitle": "Relâcher pour téléverser",
+    "dropOverlayHint": "Vous configurerez le téléversement ensuite.",
+    "loadError": "Les fichiers n'ont pas pu être chargés.",
+    "uploadedToast": "{count, plural, one {# fichier téléversé.} other {# fichiers téléversés.}}"
+  },
+  "sourceOptions": {
+    "all": "Toutes les sources",
+    "protocols": "Procès-verbaux",
+    "wordImport": "Import Word",
+    "submissions": "Dépôts",
+    "uploads": "Téléversements"
+  },
+  "sortOptions": {
+    "newestFirst": "Plus récent d'abord",
+    "oldestFirst": "Plus ancien d'abord",
+    "nameAsc": "Nom (A-Z)",
+    "nameDesc": "Nom (Z-A)",
+    "sizeDesc": "Taille (grand-petit)",
+    "sizeAsc": "Taille (petit-grand)"
+  },
+  "target": {
+    "ruleType": "{filename} : type de fichier '.{ext}' non autorisé",
+    "ruleTooLarge": "{filename} : trop volumineux (max. {maxSize} Mo)",
+    "ruleMaxFiles": "Un maximum de {max} fichiers par élément est autorisé ({count} sélectionnés)",
+    "categoryNone": "Aucune référence",
+    "categoryEvent": "Événement",
+    "categorySubmissionElement": "Élément de dépôt",
+    "categoryCycle": "Cycle",
+    "referenceLabel": "Référence",
+    "eventLabel": "Événement",
+    "eventPlaceholder": "Choisir un événement…",
+    "assignmentLabel": "Dépôt",
+    "assignmentPlaceholder": "Choisir un dépôt…",
+    "cycleLabel": "Cycle",
+    "cyclePlaceholder": "Choisir un cycle…",
+    "rulesPrefix": "Règles du dépôt :",
+    "rulesOnlyTypes": "uniquement {types}",
+    "rulesAllTypes": "tous types de fichiers",
+    "rulesPerFile": "max. {size} Mo par fichier",
+    "rulesMaxFiles": "max. {max} fichiers par élément",
+    "elementLabel": "Élément de dépôt",
+    "elementPlaceholder": "Choisir un élément…"
+  }
+}

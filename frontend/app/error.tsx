@@ -1,6 +1,9 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 export default function GlobalError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  const t = useTranslations("common");
   return (
     <main className="login-frame">
       <section className="login-panel">
@@ -11,11 +14,11 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
           <div className="eyebrow">hocX</div>
         </div>
         <div className="login-heading">
-          <h1>Verbindung unterbrochen</h1>
-          <p className="login-subtitle">Der Server ist momentan nicht erreichbar. Bereits bestätigte Daten bleiben erhalten; prüfe nach dem erneuten Verbinden den Speicherstatus offener Änderungen.</p>
+          <h1>{t("connectionLost.title")}</h1>
+          <p className="login-subtitle">{t("connectionLost.description")}</p>
         </div>
         <button type="button" className="button-secondary login-submit" onClick={() => reset()}>
-          Erneut versuchen
+          {t("retry")}
         </button>
       </section>
     </main>

@@ -1,0 +1,68 @@
+{
+  "pageTitle": "Utenti",
+  "ownAccessOnlyHint": "Accessi e ruoli di questa organizzazione.",
+  "pageHint": "Gli account di questa organizzazione e i loro ruoli.",
+  "newUser": "+ Nuovo utente",
+  "emptyState": {
+    "title": "Solo il tuo accesso",
+    "description": "Invita altre persone e assegna loro un ruolo: Admin, Redattore, Cassiere o Lettore.",
+    "invite": "+ Invita utente"
+  },
+  "explainRoles": "Spiega i ruoli",
+  "explainRolesDescription": "Ogni account ha esattamente un ruolo per organizzazione.",
+  "tabs": {
+    "active": "Utenti attivi ({count})",
+    "participants": "Partecipanti ({count})"
+  },
+  "searchUsers": "Cerca utenti",
+  "searchParticipants": "Cerca partecipanti",
+  "columns": {
+    "displayName": "Nome visualizzato",
+    "name": "Nome",
+    "email": "E-mail",
+    "role": "Ruolo",
+    "actions": "Azioni",
+    "participantEmail": "E-mail (partecipante)"
+  },
+  "mfaButton": "MFA",
+  "delete": "Elimina",
+  "close": "Chiudi",
+  "editUserTitle": "Modifica utente",
+  "createUserTitle": "Crea utente",
+  "userModalDescription": "Gestisci i dati dell'account e il ruolo.",
+  "firstName": "Nome",
+  "lastName": "Cognome",
+  "displayName": "Nome visualizzato",
+  "email": "E-mail",
+  "newPassword": "Nuova password",
+  "password": "Password",
+  "passwordHelpEdit": "Compila solo per cambiare la password. Almeno 12 caratteri.",
+  "passwordHelpCreate": "Impostata direttamente qui, almeno 12 caratteri. Non esiste un'e-mail di invito automatica - comunica la password all'utente separatamente.",
+  "role": "Ruolo",
+  "active": "Attivo",
+  "enableLogin": "Attiva accesso",
+  "participantAutoNote": "Questo account è stato creato automaticamente da un partecipante. Per il primo accesso, attiva l'accesso e imposta una nuova password.",
+  "cancel": "Annulla",
+  "save": "Salva",
+  "enableLoginForTitle": "Attiva accesso per {name}",
+  "enableLoginTitle": "Attiva accesso",
+  "enableLoginDescription": "Assegna e-mail e password per permettere a questo partecipante di accedere. Rimane comunque collegato come partecipante.",
+  "mfaTitle": "MFA di {name}",
+  "mfaTitleFallback": "MFA",
+  "roleDescriptions": {
+    "admin": "Accesso completo all'interno dell'organizzazione, inclusa la struttura (modelli, cicli, impostazioni) e la gestione utenti.",
+    "writer": "Lavora nell'area verbali e gestisce i dati operativi, senza modificare struttura o finanze.",
+    "kassier": "Come lettore, con in più accesso completo in scrittura a finanze e multe.",
+    "reader": "Accesso in sola lettura, può avviare esportazioni PDF e vede solo le proprie multe."
+  },
+  "toasts": {
+    "loginEnabled": "Accesso attivato",
+    "loginEnableFailed": "Impossibile attivare l'accesso",
+    "userSaved": "Utente salvato",
+    "userCreated": "Utente creato",
+    "userSaveFailed": "Impossibile salvare l'utente",
+    "deleteConfirm": "Eliminare definitivamente l'utente \"{name}\"? L'account e l'accesso andranno persi immediatamente.",
+    "userDeleted": "Utente eliminato",
+    "userDeleteFailed": "Impossibile eliminare l'utente"
+  }
+}

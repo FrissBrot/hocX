@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 
@@ -93,6 +94,10 @@ export function ProtocolEditor({
   canViewFines = true,
   accordionEnabled = true,
 }: ProtocolEditorProps) {
+  const t = useTranslations("protocols.editor");
+  const tRoot = useTranslations("protocols");
+  const tCommon = useTranslations("common");
+  const locale = useLocale();
   const router = useRouter();
   const [elements, setElements] = useState(initialElements);
   const [events, setEvents] = useState(availableEvents);
@@ -168,7 +173,7 @@ export function ProtocolEditor({
     () =>
       collab.onStatusChanged(({ status, display_name }) => {
         setProtocolStatus(status);
-        showToast(`Status wurde von ${display_name} zu "${protocolStatusLabel(status)}" geändert.`);
+        showToast(`Status wurde von ${display_name} zu "${protocolStatusLabel(status, tRoot)}" geändert.`);
         // The backend already cleared every tracked-change mark server-side on this same
         // transition - refetch so a viewer who stays on this page (not the one who
         // triggered the transition, which navigates away right after) doesn't keep
@@ -317,10 +322,10 @@ export function ProtocolEditor({
   const { busyByProtocol: pdfBusyByProtocol, openOrGeneratePdf } = usePdfExport();
 
   const workflowMeta: Record<string, { modeLabel: string; ctaLabel: string; nextStatus: string }> = {
-    geplant:       { modeLabel: "Vorbereitungsmodus",   ctaLabel: "Vorbereitung abschliessen", nextStatus: "vorbereitet" },
-    vorbereitet:   { modeLabel: "Sitzungsmodus",         ctaLabel: "Sitzung abschliessen",      nextStatus: "durchgeführt" },
-    durchgeführt:  { modeLabel: "Nachbearbeitungsmodus", ctaLabel: "Protokoll abschliessen",    nextStatus: "abgeschlossen" },
-    abgeschlossen: { modeLabel: "Abgeschlossen",         ctaLabel: "",                          nextStatus: "" },
+    geplant:       { modeLabel: t("workflowPreparationMode"),   ctaLabel: t("workflowFinishPreparation"), nextStatus: "vorbereitet" },
+    vorbereitet:   { modeLabel: t("workflowSessionMode"),       ctaLabel: t("workflowFinishSession"),     nextStatus: "durchgeführt" },
+    durchgeführt:  { modeLabel: t("workflowPostProcessingMode"), ctaLabel: t("workflowFinishProtocol"),   nextStatus: "abgeschlossen" },
+    abgeschlossen: { modeLabel: t("workflowDone"),              ctaLabel: "",                             nextStatus: "" },
   };
 
 
@@ -878,7 +883,7 @@ export function ProtocolEditor({
         });
         return next;
       });
-      showToast(err instanceof Error ? err.message : "Reihenfolge konnte nicht gespeichert werden", "error");
+      showToast(err instanceof Error ? err.message : t("orderSaveFailed"), "error");
     }
   }
 
@@ -979,7 +984,7 @@ export function ProtocolEditor({
       collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json });
     } catch (err: unknown) {
       setStatus(blockId, "error");
-      showToast(err instanceof Error ? err.message : "Änderung konnte nicht gespeichert werden", "error");
+      showToast(err instanceof Error ? err.message : t("changeSaveFailed"), "error");
     }
   }
 
@@ -1050,9 +1055,9 @@ export function ProtocolEditor({
           path: `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
           method: "PUT",
           body: JSON.stringify({ content, expected_content: expectedContent }),
-          lastError: err instanceof Error ? err.message : "Text konnte nicht gespeichert werden",
+          lastError: err instanceof Error ? err.message : t("textSaveFailed"),
         });
-        showToast("Text lokal gesichert – wird nach Wiederherstellung der Verbindung automatisch gespeichert.", "error");
+        showToast(t("textSavedLocallyOffline"), "error");
       }
     }, 700);
   }
@@ -1100,7 +1105,7 @@ export function ProtocolEditor({
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Todo konnte nicht erstellt werden", "error");
+      showToast(err instanceof Error ? err.message : t("todoCreateFailed"), "error");
     }
   }
 
@@ -1117,15 +1122,15 @@ export function ProtocolEditor({
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Todo konnte nicht gespeichert werden", "error");
+      showToast(err instanceof Error ? err.message : t("todoSaveFailed"), "error");
     }
   }
 
   async function deleteTodo(protocolElementBlockId: string, todoId: string) {
     const ok = await confirm({
-      message: "Todo endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      message: t("todoDeleteConfirm"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: tCommon("delete")
     });
     if (!ok) return;
     setStatus(protocolElementBlockId, "saving");
@@ -1137,7 +1142,7 @@ export function ProtocolEditor({
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Todo konnte nicht gelöscht werden", "error");
+      showToast(err instanceof Error ? err.message : t("todoDeleteFailed"), "error");
     }
   }
 
@@ -1180,15 +1185,15 @@ export function ProtocolEditor({
       if (created.duplicate_warning) showToast(created.duplicate_warning, "info");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Bild konnte nicht hochgeladen werden", "error");
+      showToast(err instanceof Error ? err.message : t("imageUploadFailed"), "error");
     }
   }
 
   async function deleteImage(protocolElementBlockId: string, imageId: string) {
     const ok = await confirm({
-      message: "Bild endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      message: t("imageDeleteConfirm"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: tCommon("delete")
     });
     if (!ok) return;
     setStatus(protocolElementBlockId, "saving");
@@ -1200,11 +1205,11 @@ export function ProtocolEditor({
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Bild konnte nicht gelöscht werden", "error");
+      showToast(err instanceof Error ? err.message : t("imageDeleteFailed"), "error");
     }
   }
 
-  async function createEventFromBlock(protocolElementBlockId: string, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft): Promise<EventSummary | null> {
+  async function createEventFromBlock(protocolElementBlockId: string, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft): Promise<EventSummary | null> { // i18n-ok: TS-Generic-Signatur, kein UI-Text
     const configuredTag = String(blockConfig.event_tag_filter ?? "").trim();
     const allowEndDate = blockConfig.event_allow_end_date === true;
     const draft = draftOverride ?? newEventDrafts[protocolElementBlockId] ?? createProtocolEventDraft(protocol.protocol_date, configuredTag);
@@ -1248,7 +1253,7 @@ export function ProtocolEditor({
       return created;
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Termin konnte nicht erstellt werden", "error");
+      showToast(err instanceof Error ? err.message : t("eventCreateFailed"), "error");
       return null;
     }
   }
@@ -1266,7 +1271,7 @@ export function ProtocolEditor({
       return true;
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Termin konnte nicht gespeichert werden", "error");
+      showToast(err instanceof Error ? err.message : t("eventSaveFailed"), "error");
       return false;
     }
   }
@@ -1280,7 +1285,7 @@ export function ProtocolEditor({
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Termin konnte nicht gelöscht werden", "error");
+      showToast(err instanceof Error ? err.message : t("eventDeleteFailed"), "error");
     }
   }
 
@@ -1416,7 +1421,7 @@ export function ProtocolEditor({
   async function createListEntryFromBlock(
     protocolElementBlockId: string,
     listDefinitionId: string,
-    payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }
+    payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> } // i18n-ok: TS-Generic-Signatur, kein UI-Text
   ) {
     setStatus(protocolElementBlockId, "saving");
     try {
@@ -1436,7 +1441,7 @@ export function ProtocolEditor({
       return true;
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Eintrag konnte nicht erstellt werden", "error");
+      showToast(err instanceof Error ? err.message : t("entryCreateFailed"), "error");
       return false;
     }
   }
@@ -1466,16 +1471,16 @@ export function ProtocolEditor({
       return true;
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Eintrag konnte nicht gespeichert werden", "error");
+      showToast(err instanceof Error ? err.message : t("entrySaveFailed"), "error");
       return false;
     }
   }
 
   async function deleteListEntryFromBlock(protocolElementBlockId: string, listDefinitionId: string, entryId: string) {
     const ok = await confirm({
-      message: "Eintrag endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      message: t("entryDeleteConfirm"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: tCommon("delete")
     });
     if (!ok) return;
     setStatus(protocolElementBlockId, "saving");
@@ -1489,7 +1494,7 @@ export function ProtocolEditor({
       void syncBlockListSnapshot(protocolElementBlockId);
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Eintrag konnte nicht gelöscht werden", "error");
+      showToast(err instanceof Error ? err.message : t("entryDeleteFailed"), "error");
     }
   }
 
@@ -1505,7 +1510,7 @@ export function ProtocolEditor({
       });
     } catch (err: unknown) {
       updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: false, configuration_snapshot_json: block.configuration_snapshot_json }));
-      showToast(err instanceof Error ? err.message : "Termin konnte nicht eingeblendet werden", "error");
+      showToast(err instanceof Error ? err.message : t("eventShowFailed"), "error");
     }
   }
 
@@ -1536,7 +1541,7 @@ export function ProtocolEditor({
           })
         );
       }
-      showToast(err instanceof Error ? err.message : "Termin konnte nicht entfernt werden", "error");
+      showToast(err instanceof Error ? err.message : t("eventRemoveFailed"), "error");
     }
   }
 
@@ -1585,7 +1590,7 @@ export function ProtocolEditor({
       );
       return newBlock;
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Termin konnte nicht hinzugefügt werden", "error");
+      showToast(err instanceof Error ? err.message : t("eventAddFailed"), "error");
       return null;
     }
   }
@@ -1594,14 +1599,14 @@ export function ProtocolEditor({
     <div className="grid" ref={editorRef}>
       {useDocumentLayout && (
         <div className="protocol-document-header">
-          <a href="/protocols" className="button-secondary protocol-document-back">← Zurück zu den Protokollen</a>
+          <a href="/protocols" className="button-secondary protocol-document-back">{t("backToProtocols")}</a>
           <Badge variant={protocolStatusVariant(protocolStatus)} className="protocol-document-badge">
-            {protocolStatusLabel(protocolStatus)}
+            {protocolStatusLabel(protocolStatus, tRoot)}
           </Badge>
           <h1 className="protocol-document-title">{protocol.title || protocol.protocol_number}</h1>
           <div className="protocol-document-actions">
             <button type="button" className="button-ghost protocol-document-search-trigger" onClick={() => setSearchOpen(true)}>
-              Suchen <span className="dropdown-hint">Strg+F</span>
+              {t("searchButton")} <span className="dropdown-hint">{t("ctrlFHint")}</span>
             </button>
             <button
               type="button"
@@ -1609,7 +1614,7 @@ export function ProtocolEditor({
               disabled={pdfBusyByProtocol[protocol.id]}
               onClick={() => openOrGeneratePdf(protocol)}
             >
-              {pdfBusyByProtocol[protocol.id] ? "…" : "PDF exportieren"}
+              {pdfBusyByProtocol[protocol.id] ? "…" : t("exportPdfButton")}
             </button>
             {!isReadOnly && workflowMeta[protocolStatus]?.ctaLabel && (
               <button
@@ -1627,22 +1632,22 @@ export function ProtocolEditor({
 
       <div className="status-row">
         <span className="pill">{protocol.protocol_number}</span>
-        <span className="pill">{workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus)}</span>
+        <span className="pill">{workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus, tRoot)}</span>
         {protocol.import_source_url && (
           <a
             className="pill"
             href={protocol.import_source_url}
             title={protocol.import_source_filename ?? undefined}
           >
-            Original-Dokument öffnen
+            {t("openOriginalDocument")}
           </a>
         )}
         {protocolStatus === "geplant" && !isReadOnly && (
-          <TodoMiniMenu label={trackChangesEnabled ? "Änderungen nachverfolgen: An" : "Änderungen nachverfolgen: Aus"} compact>
+          <TodoMiniMenu label={trackChangesEnabled ? t("trackChangesOn") : t("trackChangesOff")} compact>
             {(close) => (
               <>
-                <TodoMenuOption label="An" active={trackChangesEnabled} onClick={() => { void setTrackChangesEnabled(true); close(); }} />
-                <TodoMenuOption label="Aus" active={!trackChangesEnabled} onClick={() => { void setTrackChangesEnabled(false); close(); }} />
+                <TodoMenuOption label={t("onLabel")} active={trackChangesEnabled} onClick={() => { void setTrackChangesEnabled(true); close(); }} />
+                <TodoMenuOption label={t("offLabel")} active={!trackChangesEnabled} onClick={() => { void setTrackChangesEnabled(false); close(); }} />
               </>
             )}
           </TodoMiniMenu>
@@ -1652,13 +1657,13 @@ export function ProtocolEditor({
 
       <Modal
         open={showStatusChangeWarning}
-        title="Andere Person bearbeitet gerade"
-        description="Mindestens eine andere Person bearbeitet dieses Protokoll gerade aktiv. Der Statuswechsel wird für alle sofort übernommen."
+        title={t("otherEditorWarningTitle")}
+        description={t("otherEditorWarningDescription")}
         onClose={() => setShowStatusChangeWarning(false)}
       >
         <div className="modal-actions">
           <button type="button" className="button-ghost" onClick={() => setShowStatusChangeWarning(false)}>
-            Abbrechen
+            {tCommon("cancel")}
           </button>
           <button
             type="button"
@@ -1668,12 +1673,12 @@ export function ProtocolEditor({
               void performStatusTransition();
             }}
           >
-            Trotzdem wechseln
+            {t("switchAnywayButton")}
           </button>
         </div>
       </Modal>
 
-      {showSavedIndicator && <div className="save-indicator">✓ Gespeichert</div>}
+      {showSavedIndicator && <div className="save-indicator">{t("savedIndicator")}</div>}
 
       {useDocumentLayout ? (
         <div className="protocol-document-shell">
@@ -1684,8 +1689,8 @@ export function ProtocolEditor({
             {visibleElements.length === 0 && (
               <div className="editor-panel-empty">
                 <div>
-                  <div className="eyebrow">Keine Punkte</div>
-                  <h3>Dieses Protokoll hat noch keine sichtbaren Abschnitte</h3>
+                  <div className="eyebrow">{t("noItemsEyebrow")}</div>
+                  <h3>{t("noVisibleSectionsMessage")}</h3>
                 </div>
               </div>
             )}
@@ -1771,7 +1776,7 @@ export function ProtocolEditor({
 
           <aside className="protocol-quicknav" ref={navRef}>
             <div className="card protocol-quicknav-section">
-              <div className="eyebrow">Schnellzugriff</div>
+              <div className="eyebrow">{t("quickAccessEyebrow")}</div>
               <nav className="protocol-quicknav-list">
                 {visibleElements.map((element) => (
                   <div
@@ -1806,23 +1811,23 @@ export function ProtocolEditor({
 
             {attendanceTally && (
               <div className="card protocol-quicknav-attendance">
-                <div className="eyebrow">Anwesenheit</div>
+                <div className="eyebrow">{t("attendanceEyebrow")}</div>
                 <div className="protocol-quicknav-stat-row">
-                  <span>Anwesend</span>
+                  <span>{t("presentLabel")}</span>
                   <strong>{attendanceTally.present}</strong>
                 </div>
                 <div className="protocol-quicknav-stat-row">
-                  <span>Entschuldigt</span>
+                  <span>{t("excusedLabel")}</span>
                   <strong>{attendanceTally.excused}</strong>
                 </div>
                 <div className="protocol-quicknav-stat-row protocol-quicknav-stat-danger">
-                  <span>Unentschuldigt</span>
+                  <span>{t("unexcusedLabel")}</span>
                   <strong>{attendanceTally.absent}</strong>
                 </div>
               </div>
             )}
 
-            {!isReadOnly && <p className="protocol-quicknav-autosave muted">Änderungen werden automatisch gespeichert.</p>}
+            {!isReadOnly && <p className="protocol-quicknav-autosave muted">{t("autosaveNotice")}</p>}
           </aside>
         </div>
       ) : (
@@ -1937,9 +1942,9 @@ export function ProtocolEditor({
           ) : (
             <div className="editor-panel-empty">
               <div>
-                <div className="eyebrow">Kein Punkt ausgewählt</div>
-                <h3>Wähle einen Punkt aus dem Navigator</h3>
-                <p>Jeder Punkt gruppiert alle Blöcke eines Elements, sodass Text, Todos und Bilder zusammenbleiben.</p>
+                <div className="eyebrow">{t("noItemSelectedEyebrow")}</div>
+                <h3>{t("chooseItemFromNavigator")}</h3>
+                <p>{t("itemGroupsBlocksHint")}</p>
               </div>
             </div>
           )}
@@ -1948,10 +1953,10 @@ export function ProtocolEditor({
 
 
       <div className="editor-fixed-actions">
-        {!isReadOnly && selectedElementIndex >= 0 && selectedElementIndex < visibleElements.length - 1 ? (
+        {!isReadOnly && selectedElementIndex >= 0 && selectedElementIndex < visibleElements.length - 1 ? ( // i18n-ok: TS-Generic-Signatur, kein UI-Text
           <>
             <button type="button" className="button-ghost editor-fixed-actions-close" onClick={closeProtocol}>
-              Schliessen
+              {tCommon("close")}
             </button>
             <button
               type="button"
@@ -1973,13 +1978,13 @@ export function ProtocolEditor({
                 }
               }}
             >
-              Weiter →
+              {t("continueButton")}
             </button>
           </>
         ) : !isReadOnly && workflowMeta[protocolStatus]?.ctaLabel ? (
           <>
             <button type="button" className="button-ghost editor-fixed-actions-close" onClick={closeProtocol}>
-              Schliessen
+              {tCommon("close")}
             </button>
             <button
               type="button"
@@ -1992,7 +1997,7 @@ export function ProtocolEditor({
             </button>
           </>
         ) : (
-          <a href="/protocols" className="button-secondary">← Zurück zu den Protokollen</a>
+          <a href="/protocols" className="button-secondary">{t("backToProtocols")}</a>
         )}
       </div>
       </>
@@ -2045,7 +2050,7 @@ export function ProtocolEditor({
             open={collabStatusPanelOpen}
             onClose={() => setCollabStatusPanelOpen(false)}
             protocolNumber={protocol.protocol_number}
-            modeLabel={workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus)}
+            modeLabel={workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus, tRoot)}
             attendanceTally={attendanceTally}
             otherPresence={collab.otherPresence}
             connected={collab.connected}
@@ -2070,7 +2075,7 @@ export function ProtocolEditor({
           role="menu"
         >
           <button type="button" className="mini-menu-option" onClick={() => void toggleEventCancelledFromContextMenu()}>
-            {eventContextMenu.eventRow.is_cancelled ? "Absage aufheben" : "Als abgesagt markieren"}
+            {eventContextMenu.eventRow.is_cancelled ? t("uncancelEventOption") : t("markAsCancelledOption")}
           </button>
         </div>,
         document.body

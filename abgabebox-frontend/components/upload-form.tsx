@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { CaptchaWidget } from "@/components/captcha-widget";
 import { publicApiUrl } from "@/lib/api";
@@ -18,6 +19,7 @@ type Props = {
 };
 
 export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileTypes, maxFiles, maxFileSizeMb, alreadyUploadedCount, sitekey }: Props) {
+  const t = useTranslations("abgabebox.upload");
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [captchaSessionToken, setCaptchaSessionToken] = useState<string | null>(null);
@@ -45,14 +47,14 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
     };
   }, []);
 
-  const accept = (allowedFileTypes.length > 0 ? allowedFileTypes : SUPPORTED_UPLOAD_EXTENSIONS).map((t) => `.${t}`).join(",");
-  const typeLabel = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => t.toUpperCase()).join(", ") : "Bilder, PDF und Office-Dokumente";
+  const accept = (allowedFileTypes.length > 0 ? allowedFileTypes : SUPPORTED_UPLOAD_EXTENSIONS).map((ext) => `.${ext}`).join(",");
+  const typeLabel = allowedFileTypes.length > 0 ? allowedFileTypes.map((ext) => ext.toUpperCase()).join(", ") : t("typeLabelDefault");
   const remaining = maxFiles === null ? null : Math.max(0, maxFiles - uploadedSoFar);
 
   function validateAndSet(selected: File[]): boolean {
     const result = validateUploadFiles(selected, { maxFiles, allowedFileTypes, maxFileSizeMb, alreadyUploaded: uploadedSoFar });
     if (!result.ok) {
-      setError(result.error);
+      setError(t(`errors.${result.code}`, "params" in result ? result.params : undefined));
       return false;
     }
     setError(null);
@@ -138,11 +140,11 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (files.length === 0) { setError("Bitte mindestens eine Datei auswählen"); return; }
-    if (!navigator.onLine) { setError("Keine Internetverbindung – die ausgewählten Dateien bleiben erhalten. Bitte nach dem Verbinden erneut senden."); return; }
+    if (files.length === 0) { setError(t("errors.noFileSelected")); return; }
+    if (!navigator.onLine) { setError(t("errors.offline")); return; }
 
     if (!captchaSessionToken) {
-      setError("Sicherheitscheck läuft noch – bitte kurz warten und nochmals versuchen");
+      setError(t("errors.captchaPending"));
       return;
     }
 
@@ -161,16 +163,19 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
       );
       if (!response.ok) {
         if (response.status === 429) {
-          throw new Error("Zu viele Versuche – bitte kurz warten und dann nochmals versuchen");
+          throw new Error(t("errors.tooManyRequests"));
         }
         if (response.status === 401) {
           // Sitzungs-Token abgelaufen (siehe ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES) - Widget fuer
           // eine frische Loesung neu starten, ausgewaehlte Dateien bleiben erhalten.
           requestFreshCaptcha();
-          throw new Error("Sicherheitscheck ist abgelaufen – wird gerade erneuert, bitte kurz warten");
+          throw new Error(t("errors.captchaExpired"));
         }
         const body = await response.json().catch(() => null);
-        throw new Error(body?.detail ?? "Upload fehlgeschlagen");
+        // body?.detail kommt direkt vom Backend (abgabebox-backend liefert aktuell kuratierten
+        // Freitext, keine stabilen Fehlercodes) - kann hier noch nicht lokalisiert werden, siehe
+        // CLAUDE.md Abschnitt i18n Punkt 10 (kein unnoetiger Umbau des Error-Handlings).
+        throw new Error(body?.detail ?? t("errors.uploadFailedGeneric"));
       }
       const result = await response.json().catch(() => null);
       setWarnings(result?.image_duplicate_warnings ?? []);
@@ -179,8 +184,8 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
       setDone(true);
     } catch (err) {
       setError(navigator.onLine
-        ? (err instanceof Error ? err.message : "Upload fehlgeschlagen")
-        : "Verbindung während des Uploads unterbrochen. Prüfe vor dem erneuten Senden, ob die Abgabe bereits angekommen ist.");
+        ? (err instanceof Error ? err.message : t("errors.uploadFailedGeneric"))
+        : t("errors.connectionLost"));
     } finally {
       // Das Sitzungs-Token bleibt bewusst erhalten (ausser beim 401-Fall oben) - der
       // Sicherheitscheck soll nur einmal pro Seitenaufruf laufen, nicht vor jedem Upload.
@@ -195,9 +200,9 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
     return (
       <div className="upload-success">
         <div className="upload-success-icon">✓</div>
-        <div className="upload-success-title">Abgabe erfolgreich</div>
+        <div className="upload-success-title">{t("successTitle")}</div>
         <div className="upload-success-sub">
-          {uploadedSoFar} Datei{uploadedSoFar === 1 ? "" : "en"} für diese Abgabe hochgeladen.
+          {t("successCount", { count: uploadedSoFar })}
         </div>
         {warnings.length > 0 && (
           <div className="upload-warning-list">
@@ -208,7 +213,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
         )}
         {canUploadMore && (
           <button type="button" className="button upload-again-button" onClick={() => setDone(false)}>
-            Weitere Datei hochladen
+            {t("uploadMore")}
           </button>
         )}
       </div>
@@ -217,10 +222,10 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
 
   return (
     <form onSubmit={handleSubmit}>
-      {!online && <div className="upload-error" role="status">Offline – Uploads sind erst nach Wiederherstellung der Verbindung möglich. Die Auswahl bleibt in diesem Tab erhalten.</div>}
+      {!online && <div className="upload-error" role="status">{t("offlineNotice")}</div>}
       {uploadedSoFar > 0 && (
         <p className="upload-already-count">
-          Bereits {uploadedSoFar} Datei{uploadedSoFar === 1 ? "" : "en"} für diese Abgabe hochgeladen.
+          {t("alreadyUploaded", { count: uploadedSoFar })}
         </p>
       )}
 
@@ -244,11 +249,11 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
         <div className="drop-zone-icon">{files.length > 0 ? "📄" : "⬆"}</div>
         <div className="drop-zone-label">
           {files.length > 0
-            ? `${files.length} Datei${files.length > 1 ? "en" : ""} ausgewählt`
-            : "Datei auswählen oder hierher ziehen"}
+            ? t("dropLabelSelected", { count: files.length })
+            : t("dropLabelEmpty")}
         </div>
         <div className="drop-zone-hint">
-          {typeLabel} · {remaining === null ? "max. 50 Dateien pro Upload" : `max. ${remaining} weitere ${remaining === 1 ? "Datei" : "Dateien"}`} · je {maxFileSizeMb} MiB · insgesamt maximal 150 MiB
+          {typeLabel} · {remaining === null ? t("hintMaxFilesUnbounded") : t("hintMaxFilesRemaining", { count: remaining })} · {t("hintPerFile", { size: maxFileSizeMb })} · {t("hintTotal")}
         </div>
       </div>
 
@@ -259,7 +264,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
             <li key={i} className="file-item">
               <span className="file-name">{file.name}</span>
               <span className="file-size">{formatSize(file.size)}</span>
-              <button type="button" className="file-remove" onClick={() => removeFile(i)} aria-label="Entfernen">✕</button>
+              <button type="button" className="file-remove" onClick={() => removeFile(i)} aria-label={t("removeFile")}>✕</button>
             </li>
           ))}
         </ul>
@@ -278,15 +283,15 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
           )}
           <div className={`captcha-status${captchaSessionToken ? " captcha-status-ok" : ""}`}>
             {captchaSessionToken
-              ? "✓ Sicherheitscheck abgeschlossen"
+              ? t("captchaDone")
               : captchaVerifying
-                ? "Sicherheitscheck wird geprüft…"
-                : "Sicherheitscheck läuft…"}
+                ? t("captchaVerifying")
+                : t("captchaRunning")}
           </div>
         </div>
       ) : (
         <div style={{ margin: "var(--space-5) 0 var(--space-1)" }}>
-          <div className="captcha-placeholder">Sicherheitscheck (kein FriendlyCaptcha konfiguriert – Test-/Dev-Betrieb)</div>
+          <div className="captcha-placeholder">{t("captchaPlaceholder")}</div>
         </div>
       )}
 
@@ -298,7 +303,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
         style={{ width: "100%", marginTop: "var(--space-3)" }}
         disabled={submitting || files.length === 0}
       >
-        {submitting ? "Wird hochgeladen…" : "Abgeben"}
+        {submitting ? t("submitting") : t("submit")}
       </button>
     </form>
   );

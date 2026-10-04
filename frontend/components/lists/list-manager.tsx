@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { StructuredListTable } from "@/components/lists/structured-list-table";
@@ -40,22 +41,28 @@ type ListDefinitionFormState = {
   is_active: boolean;
 };
 
-const valueTypeOptions: Array<{ value: StructuredListValueType; label: string }> = [
-  { value: "text", label: "Freier Text" },
-  { value: "participant", label: "Ein Teilnehmer" },
-  { value: "participants", label: "Mehrere Teilnehmer" },
-  { value: "event", label: "Ein Termin" },
-];
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
-const initialFormState: ListDefinitionFormState = {
-  name: "",
-  description: "",
-  column_one_title: "Spalte 1",
-  column_one_value_type: "text",
-  column_two_title: "Spalte 2",
-  column_two_value_type: "text",
-  is_active: true,
-};
+function valueTypeOptions(t: TFunc): Array<{ value: StructuredListValueType; label: string }> {
+  return [
+    { value: "text", label: t("valueTypes.text") },
+    { value: "participant", label: t("valueTypes.participant") },
+    { value: "participants", label: t("valueTypes.participants") },
+    { value: "event", label: t("valueTypes.event") },
+  ];
+}
+
+function initialFormState(t: TFunc): ListDefinitionFormState {
+  return {
+    name: "",
+    description: "",
+    column_one_title: t("defaultColumnOne"),
+    column_one_value_type: "text",
+    column_two_title: t("defaultColumnTwo"),
+    column_two_value_type: "text",
+    is_active: true,
+  };
+}
 
 function formFromDefinition(definition: StructuredListDefinition): ListDefinitionFormState {
   return {
@@ -69,10 +76,6 @@ function formFromDefinition(definition: StructuredListDefinition): ListDefinitio
   };
 }
 
-function valueTypeLabel(valueType: StructuredListValueType) {
-  return valueTypeOptions.find((option) => option.value === valueType)?.label ?? valueType;
-}
-
 export function ListManager({
   initialLists,
   initialEntriesByList,
@@ -80,6 +83,7 @@ export function ListManager({
   availableEvents,
   documentTemplates = [],
 }: ListManagerProps) {
+  const t = useTranslations("lists");
   const showToast = useToast();
   const confirm = useConfirm();
   const [lists, setLists] = useState(initialLists);
@@ -88,7 +92,7 @@ export function ListManager({
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingListId, setEditingListId] = useState<string | null>(null);
-  const [form, setForm] = useState(initialFormState);
+  const [form, setForm] = useState(() => initialFormState(t));
 
   // Export modal state
   const landscapeTemplates = documentTemplates.filter(
@@ -197,7 +201,7 @@ export function ListManager({
       setExportUrl(url);
       if (url) triggerDownload(url);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.pdfExportFailed"), "error");
     } finally {
       setExportBusy(false);
     }
@@ -226,7 +230,7 @@ export function ListManager({
 
   function openCreate() {
     setEditingListId(null);
-    setForm(initialFormState);
+    setForm(initialFormState(t));
     setModalOpen(true);
   }
 
@@ -265,17 +269,17 @@ export function ListManager({
       setEntriesByList((current) => ({ ...current, [saved.id]: current[saved.id] ?? [] }));
       setSelectedListId(saved.id);
       setModalOpen(false);
-      showToast(editingListId ? "Liste gespeichert" : "Liste erstellt", "success");
+      showToast(editingListId ? t("toasts.listSaved") : t("toasts.listCreated"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Liste konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.listSaveFailed"), "error");
     }
   }
 
   async function deleteDefinition(listId: string) {
     const ok = await confirm({
-      message: "Liste endgültig löschen? Alle Einträge dieser Liste gehen dabei unwiderruflich verloren.",
+      message: t("toasts.deleteListConfirm"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: t("toasts.deleteLabel")
     });
     if (!ok) return;
     try {
@@ -288,13 +292,13 @@ export function ListManager({
         return next;
       });
       setSelectedListId((current) => (current === listId ? (remainingLists[0]?.id ?? null) : current));
-      showToast("Liste geloescht", "success");
+      showToast(t("toasts.listDeleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Liste konnte nicht geloescht werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.listDeleteFailed"), "error");
     }
   }
 
-  async function createEntry(listId: string, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) {
+  async function createEntry(listId: string, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) {  // i18n-ok: TS-Typannotation, kein JSX
     try {
       const created = await browserApiFetch<StructuredListEntry>(`/api/lists/${listId}/entries`, {
         method: "POST",
@@ -304,10 +308,10 @@ export function ListManager({
         ...current,
         [listId]: [...(current[listId] ?? []), created].sort((left, right) => left.sort_index - right.sort_index),
       }));
-      showToast("Eintrag erstellt", "success");
+      showToast(t("toasts.entryCreated"), "success");
       return true;
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Eintrag konnte nicht erstellt werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.entryCreateFailed"), "error");
       return false;
     }
   }
@@ -315,7 +319,7 @@ export function ListManager({
   async function updateEntry(
     listId: string,
     entryId: string,
-    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>  // i18n-ok: TS-Typannotation, kein JSX
   ) {
     try {
       const updated = await browserApiFetch<StructuredListEntry>(`/api/list-entries/${entryId}`, {
@@ -326,19 +330,19 @@ export function ListManager({
         ...current,
         [listId]: (current[listId] ?? []).map((entry) => (entry.id === entryId ? updated : entry)),
       }));
-      showToast("Eintrag gespeichert", "success");
+      showToast(t("toasts.entrySaved"), "success");
       return true;
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Eintrag konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.entrySaveFailed"), "error");
       return false;
     }
   }
 
   async function deleteEntry(listId: string, entryId: string) {
     const ok = await confirm({
-      message: "Eintrag endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      message: t("toasts.deleteEntryConfirm"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: t("toasts.deleteLabel")
     });
     if (!ok) return;
     try {
@@ -347,15 +351,15 @@ export function ListManager({
         ...current,
         [listId]: (current[listId] ?? []).filter((entry) => entry.id !== entryId),
       }));
-      showToast("Eintrag geloescht", "success");
+      showToast(t("toasts.entryDeleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Eintrag konnte nicht geloescht werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.entryDeleteFailed"), "error");
     }
   }
 
   async function updateHistoricalEntry(
     entryId: string,
-    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>  // i18n-ok: TS-Typannotation, kein JSX
   ) {
     if (!historical.editUnlocked) {
       setShowUnlockConfirm(true);
@@ -363,10 +367,10 @@ export function ListManager({
     }
     try {
       await historical.saveHistoricalEntry(entryId, payload);
-      showToast("Historischer Eintrag gespeichert", "success");
+      showToast(t("toasts.historicalEntrySaved"), "success");
       return true;
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Historischer Eintrag konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.historicalEntrySaveFailed"), "error");
       return false;
     }
   }
@@ -377,16 +381,16 @@ export function ListManager({
       return;
     }
     const ok = await confirm({
-      message: "Diesen Eintrag aus der historischen Ansicht entfernen? Dies verändert den historischen Datenstand dauerhaft.",
+      message: t("toasts.deleteHistoricalEntryConfirm"),
       tone: "danger",
-      confirmLabel: "Entfernen"
+      confirmLabel: t("toasts.removeLabel")
     });
     if (!ok) return;
     try {
       await historical.deleteHistoricalEntry(entryId);
-      showToast("Eintrag aus der historischen Ansicht entfernt", "success");
+      showToast(t("toasts.historicalEntryRemoved"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Eintrag konnte nicht entfernt werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.entryRemoveFailed"), "error");
     }
   }
 
@@ -394,7 +398,7 @@ export function ListManager({
   // see useHistoricalList.confirmReconstruction.
   async function updateDraftEntry(
     entryId: string,
-    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>  // i18n-ok: TS-Typannotation, kein JSX
   ) {
     historical.updateDraftEntry(entryId, payload);
     return true;
@@ -402,9 +406,9 @@ export function ListManager({
 
   async function deleteDraftEntry(entryId: string) {
     const ok = await confirm({
-      message: "Diesen Eintrag aus dem Entwurf entfernen? Er wird beim Bestätigen nicht mit übernommen.",
+      message: t("toasts.deleteDraftEntryConfirm"),
       tone: "danger",
-      confirmLabel: "Entfernen"
+      confirmLabel: t("toasts.removeLabel")
     });
     if (!ok) return;
     historical.deleteDraftEntry(entryId);
@@ -414,9 +418,9 @@ export function ListManager({
     setIsConfirmingReconstruction(true);
     try {
       await historical.confirmReconstruction();
-      showToast("Snapshot für diese Periode erstellt", "success");
+      showToast(t("toasts.snapshotCreated"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Snapshot konnte nicht erstellt werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.snapshotCreateFailed"), "error");
     } finally {
       setIsConfirmingReconstruction(false);
     }
@@ -426,21 +430,21 @@ export function ListManager({
     <div className="grid">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Listen</h1>
-          <p className="muted">{lists.length === 0 ? "Frei definierbare Listen für Material, Ämter oder Anmeldungen." : "Alle Listen dieses Mandanten."}</p>
+          <h1 className="page-title">{t("pageTitle")}</h1>
+          <p className="muted">{lists.length === 0 ? t("pageDescriptionEmpty") : t("pageDescription")}</p>
         </div>
-        {lists.length > 0 ? <button type="button" className="button-primary" onClick={openCreate}>+ Neue Liste</button> : null}
+        {lists.length > 0 ? <button type="button" className="button-primary" onClick={openCreate}>{t("newList")}</button> : null}
       </div>
       {lists.length === 0 ? (
         <EmptyState
-          title="Noch keine Liste vorhanden"
-          description="Listen sind frei definierbare Tabellen – etwa Materialausleihe, Ämterverteilung oder Anmeldungen."
+          title={t("emptyState.title")}
+          description={t("emptyState.description")}
           actions={
             <button type="button" className="button-primary" onClick={openCreate}>
-              + Neue Liste
+              {t("newList")}
             </button>
           }
-          hint="Listen können als Quelle für Abgaben verwendet werden."
+          hint={t("emptyState.hint")}
         />
       ) : (
       <div className="list-manager-layout">
@@ -448,18 +452,18 @@ export function ListManager({
         {/* Left sidebar */}
         <div className="list-manager-sidebar">
           <div className="list-manager-sidebar-header">
-            <h2 className="list-manager-sidebar-title">Listen</h2>
-            <span className="pill">{lists.length} gesamt</span>
+            <h2 className="list-manager-sidebar-title">{t("sidebar.title")}</h2>
+            <span className="pill">{t("sidebar.totalCount", { count: lists.length })}</span>
           </div>
           <label className="field-stack list-manager-search">
-            <span className="field-label">Suche</span>
-            <SearchInput value={search} onChange={setSearch} placeholder="Listen suchen…" />
+            <span className="field-label">{t("sidebar.search")}</span>
+            <SearchInput value={search} onChange={setSearch} placeholder={t("sidebar.searchPlaceholder")} />
           </label>
 
           {/* List items — scrollable, fills available height */}
           <div className="list-manager-items">
             {filteredLists.length === 0 ? (
-              <span className="muted" style={{ fontSize: "var(--text-base)", padding: "var(--space-2) var(--space-1)", display: "block" }}>Keine Listen</span>
+              <span className="muted" style={{ fontSize: "var(--text-base)", padding: "var(--space-2) var(--space-1)", display: "block" }}>{t("sidebar.empty")}</span>
             ) : filteredLists.map((definition) => {
               const isSelected = selectedListId === definition.id;
               const entryCount = (entriesByList[definition.id] ?? []).length;
@@ -475,7 +479,7 @@ export function ListManager({
                     aria-pressed={isSelected}
                   >
                     <span className="list-manager-item-name">{definition.name}</span>
-                    <span className="list-manager-item-count">{entryCount} {entryCount === 1 ? "Eintrag" : "Einträge"}</span>
+                    <span className="list-manager-item-count">{t("sidebar.entryCount", { count: entryCount })}</span>
                   </button>
                 </div>
               );
@@ -513,8 +517,8 @@ export function ListManager({
               {!isLive && !historical.isLoading && !historical.definition ? (
                 <p className="muted">
                   {isReconstructing
-                    ? "Für diese Liste konnten keine Daten gefunden werden - weder aktuell noch in einem anderen Zyklus."
-                    : "Diese Liste existierte in diesem Zyklus noch nicht."}
+                    ? t("noDataForReconstruct")
+                    : t("notFoundInCycle")}
                 </p>
               ) : (
                 displayedDefinition && (
@@ -524,7 +528,7 @@ export function ListManager({
                     heading={
                       <div>
                         <h2 className="list-manager-title">{displayedDefinition.name}</h2>
-                        <p className="list-manager-description muted">Spalten: {displayedDefinition.column_one_title} · {displayedDefinition.column_two_title}</p>
+                        <p className="list-manager-description muted">{t("columnsLabel", { one: displayedDefinition.column_one_title, two: displayedDefinition.column_two_title })}</p>
                         {displayedDefinition.description && <p className="list-manager-description muted">{displayedDefinition.description}</p>}
                       </div>
                     }
@@ -533,17 +537,17 @@ export function ListManager({
                   {historical.availableCycles.length > 0 && (
                     <SearchableSelect
                       options={[
-                        { id: "live", label: "Aktuell", cycle: null },
+                        { id: "live", label: t("viewOption.current"), cycle: null },
                         ...historical.availableCycles.map((cycle) => ({
                           id: `${cycle.cycle_config_id}:${cycle.cycle_year}`,
-                          label: `${cycle.cycle_config_name} ${cycle.cycle_year}${cycle.has_snapshot ? " (historisch)" : " (kein Snapshot)"}`,
+                          label: `${cycle.cycle_config_name} ${cycle.cycle_year}${cycle.has_snapshot ? ` ${t("viewOption.historical")}` : ` ${t("viewOption.noSnapshot")}`}`,
                           cycle,
                         })),
                       ]}
                       getId={(option) => option.id}
                       getLabel={(option) => option.label}
                       value={isLive ? "live" : `${historical.cycleConfigId}:${historical.cycleYear}`}
-                      triggerProps={{ "aria-label": "Ansicht" }}
+                      triggerProps={{ "aria-label": t("viewOption.viewAriaLabel") }}
                       onChange={(option) => {
                         if (!option) return;
                         if (option.cycle) {
@@ -556,12 +560,12 @@ export function ListManager({
                   )}
                   {isLive && landscapeTemplates.length > 0 && (
                     <button type="button" className="button-secondary button-ghost" onClick={() => { setExportListId(selectedListId ?? ""); setExportUrl(null); setExportModalOpen(true); }}>
-                      Export
+                      {t("export")}
                     </button>
                   )}
                         {isLive && <>
-                        <button type="button" className="button-secondary button-ghost" onClick={() => openEdit(selectedList)}>Bearbeiten</button>
-                        <button type="button" className="button-secondary button-ghost" onClick={() => void deleteDefinition(selectedList.id)}>Liste löschen</button>
+                        <button type="button" className="button-secondary button-ghost" onClick={() => openEdit(selectedList)}>{t("edit")}</button>
+                        <button type="button" className="button-secondary button-ghost" onClick={() => void deleteDefinition(selectedList.id)}>{t("deleteList")}</button>
                         </>}
                       </>
                     }
@@ -575,7 +579,7 @@ export function ListManager({
                       isLive
                         ? (payload) => createEntry(selectedList.id, payload)
                         : async () => {
-                            showToast("Es können keine neuen Einträge angelegt werden - nur bestehende bearbeiten oder entfernen", "error");
+                            showToast(t("noNewEntries"), "error");
                             return false;
                           }
                     }
@@ -598,7 +602,7 @@ export function ListManager({
               )}
             </div>
           ) : (
-            <p className="muted">Wähle eine Liste aus oder erstelle eine neue.</p>
+            <p className="muted">{t("selectListPrompt")}</p>
           )}
         </div>
       </div>
@@ -607,7 +611,7 @@ export function ListManager({
       <Modal
         open={exportModalOpen}
         onClose={() => setExportModalOpen(false)}
-        title="Liste exportieren"
+        title={t("exportModal.title")}
         size="wide"
       >
         <div style={{ display: "flex", gap: "var(--space-5)", height: "min(640px, calc(100dvh - 200px))", minHeight: 0 }}>
@@ -616,7 +620,7 @@ export function ListManager({
 
             {/* List dropdown with search */}
             <div>
-              <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Liste</div>
+              <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>{t("exportModal.listLabel")}</div>
               <div ref={listDropdownRef} style={{ position: "relative" }}>
                 <button
                   type="button"
@@ -624,7 +628,7 @@ export function ListManager({
                   className="dropdown-trigger"
                 >
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {exportListDef?.name ?? "Liste wählen…"}
+                    {exportListDef?.name ?? t("exportModal.chooseList")}
                   </span>
                   <span style={{ flexShrink: 0, opacity: 0.5 }}>▾</span>
                 </button>
@@ -634,7 +638,7 @@ export function ListManager({
                       <input
                         autoFocus
                         type="text"
-                        placeholder="Suchen…"
+                        placeholder={t("exportModal.searchPlaceholder")}
                         value={listDropdownSearch}
                         onChange={(e) => setListDropdownSearch(e.target.value)}
                         className="dropdown-search-input"
@@ -642,7 +646,7 @@ export function ListManager({
                     </div>
                     <div className="dropdown-panel-scroll">
                       {listDropdownFiltered.length === 0 ? (
-                        <div className="muted" style={{ padding: "var(--space-2) var(--space-3)", fontSize: "var(--text-base)" }}>Keine Listen gefunden</div>
+                        <div className="muted" style={{ padding: "var(--space-2) var(--space-3)", fontSize: "var(--text-base)" }}>{t("exportModal.noListsFound")}</div>
                       ) : listDropdownFiltered.map((l) => (
                         <button
                           key={l.id}
@@ -662,7 +666,7 @@ export function ListManager({
             {/* Group by */}
             {exportListDef && (
               <div>
-                <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Gruppieren nach</div>
+                <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>{t("exportModal.groupBy")}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
                   {(["", "column_one", "column_two"] as const).map((col) => (
                     <button
@@ -672,7 +676,7 @@ export function ListManager({
                       style={{ width: "auto", minHeight: 0 }}
                       onClick={() => { setExportGroupBy(col); clearExportUrl(); }}
                     >
-                      {col === "" ? "Keine" : col === "column_one" ? exportListDef.column_one_title : exportListDef.column_two_title}
+                      {col === "" ? t("exportModal.none") : col === "column_one" ? exportListDef.column_one_title : exportListDef.column_two_title}
                     </button>
                   ))}
                 </div>
@@ -682,7 +686,7 @@ export function ListManager({
             {/* Filter */}
             {exportListDef && (
               <div>
-                <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Filtern nach Spalte</div>
+                <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>{t("exportModal.filterByColumn")}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
                   {(["", "column_one", "column_two"] as const).map((col) => (
                     <button
@@ -692,7 +696,7 @@ export function ListManager({
                       style={{ width: "auto", minHeight: 0 }}
                       onClick={() => { setExportFilterColumn(col); setExportFilterParticipantId(""); setExportFilterEventId(""); setExportFilterText(""); clearExportUrl(); }}
                     >
-                      {col === "" ? "Kein Filter" : col === "column_one" ? exportListDef.column_one_title : exportListDef.column_two_title}
+                      {col === "" ? t("exportModal.noFilter") : col === "column_one" ? exportListDef.column_one_title : exportListDef.column_two_title}
                     </button>
                   ))}
                 </div>
@@ -706,7 +710,7 @@ export function ListManager({
                           getId={(p) => p.id}
                           getLabel={(p) => p.display_name}
                           value={exportFilterParticipantId || null}
-                          nullLabel="Alle"
+                          nullLabel={t("exportModal.all")}
                           onChange={(p) => { setExportFilterParticipantId(p ? p.id : ""); clearExportUrl(); }}
                         />
                       </div>
@@ -720,7 +724,7 @@ export function ListManager({
                           getId={(e) => e.id}
                           getLabel={(e) => `${e.event_date} — ${e.title}`}
                           value={exportFilterEventId || null}
-                          nullLabel="Alle"
+                          nullLabel={t("exportModal.all")}
                           onChange={(e) => { setExportFilterEventId(e ? e.id : ""); clearExportUrl(); }}
                         />
                       </div>
@@ -730,7 +734,7 @@ export function ListManager({
                     <input
                       className="input"
                       type="text"
-                      placeholder="Suchbegriff…"
+                      placeholder={t("exportModal.searchTermPlaceholder")}
                       value={exportFilterText}
                       onChange={(e) => { setExportFilterText(e.target.value); clearExportUrl(); }}
                       style={{ marginTop: "var(--space-2)" }}
@@ -811,7 +815,7 @@ export function ListManager({
                 />
               </>
             ) : (
-              <p className="muted">Wähle eine Liste aus.</p>
+              <p className="muted">{t("exportModal.selectListPrompt")}</p>
             )}
           </div>
         </div>
@@ -820,13 +824,13 @@ export function ListManager({
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editingListId ? "Liste bearbeiten" : "Liste erstellen"}
-        description="Jede Liste hat genau zwei Spalten. Der Datentyp bestimmt, welche Eingabe spaeter im Tabellenblock und im Protokoll sichtbar ist."
+        title={editingListId ? t("formModal.editTitle") : t("formModal.createTitle")}
+        description={t("formModal.description")}
       >
         <ModalSaveForm className="grid" onSubmit={saveDefinition}>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Listenname</span>
+              <span className="field-label">{t("formModal.name")}</span>
               <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
             </label>
             <label className="checkbox-line">
@@ -835,22 +839,22 @@ export function ListManager({
                 checked={form.is_active}
                 onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))}
               />
-              Aktiv
+              {t("formModal.active")}
             </label>
           </div>
           <label className="field-stack">
-            <span className="field-label">Beschreibung</span>
+            <span className="field-label">{t("formModal.description2")}</span>
             <input
               value={form.description}
               onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-              placeholder="Optional"
+              placeholder={t("formModal.descriptionPlaceholder")}
             />
           </label>
           <div className="two-col">
             <div className="card grid">
-              <div className="eyebrow">Spalte 1</div>
+              <div className="eyebrow">{t("formModal.column1")}</div>
               <label className="field-stack">
-                <span className="field-label">Titel</span>
+                <span className="field-label">{t("formModal.title")}</span>
                 <input
                   value={form.column_one_title}
                   onChange={(event) => setForm((current) => ({ ...current, column_one_title: event.target.value }))}
@@ -858,7 +862,7 @@ export function ListManager({
                 />
               </label>
               <label className="field-stack">
-                <span className="field-label">Datentyp</span>
+                <span className="field-label">{t("formModal.dataType")}</span>
                 <select
                   value={form.column_one_value_type}
                   onChange={(event) =>
@@ -868,7 +872,7 @@ export function ListManager({
                     }))
                   }
                 >
-                  {valueTypeOptions.map((option) => (
+                  {valueTypeOptions(t).map((option) => (
                     <option key={`list-column-one-type-${option.value}`} value={option.value}>
                       {option.label}
                     </option>
@@ -877,9 +881,9 @@ export function ListManager({
               </label>
             </div>
             <div className="card grid">
-              <div className="eyebrow">Spalte 2</div>
+              <div className="eyebrow">{t("formModal.column2")}</div>
               <label className="field-stack">
-                <span className="field-label">Titel</span>
+                <span className="field-label">{t("formModal.title")}</span>
                 <input
                   value={form.column_two_title}
                   onChange={(event) => setForm((current) => ({ ...current, column_two_title: event.target.value }))}
@@ -887,7 +891,7 @@ export function ListManager({
                 />
               </label>
               <label className="field-stack">
-                <span className="field-label">Datentyp</span>
+                <span className="field-label">{t("formModal.dataType")}</span>
                 <select
                   value={form.column_two_value_type}
                   onChange={(event) =>
@@ -897,7 +901,7 @@ export function ListManager({
                     }))
                   }
                 >
-                  {valueTypeOptions.map((option) => (
+                  {valueTypeOptions(t).map((option) => (
                     <option key={`list-column-two-type-${option.value}`} value={option.value}>
                       {option.label}
                     </option>
@@ -908,7 +912,7 @@ export function ListManager({
           </div>
           <div className="table-toolbar-actions">
             <button data-modal-save type="submit" className="button-secondary">
-              {editingListId ? "Liste speichern" : "Liste erstellen"}
+              {editingListId ? t("formModal.save") : t("formModal.create")}
             </button>
           </div>
         </ModalSaveForm>

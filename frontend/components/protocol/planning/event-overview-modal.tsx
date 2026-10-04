@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { useConfirm } from "@/contexts/confirm-context";
 import { Modal } from "@/components/ui/modal";
@@ -90,6 +91,8 @@ export function EventOverviewModal({
   const [creating, setCreating] = useState(false);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [detailEvent, setDetailEvent] = useState<EventSummary | null>(null);
+  const t = useTranslations("events");
+  const tCommon = useTranslations("common");
   const confirm = useConfirm();
 
   const visibleIds = new Set(visibleEvents.map((e) => e.id));
@@ -150,9 +153,9 @@ export function EventOverviewModal({
   async function handleDelete(eventId: string, title: string) {
     if (
       !(await confirm({
-        message: `Termin "${title}" endgültig löschen? Das entfernt ihn aus allen Protokollen.`,
+        message: t("overviewModal.deleteConfirm", { title }),
         tone: "danger",
-        confirmLabel: "Löschen"
+        confirmLabel: t("delete")
       }))
     )
       return;
@@ -160,10 +163,10 @@ export function EventOverviewModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Terminübersicht" size="fullscreen">
+    <Modal open={open} onClose={onClose} title={t("overviewModal.title")} size="fullscreen">
       <div className="event-overview-modal">
         {visibleEvents.length === 0 ? (
-          <p className="muted">Keine Termine angezeigt.</p>
+          <p className="muted">{t("overviewModal.noEventsShown")}</p>
         ) : (
           <div className="event-table-wrap event-table-wrap-scrollable event-overview-table-wrap">
             <table className="data-table event-table event-table-compact">
@@ -176,11 +179,11 @@ export function EventOverviewModal({
               </colgroup>
               <thead>
                 <tr>
-                  <th>Datum</th>
-                  <th>Tag</th>
-                  <th>Titel</th>
-                  <th>Beschreibung</th>
-                  <th aria-label="Aktionen" />
+                  <th>{t("columns.date")}</th>
+                  <th>{t("columns.tag")}</th>
+                  <th>{t("columns.title")}</th>
+                  <th>{t("columns.description")}</th>
+                  <th aria-label={t("columns.actions")} />
                 </tr>
               </thead>
               <tbody>
@@ -194,7 +197,7 @@ export function EventOverviewModal({
                       <button
                         type="button"
                         className="button-ghost button-icon button-icon-danger"
-                        title="Termin endgültig löschen"
+                        title={t("overviewModal.deleteButtonTitle")}
                         onClick={(e) => {
                           e.stopPropagation();
                           void handleDelete(eventRow.id, eventRow.title);
@@ -213,7 +216,7 @@ export function EventOverviewModal({
         {!showAddPanel ? (
           <div className="modal-actions">
             <button type="button" className="button-secondary" onClick={openAddPanel}>
-              + Hinzufügen
+              {t("overviewModal.addButton")}
             </button>
           </div>
         ) : (
@@ -225,28 +228,28 @@ export function EventOverviewModal({
                   className={`button-toggle${addScope === "current" ? " button-toggle-active" : ""}`}
                   onClick={() => onAddScopeChange("current")}
                 >
-                  Aktueller Zyklus
+                  {t("overviewModal.currentCycleScope")}
                 </button>
                 <button
                   type="button"
                   className={`button-toggle${addScope === "all" ? " button-toggle-active" : ""}`}
                   onClick={() => onAddScopeChange("all")}
                 >
-                  Alle Termine
+                  {t("overviewModal.allEventsScope")}
                 </button>
               </div>
               <input
                 className="input"
                 value={addSearch}
                 onChange={(e) => onAddSearchChange(e.target.value)}
-                placeholder="Suche nach Titel oder Tag…"
+                placeholder={t("overviewModal.searchPlaceholder")}
               />
             </div>
 
             {addLoading ? (
-              <p className="muted">Lädt…</p>
+              <p className="muted">{tCommon("loading")}</p>
             ) : addResults.length === 0 ? (
-              <p className="muted">Keine passenden Termine gefunden.</p>
+              <p className="muted">{t("overviewModal.noMatchingEvents")}</p>
             ) : (
               <div className="participant-check-grid">
                 {addResults.map((evt) => (
@@ -262,7 +265,7 @@ export function EventOverviewModal({
                       <span />
                     </div>
                     <div className="candidate-card-body">
-                      <div>{evt.title ?? "Termin ohne Titel"}</div>
+                      <div>{evt.title ?? t("overviewModal.untitledEvent")}</div>
                       <div className="muted">
                         {evt.event_date}
                         {evt.tag ? ` · ${evt.tag}` : ""}
@@ -295,7 +298,7 @@ export function EventOverviewModal({
                   value={forcedTag || newDraft.tag}
                   onChange={(v) => setNewDraft((d) => ({ ...d, tag: v }))}
                   suggestions={knownEventTags}
-                  placeholder="Tag"
+                  placeholder={t("columns.tag")}
                   multi={false}
                   readOnly={Boolean(forcedTag) || creating}
                   tagConfig={tagConfig}
@@ -307,31 +310,31 @@ export function EventOverviewModal({
                   value={newDraft.title}
                   disabled={creating}
                   onChange={(e) => setNewDraft((d) => ({ ...d, title: e.target.value }))}
-                  placeholder="Titel"
+                  placeholder={t("columns.title")}
                 />
                 <input
                   className="event-field-description"
                   value={newDraft.description}
                   disabled={creating}
                   onChange={(e) => setNewDraft((d) => ({ ...d, description: e.target.value }))}
-                  placeholder="Beschreibung"
+                  placeholder={t("columns.description")}
                 />
                 <div className="modal-actions">
                   <button type="button" className="button-ghost" disabled={creating} onClick={() => setShowCreateForm(false)}>
-                    Abbrechen
+                    {tCommon("cancel")}
                   </button>
                   <button type="button" className="button-primary" disabled={creating} onClick={() => void handleCreate()}>
-                    {creating ? "…" : "Termin anlegen"}
+                    {creating ? "…" : t("overviewModal.createEventButton")}
                   </button>
                 </div>
               </div>
             ) : (
               <div className="modal-actions">
                 <button type="button" className="button-ghost" onClick={() => setShowAddPanel(false)}>
-                  Schliessen
+                  {tCommon("close")}
                 </button>
                 <button type="button" className="button-secondary" onClick={() => setShowCreateForm(true)}>
-                  + Neuer Termin
+                  {t("overviewModal.newEventButton")}
                 </button>
               </div>
             )}
@@ -342,7 +345,7 @@ export function EventOverviewModal({
       <Modal
         open={Boolean(detailEvent)}
         onClose={() => setDetailEvent(null)}
-        title={detailEvent?.title || "Termin"}
+        title={detailEvent?.title || t("detailModal.fallbackTitle")}
         description={detailEvent ? formatDateRange(detailEvent.event_date, detailEvent.event_end_date) : undefined}
         size="wide"
       >

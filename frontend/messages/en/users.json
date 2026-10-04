@@ -1,0 +1,68 @@
+{
+  "pageTitle": "Users",
+  "ownAccessOnlyHint": "Access and roles for this organization.",
+  "pageHint": "This organization's accounts and their roles.",
+  "newUser": "+ New user",
+  "emptyState": {
+    "title": "Only your own access",
+    "description": "Invite more people and assign them a role: Admin, Writer, Treasurer or Reader.",
+    "invite": "+ Invite user"
+  },
+  "explainRoles": "Explain roles",
+  "explainRolesDescription": "Each account has exactly one role per organization.",
+  "tabs": {
+    "active": "Active users ({count})",
+    "participants": "Participants ({count})"
+  },
+  "searchUsers": "Search users",
+  "searchParticipants": "Search participants",
+  "columns": {
+    "displayName": "Display name",
+    "name": "Name",
+    "email": "Email",
+    "role": "Role",
+    "actions": "Actions",
+    "participantEmail": "Email (participant)"
+  },
+  "mfaButton": "MFA",
+  "delete": "Delete",
+  "close": "Close",
+  "editUserTitle": "Edit user",
+  "createUserTitle": "Create user",
+  "userModalDescription": "Maintain account data and role.",
+  "firstName": "First name",
+  "lastName": "Last name",
+  "displayName": "Display name",
+  "email": "Email",
+  "newPassword": "New password",
+  "password": "Password",
+  "passwordHelpEdit": "Only fill in to change the password. At least 12 characters.",
+  "passwordHelpCreate": "Set directly here, at least 12 characters. There is no automatic invitation email - share the password with the user separately.",
+  "role": "Role",
+  "active": "Active",
+  "enableLogin": "Enable login",
+  "participantAutoNote": "This account was created automatically from a participant. For the first login, please enable login and set a new password.",
+  "cancel": "Cancel",
+  "save": "Save",
+  "enableLoginForTitle": "Enable login for {name}",
+  "enableLoginTitle": "Enable login",
+  "enableLoginDescription": "Assign an email and password so this participant can log in. They remain linked as a participant.",
+  "mfaTitle": "MFA for {name}",
+  "mfaTitleFallback": "MFA",
+  "roleDescriptions": {
+    "admin": "Full access within the organization, including structure (templates, cycles, settings) and user management.",
+    "writer": "Works in the protocol area and maintains operational data, but changes neither structure nor finances.",
+    "kassier": "Like reader, plus full write access to finances and fines.",
+    "reader": "Read-only access, can trigger PDF exports and only sees their own fines."
+  },
+  "toasts": {
+    "loginEnabled": "Login enabled",
+    "loginEnableFailed": "Login could not be enabled",
+    "userSaved": "User saved",
+    "userCreated": "User created",
+    "userSaveFailed": "User could not be saved",
+    "deleteConfirm": "Permanently delete user \"{name}\"? The account and access are lost immediately.",
+    "userDeleted": "User deleted",
+    "userDeleteFailed": "User could not be deleted"
+  }
+}

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
@@ -13,8 +14,9 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { FINE_TYPE_LABEL } from "@/lib/constants/fine-types";
+import { fineTypeLabels } from "@/lib/constants/fine-types";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
+import type { Locale } from "@/i18n/locale-config.generated";
 import { AttendanceFineListItem, FinanceAccount } from "@/types/api";
 
 const PAGE_SIZE = 50;
@@ -29,6 +31,10 @@ type Props = {
 };
 
 export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) {
+  const t = useTranslations("finances");
+  const tCommon = useTranslations("common");
+  const fineTypeLabel = useMemo(() => fineTypeLabels(t), [t]);
+  const locale = useLocale();
   const router = useRouter();
   const confirm = useConfirm();
   const showToast = useToast();
@@ -81,12 +87,12 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
           !q ||
           f.participant_name_snapshot.toLowerCase().includes(q) ||
           (f.protocol_number ?? "").toLowerCase().includes(q) ||
-          (FINE_TYPE_LABEL[f.fine_type] ?? f.fine_type).toLowerCase().includes(q);
+          (fineTypeLabel[f.fine_type] ?? f.fine_type).toLowerCase().includes(q);
         return matchStatus && matchSearch;
       })
       .sort((a, b) => {
         if (sortKey === "amount") return (a.amount - b.amount) * dir;
-        if (sortKey === "fine_type") return (FINE_TYPE_LABEL[a.fine_type] ?? "").localeCompare(FINE_TYPE_LABEL[b.fine_type] ?? "") * dir;
+        if (sortKey === "fine_type") return (fineTypeLabel[a.fine_type] ?? "").localeCompare(fineTypeLabel[b.fine_type] ?? "") * dir;
         if (sortKey === "protocol_number") return (a.protocol_number ?? "").localeCompare(b.protocol_number ?? "") * dir;
         if (sortKey === "status") return a.status.localeCompare(b.status) * dir;
         return a.participant_name_snapshot.localeCompare(b.participant_name_snapshot) * dir;
@@ -107,19 +113,19 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
       const updated = await browserApiFetch<AttendanceFineListItem>(`/api/fines/${fine.id}/collect`, { method: "POST" });
       if (updated) setFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Busse konnte nicht kassiert werden", "error");
+      showToast(error instanceof Error ? error.message : t("collectFailed"), "error");
     } finally {
       setBusy((b) => ({ ...b, [fine.id]: false }));
     }
   }
 
   async function deleteFine(fine: AttendanceFineListItem) {
-    if (!(await confirm({ message: `Busse von ${fine.participant_name_snapshot} endgültig löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
+    if (!(await confirm({ message: t("deleteFineConfirm", { name: fine.participant_name_snapshot }), tone: "danger", confirmLabel: tCommon("delete") }))) return;
     try {
       await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
       setFines((prev) => prev.filter((f) => f.id !== fine.id));
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Busse konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("deleteFineFailed"), "error");
     }
   }
 
@@ -129,7 +135,7 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
       const updated = await browserApiFetch<AttendanceFineListItem>(`/api/fines/${fine.id}/reopen`, { method: "POST" });
       if (updated) setFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Busse konnte nicht zurückgesetzt werden", "error");
+      showToast(error instanceof Error ? error.message : t("reopenFailed"), "error");
     } finally {
       setBusy((b) => ({ ...b, [fine.id]: false }));
     }
@@ -142,7 +148,7 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
       setHasMore((latest ?? []).length === PAGE_SIZE);
       setCreateOpen(false);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Bussen konnten nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("reloadFailed"), "error");
     }
   }
 
@@ -155,38 +161,38 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
     <div className="grid">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Bussen</h1>
-          <p className="muted">{ownOnly ? "Deine Verspätungs- und Absenzbussen." : "Alle Verspätungs- und Absenzbussen dieses Mandanten."}</p>
+          <h1 className="page-title">{t("finesPageTitle")}</h1>
+          <p className="muted">{ownOnly ? t("ownOnlyDescription") : t("allDescription")}</p>
         </div>
       </div>
 
       {hasNoFines ? (
         <EmptyState
-          title="Noch keine Bussen erfasst"
-          description="Bussen entstehen aus der Anwesenheitskontrolle eines Protokolls oder werden hier manuell hinzugefügt."
+          title={t("noFinesTitle")}
+          description={t("noFinesDescription")}
           actions={
             canCreate ? (
               <button type="button" className="button-primary" onClick={() => setCreateOpen(true)}>
-                + Busse
+                {t("addFine")}
               </button>
             ) : null
           }
-          hint="Verspätungen und unentschuldigte Absenzen lassen sich pro Protokoll automatisch verbuchen."
+          hint={t("noFinesHint")}
         />
       ) : (
       <>
       <div className="list-filter-row">
         <FilterTabs
           options={[
-            { value: "pending", label: "Ausstehend", count: counts.pending || undefined },
-            { value: "collected", label: "Kassiert", count: counts.collected || undefined },
-            { value: "all", label: "Alle" },
+            { value: "pending", label: t("filterPending"), count: counts.pending || undefined },
+            { value: "collected", label: t("filterCollected"), count: counts.collected || undefined },
+            { value: "all", label: t("filterAll") },
           ]}
           value={statusFilter}
           onChange={setStatusFilter}
         />
         <div className="list-filter-search">
-          <SearchInput value={search} onChange={setSearch} placeholder="Bussen durchsuchen" />
+          <SearchInput value={search} onChange={setSearch} placeholder={t("finesSearchPlaceholder")} />
         </div>
       </div>
 
@@ -194,15 +200,15 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
         className="data-table-lg"
         columns={[
           ...(canWrite ? [{ key: "collect", label: "" }] : []),
-          { key: "participant_name_snapshot", label: "Teilnehmer", sortable: true, sortDirection: sd("participant_name_snapshot"), onSort: () => toggleSort("participant_name_snapshot") },
-          { key: "protocol_number", label: "Protokoll", sortable: true, sortDirection: sd("protocol_number"), onSort: () => toggleSort("protocol_number") },
-          { key: "fine_type", label: "Grund", sortable: true, sortDirection: sd("fine_type"), onSort: () => toggleSort("fine_type") },
-          "Konto",
-          { key: "amount", label: "Betrag", sortable: true, sortDirection: sd("amount"), onSort: () => toggleSort("amount") },
-          { key: "status", label: "Status", sortable: true, sortDirection: sd("status"), onSort: () => toggleSort("status") },
-          ...(canWrite ? ["Aktionen"] : []),
+          { key: "participant_name_snapshot", label: t("colParticipant"), sortable: true, sortDirection: sd("participant_name_snapshot"), onSort: () => toggleSort("participant_name_snapshot") },
+          { key: "protocol_number", label: t("colProtocol"), sortable: true, sortDirection: sd("protocol_number"), onSort: () => toggleSort("protocol_number") },
+          { key: "fine_type", label: t("colReason"), sortable: true, sortDirection: sd("fine_type"), onSort: () => toggleSort("fine_type") },
+          t("colAccount"),
+          { key: "amount", label: t("colAmount"), sortable: true, sortDirection: sd("amount"), onSort: () => toggleSort("amount") },
+          { key: "status", label: t("colStatus"), sortable: true, sortDirection: sd("status"), onSort: () => toggleSort("status") },
+          ...(canWrite ? [tCommon("actions")] : []),
         ]}
-        emptyMessage="Keine Bussen gefunden."
+        emptyMessage={t("emptyFines")}
       >
         {filtered.map((fine) => {
           const isCollected = fine.status === "collected";
@@ -215,7 +221,7 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
                   <button
                     type="button"
                     className={`todo-check${isCollected ? " todo-check-done" : ""}`}
-                    title={isCollected ? "Bereits kassiert" : "Busse kassieren"}
+                    title={isCollected ? t("alreadyCollected") : t("markCollected")}
                     disabled={busy[fine.id] || isCollected}
                     onClick={() => !isCollected && void collectFine(fine)}
                   >
@@ -234,15 +240,16 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
                   {fine.protocol_date ? <span className="todo-protocol-title">{formatDate(fine.protocol_date)}</span> : null}
                 </button>
               </td>
-              <td>{FINE_TYPE_LABEL[fine.fine_type] ?? fine.fine_type}</td>
-              <td>{account?.name ?? "Unbekanntes Konto"}</td>
+              <td>{fineTypeLabel[fine.fine_type] ?? fine.fine_type}</td>
+              <td>{account?.name ?? t("unknownAccount")}</td>
               <td>{fine.amount.toFixed(2)} {cur}</td>
               <td>
-                <Badge variant={isCollected ? "success" : "neutral"}>{isCollected ? "Kassiert" : "Ausstehend"}</Badge>
+                <Badge variant={isCollected ? "success" : "neutral"}>{isCollected ? t("statusCollected") : t("statusPending")}</Badge>
                 {isCollected && fine.collected_at ? (
                   <div className="muted fines-collected-note">
-                    {formatDateTime(fine.collected_at)}
-                    {fine.collected_by_display_name ? ` von ${fine.collected_by_display_name}` : ""}
+                    {fine.collected_by_display_name
+                      ? t("collectedNoteWithUser", { date: formatDateTime(fine.collected_at, locale as Locale), user: fine.collected_by_display_name })
+                      : t("collectedNote", { date: formatDateTime(fine.collected_at, locale as Locale) })}
                   </div>
                 ) : null}
               </td>
@@ -251,12 +258,12 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
                   <div className="table-actions table-actions-start">
                     {!isCollected && (
                       <button type="button" className="row-text-action row-text-action-danger" onClick={() => void deleteFine(fine)}>
-                        Löschen
+                        {tCommon("delete")}
                       </button>
                     )}
                     {isCollected && fine.can_reopen && (
                       <button type="button" className="row-text-action" disabled={busy[fine.id]} onClick={() => void reopenFine(fine)}>
-                        Rückgängig
+                        {t("reopen")}
                       </button>
                     )}
                   </div>
@@ -272,10 +279,10 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
       {hasMore && (
         <div className="load-more-row" ref={loadMoreSentinelRef}>
           {isLoadingMore ? (
-            <span className="muted">Lädt weitere Bussen…</span>
+            <span className="muted">{t("loadingMoreFines")}</span>
           ) : (
             <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
-              Mehr laden ({fines.length} geladen)
+              {t("loadMoreFines", { count: fines.length })}
             </button>
           )}
         </div>

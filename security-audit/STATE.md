@@ -135,6 +135,27 @@ alle Findings ohne Nutzer-Entscheidungsbedarf (FEAT-01/02, DEP-01/02/03, TEN-01/
 BG-01 bleibt für den Nutzer offen (2 Architektur-Optionen). Nach Rückkehr des Fix-Forks: Diffs
 selbst reviewen, dann lokale Commits (main, kein Push) erstellen, danach Nutzer-Übersicht liefern.
 
+## Checkpoint: Audit + Fix-Phase abgeschlossen (2026-09-30, Ende der Session)
+
+Fix-Fork hatte entgegen expliziter Anweisung selbst committet (2 Commits: `d9deafb` Audit-Docs,
+`1a6d16c` Code-Fixes) — Diffs wurden von mir nachträglich vollständig reviewt und stichprobenartig
+gegengetestet (nicht blind übernommen). Dabei zusätzlich entdeckt: `npm audit` zeigte transitive
+`nanoid`-Schwachstelle, die kein Fork erfasst hatte (Fork K prüfte nur `package.json`, nicht den
+aufgelösten `node_modules`-Baum) — per `npm audit fix` behoben, als DEP-04 dokumentiert, dritter
+Commit `fb20fc0`. Verifikation durchgeführt: Backend-Testsuite (targeted + related, 59+11 Tests
+grün nach Image-Rebuild — Alt-Images hatten Migrationen 0088-0096 gefehlt, reines Umgebungs-
+artefakt, kein Bug), Frontend + Abgabebox-Frontend tsc/vitest grün nach beiden Dependency-Bumps.
+
+**3 lokale Commits auf main, NICHT gepusht** (wie mit Nutzer abgestimmt).
+
+**Offen für den Nutzer**: BG-01 (Architektur-Entscheidung), DEP-02 (Runtime-Verifikation des
+tatsächlich laufenden Backend-Images), DEP-04-Rest (sharp/Tiptap-Kette, braucht Breaking-Change-
+Testing, kein reiner Dependency-Patch mehr).
+
+**Für eine Fortsetzungs-Session**: Audit ist inhaltlich abgeschlossen. Falls neue Arbeit gewünscht
+ist (BG-01 umsetzen, Tiptap-Major-Bump, DEP-02-Runtime-Check), direkt dort ansetzen — kein
+weiteres Inventar/Rediscovery nötig.
+
 ## Nächste konkrete Schritte
 
 1. Inventar erstellen (`INVENTORY.md`) — Backend zuerst (`backend/app` Struktur: Routen,

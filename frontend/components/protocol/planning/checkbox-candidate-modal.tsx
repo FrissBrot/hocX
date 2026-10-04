@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { Modal } from "@/components/ui/modal";
 import { ActionIcon } from "@/components/ui/action-icons";
@@ -49,13 +50,16 @@ export function CheckboxCandidateModal({
   items,
   searchable = true,
   loading = false,
-  emptyMessage = "Keine Elemente gefunden.",
+  emptyMessage,
   onToggle,
   renderEditForm,
   topActions,
 }: CheckboxCandidateModalProps) {
+  const t = useTranslations("protocols");
+  const tCommon = useTranslations("common");
   const [search, setSearch] = useState("");
   const [editingItem, setEditingItem] = useState<CandidateItem | null>(null);
+  const resolvedEmptyMessage = emptyMessage ?? t("noElementsFound");
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -82,15 +86,15 @@ export function CheckboxCandidateModal({
 
         {searchable && (
           <label className="field-stack">
-            <span className="field-label">Suche</span>
-            <SearchInput value={search} onChange={setSearch} placeholder="Suchen…" autoFocus />
+            <span className="field-label">{t("searchLabel")}</span>
+            <SearchInput value={search} onChange={setSearch} placeholder={tCommon("searchPlaceholder")} autoFocus />
           </label>
         )}
 
         {loading ? (
-          <p className="muted">Lädt…</p>
+          <p className="muted">{tCommon("loading")}</p>
         ) : filtered.length === 0 ? (
-          <p className="muted">{emptyMessage}</p>
+          <p className="muted">{resolvedEmptyMessage}</p>
         ) : (
           groups.map(([groupLabel, groupItems], groupIndex) => (
             <div key={groupLabel || "_"} className={`candidate-group${groupIndex > 0 ? " candidate-group-divider" : ""}`}>
@@ -125,8 +129,8 @@ export function CheckboxCandidateModal({
                         <button
                           type="button"
                           className="button-ghost button-icon candidate-card-edit"
-                          title="Termin bearbeiten"
-                          aria-label="Termin bearbeiten"
+                          title={t("editEventTitle")}
+                          aria-label={t("editEventTitle")}
                           onClick={(e) => {
                             e.stopPropagation();
                             setEditingItem(item);
@@ -152,7 +156,7 @@ export function CheckboxCandidateModal({
       </div>
 
       {renderEditForm ? (
-        <Modal open={Boolean(editingItem)} onClose={() => setEditingItem(null)} title="Termin bearbeiten" size="wide">
+        <Modal open={Boolean(editingItem)} onClose={() => setEditingItem(null)} title={t("editEventTitle")} size="wide">
           {editingItem ? renderEditForm(editingItem, () => setEditingItem(null)) : null}
         </Modal>
       ) : null}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,8 @@ type Props = {
 const PAGE_SIZE = 50;
 
 export function AdminDomainOverview({ initialPage }: Props) {
+  const t = useTranslations("admin.domains");
+  const locale = useLocale();
   const showToast = useToast();
   const confirm = useConfirm();
   const [search, setSearch] = useState("");
@@ -67,10 +70,10 @@ export function AdminDomainOverview({ initialPage }: Props) {
 
   async function deleteDomain(domain: AdminDomainSummary) {
     const confirmed = await confirm({
-      title: `"${domain.domain}" endgültig löschen?`,
-      message: `Diese Domain wird vom Mandanten "${domain.tenant_name}" entfernt. Der Mandant kann danach eine neue Domain hinterlegen und erneut verifizieren.`,
+      title: t("deleteConfirmTitle", { domain: domain.domain }),
+      message: t("deleteConfirmMessage", { tenant: domain.tenant_name }),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: t("delete")
     });
     if (!confirmed) return;
     try {
@@ -82,49 +85,49 @@ export function AdminDomainOverview({ initialPage }: Props) {
       } else {
         await fetchPage(offset, search);
       }
-      showToast("Domain gelöscht", "success");
+      showToast(t("deleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Domain konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("deleteFailed"), "error");
     }
   }
 
   return (
     <div className="grid">
       <DataToolbar
-        title="Domains"
-        description="Alle Custom Domains über alle Mandanten hinweg, mit Status und Gesundheitsprüfung."
+        title={t("title")}
+        description={t("description")}
       />
 
       <article className="card">
         <label className="field-stack">
-          <span className="field-label">Suche</span>
-          <SearchInput value={search} onChange={setSearch} placeholder="Domain oder Mandant durchsuchen" />
+          <span className="field-label">{t("search")}</span>
+          <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
         </label>
       </article>
 
       <DataTable
-        columns={["Mandant", "Zweck", "Domain", "Status", "Zuletzt geprüft", "Aktionen"]}
-        emptyMessage={loading ? "Wird geladen…" : "Keine Domains gefunden."}
+        columns={[t("tenant"), t("purpose"), t("domain"), t("status"), t("lastChecked"), t("actions")]}
+        emptyMessage={loading ? t("loading") : t("noDomainsFound")}
       >
         {visibleDomains.map((d) => (
           <tr key={d.id}>
             <td>{d.tenant_name}</td>
-            <td>{d.purpose === "app" ? "hocX-App" : "Abgabebox"}</td>
+            <td>{d.purpose === "app" ? t("purposeApp") : t("purposeAbgabebox")}</td>
             <td className="domain-row-domain">{d.domain}</td>
             <td>
               {d.status === "pending" ? (
-                <Badge variant="neutral">Ausstehend</Badge>
+                <Badge variant="neutral">{t("statusPending")}</Badge>
               ) : d.is_healthy ? (
-                <Badge variant="success">Aktiv</Badge>
+                <Badge variant="success">{t("statusActive")}</Badge>
               ) : (
-                <Badge variant="danger">Nicht erreichbar</Badge>
+                <Badge variant="danger">{t("statusUnreachable")}</Badge>
               )}
             </td>
             <td className="muted">
-              {d.last_checked_at ? new Date(d.last_checked_at).toLocaleString("de-CH") : "—"}
+              {d.last_checked_at ? new Date(d.last_checked_at).toLocaleString(locale) : "—"}
             </td>
             <td>
-              <ActionMenu items={[{ label: "Löschen", onClick: () => deleteDomain(d), danger: true }]} />
+              <ActionMenu items={[{ label: t("delete"), onClick: () => deleteDomain(d), danger: true }]} />
             </td>
           </tr>
         ))}

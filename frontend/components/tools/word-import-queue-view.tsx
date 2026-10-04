@@ -3,6 +3,7 @@
 import type { Route } from "next";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { useConfirm } from "@/contexts/confirm-context";
 import { useRefreshOnRestore } from "@/lib/hooks/use-refresh-on-restore";
@@ -52,6 +53,8 @@ type PendingUpload = {
 };
 
 export function WordImportQueueView({ templates, initialDocuments, initialTemplateId }: Props) {
+  const t = useTranslations("tools.wordImport");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const confirm = useConfirm();
   useRefreshOnRestore();
@@ -99,7 +102,7 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
           setDocuments((current) => [...result.documents, ...current]);
           if (result.errors.length) setUploadErrors((current) => [...current, ...result.errors]);
         } catch (err) {
-          setUploadErrors((current) => [...current, `${file.name}: ${err instanceof Error ? err.message : "Upload fehlgeschlagen"}`]);
+          setUploadErrors((current) => [...current, `${file.name}: ${err instanceof Error ? err.message : t("queueView.uploadFailed")}`]);
         } finally {
           setPendingUploads((current) => current.filter((pending) => pending.id !== placeholderId));
         }
@@ -111,7 +114,7 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
   }
 
   async function handleDelete(document: WordImportDocumentSummary) {
-    if (!(await confirm({ message: `"${document.display_name}" aus der Warteschlange entfernen?`, tone: "danger", confirmLabel: "Entfernen" }))) return;
+    if (!(await confirm({ message: t("queueView.deleteConfirm", { name: document.display_name }), tone: "danger", confirmLabel: t("queueView.removeLabel") }))) return;
     setDeletingId(document.id);
     setDeleteErrors([]);
     try {
@@ -123,7 +126,7 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
       setDocuments((current) => current.filter((doc) => doc.id !== document.id));
       setSelectedIds((current) => current.filter((id) => id !== document.id));
     } catch (err) {
-      setDeleteErrors([`${document.display_name}: ${err instanceof Error ? err.message : "Entfernen fehlgeschlagen"}`]);
+      setDeleteErrors([`${document.display_name}: ${err instanceof Error ? err.message : t("queueView.removeFailed")}`]);
     } finally {
       setDeletingId(null);
     }
@@ -131,7 +134,7 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
 
   async function handleBulkDelete() {
     if (!selectedIds.length) return;
-    if (!(await confirm({ message: `${selectedIds.length} Dokument(e) aus der Warteschlange entfernen?`, tone: "danger", confirmLabel: "Entfernen" }))) return;
+    if (!(await confirm({ message: t("queueView.bulkDeleteConfirm", { count: selectedIds.length }), tone: "danger", confirmLabel: t("queueView.removeLabel") }))) return;
     setBulkDeleting(true);
     setDeleteErrors([]);
     try {
@@ -147,8 +150,8 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
         if (result.status === "rejected") {
           const id = selectedIds[index];
           failedIds.add(id);
-          const name = documents.find((doc) => doc.id === id)?.display_name ?? "Dokument";
-          errors.push(`${name}: ${result.reason instanceof Error ? result.reason.message : "Entfernen fehlgeschlagen"}`);
+          const name = documents.find((doc) => doc.id === id)?.display_name ?? t("documentFallback");
+          errors.push(`${name}: ${result.reason instanceof Error ? result.reason.message : t("queueView.removeFailed")}`);
         }
       });
       setDocuments((current) => current.filter((doc) => !selectedIds.includes(doc.id) || failedIds.has(doc.id)));
@@ -169,15 +172,13 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
   return (
     <div className="grid">
       <article className="card">
-        <h2 style={{ margin: "0 0 0.35rem" }}>Dokumente einlesen</h2>
+        <h2 style={{ margin: "0 0 0.35rem" }}>{t("queueView.heading")}</h2>
         <p className="muted" style={{ margin: "0 0 0.75rem" }}>
-          Mehrere Word- oder PDF-Altprotokolle auf einmal hochladen — auch als ZIP gebündelt, dann werden nur die enthaltenen Word- und
-          PDF-Dateien eingelesen, alles andere wird ignoriert. Die Dateien werden derselben Vorlage zugeteilt, sofort analysiert und
-          landen als &quot;Eingelesen&quot; in der Tabelle unten.
+          {t("queueView.intro")}
         </p>
         <div className="word-import-narrow" style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap" }}>
           <label className="field-stack" style={{ flex: "0 0 auto", minWidth: "220px" }}>
-            <span className="field-label">Vorlage</span>
+            <span className="field-label">{t("templateLabel")}</span>
             <SearchableSelect
               options={templates}
               getId={(template) => template.id}
@@ -191,7 +192,7 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
             />
           </label>
           <label className="field-stack" style={{ flex: "1 1 auto" }}>
-            <span className="field-label">Word-, PDF- oder ZIP-Dateien (.docx, .pdf, .zip)</span>
+            <span className="field-label">{t("queueView.fileFieldLabel")}</span>
             <label
               className={`word-import-dropzone word-import-dropzone-compact${isDragOver ? " is-dragover" : ""}`}
               onDragOver={(event) => {
@@ -209,7 +210,7 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
                 <UploadIcon />
               </span>
               <span>
-                <span className="word-import-dropzone-link">Dateien auswählen</span> oder hierher ziehen
+                <span className="word-import-dropzone-link">{t("queueView.chooseFilesLink")}</span> {t("queueView.orDragHere")}
               </span>
               <input
                 ref={fileInputRef}
@@ -222,7 +223,7 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
               />
             </label>
           </label>
-          {uploading && <span className="muted">Lädt…</span>}
+          {uploading && <span className="muted">{tCommon("loading")}</span>}
         </div>
         {uploadErrors.length > 0 && (
           <div className="form-error-banner" style={{ marginTop: "0.75rem" }}>
@@ -236,23 +237,23 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
       <div className="list-filter-row">
         <FilterTabs<StatusFilter>
           options={[
-            { value: "eingelesen", label: "Offen", count: counts.eingelesen || undefined },
-            { value: "importiert", label: "Abgeschlossen", count: counts.importiert || undefined },
-            { value: "all", label: "Alle" },
+            { value: "eingelesen", label: t("queueView.filterOpen"), count: counts.eingelesen || undefined },
+            { value: "importiert", label: t("queueView.filterDone"), count: counts.importiert || undefined },
+            { value: "all", label: t("queueView.filterAll") },
           ]}
           value={statusFilter}
           onChange={setStatusFilter}
         />
         {selectedIds.length > 0 && (
           <div className="table-toolbar-actions">
-            <span className="pill">{selectedIds.length} ausgewählt</span>
+            <span className="pill">{t("queueView.selectedCount", { count: selectedIds.length })}</span>
             <button
               type="button"
               className="button-secondary button-danger"
               disabled={bulkDeleting}
               onClick={() => void handleBulkDelete()}
             >
-              Auswahl entfernen
+              {t("queueView.removeSelectionButton")}
             </button>
           </div>
         )}
@@ -275,19 +276,19 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
             header: (
               <input
                 type="checkbox"
-                aria-label="Alle auswählen"
+                aria-label={t("queueView.selectAllAriaLabel")}
                 checked={allFilteredSelected}
                 onChange={(event) => setSelectedIds(event.target.checked ? filtered.map((doc) => doc.id) : [])}
               />
             ),
           },
-          "Name",
-          "Vorlage",
-          "Hochgeladen am",
-          "Status",
-          "Aktionen",
+          t("queueView.colName"),
+          t("templateLabel"),
+          t("queueView.colUploadedAt"),
+          t("queueView.colStatus"),
+          t("queueView.colActions"),
         ]}
-        emptyMessage="Keine Dokumente in dieser Ansicht."
+        emptyMessage={t("queueView.emptyMessage")}
       >
         {(statusFilter === "eingelesen" || statusFilter === "all") &&
           pendingUploads.map((pending) => (
@@ -297,10 +298,10 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
                 <strong>{pending.name}</strong>
               </td>
               <td>{templates.find((template) => template.id === uploadTemplateId)?.name ?? ""}</td>
-              <td>&mdash;</td>
+              <td>&mdash;</td> {/* i18n-ok: Platzhalter-Gedankenstrich, kein UI-Text */}
               <td>
                 <span className="word-import-cell-with-spinner">
-                  <SpinnerIcon size={12} /> Wird analysiert…
+                  <SpinnerIcon size={12} /> {t("queueView.analyzingEllipsis")}
                 </span>
               </td>
               <td />
@@ -330,15 +331,15 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
               <div className="muted">{document.original_filename}</div>
               {document.duplicates.length > 0 && (
                 <div className="word-import-duplicate-hint">
-                  <Badge variant="warning">Mögliches Duplikat</Badge>
+                  <Badge variant="warning">{t("queueView.possibleDuplicateBadge")}</Badge>
                   <span className="muted">
-                    gleiches Datum wie{" "}
+                    {t("queueView.sameDatePrefix")}{" "}
                     {document.duplicates.map((duplicate, index) => (
                       <span key={duplicate.id}>
                         {index > 0 && ", "}
                         {duplicate.status === "importiert" && duplicate.protocol_id ? (
                           <a className="row-text-action" href={`/protocols/${duplicate.protocol_id}`}>
-                            „{duplicate.display_name}“ (bereits importiert)
+                            {t("queueView.alreadyImportedNamed", { name: duplicate.display_name })}
                           </a>
                         ) : (
                           <button
@@ -346,7 +347,7 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
                             className="row-text-action"
                             onClick={() => router.push(`/tools/import/${duplicate.id}` as Route)}
                           >
-                            „{duplicate.display_name}“ (noch offen)
+                            {t("queueView.stillOpenNamed", { name: duplicate.display_name })}
                           </button>
                         )}
                       </span>
@@ -359,7 +360,7 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
             <td>{formatDateTime(document.created_at)}</td>
             <td>
               <Badge variant={document.status === "importiert" ? "success" : "info"}>
-                {document.status === "importiert" ? "Importiert" : "Eingelesen"}
+                {document.status === "importiert" ? t("queueView.statusImported") : t("queueView.statusRead")}
               </Badge>
             </td>
             <td>
@@ -367,7 +368,7 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
                 {document.status === "eingelesen" ? (
                   <>
                     <button type="button" className="row-text-action" onClick={() => router.push(`/tools/import/${document.id}` as Route)}>
-                      Prüfen &amp; importieren
+                      {t("queueView.reviewAndImportButton")}
                     </button>
                     <button
                       type="button"
@@ -375,18 +376,18 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
                       disabled={deletingId === document.id}
                       onClick={() => void handleDelete(document)}
                     >
-                      Entfernen
+                      {t("queueView.removeLabel")}
                     </button>
                   </>
                 ) : (
                   <>
                     {document.protocol_id && (
                       <a className="row-text-action" href={`/protocols/${document.protocol_id}`}>
-                        Protokoll öffnen
+                        {t("queueView.openProtocolButton")}
                       </a>
                     )}
                     <a className="row-text-action" href={`/api/stored-files/${document.stored_file_id}/content`}>
-                      Original herunterladen
+                      {t("queueView.downloadOriginalButton")}
                     </a>
                   </>
                 )}

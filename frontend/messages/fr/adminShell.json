@@ -1,0 +1,21 @@
+{
+  "title": "Administration de la plateforme",
+  "tagline": "Gérer les organisations et les utilisateurs sur l'ensemble du système.",
+  "groups": { "tenants": "Organisations", "system": "Système", "access": "Accès" },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "tenants": "Organisations",
+    "pricing": "Tarifs",
+    "users": "Utilisateurs",
+    "domains": "Domaines",
+    "errorLogs": "Journal des erreurs",
+    "uploadPipeline": "Pipeline de fichiers",
+    "admins": "Comptes administrateurs",
+    "sso": "SSO",
+    "security": "Sécurité"
+  },
+  "logout": "Se déconnecter",
+  "menuToggleClose": "Fermer",
+  "breadcrumbNav": "Fil d'Ariane",
+  "readOnlyBanner": "Accès en lecture seule (support) : les modifications ne sont pas possibles avec ce compte."
+}

@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
-import { FINE_TYPE_LABEL } from "@/lib/constants/fine-types";
+import { fineTypeLabels } from "@/lib/constants/fine-types";
 import { formatDate } from "@/lib/utils/format";
 import { AttendanceFineListItem, NextSessionAttendanceEntry, NextSessionInfo, TodoListItem } from "@/types/api";
 
@@ -29,19 +30,23 @@ function isOverdue(dateStr: string | null | undefined): boolean {
   return new Date(dateStr) < new Date(new Date().toDateString());
 }
 
-function sessionCountdownLabel(dateStr: string): string {
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
+function sessionCountdownLabel(dateStr: string, t: TFunc): string {
   const today = new Date(new Date().toDateString());
   const target = new Date(dateStr);
   const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
-  if (diffDays === 0) return "Heute";
-  if (diffDays === 1) return "Morgen";
-  if (diffDays > 1) return `In ${diffDays} Tagen`;
+  if (diffDays === 0) return t("today");
+  if (diffDays === 1) return t("tomorrow");
+  if (diffDays > 1) return t("inDays", { count: diffDays });
   return "";
 }
 
 export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, hasProtocols, canConfigure }: Props) {
+  const t = useTranslations("dashboard");
   const router = useRouter();
   const showToast = useToast();
+  const fineTypeLabel = fineTypeLabels(useTranslations("finances"));
   const [entries, setEntries] = useState<NextSessionAttendanceEntry[]>(nextSession.entries);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
@@ -64,7 +69,7 @@ export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, 
   );
 
   const protocol = nextSession.protocol;
-  const countdown = protocol ? sessionCountdownLabel(protocol.protocol_date ?? "") : "";
+  const countdown = protocol ? sessionCountdownLabel(protocol.protocol_date ?? "", t) : "";
 
   async function toggleExcused(entry: NextSessionAttendanceEntry) {
     if (!canExcuse || !protocol || busy[entry.participant_id]) return;
@@ -86,7 +91,7 @@ export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, 
       // The optimistic status flip was already reverted above - without this, that revert
       // was the only visible feedback, so a real failure just looked like the click didn't
       // register (audit F8, 2026-08-16).
-      showToast(err instanceof Error ? err.message : "Status konnte nicht geändert werden", "error");
+      showToast(err instanceof Error ? err.message : t("statusChangeFailed"), "error");
     } finally {
       setBusy((b) => ({ ...b, [entry.participant_id]: false }));
     }
@@ -97,30 +102,30 @@ export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, 
       <div className="grid">
         <div className="page-header">
           <div>
-            <h1 className="page-title">Dashboard</h1>
-            <p className="muted">Überblick über Protokolle, Todos und Termine.</p>
+            <h1 className="page-title">{t("pageTitle")}</h1>
+            <p className="muted">{t("pageIntro")}</p>
           </div>
         </div>
         <EmptyState
-          title="Hier entsteht dein Überblick"
-          description="Sobald das erste Protokoll läuft, zeigt das Dashboard offene Todos, kommende Termine und Kennzahlen deines Mandanten."
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
           actions={
             canWrite || canConfigure ? (
               <>
                 {canWrite ? (
                   <button type="button" className="button-primary" onClick={() => router.push("/protocols?create=1")}>
-                    + Neues Protokoll
+                    {t("newProtocolButton")}
                   </button>
                 ) : null}
                 {canConfigure ? (
                   <button type="button" className={canWrite ? "button-secondary" : "button-primary"} onClick={() => router.push("/templates")}>
-                    Vorlage einrichten
+                    {t("setupTemplateButton")}
                   </button>
                 ) : null}
               </>
             ) : null
           }
-          hint="Tipp: Beginne mit einer Vorlage – sie bestimmt, welche Elemente jedes Protokoll enthält."
+          hint={t("emptyHint")}
         />
       </div>
     );
@@ -129,7 +134,7 @@ export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, 
   return (
     <div className="dashboard-grid">
       <section className="panel dashboard-hero">
-        <div className="eyebrow">Nächste Sitzung</div>
+        <div className="eyebrow">{t("nextSessionEyebrow")}</div>
         {protocol ? (
           <>
             <h1 className="dashboard-hero-title">{protocol.title || protocol.protocol_number}</h1>
@@ -140,25 +145,25 @@ export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, 
               {countdown ? <span className="dashboard-countdown-pill pill">{countdown}</span> : null}
             </div>
             <button type="button" className="button-secondary dashboard-hero-action" onClick={() => router.push(`/protocols/${protocol.id}`)}>
-              Protokoll öffnen
+              {t("openProtocolButton")}
             </button>
           </>
         ) : (
           <>
-            <h1 className="dashboard-hero-title">Keine anstehende Sitzung geplant</h1>
-            <p className="muted">Sobald ein neues Protokoll angelegt wird, erscheint es hier.</p>
+            <h1 className="dashboard-hero-title">{t("noUpcomingSessionTitle")}</h1>
+            <p className="muted">{t("noUpcomingSessionDescription")}</p>
           </>
         )}
       </section>
 
       <section className="card dashboard-tile dashboard-excuse-card">
         <div className="dashboard-list-header">
-          <div className="eyebrow">Teilnehmer entschuldigen</div>
+          <div className="eyebrow">{t("excuseParticipantsEyebrow")}</div>
         </div>
         {!protocol ? (
-          <p className="muted">Keine nächste Sitzung — daher nichts zu entschuldigen.</p>
+          <p className="muted">{t("noSessionForExcuse")}</p>
         ) : entries.length === 0 ? (
-          <p className="muted">Für diese Sitzung ist keine Anwesenheitsliste hinterlegt.</p>
+          <p className="muted">{t("noAttendanceList")}</p>
         ) : (
           <div className="excuse-chip-grid">
             {entries.map((entry) => {
@@ -169,7 +174,7 @@ export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, 
                   type="button"
                   className={`excuse-chip${excused ? " excuse-chip-excused" : ""}`}
                   disabled={!canExcuse || busy[entry.participant_id]}
-                  title={!canExcuse ? "" : excused ? "Wieder auf unentschuldigt setzen" : "Als entschuldigt markieren"}
+                  title={!canExcuse ? "" : excused ? t("unexcuseTitle") : t("excuseTitle")}
                   onClick={() => void toggleExcused(entry)}
                 >
                   <span className="excuse-chip-status-icon">{excused ? "✓" : "○"}</span>
@@ -183,13 +188,13 @@ export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, 
 
       <section className="card dashboard-tile">
         <div className="dashboard-list-header">
-          <div className="eyebrow">Überfällige Todos</div>
+          <div className="eyebrow">{t("overdueTodosEyebrow")}</div>
           <button type="button" className="button-ghost dashboard-list-header-action" onClick={() => router.push("/todos")}>
-            Alle
+            {t("allButton")}
           </button>
         </div>
         {overdueTodos.length === 0 ? (
-          <p className="muted">Keine überfälligen Todos.</p>
+          <p className="muted">{t("noOverdueTodos")}</p>
         ) : (
           <div className="dashboard-list">
             {overdueTodos.map((todo) => (
@@ -212,13 +217,13 @@ export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, 
 
       <section className="card dashboard-tile">
         <div className="dashboard-list-header">
-          <div className="eyebrow">Offene Bussen</div>
+          <div className="eyebrow">{t("openFinesEyebrow")}</div>
           <button type="button" className="button-ghost dashboard-list-header-action" onClick={() => router.push("/fines")}>
-            Alle
+            {t("allButton")}
           </button>
         </div>
         {openFines.length === 0 ? (
-          <p className="muted">Keine offenen Bussen.</p>
+          <p className="muted">{t("noOpenFines")}</p>
         ) : (
           <div className="dashboard-list">
             {openFines.map((fine) => (
@@ -226,7 +231,7 @@ export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, 
                 <span className="dashboard-list-row-icon dashboard-list-row-icon-fine">CHF</span>
                 <span className="dashboard-list-row-text">
                   <span className="dashboard-list-row-title">{fine.participant_name_snapshot}</span>
-                  <span className="dashboard-list-row-sub">{FINE_TYPE_LABEL[fine.fine_type] ?? fine.fine_type}</span>
+                  <span className="dashboard-list-row-sub">{fineTypeLabel[fine.fine_type] ?? fine.fine_type}</span>
                 </span>
                 <span className="dashboard-list-row-meta">{fine.amount.toFixed(2)} {fine.currency_label ?? ""}</span>
               </button>

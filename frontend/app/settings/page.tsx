@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import { DocumentTemplateManager } from "@/components/settings/document-template-manager";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
-import { TEMPLATE_TABS } from "@/components/ui/section-tabs";
+import { templateTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { DocumentTemplate, DocumentTemplatePart } from "@/types/api";
 
@@ -12,6 +13,7 @@ export default async function SettingsPage() {
   if (session.current_role !== "admin") {
     redirect("/");
   }
+  const t = await getTranslations("nav");
   const [documentTemplates, documentTemplateParts] = await Promise.all([
     backendFetchWithSession<DocumentTemplate[]>("/api/document-templates"),
     backendFetchWithSession<DocumentTemplatePart[]>("/api/document-template-parts")
@@ -19,7 +21,7 @@ export default async function SettingsPage() {
 
   return (
     <AppShell initialSession={session}>
-      <RouteTabs tabs={TEMPLATE_TABS} activeHref="/settings" />
+      <RouteTabs tabs={templateTabs(t)} activeHref="/settings" />
       <section className="panel">
         <div className="section-stack">
           <DocumentTemplateManager

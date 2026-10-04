@@ -1,0 +1,86 @@
+{
+  "pageTitle": "Teilnehmer",
+  "pageDescriptionEmpty": "Mitglieder und Gäste dieses Mandanten.",
+  "pageDescription": "Mandantenweite Personen, die später Templates und Todos zugeordnet werden können.",
+  "csvImport": "CSV-Import",
+  "deleteSelection": "Auswahl löschen",
+  "newParticipant": "Neuer Teilnehmer",
+  "emptyState": {
+    "title": "Noch keine Teilnehmer erfasst",
+    "description": "Erfasse Mitglieder einzeln oder importiere eine bestehende Liste – danach stehen sie in Anwesenheit, Todos und Bussen zur Verfügung.",
+    "addParticipant": "+ Teilnehmer",
+    "importList": "Liste importieren"
+  },
+  "searchPlaceholder": "Teilnehmer durchsuchen",
+  "columns": {
+    "name": "Teilnehmer",
+    "firstName": "Vorname",
+    "lastName": "Nachname",
+    "email": "E-Mail",
+    "status": "Status",
+    "actions": "Aktionen"
+  },
+  "emptyFiltered": "Keine Teilnehmer für den aktuellen Filter gefunden.",
+  "fallbackName": "Teilnehmer",
+  "statusActive": "Aktiv",
+  "statusInactive": "Inaktiv",
+  "delete": "Löschen",
+  "loadingMore": "Lädt weitere Teilnehmer…",
+  "loadMore": "Mehr laden ({count} geladen)",
+  "csvPreview": {
+    "title": "CSV-Vorschau",
+    "description": "{count} Einträge erkannt. Nur Vorname, Nachname, Übername und E-Mail werden importiert.",
+    "displayName": "Anzeigename",
+    "cancel": "Abbrechen",
+    "importing": "Importiere…",
+    "importEntries": "{count} Einträge importieren"
+  },
+  "importResult": {
+    "title": "Import abgeschlossen",
+    "imported": "{count} importiert",
+    "duplicatesSkipped": "{count} Duplikate übersprungen",
+    "errorsCount": "{count} Fehler",
+    "skippedExisting": "Übersprungen (bereits vorhanden)",
+    "errorsLabel": "Fehler",
+    "close": "Schließen"
+  },
+  "editModal": {
+    "createTitle": "Teilnehmer erstellen",
+    "editTitle": "Teilnehmer bearbeiten",
+    "description": "Teilnehmer können direkt Templates zugewiesen und später in Todos ausgewählt werden.",
+    "displayName": "Anzeigename",
+    "active": "Aktiv",
+    "firstName": "Vorname",
+    "lastName": "Nachname",
+    "email": "E-Mail",
+    "joinedAt": "Eintrittsdatum",
+    "joinedAtHint": "Erscheint erst ab diesem Datum in Anwesenheitslisten. Leer = kein Beginn hinterlegt.",
+    "leftAt": "Austrittsdatum",
+    "leftAtHint": "Erscheint ab dem Folgetag nicht mehr in Anwesenheitslisten. Leer = kein Austritt hinterlegt.",
+    "templates": "Templates",
+    "noDescription": "Kein Beschreibungstext",
+    "save": "Teilnehmer speichern",
+    "create": "Teilnehmer erstellen"
+  },
+  "toasts": {
+    "loadMoreFailed": "Weitere Teilnehmende konnten nicht geladen werden",
+    "templatesLoadFailed": "Zugewiesene Vorlagen konnten nicht geladen werden",
+    "leftBeforeJoined": "Austrittsdatum darf nicht vor dem Eintrittsdatum liegen",
+    "updated": "{name} aktualisiert",
+    "created": "{name} erstellt",
+    "saveFailed": "Teilnehmer konnte nicht gespeichert werden",
+    "deleteConfirmMessage": "Teilnehmer endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+    "deleteConfirmLabel": "Löschen",
+    "deletedSingle": "Teilnehmer \"{name}\" gelöscht",
+    "deleteFailed": "Teilnehmer konnte nicht gelöscht werden",
+    "deleteUnnamed": "Unbenannt",
+    "bulkDeleteConfirmMessage": "{count} Teilnehmer endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+    "bulkDeleted": "Teilnehmer gelöscht",
+    "bulkDeleteFailed": "Teilnehmer konnten nicht gelöscht werden",
+    "csvImportFailed": "CSV-Import fehlgeschlagen"
+  },
+  "membership": {
+    "leftSince": "Ausgetreten seit {date}",
+    "joinsFrom": "Eintritt ab {date}"
+  }
+}

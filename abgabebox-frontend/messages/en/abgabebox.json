@@ -1,0 +1,61 @@
+{
+  "meta": { "description": "Submit files without logging in" },
+  "home": { "title": "Abgabebox", "hint": "Please use the full submission link you received from the organization." },
+  "notFound": { "title": "Not found", "hint": "This page doesn't exist or isn't currently available." },
+  "error": { "title": "Something went wrong", "hint": "The page could not be loaded. This can be caused by a brief outage - please try again in a moment.", "retry": "Try again" },
+  "assignments": {
+    "disabledTitle": "Submission box not available",
+    "disabledHint": "The submission box is currently not available for this organization.",
+    "title": "Open submissions",
+    "hint": "Choose a submission to upload your file.",
+    "empty": "There are currently no open submissions.",
+    "backToOverview": "← Back to overview"
+  },
+  "elements": {
+    "title": "Items",
+    "hint": "Choose your item to upload the file.",
+    "empty": "There are currently no open items.",
+    "windowFrom": "from {date}",
+    "windowUntil": "until {date}",
+    "uploadedCount": "{count, plural, one {# file already uploaded} other {# files already uploaded}}",
+    "backToOverview": "← Back to overview"
+  },
+  "upload": {
+    "typeLabelDefault": "Images, PDF and Office documents",
+    "dropLabelSelected": "{count, plural, one {# file selected} other {# files selected}}",
+    "dropLabelEmpty": "Select a file or drag it here",
+    "hintMaxFilesUnbounded": "max. 50 files per upload",
+    "hintMaxFilesRemaining": "{count, plural, one {max. # more file} other {max. # more files}}",
+    "hintPerFile": "{size} MiB each",
+    "hintTotal": "150 MiB in total maximum",
+    "removeFile": "Remove",
+    "offlineNotice": "Offline – uploads are only possible once the connection is restored. Your selection stays in this tab.",
+    "alreadyUploaded": "{count, plural, one {# file already uploaded for this submission.} other {# files already uploaded for this submission.}}",
+    "captchaDone": "✓ Security check completed",
+    "captchaVerifying": "Checking security check…",
+    "captchaRunning": "Security check running…",
+    "captchaPlaceholder": "Security check (no FriendlyCaptcha configured – test/dev environment)",
+    "submit": "Submit",
+    "submitting": "Uploading…",
+    "successTitle": "Submission successful",
+    "successCount": "{count, plural, one {# file uploaded for this submission.} other {# files uploaded for this submission.}}",
+    "uploadMore": "Upload another file",
+    "errors": {
+      "noFileSelected": "Please select at least one file",
+      "offline": "No internet connection – the selected files are kept. Please resend once you're connected again.",
+      "captchaPending": "Security check still running – please wait a moment and try again",
+      "tooManyRequests": "Too many attempts – please wait a moment and try again",
+      "captchaExpired": "Security check has expired – it's being renewed, please wait a moment",
+      "uploadFailedGeneric": "Upload failed",
+      "connectionLost": "Connection interrupted during upload. Check whether the submission already arrived before sending again.",
+      "tooManyFiles": "A maximum of 50 files is allowed per upload.",
+      "selectionTooLarge": "The selection is larger than 150 MiB. Please split it across multiple uploads.",
+      "maxFilesTotal": "A maximum of {maxFiles} file(s) is allowed in total ({remaining} still possible)",
+      "unsupportedType": "\"{filename}\" isn't supported. Please choose an image, PDF or Office document.",
+      "disallowedType": "\"{filename}\" has a disallowed file format (allowed: {allowed})",
+      "fileTooLarge": "\"{filename}\" is too large (max. {maxFileSizeMb} MB)"
+    }
+  },
+  "language": { "label": "Language" },
+  "copyright": "Copyright © {year} hocX Project · All rights reserved."
+}

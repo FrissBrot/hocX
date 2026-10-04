@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 import { listElements } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -16,15 +17,16 @@ export default async function AssignmentElementsPage({
   if (elements === null) {
     notFound();
   }
+  const t = await getTranslations("abgabebox.elements");
 
   return (
     <div>
-      <h1>Elemente</h1>
-      <p className="muted">Wähle dein Element aus, um die Datei hochzuladen.</p>
+      <h1>{t("title")}</h1>
+      <p className="muted">{t("hint")}</p>
 
       {elements.length === 0 ? (
         <div className="card">
-          <p className="muted" style={{ margin: 0 }}>Aktuell sind keine Elemente offen.</p>
+          <p className="muted" style={{ margin: 0 }}>{t("empty")}</p>
         </div>
       ) : (
         elements.map((element, i) => {
@@ -44,13 +46,13 @@ export default async function AssignmentElementsPage({
                   {element.window_start && element.window_end
                     ? `${formatDate(element.window_start)} – ${formatDate(element.window_end)}`
                     : element.window_start
-                      ? `ab ${formatDate(element.window_start)}`
-                      : `bis ${formatDate(element.window_end)}`}
+                      ? t("windowFrom", { date: formatDate(element.window_start) })
+                      : t("windowUntil", { date: formatDate(element.window_end) })}
                 </div>
               ) : null}
               {element.uploaded_count > 0 ? (
                 <div className="window">
-                  {element.uploaded_count} Datei{element.uploaded_count === 1 ? "" : "en"} bereits hochgeladen
+                  {t("uploadedCount", { count: element.uploaded_count })}
                 </div>
               ) : null}
             </Link>
@@ -59,7 +61,7 @@ export default async function AssignmentElementsPage({
       )}
 
       <Link href={`/${linkToken}`} className="back-btn">
-        ← Zurück zur Übersicht
+        {t("backToOverview")}
       </Link>
     </div>
   );

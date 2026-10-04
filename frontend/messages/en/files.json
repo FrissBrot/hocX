@@ -1,0 +1,131 @@
+{
+  "partition": {
+    "imagesHint": "Please upload images via the Photos page.",
+    "unsupported": "Not supported: {names}"
+  },
+  "modal": {
+    "title": "Upload files",
+    "description": "Files land under Files, get virus-scanned on upload, and can be linked to an event, a submission or a cycle."
+  },
+  "dropzone": {
+    "releaseToUpload": "Release to upload",
+    "dragHint": "Drag files here",
+    "orText": "or",
+    "browse": "Choose files",
+    "formatsAriaLabel": "Supported formats"
+  },
+  "queue": {
+    "heading": "Queue",
+    "countNone": "No file selected",
+    "count": "{count, plural, one {# file selected} other {# files selected}}",
+    "empty": "No files selected yet.",
+    "uploading": "Uploading…",
+    "ready": "Ready to upload",
+    "removeFile": "Remove {name}"
+  },
+  "tags": {
+    "label": "Tags for all files",
+    "placeholder": "Add tag…"
+  },
+  "footer": {
+    "summary": "{count, plural, one {# file} other {# files}}",
+    "cancel": "Cancel",
+    "uploading": "Uploading…",
+    "uploadCount": "{count, plural, one {Upload # file} other {Upload # files}}",
+    "upload": "Upload"
+  },
+  "errors": {
+    "uploadFailed": "Upload failed"
+  },
+  "source": {
+    "protocol": "Protocol",
+    "wordImport": "Word import",
+    "submission": "Submission",
+    "upload": "Upload"
+  },
+  "detail": {
+    "openOriginal": "Open original",
+    "detailsTitle": "Details",
+    "source": "Source",
+    "reference": "Reference",
+    "uploadedAt": "Uploaded",
+    "uploadedBy": "Uploaded by",
+    "fileType": "File type",
+    "unknown": "Unknown",
+    "size": "Size",
+    "dimensions": "Image dimensions",
+    "loading": "Loading…",
+    "originTitle": "Origin",
+    "tagsTitle": "Tags",
+    "saving": "Saving…",
+    "tagPlaceholder": "Add tag…",
+    "openOriginalNewTab": "Open original in new tab"
+  },
+  "table": {
+    "columnName": "Name",
+    "columnSource": "Source",
+    "columnReference": "Reference",
+    "columnUploaded": "Uploaded",
+    "columnSize": "Size",
+    "empty": "No files found.",
+    "protocolRef": "Protocol {label}",
+    "download": "Download",
+    "share": "Share"
+  },
+  "view": {
+    "title": "Files",
+    "descriptionEmpty": "All documents of this organization.",
+    "description": "All uploaded non-image files of this organization - from protocols, Word imports, submissions and direct uploads. See the separate \"Photos\" page for photos.",
+    "uploadButton": "+ Upload files",
+    "emptyTitle": "No files yet",
+    "emptyDescription": "Documents from protocols and submissions will collect here – or upload them directly.",
+    "emptyHint": "Every file is automatically virus-scanned on upload.",
+    "searchPlaceholder": "Search files",
+    "tagPlaceholder": "Choose or type a tag…",
+    "countFiles": "{count, plural, one {# file} other {# files}}",
+    "loadMoreLoading": "Loading more files…",
+    "loadMore": "Load more ({count} loaded)",
+    "dropOverlayTitle": "Release to upload",
+    "dropOverlayHint": "You'll set up the upload next.",
+    "loadError": "Files could not be loaded.",
+    "uploadedToast": "{count, plural, one {# file uploaded.} other {# files uploaded.}}"
+  },
+  "sourceOptions": {
+    "all": "All sources",
+    "protocols": "Protocols",
+    "wordImport": "Word import",
+    "submissions": "Submissions",
+    "uploads": "Uploads"
+  },
+  "sortOptions": {
+    "newestFirst": "Newest first",
+    "oldestFirst": "Oldest first",
+    "nameAsc": "Name (A-Z)",
+    "nameDesc": "Name (Z-A)",
+    "sizeDesc": "Size (large-small)",
+    "sizeAsc": "Size (small-large)"
+  },
+  "target": {
+    "ruleType": "{filename}: file type '.{ext}' not allowed",
+    "ruleTooLarge": "{filename}: too large (max. {maxSize} MB)",
+    "ruleMaxFiles": "A maximum of {max} files per element is allowed ({count} selected)",
+    "categoryNone": "No reference",
+    "categoryEvent": "Event",
+    "categorySubmissionElement": "Submission item",
+    "categoryCycle": "Cycle",
+    "referenceLabel": "Reference",
+    "eventLabel": "Event",
+    "eventPlaceholder": "Choose event…",
+    "assignmentLabel": "Submission",
+    "assignmentPlaceholder": "Choose submission…",
+    "cycleLabel": "Cycle",
+    "cyclePlaceholder": "Choose cycle…",
+    "rulesPrefix": "Submission rules:",
+    "rulesOnlyTypes": "only {types}",
+    "rulesAllTypes": "all file types",
+    "rulesPerFile": "max. {size} MB per file",
+    "rulesMaxFiles": "max. {max} files per element",
+    "elementLabel": "Submission item",
+    "elementPlaceholder": "Choose item…"
+  }
+}

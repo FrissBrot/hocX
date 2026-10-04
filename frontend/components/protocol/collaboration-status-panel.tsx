@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { useTranslations } from "next-intl";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { CollaboratorAvatar } from "@/components/protocol/collaboration-presence";
@@ -38,6 +39,8 @@ export function CollaborationStatusPanel({
   onMouseEnter,
   onMouseLeave,
 }: CollaborationStatusPanelProps) {
+  const t = useTranslations("protocols.collaboration.statusPanel");
+  const tCollab = useTranslations("protocols.collaboration");
   const rootRef = useRef<HTMLDivElement>(null);
   usePopupEscape(open, onClose, rootRef);
 
@@ -47,16 +50,16 @@ export function CollaborationStatusPanel({
         className={`quick-flyout${open ? " quick-flyout-open" : ""}`}
         role="dialog"
         aria-hidden={!open}
-        aria-label="Status & Zusammenarbeit"
+        aria-label={t("ariaLabel")}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
       >
         <div className="quick-flyout-header">
           <div className="quick-flyout-title">
             <span className="quick-flyout-title-icon"><NavIcon name="activity" /></span>
-            <span className="eyebrow">Status &amp; Zusammenarbeit</span>
+            <span className="eyebrow">{t("title")}</span>
           </div>
-          <button type="button" className="button-ghost quick-flyout-close" onClick={onClose} aria-label="Schliessen">
+          <button type="button" className="button-ghost quick-flyout-close" onClick={onClose} aria-label={t("close")}>
             <ActionIcon name="close" />
           </button>
         </div>
@@ -68,26 +71,26 @@ export function CollaborationStatusPanel({
 
         {attendanceTally && (
           <>
-            <div className="eyebrow collab-status-section-label">Teilnehmer</div>
+            <div className="eyebrow collab-status-section-label">{t("participants")}</div>
             <div className="collab-status-tiles">
               <div className="collab-status-tile collab-status-tile-success">
                 <strong>{attendanceTally.present}</strong>
-                <span>Anwesend</span>
+                <span>{t("present")}</span>
               </div>
               <div className="collab-status-tile collab-status-tile-neutral">
                 <strong>{attendanceTally.excused}</strong>
-                <span>Entschuldigt</span>
+                <span>{t("excused")}</span>
               </div>
               <div className="collab-status-tile collab-status-tile-danger">
                 <strong>{attendanceTally.absent}</strong>
-                <span>Unent<wbr />schuldigt</span>
+                <span>{t("absent")}</span>
               </div>
             </div>
 
           </>
         )}
 
-        <div className="eyebrow collab-status-section-label">Gerade aktiv</div>
+        <div className="eyebrow collab-status-section-label">{t("activeNow")}</div>
         {otherPresence.length > 0 ? (
           <div className="collab-status-active">
             <div className="collab-status-active-avatars">
@@ -95,13 +98,13 @@ export function CollaborationStatusPanel({
                 <CollaboratorAvatar key={user.user_id} user={user} />
               ))}
             </div>
-            <span className="muted">bearbeiten live mit</span>
+            <span className="muted">{t("editingLiveWith")}</span>
           </div>
         ) : (
           <p className="muted collab-status-active-empty">
             {connected
-              ? "Niemand sonst bearbeitet gerade live."
-              : "Live-Zusammenarbeit momentan nicht verbunden – deine Änderungen werden trotzdem automatisch gespeichert."}
+              ? t("noOneElseActive")
+              : tCollab("offlineTitle")}
           </p>
         )}
 
@@ -111,12 +114,12 @@ export function CollaborationStatusPanel({
           </button>
         )}
 
-        <div className="eyebrow collab-status-section-label">Tastenkürzel</div>
+        <div className="eyebrow collab-status-section-label">{t("shortcuts")}</div>
         <div className="collab-status-shortcuts">
-          <div className="collab-status-shortcut-row"><kbd>⌃⌥N</kbd><span>Sitzungsnotizen öffnen</span></div>
-          <div className="collab-status-shortcut-row"><kbd>⌃⌥T</kbd><span>Schnelles Todo öffnen</span></div>
-          <div className="collab-status-shortcut-row"><kbd>⌃⏎</kbd><span>Nächster Abschnitt</span></div>
-          <div className="collab-status-shortcut-row"><kbd>⌃⇧⏎</kbd><span>Vorheriger Abschnitt</span></div>
+          <div className="collab-status-shortcut-row"><kbd>⌃⌥N</kbd><span>{t("shortcutNotes")}</span></div>
+          <div className="collab-status-shortcut-row"><kbd>⌃⌥T</kbd><span>{t("shortcutTodo")}</span></div>
+          <div className="collab-status-shortcut-row"><kbd>⌃⏎</kbd><span>{t("shortcutNextSection")}</span></div>
+          <div className="collab-status-shortcut-row"><kbd>⌃⇧⏎</kbd><span>{t("shortcutPrevSection")}</span></div>
         </div>
       </div>
   );

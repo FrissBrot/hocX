@@ -1,0 +1,86 @@
+{
+  "pageTitle": "Participants",
+  "pageDescriptionEmpty": "Members and guests of this organization.",
+  "pageDescription": "Organization-wide people who can later be assigned to templates and todos.",
+  "csvImport": "CSV import",
+  "deleteSelection": "Delete selection",
+  "newParticipant": "New participant",
+  "emptyState": {
+    "title": "No participants yet",
+    "description": "Add members individually or import an existing list – they'll then be available for attendance, todos and fines.",
+    "addParticipant": "+ Participant",
+    "importList": "Import list"
+  },
+  "searchPlaceholder": "Search participants",
+  "columns": {
+    "name": "Participant",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "email": "Email",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "emptyFiltered": "No participants found for the current filter.",
+  "fallbackName": "Participant",
+  "statusActive": "Active",
+  "statusInactive": "Inactive",
+  "delete": "Delete",
+  "loadingMore": "Loading more participants…",
+  "loadMore": "Load more ({count} loaded)",
+  "csvPreview": {
+    "title": "CSV preview",
+    "description": "{count} entries recognized. Only first name, last name, nickname and email are imported.",
+    "displayName": "Display name",
+    "cancel": "Cancel",
+    "importing": "Importing…",
+    "importEntries": "Import {count} entries"
+  },
+  "importResult": {
+    "title": "Import completed",
+    "imported": "{count} imported",
+    "duplicatesSkipped": "{count} duplicates skipped",
+    "errorsCount": "{count} errors",
+    "skippedExisting": "Skipped (already exists)",
+    "errorsLabel": "Errors",
+    "close": "Close"
+  },
+  "editModal": {
+    "createTitle": "Create participant",
+    "editTitle": "Edit participant",
+    "description": "Participants can be assigned templates directly and selected in todos later.",
+    "displayName": "Display name",
+    "active": "Active",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "email": "Email",
+    "joinedAt": "Join date",
+    "joinedAtHint": "Only appears in attendance lists from this date on. Empty = no start date set.",
+    "leftAt": "Leave date",
+    "leftAtHint": "No longer appears in attendance lists from the next day on. Empty = no leave date set.",
+    "templates": "Templates",
+    "noDescription": "No description text",
+    "save": "Save participant",
+    "create": "Create participant"
+  },
+  "toasts": {
+    "loadMoreFailed": "Could not load more participants",
+    "templatesLoadFailed": "Could not load assigned templates",
+    "leftBeforeJoined": "Leave date cannot be before the join date",
+    "updated": "{name} updated",
+    "created": "{name} created",
+    "saveFailed": "Participant could not be saved",
+    "deleteConfirmMessage": "Permanently delete participant? This cannot be undone.",
+    "deleteConfirmLabel": "Delete",
+    "deletedSingle": "Participant \"{name}\" deleted",
+    "deleteFailed": "Participant could not be deleted",
+    "deleteUnnamed": "Unnamed",
+    "bulkDeleteConfirmMessage": "Permanently delete {count} participants? This cannot be undone.",
+    "bulkDeleted": "Participants deleted",
+    "bulkDeleteFailed": "Participants could not be deleted",
+    "csvImportFailed": "CSV import failed"
+  },
+  "membership": {
+    "leftSince": "Left on {date}",
+    "joinsFrom": "Joining from {date}"
+  }
+}

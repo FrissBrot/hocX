@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
@@ -25,30 +26,37 @@ function extensionOf(name: string): string {
 
 // `zipIsContainer`: the photo window accepts .zip only as a carrier for images, so the ZIP
 // itself is exempt from the type/size rules (the backend judges each entry once it opens it).
-export function findUploadRuleProblems(files: File[], rules: UploadRules | null, zipIsContainer = false): string[] {
+export function findUploadRuleProblems(
+  files: File[],
+  rules: UploadRules | null,
+  t: (key: string, values?: Record<string, string | number | Date>) => string,
+  zipIsContainer = false
+): string[] {
   if (!rules) return [];
   const problems: string[] = [];
   const judged = files.filter((file) => !(zipIsContainer && extensionOf(file.name) === "zip"));
   for (const file of judged) {
     const extension = extensionOf(file.name);
     if (rules.allowedExtensions.length > 0 && !rules.allowedExtensions.includes(extension)) {
-      problems.push(`${file.name}: Dateityp '.${extension}' nicht erlaubt`);
+      problems.push(t("target.ruleType", { filename: file.name, ext: extension }));
     } else if (file.size > rules.maxFileSizeMb * 1024 * 1024) {
-      problems.push(`${file.name}: zu gross (max. ${rules.maxFileSizeMb} MB)`);
+      problems.push(t("target.ruleTooLarge", { filename: file.name, maxSize: rules.maxFileSizeMb }));
     }
   }
   if (rules.maxFiles !== null && judged.length > rules.maxFiles) {
-    problems.push(`Maximal ${rules.maxFiles} Dateien pro Element erlaubt (${judged.length} gewählt)`);
+    problems.push(t("target.ruleMaxFiles", { max: rules.maxFiles, count: judged.length }));
   }
   return problems;
 }
 
-const TARGET_CATEGORY_OPTIONS: { id: TargetCategory; label: string }[] = [
-  { id: "none", label: "Kein Bezug" },
-  { id: "event", label: "Termin" },
-  { id: "submission_element", label: "Abgabe-Element" },
-  { id: "cycle", label: "Zyklus" },
-];
+function targetCategoryOptions(t: (key: string) => string): { id: TargetCategory; label: string }[] {
+  return [
+    { id: "none", label: t("target.categoryNone") },
+    { id: "event", label: t("target.categoryEvent") },
+    { id: "submission_element", label: t("target.categorySubmissionElement") },
+    { id: "cycle", label: t("target.categoryCycle") },
+  ];
+}
 
 // State behind the optional "Bezug" picker of an upload window (Kein Bezug / Termin / Abgabe-
 // Element / Zyklus) - the same choice, and the same form fields, POST /files/gallery-uploads
@@ -128,13 +136,14 @@ export function useUploadTarget() {
 }
 
 export function UploadTargetFields({ target }: { target: ReturnType<typeof useUploadTarget> }) {
+  const t = useTranslations("files");
   return (
     <>
       <div className="gallery-upload-fields">
         <label>
-          Bezug
+          {t("target.referenceLabel")}
           <SearchableSelect
-            options={TARGET_CATEGORY_OPTIONS}
+            options={targetCategoryOptions(t)}
             getId={(option) => option.id}
             getLabel={(option) => option.label}
             value={target.targetKind}
@@ -143,20 +152,20 @@ export function UploadTargetFields({ target }: { target: ReturnType<typeof useUp
         </label>
         {target.targetKind === "event" && (
           <label>
-            Termin
+            {t("target.eventLabel")}
             <SearchableSelect
               options={target.events}
               getId={(event) => event.id}
               getLabel={(event) => `${event.title} (${formatDate(event.event_date)})`}
               value={target.selectedEventId || null}
               onChange={(event) => target.setSelectedEventId(event?.id ?? "")}
-              placeholder="Termin wählen…"
+              placeholder={t("target.eventPlaceholder")}
             />
           </label>
         )}
         {target.targetKind === "submission_element" && (
           <label>
-            Abgabe
+            {t("target.assignmentLabel")}
             <SearchableSelect
               options={target.assignments}
               getId={(assignment) => assignment.id}
@@ -166,44 +175,44 @@ export function UploadTargetFields({ target }: { target: ReturnType<typeof useUp
                 target.setSelectedAssignmentId(assignment?.id ?? "");
                 target.setSelectedElementRef("");
               }}
-              placeholder="Abgabe wählen…"
+              placeholder={t("target.assignmentPlaceholder")}
             />
           </label>
         )}
         {target.targetKind === "cycle" && (
           <label>
-            Zyklus
+            {t("target.cycleLabel")}
             <SearchableSelect
               options={target.cycleConfigs}
               getId={(cycleConfig) => cycleConfig.id}
               getLabel={(cycleConfig) => cycleConfig.name}
               value={target.selectedCycleConfigId || null}
               onChange={(cycleConfig) => target.setSelectedCycleConfigId(cycleConfig?.id ?? "")}
-              placeholder="Zyklus wählen…"
+              placeholder={t("target.cyclePlaceholder")}
             />
           </label>
         )}
       </div>
       {target.rules && (
         <p className="muted" data-testid="upload-rules">
-          Regeln der Abgabe:{" "}
+          {t("target.rulesPrefix")}{" "}
           {target.rules.allowedExtensions.length > 0
-            ? `nur ${target.rules.allowedExtensions.map((type) => type.toUpperCase()).join(", ")}`
-            : "alle Dateitypen"}
-          {` · max. ${target.rules.maxFileSizeMb} MB pro Datei`}
-          {target.rules.maxFiles !== null ? ` · max. ${target.rules.maxFiles} Dateien pro Element` : ""}
+            ? t("target.rulesOnlyTypes", { types: target.rules.allowedExtensions.map((type) => type.toUpperCase()).join(", ") })
+            : t("target.rulesAllTypes")}
+          {" · "}{t("target.rulesPerFile", { size: target.rules.maxFileSizeMb })}
+          {target.rules.maxFiles !== null ? ` · ${t("target.rulesMaxFiles", { max: target.rules.maxFiles })}` : ""}
         </p>
       )}
       {target.targetKind === "submission_element" && target.selectedAssignmentId && (
         <label className="gallery-upload-tags">
-          <span className="gallery-upload-label">Abgabe-Element</span>
+          <span className="gallery-upload-label">{t("target.elementLabel")}</span>
           <SearchableSelect
             options={target.elements}
             getId={(element) => element.element_ref}
             getLabel={(element) => element.label}
             value={target.selectedElementRef || null}
             onChange={(element) => target.setSelectedElementRef(element?.element_ref ?? "")}
-            placeholder="Element wählen…"
+            placeholder={t("target.elementPlaceholder")}
           />
         </label>
       )}

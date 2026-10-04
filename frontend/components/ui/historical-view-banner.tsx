@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { Modal } from "@/components/ui/modal";
 
 type HistoricalViewBannerProps = {
@@ -15,18 +17,19 @@ type HistoricalViewBannerProps = {
  * explicitly confirms HistoricalEditConfirmModal below (see useHistoricalSnapshot's
  * editUnlocked). */
 export function HistoricalViewBanner({ cycleConfigName, cycleYear, isEdited, editUnlocked, onRequestUnlock }: HistoricalViewBannerProps) {
+  const t = useTranslations("protocols.historicalBanner");
   return (
     <div className="historical-view-banner">
       <div>
-        <strong>Historische Ansicht — {cycleConfigName} {cycleYear}</strong>
+        <strong>{t("title", { name: cycleConfigName, year: cycleYear })}</strong>
         <p className="muted">
-          Diese Daten sind eingefroren und schreibgeschützt.
-          {isEdited ? " Diese historische Ansicht wurde nachträglich bearbeitet." : ""}
+          {t("frozenNotice")}
+          {isEdited ? t("editedNotice") : ""}
         </p>
       </div>
       {!editUnlocked && (
         <button type="button" className="button-ghost button-secondary" onClick={onRequestUnlock}>
-          Bearbeitung freischalten
+          {t("unlockEdit")}
         </button>
       )}
     </div>
@@ -48,21 +51,22 @@ type ReconstructionBannerProps = {
  * HistoricalViewBanner) since nothing has been frozen yet - it's a fresh draft,
  * pre-filled from the nearest available source, until "Bestätigen" writes it. */
 export function ReconstructionBanner({ cycleConfigName, cycleYear, source, isConfirming, onConfirm, onCancel }: ReconstructionBannerProps) {
-  const sourceLabel = source ? (source.kind === "live" ? "der aktuellen Liste" : `Zyklus ${source.cycleYear}`) : "…";
+  const t = useTranslations("protocols.historicalBanner");
+  const sourceLabel = source ? (source.kind === "live" ? t("sourceLive") : t("sourceCycle", { year: source.cycleYear ?? "" })) : "…";
   return (
     <div className="historical-view-banner">
       <div>
-        <strong>Fehlender Snapshot — {cycleConfigName} {cycleYear}</strong>
+        <strong>{t("missingSnapshotTitle", { name: cycleConfigName, year: cycleYear })}</strong>
         <p className="muted">
-          Für diese Periode gibt es noch keinen Snapshot. Die Daten wurden aus {sourceLabel} vorausgefüllt - bitte prüfen, anpassen und bestätigen.
+          {t("missingSnapshotBody", { source: sourceLabel })}
         </p>
       </div>
       <div className="table-toolbar-actions">
         <button type="button" className="button-ghost button-secondary" onClick={onCancel}>
-          Abbrechen
+          {t("cancel")}
         </button>
         <button type="button" className="button-secondary" onClick={onConfirm} disabled={isConfirming}>
-          {isConfirming ? "…" : "Bestätigen"}
+          {isConfirming ? "…" : t("confirm")}
         </button>
       </div>
     </div>
@@ -79,19 +83,20 @@ type HistoricalEditConfirmModalProps = {
  * editUnlocked to true. Nothing on a historical view can be saved or deleted before
  * this has been confirmed once for the current cycle selection. */
 export function HistoricalEditConfirmModal({ open, onCancel, onConfirm }: HistoricalEditConfirmModalProps) {
+  const t = useTranslations("protocols.historicalBanner");
   return (
     <Modal
       open={open}
       onClose={onCancel}
-      title="Historische Daten bearbeiten?"
-      description="Sie bearbeiten Daten aus einem vergangenen, abgeschlossenen Zyklus. Diese Änderung verändert den historischen Datenstand dauerhaft und wird protokolliert."
+      title={t("editConfirmTitle")}
+      description={t("editConfirmDescription")}
     >
       <div className="table-toolbar-actions">
         <button type="button" className="button-secondary button-ghost" onClick={onCancel}>
-          Abbrechen
+          {t("cancel")}
         </button>
         <button type="button" className="button-secondary button-danger" onClick={onConfirm}>
-          Trotzdem bearbeiten
+          {t("editAnyway")}
         </button>
       </div>
     </Modal>

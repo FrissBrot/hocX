@@ -24,6 +24,11 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
+# next-intl Namespace-Kataloge (frontend/i18n/request.ts liest sie zur Laufzeit per fs von
+# <cwd>/messages) - wie public/ und .next/static oben nicht Teil des von "next build" erzeugten
+# Standalone-Traces (das verfolgt nur statisch importierte/require()te Dateien), muss also
+# ebenfalls von Hand kopiert werden.
+COPY --from=build --chown=node:node /app/messages ./messages
 
 USER node
 

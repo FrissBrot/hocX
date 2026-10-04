@@ -2,6 +2,7 @@
 
 import { ReactNode, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { usePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
@@ -16,6 +17,11 @@ import {
   ProtocolSummary,
   ProtocolTodo,
 } from "@/types/api";
+// Next-intl Translator-Funktion, durchgereicht an reine Hilfsfunktionen (keine eigenen
+// Komponenten, koennen daher nicht selbst useTranslations() aufrufen) - siehe
+// frontend/components/ui/app-shell-nav.ts::formatRoleLabel(role, t) fuer dasselbe Muster.
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
 export const TODO_STATUS = {
   open: 1,
   in_progress: 2,
@@ -55,12 +61,25 @@ export function compareIsoDate(left: string | null | undefined, right: string | 
   return left.localeCompare(right);
 }
 
+// NICHT mehr fuer neuen Code verwenden - siehe attendanceOptions(t) unten. Als Konstante
+// erhalten, weil frontend/components/tools/word-import-wizard.tsx (anderer Zustaendigkeits-
+// bereich dieser i18n-Migration) sie noch modul-weit referenziert, ausserhalb einer Komponente
+// und damit ohne Zugriff auf useTranslations().
 export const ATTENDANCE_OPTIONS = [
   { value: "present", label: "Anwesend" },
   { value: "late", label: "Verspaetet" },
   { value: "excused", label: "Entschuldigt" },
   { value: "absent", label: "Unentschuldigt" },
 ] as const;
+
+export function attendanceOptions(t: TFunc) {
+  return [
+    { value: "present", label: t("attendance.present") },
+    { value: "late", label: t("attendance.late") },
+    { value: "excused", label: t("attendance.excused") },
+    { value: "absent", label: t("attendance.absent") },
+  ] as const;
+}
 
 export function attendanceParticipants(participants: ParticipantSummary[]) {
   return participants.filter((participant) => !participant.exclude_from_attendance);
@@ -131,24 +150,28 @@ export function sectionIconKey(element: ProtocolElement): import("@/components/u
   return "documents";
 }
 
-export const EMBEDDED_BLOCK_OPTIONS = [
-  { value: 1, label: "Text" },
-  { value: 6, label: "Tabelle" },
-  { value: 2, label: "Todo" },
-  { value: 3, label: "Bild" },
-  { value: 5, label: "Statischer Text" },
-  { value: 7, label: "Terminliste" },
-  { value: 8, label: "Bulletpoints" },
-  { value: 9, label: "Anwesenheit" },
-  { value: 10, label: "Sitzungsdatum" },
-] as const;
+export function embeddedBlockOptions(t: TFunc) {
+  return [
+    { value: 1, label: t("embeddedBlock.text") },
+    { value: 6, label: t("embeddedBlock.table") },
+    { value: 2, label: t("embeddedBlock.todo") },
+    { value: 3, label: t("embeddedBlock.image") },
+    { value: 5, label: t("embeddedBlock.staticText") },
+    { value: 7, label: t("embeddedBlock.eventList") },
+    { value: 8, label: t("embeddedBlock.bulletPoints") },
+    { value: 9, label: t("embeddedBlock.attendance") },
+    { value: 10, label: t("embeddedBlock.sessionDate") },
+  ] as const;
+}
 
-export const EMBEDDED_FORM_VALUE_OPTIONS = [
-  { value: "text", label: "Freier Text" },
-  { value: "participant", label: "Ein Teilnehmer" },
-  { value: "participants", label: "Mehrere Teilnehmer" },
-  { value: "event", label: "Ein Termin" },
-] as const;
+export function embeddedFormValueOptions(t: TFunc) {
+  return [
+    { value: "text", label: t("embeddedFormValue.freeText") },
+    { value: "participant", label: t("embeddedFormValue.oneParticipant") },
+    { value: "participants", label: t("embeddedFormValue.multipleParticipants") },
+    { value: "event", label: t("embeddedFormValue.oneEvent") },
+  ] as const;
+}
 
 export type MatrixEmbeddedBlock = {
   element_type_id: number;
@@ -178,10 +201,10 @@ export function createProtocolEventDraft(protocolDate: string | undefined, defau
   };
 }
 
-export function createInlineProtocolEventDraft(protocolDate: string | undefined, defaultTag = "", showTitle = true): ProtocolEventDraft {
+export function createInlineProtocolEventDraft(protocolDate: string | undefined, defaultTag = "", showTitle = true, t?: TFunc): ProtocolEventDraft {
   const draft = createProtocolEventDraft(protocolDate, defaultTag);
   if (!showTitle) {
-    draft.title = "Neuer Termin";
+    draft.title = t ? t("newEventTitle") : "Neuer Termin";
   }
   return draft;
 }
@@ -209,8 +232,8 @@ export function embeddedBlockKindForElementType(elementTypeId: number | string) 
   return mapping[String(elementTypeId)] ?? "text";
 }
 
-export function embeddedBlockTypeLabel(elementTypeId: number | string) {
-  return EMBEDDED_BLOCK_OPTIONS.find((option) => option.value === Number(elementTypeId))?.label ?? `Block ${elementTypeId}`;
+export function embeddedBlockTypeLabel(elementTypeId: number | string, t: TFunc) {
+  return embeddedBlockOptions(t).find((option) => option.value === Number(elementTypeId))?.label ?? t("embeddedBlock.fallback", { id: elementTypeId });
 }
 
 export function nextEmbeddedItemId(items: Array<Record<string, any>>, prefix: string) {
@@ -239,7 +262,8 @@ export function createMatrixEmbeddedBlock(
   rowLabel: string,
   protocol: ProtocolSummary,
   availableParticipants: ParticipantSummary[],
-  configurationOverride: Record<string, unknown> = {}
+  configurationOverride: Record<string, unknown>,
+  t: TFunc
 ): MatrixEmbeddedBlock {
   const blockKind = embeddedBlockKindForElementType(elementTypeId);
   const override = asObject(configurationOverride);
@@ -247,7 +271,7 @@ export function createMatrixEmbeddedBlock(
   if (elementTypeId === 2) {
     return {
       element_type_id: elementTypeId,
-      title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+      title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
@@ -260,7 +284,7 @@ export function createMatrixEmbeddedBlock(
   if (elementTypeId === 3) {
     return {
       element_type_id: elementTypeId,
-      title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+      title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
@@ -273,7 +297,7 @@ export function createMatrixEmbeddedBlock(
   if (elementTypeId === 6) {
     return {
       element_type_id: elementTypeId,
-      title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+      title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
@@ -286,7 +310,7 @@ export function createMatrixEmbeddedBlock(
   if (elementTypeId === 7) {
     return {
       element_type_id: elementTypeId,
-      title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+      title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
@@ -308,7 +332,7 @@ export function createMatrixEmbeddedBlock(
   if (elementTypeId === 8) {
     return {
       element_type_id: elementTypeId,
-      title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+      title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
@@ -322,7 +346,7 @@ export function createMatrixEmbeddedBlock(
     const eligibleParticipants = attendanceParticipants(availableParticipants);
     return {
       element_type_id: elementTypeId,
-      title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+      title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
@@ -339,7 +363,7 @@ export function createMatrixEmbeddedBlock(
   if (elementTypeId === 10) {
     return {
       element_type_id: elementTypeId,
-      title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+      title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
@@ -353,7 +377,7 @@ export function createMatrixEmbeddedBlock(
 
   return {
     element_type_id: elementTypeId,
-    title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+    title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
     block_kind: blockKind,
     text_content: "",
     configuration_snapshot_json: {
@@ -387,6 +411,7 @@ export function embeddedBlockSummary(
   availableParticipants: ParticipantSummary[],
   availableEvents: EventSummary[],
   protocol: ProtocolSummary,
+  t: TFunc,
   matrixColumn?: Record<string, any>,
   availableTemplates?: import("@/types/api").TemplateSummary[]
 ) {
@@ -396,18 +421,18 @@ export function embeddedBlockSummary(
   if (elementTypeId === 2) {
     const items = (Array.isArray(config.todo_items) ? config.todo_items : []) as Array<Record<string, any>>;
     const filledItems = items.filter((item) => String(item.task ?? "").trim());
-    return filledItems.length ? `${filledItems.length} Todo${filledItems.length === 1 ? "" : "s"}` : "Keine Todos";
+    return filledItems.length ? t("summary.todoCount", { count: filledItems.length }) : t("summary.noTodos");
   }
 
   if (elementTypeId === 3) {
     const images = (Array.isArray(config.images) ? config.images : []) as Array<Record<string, any>>;
     const filledImages = images.filter((image) => String(image.url ?? "").trim());
-    return filledImages.length ? `${filledImages.length} Bild${filledImages.length === 1 ? "" : "er"}` : "Kein Bild";
+    return filledImages.length ? t("summary.imageCount", { count: filledImages.length }) : t("summary.noImage");
   }
 
   if (elementTypeId === 6) {
     const rows = (Array.isArray(config.rows) ? config.rows : []) as Array<Record<string, any>>;
-    return rows.length ? `${rows.length} Zeile${rows.length === 1 ? "" : "n"}` : "Leere Tabelle";
+    return rows.length ? t("summary.rowCount", { count: rows.length }) : t("summary.emptyTable");
   }
 
   if (elementTypeId === 7) {
@@ -431,13 +456,13 @@ export function embeddedBlockSummary(
           );
       return matchesDate && matchesTag && matchesCycle;
     });
-    return matchingEvents.length ? `${matchingEvents.length} Termin${matchingEvents.length === 1 ? "" : "e"}` : "Keine Termine";
+    return matchingEvents.length ? t("summary.eventCount", { count: matchingEvents.length }) : t("summary.noEvents");
   }
 
   if (elementTypeId === 8) {
     const items = (Array.isArray(config.bullet_items) ? config.bullet_items : []) as string[];
     const filledItems = items.filter((item) => String(item).trim());
-    return filledItems.length ? `${filledItems.length} Punkt${filledItems.length === 1 ? "" : "e"}` : "Keine Punkte";
+    return filledItems.length ? t("summary.bulletCount", { count: filledItems.length }) : t("summary.noBullets");
   }
 
   if (elementTypeId === 9) {
@@ -447,15 +472,15 @@ export function embeddedBlockSummary(
       const entry = entries.find((currentEntry) => String(currentEntry.participant_id) === participant.id);
       return String(entry?.status ?? "") === "present";
     }).length;
-    return eligibleParticipants.length ? `${presentCount}/${eligibleParticipants.length} anwesend` : "0 Teilnehmer";
+    return eligibleParticipants.length ? t("summary.presentOf", { present: presentCount, total: eligibleParticipants.length }) : t("summary.noParticipants");
   }
 
   if (elementTypeId === 10) {
-    return String(config.selected_date ?? "").trim() ? `Termin ${formatShortDate(String(config.selected_date))}` : "Kein Datum";
+    return String(config.selected_date ?? "").trim() ? t("summary.eventOn", { date: formatShortDate(String(config.selected_date)) }) : t("summary.noDate");
   }
 
   const text = String(embeddedBlock.text_content ?? "").trim();
-  return text || "Kein Inhalt";
+  return text || t("summary.noContent");
 }
 
 export function visibleBlockTitle(block: {
@@ -520,8 +545,9 @@ export function TodoMiniMenu({
 // whether it also has a "changed" mark from an earlier edit. onAccept, if given, renders
 // a hover-revealed "Ausblenden" icon that accepts this one todo's change.
 export function TrackedTaskText({ todo, trackChangesActive, onAccept }: { todo: ProtocolTodo; trackChangesActive: boolean; onAccept?: () => void }) {
+  const t = useTranslations("protocols.todos");
   if (!trackChangesActive) return <>{todo.task}</>;
-  const hideButton = onAccept ? <TrackedChangeHideButton onAccept={onAccept} title="Änderung an diesem Todo ausblenden" /> : null;
+  const hideButton = onAccept ? <TrackedChangeHideButton onAccept={onAccept} title={t("hideChangeTitle")} /> : null;
   if (todo.pending_delete) {
     return (
       <span className="tracked-run">
@@ -580,8 +606,8 @@ export function TodoMenuSearchList<T>({
   getSubtle,
   isActive,
   onPick,
-  emptyLabel = "Keine Ergebnisse",
-  searchPlaceholder = "Suchen…",
+  emptyLabel,
+  searchPlaceholder,
 }: {
   items: T[];
   getKey: (item: T) => string | number;
@@ -592,15 +618,18 @@ export function TodoMenuSearchList<T>({
   emptyLabel?: string;
   searchPlaceholder?: string;
 }) {
+  const tCommon = useTranslations("common");
+  const resolvedEmptyLabel = emptyLabel ?? tCommon("noResults");
+  const resolvedSearchPlaceholder = searchPlaceholder ?? tCommon("searchPlaceholder");
   const [search, setSearch] = useState("");
   const filtered = search.trim()
     ? items.filter((item) => getLabel(item).toLowerCase().includes(search.trim().toLowerCase()))
     : items;
   return (
     <>
-      <SearchInput value={search} onChange={setSearch} placeholder={searchPlaceholder} />
+      <SearchInput value={search} onChange={setSearch} placeholder={resolvedSearchPlaceholder} />
       {filtered.length === 0 ? (
-        <span className="assignee-empty">{emptyLabel}</span>
+        <span className="assignee-empty">{resolvedEmptyLabel}</span>
       ) : (
         filtered.map((item) => (
           <TodoMenuOption

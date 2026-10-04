@@ -2,6 +2,7 @@
 
 import { ChangeEvent, ClipboardEvent, FormEvent, KeyboardEvent, SVGProps, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { attemptBridgeRedirect } from "@/lib/bridge-redirect";
 import { browserApiFetch } from "@/lib/api/client";
@@ -61,6 +62,7 @@ function sanitizeTotpCode(value: string) {
 }
 
 export default function LoginPage() {
+  const t = useTranslations("auth");
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -215,7 +217,7 @@ export default function LoginPage() {
   async function submitLocal(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
-    setStatusMsg("Anmeldung läuft…");
+    setStatusMsg(t("status.loggingIn"));
     try {
       const session = await browserApiFetch<LoginResponse>("/api/auth/login", {
         method: "POST",
@@ -233,9 +235,9 @@ export default function LoginPage() {
         setStatusMsg("");
         return;
       }
-      setStatusMsg("Login konnte nicht abgeschlossen werden.");
+      setStatusMsg(t("status.loginIncomplete"));
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : "Login fehlgeschlagen");
+      setStatusMsg(error instanceof Error ? error.message : t("status.loginFailed"));
     } finally {
       setLoading(false);
     }
@@ -244,7 +246,7 @@ export default function LoginPage() {
   async function verifyTotp() {
     if (!pendingMfa) return;
     setLoading(true);
-    setStatusMsg("Code wird geprüft…");
+    setStatusMsg(t("status.codeChecking"));
     try {
       const session = await browserApiFetch<LoginResponse>("/api/auth/mfa/totp/verify", {
         method: "POST",
@@ -252,7 +254,7 @@ export default function LoginPage() {
       });
       finishLogin(session);
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : "Code-Prüfung fehlgeschlagen");
+      setStatusMsg(error instanceof Error ? error.message : t("status.codeCheckFailed"));
     } finally {
       setLoading(false);
     }
@@ -362,7 +364,7 @@ export default function LoginPage() {
   async function startTotpSetup() {
     if (!pendingMfa) return;
     setLoading(true);
-    setStatusMsg("TOTP-Setup wird vorbereitet…");
+    setStatusMsg(t("status.totpSetupPreparing"));
     try {
       const setup = await browserApiFetch<TotpEnrollmentStart>("/api/auth/mfa/totp/setup/start", {
         method: "POST",
@@ -373,7 +375,7 @@ export default function LoginPage() {
       setTotpLabel("");
       setStatusMsg("");
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : "TOTP-Setup konnte nicht gestartet werden");
+      setStatusMsg(error instanceof Error ? error.message : t("status.totpSetupStartFailed"));
     } finally {
       setLoading(false);
     }
@@ -382,7 +384,7 @@ export default function LoginPage() {
   async function completeTotpSetup() {
     if (!totpSetup) return;
     setLoading(true);
-    setStatusMsg("TOTP wird aktiviert…");
+    setStatusMsg(t("status.totpActivating"));
     try {
       const session = await browserApiFetch<LoginResponse>("/api/auth/mfa/totp/setup/complete", {
         method: "POST",
@@ -394,7 +396,7 @@ export default function LoginPage() {
       });
       finishLogin(session);
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : "TOTP konnte nicht aktiviert werden");
+      setStatusMsg(error instanceof Error ? error.message : t("status.totpActivateFailed"));
     } finally {
       setLoading(false);
     }
@@ -405,10 +407,10 @@ export default function LoginPage() {
     setLoading(true);
     setStatusMsg(
       pendingMfa.status === "setup_required"
-        ? "Passkey wird eingerichtet…"
+        ? t("status.passkeySettingUp")
         : mode === "auto"
-          ? "Passkey-Dialog wird geöffnet…"
-          : "Passkey wird geprüft…"
+          ? t("status.passkeyDialogOpening")
+          : t("status.passkeyChecking")
     );
     try {
       if (pendingMfa.status === "setup_required") {
@@ -443,7 +445,7 @@ export default function LoginPage() {
       });
       finishLogin(session);
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : "Passkey-Vorgang fehlgeschlagen");
+      setStatusMsg(error instanceof Error ? error.message : t("status.passkeyFailed"));
     } finally {
       setLoading(false);
     }
@@ -453,15 +455,15 @@ export default function LoginPage() {
     return (
       <form className="login-form" onSubmit={submitLocal}>
         <label className="field-stack">
-          <span className="field-label">E-Mail</span>
+          <span className="field-label">{t("password.emailLabel")}</span>
           <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
         </label>
         <label className="field-stack">
-          <span className="field-label">Passwort</span>
+          <span className="field-label">{t("password.passwordLabel")}</span>
           <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
         </label>
         <button type="submit" className="button-secondary login-submit" disabled={loading}>
-          {loading ? "…" : "Einloggen"}
+          {loading ? "…" : t("password.submit")}
         </button>
       </form>
     );
@@ -473,12 +475,12 @@ export default function LoginPage() {
       <div className="grid">
         <div className="security-summary-card">
           <div>
-            <div className="eyebrow">Pflicht-Setup</div>
-            <strong>Für dieses Konto ist MFA erforderlich</strong>
+            <div className="eyebrow">{t("mfa.mandatorySetupEyebrow")}</div>
+            <strong>{t("mfa.requiredTitle")}</strong>
             <div className="muted">
               {pendingMfa.tenant_name
-                ? `${pendingMfa.user_display_name} ist Administrator in ${pendingMfa.tenant_name}.`
-                : `${pendingMfa.user_display_name} benötigt vor dem Login einen zweiten Faktor.`}
+                ? t("mfa.requiredAdminDescription", { user: pendingMfa.user_display_name, tenant: pendingMfa.tenant_name })
+                : t("mfa.requiredGenericDescription", { user: pendingMfa.user_display_name })}
             </div>
           </div>
         </div>
@@ -486,17 +488,17 @@ export default function LoginPage() {
         <div className="wizard-steps">
           <div className="wizard-step">
             <div className="wizard-step-dot is-done">1</div>
-            <div className="wizard-step-label is-active">Methode wählen</div>
+            <div className="wizard-step-label is-active">{t("mfa.stepChooseMethod")}</div>
           </div>
           <div className="wizard-step-line is-done" />
           <div className="wizard-step">
             <div className={`wizard-step-dot${totpSetup || activeMethod === "webauthn" ? " is-active" : ""}`}>2</div>
-            <div className="wizard-step-label">Bestätigen</div>
+            <div className="wizard-step-label">{t("mfa.stepConfirm")}</div>
           </div>
           <div className="wizard-step-line" />
           <div className="wizard-step">
             <div className="wizard-step-dot">3</div>
-            <div className="wizard-step-label">Fertig anmelden</div>
+            <div className="wizard-step-label">{t("mfa.stepFinish")}</div>
           </div>
         </div>
 
@@ -506,8 +508,8 @@ export default function LoginPage() {
             className={activeMethod === "totp" ? "wizard-purpose-card is-selected" : "wizard-purpose-card"}
             onClick={() => setActiveMethod("totp")}
           >
-            <div className="wizard-purpose-title">TOTP</div>
-            <div className="wizard-purpose-desc">Authenticator-App auf Handy oder Desktop</div>
+            <div className="wizard-purpose-title">{t("mfa.methodTotpTitle")}</div>
+            <div className="wizard-purpose-desc">{t("mfa.methodTotpDescription")}</div>
           </button>
           <button
             type="button"
@@ -515,9 +517,9 @@ export default function LoginPage() {
             onClick={() => setActiveMethod("webauthn")}
             disabled={!pendingMfa.can_add_passkey || !canUsePasskeys}
           >
-            <div className="wizard-purpose-title">Passkey</div>
+            <div className="wizard-purpose-title">{t("mfa.methodPasskeyTitle")}</div>
             <div className="wizard-purpose-desc">
-              {canUsePasskeys && pendingMfa.can_add_passkey ? "Face ID, Touch ID oder Windows Hello" : "In diesem Browser oder auf dieser Domain nicht verfügbar"}
+              {canUsePasskeys && pendingMfa.can_add_passkey ? t("mfa.methodPasskeyDescriptionAvailable") : t("mfa.methodPasskeyDescriptionUnavailable")}
             </div>
           </button>
         </div>
@@ -526,27 +528,27 @@ export default function LoginPage() {
           <article className="security-method-card">
             <div className="security-method-header">
               <div>
-                <div className="eyebrow">Schritt für Schritt</div>
-                <h3>TOTP einrichten</h3>
+                <div className="eyebrow">{t("mfa.stepByStepEyebrow")}</div>
+                <h3>{t("mfa.totpSetupHeading")}</h3>
               </div>
-              <span className="pill">Pflicht</span>
+              <span className="pill">{t("mfa.mandatoryPill")}</span>
             </div>
             {!totpSetup ? (
               <button type="button" className="button-secondary" onClick={() => void startTotpSetup()} disabled={loading}>
-                TOTP-Setup starten
+                {t("mfa.startTotpSetup")}
               </button>
             ) : (
               <TotpEnrollCard
                 setup={totpSetup}
                 label={totpLabel}
                 onLabelChange={setTotpLabel}
-                labelPlaceholder="z.B. Firmenhandy"
+                labelPlaceholder={t("mfa.totpLabelPlaceholder")}
                 code={totpCode}
                 onCodeChange={setTotpCode}
                 onSubmit={() => void completeTotpSetup()}
                 busy={loading}
-                submitLabel="TOTP aktivieren und anmelden"
-                submitBusyLabel="Wird aktiviert…"
+                submitLabel={t("mfa.totpActivateAndLogin")}
+                submitBusyLabel={t("mfa.totpActivatingShort")}
               />
             )}
           </article>
@@ -554,20 +556,20 @@ export default function LoginPage() {
           <article className="security-method-card">
             <div className="security-method-header">
               <div>
-                <div className="eyebrow">Schritt für Schritt</div>
-                <h3>Passkey einrichten</h3>
+                <div className="eyebrow">{t("mfa.stepByStepEyebrow")}</div>
+                <h3>{t("mfa.passkeySetupHeading")}</h3>
               </div>
-              <span className="pill">Empfohlen</span>
+              <span className="pill">{t("mfa.recommendedPill")}</span>
             </div>
             <p className="muted">
-              Dein Gerät öffnet gleich den nativen Sicherheitsdialog. Nach der Bestätigung wirst du direkt angemeldet.
+              {t("mfa.passkeySetupDescription")}
             </p>
             <label className="field-stack">
-              <span className="field-label">Bezeichnung</span>
-              <input value={passkeyLabel} onChange={(event) => setPasskeyLabel(event.target.value)} placeholder="z.B. Arbeitslaptop" />
+              <span className="field-label">{t("mfa.designationLabel")}</span>
+              <input value={passkeyLabel} onChange={(event) => setPasskeyLabel(event.target.value)} placeholder={t("mfa.passkeyLabelPlaceholder")} />
             </label>
             <button type="button" className="button-secondary" disabled={loading || !canUsePasskeys || !pendingMfa.can_add_passkey} onClick={() => void runPasskeyFlow()}>
-              {loading ? "Passkey wird eingerichtet…" : "Passkey einrichten und anmelden"}
+              {loading ? t("status.passkeySettingUp") : t("mfa.setupPasskeyAndLogin")}
             </button>
           </article>
         )}
@@ -582,8 +584,8 @@ export default function LoginPage() {
       return (
         <div className="mfa-screen mfa-screen-choice">
           <div className="mfa-screen-header mfa-screen-header-left">
-            <h1>Anmeldemethode wählen</h1>
-            <p>Wähle, wie du deine Identität bestätigen möchtest.</p>
+            <h1>{t("mfa.chooseMethodTitle")}</h1>
+            <p>{t("mfa.chooseMethodSubtitle")}</p>
           </div>
 
           <div className="mfa-choice-list">
@@ -598,11 +600,11 @@ export default function LoginPage() {
                   <MfaPasskeyIcon width={28} height={28} />
                 </span>
                 <span className="mfa-choice-copy">
-                  <strong>Passkey</strong>
+                  <strong>{t("mfa.methodPasskeyTitle")}</strong>
                   <span>
                     {canUsePasskeys
-                      ? "Mit Face ID, Fingerabdruck oder Gerätecode"
-                      : "In diesem Browser oder auf dieser Domain nicht verfügbar"}
+                      ? t("mfa.passkeyChoiceAvailable")
+                      : t("mfa.methodPasskeyDescriptionUnavailable")}
                   </span>
                 </span>
               </button>
@@ -613,8 +615,8 @@ export default function LoginPage() {
                   <MfaCodeIcon width={28} height={28} />
                 </span>
                 <span className="mfa-choice-copy">
-                  <strong>Code</strong>
-                  <span>Aus deiner Authenticator-App eingeben</span>
+                  <strong>{t("mfa.codeChoiceTitle")}</strong>
+                  <span>{t("mfa.codeChoiceDescription")}</span>
                 </span>
               </button>
             ) : null}
@@ -622,7 +624,7 @@ export default function LoginPage() {
 
           <div className="mfa-footer-stack">
             <button type="button" className="button-secondary button-ghost login-secondary-button login-secondary-button-centered" onClick={resetMfaFlow}>
-              Zurück zur Anmeldung
+              {t("mfa.backToLogin")}
             </button>
           </div>
         </div>
@@ -637,8 +639,8 @@ export default function LoginPage() {
           </div>
 
           <div className="mfa-screen-header mfa-screen-header-left">
-            <h1>Bestätigungscode eingeben</h1>
-            <p>Gib den 6-stelligen Code aus deiner Authenticator-App ein.</p>
+            <h1>{t("mfa.confirmCodeTitle")}</h1>
+            <p>{t("mfa.confirmCodeSubtitle")}</p>
           </div>
 
           <form
@@ -663,24 +665,24 @@ export default function LoginPage() {
                   onFocus={(event) => event.currentTarget.select()}
                   inputMode="numeric"
                   autoComplete={index === 0 ? "one-time-code" : "off"}
-                  aria-label={`Code-Ziffer ${index + 1}`}
+                  aria-label={t("mfa.codeDigitLabel", { n: index + 1 })}
                   maxLength={1}
                 />
               ))}
             </div>
 
             <button type="submit" className="button-secondary login-submit mfa-primary-button" disabled={totpCode.length !== MFA_CODE_LENGTH || loading}>
-              {loading ? "Prüft…" : "Bestätigen"}
+              {loading ? t("mfa.checking") : t("mfa.confirmButton")}
             </button>
           </form>
 
           <div className={`mfa-footer-links${canSwitchMethods ? " mfa-footer-links-split" : ""}`}>
             <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={resetMfaFlow}>
-              Zurück zur Anmeldung
+              {t("mfa.backToLogin")}
             </button>
             {canSwitchMethods ? (
               <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={openMethodChooser}>
-                Andere Option wählen
+                {t("mfa.chooseOtherOption")}
               </button>
             ) : null}
           </div>
@@ -695,8 +697,8 @@ export default function LoginPage() {
         </div>
 
         <div className="mfa-screen-header mfa-screen-header-center">
-          <h1>Passkey bestätigen</h1>
-          <p>Folge den Anweisungen deines Geräts, um dich mit Face ID, Fingerabdruck oder Gerätecode anzumelden.</p>
+          <h1>{t("mfa.confirmPasskeyTitle")}</h1>
+          <p>{t("mfa.confirmPasskeySubtitle")}</p>
         </div>
 
         <button
@@ -705,17 +707,17 @@ export default function LoginPage() {
           disabled={loading || !canUsePasskeys}
           onClick={() => void runPasskeyFlow("manual")}
         >
-          {loading ? "Öffnet…" : canUsePasskeys ? "Weiter" : "Passkey nicht verfügbar"}
+          {loading ? t("mfa.opening") : canUsePasskeys ? t("mfa.continueButton") : t("mfa.passkeyUnavailable")}
         </button>
 
         <div className="mfa-footer-stack">
           {canSwitchMethods ? (
             <button type="button" className="button-secondary button-ghost login-secondary-button login-secondary-button-centered" onClick={openMethodChooser}>
-              Andere Option wählen
+              {t("mfa.chooseOtherOption")}
             </button>
           ) : null}
           <button type="button" className="button-secondary button-ghost login-secondary-button login-secondary-button-centered" onClick={resetMfaFlow}>
-            Zurück zur Anmeldung
+            {t("mfa.backToLogin")}
           </button>
         </div>
       </div>
@@ -724,7 +726,7 @@ export default function LoginPage() {
 
   const isVerifyScreen = pendingMfa?.status === "verification_required";
   const loginPanelClassName = pendingMfa?.status === "setup_required" ? "login-panel login-panel-wide" : "login-panel";
-  const loginTitle = pendingMfa?.status === "setup_required" ? "Sicher anmelden" : "Anmelden bei hocX";
+  const loginTitle = pendingMfa?.status === "setup_required" ? t("secureTitle") : t("title");
 
   return (
     <main className="login-frame">
@@ -745,7 +747,7 @@ export default function LoginPage() {
 
             <div className="login-heading">
               <h1>{loginTitle}</h1>
-              {resolvedTenant && !pendingMfa ? <p className="login-subtitle">für {resolvedTenant.tenant_name}</p> : null}
+              {resolvedTenant && !pendingMfa ? <p className="login-subtitle">{t("forTenant", { tenant: resolvedTenant.tenant_name })}</p> : null}
               {pendingMfa ? <p className="login-subtitle">{pendingMfa.user_email}</p> : null}
             </div>
           </>
@@ -756,15 +758,15 @@ export default function LoginPage() {
         {pendingMfa?.status === "setup_required" ? (
           <div className="table-actions table-actions-start">
             <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={resetMfaFlow}>
-              Zurück zum Login
+              {t("mfa.backToLoginPanel")}
             </button>
           </div>
         ) : null}
 
         {statusMsg && <p className={isVerifyScreen ? "login-status login-status-mfa" : "login-status"}>{statusMsg}</p>}
-        {appVersion && isVerifyScreen ? <p className="login-version login-version-in-panel"><a href={getReleaseUrl(appVersion)} target="_blank" rel="noopener noreferrer" title="Release und Changelog auf GitHub öffnen (neuer Tab)">hocX {appVersion}</a></p> : null}
+        {appVersion && isVerifyScreen ? <p className="login-version login-version-in-panel"><a href={getReleaseUrl(appVersion)} target="_blank" rel="noopener noreferrer" title={t("releaseLinkTitle")}>hocX {appVersion}</a></p> : null}
       </section>
-      {appVersion && !isVerifyScreen ? <p className="login-version"><a href={getReleaseUrl(appVersion)} target="_blank" rel="noopener noreferrer" title="Release und Changelog auf GitHub öffnen (neuer Tab)">hocX {appVersion}</a></p> : null}
+      {appVersion && !isVerifyScreen ? <p className="login-version"><a href={getReleaseUrl(appVersion)} target="_blank" rel="noopener noreferrer" title={t("releaseLinkTitle")}>hocX {appVersion}</a></p> : null}
       {!isVerifyScreen ? <CopyrightNotice className="login-copyright" /> : null}
     </main>
   );

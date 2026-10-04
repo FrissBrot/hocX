@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { TableSnapshotCycleSummary } from "@/types/api";
 
 type SnapshotSwitcherProps = {
@@ -19,6 +21,7 @@ type SnapshotSwitcherProps = {
  * with no snapshot - a gap) is listed with a warning marker; selecting it starts
  * reconstruction instead of a normal read-only view. */
 export function SnapshotSwitcher({ mode, availableCycles, cycleConfigId, cycleYear, onSwitchToLive, onSwitchToHistorical }: SnapshotSwitcherProps) {
+  const t = useTranslations("protocols.snapshotSwitcher");
   if (availableCycles.length === 0) {
     return null;
   }
@@ -38,7 +41,7 @@ export function SnapshotSwitcher({ mode, availableCycles, cycleConfigId, cycleYe
 
   return (
     <label className="field-stack snapshot-switcher">
-      <span className="field-label">Ansicht</span>
+      <span className="field-label">{t("label")}</span>
       <select
         value={currentValue}
         onChange={(event) => {
@@ -51,15 +54,15 @@ export function SnapshotSwitcher({ mode, availableCycles, cycleConfigId, cycleYe
           onSwitchToHistorical(id, Number(yearRaw), hasSnapshotRaw === "1");
         }}
       >
-        <option value="live">Aktuell (bearbeitbar)</option>
+        <option value="live">{t("current")}</option>
         {availableCycles.map((cycle) => (
           <option
             key={`${cycle.cycle_config_id}:${cycle.cycle_year}`}
             value={`${cycle.cycle_config_id}:${cycle.cycle_year}:${cycle.has_snapshot ? "1" : "0"}`}
           >
             {cycle.has_snapshot
-              ? `${cycle.cycle_config_name} ${cycle.cycle_year} (historisch)`
-              : `⚠ ${cycle.cycle_config_name} ${cycle.cycle_year} (kein Snapshot)`}
+              ? t("historical", { name: cycle.cycle_config_name, year: cycle.cycle_year })
+              : t("missingSnapshot", { name: cycle.cycle_config_name, year: cycle.cycle_year })}
           </option>
         ))}
       </select>

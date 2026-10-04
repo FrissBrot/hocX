@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 export type ToastType = "success" | "error" | "info";
 
@@ -45,10 +46,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 }
 
 function ToastList({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: string) => void }) {
+  const t = useTranslations("common");
   if (toasts.length === 0) return null;
 
   return (
-    <div className="app-toast-stack" role="region" aria-label="Benachrichtigungen" aria-live="polite">
+    <div className="app-toast-stack" role="region" aria-label={t("notificationsRegion")} aria-live="polite">
       {toasts.map((toast) => (
         <div key={toast.id} className={`app-toast app-toast-${toast.type}`} role="alert">
           <span
@@ -60,7 +62,7 @@ function ToastList({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id:
           <button
             type="button"
             className="app-toast-close"
-            aria-label="Schliessen"
+            aria-label={t("close")}
             onClick={() => onDismiss(toast.id)}
           >
             ✕

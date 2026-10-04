@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { MfaProfilePanel } from "@/components/security/mfa-profile-panel";
 import { Modal } from "@/components/ui/modal";
 import { Tabs } from "@/components/ui/tabs";
+import { locales, localeConfig } from "@/i18n/locale-config.generated";
 
 type Props = {
   open: boolean;
@@ -27,6 +29,7 @@ export function ProfileModal({
   onSave,
   onLogout,
 }: Props) {
+  const t = useTranslations("settings.profileModal");
   const [activeTab, setActiveTab] = useState("profil");
 
   useEffect(() => {
@@ -40,8 +43,8 @@ export function ProfileModal({
       open={open}
       onClose={onClose}
       onEscape={onSave}
-      title="Benutzerprofil"
-      description="Persönliche Einstellungen, Sprache und Sicherheit deines Kontos."
+      title={t("title")}
+      description={t("description")}
       size="wide"
     >
       <Tabs
@@ -50,16 +53,17 @@ export function ProfileModal({
         tabs={[
           {
             id: "profil",
-            label: "Profil",
+            label: t("tabs.profile"),
             content: (
               <div className="grid">
                 <label className="field-stack">
-                  <span className="field-label">Sprache</span>
+                  <span className="field-label">{t("languageLabel")}</span>
                   <select value={language} onChange={(event) => onLanguageChange(event.target.value)}>
-                    <option value="de">Deutsch</option>
-                    <option value="en">English</option>
-                    <option value="fr">Français</option>
-                    <option value="it">Italiano</option>
+                    {locales.map((code) => (
+                      <option key={code} value={code}>
+                        {localeConfig[code].nativeLabel}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className="field-radio-option">
@@ -69,16 +73,16 @@ export function ProfileModal({
                     onChange={(event) => onProtocolAccordionChange(event.target.checked)}
                   />
                   <span className="field-radio-option-label">
-                    <strong>Protokollpunkte automatisch einklappen</strong>
-                    <small className="muted">Nur den aktiven Punkt geöffnet anzeigen.</small>
+                    <strong>{t("accordionLabel")}</strong>
+                    <small className="muted">{t("accordionHint")}</small>
                   </span>
                 </label>
                 <div className="table-actions table-actions-start">
                   <button type="button" className="button-secondary" onClick={onSave}>
-                    Profil speichern
+                    {t("save")}
                   </button>
                   <button type="button" className="button-secondary button-danger" onClick={onLogout}>
-                    Logout
+                    {t("logout")}
                   </button>
                 </div>
               </div>
@@ -86,7 +90,7 @@ export function ProfileModal({
           },
           {
             id: "sicherheit",
-            label: "Sicherheit",
+            label: t("tabs.security"),
             content: <MfaProfilePanel open={open && activeTab === "sicherheit"} />,
           },
         ]}

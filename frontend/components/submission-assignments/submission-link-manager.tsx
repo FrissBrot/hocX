@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { ActionIcon } from "@/components/ui/action-icons";
@@ -19,6 +20,8 @@ type Props = {
 };
 
 export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: Props) {
+  const t = useTranslations("submissionAssignments");
+  const tCommon = useTranslations("common");
   const showToast = useToast();
   const confirm = useConfirm();
   const [newName, setNewName] = useState("");
@@ -44,9 +47,9 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
       });
       onLinksChange([...links, created]);
       setNewName("");
-      showToast("Link erstellt", "success");
+      showToast(t("linkCreatedToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Link konnte nicht erstellt werden", "error");
+      showToast(error instanceof Error ? error.message : t("linkCreateFailed"), "error");
     }
   }
 
@@ -64,7 +67,7 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
       );
       setEditingId(null);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Link konnte nicht umbenannt werden", "error");
+      showToast(error instanceof Error ? error.message : t("linkRenameFailed"), "error");
     }
   }
 
@@ -77,31 +80,28 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
         })
       );
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Standard-Link konnte nicht gesetzt werden", "error");
+      showToast(error instanceof Error ? error.message : t("defaultLinkSetFailed"), "error");
     }
   }
 
   async function regenerate(link: SubmissionLink) {
     const ok = await confirm({
-      message: `Neuen Link für „${link.name}“ erzeugen? Die bisherige Adresse funktioniert danach sofort nicht mehr.`,
+      message: t("regenerateConfirm", { name: link.name }),
       tone: "danger",
     });
     if (!ok) return;
     try {
       replace(await browserApiFetch<SubmissionLink>(`/api/submission-links/${link.id}/regenerate`, { method: "POST" }));
-      showToast("Neuer Link erzeugt", "success");
+      showToast(t("linkRegeneratedToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Link konnte nicht erneuert werden", "error");
+      showToast(error instanceof Error ? error.message : t("linkRegenerateFailed"), "error");
     }
   }
 
   async function remove(link: SubmissionLink) {
-    const usage =
-      link.assignment_count > 0
-        ? ` ${link.assignment_count} Abgabe${link.assignment_count === 1 ? " ist" : "n sind"} darüber erreichbar und danach nicht mehr über diesen Link.`
-        : "";
+    const usage = link.assignment_count > 0 ? t("removeUsageSuffix", { count: link.assignment_count }) : "";
     const ok = await confirm({
-      message: `Link „${link.name}“ löschen? Die Adresse funktioniert danach nicht mehr.${usage}`,
+      message: t("deleteLinkConfirm", { name: link.name, usage }),
       tone: "danger",
     });
     if (!ok) return;
@@ -109,21 +109,19 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
       await browserApiFetch(`/api/submission-links/${link.id}`, { method: "DELETE" });
       onLinksChange(links.filter((item) => item.id !== link.id));
       onLinkRemoved(link.id);
-      showToast("Link gelöscht", "success");
+      showToast(t("linkDeletedToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Link konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("linkDeleteFailed"), "error");
     }
   }
 
   return (
     <div className="grid">
       <p className="muted">
-        Die öffentliche Abgabebox ist nur über einen Link erreichbar. Die Adresse enthält einen zufälligen Schlüssel – wer den
-        Link kennt, kann die damit verknüpften Abgaben nutzen. Welche Abgabe über welche Links erreichbar ist, wird bei der Abgabe
-        selbst festgelegt.
+        {t("linkManagerIntro")}
       </p>
 
-      {links.length === 0 ? <p className="muted">Noch keine Links – ohne Link ist keine Abgabe erreichbar.</p> : null}
+      {links.length === 0 ? <p className="muted">{t("noLinksYet")}</p> : null}
 
       {links.map((link) => (
         <div key={link.id} className="field-stack" style={{ borderTop: "1px solid var(--border)", paddingTop: "var(--space-3)" }}>
@@ -148,18 +146,18 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
                   style={{ flex: 1, minWidth: 160 }}
                 />
                 <button type="button" className="button-secondary" onClick={() => void saveName(link)} disabled={!editName.trim()}>
-                  Speichern
+                  {tCommon("save")}
                 </button>
                 <button type="button" className="button-ghost" onClick={() => setEditingId(null)}>
-                  Abbrechen
+                  {t("cancel")}
                 </button>
               </>
             ) : (
               <>
                 <strong>{link.name}</strong>
-                {link.is_default ? <Badge variant="success">Standard</Badge> : null}
+                {link.is_default ? <Badge variant="success">{t("defaultLabel")}</Badge> : null}
                 <span className="muted" style={{ flex: 1 }}>
-                  {link.assignment_count} Abgabe{link.assignment_count === 1 ? "" : "n"}
+                  {t("assignmentCountSuffix", { count: link.assignment_count })}
                 </span>
                 <button
                   type="button"
@@ -168,8 +166,8 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
                     setEditingId(link.id);
                     setEditName(link.name);
                   }}
-                  aria-label="Umbenennen"
-                  title="Umbenennen"
+                  aria-label={t("renameLabel")}
+                  title={t("renameLabel")}
                 >
                   <ActionIcon name="edit" />
                 </button>
@@ -177,44 +175,44 @@ export function SubmissionLinkManager({ links, onLinksChange, onLinkRemoved }: P
                   type="button"
                   className="subm-sidebar-icon-button subm-sidebar-icon-button-danger"
                   onClick={() => void remove(link)}
-                  aria-label="Löschen"
-                  title="Löschen"
+                  aria-label={t("delete")}
+                  title={t("delete")}
                 >
                   <ActionIcon name="delete" />
                 </button>
               </>
             )}
           </div>
-          <CopyField label="Link" value={link.url} />
+          <CopyField label={t("linkFieldLabel")} value={link.url} />
           <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
             {!link.is_default ? (
               <button type="button" className="button-ghost" onClick={() => void makeDefault(link)}>
-                Als Standard festlegen
+                {t("makeDefaultButton")}
               </button>
             ) : null}
             <button type="button" className="button-ghost" onClick={() => void regenerate(link)}>
-              Neuen Schlüssel erzeugen
+              {t("regenerateButton")}
             </button>
           </div>
         </div>
       ))}
 
       <form className="field-stack" onSubmit={createLink} style={{ borderTop: "1px solid var(--border)", paddingTop: "var(--space-3)" }}>
-        <span className="field-label">Neuer Link</span>
+        <span className="field-label">{t("newLinkLabel")}</span>
         <div style={{ display: "flex", gap: "var(--space-2)" }}>
           <input
             value={newName}
             maxLength={80}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Name, z. B. „Eltern“ oder „Leiterteam“"
+            placeholder={t("newLinkNamePlaceholder")}
             required
             style={{ flex: 1 }}
           />
           <button type="submit" className="button-secondary" disabled={!newName.trim()}>
-            Link erstellen
+            {t("createLinkButton")}
           </button>
         </div>
-        <span className="field-help">Der Name ist nur für dich sichtbar – die Adresse selbst ist zufällig generiert.</span>
+        <span className="field-help">{t("newLinkHelp")}</span>
       </form>
     </div>
   );

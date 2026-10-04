@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl";
+
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { NavIconKey } from "@/components/ui/nav-icons";
@@ -36,12 +38,14 @@ export function formatChfShort(rp: number | null | undefined): string {
   return Number.isInteger(francs) ? `CHF ${francs}.–` : `CHF ${francs.toFixed(2)}`;
 }
 
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
 /** "CHF 190.00 / Jahr" bzw. "Kein Preis festgelegt" für eine Tabellenzelle. */
-export function formatPlanPrice(plan: AdminPlan | undefined, cycle: "monthly" | "yearly"): string {
-  if (!plan) return "Kein Plan zugewiesen";
+export function formatPlanPrice(plan: AdminPlan | undefined, cycle: "monthly" | "yearly", t: TFunc): string {
+  if (!plan) return t("noPlanAssigned");
   const rp = cycle === "monthly" ? plan.price_monthly_rp : plan.price_yearly_rp;
-  if (rp === null) return "Kein Preis festgelegt";
-  return `CHF ${(rp / 100).toFixed(2)} / ${cycle === "monthly" ? "Monat" : "Jahr"}`;
+  if (rp === null) return t("noPriceSet");
+  return t("pricePerCycle", { price: `CHF ${(rp / 100).toFixed(2)}`, cycle: cycle === "monthly" ? t("month") : t("year") });
 }
 
 const FEATURE_ICON_HINTS: [RegExp, NavIconKey][] = [
@@ -119,6 +123,7 @@ export function PlanOption({
   cycle: "monthly" | "yearly";
   onSelect: () => void;
 }) {
+  const t = useTranslations("admin.plans");
   const price = cycle === "monthly" ? plan.price_monthly_rp : plan.price_yearly_rp;
   return (
     <label className={checked ? "admin-plan-option admin-plan-option-active" : "admin-plan-option"}>
@@ -126,28 +131,29 @@ export function PlanOption({
       <span className="admin-plan-option-copy">
         <span className="admin-plan-option-title">
           <strong>{plan.name}</strong>
-          {!plan.is_bookable ? <Badge className="admin-badge-sm">nicht buchbar</Badge> : null}
+          {!plan.is_bookable ? <Badge className="admin-badge-sm">{t("notBookable")}</Badge> : null}
         </span>
         <span className="muted">
-          {plan.included_user_limit === null ? "Unbegrenzt Benutzer" : `${plan.included_user_limit} Benutzer`}
+          {plan.included_user_limit === null ? t("unlimitedUsers") : t("userCount", { count: plan.included_user_limit })}
           {" · "}
-          {plan.included_storage_bytes === null ? "kein Speicherlimit" : formatFileSize(plan.included_storage_bytes)}
+          {plan.included_storage_bytes === null ? t("noStorageLimit") : formatFileSize(plan.included_storage_bytes)}
         </span>
       </span>
-      <span className="admin-plan-option-price">{price === null ? "–" : `${formatChfShort(price)} / ${cycle === "monthly" ? "Monat" : "Jahr"}`}</span>
+      <span className="admin-plan-option-price">{price === null ? "–" : t("pricePerCycle", { price: formatChfShort(price), cycle: cycle === "monthly" ? t("month") : t("year") })}</span>
     </label>
   );
 }
 
 export function BillingCycleToggle({ value, onChange }: { value: "monthly" | "yearly"; onChange: (value: "monthly" | "yearly") => void }) {
+  const t = useTranslations("admin.plans");
   return (
     <div>
       <FilterTabs
         value={value}
         onChange={onChange}
         options={[
-          { value: "monthly", label: "Monatlich" },
-          { value: "yearly", label: "Jährlich" },
+          { value: "monthly", label: t("monthly") },
+          { value: "yearly", label: t("yearly") },
         ]}
       />
     </div>

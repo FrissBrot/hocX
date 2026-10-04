@@ -3,6 +3,7 @@
 import { DragEvent, FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
@@ -12,7 +13,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { formatDateRange } from "@/lib/utils/format";
-import { ELEMENT_TYPE_LABELS } from "@/lib/constants/element-types";
+import { elementTypeLabels } from "@/lib/constants/element-types";
 import {
   CycleConfigSummary,
   DocumentTemplate,
@@ -233,9 +234,9 @@ function responsibilityConfigsEqual(left: ResponsibilityConfig, right: Responsib
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function participantName(participant: ParticipantSummary | undefined, mode: ResponsibleNameMode) {
+function participantName(participant: ParticipantSummary | undefined, mode: ResponsibleNameMode, t: TFunc) {
   if (!participant) {
-    return "Unbekannter Teilnehmer";
+    return t("unknownParticipant");
   }
   if (mode === "first_name") {
     return participant.first_name?.trim() || participant.display_name;
@@ -249,12 +250,13 @@ function participantName(participant: ParticipantSummary | undefined, mode: Resp
 function titleWithResponsibility(
   item: TemplateElement,
   participantsById: Map<string, ParticipantSummary>,
-  fallbackMode: ResponsibleNameMode
+  fallbackMode: ResponsibleNameMode,
+  t: TFunc
 ) {
   const responsibility = parseResponsibilityConfig(item.configuration_json);
   const mode = responsibility.name_display_mode || fallbackMode;
   const names = responsibility.assignments
-    .map((assignment) => participantName(participantsById.get(assignment.participant_id), mode))
+    .map((assignment) => participantName(participantsById.get(assignment.participant_id), mode, t))
     .filter(Boolean);
   return names.length ? `${item.title} (${names.join(", ")})` : item.title;
 }
@@ -281,11 +283,12 @@ function rowOptionLabel(
   entry: StructuredListEntry,
   meta: EligibleResponsibleList,
   participantsById: Map<string, ParticipantSummary>,
-  mode: ResponsibleNameMode
+  mode: ResponsibleNameMode,
+  t: TFunc
 ) {
-  const text = listTextValue(entry, meta.textColumn) || "Leere Zeile";
+  const text = listTextValue(entry, meta.textColumn) || t("emptyRow");
   const names = listParticipantIds(entry, meta.participantColumn, meta.participantValueType)
-    .map((participantId) => participantName(participantsById.get(participantId), mode))
+    .map((participantId) => participantName(participantsById.get(participantId), mode, t))
     .filter(Boolean);
   return names.length ? `${text} -> ${names.join(", ")}` : text;
 }
@@ -356,20 +359,24 @@ function BehaviorExportIcon() {
   );
 }
 
-const BEHAVIOR_ICON_FIELDS: Array<{ field: TemplateElementBehaviorField; label: string; icon: ReactNode }> = [
-  { field: "is_editable", label: "Im Protokoll bearbeitbar", icon: <BehaviorEditableIcon /> },
-  { field: "title_as_subtitle", label: "Blocktitel im PDF als Untertitel rendern", icon: <BehaviorSubtitleIcon /> },
-  { field: "copy_from_last_protocol", label: "Daten aus letzter Sitzung übernehmen", icon: <BehaviorHistoryIcon /> },
-  { field: "is_visible", label: "Im Editor sichtbar", icon: <BehaviorEyeIcon /> },
-  { field: "export_visible", label: "Im Export sichtbar", icon: <BehaviorExportIcon /> },
-];
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
-function blockDisplayLabel(block: TemplateElementBlock): string {
+function behaviorIconFields(t: TFunc): Array<{ field: TemplateElementBehaviorField; label: string; icon: ReactNode }> {
+  return [
+    { field: "is_editable", label: t("editor.behaviorEditable"), icon: <BehaviorEditableIcon /> },
+    { field: "title_as_subtitle", label: t("editor.behaviorTitleAsSubtitle"), icon: <BehaviorSubtitleIcon /> },
+    { field: "copy_from_last_protocol", label: t("editor.behaviorCopyFromLast"), icon: <BehaviorHistoryIcon /> },
+    { field: "is_visible", label: t("editor.behaviorVisibleInEditor"), icon: <BehaviorEyeIcon /> },
+    { field: "export_visible", label: t("editor.behaviorVisibleInExport"), icon: <BehaviorExportIcon /> },
+  ];
+}
+
+function blockDisplayLabel(block: TemplateElementBlock, t: TFunc): string {
   const title = block.block_title?.trim() || block.title?.trim();
   if (title) {
     return title;
   }
-  return ELEMENT_TYPE_LABELS[block.element_type_id] ?? "Block";
+  return elementTypeLabels(t)[block.element_type_id] ?? t("block");
 }
 
 function blockBehaviorValues(block: TemplateElementBlock): Record<TemplateElementBehaviorField, boolean> {
@@ -389,9 +396,10 @@ function BehaviorIconRow({
   values: Record<TemplateElementBehaviorField, boolean>;
   onToggle: (field: TemplateElementBehaviorField) => void;
 }) {
+  const t = useTranslations("templates");
   return (
     <div className="behavior-icon-row">
-      {BEHAVIOR_ICON_FIELDS.map(({ field, label, icon }) => {
+      {behaviorIconFields(t).map(({ field, label, icon }) => {
         const active = values[field];
         return (
           <button
@@ -412,6 +420,7 @@ function BehaviorIconRow({
 
 export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: TemplateBuilderProps) {
   const router = useRouter();
+  const t = useTranslations("templates.builder");
   const showToast = useToast();
   const confirm = useConfirm();
   const [templates, setTemplates] = useState(initialTemplates);
@@ -452,26 +461,26 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       setTemplates((current) => [created, ...current]);
       setForm(initialTemplateCreate);
       setShowCreateForm(false);
-      showToast(`Vorlage "${created.name}" erstellt`, "success");
+      showToast(t("createdToast", { name: created.name }), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Vorlage konnte nicht erstellt werden", "error");
+      showToast(error instanceof Error ? error.message : t("createFailedToast"), "error");
     }
   }
 
   async function deleteTemplate(templateId: string) {
     const ok = await confirm({
-      message: "Vorlage endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      message: t("deleteConfirm"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: t("delete")
     });
     if (!ok) return;
     try {
-      const deletedName = templates.find((template) => template.id === templateId)?.name ?? "Unbenannt";
+      const deletedName = templates.find((template) => template.id === templateId)?.name ?? t("unnamed");
       await browserApiFetch(`/api/templates/${templateId}`, { method: "DELETE" });
       setTemplates((current) => current.filter((template) => template.id !== templateId));
-      showToast(`Vorlage "${deletedName}" gelöscht`, "success");
+      showToast(t("deletedToast", { name: deletedName }), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Vorlage konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("deleteFailedToast"), "error");
     }
   }
 
@@ -483,15 +492,15 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
         body: JSON.stringify({ status: nextStatus }),
       });
       setTemplates((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      showToast(nextStatus === "archived" ? "Vorlage archiviert" : "Vorlage aus dem Archiv zurückgeholt", "success");
+      showToast(nextStatus === "archived" ? t("archivedToast") : t("unarchivedToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Status konnte nicht geändert werden", "error");
+      showToast(error instanceof Error ? error.message : t("statusChangeFailedToast"), "error");
     }
   }
 
   function openDuplicate(template: TemplateSummary) {
     setDuplicateTarget(template);
-    setDuplicateName(`${template.name} (Kopie)`);
+    setDuplicateName(t("duplicateNameSuggestion", { name: template.name }));
   }
 
   async function submitDuplicate(event: FormEvent<HTMLFormElement>) {
@@ -505,9 +514,9 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       });
       setTemplates((current) => [created, ...current]);
       setDuplicateTarget(null);
-      showToast(`Vorlage "${created.name}" wurde erstellt`, "success");
+      showToast(t("duplicatedToast", { name: created.name }), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Vorlage konnte nicht dupliziert werden", "error");
+      showToast(error instanceof Error ? error.message : t("duplicateFailedToast"), "error");
     } finally {
       setDuplicateBusy(false);
     }
@@ -517,52 +526,52 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
     <div className="grid">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Vorlagen</h1>
-          <p className="muted">Vorlagen sind schlanke Container: sie wählen fertige Elemente aus und legen nur deren Reihenfolge fest.</p>
+          <h1 className="page-title">{t("pageTitle")}</h1>
+          <p className="muted">{t("pageIntro")}</p>
         </div>
         <button type="button" className={showCreateForm ? "button-ghost" : "button-primary"} onClick={() => setShowCreateForm((current) => !current)}>
-          {showCreateForm ? "Abbrechen" : "+ Vorlage"}
+          {showCreateForm ? t("cancel") : t("newTemplateButton")}
         </button>
       </div>
 
       <Modal
         open={showCreateForm}
         onClose={() => setShowCreateForm(false)}
-        title="Vorlage erstellen"
-        description="Legt eine neue leere Vorlage an, der anschliessend wiederverwendbare Elemente zugewiesen werden."
+        title={t("createTitle")}
+        description={t("createDescription")}
       >
         <ModalSaveForm className="grid" onSubmit={createTemplate}>
           <label className="field-stack">
-            <span className="field-label">Vorlagenname</span>
-            <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Vorlagenname" required />
+            <span className="field-label">{t("nameLabel")}</span>
+            <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder={t("nameLabel")} required />
           </label>
           <label className="field-stack">
-            <span className="field-label">Beschreibung</span>
-            <textarea rows={4} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Beschreibung" />
+            <span className="field-label">{t("descriptionLabel")}</span>
+            <textarea rows={4} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder={t("descriptionLabel")} />
           </label>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Protokollnummer-Muster</span>
-              <input value={form.protocol_number_pattern} onChange={(event) => setForm((current) => ({ ...current, protocol_number_pattern: event.target.value }))} placeholder="z.B. Sitzung {n}" />
-              <span className="field-help">Beispiele: Sitzung [n], Sitzung [mm].[n_month], J[yy]-[n_year], V[n_cycle]. Eckige und geschweifte Klammern funktionieren beide.</span>
+              <span className="field-label">{t("protocolNumberPatternLabel")}</span>
+              <input value={form.protocol_number_pattern} onChange={(event) => setForm((current) => ({ ...current, protocol_number_pattern: event.target.value }))} placeholder={t("protocolNumberPatternPlaceholder")} />
+              <span className="field-help">{t("protocolNumberPatternHelp")}</span>
             </label>
             <label className="field-stack">
-              <span className="field-label">Titel-Muster</span>
-              <input value={form.title_pattern} onChange={(event) => setForm((current) => ({ ...current, title_pattern: event.target.value }))} placeholder="z.B. Sitzung {n} - {date:DD.MM.YYYY}" />
-              <span className="field-help">Das Datums-Token verwendet immer das gewählte Protokolldatum, nicht den heutigen Tag.</span>
+              <span className="field-label">{t("titlePatternLabel")}</span>
+              <input value={form.title_pattern} onChange={(event) => setForm((current) => ({ ...current, title_pattern: event.target.value }))} placeholder={t("titlePatternPlaceholder")} />
+              <span className="field-help">{t("titlePatternHelp")}</span>
             </label>
           </div>
           <label className="field-stack">
-            <span className="field-label">Zyklus</span>
+            <span className="field-label">{t("cycleLabel")}</span>
             <SearchableSelect
               options={availableCycleConfigs}
               getId={(cc) => cc.id}
               getLabel={(cc) => cc.name}
               value={form.cycle_config_id || null}
               onChange={(cc) => setForm((current) => ({ ...current, cycle_config_id: cc ? String(cc.id) : "" }))}
-              nullLabel="Kein Zyklus"
+              nullLabel={t("noCycle")}
             />
-            <span className="field-help">Zyklen können unter Struktur → Zyklen verwaltet werden.</span>
+            <span className="field-help">{t("cycleHelp")}</span>
           </label>
           <label className="checkbox-row">
             <input
@@ -570,13 +579,13 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
               checked={form.auto_create_next_protocol}
               onChange={(event) => setForm((current) => ({ ...current, auto_create_next_protocol: event.target.checked }))}
             />
-            <span>Naechstes Protokoll automatisch erstellen, wenn dieses spaeter auf Abgeschlossen gesetzt wird.</span>
+            <span>{t("autoCreateNextProtocolLabel")}</span>
           </label>
           <div className="info-note">
-            Tokens: {"{n}"} = alle Protokolle, {"{n_year}"} = in diesem Jahr, {"{n_month}"} = in diesem Monat, {"{n_cycle}"} = im eigenen Zyklus. Datums-Tokens: {"{date}"}, {"{date:DD.MM.YYYY}"}, {"{dd}"}, {"{mm}"}, {"{yyyy}"}.
+            {t("patternTokensHelp")}
           </div>
           <div className="table-toolbar-actions">
-            <button data-modal-save type="submit" className="button-secondary">Vorlage erstellen</button>
+            <button data-modal-save type="submit" className="button-secondary">{t("createSubmit")}</button>
           </div>
         </ModalSaveForm>
       </Modal>
@@ -584,18 +593,18 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       <div className="list-filter-row">
         <div />
         <div className="list-filter-search">
-          <SearchInput value={search} onChange={setSearch} placeholder="Vorlagen durchsuchen" />
+          <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
         </div>
       </div>
 
-      <DataTable className="data-table-lg" columns={["Vorlage", "Beschreibung", "Version", "Aktionen"]}>
+      <DataTable className="data-table-lg" columns={[t("colTemplate"), t("colDescription"), t("colVersion"), t("colActions")]}>
         {filteredTemplates.map((template) => (
           <tr key={template.id} className="table-row-clickable" onClick={() => router.push(`/templates/${template.id}`)}>
             <td>
               <strong>{template.name}</strong>
-              <div className="muted">{template.status === "archived" ? "Archiviert" : "Aktiv"}</div>
+              <div className="muted">{template.status === "archived" ? t("archived") : t("active")}</div>
             </td>
-            <td className="table-cell-wrap">{template.description ?? "Keine Beschreibung"}</td>
+            <td className="table-cell-wrap">{template.description ?? t("noDescription")}</td>
             <td>{template.version}</td>
             <td>
               <div className="table-actions">
@@ -607,7 +616,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
                     openDuplicate(template);
                   }}
                 >
-                  Duplizieren
+                  {t("duplicate")}
                 </button>
                 <button
                   type="button"
@@ -617,12 +626,12 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
                     void toggleTemplateArchived(template);
                   }}
                 >
-                  {template.status === "archived" ? "Aus Archiv zurückholen" : "Archivieren"}
+                  {template.status === "archived" ? t("unarchive") : t("archive")}
                 </button>
                 <button type="button" className="button-secondary button-danger" onClick={(event) => {
                   event.stopPropagation();
                   void deleteTemplate(template.id);
-                }}>Löschen</button>
+                }}>{t("delete")}</button>
               </div>
             </td>
           </tr>
@@ -632,17 +641,17 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       <Modal
         open={duplicateTarget !== null}
         onClose={() => setDuplicateTarget(null)}
-        title={duplicateTarget ? `"${duplicateTarget.name}" duplizieren` : "Vorlage duplizieren"}
-        description="Erstellt eine unabhängige Kopie mit allen Elementen, deren Einstellungen und den zugewiesenen Teilnehmenden."
+        title={duplicateTarget ? t("duplicateTitleNamed", { name: duplicateTarget.name }) : t("duplicateTitle")}
+        description={t("duplicateDescription")}
       >
         <ModalSaveForm className="grid" onSubmit={submitDuplicate}>
           <label className="field-stack">
-            <span className="field-label">Name der neuen Vorlage</span>
+            <span className="field-label">{t("newNameLabel")}</span>
             <input value={duplicateName} onChange={(event) => setDuplicateName(event.target.value)} required />
           </label>
           <div className="table-toolbar-actions">
             <button data-modal-save type="submit" className="button-secondary" disabled={duplicateBusy}>
-              {duplicateBusy ? "Wird dupliziert…" : "Duplizieren"}
+              {duplicateBusy ? t("duplicating") : t("duplicate")}
             </button>
           </div>
         </ModalSaveForm>
@@ -663,6 +672,8 @@ export function TemplateEditor({
   availableCycleConfigs,
 }: TemplateEditorProps) {
   const router = useRouter();
+  const t = useTranslations("templates.editor");
+  const tRoot = useTranslations("templates");
   const showToast = useToast();
   const confirm = useConfirm();
   const [template, setTemplate] = useState(initialTemplate);
@@ -889,7 +900,7 @@ export function TemplateEditor({
       setListEntriesByListId((current) => ({ ...current, [listDefinitionId]: entries ?? [] }));
       return entries ?? [];
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Listeneinträge konnten nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("listEntriesLoadFailed"), "error");
       return [];
     } finally {
       setLoadingResponsibleListId((current) => (current === listDefinitionId ? null : current));
@@ -919,7 +930,7 @@ export function TemplateEditor({
       });
       setElements((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Einstellung konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("settingSaveFailed"), "error");
     }
   }
 
@@ -955,7 +966,7 @@ export function TemplateEditor({
   }
 
   function currentResponsibilityTitle(item: TemplateElement) {
-    return titleWithResponsibility(item, participantsById, responsibilityNameMode);
+    return titleWithResponsibility(item, participantsById, responsibilityNameMode, t);
   }
 
   async function applyResponsibilityNameMode(nextMode: ResponsibleNameMode) {
@@ -979,7 +990,7 @@ export function TemplateEditor({
       }
       showToast("Namensformat für Verantwortliche gespeichert", "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Namensformat konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("nameFormatSaveFailed"), "error");
     } finally {
       setBulkAssignBusy(false);
     }
@@ -1048,7 +1059,7 @@ export function TemplateEditor({
         showToast(`${matchedElementCount} Element${matchedElementCount === 1 ? "" : "e"} wurden automatisch zugeordnet`, "success");
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Automatische Zuordnung konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("autoAssignmentSaveFailed"), "error");
     } finally {
       setBulkAssignBusy(false);
     }
@@ -1071,9 +1082,9 @@ export function TemplateEditor({
           assignments: nextAssignments,
         };
       });
-      showToast(enabled ? "Verantwortliche Person zugewiesen" : "Verantwortliche Person entfernt", "success");
+      showToast(enabled ? t("responsibleAssignedToast") : t("responsibleRemovedToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Verantwortliche Person konnte nicht aktualisiert werden", "error");
+      showToast(error instanceof Error ? error.message : t("responsibleUpdateFailed"), "error");
     }
   }
 
@@ -1089,7 +1100,7 @@ export function TemplateEditor({
       }));
       showToast("Tabellen-Verknüpfung aktualisiert", "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Tabellen-Verknüpfung konnte nicht aktualisiert werden", "error");
+      showToast(error instanceof Error ? error.message : t("tableLinkUpdateFailed"), "error");
     }
   }
 
@@ -1114,7 +1125,7 @@ export function TemplateEditor({
       });
       showToast("Tabellen-Verknüpfung aktualisiert", "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Tabellen-Verknüpfung konnte nicht aktualisiert werden", "error");
+      showToast(error instanceof Error ? error.message : t("tableLinkUpdateFailed"), "error");
     }
   }
 
@@ -1159,7 +1170,7 @@ export function TemplateEditor({
       });
       showToast("Element mit Tabellenzeile verknüpft", "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Tabellenzeilen-Verknüpfung konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("tableRowLinkSaveFailed"), "error");
     }
   }
 
@@ -1168,11 +1179,11 @@ export function TemplateEditor({
       return "";
     }
     const listMeta = eligibleResponsibleLists.find((item) => item.definition.id === assignment.list_definition_id);
-    const listName = listMeta?.definition.name ?? "Unbekannte Liste";
+    const listName = listMeta?.definition.name ?? t("unknownList");
     const linkedEntry = listEntriesByListId[assignment.list_definition_id]?.find((entry) => entry.id === assignment.list_entry_id);
     const rowLabel = linkedEntry && listMeta
-      ? listTextValue(linkedEntry, listMeta.textColumn) || "Leere Zeile"
-      : "Unbekannte Zeile";
+      ? listTextValue(linkedEntry, listMeta.textColumn) || t("emptyRow")
+      : t("unknownRow");
     return `${listName} · ${rowLabel}`;
   }
 
@@ -1209,7 +1220,8 @@ export function TemplateEditor({
         .map((participantId) =>
           participantName(
             participantsById.get(participantId),
-            responsibility.name_display_mode || responsibilityNameMode
+            responsibility.name_display_mode || responsibilityNameMode,
+            t
           )
         )
         .filter(Boolean)
@@ -1255,7 +1267,7 @@ export function TemplateEditor({
       setShowSettingsModal(false);
       router.refresh();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Vorlage konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("templateSaveFailed"), "error");
     }
   }
 
@@ -1276,7 +1288,7 @@ export function TemplateEditor({
         setShowParticipantModal(false);
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Teilnehmerzuordnungen konnten nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("participantAssignmentsSaveFailed"), "error");
     }
   }
 
@@ -1301,7 +1313,7 @@ export function TemplateEditor({
       showToast(`${createdItems.length} Element${createdItems.length === 1 ? "" : "e"} hinzugefuegt`, "success");
       router.refresh();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Element konnte nicht hinzugefügt werden", "error");
+      showToast(error instanceof Error ? error.message : t("elementAddFailed"), "error");
     }
   }
 
@@ -1353,7 +1365,7 @@ export function TemplateEditor({
       if (seq === templateOrderSeqRef.current) {
         setElements(previousElements);
       }
-      showToast(error instanceof Error ? error.message : "Template-Reihenfolge konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("orderSaveFailed"), "error");
       return false;
     }
   }
@@ -1370,7 +1382,7 @@ export function TemplateEditor({
     const nextOrdered = [...orderedElements];
     const [moved] = nextOrdered.splice(sourceIndex, 1);
     nextOrdered.splice(targetIndex, 0, moved);
-    await persistTemplateOrder(nextOrdered, "Template-Reihenfolge gespeichert");
+    await persistTemplateOrder(nextOrdered, t("orderSavedToast"));
   }
 
   async function moveTemplateItemToPosition(templateElementId: string, requestedPosition: number) {
@@ -1523,10 +1535,10 @@ export function TemplateEditor({
 
   async function deleteTemplateItem(templateElementId: string) {
     const ok = await confirm({
-      title: "Element entfernen?",
-      message: "Das Element wird aus dieser Vorlage entfernt. Es bleibt bestehen und kann jederzeit wieder hinzugefügt werden, die Einstellungen in dieser Vorlage gehen aber verloren.",
+      title: t("removeElementTitle"),
+      message: t("removeElementMessage"),
       tone: "danger",
-      confirmLabel: "Entfernen"
+      confirmLabel: t("remove")
     });
     if (!ok) return;
     try {
@@ -1535,7 +1547,7 @@ export function TemplateEditor({
       showToast("Element aus Vorlage entfernt", "success");
       router.refresh();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Element konnte nicht entfernt werden", "error");
+      showToast(error instanceof Error ? error.message : t("elementRemoveFailed"), "error");
     }
   }
 
@@ -1543,7 +1555,7 @@ export function TemplateEditor({
     <div className="grid">
       <DataToolbar
         title={template.name}
-        description="Ziehe Elemente in die gewünschte Reihenfolge."
+        description={t("reorderHint")}
         actions={
           <div className="table-toolbar-actions">
             <button type="button" className="button-ghost button-secondary" onClick={() => setShowSettingsModal(true)}>
@@ -1559,54 +1571,54 @@ export function TemplateEditor({
       <Modal
         open={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
-        title="Vorlagen-Einstellungen"
-        description="Allgemeine Angaben zu dieser Vorlage und dem verwendeten Dokumentlayout."
+        title={t("settingsTitle")}
+        description={t("settingsDescription")}
         size="wide"
       >
         <ModalSaveForm className="grid" onSubmit={saveTemplate}>
           <label className="field-stack">
-            <span className="field-label">Name der Vorlage</span>
+            <span className="field-label">{t("nameLabel")}</span>
             <input value={templateMeta.name} onChange={(event) => setTemplateMeta((current) => ({ ...current, name: event.target.value }))} />
           </label>
           <label className="field-stack">
-            <span className="field-label">Beschreibung</span>
+            <span className="field-label">{t("descriptionLabel")}</span>
             <textarea rows={4} value={templateMeta.description} onChange={(event) => setTemplateMeta((current) => ({ ...current, description: event.target.value }))} />
           </label>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Protokollnummer-Muster</span>
-              <input value={templateMeta.protocol_number_pattern} onChange={(event) => setTemplateMeta((current) => ({ ...current, protocol_number_pattern: event.target.value }))} placeholder="z. B. Sitzung {n}" />
-              <span className="field-help">Beispiele: Sitzung [n], Sitzung [mm].[n_month], J[yy]-[n_year], V[n_cycle]. Eckige und geschweifte Klammern funktionieren beide.</span>
+              <span className="field-label">{t("protocolNumberPatternLabel")}</span>
+              <input value={templateMeta.protocol_number_pattern} onChange={(event) => setTemplateMeta((current) => ({ ...current, protocol_number_pattern: event.target.value }))} placeholder={t("protocolNumberPatternPlaceholder")} />
+              <span className="field-help">{t("protocolNumberPatternHelp")}</span>
             </label>
             <label className="field-stack">
-              <span className="field-label">Titel-Muster</span>
-              <input value={templateMeta.title_pattern} onChange={(event) => setTemplateMeta((current) => ({ ...current, title_pattern: event.target.value }))} placeholder="z. B. Sitzung {n} - {date:DD.MM.YYYY}" />
-              <span className="field-help">Wird automatisch verwendet, wenn ein neues Protokoll erstellt wird und das Titelfeld leer bleibt.</span>
+              <span className="field-label">{t("titlePatternLabel")}</span>
+              <input value={templateMeta.title_pattern} onChange={(event) => setTemplateMeta((current) => ({ ...current, title_pattern: event.target.value }))} placeholder={t("titlePatternPlaceholder")} />
+              <span className="field-help">{t("titlePatternHelp")}</span>
             </label>
           </div>
           <label className="field-stack">
-            <span className="field-label">Zyklus</span>
+            <span className="field-label">{t("cycleLabel")}</span>
             <SearchableSelect
               options={availableCycleConfigs}
               getId={(cc) => cc.id}
               getLabel={(cc) => cc.name}
               value={templateMeta.cycle_config_id || null}
               onChange={(cc) => setTemplateMeta((current) => ({ ...current, cycle_config_id: cc ? String(cc.id) : "" }))}
-              nullLabel="Kein Zyklus"
+              nullLabel={t("noCycle")}
             />
-            <span className="field-help">Zyklen können unter Struktur → Zyklen verwaltet werden.</span>
+            <span className="field-help">{t("cycleHelp")}</span>
           </label>
           <label className="field-stack">
-            <span className="field-label">Todo-Termin-Tag</span>
+            <span className="field-label">{t("todoEventTagLabel")}</span>
             <SearchableSelect
               options={Array.from(new Set(availableEvents.map((e) => e.tag).filter((tag): tag is string => Boolean(tag)))).sort()}
               getId={(tag) => tag}
               getLabel={(tag) => tag}
               value={templateMeta.todo_due_event_tag || null}
               onChange={(tag) => setTemplateMeta((current) => ({ ...current, todo_due_event_tag: tag ?? "" }))}
-              nullLabel="Alle Termine"
+              nullLabel={t("allEvents")}
             />
-            <span className="field-help">Nur Termine mit diesem Tag werden in der Todo-Fällig-Auswahl angezeigt. Leer = alle Termine.</span>
+            <span className="field-help">{t("todoEventTagHelp")}</span>
           </label>
           <label className="checkbox-row">
             <input
@@ -1616,25 +1628,25 @@ export function TemplateEditor({
                 setTemplateMeta((current) => ({ ...current, auto_create_next_protocol: event.target.checked }))
               }
             />
-            <span>Naechstes Protokoll automatisch erstellen, sobald dieses Protokoll spaeter auf Abgeschlossen gesetzt wird.</span>
+            <span>{t("autoCreateNextProtocolLabel")}</span>
           </label>
           <div className="info-note">
             Protokollnummer-Tokens: [n] alle, [n_year] pro Jahr, [n_month] pro Monat, [n_cycle] im Zyklus. Zyklusname-Tokens: [cy] = Startjahr, [cy_end] = Endjahr.
           </div>
           <label className="field-stack">
-            <span className="field-label">PDF-Layout</span>
+            <span className="field-label">{t("pdfLayoutLabel")}</span>
             <SearchableSelect
               options={availableDocumentTemplates.filter((dt) => dt.is_active)}
               getId={(dt) => dt.id}
               getLabel={(dt) => `${dt.name}${dt.is_default ? " (Standard)" : ""}`}
               value={templateMeta.document_template_id || null}
               onChange={(dt) => setTemplateMeta((current) => ({ ...current, document_template_id: dt ? String(dt.id) : "" }))}
-              nullLabel="Kein Layout zugewiesen"
+              nullLabel={t("noLayoutAssigned")}
             />
-            <span className="field-help">Wird beim PDF-Export verwendet. Kann in den Einstellungen → Dokumentlayouts konfiguriert werden.</span>
+            <span className="field-help">{t("pdfLayoutHelp")}</span>
           </label>
           <div className="table-toolbar-actions">
-            <button data-modal-save type="submit" className="button-secondary">Vorlage speichern</button>
+            <button data-modal-save type="submit" className="button-secondary">{t("saveTemplate")}</button>
           </div>
         </ModalSaveForm>
       </Modal>
@@ -1642,14 +1654,14 @@ export function TemplateEditor({
       <Modal
         open={showParticipantModal}
         onClose={() => setShowParticipantModal(false)}
-        title="Teilnehmer waehlen"
-        description="Mit Haken legst du fest, wer in diesem Template im Protokoll auswählbar ist. Für ausgewählte Teilnehmer kannst du sie hier direkt aus der Anwesenheitskontrolle entfernen."
+        title={t("chooseParticipantsTitle")}
+        description={t("chooseParticipantsDescription")}
         size="fullscreen"
       >
         <div className="grid">
           <label className="field-stack">
-            <span className="field-label">Suche</span>
-            <SearchInput value={participantPickerSearch} onChange={setParticipantPickerSearch} placeholder="Teilnehmer suchen" autoFocus />
+            <span className="field-label">{t("searchLabel")}</span>
+            <SearchInput value={participantPickerSearch} onChange={setParticipantPickerSearch} placeholder={t("searchParticipantsPlaceholder")} autoFocus />
           </label>
           <div className="status-row">
             <span className="pill">{assignedParticipantIds.length} ausgewaehlt</span>
@@ -1695,7 +1707,7 @@ export function TemplateEditor({
                   <div>
                     <strong>{participant.display_name}</strong>
                     <div className="muted">
-                      {[participant.first_name, participant.last_name].filter(Boolean).join(" ") || participant.email || "Teilnehmer"}
+                      {[participant.first_name, participant.last_name].filter(Boolean).join(" ") || participant.email || t("participantFallback")}
                     </div>
                     {checked ? (
                       <span className="checkbox-row" onClick={(event) => event.stopPropagation()}>
@@ -1712,7 +1724,7 @@ export function TemplateEditor({
                             )
                           }
                         />
-                        <span>Aus Anwesenheitskontrolle entfernen</span>
+                        <span>{t("removeFromAttendance")}</span>
                       </span>
                     ) : null}
                   </div>
@@ -1730,8 +1742,8 @@ export function TemplateEditor({
 
       <article className="card">
         <DataToolbar
-          title="Elemente"
-          description="Vorlagen sammeln nur fertige Elemente. Wiederholungen und Filter werden direkt in den Blöcken des Elements gepflegt."
+          title={t("elementsTitle")}
+          description={t("elementsDescription")}
           actions={
             <div className="table-toolbar-actions">
               <button type="button" className="button-ghost button-secondary" onClick={() => setShowAutoAssignModal(true)}>
@@ -1745,7 +1757,7 @@ export function TemplateEditor({
                   setShowCreateItem((current) => !current);
                 }}
               >
-                {showCreateItem ? "Formular schliessen" : "Element hinzufügen"}
+                {showCreateItem ? t("closeForm") : t("addElement")}
               </button>
             </div>
           }
@@ -1754,27 +1766,27 @@ export function TemplateEditor({
         <Modal
           open={showAutoAssignModal}
           onClose={() => setShowAutoAssignModal(false)}
-          title="Verantwortliche-Zuordnung"
-          description="Steuert, wie Verantwortliche hinter Elementtiteln angezeigt und automatisch aus einer Liste zugeordnet werden."
+          title={t("responsibilityTitle")}
+          description={t("responsibilityDescription")}
           size="wide"
         >
           <div className="grid">
             <div className="three-col">
               <label className="field-stack">
-                <span className="field-label">Namensanzeige</span>
+                <span className="field-label">{t("nameDisplayLabel")}</span>
                 <select
                   value={responsibilityNameMode}
                   disabled={bulkAssignBusy}
                   onChange={(event) => void applyResponsibilityNameMode(event.target.value as ResponsibleNameMode)}
                 >
-                  <option value="display_name">Anzeigename</option>
-                  <option value="first_name">Vorname</option>
-                  <option value="last_name">Nachname</option>
+                  <option value="display_name">{t("displayNameOption")}</option>
+                  <option value="first_name">{t("firstNameOption")}</option>
+                  <option value="last_name">{t("lastNameOption")}</option>
                 </select>
-                <span className="field-help">Dieses Format wird für die Anzeige der Verantwortlichen hinter dem Elementtitel verwendet.</span>
+                <span className="field-help">{t("nameDisplayHelp")}</span>
               </label>
               <label className="field-stack">
-                <span className="field-label">Initiale Zuordnung aus Liste</span>
+                <span className="field-label">{t("initialListAssignmentLabel")}</span>
                 <SearchableSelect
                   options={eligibleResponsibleLists}
                   getId={(item) => item.definition.id}
@@ -1788,9 +1800,9 @@ export function TemplateEditor({
                       void autoAssignResponsiblesFromList(nextValue);
                     }
                   }}
-                  nullLabel="Keine Liste ausgewählt"
+                  nullLabel={t("noListSelected")}
                 />
-                <span className="field-help">Es werden nur Listen mit genau einer Textspalte und einer Teilnehmer-Spalte angeboten.</span>
+                <span className="field-help">{t("initialListAssignmentHelp")}</span>
               </label>
               <div className="table-toolbar-actions align-end">
                 <button
@@ -1799,7 +1811,7 @@ export function TemplateEditor({
                   disabled={!responsibilityAutoListId || bulkAssignBusy}
                   onClick={() => responsibilityAutoListId && void autoAssignResponsiblesFromList(responsibilityAutoListId)}
                 >
-                  {bulkAssignBusy ? "…" : "Erneut abgleichen"}
+                  {bulkAssignBusy ? "…" : t("reconcile")}
                 </button>
               </div>
             </div>
@@ -1813,7 +1825,7 @@ export function TemplateEditor({
               <span className="pill">{eligibleResponsibleLists.length} passende Listen</span>
               {responsibilityAutoListId ? (
                 <span className="pill">
-                  Auto-Liste: {eligibleResponsibleLists.find((item) => String(item.definition.id) === responsibilityAutoListId)?.definition.name ?? "Unbekannte Liste"}
+                  {t("autoListLabel", { name: eligibleResponsibleLists.find((item) => String(item.definition.id) === responsibilityAutoListId)?.definition.name ?? t("unknownList") })}
                 </span>
               ) : null}
             </div>
@@ -1826,8 +1838,8 @@ export function TemplateEditor({
             setElementPickerSearch("");
             setShowCreateItem(false);
           }}
-          title="Element zum Template hinzufügen"
-          description="Waehle ein oder mehrere fertige Elemente aus und fuege sie gesammelt zum Template hinzu."
+          title={t("addElementTitle")}
+          description={t("addElementDescription")}
         >
           <ModalSaveForm className="grid" onSubmit={addElementToTemplate}>
             <div className="list-filter-row">
@@ -1835,8 +1847,8 @@ export function TemplateEditor({
                 <SearchInput
                   value={elementPickerSearch}
                   onChange={setElementPickerSearch}
-                  placeholder="Elemente durchsuchen"
-                  aria-label="Elemente durchsuchen"
+                  placeholder={t("searchElementsPlaceholder")}
+                  aria-label={t("searchElementsPlaceholder")}
                   autoFocus
                 />
               </div>
@@ -1845,8 +1857,8 @@ export function TemplateEditor({
               </a>
             </div>
             <DataTable
-              columns={["", "Element", "Typen", "Beschreibung", "Bloecke"]}
-              emptyMessage="Keine passenden Elemente gefunden."
+              columns={["", t("colElement"), t("colTypes"), t("colDescription"), t("colBlocksCount")]}
+              emptyMessage={t("noMatchingElements")}
             >
               {filteredElementDefinitions.map((definition) => {
                 const checked = newItemForm.element_definition_ids.includes(String(definition.id));
@@ -1875,15 +1887,15 @@ export function TemplateEditor({
                       <strong>{definition.title}</strong>
                     </td>
                     <td>{definitionTypeSummary(definition)}</td>
-                    <td>{definition.description ?? "Keine Beschreibung"}</td>
+                    <td>{definition.description ?? t("noDescription")}</td>
                     <td>{definition.blocks.length}</td>
                   </tr>
                 );
               })}
             </DataTable>
-            <span className="field-help">Neue Elemente werden automatisch hinten angehaengt. Die Reihenfolge kannst du danach per Drag and Drop oder direkt ueber die Positionszahl anpassen.</span>
+            <span className="field-help">{t("addElementOrderHint")}</span>
             <div className="table-toolbar-actions">
-              <button data-modal-save type="submit" className="button-secondary" disabled={newItemForm.element_definition_ids.length === 0}>Ausgewaehlte Elemente hinzufuegen</button>
+              <button data-modal-save type="submit" className="button-secondary" disabled={newItemForm.element_definition_ids.length === 0}>{t("addSelectedElements")}</button>
             </div>
           </ModalSaveForm>
         </Modal>
@@ -1891,8 +1903,8 @@ export function TemplateEditor({
         <Modal
           open={!!responsibilityModalElement}
           onClose={() => setShowResponsibilityModalFor(null)}
-          title={responsibilityModalElement ? `Verantwortliche für ${responsibilityModalElement.title}` : "Verantwortliche"}
-          description="Weise diesem Element Teilnehmende zu, verknüpfe sie optional mit einer Listenzeile und fixiere Verbindungen bei Bedarf mit dem Schloss."
+          title={responsibilityModalElement ? t("responsibleForNamed", { title: responsibilityModalElement.title }) : t("responsibleTitle")}
+          description={t("assignResponsibilityDescription")}
           size="fullscreen"
         >
           {responsibilityModalElement ? (() => {
@@ -1902,34 +1914,34 @@ export function TemplateEditor({
             return (
               <div className="grid section-stack">
                 <article className="card">
-                  <div className="eyebrow">Titelvorschau</div>
+                  <div className="eyebrow">{t("titlePreviewLabel")}</div>
                   <h3>{currentResponsibilityTitle(responsibilityModalElement)}</h3>
-                  <p className="muted">Wenn Verantwortliche gesetzt sind, werden sie später im Protokoll direkt hinter dem Elementtitel angezeigt.</p>
+                  <p className="muted">{t("titlePreviewHelp")}</p>
                   <div className="status-row">
                     <span className="pill">{assignments.length} zugewiesen</span>
                     <span className="pill">
-                      Anzeige: {responsibilityNameMode === "display_name" ? "Anzeigename" : responsibilityNameMode === "first_name" ? "Vorname" : "Nachname"}
+                      {t("displayModeLabel", { mode: responsibilityNameMode === "display_name" ? t("displayNameOption") : responsibilityNameMode === "first_name" ? t("firstNameOption") : t("lastNameOption") })}
                     </span>
                   </div>
                 </article>
 
                 <article className="card">
-                  <div className="eyebrow">Aktuelle Verantwortliche</div>
+                  <div className="eyebrow">{t("currentResponsibleLabel")}</div>
                   {assignments.length ? (
                     <div className="responsibility-list">
                       {assignments.map((assignment) => {
                         const participant = participantsById.get(assignment.participant_id);
                         const sourceLabel = assignment.list_definition_id
                           ? assignment.locked
-                            ? "Fix mit Tabellenzeile verknüpft"
-                            : "Aus Liste erkannt"
-                          : "Manuell zugewiesen";
+                            ? t("linkedFixedToRow")
+                            : t("detectedFromList")
+                          : t("assignedManually");
                         const lockTitle = responsibilityLinkTooltip(assignment);
                         return (
                           <div className="responsibility-card" key={`responsibility-${responsibilityModalElement.id}-${assignment.participant_id}`}>
                             <div className="responsibility-card-head">
                               <div>
-                                <strong>{participantName(participant, responsibilityNameMode)}</strong>
+                                <strong>{participantName(participant, responsibilityNameMode, t)}</strong>
                                 <div className="muted">{sourceLabel}</div>
                               </div>
                               <div className="responsibility-card-actions">
@@ -1957,39 +1969,39 @@ export function TemplateEditor({
                       })}
                     </div>
                   ) : (
-                    <div className="responsibility-empty">Noch keine Verantwortlichen gesetzt.</div>
+                    <div className="responsibility-empty">{t("noResponsibleYet")}</div>
                   )}
                 </article>
 
                 <article className="card">
-                  <div className="eyebrow">Mit Tabellenzeile verknüpfen</div>
+                  <div className="eyebrow">{t("linkToTableRow")}</div>
                   <div className="two-col">
                     <label className="field-stack">
-                      <span className="field-label">Liste</span>
+                      <span className="field-label">{t("listLabel")}</span>
                       <SearchableSelect
                         options={eligibleResponsibleLists}
                         getId={(item) => item.definition.id}
                         getLabel={(item) => item.definition.name}
                         value={manualLinkListId || null}
                         onChange={(item) => setManualLinkListId(item ? item.definition.id : "")}
-                        placeholder="Liste wählen"
+                        placeholder={t("chooseListPlaceholder")}
                       />
                     </label>
                     <label className="field-stack">
-                      <span className="field-label">Zeile</span>
+                      <span className="field-label">{t("rowLabel")}</span>
                       <SearchableSelect
                         options={manualLinkListMeta ? availableManualEntries : []}
                         getId={(entry) => entry.id}
-                        getLabel={(entry) => rowOptionLabel(entry, manualLinkListMeta!, participantsById, responsibilityNameMode)}
+                        getLabel={(entry) => rowOptionLabel(entry, manualLinkListMeta!, participantsById, responsibilityNameMode, t)}
                         value={manualLinkEntryId || null}
                         onChange={(entry) => setManualLinkEntryId(entry ? entry.id : "")}
                         disabled={!manualLinkListMeta || loadingResponsibleListId === manualLinkListMeta.definition.id}
                         placeholder={
                           !manualLinkListMeta
-                            ? "Zuerst Liste wählen"
+                            ? t("chooseListFirst")
                             : loadingResponsibleListId === manualLinkListMeta.definition.id
-                            ? "Zeilen werden geladen..."
-                            : "Zeile wählen"
+                            ? t("rowsLoading")
+                            : t("chooseRow")
                         }
                       />
                     </label>
@@ -2004,14 +2016,14 @@ export function TemplateEditor({
                       Zeile verknüpfen
                     </button>
                   </div>
-                  <span className="field-help">Diese Aktion setzt die Teilnehmenden der gewählten Zeile für dieses Element und fixiert die Verbindung direkt über die Tabellenzeilen-ID.</span>
+                  <span className="field-help">{t("linkRowHint")}</span>
                 </article>
 
                 <article className="card">
-                  <div className="eyebrow">Teilnehmende manuell zuweisen</div>
+                  <div className="eyebrow">{t("assignManuallyTitle")}</div>
                   <label className="field-stack">
-                    <span className="field-label">Suchen</span>
-                    <SearchInput value={responsibilitySearch} onChange={setResponsibilitySearch} placeholder="Teilnehmer suchen" />
+                    <span className="field-label">{t("search")}</span>
+                    <SearchInput value={responsibilitySearch} onChange={setResponsibilitySearch} placeholder={t("searchParticipantsPlaceholder")} />
                   </label>
                   <div className="selection-list selection-grid">
                     {filteredResponsibilityParticipants.map((participant) => {
@@ -2028,7 +2040,7 @@ export function TemplateEditor({
                             onChange={(event) => void toggleResponsibleParticipant(responsibilityModalElement.id, participant.id, event.target.checked)}
                           />
                           <div>
-                            <strong>{participantName(participant, responsibilityNameMode)}</strong>
+                            <strong>{participantName(participant, responsibilityNameMode, t)}</strong>
                             <div className="muted">{participant.display_name}</div>
                             {linkedAssignment?.list_definition_id ? (
                               <div className="muted">{responsibilityLinkTooltip(linkedAssignment)}</div>
@@ -2039,7 +2051,7 @@ export function TemplateEditor({
                     })}
                   </div>
                   {filteredResponsibilityParticipants.length === 0 ? (
-                    <div className="responsibility-empty">Keine Teilnehmenden für den aktuellen Suchbegriff gefunden.</div>
+                    <div className="responsibility-empty">{t("noMatchingParticipants")}</div>
                   ) : null}
                 </article>
               </div>
@@ -2052,7 +2064,7 @@ export function TemplateEditor({
           onDragOver={(event) => event.preventDefault()}
         >
           {orderedElements.length === 0 && !draggedTemplateElementId ? (
-            <div className="template-element-empty">Noch keine Elemente im Template.</div>
+            <div className="template-element-empty">{t("noElementsYet")}</div>
           ) : null}
 
           {orderedElements.map((item, index) => {
@@ -2079,7 +2091,7 @@ export function TemplateEditor({
                     className="template-element-drag-handle"
                     onDragStart={(event) => handleTemplateDragStart(event, item.id)}
                     onDragEnd={handleTemplateDragEnd}
-                    title="Ziehen zum Umordnen"
+                    title={t("dragToReorder")}
                     aria-label={`Element ${item.title} ziehen`}
                   >
                     ⋮⋮
@@ -2132,7 +2144,7 @@ export function TemplateEditor({
                             onClick={() => toggleBehaviorExpanded(item.id)}
                             aria-expanded={expandedBehaviorIds.has(item.id)}
                           >
-                            {expandedBehaviorIds.has(item.id) ? "Blöcke einklappen" : `${item.blocks.length} Blöcke einzeln einstellen`}
+                            {expandedBehaviorIds.has(item.id) ? t("collapseBlocks") : t("configureBlocksIndividually", { count: item.blocks.length })}
                           </button>
                         ) : null}
                       </div>
@@ -2140,12 +2152,12 @@ export function TemplateEditor({
                   </div>
 
                   <div className="template-element-row-meta">
-                    <span className="pill">{item.blocks.length} {item.blocks.length === 1 ? "Block" : "Blöcke"}</span>
+                    <span className="pill">{t("blockCount", { count: item.blocks.length })}</span>
                     {responsibilityCount ? <span className="pill">{responsibilityCount} Verantwortliche</span> : null}
                   </div>
 
                   <label className="table-order-field template-element-position-field">
-                    <span className="muted">Pos.</span>
+                    <span className="muted">{t("positionAbbr")}</span>
                     <input
                       type="number"
                       min={1}
@@ -2187,7 +2199,7 @@ export function TemplateEditor({
                   <div className="template-element-behavior-expanded">
                     {item.blocks.map((block) => (
                       <div key={block.id} className="template-element-behavior-expanded-row">
-                        <span className="muted">{blockDisplayLabel(block)}</span>
+                        <span className="muted">{blockDisplayLabel(block, tRoot)}</span>
                         <BehaviorIconRow
                           values={blockBehaviorValues(block)}
                           onToggle={(field) =>

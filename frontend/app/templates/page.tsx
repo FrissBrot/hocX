@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
-import { TEMPLATE_TABS } from "@/components/ui/section-tabs";
+import { templateTabs } from "@/components/ui/section-tabs";
 import { TemplateBuilder } from "@/components/template/template-builder";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { CycleConfigSummary, TemplateSummary } from "@/types/api";
@@ -12,6 +13,7 @@ export default async function TemplatesPage() {
   if (session.current_role !== "admin") {
     redirect("/");
   }
+  const t = await getTranslations("nav");
   const [data, cycleConfigs] = await Promise.all([
     backendFetchWithSession<TemplateSummary[]>("/api/templates"),
     backendFetchWithSession<CycleConfigSummary[]>("/api/cycle-configs"),
@@ -19,7 +21,7 @@ export default async function TemplatesPage() {
 
   return (
     <AppShell initialSession={session}>
-      <RouteTabs tabs={TEMPLATE_TABS} activeHref="/templates" />
+      <RouteTabs tabs={templateTabs(t)} activeHref="/templates" />
       <section className="panel">
         <TemplateBuilder initialTemplates={data ?? []} availableCycleConfigs={cycleConfigs ?? []} />
       </section>

@@ -1,0 +1,18 @@
+{
+  "categoryHints": {
+    "photos": "Galleria, immagini dei verbali e immagini della cassetta di consegna",
+    "files": "Import Word, documenti della cassetta di consegna e altri caricamenti",
+    "protocols": "Export PDF/LaTeX generati",
+    "other": "Loghi, import e altri file"
+  },
+  "quotaComposition": {
+    "fromPlan": "{size} dal piano",
+    "fromPackages": "+ {size} da pacchetti aggiuntivi"
+  },
+  "breakdown": {
+    "columnCategory": "Categoria",
+    "columnSize": "Dimensione",
+    "columnShare": "Quota",
+    "empty": "Ancora nessun file."
+  }
+}

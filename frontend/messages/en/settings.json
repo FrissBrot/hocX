@@ -1,0 +1,14 @@
+{
+  "profileModal": {
+    "title": "User profile",
+    "description": "Personal settings, language and security for your account.",
+    "tabs": { "profile": "Profile", "security": "Security" },
+    "languageLabel": "Language",
+    "accordionLabel": "Collapse protocol items automatically",
+    "accordionHint": "Only show the active item expanded.",
+    "save": "Save profile",
+    "logout": "Log out",
+    "saveFailed": "Profile could not be saved."
+  },
+  "logoutFailed": "Logout failed. Please try again."
+}

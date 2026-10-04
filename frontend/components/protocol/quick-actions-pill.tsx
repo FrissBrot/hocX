@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { NavIcon } from "@/components/ui/nav-icons";
 
 type QuickActionsPillProps = {
@@ -13,12 +14,13 @@ type QuickActionsPillProps = {
 };
 
 export function QuickActionsPill({ onNotesClick, onNotesHover, onTodosClick, onTodosHover, onHoverLeave, onCollabClick, onCollabHover }: QuickActionsPillProps) {
+  const t = useTranslations("protocols.quickActions");
   return (
-    <div className="protocol-quick-actions" role="toolbar" aria-label="Schnellmenü" onMouseLeave={onHoverLeave}>
+    <div className="protocol-quick-actions" role="toolbar" aria-label={t("ariaLabel")} onMouseLeave={onHoverLeave}>
       <button
         type="button"
         className="protocol-quick-actions-btn"
-        title="Sitzungsnotizen öffnen"
+        title={t("sessionNotes")}
         onClick={onNotesClick}
         onMouseEnter={onNotesHover}
       >
@@ -27,7 +29,7 @@ export function QuickActionsPill({ onNotesClick, onNotesHover, onTodosClick, onT
       <button
         type="button"
         className="protocol-quick-actions-btn"
-        title="Todo erstellen"
+        title={t("createTodo")}
         onClick={onTodosClick}
         onMouseEnter={onTodosHover}
       >
@@ -36,7 +38,7 @@ export function QuickActionsPill({ onNotesClick, onNotesHover, onTodosClick, onT
       <button
         type="button"
         className="protocol-quick-actions-btn"
-        title={onCollabClick ? "Kollaborationsansicht" : "Kollaborationsansicht (bald verfügbar)"}
+        title={onCollabClick ? t("collaborationView") : t("collaborationViewSoon")}
         onClick={onCollabClick}
         onMouseEnter={onCollabHover}
         disabled={!onCollabClick}

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.locale_config_generated import LOCALE_COOKIE_NAME, normalize_locale
 from app.models import AppUser, Role, Tenant, TenantFeature, UserMfaFactor
 
 
@@ -108,6 +109,26 @@ def issue_session_cookie(response: Response, user_id: int, *, mfa_verified: bool
     response.set_cookie(
         key=settings.auth_session_cookie,
         value=token,
+        httponly=True,
+        secure=settings.auth_secure_cookies,
+        samesite="lax",
+        max_age=settings.auth_session_ttl_hours * 3600,
+        path="/",
+    )
+
+
+def issue_locale_cookie(response: Response, locale: str | None) -> None:
+    """Spiegelt die gespeicherte Sprachpraeferenz (preferred_language) in einen eigenen Cookie,
+    den das Frontend serverseitig ohne weiteren Netzwerk-Request lesen kann (next-intl, siehe
+    frontend/i18n/request.ts) - dieselbe Rolle wie issue_session_cookie fuer die Session, nur
+    nicht httpOnly-kritisch (next-intl liest sie serverseitig ueber cookies(), unabhaengig vom
+    httpOnly-Flag). Aufgerufen bei Login, bei jedem Session-Abruf (haelt den Cookie frisch, falls
+    preferred_language zwischenzeitlich auf einem anderen Geraet geaendert wurde) und beim
+    Self-Update des Profils. normalize_locale faengt eine unbekannte/leere Locale ab, statt sie
+    ungeprueft in den Cookie zu schreiben."""
+    response.set_cookie(
+        key=LOCALE_COOKIE_NAME,
+        value=normalize_locale(locale),
         httponly=True,
         secure=settings.auth_secure_cookies,
         samesite="lax",

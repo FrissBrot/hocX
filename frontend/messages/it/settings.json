@@ -1,0 +1,14 @@
+{
+  "profileModal": {
+    "title": "Profilo utente",
+    "description": "Impostazioni personali, lingua e sicurezza del tuo account.",
+    "tabs": { "profile": "Profilo", "security": "Sicurezza" },
+    "languageLabel": "Lingua",
+    "accordionLabel": "Comprimi automaticamente i punti del verbale",
+    "accordionHint": "Mostra espanso solo il punto attivo.",
+    "save": "Salva profilo",
+    "logout": "Disconnetti",
+    "saveFailed": "Impossibile salvare il profilo."
+  },
+  "logoutFailed": "Disconnessione non riuscita. Riprova."
+}

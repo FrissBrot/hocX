@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { Modal } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -123,11 +124,14 @@ function hasValueContent(valueType: StructuredListValueType, rawValue: Structure
   return String(value.text_value ?? "").trim().length > 0;
 }
 
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
 function valueSummary(
   valueType: StructuredListValueType,
   rawValue: StructuredListValue,
   participants: ParticipantSummary[],
-  events: EventSummary[]
+  events: EventSummary[],
+  t: TFunc
 ) {
   const value = normalizeValueForType(valueType, rawValue);
   if (valueType === "participant") {
@@ -141,7 +145,7 @@ function valueSummary(
     }
     const selectedParticipants = participants.filter((item) => selectedIds.includes(item.id));
     if (!selectedParticipants.length) {
-      return `${selectedIds.length} ausgewaehlt`;
+      return t("selectedCount", { count: selectedIds.length });
     }
     return selectedParticipants.map((item) => item.display_name).join(", ");
   }
@@ -197,7 +201,7 @@ export function StructuredListTable({
   fullWidth = false,
   heading,
   headingActions,
-  emptyMessage = "Noch keine Eintraege.",
+  emptyMessage,
   groupByColumn = "",
   sortByColumn = "",
   sortDirection = "asc",
@@ -208,6 +212,8 @@ export function StructuredListTable({
   onUpdateEntry,
   onDeleteEntry,
 }: StructuredListTableProps) {
+  const t = useTranslations("lists.table");
+  const resolvedEmptyMessage = emptyMessage ?? t("emptyMessage");
   const sortedEvents = useMemo(
     () => [...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date)),
     [availableEvents]
@@ -347,7 +353,7 @@ export function StructuredListTable({
 
   function entryDisplayText(entry: StructuredListEntry, column: StructuredListDisplayColumn) {
     const columnKey = displayColumnKey(column);
-    return valueSummary(displayColumnType(column), rowValue(entry, columnKey), availableParticipants, sortedEvents);
+    return valueSummary(displayColumnType(column), rowValue(entry, columnKey), availableParticipants, sortedEvents, t);
   }
 
   function entrySortText(entry: StructuredListEntry, column: StructuredListDisplayColumn) {
@@ -403,7 +409,7 @@ export function StructuredListTable({
           getLabel={(participant) => participant.display_name}
           value={(value.participant_id as string | null | undefined) ?? null}
           disabled={options.disabled}
-          nullLabel="Teilnehmer"
+          nullLabel={t("participantNullLabel")}
           onChange={(participant) => {
             const nextValue = { participant_id: participant ? participant.id : null };
             if (options.isNewRow) {
@@ -424,7 +430,7 @@ export function StructuredListTable({
           disabled={options.disabled}
           onClick={() => openParticipantPicker(columnKey, value, { entryId: entryId ?? undefined, isNewRow: options.isNewRow })}
         >
-          {valueSummary(valueType, value, availableParticipants, sortedEvents)}
+          {valueSummary(valueType, value, availableParticipants, sortedEvents, t)}
         </button>
       );
     }
@@ -437,7 +443,7 @@ export function StructuredListTable({
           getLabel={(eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}`}
           value={(value.event_id as string | null | undefined) ?? null}
           disabled={options.disabled}
-          nullLabel="Termin"
+          nullLabel={t("eventNullLabel")}
           onChange={(eventRow) => {
             const nextValue = { event_id: eventRow ? eventRow.id : null };
             if (options.isNewRow) {
@@ -463,7 +469,7 @@ export function StructuredListTable({
             queueRowSave(entryId, { [columnKey]: nextValue });
           }
         }}
-        placeholder="Wert"
+        placeholder={t("valuePlaceholder")}
       />
     );
   }
@@ -515,7 +521,7 @@ export function StructuredListTable({
 
     sortedEntries.forEach((entry) => {
       const rawLabel = entryDisplayText(entry, groupByColumn);
-      const label = rawLabel !== "—" ? rawLabel : "Ohne Wert";
+      const label = rawLabel !== "—" ? rawLabel : t("noValue");
       const key = entrySortText(entry, groupByColumn).trim() || "__empty__";
       const existingIndex = groupIndex.get(key);
       if (existingIndex == null) {
@@ -583,7 +589,7 @@ export function StructuredListTable({
                 setNewRowDraft(createNewRowDraft(definition));
               }}
             >
-              Neuer Eintrag
+              {t("newEntryButton")}
             </button>
           )}
           </div>
@@ -616,14 +622,14 @@ export function StructuredListTable({
                 )}
               </th>
               {editable ? (
-                <th className="event-column-actions" aria-label="Aktionen">
-                  {heading ? "Aktionen" : null}
+                <th className="event-column-actions" aria-label={t("actionsLabel")}>
+                  {heading ? t("actionsLabel") : null}
                   {allowCreate && !heading && (
                   <button
                     type="button"
                     className="button-ghost button-icon"
-                    title="Listenzeile hinzufuegen"
-                    aria-label="Listenzeile hinzufuegen"
+                    title={t("addRowTitle")}
+                    aria-label={t("addRowTitle")}
                     disabled={showNewRow || creatingNewRow}
                     onClick={() => {
                       setShowNewRow(true);
@@ -658,8 +664,8 @@ export function StructuredListTable({
                       <button
                         type="button"
                         className="button-ghost button-icon button-icon-danger"
-                        title="Neue Listenzeile verwerfen"
-                        aria-label="Neue Listenzeile verwerfen"
+                        title={t("discardNewRowTitle")}
+                        aria-label={t("discardNewRowTitle")}
                         disabled={creatingNewRow}
                         onClick={resetNewRow}
                       >
@@ -700,12 +706,12 @@ export function StructuredListTable({
                       if (trackedInfo?.status === "removed") {
                         return (
                           <tr key={entry.id} className="tracked-removed-row">
-                            <td><span className="tracked-strike">{valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents)}</span></td>
+                            <td><span className="tracked-strike">{valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents, t)}</span></td>
                             <td>
-                              <span className="tracked-strike">{valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents)}</span>
+                              <span className="tracked-strike">{valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents, t)}</span>
                               {onAcceptTrackedEntry && (
                                 <TrackedChangeHideButton
-                                  title="Entfernten Eintrag ausblenden"
+                                  title={t("hideRemovedEntryTitle")}
                                   onAccept={() => onAcceptTrackedEntry(entry.id)}
                                 />
                               )}
@@ -723,7 +729,7 @@ export function StructuredListTable({
                           <td className={col1Changed || col1Added ? "tracked-cell" : undefined}>
                             {col1Changed && (
                               <div className="tracked-before-caption tracked-strike">
-                                {valueSummary(definition.column_one_value_type, trackedInfo?.before?.column_one_value ?? {}, availableParticipants, sortedEvents)}
+                                {valueSummary(definition.column_one_value_type, trackedInfo?.before?.column_one_value ?? {}, availableParticipants, sortedEvents, t)}
                               </div>
                             )}
                             {editable
@@ -731,8 +737,8 @@ export function StructuredListTable({
                                   isNewRow: false,
                                 })
                               : (col1Changed || col1Added
-                                  ? <span className="tracked-underline">{valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents)}</span>
-                                  : valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents))}
+                                  ? <span className="tracked-underline">{valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents, t)}</span>
+                                  : valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents, t))}
                             {(col1Changed || col1Added) && onAcceptTrackedEntry && (
                               <TrackedChangeHideButton onAccept={() => onAcceptTrackedEntry(entry.id)} />
                             )}
@@ -740,7 +746,7 @@ export function StructuredListTable({
                           <td className={col2Changed || col2Added ? "tracked-cell" : undefined}>
                             {col2Changed && (
                               <div className="tracked-before-caption tracked-strike">
-                                {valueSummary(definition.column_two_value_type, trackedInfo?.before?.column_two_value ?? {}, availableParticipants, sortedEvents)}
+                                {valueSummary(definition.column_two_value_type, trackedInfo?.before?.column_two_value ?? {}, availableParticipants, sortedEvents, t)}
                               </div>
                             )}
                             {editable
@@ -748,8 +754,8 @@ export function StructuredListTable({
                                   isNewRow: false,
                                 })
                               : (col2Changed || col2Added
-                                  ? <span className="tracked-underline">{valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents)}</span>
-                                  : valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents))}
+                                  ? <span className="tracked-underline">{valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents, t)}</span>
+                                  : valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents, t))}
                             {(col2Changed || col2Added) && onAcceptTrackedEntry && (
                               <TrackedChangeHideButton onAccept={() => onAcceptTrackedEntry(entry.id)} />
                             )}
@@ -760,11 +766,11 @@ export function StructuredListTable({
                                 <button
                                   type="button"
                                   className={heading ? "button-secondary button-danger" : "button-ghost button-icon button-icon-danger"}
-                                  title="Listenzeile loeschen"
-                                  aria-label="Listenzeile loeschen"
+                                  title={t("deleteRowTitle")}
+                                  aria-label={t("deleteRowTitle")}
                                   onClick={() => void onDeleteEntry(entry.id)}
                                 >
-                                  {heading ? "Löschen" : "x"}
+                                  {heading ? t("deleteButton") : "x"}
                                 </button>
                               </div>
                             </td>
@@ -778,7 +784,7 @@ export function StructuredListTable({
             ) : !showNewRow ? (
               <tr>
                 <td colSpan={editable ? 3 : 2}>
-                  <span className="muted">{emptyMessage}</span>
+                  <span className="muted">{resolvedEmptyMessage}</span>
                 </td>
               </tr>
             ) : null}
@@ -792,16 +798,16 @@ export function StructuredListTable({
           setParticipantPicker(null);
           setParticipantSearch("");
         }}
-        title="Teilnehmer waehlen"
-        description="Mehrfachauswahl fuer dieses Listenfeld."
+        title={t("participantPickerTitle")}
+        description={t("participantPickerDescription")}
       >
         <div className="grid">
           <label className="field-stack">
-            <span className="field-label">Suche</span>
+            <span className="field-label">{t("search")}</span>
             <input
               value={participantSearch}
               onChange={(event) => setParticipantSearch(event.target.value)}
-              placeholder="Teilnehmer filtern"
+              placeholder={t("participantFilterPlaceholder")}
             />
           </label>
           <div className="participant-check-grid">

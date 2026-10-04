@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 import { ActionIcon } from "@/components/ui/action-icons";
 
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
@@ -17,6 +18,7 @@ type LightboxImageProps = {
 };
 
 export function LightboxImage({ src, alt, className, previewSrc }: LightboxImageProps) {
+  const tCommon = useTranslations("common");
   const [open, setOpen] = useState(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -49,7 +51,7 @@ export function LightboxImage({ src, alt, className, previewSrc }: LightboxImage
                 type="button"
                 className="image-lightbox-close"
                 onClick={() => setOpen(false)}
-                aria-label="Schliessen"
+                aria-label={tCommon("close")}
               >
                 <ActionIcon name="close" width={18} height={18} />
               </button>

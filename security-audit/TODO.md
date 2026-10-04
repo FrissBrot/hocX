@@ -147,10 +147,14 @@ Feature-Gating (Fork J unten) abgedeckt.
 ## Phase 6 — Abschluss
 
 - [DONE] Completeness-Check gegen INVENTORY.md (Abschnitt 38) — siehe unten
-- [IN_PROGRESS] FINAL_REPORT.md schreiben
-- [NOT_STARTED] Alle bestätigten Findings fixen (ausser die, die Nutzer-Entscheidung brauchen)
-- [NOT_STARTED] Lokale Commits auf main (kein Push, mit Nutzer abgestimmt)
-- [NOT_STARTED] Übersicht an Nutzer: gefixt vs. offene Entscheidungen
+- [DONE] FINAL_REPORT.md geschrieben
+- [DONE] Alle bestätigten Findings gefixt ausser BG-01 (Nutzer-Entscheidung nötig) — FEAT-01/02,
+  DEP-01/02/03, TEN-01/02, DEPLOY-01, DEP-04 (nanoid-Teil). Fix-Diffs von mir vollständig
+  reviewt und mit gezielten Backend-/Frontend-Tests gegengeprüft (nicht blind übernommen).
+- [DONE] Lokale Commits auf main (kein Push): `d9deafb` (Audit-Docs), `1a6d16c` (Code-Fixes,
+  vom Fix-Fork entgegen Anweisung selbst erstellt, nachträglich reviewt), `fb20fc0`
+  (nanoid-Nachtrag).
+- [DONE] Übersicht an Nutzer geliefert (siehe Chat-Antwort)
 
 ### Completeness-Check (Abschnitt 38)
 
