@@ -556,6 +556,7 @@
     "assignedManually": "Assigned manually",
     "autoAssignmentSaveFailed": "Automatic assignment could not be saved",
     "autoCreateNextProtocolLabel": "Automatically create the next protocol once this one is later set to completed.",
+    "patternTokensInfo": "Protocol number tokens: [n] all of this template, [n_year] per year, [n_month] per month, [n_cycle] per cycle across all templates of this cycle, [cycle_yyyy_start]/[cycle_yyyy_end] = start/end year of the cycle. Cycle name tokens: [cy] = start year, [cy_end] = end year.",
     "autoListLabel": "Auto list: {name}",
     "behaviorCopyFromLast": "Copy data from the last session",
     "behaviorEditable": "Editable in the protocol",

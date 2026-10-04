@@ -556,6 +556,7 @@
     "assignedManually": "Attribué manuellement",
     "autoAssignmentSaveFailed": "L'attribution automatique n'a pas pu être enregistrée",
     "autoCreateNextProtocolLabel": "Créer automatiquement le prochain procès-verbal lorsque celui-ci sera plus tard marqué comme terminé.",
+    "patternTokensInfo": "Jetons de numéro de procès-verbal : [n] tous ceux de ce modèle, [n_year] par année, [n_month] par mois, [n_cycle] par cycle, tous modèles de ce cycle confondus, [cycle_yyyy_start]/[cycle_yyyy_end] = année de début/fin du cycle. Jetons du nom de cycle : [cy] = année de début, [cy_end] = année de fin.",
     "autoListLabel": "Liste automatique : {name}",
     "behaviorCopyFromLast": "Reprendre les données de la dernière séance",
     "behaviorEditable": "Modifiable dans le procès-verbal",

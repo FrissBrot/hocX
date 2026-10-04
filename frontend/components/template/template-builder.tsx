@@ -1634,7 +1634,7 @@ export function TemplateEditor({
             <span>{t("autoCreateNextProtocolLabel")}</span>
           </label>
           <div className="info-note">
-            Protokollnummer-Tokens: [n] alle, [n_year] pro Jahr, [n_month] pro Monat, [n_cycle] im Zyklus. Zyklusname-Tokens: [cy] = Startjahr, [cy_end] = Endjahr.
+            {t("patternTokensInfo")}
           </div>
           <label className="field-stack">
             <span className="field-label">{t("pdfLayoutLabel")}</span>

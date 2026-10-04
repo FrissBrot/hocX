@@ -556,6 +556,7 @@
     "assignedManually": "Manuell zugewiesen",
     "autoAssignmentSaveFailed": "Automatische Zuordnung konnte nicht gespeichert werden",
     "autoCreateNextProtocolLabel": "Nächstes Protokoll automatisch erstellen, wenn dieses später auf Abgeschlossen gesetzt wird.",
+    "patternTokensInfo": "Protokollnummer-Tokens: [n] alle dieser Vorlage, [n_year] pro Jahr, [n_month] pro Monat, [n_cycle] im Zyklus über alle Vorlagen dieses Zyklus, [cycle_yyyy_start]/[cycle_yyyy_end] = Start-/Endjahr des Zyklus. Zyklusname-Tokens: [cy] = Startjahr, [cy_end] = Endjahr.",
     "autoListLabel": "Auto-Liste: {name}",
     "behaviorCopyFromLast": "Daten aus letzter Sitzung übernehmen",
     "behaviorEditable": "Im Protokoll bearbeitbar",

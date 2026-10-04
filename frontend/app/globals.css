@@ -789,6 +789,8 @@ input[type="number"] {
   min-width: 0;
 }
 
+/* Dezent wie ein Eingabefeld statt als dunkler Primärbutton - der Picker ist eine
+   Hilfsaktion des Feldes, nicht die Hauptaktion des Formulars. */
 .date-input-picker {
   width: 48px;
   min-width: 48px;
@@ -796,6 +798,20 @@ input[type="number"] {
   display: grid;
   place-items: center;
   border-radius: 50%;
+  --button-bg: var(--panel-solid);
+  --button-hover-bg: var(--accent-soft);
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.date-input-picker:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.date-input-picker:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .date-input-picker svg {

@@ -290,11 +290,18 @@ class ProtocolService:
         many protocols in its scope already have a protocol_date on or before its own date, so
         the number always matches chronological order within the scope regardless of the order
         protocols were created/imported in. exclude_protocol_id lets a protocol that already
-        exists recompute its own rank (see _renumber_later_siblings) without counting itself."""
+        exists recompute its own rank (see _renumber_later_siblings) without counting itself.
+
+        n/n_year/n_month zählen pro Vorlage. n_cycle zählt über alle Vorlagen, die derselben
+        CycleConfig zugeordnet sind (ein Zyklus ist eine gemeinsame Folge, z. B. zählen Hock
+        und Arbeitsweekend im selben Scharjahr durch); eine Vorlage ohne Zyklus behält ein
+        n_cycle pro Vorlage (Kalenderjahr)."""
         cycle_start, cycle_end = self._cycle_bounds(protocol_date, reset_month=reset_month, reset_day=reset_day)
         base_filters = [Protocol.tenant_id == tenant_id, Protocol.template_id == template_id]
         if exclude_protocol_id is not None:
             base_filters.append(Protocol.id != exclude_protocol_id)
+        template = db.get(Template, template_id)
+        cycle_config_id = template.cycle_config_id if template is not None else None
         # Single query with conditional aggregation for per-template counts.
         row = db.execute(
             select(
@@ -323,18 +330,36 @@ class ProtocolService:
         if exclude_protocol_id is not None:
             cycle_all_filters.append(Protocol.id != exclude_protocol_id)
         cycle_all = db.scalar(select(func.count(Protocol.id)).where(*cycle_all_filters)) or 0
+        cycle_count = row.cycle
+        if cycle_config_id is not None:
+            cycle_count = (
+                db.scalar(
+                    select(func.count(Protocol.id))
+                    .join(Template, Template.id == Protocol.template_id)
+                    .where(*cycle_all_filters, Template.cycle_config_id == cycle_config_id)
+                )
+                or 0
+            )
         return {
             "n": row.overall + 1,
             "n_year": row.yearly + 1,
             "n_month": row.monthly + 1,
-            "n_cycle": row.cycle + 1,
+            "n_cycle": cycle_count + 1,
             "n_cycle_all": cycle_all + 1,
             "cycle_year_start": cycle_start.year,
             "cycle_year_end": cycle_end.year,
         }
 
     def _add_virtual_dates(
-        self, counts: dict[str, int], *, extra_dates: list[date], target_date: date, reset_month: int, reset_day: int
+        self,
+        counts: dict[str, int],
+        *,
+        extra_dates: list[date],
+        target_date: date,
+        reset_month: int,
+        reset_day: int,
+        same_template: bool = True,
+        same_cycle: bool = True,
     ) -> dict[str, int]:
         """Adds protocols that don't exist in the DB yet (or, for preview_title, may never
         exist as a Protocol row at all - see the word-import queue's still-open sibling
@@ -342,18 +367,23 @@ class ProtocolService:
         be <= target_date (it's being added because it ranks before/with target_date, same
         convention _sequence_counts uses for real rows) - later dates are ignored defensively.
         Cycle bounds are derived from target_date, not extra_date: the question is always
-        "does this extra date fall into target_date's cycle", never the reverse."""
+        "does this extra date fall into target_date's cycle", never the reverse.
+        same_template/same_cycle: gehört das virtuelle Protokoll zu einer anderen Vorlage,
+        zählt es nicht in n/n_year/n_month, und in n_cycle nur bei gleichem Zyklus (siehe
+        _sequence_counts)."""
         cycle_start, cycle_end = self._cycle_bounds(target_date, reset_month=reset_month, reset_day=reset_day)
         for extra_date in extra_dates:
             if extra_date > target_date:
                 continue
-            counts["n"] += 1
-            if extra_date.year == target_date.year:
-                counts["n_year"] += 1
-                if extra_date.month == target_date.month:
-                    counts["n_month"] += 1
+            if same_template:
+                counts["n"] += 1
+                if extra_date.year == target_date.year:
+                    counts["n_year"] += 1
+                    if extra_date.month == target_date.month:
+                        counts["n_month"] += 1
             if cycle_start <= extra_date <= cycle_end:
-                counts["n_cycle"] += 1
+                if same_cycle:
+                    counts["n_cycle"] += 1
                 counts["n_cycle_all"] += 1
         return counts
 
@@ -388,8 +418,9 @@ class ProtocolService:
           tenant-wide count (_sequence_counts's cycle_all query has no template_id filter), so
           inserting an earlier-dated protocol into THIS template can also shift the n_cycle_all
           rank of a later-dated, still-open protocol that belongs to a DIFFERENT template - but
-          only if that other template's own pattern actually uses {n_cycle_all} (its n/n_year/
-          n_month/n_cycle are per-template and can't be affected by an insert elsewhere). Cross-
+          only if that other template's own pattern actually uses {n_cycle_all}, oder {n_cycle}
+          wenn sie demselben Zyklus zugeordnet ist (n/n_year/n_month sind pro Vorlage und werden
+          von einem Einschub anderswo nicht berührt). Cross-
           template siblings are recomputed against `reset_month`/`reset_day` - i.e. the inserted
           protocol's own cycle config - since {n_cycle_all} only makes sense as a single shared
           counter when every template using it shares the same cycle boundary.
@@ -419,9 +450,16 @@ class ProtocolService:
             )
         ).all()
         for sibling, sibling_template in cross_template_rows:
-            if self._pattern_uses_token(
-                sibling_template.protocol_number_pattern, "n_cycle_all"
-            ) or self._pattern_uses_token(sibling_template.title_pattern, "n_cycle_all"):
+            shift_tokens = ["n_cycle_all"]
+            # n_cycle ist eine gemeinsame Folge aller Vorlagen desselben Zyklus (siehe
+            # _sequence_counts) - ein Einschub hier verschiebt also auch deren n_cycle.
+            if template.cycle_config_id is not None and sibling_template.cycle_config_id == template.cycle_config_id:
+                shift_tokens.append("n_cycle")
+            if any(
+                self._pattern_uses_token(sibling_template.protocol_number_pattern, token)
+                or self._pattern_uses_token(sibling_template.title_pattern, token)
+                for token in shift_tokens
+            ):
                 pairs.append((sibling, sibling_template))
 
         if not pairs:
@@ -451,6 +489,9 @@ class ProtocolService:
                 target_date=sibling.protocol_date,
                 reset_month=reset_month,
                 reset_day=reset_day,
+                same_template=sibling_template.id == template.id,
+                same_cycle=sibling_template.id == template.id
+                or (template.cycle_config_id is not None and sibling_template.cycle_config_id == template.cycle_config_id),
             )
             # number_blocked tracks whether the number's own collision check (below) refused
             # to apply the new rank - if so, the title must NOT be re-rendered with that same
@@ -1355,9 +1396,12 @@ class ProtocolService:
             for token in ("n", "n_year", "n_month", "n_cycle", "n_cycle_all")
         )
 
-        def _pick_protocol_number(current_counts: dict[str, int]) -> tuple[str | None, dict[str, int]]:
+        def _pick_protocol_number(current_counts: dict[str, int]) -> str | None:
+            # Ausweich-Bump bei Kollision betrifft nur die Nummer, nicht die Zähler für den
+            # Titel: kollidiert z. B. "2025/2026.1" mit einem Protokoll einer anderen Vorlage,
+            # bleibt der Titel trotzdem "1. Hock ..." statt mit hochgezählt zu werden.
             if payload.protocol_number:
-                return payload.protocol_number, current_counts
+                return payload.protocol_number
             # A pattern with no counter token at all formats identically regardless of
             # `bump` - every one of the 100 iterations below would recompute the exact
             # same candidate and re-run the exact same collision SELECT (audit finding,
@@ -1370,8 +1414,8 @@ class ProtocolService:
                     break
                 exists = db.scalar(select(Protocol.id).where(Protocol.tenant_id == tenant_id, Protocol.protocol_number == candidate))
                 if not exists:
-                    return candidate, bumped
-            return None, current_counts
+                    return candidate
+            return None
 
         if not payload.protocol_number:
             # Auto-derived number/title: slot this protocol into its true chronological position
@@ -1403,7 +1447,7 @@ class ProtocolService:
         max_attempts = 1 if payload.protocol_number else 5
         protocol: Protocol | None = None
         for attempt in range(max_attempts):
-            protocol_number, counts = _pick_protocol_number(counts)
+            protocol_number = _pick_protocol_number(counts)
             title = payload.title or self._format_pattern(
                 template.title_pattern,
                 counts=counts,

@@ -121,3 +121,64 @@ def test_number_resets_per_cycle_instead_of_continuing_across_cycles(db):
     # of cycle A's count, instead of continuing on as if it were the same period.
     cycle_b_first = _create(db, tenant_id=tenant.id, template_id=template.id, protocol_date=date(2026, 9, 1))
     assert cycle_b_first.protocol_number == "P-2026-1"
+
+
+def _shared_cycle_templates(db, tenant_id):
+    cycle_cfg = CycleConfig(tenant_id=tenant_id, name="Scharjahr", reset_month=7, reset_day=31)
+    db.add(cycle_cfg)
+    db.flush()
+    hock = make_template(db, tenant_id, name="Hock")
+    weekend = make_template(db, tenant_id, name="Arbeitsweekend")
+    for template in (hock, weekend):
+        template.protocol_number_pattern = "{cycle_yyyy_start}/{cycle_yyyy_end}.{n_cycle}"
+        template.title_pattern = "{n_cycle}. Hock vom {dd.mm.yyyy}"
+        template.cycle_config_id = cycle_cfg.id
+    db.flush()
+    return hock, weekend
+
+
+def test_n_cycle_counts_across_all_templates_of_the_same_cycle(db):
+    # n_cycle ist eine gemeinsame Folge aller Vorlagen desselben Zyklus, nicht pro Vorlage.
+    tenant = make_tenant(db)
+    hock, weekend = _shared_cycle_templates(db, tenant.id)
+    make_protocol(db, tenant.id, hock.id, protocol_number="2026/2027.1", protocol_date=date(2026, 8, 10), status="abgeschlossen")
+    # Protokoll im Vorzyklus und eines in einer Vorlage ohne diesen Zyklus zählen nicht mit.
+    make_protocol(db, tenant.id, hock.id, protocol_number="2025/2026.1", protocol_date=date(2026, 6, 21), status="abgeschlossen")
+    other = make_template(db, tenant.id, name="Ohne Zyklus")
+    make_protocol(db, tenant.id, other.id, protocol_number="X-1", protocol_date=date(2026, 8, 12), status="abgeschlossen")
+
+    created = _create(db, tenant_id=tenant.id, template_id=weekend.id, protocol_date=date(2026, 8, 15))
+
+    assert created.protocol_number == "2026/2027.2"
+    assert created.title == "2. Hock vom 15.08.2026"
+
+
+def test_earlier_insert_shifts_open_sibling_of_other_template_in_same_cycle(db):
+    tenant = make_tenant(db)
+    hock, weekend = _shared_cycle_templates(db, tenant.id)
+    later = make_protocol(db, tenant.id, hock.id, protocol_number="2026/2027.1", protocol_date=date(2026, 9, 1), status="geplant")
+
+    created = _create(db, tenant_id=tenant.id, template_id=weekend.id, protocol_date=date(2026, 8, 15))
+    db.flush()
+    db.refresh(later)
+
+    assert created.protocol_number == "2026/2027.1"
+    assert later.protocol_number == "2026/2027.2"
+    assert later.title == "2. Hock vom 01.09.2026"
+
+
+def test_number_collision_bump_does_not_shift_title(db):
+    # Ausweichen bei einer Nummern-Kollision betrifft nur die Nummer - der Titel behält den
+    # echten Rang (früher wurde z. B. "4. Hock" statt "1. Hock" erzeugt).
+    tenant = make_tenant(db)
+    foreign = make_template(db, tenant.id, name="Import")
+    make_protocol(db, tenant.id, foreign.id, protocol_number="P-1", protocol_date=date(2025, 10, 14), status="abgeschlossen")
+    template = make_template(db, tenant.id)
+    template.protocol_number_pattern = "P-{n}"
+    template.title_pattern = "{n}. Hock vom {dd.mm.yyyy}"
+    db.flush()
+
+    created = _create(db, tenant_id=tenant.id, template_id=template.id, protocol_date=date(2026, 8, 15))
+
+    assert created.protocol_number == "P-2"
+    assert created.title == "1. Hock vom 15.08.2026"

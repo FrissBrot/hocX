@@ -556,6 +556,7 @@
     "assignedManually": "Assegnato manualmente",
     "autoAssignmentSaveFailed": "L'assegnazione automatica non ha potuto essere salvata",
     "autoCreateNextProtocolLabel": "Crea automaticamente il prossimo verbale quando questo verrà in seguito impostato come completato.",
+    "patternTokensInfo": "Token del numero di verbale: [n] tutti di questo modello, [n_year] per anno, [n_month] per mese, [n_cycle] per ciclo su tutti i modelli di questo ciclo, [cycle_yyyy_start]/[cycle_yyyy_end] = anno di inizio/fine del ciclo. Token del nome del ciclo: [cy] = anno di inizio, [cy_end] = anno di fine.",
     "autoListLabel": "Lista automatica: {name}",
     "behaviorCopyFromLast": "Riprendi i dati dall'ultima sessione",
     "behaviorEditable": "Modificabile nel verbale",
