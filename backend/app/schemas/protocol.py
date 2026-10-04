@@ -50,6 +50,19 @@ class ProtocolUpdate(BaseModel):
     track_changes_enabled: bool | None = None
 
 
+class ProtocolListCycle(BaseModel):
+    """Zyklus, in den ein Protokoll fuer die Gruppierung der Protokoll-Liste faellt - bestimmt
+    ueber die CycleConfig seiner Vorlage. Ohne CycleConfig: Kalenderjahr (name = None, das
+    Frontend beschriftet es dann selbst)."""
+
+    key: str
+    name: str | None = None
+    cycle_year: int
+    start_date: date
+    end_date: date
+    is_current: bool = False
+
+
 class ProtocolRead(PublicIdModel):
     _fk_models: ClassVar[dict[str, type]] = {
         "tenant_id": Tenant,
@@ -83,6 +96,8 @@ class ProtocolRead(PublicIdModel):
     # lets the UI show an "Importiert" badge + a link back to the source .docx/.pdf.
     import_source_filename: str | None = None
     import_source_url: str | None = None
+    # Nur in der Liste (GET /api/protocols) gesetzt, siehe _build_protocol_reads.
+    cycle: ProtocolListCycle | None = None
 
 
 class NextSessionAttendanceEntry(BaseModel):

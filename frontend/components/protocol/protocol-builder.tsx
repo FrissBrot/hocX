@@ -18,9 +18,10 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { usePdfExport, PdfExportResult } from "@/lib/hooks/use-pdf-export";
-import { formatDate, formatDateTime } from "@/lib/utils/format";
-import { ProtocolSummary, TemplateSummary } from "@/types/api";
+import { formatDate, formatDateTime, toIntlLocale } from "@/lib/utils/format";
+import { ProtocolListCycle, ProtocolSummary, TemplateSummary } from "@/types/api";
 import { protocolStatusLabel, protocolStatusVariant } from "@/components/protocol/protocol-status";
+import { ProtocolCycleGroup, groupProtocolsByCycle, visibleCycleGroupCount } from "@/components/protocol/protocol-cycle-groups";
 
 const PAGE_SIZE = 100;
 
@@ -31,6 +32,24 @@ const PAGE_SIZE = 100;
 // it's spelled out instead of faked with a specific number.
 function resolvePatternPreview(pattern: string, protocolDateIso: string, t: (key: string) => string): string {
   return pattern.replace(/\{n\}/g, t("builder.sequenceNumberPlaceholder")).replace(/\{date(?::[^}]*)?\}/g, formatDate(protocolDateIso) || t("builder.datePlaceholder"));
+}
+
+type TFunc = (key: string, values?: Record<string, string | number>) => string;
+
+function cycleGroupTitle(cycle: ProtocolListCycle | null, t: TFunc): string {
+  if (!cycle) return t("noCycle");
+  return cycle.name ?? t("calendarYear", { year: cycle.cycle_year });
+}
+
+function cycleGroupMeta(group: ProtocolCycleGroup, locale: string, t: TFunc): string {
+  const count = t("protocolCount", { count: group.protocols.length });
+  if (!group.cycle) return count;
+  const month = new Intl.DateTimeFormat(toIntlLocale(locale), { month: "short", year: "numeric" });
+  const range = t("cycleRange", {
+    start: month.format(new Date(`${group.cycle.start_date}T00:00:00`)),
+    end: month.format(new Date(`${group.cycle.end_date}T00:00:00`)),
+  });
+  return `${range} · ${count}`;
 }
 
 function statusFilterOptions(t: (key: string) => string): FilterTabOption[] {
@@ -79,6 +98,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   const { busyByProtocol: pdfBusyByProtocol, openOrGeneratePdf } = usePdfExport();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [showOlderCycles, setShowOlderCycles] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [form, setForm] = useState<ProtocolFormState>({
     template_id: templates[0] ? String(templates[0].id) : "",
@@ -113,6 +133,13 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
       })
       .sort((a, b) => (b.protocol_date ?? "").localeCompare(a.protocol_date ?? ""));
   }, [protocols, search, statusFilter]);
+
+  const cycleGroups = useMemo(() => groupProtocolsByCycle(sortedProtocols), [sortedProtocols]);
+  // Beim Suchen/Filtern alles zeigen - sonst verstecken sich Treffer in eingeklappten Zyklen.
+  const isFiltering = !!search || statusFilter !== "all";
+  const visibleGroupCount = showOlderCycles || isFiltering ? cycleGroups.length : visibleCycleGroupCount(cycleGroups);
+  const visibleGroups = cycleGroups.slice(0, visibleGroupCount);
+  const olderGroups = cycleGroups.slice(visibleGroupCount);
 
   useEffect(() => {
     if (!showCreateForm) {
@@ -228,12 +255,83 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   async function revertStatus(protocolId: string) {
     try {
       const updated = await browserApiFetch<ProtocolSummary>(`/api/protocols/${protocolId}/revert-status`, { method: "POST" });
-      setProtocols((current) => current.map((p) => (p.id === protocolId ? updated : p)));
+      // Der Einzel-Endpunkt liefert keinen Listen-Zyklus - den bisherigen behalten.
+      setProtocols((current) => current.map((p) => (p.id === protocolId ? { ...updated, cycle: p.cycle } : p)));
       showToast(t("statusChanged", { status: protocolStatusLabel(updated.status, tRoot) }), "success");
       router.refresh();
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("revertFailed"), "error");
     }
+  }
+
+  function renderProtocolRow(protocol: ProtocolSummary) {
+    const isFinal = protocol.status === "abgeschlossen";
+    const previousStatus = ({
+      vorbereitet: "geplant",
+      durchgeführt: "vorbereitet",
+      abgeschlossen: "durchgeführt",
+    } as Record<string, string>)[protocol.status];
+    const pdfLabel = t("openPdf");
+    const actions: ActionMenuItem[] = [];
+    if (!isFinal && !pdfBusyByProtocol[protocol.id]) {
+      actions.push({
+        label: pdfLabel,
+        onClick: () => void openOrGeneratePdf(protocol, (result) => handlePdfExported(protocol.id, result)),
+      });
+    }
+    if (previousStatus) {
+      actions.push({
+        label: t("revertTo", { status: protocolStatusLabel(previousStatus, tRoot) }),
+        onClick: () => void revertStatus(protocol.id),
+      });
+    }
+    actions.push({
+      label: t("deleteProtocol"),
+      danger: true,
+      onClick: () => void deleteProtocol(protocol.id),
+    });
+    const statusVariant = protocolStatusVariant(protocol.status);
+    const subtitle = [
+      protocol.protocol_number,
+      formatDate(protocol.protocol_date) || null,
+      !readOnly ? templates.find((candidate) => candidate.id === protocol.template_id)?.name ?? null : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return (
+      <div key={protocol.id} className="record-list-row" onClick={() => router.push(`/protocols/${protocol.id}`)}>
+        <span className={`record-list-row-dot record-list-row-dot-${statusVariant}`} aria-hidden="true" />
+        <span className="record-list-row-text">
+          <span className="record-list-row-title">{protocol.title ?? protocol.protocol_number}</span>
+          <span className="record-list-row-sub">{subtitle}</span>
+        </span>
+        <div className="record-list-row-trailing" onClick={(e) => e.stopPropagation()}>
+          {protocol.import_source_filename && (
+            <span title={t("importedFrom", { filename: protocol.import_source_filename })}>
+              <Badge variant="info">{t("imported")}</Badge>
+            </span>
+          )}
+          <Badge variant={statusVariant}>{protocolStatusLabel(protocol.status, tRoot)}</Badge>
+          {isFinal ? (
+            <button
+              type="button"
+              className={`pdf-icon-link pdf-icon-link-success pdf-icon-link-sm${pdfBusyByProtocol[protocol.id] ? " pdf-icon-disabled" : ""}`}
+              onClick={() => openOrGeneratePdf(protocol, (result) => handlePdfExported(protocol.id, result))}
+              aria-label={t("openPdfFor", { number: protocol.protocol_number })}
+              title={pdfLabel}
+              disabled={pdfBusyByProtocol[protocol.id]}
+            >
+              {pdfBusyByProtocol[protocol.id] ? "..." : "PDF"}
+            </button>
+          ) : (
+            <span className="record-list-row-pdf-spacer" aria-hidden="true" />
+          )}
+          {!readOnly && (
+            <ActionMenu items={actions} ariaLabel={t("actionsFor", { number: protocol.protocol_number })} />
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -343,81 +441,40 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
           hint={t("emptyHint")}
         />
       ) : (
-      <article className="card">
-        <div className="record-list">
-          {sortedProtocols.map((protocol) => {
-            const isFinal = protocol.status === "abgeschlossen";
-            const previousStatus = ({
-              vorbereitet: "geplant",
-              durchgeführt: "vorbereitet",
-              abgeschlossen: "durchgeführt",
-            } as Record<string, string>)[protocol.status];
-            const pdfLabel = t("openPdf");
-            const actions: ActionMenuItem[] = [];
-            if (!isFinal && !pdfBusyByProtocol[protocol.id]) {
-              actions.push({
-                label: pdfLabel,
-                onClick: () => void openOrGeneratePdf(protocol, (result) => handlePdfExported(protocol.id, result)),
-              });
-            }
-            if (previousStatus) {
-              actions.push({
-                label: t("revertTo", { status: protocolStatusLabel(previousStatus, tRoot) }),
-                onClick: () => void revertStatus(protocol.id),
-              });
-            }
-            actions.push({
-              label: t("deleteProtocol"),
-              danger: true,
-              onClick: () => void deleteProtocol(protocol.id),
-            });
-            const statusVariant = protocolStatusVariant(protocol.status);
-            const subtitle = [
-              protocol.protocol_number,
-              formatDate(protocol.protocol_date) || null,
-              !readOnly ? templates.find((candidate) => candidate.id === protocol.template_id)?.name ?? null : null,
-            ]
-              .filter(Boolean)
-              .join(" · ");
-            return (
-              <div key={protocol.id} className="record-list-row" onClick={() => router.push(`/protocols/${protocol.id}`)}>
-                <span className={`record-list-row-dot record-list-row-dot-${statusVariant}`} aria-hidden="true" />
-                <span className="record-list-row-text">
-                  <span className="record-list-row-title">{protocol.title ?? protocol.protocol_number}</span>
-                  <span className="record-list-row-sub">{subtitle}</span>
-                </span>
-                <div className="record-list-row-trailing" onClick={(e) => e.stopPropagation()}>
-                  {protocol.import_source_filename && (
-                    <span title={t("importedFrom", { filename: protocol.import_source_filename })}>
-                      <Badge variant="info">{t("imported")}</Badge>
-                    </span>
-                  )}
-                  <Badge variant={statusVariant}>{protocolStatusLabel(protocol.status, tRoot)}</Badge>
-                  {isFinal ? (
-                    <button
-                      type="button"
-                      className={`pdf-icon-link pdf-icon-link-success pdf-icon-link-sm${pdfBusyByProtocol[protocol.id] ? " pdf-icon-disabled" : ""}`}
-                      onClick={() => openOrGeneratePdf(protocol, (result) => handlePdfExported(protocol.id, result))}
-                      aria-label={t("openPdfFor", { number: protocol.protocol_number })}
-                      title={pdfLabel}
-                      disabled={pdfBusyByProtocol[protocol.id]}
-                    >
-                      {pdfBusyByProtocol[protocol.id] ? "..." : "PDF"}
-                    </button>
-                  ) : (
-                    <span className="record-list-row-pdf-spacer" aria-hidden="true" />
-                  )}
-                  {!readOnly && (
-                    <ActionMenu items={actions} ariaLabel={t("actionsFor", { number: protocol.protocol_number })} />
-                  )}
+      <div className="protocol-cycle-groups">
+        {sortedProtocols.length === 0 ? (
+          <article className="card">
+            <p className="muted record-list-empty">{t("noProtocolsFound")}</p>
+          </article>
+        ) : null}
+        {visibleGroups.map((group) => {
+          const allFinal = group.protocols.every((protocol) => protocol.status === "abgeschlossen");
+          return (
+            <section key={group.key} className="protocol-cycle-group" aria-label={cycleGroupTitle(group.cycle, t)}>
+              <header className="protocol-cycle-header">
+                <h2 className="protocol-cycle-title">{cycleGroupTitle(group.cycle, t)}</h2>
+                {group.cycle?.is_current ? <Badge variant="info">{t("currentCycle")}</Badge> : null}
+                <span className="protocol-cycle-meta">{cycleGroupMeta(group, locale, t)}</span>
+                <span className="protocol-cycle-rule" aria-hidden="true" />
+                {allFinal ? <span className="protocol-cycle-done">{t("allFinalized")}</span> : null}
+              </header>
+              <article className="card">
+                <div className="record-list">
+                  {group.protocols.map((protocol) => renderProtocolRow(protocol))}
                 </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {sortedProtocols.length === 0 ? <p className="muted record-list-empty">{t("noProtocolsFound")}</p> : null}
-      </article>
+              </article>
+            </section>
+          );
+        })}
+        {olderGroups.length > 0 ? (
+          <button type="button" className="protocol-cycle-older" onClick={() => setShowOlderCycles(true)}>
+            <span className="protocol-cycle-older-chevron" aria-hidden="true">›</span>
+            <span className="protocol-cycle-title">{cycleGroupTitle(olderGroups[0].cycle, t)}</span>
+            <span className="protocol-cycle-meta">{cycleGroupMeta(olderGroups[0], locale, t)}</span>
+            <span className="protocol-cycle-older-action">{t("showOlderCycles", { count: olderGroups.length })}</span>
+          </button>
+        ) : null}
+      </div>
       )}
 
       {hasMore && (

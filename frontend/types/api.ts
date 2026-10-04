@@ -931,6 +931,17 @@ export type StructuredListEntry = {
   updated_at: string;
 };
 
+/** Zyklus eines Protokolls für die Gruppierung der Liste (nur GET /api/protocols). */
+export type ProtocolListCycle = {
+  key: string;
+  /** null = Vorlage ohne Zyklus, gruppiert nach Kalenderjahr. */
+  name: string | null;
+  cycle_year: number;
+  start_date: string;
+  end_date: string;
+  is_current: boolean;
+};
+
 export type ProtocolSummary = {
   id: string;
   tenant_id?: string;
@@ -954,6 +965,7 @@ export type ProtocolSummary = {
   latest_pdf_url?: string | null;
   import_source_filename?: string | null;
   import_source_url?: string | null;
+  cycle?: ProtocolListCycle | null;
 };
 
 export type NextSessionAttendanceEntry = {

@@ -1956,6 +1956,7 @@ export function ProtocolEditor({
               setSelectedFiles={setSelectedFiles}
               setNewTodoTask={setNewTodoTask}
               saveBlockConfiguration={saveBlockConfiguration}
+              saveAttendanceStatus={saveAttendanceStatus}
               updateBlockInState={updateBlockInState}
               handleTextChange={handleTextChange}
               forceEditable={forceEditable}

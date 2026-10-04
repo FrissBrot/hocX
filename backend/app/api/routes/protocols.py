@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -8,10 +9,11 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
+from app.core.cycle_utils import format_cycle_name
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.core.db import get_db, SessionLocal
 from app.core.error_log import record_system_error
-from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
+from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolListCycle, ProtocolRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
 from app.services import public_id_service
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
@@ -19,7 +21,7 @@ from app.services.event_service import EventService
 from app.services.export_service import ExportService
 from app.services.protocol_service import ProtocolService
 from app.services.protocol_todo_service import ProtocolTodoService
-from app.models.entities import Participant, Protocol, ProtocolElement, ProtocolExportCache, StoredFile, UserProtocolScroll, WordImportDocument
+from app.models.entities import CycleConfig, Participant, Protocol, ProtocolElement, ProtocolExportCache, StoredFile, Template, UserProtocolScroll, WordImportDocument
 
 router = APIRouter()
 service = ProtocolService()
@@ -48,6 +50,41 @@ async def _generate_pdf_background(protocol_id: int) -> None:
         record_system_error(db, exc=exc)
     finally:
         db.close()
+
+
+def _cycle_configs_by_template(db: Session, template_ids: set[int]) -> dict[int, CycleConfig]:
+    rows = db.execute(
+        select(Template.id, CycleConfig)
+        .join(CycleConfig, CycleConfig.id == Template.cycle_config_id)
+        .where(Template.id.in_(template_ids))
+    ).all()
+    return {template_id: cfg for template_id, cfg in rows}
+
+
+def _protocol_list_cycle(protocol_date: date, cfg: CycleConfig | None, *, today: date) -> ProtocolListCycle:
+    """Zyklus eines Protokolls fuer die Gruppierung der Liste - dieselben Grenzen wie die
+    Protokoll-Nummerierung (ProtocolService._cycle_bounds), Vorlage ohne Zyklus = Kalenderjahr
+    (Reset 31.12., wie dort). Name: Muster der CycleConfig, sonst "<Name> <cy>/<cy_end>"."""
+    reset_month, reset_day = (cfg.reset_month, cfg.reset_day) if cfg is not None else (12, 31)
+    start, end = service._cycle_bounds(protocol_date, reset_month=reset_month, reset_day=reset_day)
+    cycle_year = start.year
+    if cfg is None:
+        key, name = f"year:{cycle_year}", None
+    else:
+        key = f"{cfg.public_id}:{cycle_year}"
+        name = (
+            format_cycle_name(cfg.name_pattern, cycle_year)
+            if cfg.name_pattern
+            else f"{cfg.name} {format_cycle_name(None, cycle_year)}"
+        )
+    return ProtocolListCycle(
+        key=key,
+        name=name,
+        cycle_year=cycle_year,
+        start_date=start,
+        end_date=end,
+        is_current=start <= today <= end,
+    )
 
 
 def _build_protocol_reads(db: Session, protocols: list) -> list[ProtocolRead]:
@@ -86,9 +123,13 @@ def _build_protocol_reads(db: Session, protocols: list) -> list[ProtocolRead]:
     ).all()
     import_by_protocol = {row.protocol_id: (row.original_filename, row.stored_file_public_id) for row in import_rows}
 
+    cycle_by_template = _cycle_configs_by_template(db, {p.template_id for p in protocols})
+    today = date.today()
+
     result = []
     for p in protocols:
         r = ProtocolRead.model_validate(p)
+        r.cycle = _protocol_list_cycle(p.protocol_date, cycle_by_template.get(p.template_id), today=today)
         if p.id in pdf_by_protocol:
             r.latest_pdf_url = f"/api/stored-files/{pdf_by_protocol[p.id]}/content"
         if p.id in import_by_protocol:
