@@ -12,7 +12,7 @@ from app.schemas.word_import import WordImportAnalysis, WordImportTextMapping, W
 from app.services.document_template_service import DocumentTemplateService
 from app.services.document_template_config_ids import translate_part_ids
 from app.services.snapshot_reference_ids import snapshot_reference_ids
-from tests.factories import make_tenant, make_list_definition, make_finance_account
+from tests.factories import make_tenant, make_list_definition, make_finance_account, make_event
 
 
 def test_document_template_part_references_round_trip_and_materialize(db, tmp_path, monkeypatch):
@@ -66,13 +66,15 @@ def test_snapshot_public_references_preserve_internal_config_and_scope(db):
     lists = [make_list_definition(db, tenant.id, name=str(i)) for i in range(3)]
     foreign = make_list_definition(db, other.id)
     account = make_finance_account(db, tenant.id)
-    config = {"linked_list_id": lists[0].id, "auto_source": {"list_id": lists[1].id},
+    event = make_event(db, tenant.id)
+    config = {"repeat_source_type": "event", "repeat_source_id": event.id, "linked_list_id": lists[0].id, "auto_source": {"list_id": lists[1].id},
               "rows": [{"linked_list_id": lists[2].id}, {"row_config": {"linked_list_id": foreign.id}}],
               "finance_account_id": account.id}
     original = deepcopy(config)
     result = snapshot_reference_ids(db, config, tenant.id)
     assert result == {"lists": {str(item.id): str(item.public_id) for item in lists},
-                      "finance_accounts": {str(account.id): str(account.public_id)}}
+                      "finance_accounts": {str(account.id): str(account.public_id)},
+                      "events": {str(event.id): str(event.public_id)}}
     assert config == original
 
     from tests.factories import make_template, make_protocol, make_protocol_element, make_protocol_element_block

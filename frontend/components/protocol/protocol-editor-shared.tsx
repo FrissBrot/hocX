@@ -416,6 +416,15 @@ export function asObject(value: unknown): Record<string, any> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, any>) : {};
 }
 
+// repeat_source_id in the snapshot is the internal event id; EventSummary.id is the
+// public UUID, so resolve through the block's public_reference_ids.
+export function blockEventPublicId(block: ProtocolElementBlock): string | undefined {
+  const config = asObject(block.configuration_snapshot_json);
+  if (config.repeat_source_type !== "event" || config.repeat_source_id == null) return undefined;
+  const internalId = String(config.repeat_source_id);
+  return block.public_reference_ids?.events?.[internalId] ?? internalId;
+}
+
 export function readMatrixEmbeddedBlock(cell: Record<string, any>): MatrixEmbeddedBlock | null {
   const embeddedBlock = asObject(cell.embedded_block);
   const elementTypeId = Number(embeddedBlock.element_type_id ?? 0);

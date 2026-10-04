@@ -1140,7 +1140,7 @@ export type ProtocolElementBlock = {
   is_visible_snapshot: boolean;
   export_visible_snapshot: boolean;
   latex_template_snapshot: string | null;
-  public_reference_ids?: { lists?: Record<string, string>; finance_accounts?: Record<string, string> };
+  public_reference_ids?: { lists?: Record<string, string>; finance_accounts?: Record<string, string>; events?: Record<string, string> };
   configuration_snapshot_json: Record<string, unknown>;
   text_content: string | null;
   display_compiled_text: string | null;

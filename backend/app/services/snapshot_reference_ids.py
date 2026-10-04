@@ -1,7 +1,7 @@
 """Public API references for snapshot configs whose stored IDs remain internal."""
 from sqlalchemy import select
 
-from app.models import FinanceAccount, ListDefinition
+from app.models import Event, FinanceAccount, ListDefinition
 
 
 def snapshot_reference_ids(db, config: dict, tenant_id: int) -> dict:
@@ -10,8 +10,13 @@ def snapshot_reference_ids(db, config: dict, tenant_id: int) -> dict:
         if isinstance(row, dict):
             list_ids.extend([row.get("linked_list_id"), (row.get("row_config") or {}).get("linked_list_id")])
     account_ids = [config.get("finance_account_id")]
+    event_ids = [config.get("repeat_source_id")] if config.get("repeat_source_type") == "event" else []
     result = {}
-    for name, model, values in (("lists", ListDefinition, list_ids), ("finance_accounts", FinanceAccount, account_ids)):
+    for name, model, values in (
+        ("lists", ListDefinition, list_ids),
+        ("finance_accounts", FinanceAccount, account_ids),
+        ("events", Event, event_ids),
+    ):
         ids = {value for value in values if isinstance(value, int) and not isinstance(value, bool)}
         result[name] = {
             str(internal_id): str(public_id)

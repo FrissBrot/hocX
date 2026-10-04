@@ -60,6 +60,7 @@ import {
   TodoMenuSearchList,
   TodoMiniMenu,
   asObject,
+  blockEventPublicId,
   protocolAttendanceParticipants,
   tallyAttendance,
   canCreateProtocolEventDraft,
@@ -1855,9 +1856,8 @@ export function FocusedElementEditor({
                       </div>
                     );
                   }
-                  const linkedEvent = isAutoEventBlock
-                    ? availableEvents.find((e) => e.id === String(blockConfig.repeat_source_id))
-                    : undefined;
+                  const linkedEventId = isAutoEventBlock ? blockEventPublicId(block) : undefined;
+                  const linkedEvent = linkedEventId ? availableEvents.find((e) => e.id === linkedEventId) : undefined;
                   const configuredEventFields = isAutoEventBlock && Array.isArray(blockConfig.event_fields)
                     ? (blockConfig.event_fields as Array<{ field: string; label: string }>)
                     : [];
@@ -3353,16 +3353,15 @@ export function FocusedElementEditor({
       const tagFilters = String(referenceConfig.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
       const usedEventIds = new Set(
         element.blocks
-          .map((b) => asObject(b.configuration_snapshot_json).repeat_source_id)
-          .filter((id) => id != null)
-          .map(String)
+          .map(blockEventPublicId)
+          .filter((id): id is string => id != null)
       );
       const existingItems: CandidateItem[] = element.blocks
         .filter((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event")
         .map((b) => {
           const config = asObject(b.configuration_snapshot_json);
-          const eventId = String(config.repeat_source_id);
-          const evt = availableEvents.find((e) => e.id === eventId);
+          const eventId = blockEventPublicId(b);
+          const evt = eventId ? availableEvents.find((e) => e.id === eventId) : undefined;
           return {
             id: `block-${b.id}`,
             label: String(config.repeat_source_label ?? evt?.title ?? t("unknownEvent")),
@@ -3396,8 +3395,8 @@ export function FocusedElementEditor({
       function findCandidateEvent(item: CandidateItem): EventSummary | undefined {
         if (item.id.startsWith("block-")) {
           const b = element.blocks.find((blk) => `block-${blk.id}` === item.id);
-          const eventId = b ? String(asObject(b.configuration_snapshot_json).repeat_source_id) : undefined;
-          return availableEvents.find((e) => e.id === eventId);
+          const eventId = b ? blockEventPublicId(b) : undefined;
+          return eventId ? availableEvents.find((e) => e.id === eventId) : undefined;
         }
         const eventId = item.id.slice("event-".length);
         return eventBlockCandidates.find((e) => e.id === eventId);
