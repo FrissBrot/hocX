@@ -95,18 +95,27 @@
     "markedBestToast": "Aggiunto al best-of.",
     "noAlbumToast": "{count, plural, one {# foto non appartiene a nessun album - best-of non possibile.} other {# foto non appartengono a nessun album - best-of non possibile.}}",
     "release": "Approva",
-    "selectedCount": "{count, plural, one {# selezionata} other {# selezionate}}",
+    "selectedCount": "{count, plural, one {# foto selezionata} other {# foto selezionate}}",
     "share": "Condividi",
     "shareDefaultName": "{count, plural, one {1 foto} other {# foto}}",
     "tagPlaceholder": "Aggiungi tag…",
     "tagsAddedToast": "Tag aggiunti.",
     "tagsError": "Impossibile aggiungere i tag.",
     "unmarkBest": "☆ Rimuovi da best-of",
-    "unmarkedBestToast": "Rimosso dal best-of."
+    "unmarkedBestToast": "Rimosso dal best-of.",
+    "albumAction": "Aggiungi ad album",
+    "tagsAction": "Tag",
+    "bestAction": "Best-of",
+    "download": "Scarica",
+    "selectAll": "Seleziona tutto",
+    "selectionActions": "Azioni sulla selezione",
+    "downloadError": "Impossibile scaricare le foto."
   },
   "dateGroups": {
     "groupCount": "· {count, plural, one {# foto} other {# foto}}",
-    "toggleGroupTitle": "Seleziona o deseleziona tutte le foto di questo gruppo di date"
+    "toggleGroupTitle": "Seleziona o deseleziona tutte le foto di questo gruppo di date",
+    "selectDay": "Seleziona tutto il giorno",
+    "deselectDay": "Deseleziona il giorno"
   },
   "galleryUpload": {
     "browse": "Scegli i file",
@@ -235,7 +244,8 @@
     "deselectAriaLabel": "Deseleziona",
     "liveBadge": "LIVE",
     "pendingBadge": "Non approvata",
-    "selectAriaLabel": "Seleziona"
+    "selectAriaLabel": "Seleziona",
+    "openAriaLabel": "Apri {name}"
   },
   "view": {
     "albumLinkWithCount": "{name} ({count})",
@@ -285,15 +295,21 @@
       "albums": "Album",
       "all": "Tutte le foto",
       "duplicates": "Duplicati",
-      "series": "Simili"
+      "series": "Simili",
+      "duplicatesAndSimilar": "Duplicati e simili"
     },
-    "tagPlaceholder": "Scegli o digita un tag…",
+    "tagPlaceholder": "Filtra per tag",
     "uploadAlbumAssignError": "Immagini caricate, ma l’assegnazione all’album non è riuscita.",
     "uploadButton": "+ Carica immagini",
     "uploadPillNoTotal": "Caricamento galleria in corso · {processed} immagini",
     "uploadPillTotal": "Caricamento galleria in corso · {processed} di {total} immagini",
     "uploadQueuedToast": "Caricamento in corso, elaborazione in background…",
-    "uploadedToast": "{count, plural, one {1 immagine caricata.} other {# immagini caricate.}}"
+    "uploadedToast": "{count, plural, one {1 immagine caricata.} other {# immagini caricate.}}",
+    "startAnalysis": "Avvia analisi",
+    "analysisStarting": "Avvio dell’analisi…",
+    "analysisStarted": "Analisi avviata.",
+    "analysisStartError": "Impossibile avviare l’analisi.",
+    "loadedOfTotal": "{count} di {total} foto caricate."
   },
   "viewer": {
     "analysisPending": "Analisi in sospeso",

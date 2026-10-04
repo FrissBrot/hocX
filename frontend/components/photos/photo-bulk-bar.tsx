@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { PhotoActionIcon } from "./photo-action-icon";
+import { Popover } from "@/components/ui/popover";
 import { confirmAddToSharedAlbum } from "./album-share-release";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ShareLinkModal } from "@/components/ui/share-link-modal";
 import { TagInput } from "@/components/ui/tag-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
-import { browserApiFetch } from "@/lib/api/client";
+import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { FileBulkDeleteResult, PhotoAlbum } from "@/types/api";
 
 export function PhotoBulkBar({
@@ -18,6 +20,8 @@ export function PhotoBulkBar({
   onClearSelection,
   onDone,
   onReleaseSelected,
+  onSelectAll,
+  selectedItems = [],
 }: {
   selectedIds: string[];
   tagSuggestions: string[];
@@ -25,6 +29,8 @@ export function PhotoBulkBar({
   onDone: () => void;
   // Albumansicht des Besitzers mit noch nicht freigegebenen Fotos in der Auswahl.
   onReleaseSelected?: () => void;
+  onSelectAll?: () => void;
+  selectedItems?: { original_name: string; content_url: string }[];
 }) {
   const t = useTranslations("photos.bulkBar");
   const confirm = useConfirm();
@@ -34,6 +40,10 @@ export function PhotoBulkBar({
   const [taggingOpen, setTaggingOpen] = useState(false);
   const [tagsValue, setTagsValue] = useState("");
   const [busy, setBusy] = useState(false);
+  const albumAnchorRef = useRef<HTMLDivElement>(null);
+  const bestAnchorRef = useRef<HTMLDivElement>(null);
+  const [albumOpen, setAlbumOpen] = useState(false);
+  const [bestOpen, setBestOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
@@ -127,46 +137,56 @@ export function PhotoBulkBar({
     }
   }
 
+  async function downloadSelected() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      for (const item of selectedItems) {
+        const response = await fetch(`${browserApiBaseUrl}${item.content_url}`, { credentials: "include" });
+        if (!response.ok) throw new Error();
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = item.original_name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+    } catch {
+      showToast(t("downloadError"), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <div className="photo-bulk-bar">
-      <span className="pill">{t("selectedCount", { count: selectedIds.length })}</span>
-      <div className="table-toolbar-actions">
-        {onReleaseSelected && (
-          <button type="button" className="button-secondary" onClick={onReleaseSelected} disabled={busy}>
-            {t("release")}
-          </button>
-        )}
-        <SearchableSelect
-          className="photo-bulk-bar-album-select"
-          options={albums}
-          getId={(album) => album.id}
-          getLabel={(album) => album.name}
-          value={selectedAlbumId || null}
-          onChange={(album) => setSelectedAlbumId(album?.id ?? "")}
-          nullLabel={t("albumPlaceholder")}
-          disabled={busy}
-        />
-        <button type="button" className="button-ghost button-secondary" onClick={() => void addToAlbum()} disabled={busy || !selectedAlbumId}>
-          {t("addToAlbum")}
-        </button>
-        <button type="button" className="button-ghost button-secondary" onClick={() => setTaggingOpen((current) => !current)} disabled={busy}>
-          {t("addTags")}
-        </button>
-        <button type="button" className="button-ghost button-secondary" onClick={() => void toggleBest("include")} disabled={busy}>
-          {t("markBest")}
-        </button>
-        <button type="button" className="button-ghost button-secondary" onClick={() => void toggleBest("exclude")} disabled={busy}>
-          {t("unmarkBest")}
-        </button>
-        <button type="button" className="button-secondary" onClick={() => setShareOpen(true)} disabled={busy}>
-          {t("share")}
-        </button>
-        <button type="button" className="button-secondary button-danger" onClick={() => void deleteSelected()} disabled={busy}>
-          {t("delete")}
-        </button>
-        <button type="button" className="button-ghost button-secondary" onClick={onClearSelection} disabled={busy}>
-          {t("clearSelection")}
-        </button>
+    <div className="photo-bulk-bar" role="region" aria-label={t("selectionActions")}>
+      <div className="photo-bulk-selection">
+        <button type="button" className="button-icon-soft photo-bulk-clear" aria-label={t("clearSelection")} onClick={onClearSelection} disabled={busy}><PhotoActionIcon name="close" /></button>
+        <span className="photo-bulk-count">{t("selectedCount", { count: selectedIds.length })}</span>
+        {onSelectAll && <button type="button" className="button-secondary button-ghost photo-bulk-select-all" onClick={onSelectAll} disabled={busy}>{t("selectAll")}</button>}
+      </div>
+      <div className="photo-bulk-actions">
+        {onReleaseSelected && <button type="button" className="button-secondary button-ghost" onClick={onReleaseSelected} disabled={busy}>{t("release")}</button>}
+        <div ref={albumAnchorRef}>
+          <button type="button" className="button-secondary button-ghost" onClick={() => setAlbumOpen((open) => !open)} disabled={busy} aria-expanded={albumOpen}><PhotoActionIcon name="album" />{t("albumAction")}</button>
+          <Popover open={albumOpen} onOpenChange={setAlbumOpen} anchorRef={albumAnchorRef} className="photo-bulk-album-popover">
+            <SearchableSelect className="photo-bulk-bar-album-select" options={albums} getId={(album) => album.id} getLabel={(album) => album.name} value={selectedAlbumId || null} onChange={(album) => setSelectedAlbumId(album?.id ?? "")} nullLabel={t("albumPlaceholder")} disabled={busy} />
+            <button type="button" className="button-primary" onClick={() => void addToAlbum()} disabled={busy || !selectedAlbumId}>{t("addToAlbum")}</button>
+          </Popover>
+        </div>
+        <button type="button" className="button-secondary button-ghost" onClick={() => setTaggingOpen((open) => !open)} disabled={busy} aria-expanded={taggingOpen}><PhotoActionIcon name="tag" />{t("tagsAction")}</button>
+        <div ref={bestAnchorRef}>
+          <button type="button" className="button-secondary button-ghost photo-bulk-best" onClick={() => setBestOpen((open) => !open)} disabled={busy} aria-expanded={bestOpen}><PhotoActionIcon name="star" />{t("bestAction")}</button>
+          <Popover open={bestOpen} onOpenChange={setBestOpen} anchorRef={bestAnchorRef} className="action-menu">
+            <button type="button" className="action-menu-item" disabled={busy} onClick={() => { setBestOpen(false); void toggleBest("include"); }}>{t("markBest")}</button>
+            <button type="button" className="action-menu-item" disabled={busy} onClick={() => { setBestOpen(false); void toggleBest("exclude"); }}>{t("unmarkBest")}</button>
+          </Popover>
+        </div>
+        {selectedItems.length > 0 && <button type="button" className="button-secondary button-ghost" onClick={() => void downloadSelected()} disabled={busy}><PhotoActionIcon name="download" />{t("download")}</button>}
+        <button type="button" className="button-secondary button-ghost" onClick={() => setShareOpen(true)} disabled={busy}><PhotoActionIcon name="share" />{t("share")}</button>
+        <button type="button" className="button-secondary button-ghost photo-bulk-delete" onClick={() => void deleteSelected()} disabled={busy}><PhotoActionIcon name="delete" />{t("delete")}</button>
       </div>
       <ShareLinkModal
         open={shareOpen}

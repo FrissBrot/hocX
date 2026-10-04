@@ -95,18 +95,27 @@
     "markedBestToast": "Zu Best-of hinzugefügt.",
     "noAlbumToast": "{count} Foto(s) gehören zu keinem Album - Best-of nicht möglich.",
     "release": "Freigeben",
-    "selectedCount": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
+    "selectedCount": "{count, plural, one {# Foto ausgewählt} other {# Fotos ausgewählt}}",
     "share": "Teilen",
     "shareDefaultName": "{count, plural, one {1 Foto} other {# Fotos}}",
     "tagPlaceholder": "Tag hinzufügen…",
     "tagsAddedToast": "Tags hinzugefügt.",
     "tagsError": "Tags konnten nicht hinzugefügt werden.",
     "unmarkBest": "☆ Best-of entfernen",
-    "unmarkedBestToast": "Aus Best-of entfernt."
+    "unmarkedBestToast": "Aus Best-of entfernt.",
+    "albumAction": "Zu Album",
+    "tagsAction": "Tags",
+    "bestAction": "Best-of",
+    "download": "Herunterladen",
+    "selectAll": "Alle auswählen",
+    "selectionActions": "Auswahlaktionen",
+    "downloadError": "Fotos konnten nicht heruntergeladen werden."
   },
   "dateGroups": {
     "groupCount": "· {count, plural, one {# Foto} other {# Fotos}}",
-    "toggleGroupTitle": "Alle Fotos dieser Datumsgruppe markieren oder abwählen"
+    "toggleGroupTitle": "Alle Fotos dieser Datumsgruppe markieren oder abwählen",
+    "selectDay": "Ganzen Tag auswählen",
+    "deselectDay": "Tag abwählen"
   },
   "galleryUpload": {
     "browse": "Dateien auswählen",
@@ -235,7 +244,8 @@
     "deselectAriaLabel": "Auswahl aufheben",
     "liveBadge": "LIVE",
     "pendingBadge": "Nicht freigegeben",
-    "selectAriaLabel": "Auswählen"
+    "selectAriaLabel": "Auswählen",
+    "openAriaLabel": "{name} öffnen"
   },
   "view": {
     "albumLinkWithCount": "{name} ({count})",
@@ -285,15 +295,21 @@
       "albums": "Alben",
       "all": "Alle Fotos",
       "duplicates": "Duplikate",
-      "series": "Ähnliche"
+      "series": "Ähnliche",
+      "duplicatesAndSimilar": "Duplikate & Ähnliche"
     },
-    "tagPlaceholder": "Tag wählen oder eingeben…",
+    "tagPlaceholder": "Nach Tag filtern",
     "uploadAlbumAssignError": "Bilder hochgeladen, aber Zuordnung zum Album fehlgeschlagen.",
     "uploadButton": "+ Bilder hochladen",
     "uploadPillNoTotal": "Galerie-Upload läuft · {processed} Bildern",
     "uploadPillTotal": "Galerie-Upload läuft · {processed} von {total} Bildern",
     "uploadQueuedToast": "Wird hochgeladen und im Hintergrund verarbeitet…",
-    "uploadedToast": "{count, plural, one {1 Bild hochgeladen.} other {# Bilder hochgeladen.}}"
+    "uploadedToast": "{count, plural, one {1 Bild hochgeladen.} other {# Bilder hochgeladen.}}",
+    "startAnalysis": "Analyse starten",
+    "analysisStarting": "Analyse wird gestartet…",
+    "analysisStarted": "Analyse gestartet.",
+    "analysisStartError": "Analyse konnte nicht gestartet werden.",
+    "loadedOfTotal": "{count} von {total} Fotos geladen."
   },
   "viewer": {
     "analysisPending": "Analyse ausstehend",

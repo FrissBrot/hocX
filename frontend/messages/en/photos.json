@@ -95,18 +95,27 @@
     "markedBestToast": "Added to best-of.",
     "noAlbumToast": "{count, plural, one {# photo doesn't belong to an album - best-of isn't possible.} other {# photos don't belong to an album - best-of isn't possible.}}",
     "release": "Release",
-    "selectedCount": "{count, plural, one {# selected} other {# selected}}",
+    "selectedCount": "{count, plural, one {# photo selected} other {# photos selected}}",
     "share": "Share",
     "shareDefaultName": "{count, plural, one {1 photo} other {# photos}}",
     "tagPlaceholder": "Add tag…",
     "tagsAddedToast": "Tags added.",
     "tagsError": "Tags could not be added.",
     "unmarkBest": "☆ Remove best-of",
-    "unmarkedBestToast": "Removed from best-of."
+    "unmarkedBestToast": "Removed from best-of.",
+    "albumAction": "Add to album",
+    "tagsAction": "Tags",
+    "bestAction": "Best-of",
+    "download": "Download",
+    "selectAll": "Select all",
+    "selectionActions": "Selection actions",
+    "downloadError": "Photos could not be downloaded."
   },
   "dateGroups": {
     "groupCount": "· {count, plural, one {# photo} other {# photos}}",
-    "toggleGroupTitle": "Mark or unmark all photos of this date group"
+    "toggleGroupTitle": "Mark or unmark all photos of this date group",
+    "selectDay": "Select entire day",
+    "deselectDay": "Deselect day"
   },
   "galleryUpload": {
     "browse": "Choose files",
@@ -235,7 +244,8 @@
     "deselectAriaLabel": "Deselect",
     "liveBadge": "LIVE",
     "pendingBadge": "Not released",
-    "selectAriaLabel": "Select"
+    "selectAriaLabel": "Select",
+    "openAriaLabel": "Open {name}"
   },
   "view": {
     "albumLinkWithCount": "{name} ({count})",
@@ -285,15 +295,21 @@
       "albums": "Albums",
       "all": "All photos",
       "duplicates": "Duplicates",
-      "series": "Similar"
+      "series": "Similar",
+      "duplicatesAndSimilar": "Duplicates & similar"
     },
-    "tagPlaceholder": "Choose or type a tag…",
+    "tagPlaceholder": "Filter by tag",
     "uploadAlbumAssignError": "Images uploaded, but assigning them to the album failed.",
     "uploadButton": "+ Upload images",
     "uploadPillNoTotal": "Gallery upload running · {processed} images",
     "uploadPillTotal": "Gallery upload running · {processed} of {total} images",
     "uploadQueuedToast": "Uploading and processing in the background…",
-    "uploadedToast": "{count, plural, one {1 image uploaded.} other {# images uploaded.}}"
+    "uploadedToast": "{count, plural, one {1 image uploaded.} other {# images uploaded.}}",
+    "startAnalysis": "Start analysis",
+    "analysisStarting": "Starting analysis…",
+    "analysisStarted": "Analysis started.",
+    "analysisStartError": "Analysis could not be started.",
+    "loadedOfTotal": "{count} of {total} photos loaded."
   },
   "viewer": {
     "analysisPending": "Analysis pending",

@@ -14,7 +14,7 @@ export default async function PhotosPage() {
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
+      <section className="photos-page">
         <PhotosView />
       </section>
     </AppShell>

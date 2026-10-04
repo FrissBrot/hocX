@@ -103,10 +103,10 @@ describe("PhotosView", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows the Alle Fotos / Alben / Duplikate / Ähnliche tabs", () => {
+  it("shows the three main gallery tabs", () => {
     mockFilesAndProgress([], NO_PROGRESS);
     render(<PhotosView />);
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Alle Fotos", "Alben", "Duplikate", "Ähnliche"]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Alle Fotos", "Alben", "Duplikate & Ähnliche"]);
   });
 
   it("preserves photos after a pagination failure, pauses automatic loading and retries the same page", async () => {
@@ -189,7 +189,21 @@ describe("PhotosView", () => {
     fireEvent.click(checkboxes[0]);
     fireEvent.click(checkboxes[1]);
 
-    await waitFor(() => expect(screen.getByText("2 ausgewählt")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("2 Fotos ausgewählt")).toBeInTheDocument());
+  });
+
+  it("selects all loaded photos from the bulk bar and starts analysis for that selection", async () => {
+    mockFilesAndProgress([makeItem({ id: "a" }), makeItem({ id: "b" }), makeItem({ id: "c" })], NO_PROGRESS);
+    render(<PhotosView />);
+    const checkboxes = await screen.findAllByRole("checkbox");
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Alle auswählen", exact: true }));
+    expect(screen.getByText("3 Fotos ausgewählt")).toBeInTheDocument();
+    expect(checkboxes.every((checkbox) => checkbox.getAttribute("aria-checked") === "true")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Analyse starten" }));
+    await waitFor(() => expect(browserApiFetchMock).toHaveBeenCalledWith("/api/files/analysis-jobs", {
+      method: "POST", body: JSON.stringify({ search: null, tags: [], file_ids: ["a", "b", "c"] }),
+    }));
   });
 
   it("never renders the analysis progress bar text", async () => {

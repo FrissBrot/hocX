@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { PhotoActionIcon } from "./photo-action-icon";
 import { LivePhotoClip } from "@/components/photos/live-photo-clip";
 import { browserApiBaseUrl } from "@/lib/api/client";
 import { FileOverviewItem } from "@/types/api";
@@ -100,6 +101,7 @@ export function PhotoTile({
           </svg>
         )}
       </button>
+      <button type="button" className="button-icon-soft photo-tile-open" aria-label={t("openAriaLabel", { name: item.original_name })} onClick={onOpen}><PhotoActionIcon name="expand" /></button>
       {item.is_best && <span className="photo-tile-badge">{t("bestBadge")}</span>}
       {item.share_pending && <span className="photo-tile-badge photo-tile-badge-pending">{t("pendingBadge")}</span>}
     </div>

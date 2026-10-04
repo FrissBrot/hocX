@@ -6,6 +6,7 @@ const showToastMock = vi.fn();
 const confirmMock = vi.fn();
 
 vi.mock("@/lib/api/client", () => ({
+  browserApiBaseUrl: "",
   browserApiFetch: (...args: unknown[]) => browserApiFetchMock(...args),
 }));
 
@@ -31,7 +32,28 @@ describe("PhotoBulkBar toggleBest", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("downloads the selected originals with their filenames", async () => {
+    const blob = new Blob(["photo"]);
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => blob });
+    const createUrl = vi.fn().mockReturnValue("blob:photo");
+    const NativeURL = URL;
+    vi.stubGlobal("URL", class extends NativeURL {
+      static createObjectURL = createUrl;
+      static revokeObjectURL = vi.fn();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const downloads: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { downloads.push(this.download); });
+    render(<PhotoBulkBar selectedIds={["a", "b"]} selectedItems={[{ original_name: "a.jpg", content_url: "/a/content" }, { original_name: "b.jpg", content_url: "/b/content" }]} tagSuggestions={[]} onClearSelection={() => {}} onDone={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Herunterladen" }));
+    await waitFor(() => expect(downloads).toEqual(["a.jpg", "b.jpg"]));
+    expect(fetchMock).toHaveBeenCalledWith("/a/content", { credentials: "include" });
+    expect(fetchMock).toHaveBeenCalledWith("/b/content", { credentials: "include" });
+    expect(createUrl).toHaveBeenCalledWith(blob);
   });
 
   it("does not claim success when every selected photo fails (audit fix, 2026-09-17)", async () => {
@@ -44,6 +66,7 @@ describe("PhotoBulkBar toggleBest", () => {
 
     render(<PhotoBulkBar selectedIds={["a", "b"]} tagSuggestions={[]} onClearSelection={() => {}} onDone={onDone} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Best-of", exact: true }));
     fireEvent.click(await screen.findByRole("button", { name: "★ Best-of" }));
 
     await waitFor(() => expect(onDone).toHaveBeenCalled());
@@ -63,6 +86,7 @@ describe("PhotoBulkBar toggleBest", () => {
 
     render(<PhotoBulkBar selectedIds={["a", "b"]} tagSuggestions={[]} onClearSelection={() => {}} onDone={onDone} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Best-of", exact: true }));
     fireEvent.click(await screen.findByRole("button", { name: "★ Best-of" }));
 
     await waitFor(() => expect(onDone).toHaveBeenCalled());
@@ -80,6 +104,7 @@ describe("PhotoBulkBar toggleBest", () => {
 
     render(<PhotoBulkBar selectedIds={["a", "b"]} tagSuggestions={[]} onClearSelection={() => {}} onDone={onDone} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Best-of", exact: true }));
     fireEvent.click(await screen.findByRole("button", { name: "★ Best-of" }));
 
     await waitFor(() => expect(onDone).toHaveBeenCalled());

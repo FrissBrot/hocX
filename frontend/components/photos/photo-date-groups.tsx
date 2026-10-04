@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { groupPhotosByDate } from "./grouping";
 import { PhotoTile } from "./photo-tile";
@@ -24,6 +24,7 @@ export function PhotoDateGroups({
   onToggleGroup: (ids: string[]) => void;
 }) {
   const t = useTranslations("photos.dateGroups");
+  const locale = useLocale();
   const groups = useMemo(() => groupPhotosByDate(items), [items]);
   const selectionMode = selectedIds.size > 0;
 
@@ -48,19 +49,17 @@ export function PhotoDateGroups({
     <>
       {groups.map((group) => (
         <div key={group.key} className="photo-date-group">
-          <button
-            type="button"
-            className="button-ghost photo-date-header"
-            aria-pressed={group.items.every((item) => selectedIds.has(item.id))}
-            title={t("toggleGroupTitle")}
-            onClick={() => onToggleGroup(group.items.map((item) => item.id))}
-          >
-            <span className="photo-date-weekday">{formatWeekdayDate(group.date)}</span>
-            {group.contextLabel && <span className="photo-date-context">{group.contextLabel}</span>}
-            <span className="photo-date-count">
-              {t("groupCount", { count: group.items.length })}
-            </span>
-          </button>
+          <div className="photo-date-heading">
+            <div className="photo-date-heading-labels">
+              <h2 className="photo-date-weekday">{formatWeekdayDate(group.date, locale)}</h2>
+              <span className="photo-date-context">
+                {group.contextLabel}{group.contextLabel ? " " : null}{t("groupCount", { count: group.items.length })}
+              </span>
+            </div>
+            <button type="button" className="button-secondary button-ghost photo-date-select-all" aria-pressed={group.items.every((item) => selectedIds.has(item.id))} onClick={() => onToggleGroup(group.items.map((item) => item.id))}>
+              {group.items.every((item) => selectedIds.has(item.id)) ? t("deselectDay") : t("selectDay")}
+            </button>
+          </div>
           <div className="photo-grid">
             {group.items.map((item) => (
               <PhotoTile

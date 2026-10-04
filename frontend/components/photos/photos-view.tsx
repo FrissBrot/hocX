@@ -85,6 +85,8 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
   const [isReloading, setIsReloading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [analysisStarting, setAnalysisStarting] = useState(false);
+  const [analysisPollKey, setAnalysisPollKey] = useState(0);
   const [analysisProgress, setAnalysisProgress] = useState<ProgressData | null>(null);
   const [queuedUploadId, setQueuedUploadId] = useState<string | undefined>();
   const [galleryUploadJobs, setGalleryUploadJobs] = useState<GalleryUploadJob[]>([]);
@@ -360,18 +362,18 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
   const grouped = sortKey === "group_date";
 
   return (
-    <div className="grid grid-tight">
+    <div className="grid grid-tight photos-overview">
       {!embedded && (
         <>
-          <div className="page-header">
+          <div className="page-header photos-page-header">
             <div>
               <h1 className="page-title">{t("pageTitle")}</h1>
               <p className="muted">
                 {t("description")}
-                {tab === "all" && ` ${t("loadedSuffix", { count: items.length })}`}
+                {tab === "all" && ` ${analysisProgress?.total_images ? t("loadedOfTotal", { count: items.length, total: analysisProgress.total_images }) : t("loadedSuffix", { count: items.length })}`}
               </p>
             </div>
-            <div className="table-toolbar-actions">
+            <div className="table-toolbar-actions photos-header-actions">
               {analysisProgress && analysisProgress.pending_images > 0 && (
                 <span className="pill">{t("analysisPill", { count: analysisProgress.active_job_image_count || analysisProgress.pending_images })}</span>
               )}
@@ -385,7 +387,16 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
                     : t("uploadPillNoTotal", { processed: galleryUploadJobs.reduce((sum, job) => sum + job.processed_files, 0) })}
                 </span>
               )}
-              <button type="button" className="button-secondary" onClick={() => {
+              <button type="button" className="button-secondary photos-analysis-start" disabled={analysisStarting || Boolean(analysisProgress?.active_job_image_count)} onClick={async () => {
+                setAnalysisStarting(true);
+                try {
+                  await browserApiFetch("/api/files/analysis-jobs", { method: "POST", body: JSON.stringify({ search: search || null, tags: tagFilter, ...(selectedIds.size > 0 ? { file_ids: Array.from(selectedIds) } : {}) }) });
+                  setAnalysisPollKey((key) => key + 1);
+                  showToast(t("analysisStarted"), "success");
+                } catch { showToast(t("analysisStartError"), "error"); }
+                finally { setAnalysisStarting(false); }
+              }}>{analysisStarting ? t("analysisStarting") : t("startAnalysis")}</button>
+              <button type="button" className="button-primary photos-upload-button" onClick={() => {
                 setDroppedFiles([]);
                 setUploadModalOpen(true);
               }}>
@@ -421,15 +432,14 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
               )}
             </AlbumReleaseNotice>
           )}
-          <div className="list-filter-row list-filter-row-compact">
+          <div className="list-filter-row list-filter-row-compact photos-filter-row">
             <FilterTabs
               options={[
                 { value: "all", label: t("tabs.all") },
                 { value: "albums", label: t("tabs.albums") },
-                { value: "duplicates", label: t("tabs.duplicates") },
-                { value: "series", label: t("tabs.series") },
+                { value: "duplicates", label: t("tabs.duplicatesAndSimilar") },
               ]}
-              value={tab}
+              value={tab === "series" ? "duplicates" : tab}
               onChange={setTab}
             />
             {tab !== "albums" && (
@@ -460,6 +470,8 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
         </>
       )}
 
+      {(tab === "duplicates" || tab === "series") && !embedded && <FilterTabs options={[{ value: "duplicates", label: t("tabs.duplicates") }, { value: "series", label: t("tabs.series") }]} value={tab} onChange={setTab} />}
+
       {tab === "albums" && !embedded ? (
         <PhotoAlbums
           openAlbumId={openAlbumId}
@@ -472,10 +484,10 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
         <PhotoSimilarGroups search={search} tagFilter={tagFilter} onDeleted={handleDeletedElsewhere} />
       ) : (
         <>
-          {!embedded && <PhotoAnalysisProgress onUpdate={setAnalysisProgress} />}
+          {!embedded && <PhotoAnalysisProgress key={analysisPollKey} onUpdate={setAnalysisProgress} />}
           {!embedded && <GalleryUploadProgress queuedJobId={queuedUploadId} onUpdate={setGalleryUploadJobs} onJobDone={handleGalleryUploadJobDone} />}
           {embedded && (
-            <div className="list-filter-row list-filter-row-compact">
+            <div className="list-filter-row list-filter-row-compact photos-filter-row">
               <div className="list-filter-search">
                 <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
               </div>
@@ -500,6 +512,8 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
           {selectedIds.size > 0 && (
             <PhotoBulkBar
               selectedIds={Array.from(selectedIds)}
+              selectedItems={items.filter((item) => selectedIds.has(item.id))}
+              onSelectAll={() => setSelectedIds(new Set(items.map((item) => item.id)))}
               tagSuggestions={tagSuggestions}
               onClearSelection={() => setSelectedIds(new Set())}
               onDone={() => reload()}
