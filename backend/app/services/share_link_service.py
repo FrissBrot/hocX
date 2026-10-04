@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.models.entities import AppUser, PhotoAlbum, PhotoAlbumItem, ShareLink, ShareLinkFile
 from app.services import photo_album_share_service
+from app.services.photo_metadata_privacy import MetadataPolicy
 
 # 24 Bytes = 192 Bit Entropie, als URL-safe Base64 (32 Zeichen) - nicht erratbar. Gleiches Mass
 # wie submission_link_service.generate_token().
@@ -30,12 +31,32 @@ class ShareLinkError(Exception):
     """Raised for create() preconditions - the route turns this into a 422."""
 
 
+DEFAULT_METADATA_POLICY = MetadataPolicy(location=False, capture_date=True, camera=False)
+
+
+def _metadata_columns(policy: MetadataPolicy) -> dict[str, bool]:
+    return {"share_location": policy.location, "share_capture_date": policy.capture_date, "share_camera": policy.camera}
+
+
+def metadata_policy_for(link: ShareLink) -> MetadataPolicy:
+    return MetadataPolicy(location=link.share_location, capture_date=link.share_capture_date, camera=link.share_camera)
+
+
 def create_for_files(
-    db: Session, *, tenant_id: int, name: str, file_ids: list[uuid.UUID], expires_at: datetime | None, created_by: int | None
+    db: Session,
+    *,
+    tenant_id: int,
+    name: str,
+    file_ids: list[uuid.UUID],
+    expires_at: datetime | None,
+    created_by: int | None,
+    metadata: MetadataPolicy = DEFAULT_METADATA_POLICY,
 ) -> ShareLink:
     if not file_ids or len(file_ids) > 200:
         raise ShareLinkError("Bitte 1 bis 200 Dateien auswählen.")
-    link = ShareLink(tenant_id=tenant_id, name=name, token=generate_token(), expires_at=expires_at, created_by=created_by)
+    link = ShareLink(
+        tenant_id=tenant_id, name=name, token=generate_token(), expires_at=expires_at, created_by=created_by, **_metadata_columns(metadata)
+    )
     db.add(link)
     db.flush()
     db.add_all([ShareLinkFile(share_link_id=link.id, file_id=file_id) for file_id in dict.fromkeys(file_ids)])
@@ -45,10 +66,25 @@ def create_for_files(
 
 
 def create_for_album(
-    db: Session, *, tenant_id: int, name: str, album: PhotoAlbum, expires_at: datetime | None, created_by: int | None
+    db: Session,
+    *,
+    tenant_id: int,
+    name: str,
+    album: PhotoAlbum,
+    expires_at: datetime | None,
+    created_by: int | None,
+    metadata: MetadataPolicy = DEFAULT_METADATA_POLICY,
 ) -> ShareLink:
     photo_album_share_service.release_stale_pending(db, album.id)
-    link = ShareLink(tenant_id=tenant_id, name=name, token=generate_token(), album_id=album.id, expires_at=expires_at, created_by=created_by)
+    link = ShareLink(
+        tenant_id=tenant_id,
+        name=name,
+        token=generate_token(),
+        album_id=album.id,
+        expires_at=expires_at,
+        created_by=created_by,
+        **_metadata_columns(metadata),
+    )
     db.add(link)
     db.commit()
     db.refresh(link)

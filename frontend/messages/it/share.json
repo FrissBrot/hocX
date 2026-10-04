@@ -15,8 +15,24 @@
   "publicPage": {
     "linkUnavailable": "Link non disponibile",
     "linkUnavailableHint": "Questo link non è valido, è scaduto o è stato revocato.",
-    "fileCount": "{count, plural, one {# file} other {# file}} da scaricare",
+    "sharedAlbum": "ha condiviso un album con te",
+    "sharedFiles": "ha condiviso dei file con te",
+    "photoCount": "{count, plural, one {# foto} other {# foto}}",
+    "fileCount": "{count, plural, one {# file} other {# file}}",
+    "validUntil": "Link valido fino al {date}",
+    "select": "Seleziona",
+    "cancelSelect": "Annulla",
+    "downloadSelected": "{count, plural, =0 {Nessuna selezione} other {Scarica #}}",
     "downloadAll": "Scarica tutto",
-    "noFiles": "Nessun file disponibile."
+    "download": "Scarica",
+    "noFiles": "Nessun file disponibile.",
+    "open": "Apri {name}",
+    "toggleSelect": "Seleziona {name}",
+    "previous": "Precedente",
+    "next": "Successivo",
+    "close": "Chiudi",
+    "position": "{index} di {total}",
+    "footerNotice": "Non condividere queste foto pubblicamente senza il consenso delle persone ritratte.",
+    "sharedWith": "Condiviso con <brand>hocX</brand>"
   }
 }

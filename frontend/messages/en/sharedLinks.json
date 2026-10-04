@@ -9,7 +9,15 @@
     "expiryLabel": "Expiry date",
     "nameLabel": "Name",
     "shareLinkLabel": "Share link",
-    "title": "Share link"
+    "title": "Share link",
+    "metadataLegend": "Share photo metadata",
+    "metadataLocation": "Location (GPS)",
+    "metadataLocationHelp": "Where the photo was taken.",
+    "metadataCaptureDate": "Capture date",
+    "metadataCaptureDateHelp": "Date and time the photo was taken.",
+    "metadataCamera": "Camera & device",
+    "metadataCameraHelp": "Model, serial number, lens and exposure settings.",
+    "metadataHelp": "Details that are switched off are removed from the photos when they are downloaded."
   },
   "emptyDescription": "Use \"Share\" on files, photos or a photo album to create a download link without logging in.",
   "emptyTitle": "No links yet",

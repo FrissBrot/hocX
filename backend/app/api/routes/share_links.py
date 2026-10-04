@@ -14,6 +14,7 @@ from app.models.entities import ShareLink
 from app.schemas.files import ShareLinkCreate, ShareLinkRead
 from app.services import photo_album_share_service, share_link_service
 from app.services.file_service import FileService
+from app.services.photo_metadata_privacy import MetadataPolicy
 
 router = APIRouter()
 service = FileService()
@@ -31,6 +32,9 @@ def _read(link: ShareLink, *, album_name: str | None, file_count: int, created_b
         expires_at=link.expires_at,
         revoked_at=link.revoked_at,
         status=share_link_service.status_for(link),
+        share_location=link.share_location,
+        share_capture_date=link.share_capture_date,
+        share_camera=link.share_camera,
     )
 
 
@@ -46,13 +50,14 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
     has_album = payload.album_id is not None
     if has_files == has_album:
         raise HTTPException(status_code=422, detail="Bitte entweder Dateien oder ein Album auswählen (genau eines).")
+    metadata = MetadataPolicy(location=payload.share_location, capture_date=payload.share_capture_date, camera=payload.share_camera)
 
     if has_album:
         album = photo_album_share_service.get_accessible_album(db, payload.album_id, user.current_tenant_id)
         if album is None:
             raise HTTPException(status_code=404, detail="Album nicht gefunden")
         link = share_link_service.create_for_album(
-            db, tenant_id=user.current_tenant_id, name=name, album=album, expires_at=payload.expires_at, created_by=user.user_id
+            db, tenant_id=user.current_tenant_id, name=name, album=album, expires_at=payload.expires_at, created_by=user.user_id, metadata=metadata
         )
         return _read(link, album_name=album.name, file_count=len(share_link_service.file_ids_for_link(db, link)), created_by_name=user.display_name)
 
@@ -62,7 +67,7 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
         raise HTTPException(status_code=404, detail="Mindestens eine Datei wurde nicht gefunden")
     try:
         link = share_link_service.create_for_files(
-            db, tenant_id=user.current_tenant_id, name=name, file_ids=ids, expires_at=payload.expires_at, created_by=user.user_id
+            db, tenant_id=user.current_tenant_id, name=name, file_ids=ids, expires_at=payload.expires_at, created_by=user.user_id, metadata=metadata
         )
     except share_link_service.ShareLinkError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None

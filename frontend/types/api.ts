@@ -315,6 +315,9 @@ export type ShareLink = {
   expires_at: string | null;
   revoked_at: string | null;
   status: ShareLinkStatus;
+  share_location: boolean;
+  share_capture_date: boolean;
+  share_camera: boolean;
 };
 
 export type PublicShareFile = {
@@ -323,12 +326,23 @@ export type PublicShareFile = {
   mime_type: string | null;
   file_size_bytes: number | null;
   is_image: boolean;
+  width: number | null;
+  height: number | null;
+  taken_at: string | null;
   thumbnail_url: string | null;
+  view_url: string | null;
   download_url: string;
 };
 
 export type PublicShare = {
   name: string;
+  context: string | null;
+  is_album: boolean;
+  tenant_name: string;
+  expires_at: string | null;
+  total_size_bytes: number;
+  date_from: string | null;
+  date_to: string | null;
   files: PublicShareFile[];
   download_all_url: string | null;
 };

@@ -1,27 +1,20 @@
 import { getTranslations } from "next-intl/server";
 
+import { PublicShareGallery } from "@/components/share/public-share-gallery";
 import { backendFetch } from "@/lib/api/client";
-import { formatFileSize } from "@/lib/utils/format";
 import { PublicShare } from "@/types/api";
 
-function FileIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" />
-      <path d="M14 3v5h5" />
-    </svg>
-  );
-}
-
+// Öffentlich ohne Login erreichbar: proxy.ts nimmt /share/* vom Login-Redirect aus, der Token
+// in der URL ist die einzige Authentifizierung (siehe backend public_share.py).
 export default async function PublicSharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const t = await getTranslations("share.publicPage");
-  const share = await backendFetch<PublicShare>(`/api/public/share/${token}`);
+  const share = await backendFetch<PublicShare>(`/api/public/share/${encodeURIComponent(token)}`);
 
   if (!share) {
     return (
-      <main className="public-share-page">
-        <div className="card public-share-card">
+      <main className="public-share-page public-share-page-center">
+        <div className="card public-share-unavailable">
           <h1 className="page-title">{t("linkUnavailable")}</h1>
           <p className="muted">{t("linkUnavailableHint")}</p>
         </div>
@@ -29,47 +22,5 @@ export default async function PublicSharePage({ params }: { params: Promise<{ to
     );
   }
 
-  return (
-    <main className="public-share-page">
-      <div className="card public-share-card">
-        <div className="page-header">
-          <div>
-            <h1 className="page-title">{share.name}</h1>
-            <p className="muted">
-              {t("fileCount", { count: share.files.length })}
-            </p>
-          </div>
-          {share.download_all_url ? (
-            <a href={share.download_all_url} className="button-primary">
-              {t("downloadAll")}
-            </a>
-          ) : null}
-        </div>
-        {share.files.length === 0 ? (
-          <p className="muted">{t("noFiles")}</p>
-        ) : (
-          <div className="public-share-grid">
-            {share.files.map((file) => (
-              <a key={file.id} href={file.download_url} className="public-share-item">
-                {file.thumbnail_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={file.thumbnail_url} alt="" className="public-share-thumb" />
-                ) : (
-                  <span className="public-share-thumb public-share-thumb-file">
-                    <FileIcon />
-                  </span>
-                )}
-                <span className="public-share-item-name" title={file.original_name}>
-                  {file.original_name}
-                </span>
-                <span className="muted public-share-item-size">
-                  {file.file_size_bytes ? formatFileSize(file.file_size_bytes) : ""}
-                </span>
-              </a>
-            ))}
-          </div>
-        )}
-      </div>
-    </main>
-  );
+  return <PublicShareGallery share={share} />;
 }

@@ -160,6 +160,27 @@ export function formatTime(input: string | null | undefined, locale?: string) {
   }).format(parsed);
 }
 
+// Lange Schreibweise mit ausgeschriebenem Monat ("14.–28. Juli 2026"), z. B. für den
+// Aufnahmezeitraum auf der öffentlichen Freigabeseite. formatRange fasst gleiche Monate/Jahre
+// sprachgerecht zusammen.
+export function formatLongDateRange(start: string | null | undefined, end: string | null | undefined, locale?: string) {
+  const from = start ? new Date(start) : null;
+  const to = end ? new Date(end) : null;
+  const formatter = new Intl.DateTimeFormat(toIntlLocale(locale), { day: "numeric", month: "long", year: "numeric", timeZone: APP_TIME_ZONE });
+  if (from && !Number.isNaN(from.getTime()) && to && !Number.isNaN(to.getTime())) {
+    return formatter.formatRange(from, to);
+  }
+  const single = from ?? to;
+  return single && !Number.isNaN(single.getTime()) ? formatter.format(single) : "";
+}
+
+// Kurzes Datum mit abgekürztem Monat ("31. Okt. 2026").
+export function formatShortMonthDate(input: string | null | undefined, locale?: string) {
+  const parsed = input ? new Date(input) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) return "";
+  return new Intl.DateTimeFormat(toIntlLocale(locale), { day: "numeric", month: "short", year: "numeric", timeZone: APP_TIME_ZONE }).format(parsed);
+}
+
 export function formatFileSize(bytes: number | null | undefined) {
   if (bytes === null || bytes === undefined || Number.isNaN(bytes)) {
     return "";

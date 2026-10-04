@@ -73,7 +73,11 @@ export async function proxy(request: NextRequest) {
   // admin.hocx.ch/login (so the rewrite above can map it to /admin/login), that exclusion
   // moved in here instead - skip only the auth-redirect check for the login path itself,
   // not the whole middleware, so the hostname rewrite still applies to it.
-  if (rewrittenPathname !== loginPath) {
+  // Öffentliche Freigabe-Links (/share/<token>) sind per Design ohne Login erreichbar - der
+  // Token in der URL IST die Authentifizierung (siehe backend public_share.py). Ohne diese
+  // Ausnahme landeten Empfänger ohne hocX-Konto auf /login statt bei den Fotos.
+  const isPublicPath = rewrittenPathname === "/share" || rewrittenPathname.startsWith("/share/");
+  if (rewrittenPathname !== loginPath && !isPublicPath) {
     const cookie = request.headers.get("cookie") ?? "";
     const authenticated = await isAuthenticated(cookie, sessionPath);
     if (authenticated === false) {

@@ -9,7 +9,15 @@
     "expiryLabel": "Data di scadenza",
     "nameLabel": "Nome",
     "shareLinkLabel": "Link di condivisione",
-    "title": "Condividi link"
+    "title": "Condividi link",
+    "metadataLegend": "Condividi i metadati delle foto",
+    "metadataLocation": "Posizione (GPS)",
+    "metadataLocationHelp": "Dove è stata scattata la foto.",
+    "metadataCaptureDate": "Data di scatto",
+    "metadataCaptureDateHelp": "Data e ora dello scatto.",
+    "metadataCamera": "Fotocamera e dispositivo",
+    "metadataCameraHelp": "Modello, numero di serie, obiettivo e impostazioni di esposizione.",
+    "metadataHelp": "Le informazioni disattivate vengono rimosse dalle foto al momento del download."
   },
   "emptyDescription": "Usa \"Condividi\" su file, foto o un album fotografico per creare un link di download senza accesso.",
   "emptyTitle": "Ancora nessun link",

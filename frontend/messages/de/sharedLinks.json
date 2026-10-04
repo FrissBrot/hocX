@@ -9,7 +9,15 @@
     "expiryLabel": "Ablaufdatum",
     "nameLabel": "Name",
     "shareLinkLabel": "Freigabe-Link",
-    "title": "Link teilen"
+    "title": "Link teilen",
+    "metadataLegend": "Foto-Metadaten teilen",
+    "metadataLocation": "Standort (GPS)",
+    "metadataLocationHelp": "Wo das Foto aufgenommen wurde.",
+    "metadataCaptureDate": "Aufnahmedatum",
+    "metadataCaptureDateHelp": "Datum und Uhrzeit der Aufnahme.",
+    "metadataCamera": "Kamera & Gerät",
+    "metadataCameraHelp": "Modell, Seriennummer, Objektiv und Belichtungswerte.",
+    "metadataHelp": "Ausgeschaltete Angaben werden beim Herunterladen aus den Fotos entfernt."
   },
   "emptyDescription": "Über „Teilen“ bei Dateien, Fotos oder einem Fotoalbum lässt sich ein Download-Link ohne Anmeldung erzeugen.",
   "emptyTitle": "Noch keine Links vorhanden",

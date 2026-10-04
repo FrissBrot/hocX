@@ -315,6 +315,10 @@ class ShareLinkCreate(BaseModel):
     expires_at: datetime | None = None
     file_ids: list[uuid.UUID] | None = None
     album_id: uuid.UUID | None = None
+    # Welche Foto-Metadaten oeffentlich mitgehen (siehe photo_metadata_privacy.py).
+    share_location: bool = False
+    share_capture_date: bool = True
+    share_camera: bool = False
 
 
 class ShareLinkRead(BaseModel):
@@ -328,6 +332,9 @@ class ShareLinkRead(BaseModel):
     expires_at: datetime | None = None
     revoked_at: datetime | None = None
     status: Literal["active", "expired", "revoked"]
+    share_location: bool = False
+    share_capture_date: bool = True
+    share_camera: bool = False
 
 
 class PublicShareFile(BaseModel):
@@ -336,11 +343,26 @@ class PublicShareFile(BaseModel):
     mime_type: str | None
     file_size_bytes: int | None
     is_image: bool
+    width: int | None = None
+    height: int | None = None
+    taken_at: datetime | None = None
     thumbnail_url: str | None
+    # Grossansicht in der Lightbox: das Original inline, wenn der Browser es sicher darstellen
+    # kann (JPEG/PNG/WebP/GIF), sonst die Vorschau; None fuer Nicht-Bilder.
+    view_url: str | None = None
     download_url: str
 
 
 class PublicShareRead(BaseModel):
     name: str
+    # Untertitel ueber dem Titel (z. B. Albumname, wenn der Link anders heisst).
+    context: str | None = None
+    is_album: bool = False
+    tenant_name: str
+    expires_at: datetime | None = None
+    total_size_bytes: int = 0
+    date_from: datetime | None = None
+    date_to: datetime | None = None
     files: list[PublicShareFile]
+    # Immer ein ZIP; mit ?ids=<uuid>,<uuid> nur die Auswahl.
     download_all_url: str | None = None

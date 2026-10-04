@@ -1576,6 +1576,11 @@ class ShareLink(Base, TimestampMixin):
     # Widerruf ist soft (statt DELETE), damit die Uebersicht "Geteilte Links" auch widerrufene
     # Links mit ihrem Status weiter anzeigen kann.
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Welche Foto-Metadaten oeffentlich mitgehen (siehe photo_metadata_privacy.py) - Standort und
+    # Kamera/Geraet standardmaessig nicht, das Aufnahmedatum schon.
+    share_location: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    share_capture_date: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    share_camera: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
 
 class ShareLinkFile(Base):

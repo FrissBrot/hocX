@@ -9,7 +9,15 @@
     "expiryLabel": "Date d'expiration",
     "nameLabel": "Nom",
     "shareLinkLabel": "Lien de partage",
-    "title": "Partager le lien"
+    "title": "Partager le lien",
+    "metadataLegend": "Partager les métadonnées des photos",
+    "metadataLocation": "Lieu (GPS)",
+    "metadataLocationHelp": "Où la photo a été prise.",
+    "metadataCaptureDate": "Date de prise de vue",
+    "metadataCaptureDateHelp": "Date et heure de la prise de vue.",
+    "metadataCamera": "Appareil",
+    "metadataCameraHelp": "Modèle, numéro de série, objectif et réglages d’exposition.",
+    "metadataHelp": "Les informations désactivées sont retirées des photos lors du téléchargement."
   },
   "emptyDescription": "Utilisez « Partager » sur des fichiers, photos ou un album photo pour créer un lien de téléchargement sans connexion.",
   "emptyTitle": "Aucun lien pour l'instant",
