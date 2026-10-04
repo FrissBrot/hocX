@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { buildDangerGradientStops } from "./hiking-tour-elevation-danger-gradient";
 import { layoutElevationLabels } from "./hiking-tour-elevation-labels";
 
 import { Area, AreaChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-import { ElevationProfilePoint, HikingTourWaypoint, MarchTimeTable } from "@/types/api";
+import { ElevationProfilePoint, HikingTourWaypoint, MarchTimeTable, TerrainDangerSegment } from "@/types/api";
 
 function ElevationTooltip({ active, payload }: { active?: boolean; payload?: { payload: ElevationProfilePoint }[] }) {
   if (!active || !payload?.length) return null;
@@ -32,11 +33,13 @@ export function HikingTourElevationChart({
   waypoints,
   marchTable,
   onHoverPoint,
+  dangerSegments,
 }: {
   points: ElevationProfilePoint[];
   waypoints: HikingTourWaypoint[];
   marchTable: MarchTimeTable | null;
   onHoverPoint?: (point: ElevationProfilePoint | null) => void;
+  dangerSegments?: TerrainDangerSegment[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(600);
@@ -79,6 +82,7 @@ export function HikingTourElevationChart({
     width: textWidths[index] ?? marker.label.length * 12,
   })), width);
   const labelHeight = Math.max(16, ...layout.map((label, index) => 28 + label.lane * 20 - profileY(markers[index].point.elevation_m)));
+  const dangerStops = buildDangerGradientStops(points, dangerSegments);
 
   return (
     <div ref={containerRef}>
@@ -94,6 +98,13 @@ export function HikingTourElevationChart({
           <linearGradient id="wanderplaner-elevation-fill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.35} />
             <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
+          </linearGradient>
+          {/* Gefahreneinschätzung (Auftrag): faerbt die Profillinie abschnittsweise ein, siehe
+              hiking-tour-elevation-danger-gradient.ts. Ohne Segmente identisch zu "var(--chart-1)". */}
+          <linearGradient id="wanderplaner-elevation-danger-stroke" x1="0" y1="0" x2="1" y2="0">
+            {dangerStops.map((stop, index) => (
+              <stop key={index} offset={stop.offset} stopColor={stop.color} />
+            ))}
           </linearGradient>
         </defs>
         <XAxis
@@ -115,7 +126,7 @@ export function HikingTourElevationChart({
           width={44}
         />
         <Tooltip content={<ElevationTooltip />} />
-        <Area type="monotone" dataKey="elevation_m" stroke="var(--chart-1)" strokeWidth={2} fill="url(#wanderplaner-elevation-fill)" />
+        <Area type="monotone" dataKey="elevation_m" stroke="url(#wanderplaner-elevation-danger-stroke)" strokeWidth={2} fill="url(#wanderplaner-elevation-fill)" />
         {markers.map(({ waypoint, point, label }, index) => (
           <ReferenceDot
             key={waypoint.id}

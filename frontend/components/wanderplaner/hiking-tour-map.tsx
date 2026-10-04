@@ -4,7 +4,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 
-import { HikingTourWaypointKind } from "@/types/api";
+import { ElevationProfilePoint, HikingTourWaypointKind, TerrainDangerLevel, TerrainDangerSegment } from "@/types/api";
 
 // Offizieller swisstopo-Vector-Tile-Style (Auftrag Abschnitt 1/2 - dieselbe Basiskarte wie
 // map.geo.admin.ch, kostenlos, kein API-Key). Attribution ist Pflicht (siehe
@@ -12,6 +12,16 @@ import { HikingTourWaypointKind } from "@/types/api";
 // zeigt sie automatisch aus dem Style an, hier nur kompakt statt ausgeklappt.
 const SWISSTOPO_STYLE_URL = "https://vectortiles.geo.admin.ch/styles/ch.swisstopo.basemap.vt/style.json";
 const SWITZERLAND_CENTER: [number, number] = [8.2275, 46.8182];
+
+// Gefahreneinschätzung (Auftrag "Gefahreneinschätzung des Weges"): "alpine" (amtlicher Status
+// Alpinwanderweg) hat Vorrang vor "steep_exposed" (Geländeanalyse auf normalen Wanderwegen),
+// siehe app/core/route_danger.py::merge_with_official_status. Gleiches Token-Muster wie
+// KIND_COLOR_TOKEN unten - "normal" bleibt die bisherige Routenfarbe.
+const DANGER_COLOR_TOKEN: Record<TerrainDangerLevel, string> = {
+  normal: "--accent-strong",
+  steep_exposed: "--warning",
+  alpine: "--info",
+};
 
 const KIND_COLOR_TOKEN: Record<HikingTourWaypointKind, string> = {
   START: "--success",
@@ -48,19 +58,27 @@ type Props = {
   waypoints: MapWaypoint[];
   /** [lat, lon]-Paare (Konvention dieser API, siehe RouteLegRead) */
   routeCoordinates?: [number, number][];
+  /** Zusammen mit dangerSegments: faerbt die Route abschnittsweise ein (Gefahreneinschätzung,
+   * siehe GET .../terrain-danger). Ohne eins von beiden bleibt die Route einfarbig
+   * (routeCoordinates), wie bisher. */
+  elevationProfile?: ElevationProfilePoint[];
+  dangerSegments?: TerrainDangerSegment[];
   onMapClick?: (lat: number, lon: number) => void;
   onMarkerDragEnd?: (waypointId: string, lat: number, lon: number) => void;
   /** Hover-Synchronisation Höhenprofil -> Karte (Auftrag Abschnitt 6): temporaerer Marker,
    * unabhaengig von waypoints (loest kein fitBounds aus). */
   highlightPoint?: { lat: number; lon: number } | null;
+  /** Startansicht an die Kartengrösse anpassen, mit der Schweiz im Zentrum. */
+  fitSwitzerland?: boolean;
   className?: string;
 };
 
-export function HikingTourMap({ waypoints, routeCoordinates, onMapClick, onMarkerDragEnd, highlightPoint, className }: Props) {
+export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, dangerSegments, onMapClick, onMarkerDragEnd, highlightPoint, fitSwitzerland = false, className }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedPoint = waypoints.find((waypoint) => waypoint.id === selectedId);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const fittedWaypointsRef = useRef(false);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const highlightMarkerRef = useRef<maplibregl.Marker | null>(null);
   const onMapClickRef = useRef(onMapClick);
@@ -73,12 +91,22 @@ export function HikingTourMap({ waypoints, routeCoordinates, onMapClick, onMarke
       style: SWISSTOPO_STYLE_URL,
       center: SWITZERLAND_CENTER,
       zoom: 7,
+      ...(fitSwitzerland ? {
+        bounds: [[5.95, 45.82], [10.5, 47.81]] as [[number, number], [number, number]],
+        fitBoundsOptions: { padding: 24, duration: 0 },
+      } : {}),
       attributionControl: { compact: true },
     });
     map.addControl(new maplibregl.NavigationControl(), "top-right");
     map.on("click", (event) => onMapClickRef.current?.(event.lngLat.lat, event.lngLat.lng));
     mapRef.current = map;
+    fittedWaypointsRef.current = false;
+    // Das Popup kann nach der Initialisierung seine endgültige Grösse erhalten.
+    // Resize aktualisiert auch die Canvas-Fläche, nicht nur die CSS-Abmessungen.
+    const observer = new ResizeObserver(() => map.resize());
+    observer.observe(containerRef.current);
     return () => {
+      observer.disconnect();
       highlightMarkerRef.current?.remove();
       highlightMarkerRef.current = null;
       map.remove();
@@ -123,7 +151,8 @@ export function HikingTourMap({ waypoints, routeCoordinates, onMapClick, onMarke
       return marker;
     });
 
-    if (waypoints.length > 0) {
+    if (waypoints.length > 0 && !fittedWaypointsRef.current) {
+      fittedWaypointsRef.current = true;
       const bounds = waypoints.reduce(
         (acc, wp) => acc.extend([wp.lon, wp.lat]),
         new maplibregl.LngLatBounds([waypoints[0].lon, waypoints[0].lat], [waypoints[0].lon, waypoints[0].lat])
@@ -160,13 +189,38 @@ export function HikingTourMap({ waypoints, routeCoordinates, onMapClick, onMarke
     const map = mapRef.current;
     if (!map) return;
 
-    // Kein "|| #hex"-Fallback (design-ok: --accent-strong ist in tokens.css immer definiert,
-    // ein Fallback wuerde nur einen Tippfehler verdecken, siehe DESIGN.md Abschnitt 3).
-    const routeLineColor = getComputedStyle(document.documentElement).getPropertyValue("--accent-strong").trim();
-    const geojson: GeoJSON.Feature<GeoJSON.LineString> = {
-      type: "Feature",
-      properties: {},
-      geometry: { type: "LineString", coordinates: (routeCoordinates ?? []).map(([lat, lon]) => [lon, lat]) },
+    // Kein "|| #hex"-Fallback (design-ok: --accent-strong/--warning/--info sind in tokens.css
+    // immer definiert, ein Fallback wuerde nur einen Tippfehler verdecken, siehe DESIGN.md
+    // Abschnitt 3).
+    const style = getComputedStyle(document.documentElement);
+    const dangerColor: Record<TerrainDangerLevel, string> = {
+      normal: style.getPropertyValue(DANGER_COLOR_TOKEN.normal).trim(),
+      steep_exposed: style.getPropertyValue(DANGER_COLOR_TOKEN.steep_exposed).trim(),
+      alpine: style.getPropertyValue(DANGER_COLOR_TOKEN.alpine).trim(),
+    };
+
+    // Gefahreneinschätzung (siehe DataToolbar-Beschreibung/GET .../terrain-danger): die Route
+    // wird abschnittsweise eingefaerbt, sobald sowohl Hoehenprofil als auch Gefahrensegmente
+    // vorliegen - sonst bleibt es bei der bisherigen einfarbigen Linie aus routeCoordinates.
+    const dangerFeatures: GeoJSON.Feature<GeoJSON.LineString>[] = (elevationProfile && dangerSegments
+      ? dangerSegments
+      : []
+    ).flatMap((segment) => {
+      const segmentPoints = elevationProfile!.filter((point) => point.distance_m >= segment.from_m && point.distance_m <= segment.to_m);
+      if (segmentPoints.length < 2) return [];
+      return [{
+        type: "Feature" as const,
+        properties: { danger: segment.danger },
+        geometry: { type: "LineString" as const, coordinates: segmentPoints.map((point) => [point.lon, point.lat]) },
+      }];
+    });
+    const geojson: GeoJSON.FeatureCollection<GeoJSON.LineString> = {
+      type: "FeatureCollection",
+      features: dangerFeatures.length > 0 ? dangerFeatures : [{
+        type: "Feature",
+        properties: { danger: "normal" },
+        geometry: { type: "LineString", coordinates: (routeCoordinates ?? []).map(([lat, lon]) => [lon, lat]) },
+      }],
     };
 
     const applySource = () => {
@@ -181,13 +235,21 @@ export function HikingTourMap({ waypoints, routeCoordinates, onMapClick, onMarke
         type: "line",
         source: "wanderplaner-route",
         layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": routeLineColor, "line-width": 4 },
+        paint: {
+          "line-color": [
+            "match", ["get", "danger"],
+            "alpine", dangerColor.alpine,
+            "steep_exposed", dangerColor.steep_exposed,
+            dangerColor.normal,
+          ],
+          "line-width": 4,
+        },
       });
     };
 
     if (map.isStyleLoaded()) applySource();
     else map.once("load", applySource);
-  }, [routeCoordinates]);
+  }, [routeCoordinates, elevationProfile, dangerSegments]);
 
   return (
     <div className="wanderplaner-map-frame">

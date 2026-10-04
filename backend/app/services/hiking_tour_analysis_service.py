@@ -62,7 +62,7 @@ class HikingTourAnalysisService:
         self.march_time_service = march_time_service or MarchTimeService()
         self.emergency_exit_service = emergency_exit_service or EmergencyExitService()
 
-    def analyze(self, db: Session, tour: HikingTour) -> HikingTour:
+    def analyze(self, db: Session, tour: HikingTour, *, commit: bool = True) -> HikingTour:
         if not tour.route_legs:
             raise ValueError("Route muss zuerst berechnet werden, bevor eine automatische Analyse möglich ist")
         if not tour.elevation_profile_json:
@@ -113,7 +113,9 @@ class HikingTourAnalysisService:
         if tour.status == "draft":
             tour.status = "analyzed"
         db.add(tour)
-        db.commit()
+        db.flush()
+        if commit:
+            db.commit()
         db.refresh(tour)
         return tour
 
@@ -238,6 +240,8 @@ class HikingTourAnalysisService:
         for suggestion in break_suggestions:
             waypoint = chain_waypoints_by_seq.get(suggestion.after_sequence)
             if waypoint is None or waypoint.kind in ("START", "END"):
+                continue
+            if not waypoint.auto_generated and waypoint.break_minutes is not None:
                 continue
             waypoint.break_minutes = suggestion.minutes
             waypoint.break_reason = suggestion.reason

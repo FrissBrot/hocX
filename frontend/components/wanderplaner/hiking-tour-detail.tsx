@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataToolbar } from "@/components/ui/data-table";
@@ -24,6 +24,7 @@ import {
   HikingTourWaypointKind,
   HikingTourWaypointVerificationStatus,
   MarchTimeTable,
+  TerrainDanger,
 } from "@/types/api";
 
 // Auftrag Abschnitt 17 - dieselbe feste Item-Liste wie RECONNAISSANCE_CHECKLIST_ITEMS im
@@ -99,13 +100,13 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
   const [placingVia, setPlacingVia] = useState(false);
   const [profile, setProfile] = useState<HikingTourRoutingProfile>(tour.routing_profile ?? "wanderwege_bevorzugen");
   const [saving, setSaving] = useState(false);
-  const [computingRoute, setComputingRoute] = useState(false);
+  const [savingRoute, setSavingRoute] = useState(false);
+  const [draftWaypoints, setDraftWaypoints] = useState(initialTour.waypoints);
   const [elevationProfile, setElevationProfile] = useState<ElevationProfile | null>(null);
-  const [fetchingElevation, setFetchingElevation] = useState(false);
+  const [terrainDanger, setTerrainDanger] = useState<TerrainDanger | null>(null);
   const [marchTableRevision, setMarchTableRevision] = useState(0);
   const [marchTable, setMarchTable] = useState<MarchTimeTable | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<ElevationProfilePoint | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
   const [showReconnaissance, setShowReconnaissance] = useState(false);
   const [checklistDraft, setChecklistDraft] = useState<Record<string, boolean>>(tour.reconnaissance_checklist);
   const [remarksDraft, setRemarksDraft] = useState(tour.reconnaissance_remarks ?? "");
@@ -149,72 +150,80 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
     }
   }
 
-  async function handleMapClick(lat: number, lon: number) {
-    if (!placingVia) return;
+  const handleMapClick = useCallback((lat: number, lon: number) => {
+    if (!placingVia || savingRoute) return;
     setPlacingVia(false);
-    try {
-      const created = await browserApiFetch<HikingTourWaypoint>(`/api/hiking-tours/${tour.id}/waypoints`, {
-        method: "POST",
-        body: JSON.stringify({ lat, lon }),
-      });
-      setTour((prev) => ({ ...prev, waypoints: [...prev.waypoints, created].sort((a, b) => a.sequence - b.sequence) }));
-      showToast("Via-Punkt hinzugefügt", "success");
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Fehler beim Hinzufügen", "error");
-    }
-  }
+    const now = new Date().toISOString();
+    setDraftWaypoints((previous) => {
+      const end = previous.find((waypoint) => waypoint.kind === "END");
+      const sequence = end?.sequence ?? previous.length;
+      return [...previous.map((waypoint) => waypoint.kind === "END" ? { ...waypoint, sequence: sequence + 1 } : waypoint), {
+        id: `draft-${crypto.randomUUID()}`, sequence, kind: "USER_DEFINED" as const, label: null,
+        description: null, lat, lon, elevation_m: null, break_minutes: null, break_reason: null,
+        auto_generated: false, verification_status: null, decision_metrics_json: null, exit_metrics_json: null,
+        created_at: now, updated_at: now,
+      }].sort((a, b) => a.sequence - b.sequence);
+    });
+  }, [placingVia, savingRoute]);
 
-  async function handleMarkerDragEnd(waypointId: string, lat: number, lon: number) {
-    try {
-      const updated = await browserApiFetch<HikingTourWaypoint>(`/api/hiking-tours/${tour.id}/waypoints/${waypointId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ lat, lon }),
-      });
-      setTour((prev) => ({ ...prev, waypoints: prev.waypoints.map((wp) => (wp.id === updated.id ? updated : wp)) }));
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Punkt konnte nicht verschoben werden", "error");
-    }
-  }
+  const handleMarkerDragEnd = useCallback((waypointId: string, lat: number, lon: number) => {
+    if (savingRoute) return;
+    setDraftWaypoints((previous) => previous.map((waypoint) => waypoint.id === waypointId ? { ...waypoint, lat, lon } : waypoint));
+  }, [savingRoute]);
 
   async function handleDeleteWaypoint(waypoint: HikingTourWaypoint) {
+    if (savingRoute || waypoint.kind === "START" || waypoint.kind === "END") return;
     if (!(await confirm({ message: `Punkt «${waypoint.label ?? KIND_LABEL[waypoint.kind]}» entfernen?`, tone: "danger", confirmLabel: "Entfernen" }))) return;
-    try {
-      await browserApiFetch(`/api/hiking-tours/${tour.id}/waypoints/${waypoint.id}`, { method: "DELETE" });
-      setTour((prev) => ({ ...prev, waypoints: prev.waypoints.filter((wp) => wp.id !== waypoint.id) }));
-      showToast("Punkt entfernt", "success");
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Fehler beim Entfernen", "error");
-    }
+    setDraftWaypoints((previous) => previous.filter((point) => point.id !== waypoint.id));
   }
 
-  async function handleUpdateBreakMinutes(waypoint: HikingTourWaypoint, minutes: number) {
-    try {
-      const updated = await browserApiFetch<HikingTourWaypoint>(`/api/hiking-tours/${tour.id}/waypoints/${waypoint.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ break_minutes: minutes }),
-      });
-      setMarchTableRevision((value) => value + 1);
-      setTour((prev) => ({ ...prev, waypoints: prev.waypoints.map((wp) => (wp.id === updated.id ? updated : wp)) }));
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Pause konnte nicht gespeichert werden", "error");
-    }
+  function handleUpdateBreakMinutes(waypoint: HikingTourWaypoint, minutes: number) {
+    if (savingRoute) return;
+    setDraftWaypoints((previous) => previous.map((point) => point.id === waypoint.id ? { ...point, break_minutes: minutes } : point));
   }
 
-  async function handleComputeRoute() {
-    setComputingRoute(true);
+  const changes = useMemo(() => {
+    const saved = new Map(tour.waypoints.map((waypoint) => [waypoint.id, waypoint]));
+    const updates = draftWaypoints.flatMap((waypoint) => {
+      const original = saved.get(waypoint.id);
+      if (!original) return [];
+      const positionChanged = waypoint.lat !== original.lat || waypoint.lon !== original.lon;
+      const pauseChanged = waypoint.break_minutes !== original.break_minutes;
+      if (!positionChanged && !pauseChanged) return [];
+      return [{ id: waypoint.id,
+        ...(positionChanged ? { lat: waypoint.lat, lon: waypoint.lon } : {}),
+        ...(pauseChanged ? { break_minutes: waypoint.break_minutes } : {}),
+      }];
+    });
+    return {
+      updates,
+      additions: draftWaypoints.filter((waypoint) => !saved.has(waypoint.id)).map(({ lat, lon, label, description, break_minutes }) => ({ lat, lon, label, description, break_minutes })),
+      deletions: tour.waypoints.filter((waypoint) => !draftWaypoints.some((draft) => draft.id === waypoint.id)).map((waypoint) => waypoint.id),
+    };
+  }, [draftWaypoints, tour.waypoints]);
+  const routeDirty = Boolean(changes.updates.length || changes.additions.length || changes.deletions.length || profile !== (tour.routing_profile ?? "wanderwege_bevorzugen"));
+  const needsPlanning = !tour.route_legs.length || !tour.elevation_profile_fetched_at || tour.status === "draft";
+
+  async function handleSaveRoute() {
+    if (savingRoute) return;
+    setSavingRoute(true);
+    setPlacingVia(false);
     try {
-      const updated = await browserApiFetch<HikingTour>(`/api/hiking-tours/${tour.id}/route`, {
+      const updated = await browserApiFetch<HikingTour>(`/api/hiking-tours/${tour.id}/plan`, {
         method: "POST",
-        body: JSON.stringify({ routing_profile: profile }),
-        // Landesweites Wegenetz und mehrere Zwischenpunkte benötigen länger als 15s.
-        signal: AbortSignal.timeout(180_000),
+        body: JSON.stringify({ ...changes, routing_profile: profile, expected_updated_at: tour.updated_at }),
+        signal: AbortSignal.timeout(600_000),
       });
       setTour(updated);
-      showToast("Route berechnet", "success");
+      setDraftWaypoints(updated.waypoints);
+      setProfile(updated.routing_profile ?? "wanderwege_bevorzugen");
+      setHoveredPoint(null);
+      setMarchTableRevision((value) => value + 1);
+      showToast("Wanderung gespeichert und neu berechnet", "success");
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Route konnte nicht berechnet werden", "error");
+      showToast(err instanceof Error ? err.message : "Änderungen konnten nicht gespeichert werden", "error");
     } finally {
-      setComputingRoute(false);
+      setSavingRoute(false);
     }
   }
 
@@ -254,35 +263,23 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
     };
   }, [tour.id, tour.elevation_profile_fetched_at]);
 
-  async function handleFetchElevationProfile() {
-    if (!(await confirm({
-      message: "Für das Höhenprofil wird der Verlauf dieser Wanderroute an swisstopo (api3.geo.admin.ch) übertragen. Konto- und Teilnehmerdaten werden nicht mitgesendet. Möchtest du diesen Abruf erlauben?",
-      confirmLabel: "Abruf erlauben",
-    }))) return;
-    setFetchingElevation(true);
-    try {
-      const updated = await browserApiFetch<HikingTour>(`/api/hiking-tours/${tour.id}/elevation-profile`, { method: "POST" });
-      setTour((prev) => ({ ...updated, route_legs: prev.route_legs }));
-      showToast("Höhenprofil abgerufen", "success");
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Höhenprofil konnte nicht abgerufen werden", "error");
-    } finally {
-      setFetchingElevation(false);
+  useEffect(() => {
+    if (!tour.terrain_danger_computed_at) {
+      setTerrainDanger(null);
+      return;
     }
-  }
-
-  async function handleAnalyze() {
-    setAnalyzing(true);
-    try {
-      const updated = await browserApiFetch<HikingTour>(`/api/hiking-tours/${tour.id}/analyze`, { method: "POST", signal: AbortSignal.timeout(180_000) });
-      setTour(updated);
-      showToast("Tour automatisch analysiert", "success");
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Automatische Analyse fehlgeschlagen", "error");
-    } finally {
-      setAnalyzing(false);
-    }
-  }
+    let cancelled = false;
+    browserApiFetch<TerrainDanger>(`/api/hiking-tours/${tour.id}/terrain-danger`)
+      .then((danger) => {
+        if (!cancelled) setTerrainDanger(danger);
+      })
+      .catch(() => {
+        if (!cancelled) setTerrainDanger(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tour.id, tour.terrain_danger_computed_at]);
 
   async function handleVerificationChange(waypoint: HikingTourWaypoint, status: HikingTourWaypointVerificationStatus) {
     try {
@@ -291,6 +288,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
         body: JSON.stringify({ verification_status: status }),
       });
       setTour((prev) => ({ ...prev, waypoints: prev.waypoints.map((wp) => (wp.id === updated.id ? updated : wp)) }));
+      setDraftWaypoints((previous) => previous.map((waypoint) => waypoint.id === updated.id ? { ...waypoint, verification_status: updated.verification_status } : waypoint));
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : "Status konnte nicht geändert werden", "error");
     }
@@ -358,8 +356,8 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
   }
 
   const mapWaypoints = useMemo(
-    () => tour.waypoints.map((wp) => ({ id: wp.id, kind: wp.kind, lat: wp.lat, lon: wp.lon, label: wp.label, description: wp.description, elevation_m: wp.elevation_m, break_minutes: wp.break_minutes })),
-    [tour.waypoints]
+    () => draftWaypoints.map((wp) => ({ id: wp.id, kind: wp.kind, lat: wp.lat, lon: wp.lon, label: wp.label, description: wp.description, elevation_m: wp.elevation_m, break_minutes: wp.break_minutes })),
+    [draftWaypoints]
   );
   const routeCoordinates = useMemo<[number, number][]>(
     () => tour.route_legs.flatMap((leg) => leg.coordinates),
@@ -376,14 +374,14 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
         </div>
         {canWrite && (
           <div className="page-header-actions">
-            <button type="button" className="button-secondary" onClick={() => setShowEdit(true)}>
+            <button type="button" className="button-secondary" onClick={() => setShowEdit(true)} disabled={savingRoute}>
               Bearbeiten
             </button>
-            <button type="button" className="button-secondary" onClick={() => setShowReconnaissance(true)}>
+            <button type="button" className="button-secondary" onClick={() => setShowReconnaissance(true)} disabled={savingRoute}>
               Rekognoszierung
             </button>
             {tour.route_legs.length > 0 && (
-              <button type="button" className="button-secondary" onClick={() => { setPrintResult(null); setShowPrint(true); }}>
+              <button type="button" className="button-secondary" onClick={() => { setPrintResult(null); setShowPrint(true); }} disabled={savingRoute}>
                 Drucken
               </button>
             )}
@@ -393,11 +391,11 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
               </a>
             )}
             {tour.status === "reconnoitered" && (
-              <button type="button" className="button-primary" onClick={() => void handleApprove()} disabled={approving}>
+              <button type="button" className="button-primary" onClick={() => void handleApprove()} disabled={approving || savingRoute}>
                 {approving ? "Wird freigegeben…" : "Freigeben"}
               </button>
             )}
-            <button type="button" className="button-danger" onClick={() => void handleDeleteTour()}>
+            <button type="button" className="button-danger" onClick={() => void handleDeleteTour()} disabled={savingRoute}>
               Löschen
             </button>
           </div>
@@ -407,24 +405,34 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
       <div className="section-card">
         <DataToolbar
           title="Karte & Route"
-          description="Wegpunkte lassen sich per Ziehen verschieben. Neue Via-Punkte per Klick setzen."
+          description="Wegpunkte lassen sich per Ziehen verschieben. Änderungen werden erst beim Speichern übernommen; Weg, Höhenprofil und automatische Punkte werden dann neu berechnet."
           actions={
             canWrite ? (
               <div className="page-header-actions">
-                <select value={profile} onChange={(event) => setProfile(event.target.value as HikingTourRoutingProfile)}>
+                <select aria-label="Routingprofil" disabled={savingRoute} value={profile} onChange={(event) => setProfile(event.target.value as HikingTourRoutingProfile)}>
                   {Object.entries(ROUTING_PROFILE_LABEL).map(([value, label]) => (
                     <option key={value} value={value}>
                       {label}
                     </option>
                   ))}
                 </select>
-                <button type="button" className="button-secondary wanderplaner-loading-button" onClick={() => void handleComputeRoute()} disabled={computingRoute} aria-busy={computingRoute}>
-                  {computingRoute && <HikingTourLoadingLandscape />}
-                  <span className="wanderplaner-loading-label">{computingRoute ? "Wird berechnet…" : "Route berechnen"}</span>
-                </button>
+                {(routeDirty || needsPlanning || savingRoute) && (
+                  <button type="button" className="button-primary wanderplaner-loading-button" onClick={() => void handleSaveRoute()} disabled={savingRoute} aria-busy={savingRoute}>
+                    {savingRoute && <HikingTourLoadingLandscape />}
+                    <span className="wanderplaner-loading-label">{savingRoute ? "Wird gespeichert und berechnet…" : "Speichern"}</span>
+                  </button>
+                )}
+                {routeDirty && !savingRoute && (
+                  <button type="button" className="button-ghost" onClick={() => {
+                    setDraftWaypoints(tour.waypoints);
+                    setProfile(tour.routing_profile ?? "wanderwege_bevorzugen");
+                    setPlacingVia(false);
+                  }}>Änderungen verwerfen</button>
+                )}
                 <button
                   type="button"
                   className={placingVia ? "button-toggle button-toggle-active" : "button-toggle"}
+                  disabled={savingRoute}
                   onClick={() => setPlacingVia((value) => !value)}
                 >
                   Via-Punkt hinzufügen
@@ -433,12 +441,16 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
             ) : undefined
           }
         />
+        {routeDirty && <p className="field-help">Ungespeicherte Änderungen. Die angezeigte Route und das Höhenprofil entsprechen noch dem letzten gespeicherten Stand.</p>}
+        {(routeDirty || needsPlanning) && <p className="field-help">Beim Speichern wird der Routenverlauf für das Höhenprofil an swisstopo übermittelt.</p>}
         {placingVia && <p className="field-help">Auf die Karte klicken, um den Via-Punkt zu platzieren.</p>}
         <HikingTourMap
           waypoints={mapWaypoints}
           routeCoordinates={routeCoordinates}
-          onMapClick={canWrite ? handleMapClick : undefined}
-          onMarkerDragEnd={canWrite ? handleMarkerDragEnd : undefined}
+          elevationProfile={elevationProfile?.points}
+          dangerSegments={terrainDanger?.segments}
+          onMapClick={canWrite && !savingRoute ? handleMapClick : undefined}
+          onMarkerDragEnd={canWrite && !savingRoute ? handleMarkerDragEnd : undefined}
           highlightPoint={hoveredPoint ? { lat: hoveredPoint.lat, lon: hoveredPoint.lon } : null}
         />
         {tour.route_distance_m !== null && tour.route_distance_m !== undefined && (
@@ -461,27 +473,9 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
           <DataToolbar
             title="Höhenprofil"
             description="Beim Überfahren markiert das Höhenprofil die Stelle auf der Karte. Die automatische Analyse ergänzt markante Verzweigungen, Querungen und Hütten – ungefähr alle 15 Gehminuten."
-            actions={
-              canWrite ? (
-                <div className="page-header-actions">
-                  <button type="button" className="button-secondary" onClick={() => void handleFetchElevationProfile()} disabled={fetchingElevation}>
-                    {fetchingElevation ? "Wird abgerufen…" : "Höhenprofil abrufen"}
-                  </button>
-                  <button
-                    type="button"
-                    className="button-secondary"
-                    onClick={() => void handleAnalyze()}
-                    disabled={analyzing || !tour.elevation_profile_fetched_at}
-                    title={!tour.elevation_profile_fetched_at ? "Zuerst das Höhenprofil abrufen" : undefined}
-                  >
-                    {analyzing ? "Wird analysiert…" : "Automatisch analysieren"}
-                  </button>
-                </div>
-              ) : undefined
-            }
           />
           {elevationProfile ? (
-            <HikingTourElevationChart points={elevationProfile.points} waypoints={tour.waypoints} marchTable={marchTable} onHoverPoint={setHoveredPoint} />
+            <HikingTourElevationChart points={elevationProfile.points} waypoints={tour.waypoints} marchTable={marchTable} onHoverPoint={setHoveredPoint} dangerSegments={terrainDanger?.segments} />
           ) : (
             <p className="field-help">Noch kein Höhenprofil abgerufen.</p>
           )}
@@ -491,9 +485,10 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
       <div className="section-card">
         <HikingTourMarchTable
           table={marchTable}
-          waypoints={tour.waypoints}
-          canWrite={canWrite}
-          onUpdateBreakMinutes={(waypoint, minutes) => void handleUpdateBreakMinutes(waypoint, minutes)}
+          waypoints={draftWaypoints}
+          canWrite={canWrite && !savingRoute}
+          dangerSegments={terrainDanger?.segments}
+          onUpdateBreakMinutes={handleUpdateBreakMinutes}
           onVerificationChange={(waypoint, status) => void handleVerificationChange(waypoint, status)}
           onDeleteWaypoint={(waypoint) => void handleDeleteWaypoint(waypoint)}
         />

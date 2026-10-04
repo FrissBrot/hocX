@@ -74,8 +74,9 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
     }
     setSaving(true);
     try {
-      const created = await browserApiFetch<HikingTour>("/api/hiking-tours", {
+      const created = await browserApiFetch<HikingTour>("/api/hiking-tours/planned", {
         method: "POST",
+        signal: AbortSignal.timeout(600_000),
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim() || null,
@@ -83,6 +84,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
           start,
           end,
           via_points: [],
+          routing_profile: "wanderwege_bevorzugen",
         }),
       });
       setTours((prev) => [
@@ -111,7 +113,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
       const formData = new FormData();
       formData.append("title", gpxTitle.trim() || gpxFile.name.replace(/\.gpx$/i, ""));
       formData.append("file", gpxFile);
-      const created = await browserApiFetch<HikingTour>("/api/hiking-tours/gpx-import", { method: "POST", body: formData });
+      const created = await browserApiFetch<HikingTour>("/api/hiking-tours/gpx-import?plan=true", { method: "POST", body: formData, signal: AbortSignal.timeout(600_000) });
       setShowGpxImport(false);
       setGpxTitle("");
       setGpxFile(null);
@@ -171,26 +173,29 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
           setShowCreate(false);
           resetCreateForm();
         }}
-        size="wide"
+        size="fullscreen"
+        className="wanderplaner-create-modal"
       >
-        <form onSubmit={(event) => void handleCreate(event)}>
-          <div className="grid">
-            <label className="field-stack">
-              <span className="field-label">Titel</span>
-              <input required value={title} onChange={(event) => setTitle(event.target.value)} />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Beschreibung</span>
-              <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={2} />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Datum</span>
-              <DateInput value={tourDate} onChange={setTourDate} />
-              <span className="field-help">Optional.</span>
-            </label>
-
-            <div className="field-stack">
+        <form className="wanderplaner-create-form" onSubmit={(event) => void handleCreate(event)}>
+          <div className="wanderplaner-create-layout">
+            <div className="wanderplaner-create-fields">
+              <label className="field-stack">
+                <span className="field-label">Titel</span>
+                <input required value={title} onChange={(event) => setTitle(event.target.value)} />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">Beschreibung</span>
+                <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={2} />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">Datum</span>
+                <DateInput value={tourDate} onChange={setTourDate} />
+                <span className="field-help">Optional.</span>
+              </label>
+            </div>
+            <div className="wanderplaner-create-map-section">
               <span className="field-label">Start und Ziel</span>
+              <span className="field-help">Weg, Höhenprofil und automatische Punkte werden beim Erstellen geladen. Für das Höhenprofil wird der Routenverlauf an swisstopo übermittelt.</span>
               <div className="wanderplaner-map-hint">
                 <div className="wanderplaner-toggle-group">
                   <button
@@ -212,7 +217,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
                   Auf die Karte klicken, um {pendingField === "start" ? "den Start" : "das Ziel"} zu setzen.
                 </span>
               </div>
-              <HikingTourMap waypoints={mapWaypoints} onMapClick={handleMapClick} className="wanderplaner-map-compact" />
+              <HikingTourMap waypoints={mapWaypoints} onMapClick={handleMapClick} className="wanderplaner-create-map" fitSwitzerland />
             </div>
           </div>
           <div className="modal-actions">
@@ -228,7 +233,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
             </button>
             <button type="submit" className="button-primary wanderplaner-loading-button" disabled={saving || !start || !end} aria-busy={saving}>
               {saving && <HikingTourLoadingLandscape />}
-              <span className="wanderplaner-loading-label">{saving ? "Wird erstellt…" : "Wanderung erstellen"}</span>
+              <span className="wanderplaner-loading-label">{saving ? "Route und Höhenprofil werden berechnet…" : "Wanderung erstellen"}</span>
             </button>
           </div>
         </form>
@@ -244,7 +249,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
       >
         <form onSubmit={(event) => void handleGpxImport(event)}>
           <div className="grid">
-            <p className="field-help">Die GPX-Datei dient als Ausgangspunkt einer neuen Wanderung (Start/Ziel/Via-Punkte).</p>
+            <p className="field-help">Die GPX-Datei dient als Ausgangspunkt einer neuen Wanderung. Weg, Höhenprofil und automatische Punkte werden geladen; der Routenverlauf wird für das Höhenprofil an swisstopo übermittelt.</p>
             <label className="field-stack">
               <span className="field-label">Titel</span>
               <input value={gpxTitle} onChange={(event) => setGpxTitle(event.target.value)} placeholder={gpxFile?.name.replace(/\.gpx$/i, "") ?? ""} />
@@ -267,7 +272,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
             </button>
             <button type="submit" className="button-primary wanderplaner-loading-button" disabled={importingGpx || !gpxFile} aria-busy={importingGpx}>
               {importingGpx && <HikingTourLoadingLandscape />}
-              <span className="wanderplaner-loading-label">{importingGpx ? "Wird importiert…" : "Importieren"}</span>
+              <span className="wanderplaner-loading-label">{importingGpx ? "Wird importiert und berechnet…" : "Importieren"}</span>
             </button>
           </div>
         </form>

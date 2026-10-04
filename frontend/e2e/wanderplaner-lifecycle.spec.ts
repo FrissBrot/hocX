@@ -59,12 +59,12 @@ test.describe("Wanderplaner: Hoehenprofil, Analyse, Rekognoszierung, Druck, GPX"
     await page.goto(`/hiking-planner/${tourId}`);
     await expect(page.getByRole("heading", { name: "E2E Lifecycle Hoehenprofil" })).toBeVisible({ timeout: 15_000 });
 
-    await page.getByRole("button", { name: "Höhenprofil abrufen" }).click();
-    await expect(page.getByText("Höhenprofil abgerufen", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("button", { name: "Höhenprofil abrufen" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Automatisch analysieren" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Speichern", exact: true }).click();
+    await expect(page.getByText("Wanderung gespeichert und neu berechnet", { exact: true })).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByRole("heading", { name: "Wegpunkte & Marschtabelle" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Automatisch analysieren" }).click();
-    await expect(page.getByText("Tour automatisch analysiert")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole("heading", { name: "Marschzeittabelle" })).toBeVisible();
   });
 
   test("Rekognoszierung und Freigabe", async ({ page }) => {
@@ -116,7 +116,7 @@ test.describe("Wanderplaner: Hoehenprofil, Analyse, Rekognoszierung, Druck, GPX"
     await page.setInputFiles('input[type="file"]', path.join(__dirname, "fixtures", "rigi-kulm.gpx"));
     await page.getByRole("button", { name: "Importieren", exact: true }).click();
 
-    await expect(page).toHaveURL(/\/hiking-planner\/.+/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/hiking-planner\/.+/, { timeout: 90_000 });
     await expect(page.getByRole("heading", { name: "E2E Lifecycle GPX Import" })).toBeVisible();
     // Die GPX-Datei benennt Start/Ziel explizit ("Start"/"Ziel") - der Import uebernimmt das
     // als Wegpunkt-Label (siehe gpx_service.py), deshalb erscheint der Text hier doppelt

@@ -118,7 +118,7 @@ class ElevationProfileService:
     (hiking_tour_route_leg) - das Hoehenprofil folgt der tatsaechlichen Routengeometrie, nicht
     der Luftlinie zwischen den Wegpunkten."""
 
-    def fetch_and_store(self, db: Session, tour: HikingTour) -> HikingTour:
+    def fetch_and_store(self, db: Session, tour: HikingTour, *, commit: bool = True) -> HikingTour:
         legs = list(tour.route_legs)
         if not legs:
             raise ValueError("Route muss zuerst berechnet werden, bevor ein Höhenprofil abgerufen werden kann")
@@ -147,6 +147,8 @@ class ElevationProfileService:
             db.add(waypoint)
 
         db.add(tour)
-        db.commit()
+        db.flush()
+        if commit:
+            db.commit()
         db.refresh(tour)
         return tour

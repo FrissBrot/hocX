@@ -1,0 +1,39 @@
+# Lokale Override-Datei fuer einen zweiten, parallelen E2E-Stack (eigener Branch, eigener
+# Compose-Projektname), damit er nicht mit dem hocx-e2e-Stack eines anderen Agenten auf
+# denselben Host-Ports kollidiert. Nicht committen - docker-compose.e2e.yml bindet die
+# Standard-E2E-Ports fest. "ports: !override" ersetzt statt anzuhaengen (Compose fuehrt
+# Listen aus mehreren -f-Dateien sonst zusammen statt sie zu ersetzen), siehe
+# docker-compose.dev.branch-ports.yml fuer dasselbe Muster beim Dev-Stack.
+services:
+  db:
+    ports: !override
+      - "127.0.0.1:55832:5432"
+  backend:
+    ports: !override
+      - "127.0.0.1:18400:8000"
+    environment:
+      TRAEFIK_DOMAIN: ""
+      PHOTO_ALBUM_SYNC_INTERVAL_MINUTES: "1"
+  frontend:
+    ports: !override
+      - "127.0.0.1:13400:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:13400
+      INTERNAL_API_URL: http://backend:8000
+      FRONTEND_API_PROXY_TARGET: http://backend:8000
+      HOCX_VERSION: e2e
+  abgabebox-backend:
+    ports: !override
+      - "127.0.0.1:18401:8000"
+    environment:
+      ABGABEBOX_CORS_ORIGIN: http://127.0.0.1:13401
+      ABGABEBOX_ENVIRONMENT: test
+  abgabebox-frontend:
+    ports: !override
+      - "127.0.0.1:13401:3000"
+    environment:
+      NEXT_PUBLIC_ABGABEBOX_API_URL: http://127.0.0.1:13401
+      INTERNAL_ABGABEBOX_API_URL: http://abgabebox-backend:8000
+      ABGABEBOX_API_PROXY_TARGET: http://abgabebox-backend:8000
+  clamav:
+    profiles: !override []

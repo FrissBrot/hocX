@@ -1720,6 +1720,12 @@ class HikingTour(Base, TimestampMixin, UpdatedAtMixin):
     # zeilenweise abgefragt, nur als Ganzes fuers Hoehenprofil-Chart gelesen.
     elevation_profile_json: Mapped[list[dict] | None] = mapped_column(JSONB)
     elevation_profile_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Gefahreneinschätzung (amtliche Kategorie + Geländeanalyse kombiniert, siehe
+    # app/core/route_danger.py): [{"from_m","to_m","danger": "normal"|"steep_exposed"|"alpine"}],
+    # kumulierte Distanz wie elevation_profile_json. Braucht ein bestehendes Höhenprofil, siehe
+    # terrain_danger_service.py - NULL, solange keins berechnet wurde.
+    terrain_danger_json: Mapped[list[dict] | None] = mapped_column(JSONB)
+    terrain_danger_computed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Rekognoszierung (Phase 5, Auftrag Abschnitt 17): {item_key: bool}, siehe
     # RECONNAISSANCE_CHECKLIST_ITEMS in hiking_tour.py fuer die feste Item-Liste. Absichtlich
     # kein Pflicht-"alle Haken gesetzt" - die bewusste Nutzeraktion (Klick auf "Als
@@ -1883,4 +1889,10 @@ class HikingTourRouteLeg(Base):
     network_version_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("routing_network_meta.id", ondelete="SET NULL")
     )
+    # Lauflängenkodierte amtliche Wanderweg-Kategorie entlang dieses Legs, relativ zum
+    # Leg-Start: [{"from_m","to_m","status": "wanderweg"|"bergwanderweg"|"alpinwanderweg"|null}],
+    # siehe routing_service.py::_route_leg. Quelle fuer die Gefahreneinschaetzung (Auftrag
+    # "alle Alpinwanderwege blau markieren"), hier statt live auf routing_edge zu joinen, damit
+    # ein spaeterer Netz-Reimport diese Tour nicht rueckwirkend veraendert (siehe Klassen-Docstring).
+    wanderweg_segments_json: Mapped[list[dict] | None] = mapped_column(JSONB)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))

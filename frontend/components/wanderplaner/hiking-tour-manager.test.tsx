@@ -98,7 +98,7 @@ describe("HikingTourManager", () => {
 
     await waitFor(() => expect(routerPushMock).toHaveBeenCalledWith("/hiking-planner/tour-2"));
     const [url, init] = browserApiFetchMock.mock.calls[0];
-    expect(url).toBe("/api/hiking-tours");
+    expect(url).toBe("/api/hiking-tours/planned");
     const body = JSON.parse(init.body);
     expect(body.title).toBe("Pilatus Höhenweg");
     expect(body.start).toEqual({ lat: 47.05, lon: 8.48 });

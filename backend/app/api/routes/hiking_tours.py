@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.core.db import get_db
 from app.core.gpx import MAX_FILE_SIZE_BYTES as GPX_MAX_FILE_SIZE_BYTES
@@ -11,6 +12,7 @@ from app.models.entities import HikingTour
 from app.schemas.hiking_tour import (
     ElevationProfileRead,
     HikingTourCreate,
+    HikingTourPlanRequest,
     HikingTourRead,
     HikingTourSummary,
     HikingTourUpdate,
@@ -18,6 +20,7 @@ from app.schemas.hiking_tour import (
     PrintResponse,
     ReconnaissanceUpdate,
     RouteComputeRequest,
+    TerrainDangerRead,
     ViaPointCreate,
     WaypointRead,
     WaypointUpdate,
@@ -29,13 +32,16 @@ from app.services.elevation_service import ElevationProfileService, ElevationSer
 from app.services.gpx_service import GpxExportService, GpxImportService
 from app.services.hiking_tour_analysis_service import HikingTourAnalysisService
 from app.services.hiking_tour_print_service import HikingTourPrintService
+from app.services.hiking_tour_planning_service import HikingTourPlanningService
 from app.services.hiking_tour_service import HikingTourService
 from app.services.map_print_service import MapPrintServiceError
 from app.services.march_time_service import MarchTimeService
 from app.services.routing_service import RoutingError, RoutingService
+from app.services.terrain_danger_service import TerrainDangerServiceError
 
 router = APIRouter()
 service = HikingTourService()
+planning_service = HikingTourPlanningService()
 routing_service = RoutingService()
 elevation_service = ElevationProfileService()
 march_time_service = MarchTimeService()
@@ -78,10 +84,54 @@ def create_hiking_tour(
         raise HTTPException(status_code=400, detail="Hiking tour could not be created") from exc
 
 
+@router.post("/hiking-tours/planned", response_model=HikingTourRead, status_code=status.HTTP_201_CREATED)
+def create_planned_hiking_tour(
+    payload: HikingTourCreate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_wanderplaner_write(user)
+    try:
+        return planning_service.create(db, payload, tenant_id=user.current_tenant_id)
+    except (RoutingError, ElevationServiceError, TerrainDangerServiceError, ValueError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Wanderung konnte nicht erstellt werden") from exc
+
+
+@router.post("/hiking-tours/{tour_id}/plan", response_model=HikingTourRead)
+def save_hiking_tour_plan(
+    tour_id: uuid.UUID,
+    payload: HikingTourPlanRequest,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_wanderplaner_write(user)
+    # Gleichzeitige Speichervorgänge serialisieren; fremde Touren bleiben unzugänglich.
+    tour = db.query(HikingTour).filter(
+        HikingTour.public_id == tour_id, HikingTour.tenant_id == user.current_tenant_id,
+    ).with_for_update(of=HikingTour).first()
+    if tour is None:
+        raise HTTPException(status_code=404, detail="Hiking tour not found")
+    if payload.expected_updated_at is not None and payload.expected_updated_at != tour.updated_at:
+        raise HTTPException(status_code=409, detail="Die Wanderung wurde inzwischen geändert. Bitte neu laden.")
+    try:
+        return planning_service.save(db, tour, payload)
+    except (RoutingError, ElevationServiceError, TerrainDangerServiceError, ValueError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Wanderung konnte nicht gespeichert werden") from exc
+
+
 @router.post("/hiking-tours/gpx-import", response_model=HikingTourRead, status_code=status.HTTP_201_CREATED)
 async def import_hiking_tour_gpx(
     title: str = Form(...),
     file: UploadFile = File(...),
+    plan: bool = Query(default=False),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -91,8 +141,12 @@ async def import_hiking_tour_gpx(
     require_wanderplaner_write(user)
     content = await file.read(GPX_MAX_FILE_SIZE_BYTES + 1)
     try:
-        return gpx_import_service.import_tour(db, content, tenant_id=user.current_tenant_id, title=title)
-    except ValueError as exc:
+        tour = await run_in_threadpool(gpx_import_service.import_tour, db, content,
+            tenant_id=user.current_tenant_id, title=title, commit=not plan)
+        if plan:
+            return await run_in_threadpool(planning_service.recalculate, db, tour, profile="wanderwege_bevorzugen")
+        return tour
+    except (RoutingError, ElevationServiceError, TerrainDangerServiceError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
@@ -195,6 +249,19 @@ def get_elevation_profile(
     if tour.elevation_profile_json is None or tour.elevation_profile_fetched_at is None:
         raise HTTPException(status_code=404, detail="Kein Höhenprofil vorhanden")
     return ElevationProfileRead(fetched_at=tour.elevation_profile_fetched_at, points=tour.elevation_profile_json)
+
+
+@router.get("/hiking-tours/{tour_id}/terrain-danger", response_model=TerrainDangerRead)
+def get_terrain_danger(
+    tour_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_wanderplaner_read(user)
+    tour = _get_tour_or_404(db, tour_id, user)
+    if tour.terrain_danger_json is None or tour.terrain_danger_computed_at is None:
+        raise HTTPException(status_code=404, detail="Keine Gefahreneinschätzung vorhanden")
+    return TerrainDangerRead(computed_at=tour.terrain_danger_computed_at, segments=tour.terrain_danger_json)
 
 
 @router.get("/hiking-tours/{tour_id}/march-table", response_model=MarchTimeTableRead)

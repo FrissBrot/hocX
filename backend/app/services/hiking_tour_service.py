@@ -28,7 +28,7 @@ class HikingTourService:
     def get_tour(self, db: Session, public_id: uuid.UUID, *, tenant_id: int) -> HikingTour | None:
         return self.repository.get_by_public_id(db, public_id, tenant_id=tenant_id)
 
-    def create_tour(self, db: Session, payload: HikingTourCreate, *, tenant_id: int) -> HikingTour:
+    def create_tour(self, db: Session, payload: HikingTourCreate, *, tenant_id: int, commit: bool = True) -> HikingTour:
         tour = HikingTour(
             tenant_id=tenant_id,
             title=payload.title,
@@ -74,7 +74,9 @@ class HikingTourService:
         RouteLandmarkService().assign_unique_names(db, tour)
         from app.services.photo_tour_link_service import sync_photos_for_tours
         sync_photos_for_tours(db, tenant_id)
-        db.commit()
+        db.flush()
+        if commit:
+            db.commit()
         db.refresh(tour)
         return tour
 
@@ -119,7 +121,7 @@ class HikingTourService:
         db.refresh(created)
         return created
 
-    def update_waypoint(self, db: Session, waypoint: HikingTourWaypoint, payload: WaypointUpdate) -> HikingTourWaypoint:
+    def update_waypoint(self, db: Session, waypoint: HikingTourWaypoint, payload: WaypointUpdate, *, commit: bool = True) -> HikingTourWaypoint:
         values = payload.model_dump(exclude={"lat", "lon"}, exclude_unset=True)
         if payload.lat is not None and payload.lon is not None:
             values["point"] = _make_point(payload.lat, payload.lon)
@@ -133,7 +135,7 @@ class HikingTourService:
                 payload.lat if payload.lat is not None else point.y,
                 payload.lon if payload.lon is not None else point.x,
                 [other.label for other in others], payload.label)
-        return self.repository.update_waypoint(db, waypoint, values)
+        return self.repository.update_waypoint(db, waypoint, values, commit=commit)
 
     def delete_waypoint(self, db: Session, waypoint: HikingTourWaypoint) -> None:
         # Auftrag Abschnitt 7: automatisch erzeugte Punkte muessen loeschbar sein, nicht nur

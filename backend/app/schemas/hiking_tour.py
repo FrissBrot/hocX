@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, time
 from decimal import Decimal
+from typing import Literal
 
 from geoalchemy2.shape import to_shape
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -170,6 +171,21 @@ class RouteComputeRequest(BaseModel):
         return value
 
 
+class PlannedWaypointUpdate(WaypointUpdate):
+    id: uuid.UUID
+
+
+class PlannedViaPoint(ViaPointCreate):
+    break_minutes: int | None = Field(default=None, ge=0)
+
+
+class HikingTourPlanRequest(RouteComputeRequest):
+    expected_updated_at: datetime | None = None
+    updates: list[PlannedWaypointUpdate] = Field(default_factory=list, max_length=500)
+    additions: list[PlannedViaPoint] = Field(default_factory=list, max_length=100)
+    deletions: list[uuid.UUID] = Field(default_factory=list, max_length=500)
+
+
 class RouteLegRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -292,6 +308,10 @@ class HikingTourRead(HikingTourBase):
     # Das volle Profil (potenziell hunderte Punkte) wird bewusst NICHT hier mitgeschickt,
     # nur ob/wann eins existiert - siehe GET /hiking-tours/{id}/elevation-profile.
     elevation_profile_fetched_at: datetime | None = None
+    # Gefahreneinschätzung (siehe terrain_danger_service.py): auch hier nur der Zeitstempel,
+    # die vollen Segmente kommen ueber GET .../terrain-danger - gleiches Gewichtsargument wie
+    # beim Hoehenprofil.
+    terrain_danger_computed_at: datetime | None = None
     # Rekognoszierung/Freigabe (Phase 5, Auftrag Abschnitt 17).
     reconnaissance_checklist: dict[str, bool] = {}
     reconnaissance_remarks: str | None = None
@@ -326,6 +346,7 @@ class HikingTourRead(HikingTourBase):
             "route_cost": data.route_cost,
             "route_computed_at": data.route_computed_at,
             "elevation_profile_fetched_at": data.elevation_profile_fetched_at,
+            "terrain_danger_computed_at": data.terrain_danger_computed_at,
             "reconnaissance_checklist": data.reconnaissance_checklist_json or {},
             "reconnaissance_remarks": data.reconnaissance_remarks,
             "reconnoitered_at": data.reconnoitered_at,
@@ -364,6 +385,17 @@ class ElevationProfilePoint(BaseModel):
 class ElevationProfileRead(BaseModel):
     fetched_at: datetime
     points: list[ElevationProfilePoint]
+
+
+class TerrainDangerSegment(BaseModel):
+    from_m: float
+    to_m: float
+    danger: Literal["normal", "steep_exposed", "alpine"]
+
+
+class TerrainDangerRead(BaseModel):
+    computed_at: datetime
+    segments: list[TerrainDangerSegment]
 
 
 class PrintRequest(BaseModel):

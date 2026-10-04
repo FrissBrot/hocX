@@ -3,7 +3,7 @@
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { PillMenu } from "@/components/ui/pill-menu";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
-import { HikingTourWaypoint, HikingTourWaypointVerificationStatus, HikingTourWaypointKind, MarchTimeTable } from "@/types/api";
+import { HikingTourWaypoint, HikingTourWaypointVerificationStatus, HikingTourWaypointKind, MarchTimeEntry, MarchTimeTable, TerrainDangerSegment } from "@/types/api";
 
 const KIND_LABEL: Record<HikingTourWaypointKind, string> = {
   START: "Start",
@@ -52,16 +52,44 @@ const VERIFICATION_OPTIONS = (Object.keys(VERIFICATION_LABEL) as HikingTourWaypo
   variant: VERIFICATION_VARIANT[value],
 }));
 
+// Gefahreneinschätzung (Auftrag): nur die beiden "echten" Gefahrenstufen bekommen hier ein
+// Badge - "normal" ist der unauffällige Regelfall und braucht keine eigene Markierung.
+type RowDanger = "steep_exposed" | "alpine";
+
+const DANGER_LABEL: Record<RowDanger, string> = {
+  steep_exposed: "Steil/ausgesetzt",
+  alpine: "Alpin",
+};
+
+const DANGER_VARIANT: Record<RowDanger, BadgeVariant> = {
+  steep_exposed: "warning",
+  alpine: "info",
+};
+
+/** Abschnitt dieser Zeile (vom vorherigen bis zu diesem Wegpunkt) gegen die Gefahrensegmente
+ * prüfen - "alpine" hat Vorrang, falls beide in diesem Abschnitt vorkommen (gleiche Priorität
+ * wie app/core/route_danger.py::merge_with_official_status). */
+function rowDanger(entry: MarchTimeEntry | undefined, segments: TerrainDangerSegment[] | undefined): RowDanger | null {
+  if (!entry || !segments?.length) return null;
+  const from = entry.cumulative_distance_m - entry.segment_distance_m;
+  const to = entry.cumulative_distance_m;
+  const overlapping = segments.filter((segment) => segment.danger !== "normal" && segment.from_m < to && segment.to_m > from);
+  if (overlapping.some((segment) => segment.danger === "alpine")) return "alpine";
+  if (overlapping.some((segment) => segment.danger === "steep_exposed")) return "steep_exposed";
+  return null;
+}
+
 type Props = {
   table: MarchTimeTable | null;
   waypoints: HikingTourWaypoint[];
   canWrite?: boolean;
+  dangerSegments?: TerrainDangerSegment[];
   onUpdateBreakMinutes?: (waypoint: HikingTourWaypoint, minutes: number) => void;
   onVerificationChange?: (waypoint: HikingTourWaypoint, status: HikingTourWaypointVerificationStatus) => void;
   onDeleteWaypoint?: (waypoint: HikingTourWaypoint) => void;
 };
 
-export function HikingTourMarchTable({ table, waypoints, canWrite = false, onUpdateBreakMinutes, onVerificationChange, onDeleteWaypoint }: Props) {
+export function HikingTourMarchTable({ table, waypoints, canWrite = false, dangerSegments, onUpdateBreakMinutes, onVerificationChange, onDeleteWaypoint }: Props) {
   const entries = new Map(table?.entries.map((entry) => [entry.sequence, entry]) ?? []);
   // Notausstiege stehen direkt nach dem zugehörigen Kontrollpunkt. Alte Analysen
   // kodieren dessen Sequenz im reservierten Bereich ab 500000.
@@ -85,6 +113,7 @@ export function HikingTourMarchTable({ table, waypoints, canWrite = false, onUpd
           const elevation = entry?.elevation_m ?? waypoint.elevation_m;
           const metrics = waypoint.decision_metrics_json;
           const verificationStatus = waypoint.verification_status ?? (waypoint.auto_generated ? "AUTO_DETECTED" : null);
+          const danger = rowDanger(entry, dangerSegments);
           return (
             <tr key={waypoint.id}>
               <td>{index + 1}</td>
@@ -119,10 +148,15 @@ export function HikingTourMarchTable({ table, waypoints, canWrite = false, onUpd
                   {metrics.nearest_exit_label && metrics.time_to_exit_minutes !== null && <> · Nächster Ausstieg: {formatMinutes(metrics.time_to_exit_minutes)}</>}
                 </div>}
               </td>
-              <td>{verificationStatus ? canWrite && onVerificationChange ? (
-                <PillMenu value={verificationStatus} options={VERIFICATION_OPTIONS}
-                  onChange={(status) => onVerificationChange(waypoint, status)} />
-              ) : <Badge variant={VERIFICATION_VARIANT[verificationStatus]}>{VERIFICATION_LABEL[verificationStatus]}</Badge> : dash}</td>
+              <td>{verificationStatus || danger ? (
+                <div className="wanderplaner-row-badges">
+                  {danger && <Badge variant={DANGER_VARIANT[danger]}>{DANGER_LABEL[danger]}</Badge>}
+                  {verificationStatus && (canWrite && onVerificationChange ? (
+                    <PillMenu value={verificationStatus} options={VERIFICATION_OPTIONS}
+                      onChange={(status) => onVerificationChange(waypoint, status)} />
+                  ) : <Badge variant={VERIFICATION_VARIANT[verificationStatus]}>{VERIFICATION_LABEL[verificationStatus]}</Badge>)}
+                </div>
+              ) : dash}</td>
               <td>
                 <div className="wanderplaner-row-actions">
                 {canWrite && onDeleteWaypoint && (waypoint.kind === "USER_DEFINED" || waypoint.auto_generated) && (

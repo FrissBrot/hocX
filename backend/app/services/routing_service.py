@@ -33,6 +33,10 @@ class _LegResult:
     ascent_m: float
     descent_m: float
     cost: float
+    # Lauflängenkodierte amtliche Kategorie entlang des Legs, relativ zum Leg-Start (Auftrag
+    # Gefahreneinschätzung): neues Segment nur bei einem Statuswechsel zwischen aufeinander-
+    # folgenden Kanten, nie pro Kante einzeln (ein Leg durchläuft oft dutzende Kanten).
+    wanderweg_segments: list[dict]
 
 
 MAX_SNAP_DISTANCE_M = 150.0
@@ -70,7 +74,7 @@ def _snap_to_edge(db: Session, *, lon: float, lat: float) -> _Snap | None:
 
 def _route_leg(db: Session, *, profile: str, start: _Snap, end: _Snap) -> _LegResult:
     if start.point == end.point or (start.vertex_id is not None and start.vertex_id == end.vertex_id):
-        return _LegResult(LineString([start.point, start.point]), 0.0, 0.0, 0.0, 0.0)
+        return _LegResult(LineString([start.point, start.point]), 0.0, 0.0, 0.0, 0.0, [])
     edges_sql = (
         f"SELECT id, source, target, cost_{profile} AS cost, reverse_cost_{profile} AS reverse_cost "
         "FROM routing_edge ORDER BY id"
@@ -89,7 +93,7 @@ def _route_leg(db: Session, *, profile: str, start: _Snap, end: _Snap) -> _LegRe
                 CAST(:to_v AS bigint), directed := true, driving_side := 'b', details := true)
         )
         SELECT r.node, r.next_node, r.cost AS step_cost, e.source, e.target,
-               e.geom, e.length_m, e.ascent_m, e.descent_m
+               e.geom, e.length_m, e.ascent_m, e.descent_m, e.wanderweg_status
         FROM route r JOIN routing_edge e ON e.id = r.edge ORDER BY r.seq
     """), {"edges_sql": edges_sql, "points_sql": points_sql,
            "from_v": start.vertex_id if start.vertex_id is not None else -1,
@@ -98,6 +102,7 @@ def _route_leg(db: Session, *, profile: str, start: _Snap, end: _Snap) -> _LegRe
         raise RoutingError("Kein Routing zwischen diesen Punkten möglich: Wegenetz nicht verbunden")
     coords: list[tuple[float, float]] = []
     distance_m = ascent_m = descent_m = cost = 0.0
+    wanderweg_segments: list[dict] = []
     fractions = {-1: start.fraction, -2: end.fraction}
     for row in rows:
         frm = fractions[row.node] if row.node < 0 else 0.0 if row.node == row.source else 1.0
@@ -109,17 +114,24 @@ def _route_leg(db: Session, *, profile: str, start: _Snap, end: _Snap) -> _LegRe
             points_on_edge = points_on_edge[1:]
         coords.extend(points_on_edge)
         proportion = abs(to - frm)
-        distance_m += row.length_m * proportion
+        edge_distance_m = row.length_m * proportion
+        if wanderweg_segments and wanderweg_segments[-1]["status"] == row.wanderweg_status:
+            wanderweg_segments[-1]["to_m"] += edge_distance_m
+        else:
+            wanderweg_segments.append(
+                {"from_m": distance_m, "to_m": distance_m + edge_distance_m, "status": row.wanderweg_status}
+            )
+        distance_m += edge_distance_m
         ascent_m += (row.ascent_m if to >= frm else row.descent_m) * proportion
         descent_m += (row.descent_m if to >= frm else row.ascent_m) * proportion
         cost += row.step_cost
     if len(coords) < 2:
         raise RoutingError("Keine gültige Weggeometrie zwischen diesen Punkten gefunden")
-    return _LegResult(LineString(coords), distance_m, ascent_m, descent_m, cost)
+    return _LegResult(LineString(coords), distance_m, ascent_m, descent_m, cost, wanderweg_segments)
 
 
 class RoutingService:
-    def compute_route(self, db: Session, tour: HikingTour, *, profile: str) -> HikingTour:
+    def compute_route(self, db: Session, tour: HikingTour, *, profile: str, commit: bool = True) -> HikingTour:
         if profile not in ROUTING_PROFILES:
             raise ValueError(f"Unknown routing profile: {profile}")
         # EMERGENCY_EXIT-Wegpunkte (Phase 4) sind ein Abstecher abseits der Route, keine
@@ -175,6 +187,7 @@ class RoutingService:
                     cost=leg.cost,
                     routing_profile=profile,
                     network_version_id=network_version_id,
+                    wanderweg_segments_json=leg.wanderweg_segments,
                 )
             )
             total_distance += leg.distance_m
@@ -182,9 +195,11 @@ class RoutingService:
             total_descent += leg.descent_m
             total_cost += leg.cost
 
-        # Das alte Höhenprofil gehört zur vorherigen Geometrie.
+        # Das alte Höhenprofil und die alte Gefahreneinschätzung gehören zur vorherigen Geometrie.
         tour.elevation_profile_json = None
         tour.elevation_profile_fetched_at = None
+        tour.terrain_danger_json = None
+        tour.terrain_danger_computed_at = None
         for waypoint in waypoints:
             waypoint.elevation_m = None
         tour.routing_profile = profile
@@ -197,6 +212,8 @@ class RoutingService:
         db.flush()
         from app.services.photo_tour_link_service import sync_photos_for_tours
         sync_photos_for_tours(db, tour.tenant_id)
-        db.commit()
+        db.flush()
+        if commit:
+            db.commit()
         db.refresh(tour)
         return tour

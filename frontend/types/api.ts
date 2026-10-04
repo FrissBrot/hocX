@@ -879,6 +879,19 @@ export type ElevationProfile = {
   points: ElevationProfilePoint[];
 };
 
+export type TerrainDangerLevel = "normal" | "steep_exposed" | "alpine";
+
+export type TerrainDangerSegment = {
+  from_m: number;
+  to_m: number;
+  danger: TerrainDangerLevel;
+};
+
+export type TerrainDanger = {
+  computed_at: string;
+  segments: TerrainDangerSegment[];
+};
+
 export type MarchTimeEntry = {
   sequence: number;
   label: string | null;
@@ -954,6 +967,7 @@ export type HikingTour = {
   route_cost: number | null;
   route_computed_at: string | null;
   elevation_profile_fetched_at: string | null;
+  terrain_danger_computed_at: string | null;
   // Phase 5 (Auftrag Abschnitt 17)
   reconnaissance_checklist: Record<string, boolean>;
   reconnaissance_remarks: string | null;

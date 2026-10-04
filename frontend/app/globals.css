@@ -16657,6 +16657,14 @@ input[type="radio"] {
   gap: var(--space-2);
 }
 
+/* Wanderplaner: mehrere Badges (Verifikation + Gefahreneinschätzung) in derselben Zelle */
+.wanderplaner-row-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+}
+
 /* Wanderplaner: Karte (MapLibre) */
 .wanderplaner-map {
   width: 100%;
@@ -16787,6 +16795,66 @@ input[type="radio"] {
   stroke-width: 2;
   stroke-linejoin: round;
   stroke-linecap: round;
+}
+
+/* Neue Wanderung: Formular seitlich, Karte nutzt die übrige Dialogfläche. */
+.wanderplaner-create-modal.modal-shell {
+  width: 100%;
+  height: calc(100dvh - 2 * var(--space-5));
+}
+
+.wanderplaner-create-modal .modal-content { overflow: hidden; }
+
+.wanderplaner-create-form {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  gap: var(--space-4);
+}
+
+.wanderplaner-create-layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: var(--space-5);
+  min-height: 0;
+}
+
+.wanderplaner-create-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  overflow-y: auto;
+}
+
+.wanderplaner-create-map-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 0;
+}
+
+.wanderplaner-create-map-section .wanderplaner-map-frame {
+  flex: 1;
+  min-height: 0;
+}
+
+.wanderplaner-map.wanderplaner-create-map { height: 100%; }
+
+.wanderplaner-create-form .modal-actions { margin-top: 0; }
+
+@media (max-width: 900px) {
+  .wanderplaner-create-modal.modal-shell {
+    height: calc(100dvh - 2 * var(--space-4));
+  }
+  .wanderplaner-create-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(320px, 1fr);
+    gap: var(--space-4);
+    overflow-y: auto;
+  }
+  .wanderplaner-create-fields { overflow: visible; }
+  .wanderplaner-create-map-section { min-height: 320px; }
 }
 
 /* Rein dekorative Landschaft während der Routenberechnung. */

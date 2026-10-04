@@ -1,18 +1,10 @@
 import { test, expect, request as playwrightRequest } from "@playwright/test";
 import { authFiles } from "./auth";
 
-// Wanderplaner Phase 1+2: Tour per Kartenklick erstellen (Start/Ziel) -> Wegpunkte sehen ->
-// Via-Punkt per Kartenklick hinzufuegen/entfernen -> Route berechnen (Button-Verdrahtung,
-// siehe Kommentar unten zum Grund fuer die tolerante Assertion) -> Tour bearbeiten -> loeschen.
-// Hoehenprofil/Marschzeit (Phase 3) und automatische Analyse (Phase 4, "Automatisch
-// analysieren"-Button in hiking-tour-detail.tsx) sind hier bewusst NICHT Teil des Flows: die
-// geteilte E2E-Umgebung hat kein importiertes Wegenetz (siehe
-// scripts/import_routing_network.py-Docstring), "Route berechnen" schlaegt darum erwartungs-
-// gemaess fehl, und beide Folge-Features setzen eine erfolgreich berechnete Route voraus.
-// Ihre fachliche Korrektheit ist bereits durch Backend-Integrationstests gegen das
-// Fixture-Wegenetz abgedeckt (test_hiking_tour_analysis_service.py u.a.). Rekognoszierung und
-// Druck folgen erst in spaeteren Phasen (siehe Wiki-Seite "Wanderplaner").
-test("Tour per Karte erstellen, Route berechnen, Wegpunkt hinzufuegen/entfernen und wieder loeschen", async ({ page }) => {
+// Die geteilte E2E-Umgebung hat kein Wegenetz. Der Erstellungsfehler wird daher
+// deterministisch simuliert; der echte Planungsablauf wird im Backend gegen das
+// isolierte Fixture-Netz geprüft. Lokale Via-Entwürfe werden an einer bestehenden Tour geprüft.
+test("Erstellen behandelt Berechnungsfehler und Routenänderungen bleiben lokal", async ({ page }) => {
   test.setTimeout(90_000); // MapLibre-Ladezeiten (echte swisstopo-Tiles) brauchen mehr als die Default-45s
   const writerApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.writer });
   const adminApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.platformAdmin });
@@ -50,41 +42,39 @@ test("Tour per Karte erstellen, Route berechnen, Wegpunkt hinzufuegen/entfernen 
     await expect(page.getByRole("button", { name: /Start setzen/ })).toContainText("✓");
     await createMap.click({ position: { x: createMapBox.width * 0.7, y: createMapBox.height * 0.5 } });
     await expect(page.getByRole("button", { name: /Ziel setzen/ })).toContainText("✓");
+    await page.route("**/api/hiking-tours/planned", (route) => route.fulfill({
+      status: 422, contentType: "application/json", body: JSON.stringify({ detail: "Test: Berechnung nicht verfügbar" }),
+    }));
     await page.getByRole("button", { name: "Wanderung erstellen" }).click();
+    await expect(page.getByText("Test: Berechnung nicht verfügbar")).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Neue Wanderung" })).toBeVisible();
+    await page.getByRole("button", { name: "Schliessen", exact: true }).click();
 
-    // Grosszuegiger Timeout: die dynamische Detailroute (/hiking-planner/[id]) kompiliert im
-    // Next.js-Dev-Server (siehe docker-compose.dev.yml, auch der geteilte E2E-Stack laeuft im
-    // Dev-Modus) bei ihrem allerersten Besuch on-demand nach - laenger als das Standard-
-    // Timeout, wenn diese Route seit einem Server-Neustart noch nie kompiliert wurde.
-    await expect(page).toHaveURL(/\/hiking-planner\/.+/, { timeout: 15_000 });
-    await expect(page.getByRole("heading", { name: "E2E Rigi Kulm ab Goldau" })).toBeVisible();
-    await expect(page.getByText("Start", { exact: true })).toBeVisible();
-    await expect(page.getByText("Ziel", { exact: true })).toBeVisible();
-
-    await page.waitForTimeout(1000); // Karte auf der Detailseite laedt neu (eigene MapLibre-Instanz)
+    const created = await writerApi.post("/api/hiking-tours", {
+      data: { title: "E2E Rigi Kulm ab Goldau", start: { lat: 47, lon: 8.5 }, end: { lat: 47, lon: 8.52 } },
+    });
+    expect(created.ok(), await created.text()).toBeTruthy();
+    const tour = await created.json();
+    await page.goto(`/hiking-planner/${tour.id}`);
+    await expect(page.getByRole("heading", { name: tour.title })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Route berechnen" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Höhenprofil abrufen" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Automatisch analysieren" })).toHaveCount(0);
     await page.getByRole("button", { name: "Via-Punkt hinzufügen" }).click();
     const detailMap = page.locator(".wanderplaner-map");
-    const detailMapBox = await detailMap.boundingBox();
-    if (!detailMapBox) throw new Error("Karte in der Detailansicht nicht gefunden");
-    await detailMap.click({ position: { x: detailMapBox.width / 2, y: detailMapBox.height / 2 } });
-    await expect(page.getByText("Via-Punkt hinzugefügt")).toBeVisible();
-    await expect(page.getByText("Via-Punkt", { exact: true })).toBeVisible();
-
-    // Route berechnen: prueft nur, dass Button/Request verdrahtet sind (Erfolg ODER ein
-    // erwarteter "kein Routing möglich"-Fehler sind beide gueltig - die geteilte E2E-Umgebung
-    // hat kein importiertes Wegenetz, siehe scripts/import_routing_network.py-Docstring: der
-    // Import ist ein separater Betriebsschritt, nicht Teil dieses Test-Deploys). Die fachliche
-    // Routing-Korrektheit selbst ist bereits durch test_routing_service.py abgedeckt.
-    await page.getByRole("button", { name: "Route berechnen" }).click();
-    await expect(page.locator(".app-toast").first()).toBeVisible({ timeout: 10_000 });
-
-    await page.getByRole("row", { name: /Via-Punkt/ }).getByRole("button", { name: "Entfernen" }).click();
-    await page.getByRole("button", { name: "Entfernen" }).last().click();
-    await expect(page.getByText("Punkt entfernt")).toBeVisible();
+    const detailBox = await detailMap.boundingBox();
+    if (!detailBox) throw new Error("Detailkarte nicht gefunden");
+    await detailMap.click({ position: { x: detailBox.width * 0.5, y: detailBox.height * 0.5 } });
+    await expect(page.getByText(/Ungespeicherte Änderungen/)).toBeVisible();
+    // Vor Speichern bleibt auch die echte API unverändert.
+    const persisted = await (await writerApi.get(`/api/hiking-tours/${tour.id}`)).json();
+    expect(persisted.waypoints).toHaveLength(2);
+    await page.getByRole("button", { name: "Änderungen verwerfen" }).click();
+    await expect(page.getByText(/Ungespeicherte Änderungen/)).toHaveCount(0);
 
     await page.getByRole("button", { name: "Bearbeiten" }).click();
     await page.getByLabel("Titel").fill("E2E Rigi Kulm ab Goldau (bearbeitet)");
-    await page.getByRole("button", { name: "Speichern" }).click();
+    await page.getByRole("dialog", { name: "Wanderung bearbeiten" }).getByRole("button", { name: "Speichern" }).click();
     await expect(page.getByRole("heading", { name: "E2E Rigi Kulm ab Goldau (bearbeitet)" })).toBeVisible();
 
     await page.getByRole("button", { name: "Löschen" }).first().click();

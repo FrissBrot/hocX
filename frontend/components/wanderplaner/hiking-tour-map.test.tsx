@@ -2,10 +2,14 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { StrictMode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 
+const mapOptions = vi.hoisted(() => vi.fn());
+const resizeMap = vi.hoisted(() => vi.fn());
 const markers = vi.hoisted(() => [] as { position?: number[]; attached: boolean }[]);
 vi.mock("maplibre-gl", () => ({
   default: {
     Map: class {
+      constructor(options: unknown) { mapOptions(options); }
+      resize = resizeMap;
       addControl() {}
       fitBounds() {}
       on() {}
@@ -34,7 +38,16 @@ vi.mock("maplibre-gl", () => ({
 }));
 import { HikingTourMap } from "./hiking-tour-map";
 
-beforeEach(() => { markers.length = 0; });
+beforeEach(() => {
+  markers.length = 0;
+  mapOptions.mockClear();
+  resizeMap.mockClear();
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(private callback: () => void) {}
+    observe() { this.callback(); }
+    disconnect() {}
+  });
+});
 
 it("positions, updates and removes the elevation hover marker", () => {
   const { rerender, unmount } = render(<HikingTourMap waypoints={[]} highlightPoint={{ lat: 47, lon: 8 }} />);
@@ -73,5 +86,15 @@ it("opens, switches and closes waypoint information", () => {
   expect(screen.getByRole("complementary").textContent).not.toContain("Aussichtspunkt");
   fireEvent.click(screen.getByRole("button", { name: "Wegpunkt-Information schliessen" }));
   expect(screen.queryByRole("complementary")).toBeNull();
+  unmount();
+});
+
+it("fits the Switzerland overview to the creation map and resizes its canvas", () => {
+  const { unmount } = render(<HikingTourMap waypoints={[]} fitSwitzerland />);
+  expect(mapOptions).toHaveBeenCalledWith(expect.objectContaining({
+    bounds: [[5.95, 45.82], [10.5, 47.81]],
+    fitBoundsOptions: { padding: 24, duration: 0 },
+  }));
+  expect(resizeMap).toHaveBeenCalled();
   unmount();
 });

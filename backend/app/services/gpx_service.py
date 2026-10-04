@@ -21,7 +21,7 @@ class GpxImportService:
     def __init__(self, hiking_tour_service: HikingTourService | None = None) -> None:
         self.hiking_tour_service = hiking_tour_service or HikingTourService()
 
-    def import_tour(self, db: Session, content: bytes, *, tenant_id: int, title: str) -> HikingTour:
+    def import_tour(self, db: Session, content: bytes, *, tenant_id: int, title: str, commit: bool = True) -> HikingTour:
         result = parse_gpx(content)
         try:
             payload = HikingTourCreate(
@@ -35,7 +35,7 @@ class GpxImportService:
             # manuell erstellter Wegpunkt (siehe hiking_tour.py::_validate_within_ch_li) -
             # kein zweites, abweichendes Regelwerk fuer importierte GPX-Punkte.
             raise GpxError("Start/Ziel/Via-Punkte der GPX-Datei liegen ausserhalb der Schweiz/Liechtenstein") from exc
-        tour = self.hiking_tour_service.create_tour(db, payload, tenant_id=tenant_id)
+        tour = self.hiking_tour_service.create_tour(db, payload, tenant_id=tenant_id, commit=False)
 
         # PointCreate (Start/Ziel) kennt anders als ViaPointCreate kein label - benannte
         # Start-/Ziel-Punkte aus der GPX-Datei (z.B. "Start"/"Gipfel") gingen sonst verloren,
@@ -43,7 +43,10 @@ class GpxImportService:
         for waypoint in tour.waypoints:
             name = result.start.name if waypoint.kind == "START" else result.end.name if waypoint.kind == "END" else None
             if name:
-                self.hiking_tour_service.update_waypoint(db, waypoint, WaypointUpdate(label=name))
+                self.hiking_tour_service.update_waypoint(db, waypoint, WaypointUpdate(label=name), commit=False)
+        db.flush()
+        if commit:
+            db.commit()
         db.refresh(tour)
         return tour
 
