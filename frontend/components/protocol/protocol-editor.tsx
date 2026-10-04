@@ -247,6 +247,10 @@ export function ProtocolEditor({
         const incomingText = (patch as { text_content?: unknown }).text_content;
         if (typeof incomingText === "string") {
           setTextDrafts((current) => ({ ...current, [blockId]: incomingText }));
+          // Keep the optimistic-concurrency baseline (see textBaselineRef's declaration) in
+          // step with this genuinely new server content, so this client's next save doesn't
+          // send a now-stale expected_content for a change it never made itself.
+          textBaselineRef.current[blockId] = incomingText;
         }
       }),
     [collab.onFieldUpdate]
@@ -382,6 +386,18 @@ export function ProtocolEditor({
     router.push("/protocols");
   };
   const timers = useRef<Record<string, number>>({});
+  // Tracks, per text block, the content we most recently sent (or are about to send) as the
+  // save's optimistic-concurrency baseline (see handleTextChange's expected_content). Reading
+  // this straight from `elements` state instead used to go stale whenever a user resumed
+  // typing before the *previous* debounced save's response had come back and updated
+  // `elements`: the new save then sent the *old* baseline while the server already held the
+  // first save's content, so the backend correctly reported a 409 against a conflict that
+  // never really involved another person - just this same user's own two in-flight saves -
+  // and the conflict handler then visibly replaced the just-typed text with the (by-then
+  // outdated) server version. Updated optimistically the instant a save is dispatched, not
+  // only once its response lands, so a same-user save fired while the previous one is still
+  // in flight always chains off the right baseline.
+  const textBaselineRef = useRef<Record<string, string>>({});
   const shouldScrollToElementRef = useRef(false);
   // Separate from shouldScrollToElementRef: only an explicit jump (sidebar/keyboard/search,
   // set in focusElement below) should steal focus into a field. Restoring the remembered
@@ -965,6 +981,7 @@ export function ProtocolEditor({
         tracked_baseline_content: freshBlock.tracked_baseline_content,
       }));
       setTextDrafts((current) => ({ ...current, [blockId]: freshBlock.text_content ?? "" }));
+      textBaselineRef.current[blockId] = freshBlock.text_content ?? "";
       setStatus(blockId, "saved");
     } catch {
       // best-effort - the conflict toast already told the user to reload manually if this
@@ -992,11 +1009,53 @@ export function ProtocolEditor({
     }
   }
 
+  // Dedicated atomic single-participant save for the attendance block's status buttons - see
+  // backend ProtocolElementService.set_attendance_status. saveBlockConfiguration above PATCHes
+  // the whole configuration_snapshot_json; building attendance_entries through that generic
+  // path round-trips the *entire* array taken from a local snapshot, so a second status click
+  // fired before the first save's response/re-render had landed (the same person clicking
+  // quickly through the list, or two people taking attendance together) based its "whole
+  // array" on a stale copy and silently erased whoever was just saved. This talks to a
+  // server-side merge endpoint instead, so each click only ever touches its own entry - and
+  // unlike saveBlockConfiguration, failures are rethrown so callers (the fine-creation logic in
+  // focused-element-editor.tsx) don't keep going as though the save had succeeded.
+  async function saveAttendanceStatus(blockId: string, participantId: string, participantName: string, status: string) {
+    const block = elements.flatMap((element) => element.blocks).find((b) => b.id === blockId);
+    const previousEntries = Array.isArray(block?.configuration_snapshot_json?.attendance_entries)
+      ? (block!.configuration_snapshot_json.attendance_entries as Array<Record<string, unknown>>)
+      : [];
+    const optimisticEntries = [
+      ...previousEntries.filter((entry) => String(entry.participant_id) !== participantId),
+      { participant_id: participantId, participant_name: participantName, status },
+    ];
+    updateBlockInState(blockId, (b) => ({
+      ...b,
+      configuration_snapshot_json: { ...b.configuration_snapshot_json, attendance_entries: optimisticEntries },
+    }));
+    try {
+      const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
+        `/api/protocol-element-blocks/${blockId}/attendance/${participantId}`,
+        { method: "POST", body: JSON.stringify({ status }) }
+      );
+      updateBlockInState(blockId, (b) => ({ ...b, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json });
+    } catch (err: unknown) {
+      updateBlockInState(blockId, (b) => ({
+        ...b,
+        configuration_snapshot_json: { ...b.configuration_snapshot_json, attendance_entries: previousEntries },
+      }));
+      throw err;
+    }
+  }
+
   function handleTextChange(protocolElementBlockId: string, content: string) {
     const mutationKey = `protocol-text:${protocolElementBlockId}`;
-    const expectedContent = elements
-      .flatMap((element) => element.blocks)
-      .find((block) => block.id === protocolElementBlockId)?.text_content ?? "";
+    // See textBaselineRef's declaration: prefer the baseline of a still-in-flight save over
+    // `elements` state, which only catches up once that save's response has landed.
+    const expectedContent =
+      textBaselineRef.current[protocolElementBlockId] ??
+      (elements.flatMap((element) => element.blocks).find((block) => block.id === protocolElementBlockId)?.text_content ?? "");
+    textBaselineRef.current[protocolElementBlockId] = content;
     saveDraft(mutationKey, content);
     queueMutation({
       key: mutationKey,
@@ -1727,6 +1786,7 @@ export function ProtocolEditor({
                 setSelectedFiles={setSelectedFiles}
                 setNewTodoTask={setNewTodoTask}
                 saveBlockConfiguration={saveBlockConfiguration}
+                saveAttendanceStatus={saveAttendanceStatus}
                 updateBlockInState={updateBlockInState}
                 handleTextChange={handleTextChange}
                 forceEditable={forceEditable}

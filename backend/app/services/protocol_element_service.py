@@ -142,6 +142,31 @@ class ProtocolElementService:
         self._sync_session_date_marker(db, updated)
         return updated
 
+    def set_attendance_status(
+        self, db: Session, block_id: int, participant_id: int, participant_name: str, status: str
+    ) -> ProtocolElementBlock | None:
+        """Atomic, single-participant upsert into one attendance block's attendance_entries -
+        reads the block fresh and writes back only this participant's entry, instead of the
+        client sending the whole array back (see focused-element-editor.tsx::
+        handleAttendanceChange). That full-array round trip used to silently lose other
+        participants' just-saved statuses whenever two clicks (by the same person clicking
+        fast through the list, or by two people taking attendance together) were in flight
+        before either response/re-render landed: whichever save's full snapshot arrived last
+        at the server overwrote the other's change with its own (now stale) copy of
+        everyone-else's status. Mirrors ProtocolService.set_attendance_excused's merge
+        pattern, just generalized to any status and scoped to one block instead of every
+        attendance block of the protocol."""
+        block = self.block_repository.get(db, block_id)
+        if block is None:
+            return None
+        config = dict(block.configuration_snapshot_json or {})
+        entries = [
+            entry for entry in config.get("attendance_entries", []) if entry.get("participant_id") != participant_id
+        ]
+        entries.append({"participant_id": participant_id, "participant_name": participant_name, "status": status})
+        config["attendance_entries"] = entries
+        return self.block_repository.update(db, block, {"configuration_snapshot_json": config})
+
     def _sync_session_date_marker(self, db: Session, block: ProtocolElementBlock) -> None:
         config = block.configuration_snapshot_json or {}
         if config.get("block_kind") != "session_date":

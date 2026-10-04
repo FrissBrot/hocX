@@ -113,6 +113,11 @@ class AttendanceExcusePayload(BaseModel):
     excused: bool = True
 
 
+# Mirrors frontend/components/protocol/protocol-editor-shared.tsx's ATTENDANCE_OPTIONS.
+class AttendanceStatusUpdate(BaseModel):
+    status: Literal["present", "late", "excused", "absent"]
+
+
 class ProtocolElementBlockRead(BaseModel):
     # Built via explicit keyword construction (protocol_elements.py's _block_to_read) - not
     # from_attributes, so id/protocol_element_id/template_element_block_id/

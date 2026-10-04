@@ -9,8 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.core.db import get_db
 from app.core.redis_client import get_redis_sync
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
-from app.models import ElementDefinition, Event, Protocol, ProtocolElement, ProtocolElementBlock, TemplateElement, TemplateElementBlock
+from app.models import ElementDefinition, Event, Participant, Protocol, ProtocolElement, ProtocolElementBlock, TemplateElement, TemplateElementBlock
 from app.schemas.protocol import (
+    AttendanceStatusUpdate,
     ProtocolElementBlockFromEventCreate,
     ProtocolElementBlockRead,
     ProtocolElementBlockUpdate,
@@ -192,6 +193,37 @@ def patch_protocol_element_block(
     if protocol_element_block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
     return _block_to_read(db, protocol_element_block)
+
+
+@router.post("/protocol-element-blocks/{protocol_element_block_id}/attendance/{participant_id}", response_model=ProtocolElementBlockRead)
+def set_block_attendance_status(
+    protocol_element_block_id: uuid.UUID,
+    participant_id: uuid.UUID,
+    payload: AttendanceStatusUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Single-participant attendance status upsert - see ProtocolElementService.
+    set_attendance_status for why this exists instead of routing attendance clicks through
+    the generic config PATCH above (full-array overwrite races)."""
+    require_writer(user)
+    block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    _ensure_block_not_locked_by_other(protocol.id, block.id, user)
+    participant_internal_id = public_id_service.resolve_internal_id(db, Participant, participant_id, tenant_id=user.current_tenant_id)
+    if participant_internal_id is None:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    participant = db.get(Participant, participant_internal_id)
+    try:
+        updated = service.set_attendance_status(
+            db, block.id, participant_internal_id, participant.display_name, payload.status
+        )
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Attendance status could not be updated") from exc
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Protocol element block not found")
+    _broadcast_block_update(protocol.id, updated, user)
+    return _block_to_read(db, updated)
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/refresh", response_model=ProtocolElementBlockRead)

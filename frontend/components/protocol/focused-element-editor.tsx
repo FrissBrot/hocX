@@ -107,6 +107,7 @@ export function FocusedElementEditor({
   setSelectedFiles,
   setNewTodoTask,
   saveBlockConfiguration,
+  saveAttendanceStatus,
   updateBlockInState,
   handleTextChange,
   forceEditable,
@@ -177,6 +178,7 @@ export function FocusedElementEditor({
   setSelectedFiles: Dispatch<SetStateAction<Record<string, File | null>>>;
   setNewTodoTask: Dispatch<SetStateAction<Record<string, string>>>;
   saveBlockConfiguration: (blockId: string, configurationSnapshotJson: Record<string, unknown>) => Promise<void>;
+  saveAttendanceStatus: (blockId: string, participantId: string, participantName: string, status: string) => Promise<void>;
   updateBlockInState: (blockId: string, updater: (current: ProtocolElement["blocks"][number]) => ProtocolElement["blocks"][number]) => void;
   handleTextChange: (protocolElementBlockId: string, content: string) => void;
   forceEditable: boolean;
@@ -2837,9 +2839,8 @@ export function FocusedElementEditor({
                 const hasFineConfig = fineAccountId != null && (fineAmountLate > 0 || fineAmountAbsent > 0);
 
                 async function handleAttendanceChange(participant: ParticipantSummary, newStatus: string) {
-                  const previousEntries = attendanceEntries;
-                  const nextEntries = attendanceEntries.filter((entry) => String(entry.participant_id) !== participant.id);
-                  nextEntries.push({ participant_id: participant.id, participant_name: participant.display_name, status: newStatus });
+                  const previousEntry = attendanceEntries.find((entry) => String(entry.participant_id) === participant.id);
+                  const previousStatus = previousEntry ? String(previousEntry.status) : null;
                   // Explicit lock/unlock around the save, rather than relying only on this
                   // section's onFocusCapture/onBlurCapture (bug found 2026-09-27): clicking a
                   // <button> doesn't reliably move DOM focus in every browser (notably Safari,
@@ -2849,11 +2850,11 @@ export function FocusedElementEditor({
                   // broadcast (see collaboration_ws.py's "lock_not_held" check), leaving every
                   // other viewer's attendance list stale until they reloaded. Sent over the
                   // same WS connection right before the save, so by the time sendFieldUpdate
-                  // follows (inside saveBlockConfiguration), the server has already processed
+                  // follows (inside saveAttendanceStatus), the server has already processed
                   // this lock_request - messages on one connection are handled in order.
                   collab.lockField(blockFieldKey);
                   try {
-                    await saveBlockConfiguration(block.id, { ...blockConfig, attendance_entries: nextEntries });
+                    await saveAttendanceStatus(block.id, participant.id, participant.display_name, newStatus);
 
                     if (hasFineConfig) {
                       const existingFine = protocolFines.find(
@@ -2897,7 +2898,12 @@ export function FocusedElementEditor({
                     // The sequence can fail partway through (attendance saved but fine update
                     // failed, or vice versa) - roll the attendance status back to what it was
                     // before this change so the UI doesn't show a state that never fully applied.
-                    await saveBlockConfiguration(block.id, { ...blockConfig, attendance_entries: previousEntries }).catch(() => {});
+                    // Only possible when there was a previous status to restore; if this was the
+                    // participant's first entry in this block, saveAttendanceStatus has already
+                    // reverted its own failed save and there is nothing further to undo here.
+                    if (previousStatus !== null) {
+                      await saveAttendanceStatus(block.id, participant.id, participant.display_name, previousStatus).catch(() => {});
+                    }
                     showToast(
                       error instanceof Error
                         ? `Anwesenheit/Busse eventuell nicht synchron: ${error.message}`
