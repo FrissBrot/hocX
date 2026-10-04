@@ -15,6 +15,7 @@
   "blockTypeAttendance": "Présence",
   "blockTypeBulletList": "Liste à puces",
   "blockTypeChart": "Graphique",
+  "blockTypeEntryExit": "Entrées/sorties",
   "blockTypeDisplay": "Affichage",
   "blockTypeFinanceBalance": "Solde du compte",
   "blockTypeFinanceTransactions": "Transactions",

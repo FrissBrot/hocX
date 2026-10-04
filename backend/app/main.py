@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -122,30 +123,36 @@ def ensure_startup_seed_data() -> None:
 def ensure_lookup_values() -> None:
     with SessionLocal() as db:
         existing_codes = set(db.scalars(select(ElementType.code)))
+        # Feste ids: das Frontend (lib/constants/element-types.ts, Vorlagen-Editor) adressiert
+        # Blocktypen per id. Ein max(id)+1-Anhaengen hatte auf frischen Installationen die
+        # Finanz-/Chart-Typen verschoben (siehe Migration 0098_canonical_element_type_ids).
         desired = [
-            ("text", "Editable text"),
-            ("todo", "Todo element"),
-            ("image", "Image element"),
-            ("display", "Read-only display element"),
-            ("static_text", "Static text element"),
-            ("form", "Structured form block"),
-            ("event_list", "Filtered event list"),
-            ("bullet_list", "Bullet point list"),
-            ("attendance", "Attendance control block"),
-            ("session_date", "Next session date block"),
-            ("matrix", "Responsive matrix block"),
-            ("finance_balance", "Finance account balance"),
-            ("finance_transactions", "Finance transaction table"),
-            ("fine_list", "Attendance fine list"),
-            ("chart", "Statistics chart block"),
+            (1, "text", "Editable text"),
+            (2, "todo", "Todo element"),
+            (3, "image", "Image element"),
+            (4, "display", "Read-only display element"),
+            (5, "static_text", "Static text element"),
+            (6, "form", "Structured form block"),
+            (7, "event_list", "Filtered event list"),
+            (8, "bullet_list", "Bullet point list"),
+            (9, "attendance", "Attendance control block"),
+            (10, "session_date", "Next session date block"),
+            (11, "matrix", "Responsive matrix block"),
+            (12, "finance_balance", "Finance account balance"),
+            (13, "finance_transactions", "Finance transaction table"),
+            (14, "fine_list", "Attendance fine list"),
+            (15, "chart", "Statistics chart block"),
+            (16, "entry_exit", "Participant entry/exit block"),
         ]
         changed = False
-        next_id = int(max(db.scalars(select(ElementType.id)).all() or [0]))
-        for code, description in desired:
+        existing_ids = set(db.scalars(select(ElementType.id)))
+        for element_type_id, code, description in desired:
             if code in existing_codes:
                 continue
-            next_id += 1
-            db.add(ElementType(id=next_id, code=code, description=description))
+            if element_type_id in existing_ids:
+                logging.getLogger(__name__).error("element_type id %s ist belegt, Code %s fehlt - Typen manuell pruefen", element_type_id, code)
+                continue
+            db.add(ElementType(id=element_type_id, code=code, description=description))
             changed = True
         if changed:
             db.commit()

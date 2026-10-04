@@ -15,6 +15,7 @@
   "blockTypeAttendance": "Presenza",
   "blockTypeBulletList": "Elenco puntato",
   "blockTypeChart": "Grafico",
+  "blockTypeEntryExit": "Entrate/uscite",
   "blockTypeDisplay": "Visualizzazione",
   "blockTypeFinanceBalance": "Saldo conto",
   "blockTypeFinanceTransactions": "Transazioni",

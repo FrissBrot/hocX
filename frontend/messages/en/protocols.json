@@ -15,6 +15,7 @@
   "blockTypeAttendance": "Attendance",
   "blockTypeBulletList": "Bullet list",
   "blockTypeChart": "Chart",
+  "blockTypeEntryExit": "Entries/exits",
   "blockTypeDisplay": "Display",
   "blockTypeFinanceBalance": "Account balance",
   "blockTypeFinanceTransactions": "Transactions",

@@ -15,6 +15,7 @@
   "blockTypeAttendance": "Anwesenheit",
   "blockTypeBulletList": "Aufzählung",
   "blockTypeChart": "Diagramm",
+  "blockTypeEntryExit": "Ein-/Austritte",
   "blockTypeDisplay": "Anzeige",
   "blockTypeFinanceBalance": "Kontostand",
   "blockTypeFinanceTransactions": "Transaktionen",
