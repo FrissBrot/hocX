@@ -20,6 +20,26 @@ Installationen aktualisieren können.
 - Abgaben können Elemente automatisch schliessen: nie, nach der ersten Abgabe oder
   sobald die maximale Dateizahl erreicht ist. «Wieder aufschalten» funktioniert
   unverändert.
+- Dateien/Fotos-Tabelle zeigt ein Dateityp-Icon nach Dateiendung statt eines generischen
+  Platzhalters.
+- Beim Erstellen eines Freigabe-Links wählbar, welche Foto-Metadaten mitgehen: Standort
+  (GPS), Aufnahmedatum, Kamera & Gerät – Vorgabe nur das Aufnahmedatum. Enthält Migration
+  `0100`, die diese Vorgabe auch auf bestehende Links setzt.
+- Die öffentliche Freigabeseite (`/share/<token>`) ist ohne Login erreichbar (der Token
+  bleibt die einzige Authentifizierung) und neu gestaltet: Absender-Kopfzeile, Meta-Zeile
+  (Anzahl, Grösse, Aufnahmezeitraum, Ablaufdatum), Masonry-Raster, Lightbox mit Blättern.
+  «Alle herunterladen» liefert ein ZIP, im Auswahlmodus nur die gewählten Dateien.
+
+### Geändert
+
+- Terminliste, Kalender und der Termin-Dialog im neuen Design: Tag-Sidebar mit Zählern,
+  Monatsgruppen mit Datumskachel und Heute-Linie, Zeitfilter Kommend/Alle/Vergangen,
+  Ansicht-Menü für die Zeilenfelder (pro Browser gespeichert); Kalender als
+  Vollbild-Dialog mit Tagesdetail; neuer Termin zweispaltig mit Zeitraum,
+  Personen-Rollen, Tag-Chips und Zyklen.
+- Transaktionsformular der Finanzen mit expliziter Einnahme-/Ausgabe-Auswahl statt
+  Vorzeichen-Eingabe über den Betrag.
+- Fotogalerie mit haftender Auswahlleiste und kompakteren Aktionen.
 
 ### Behoben
 
@@ -30,6 +50,9 @@ Installationen aktualisieren können.
 - Weitertippen im Protokolltext, während ein vorheriger Save noch läuft, löst keinen
   Konflikt mehr gegen die eigene vorherige Version aus, der den gerade getippten Text
   sichtbar durch eine veraltete Serverversion ersetzt hat.
+- Die Galerie-Gruppierung «Duplikate»/«Ähnliche» verifiziert vor dem Gruppieren den
+  tatsächlichen Bildinhalt (Pixelvergleich), statt sich allein auf den groben
+  Perceptual-Hash-Kandidatenfilter zu verlassen.
 
 ## [1.1.6] - 2026-10-04
 
