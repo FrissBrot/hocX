@@ -16788,3 +16788,54 @@ input[type="radio"] {
   stroke-linejoin: round;
   stroke-linecap: round;
 }
+
+/* Rein dekorative Landschaft während der Routenberechnung. */
+.wanderplaner-loading-button {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.wanderplaner-loading-button[aria-busy="true"] {
+  cursor: wait;
+  opacity: 1;
+}
+
+.wanderplaner-loading-landscape {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: inherit;
+}
+
+.wanderplaner-loading-landscape svg {
+  display: block;
+  width: 200%;
+  height: 100%;
+  animation: wanderplaner-landscape-scroll calc(var(--dur-slow) * 25) linear infinite;
+}
+
+.wanderplaner-loading-landscape-area {
+  fill: currentColor;
+  opacity: 0.12;
+}
+
+.wanderplaner-loading-landscape-ridge {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  opacity: 0.25;
+}
+
+.wanderplaner-loading-label {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes wanderplaner-landscape-scroll {
+  to { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wanderplaner-loading-landscape svg { animation: none; }
+}

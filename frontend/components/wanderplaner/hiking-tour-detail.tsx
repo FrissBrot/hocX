@@ -8,6 +8,7 @@ import { DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { HikingTourElevationChart } from "@/components/wanderplaner/hiking-tour-elevation-chart";
+import { HikingTourLoadingLandscape } from "@/components/wanderplaner/hiking-tour-loading-landscape";
 import { HikingTourMap } from "@/components/wanderplaner/hiking-tour-map";
 import { HikingTourMarchTable } from "@/components/wanderplaner/hiking-tour-march-table";
 import { browserApiFetch } from "@/lib/api/client";
@@ -417,8 +418,9 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
                     </option>
                   ))}
                 </select>
-                <button type="button" className="button-secondary" onClick={() => void handleComputeRoute()} disabled={computingRoute}>
-                  {computingRoute ? "Wird berechnet…" : "Route berechnen"}
+                <button type="button" className="button-secondary wanderplaner-loading-button" onClick={() => void handleComputeRoute()} disabled={computingRoute} aria-busy={computingRoute}>
+                  {computingRoute && <HikingTourLoadingLandscape />}
+                  <span className="wanderplaner-loading-label">{computingRoute ? "Wird berechnet…" : "Route berechnen"}</span>
                 </button>
                 <button
                   type="button"

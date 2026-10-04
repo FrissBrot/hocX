@@ -8,6 +8,7 @@ import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { HikingTourElevationPreview } from "@/components/wanderplaner/hiking-tour-elevation-preview";
+import { HikingTourLoadingLandscape } from "@/components/wanderplaner/hiking-tour-loading-landscape";
 import { HikingTourMap } from "@/components/wanderplaner/hiking-tour-map";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -225,8 +226,9 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
             >
               Abbrechen
             </button>
-            <button type="submit" className="button-primary" disabled={saving || !start || !end}>
-              {saving ? "Wird erstellt…" : "Wanderung erstellen"}
+            <button type="submit" className="button-primary wanderplaner-loading-button" disabled={saving || !start || !end} aria-busy={saving}>
+              {saving && <HikingTourLoadingLandscape />}
+              <span className="wanderplaner-loading-label">{saving ? "Wird erstellt…" : "Wanderung erstellen"}</span>
             </button>
           </div>
         </form>
@@ -263,8 +265,9 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
             >
               Abbrechen
             </button>
-            <button type="submit" className="button-primary" disabled={importingGpx || !gpxFile}>
-              {importingGpx ? "Wird importiert…" : "Importieren"}
+            <button type="submit" className="button-primary wanderplaner-loading-button" disabled={importingGpx || !gpxFile} aria-busy={importingGpx}>
+              {importingGpx && <HikingTourLoadingLandscape />}
+              <span className="wanderplaner-loading-label">{importingGpx ? "Wird importiert…" : "Importieren"}</span>
             </button>
           </div>
         </form>
