@@ -8,6 +8,22 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.1.5] - 2026-10-04
+
+Wartungsrelease auf 1.1.4 mit Korrekturen rund um Teilnehmer-Mitgliedschaften,
+historische Listen und die Protokollnummerierung im Zyklus. Keine Migrationen und
+keine neuen Pflicht-Umgebungsvariablen.
+
+### Update von 1.1.4 auf 1.1.5
+
+Nach Veröffentlichung der Release-Images `HOCX_VERSION` in `.env` auf `v1.1.5` setzen,
+dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` ausführen.
+
+- Keine Datenbank-Migrationen, keine manuellen Vorbereitungsschritte.
+- Git-Tag und GitHub-Release entstehen erst nach erfolgreicher Promotion aller Images
+  durch den Release-Workflow. Der Push dieser Vorbereitung veröffentlicht noch kein
+  Release.
+
 ### Geändert
 
 - In aktuellen Listen werden noch verknüpfte, bereits ausgetretene Teilnehmer
@@ -16,6 +32,11 @@ Installationen aktualisieren können.
 
 ### Behoben
 
+- `[n_cycle]` zählt über alle Vorlagen, die derselben Zyklus-Definition zugeordnet
+  sind (z. B. Hock und Arbeitsweekend im selben Scharjahr); Vorlagen ohne Zyklus
+  zählen weiter pro Vorlage. Einschübe nummerieren offene Protokolle anderer Vorlagen
+  im selben Zyklus mit um, und bei einer Kollision der Protokollnummer weicht nur die
+  Nummer aus – der Titel behält den echten Rang.
 - Offene Protokolle aktualisieren Teilnehmerlisten sowie Ein- und Austritte nach
   Änderungen der Mitgliedschaft anhand des Protokolldatums. Erfasste Anwesenheiten,
   Notizen und ausgeblendete Einträge bleiben erhalten.
