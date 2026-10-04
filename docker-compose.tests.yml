@@ -114,25 +114,36 @@ services:
     profiles: [tests]
 
   frontend-test:
-    image: node:22-bookworm-slim
+    # Same deps-layer trick as the dev/prod frontend service (docker-compose.yml): node_modules
+    # is baked into the image by `target: deps`'s own `npm ci` and only rebuilt when
+    # package.json/package-lock.json change - the named volume below then keeps that install
+    # instead of the (image-)npm ci on every single test invocation re-downloading and
+    # reinstalling the entire dependency tree from scratch (previously the dominant cost of
+    # every local/CI test-stack run; perf audit 2026-10-05).
+    build:
+      context: ./frontend
+      target: deps
     working_dir: /app
     environment:
       CI: "true"
     volumes:
       - ./frontend:/app
       - frontend-test-node-modules:/app/node_modules
-    command: sh -c "npm ci --no-audit --no-fund && npm test"
+    command: npm test
     profiles: [tests]
 
   abgabebox-frontend-test:
-    image: node:22-bookworm-slim
+    # Same deps-layer trick as frontend-test above - see its comment.
+    build:
+      context: ./abgabebox-frontend
+      target: deps
     working_dir: /app
     environment:
       CI: "true"
     volumes:
       - ./abgabebox-frontend:/app
       - abgabebox-frontend-test-node-modules:/app/node_modules
-    command: sh -c "npm ci --no-audit --no-fund && npm test"
+    command: npm test
     profiles: [tests]
 
 volumes:

@@ -40,11 +40,15 @@ run_tests() {
   if [[ "${E2E_USE_HOST_PLAYWRIGHT:-0}" == "1" ]]; then
     (cd "$REPO_DIR/frontend" && PLAYWRIGHT_BASE_URL=http://127.0.0.1:13000 E2E_ABGABEBOX_BASE_URL=http://127.0.0.1:13001 E2E_USER_EMAIL=admin@hocx.local E2E_USER_PASSWORD='ChangeMe123!' npm run test:e2e)
   else
+    # Image tag must match frontend/package.json's @playwright/test version (perf/version
+    # audit 2026-10-05: this had drifted to v1.55.0 while package-lock.json had long since
+    # resolved to 1.63.0 - a mismatched browser/driver version that silently forces a
+    # redownload or fails outright, not a visible config error) - bump both together.
     docker run --rm --network host -v "$REPO_DIR/frontend:/work" -w /work \
       -e CI="${CI:-}" -e PLAYWRIGHT_BASE_URL=http://127.0.0.1:13000 \
       -e E2E_ABGABEBOX_BASE_URL=http://127.0.0.1:13001 \
       -e E2E_USER_EMAIL=admin@hocx.local -e E2E_USER_PASSWORD='ChangeMe123!' \
-      mcr.microsoft.com/playwright:v1.55.0-noble sh -c 'npm ci && npm run test:e2e'
+      mcr.microsoft.com/playwright:v1.63.0-noble sh -c 'npm ci && npm run test:e2e'
   fi
 }
 

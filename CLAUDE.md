@@ -102,8 +102,9 @@ Projektabhängigkeiten und Projektbefehle laufen in Containern. Auf dem Host ins
 - Typecheck/Tests Frontend: `docker compose exec frontend node_modules/.bin/tsc --noEmit` bzw. `.../vitest run`
 - i18n (vor jedem Commit mit UI-Änderung): `python3 scripts/check-i18n-completeness.py`, `python3 scripts/check-i18n-hardcoded-text.py` und `python3 scripts/check-i18n-key-resolution.py`, nach jeder Änderung an `i18n/locales.json` zusätzlich `python3 scripts/sync-i18n-config.py`
 - E2E-Stack (eigene DB, Wegwerf-Konten): `./scripts/e2e.sh up` / `test` / `down`
-- Für visuelle Vergleiche Playwright-Screenshots gegen den E2E-Stack (`mcr.microsoft.com/playwright:v1.55.0-noble`), Light/Dark, 1440 und 390 px.
+- Für visuelle Vergleiche Playwright-Screenshots gegen den E2E-Stack (`mcr.microsoft.com/playwright:v1.63.0-noble` - Image-Tag muss `frontend/package.json`s `@playwright/test`-Version entsprechen, siehe `scripts/e2e.sh`), Light/Dark, 1440 und 390 px.
 - Zuerst die kleinste relevante Prüfung ausführen; vollständige Test- oder E2E-Suites nur, wenn sie für die Änderung sinnvoll sind.
+- `docker builder prune`/`docker image prune -a` (oder `-f`-Varianten) nicht als Routine-Aufräumschritt während des Testens ausführen: `backend-test`/`abgabebox-backend-test`/`photo-analysis-worker-test` und `frontend-test`/`abgabebox-frontend-test` (`docker-compose.tests.yml`) sind bewusst so gebaut, dass ein unveränderter `requirements*.txt`/`package*.json` die pip-/npm-Install-Layer aus dem Docker-Build-Cache wiederverwendet statt neu zu installieren – ein Cache-Prune zwingt den nächsten `--build`-Lauf zur vollständigen Neuinstallation (mehrere Minuten) und kann bei `npm`/`pip` sogar andere (neuere) Paketversionen auflösen als die zuvor getestete, gecachte Schicht. Bei echtem Platzmangel gezielt alte, nicht mehr referenzierte Images/Volumes identifizieren statt pauschal zu pruning.
 
 ## Sonstiges
 
