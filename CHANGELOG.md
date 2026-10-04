@@ -8,6 +8,26 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Geändert
+
+- In aktuellen Listen werden noch verknüpfte, bereits ausgetretene Teilnehmer
+  orange markiert. Der Hinweis zeigt das Austrittsdatum; dies gilt für Einzel-
+  und Mehrfachverknüpfungen. Historische Ansichten behalten ihre damalige Darstellung.
+
+### Behoben
+
+- Offene Protokolle aktualisieren Teilnehmerlisten sowie Ein- und Austritte nach
+  Änderungen der Mitgliedschaft anhand des Protokolldatums. Erfasste Anwesenheiten,
+  Notizen und ausgeblendete Einträge bleiben erhalten.
+- Historische Listen zeigen die damals verknüpften Teilnehmer wieder korrekt an.
+  Neue Snapshots speichern zusätzlich ihre Namen und erhalten sie auch nach einer
+  späteren Umbenennung oder Löschung. Abgeschlossene Protokolle zeigen den
+  eingefrorenen Stand ihrer Anwesenheitslisten.
+- Die Teilnehmerauswahl berücksichtigt Ein- und Austrittsdaten: Aktuelle Listen
+  verwenden das heutige Datum, Protokolle und ihre zugehörigen Eingaben das
+  Protokolldatum. Der Austrittstag bleibt eingeschlossen; danach stehen ausgetretene
+  Teilnehmer nicht mehr zur Auswahl. Bestehende Verknüpfungen bleiben sichtbar.
+
 ## [1.1.4] - 2026-10-04
 
 Wartungsrelease auf 1.1.3 mit vollständiger Mehrsprachigkeit (Deutsch/Englisch/
