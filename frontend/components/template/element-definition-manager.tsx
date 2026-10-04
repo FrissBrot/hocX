@@ -22,6 +22,7 @@ import { formatDateRange } from "@/lib/utils/format";
 import { elementTypeOptions as buildElementTypeOptions, elementTypeLabels as buildElementTypeLabels } from "@/lib/constants/element-types";
 import { EVENT_SYNC_FIELDS, TODO_SYNC_FIELDS } from "@/lib/constants/event-sync-fields";
 import { ElementDefinition, ElementDefinitionBlock, EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
+import { ChartCycleSelection } from "@/components/protocol/chart-cycle-selection";
 import { asObject } from "@/components/protocol/protocol-editor-shared";
 
 type ElementDefinitionManagerProps = {
@@ -88,6 +89,8 @@ type BlockFormState = {
   fine_amount_absent: string;
   chart_type: string;
   chart_cycle_key: string;
+  chart_cycle_config_id: string;
+  chart_cycle_offset: number;
   entry_exit_first_use_mode: "all" | "since_date";
   entry_exit_first_use_date: string;
   left_column_heading: string;
@@ -285,6 +288,8 @@ const initialBlockForm: BlockFormState = {
   fine_amount_absent: "",
   chart_type: "",
   chart_cycle_key: "all",
+  chart_cycle_config_id: "",
+  chart_cycle_offset: 0,
   entry_exit_first_use_mode: "all" as "all" | "since_date",
   entry_exit_first_use_date: "",
   left_column_heading: "",
@@ -545,6 +550,8 @@ function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
     fine_amount_absent: block.configuration_json?.fine_amount_absent != null ? String(block.configuration_json.fine_amount_absent) : "",
     chart_type: String(block.configuration_json?.chart_type ?? ""),
     chart_cycle_key: String(block.configuration_json?.cycle_key ?? "all"),
+    chart_cycle_config_id: String(block.configuration_json?.cycle_config_id ?? ""),
+    chart_cycle_offset: Number(block.configuration_json?.cycle_offset ?? 0),
     entry_exit_first_use_mode: (String(block.configuration_json?.entry_exit_first_use_mode ?? "all") as "all" | "since_date"),
     entry_exit_first_use_date: String(block.configuration_json?.entry_exit_first_use_date ?? ""),
     left_column_heading: String(block.configuration_json?.left_column_heading ?? ""),
@@ -690,6 +697,8 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
       fine_amount_absent: form.fine_amount_absent ? parseFloat(form.fine_amount_absent) : null,
       chart_type: form.chart_type || null,
       cycle_key: form.chart_cycle_key || "all",
+      cycle_config_id: form.chart_cycle_config_id || null,
+      cycle_offset: form.chart_cycle_offset,
       entry_exit_first_use_mode: form.entry_exit_first_use_mode,
       entry_exit_first_use_date: form.entry_exit_first_use_mode === "since_date" ? (form.entry_exit_first_use_date || null) : null,
       left_column_heading: form.left_column_heading || null,
@@ -2683,6 +2692,10 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   </select>
                 </label>
               </div>
+              <ChartCycleSelection
+                config={{ cycle_config_id: createBlockForm.chart_cycle_config_id, cycle_offset: createBlockForm.chart_cycle_offset }}
+                onChange={(config) => setCreateBlockForm((c) => ({ ...c, chart_cycle_config_id: config.cycle_config_id ?? "", chart_cycle_offset: config.cycle_offset ?? 0, chart_cycle_key: "all" }))}
+              />
             </SettingsSection>
           ) : null}
           {createBlockForm.element_type_id === "16" ? (
@@ -3298,6 +3311,10 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     </select>
                   </label>
                 </div>
+                <ChartCycleSelection
+                  config={{ cycle_config_id: blockForm.chart_cycle_config_id, cycle_offset: blockForm.chart_cycle_offset }}
+                  onChange={(config) => setBlockForm((c) => ({ ...c, chart_cycle_config_id: config.cycle_config_id ?? "", chart_cycle_offset: config.cycle_offset ?? 0, chart_cycle_key: "all" }))}
+                />
               </SettingsSection>
             ) : null}
             {blockForm.element_type_id === "16" ? (

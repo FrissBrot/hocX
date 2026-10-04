@@ -9,6 +9,7 @@ import {
 import { StatisticsOverview } from "@/types/api";
 import { CHART_COLORS, CHART_PIE_PALETTE } from "@/lib/constants/chart-colors";
 import { browserApiFetch } from "@/lib/api/client";
+import { ChartCycleSelection } from "@/components/protocol/chart-cycle-selection";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 
 const STATS_BUMP_EVENT = "hocx:stats-refresh";
@@ -19,18 +20,10 @@ export function bumpStatsCharts() {
   window.dispatchEvent(new Event(STATS_BUMP_EVENT));
 }
 
-// Every ChartBlock instance shows the same /api/statistics/overview data (there's no
-// per-block query param), so a page with several chart blocks previously fired one
-// identical request per block, per 15s tick. This module-level cache + a single shared
-// poll timer (ref-counted across mounted instances) makes concurrent instances share one
-// in-flight request/interval instead of each running its own.
-let _statsCache: StatisticsOverview | null = null;
-let _statsCacheVersion = -1;
-// True once a refresh attempt has failed and fallen back to _statsCache - so the chart can
-// still render (better than blanking out on a transient error), but the user is told the
-// numbers on screen may no longer be current instead of that being silent.
-let _statsCacheStale = false;
-let _statsInFlight: { version: number; promise: Promise<{ data: StatisticsOverview | null; stale: boolean }> } | null = null;
+// Diagramme mit derselben Zyklus-Auswahl teilen Cache, Anfrage und Polling.
+type StatsResult = { data: StatisticsOverview | null; stale: boolean };
+const statsCaches = new Map<string, { version: number; result: StatsResult }>();
+const statsRequests = new Map<string, { version: number; promise: Promise<StatsResult> }>();
 let _statsPollInterval: ReturnType<typeof setInterval> | null = null;
 let _statsPollRefCount = 0;
 
@@ -49,24 +42,20 @@ function releaseStatsPolling() {
   }
 }
 
-function fetchStatsOverview(version: number): Promise<{ data: StatisticsOverview | null; stale: boolean }> {
-  if (_statsCacheVersion === version) return Promise.resolve({ data: _statsCache, stale: _statsCacheStale });
-  if (_statsInFlight?.version === version) return _statsInFlight.promise;
-  const promise = browserApiFetch<StatisticsOverview>(`/api/statistics/overview?_t=${version}`)
-    .then((d) => {
-      _statsCache = d ?? null;
-      _statsCacheVersion = version;
-      _statsCacheStale = false;
-      return { data: _statsCache, stale: false };
+function fetchStatsOverview(version: number, scope: string): Promise<StatsResult> {
+  const cached = statsCaches.get(scope);
+  if (cached?.version === version) return Promise.resolve(cached.result);
+  const request = statsRequests.get(scope);
+  if (request?.version === version) return request.promise;
+  const promise = browserApiFetch<StatisticsOverview>(`/api/statistics/overview?_t=${version}${scope}`)
+    .then((data) => {
+      const result = { data: data ?? null, stale: false };
+      statsCaches.set(scope, { version, result });
+      return result;
     })
-    .catch(() => {
-      _statsCacheStale = _statsCache !== null;
-      return { data: _statsCache, stale: _statsCacheStale };
-    })
-    .finally(() => {
-      if (_statsInFlight?.version === version) _statsInFlight = null;
-    });
-  _statsInFlight = { version, promise };
+    .catch(() => ({ data: cached?.result.data ?? null, stale: !!cached?.result.data }))
+    .finally(() => { if (statsRequests.get(scope)?.version === version) statsRequests.delete(scope); });
+  statsRequests.set(scope, { version, promise });
   return promise;
 }
 
@@ -94,6 +83,8 @@ function fmtMonth(m: string, locale: string) {
 type Config = {
   chart_type?: string;
   cycle_key?: string;
+  cycle_config_id?: string | null;
+  cycle_offset?: number;
 };
 
 type Props = {
@@ -105,9 +96,10 @@ type Props = {
 export function ChartBlock({ config, editable, onSave }: Props) {
   const t = useTranslations("protocols.chart");
   const locale = useLocale();
-  const [data, setData] = useState<StatisticsOverview | null>(_statsCacheVersion >= 0 ? _statsCache : null);
-  const [stale, setStale] = useState(_statsCacheStale);
-  const [loading, setLoading] = useState(_statsCacheVersion < 0);
+  const scope = config.cycle_config_id ? `&cycle_config_id=${encodeURIComponent(config.cycle_config_id)}&cycle_offset=${config.cycle_offset ?? 0}` : "";
+  const [data, setData] = useState<StatisticsOverview | null>(null);
+  const [stale, setStale] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(() => _statsVersion);
   const chartType = config.chart_type ?? "";
   const cycleKey = config.cycle_key ?? "all";
@@ -124,8 +116,8 @@ export function ChartBlock({ config, editable, onSave }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    if (_statsCacheVersion !== tick) setLoading(true);
-    fetchStatsOverview(tick).then(({ data: d, stale: s }) => {
+    setLoading(true);
+    fetchStatsOverview(tick, scope).then(({ data: d, stale: s }) => {
       if (cancelled) return;
       setData(d);
       setStale(s);
@@ -134,7 +126,7 @@ export function ChartBlock({ config, editable, onSave }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [tick]);
+  }, [tick, scope]);
 
   function save(partial: Partial<Config>) {
     onSave({ ...config, ...partial });
@@ -164,7 +156,7 @@ export function ChartBlock({ config, editable, onSave }: Props) {
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-          {hasCycles && (chartType === "groups_sessions" || chartType === "groups_avg") && (
+          {!config.cycle_config_id && hasCycles && (chartType === "groups_sessions" || chartType === "groups_avg") && (
             <SearchableSelect
               className="stats-cycle-select"
               options={cycleOptions}
@@ -176,6 +168,7 @@ export function ChartBlock({ config, editable, onSave }: Props) {
           )}
         </div>
       )}
+      {editable && <ChartCycleSelection config={config} onChange={(partial) => save({ ...partial, cycle_key: "all" })} />}
       {!editable && !chartType && (
         <p className="muted">{t("noChartSelected")}</p>
       )}

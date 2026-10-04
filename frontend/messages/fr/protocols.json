@@ -77,6 +77,7 @@
   "cancel": "Annuler",
   "cancelledLabel": "Annulé",
   "chart": {
+    "cycleHelp": "Limiter les données du diagramme au cycle sélectionné. Le cycle actuel dépend de la date du jour et change automatiquement.",
     "allCycles": "Tous les cycles",
     "loading": "Chargement des données…",
     "noChartSelected": "Aucun graphique sélectionné.",

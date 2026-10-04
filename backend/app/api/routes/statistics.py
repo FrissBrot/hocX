@@ -1,6 +1,7 @@
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -11,6 +12,7 @@ from app.core.security import CurrentUser, get_current_user, require_reader
 from app.models.entities import CycleConfig, FinanceAccount, Participant, Protocol
 from app.services import public_id_service
 from app.services.statistics_common import (
+    chart_cycle_bounds,
     aggregate_attendance,
     aggregate_todo_counts,
     fetch_attendance_blocks,
@@ -114,11 +116,17 @@ class StatisticsOverview(BaseModel):
 
 @router.get("/statistics/overview", response_model=StatisticsOverview)
 def get_statistics_overview(
+    cycle_config_id: uuid.UUID | None = None,
+    cycle_offset: Annotated[int, Query(ge=-3, le=0)] = 0,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
     tenant_id = user.current_tenant_id
+    try:
+        bounds = chart_cycle_bounds(db, tenant_id, cycle_config_id, cycle_offset)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     # ── Protocols total ──────────────────────────────────────────────────────
     protocols_total = db.scalar(
@@ -151,7 +159,7 @@ def get_statistics_overview(
                 ))
 
     # ── Groups stats (groups identified by event.tag matching Gruppen list) ──
-    group_rows = fetch_group_session_rows(db, tenant_id)
+    group_rows = fetch_group_session_rows(db, tenant_id, bounds)
 
     groups_stats = [
         GroupStat(
@@ -166,7 +174,7 @@ def get_statistics_overview(
     ]
 
     # ── Attendance ───────────────────────────────────────────────────────────
-    attendance_blocks = fetch_attendance_blocks(db, tenant_id)
+    attendance_blocks = fetch_attendance_blocks(db, tenant_id, bounds)
     monthly_att, per_participant_att = aggregate_attendance(attendance_blocks)
 
     attendance_by_participant = sorted(
@@ -197,7 +205,7 @@ def get_statistics_overview(
     ]
 
     # ── Todos ────────────────────────────────────────────────────────────────
-    todos = fetch_todo_rows(db, tenant_id)
+    todos = fetch_todo_rows(db, tenant_id, bounds)
     todo_open, todo_done = aggregate_todo_counts(todos)
     todos_summary = TodoSummary(open=todo_open, done=todo_done, total=len(todos))
 
@@ -206,7 +214,7 @@ def get_statistics_overview(
     fines_by_participant = sorted(
         [
             FineByStat(name=r.name, count=int(r.count), amount=float(r.amount or 0))
-            for r in fetch_fines_by_participant(db, tenant_id)
+            for r in fetch_fines_by_participant(db, tenant_id, bounds)
         ],
         key=lambda x: x.count,
         reverse=True,
@@ -218,11 +226,11 @@ def get_statistics_overview(
             count=int(r.count),
             amount=float(r.amount or 0),
         )
-        for r in fetch_fines_by_type(db, tenant_id)
+        for r in fetch_fines_by_type(db, tenant_id, bounds)
     ]
 
     # ── Finance by month ─────────────────────────────────────────────────────
-    finance_rows = fetch_finance_by_account_month(db, tenant_id)
+    finance_rows = fetch_finance_by_account_month(db, tenant_id, bounds)
     account_public_ids = public_id_service.resolve_public_ids(db, FinanceAccount, [r.account_id for r in finance_rows])
 
     finance_by_month = [

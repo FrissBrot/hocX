@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.services.statistics_common import (
     GROUPS_LIST_NAME,
+    chart_cycle_bounds,
     aggregate_attendance,
     aggregate_group_rows,
     aggregate_todo_counts,
@@ -144,8 +145,8 @@ def _fmt_month(m: str) -> str:
 # dataclasses/Rows, sorted+truncated to the top N for the chart). See statistics_common's
 # module docstring (2026-08-12/13 audit, M4/M10/M11/M12).
 
-def _fetch_attendance_data(db: Session, tenant_id: int) -> tuple[list[dict], list[dict]]:
-    blocks = fetch_attendance_blocks(db, tenant_id)
+def _fetch_attendance_data(db: Session, tenant_id: int, bounds=None) -> tuple[list[dict], list[dict]]:
+    blocks = fetch_attendance_blocks(db, tenant_id, bounds)
     monthly, per_participant = aggregate_attendance(blocks)
 
     by_time = [
@@ -170,14 +171,14 @@ def _fetch_attendance_data(db: Session, tenant_id: int) -> tuple[list[dict], lis
     return by_time, by_participant
 
 
-def _fetch_finance_data(db: Session, tenant_id: int) -> list[dict]:
-    rows = fetch_finance_by_month(db, tenant_id)
+def _fetch_finance_data(db: Session, tenant_id: int, bounds=None) -> list[dict]:
+    rows = fetch_finance_by_month(db, tenant_id, bounds)
     return [{"month": r.month, "income": float(r.income or 0), "expenses": float(r.expenses or 0)} for r in rows]
 
 
-def _fetch_fines_data(db: Session, tenant_id: int) -> tuple[list[dict], list[dict]]:
-    participant_rows = fetch_fines_by_participant(db, tenant_id)
-    type_rows = fetch_fines_by_type(db, tenant_id)
+def _fetch_fines_data(db: Session, tenant_id: int, bounds=None) -> tuple[list[dict], list[dict]]:
+    participant_rows = fetch_fines_by_participant(db, tenant_id, bounds)
+    type_rows = fetch_fines_by_type(db, tenant_id, bounds)
 
     by_participant = sorted(
         [{"name": r.name, "amount": float(r.amount or 0)} for r in participant_rows],
@@ -189,14 +190,14 @@ def _fetch_fines_data(db: Session, tenant_id: int) -> tuple[list[dict], list[dic
     return by_participant, by_type
 
 
-def _fetch_todo_data(db: Session, tenant_id: int) -> dict:
-    rows = fetch_todo_rows(db, tenant_id)
+def _fetch_todo_data(db: Session, tenant_id: int, bounds=None) -> dict:
+    rows = fetch_todo_rows(db, tenant_id, bounds)
     open_, done = aggregate_todo_counts(rows)
     return {"done": done, "open": open_}
 
 
-def _fetch_groups_data(db: Session, tenant_id: int, cycle_key: str | None = None) -> list[dict]:
-    rows = fetch_group_session_rows(db, tenant_id)
+def _fetch_groups_data(db: Session, tenant_id: int, cycle_key: str | None = None, bounds=None) -> list[dict]:
+    rows = fetch_group_session_rows(db, tenant_id, bounds)
     return aggregate_group_rows(rows, cycle_key)
 
 
@@ -209,10 +210,11 @@ def generate_chart_png(
     options: dict[str, Any] | None = None,
 ) -> bytes:
     opts = options or {}
+    bounds = chart_cycle_bounds(db, tenant_id, opts.get("cycle_config_id"), int(opts.get("cycle_offset", 0)))
     primary, secondary, pie_palette = _resolve_colors(opts)
 
     if chart_type == "attendance_over_time":
-        by_time, _ = _fetch_attendance_data(db, tenant_id)
+        by_time, _ = _fetch_attendance_data(db, tenant_id, bounds)
         if not by_time:
             return _empty_chart("Keine Anwesenheitsdaten")
         labels  = [_fmt_month(d["month"]) for d in by_time]
@@ -239,7 +241,7 @@ def generate_chart_png(
         return _fig_to_bytes(fig)
 
     if chart_type == "attendance_by_participant":
-        _, by_participant = _fetch_attendance_data(db, tenant_id)
+        _, by_participant = _fetch_attendance_data(db, tenant_id, bounds)
         if not by_participant:
             return _empty_chart("Keine Anwesenheitsdaten")
         names   = [textwrap.shorten(d["name"], 22) for d in by_participant]
@@ -268,7 +270,7 @@ def generate_chart_png(
         return _fig_to_bytes(fig)
 
     if chart_type == "finance_by_month":
-        data = _fetch_finance_data(db, tenant_id)
+        data = _fetch_finance_data(db, tenant_id, bounds)
         if not data:
             return _empty_chart("Keine Finanzdaten")
         labels   = [_fmt_month(d["month"]) for d in data]
@@ -288,7 +290,7 @@ def generate_chart_png(
         return _fig_to_bytes(fig)
 
     if chart_type == "fines_by_participant":
-        by_participant, _ = _fetch_fines_data(db, tenant_id)
+        by_participant, _ = _fetch_fines_data(db, tenant_id, bounds)
         if not by_participant:
             return _empty_chart("Keine Bussendaten")
         names   = [textwrap.shorten(d["name"], 22) for d in by_participant]
@@ -304,7 +306,7 @@ def generate_chart_png(
         return _fig_to_bytes(fig)
 
     if chart_type == "fines_by_type":
-        _, by_type = _fetch_fines_data(db, tenant_id)
+        _, by_type = _fetch_fines_data(db, tenant_id, bounds)
         if not by_type:
             return _empty_chart("Keine Bussendaten")
         labels = [d["label"] for d in by_type]
@@ -327,7 +329,7 @@ def generate_chart_png(
         return _fig_to_bytes(fig)
 
     if chart_type == "todos":
-        data = _fetch_todo_data(db, tenant_id)
+        data = _fetch_todo_data(db, tenant_id, bounds)
         done, open_ = data["done"], data["open"]
         if done + open_ == 0:
             return _empty_chart("Keine Todos")
@@ -351,7 +353,7 @@ def generate_chart_png(
 
     if chart_type == "groups_sessions":
         cycle_key = opts.get("cycle_key")
-        data = _fetch_groups_data(db, tenant_id, cycle_key)
+        data = _fetch_groups_data(db, tenant_id, cycle_key, bounds)
         if not data:
             return _empty_chart("Keine Gruppendata")
         names           = [textwrap.shorten(d["name"], 22) for d in data]
@@ -372,7 +374,7 @@ def generate_chart_png(
 
     if chart_type == "groups_avg":
         cycle_key = opts.get("cycle_key")
-        data = _fetch_groups_data(db, tenant_id, cycle_key)
+        data = _fetch_groups_data(db, tenant_id, cycle_key, bounds)
         if not data:
             return _empty_chart("Keine Gruppendata")
         names = [textwrap.shorten(d["name"], 22) for d in data]
