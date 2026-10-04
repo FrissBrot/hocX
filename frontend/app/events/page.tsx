@@ -22,7 +22,12 @@ export default async function EventsPage() {
   return (
     <AppShell initialSession={session}>
       <section className="panel">
-        <EventManager initialEvents={events ?? []} documentTemplates={documentTemplates ?? []} availableParticipants={participants ?? []} />
+        <EventManager
+          initialEvents={events ?? []}
+          documentTemplates={documentTemplates ?? []}
+          availableParticipants={participants ?? []}
+          tenantName={session.current_tenant?.name ?? null}
+        />
       </section>
     </AppShell>
   );

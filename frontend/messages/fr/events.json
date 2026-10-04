@@ -1,5 +1,22 @@
 {
-  "additionalColumns": "Colonnes supplémentaires",
+  "calendar": {
+    "createOnDay": "Événement ce jour-là",
+    "eventCount": "{count, plural, one {# événement} other {# événements}}",
+    "free": "libre",
+    "freeDay": "Jour libre",
+    "monthSummary": "{busy} jours occupés sur {total}",
+    "more": "+{count} de plus",
+    "next": "Suivant",
+    "noEventDescription": "Ce jour est libre.",
+    "noEventTitle": "Pas encore d’événement",
+    "open": "Calendrier",
+    "previous": "Précédent",
+    "title": "Calendrier",
+    "today": "Aujourd’hui",
+    "viewMonth": "Mois",
+    "viewYear": "Année",
+    "yearSummary": "{count, plural, one {# événement} other {# événements}} · {busy, plural, one {# jour occupé} other {# jours occupés}}"
+  },
   "columns": {
     "actions": "Actions",
     "cancelled": "Annulé",
@@ -9,20 +26,35 @@
     "location": "Lieu",
     "organizers": "Organisateurs",
     "participantCount": "Nombre de participants",
-    "participantsList": "Participants (liste)",
     "participantsRole": "Participants",
     "special1": "Spécial 1",
     "special2": "Spécial 2",
     "special3": "Spécial 3",
-    "specialText1": "Texte spécial 1",
-    "specialText2": "Texte spécial 2",
-    "specialText3": "Texte spécial 3",
     "tag": "Étiquette",
     "title": "Titre"
   },
   "contextMenu": {
     "markCancelled": "Marquer comme annulé",
     "uncancel": "Annuler l'annulation"
+  },
+  "createModal": {
+    "cancelledHint": "Reste visible, mais n’est plus compté comme prévu.",
+    "cyclesHint": "Facultatif – pilote les analyses et statistiques.",
+    "days": "{count, plural, one {# jour} other {# jours}}",
+    "descriptionPlaceholder": "Ordre du jour, déroulement, remarques …",
+    "eyebrow": "Nouvel événement",
+    "eyebrowTenant": "Nouvel événement · {tenant}",
+    "newTag": "+ Nouveau",
+    "newTagLabel": "Nouveau tag",
+    "period": "Période",
+    "periodHint": "Ne définir une date de fin que pour les événements sur plusieurs jours.",
+    "requiredHint": "La date de début et le titre sont obligatoires.",
+    "rolesFilled": "{filled} rôles sur {total} attribués",
+    "singleDay": "Un jour",
+    "status": "Statut",
+    "tagHint": "Exactement un tag par événement.",
+    "titlePlaceholder": "Titre de l’événement",
+    "until": "au"
   },
   "csvImport": "Import CSV",
   "delete": "Supprimer",
@@ -72,7 +104,6 @@
     "title": "Exporter les événements",
     "untilLabel": "Jusqu'à {title} · {date}"
   },
-  "filterAll": "Tous",
   "filterSection": "Filtre",
   "form": {
     "cancelled": "Événement annulé",
@@ -81,16 +112,12 @@
     "cycles": "Cycles",
     "cyclesHint": "Attribué par défaut selon la date de l'événement ; modifiable manuellement.",
     "cyclesLoading": "Chargement des cycles…",
-    "description": "L'étiquette aide ensuite à relier aux points de procès-verbal correspondants.",
-    "editTitle": "Modifier l'événement",
     "endDate": "Date de fin",
-    "endDateHint": "Laisser vide pour un seul jour.",
     "location": "Lieu",
     "locationPlaceholder": "p. ex. maison communale, terrain de sport",
     "noCycles": "Aucun cycle disponible (créez des cycles sous Structure → Cycles)",
     "participantCount": "Nombre de participants",
     "people": "Personnes",
-    "save": "Enregistrer l'événement",
     "startDate": "Date de début",
     "tag": "Étiquette",
     "tagPlaceholder": "p. ex. réunion, camp, soirée parents",
@@ -127,10 +154,19 @@
     "valid": "{count} valides",
     "withErrors": "{count} avec erreurs"
   },
+  "list": {
+    "emptyTitle": "Aucun événement trouvé",
+    "monthCount": "{count, plural, one {# événement} other {# événements}}",
+    "open": "Ouvrir",
+    "resetFilters": "Réinitialiser les filtres",
+    "summaryQuery": "{count, plural, one {# événement} other {# événements}} pour « {query} »",
+    "summaryTag": "{count, plural, one {# événement} other {# événements}} avec le tag « {tag} »",
+    "summaryTagQuery": "{count, plural, one {# événement} other {# événements}} avec le tag « {tag} » pour « {query} »",
+    "today": "Aujourd’hui · {date}"
+  },
   "loadMore": "Charger plus ({count} chargés)",
   "loadingMore": "Chargement d'autres événements…",
   "newEvent": "Nouvel événement",
-  "noDescription": "Aucune description",
   "noTag": "Aucune étiquette",
   "overviewModal": {
     "addButton": "+ Ajouter",
@@ -146,8 +182,8 @@
     "title": "Aperçu des événements",
     "untitledEvent": "Événement sans titre"
   },
-  "pageDescription": "Tous les événements de cette organisation.",
   "pageDescriptionEmpty": "Tous les événements et activités de cette organisation.",
+  "pageSummary": "{total, plural, one {# événement} other {# événements}} de ce mandant · {upcoming} à venir",
   "pageTitle": "Événements",
   "pickerModal": {
     "fallbackTitle": "Choisir des participants",
@@ -155,11 +191,19 @@
     "search": "Rechercher",
     "searchPlaceholder": "Filtrer les participants"
   },
+  "rowFieldsSection": "Afficher dans la ligne",
   "searchPlaceholder": "Rechercher des événements",
-  "selectEllipsis": "Sélectionner…",
   "selectedCount": "{count} sélectionné(s)",
   "showAllPeriods": "Afficher toutes les périodes de cycle",
-  "showPast": "Afficher les événements passés",
+  "tagSidebar": {
+    "all": "Tous les événements",
+    "title": "Tags"
+  },
+  "timeFilter": {
+    "all": "Tous",
+    "past": "Passés",
+    "upcoming": "À venir"
+  },
   "toasts": {
     "csvImportFailed": "Échec de l'import CSV",
     "cyclesLoadFailed": "Impossible de charger les cycles",
@@ -168,7 +212,6 @@
     "deleteFailed": "L'événement n'a pas pu être supprimé",
     "deleted": "Événement supprimé",
     "eventCreated": "Événement créé",
-    "eventSaved": "Événement enregistré",
     "eventUpdateFailed": "L'événement n'a pas pu être mis à jour",
     "importedCount": "{count} événements importés",
     "loadMoreFailed": "Impossible de charger d'autres événements",

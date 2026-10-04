@@ -1,5 +1,22 @@
 {
-  "additionalColumns": "Colonne aggiuntive",
+  "calendar": {
+    "createOnDay": "Evento in questo giorno",
+    "eventCount": "{count, plural, one {# evento} other {# eventi}}",
+    "free": "libero",
+    "freeDay": "Giorno libero",
+    "monthSummary": "{busy} giorni occupati su {total}",
+    "more": "+{count} altri",
+    "next": "Successivo",
+    "noEventDescription": "Questo giorno è libero.",
+    "noEventTitle": "Ancora nessun evento",
+    "open": "Calendario",
+    "previous": "Precedente",
+    "title": "Calendario",
+    "today": "Oggi",
+    "viewMonth": "Mese",
+    "viewYear": "Anno",
+    "yearSummary": "{count, plural, one {# evento} other {# eventi}} · {busy, plural, one {# giorno occupato} other {# giorni occupati}}"
+  },
   "columns": {
     "actions": "Azioni",
     "cancelled": "Annullato",
@@ -9,20 +26,35 @@
     "location": "Luogo",
     "organizers": "Organizzatori",
     "participantCount": "Numero partecipanti",
-    "participantsList": "Partecipanti (elenco)",
     "participantsRole": "Partecipanti",
     "special1": "Speciale 1",
     "special2": "Speciale 2",
     "special3": "Speciale 3",
-    "specialText1": "Testo speciale 1",
-    "specialText2": "Testo speciale 2",
-    "specialText3": "Testo speciale 3",
     "tag": "Tag",
     "title": "Titolo"
   },
   "contextMenu": {
     "markCancelled": "Segna come annullato",
     "uncancel": "Annulla la cancellazione"
+  },
+  "createModal": {
+    "cancelledHint": "Resta visibile, ma non conta più come pianificato.",
+    "cyclesHint": "Facoltativo – determina analisi e statistiche.",
+    "days": "{count, plural, one {# giorno} other {# giorni}}",
+    "descriptionPlaceholder": "Ordine del giorno, programma, note …",
+    "eyebrow": "Nuovo evento",
+    "eyebrowTenant": "Nuovo evento · {tenant}",
+    "newTag": "+ Nuovo",
+    "newTagLabel": "Nuovo tag",
+    "period": "Periodo",
+    "periodHint": "Impostare una data di fine solo per eventi di più giorni.",
+    "requiredHint": "Data di inizio e titolo sono obbligatori.",
+    "rolesFilled": "{filled} ruoli su {total} assegnati",
+    "singleDay": "Un giorno",
+    "status": "Stato",
+    "tagHint": "Esattamente un tag per evento.",
+    "titlePlaceholder": "Titolo dell’evento",
+    "until": "al"
   },
   "csvImport": "Importa CSV",
   "delete": "Elimina",
@@ -72,7 +104,6 @@
     "title": "Esporta eventi",
     "untilLabel": "Fino a {title} · {date}"
   },
-  "filterAll": "Tutti",
   "filterSection": "Filtro",
   "form": {
     "cancelled": "Evento annullato",
@@ -81,16 +112,12 @@
     "cycles": "Cicli",
     "cyclesHint": "Assegnato per impostazione predefinita in base alla data dell'evento; modificabile manualmente.",
     "cyclesLoading": "Caricamento cicli…",
-    "description": "Il tag aiuta in seguito a collegare i punti del verbale corrispondenti.",
-    "editTitle": "Modifica evento",
     "endDate": "Data di fine",
-    "endDateHint": "Lascia vuoto per un singolo giorno.",
     "location": "Luogo",
     "locationPlaceholder": "ad es. casa comunale, campo sportivo",
     "noCycles": "Nessun ciclo disponibile (crea cicli in Struttura → Cicli)",
     "participantCount": "Numero di partecipanti",
     "people": "Persone",
-    "save": "Salva evento",
     "startDate": "Data di inizio",
     "tag": "Tag",
     "tagPlaceholder": "ad es. riunione, campo, serata genitori",
@@ -127,10 +154,19 @@
     "valid": "{count} validi",
     "withErrors": "{count} con errori"
   },
+  "list": {
+    "emptyTitle": "Nessun evento trovato",
+    "monthCount": "{count, plural, one {# evento} other {# eventi}}",
+    "open": "Apri",
+    "resetFilters": "Reimposta filtri",
+    "summaryQuery": "{count, plural, one {# evento} other {# eventi}} per «{query}»",
+    "summaryTag": "{count, plural, one {# evento} other {# eventi}} con tag «{tag}»",
+    "summaryTagQuery": "{count, plural, one {# evento} other {# eventi}} con tag «{tag}» per «{query}»",
+    "today": "Oggi · {date}"
+  },
   "loadMore": "Carica altri ({count} caricati)",
   "loadingMore": "Caricamento altri eventi…",
   "newEvent": "Nuovo evento",
-  "noDescription": "Nessuna descrizione",
   "noTag": "Nessun tag",
   "overviewModal": {
     "addButton": "+ Aggiungi",
@@ -146,8 +182,8 @@
     "title": "Panoramica eventi",
     "untitledEvent": "Evento senza titolo"
   },
-  "pageDescription": "Tutti gli eventi di questa organizzazione.",
   "pageDescriptionEmpty": "Tutti gli eventi e le occasioni di questa organizzazione.",
+  "pageSummary": "{total, plural, one {# evento} other {# eventi}} di questo mandante · {upcoming} in arrivo",
   "pageTitle": "Eventi",
   "pickerModal": {
     "fallbackTitle": "Scegli partecipanti",
@@ -155,11 +191,19 @@
     "search": "Cerca",
     "searchPlaceholder": "Filtra partecipanti"
   },
+  "rowFieldsSection": "Mostra nella riga",
   "searchPlaceholder": "Cerca eventi",
-  "selectEllipsis": "Seleziona…",
   "selectedCount": "{count} selezionati",
   "showAllPeriods": "Mostra tutti i periodi di ciclo",
-  "showPast": "Mostra eventi passati",
+  "tagSidebar": {
+    "all": "Tutti gli eventi",
+    "title": "Tag"
+  },
+  "timeFilter": {
+    "all": "Tutti",
+    "past": "Passati",
+    "upcoming": "In arrivo"
+  },
   "toasts": {
     "csvImportFailed": "Importazione CSV non riuscita",
     "cyclesLoadFailed": "Impossibile caricare i cicli",
@@ -168,7 +212,6 @@
     "deleteFailed": "Impossibile eliminare l'evento",
     "deleted": "Evento eliminato",
     "eventCreated": "Evento creato",
-    "eventSaved": "Evento salvato",
     "eventUpdateFailed": "Impossibile aggiornare l'evento",
     "importedCount": "{count} eventi importati",
     "loadMoreFailed": "Impossibile caricare altri eventi",

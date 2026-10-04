@@ -1,5 +1,22 @@
 {
-  "additionalColumns": "Zusätzliche Spalten",
+  "calendar": {
+    "createOnDay": "Termin an diesem Tag",
+    "eventCount": "{count, plural, one {# Termin} other {# Termine}}",
+    "free": "frei",
+    "freeDay": "Freier Tag",
+    "monthSummary": "{busy} von {total} Tagen belegt",
+    "more": "+{count} weitere",
+    "next": "Weiter",
+    "noEventDescription": "Dieser Tag ist frei.",
+    "noEventTitle": "Noch kein Termin",
+    "open": "Kalender",
+    "previous": "Zurück",
+    "title": "Kalender",
+    "today": "Heute",
+    "viewMonth": "Monat",
+    "viewYear": "Jahr",
+    "yearSummary": "{count, plural, one {# Termin} other {# Termine}} · {busy, plural, one {# Tag} other {# Tage}} belegt"
+  },
   "columns": {
     "actions": "Aktionen",
     "cancelled": "Abgesagt",
@@ -9,20 +26,35 @@
     "location": "Standort",
     "organizers": "Organisatoren",
     "participantCount": "Teilnehmerzahl",
-    "participantsList": "Teilnehmer (Liste)",
     "participantsRole": "Teilnehmer",
     "special1": "Spezial 1",
     "special2": "Spezial 2",
     "special3": "Spezial 3",
-    "specialText1": "Spezial Text 1",
-    "specialText2": "Spezial Text 2",
-    "specialText3": "Spezial Text 3",
     "tag": "Tag",
     "title": "Titel"
   },
   "contextMenu": {
     "markCancelled": "Als abgesagt markieren",
     "uncancel": "Absage aufheben"
+  },
+  "createModal": {
+    "cancelledHint": "Bleibt sichtbar, zählt aber nicht mehr als geplant.",
+    "cyclesHint": "Zuordnung optional – steuert Auswertungen und Statistiken.",
+    "days": "{count, plural, one {# Tag} other {# Tage}}",
+    "descriptionPlaceholder": "Traktanden, Ablauf, Hinweise …",
+    "eyebrow": "Neuer Termin",
+    "eyebrowTenant": "Neuer Termin · {tenant}",
+    "newTag": "+ Neu",
+    "newTagLabel": "Neuer Tag",
+    "period": "Zeitraum",
+    "periodHint": "Enddatum nur bei mehrtägigen Terminen setzen.",
+    "requiredHint": "Startdatum und Titel sind erforderlich.",
+    "rolesFilled": "{filled} von {total} Rollen besetzt",
+    "singleDay": "Eintägig",
+    "status": "Status",
+    "tagHint": "Genau ein Tag pro Termin.",
+    "titlePlaceholder": "Titel des Termins",
+    "until": "bis"
   },
   "csvImport": "CSV Import",
   "delete": "Löschen",
@@ -72,7 +104,6 @@
     "title": "Termine exportieren",
     "untilLabel": "Bis {title} · {date}"
   },
-  "filterAll": "Alle",
   "filterSection": "Filter",
   "form": {
     "cancelled": "Termin abgesagt",
@@ -81,16 +112,12 @@
     "cycles": "Zyklen",
     "cyclesHint": "Standardmässig nach Termindatum zugeordnet, kann manuell angepasst werden.",
     "cyclesLoading": "Zyklen werden geladen…",
-    "description": "Der Tag hilft später beim Verknüpfen mit passenden Protokollpunkten.",
-    "editTitle": "Termin bearbeiten",
     "endDate": "Enddatum",
-    "endDateHint": "Leer lassen für einen einzelnen Tag.",
     "location": "Standort",
     "locationPlaceholder": "z. B. Gemeinschaftshaus, Sportplatz",
     "noCycles": "Keine Zyklen verfügbar (Zyklen unter Struktur → Zyklen anlegen)",
     "participantCount": "Anzahl Teilnehmer",
     "people": "Personen",
-    "save": "Termin speichern",
     "startDate": "Startdatum",
     "tag": "Tag",
     "tagPlaceholder": "z. B. Sitzung, Lager, Elternabend",
@@ -127,10 +154,19 @@
     "valid": "{count} gültig",
     "withErrors": "{count} mit Fehlern"
   },
+  "list": {
+    "emptyTitle": "Keine Termine gefunden",
+    "monthCount": "{count, plural, one {# Termin} other {# Termine}}",
+    "open": "Öffnen",
+    "resetFilters": "Filter zurücksetzen",
+    "summaryQuery": "{count, plural, one {# Termin} other {# Termine}} für «{query}»",
+    "summaryTag": "{count, plural, one {# Termin} other {# Termine}} mit Tag «{tag}»",
+    "summaryTagQuery": "{count, plural, one {# Termin} other {# Termine}} mit Tag «{tag}» für «{query}»",
+    "today": "Heute · {date}"
+  },
   "loadMore": "Mehr laden ({count} geladen)",
   "loadingMore": "Lädt weitere Termine…",
   "newEvent": "Neuer Termin",
-  "noDescription": "Keine Beschreibung",
   "noTag": "Kein Tag",
   "overviewModal": {
     "addButton": "+ Hinzufügen",
@@ -146,8 +182,8 @@
     "title": "Terminübersicht",
     "untitledEvent": "Termin ohne Titel"
   },
-  "pageDescription": "Alle Termine dieses Mandanten.",
   "pageDescriptionEmpty": "Alle Termine und Anlässe dieses Mandanten.",
+  "pageSummary": "{total, plural, one {# Termin} other {# Termine}} dieses Mandanten · {upcoming} kommend",
   "pageTitle": "Termine",
   "pickerModal": {
     "fallbackTitle": "Teilnehmer wählen",
@@ -155,11 +191,19 @@
     "search": "Suche",
     "searchPlaceholder": "Teilnehmer filtern"
   },
+  "rowFieldsSection": "In der Zeile anzeigen",
   "searchPlaceholder": "Termine durchsuchen",
-  "selectEllipsis": "Auswählen…",
   "selectedCount": "{count} ausgewählt",
   "showAllPeriods": "Alle Zyklus-Perioden anzeigen",
-  "showPast": "Vergangene Termine anzeigen",
+  "tagSidebar": {
+    "all": "Alle Termine",
+    "title": "Tags"
+  },
+  "timeFilter": {
+    "all": "Alle",
+    "past": "Vergangen",
+    "upcoming": "Kommend"
+  },
   "toasts": {
     "csvImportFailed": "CSV-Import fehlgeschlagen",
     "cyclesLoadFailed": "Zyklen konnten nicht geladen werden",
@@ -168,7 +212,6 @@
     "deleteFailed": "Termin konnte nicht gelöscht werden",
     "deleted": "Termin gelöscht",
     "eventCreated": "Termin erstellt",
-    "eventSaved": "Termin gespeichert",
     "eventUpdateFailed": "Termin konnte nicht aktualisiert werden",
     "importedCount": "{count} Termine importiert",
     "loadMoreFailed": "Weitere Termine konnten nicht geladen werden",

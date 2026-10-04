@@ -1,15 +1,19 @@
 "use client";
 
-import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
+import { EventCalendarModal } from "@/components/events/event-calendar-modal";
+import { EventCreateModal } from "@/components/events/event-create-modal";
+import { EventIcon } from "@/components/events/event-icons";
+import { effectiveEndDate, fallbackTagColor, isoToUtcDate } from "@/components/events/event-utils";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
-import { DateInput } from "@/components/ui/date-input";
+import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabs } from "@/components/ui/filter-tabs";
-import { Modal, ModalSaveForm } from "@/components/ui/modal";
+import { Modal } from "@/components/ui/modal";
 import { computePopoverPosition, Popover, usePopoverDismiss } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -18,19 +22,15 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { useTableSort } from "@/lib/hooks/use-table-sort";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { getCycleYear } from "@/lib/utils/cycle";
-import { formatDate, formatDateRange } from "@/lib/utils/format";
+import { formatDate, formatDateRange, toIntlLocale } from "@/lib/utils/format";
 import {
-  CycleAssignment,
   CycleConfigSummary,
-  CycleInfo,
   DocumentTemplate,
   EventImportPreview,
   EventSummary,
   ParticipantSummary,
-  TemplateSummary,
 } from "@/types/api";
 
 const PAGE_SIZE = 100;
@@ -49,111 +49,38 @@ function csvTargetFields(t: TFunc): { field: CsvTargetField; label: string; requ
   ];
 }
 
-type OptionalColumnKey =
-  | "is_cancelled"
-  | "participant_count"
-  | "location"
-  | "organizer_ids"
-  | "leadership_ids"
-  | "participant_ids"
-  | "spezial1_ids"
-  | "spezial2_ids"
-  | "spezial3_ids"
-  | "spezial_text1"
-  | "spezial_text2"
-  | "spezial_text3";
+// Felder, die in der Terminzeile zusätzlich angezeigt werden können (Menü „Ansicht").
+type RowFieldKey = "description" | "location" | "participant_count" | "organizer_ids";
 
-function optionalColumns(t: TFunc): { key: OptionalColumnKey; label: string }[] {
+const DEFAULT_ROW_FIELDS: RowFieldKey[] = ["description", "location", "participant_count"];
+const ROW_FIELDS_STORAGE_KEY = "hocx.events.rowFields";
+
+function rowFieldOptions(t: TFunc): { key: RowFieldKey; label: string }[] {
   return [
-    { key: "is_cancelled", label: t("columns.cancelled") },
-    { key: "participant_count", label: t("columns.participantCount") },
+    { key: "description", label: t("columns.description") },
     { key: "location", label: t("columns.location") },
+    { key: "participant_count", label: t("columns.participantCount") },
     { key: "organizer_ids", label: t("columns.organizers") },
-    { key: "leadership_ids", label: t("columns.leadership") },
-    { key: "participant_ids", label: t("columns.participantsList") },
-    { key: "spezial1_ids", label: t("columns.special1") },
-    { key: "spezial2_ids", label: t("columns.special2") },
-    { key: "spezial3_ids", label: t("columns.special3") },
-    { key: "spezial_text1", label: t("columns.specialText1") },
-    { key: "spezial_text2", label: t("columns.specialText2") },
-    { key: "spezial_text3", label: t("columns.specialText3") },
   ];
 }
+
+type TimeFilter = "upcoming" | "all" | "past";
+
+// Sidebar-Eintrag für Termine ohne Tag.
+const NO_TAG_FILTER = "__no_tag__";
 
 type Props = {
   initialEvents: EventSummary[];
   documentTemplates?: DocumentTemplate[];
   availableParticipants?: ParticipantSummary[];
+  tenantName?: string | null;
 };
 
-type ParticipantPickerField = "organizer_ids" | "leadership_ids" | "participant_ids" | "spezial1_ids" | "spezial2_ids" | "spezial3_ids";
-
-function participantRoleFields(t: TFunc): { field: ParticipantPickerField; label: string }[] {
-  return [
-    { field: "organizer_ids", label: t("columns.organizers") },
-    { field: "leadership_ids", label: t("columns.leadership") },
-    { field: "participant_ids", label: t("columns.participantsRole") },
-    { field: "spezial1_ids", label: t("columns.special1") },
-    { field: "spezial2_ids", label: t("columns.special2") },
-    { field: "spezial3_ids", label: t("columns.special3") },
-  ];
-}
-
-type FlatCycle = CycleInfo & { cycle_config_id: string; config_name: string };
-
-type EventFormState = {
-  id?: string;
-  event_date: string;
-  event_end_date: string;
-  tag: string;
-  title: string;
-  description: string;
-  participant_count: string;
-  is_cancelled: boolean;
-  cycle_assignments: CycleAssignment[];
-  // false = Zyklen folgen dem Termindatum (Backend ordnet zu); true = manuell gewählt.
-  cycle_assignments_touched: boolean;
-  organizer_ids: string[];
-  leadership_ids: string[];
-  participant_ids: string[];
-  spezial1_ids: string[];
-  spezial2_ids: string[];
-  spezial3_ids: string[];
-  location: string;
-  spezial_text1: string;
-  spezial_text2: string;
-  spezial_text3: string;
-};
-
-function emptyForm(): EventFormState {
-  return {
-    event_date: new Date().toISOString().slice(0, 10),
-    event_end_date: "",
-    tag: "",
-    title: "",
-    description: "",
-    participant_count: "0",
-    is_cancelled: false,
-    cycle_assignments: [],
-    cycle_assignments_touched: false,
-    organizer_ids: [],
-    leadership_ids: [],
-    participant_ids: [],
-    spezial1_ids: [],
-    spezial2_ids: [],
-    spezial3_ids: [],
-    location: "",
-    spezial_text1: "",
-    spezial_text2: "",
-    spezial_text3: "",
-  };
-}
-
-export function EventManager({ initialEvents, documentTemplates = [], availableParticipants = [] }: Props) {
+export function EventManager({ initialEvents, documentTemplates = [], availableParticipants = [], tenantName }: Props) {
   const t = useTranslations("events");
+  const locale = useLocale();
   const CSV_TARGET_FIELDS = useMemo(() => csvTargetFields(t), [t]);
-  const OPTIONAL_COLUMNS = useMemo(() => optionalColumns(t), [t]);
-  const PARTICIPANT_ROLE_FIELDS = useMemo(() => participantRoleFields(t), [t]);
+  const ROW_FIELD_OPTIONS = useMemo(() => rowFieldOptions(t), [t]);
   const showToast = useToast();
   const confirm = useConfirm();
   const [events, setEvents] = useState(initialEvents);
@@ -161,22 +88,16 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState("all");
-  const [showPast, setShowPast] = useState(true);
-  const { sortKey, sortDirection, toggleSort, sortIndicator } = useTableSort<"event_date" | "title" | "tag" | "description" | "participant_count">("event_date");
-  const [visibleColumns, setVisibleColumns] = useState<Set<OptionalColumnKey>>(new Set());
-  const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<EventFormState>(emptyForm);
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
+  const [rowFields, setRowFields] = useState<Set<RowFieldKey>>(() => new Set(DEFAULT_ROW_FIELDS));
+  const [createDate, setCreateDate] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [todayIso, setTodayIso] = useState("0000-01-01");
   const [detailEvent, setDetailEvent] = useState<EventSummary | null>(null);
   const { tagConfig, updateTagColor, renameTag } = useTagConfig();
   const [cycleConfigs, setCycleConfigs] = useState<CycleConfigSummary[]>([]);
   const [showAllPeriods, setShowAllPeriods] = useState(false);
-  const [availableCycles, setAvailableCycles] = useState<FlatCycle[]>([]);
-  const [cyclesLoading, setCyclesLoading] = useState(false);
-  const cyclesLoadedRef = useRef(false);
 
-  const [pickerField, setPickerField] = useState<ParticipantPickerField | null>(null);
-  const [pickerSearch, setPickerSearch] = useState("");
 
   const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; event: EventSummary } | null>(null);
 
@@ -283,6 +204,21 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     setTodayIso(new Date().toISOString().slice(0, 10));
   }, []);
 
+  // Zeilen-Ansicht ist eine reine Komfort-Einstellung pro Browser.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(ROW_FIELDS_STORAGE_KEY);
+      if (!stored) return;
+      const parsed: unknown = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        const allowed = new Set<string>(["description", "location", "participant_count", "organizer_ids"]);
+        setRowFields(new Set(parsed.filter((key): key is RowFieldKey => typeof key === "string" && allowed.has(key))));
+      }
+    } catch {
+      // Ohne Speicher gilt die Standardansicht.
+    }
+  }, []);
+
   useEffect(() => {
     browserApiFetch<CycleConfigSummary[]>("/api/cycle-configs")
       .then((configs) => setCycleConfigs(configs ?? []))
@@ -304,28 +240,6 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     document.addEventListener("scroll", onScroll, true);
     return () => document.removeEventListener("scroll", onScroll, true);
   }, [eventContextMenu]);
-
-  async function ensureCyclesLoaded() {
-    if (cyclesLoadedRef.current) return;
-    cyclesLoadedRef.current = true;
-    setCyclesLoading(true);
-    try {
-      const configs = cycleConfigs.length > 0 ? cycleConfigs : await browserApiFetch<CycleConfigSummary[]>("/api/cycle-configs"); // i18n-ok: Vergleichsoperator, kein JSX
-      const cycleGroups = await Promise.all(
-        (configs ?? []).map((cfg) =>
-          browserApiFetch<CycleInfo[]>(`/api/cycle-configs/${cfg.id}/cycles`).then((cycles) =>
-            (cycles ?? []).map((c) => ({ ...c, cycle_config_id: cfg.id, config_name: cfg.name }))
-          ).catch(() => [] as FlatCycle[])
-        )
-      );
-      setAvailableCycles(cycleGroups.flat());
-    } catch (error) {
-      cyclesLoadedRef.current = false;
-      showToast(error instanceof Error ? error.message : t("toasts.cyclesLoadFailed"), "error");
-    } finally {
-      setCyclesLoading(false);
-    }
-  }
 
   const knownTags = useMemo(
     () =>
@@ -349,48 +263,103 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     });
   }
 
+  // Basis für Sidebar-Zähler und Liste: nur der Zyklus-Filter, noch ohne Tag/Zeit/Suche.
+  const periodEvents = useMemo(
+    () => (showAllPeriods ? events : events.filter((event) => isInCurrentPeriod(event))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cycleConfigs, events, showAllPeriods, todayIso]
+  );
+
+  const tagCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    let untagged = 0;
+    periodEvents.forEach((event) => {
+      const tag = (event.tag ?? "").trim();
+      if (tag) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      else untagged += 1;
+    });
+    const tags = Array.from(counts.entries()).sort(([left], [right]) => left.localeCompare(right));
+    return { tags, untagged };
+  }, [periodEvents]);
+
+  const upcomingCount = useMemo(() => events.filter((event) => effectiveEndDate(event) >= todayIso).length, [events, todayIso]);
+
   const filteredEvents = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return [...events]
+    return periodEvents
       .filter((event) => {
-        if (!showPast) {
-          const effectiveEndDate = event.event_end_date || event.event_date;
-          if (effectiveEndDate < todayIso) {
-            return false;
-          }
-        }
-        if (!showAllPeriods && !isInCurrentPeriod(event)) {
-          return false;
-        }
-        if (tagFilter !== "all" && (event.tag ?? "") !== tagFilter) {
+        const isPast = effectiveEndDate(event) < todayIso;
+        if (timeFilter === "upcoming" && isPast) return false;
+        if (timeFilter === "past" && !isPast) return false;
+        const tag = (event.tag ?? "").trim();
+        if (tagFilter === NO_TAG_FILTER ? tag !== "" : tagFilter !== "all" && tag !== tagFilter) {
           return false;
         }
         if (!query) {
           return true;
         }
-        const haystack = `${event.title} ${event.tag ?? ""} ${event.description ?? ""}`.toLowerCase();
+        const haystack = `${event.title} ${event.tag ?? ""} ${event.description ?? ""} ${event.location ?? ""}`.toLowerCase();
         return haystack.includes(query);
       })
-      .sort((left, right) => {
-        const direction = sortDirection === "asc" ? 1 : -1;
-        if (sortKey === "event_date") {
-          const leftValue = left.event_date;
-          const rightValue = right.event_date;
-          return leftValue.localeCompare(rightValue) * direction;
-        }
-        if (sortKey === "participant_count") {
-          return ((left.participant_count ?? 0) - (right.participant_count ?? 0)) * direction;
-        }
-        const leftValue = String(left[sortKey] ?? "").toLowerCase();
-        const rightValue = String(right[sortKey] ?? "").toLowerCase();
-        return leftValue.localeCompare(rightValue) * direction;
-      });
-  }, [cycleConfigs, events, search, showAllPeriods, showPast, sortDirection, sortKey, tagFilter, todayIso]);
+      .sort((left, right) => left.event_date.localeCompare(right.event_date) || left.title.localeCompare(right.title));
+  }, [periodEvents, search, tagFilter, timeFilter, todayIso]);
 
-  function openCreate() {
-    setForm(emptyForm());
-    void ensureCyclesLoaded();
-    setModalOpen(true);
+  const monthFormatter = useMemo(
+    () => new Intl.DateTimeFormat(toIntlLocale(locale), { month: "long", year: "numeric", timeZone: "UTC" }),
+    [locale]
+  );
+  const weekdayFormatter = useMemo(
+    () => new Intl.DateTimeFormat(toIntlLocale(locale), { weekday: "short", timeZone: "UTC" }),
+    [locale]
+  );
+  const todayFormatter = useMemo(
+    () => new Intl.DateTimeFormat(toIntlLocale(locale), { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }),
+    [locale]
+  );
+
+  const monthGroups = useMemo(() => {
+    const groups: { key: string; label: string; items: EventSummary[] }[] = [];
+    filteredEvents.forEach((event) => {
+      const key = event.event_date.slice(0, 7);
+      const last = groups[groups.length - 1];
+      if (last && last.key === key) {
+        last.items.push(event);
+      } else {
+        groups.push({ key, label: monthFormatter.format(isoToUtcDate(event.event_date)), items: [event] });
+      }
+    });
+    return groups;
+  }, [filteredEvents, monthFormatter]);
+
+  // Die „Heute"-Linie trennt vergangene und kommende Termine, nur wenn beide sichtbar sind.
+  const todayMarkerEventId = useMemo(() => {
+    if (timeFilter !== "all") return null;
+    const index = filteredEvents.findIndex((event) => effectiveEndDate(event) >= todayIso);
+    return index > 0 ? filteredEvents[index].id : null;
+  }, [filteredEvents, timeFilter, todayIso]);
+
+  function tagColor(tag: string): string {
+    return tagConfig[tag]?.color ?? fallbackTagColor(tag);
+  }
+
+  const hasActiveFilter = tagFilter !== "all" || search.trim().length > 0;
+
+  function resetFilters() {
+    setTagFilter("all");
+    setSearch("");
+  }
+
+  function filterSummary(): string {
+    const count = filteredEvents.length;
+    const query = search.trim();
+    const tag = tagFilter === NO_TAG_FILTER ? t("noTag") : tagFilter;
+    if (tagFilter !== "all" && query) return t("list.summaryTagQuery", { count, tag, query });
+    if (tagFilter !== "all") return t("list.summaryTag", { count, tag });
+    return t("list.summaryQuery", { count, query });
+  }
+
+  function openCreate(date?: string) {
+    setCreateDate(date ?? todayIso);
   }
 
   async function updateEventDetail(eventId: string, patch: Partial<EventSummary>) {
@@ -415,121 +384,12 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     }
   }
 
-  function openParticipantPicker(field: ParticipantPickerField) {
-    setPickerField(field);
-    setPickerSearch("");
-  }
-
-  function togglePickerParticipant(field: ParticipantPickerField, participantId: string) {
-    setForm((current) => {
-      const selected = current[field] as string[];
-      return {
-        ...current,
-        [field]: selected.includes(participantId)
-          ? selected.filter((id) => id !== participantId)
-          : [...selected, participantId],
-      };
-    });
-  }
-
-  function participantLabel(ids: string[]): string {
-    if (!ids.length) return t("selectEllipsis");
+  function organizerNames(ids: string[] | null | undefined): string | null {
+    if (!ids || ids.length === 0) return null;
     const names = ids
       .map((id) => availableParticipants.find((p) => p.id === id)?.display_name)
       .filter(Boolean);
     return names.length ? names.join(", ") : t("selectedCount", { count: ids.length });
-  }
-
-  function formatParticipantNames(ids: string[] | null | undefined): ReactNode {
-    if (!ids || ids.length === 0) return <span className="muted">–</span>;
-    const names = ids
-      .map((id) => availableParticipants.find((p) => p.id === id)?.display_name)
-      .filter(Boolean);
-    return names.length ? names.join(", ") : <span className="muted">{t("selectedCount", { count: ids.length })}</span>;
-  }
-
-  const optionalColumnRenderers: Record<OptionalColumnKey, (item: EventSummary) => ReactNode> = {
-    is_cancelled: (item) =>
-      item.is_cancelled ? <Badge variant="danger">{t("columns.cancelled")}</Badge> : <span className="muted">–</span>,
-    participant_count: (item) => item.participant_count ?? 0,
-    location: (item) => item.location || <span className="muted">–</span>,
-    organizer_ids: (item) => formatParticipantNames(item.organizer_ids),
-    leadership_ids: (item) => formatParticipantNames(item.leadership_ids),
-    participant_ids: (item) => formatParticipantNames(item.participant_ids),
-    spezial1_ids: (item) => formatParticipantNames(item.spezial1_ids),
-    spezial2_ids: (item) => formatParticipantNames(item.spezial2_ids),
-    spezial3_ids: (item) => formatParticipantNames(item.spezial3_ids),
-    spezial_text1: (item) => item.spezial_text1 || <span className="muted">–</span>,
-    spezial_text2: (item) => item.spezial_text2 || <span className="muted">–</span>,
-    spezial_text3: (item) => item.spezial_text3 || <span className="muted">–</span>,
-  };
-
-  const activeOptionalColumns = OPTIONAL_COLUMNS.filter((column) => visibleColumns.has(column.key));
-
-  function defaultCycleAssignments(eventDate: string): CycleAssignment[] {
-    if (!eventDate) return [];
-    return cycleConfigs.map((config) => ({
-      cycle_config_id: config.id,
-      cycle_year: getCycleYear(eventDate, config.reset_month, config.reset_day),
-    }));
-  }
-
-  const formCycleAssignments = form.cycle_assignments_touched ? form.cycle_assignments : defaultCycleAssignments(form.event_date);
-
-  function toggleCycle(cycleConfigId: string, cycleYear: number) {
-    setForm((current) => {
-      const base = current.cycle_assignments_touched ? current.cycle_assignments : defaultCycleAssignments(current.event_date);
-      const exists = base.some(
-        (a) => a.cycle_config_id === cycleConfigId && a.cycle_year === cycleYear
-      );
-      const next = exists
-        ? base.filter((a) => !(a.cycle_config_id === cycleConfigId && a.cycle_year === cycleYear))
-        : [...base, { cycle_config_id: cycleConfigId, cycle_year: cycleYear }];
-      return { ...current, cycle_assignments: next, cycle_assignments_touched: true };
-    });
-  }
-
-  async function saveEvent(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    try {
-      const payload = {
-        event_date: form.event_date,
-        event_end_date: form.event_end_date || null,
-        tag: form.tag || null,
-        title: form.title,
-        description: form.description || null,
-        participant_count: Math.max(0, Number(form.participant_count || "0")),
-        is_cancelled: form.is_cancelled,
-        cycle_assignments: form.cycle_assignments_touched ? form.cycle_assignments : undefined,
-        organizer_ids: form.organizer_ids,
-        leadership_ids: form.leadership_ids,
-        participant_ids: form.participant_ids,
-        spezial1_ids: form.spezial1_ids,
-        spezial2_ids: form.spezial2_ids,
-        spezial3_ids: form.spezial3_ids,
-        location: form.location || null,
-        spezial_text1: form.spezial_text1 || null,
-        spezial_text2: form.spezial_text2 || null,
-        spezial_text3: form.spezial_text3 || null,
-      };
-      const saved = form.id
-        ? await browserApiFetch<EventSummary>(`/api/events/${form.id}`, {
-            method: "PATCH",
-            body: JSON.stringify(payload),
-          })
-        : await browserApiFetch<EventSummary>("/api/events", {
-            method: "POST",
-            body: JSON.stringify(payload),
-          });
-
-      setEvents((current) =>
-        form.id ? current.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...current]
-      );
-      setModalOpen(false);
-      showToast(form.id ? t("toasts.eventSaved") : t("toasts.eventCreated"), "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.saveFailed"), "error");
-    }
   }
 
   async function deleteEvent(eventId: string) {
@@ -587,16 +447,103 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     onLoadMore: () => void loadMore(),
   });
 
-  function toggleColumn(key: OptionalColumnKey) {
-    setVisibleColumns((current) => {
+  function toggleRowField(key: RowFieldKey) {
+    setRowFields((current) => {
       const next = new Set(current);
       if (next.has(key)) {
         next.delete(key);
       } else {
         next.add(key);
       }
+      try {
+        window.localStorage.setItem(ROW_FIELDS_STORAGE_KEY, JSON.stringify(Array.from(next)));
+      } catch {
+        // Nicht speicherbar (z. B. privates Fenster): Einstellung gilt nur für diese Sitzung.
+      }
       return next;
     });
+  }
+
+  function renderEventRow(item: EventSummary) {
+    const isPast = effectiveEndDate(item) < todayIso;
+    const tag = (item.tag ?? "").trim();
+    const startDate = isoToUtcDate(item.event_date);
+    const organizers = rowFields.has("organizer_ids") ? organizerNames(item.organizer_ids) : null;
+    const participantCount = item.participant_count ?? 0;
+    const rowClass = `event-list-row${isPast ? " event-list-row-past" : ""}${item.is_cancelled ? " event-list-row-cancelled" : ""}`;
+
+    return (
+      <Fragment key={item.id}>
+        {item.id === todayMarkerEventId ? (
+          <div className="event-today-marker">
+            <span>{t("list.today", { date: todayFormatter.format(isoToUtcDate(todayIso)) })}</span>
+          </div>
+        ) : null}
+        <div className={rowClass} onClick={() => setDetailEvent(item)} onContextMenu={(event) => openEventContextMenu(event, item)}>
+          <div className="event-date-tile" aria-hidden="true">
+            <span className="event-date-tile-weekday">{weekdayFormatter.format(startDate).replace(/\.$/, "")}</span>
+            <span className="event-date-tile-day">{startDate.getUTCDate()}</span>
+          </div>
+          <div className="event-list-row-body">
+            <button
+              type="button"
+              className="event-list-row-title"
+              onClick={(clickEvent) => {
+                clickEvent.stopPropagation();
+                setDetailEvent(item);
+              }}
+            >
+              {item.title}
+            </button>
+            <div className="event-list-row-meta">
+              {tag ? (
+                <span className="badge event-tag-badge" style={{ "--tag-color": tagColor(tag) } as React.CSSProperties}>
+                  <span className="badge-dot" />
+                  {tag}
+                </span>
+              ) : null}
+              {item.is_cancelled ? <Badge variant="danger">{t("columns.cancelled")}</Badge> : null}
+              {item.event_end_date && item.event_end_date !== item.event_date ? (
+                <span className="event-list-meta-item">{formatDateRange(item.event_date, item.event_end_date)}</span>
+              ) : null}
+              {rowFields.has("description") && item.description ? (
+                <span className="event-list-meta-item event-list-meta-description">{item.description}</span>
+              ) : null}
+              {rowFields.has("location") && item.location ? (
+                <span className="event-list-meta-item">
+                  <EventIcon name="pin" width={14} height={14} />
+                  {item.location}
+                </span>
+              ) : null}
+              {organizers ? (
+                <span className="event-list-meta-item">
+                  <EventIcon name="user" width={14} height={14} />
+                  {organizers}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <div className="event-list-row-aside">
+            {rowFields.has("participant_count") && participantCount > 0 ? (
+              <span className="event-list-count" title={t("columns.participantCount")}>
+                <EventIcon name="users" width={15} height={15} />
+                {participantCount}
+              </span>
+            ) : null}
+            <ActionMenu
+              items={[
+                { label: t("list.open"), onClick: () => setDetailEvent(item) },
+                {
+                  label: item.is_cancelled ? t("contextMenu.uncancel") : t("contextMenu.markCancelled"),
+                  onClick: () => void toggleCancelled(item),
+                },
+                { label: t("delete"), onClick: () => void deleteEvent(item.id), danger: true },
+              ]}
+            />
+          </div>
+        </div>
+      </Fragment>
+    );
   }
 
   function openImportModal() {
@@ -677,67 +624,33 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       <div className="page-header">
         <div>
           <h1 className="page-title">{t("pageTitle")}</h1>
-          <p className="muted">{hasNoEvents ? t("pageDescriptionEmpty") : t("pageDescription")}</p>
+          <p className="muted">
+            {hasNoEvents ? t("pageDescriptionEmpty") : t("pageSummary", { total: events.length, upcoming: upcomingCount })}
+          </p>
         </div>
         {hasNoEvents ? null : (
-        <div className="table-toolbar-actions">
-          <button type="button" className="button-secondary button-ghost" onClick={openImportModal}>
-            {t("csvImport")}
-          </button>
-          {landscapeTemplates.length > 0 && (
-            <button type="button" className="button-secondary button-ghost" onClick={() => setExportModalOpen(true)}>
-              {t("export")}
+          <div className="event-header-actions">
+            <button type="button" className="button-secondary button-ghost event-calendar-button" onClick={() => setCalendarOpen(true)}>
+              <EventIcon name="calendar" />
+              {t("calendar.open")}
             </button>
-          )}
-          <div className="mini-menu mini-menu-compact mini-menu-end">
-            <button
-              ref={viewMenuTriggerRef}
-              type="button"
-              className={`mini-menu-trigger${viewMenuOpen ? " mini-menu-trigger-open" : ""}`}
-              onClick={() => setViewMenuOpen((value) => !value)}
-              aria-haspopup="menu"
-              aria-expanded={viewMenuOpen}
-            >
-              <span className="mini-menu-trigger-label">{t("view")}</span>
-              <span className="mini-menu-trigger-icon">⌄</span>
+            <div className="event-button-group">
+              <button type="button" className="button-secondary button-ghost" onClick={openImportModal}>
+                <EventIcon name="upload" />
+                {t("csvImport")}
+              </button>
+              {landscapeTemplates.length > 0 && (
+                <button type="button" className="button-secondary button-ghost" onClick={() => setExportModalOpen(true)}>
+                  <EventIcon name="download" />
+                  {t("export")}
+                </button>
+              )}
+            </div>
+            <button type="button" className="button-primary event-new-button" onClick={() => openCreate()}>
+              <EventIcon name="plus" />
+              {t("newEvent")}
             </button>
-            <Popover open={viewMenuOpen} onOpenChange={setViewMenuOpen} anchorRef={viewMenuTriggerRef} align="end" className="mini-menu-popover-portal">
-              <div className="mini-menu-section">
-                <div className="mini-menu-section-title">{t("filterSection")}</div>
-                <label className="mini-menu-option">
-                  <span>{t("showPast")}</span>
-                  <input type="checkbox" checked={showPast} onChange={(event) => setShowPast(event.target.checked)} />
-                </label>
-                {cycleConfigs.length > 0 && (
-                  <label className="mini-menu-option">
-                    <span>{t("showAllPeriods")}</span>
-                    <input
-                      type="checkbox"
-                      checked={showAllPeriods}
-                      onChange={(event) => setShowAllPeriods(event.target.checked)}
-                    />
-                  </label>
-                )}
-              </div>
-              <div className="mini-menu-section">
-                <div className="mini-menu-section-title">{t("additionalColumns")}</div>
-                {OPTIONAL_COLUMNS.map((column) => (
-                  <label key={column.key} className="mini-menu-option">
-                    <span>{column.label}</span>
-                    <input
-                      type="checkbox"
-                      checked={visibleColumns.has(column.key)}
-                      onChange={() => toggleColumn(column.key)}
-                    />
-                  </label>
-                ))}
-              </div>
-            </Popover>
           </div>
-          <button type="button" className="button-secondary" onClick={openCreate}>
-            {t("newEvent")}
-          </button>
-        </div>
         )}
       </div>
 
@@ -746,82 +659,161 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
           title={t("emptyState.title")}
           description={t("emptyState.description")}
           actions={
-            <button type="button" className="button-primary" onClick={openCreate}>
+            <button type="button" className="button-primary" onClick={() => openCreate()}>
               {t("emptyState.add")}
             </button>
           }
           hint={t("emptyState.hint")}
         />
       ) : (
-      <>
-      <div className="list-filter-row">
-        <FilterTabs
-          options={[{ value: "all", label: t("filterAll") }, ...knownTags.map((tag) => ({ value: tag, label: tag }))]}
-          value={tagFilter}
-          onChange={setTagFilter}
-        />
-        <div className="list-filter-search">
-          <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
-        </div>
-      </div>
-
-      <DataTable
-        className="data-table-lg"
-        columns={[
-          { key: "event_date", label: t("columns.date"), sortable: true, sortDirection: sortIndicator("event_date"), onSort: () => toggleSort("event_date") },
-          { key: "title", label: t("columns.title"), sortable: true, sortDirection: sortIndicator("title"), onSort: () => toggleSort("title") },
-          { key: "tag", label: t("columns.tag"), sortable: true, sortDirection: sortIndicator("tag"), onSort: () => toggleSort("tag") },
-          ...activeOptionalColumns.map((column) =>
-            column.key === "participant_count"
-              ? {
-                  key: column.key,
-                  label: column.label,
-                  sortable: true,
-                  sortDirection: sortIndicator("participant_count"),
-                  onSort: () => toggleSort("participant_count"),
-                }
-              : { key: column.key, label: column.label }
-          ),
-          { key: "description", label: t("columns.description"), sortable: true, sortDirection: sortIndicator("description"), onSort: () => toggleSort("description") },
-          t("columns.actions"),
-        ]}
-      >
-        {filteredEvents.map((item) => (
-          <tr
-            key={item.id}
-            className={`table-row-clickable${visibleColumns.has("is_cancelled") && item.is_cancelled ? " table-row-cancelled" : ""}`}
-            onClick={() => setDetailEvent(item)}
-            onContextMenu={(event) => openEventContextMenu(event, item)}
-          >
-            <td>{formatDateRange(item.event_date, item.event_end_date)}</td>
-            <td>
-              <strong>{item.title}</strong>
-            </td>
-            <td>{item.tag ? <span className="pill">{item.tag}</span> : <span className="muted">{t("noTag")}</span>}</td>
-            {activeOptionalColumns.map((column) => (
-              <td key={column.key}>{optionalColumnRenderers[column.key](item)}</td>
-            ))}
-            <td className="table-cell-wrap">{item.description ?? <span className="muted">{t("noDescription")}</span>}</td>
-            <td>
-              <div className="table-actions table-actions-start">
+        <div className="event-layout">
+          <aside className="event-tag-sidebar" aria-label={t("tagSidebar.title")}>
+            <div className="event-tag-sidebar-title">{t("tagSidebar.title")}</div>
+            <div className="event-tag-sidebar-list">
+              <button
+                type="button"
+                className={`event-tag-sidebar-item${tagFilter === "all" ? " event-tag-sidebar-item-active" : ""}`}
+                aria-pressed={tagFilter === "all"}
+                onClick={() => setTagFilter("all")}
+              >
+                <span className="event-tag-dot event-tag-dot-all" />
+                <span className="event-tag-sidebar-label">{t("tagSidebar.all")}</span>
+                <span className="event-tag-sidebar-count">{periodEvents.length}</span>
+              </button>
+              {tagCounts.tags.map(([tag, count]) => (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`event-tag-sidebar-item${tagFilter === tag ? " event-tag-sidebar-item-active" : ""}`}
+                  aria-pressed={tagFilter === tag}
+                  onClick={() => setTagFilter(tag)}
+                >
+                  <span className="event-tag-dot" style={{ "--tag-color": tagColor(tag) } as React.CSSProperties} />
+                  <span className="event-tag-sidebar-label">{tag}</span>
+                  <span className="event-tag-sidebar-count">{count}</span>
+                </button>
+              ))}
+              {tagCounts.untagged > 0 && (
                 <button
                   type="button"
-                  className="button-secondary button-danger"
-                  onClick={(clickEvent) => {
-                    clickEvent.stopPropagation();
-                    void deleteEvent(item.id);
-                  }}
+                  className={`event-tag-sidebar-item${tagFilter === NO_TAG_FILTER ? " event-tag-sidebar-item-active" : ""}`}
+                  aria-pressed={tagFilter === NO_TAG_FILTER}
+                  onClick={() => setTagFilter(NO_TAG_FILTER)}
                 >
-                  {t("delete")}
+                  <span className="event-tag-dot event-tag-dot-none" />
+                  <span className="event-tag-sidebar-label">{t("noTag")}</span>
+                  <span className="event-tag-sidebar-count">{tagCounts.untagged}</span>
+                </button>
+              )}
+            </div>
+          </aside>
+
+          <div className="event-main">
+            <div className="event-toolbar">
+              <div className="event-toolbar-search">
+                <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
+              </div>
+              <FilterTabs<TimeFilter>
+                options={[
+                  { value: "upcoming", label: t("timeFilter.upcoming") },
+                  { value: "all", label: t("timeFilter.all") },
+                  { value: "past", label: t("timeFilter.past") },
+                ]}
+                value={timeFilter}
+                onChange={setTimeFilter}
+              />
+              <button
+                ref={viewMenuTriggerRef}
+                type="button"
+                className={`button-secondary button-ghost event-view-trigger${viewMenuOpen ? " event-view-trigger-open" : ""}`}
+                onClick={() => setViewMenuOpen((value) => !value)}
+                aria-haspopup="menu"
+                aria-expanded={viewMenuOpen}
+              >
+                <EventIcon name="sliders" />
+                {t("view")}
+              </button>
+              <Popover
+                open={viewMenuOpen}
+                onOpenChange={setViewMenuOpen}
+                anchorRef={viewMenuTriggerRef}
+                align="end"
+                className="mini-menu-popover-portal event-view-popover"
+              >
+                {cycleConfigs.length > 0 && (
+                  <div className="mini-menu-section">
+                    <div className="mini-menu-section-title">{t("filterSection")}</div>
+                    <label className="mini-menu-option mini-menu-switch-option">
+                      <span>{t("showAllPeriods")}</span>
+                      <input
+                        type="checkbox"
+                        className="mini-menu-switch-input"
+                        checked={showAllPeriods}
+                        onChange={(event) => setShowAllPeriods(event.target.checked)}
+                      />
+                      <span className="mini-menu-switch" aria-hidden="true" />
+                    </label>
+                  </div>
+                )}
+                <div className="mini-menu-section">
+                  <div className="mini-menu-section-title">{t("rowFieldsSection")}</div>
+                  {ROW_FIELD_OPTIONS.map((option) => (
+                    <label key={option.key} className="mini-menu-option mini-menu-switch-option">
+                      <span>{option.label}</span>
+                      <input
+                        type="checkbox"
+                        className="mini-menu-switch-input"
+                        checked={rowFields.has(option.key)}
+                        onChange={() => toggleRowField(option.key)}
+                      />
+                      <span className="mini-menu-switch" aria-hidden="true" />
+                    </label>
+                  ))}
+                </div>
+              </Popover>
+            </div>
+
+            {hasActiveFilter && filteredEvents.length > 0 && (
+              <div className="event-filter-summary">
+                <span>{filterSummary()}</span>
+                <button type="button" className="event-link-button" onClick={resetFilters}>
+                  {t("list.resetFilters")}
                 </button>
               </div>
-            </td>
-          </tr>
-        ))}
-      </DataTable>
-      </>
-      )}
+            )}
 
+            <div className="event-list">
+              {monthGroups.length === 0 ? (
+                <div className="event-list-empty">
+                  <strong className="event-list-empty-title">{t("list.emptyTitle")}</strong>
+                  {hasActiveFilter || timeFilter !== "all" ? (
+                    <button
+                      type="button"
+                      className="event-link-button"
+                      onClick={() => {
+                        resetFilters();
+                        setTimeFilter("all");
+                      }}
+                    >
+                      {t("list.resetFilters")}
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                monthGroups.map((group) => (
+                  <section key={group.key} className="event-month-group">
+                    <h2 className="event-month-heading">
+                      {group.label}
+                      <span className="event-month-count">{t("list.monthCount", { count: group.items.length })}</span>
+                    </h2>
+                    {group.items.map((item) => renderEventRow(item))}
+                  </section>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {hasMore && (
         <div className="load-more-row" ref={loadMoreSentinelRef}>
           {isLoadingMore ? (
@@ -960,133 +952,26 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         </div>
       </Modal>
 
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={form.id ? t("form.editTitle") : t("form.createTitle")}
-        description={t("form.description")}
-      >
-        <ModalSaveForm className="grid" onSubmit={saveEvent}>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">{t("form.startDate")}</span>
-              <DateInput value={form.event_date} onChange={(value) => setForm((current) => ({ ...current, event_date: value }))} required />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">{t("form.endDate")}</span>
-              <DateInput value={form.event_end_date} onChange={(value) => setForm((current) => ({ ...current, event_end_date: value }))} />
-              <span className="field-help">{t("form.endDateHint")}</span>
-            </label>
-          </div>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">{t("form.tag")}</span>
-              <input
-                value={form.tag}
-                onChange={(event) => setForm((current) => ({ ...current, tag: event.target.value }))}
-                placeholder={t("form.tagPlaceholder")}
-                list="event-tag-suggestions"
-              />
-              <datalist id="event-tag-suggestions">
-                {knownTags.map((tag) => (
-                  <option key={tag} value={tag} />
-                ))}
-              </datalist>
-            </label>
-            <label className="field-stack">
-              <span className="field-label">{t("form.title")}</span>
-              <input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} required />
-            </label>
-          </div>
-          <label className="field-stack">
-            <span className="field-label">{t("form.participantCount")}</span>
-            <input
-              type="number"
-              min="0"
-              value={form.participant_count}
-              onChange={(event) => setForm((current) => ({ ...current, participant_count: event.target.value }))}
-            />
-          </label>
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={form.is_cancelled}
-              onChange={(event) => setForm((current) => ({ ...current, is_cancelled: event.target.checked }))}
-            />
-            {t("form.cancelled")}
-          </label>
-          <label className="field-stack">
-            <span className="field-label">{t("columns.description")}</span>
-            <textarea rows={5} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} />
-          </label>
-          <label className="field-stack">
-            <span className="field-label">{t("form.location")}</span>
-            <input value={form.location} onChange={(e) => setForm((current) => ({ ...current, location: e.target.value }))} placeholder={t("form.locationPlaceholder")} />
-          </label>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">{t("columns.specialText1")}</span>
-              <input value={form.spezial_text1} onChange={(e) => setForm((current) => ({ ...current, spezial_text1: e.target.value }))} />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">{t("columns.specialText2")}</span>
-              <input value={form.spezial_text2} onChange={(e) => setForm((current) => ({ ...current, spezial_text2: e.target.value }))} />
-            </label>
-          </div>
-          <label className="field-stack">
-            <span className="field-label">{t("columns.specialText3")}</span>
-            <input value={form.spezial_text3} onChange={(e) => setForm((current) => ({ ...current, spezial_text3: e.target.value }))} />
-          </label>
-          {availableParticipants.length > 0 && (
-            <div className="field-stack">
-              <span className="field-label">{t("form.people")}</span>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-2)" }}>
-                {PARTICIPANT_ROLE_FIELDS.map(({ field, label }) => (
-                  <div key={field} className="field-stack" style={{ gap: "var(--space-1)" }}>
-                    <span className="field-label" style={{ fontSize: "var(--text-xs)" }}>{label}</span>
-                    <button
-                      type="button"
-                      className="button-ghost structured-list-picker"
-                      onClick={() => openParticipantPicker(field)}
-                      style={{ textAlign: "left", minHeight: 36, padding: "var(--space-2) var(--space-3)", fontSize: "var(--text-base)" }}
-                    >
-                      {participantLabel(form[field] as string[])}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="field-stack">
-            <span className="field-label">{t("form.cycles")}</span>
-            {cyclesLoading ? (
-              <span className="muted" style={{ fontSize: "var(--text-base)" }}>{t("form.cyclesLoading")}</span>
-            ) : availableCycles.length === 0 ? (
-              <span className="muted" style={{ fontSize: "var(--text-base)" }}>{t("form.noCycles")}</span>
-            ) : (
-              <div className="cycle-chip-list">
-                {availableCycles.map((cycle) => {
-                  const active = formCycleAssignments.some(
-                    (a) => a.cycle_config_id === cycle.cycle_config_id && a.cycle_year === cycle.cycle_year
-                  );
-                  return (
-                    <button
-                      key={`${cycle.cycle_config_id}-${cycle.cycle_year}`}
-                      type="button"
-                      className={`cycle-chip${active ? " cycle-chip-active" : ""}`}
-                      onClick={() => toggleCycle(cycle.cycle_config_id, cycle.cycle_year)}
-                    >
-                      {cycle.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <span className="field-help">{t("form.cyclesHint")}</span>
-          </div>
-          <button data-modal-save type="submit">{form.id ? t("form.save") : t("form.create")}</button>
-        </ModalSaveForm>
-      </Modal>
+      <EventCreateModal
+        open={createDate !== null}
+        onClose={() => setCreateDate(null)}
+        initialDate={createDate ?? todayIso}
+        knownTags={knownTags}
+        availableParticipants={availableParticipants}
+        cycleConfigs={cycleConfigs}
+        tenantName={tenantName}
+        onCreated={(saved) => setEvents((current) => [saved, ...current])}
+      />
+
+      <EventCalendarModal
+        open={calendarOpen}
+        onClose={() => setCalendarOpen(false)}
+        events={events}
+        todayIso={todayIso}
+        tagColor={tagColor}
+        onOpenEvent={setDetailEvent}
+        onCreateForDate={(iso) => openCreate(iso)}
+      />
 
       <Modal
         open={Boolean(detailEvent)}
@@ -1110,41 +995,6 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             }}
           />
         ) : null}
-      </Modal>
-
-      <Modal
-        open={Boolean(pickerField)}
-        onClose={() => setPickerField(null)}
-        title={PARTICIPANT_ROLE_FIELDS.find((r) => r.field === pickerField)?.label ?? t("pickerModal.fallbackTitle")}
-        description={t("pickerModal.multiSelect")}
-      >
-        <div className="grid">
-          <label className="field-stack">
-            <span className="field-label">{t("pickerModal.search")}</span>
-            <input
-              value={pickerSearch}
-              onChange={(e) => setPickerSearch(e.target.value)}
-              placeholder={t("pickerModal.searchPlaceholder")}
-            />
-          </label>
-          <div className="participant-check-grid">
-            {availableParticipants
-              .filter((p) => !pickerSearch.trim() || p.display_name.toLowerCase().includes(pickerSearch.toLowerCase()))
-              .map((p) => {
-                const checked = pickerField ? (form[pickerField] as string[]).includes(p.id) : false;
-                return (
-                  <label key={p.id} className={`participant-check-card${checked ? " participant-check-card-active" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => pickerField && togglePickerParticipant(pickerField, p.id)}
-                    />
-                    <span>{p.display_name}</span>
-                  </label>
-                );
-              })}
-          </div>
-        </div>
       </Modal>
 
       <Modal open={exportModalOpen} title={t("exportModal.title")} onClose={() => setExportModalOpen(false)}>
