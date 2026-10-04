@@ -8,22 +8,109 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
-### Hinzugefügt
+## [1.1.4] - 2026-10-04
 
-- Vollständige Internationalisierung (i18n) von Hauptapp, Platform-Admin und Abgabebox mit
-  next-intl: Deutsch (Default), Englisch, Französisch, Italienisch. Zentrale Locale-Konfiguration
-  in `i18n/locales.json` (siehe `CLAUDE.md`, Abschnitt „Internationalisierung / i18n"), Sprachauswahl
-  in den Benutzereinstellungen, persistente Präferenz (`app_user.preferred_language` +
-  `hocx_locale`-Cookie), automatische CI-Prüfung auf Übersetzungs-Vollständigkeit und neue hart
-  codierte UI-Texte.
+Wartungsrelease auf 1.1.3 mit vollständiger Mehrsprachigkeit (Deutsch/Englisch/
+Französisch/Italienisch), einem Design- und einem Usability-Audit sowie mehreren
+Sicherheits- und Kollaborations-Fixes. Enthält die Migration `0097`; sie läuft beim
+Deploy automatisch. Für das Update von 1.1.3 sind keine neuen Pflicht-Umgebungsvariablen
+nötig.
+
+### Update von 1.1.3 auf 1.1.4
+
+Nach Veröffentlichung der Release-Images `HOCX_VERSION` in `.env` auf `v1.1.4` setzen,
+dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` ausführen.
+
+- Migration `0097` ergänzt `app_user.preferred_language` nachträglich bei bereits
+  laufenden, inkrementell migrierten Installationen, auf denen die Spalte trotz
+  aktueller `sql/baseline_schema.sql` noch fehlte (Query-Fehler auf praktisch jedem
+  authentifizierten Request). Prüft per Inspector, ob die Spalte schon existiert, ist
+  also auch auf frisch per `baseline_schema.sql` initialisierten Datenbanken sicher.
+  Keine manuellen Vorbereitungsschritte.
+- `deploy.sh` erstellt Traefik beim ersten Deploy mit dieser Version einmalig neu (kurze
+  Unterbrechung von wenigen Sekunden), weil sich `infra/traefik/traefik.yml` geändert
+  hat (siehe unten).
+- Git-Tag und GitHub-Release entstehen erst nach erfolgreicher Promotion aller Images
+  durch den Release-Workflow. Der Push dieser Vorbereitung veröffentlicht noch kein
+  Release.
+
+### Neu
+
+- **Vollständige Internationalisierung (i18n)** von Hauptapp, Platform-Admin und
+  Abgabebox mit next-intl: Deutsch (Default), Englisch, Französisch, Italienisch.
+  Zentrale Locale-Konfiguration in `i18n/locales.json` (siehe `CLAUDE.md`, Abschnitt
+  „Internationalisierung / i18n"), Sprachauswahl in den Benutzereinstellungen,
+  persistente Präferenz (`app_user.preferred_language` + `hocx_locale`-Cookie) und
+  automatische CI-Prüfung auf Übersetzungs-Vollständigkeit, hart codierte UI-Texte und
+  fehlerhafte Key-Auflösung zur Laufzeit.
+- Echter Upload-Fortschritt im Galerie-Upload-Dialog: Fortschrittsbalken pro Datei
+  (gesendete/gesamte Bytes), Prozentanzeige am Upload-Button, animierte Anzeige vor dem
+  ersten Fortschrittsereignis und während der Server den Upload entgegennimmt.
+- Gemeinsames Action-Icon-Set (`components/ui/action-icons.tsx`) für
+  Bearbeiten/Löschen/Schliessen/Plus/Kopieren statt roher Unicode-Zeichen und
+  duplizierter Inline-SVGs; `mini-menu` als eigenständiger, in `DESIGN.md`
+  dokumentierter Baustein.
+
+### Geändert
+
+- Primäre Seitenaktion durchgängig auf `button-primary` vereinheitlicht (betraf
+  mehrere Listen-/Manager-Seiten, die bisher `button-secondary` zeigten).
+- Lösch-Terminologie vereinheitlicht ("Löschen" statt "Entfernen" bei echten
+  Löschvorgängen, Bestätigungstexte auf Standardformel).
+- Vorlagen-Detailseite und ihre Feldlabels lokalisiert und an die Struktur der
+  Schwesterseite `/templates` angeglichen.
+- Finanzen-Seite: fehlender Mobile-Breakpoint behoben (einspaltiges Layout ≤900px,
+  scrollende Transaktionstabelle ≤640px statt Viewport-Überlauf).
+- Protokoll-erstellen-Dialog: Namensvorschau beschriftet, Platzhalter aufgelöst statt
+  rohe `{n}`/`{date:...}`-Syntax zu zeigen; Dashboard-CTA „+ Neues Protokoll" öffnet den
+  Dialog jetzt direkt statt nur zur Liste zu navigieren.
+- Natives `required` (englische Browser-Validierungsmeldung) durch disabled-
+  Speichern-Button ersetzt (Benutzer-erstellen-Formulare, Tenant- und
+  Platform-Admin-Variante).
+- „ClamAV Online/Offline"-Chip durch Klartext „Virenprüfung aktiv/offline" ersetzt;
+  Offline-Hinweistext bei der Protokoll-Kollaboration erklärt jetzt, dass Änderungen
+  trotzdem automatisch gespeichert werden.
+- Autofokus beim Öffnen eines Protokolls nur noch bei expliziten Sprungaktionen
+  (Navigation/Tastatur/Suche), nicht mehr beim passiven Laden/Wiederherstellen der
+  Scroll-Position.
+- Nav-Label fr/it gekürzt (Organisation/Organizzazione), Sprachauswahl-Dropdown im
+  Seitenkopf der Abgabebox nach denselben Tokens gestylt wie das Haupt-App-Select.
 
 ### Behoben
 
 - `deploy.sh` erstellt Traefik neu, wenn sich `infra/traefik/traefik.yml` geändert hat.
   Bisher lief Traefik nach einem Update mit der alten statischen Konfiguration weiter
   (u. a. 60-s-`readTimeout`), wodurch grosse Galerie-Uploads mit «Bad Gateway» abbrachen.
-  Beim ersten Deploy mit dieser Version wird Traefik einmalig neu erstellt (kurze
-  Unterbrechung von wenigen Sekunden).
+- **Protokoll-Kollaboration** war über vier Bugs zusammen unzuverlässig: Der
+  Kollaborations-Websocket liess nur die statische Haupt-Domain zu, nie eine
+  Mandanten-eigene Custom-Domain (sofort „Offline"); Todo-/Bild-Updates wurden
+  serverseitig immer abgelehnt, weil nur der übergeordnete Block sperrbar ist;
+  Anwesenheits-Klicks verliessen sich auf ein Fokus-Event, das bei einem Button-Klick
+  nicht in jedem Browser (v. a. Safari) auslöst; die „Status & Zusammenarbeit"-Kachel
+  zählte auch ausgeblendete oder zum Löschen vorgesehene Anwesenheits-Blöcke.
+- Protokoll-Suche: Sprung zum gewählten Kapitel landete nicht mehr korrekt, weil der
+  Scroll-Spy den programmatischen Smooth-Scroll abbrach; ein Treffer auf das bereits
+  aktive Kapitel scrollt jetzt ebenfalls.
+- **Zentrale Fehlererfassung:** mehrere Stellen, an denen unerwartete Backend-Fehler
+  nie in `system_error_log` landeten, geschlossen — u. a. ein falscher `source`-Wert in
+  den Wartungs-Loops, der an der DB-Constraint scheiterte und sämtliche
+  Wartungs-Loop-Fehler lautlos verwarf, sowie fehlendes zentrales Logging in
+  WebSocket-Hintergrund-Tasks und weiteren Hintergrund-Diensten.
+- `MISSING_MESSAGE`-Laufzeitfehler durch falschen Übersetzungs-Namespace behoben
+  (Haupt-App-Breadcrumb, Protokoll-Vorlagen-Platzhaltervorschau); neuer
+  `check-i18n-key-resolution.py`-CI-Guard verhindert ein Wiederauftreten.
+- Fehlende Migration für `app_user.preferred_language` ergänzt — fehlte real auf
+  bereits laufenden, inkrementell migrierten Datenbanken.
+- **Sicherheitsaudit vom 30.09.2026:** `require_feature("custom_domain")` gate nur
+  das Anlegen/Verifizieren einer Custom-Domain, nicht deren fortlaufenden Betrieb —
+  nach Entzug des Features blieb eine bereits aktive Domain unbegrenzt geroutet;
+  Regenerate-Aufruf, Health-Check-Loop und Login-Bridge prüfen das Feature jetzt
+  zusätzlich laufend. Dependency-Updates: Next.js 16.2.12 → 16.3.6 (Out-of-Band-
+  Sicherheitsupdate), `starlette` explizit auf `>=1.0.1` gepinnt (CVE-2026-48710),
+  PyJWT 2.10.1 → 2.12.0, transitive `nanoid`-Schwachstelle in beiden Frontends per
+  `npm audit fix` behoben.
+- Admin-Mandanten-Einstellungen: Hooks-Reihenfolge-Crash im Speicher-Tab behoben
+  (`useTranslations` wurde nach einem frühen `return null` aufgerufen).
 
 ## [1.1.3] - 2026-09-27
 
