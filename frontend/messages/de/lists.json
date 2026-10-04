@@ -96,6 +96,7 @@
     "snapshotCreateFailed": "Snapshot konnte nicht erstellt werden"
   },
   "table": {
+    "departedParticipant": "Ausgetreten am {date}",
     "newEntryButton": "Neuer Eintrag",
     "actionsLabel": "Aktionen",
     "addRowTitle": "Listenzeile hinzufuegen",

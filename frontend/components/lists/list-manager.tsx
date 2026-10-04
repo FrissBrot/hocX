@@ -572,6 +572,7 @@ export function ListManager({
                         </>}
                       </>
                     }
+                    highlightDepartedParticipants={isLive}
                     entries={displayedEntries}
                     availableParticipants={availableParticipants}
                     availableEvents={availableEvents}
@@ -805,6 +806,7 @@ export function ListManager({
                 </div>
                 <StructuredListTable
                   definition={exportListDef}
+                  highlightDepartedParticipants
                   entries={exportFilteredEntries}
                   availableParticipants={availableParticipants}
                   availableEvents={availableEvents}

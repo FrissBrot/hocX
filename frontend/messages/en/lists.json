@@ -96,6 +96,7 @@
     "snapshotCreateFailed": "Snapshot could not be created"
   },
   "table": {
+    "departedParticipant": "Left on {date}",
     "newEntryButton": "New entry",
     "actionsLabel": "Actions",
     "addRowTitle": "Add list row",

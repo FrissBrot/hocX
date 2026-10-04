@@ -16670,3 +16670,10 @@ input[type="radio"] {
     margin-left: auto;
   }
 }
+
+/* Noch verknüpfte, bereits ausgetretene Teilnehmer in aktuellen Listen. */
+.structured-list-departed .mini-menu-trigger {
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+  border-color: var(--warning);
+}

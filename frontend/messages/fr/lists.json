@@ -96,6 +96,7 @@
     "snapshotCreateFailed": "L'instantané n'a pas pu être créé"
   },
   "table": {
+    "departedParticipant": "Départ le {date}",
     "newEntryButton": "Nouvelle entrée",
     "actionsLabel": "Actions",
     "addRowTitle": "Ajouter une ligne",

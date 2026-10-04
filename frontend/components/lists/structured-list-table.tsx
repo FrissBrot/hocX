@@ -5,6 +5,8 @@ import { useParticipantSelectable } from "@/contexts/participant-date-context";
 import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { Badge } from "@/components/ui/badge";
+import { localDateToday } from "@/lib/utils/participant-membership";
 import { Modal } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
@@ -32,6 +34,7 @@ type StructuredListTableProps = {
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
   editable?: boolean;
+  highlightDepartedParticipants?: boolean;
   /** Independent of `editable` - hides the "add row" control even while existing rows
    * are editable/deletable. Used by the historical-snapshot view: an unlocked
    * historical row can be edited or removed, but new rows were never part of that
@@ -205,6 +208,7 @@ export function StructuredListTable({
   availableParticipants,
   availableEvents,
   editable = true,
+  highlightDepartedParticipants = false,
   allowCreate = true,
   fullWidth = false,
   heading,
@@ -222,6 +226,7 @@ export function StructuredListTable({
 }: StructuredListTableProps) {
   const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("lists.table");
+  const today = localDateToday();
   const resolvedEmptyMessage = emptyMessage ?? t("emptyMessage");
   const sortedEvents = useMemo(
     () => [...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date)),
@@ -408,6 +413,35 @@ export function StructuredListTable({
     });
   }
 
+  function departedParticipant(participantId: unknown) {
+    if (!highlightDepartedParticipants) return undefined;
+    return availableParticipants.find((participant) => participant.id === participantId
+      && participant.left_at && participant.left_at < today);
+  }
+
+  function departedTitle(participant: ParticipantSummary) {
+    return t("departedParticipant", { date: formatDate(participant.left_at) });
+  }
+
+  function renderValueSummary(valueType: StructuredListValueType, value: StructuredListValue) {
+    const ids = valueType === "participant" ? [value.participant_id]
+      : valueType === "participants" && Array.isArray(value.participant_ids) ? value.participant_ids : [];
+    if (!ids.some((id) => departedParticipant(id))) {
+      return valueSummary(valueType, value, availableParticipants, sortedEvents, t);
+    }
+    return ids.map((id, index) => {
+      const participant = availableParticipants.find((item) => item.id === id);
+      const name = participant?.display_name ?? "";
+      const departed = departedParticipant(id);
+      return <Fragment key={String(id)}>
+        {index > 0 ? ", " : null}
+        {departed
+          ? <Badge variant="warning"><span title={departedTitle(departed)}>{name}</span></Badge>
+          : name}
+      </Fragment>;
+    });
+  }
+
   function renderEditableCell(
     entryId: string | null,
     columnKey: StructuredListColumnKey,
@@ -416,9 +450,12 @@ export function StructuredListTable({
     options: { isNewRow: boolean; disabled?: boolean }
   ) {
     if (valueType === "participant") {
+      const departed = departedParticipant(value.participant_id);
       return (
         <SearchableSelect
           options={availableParticipants}
+          className={departed ? "structured-list-departed" : undefined}
+          triggerProps={departed ? { title: departedTitle(departed) } : undefined}
           isOptionSelectable={isParticipantSelectable}
           getId={(participant) => participant.id}
           getLabel={(participant) => participant.display_name}
@@ -445,7 +482,7 @@ export function StructuredListTable({
           disabled={options.disabled}
           onClick={() => openParticipantPicker(columnKey, value, { entryId: entryId ?? undefined, isNewRow: options.isNewRow })}
         >
-          {valueSummary(valueType, value, availableParticipants, sortedEvents, t)}
+          {renderValueSummary(valueType, value)}
         </button>
       );
     }
@@ -721,9 +758,9 @@ export function StructuredListTable({
                       if (trackedInfo?.status === "removed") {
                         return (
                           <tr key={entry.id} className="tracked-removed-row">
-                            <td><span className="tracked-strike">{valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents, t)}</span></td>
+                            <td><span className="tracked-strike">{renderValueSummary(definition.column_one_value_type, firstValue)}</span></td>
                             <td>
-                              <span className="tracked-strike">{valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents, t)}</span>
+                              <span className="tracked-strike">{renderValueSummary(definition.column_two_value_type, secondValue)}</span>
                               {onAcceptTrackedEntry && (
                                 <TrackedChangeHideButton
                                   title={t("hideRemovedEntryTitle")}
@@ -752,8 +789,8 @@ export function StructuredListTable({
                                   isNewRow: false,
                                 })
                               : (col1Changed || col1Added
-                                  ? <span className="tracked-underline">{valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents, t)}</span>
-                                  : valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents, t))}
+                                  ? <span className="tracked-underline">{renderValueSummary(definition.column_one_value_type, firstValue)}</span>
+                                  : renderValueSummary(definition.column_one_value_type, firstValue))}
                             {(col1Changed || col1Added) && onAcceptTrackedEntry && (
                               <TrackedChangeHideButton onAccept={() => onAcceptTrackedEntry(entry.id)} />
                             )}
@@ -769,8 +806,8 @@ export function StructuredListTable({
                                   isNewRow: false,
                                 })
                               : (col2Changed || col2Added
-                                  ? <span className="tracked-underline">{valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents, t)}</span>
-                                  : valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents, t))}
+                                  ? <span className="tracked-underline">{renderValueSummary(definition.column_two_value_type, secondValue)}</span>
+                                  : renderValueSummary(definition.column_two_value_type, secondValue))}
                             {(col2Changed || col2Added) && onAcceptTrackedEntry && (
                               <TrackedChangeHideButton onAccept={() => onAcceptTrackedEntry(entry.id)} />
                             )}

@@ -96,6 +96,7 @@
     "snapshotCreateFailed": "Impossibile creare lo snapshot"
   },
   "table": {
+    "departedParticipant": "Uscita il {date}",
     "newEntryButton": "Nuova voce",
     "actionsLabel": "Azioni",
     "addRowTitle": "Aggiungi riga",
