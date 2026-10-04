@@ -139,6 +139,10 @@ def test_export_latex_attendance_counts_all_four_buckets_correctly(db):
     compile - _build_export_context builds the LaTeX body content but doesn't invoke
     pdflatex itself."""
     tenant, template, protocol = _protocol_with_template_dir(db)
+    # Closed protocols keep their attendance snapshot; open ones get rebuilt from template
+    # participants on export (refresh_membership_blocks), which would drop these entries.
+    protocol.status = "abgeschlossen"
+    db.commit()
     element = make_protocol_element(db, protocol.id, sort_index=0, section_name="Anwesenheit")
     make_protocol_element_block(
         db, element.id, sort_index=0, element_type_code="attendance",
