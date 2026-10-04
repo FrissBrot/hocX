@@ -263,8 +263,13 @@ def insert_full_upload(
     event_id: int | None,
     list_entry_id: int | None,
     files: list[dict],
+    close_after: bool = False,
 ) -> int:
-    """Insert submission_upload + all stored_files + upload_files in one transaction."""
+    """Insert submission_upload + all stored_files + upload_files in one transaction.
+
+    close_after: zusaetzlich eine status='closed'-Zeile hinter der Abgabe einfuegen (automatisches
+    Schliessen, siehe submission_assignment.auto_close) - in derselben Transaktion, damit das
+    Element nie mit der Abgabe, aber ohne die Schliessung sichtbar wird."""
     upload_result = db.execute(
         insert(submission_upload_table)
         .values(
@@ -301,6 +306,17 @@ def insert_full_upload(
                 upload_id=upload_id,
                 stored_file_id=stored_file_id,
                 sort_index=sort_index,
+            )
+        )
+
+    if close_after:
+        db.execute(
+            insert(submission_upload_table).values(
+                assignment_id=assignment_id,
+                event_id=event_id,
+                list_entry_id=list_entry_id,
+                status="closed",
+                submitted_at=None,
             )
         )
 

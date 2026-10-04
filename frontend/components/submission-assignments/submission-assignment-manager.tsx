@@ -433,6 +433,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       max_files_per_element: form.max_files_per_element === "" ? null : Number(form.max_files_per_element),
       max_file_size_mb: Number(form.max_file_size_mb),
       sort_order: form.sort_order,
+      auto_close: form.auto_close,
       responsible_participant_source: form.source_type === "manual" ? null : form.responsible_participant_source || null,
       link_ids: form.link_ids,
     };

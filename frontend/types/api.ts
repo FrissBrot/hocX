@@ -134,6 +134,8 @@ export type TenantDomain = {
 export type SubmissionSourceType = "events" | "list" | "manual";
 export type SubmissionElementStatus = "open" | "submitted" | "closed";
 export type SubmissionSortOrder = "alphabetical" | "date" | "proximity";
+/** Wann ein Abgabefeld nach einer Abgabe über die Abgabebox automatisch schliesst. */
+export type SubmissionAutoClose = "never" | "first_upload" | "max_files";
 
 export type SubmissionAssignment = {
   id: string;
@@ -154,6 +156,7 @@ export type SubmissionAssignment = {
   max_files_per_element: number | null;
   max_file_size_mb: number;
   sort_order: SubmissionSortOrder;
+  auto_close: SubmissionAutoClose;
   responsible_participant_source: string | null;
   link_ids: string[];
   created_at: string;

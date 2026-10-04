@@ -14228,7 +14228,8 @@ input[type="radio"] {
 .subm-edit-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .subm-edit-modal .subm-edit-chip { --button-bg: transparent; --button-hover-bg: transparent; width: auto; min-height: 0; padding: var(--space-1) var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-pill); color: var(--muted); font-size: var(--text-base); font-weight: 500; }
 .subm-edit-modal .subm-edit-chip:hover { border-color: var(--text); color: var(--text); }
-.subm-edit-modal .subm-edit-chip[aria-pressed="true"] { --button-bg: var(--primary); --button-hover-bg: var(--primary-strong); border-color: var(--primary); color: var(--primary-contrast); }
+.subm-edit-modal .subm-edit-chip:disabled { opacity: 0.5; cursor: not-allowed; border-color: var(--border-strong); color: var(--muted); }
+.subm-edit-modal .subm-edit-chip[aria-pressed="true"], .subm-edit-modal .subm-edit-chip[aria-checked="true"] { --button-bg: var(--primary); --button-hover-bg: var(--primary-strong); border-color: var(--primary); color: var(--primary-contrast); }
 .subm-edit-modal .subm-edit-type-all { --button-bg: transparent; --button-hover-bg: transparent; width: auto; min-height: 0; padding: var(--space-1) var(--space-2); border: 0; color: var(--muted); font-size: var(--text-base); }
 .subm-edit-modal .subm-edit-type-all:hover { color: var(--text); }
 .subm-edit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }

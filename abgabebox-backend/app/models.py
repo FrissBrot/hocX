@@ -83,6 +83,7 @@ submission_assignment_table = Table(
     Column("max_file_size_mb", Integer),
     Column("is_active", Boolean),
     Column("sort_order", Text),
+    Column("auto_close", Text),
 )
 
 # cycle_config/event_cycle: nur fuer den Zyklus-Filter der Termin-Abgaben. Spalten-SELECT

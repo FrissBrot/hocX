@@ -239,6 +239,18 @@ def _get_assignment_or_404(db: Session, tenant: dict, assignment_slug: str) -> d
     return assignment
 
 
+def _closes_after_upload(assignment: dict, *, files_after_upload: int) -> bool:
+    """Ob das Element nach dieser Abgabe automatisch geschlossen wird (submission_assignment.
+    auto_close): 'first_upload' immer, 'max_files' sobald max_files_per_element erreicht ist -
+    ohne Maximum (unbegrenzt) nie. files_after_upload zaehlt nur die Abgabebox-Dateien, genau wie
+    die max_files-Pruefung in upload()."""
+    auto_close = assignment.get("auto_close") or "never"
+    if auto_close == "first_upload":
+        return True
+    max_files = assignment.get("max_files_per_element")
+    return auto_close == "max_files" and max_files is not None and files_after_upload >= max_files
+
+
 @router.get("/public/{link_token}/assignments", response_model=list[AssignmentPublic])
 def list_assignments(link_token: str, db: Session = Depends(get_db)):
     tenant = _get_tenant_or_404(db, link_token)
@@ -498,6 +510,18 @@ async def upload(
             # actually closes the TOCTOU the early check above can't: no other upload for this
             # tenant can be mid-write while this re-count runs, so "already_uploaded" here is
             # guaranteed accurate at the moment this request commits to writing its own files.
+            # Ebenfalls im Lock neu pruefen: eine parallele Abgabe kann das Element inzwischen
+            # automatisch geschlossen haben (auto_close), nachdem resolve_single_element oben noch
+            # "offen" gesehen hat.
+            if (assignment.get("auto_close") or "never") != "never":
+                latest_status = repository.latest_status_by_element(db, assignment_id=assignment["id"]).get(
+                    (element["event_id"], element["list_entry_id"])
+                )
+                if latest_status == "closed":
+                    _log("element_closed", "Element ist nicht (mehr) offen")
+                    raise HTTPException(status_code=400, detail="Element ist nicht (mehr) offen")
+
+            already_uploaded = 0
             if max_files is not None:
                 already_uploaded = repository.count_files_by_element(db, assignment_id=assignment["id"]).get(
                     (element["event_id"], element["list_entry_id"]), 0
@@ -589,6 +613,7 @@ async def upload(
                 event_id=element["event_id"],
                 list_entry_id=element["list_entry_id"],
                 files=saved_files,
+                close_after=_closes_after_upload(assignment, files_after_upload=already_uploaded + len(saved_files)),
             )
         except Exception as exc:
             # M16: files were already moved out of quarantine (Step 4) before this insert, and

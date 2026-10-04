@@ -12,6 +12,7 @@ import {
   CycleConfigSummary,
   StructuredListDefinition,
   SubmissionAssignment,
+  SubmissionAutoClose,
   SubmissionLink,
   SubmissionSortOrder,
   SubmissionSourceType,
@@ -33,6 +34,7 @@ export type FormState = {
   max_files_per_element: number | "";
   max_file_size_mb: number;
   sort_order: SubmissionSortOrder;
+  auto_close: SubmissionAutoClose;
   responsible_participant_source: string;
   link_ids: string[];
 };
@@ -53,6 +55,7 @@ export const initialForm: FormState = {
   max_files_per_element: 5,
   max_file_size_mb: 20,
   sort_order: "date",
+  auto_close: "never",
   responsible_participant_source: "",
   link_ids: [],
 };
@@ -77,7 +80,7 @@ function singleParticipantEventFields(t: TFunc): { value: string; label: string 
 }
 
 // Zyklen, die ausgewählt werden können: 0 = aktueller Zyklus, -1 = vorheriger usw.
-const CYCLE_OFFSET_OPTIONS = [0, -1, -2, -3];
+export const CYCLE_OFFSET_OPTIONS = [0, -1, -2, -3];
 
 export function cycleOffsetLabel(offset: number, t: TFunc): string {
   return offset === 0 ? t("currentCycle") : offset === -1 ? t("previousCycle") : t("cycleOffsetNamed", { offset: Math.abs(offset) });
@@ -89,6 +92,14 @@ function fileTypeGroups(t: TFunc) {
     { label: t("fileGroupOffice"), types: ["doc", "docx", "xls", "xlsx", "ppt", "pptx"] },
     { label: t("fileGroupImages"), types: ["jpg", "jpeg", "png", "gif", "webp"] },
     { label: t("fileGroupApple"), types: ["pages", "key", "numbers", "heic", "heif"] },
+  ];
+}
+
+function autoCloseOptions(t: TFunc): { value: SubmissionAutoClose; label: string }[] {
+  return [
+    { value: "never", label: t("autoCloseNever") },
+    { value: "first_upload", label: t("autoCloseFirstUpload") },
+    { value: "max_files", label: t("autoCloseMaxFiles") },
   ];
 }
 
@@ -125,6 +136,7 @@ export function formFromAssignment(assignment: SubmissionAssignment): FormState 
     max_files_per_element: assignment.max_files_per_element ?? "",
     max_file_size_mb: assignment.max_file_size_mb,
     sort_order: assignment.sort_order,
+    auto_close: assignment.auto_close ?? "never",
     responsible_participant_source: assignment.responsible_participant_source ?? "",
     link_ids: assignment.link_ids,
   };
@@ -154,8 +166,15 @@ function windowSentence(before: number | "", after: number | "", t: TFunc): stri
   return t("windowNoneSentence");
 }
 
-/** Erklärt in einem Satz, wie sich die Abgabe mit den aktuellen Einstellungen verhält. */
-export function describeAssignment(form: FormState, listName: string | null, t: TFunc): string {
+function autoCloseSentence(form: FormState, t: TFunc): string | null {
+  if (form.auto_close === "first_upload") return t("autoCloseFirstUploadSentence");
+  if (form.auto_close === "max_files" && form.max_files_per_element !== "") {
+    return t("autoCloseMaxFilesSentence", { count: form.max_files_per_element });
+  }
+  return null;
+}
+
+function describeBase(form: FormState, listName: string | null, t: TFunc): string {
   if (form.source_type === "events") {
     const subject = form.tag_filter
       ? t("eventsSubjectTagged", { tag: form.tag_filter })
@@ -169,6 +188,13 @@ export function describeAssignment(form: FormState, listName: string | null, t: 
     return `${subject} ${deadlineSentence(form.deadline, t)}`;
   }
   return `${t("manualSubject")} ${deadlineSentence(form.deadline, t)}`;
+}
+
+/** Erklärt in einem Satz, wie sich die Abgabe mit den aktuellen Einstellungen verhält. */
+export function describeAssignment(form: FormState, listName: string | null, t: TFunc): string {
+  const base = describeBase(form, listName, t);
+  const autoClose = autoCloseSentence(form, t);
+  return autoClose ? `${base} ${autoClose}` : base;
 }
 
 /** Öffentliche Adresse ohne Protokoll, aufgeteilt in feste Basis und den Slug der Abgabe. */
@@ -468,7 +494,11 @@ export function SubmissionAssignmentFormModal({
                   min={1}
                   placeholder={t("unlimited")}
                   value={form.max_files_per_element}
-                  onChange={(e) => setForm((c) => ({ ...c, max_files_per_element: e.target.value === "" ? "" : Number(e.target.value) }))}
+                  onChange={(e) => {
+                    const value = e.target.value === "" ? "" : Number(e.target.value);
+                    // Ohne Maximum gibt es nichts zu erreichen: "Sobald Maximum erreicht" fällt auf "Nie" zurück.
+                    setForm((c) => ({ ...c, max_files_per_element: value, auto_close: value === "" && c.auto_close === "max_files" ? "never" : c.auto_close }));
+                  }}
                 />
               </label>
               <label className="field-stack">
@@ -490,6 +520,28 @@ export function SubmissionAssignmentFormModal({
                   </select>
                 </label>
               ) : null}
+            </div>
+
+            <div className="field-stack">
+              <span className="field-label" id="subm-auto-close-label">{t("autoCloseLabel")}</span>
+              <div className="subm-edit-chips" role="radiogroup" aria-labelledby="subm-auto-close-label">
+                {autoCloseOptions(t).map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    className="subm-edit-chip"
+                    aria-checked={form.auto_close === option.value}
+                    disabled={option.value === "max_files" && form.max_files_per_element === ""}
+                    onClick={() => setForm((c) => ({ ...c, auto_close: option.value }))}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <span className="field-help">
+                {form.max_files_per_element === "" ? t("autoCloseHelpUnlimited") : t("autoCloseHelp")}
+              </span>
             </div>
 
             {responsibleOptions.length > 0 ? (

@@ -1291,6 +1291,7 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
         CheckConstraint("max_files_per_element IS NULL OR max_files_per_element >= 1", name="ck_submission_assignment_max_files"),
         CheckConstraint("max_file_size_mb >= 1", name="ck_submission_assignment_max_size"),
         CheckConstraint("sort_order IN ('alphabetical', 'date', 'proximity')", name="ck_submission_assignment_sort_order"),
+        CheckConstraint("auto_close IN ('never', 'first_upload', 'max_files')", name="ck_submission_assignment_auto_close"),
         Index("idx_submission_assignment_tenant_active", "tenant_id", "is_active"),
         Index("idx_submission_assignment_list_definition", "list_definition_id"),
         Index("idx_submission_assignment_cycle_config", "cycle_config_id"),
@@ -1320,6 +1321,9 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
     max_file_size_mb: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("20"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     sort_order: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'date'"))
+    # Element nach einer Abgabe ueber die Abgabebox automatisch schliessen: 'never',
+    # 'first_upload' oder 'max_files' (Migration 0099_submission_auto_close).
+    auto_close: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'never'"))
     responsible_participant_source: Mapped[str | None] = mapped_column(Text)
     # Ueber welche Abgabe-Links (SubmissionLink) diese Abgabe oeffentlich erreichbar ist. Ohne
     # Link ist sie ueber die Abgabebox nicht erreichbar.

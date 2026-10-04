@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -46,6 +46,32 @@ function Harness({ start = initialForm, onSubmit = vi.fn() }: { start?: FormStat
     />
   );
 }
+
+describe("describeAssignment – automatisch schliessen", () => {
+  const base: FormState = { ...initialForm, title: "Bericht", source_type: "manual" };
+
+  it("erwähnt nichts, wenn nie automatisch geschlossen wird", () => {
+    expect(describeAssignment(base, null, t)).not.toContain("automatisch");
+  });
+
+  it("beschreibt das Schliessen nach der ersten Abgabe bzw. beim Maximum", () => {
+    expect(describeAssignment({ ...base, auto_close: "first_upload" }, null, t)).toContain("nach der ersten Abgabe");
+    expect(describeAssignment({ ...base, auto_close: "max_files", max_files_per_element: 1 }, null, t)).toContain("sobald 1 Datei abgegeben wurde");
+  });
+});
+
+describe("Automatisch schliessen im Formular", () => {
+  it("deaktiviert «Maximum» ohne Maximum und fällt beim Leeren auf «Nie» zurück", () => {
+    render(<Harness start={{ ...initialForm, auto_close: "max_files", max_files_per_element: 3 }} />);
+    const maxOption = screen.getByRole("radio", { name: "Sobald Max. Dateien erreicht" });
+    expect(maxOption.getAttribute("aria-checked")).toBe("true");
+
+    fireEvent.change(screen.getByPlaceholderText("unbegrenzt"), { target: { value: "" } });
+
+    expect(maxOption).toHaveProperty("disabled", true);
+    expect(screen.getByRole("radio", { name: "Nie" }).getAttribute("aria-checked")).toBe("true");
+  });
+});
 
 describe("formProblem", () => {
   it("verlangt Titel und für Termine einen Tag", () => {
@@ -102,7 +128,7 @@ describe("publicUrlParts / slugify", () => {
 describe("SubmissionAssignmentFormModal", () => {
   it("bietet Termine, Liste und Manuell als Verknüpfung an", () => {
     render(<Harness />);
-    const radios = screen.getAllByRole("radio");
+    const radios = within(screen.getByRole("radiogroup", { name: "Verknüpfung" })).getAllByRole("radio");
     expect(radios.map((r) => r.textContent)).toEqual([
       expect.stringContaining("Termine"),
       expect.stringContaining("Liste"),
