@@ -2,7 +2,7 @@
 
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { HikingTourWaypointKind } from "@/types/api";
 
@@ -33,6 +33,15 @@ export type MapWaypoint = {
   lat: number;
   lon: number;
   label?: string | null;
+  description?: string | null;
+  elevation_m?: number | null;
+  break_minutes?: number | null;
+};
+
+const KIND_LABEL: Record<HikingTourWaypointKind, string> = {
+  START: "Start", END: "Ziel", NAVIGATION: "Fixpunkt", BREAK: "Pausenplatz",
+  SUMMIT: "Gipfel", PASS: "Pass", HUT: "Hütte", WATER: "Wasser",
+  DECISION: "Fixpunkt", EMERGENCY_EXIT: "Notausstieg", USER_DEFINED: "Fixpunkt",
 };
 
 type Props = {
@@ -48,6 +57,8 @@ type Props = {
 };
 
 export function HikingTourMap({ waypoints, routeCoordinates, onMapClick, onMarkerDragEnd, highlightPoint, className }: Props) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedPoint = waypoints.find((waypoint) => waypoint.id === selectedId);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -83,14 +94,28 @@ export function HikingTourMap({ waypoints, routeCoordinates, onMapClick, onMarke
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = waypoints.map((waypoint) => {
       const element = document.createElement("div");
-      element.className = "wanderplaner-map-marker";
+      element.className = "wanderplaner-map-marker-anchor";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "wanderplaner-map-marker";
+      button.setAttribute("aria-label", waypoint.label || KIND_LABEL[waypoint.kind]);
+      element.appendChild(button);
+      let dragged = false;
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (!dragged) setSelectedId(waypoint.id);
+      });
+      button.addEventListener("dblclick", (event) => event.stopPropagation());
+      button.addEventListener("keydown", (event) => event.stopPropagation());
       element.style.setProperty("--wanderplaner-marker-color", `var(${KIND_COLOR_TOKEN[waypoint.kind] ?? "--accent"})`);
       if (waypoint.label) element.title = waypoint.label;
       const marker = new maplibregl.Marker({ element, draggable: Boolean(onMarkerDragEnd) })
         .setLngLat([waypoint.lon, waypoint.lat])
         .addTo(map);
       if (onMarkerDragEnd) {
+        marker.on("dragstart", () => { dragged = true; });
         marker.on("dragend", () => {
+          setTimeout(() => { dragged = false; }, 0);
           const pos = marker.getLngLat();
           onMarkerDragEnd(waypoint.id, pos.lat, pos.lng);
         });
@@ -164,5 +189,24 @@ export function HikingTourMap({ waypoints, routeCoordinates, onMapClick, onMarke
     else map.once("load", applySource);
   }, [routeCoordinates]);
 
-  return <div ref={containerRef} className={`wanderplaner-map${className ? ` ${className}` : ""}`} role="application" aria-label="Karte" />;
+  return (
+    <div className="wanderplaner-map-frame">
+      <div ref={containerRef} className={`wanderplaner-map${className ? ` ${className}` : ""}`} role="application" aria-label="Karte" />
+      {selectedPoint && (
+        <aside className="wanderplaner-map-info" aria-label="Wegpunkt-Information" onKeyDown={(event) => {
+          if (event.key === "Escape") setSelectedId(null);
+        }}>
+          <div className="wanderplaner-map-info-header">
+            <strong>{selectedPoint.label || KIND_LABEL[selectedPoint.kind]}</strong>
+            <button type="button" className="button-icon-soft" aria-label="Wegpunkt-Information schliessen" onClick={() => setSelectedId(null)}>✕</button>
+          </div>
+          <span className="field-help">{KIND_LABEL[selectedPoint.kind]}</span>
+          {selectedPoint.elevation_m != null && <div>Höhe: {Math.round(selectedPoint.elevation_m)} m</div>}
+          <div className="field-help">{selectedPoint.lat.toFixed(5)}, {selectedPoint.lon.toFixed(5)}</div>
+          {selectedPoint.break_minutes != null && selectedPoint.break_minutes > 0 && <div>Pause: {selectedPoint.break_minutes} min</div>}
+          {selectedPoint.description && <p>{selectedPoint.description}</p>}
+        </aside>
+      )}
+    </div>
+  );
 }

@@ -357,7 +357,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
   }
 
   const mapWaypoints = useMemo(
-    () => tour.waypoints.map((wp) => ({ id: wp.id, kind: wp.kind, lat: wp.lat, lon: wp.lon, label: wp.label })),
+    () => tour.waypoints.map((wp) => ({ id: wp.id, kind: wp.kind, lat: wp.lat, lon: wp.lon, label: wp.label, description: wp.description, elevation_m: wp.elevation_m, break_minutes: wp.break_minutes })),
     [tour.waypoints]
   );
   const routeCoordinates = useMemo<[number, number][]>(

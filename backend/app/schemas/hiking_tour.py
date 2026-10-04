@@ -255,14 +255,20 @@ class HikingTourSummary(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+    elevation_preview: list[tuple[float, float]] = []
 
     @model_validator(mode="before")
     @classmethod
     def _from_orm(cls, data):
         if not hasattr(data, "public_id"):
             return data
+        profile = data.elevation_profile_json or []
+        # Kleine Vorschau mit höchstens 80 Stützpunkten, inklusive Start und Ziel.
+        count = min(len(profile), 80)
+        indices = [round(index * (len(profile) - 1) / max(count - 1, 1)) for index in range(count)]
         return {
             "id": data.public_id,
+            "elevation_preview": [(profile[index]["distance_m"], profile[index]["elevation_m"]) for index in indices],
             "title": data.title,
             "tour_date": data.tour_date,
             "status": data.status,

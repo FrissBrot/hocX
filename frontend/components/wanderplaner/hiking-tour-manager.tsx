@@ -7,6 +7,7 @@ import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
+import { HikingTourElevationPreview } from "@/components/wanderplaner/hiking-tour-elevation-preview";
 import { HikingTourMap } from "@/components/wanderplaner/hiking-tour-map";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -148,7 +149,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
 
       <div>
         <DataToolbar title="Wanderungen" />
-        <DataTable columns={["Titel", "Datum", "Status"]} emptyMessage="Noch keine Wanderungen geplant.">
+        <DataTable columns={["Titel", "Datum", "Status", "Höhenprofil"]} emptyMessage="Noch keine Wanderungen geplant.">
           {tours.map((tour) => (
             <tr key={tour.id} className="table-row-clickable" onClick={() => router.push(`/hiking-planner/${tour.id}`)}>
               <td>{tour.title}</td>
@@ -156,6 +157,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
               <td>
                 <Badge variant={STATUS_VARIANT[tour.status] ?? "neutral"}>{STATUS_LABEL[tour.status] ?? tour.status}</Badge>
               </td>
+              <td><HikingTourElevationPreview points={tour.elevation_preview} /></td>
             </tr>
           ))}
         </DataTable>

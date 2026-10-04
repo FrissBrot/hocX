@@ -915,6 +915,7 @@ export type MarchTimeTable = {
 };
 
 export type HikingTourSummary = {
+  elevation_preview?: [number, number][];
   id: string;
   title: string;
   tour_date: string | null;

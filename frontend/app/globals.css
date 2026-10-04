@@ -16671,6 +16671,10 @@ input[type="radio"] {
 }
 
 .wanderplaner-map-marker {
+  min-height: 0;
+  padding: 0;
+  display: block;
+  transition: transform var(--dur-fast) var(--ease-out);
   width: 18px;
   height: 18px;
   border-radius: var(--radius-pill);
@@ -16734,4 +16738,53 @@ input[type="radio"] {
   stroke-width: 1;
   fill: none;
   pointer-events: none;
+}
+
+.wanderplaner-map-marker:hover:not(:disabled),
+.wanderplaner-map-marker:focus-visible {
+  transform: scale(1.25);
+  background: var(--wanderplaner-marker-color, var(--accent)); /* design-ok: dynamische Wegpunktfarbe wie am Marker */
+}
+
+.wanderplaner-map-frame { position: relative; }
+
+.wanderplaner-map-info {
+  position: absolute;
+  top: var(--space-3);
+  right: 56px;
+  width: min(280px, calc(100% - 80px));
+  max-height: calc(100% - 48px);
+  overflow: auto;
+  padding: var(--space-3);
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+  font-size: var(--text-base);
+  overflow-wrap: anywhere;
+}
+
+.wanderplaner-map-info-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.wanderplaner-map-info p { margin: var(--space-2) 0 0; }
+
+.wanderplaner-elevation-preview {
+  display: block;
+  width: 160px;
+  height: 44px;
+}
+
+.wanderplaner-elevation-preview-area { fill: var(--accent-soft); }
+
+.wanderplaner-elevation-preview-line {
+  fill: none;
+  stroke: var(--chart-1);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
