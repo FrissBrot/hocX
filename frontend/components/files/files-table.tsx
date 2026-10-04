@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
+import { FileTypeIcon } from "./file-type-icon";
 import { SOURCE_BADGE_VARIANT, SOURCE_KEY } from "./file-detail-modal";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
@@ -31,7 +32,7 @@ export function FilesTable({
           <tr key={item.id} className="table-row-clickable" onClick={() => onOpenDetail(item)}>
             <td>
               <span className="files-table-name">
-                <FileTypeIcon />
+                <FileTypeIcon name={item.original_name} />
                 <span title={item.original_name}>{item.original_name}</span>
               </span>
             </td>
@@ -64,14 +65,5 @@ export function FilesTable({
         );
       })}
     </DataTable>
-  );
-}
-
-function FileTypeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" />
-      <path d="M14 3v5h5" />
-    </svg>
   );
 }
