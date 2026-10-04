@@ -7,7 +7,7 @@ from io import StringIO
 
 from sqlalchemy.orm import Session
 
-from app.core.cycle_utils import format_cycle_name
+from app.core.cycle_utils import format_cycle_name, get_cycle_year
 from app.models import Event, Participant, Protocol
 from app.models.entities import CycleConfig, EventCycle
 from app.repositories.event_repository import EventRepository
@@ -129,7 +129,11 @@ class EventService:
         )
         try:
             created = self.repository.create(db, event, commit=False)
-            if payload.cycle_assignments:
+            if payload.cycle_assignments is None:
+                # Ohne explizite Angabe gehört ein Termin standardmässig zu dem Zyklus, in den
+                # sein eigenes Datum fällt (je Zyklus-Definition des Mandanten).
+                self._apply_default_cycle_assignments(db, created.id, created.event_date, tenant_id=tenant_id)
+            elif payload.cycle_assignments:
                 self._set_cycle_assignments(db, created.id, payload.cycle_assignments, tenant_id=tenant_id, commit=False)
         except Exception:
             # Repository used to commit the new Event immediately, before cycle assignment
@@ -158,11 +162,22 @@ class EventService:
             id_lists={field: values[field] for field in self._PARTICIPANT_ID_FIELDS if field in values},
         )
         values.update(resolved_ids)
+        previous_date = event.event_date
+        # Zuordnungen, die noch exakt dem Standard fürs alte Datum entsprechen, gelten als
+        # nicht manuell angepasst und wandern bei einer Datumsänderung mit.
+        follows_default_cycles = (
+            payload.cycle_assignments is None
+            and next_start != previous_date
+            and self._current_cycle_keys(db, event.id) == self._default_cycle_keys(db, previous_date, tenant_id=event.tenant_id)
+        )
         try:
             if values:
                 event = self.repository.update(db, event, values, commit=False)
             if payload.cycle_assignments is not None:
                 self._set_cycle_assignments(db, event.id, payload.cycle_assignments, tenant_id=event.tenant_id, commit=False)
+            elif follows_default_cycles:
+                db.query(EventCycle).filter(EventCycle.event_id == event.id).delete(synchronize_session=False)
+                self._apply_default_cycle_assignments(db, event.id, next_start, tenant_id=event.tenant_id)
         except Exception:
             db.rollback()
             raise
@@ -176,6 +191,18 @@ class EventService:
             return False
         self.repository.delete(db, event)
         return True
+
+    def _default_cycle_keys(self, db: Session, event_date: date, *, tenant_id: int) -> set[tuple[int, int]]:
+        configs = db.query(CycleConfig).filter(CycleConfig.tenant_id == tenant_id).all()
+        return {(config.id, get_cycle_year(event_date, config.reset_month, config.reset_day)) for config in configs}
+
+    def _current_cycle_keys(self, db: Session, event_id: int) -> set[tuple[int, int]]:
+        rows = db.query(EventCycle).filter(EventCycle.event_id == event_id).all()
+        return {(row.cycle_config_id, row.cycle_year) for row in rows}
+
+    def _apply_default_cycle_assignments(self, db: Session, event_id: int, event_date: date, *, tenant_id: int) -> None:
+        for cycle_config_id, cycle_year in self._default_cycle_keys(db, event_date, tenant_id=tenant_id):
+            db.add(EventCycle(event_id=event_id, cycle_config_id=cycle_config_id, cycle_year=cycle_year))
 
     def _set_cycle_assignments(
         self, db: Session, event_id: int, assignments: list[CycleAssignment], *, tenant_id: int, commit: bool = True

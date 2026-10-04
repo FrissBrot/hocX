@@ -10,9 +10,10 @@ from datetime import date
 
 import pytest
 
-from app.schemas.event import EventCreate, EventUpdate
+from app.models.entities import EventCycle
+from app.schemas.event import CycleAssignment, EventCreate, EventUpdate
 from app.services.event_service import EventService
-from tests.factories import make_event, make_tenant
+from tests.factories import make_cycle_config, make_event, make_tenant
 
 
 # --- create_event / update_event validation -------------------------------------------------
@@ -32,6 +33,56 @@ def test_create_event_basic(db):
     assert event.title == "Vereinsversammlung"
     assert event.participant_count == 12
     assert event.tenant_id == tenant.id
+
+
+def _cycle_keys(db, event_id):
+    return {(row.cycle_config_id, row.cycle_year) for row in db.query(EventCycle).filter(EventCycle.event_id == event_id)}
+
+
+def test_create_event_assigns_cycle_by_event_date_by_default(db):
+    tenant = make_tenant(db, "Zyklus Verein")
+    cycle = make_cycle_config(db, tenant.id, reset_month=7, reset_day=31)
+    service = EventService()
+
+    july = service.create_event(db, EventCreate(event_date="2026-07-06", title="Sola"), tenant_id=tenant.id)
+    august = service.create_event(db, EventCreate(event_date="2026-08-15", title="Arbeitsweekend"), tenant_id=tenant.id)
+
+    assert _cycle_keys(db, july.id) == {(cycle.id, 2025)}
+    assert _cycle_keys(db, august.id) == {(cycle.id, 2026)}
+
+
+def test_create_event_keeps_explicit_cycle_assignments(db):
+    tenant = make_tenant(db, "Manuell Verein")
+    cycle = make_cycle_config(db, tenant.id, reset_month=7, reset_day=31)
+    service = EventService()
+
+    event = service.create_event(
+        db,
+        EventCreate(event_date="2026-07-06", title="Sola", cycle_assignments=[CycleAssignment(cycle_config_id=cycle.public_id, cycle_year=2026)]),
+        tenant_id=tenant.id,
+    )
+    empty = service.create_event(db, EventCreate(event_date="2026-07-06", title="Ohne", cycle_assignments=[]), tenant_id=tenant.id)
+
+    assert _cycle_keys(db, event.id) == {(cycle.id, 2026)}
+    assert _cycle_keys(db, empty.id) == set()
+
+
+def test_update_event_date_moves_default_cycle_but_keeps_manual_one(db):
+    tenant = make_tenant(db, "Verschieben Verein")
+    cycle = make_cycle_config(db, tenant.id, reset_month=7, reset_day=31)
+    service = EventService()
+    default = service.create_event(db, EventCreate(event_date="2026-07-06", title="Auto"), tenant_id=tenant.id)
+    manual = service.create_event(
+        db,
+        EventCreate(event_date="2026-07-06", title="Manuell", cycle_assignments=[CycleAssignment(cycle_config_id=cycle.public_id, cycle_year=2026)]),
+        tenant_id=tenant.id,
+    )
+
+    service.update_event(db, default.id, EventUpdate(event_date="2026-08-20"))
+    service.update_event(db, manual.id, EventUpdate(event_date="2026-06-01"))
+
+    assert _cycle_keys(db, default.id) == {(cycle.id, 2026)}
+    assert _cycle_keys(db, manual.id) == {(cycle.id, 2026)}
 
 
 def test_create_event_end_before_start_raises(db):

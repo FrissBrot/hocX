@@ -1,6 +1,7 @@
 "use client";
 
 import { useParticipantSelectable } from "@/contexts/participant-date-context";
+import { useParticipantNameSource } from "@/contexts/participant-directory-context";
 
 import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -223,6 +224,7 @@ export function FocusedElementEditor({
   renameTag: (oldTag: string, newTag: string) => Promise<void>;
 }) {
   const isParticipantSelectable = useParticipantSelectable();
+  const participantNames = useParticipantNameSource(availableParticipants);
   const t = useTranslations("protocols");
   const confirm = useConfirm();
   const showToast = useToast();
@@ -451,7 +453,7 @@ export function FocusedElementEditor({
 
   function singleParticipantSummary(participantId: string | null | undefined): string {
     if (!participantId) return t("chooseParticipant");
-    const p = availableParticipants.find((entry) => entry.id === participantId);
+    const p = participantNames.find((entry) => entry.id === participantId);
     return p?.display_name ?? t("chooseParticipant");
   }
 
@@ -459,11 +461,11 @@ export function FocusedElementEditor({
     if (!value) return "";
     if (valueType === "participant") {
       const id = String(value.participant_id ?? "");
-      return availableParticipants.find((p) => p.id === id)?.display_name ?? "";
+      return participantNames.find((p) => p.id === id)?.display_name ?? "";
     }
     if (valueType === "participants") {
       const ids = Array.isArray(value.participant_ids) ? value.participant_ids.map(String) : [];
-      return availableParticipants.filter((p) => ids.includes(p.id)).map((p) => p.display_name).join(", ");
+      return participantNames.filter((p) => ids.includes(p.id)).map((p) => p.display_name).join(", ");
     }
     if (valueType === "event") {
       const id = String(value.event_id ?? "");
@@ -501,17 +503,12 @@ export function FocusedElementEditor({
     if (!selectedIds.length) {
       return t("chooseParticipant");
     }
-    const selectedParticipants = availableParticipants.filter((participant) => selectedIds.includes(participant.id));
+    const selectedParticipants = participantNames.filter((participant) => selectedIds.includes(participant.id));
     if (!selectedParticipants.length) {
       return `${selectedIds.length} ausgewaehlt`;
     }
-    if (selectedParticipants.length === 1) {
-      return selectedParticipants[0].display_name;
-    }
-    if (selectedParticipants.length === 2) {
-      return `${selectedParticipants[0].display_name}, ${selectedParticipants[1].display_name}`;
-    }
-    return `${selectedParticipants[0].display_name} + ${selectedParticipants.length - 1}`;
+    // Alle Namen ausschreiben; zu lange Listen kürzt das CSS mit Ellipse (voller Text im Tooltip).
+    return selectedParticipants.map((participant) => participant.display_name).join(", ");
   }
 
   function closeParticipantPicker() {
@@ -1000,7 +997,7 @@ export function FocusedElementEditor({
       return multiParticipantSummary(value);
     }
     if (rowType === "participant") {
-      const participant = availableParticipants.find((entry) => entry.id === String(value.participant_id ?? ""));
+      const participant = participantNames.find((entry) => entry.id === String(value.participant_id ?? ""));
       return participant?.display_name ?? t("chooseParticipant");
     }
     if (rowType === "event") {
@@ -1277,7 +1274,7 @@ export function FocusedElementEditor({
             event_list: t("eventsLabel"), attendance: t("blockTypeAttendance"), matrix: t("blockTypeMatrix"),
             session_date: t("blockTypeSessionDate"), finance_balance: t("blockTypeFinanceBalance"),
             finance_transactions: t("blockTypeFinanceTransactions"), fine_list: t("blockTypeFineList"),
-            chart: t("blockTypeChart"),
+            chart: t("blockTypeChart"), entry_exit: t("blockTypeEntryExit"),
           };
           const blockConfig = asObject(block.configuration_snapshot_json);
           // Matrix blocks lock per-cell instead (see cellFieldKey below), so the whole-block
@@ -1883,7 +1880,7 @@ export function FocusedElementEditor({
                             const participantSummary = isParticipantsField
                               ? currentIds.length === 0
                                 ? "Auswählen…"
-                                : availableParticipants
+                                : participantNames
                                     .filter((p) => currentIds.includes(p.id))
                                     .map((p) => p.display_name)
                                     .join(", ") || `${currentIds.length} ausgewählt`
@@ -2187,7 +2184,7 @@ export function FocusedElementEditor({
                                 onKeyDown={handleFormInputKeyDown}
                                 onClick={() => openMultiParticipantPicker(block.id, index, row)}
                               >
-                                {multiParticipantSummary(row)}
+                                <span className="participant-summary-text" title={multiParticipantSummary(row)}>{multiParticipantSummary(row)}</span>
                               </button>
                             ) : rowType === "event" ? (
                               <SearchableSelect
@@ -2393,7 +2390,7 @@ export function FocusedElementEditor({
                                           />
                                           {cellEditable ? (
                                             <div className="matrix-row-summary muted">
-                                              {embeddedBlockSummary(embeddedBlock, availableParticipants, availableEvents, protocol, t, column!, availableTemplates)}
+                                              {embeddedBlockSummary(embeddedBlock, participantNames, availableEvents, protocol, t, column!, availableTemplates)}
                                             </div>
                                           ) : null}
                                         </>
@@ -2441,7 +2438,7 @@ export function FocusedElementEditor({
                                             <button type="button" className="button-ghost form-participant-picker-button"
                                               onClick={() => openMatrixParticipantPicker(block.id, columnId!, {
                                                 row_id: rowId, label: row.label, ...value })}>
-                                              {multiParticipantSummary(value)}
+                                              <span className="participant-summary-text" title={multiParticipantSummary(value)}>{multiParticipantSummary(value)}</span>
                                             </button>
                                           ) : matrixRowType(row) === "event" ? (
                                             <SearchableSelect

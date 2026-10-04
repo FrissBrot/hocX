@@ -31,7 +31,7 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
     redirect("/protocols");
   }
 
-  const [documentTemplates, templates, events, lists, elements, participants] = await Promise.all([
+  const [documentTemplates, templates, events, lists, elements, participants, participantDirectory] = await Promise.all([
     backendFetchWithSession<DocumentTemplate[]>("/api/document-templates").then((v) => v ?? []),
     backendFetchWithSession<TemplateSummary[]>("/api/templates").then((v) => v ?? []),
     backendFetchWithSession<EventSummary[]>("/api/events").then((v) => v ?? []),
@@ -40,6 +40,8 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
     backendFetchWithSession<ParticipantSummary[]>(
       `/api/templates/${protocol.template_id}/participants`
     ).then((v) => v ?? []),
+    // Alle Teilnehmer, damit gespeicherte Auswahlen ausserhalb der Vorlage mit Namen statt "X ausgewaehlt" erscheinen.
+    backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=2000").then((v) => v ?? []),
   ]);
   const listReferences = Object.assign({}, ...elements.flatMap((element) =>
     element.blocks.map((block) => block.public_reference_ids?.lists ?? {})
@@ -101,6 +103,7 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
           initialTodos={initialTodos}
           initialImages={initialImages}
           availableParticipants={participants}
+          participantDirectory={participantDirectory}
           availableEvents={events}
           availableLists={lists}
           initialListEntries={initialListEntries}

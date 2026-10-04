@@ -8,6 +8,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 
 import { ParticipantDateContext } from "@/contexts/participant-date-context";
+import { ParticipantDirectoryContext } from "@/contexts/participant-directory-context";
 import { SessionPanel, SessionPanelHandle } from "@/components/protocol/session-panel";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +65,7 @@ type ProtocolEditorProps = {
   initialTodos: Record<string, ProtocolTodo[]>;
   initialImages: Record<string, ProtocolImage[]>;
   availableParticipants: ParticipantSummary[];
+  participantDirectory?: ParticipantSummary[];
   availableEvents: EventSummary[];
   availableLists: StructuredListDefinition[];
   initialListEntries: Record<string, StructuredListEntry[]>;
@@ -83,6 +85,7 @@ export function ProtocolEditor({
   initialTodos,
   initialImages,
   availableParticipants,
+  participantDirectory = [],
   availableEvents,
   availableLists,
   initialListEntries,
@@ -1219,16 +1222,6 @@ export function ProtocolEditor({
       return null;
     }
     setStatus(protocolElementBlockId, "saving");
-    const cycleAssignments: { cycle_config_id: string; cycle_year: number }[] = [];
-    if (currentCycleYear !== null && currentTemplate?.cycle_config_id && currentTemplate.cycle_config) {
-      cycleAssignments.push({ cycle_config_id: currentTemplate.cycle_config_id, cycle_year: currentCycleYear });
-      const eventCycleYear = draft.event_date
-        ? getCycleYear(draft.event_date, currentTemplate.cycle_config.reset_month, currentTemplate.cycle_config.reset_day)
-        : null;
-      if (eventCycleYear !== null && eventCycleYear !== currentCycleYear) {
-        cycleAssignments.push({ cycle_config_id: currentTemplate.cycle_config_id, cycle_year: eventCycleYear });
-      }
-    }
     try {
       const created = await browserApiFetch<EventSummary>("/api/events", {
         method: "POST",
@@ -1239,7 +1232,7 @@ export function ProtocolEditor({
           title: draft.title,
           description: draft.description || null,
           participant_count: Math.max(0, Number(draft.participant_count || "0")),
-          cycle_assignments: cycleAssignments,
+          // Keine cycle_assignments: das Backend ordnet den Termin nach seinem eigenen Datum zu.
         }),
       });
       setEvents((current) => [...current, created]);
@@ -1598,6 +1591,7 @@ export function ProtocolEditor({
 
   return (
     <ParticipantDateContext.Provider value={protocol.protocol_date ?? null}>
+    <ParticipantDirectoryContext.Provider value={participantDirectory}>
     <div className="grid" ref={editorRef}>
       {useDocumentLayout && (
         <div className="protocol-document-header">
@@ -2093,6 +2087,7 @@ export function ProtocolEditor({
         protocolNumber={protocol.protocol_number}
       />
     </div>
+    </ParticipantDirectoryContext.Provider>
     </ParticipantDateContext.Provider>
   );
 }

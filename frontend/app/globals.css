@@ -5176,6 +5176,11 @@ input[type="radio"] {
   white-space: nowrap;
 }
 
+/* Gruppierte Zeilen fassen viele Werte kommagetrennt zusammen - umbrechen statt die Tabelle zu sprengen. */
+.structured-list-table .structured-list-grouped-row td {
+  white-space: normal;
+}
+
 .structured-list-table-flat input,
 .structured-list-table-flat textarea,
 .structured-list-table-flat select {
@@ -6157,6 +6162,15 @@ input[type="radio"] {
   min-height: 48px;
   justify-content: flex-start;
   text-align: left;
+}
+
+/* Namen ausschreiben, solange Platz ist; sonst mit Ellipse kürzen (voller Text im Tooltip). */
+.participant-summary-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .participant-check-card {

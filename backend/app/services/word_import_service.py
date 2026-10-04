@@ -3364,12 +3364,10 @@ class WordImportService:
                 entry["chosen"] = final_id
 
         template = db.get(Template, payload.template_id)
+        # Importierte Termine bekommen keine explizite Zuordnung: event_service ordnet sie
+        # nach ihrem eigenen Datum zu (früher: Zyklus des Protokolldatums, wodurch z. B.
+        # rückblickend erwähnte Anlässe im neuen Zyklus auftauchten).
         cycle_assignments: list[CycleAssignment] | None = None
-        if template is not None and template.cycle_config_id is not None:
-            cycle_cfg = db.get(CycleConfig, template.cycle_config_id)
-            if cycle_cfg is not None:
-                cycle_year = get_cycle_year(payload.protocol_date, cycle_cfg.reset_month, cycle_cfg.reset_day)
-                cycle_assignments = [CycleAssignment(cycle_config_id=cycle_cfg.public_id, cycle_year=cycle_year)]
 
         protocol_id = protocol_service.create_from_template(
             db,

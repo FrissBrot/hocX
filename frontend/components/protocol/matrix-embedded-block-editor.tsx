@@ -1,6 +1,7 @@
 "use client";
 
 import { useParticipantSelectable } from "@/contexts/participant-date-context";
+import { useParticipantNameSource } from "@/contexts/participant-directory-context";
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -72,6 +73,7 @@ export function MatrixEmbeddedBlockEditor({
   onTagRename: (oldTag: string, newTag: string) => Promise<void>;
 }) {
   const isParticipantSelectable = useParticipantSelectable();
+  const participantNames = useParticipantNameSource(availableParticipants);
   const t = useTranslations("protocols.matrixEditor");
   const tRoot = useTranslations("protocols");
   const tCommon = useTranslations("common");
@@ -145,7 +147,7 @@ export function MatrixEmbeddedBlockEditor({
   }, []);
 
   function participantNameById(participantId: string | null | undefined) {
-    return availableParticipants.find((participant) => participant.id === participantId)?.display_name ?? "—";
+    return participantNames.find((participant) => participant.id === participantId)?.display_name ?? "—";
   }
 
   function eventLabelById(eventId: string | null | undefined) {
@@ -240,17 +242,11 @@ export function MatrixEmbeddedBlockEditor({
     if (!selectedIds.length) {
       return "Teilnehmer waehlen";
     }
-    const selectedParticipants = availableParticipants.filter((participant) => selectedIds.includes(participant.id));
+    const selectedParticipants = participantNames.filter((participant) => selectedIds.includes(participant.id));
     if (!selectedParticipants.length) {
       return `${selectedIds.length} ausgewaehlt`;
     }
-    if (selectedParticipants.length === 1) {
-      return selectedParticipants[0].display_name;
-    }
-    if (selectedParticipants.length === 2) {
-      return `${selectedParticipants[0].display_name}, ${selectedParticipants[1].display_name}`;
-    }
-    return `${selectedParticipants[0].display_name} + ${selectedParticipants.length - 1}`;
+    return selectedParticipants.map((participant) => participant.display_name).join(", ");
   }
 
   if (elementTypeId === 1 || elementTypeId === 5) {
@@ -555,8 +551,9 @@ export function MatrixEmbeddedBlockEditor({
                 </select>
                 {String(row.value_type ?? "text") === "participant" ? (
                   <SearchableSelect
-                    options={availableParticipants}
-                    isOptionSelectable={isParticipantSelectable}
+                    options={participantNames}
+                    isOptionSelectable={(participant) =>
+                      isParticipantSelectable(participant) && availableParticipants.some((entry) => entry.id === participant.id)}
                     getId={(participant) => participant.id}
                     getLabel={(participant) => participant.display_name}
                     value={row.participant_id ?? null}
@@ -572,7 +569,7 @@ export function MatrixEmbeddedBlockEditor({
                   />
                 ) : String(row.value_type ?? "text") === "participants" ? (
                   <button type="button" className="button-ghost form-participant-picker-button" onClick={() => openMultiParticipantPicker(row)}>
-                    {embeddedParticipantSummary(row)}
+                    <span className="participant-summary-text" title={embeddedParticipantSummary(row)}>{embeddedParticipantSummary(row)}</span>
                   </button>
                 ) : String(row.value_type ?? "text") === "event" ? (
                   <SearchableSelect

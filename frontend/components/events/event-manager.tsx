@@ -111,6 +111,8 @@ type EventFormState = {
   participant_count: string;
   is_cancelled: boolean;
   cycle_assignments: CycleAssignment[];
+  // false = Zyklen folgen dem Termindatum (Backend ordnet zu); true = manuell gewählt.
+  cycle_assignments_touched: boolean;
   organizer_ids: string[];
   leadership_ids: string[];
   participant_ids: string[];
@@ -133,6 +135,7 @@ function emptyForm(): EventFormState {
     participant_count: "0",
     is_cancelled: false,
     cycle_assignments: [],
+    cycle_assignments_touched: false,
     organizer_ids: [],
     leadership_ids: [],
     participant_ids: [],
@@ -458,15 +461,26 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
   const activeOptionalColumns = OPTIONAL_COLUMNS.filter((column) => visibleColumns.has(column.key));
 
+  function defaultCycleAssignments(eventDate: string): CycleAssignment[] {
+    if (!eventDate) return [];
+    return cycleConfigs.map((config) => ({
+      cycle_config_id: config.id,
+      cycle_year: getCycleYear(eventDate, config.reset_month, config.reset_day),
+    }));
+  }
+
+  const formCycleAssignments = form.cycle_assignments_touched ? form.cycle_assignments : defaultCycleAssignments(form.event_date);
+
   function toggleCycle(cycleConfigId: string, cycleYear: number) {
     setForm((current) => {
-      const exists = current.cycle_assignments.some(
+      const base = current.cycle_assignments_touched ? current.cycle_assignments : defaultCycleAssignments(current.event_date);
+      const exists = base.some(
         (a) => a.cycle_config_id === cycleConfigId && a.cycle_year === cycleYear
       );
       const next = exists
-        ? current.cycle_assignments.filter((a) => !(a.cycle_config_id === cycleConfigId && a.cycle_year === cycleYear))
-        : [...current.cycle_assignments, { cycle_config_id: cycleConfigId, cycle_year: cycleYear }];
-      return { ...current, cycle_assignments: next };
+        ? base.filter((a) => !(a.cycle_config_id === cycleConfigId && a.cycle_year === cycleYear))
+        : [...base, { cycle_config_id: cycleConfigId, cycle_year: cycleYear }];
+      return { ...current, cycle_assignments: next, cycle_assignments_touched: true };
     });
   }
 
@@ -481,7 +495,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         description: form.description || null,
         participant_count: Math.max(0, Number(form.participant_count || "0")),
         is_cancelled: form.is_cancelled,
-        cycle_assignments: form.cycle_assignments,
+        cycle_assignments: form.cycle_assignments_touched ? form.cycle_assignments : undefined,
         organizer_ids: form.organizer_ids,
         leadership_ids: form.leadership_ids,
         participant_ids: form.participant_ids,
@@ -1047,7 +1061,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
             ) : (
               <div className="cycle-chip-list">
                 {availableCycles.map((cycle) => {
-                  const active = form.cycle_assignments.some(
+                  const active = formCycleAssignments.some(
                     (a) => a.cycle_config_id === cycle.cycle_config_id && a.cycle_year === cycle.cycle_year
                   );
                   return (

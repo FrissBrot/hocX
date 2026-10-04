@@ -1,8 +1,9 @@
 "use client";
 
 import { useParticipantSelectable } from "@/contexts/participant-date-context";
+import { useParticipantNameSource } from "@/contexts/participant-directory-context";
 
-import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
@@ -225,6 +226,10 @@ export function StructuredListTable({
   onDeleteEntry,
 }: StructuredListTableProps) {
   const isParticipantSelectable = useParticipantSelectable();
+  const participantNames = useParticipantNameSource(availableParticipants);
+  const isPickableParticipant = useCallback((participant: ParticipantSummary) =>
+    isParticipantSelectable(participant) && availableParticipants.some((entry) => entry.id === participant.id),
+  [availableParticipants, isParticipantSelectable]);
   const t = useTranslations("lists.table");
   const today = localDateToday();
   const resolvedEmptyMessage = emptyMessage ?? t("emptyMessage");
@@ -372,12 +377,12 @@ export function StructuredListTable({
 
   function entryDisplayText(entry: StructuredListEntry, column: StructuredListDisplayColumn) {
     const columnKey = displayColumnKey(column);
-    return valueSummary(displayColumnType(column), rowValue(entry, columnKey), availableParticipants, sortedEvents, t);
+    return valueSummary(displayColumnType(column), rowValue(entry, columnKey), participantNames, sortedEvents, t);
   }
 
   function entrySortText(entry: StructuredListEntry, column: StructuredListDisplayColumn) {
     const columnKey = displayColumnKey(column);
-    return valueSortText(displayColumnType(column), rowValue(entry, columnKey), availableParticipants, sortedEvents);
+    return valueSortText(displayColumnType(column), rowValue(entry, columnKey), participantNames, sortedEvents);
   }
 
   function openParticipantPicker(
@@ -415,7 +420,7 @@ export function StructuredListTable({
 
   function departedParticipant(participantId: unknown) {
     if (!highlightDepartedParticipants) return undefined;
-    return availableParticipants.find((participant) => participant.id === participantId
+    return participantNames.find((participant) => participant.id === participantId
       && participant.left_at && participant.left_at < today);
   }
 
@@ -427,10 +432,10 @@ export function StructuredListTable({
     const ids = valueType === "participant" ? [value.participant_id]
       : valueType === "participants" && Array.isArray(value.participant_ids) ? value.participant_ids : [];
     if (!ids.some((id) => departedParticipant(id))) {
-      return valueSummary(valueType, value, availableParticipants, sortedEvents, t);
+      return valueSummary(valueType, value, participantNames, sortedEvents, t);
     }
     return ids.map((id, index) => {
-      const participant = availableParticipants.find((item) => item.id === id);
+      const participant = participantNames.find((item) => item.id === id);
       const name = participant?.display_name ?? "";
       const departed = departedParticipant(id);
       return <Fragment key={String(id)}>
@@ -453,10 +458,10 @@ export function StructuredListTable({
       const departed = departedParticipant(value.participant_id);
       return (
         <SearchableSelect
-          options={availableParticipants}
+          options={participantNames}
           className={departed ? "structured-list-departed" : undefined}
           triggerProps={departed ? { title: departedTitle(departed) } : undefined}
-          isOptionSelectable={isParticipantSelectable}
+          isOptionSelectable={isPickableParticipant}
           getId={(participant) => participant.id}
           getLabel={(participant) => participant.display_name}
           value={(value.participant_id as string | null | undefined) ?? null}
@@ -562,7 +567,7 @@ export function StructuredListTable({
       }
       return manualCompare(left, right);
     });
-  }, [entries, entryDrafts, sortByColumn, sortDirection, textCollator, availableParticipants, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
+  }, [entries, entryDrafts, sortByColumn, sortDirection, textCollator, participantNames, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
 
   const groupedEntries = useMemo(() => {
     if (!groupByColumn) {
@@ -585,7 +590,7 @@ export function StructuredListTable({
     });
 
     return groups;
-  }, [groupByColumn, sortedEntries, entryDrafts, availableParticipants, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
+  }, [groupByColumn, sortedEntries, entryDrafts, participantNames, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
 
   const groupedDisplayRows = useMemo(() => {
     if (!groupByColumn || editable) {
@@ -618,7 +623,7 @@ export function StructuredListTable({
     groupByColumn,
     groupedEntries,
     entryDrafts,
-    availableParticipants,
+    participantNames,
     sortedEvents,
     definition.column_one_value_type,
     definition.column_two_value_type,
@@ -731,7 +736,7 @@ export function StructuredListTable({
             {sortedEntries.length ? (
               groupByColumn && !editable ? (
                 groupedDisplayRows.map((row) => (
-                  <tr key={`structured-list-grouped-${row.key}`}>
+                  <tr key={`structured-list-grouped-${row.key}`} className="structured-list-grouped-row">
                     <td>{row.leftValue}</td>
                     <td>{row.rightValue}</td>
                   </tr>
@@ -781,7 +786,7 @@ export function StructuredListTable({
                           <td className={col1Changed || col1Added ? "tracked-cell" : undefined}>
                             {col1Changed && (
                               <div className="tracked-before-caption tracked-strike">
-                                {valueSummary(definition.column_one_value_type, trackedInfo?.before?.column_one_value ?? {}, availableParticipants, sortedEvents, t)}
+                                {valueSummary(definition.column_one_value_type, trackedInfo?.before?.column_one_value ?? {}, participantNames, sortedEvents, t)}
                               </div>
                             )}
                             {editable
@@ -798,7 +803,7 @@ export function StructuredListTable({
                           <td className={col2Changed || col2Added ? "tracked-cell" : undefined}>
                             {col2Changed && (
                               <div className="tracked-before-caption tracked-strike">
-                                {valueSummary(definition.column_two_value_type, trackedInfo?.before?.column_two_value ?? {}, availableParticipants, sortedEvents, t)}
+                                {valueSummary(definition.column_two_value_type, trackedInfo?.before?.column_two_value ?? {}, participantNames, sortedEvents, t)}
                               </div>
                             )}
                             {editable
