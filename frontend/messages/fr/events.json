@@ -79,7 +79,7 @@
     "create": "Créer l'événement",
     "createTitle": "Créer un événement",
     "cycles": "Cycles",
-    "cyclesHint": "Cycles auxquels cet événement doit être associé. Facultatif.",
+    "cyclesHint": "Attribué par défaut selon la date de l'événement ; modifiable manuellement.",
     "cyclesLoading": "Chargement des cycles…",
     "description": "L'étiquette aide ensuite à relier aux points de procès-verbal correspondants.",
     "editTitle": "Modifier l'événement",

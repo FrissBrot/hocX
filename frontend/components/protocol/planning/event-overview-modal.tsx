@@ -150,6 +150,13 @@ export function EventOverviewModal({
     await onUpdateEvent(eventId, patch);
   }
 
+  // Zyklen aus dem Server-Stand (visibleEvents) übernehmen - sie wandern beim Datumswechsel
+  // serverseitig mit. Übrige Felder bleiben lokal, damit keine laufende Eingabe springt.
+  const serverDetailEvent = detailEvent ? visibleEvents.find((e) => e.id === detailEvent.id) : undefined;
+  const liveDetailEvent = detailEvent && serverDetailEvent
+    ? { ...detailEvent, cycle_assignments: serverDetailEvent.cycle_assignments }
+    : detailEvent;
+
   async function handleDelete(eventId: string, title: string) {
     if (
       !(await confirm({
@@ -351,7 +358,7 @@ export function EventOverviewModal({
       >
         {detailEvent ? (
           <EventDetailForm
-            event={detailEvent}
+            event={liveDetailEvent ?? detailEvent}
             allowEndDate={allowEndDate}
             availableParticipants={availableParticipants}
             knownEventTags={knownEventTags}

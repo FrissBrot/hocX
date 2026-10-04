@@ -8,7 +8,8 @@ import { useTranslations } from "next-intl";
 import { Tabs } from "@/components/ui/tabs";
 import { DateInput } from "@/components/ui/date-input";
 import { TagInput } from "@/components/ui/tag-input";
-import { EventSummary, ParticipantSummary } from "@/types/api";
+import { CycleAssignment, EventSummary, ParticipantSummary } from "@/types/api";
+import { useCycleOptions } from "@/lib/hooks/use-cycle-options";
 import type { TagConfig } from "@/lib/hooks/use-tag-config";
 
 type RoleField = "organizer_ids" | "leadership_ids" | "participant_ids" | "spezial1_ids" | "spezial2_ids" | "spezial3_ids";
@@ -59,6 +60,16 @@ export function EventDetailForm({
   const [activeRoleField, setActiveRoleField] = useState<RoleField | null>(null);
   const [roleSearch, setRoleSearch] = useState("");
   const ROLE_FIELDS = roleFields(t);
+  const { options: cycleOptions, loading: cyclesLoading } = useCycleOptions();
+  const cycleAssignments: CycleAssignment[] = event.cycle_assignments ?? [];
+
+  function toggleCycle(cycleConfigId: string, cycleYear: number) {
+    const exists = cycleAssignments.some((a) => a.cycle_config_id === cycleConfigId && a.cycle_year === cycleYear);
+    const next = exists
+      ? cycleAssignments.filter((a) => !(a.cycle_config_id === cycleConfigId && a.cycle_year === cycleYear))
+      : [...cycleAssignments, { cycle_config_id: cycleConfigId, cycle_year: cycleYear }];
+    void onUpdate({ cycle_assignments: next });
+  }
 
   function participantNames(ids: string[] | null | undefined) {
     const list = availableParticipants.filter((p) => (ids ?? []).includes(p.id));
@@ -123,6 +134,34 @@ export function EventDetailForm({
                   onChange={(e) => void onUpdate({ description: e.target.value || null })}
                 />
               </label>
+              <div className="field-stack">
+                <span className="field-label">{t("form.cycles")}</span>
+                {cyclesLoading ? (
+                  <span className="muted">{t("form.cyclesLoading")}</span>
+                ) : cycleOptions.length === 0 ? (
+                  <span className="muted">{t("form.noCycles")}</span>
+                ) : (
+                  <div className="cycle-chip-list">
+                    {cycleOptions.map((cycle) => {
+                      const active = cycleAssignments.some(
+                        (a) => a.cycle_config_id === cycle.cycle_config_id && a.cycle_year === cycle.cycle_year
+                      );
+                      return (
+                        <button
+                          key={`${cycle.cycle_config_id}-${cycle.cycle_year}`}
+                          type="button"
+                          className={`cycle-chip${active ? " cycle-chip-active" : ""}`}
+                          aria-pressed={active}
+                          onClick={() => toggleCycle(cycle.cycle_config_id, cycle.cycle_year)}
+                        >
+                          {cycle.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <span className="field-help">{t("form.cyclesHint")}</span>
+              </div>
             </div>
           ),
         },

@@ -79,7 +79,7 @@
     "create": "Termin erstellen",
     "createTitle": "Termin erstellen",
     "cycles": "Zyklen",
-    "cyclesHint": "Zyklen, denen dieser Termin zugeordnet werden soll. Optional.",
+    "cyclesHint": "Standardmässig nach Termindatum zugeordnet, kann manuell angepasst werden.",
     "cyclesLoading": "Zyklen werden geladen…",
     "description": "Der Tag hilft später beim Verknüpfen mit passenden Protokollpunkten.",
     "editTitle": "Termin bearbeiten",

@@ -79,7 +79,7 @@
     "create": "Create event",
     "createTitle": "Create event",
     "cycles": "Cycles",
-    "cyclesHint": "Cycles this event should be assigned to. Optional.",
+    "cyclesHint": "Assigned by event date by default; can be adjusted manually.",
     "cyclesLoading": "Loading cycles…",
     "description": "The tag helps later with linking to matching protocol items.",
     "editTitle": "Edit event",

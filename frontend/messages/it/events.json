@@ -79,7 +79,7 @@
     "create": "Crea evento",
     "createTitle": "Crea evento",
     "cycles": "Cicli",
-    "cyclesHint": "Cicli a cui questo evento deve essere assegnato. Facoltativo.",
+    "cyclesHint": "Assegnato per impostazione predefinita in base alla data dell'evento; modificabile manualmente.",
     "cyclesLoading": "Caricamento cicli…",
     "description": "Il tag aiuta in seguito a collegare i punti del verbale corrispondenti.",
     "editTitle": "Modifica evento",

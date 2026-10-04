@@ -579,7 +579,11 @@ export function StructuredListTable({
     sortedEntries.forEach((entry) => {
       const rawLabel = entryDisplayText(entry, groupByColumn);
       const label = rawLabel !== "—" ? rawLabel : t("noValue");
-      const key = entrySortText(entry, groupByColumn).trim() || "__empty__";
+      // Ohne auflösbaren Namen nach dem Rohwert gruppieren, damit verschiedene (z. B. nicht
+      // geladene) Personen nicht alle in einer gemeinsamen leeren Gruppe landen.
+      const rawGroupValue = rowValue(entry, displayColumnKey(groupByColumn));
+      const key = entrySortText(entry, groupByColumn).trim()
+        || (hasValueContent(displayColumnType(groupByColumn), rawGroupValue) ? `__raw__${JSON.stringify(rawGroupValue)}` : "__empty__");
       const existingIndex = groupIndex.get(key);
       if (existingIndex == null) {
         groupIndex.set(key, groups.length);

@@ -402,6 +402,11 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         body: JSON.stringify(patch),
       });
       setEvents((current) => current.map((event) => (event.id === eventId ? updated : event)));
+      // Nur die Zyklen aus dem Server-Stand übernehmen (wandern beim Datumswechsel mit); übrige
+      // Felder bleiben lokal, damit langsame Antworten keine laufende Eingabe überschreiben.
+      setDetailEvent((current) =>
+        current && current.id === eventId ? { ...current, cycle_assignments: updated.cycle_assignments } : current
+      );
     } catch (error) {
       if (previous) {
         setEvents((current) => current.map((event) => (event.id === eventId ? previous : event)));
