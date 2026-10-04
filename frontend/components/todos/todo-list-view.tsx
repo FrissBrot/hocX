@@ -405,7 +405,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
   ];
 
   return (
-    <div className="grid">
+    <div className="grid todos-overview">
       <div className="page-header">
         <div>
           <h1 className="page-title">{t("pageTitle")}</h1>

@@ -35,6 +35,26 @@ function renderTile() {
   return screen.getByRole("img").parentElement;
 }
 
+it("reserves masonry rows from the photo height and updates them on resize", () => {
+  let resize: ResizeObserverCallback = () => {};
+  const disconnect = vi.fn();
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: ResizeObserverCallback) { resize = callback; }
+    observe() {}
+    disconnect = disconnect;
+  });
+  vi.spyOn(window, "getComputedStyle").mockReturnValue({ display: "grid", getPropertyValue: () => "12px" } as unknown as CSSStyleDeclaration);
+  const bounds = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ height: 200 } as DOMRect);
+  const { container, unmount } = render(<div className="photo-grid"><PhotoTile item={item} selected={false} selectionMode={false} onOpen={vi.fn()} onToggleSelect={vi.fn()} /></div>);
+  const tile = container.querySelector(".photo-tile") as HTMLElement;
+  expect(tile.style.gridRowEnd).toBe("span 212");
+  bounds.mockReturnValue({ height: 150 } as DOMRect);
+  act(() => resize([], {} as ResizeObserver));
+  expect(tile.style.gridRowEnd).toBe("span 162");
+  unmount();
+  expect(disconnect).toHaveBeenCalledOnce();
+});
+
 it("reveals an image that finished loading before hydration without another load event", () => {
   vi.spyOn(HTMLImageElement.prototype, "complete", "get").mockReturnValue(true);
   vi.spyOn(HTMLImageElement.prototype, "naturalWidth", "get").mockReturnValue(480);
