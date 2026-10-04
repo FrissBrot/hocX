@@ -18,6 +18,10 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     include: ["**/*.test.{ts,tsx}"],
     exclude: ["node_modules/**", ".next/**"],
+    // CI-Runner teilen sich wenige Cores unter vollem Suite-Lauf mit Coverage-Instrumentierung;
+    // der Default (5000ms) reicht dann knapp nicht fuer Komponenten, deren erster Render auf
+    // einen echten (Mock-)Fetch wartet. Siehe asyncUtilTimeout in vitest.setup.ts.
+    testTimeout: 15000,
   },
   resolve: {
     alias: {

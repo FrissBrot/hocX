@@ -2,8 +2,16 @@ import "@testing-library/jest-dom/vitest";
 
 import fs from "node:fs";
 import path from "node:path";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
+
+// Default ist 1000ms. Auf einem CI-Runner, der sich wenige Cores mit dem Rest der Suite plus
+// v8-Coverage-Instrumentierung teilt, kann selbst ein sofort aufgeloestes Mock-Fetch (z.B.
+// setTimeout(fn, 0) fuer den Erstladungs-Debounce, siehe album-photo-picker.tsx) laenger als
+// 1000ms Wall-Clock-Zeit brauchen, ohne dass die Komponente oder der Test fehlerhaft ist -
+// verifiziert durch wiederholte isolierte Laeufe (immer gruen) vs. Volllast-Laeufe der ganzen
+// Suite (sporadisch ein anderer Timing-sensitiver Test betroffen).
+configure({ asyncUtilTimeout: 5000 });
 
 // Component tests render UI components directly (no NextIntlClientProvider - they're not
 // exercising the root layout), but most components now call useTranslations()/useLocale()
