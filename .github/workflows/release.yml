@@ -35,18 +35,39 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       candidate_sha: ${{ steps.proof.outputs.candidate_sha }}
+      source_tag: ${{ steps.normalize.outputs.source_tag }}
+      release_tag: ${{ steps.normalize.outputs.release_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Validate production confirmation and tags
+      # Manuell eingetippte/eingefuegte workflow_dispatch-Inputs bringen leicht ein
+      # unsichtbares, fuehrendes/anhaengendes Leerzeichen mit (Copy-Paste aus einer
+      # Zusammenfassung, Autovervollstaendigung) - ohne Trim scheitert ein sonst
+      # korrekter Tag an einer verankerten Regex mit einer Fehlermeldung, die die Ursache
+      # nicht zeigt (fand genau das bei "test-20261004-160b5c8-r13 "). Einmal hier
+      # getrimmt und als Job-Output weitergegeben, damit jeder spaetere Schritt/Job
+      # (inklusive promote/publish-release) densel­ben bereinigten Wert sieht statt
+      # erneut die rohen inputs.* zu lesen.
+      - name: Normalize tag inputs
+        id: normalize
         env:
           SOURCE_TAG: ${{ inputs.source_tag }}
           RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          echo "source_tag=$(printf '%s' "$SOURCE_TAG" | xargs)" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$(printf '%s' "$RELEASE_TAG" | xargs)" >> "$GITHUB_OUTPUT"
+
+      - name: Validate production confirmation and tags
+        env:
+          SOURCE_TAG: ${{ steps.normalize.outputs.source_tag }}
+          RELEASE_TAG: ${{ steps.normalize.outputs.release_tag }}
           CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
         run: |
           set -euo pipefail
+          CONFIRM_PRODUCTION="$(printf '%s' "$CONFIRM_PRODUCTION" | xargs)"
           [ "$CONFIRM_PRODUCTION" = DEPLOY ] || {
             echo "Prod-Promotion nicht bestaetigt: exakt DEPLOY eingeben." >&2
             exit 1
@@ -65,7 +86,7 @@ jobs:
         id: proof
         env:
           GH_TOKEN: ${{ github.token }}
-          SOURCE_TAG: ${{ inputs.source_tag }}
+          SOURCE_TAG: ${{ steps.normalize.outputs.source_tag }}
         run: |
           set -euo pipefail
           candidate_sha="$(printf '%s' "$SOURCE_TAG" | sed -E 's/^test-[0-9]{8}-([0-9a-f]{7,40})-r[0-9]+$/\1/')"
@@ -93,7 +114,7 @@ jobs:
       - name: Prepare changelog and check existing tag
         env:
           CANDIDATE_SHA: ${{ steps.proof.outputs.candidate_sha }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ steps.normalize.outputs.release_tag }}
         run: |
           set -euo pipefail
           git fetch origin "$CANDIDATE_SHA"
@@ -134,8 +155,8 @@ jobs:
 
       - name: Validate tags
         env:
-          SOURCE_TAG: ${{ inputs.source_tag }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_TAG: ${{ needs.verify-tested-candidate.outputs.source_tag }}
+          RELEASE_TAG: ${{ needs.verify-tested-candidate.outputs.release_tag }}
         run: |
           set -euo pipefail
           tag_regex='^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$'
@@ -160,27 +181,27 @@ jobs:
 
       - name: Ensure candidate image exists
         env:
-          IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ inputs.source_tag }}
+          IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ needs.verify-tested-candidate.outputs.source_tag }}
         run: docker buildx imagetools inspect "$IMAGE" > /dev/null
 
       - name: Promote tested image to release tag
         env:
-          SOURCE_IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ inputs.source_tag }}
-          RELEASE_IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ inputs.release_tag }}
+          SOURCE_IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ needs.verify-tested-candidate.outputs.source_tag }}
+          RELEASE_IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ needs.verify-tested-candidate.outputs.release_tag }}
         run: docker buildx imagetools create -t "$RELEASE_IMAGE" "$SOURCE_IMAGE"
 
       - name: Update latest tag
         if: ${{ inputs.update_latest }}
         env:
-          SOURCE_IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ inputs.source_tag }}
+          SOURCE_IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ needs.verify-tested-candidate.outputs.source_tag }}
           LATEST_IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:latest
         run: docker buildx imagetools create -t "$LATEST_IMAGE" "$SOURCE_IMAGE"
 
       - name: Write summary
         env:
           SERVICE: ${{ matrix.service }}
-          SOURCE_TAG: ${{ inputs.source_tag }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_TAG: ${{ needs.verify-tested-candidate.outputs.source_tag }}
+          RELEASE_TAG: ${{ needs.verify-tested-candidate.outputs.release_tag }}
           UPDATE_LATEST: ${{ inputs.update_latest }}
         run: |
           {
@@ -211,8 +232,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           CANDIDATE_SHA: ${{ needs.verify-tested-candidate.outputs.candidate_sha }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
-          SOURCE_TAG: ${{ inputs.source_tag }}
+          RELEASE_TAG: ${{ needs.verify-tested-candidate.outputs.release_tag }}
+          SOURCE_TAG: ${{ needs.verify-tested-candidate.outputs.source_tag }}
           UPDATE_LATEST: ${{ inputs.update_latest }}
         run: |
           set -euo pipefail
