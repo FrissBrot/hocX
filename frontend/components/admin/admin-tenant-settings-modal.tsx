@@ -80,6 +80,7 @@ type SettingsTab = "stammdaten" | "abo" | "benutzer" | "aufraeumen" | "speicher"
 
 export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Props) {
   const t = useTranslations("admin");
+  const storageHints = categoryHints(useTranslations("storage"));
   const roleOptions = useMemo(() => getRoleOptions(t), [t]);
   const cleanupCategories = useMemo(() => getCleanupCategories(t), [t]);
   const showToast = useToast();
@@ -450,7 +451,6 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
   const storageTotal = storageUsage?.total_bytes ?? tenant.storage_used_bytes;
   const storageBarTotal = storageQuota !== null && storageQuota > storageTotal ? storageQuota : storageTotal;
   const visibleCategories = storageUsage?.categories.filter((category) => category.bytes > 0) ?? [];
-  const storageHints = categoryHints(useTranslations("storage"));
   const effectiveUserLimit = subscriptionForm.user_limit_override ?? selectedPlan?.included_user_limit ?? null;
   const effectiveStorageLimit =
     selectedPlan?.included_storage_bytes == null && tenant.package_storage_bytes === 0
