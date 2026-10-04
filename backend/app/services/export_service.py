@@ -832,6 +832,9 @@ Status: {protocol_status}
         return re.sub(r"\s*\(.*\)$", "", name).strip()
 
     def _render_protocol_body(self, db: Session, protocol_id: int, export_dir: Path, tenant_id: int) -> str:
+        from app.services.protocol_service import ProtocolService
+
+        ProtocolService().refresh_membership_blocks(db, protocol_id)
         parts: list[str] = []
         image_export_dir = export_dir / "images"
         image_export_dir.mkdir(parents=True, exist_ok=True)

@@ -168,6 +168,7 @@ class ProtocolService:
         if protocol is None:
             return NextSessionRead(protocol=None, attendance_block_id=None, entries=[])
 
+        self.refresh_membership_blocks(db, protocol.id)
         attendance_type_id = self._attendance_type_id(db)
         block = None
         if attendance_type_id is not None:
@@ -812,6 +813,70 @@ class ProtocolService:
                 )
         entries.sort(key=lambda entry: (str(entry["date"]), str(entry["type"]), str(entry["participant_name"])))
         return entries
+
+    def refresh_membership_blocks(self, db: Session, protocol_id: int, *, commit: bool = True) -> None:
+        """Mitgliedschaftsdaten offener Protokolle nachführen; manuelle Werte erhalten.
+
+        Die bei Erstellung gespeicherten Listen veralten bei späteren Datumsänderungen.
+        Abgeschlossene Protokolle behalten hingegen ihren historischen Stand.
+        """
+        protocol = self.repository.get(db, protocol_id)
+        if protocol is None or protocol.status == "abgeschlossen":
+            return
+        rows = db.execute(
+            select(ProtocolElementBlock, ElementType.code)
+            .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+            .join(ElementType, ElementType.id == ProtocolElementBlock.element_type_id)
+            .where(ProtocolElement.protocol_id == protocol_id, ElementType.code.in_(["attendance", "entry_exit"]))
+        ).all()
+        if not rows:
+            return
+        participants = list(db.scalars(
+            select(Participant)
+            .join(TemplateParticipant, TemplateParticipant.participant_id == Participant.id)
+            .where(
+                TemplateParticipant.template_id == protocol.template_id,
+                TemplateParticipant.exclude_from_attendance.is_(False),
+                Participant.tenant_id == protocol.tenant_id,
+                participant_eligible_on(protocol.protocol_date),
+            )
+            .order_by(Participant.display_name.asc(), Participant.id.asc())
+        ))
+        changed = False
+        for block, code in rows:
+            config = dict(block.configuration_snapshot_json or {})
+            if code == "attendance":
+                previous = {entry.get("participant_id"): entry for entry in config.get("attendance_entries", [])}
+                config["attendance_entries"] = [
+                    {**previous.get(participant.id, {"status": "absent"}),
+                     "participant_id": participant.id, "participant_name": participant.display_name}
+                    for participant in participants
+                ]
+            else:
+                previous = {
+                    (entry.get("participant_id"), entry.get("type"), entry.get("date")): entry
+                    for entry in config.get("entries", [])
+                }
+                entries = self._entry_exit_entries(
+                    db, tenant_id=protocol.tenant_id, template_id=protocol.template_id,
+                    protocol_date=protocol.protocol_date, current_protocol_id=protocol.id,
+                    block_config=config,
+                )
+                config["entries"] = [
+                    {**entry, "hidden": bool(previous.get(
+                        (entry["participant_id"], entry["type"], entry["date"]), {}
+                    ).get("hidden", False))}
+                    for entry in entries
+                ]
+            if config != (block.configuration_snapshot_json or {}):
+                block.configuration_snapshot_json = config
+                db.add(block)
+                changed = True
+        if changed:
+            if commit:
+                db.commit()
+            else:
+                db.flush()
 
     def _manually_hidden_event_ids(
         self,
@@ -2092,6 +2157,10 @@ class ProtocolService:
                 return self.document_template_service.snapshot_template_for_protocol(db, protocol, document_template_id)
             return protocol
         has_status_transition = new_status is not None and new_status != previous_status
+        # Vor dem Einfrieren auch ohne vorheriges Öffnen die aktuellen Mitgliedschaften sichern.
+        if has_status_transition and new_status == "abgeschlossen":
+            protocol.protocol_date = values.get("protocol_date", protocol.protocol_date)
+            self.refresh_membership_blocks(db, protocol_id, commit=False)
         updated = self.repository.update(db, protocol, values, commit=not has_status_transition)
         if has_status_transition:
             updated = self._run_status_transition_hooks(db, protocol_id, previous_status, updated)

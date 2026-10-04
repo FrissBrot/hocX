@@ -29,6 +29,9 @@ class ProtocolElementService:
         self.block_repository = block_repository or ProtocolElementBlockRepository()
 
     def list_protocol_elements(self, db: Session, protocol_id: int) -> list[ProtocolElementRead]:
+        from app.services.protocol_service import ProtocolService
+
+        ProtocolService().refresh_membership_blocks(db, protocol_id)
         protocol_row = db.execute(
             select(Protocol.status, Protocol.tenant_id).where(Protocol.id == protocol_id)
         ).one_or_none()
