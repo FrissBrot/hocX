@@ -97,7 +97,7 @@ async def lifespan(_: FastAPI):
     cleanup_task.cancel()
 
 
-app = FastAPI(title=settings.app_name, version="1.1.5", lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version="1.1.6", lifespan=lifespan)
 
 from app.upload_admission import UploadAdmissionMiddleware
 app.add_middleware(UploadAdmissionMiddleware, path="/api/public/", max_bytes=public.MAX_UPLOAD_BODY_BYTES)

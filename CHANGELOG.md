@@ -8,6 +8,63 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.1.6] - 2026-10-04
+
+Wartungsrelease auf 1.1.5 mit Korrekturen an Blocktypen, Zyklus-Zuordnung von Terminen
+und der Anzeige von Teilnehmernamen im Protokoll-Editor. Enthält die Migration `0098`;
+sie läuft beim Deploy automatisch. Keine neuen Pflicht-Umgebungsvariablen.
+
+### Update von 1.1.5 auf 1.1.6
+
+Nach Veröffentlichung der Release-Images `HOCX_VERSION` in `.env` auf `v1.1.6` setzen,
+dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` ausführen.
+
+- Migration `0098` gleicht die Blocktyp-ids 12–16 an die festen ids des Vorlagen-Editors
+  an (12 Kontostand, 13 Transaktionen, 14 Bussenliste, 15 Diagramm, 16 Ein-/Austritte).
+  Auf Installationen, die aus der 1.0.0-Baseline aufgesetzt wurden, waren diese Typen
+  verschoben; die Migration benennt nur die Typ-Codes um, bestehende Blöcke erhalten
+  dadurch den Typ, der im Editor gewählt wurde. Auf bereits korrekten Datenbanken ist sie
+  ein No-op; bei unerwarteter Belegung bricht sie mit einer Meldung ab, statt zu raten.
+- Nach dem Update betroffene, bereits erstellte Protokolle kurz prüfen: Blöcke, die
+  vorher als falscher Typ erschienen, zeigen nun den richtigen Typ. Ein-/Austritte-Blöcke,
+  die als Diagramm gespeichert wurden, enthalten noch keine Einträge – den Punkt im
+  offenen Protokoll bei Bedarf neu anlegen.
+- Bestehende Zyklus-Zuordnungen von Terminen werden nicht automatisch geändert. Termine,
+  die fälschlich einem späteren Zyklus zugeordnet sind, in der Terminverwaltung
+  korrigieren.
+- Git-Tag und GitHub-Release entstehen erst nach erfolgreicher Promotion aller Images
+  durch den Release-Workflow. Der Push dieser Vorbereitung veröffentlicht noch kein
+  Release.
+
+### Geändert
+
+- Termine werden standardmässig dem Zyklus zugeordnet, in den ihr eigenes Datum fällt –
+  beim Erfassen im Protokoll, in der Terminverwaltung sowie beim Word- und CSV-Import.
+  Bisher erhielten im Protokoll erfasste oder importierte Termine zusätzlich den Zyklus
+  des Protokolls, wodurch z. B. rückblickend erwähnte Anlässe im neuen Zyklus auftauchten.
+  Manuell gewählte Zyklen bleiben erhalten; bei einer Datumsänderung wandern nur
+  unveränderte Standard-Zuordnungen mit.
+- Das Termin-Popup (Terminverwaltung, Terminübersicht und Terminauswahl im Protokoll)
+  zeigt die Zyklen des Termins und erlaubt, sie direkt anzupassen.
+- Mehrfachauswahlen von Teilnehmern zeigen im Protokoll-Editor alle Namen statt
+  „Name + N“; zu lange Listen werden mit Auslassungspunkten gekürzt, der volle Text
+  steht im Tooltip.
+
+### Behoben
+
+- Neu angelegte Kontostand-, Transaktions-, Bussenlisten-, Diagramm- und
+  Ein-/Austritte-Blöcke werden mit dem richtigen Typ gespeichert (siehe Migration
+  `0098`). Zuvor erschienen z. B. Ein-/Austritte unter Finanzen und „Kein Diagramm
+  ausgewählt“ statt der Ein-/Austritte. Frische Installationen erhalten die Typen
+  direkt mit festen ids.
+- Der Protokoll-Editor zeigt Namen auch für Teilnehmer, die nicht der Vorlage
+  zugewiesen sind, statt „X ausgewaehlt“ – in Listen, Formularen, Matrix-Zellen,
+  eingebetteten Blöcken und verknüpften Ereignissen.
+- Nach einer Spalte gruppierte Listen fassen Einträge mit verschiedenen Personen nicht
+  mehr in einer einzigen Zeile zusammen; zusammengefasste Zeilen brechen um, statt die
+  Tabelle zu sprengen.
+- Ein-/Austritte-Blöcke tragen im Protokoll ihre Bezeichnung statt „ENTRY_EXIT“.
+
 ## [1.1.5] - 2026-10-04
 
 Wartungsrelease auf 1.1.4 mit Korrekturen rund um Teilnehmer-Mitgliedschaften,
