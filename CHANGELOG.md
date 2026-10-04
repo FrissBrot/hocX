@@ -37,6 +37,9 @@ dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` aus
   zählen weiter pro Vorlage. Einschübe nummerieren offene Protokolle anderer Vorlagen
   im selben Zyklus mit um, und bei einer Kollision der Protokollnummer weicht nur die
   Nummer aus – der Titel behält den echten Rang.
+- Automatische Ereignis-Blöcke in Protokollen finden ihr verknüpftes Ereignis wieder
+  zuverlässig. Titel, Felder und die Auswahl bereits verwendeter Ereignisse werden
+  korrekt angezeigt, statt als unbekanntes Ereignis zu erscheinen.
 - Offene Protokolle aktualisieren Teilnehmerlisten sowie Ein- und Austritte nach
   Änderungen der Mitgliedschaft anhand des Protokolldatums. Erfasste Anwesenheiten,
   Notizen und ausgeblendete Einträge bleiben erhalten.
