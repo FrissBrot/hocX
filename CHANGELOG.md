@@ -8,6 +8,29 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Neu
+
+- Die Protokoll-Liste gruppiert nach Zyklus statt einer einzigen flachen Liste: der
+  aktuelle Zyklus und der unmittelbar vorherige stehen offen, ältere Zyklen stehen
+  hinter «Ältere Zyklen anzeigen». Vorlagen ohne Zyklus gruppieren nach Kalenderjahr.
+  Suchen/Filtern zeigt alle Treffer unabhängig vom Einklapp-Zustand.
+- Diagramm-Blöcke im Protokoll können einen Zyklus relativ zum Protokolldatum wählen
+  (aktueller, vorheriger, …) statt einen fest einprogrammierten Zyklus-Schlüssel –
+  dieselbe Zyklus-Offset-Auswahl wie bei Abgaben.
+- Abgaben können Elemente automatisch schliessen: nie, nach der ersten Abgabe oder
+  sobald die maximale Dateizahl erreicht ist. «Wieder aufschalten» funktioniert
+  unverändert.
+
+### Behoben
+
+- Ein zweiter, schnell aufeinanderfolgender Klick in der Anwesenheitskontrolle (eine
+  Person schnell durchklickend, oder zwei Personen nehmen gemeinsam Anwesenheit auf)
+  überschreibt nicht mehr stillschweigend den gerade gespeicherten Status der anderen
+  Person; betraf auch die Entschuldigen-Aktion im Dashboard.
+- Weitertippen im Protokolltext, während ein vorheriger Save noch läuft, löst keinen
+  Konflikt mehr gegen die eigene vorherige Version aus, der den gerade getippten Text
+  sichtbar durch eine veraltete Serverversion ersetzt hat.
+
 ## [1.1.6] - 2026-10-04
 
 Wartungsrelease auf 1.1.5 mit Korrekturen an Blocktypen, Zyklus-Zuordnung von Terminen
