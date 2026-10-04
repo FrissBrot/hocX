@@ -53,6 +53,10 @@ Installationen aktualisieren können.
 - Die Galerie-Gruppierung «Duplikate»/«Ähnliche» verifiziert vor dem Gruppieren den
   tatsächlichen Bildinhalt (Pixelvergleich), statt sich allein auf den groben
   Perceptual-Hash-Kandidatenfilter zu verlassen.
+- Die Aufgaben-Tabelle ist breiter und besser lesbar.
+- Die Fotogalerie ordnet Kacheln als Masonry-Raster nach dem echten Bildformat statt
+  gleich hoher Zeilen; der Ladezustand zeigt einen getönten Platzhalter statt einer
+  leeren Fläche.
 
 ## [1.1.6] - 2026-10-04
 
