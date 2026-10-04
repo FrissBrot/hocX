@@ -39,6 +39,9 @@ from app.services.photo_similarity import (
     SIMILARITY_HAMMING_THRESHOLD,
     GroupableImage,
     group_similar_images,
+    duplicate_signature,
+    same_photo,
+    verified_duplicate_groups,
 )
 from app.services.upload_lock import UPLOAD_LOCK_NAMESPACE, acquire_upload_lock, acquire_upload_lock_sync
 from app.services.upload_pipeline import (
@@ -431,7 +434,7 @@ class FileService:
         min_size lets a caller that only cares about actual near-duplicate series (the
         "Duplikate"/"Ähnliche" tabs) filter those out without re-deriving the grouping itself.
         `kind` picks the clustering threshold: "duplicate" (default, SIMILARITY_HAMMING_THRESHOLD -
-        same shot, re-encoded/cropped) backs the "Duplikate" tab, "series" (the looser
+        same shot, additionally verified against normalized pixels) backs the "Duplikate" tab, "series" (the looser
         SERIES_HAMMING_THRESHOLD - related but distinct shots, e.g. a burst) backs "Ähnliche"."""
         rows = self.stored_file_repository.list_tenant_files(
             db,
@@ -462,7 +465,28 @@ class FileService:
             for row in rows
         ]
         threshold = SIMILARITY_HAMMING_THRESHOLD if kind == "duplicate" else SERIES_HAMMING_THRESHOLD
-        groups = group_similar_images(groupable, threshold=threshold)
+        signatures = {}
+
+        def matches(a: int, b: int) -> bool:
+            row_a, row_b = rows_by_id[a], rows_by_id[b]
+            if row_a.checksum_sha256 and row_a.checksum_sha256 == row_b.checksum_sha256:
+                return True
+            for row in (row_a, row_b):
+                if row.id not in signatures:
+                    root = settings.abgabebox_storage_root if row.source == "submission_upload" else settings.storage_root
+                    signatures[row.id] = duplicate_signature(_safe_storage_path(root, row.storage_path))
+            return same_photo(signatures[a], signatures[b])
+
+        if kind == "duplicate":
+            groups = verified_duplicate_groups(groupable, matches)
+        else:
+            groups = group_similar_images(groupable, threshold=threshold)
+            # Reine Kopien gehören ausschliesslich unter Duplikate; gemischte
+            # Serien mit tatsächlich unterschiedlichen Aufnahmen unter Ähnliche.
+            groups = [
+                group for group in groups
+                if len(group) == 1 or any(not matches(group[0].id, image.id) for image in group[1:])
+            ]
         return [
             SimilarityGroup(
                 best_id=rows_by_id[group[0].id].public_id,

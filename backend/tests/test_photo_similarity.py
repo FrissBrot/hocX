@@ -224,3 +224,62 @@ def test_perceptual_hash_keeps_dark_photos_uncropped():
     night = Image.new("RGB", (200, 200), (5, 5, 5))
     night.paste((250, 250, 250), (80, 80, 120, 120))
     assert _crop_uniform_border(night).size == (200, 200)
+
+
+def test_duplicate_verification_accepts_quality_and_resolution_changes(tmp_path):
+    from app.services.photo_similarity import duplicate_signature, same_photo
+    from PIL import Image
+
+    photo = _photo_like_image()
+    photo.save(tmp_path / "original.png")
+    photo.resize((120, 160), Image.Resampling.LANCZOS).save(tmp_path / "copy.jpg", quality=65)
+    assert same_photo(duplicate_signature(tmp_path / "original.png"), duplicate_signature(tmp_path / "copy.jpg"))
+
+
+def test_duplicate_verification_rejects_local_changes_and_missing_original(tmp_path):
+    from app.services.photo_similarity import duplicate_signature, same_photo
+
+    photo = _photo_like_image()
+    photo.save(tmp_path / "original.png")
+    photo.paste((20, 20, 20), (80, 80, 100, 100))
+    photo.save(tmp_path / "different.png")
+    original = duplicate_signature(tmp_path / "original.png")
+    assert not same_photo(original, duplicate_signature(tmp_path / "different.png"))
+    assert not same_photo(original, duplicate_signature(tmp_path / "missing.png"))
+
+
+def test_verified_duplicates_do_not_merge_through_a_chain():
+    from app.services.photo_similarity import verified_duplicate_groups
+
+    images = [GroupableImage(i, "123456789abcdef0", 1, 1) for i in (1, 2, 3)]
+    groups = verified_duplicate_groups(images, lambda a, b: abs(a - b) == 1)
+    assert [[image.id for image in group] for group in groups] == [[1, 2], [3]]
+
+
+def test_gallery_tabs_separate_copies_from_different_photos(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from app.core.config import settings
+    from app.services.file_service import FileService
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    photo = _photo_like_image()
+    photo.save(tmp_path / "1.png")
+    photo.save(tmp_path / "2.png")
+    photo.paste((0, 0, 0), (80, 80, 110, 110))
+    photo.save(tmp_path / "3.png")
+    # Identischer grober Fingerabdruck simuliert eine pHash-Kollision.
+    rows = [SimpleNamespace(id=i, public_id=i, perceptual_hash="123456789abcdef0",
+                            sharpness_score=1, exposure_score=1, face_quality_score=None,
+                            checksum_sha256=str(i), source="gallery_upload", storage_path=f"{i}.png")
+            for i in (1, 2, 3)]
+    repository = Mock()
+    repository.list_tenant_files.return_value = rows
+    service = FileService(stored_file_repository=repository)
+    monkeypatch.setattr(service, "_build_overview_item", lambda row: row.id)
+    # Nur Gruppenzugehörigkeit prüfen, unabhängig vom API-Ausgabeschema.
+    monkeypatch.setattr("app.services.file_service.SimilarityGroup", lambda **kwargs: kwargs)
+    assert [group["images"] for group in service.group_similar_gallery_images(None, 1, min_size=2)] == [[1, 2]]
+    assert [group["images"] for group in service.group_similar_gallery_images(None, 1, min_size=2, kind="series")] == [[1, 2, 3]]
+    repository.list_tenant_files.return_value = rows[:2]
+    assert service.group_similar_gallery_images(None, 1, min_size=2, kind="series") == []

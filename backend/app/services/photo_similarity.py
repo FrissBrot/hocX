@@ -3,7 +3,8 @@ perceptual_hash already computed for the tenant-wide duplicate-upload warning (s
 file_service.py's PERCEPTUAL_DUPLICATE_THRESHOLD/_closest_perceptual_match), and picks one
 "best" image per group using the Phase 1 quality scores (photo_quality.py). Pure
 computation over already-computed per-image data - no model, no DB/network access inside
-this module - which is why grouping can run synchronously in the request path instead of
+the hash grouping; duplicate candidates additionally load normalized original pixels.
+Hash grouping can run synchronously in the request path instead of
 needing the dedicated worker container later phases will need: an int XOR + popcount per
 pair costs a fraction of a microsecond, so even the O(n^2) pairwise comparison stays under
 a second for the batch sizes (~1000 images) this feature targets. See
@@ -13,6 +14,11 @@ tests/test_photo_similarity.py for the benchmark MAX_GROUPING_IMAGES is based on
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable
+
+import numpy as np
+from PIL import Image, ImageFilter, ImageOps, UnidentifiedImageError
 
 import imagehash
 
@@ -25,7 +31,7 @@ from app.services.upload_pipeline import PERCEPTUAL_DUPLICATE_THRESHOLD
 # tuned SIMILARITY_HAMMING_THRESHOLD constant, despite the module docstring already
 # claiming they were unified - no circular import actually blocks this: upload_pipeline.py
 # has no reason to import this module back).
-# Used for the "Duplikate" tab: same shot, just re-encoded/cropped/resized.
+# Kandidatenfilter für Duplikate; erst der zusätzliche Pixelvergleich bestätigt Kopien.
 SIMILARITY_HAMMING_THRESHOLD = PERCEPTUAL_DUPLICATE_THRESHOLD
 
 # Looser threshold for the "Ähnliche" tab: photo series (e.g. burst shots of the same scene)
@@ -117,3 +123,50 @@ def group_similar_images(
         groups.setdefault(find(image.id), []).append(image)
 
     return [sorted(group, key=_quality_rank, reverse=True) for group in groups.values()]
+
+
+def duplicate_signature(path: Path) -> tuple[float, np.ndarray] | None:
+    """Bildinhalt normalisieren; Auflösung, JPEG-Qualität und EXIF-Rotation tolerieren."""
+    try:
+        with Image.open(path) as original:
+            image = ImageOps.exif_transpose(original).convert("RGB")
+            ratio = image.width / image.height
+            image = image.resize((128, 128), Image.Resampling.LANCZOS)
+            image = image.filter(ImageFilter.GaussianBlur(radius=1))
+            return ratio, np.asarray(image, dtype=np.float32)
+    except (OSError, UnidentifiedImageError, Image.DecompressionBombError):
+        # Fehlende/unlesbare Originale sind kein Beleg für ein Duplikat.
+        return None
+
+
+def same_photo(a: tuple[float, np.ndarray] | None, b: tuple[float, np.ndarray] | None) -> bool:
+    """Konservativer Inhaltsvergleich, zusätzlich zum groben pHash-Kandidatenfilter."""
+    if a is None or b is None:
+        return False
+    ratio_a, pixels_a = a
+    ratio_b, pixels_b = b
+    if abs(ratio_a / ratio_b - 1) > 0.01:
+        return False
+    squared = (pixels_a - pixels_b) ** 2
+    # Lokale Abweichungen (z.B. ein anderes Gesicht) dürfen nicht im Hintergrund
+    # verschwinden. Jede der 64 Bildkacheln muss dieselben Inhalte zeigen.
+    tiles = squared.reshape(8, 16, 8, 16, 3).mean(axis=(1, 3, 4))
+    return bool(np.sqrt(squared.mean()) <= 5 and np.sqrt(tiles.max()) <= 10)
+
+
+def verified_duplicate_groups(
+    images: list[GroupableImage], matches: Callable[[int, int], bool]
+) -> list[list[GroupableImage]]:
+    """Jedes Gruppenmitglied muss zu allen anderen passen, ohne Ähnlichkeitsketten."""
+    result = []
+    for candidates in group_similar_images(images):
+        partitions = []
+        for image in candidates:
+            for group in partitions:
+                if all(matches(image.id, other.id) for other in group):
+                    group.append(image)
+                    break
+            else:
+                partitions.append([image])
+        result.extend(partitions)
+    return result
