@@ -31,7 +31,7 @@
   "amountPlaceholder": "ad es. 50 o -30",
   "amountHint": "Positivo = entrata, negativo = uscita",
   "txDescriptionLabel": "Descrizione",
-  "txDescriptionPlaceholder": "Per cosa?",
+  "txDescriptionPlaceholder": "Per cosa? ad es. affitto della sede sociale",
   "dateLabel": "Data",
   "update": "Aggiorna",
   "noTransactions": "Nessuna transazione. Aggiungi la tua prima transazione.",
@@ -89,5 +89,11 @@
   "amountLabel": "Importo",
   "createFineSuccess": "Multa registrata",
   "createFineFailed": "Impossibile registrare la multa",
-  "recordButton": "Registra"
+  "recordButton": "Registra",
+  "newTransactionTitle": "Nuova transazione",
+  "editTransactionTitle": "Modifica transazione",
+  "income": "Entrata",
+  "expense": "Uscita",
+  "today": "Oggi",
+  "bookedTo": "Registrata su <strong>{account}</strong>"
 }

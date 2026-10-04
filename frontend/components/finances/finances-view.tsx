@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { DateInput } from "@/components/ui/date-input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ActionIcon } from "@/components/ui/action-icons";
@@ -41,6 +42,9 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
   const [editingTx, setEditingTx] = useState<FinanceTransaction | null>(null);
   const [txDraft, setTxDraft] = useState({ amount: "", description: "", transaction_date: today() });
   const [savingTx, setSavingTx] = useState(false);
+  const [txDirection, setTxDirection] = useState<"income" | "expense">("income");
+  const parsedTxAmount = Number(txDraft.amount.replace(",", "."));
+  const validTx = Boolean(txDraft.description.trim() && txDraft.transaction_date && Number.isFinite(parsedTxAmount) && parsedTxAmount > 0);
 
   async function openAccount(account: FinanceAccount) {
     setSelected(account);
@@ -151,6 +155,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
   // ── Transaction CRUD ─────────────────────────────────────────────────────────
 
   function startCreateTx() {
+    setTxDirection("income");
     setEditingTx(null);
     setTxDraft({ amount: "", description: "", transaction_date: today() });
     setShowTxForm(true);
@@ -158,14 +163,14 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
 
   function startEditTx(tx: FinanceTransaction) {
     setEditingTx(tx);
-    setTxDraft({ amount: String(tx.amount), description: tx.description, transaction_date: tx.transaction_date });
+    setTxDirection(tx.amount < 0 ? "expense" : "income");
+    setTxDraft({ amount: String(Math.abs(tx.amount)), description: tx.description, transaction_date: tx.transaction_date });
     setShowTxForm(true);
   }
 
   async function saveTx() {
-    if (!selected || !txDraft.description.trim() || !txDraft.amount) return;
-    const amount = parseFloat(txDraft.amount.replace(",", "."));
-    if (isNaN(amount)) return;
+    if (!selected || savingTx || !validTx) return;
+    const amount = txDirection === "expense" ? -parsedTxAmount : parsedTxAmount;
     setSavingTx(true);
     try {
       if (editingTx) {
@@ -331,30 +336,41 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
               <div>
                 <h2 className="finance-main-title">{selected.name}</h2>
                 <div className={`finance-main-balance${selected.balance < 0 ? " finance-balance-negative" : ""}`}>
-                  {formatAmount(selected.balance, selected.currency_label, locale)}
+                  {formatAmount(selected.balance, selected.currency_label, locale, true)}
                 </div>
                 {selected.provisional_balance > 0 ? (
                   <div className="finance-account-provisional">
-                    + {formatAmount(selected.provisional_balance, selected.currency_label, locale)} {t("provisionalPending")}
+                    + {formatAmount(selected.provisional_balance, selected.currency_label, locale, true)} {t("provisionalPending")}
                   </div>
                 ) : null}
               </div>
-              {canWrite && <button type="button" className="button-secondary" onClick={startCreateTx}>{t("addTransaction")}</button>}
+              {canWrite && !showTxForm && <button type="button" className="button-secondary" onClick={startCreateTx}>{t("addTransaction")}</button>}
             </div>
 
             {canWrite && showTxForm && (
-              <div className="finance-tx-form">
+              <form className="grid finance-tx-form" onSubmit={(event) => { event.preventDefault(); void saveTx(); }} onKeyDown={(event) => { if (event.key === "Escape" && !savingTx) { setShowTxForm(false); setEditingTx(null); } }}>
+                <div className="finance-tx-form-header">
+                  <h3 className="finance-tx-form-title">{editingTx ? t("editTransactionTitle") : t("newTransactionTitle")}</h3>
+                  <div className={`finance-tx-direction finance-tx-direction-${txDirection}`}>
+                    <FilterTabs options={[{ value: "income", label: t("income") }, { value: "expense", label: t("expense") }]} value={txDirection} onChange={setTxDirection} />
+                  </div>
+                  <button type="button" className="button-icon-soft finance-tx-close" aria-label={tCommon("close")} disabled={savingTx} onClick={() => { setShowTxForm(false); setEditingTx(null); }}><ActionIcon name="close" /></button>
+                </div>
                 <div className="finance-tx-form-row">
                   <label className="field-stack finance-tx-field-amount">
-                    <span className="field-label">{t("amountWithCurrencyLabel", { currency })}</span>
-                    <input
-                      value={txDraft.amount}
-                      onChange={(e) => setTxDraft((d) => ({ ...d, amount: e.target.value }))}
-                      placeholder={t("amountPlaceholder")}
-                      autoFocus
-                      onKeyDown={(e) => { if (e.key === "Enter") void saveTx(); if (e.key === "Escape") setShowTxForm(false); }}
-                    />
-                    <span className="finance-tx-hint">{t("amountHint")}</span>
+                    <span className="field-label">{t("amountLabel")}</span>
+                    <span className="finance-tx-amount-input">
+                      <span className="finance-tx-currency" aria-hidden="true">{currency}</span>
+                      <input
+                        value={txDraft.amount}
+                        onChange={(e) => setTxDraft((d) => ({ ...d, amount: e.target.value }))}
+                        aria-label={t("amountWithCurrencyLabel", { currency })}
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        required
+                        autoFocus
+                      />
+                    </span>
                   </label>
                   <label className="field-stack finance-tx-field-desc">
                     <span className="field-label">{t("txDescriptionLabel")}</span>
@@ -362,21 +378,27 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
                       value={txDraft.description}
                       onChange={(e) => setTxDraft((d) => ({ ...d, description: e.target.value }))}
                       placeholder={t("txDescriptionPlaceholder")}
-                      onKeyDown={(e) => { if (e.key === "Enter") void saveTx(); if (e.key === "Escape") setShowTxForm(false); }}
+                      required
                     />
                   </label>
-                  <label className="field-stack finance-tx-field-date">
-                    <span className="field-label">{t("dateLabel")}</span>
-                    <DateInput value={txDraft.transaction_date} onChange={(value) => setTxDraft((d) => ({ ...d, transaction_date: value }))} />
-                  </label>
+                  <div className="field-stack finance-tx-field-date">
+                    <label className="field-label" htmlFor="finance-tx-date">{t("dateLabel")}</label>
+                    <div className="finance-tx-date-input">
+                      <DateInput id="finance-tx-date" value={txDraft.transaction_date} onChange={(value) => setTxDraft((d) => ({ ...d, transaction_date: value }))} required />
+                      <button type="button" className="button-ghost finance-tx-today" onClick={() => setTxDraft((d) => ({ ...d, transaction_date: today() }))}>{t("today")}</button>
+                    </div>
+                  </div>
                 </div>
-                <div className="finance-form-actions">
-                  <button type="button" className="button-secondary" onClick={() => { setShowTxForm(false); setEditingTx(null); }}>{tCommon("cancel")}</button>
-                  <button type="button" className="button-secondary" onClick={() => void saveTx()} disabled={savingTx || !txDraft.description.trim() || !txDraft.amount}>
-                    {savingTx ? t("saving") : editingTx ? t("update") : tCommon("add")}
-                  </button>
+                <div className="finance-tx-form-footer">
+                  <p className="finance-tx-booking-note">{t.rich("bookedTo", { account: selected.name, strong: (chunks) => <strong>{chunks}</strong> })}</p>
+                  <div className="finance-form-actions">
+                    <button type="button" className="button-secondary" disabled={savingTx} onClick={() => { setShowTxForm(false); setEditingTx(null); }}>{tCommon("cancel")}</button>
+                    <button type="submit" className="button-primary" disabled={savingTx || !validTx}>
+                      {savingTx ? t("saving") : editingTx ? t("update") : tCommon("add")}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </form>
             )}
 
             {loadingTx ? (
@@ -435,11 +457,13 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
 }
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function formatAmount(amount: number, currency: string, locale: string): string {
+function formatAmount(amount: number, currency: string, locale: string, currencyFirst = false): string {
   const abs = Math.abs(amount).toFixed(2);
   const formatted = Number(abs).toLocaleString(`${locale}-CH`, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `${amount < 0 ? "−" : ""}${formatted} ${currency}`;
+  const value = `${amount < 0 ? "−" : ""}${formatted}`;
+  return currencyFirst ? `${currency} ${value}` : `${value} ${currency}`;
 }

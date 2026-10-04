@@ -31,7 +31,7 @@
   "amountPlaceholder": "z. B. 50 oder -30",
   "amountHint": "Positiv = Einnahme, negativ = Ausgabe",
   "txDescriptionLabel": "Beschreibung",
-  "txDescriptionPlaceholder": "Wofür?",
+  "txDescriptionPlaceholder": "Wofür? z. B. Raummiete Vereinsheim",
   "dateLabel": "Datum",
   "update": "Aktualisieren",
   "noTransactions": "Keine Transaktionen. Füge deine erste Transaktion hinzu.",
@@ -89,5 +89,11 @@
   "amountLabel": "Betrag",
   "createFineSuccess": "Busse erfasst",
   "createFineFailed": "Busse konnte nicht erfasst werden",
-  "recordButton": "Erfassen"
+  "recordButton": "Erfassen",
+  "newTransactionTitle": "Neue Transaktion",
+  "editTransactionTitle": "Transaktion bearbeiten",
+  "income": "Einnahme",
+  "expense": "Ausgabe",
+  "today": "Heute",
+  "bookedTo": "Wird auf <strong>{account}</strong> gebucht"
 }

@@ -31,7 +31,7 @@
   "amountPlaceholder": "p. ex. 50 ou -30",
   "amountHint": "Positif = revenu, négatif = dépense",
   "txDescriptionLabel": "Description",
-  "txDescriptionPlaceholder": "Pour quoi ?",
+  "txDescriptionPlaceholder": "Pour quoi ? p. ex. location du local du club",
   "dateLabel": "Date",
   "update": "Mettre à jour",
   "noTransactions": "Aucune transaction. Ajoutez votre première transaction.",
@@ -89,5 +89,11 @@
   "amountLabel": "Montant",
   "createFineSuccess": "Amende enregistrée",
   "createFineFailed": "L'amende n'a pas pu être enregistrée",
-  "recordButton": "Enregistrer"
+  "recordButton": "Enregistrer",
+  "newTransactionTitle": "Nouvelle transaction",
+  "editTransactionTitle": "Modifier la transaction",
+  "income": "Recette",
+  "expense": "Dépense",
+  "today": "Aujourd’hui",
+  "bookedTo": "Comptabilisé sur <strong>{account}</strong>"
 }
