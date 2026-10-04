@@ -62,6 +62,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
 function AppShellInner({ children, initialSession = null }: { children: ReactNode; initialSession?: SessionInfo | null }) {
   const t = useTranslations("nav");
   const tSettings = useTranslations("settings");
+  const tCommon = useTranslations("common");
   const showToast = useToast();
   const pathname = usePathname();
   const router = useRouter();
@@ -326,7 +327,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                 {mobileNavOpen ? t("menuToggleClose") : "☰"}
               </button>
             </div>
-            <nav className="topbar-breadcrumb" aria-label={t("breadcrumbNav")}>
+            <nav className="topbar-breadcrumb" aria-label={tCommon("breadcrumbNav")}>
               {activeCrumb.group ? (
                 <>
                   <span className="topbar-breadcrumb-group">{activeCrumb.group}</span>

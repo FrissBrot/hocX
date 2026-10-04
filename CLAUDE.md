@@ -61,9 +61,17 @@ Verbindliche Regeln:
    gespeicherte Präferenz → Cookie → Browser-Sprache → Default. Eine unbekannte/nicht unterstützte
    Locale fällt immer auf `de` zurück, bricht nie die Anwendung.
 7. Prüfungen vor Abschluss jeder UI-Aufgabe (siehe auch Abschnitt „Prüfen" unten):
-   `python3 scripts/check-i18n-completeness.py` und `python3 scripts/check-i18n-hardcoded-text.py`
-   müssen „ok" melden. Ein echter Fund im Hardcoded-Text-Check wird übersetzt; ein False Positive
-   (kein UI-Text) wird mit `// i18n-ok: <Begründung>` in derselben Zeile markiert.
+   `python3 scripts/check-i18n-completeness.py`, `python3 scripts/check-i18n-hardcoded-text.py`
+   und `python3 scripts/check-i18n-key-resolution.py` müssen „ok" melden. Ein echter Fund im
+   Hardcoded-Text-Check wird übersetzt; ein False Positive (kein UI-Text) wird mit
+   `// i18n-ok: <Begründung>` in derselben Zeile markiert. Completeness/Hardcoded-Text prüfen nur
+   Key-Parität zwischen Locales bzw. hartcodierten Text — ein `t("key")`-Aufruf, der syntaktisch
+   korrekt aussieht, aber den falschen Namespace oder einen nicht existierenden Key trifft (z. B.
+   `useTranslations("nav")` gefolgt von `t("breadcrumbNav")`, obwohl der Key in `common.json`
+   liegt), fällt erst zur Laufzeit mit next-intls `MISSING_MESSAGE` auf — das deckt
+   `check-i18n-key-resolution.py` ab, mit der bekannten Grenze, dass mehrstufige
+   Parameter-Weiterleitung (TFunc-Muster, siehe unten) nicht immer statisch auflösbar ist; solche
+   Fälle werden übersprungen statt geraten, nie als Fehlalarm gemeldet.
 8. Neue Sprache hinzufügen: ausschliesslich `i18n/locales.json` ergänzen, `sync-i18n-config.py`
    laufen lassen, dann für jeden registrierten Namespace eine `messages/<neue-locale>/<namespace>.json`
    anlegen. Language Selector, CI und Tests erkennen sie danach automatisch — kein Code in
@@ -92,7 +100,7 @@ Beim Schreiben oder Ändern von Backend-Code (Routen, Services) gilt deshalb:
 Projektabhängigkeiten und Projektbefehle laufen in Containern. Auf dem Host installiertes Node/Python dient auch Dev-Tools und ist kein Grund, Frontend- oder Backend-Abhängigkeiten auf dem Host zu installieren oder Projektbefehle dorthin zu verlagern.
 
 - Typecheck/Tests Frontend: `docker compose exec frontend node_modules/.bin/tsc --noEmit` bzw. `.../vitest run`
-- i18n (vor jedem Commit mit UI-Änderung): `python3 scripts/check-i18n-completeness.py` und `python3 scripts/check-i18n-hardcoded-text.py`, nach jeder Änderung an `i18n/locales.json` zusätzlich `python3 scripts/sync-i18n-config.py`
+- i18n (vor jedem Commit mit UI-Änderung): `python3 scripts/check-i18n-completeness.py`, `python3 scripts/check-i18n-hardcoded-text.py` und `python3 scripts/check-i18n-key-resolution.py`, nach jeder Änderung an `i18n/locales.json` zusätzlich `python3 scripts/sync-i18n-config.py`
 - E2E-Stack (eigene DB, Wegwerf-Konten): `./scripts/e2e.sh up` / `test` / `down`
 - Für visuelle Vergleiche Playwright-Screenshots gegen den E2E-Stack (`mcr.microsoft.com/playwright:v1.55.0-noble`), Light/Dark, 1440 und 390 px.
 - Zuerst die kleinste relevante Prüfung ausführen; vollständige Test- oder E2E-Suites nur, wenn sie für die Änderung sinnvoll sind.

@@ -281,11 +281,11 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
               <span className="field-label">{t("preview")}</span>
               <div className="info-note">
                 {selectedTemplate.protocol_number_pattern
-                  ? t("numberPreview", { preview: resolvePatternPreview(selectedTemplate.protocol_number_pattern, form.protocol_date, t) })
+                  ? t("numberPreview", { preview: resolvePatternPreview(selectedTemplate.protocol_number_pattern, form.protocol_date, tRoot) })
                   : t("numberManual")}
                 {" · "}
                 {selectedTemplate.title_pattern
-                  ? t("titlePreview", { preview: resolvePatternPreview(selectedTemplate.title_pattern, form.protocol_date, t) })
+                  ? t("titlePreview", { preview: resolvePatternPreview(selectedTemplate.title_pattern, form.protocol_date, tRoot) })
                   : t("titleManual")}
               </div>
             </div>

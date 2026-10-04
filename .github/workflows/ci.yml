@@ -41,6 +41,9 @@ jobs:
       - name: i18n - keine neuen hart codierten UI-Texte
         run: python3 scripts/check-i18n-hardcoded-text.py
 
+      - name: i18n - t()-Aufrufe loesen existierende Keys auf
+        run: python3 scripts/check-i18n-key-resolution.py
+
   migration-check:
     runs-on: ubuntu-latest
     services:
