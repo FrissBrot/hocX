@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 
+import { ParticipantDateContext } from "@/contexts/participant-date-context";
 import { SessionPanel, SessionPanelHandle } from "@/components/protocol/session-panel";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
@@ -515,8 +516,8 @@ export function ProtocolEditor({
     [selectedElementId, visibleElements]
   );
   const attendanceTally = useMemo(
-    () => visibleAttendanceTally(elements, availableParticipants),
-    [elements, availableParticipants]
+    () => visibleAttendanceTally(elements, availableParticipants, protocol.protocol_date, protocolStatus === "abgeschlossen"),
+    [elements, availableParticipants, protocol.protocol_date, protocolStatus]
   );
   const [collabStatusPanelOpen, setCollabStatusPanelOpen] = useState(false);
   const collabHoverCloseTimerRef = useRef<number | undefined>(undefined);
@@ -1596,6 +1597,7 @@ export function ProtocolEditor({
   }
 
   return (
+    <ParticipantDateContext.Provider value={protocol.protocol_date ?? null}>
     <div className="grid" ref={editorRef}>
       {useDocumentLayout && (
         <div className="protocol-document-header">
@@ -2091,5 +2093,6 @@ export function ProtocolEditor({
         protocolNumber={protocol.protocol_number}
       />
     </div>
+    </ParticipantDateContext.Provider>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+
 import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -136,12 +138,15 @@ function valueSummary(
   const value = normalizeValueForType(valueType, rawValue);
   if (valueType === "participant") {
     const participant = participants.find((item) => item.id === value.participant_id);
-    return participant?.display_name ?? "—";
+    return typeof rawValue.participant_name === "string" ? rawValue.participant_name : participant?.display_name ?? "—";
   }
   if (valueType === "participants") {
     const selectedIds = Array.isArray(value.participant_ids) ? (value.participant_ids as string[]) : [];
     if (!selectedIds.length) {
       return "—";
+    }
+    if (Array.isArray(rawValue.participant_names) && rawValue.participant_names.some(Boolean)) {
+      return rawValue.participant_names.filter(Boolean).join(", ");
     }
     const selectedParticipants = participants.filter((item) => selectedIds.includes(item.id));
     if (!selectedParticipants.length) {
@@ -172,12 +177,15 @@ function valueSortText(
   const value = normalizeValueForType(valueType, rawValue);
   if (valueType === "participant") {
     const participant = participants.find((item) => item.id === value.participant_id);
-    return participant?.display_name ?? "";
+    return typeof rawValue.participant_name === "string" ? rawValue.participant_name : participant?.display_name ?? "";
   }
   if (valueType === "participants") {
     const selectedIds = Array.isArray(value.participant_ids) ? (value.participant_ids as string[]) : [];
     if (!selectedIds.length) {
       return "";
+    }
+    if (Array.isArray(rawValue.participant_names) && rawValue.participant_names.some(Boolean)) {
+      return rawValue.participant_names.filter(Boolean).join(", ");
     }
     return participants
       .filter((item) => selectedIds.includes(item.id))
@@ -212,6 +220,7 @@ export function StructuredListTable({
   onUpdateEntry,
   onDeleteEntry,
 }: StructuredListTableProps) {
+  const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("lists.table");
   const resolvedEmptyMessage = emptyMessage ?? t("emptyMessage");
   const sortedEvents = useMemo(
@@ -336,11 +345,16 @@ export function StructuredListTable({
   }
 
   function rowValue(entry: StructuredListEntry, columnKey: StructuredListColumnKey) {
-    return normalizeValueForType(
-      columnKey === "column_one_value" ? definition.column_one_value_type : definition.column_two_value_type,
-      ((entryDrafts[entry.id] ?? {})[columnKey] as StructuredListValue | undefined) ??
-        (entry[columnKey] as StructuredListValue)
-    );
+    const rawValue = ((entryDrafts[entry.id] ?? {})[columnKey] as StructuredListValue | undefined)
+      ?? (entry[columnKey] as StructuredListValue);
+    // Eingefrorene Namen für Anzeige/Sortierung erhalten; Schreibwerte werden separat normalisiert.
+    return {
+      ...rawValue,
+      ...normalizeValueForType(
+        columnKey === "column_one_value" ? definition.column_one_value_type : definition.column_two_value_type,
+        rawValue,
+      ),
+    };
   }
 
   function displayColumnKey(column: StructuredListDisplayColumn): StructuredListColumnKey {
@@ -405,6 +419,7 @@ export function StructuredListTable({
       return (
         <SearchableSelect
           options={availableParticipants}
+          isOptionSelectable={isParticipantSelectable}
           getId={(participant) => participant.id}
           getLabel={(participant) => participant.display_name}
           value={(value.participant_id as string | null | undefined) ?? null}
@@ -476,13 +491,13 @@ export function StructuredListTable({
 
   const filteredParticipants = useMemo(() => {
     const query = participantSearch.trim().toLowerCase();
-    return availableParticipants.filter((participant) => {
+    return availableParticipants.filter(isParticipantSelectable).filter((participant) => {
       if (!query) {
         return true;
       }
       return participant.display_name.toLowerCase().includes(query);
     });
-  }, [availableParticipants, participantSearch]);
+  }, [availableParticipants, participantSearch, isParticipantSelectable]);
 
   const textCollator = useMemo(
     () => new Intl.Collator("de", { sensitivity: "base", numeric: true }),

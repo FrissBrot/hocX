@@ -1,5 +1,7 @@
 "use client";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -72,6 +74,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
   const [exportCustomDate, setExportCustomDate] = useState("");
   const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
   const templateDropdownRef = useRef<HTMLDivElement>(null);
+  const isParticipantSelectable = useParticipantSelectable();
   const [participantSearch, setParticipantSearch] = useState("");
   const [participantSuggestions, setParticipantSuggestions] = useState<ParticipantSummary[]>([]);
 
@@ -80,8 +83,8 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
   useEffect(() => {
     if (!participantSearch.trim()) { setParticipantSuggestions([]); return; }
     const q = participantSearch.toLowerCase();
-    setParticipantSuggestions(participants.filter((p) => p.display_name.toLowerCase().includes(q)).slice(0, 6));
-  }, [participantSearch, participants]);
+    setParticipantSuggestions(participants.filter(isParticipantSelectable).filter((p) => p.display_name.toLowerCase().includes(q)).slice(0, 6));
+  }, [participantSearch, participants, isParticipantSelectable]);
 
   const sortedEvents = useMemo(
     () => [...events].sort((a, b) => a.event_date.localeCompare(b.event_date)),

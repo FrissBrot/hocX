@@ -1,5 +1,7 @@
 "use client";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -18,7 +20,7 @@ import {
   ProtocolEventDraft,
   asObject,
   attendanceOptions,
-  attendanceParticipants,
+  protocolAttendanceParticipants,
   canCreateProtocolEventDraft,
   compareIsoDate,
   createEmbeddedFormRow,
@@ -69,6 +71,7 @@ export function MatrixEmbeddedBlockEditor({
   onTagColorChange: (tag: string, color: string) => Promise<void>;
   onTagRename: (oldTag: string, newTag: string) => Promise<void>;
 }) {
+  const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("protocols.matrixEditor");
   const tRoot = useTranslations("protocols");
   const tCommon = useTranslations("common");
@@ -77,10 +80,6 @@ export function MatrixEmbeddedBlockEditor({
   const embeddedConfig = asObject(embeddedBlock.configuration_snapshot_json);
   const sortedEvents = [...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date));
   const embeddedBlockClassName = "matrix-embedded-block";
-  const eligibleAttendanceParticipants = useMemo(
-    () => attendanceParticipants(availableParticipants),
-    [availableParticipants]
-  );
   const [embeddedEventDrafts, setEmbeddedEventDrafts] = useState<Record<string, Partial<EventSummary>>>({});
   const embeddedEventAutosaveTimers = useRef<Record<string, number>>({});
   const forcedEmbeddedTag =
@@ -557,6 +556,7 @@ export function MatrixEmbeddedBlockEditor({
                 {String(row.value_type ?? "text") === "participant" ? (
                   <SearchableSelect
                     options={availableParticipants}
+                    isOptionSelectable={isParticipantSelectable}
                     getId={(participant) => participant.id}
                     getLabel={(participant) => participant.display_name}
                     value={row.participant_id ?? null}
@@ -1125,6 +1125,7 @@ export function MatrixEmbeddedBlockEditor({
 
   if (elementTypeId === 9) {
     const attendanceEntries = (Array.isArray(embeddedConfig.attendance_entries) ? embeddedConfig.attendance_entries : []) as Array<Record<string, any>>;
+    const eligibleAttendanceParticipants = protocolAttendanceParticipants(availableParticipants, attendanceEntries, protocol);
     if (!editable) {
       return (
         <div className={embeddedBlockClassName}>

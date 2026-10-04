@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { attendanceParticipants, tallyAttendance, visibleAttendanceTally } from "./protocol-editor-shared";
+import { attendanceParticipants, protocolAttendanceParticipants, tallyAttendance, visibleAttendanceTally } from "./protocol-editor-shared";
 import { ParticipantSummary, ProtocolElement, ProtocolElementBlock } from "@/types/api";
 
 function participant(id: string, overrides: Partial<ParticipantSummary> = {}): ParticipantSummary {
@@ -147,4 +147,15 @@ describe("visibleAttendanceTally", () => {
     const elements = [element("el-1", [laterBlock, earlierBlock])];
     expect(visibleAttendanceTally(elements, participants)).toEqual({ present: 1, late: 0, excused: 0, absent: 0 });
   });
+});
+
+
+it("behält eingefrorene Anwesenheit auch nach Austritt, Umbenennung und Entfernen aus der Vorlage", () => {
+  const entries = [{ participant_id: "old", participant_name: "Damals Mitglied", status: "present" }];
+  const current = participant("old", { display_name: "Neuer Name", left_at: "2025-01-01", exclude_from_attendance: true });
+  const protocol = { status: "abgeschlossen", protocol_date: "2025-06-01" };
+  expect(protocolAttendanceParticipants([current], entries, protocol).map((p) => p.display_name)).toEqual(["Damals Mitglied"]);
+  expect(protocolAttendanceParticipants([], entries, protocol).map((p) => p.display_name)).toEqual(["Damals Mitglied"]);
+  expect(visibleAttendanceTally([element("el", [attendanceBlock({ configuration_snapshot_json: { attendance_entries: entries } })])], [], "2025-06-01", true))
+    .toEqual({ present: 1, late: 0, excused: 0, absent: 0 });
 });

@@ -1,5 +1,7 @@
 "use client";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+
 import { FormEvent, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -83,6 +85,7 @@ export function ListManager({
   availableEvents,
   documentTemplates = [],
 }: ListManagerProps) {
+  const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("lists");
   const showToast = useToast();
   const confirm = useConfirm();
@@ -707,6 +710,7 @@ export function ListManager({
                       <div style={{ marginTop: "var(--space-2)" }}>
                         <SearchableSelect
                           options={availableParticipants}
+                          isOptionSelectable={isParticipantSelectable}
                           getId={(p) => p.id}
                           getLabel={(p) => p.display_name}
                           value={exportFilterParticipantId || null}

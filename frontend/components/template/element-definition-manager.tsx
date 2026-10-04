@@ -1,5 +1,7 @@
 "use client";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+
 import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -890,6 +892,7 @@ export function ElementDefinitionManager({
   tenantId,
   autoOpenCreate = false,
 }: ElementDefinitionManagerProps) {
+  const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("templates.elementDefinitions");
   const tTypes = useTranslations("templates");
   const locale = useLocale();
@@ -1004,7 +1007,7 @@ export function ElementDefinitionManager({
     try {
       if (source === "participants") {
         setMatrixPreviewColumns(
-          participantOptions.map((p) => ({ id: `prev-p-${p.id}`, title: p.display_name }))
+          participantOptions.filter(isParticipantSelectable).map((p) => ({ id: `prev-p-${p.id}`, title: p.display_name }))
         );
       } else if (source === "events") {
         const tagFilter = matrixDesignerForm.auto_source_event_tag.trim().toLowerCase();
@@ -1171,6 +1174,7 @@ export function ElementDefinitionManager({
           <span className="field-label">{t("initialParticipant")}</span>
           <SearchableSelect
             options={participantOptions}
+            isOptionSelectable={isParticipantSelectable}
             getId={(participant) => participant.id}
             getLabel={(participant) => participant.display_name}
             value={field.template_participant_id || null}
@@ -1187,6 +1191,7 @@ export function ElementDefinitionManager({
           <span className="field-label">{t("initialParticipants")}</span>
           <SearchableMultiSelect
             options={participantOptions}
+            isOptionSelectable={isParticipantSelectable}
             getId={(participant) => participant.id}
             getLabel={(participant) => participant.display_name}
             values={field.template_participant_ids ?? []}

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
@@ -61,9 +62,10 @@ export function FineCreateModal({ open, accounts, onClose, onCreated }: Props) {
     };
   }, [open, showToast, t]);
 
+  const isParticipantSelectable = useParticipantSelectable(protocols.find((p) => p.id === protocolId)?.protocol_date);
   const participant = participants.find((entry) => entry.id === participantId) ?? null;
   const parsedAmount = Number(amount.replace(",", "."));
-  const canSave = !!protocolId && !!participant && !!accountId && Number.isFinite(parsedAmount) && parsedAmount > 0 && !saving;
+  const canSave = !!protocolId && !!participant && isParticipantSelectable(participant) && !!accountId && Number.isFinite(parsedAmount) && parsedAmount > 0 && !saving;
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -113,6 +115,7 @@ export function FineCreateModal({ open, accounts, onClose, onCreated }: Props) {
           <span className="field-label">{t("participantLabel")}</span>
           <SearchableSelect
             options={participants}
+            isOptionSelectable={isParticipantSelectable}
             getId={(entry) => entry.id}
             getLabel={(entry) => entry.display_name}
             value={participantId}

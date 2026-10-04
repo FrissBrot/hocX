@@ -1,5 +1,7 @@
 "use client";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+
 import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -58,7 +60,7 @@ import {
   TodoMenuSearchList,
   TodoMiniMenu,
   asObject,
-  attendanceParticipants,
+  protocolAttendanceParticipants,
   tallyAttendance,
   canCreateProtocolEventDraft,
   compareIsoDate,
@@ -219,6 +221,7 @@ export function FocusedElementEditor({
   updateTagColor: (tag: string, color: string) => Promise<void>;
   renameTag: (oldTag: string, newTag: string) => Promise<void>;
 }) {
+  const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("protocols");
   const confirm = useConfirm();
   const showToast = useToast();
@@ -319,16 +322,12 @@ export function FocusedElementEditor({
     () => [...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date)),
     [availableEvents]
   );
-  const eligibleAttendanceParticipants = useMemo(
-    () => attendanceParticipants(availableParticipants),
-    [availableParticipants]
-  );
   const filteredParticipants = useMemo(() => {
     const query = multiParticipantSearch.trim().toLowerCase();
     if (!query) {
-      return availableParticipants;
+      return availableParticipants.filter(isParticipantSelectable);
     }
-    return availableParticipants.filter((participant) => {
+    return availableParticipants.filter(isParticipantSelectable).filter((participant) => {
       const haystack = [
         participant.display_name,
         participant.first_name ?? "",
@@ -339,7 +338,7 @@ export function FocusedElementEditor({
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [availableParticipants, multiParticipantSearch]);
+  }, [availableParticipants, multiParticipantSearch, isParticipantSelectable]);
 
   useEffect(() => {
     return () => {
@@ -1133,7 +1132,7 @@ export function FocusedElementEditor({
     let nextColumns: Array<Record<string, any>> = [];
 
     if (source === "participants") {
-      nextColumns = availableParticipants.map((participant) => buildMatrixColumnForParticipant(rows, participant));
+      nextColumns = availableParticipants.filter(isParticipantSelectable).map((participant) => buildMatrixColumnForParticipant(rows, participant));
     } else if (source === "events") {
       const filtered = eventTagFilter
         ? availableEvents.filter((e) => String(e.tag ?? "").toLowerCase() === eventTagFilter)
@@ -1167,7 +1166,7 @@ export function FocusedElementEditor({
     }
 
     if (source === "participants") {
-      return availableParticipants.map((p) => toItem(`gen-p-${p.id}`, p.display_name));
+      return availableParticipants.filter(isParticipantSelectable).map((p) => toItem(`gen-p-${p.id}`, p.display_name));
     }
     if (source === "events") {
       const filtered = eventTagFilter
@@ -1468,6 +1467,7 @@ export function FocusedElementEditor({
                             <TodoAssigneeMenu
                               label={todo.assigned_participant_name ?? t("nobody")}
                               participants={availableParticipants}
+                              isOptionSelectable={(option) => isParticipantSelectable(availableParticipants.find((p) => p.id === option.id) ?? {})}
                               activeId={todo.assigned_participant_id}
                               onChange={(option) => {
                                 setTodosByBlock((current) => ({
@@ -2833,6 +2833,7 @@ export function FocusedElementEditor({
 
               {elementType === "attendance" && (() => {
                 const attendanceEntries = Array.isArray(blockConfig.attendance_entries) ? (blockConfig.attendance_entries as Array<Record<string, any>>) : [];
+                const eligibleAttendanceParticipants = protocolAttendanceParticipants(availableParticipants, attendanceEntries, protocol);
                 const fineAccountId = blockConfig.fine_account_id ? String(blockConfig.fine_account_id) : null;
                 const fineAmountLate = Number(blockConfig.fine_amount_late ?? 0);
                 const fineAmountAbsent = Number(blockConfig.fine_amount_absent ?? 0);
@@ -2912,7 +2913,7 @@ export function FocusedElementEditor({
                 }
 
                 const { present: nPresent, late: nLate, excused: nExcused, absent: nAbsent } =
-                  tallyAttendance(availableParticipants, attendanceEntries);
+                  tallyAttendance(eligibleAttendanceParticipants, attendanceEntries);
                 return (
                   <>
                     <div className="attendance-list">

@@ -1,5 +1,7 @@
 "use client";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -953,6 +955,11 @@ export function WordImportWizard({
 
   const [analysis, setAnalysis] = useState<WordImportAnalysis | null>(null);
   const [protocolDate, setProtocolDate] = useState("");
+  const participantSelectable = useParticipantSelectable(protocolDate || null);
+  const isImportParticipantSelectable = (option: { id: string | number | null }) => {
+    const participant = participants.find((p) => p.id === option.id);
+    return !participant || participantSelectable(participant);
+  };
   const [dateEditorOpen, setDateEditorOpen] = useState(false);
   const [tableRoles, setTableRoles] = useState<Record<number, TableRoleOverride>>({});
   const [texts, setTexts] = useState<TextDraft[]>([]);
@@ -1265,6 +1272,7 @@ export function WordImportWizard({
               </div>
             )}
             <TodoAssigneeMenu
+              isOptionSelectable={isImportParticipantSelectable}
               label={linked ? `${linked.title} (${formatDateRange(linked.event_date, linked.event_end_date)})` : "🆕 Neu anlegen"}
               nullLabel={t("createNewEmoji")}
               activeId={entry.linked_event_id}
@@ -1421,6 +1429,7 @@ export function WordImportWizard({
         </div>
         {isOpen && (
           <TodoAssigneeMenu
+            isOptionSelectable={isImportParticipantSelectable}
             label={label}
             nullLabel={t("linkNone")}
             activeId={entry.createNew ? CREATE_NEW_PARTICIPANT_ID : entry.participant_id}
@@ -1536,6 +1545,7 @@ export function WordImportWizard({
         {isOpen && (
           <div className="grid" style={{ gap: "var(--space-3)" }}>
             <TodoAssigneeMenu
+              isOptionSelectable={isImportParticipantSelectable}
               label={linked ? `${linked.column_one_display} → ${linked.column_two_display}` : "🆕 Neu (nur in diesem Protokoll)"}
               nullLabel={t("createNewThisProtocolOnly")}
               activeId={entry.linked_entry_id}
@@ -1598,6 +1608,7 @@ export function WordImportWizard({
                   <div key={nameIndex} className="field-stack">
                     <span className="muted">{name.raw_name}</span>
                     <TodoAssigneeMenu
+                      isOptionSelectable={isImportParticipantSelectable}
                       label={participants.find((participant) => participant.id === name.participant_id)?.display_name ?? t("linkNone")}
                       nullLabel={t("linkNone")}
                       activeId={name.participant_id}
@@ -1614,6 +1625,7 @@ export function WordImportWizard({
                   <div key={nameIndex} className="field-stack">
                     <span className="muted">{name.raw_name}</span>
                     <TodoAssigneeMenu
+                      isOptionSelectable={isImportParticipantSelectable}
                       label={participants.find((participant) => participant.id === name.participant_id)?.display_name ?? t("linkNone")}
                       nullLabel={t("linkNone")}
                       activeId={name.participant_id}
@@ -2761,6 +2773,7 @@ export function WordImportWizard({
                                 <span className="word-import-cell-with-spinner">
                                   {current.role === "list" ? (
                                     <TodoAssigneeMenu
+                                      isOptionSelectable={isImportParticipantSelectable}
                                       label={
                                         analysis.list_definitions.find((definition) => definition.id === current.list_definition_id)
                                           ?.name ?? "– auswählen –"
@@ -2858,7 +2871,7 @@ export function WordImportWizard({
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
                                 {group.candidates.map((candidate) => {
                                   const candidateParticipant = participants.find((p) => p.id === candidate.participant_id);
-                                  if (!candidateParticipant) return null;
+                                  if (!candidateParticipant || !participantSelectable(candidateParticipant)) return null;
                                   return (
                                     <button
                                       key={candidate.participant_id}
@@ -2874,6 +2887,7 @@ export function WordImportWizard({
                             )}
                             <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center", flexWrap: "wrap" }}>
                               <TodoAssigneeMenu
+                                isOptionSelectable={isImportParticipantSelectable}
                                 label="Anderen Teilnehmer wählen…"
                                 nullLabel={t("linkNoneEverywhere")}
                                 activeId={null}
@@ -2956,6 +2970,7 @@ export function WordImportWizard({
                                     <div className="matrix-card-row-label">{t("targetColumn")}</div>
                                     <div className="matrix-card-row-cell">
                                       <TodoAssigneeMenu<string>
+                                        isOptionSelectable={isImportParticipantSelectable}
                                         label="– auswählen –"
                                         nullLabel={t("chooseEllipsis")}
                                         activeId={null}
@@ -3002,6 +3017,7 @@ export function WordImportWizard({
                                               <div key={nameIndex} className="field-stack">
                                                 <span className="muted">{name.raw_name}</span>
                                                 <TodoAssigneeMenu
+                                                  isOptionSelectable={isImportParticipantSelectable}
                                                   label={
                                                     participants.find((participant) => participant.id === name.participant_id)
                                                       ?.display_name ?? t("linkNone")
@@ -3140,6 +3156,7 @@ export function WordImportWizard({
                           {isOpen && (
                             <div className="grid" style={{ gap: "var(--space-3)" }}>
                               <TodoAssigneeMenu
+                                isOptionSelectable={isImportParticipantSelectable}
                                 label={
                                   text.createNew
                                     ? t("newTextBlockNamed", { name: text.extracted_heading })
@@ -3207,6 +3224,7 @@ export function WordImportWizard({
                                 <label className="field-stack" style={{ gap: "0.25rem" }}>
                                   <span className="muted">{t("whichEventForBlock")}</span>
                                   <TodoAssigneeMenu
+                                    isOptionSelectable={isImportParticipantSelectable}
                                     label={linkedEvent ? `${linkedEvent.title} (${formatDate(linkedEvent.event_date)})` : "– Anlass wählen –"}
                                     nullLabel={t("linkNoneTextDiscarded")}
                                     activeId={text.linkedEventId}
@@ -3325,6 +3343,7 @@ export function WordImportWizard({
                                             <span className="muted">{field.raw_value}</span>
                                           )}
                                           <TodoAssigneeMenu
+                                            isOptionSelectable={isImportParticipantSelectable}
                                             label={
                                               field.names[0]?.create_new
                                                 ? t("newParticipantNamed", { name: field.names[0].raw_name })
@@ -3353,6 +3372,7 @@ export function WordImportWizard({
                                               >
                                                 <span className="muted">{name.raw_name}</span>
                                                 <TodoAssigneeMenu
+                                                  isOptionSelectable={isImportParticipantSelectable}
                                                   label={
                                                     name.create_new
                                                       ? t("newParticipantNamed", { name: name.raw_name })

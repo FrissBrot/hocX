@@ -1,5 +1,7 @@
 "use client";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -51,6 +53,7 @@ export function EventDetailForm({
   onTagRename,
   onUpdate,
 }: EventDetailFormProps) {
+  const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("events");
   const tCommon = useTranslations("common");
   const [activeRoleField, setActiveRoleField] = useState<RoleField | null>(null);
@@ -191,7 +194,7 @@ export function EventDetailForm({
                     />
                   </div>
                   <div className="participant-check-grid">
-                    {availableParticipants
+                    {availableParticipants.filter(isParticipantSelectable)
                       .filter((p) => p.display_name.toLowerCase().includes(roleSearch.trim().toLowerCase()))
                       .map((p) => {
                         const checked = ((event[activeRoleField] as string[] | null) ?? []).includes(p.id);

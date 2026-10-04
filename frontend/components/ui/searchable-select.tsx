@@ -8,6 +8,7 @@ import { SearchInput } from "@/components/ui/search-input";
 
 type BaseProps<T> = {
   options: T[];
+  isOptionSelectable?: (option: T) => boolean;
   getLabel: (option: T) => string;
   placeholder?: string;
   searchPlaceholder?: string;
@@ -40,6 +41,7 @@ type SingleProps<T, Id extends string | number> = BaseProps<T> & { // i18n-ok: T
 // compile error instead of a silently-never-matching runtime comparison.
 export function SearchableSelect<T, Id extends string | number>({
   options,
+  isOptionSelectable,
   getId,
   getLabel,
   value,
@@ -63,9 +65,10 @@ export function SearchableSelect<T, Id extends string | number>({
   const listRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
+  const selectable = isOptionSelectable ? options.filter(isOptionSelectable) : options;
   const filtered = search.trim()
-    ? options.filter((o) => getLabel(o).toLowerCase().includes(search.trim().toLowerCase()))
-    : options;
+    ? selectable.filter((o) => getLabel(o).toLowerCase().includes(search.trim().toLowerCase()))
+    : selectable;
   const selected = options.find((o) => getId(o) === value) ?? null;
   const triggerLabel = selected ? getLabel(selected) : nullLabel ?? resolvedPlaceholder;
 
@@ -191,6 +194,7 @@ type MultiProps<T, Id extends string | number> = BaseProps<T> & { // i18n-ok: TS
 // SearchableSelect's doc comment for why Id is its own generic parameter.
 export function SearchableMultiSelect<T, Id extends string | number>({
   options,
+  isOptionSelectable,
   getId,
   getLabel,
   values,
@@ -212,9 +216,10 @@ export function SearchableMultiSelect<T, Id extends string | number>({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
+  const selectable = isOptionSelectable ? options.filter(isOptionSelectable) : options;
   const filtered = search.trim()
-    ? options.filter((o) => getLabel(o).toLowerCase().includes(search.trim().toLowerCase()))
-    : options;
+    ? selectable.filter((o) => getLabel(o).toLowerCase().includes(search.trim().toLowerCase()))
+    : selectable;
 
   const selectedSet = new Set(values);
   let triggerLabel = emptySelectionLabel ?? resolvedPlaceholder;

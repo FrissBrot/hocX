@@ -31,7 +31,6 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
     redirect("/protocols");
   }
 
-  const participantsQuery = protocol.protocol_date ? `?as_of=${encodeURIComponent(protocol.protocol_date)}` : "";
   const [documentTemplates, templates, events, lists, elements, participants] = await Promise.all([
     backendFetchWithSession<DocumentTemplate[]>("/api/document-templates").then((v) => v ?? []),
     backendFetchWithSession<TemplateSummary[]>("/api/templates").then((v) => v ?? []),
@@ -39,7 +38,7 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
     backendFetchWithSession<StructuredListDefinition[]>("/api/lists").then((v) => v ?? []),
     backendFetchWithSession<ProtocolElement[]>(`/api/protocols/${id}/elements`).then((v) => v ?? []),
     backendFetchWithSession<ParticipantSummary[]>(
-      `/api/templates/${protocol.template_id}/participants${participantsQuery}`
+      `/api/templates/${protocol.template_id}/participants`
     ).then((v) => v ?? []),
   ]);
   const listReferences = Object.assign({}, ...elements.flatMap((element) =>

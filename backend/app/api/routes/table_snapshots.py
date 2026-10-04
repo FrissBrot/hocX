@@ -22,6 +22,7 @@ from app.schemas.table_snapshot import (
 )
 from app.services import public_id_service
 from app.services.audit_service import AuditService
+from app.services.snapshot_list_references import snapshot_list_rows
 from app.services.table_snapshot_config import SNAPSHOT_TABLES
 from app.services.table_snapshot_service import (
     ReconstructionIdentityError,
@@ -138,7 +139,8 @@ def get_snapshot_table(
         cycle_year=cycle_year,
         row_count=snapshot.row_count,
         is_edited=snapshot.is_edited,
-        rows=snapshot.snapshot_json,
+        rows=snapshot_list_rows(db, snapshot.snapshot_json, user.current_tenant_id, public=True)
+        if table_name == "list_entry" else snapshot.snapshot_json,
     )
 
 
@@ -165,6 +167,7 @@ def get_reconstruction_draft(
     )
     if draft is None:
         raise HTTPException(status_code=404, detail="No data found for this list in any source")
+    draft["entries"] = snapshot_list_rows(db, draft["entries"], user.current_tenant_id, public=True)
     return TableSnapshotListReconstructDraft(**draft)
 
 
@@ -265,6 +268,8 @@ def update_snapshot_row(
     # id/public_id are never client-editable - always keep the frozen row's originals,
     # regardless of what payload.values happens to contain.
     updated_row = {**row, **payload.values, "id": row["id"], "public_id": row["public_id"]}
+    if table_name == "list_entry":
+        updated_row = snapshot_list_rows(db, [updated_row], user.current_tenant_id)[0]
     updated_rows = list(snapshot.snapshot_json)
     updated_rows[index] = updated_row
     snapshot.snapshot_json = updated_rows
@@ -281,7 +286,8 @@ def update_snapshot_row(
         entity_id=row.get("id"),
         details={"cycle_config_id": cfg.id, "cycle_year": cycle_year, "changed_fields": list(payload.values.keys())},
     )
-    return updated_row
+    return (snapshot_list_rows(db, [updated_row], user.current_tenant_id, public=True)[0]
+            if table_name == "list_entry" else updated_row)
 
 
 @router.delete(

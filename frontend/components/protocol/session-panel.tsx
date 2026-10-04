@@ -1,5 +1,7 @@
 "use client";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+
 import { useTranslations } from "next-intl";
 
 import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
@@ -38,6 +40,7 @@ type ActivePanel = "notes" | "todo" | null;
 
 export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
   function SessionPanel({ protocol, participants, dueEvents = [], currentSectionName, onSessionNotesChange, onQuickTodoCreated }, ref) {
+    const isParticipantSelectable = useParticipantSelectable();
     const t = useTranslations("protocols.sessionPanel");
     const tCommon = useTranslations("common");
     const showToast = useToast();
@@ -160,9 +163,9 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
 
     const filteredParticipants = useMemo(() => {
       const q = assigneeSearch.trim().toLowerCase();
-      if (!q || assigneeConfirmed) return participants;
-      return participants.filter((p) => p.display_name.toLowerCase().includes(q));
-    }, [participants, assigneeSearch, assigneeConfirmed]);
+      if (!q || assigneeConfirmed) return participants.filter(isParticipantSelectable);
+      return participants.filter(isParticipantSelectable).filter((p) => p.display_name.toLowerCase().includes(q));
+    }, [participants, assigneeSearch, assigneeConfirmed, isParticipantSelectable]);
 
     useEffect(() => { setAssigneeHighlighted(0); }, [assigneeSearch]);
 

@@ -1,5 +1,7 @@
 "use client";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+
 import { DragEvent, FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -672,6 +674,7 @@ export function TemplateEditor({
   availableCycleConfigs,
 }: TemplateEditorProps) {
   const router = useRouter();
+  const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("templates.editor");
   const tRoot = useTranslations("templates");
   const showToast = useToast();
@@ -729,8 +732,8 @@ export function TemplateEditor({
     [availableParticipants]
   );
   const allParticipantIds = useMemo(
-    () => availableParticipants.filter((participant) => participant.is_active).map((participant) => participant.id),
-    [availableParticipants]
+    () => availableParticipants.filter((participant) => participant.is_active && isParticipantSelectable(participant)).map((participant) => participant.id),
+    [availableParticipants, isParticipantSelectable]
   );
   const participantAssignmentsById = useMemo(
     () => new Map(participantAssignments.map((assignment) => [assignment.participant_id, assignment])),
@@ -747,9 +750,9 @@ export function TemplateEditor({
   const filteredPickerParticipants = useMemo(() => {
     const query = participantPickerSearch.trim().toLowerCase();
     if (!query) {
-      return availableParticipants;
+      return availableParticipants.filter(isParticipantSelectable);
     }
-    return availableParticipants.filter((participant) => {
+    return availableParticipants.filter(isParticipantSelectable).filter((participant) => {
       const haystack = [
         participant.display_name,
         participant.first_name ?? "",
@@ -760,7 +763,7 @@ export function TemplateEditor({
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [availableParticipants, participantPickerSearch]);
+  }, [availableParticipants, participantPickerSearch, isParticipantSelectable]);
   const eligibleResponsibleLists = useMemo(
     () =>
       availableLists
@@ -802,7 +805,7 @@ export function TemplateEditor({
   const templateOrderSeqRef = useRef(0);
   const filteredResponsibilityParticipants = useMemo(() => {
     const query = responsibilitySearch.trim().toLowerCase();
-    return [...availableParticipants]
+    return availableParticipants.filter(isParticipantSelectable)
       .sort((left, right) => left.display_name.localeCompare(right.display_name, "de", { sensitivity: "base" }))
       .filter((participant) => {
         if (!query) {
@@ -818,7 +821,7 @@ export function TemplateEditor({
           .toLowerCase();
         return haystack.includes(query);
       });
-  }, [availableParticipants, responsibilitySearch]);
+  }, [availableParticipants, responsibilitySearch, isParticipantSelectable]);
   const manualLinkListMeta = useMemo(
     () => eligibleResponsibleLists.find((item) => String(item.definition.id) === manualLinkListId) ?? null,
     [eligibleResponsibleLists, manualLinkListId]

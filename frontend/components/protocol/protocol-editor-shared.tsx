@@ -1,5 +1,7 @@
 "use client";
 
+import { participantEligibleOn } from "@/lib/utils/participant-membership";
+
 import { ReactNode, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
@@ -81,8 +83,26 @@ export function attendanceOptions(t: TFunc) {
   ] as const;
 }
 
-export function attendanceParticipants(participants: ParticipantSummary[]) {
-  return participants.filter((participant) => !participant.exclude_from_attendance);
+export function attendanceParticipants(participants: ParticipantSummary[], asOf?: string) {
+  return participants.filter((participant) => !participant.exclude_from_attendance && (!asOf || participantEligibleOn(participant, asOf)));
+}
+
+/** Abgeschlossene Anwesenheit stammt ausschließlich aus dem eingefrorenen Protokoll. */
+export function protocolAttendanceParticipants(
+  participants: ParticipantSummary[], entries: Array<Record<string, any>>,
+  protocol: Pick<ProtocolSummary, "status" | "protocol_date">,
+): ParticipantSummary[] {
+  if (protocol.status !== "abgeschlossen") return attendanceParticipants(participants, protocol.protocol_date);
+  return entries.filter((entry) => entry.participant_id != null).map((entry) => {
+    const id = String(entry.participant_id);
+    const current = participants.find((participant) => participant.id === id);
+    return {
+      tenant_id: "", first_name: null, last_name: null, email: null, is_active: false,
+      joined_at: null, left_at: null, created_at: "", updated_at: "",
+      ...current, id, display_name: String(entry.participant_name || current?.display_name || ""),
+      exclude_from_attendance: false,
+    };
+  });
 }
 
 export type AttendanceTally = { present: number; late: number; excused: number; absent: number };
@@ -126,14 +146,19 @@ export function findVisibleAttendanceBlock(elements: ProtocolElement[]): Protoco
 
 export function visibleAttendanceTally(
   elements: ProtocolElement[],
-  participants: ParticipantSummary[]
+  participants: ParticipantSummary[],
+  asOf?: string,
+  frozen = false
 ): AttendanceTally | null {
   const attendanceBlock = findVisibleAttendanceBlock(elements);
   if (!attendanceBlock) return null;
   const entries = Array.isArray(attendanceBlock.configuration_snapshot_json.attendance_entries)
     ? (attendanceBlock.configuration_snapshot_json.attendance_entries as Array<Record<string, any>>)
     : [];
-  return tallyAttendance(participants, entries);
+  const roster = frozen
+    ? protocolAttendanceParticipants(participants, entries, { status: "abgeschlossen", protocol_date: asOf })
+    : asOf ? attendanceParticipants(participants, asOf) : participants;
+  return tallyAttendance(roster, entries);
 }
 
 /** Maps a protocol section's dominant block type to an existing app-shell nav icon for the Schnellzugriff sidebar. */
@@ -343,7 +368,7 @@ export function createMatrixEmbeddedBlock(
   }
 
   if (elementTypeId === 9) {
-    const eligibleParticipants = attendanceParticipants(availableParticipants);
+    const eligibleParticipants = attendanceParticipants(availableParticipants, protocol.protocol_date);
     return {
       element_type_id: elementTypeId,
       title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
@@ -467,7 +492,7 @@ export function embeddedBlockSummary(
 
   if (elementTypeId === 9) {
     const entries = (Array.isArray(config.attendance_entries) ? config.attendance_entries : []) as Array<Record<string, any>>;
-    const eligibleParticipants = attendanceParticipants(availableParticipants);
+    const eligibleParticipants = protocolAttendanceParticipants(availableParticipants, entries, protocol);
     const presentCount = eligibleParticipants.filter((participant) => {
       const entry = entries.find((currentEntry) => String(currentEntry.participant_id) === participant.id);
       return String(entry?.status ?? "") === "present";
