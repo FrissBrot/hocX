@@ -8,7 +8,24 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
-Enthält die Migration `0101`; sie läuft beim Deploy automatisch.
+## [1.1.8] - 2026-10-05
+
+Feature-Release auf 1.1.7 mit einem neuen Blocktyp «Sitzungsnotizen», mehrtägigen
+Terminen als Balken im Kalender, Datumsauswahl über die Terminübersicht und einer
+Korrektur der Anwesenheitsauswahl. Enthält die Migration `0101`; sie läuft beim Deploy
+automatisch. Keine neuen Pflicht-Umgebungsvariablen.
+
+### Update von 1.1.7 auf 1.1.8
+
+Nach Veröffentlichung der Release-Images `HOCX_VERSION` in `.env` auf `v1.1.8` setzen,
+dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` ausführen.
+
+- Migration `0101` legt den Blocktyp `session_notes` mit der festen id 17 an. Bestehende
+  Vorlagen und Protokolle bleiben unverändert. Ist die id 17 oder der Code bereits
+  anders belegt, bricht sie mit einer Meldung ab, statt zu raten.
+- Git-Tag und GitHub-Release entstehen erst nach erfolgreicher Promotion aller Images
+  durch den Release-Workflow. Der Push dieser Vorbereitung veröffentlicht noch kein
+  Release.
 
 ### Neu
 
