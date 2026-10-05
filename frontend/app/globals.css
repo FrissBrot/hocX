@@ -17611,11 +17611,22 @@ input[type="radio"] {
 }
 
 .event-list {
+  position: relative;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   background: var(--panel-solid);
   box-shadow: var(--shadow-soft);
   overflow: hidden;
+}
+
+/* Desktop: nur die Terminliste scrollt, Kopfzeile, Toolbar und Tag-Leiste bleiben stehen.
+   --event-list-top (gemessener Abstand zum Seitenanfang) setzt event-manager.tsx. */
+@media (min-width: 901px) {
+  .event-list {
+    max-height: calc(100dvh - var(--event-list-top) - var(--space-5));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 
 .event-month-group + .event-month-group {

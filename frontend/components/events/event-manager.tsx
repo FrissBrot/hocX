@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -338,15 +338,52 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     return index > 0 ? filteredEvents[index].id : null;
   }, [filteredEvents, timeFilter, todayIso]);
 
+  // Auf dem Desktop scrollt nur die Terminliste: sie reicht vom eigenen oberen Rand bis zum
+  // Fensterende. Der Abstand nach oben hängt von Kopfzeile/Toolbar ab und wird deshalb gemessen.
+  const eventListRef = useRef<HTMLDivElement | null>(null);
+  const [eventListTop, setEventListTop] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const list = eventListRef.current;
+    if (!list) return;
+    function measure() {
+      if (!list) return;
+      setEventListTop(Math.round(list.getBoundingClientRect().top + window.scrollY));
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (list.parentElement) observer.observe(list.parentElement);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [events.length === 0 && !hasMore]);
+
   // Beim ersten Anzeigen so scrollen, dass die „Heute"-Linie oben steht: darunter die kommenden,
   // darüber (per Hochscrollen) die vergangenen Termine.
   const todayMarkerRef = useRef<HTMLDivElement | null>(null);
   const scrolledToTodayRef = useRef(false);
   useEffect(() => {
-    if (scrolledToTodayRef.current || !todayMarkerEventId || !todayMarkerRef.current) return;
+    const marker = todayMarkerRef.current;
+    const list = eventListRef.current;
+    // Erst nach dem Messen, sonst hat die Liste noch keine Höhenbegrenzung.
+    if (scrolledToTodayRef.current || eventListTop === null || !todayMarkerEventId || !marker || !list) return;
     scrolledToTodayRef.current = true;
-    todayMarkerRef.current.scrollIntoView({ block: "start" });
-  }, [todayMarkerEventId]);
+    if (list.scrollHeight > list.clientHeight) {
+      // Desktop: nur die Liste scrollt, nicht die Seite.
+      list.scrollTop = marker.offsetTop;
+    } else {
+      marker.scrollIntoView({ block: "start" });
+    }
+  }, [todayMarkerEventId, eventListTop]);
+
+  function renderTodayMarker() {
+    return (
+      <div ref={todayMarkerRef} className="event-today-marker">
+        <span>{t("list.today", { date: todayFormatter.format(isoToUtcDate(todayIso)) })}</span>
+      </div>
+    );
+  }
 
   function tagColor(tag: string): string {
     return tagConfig[tag]?.color ?? fallbackTagColor(tag);
@@ -474,7 +511,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     });
   }
 
-  function renderEventRow(item: EventSummary) {
+  function renderEventRow(item: EventSummary, isFirstInMonth: boolean) {
     const isPast = effectiveEndDate(item) < todayIso;
     const tag = (item.tag ?? "").trim();
     const startDate = isoToUtcDate(item.event_date);
@@ -484,11 +521,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
     return (
       <Fragment key={item.id}>
-        {item.id === todayMarkerEventId ? (
-          <div ref={todayMarkerRef} className="event-today-marker">
-            <span>{t("list.today", { date: todayFormatter.format(isoToUtcDate(todayIso)) })}</span>
-          </div>
-        ) : null}
+        {item.id === todayMarkerEventId && !isFirstInMonth ? renderTodayMarker() : null}
         <div className={rowClass} onClick={() => setDetailEvent(item)} onContextMenu={(event) => openEventContextMenu(event, item)}>
           <div className="event-date-tile" aria-hidden="true">
             <span className="event-date-tile-weekday">{weekdayFormatter.format(startDate).replace(/\.$/, "")}</span>
@@ -792,7 +825,11 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               </div>
             )}
 
-            <div className="event-list">
+            <div
+              ref={eventListRef}
+              className="event-list"
+              style={eventListTop !== null ? ({ "--event-list-top": `${eventListTop}px` } as React.CSSProperties) : undefined}
+            >
               {monthGroups.length === 0 ? (
                 <div className="event-list-empty">
                   <strong className="event-list-empty-title">{t("list.emptyTitle")}</strong>
@@ -812,27 +849,29 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               ) : (
                 monthGroups.map((group) => (
                   <section key={group.key} className="event-month-group">
+                    {/* Beginnt der Monat mit dem ersten kommenden Termin, steht „Heute" vor der Monatsüberschrift. */}
+                    {group.items[0].id === todayMarkerEventId ? renderTodayMarker() : null}
                     <h2 className="event-month-heading">
                       {group.label}
                       <span className="event-month-count">{t("list.monthCount", { count: group.items.length })}</span>
                     </h2>
-                    {group.items.map((item) => renderEventRow(item))}
+                    {group.items.map((item, index) => renderEventRow(item, index === 0))}
                   </section>
                 ))
               )}
+              {hasMore && (
+                <div className="load-more-row" ref={loadMoreSentinelRef}>
+                  {isLoadingMore ? (
+                    <span className="muted">{t("loadingMore")}</span>
+                  ) : (
+                    <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
+                      {t("loadMore", { count: events.length })}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
-      {hasMore && (
-        <div className="load-more-row" ref={loadMoreSentinelRef}>
-          {isLoadingMore ? (
-            <span className="muted">{t("loadingMore")}</span>
-          ) : (
-            <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
-              {t("loadMore", { count: events.length })}
-            </button>
-          )}
         </div>
       )}
 
