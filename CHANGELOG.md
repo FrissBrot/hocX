@@ -8,6 +8,57 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.1.9] - 2026-10-05
+
+Feature- und Fix-Release auf 1.1.8 mit einem Zyklus-Filter in der Terminübersicht,
+durchgehend automatischer Fotoanalyse, wiederhergestellten Kategorien in der
+Blocktyp-Auswahl und einer Korrektur des PDF-Exports. Keine Migration, keine neuen
+Pflicht-Umgebungsvariablen.
+
+### Update von 1.1.8 auf 1.1.9
+
+Nach Veröffentlichung der Release-Images `HOCX_VERSION` in `.env` auf `v1.1.9` setzen,
+dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` ausführen.
+
+- Neue Standardwerte: `PHOTO_ANALYSIS_AUTO_QUEUE_START_HOUR=0`/`END_HOUR=24` (rund um
+  die Uhr statt 01–06 Uhr UTC), `PHOTO_ANALYSIS_AUTO_QUEUE_INTERVAL_MINUTES`,
+  `DOMAIN_HEALTH_CHECK_INTERVAL_MINUTES` und
+  `ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES` je 5 statt 30 Minuten. Wer diese
+  Variablen in `.env` explizit gesetzt hat, behält seine Werte; für das neue Verhalten
+  die Einträge entfernen.
+- Git-Tag und GitHub-Release entstehen erst nach erfolgreicher Promotion aller Images
+  durch den Release-Workflow. Der Push dieser Vorbereitung veröffentlicht noch kein
+  Release.
+
+### Neu
+
+- Terminübersicht: Zyklus-Filter. Standardmässig zeigt sie die aktuelle Periode aller
+  Zyklen; im Ansicht-Menü lässt sich ein einzelner Zyklus wählen. Zur Periode gehören
+  Termine, die zeitlich hineinfallen oder mit ihr verknüpft sind. Tags ohne Termine in
+  der Auswahl verschwinden aus der Seitenleiste.
+
+### Geändert
+
+- Fotoanalyse läuft automatisch rund um die Uhr (Prüfung alle 5 Minuten); die
+  Last-Bremse (`PHOTO_ANALYSIS_AUTO_QUEUE_MAX_LOAD_FACTOR`) bleibt. Der Button
+  «Analyse starten» entfällt. Duplikate und Ähnliche sind wieder eigene Tabs.
+- Domain-Health-Check und Quarantäne-Aufräumen der Abgabebox laufen alle 5 statt 30
+  Minuten.
+- Blocktyp-Auswahl wieder mit den Gruppen Basics, Finanzen und Organisation und einer
+  Mini-Vorschau pro Karte; Sitzungsnotizen (#17) hat eine eigene Vorschau. Die
+  #ID-Badges bleiben.
+- Die Terminliste scrollt bei jedem Tag-, Zeit- oder Zykluswechsel zur «Heute»-Linie.
+- Block-Konfiguration aufgeräumt; die Zyklusauswahl in Diagramm-Blöcken ist eine
+  kompakte Pill-Gruppe.
+
+### Behoben
+
+- PDF-Export brach mit «invalid literal for int()» ab, wenn ein Block im Editor
+  gewählte Teilnehmer oder Termine (öffentliche UUID) neben aus der Vorlage
+  vorbefüllten (interne ID) enthielt. Export, Anwesenheit-Speichern sowie Mandant
+  klonen/importieren lösen beide Formen jetzt auf; beim Klonen und Importieren gehen
+  UUID-Referenzen in Block-Snapshots nicht mehr verloren.
+
 ## [1.1.8] - 2026-10-05
 
 Feature-Release auf 1.1.7 mit einem neuen Blocktyp «Sitzungsnotizen», mehrtägigen
