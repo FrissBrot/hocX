@@ -337,7 +337,21 @@
     },
     "valueWord": "Value",
     "visibilityFilterLabel": "Visibility & filter",
-    "whichEventsLabel": "Which events?"
+    "whichEventsLabel": "Which events?",
+    "typeCategories": {
+      "basics": {
+        "description": "Freely written content for minutes and templates.",
+        "title": "Basics"
+      },
+      "finance": {
+        "description": "Blocks fed directly from a finance account.",
+        "title": "Finance"
+      },
+      "organisation": {
+        "description": "Automatically filled content around events, attendance and meetings.",
+        "title": "Organisation"
+      }
+    }
   },
   "block": "Block",
   "elementTypes": {

@@ -337,7 +337,21 @@
     },
     "valueWord": "Valeur",
     "visibilityFilterLabel": "Visibilité et filtre",
-    "whichEventsLabel": "Quels événements ?"
+    "whichEventsLabel": "Quels événements ?",
+    "typeCategories": {
+      "basics": {
+        "description": "Contenus librement rédigés pour les procès-verbaux et les modèles.",
+        "title": "Bases"
+      },
+      "finance": {
+        "description": "Blocs alimentés directement par un compte financier.",
+        "title": "Finances"
+      },
+      "organisation": {
+        "description": "Contenus remplis automatiquement autour des événements, des présences et des séances.",
+        "title": "Organisation"
+      }
+    }
   },
   "block": "Bloc",
   "elementTypes": {

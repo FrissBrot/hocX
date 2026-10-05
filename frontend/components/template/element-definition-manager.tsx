@@ -893,6 +893,15 @@ function ElementEditorSummary({
   );
 }
 
+// Gruppierung der Blocktyp-Auswahl. Titel/Beschreibung liegen in
+// templates.elementDefinitions.typeCategories.<key>. Typen, die hier (noch) fehlen,
+// landen automatisch in der letzten Kategorie, damit ein neuer Blocktyp nie unsichtbar wird.
+const elementTypeCategories: Array<{ key: "basics" | "finance" | "organisation"; types: string[] }> = [
+  { key: "basics", types: ["1", "2", "3", "6", "11"] },
+  { key: "finance", types: ["12", "13", "14"] },
+  { key: "organisation", types: ["9", "10", "7", "15", "16", "17"] },
+];
+
 export function ElementDefinitionManager({
   initialDefinitions,
   knownEventTags,
@@ -1870,6 +1879,19 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
             <div className="block-type-preview-bar" style={{ height: "90%" }} />
             <div className="block-type-preview-bar" style={{ height: "58%" }} />
           </div>
+        </div>
+      );
+    }
+    // Sitzungsnotizen: Notiz-Label mit freien Textzeilen
+    if (elementTypeId === "17") {
+      return (
+        <div className="block-type-preview">
+          <div className="block-type-preview-chip-row">
+            <div className="block-type-preview-chip" />
+          </div>
+          <div className="block-type-preview-line" />
+          <div className="block-type-preview-line block-type-preview-line-short" />
+          <div className="block-type-preview-line" />
         </div>
       );
     }
@@ -3394,24 +3416,47 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
         onClose={() => setTypePickerMode(null)}
         title={t("typePickerTitle")}
         description={t("typePickerDescription")}
+        size="fullscreen"
       >
         <div className="grid">
-          <div className="block-type-grid">
-            {elementTypeOptions.map((option) => {
+          <div className="block-type-category-stack">
+            {elementTypeCategories.map((category, categoryIndex) => {
               const activeType = typePickerMode === "create" ? createBlockForm.element_type_id : blockForm.element_type_id;
+              const isLast = categoryIndex === elementTypeCategories.length - 1;
+              const categorizedTypes = new Set(elementTypeCategories.flatMap((entry) => entry.types));
+              const options = [
+                ...category.types
+                  .map((typeId) => elementTypeOptions.find((option) => option.value === typeId))
+                  .filter((option): option is (typeof elementTypeOptions)[number] => Boolean(option)),
+                ...(isLast ? elementTypeOptions.filter((option) => !categorizedTypes.has(option.value)) : []),
+              ];
+              if (options.length === 0) return null;
               return (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`block-type-card${activeType === option.value ? " block-type-card-active" : ""}`}
-                  onClick={() => applyBlockType(option.value, typePickerMode ?? "create")}
-                >
-                  <div className="block-type-card-head">
-                    <strong>{option.label}</strong>
-                    <span className="block-type-card-number">#{option.value}</span>
+                <section key={category.key} className="block-type-category">
+                  <div className="block-type-category-head">
+                    <h3>{t(`typeCategories.${category.key}.title`)}</h3>
+                    <p className="muted">{t(`typeCategories.${category.key}.description`)}</p>
                   </div>
-                  <span className="muted">{option.description}</span>
-                </button>
+                  <div className="block-type-grid">
+                    {options.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`block-type-card${activeType === option.value ? " block-type-card-active" : ""}`}
+                        onClick={() => applyBlockType(option.value, typePickerMode ?? "create")}
+                      >
+                        {renderBlockTypePreview(option.value)}
+                        <div className="block-type-summary">
+                          <div className="block-type-card-head">
+                            <strong>{option.label}</strong>
+                            <span className="block-type-card-number">#{option.value}</span>
+                          </div>
+                          <span className="muted">{option.description}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
               );
             })}
           </div>

@@ -337,7 +337,21 @@
     },
     "valueWord": "Valore",
     "visibilityFilterLabel": "Visibilità e filtro",
-    "whichEventsLabel": "Quali eventi?"
+    "whichEventsLabel": "Quali eventi?",
+    "typeCategories": {
+      "basics": {
+        "description": "Contenuti liberi per verbali e modelli.",
+        "title": "Basi"
+      },
+      "finance": {
+        "description": "Blocchi alimentati direttamente da un conto finanziario.",
+        "title": "Finanze"
+      },
+      "organisation": {
+        "description": "Contenuti compilati automaticamente su appuntamenti, presenze e sedute.",
+        "title": "Organizzazione"
+      }
+    }
   },
   "block": "Blocco",
   "elementTypes": {

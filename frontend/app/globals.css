@@ -3214,6 +3214,26 @@ input[type="radio"] {
   background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
 }
 
+.block-type-category-stack {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.block-type-category-head {
+  display: grid;
+  gap: 2px;
+  margin-bottom: var(--space-3);
+}
+
+.block-type-category-head h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.block-type-category-head p {
+  margin: 0;
+}
+
 .block-type-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

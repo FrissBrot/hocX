@@ -337,7 +337,21 @@
     },
     "valueWord": "Wert",
     "visibilityFilterLabel": "Sichtbarkeit & Filter",
-    "whichEventsLabel": "Welche Termine?"
+    "whichEventsLabel": "Welche Termine?",
+    "typeCategories": {
+      "basics": {
+        "description": "Frei verfassbare Inhalte für Protokolle und Vorlagen.",
+        "title": "Basics"
+      },
+      "finance": {
+        "description": "Blöcke, die direkt aus einem Finanzkonto gespeist werden.",
+        "title": "Finanzen"
+      },
+      "organisation": {
+        "description": "Automatisch befüllte Inhalte rund um Termine, Anwesenheit und Sitzungen.",
+        "title": "Organisation"
+      }
+    }
   },
   "block": "Block",
   "elementTypes": {
