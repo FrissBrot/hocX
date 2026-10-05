@@ -167,6 +167,33 @@ def test_export_latex_attendance_counts_all_four_buckets_correctly(db):
     assert "2 Unentschuldigt" in body_content
 
 
+def test_matrix_embedded_attendance_resolves_participant_by_public_id(db):
+    """Unlike the standalone attendance block above, a matrix-embedded attendance entry
+    (_matrix_embedded_block_content, element_type_id == 9) is keyed by the participant's
+    public UUID, not the internal int id (see snapshot_reference_ids.
+    translate_attendance_entries) - a bare int() on that uuid string crashed PDF export
+    with "invalid literal for int() with base 10: '<uuid>'" for any protocol using a matrix
+    with an embedded attendance block (bug found 2026-10-05)."""
+    tenant, _template, protocol = _protocol_with_template_dir(db)
+    participant = make_participant(db, tenant.id, display_name="Anna Muster")
+
+    service = ExportService()
+    content = service._matrix_embedded_block_content(
+        db,
+        embedded_block={
+            "element_type_id": 9,
+            "configuration_snapshot_json": {
+                "attendance_entries": [
+                    {"participant_id": str(participant.public_id), "status": "present"},
+                ]
+            },
+        },
+        protocol=protocol,
+    )
+
+    assert "Anna Muster" in content
+
+
 # --- edge case: empty protocol (no elements at all) --------------------------------------
 
 
@@ -319,3 +346,35 @@ def test_m17_cleanup_old_generated_exports_missing_dir_is_a_noop(tmp_path, monke
     service = ExportService()
 
     assert service.cleanup_old_generated_exports() == {"deleted": 0}
+
+
+# --- Sitzungsnotizen-Block (element_type session_notes) ----------------------------------
+
+
+def test_export_latex_session_notes_block_renders_only_the_notes_with_line_breaks(db):
+    """Der Blocktyp session_notes gibt protocol.session_notes aus - einfache Zeilenumbrueche
+    aus der Textarea bleiben als \\\\ erhalten, Leerzeilen trennen Absaetze."""
+    tenant, template, protocol = _protocol_with_template_dir(db)
+    protocol.session_notes = "Erste Zeile\nZweite Zeile\n\nNeuer Absatz"
+    db.commit()
+    element = make_protocol_element(db, protocol.id, sort_index=0, section_name="Notizen")
+    make_protocol_element_block(db, element.id, sort_index=0, element_type_code="session_notes", configuration_snapshot_json={})
+
+    service = ExportService()
+    _protocol, _export_dir, _latex_source, body_content = service._build_export_context(db, protocol.id)
+
+    assert "Erste Zeile \\\\\nZweite Zeile" in body_content
+    assert "Zweite Zeile \\\\" not in body_content
+    assert "Neuer Absatz" in body_content
+    assert "Sitzungs-Todos" not in body_content
+
+
+def test_export_latex_session_notes_block_without_notes_shows_placeholder(db):
+    tenant, template, protocol = _protocol_with_template_dir(db)
+    element = make_protocol_element(db, protocol.id, sort_index=0, section_name="Notizen")
+    make_protocol_element_block(db, element.id, sort_index=0, element_type_code="session_notes", configuration_snapshot_json={})
+
+    service = ExportService()
+    _protocol, _export_dir, _latex_source, body_content = service._build_export_context(db, protocol.id)
+
+    assert "Keine Sitzungsnotizen." in body_content

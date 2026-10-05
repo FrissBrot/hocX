@@ -8,6 +8,7 @@ import resource
 import shutil
 import subprocess
 import unicodedata
+import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -1065,7 +1066,35 @@ Status: {protocol_status}
         entry_exit_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "entry_exit"))
         if entry_exit_type_id and block.element_type_id == entry_exit_type_id:
             return self._entry_exit_block_content(block.configuration_snapshot_json or {})
+        # Sitzungsnotizen-Block: nur der freie Notiztext (protocol.session_notes), keine Sitzungs-Todos
+        session_notes_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "session_notes"))
+        if session_notes_type_id and block.element_type_id == session_notes_type_id:
+            protocol_element = db.get(ProtocolElement, block.protocol_element_id)
+            protocol = self.repository.get_protocol(db, protocol_element.protocol_id) if protocol_element else None
+            notes = (protocol.session_notes or "").strip() if protocol else ""
+            if not notes:
+                return "Keine Sitzungsnotizen."
+            return self._markdown_to_latex(self._plain_lines_as_hard_breaks(notes))
         return self._escape_latex(block.description_snapshot or "")
+
+    @staticmethod
+    def _plain_lines_as_hard_breaks(text: str) -> str:
+        """Sitzungsnotizen sind Klartext aus einer Textarea: einfache Zeilenumbrueche sollen im PDF
+        erhalten bleiben. Markiert sie mit dem Tiptap-Hard-Break (abschliessender Backslash), den
+        _markdown_to_latex als \\\\ ausgibt - nicht vor Leerzeilen/Listenzeilen (dort beginnt ohnehin
+        ein neuer Absatz bzw. eine Liste)."""
+        def is_break_target(line: str) -> bool:
+            return bool(line.strip()) and not re.match(r"^(- |\d+\. )", line)
+
+        lines = text.split("\n")
+        out: list[str] = []
+        for index, line in enumerate(lines):
+            next_line = lines[index + 1] if index + 1 < len(lines) else ""
+            if is_break_target(line) and is_break_target(next_line) and not line.rstrip().endswith("\\"):
+                out.append(line.rstrip() + "\\")
+            else:
+                out.append(line)
+        return "\n".join(out)
 
     def _entry_exit_block_content(self, config: dict) -> str:
         entries = config.get("entries", []) if config else []
@@ -2003,7 +2032,18 @@ Status: {protocol_status}
                     continue
                 participant_name = entry.get("participant_name")
                 if not participant_name and entry.get("participant_id"):
-                    participant = db.get(Participant, int(entry["participant_id"]))
+                    # Matrix-embedded attendance entries are keyed by the participant's
+                    # public UUID, not the internal int id (see snapshot_reference_ids.
+                    # translate_attendance_entries) - int() here crashed PDF export with
+                    # "invalid literal for int() with base 10: '<uuid>'" (bug found 2026-10-05).
+                    participant = None
+                    try:
+                        public_id = uuid.UUID(str(entry["participant_id"]))
+                    except ValueError:
+                        public_id = None
+                    if public_id is not None:
+                        internal_id = public_id_service.resolve_internal_id(db, Participant, public_id, tenant_id=protocol.tenant_id)
+                        participant = db.get(Participant, internal_id) if internal_id is not None else None
                     participant_name = participant.display_name if participant else "Unbekannt"
                 status = status_labels.get(entry.get("status"), "—")
                 lines.append(f"{self._escape_latex(str(participant_name or 'Teilnehmer'))} & {self._escape_latex(status)} \\\\")

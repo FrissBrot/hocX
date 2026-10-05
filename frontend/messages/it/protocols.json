@@ -24,6 +24,7 @@
   "blockTypeImage": "Immagine",
   "blockTypeMatrix": "Matrice",
   "blockTypeSessionDate": "Prossima sessione",
+  "blockTypeSessionNotes": "Note della seduta",
   "blockTypeText": "Testo",
   "blockTypeTodo": "Attività",
   "builder": {
@@ -328,6 +329,7 @@
   "noElementsShown": "Nessun elemento mostrato.",
   "noEndDate": "Nessuna data di fine",
   "noEntryExitSinceLastUse": "Nessuna entrata o uscita dall'ultimo utilizzo di questo blocco.",
+  "noSessionNotes": "Ancora nessuna nota della seduta.",
   "noEventsInRange": "Nessun evento in questo periodo.",
   "noFinesForProtocol": "Nessuna multa per questo verbale.",
   "noGrouping": "Nessun raggruppamento",

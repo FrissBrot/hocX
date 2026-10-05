@@ -28,6 +28,7 @@ class ElementDefinitionService:
             9: 5,  # attendance -> key_value
             10: 6,  # session_date -> plain_text
             11: 5,  # matrix -> key_value
+            17: 6,  # session_notes -> plain_text
         }
         return mapping.get(element_type_id, 2)
 

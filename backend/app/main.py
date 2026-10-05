@@ -143,6 +143,7 @@ def ensure_lookup_values() -> None:
             (14, "fine_list", "Attendance fine list"),
             (15, "chart", "Statistics chart block"),
             (16, "entry_exit", "Participant entry/exit block"),
+            (17, "session_notes", "Session notes block"),
         ]
         changed = False
         existing_ids = set(db.scalars(select(ElementType.id)))

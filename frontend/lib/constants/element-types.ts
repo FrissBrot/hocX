@@ -17,7 +17,7 @@ export type ElementTypeOption = {
   description: string;
 };
 
-const ELEMENT_TYPE_IDS = ["1", "2", "3", "6", "7", "9", "10", "11", "12", "13", "14", "15", "16"] as const;
+const ELEMENT_TYPE_IDS = ["1", "2", "3", "6", "7", "9", "10", "11", "12", "13", "14", "15", "16", "17"] as const;
 
 export function elementTypeOptions(t: TFunc): ElementTypeOption[] {
   return ELEMENT_TYPE_IDS.map((value) => ({

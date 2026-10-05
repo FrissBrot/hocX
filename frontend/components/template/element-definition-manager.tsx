@@ -360,6 +360,7 @@ function renderTypeForElementType(elementTypeId: string | number) {
     "10": "6",
     "11": "5",
     "16": "5",
+    "17": "6",
   };
   return mapping[String(elementTypeId)] ?? "2";
 }
@@ -380,6 +381,7 @@ function blockKindForElementType(elementTypeId: string | number) {
     "13": "finance_transactions",
     "15": "chart",
     "16": "entry_exit",
+    "17": "session_notes",
   };
   return mapping[String(elementTypeId)] ?? "text";
 }
@@ -2735,6 +2737,9 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               </div>
             </SettingsSection>
           ) : null}
+          {createBlockForm.element_type_id === "17" ? (
+            <p className="info-note">{t("sessionNotesBlockNote")}</p>
+          ) : null}
           </div>
           <aside className="element-create-sidebar">
             <section className="element-create-preview">
@@ -3373,6 +3378,9 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                   )}
                 </div>
               </SettingsSection>
+            ) : null}
+            {blockForm.element_type_id === "17" ? (
+              <p className="info-note">{t("sessionNotesBlockNote")}</p>
             ) : null}
             <div className="block-editor-footer">
               <button data-modal-save type="submit" className="button-secondary">{t("saveBlockButton")}</button>

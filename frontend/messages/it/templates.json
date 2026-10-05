@@ -273,6 +273,7 @@
     "sessionDateNote": "Nel verbale appare un campo data per la prossima sessione. Il pulsante calendario apre la panoramica degli eventi; un clic su un giorno ne riprende la data. Il filtro tag definisce quali eventi vengono mostrati (vuoto = tutti).",
     "sessionDateTagFilterLabel": "Eventi nel calendario",
     "sessionDateTitle": "Data della sessione",
+    "sessionNotesBlockNote": "Mostra le note del pannello della seduta nel verbale e nell'esportazione – senza i compiti della seduta. Le note si modificano sempre nel pannello della seduta.",
     "simpleValuesGroup": "Valori semplici",
     "sinceDateLabel": "Dalla data (predefinito: data del verbale)",
     "sortAlphaLabel": "Ordina alfabeticamente per",
@@ -371,6 +372,10 @@
     "16": {
       "description": "Elenca le entrate e uscite dei partecipanti dall'ultimo utilizzo di questo blocco",
       "label": "Entrate/uscite"
+    },
+    "17": {
+      "description": "Mostra le note libere della seduta nel verbale (senza compiti)",
+      "label": "Note della seduta"
     },
     "2": {
       "description": "Lista di controllo o elenco di attività",

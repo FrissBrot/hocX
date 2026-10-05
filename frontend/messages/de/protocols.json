@@ -24,6 +24,7 @@
   "blockTypeImage": "Bild",
   "blockTypeMatrix": "Matrix",
   "blockTypeSessionDate": "Nächster Hock",
+  "blockTypeSessionNotes": "Sitzungsnotizen",
   "blockTypeText": "Text",
   "blockTypeTodo": "Aufgaben",
   "builder": {
@@ -328,6 +329,7 @@
   "noElementsShown": "Keine Elemente angezeigt.",
   "noEndDate": "Kein Enddatum",
   "noEntryExitSinceLastUse": "Keine Ein- oder Austritte seit der letzten Verwendung dieses Blocks.",
+  "noSessionNotes": "Noch keine Sitzungsnotizen erfasst.",
   "noEventsInRange": "Keine Termine in diesem Zeitraum.",
   "noFinesForProtocol": "Keine Bussen für dieses Protokoll.",
   "noGrouping": "Keine Gruppierung",

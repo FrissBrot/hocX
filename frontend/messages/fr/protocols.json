@@ -24,6 +24,7 @@
   "blockTypeImage": "Image",
   "blockTypeMatrix": "Matrice",
   "blockTypeSessionDate": "Prochaine séance",
+  "blockTypeSessionNotes": "Notes de séance",
   "blockTypeText": "Texte",
   "blockTypeTodo": "Tâches",
   "builder": {
@@ -328,6 +329,7 @@
   "noElementsShown": "Aucun élément affiché.",
   "noEndDate": "Aucune date de fin",
   "noEntryExitSinceLastUse": "Aucune entrée ni sortie depuis la dernière utilisation de ce bloc.",
+  "noSessionNotes": "Aucune note de séance pour l'instant.",
   "noEventsInRange": "Aucun événement dans cette période.",
   "noFinesForProtocol": "Aucune amende pour ce procès-verbal.",
   "noGrouping": "Aucun regroupement",

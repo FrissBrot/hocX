@@ -273,6 +273,7 @@
     "sessionDateNote": "Le procès-verbal affiche un champ de date pour la prochaine séance. Le bouton calendrier ouvre l'aperçu des événements ; un clic sur un jour reprend cette date. Le filtre de tags définit les événements affichés (vide = tous).",
     "sessionDateTagFilterLabel": "Événements dans le calendrier",
     "sessionDateTitle": "Date de séance",
+    "sessionNotesBlockNote": "Affiche les notes du panneau de séance dans le procès-verbal et dans l'export – sans les tâches de séance. Les notes se modifient toujours dans le panneau de séance.",
     "simpleValuesGroup": "Valeurs simples",
     "sinceDateLabel": "Depuis la date (par défaut : date du procès-verbal)",
     "sortAlphaLabel": "Trier alphabétiquement par",
@@ -371,6 +372,10 @@
     "16": {
       "description": "Liste les entrées et sorties de participants depuis la dernière utilisation de ce bloc",
       "label": "Entrées/sorties"
+    },
+    "17": {
+      "description": "Affiche les notes libres de la séance dans le procès-verbal (sans tâches)",
+      "label": "Notes de séance"
     },
     "2": {
       "description": "Liste de contrôle ou liste de tâches",

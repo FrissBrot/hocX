@@ -162,6 +162,10 @@ export function ProtocolEditor({
   // visible but nothing new gets marked, exactly as requested.
   const trackChangesActive = protocolStatus === "geplant" && trackChangesEnabled;
   const [sessionNotes, setSessionNotes] = useState(protocol.session_notes ?? "");
+  // Neu geladenes Protokoll (z. B. nach Refresh) übernimmt den Server-Stand, wie im Sitzungspanel.
+  useEffect(() => {
+    setSessionNotes(protocol.session_notes ?? "");
+  }, [protocol.id, protocol.session_notes]);
   const [transitioningStatus, setTransitioningStatus] = useState(false);
   const showToast = useToast();
   const confirm = useConfirm();
@@ -1784,6 +1788,7 @@ export function ProtocolEditor({
                 newTodoTask={newTodoTask}
                 browserApiBaseUrl={browserApiBaseUrl}
                 protocol={protocol}
+                sessionNotes={sessionNotes}
                 availableParticipants={availableParticipants}
                 availableEvents={events}
                 availableTemplates={availableTemplates}
@@ -1954,6 +1959,7 @@ export function ProtocolEditor({
               newTodoTask={newTodoTask}
               browserApiBaseUrl={browserApiBaseUrl}
               protocol={protocol}
+              sessionNotes={sessionNotes}
               availableParticipants={availableParticipants}
               availableEvents={events}
               availableTemplates={availableTemplates}

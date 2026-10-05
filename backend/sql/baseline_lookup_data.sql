@@ -136,6 +136,7 @@ INSERT INTO public.element_type (id, code, description) VALUES (13, 'finance_tra
 INSERT INTO public.element_type (id, code, description) VALUES (14, 'fine_list', 'Attendance fine list');
 INSERT INTO public.element_type (id, code, description) VALUES (15, 'chart', 'Statistics chart block');
 INSERT INTO public.element_type (id, code, description) VALUES (16, 'entry_exit', 'Participant entry/exit block');
+INSERT INTO public.element_type (id, code, description) VALUES (17, 'session_notes', 'Session notes block');
 
 
 --

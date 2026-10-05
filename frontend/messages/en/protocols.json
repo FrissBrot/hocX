@@ -24,6 +24,7 @@
   "blockTypeImage": "Image",
   "blockTypeMatrix": "Matrix",
   "blockTypeSessionDate": "Next session",
+  "blockTypeSessionNotes": "Session notes",
   "blockTypeText": "Text",
   "blockTypeTodo": "Tasks",
   "builder": {
@@ -328,6 +329,7 @@
   "noElementsShown": "No elements shown.",
   "noEndDate": "No end date",
   "noEntryExitSinceLastUse": "No entries or exits since this block was last used.",
+  "noSessionNotes": "No session notes yet.",
   "noEventsInRange": "No events in this period.",
   "noFinesForProtocol": "No fines for this protocol.",
   "noGrouping": "No grouping",

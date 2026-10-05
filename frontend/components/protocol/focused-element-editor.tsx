@@ -153,6 +153,7 @@ export function FocusedElementEditor({
   tagConfig,
   updateTagColor,
   renameTag,
+  sessionNotes,
 }: {
   collab: ReturnType<typeof useProtocolCollaboration>;
   trackChangesActive: boolean;
@@ -164,6 +165,8 @@ export function FocusedElementEditor({
   newTodoTask: Record<string, string>;
   browserApiBaseUrl: string;
   protocol: ProtocolSummary;
+  /** Aktueller Stand der Sitzungsnotizen (Sitzungspanel), für den Blocktyp session_notes. */
+  sessionNotes?: string;
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
   availableTemplates: TemplateSummary[];
@@ -1281,6 +1284,7 @@ export function FocusedElementEditor({
             session_date: t("blockTypeSessionDate"), finance_balance: t("blockTypeFinanceBalance"),
             finance_transactions: t("blockTypeFinanceTransactions"), fine_list: t("blockTypeFineList"),
             chart: t("blockTypeChart"), entry_exit: t("blockTypeEntryExit"),
+            session_notes: t("blockTypeSessionNotes"),
           };
           const blockConfig = asObject(block.configuration_snapshot_json);
           // Matrix blocks lock per-cell instead (see cellFieldKey below), so the whole-block
@@ -3010,6 +3014,17 @@ export function FocusedElementEditor({
                       <p className="muted">{t("noEntryExitSinceLastUse")}</p>
                     )}
                   </div>
+                );
+              })()}
+
+              {elementType === "session_notes" && (() => {
+                // Nur der freie Notiztext aus dem Sitzungspanel - die Sitzungs-Todos bleiben aussen vor.
+                // Bearbeitet wird im Sitzungspanel, hier ist der Block reine Anzeige.
+                const notes = (sessionNotes ?? protocol.session_notes ?? "").trim();
+                return notes ? (
+                  <div className="session-notes-block">{notes}</div>
+                ) : (
+                  <p className="muted">{t("noSessionNotes")}</p>
                 );
               })()}
 

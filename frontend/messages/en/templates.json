@@ -273,6 +273,7 @@
     "sessionDateNote": "The protocol shows a date field for the next session. The calendar button opens the event overview; clicking a day selects that date. The tag filter defines which events are shown there (empty = all).",
     "sessionDateTagFilterLabel": "Events in calendar",
     "sessionDateTitle": "Session date",
+    "sessionNotesBlockNote": "Shows the notes from the session panel in the protocol and in the export – without session todos. The notes are still edited in the session panel.",
     "simpleValuesGroup": "Simple values",
     "sinceDateLabel": "Since date (default: protocol date)",
     "sortAlphaLabel": "Sort alphabetically by",
@@ -371,6 +372,10 @@
     "16": {
       "description": "Lists participant entries and exits since this block was last used",
       "label": "Entries/exits"
+    },
+    "17": {
+      "description": "Shows the free-form session notes in the protocol (without todos)",
+      "label": "Session notes"
     },
     "2": {
       "description": "Checklist or task list",

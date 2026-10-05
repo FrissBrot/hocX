@@ -273,6 +273,7 @@
     "sessionDateNote": "Im Protokoll erscheint ein Datumsfeld für die nächste Sitzung. Der Kalender-Button öffnet die Terminübersicht, ein Klick auf einen Tag übernimmt das Datum. Der Tag-Filter legt fest, welche Termine dort angezeigt werden (leer = alle).",
     "sessionDateTagFilterLabel": "Termine im Kalender",
     "sessionDateTitle": "Sitzungsdatum",
+    "sessionNotesBlockNote": "Zeigt die Notizen aus dem Sitzungspanel im Protokoll und im Export an – ohne Sitzungs-Todos. Bearbeitet werden die Notizen weiterhin im Sitzungspanel.",
     "simpleValuesGroup": "Einfache Werte",
     "sinceDateLabel": "Seit Datum (Standard: Protokolldatum)",
     "sortAlphaLabel": "Alphabetisch sortieren nach",
@@ -371,6 +372,10 @@
     "16": {
       "description": "Listet Teilnehmer-Ein- und Austritte seit der letzten Verwendung dieses Blocks auf",
       "label": "Ein-/Austritte"
+    },
+    "17": {
+      "description": "Zeigt die freien Sitzungsnotizen im Protokoll an (ohne Todos)",
+      "label": "Sitzungsnotizen"
     },
     "2": {
       "description": "Checkliste oder Aufgabenliste",
