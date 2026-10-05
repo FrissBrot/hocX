@@ -37,6 +37,13 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def _enforce_rate_limit(request: Request, scope: str, *, limit: int) -> None:
+    """Eigener Zaehler pro Endpunkt-Art: ein gemeinsamer Zaehler liess die Vorschaubilder einer
+    groesseren Galerie (je ein Request) das niedrige ZIP-Limit schon beim Seitenaufruf aufbrauchen -
+    "Alle herunterladen" lieferte dann ein 429-JSON statt des ZIPs."""
+    enforce_rate_limit(f"public-share:{scope}:{_client_ip(request)}", limit=limit, period_seconds=60)
+
+
 def _resolve_link_or_404(db: Session, token: str) -> ShareLink:
     link = share_link_service.resolve_active(db, token)
     if link is None:
@@ -104,7 +111,7 @@ def _public_file_response(link: ShareLink, stored_file: StoredFile, *, attachmen
 
 @router.get("/public/share/{token}", response_model=PublicShareRead)
 def get_public_share(token: str, request: Request, db: Session = Depends(get_db)):
-    enforce_rate_limit(f"public-share:{_client_ip(request)}", limit=60, period_seconds=60)
+    _enforce_rate_limit(request, "page", limit=60)
     link = _resolve_link_or_404(db, token)
     stored_files = _clean_stored_files_for_link(db, link)
     base = f"/api/public/share/{token}"
@@ -147,7 +154,10 @@ def get_public_share(token: str, request: Request, db: Session = Depends(get_db)
 
 @router.get("/public/share/{token}/files/{file_id}/thumbnail")
 def get_public_share_thumbnail(token: str, file_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
-    enforce_rate_limit(f"public-share:{_client_ip(request)}", limit=300, period_seconds=60)
+    # Ein Request pro Vorschaubild: Alben haben keine Obergrenze, und schnelles Scrollen laedt
+    # trotz loading="lazy" schnell einige hundert. Gegen Token-Raten schuetzt das Limit hier
+    # ohnehin nicht (192 Bit), es bremst nur Missbrauch - daher grosszuegig.
+    _enforce_rate_limit(request, "thumbnail", limit=3000)
     link = _resolve_link_or_404(db, token)
     stored_file = _resolve_file_or_404(db, link, file_id)
     thumbnail_path = service.ensure_thumbnail(db, stored_file, settings.storage_root)
@@ -164,7 +174,7 @@ def get_public_share_thumbnail(token: str, file_id: uuid.UUID, request: Request,
 def view_public_share_file(token: str, file_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
     """Original inline fuer die Lightbox (die Vorschau ist nur 480 px gross) - nur fuer
     _INLINE_IMAGE_TYPES, alles andere laeuft ueber /download als Attachment."""
-    enforce_rate_limit(f"public-share:{_client_ip(request)}", limit=300, period_seconds=60)
+    _enforce_rate_limit(request, "view", limit=300)
     link = _resolve_link_or_404(db, token)
     stored_file = _resolve_file_or_404(db, link, file_id)
     if stored_file.mime_type not in _INLINE_IMAGE_TYPES:
@@ -176,7 +186,7 @@ def view_public_share_file(token: str, file_id: uuid.UUID, request: Request, db:
 
 @router.get("/public/share/{token}/files/{file_id}/download")
 def download_public_share_file(token: str, file_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
-    enforce_rate_limit(f"public-share:{_client_ip(request)}", limit=60, period_seconds=60)
+    _enforce_rate_limit(request, "file", limit=60)
     link = _resolve_link_or_404(db, token)
     stored_file = _resolve_file_or_404(db, link, file_id)
     return _public_file_response(
@@ -195,7 +205,7 @@ def download_public_share_all(
     auch bei einer einzelnen Datei, damit "Alle herunterladen" sich verlaesslich gleich
     verhaelt. Gebaut auf der Platte, nicht im Speicher - wie files.py's
     download_stored_file(part="both")."""
-    enforce_rate_limit(f"public-share:{_client_ip(request)}", limit=20, period_seconds=60)
+    _enforce_rate_limit(request, "zip", limit=20)
     link = _resolve_link_or_404(db, token)
     stored_files = _clean_stored_files_for_link(db, link)
     if ids is not None:
