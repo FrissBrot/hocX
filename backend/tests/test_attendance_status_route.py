@@ -49,7 +49,10 @@ def test_set_attendance_status_creates_first_entry(db, monkeypatch):
     )
 
     entries = result.configuration_snapshot_json["attendance_entries"]
-    assert entries == [{"participant_id": participant_a.id, "participant_name": "Anna Muster", "status": "present"}]
+    # Translated to the public id here (see snapshot_reference_ids.translate_attendance_entries) -
+    # the client only ever knows participants by their public id, never the internal one stored
+    # in the DB-side attendance_entries array.
+    assert entries == [{"participant_id": str(participant_a.public_id), "participant_name": "Anna Muster", "status": "present"}]
 
 
 def test_set_attendance_status_does_not_erase_other_participants_entry(db, monkeypatch):
@@ -67,7 +70,7 @@ def test_set_attendance_status_does_not_erase_other_participants_entry(db, monke
     )
 
     entries = {entry["participant_id"]: entry["status"] for entry in result.configuration_snapshot_json["attendance_entries"]}
-    assert entries == {participant_a.id: "present", participant_b.id: "late"}
+    assert entries == {str(participant_a.public_id): "present", str(participant_b.public_id): "late"}
 
 
 def test_set_attendance_status_can_update_an_existing_entry(db, monkeypatch):
@@ -82,7 +85,7 @@ def test_set_attendance_status_can_update_an_existing_entry(db, monkeypatch):
     )
 
     entries = result.configuration_snapshot_json["attendance_entries"]
-    assert entries == [{"participant_id": participant_a.id, "participant_name": "Anna Muster", "status": "excused"}]
+    assert entries == [{"participant_id": str(participant_a.public_id), "participant_name": "Anna Muster", "status": "excused"}]
 
 
 def test_set_attendance_status_blocked_when_frozen(db, monkeypatch):

@@ -38,11 +38,14 @@ def test_open_protocol_read_refreshes_late_membership_changes(db):
     protocol, attendance, changes, leaver, joiner, remaining = _setup(db)
     elements = ProtocolElementService().list_protocol_elements(db, protocol.id)
     config = next(b.configuration_snapshot_json for b in elements[0].blocks if b.element_type_code == "attendance")
+    # list_protocol_elements translates attendance_entries to the public id for the API
+    # boundary (see snapshot_reference_ids.translate_attendance_entries) - the stored/internal
+    # id is only used for the refresh-by-membership merge itself, not in what callers read here.
     entries = {e["participant_id"]: e for e in config["attendance_entries"]}
-    assert set(entries) == {joiner.id, remaining.id}
-    assert entries[remaining.id]["status"] == "excused"
-    assert entries[remaining.id]["note"] == "Erhalten"
-    assert entries[joiner.id]["status"] == "absent"
+    assert set(entries) == {str(joiner.public_id), str(remaining.public_id)}
+    assert entries[str(remaining.public_id)]["status"] == "excused"
+    assert entries[str(remaining.public_id)]["note"] == "Erhalten"
+    assert entries[str(joiner.public_id)]["status"] == "absent"
     assert config["custom_setting"] is True
     assert {(e["participant_id"], e["type"], e["date"]) for e in changes.configuration_snapshot_json["entries"]} == {
         (leaver.id, "leave", "2026-08-15"), (joiner.id, "join", "2026-08-15"),
