@@ -295,8 +295,7 @@
       "albums": "Album",
       "all": "Tutte le foto",
       "duplicates": "Duplicati",
-      "series": "Simili",
-      "duplicatesAndSimilar": "Duplicati e simili"
+      "series": "Simili"
     },
     "tagPlaceholder": "Filtra per tag",
     "uploadAlbumAssignError": "Immagini caricate, ma l’assegnazione all’album non è riuscita.",
@@ -305,10 +304,6 @@
     "uploadPillTotal": "Caricamento galleria in corso · {processed} di {total} immagini",
     "uploadQueuedToast": "Caricamento in corso, elaborazione in background…",
     "uploadedToast": "{count, plural, one {1 immagine caricata.} other {# immagini caricate.}}",
-    "startAnalysis": "Avvia analisi",
-    "analysisStarting": "Avvio dell’analisi…",
-    "analysisStarted": "Analisi avviata.",
-    "analysisStartError": "Impossibile avviare l’analisi.",
     "loadedOfTotal": "{count} di {total} foto caricate."
   },
   "viewer": {

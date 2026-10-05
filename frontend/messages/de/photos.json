@@ -295,8 +295,7 @@
       "albums": "Alben",
       "all": "Alle Fotos",
       "duplicates": "Duplikate",
-      "series": "Ähnliche",
-      "duplicatesAndSimilar": "Duplikate & Ähnliche"
+      "series": "Ähnliche"
     },
     "tagPlaceholder": "Nach Tag filtern",
     "uploadAlbumAssignError": "Bilder hochgeladen, aber Zuordnung zum Album fehlgeschlagen.",
@@ -305,10 +304,6 @@
     "uploadPillTotal": "Galerie-Upload läuft · {processed} von {total} Bildern",
     "uploadQueuedToast": "Wird hochgeladen und im Hintergrund verarbeitet…",
     "uploadedToast": "{count, plural, one {1 Bild hochgeladen.} other {# Bilder hochgeladen.}}",
-    "startAnalysis": "Analyse starten",
-    "analysisStarting": "Analyse wird gestartet…",
-    "analysisStarted": "Analyse gestartet.",
-    "analysisStartError": "Analyse konnte nicht gestartet werden.",
     "loadedOfTotal": "{count} von {total} Fotos geladen."
   },
   "viewer": {

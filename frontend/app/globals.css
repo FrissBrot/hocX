@@ -18871,8 +18871,6 @@ input[type="radio"] {
 .photos-page-header .muted { max-width: 720px; font-size: var(--text-base); }
 .photos-header-actions { flex-wrap: wrap; justify-content: flex-end; }
 .photos-header-actions .photos-upload-button { width: auto; min-height: 40px; padding: var(--space-2) var(--space-4); }
-.photos-header-actions .photos-analysis-start { --button-bg: var(--info-bg); --button-hover-bg: var(--accent-soft); background: var(--button-bg); color: var(--info-fg); border-radius: var(--radius-pill); font-size: var(--text-sm); }
-.photos-analysis-start::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .photos-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .photos-filter-row .filter-tabs { background: var(--neutral-bg); border-color: transparent; }
 .photos-filter-row .list-filter-search { flex: 1 1 200px; min-width: 0; }

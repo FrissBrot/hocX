@@ -91,14 +91,14 @@ class Settings(BaseSettings):
     # is crossed at most once a year per config, and the loop self-heals a missed day.
     cycle_snapshot_check_interval_minutes: int = 1440
     # Photo-culling Phase 3 auto-queue (main.py's photo_analysis_auto_queue_loop): how
-    # often to check whether it's a good time to queue unanalyzed images, and the UTC hour
-    # window ("night" by default - this is a rough quiet-hours gate, not a precise
-    # schedule, so no timezone library is pulled in for it; operators far from UTC should
-    # adjust these two hours) it's allowed to actually do so in. start > end wraps past
-    # midnight (e.g. 22/5 means 22:00-05:00 UTC).
-    photo_analysis_auto_queue_interval_minutes: int = 30
-    photo_analysis_auto_queue_start_hour: int = 1
-    photo_analysis_auto_queue_end_hour: int = 6
+    # often to check for unanalyzed images, and the UTC hour window it's allowed to queue
+    # them in. Default 0/24 = rund um die Uhr - die Analyse läuft automatisch, es gibt keinen
+    # manuellen "Analyse starten"-Button mehr; der Last-Check unten bleibt die Bremse.
+    # Ein engeres Fenster ist weiterhin möglich (start > end wraps past midnight, e.g.
+    # 22/5 means 22:00-05:00 UTC).
+    photo_analysis_auto_queue_interval_minutes: int = 5
+    photo_analysis_auto_queue_start_hour: int = 0
+    photo_analysis_auto_queue_end_hour: int = 24
     # Additional safety gate independent of the time window: skip this run if the host's
     # 1-minute load average is already above cpu_count * this factor. os.getloadavg()
     # reads /proc/loadavg, which reflects the whole Docker host, not just this container -

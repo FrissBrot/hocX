@@ -295,8 +295,7 @@
       "albums": "Albums",
       "all": "Toutes les photos",
       "duplicates": "Doublons",
-      "series": "Similaires",
-      "duplicatesAndSimilar": "Doublons et similaires"
+      "series": "Similaires"
     },
     "tagPlaceholder": "Filtrer par tag",
     "uploadAlbumAssignError": "Images importées, mais l’association à l’album a échoué.",
@@ -305,10 +304,6 @@
     "uploadPillTotal": "Import de galerie en cours · {processed} sur {total} images",
     "uploadQueuedToast": "Importation en cours, traitement en arrière-plan…",
     "uploadedToast": "{count, plural, one {1 image importée.} other {# images importées.}}",
-    "startAnalysis": "Lancer l’analyse",
-    "analysisStarting": "Démarrage de l’analyse…",
-    "analysisStarted": "Analyse lancée.",
-    "analysisStartError": "Impossible de lancer l’analyse.",
     "loadedOfTotal": "{count} photos chargées sur {total}."
   },
   "viewer": {

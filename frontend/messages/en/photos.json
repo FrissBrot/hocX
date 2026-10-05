@@ -295,8 +295,7 @@
       "albums": "Albums",
       "all": "All photos",
       "duplicates": "Duplicates",
-      "series": "Similar",
-      "duplicatesAndSimilar": "Duplicates & similar"
+      "series": "Similar"
     },
     "tagPlaceholder": "Filter by tag",
     "uploadAlbumAssignError": "Images uploaded, but assigning them to the album failed.",
@@ -305,10 +304,6 @@
     "uploadPillTotal": "Gallery upload running · {processed} of {total} images",
     "uploadQueuedToast": "Uploading and processing in the background…",
     "uploadedToast": "{count, plural, one {1 image uploaded.} other {# images uploaded.}}",
-    "startAnalysis": "Start analysis",
-    "analysisStarting": "Starting analysis…",
-    "analysisStarted": "Analysis started.",
-    "analysisStartError": "Analysis could not be started.",
     "loadedOfTotal": "{count} of {total} photos loaded."
   },
   "viewer": {

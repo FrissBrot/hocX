@@ -103,10 +103,17 @@ describe("PhotosView", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows the three main gallery tabs", () => {
+  it("shows the Alle Fotos / Alben / Duplikate / Ähnliche tabs", () => {
     mockFilesAndProgress([], NO_PROGRESS);
     render(<PhotosView />);
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Alle Fotos", "Alben", "Duplikate & Ähnliche"]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Alle Fotos", "Alben", "Duplikate", "Ähnliche"]);
+  });
+
+  it("has no manual analysis button - analysis runs automatically", async () => {
+    mockFilesAndProgress([makeItem({ id: "a" })], NO_PROGRESS);
+    render(<PhotosView />);
+    await screen.findAllByRole("checkbox");
+    expect(screen.queryByRole("button", { name: /Analyse/ })).not.toBeInTheDocument();
   });
 
   it("preserves photos after a pagination failure, pauses automatic loading and retries the same page", async () => {
@@ -192,7 +199,7 @@ describe("PhotosView", () => {
     await waitFor(() => expect(screen.getByText("2 Fotos ausgewählt")).toBeInTheDocument());
   });
 
-  it("selects all loaded photos from the bulk bar and starts analysis for that selection", async () => {
+  it("selects all loaded photos from the bulk bar", async () => {
     mockFilesAndProgress([makeItem({ id: "a" }), makeItem({ id: "b" }), makeItem({ id: "c" })], NO_PROGRESS);
     render(<PhotosView />);
     const checkboxes = await screen.findAllByRole("checkbox");
@@ -200,10 +207,6 @@ describe("PhotosView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Alle auswählen", exact: true }));
     expect(screen.getByText("3 Fotos ausgewählt")).toBeInTheDocument();
     expect(checkboxes.every((checkbox) => checkbox.getAttribute("aria-checked") === "true")).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Analyse starten" }));
-    await waitFor(() => expect(browserApiFetchMock).toHaveBeenCalledWith("/api/files/analysis-jobs", {
-      method: "POST", body: JSON.stringify({ search: null, tags: [], file_ids: ["a", "b", "c"] }),
-    }));
   });
 
   it("never renders the analysis progress bar text", async () => {
