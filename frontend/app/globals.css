@@ -14315,29 +14315,29 @@ input[type="radio"] {
 .files-type-icon {
   position: relative;
   display: inline-flex;
-  flex: 0 0 36px;
-  width: 36px;
-  height: 44px;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 30px;
   align-items: center;
   justify-content: center;
   color: var(--neutral-fg);
 }
 
 .files-type-icon svg {
-  width: 32px;
-  height: 40px;
+  width: 24px;
+  height: 30px;
 }
 
 .files-type-icon-extension {
   position: absolute;
-  bottom: 2px;
+  bottom: 1px;
   left: 0;
   right: 0;
-  padding: 1px 2px;
+  padding: 0 1px;
   border-radius: var(--radius-xs);
   background: var(--neutral-bg);
   color: var(--neutral-fg);
-  font-size: var(--text-xs);
+  font-size: calc(var(--text-xs) * 0.75); /* design-ok: Endungs-Badge im 24px-Dateisymbol, --text-xs ist dafür zu breit */
   font-weight: 700;
   line-height: 1.2;
   text-align: center;
