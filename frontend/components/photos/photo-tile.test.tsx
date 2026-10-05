@@ -205,11 +205,3 @@ it("falls back to the still photo when the clip cannot be loaded", () => {
   vi.useRealTimers();
 });
 
-it("opens a photo through its expand button while selection mode remains active", () => {
-  const onOpen = vi.fn();
-  const onToggleSelect = vi.fn();
-  render(<PhotoTile item={item} selected selectionMode onOpen={onOpen} onToggleSelect={onToggleSelect} />);
-  fireEvent.click(screen.getByRole("button", { name: "photo.jpg öffnen" }));
-  expect(onOpen).toHaveBeenCalledTimes(1);
-  expect(onToggleSelect).not.toHaveBeenCalled();
-});

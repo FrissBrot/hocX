@@ -120,7 +120,6 @@ export function PhotoTile({
           </svg>
         )}
       </button>
-      <button type="button" className="button-icon-soft photo-tile-open" aria-label={t("openAriaLabel", { name: item.original_name })} onClick={onOpen}><PhotoActionIcon name="expand" /></button>
       {item.is_best && <span className="photo-tile-badge photo-tile-badge-best" aria-label={t("bestBadge")} title={t("bestBadge")}><PhotoActionIcon name="star" /></span>}
       {item.share_pending && <span className="photo-tile-badge photo-tile-badge-pending">{t("pendingBadge")}</span>}
     </div>
