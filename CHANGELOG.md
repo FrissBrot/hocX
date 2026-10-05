@@ -8,6 +8,27 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.1.7] - 2026-10-05
+
+Feature-Release auf 1.1.6 mit zyklusbasierter Protokoll-Gruppierung, automatischem
+Abgabe-Abschluss und einer neu gestalteten, metadatensensiblen Freigabeseite. Enthält
+die Migration `0100`; sie läuft beim Deploy automatisch. Keine neuen Pflicht-
+Umgebungsvariablen.
+
+### Update von 1.1.6 auf 1.1.7
+
+Nach Veröffentlichung der Release-Images `HOCX_VERSION` in `.env` auf `v1.1.7` setzen,
+dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` ausführen.
+
+- Migration `0100` ergänzt `share_link.share_location`/`share_capture_date`/
+  `share_camera` und setzt für bestehende Links dieselbe Vorgabe wie für neue: nur das
+  Aufnahmedatum geht mit, Standort (GPS) und Kamera/Gerät nicht. Bisher gingen bei
+  öffentlichen Freigaben alle Metadaten ungefiltert raus; wer bei bestehenden Links
+  bewusst mehr mitgeben möchte, stellt das pro Link in den Freigabe-Einstellungen um.
+- Git-Tag und GitHub-Release entstehen erst nach erfolgreicher Promotion aller Images
+  durch den Release-Workflow. Der Push dieser Vorbereitung veröffentlicht noch kein
+  Release.
+
 ### Neu
 
 - Die Protokoll-Liste gruppiert nach Zyklus statt einer einzigen flachen Liste: der
