@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { EventIcon } from "@/components/events/event-icons";
-import { addUtcDays, eventsByDay, isoToUtcDate, utcDateToIso } from "@/components/events/event-utils";
+import { addUtcDays, effectiveEndDate, eventsByDay, isoToUtcDate, utcDateToIso } from "@/components/events/event-utils";
 import { Badge } from "@/components/ui/badge";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
@@ -42,6 +42,64 @@ function monthGridDays(year: number, month: number): string[] {
   const start = addUtcDays(first, -weekdayIndex(first));
   const total = Math.ceil((weekdayIndex(first) + daysInMonth(year, month)) / 7) * 7;
   return Array.from({ length: total }, (_, index) => addUtcDays(start, index));
+}
+
+/** Höchstens so viele Terminbalken übereinander pro Woche, der Rest erscheint als „+N". */
+const MAX_LANES = 3;
+
+type WeekSegment = {
+  event: EventSummary;
+  /** Spalte 0–6 innerhalb der Woche */
+  start: number;
+  span: number;
+  lane: number;
+  continuesBefore: boolean;
+  continuesAfter: boolean;
+};
+
+/**
+ * Zerlegt die Termine einer Woche in durchgehende Balken (mehrtägige Termine als ein Segment pro
+ * Woche) und verteilt sie auf Zeilen, sodass sich keine Balken überschneiden.
+ */
+function weekSegments(week: string[], dayMap: Map<string, EventSummary[]>): WeekSegment[] {
+  const seen = new Set<string>();
+  const segments: Omit<WeekSegment, "lane">[] = [];
+  week.forEach((day, column) => {
+    (dayMap.get(day) ?? []).forEach((event) => {
+      if (seen.has(event.id)) return;
+      seen.add(event.id);
+      let end = column;
+      while (end + 1 < week.length && (dayMap.get(week[end + 1]) ?? []).includes(event)) end += 1;
+      segments.push({
+        event,
+        start: column,
+        span: end - column + 1,
+        continuesBefore: event.event_date.slice(0, 10) < day,
+        continuesAfter: effectiveEndDate(event) > week[end],
+      });
+    });
+  });
+  // Längere Balken zuerst, damit sie oben durchgehend liegen.
+  segments.sort((left, right) => left.start - right.start || right.span - left.span || left.event.title.localeCompare(right.event.title));
+  const laneEnds: number[] = [];
+  return segments.map((segment) => {
+    let lane = laneEnds.findIndex((lastColumn) => lastColumn < segment.start);
+    if (lane === -1) lane = laneEnds.length;
+    laneEnds[lane] = segment.start + segment.span - 1;
+    return { ...segment, lane };
+  });
+}
+
+/** Anzahl Termine an einem Wochentag, die wegen MAX_LANES keinen eigenen Balken bekommen. */
+function hiddenSegmentCount(segments: WeekSegment[], column: number): number {
+  return segments.filter((segment) => {
+    const covers = segment.start <= column && column < segment.start + segment.span;
+    return covers && segment.lane >= MAX_LANES;
+  }).length;
+}
+
+function chunkWeeks(days: string[]): string[][] {
+  return Array.from({ length: days.length / 7 }, (_, index) => days.slice(index * 7, index * 7 + 7));
 }
 
 function tagStyle(color: string) {
@@ -146,50 +204,80 @@ export function EventCalendarModal({ open, onClose, events, todayIso, tagColor, 
           ))}
         </div>
         <div className="event-cal-days">
-          {monthGridDays(cursor.year, cursor.month).map((day) => {
-            const date = isoToUtcDate(day);
-            const outside = date.getUTCMonth() !== cursor.month;
-            const dayEvents = dayMap.get(day) ?? [];
-            const visible = dayEvents.slice(0, 3);
-            const isWeekend = weekdayIndex(day) >= 5;
-            const label = date.getUTCDate() === 1 ? formatters.dayMonthShort.format(date).replace(/\.$/, "") : String(date.getUTCDate());
-            const className = [
-              "event-cal-day",
-              outside ? "event-cal-day-outside" : "",
-              isWeekend ? "event-cal-day-weekend" : "",
-              day === selectedIso ? "event-cal-day-selected" : "",
-              day === todayIso ? "event-cal-day-today" : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
+          {chunkWeeks(monthGridDays(cursor.year, cursor.month)).map((week) => {
+            const segments = weekSegments(week, dayMap);
+            const hiddenPerDay = week.map((_, column) => hiddenSegmentCount(segments, column));
+            const isOutside = (day: string) => isoToUtcDate(day).getUTCMonth() !== cursor.month;
             return (
-              <button
-                key={day}
-                type="button"
-                role="gridcell"
-                aria-selected={day === selectedIso}
-                aria-label={formatters.dayLong.format(date)}
-                className={className}
-                onClick={() => setSelectedIso(day)}
-              >
-                <span className={`event-cal-day-number${dayEvents.length > 0 ? " event-cal-day-number-busy" : ""}`}>{label}</span>
-                {visible.map((event) => {
-                  const tag = (event.tag ?? "").trim();
+              <div key={week[0]} className="event-cal-week" role="row">
+                {week.map((day, column) => {
+                  const date = isoToUtcDate(day);
+                  const outside = isOutside(day);
+                  const hasEvents = dayMap.has(day);
+                  const isWeekend = weekdayIndex(day) >= 5;
+                  const label = date.getUTCDate() === 1 ? formatters.dayMonthShort.format(date).replace(/\.$/, "") : String(date.getUTCDate());
+                  const className = [
+                    "event-cal-day",
+                    outside ? "event-cal-day-outside" : "",
+                    isWeekend ? "event-cal-day-weekend" : "",
+                    day === selectedIso ? "event-cal-day-selected" : "",
+                    day === todayIso ? "event-cal-day-today" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
                   return (
-                    <span
-                      key={event.id}
-                      className={`event-cal-chip${event.is_cancelled ? " event-cal-chip-cancelled" : ""}${tag ? "" : " event-cal-chip-untagged"}`}
-                      style={tag ? tagStyle(tagColor(tag)) : undefined}
+                    <button
+                      key={day}
+                      type="button"
+                      role="gridcell"
+                      aria-selected={day === selectedIso}
+                      aria-label={formatters.dayLong.format(date)}
+                      className={className}
+                      style={{ gridColumn: column + 1 }}
+                      onClick={() => setSelectedIso(day)}
                     >
-                      <span className="event-cal-chip-dot" />
-                      <span className="event-cal-chip-label">{event.title}</span>
-                    </span>
+                      <span className={`event-cal-day-number${hasEvents ? " event-cal-day-number-busy" : ""}`}>{label}</span>
+                    </button>
                   );
                 })}
-                {dayEvents.length > visible.length ? (
-                  <span className="event-cal-more">{t("calendar.more", { count: dayEvents.length - visible.length })}</span>
-                ) : null}
-              </button>
+                {/* Balken liegen über den Tageszellen; Klicks gehen an die Zelle darunter (Tag auswählen). */}
+                <div className="event-cal-week-events" aria-hidden="true">
+                  {segments
+                    .filter((segment) => segment.lane < MAX_LANES)
+                    .map(({ event, start, span, lane, continuesBefore, continuesAfter }) => {
+                      const tag = (event.tag ?? "").trim();
+                      const fullyOutside = isOutside(week[start]) && isOutside(week[start + span - 1]);
+                      const className = [
+                        "event-cal-chip",
+                        "event-cal-bar",
+                        event.is_cancelled ? "event-cal-chip-cancelled" : "",
+                        tag ? "" : "event-cal-chip-untagged",
+                        fullyOutside ? "event-cal-chip-outside" : "",
+                        continuesBefore ? "event-cal-bar-continues-before" : "",
+                        continuesAfter ? "event-cal-bar-continues-after" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ");
+                      return (
+                        <span
+                          key={event.id}
+                          className={className}
+                          style={{ ...(tag ? tagStyle(tagColor(tag)) : {}), gridColumn: `${start + 1} / span ${span}`, gridRow: lane + 1 }}
+                        >
+                          <span className="event-cal-chip-dot" />
+                          <span className="event-cal-chip-label">{event.title}</span>
+                        </span>
+                      );
+                    })}
+                  {hiddenPerDay.map((count, column) =>
+                    count > 0 ? (
+                      <span key={`more-${column}`} className="event-cal-more" style={{ gridColumn: column + 1, gridRow: MAX_LANES + 1 }}>
+                        {t("calendar.more", { count })}
+                      </span>
+                    ) : null
+                  )}
+                </div>
+              </div>
             );
           })}
         </div>

@@ -17642,6 +17642,7 @@ input[type="radio"] {
 }
 
 .event-today-marker {
+  scroll-margin-top: var(--space-4);
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -18122,7 +18123,7 @@ input[type="radio"] {
 }
 
 .event-cal-weekdays,
-.event-cal-days {
+.event-cal-week {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
 }
@@ -18138,8 +18139,34 @@ input[type="radio"] {
 }
 
 .event-cal-days {
+  display: grid;
   grid-auto-rows: minmax(92px, 1fr);
   margin-bottom: -1px;
+}
+
+/* Eine Kalenderwoche: Tageszellen und Terminbalken teilen sich dieselbe Rasterzeile. */
+.event-cal-week {
+  grid-template-rows: auto;
+  min-width: 0;
+}
+
+.event-cal-week > .event-cal-day {
+  grid-row: 1;
+}
+
+.event-cal-week-events {
+  position: relative;
+  z-index: 1;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  align-self: start;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  row-gap: 2px;
+  min-width: 0;
+  /* Platz für die Tageszahl (22px hoch) oberhalb der Balken */
+  padding: calc(var(--space-2) + 22px + var(--space-1)) 0 var(--space-2);
+  pointer-events: none;
 }
 
 .event-cal-day {
@@ -18167,7 +18194,7 @@ input[type="radio"] {
   transform: none !important;
 }
 
-.event-cal-day:nth-child(7n) {
+.event-cal-week > .event-cal-day:nth-of-type(7) {
   border-right: none;
 }
 
@@ -18184,7 +18211,7 @@ input[type="radio"] {
   font-weight: 500;
 }
 
-.event-cal-day-outside .event-cal-chip {
+.event-cal-chip-outside {
   opacity: 0.6;
 }
 
@@ -18199,6 +18226,7 @@ input[type="radio"] {
 .event-cal-day-number {
   align-self: flex-start;
   padding: 1px var(--space-1);
+  line-height: 20px;
   border-radius: var(--radius-pill);
   font-size: var(--text-sm);
   font-weight: 600;
@@ -18244,6 +18272,23 @@ input[type="radio"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Mehrtägige Termine laufen als ein Balken über die Tage; an Wochengrenzen ohne Rundung. */
+.event-cal-bar {
+  margin: 0 var(--space-2);
+}
+
+.event-cal-bar-continues-before {
+  margin-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.event-cal-bar-continues-after {
+  margin-right: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .event-cal-chip-cancelled .event-cal-chip-label {
@@ -18731,6 +18776,22 @@ input[type="radio"] {
 
   .event-cal-chip {
     padding: 2px;
+  }
+
+  .event-cal-week-events {
+    padding: calc(var(--space-1) + 22px + var(--space-1)) 0 var(--space-1);
+  }
+
+  .event-cal-bar {
+    margin: 0 var(--space-1);
+  }
+
+  .event-cal-bar-continues-before {
+    margin-left: 0;
+  }
+
+  .event-cal-bar-continues-after {
+    margin-right: 0;
   }
 
   .event-cal-chip-label,

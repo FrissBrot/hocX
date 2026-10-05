@@ -338,6 +338,16 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     return index > 0 ? filteredEvents[index].id : null;
   }, [filteredEvents, timeFilter, todayIso]);
 
+  // Beim ersten Anzeigen so scrollen, dass die „Heute"-Linie oben steht: darunter die kommenden,
+  // darüber (per Hochscrollen) die vergangenen Termine.
+  const todayMarkerRef = useRef<HTMLDivElement | null>(null);
+  const scrolledToTodayRef = useRef(false);
+  useEffect(() => {
+    if (scrolledToTodayRef.current || !todayMarkerEventId || !todayMarkerRef.current) return;
+    scrolledToTodayRef.current = true;
+    todayMarkerRef.current.scrollIntoView({ block: "start" });
+  }, [todayMarkerEventId]);
+
   function tagColor(tag: string): string {
     return tagConfig[tag]?.color ?? fallbackTagColor(tag);
   }
@@ -475,7 +485,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     return (
       <Fragment key={item.id}>
         {item.id === todayMarkerEventId ? (
-          <div className="event-today-marker">
+          <div ref={todayMarkerRef} className="event-today-marker">
             <span>{t("list.today", { date: todayFormatter.format(isoToUtcDate(todayIso)) })}</span>
           </div>
         ) : null}
