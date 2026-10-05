@@ -285,14 +285,24 @@ export function ProtocolEditor({
     browserApiFetch<{ element_id: string | null }>(`/api/protocols/${protocol.id}/scroll-position`)
       .then((data) => {
         isRestoringRef.current = false;
-        if (!data?.element_id) return;
-        const id = data.element_id;
-        if (initialElements.some((e) => e.id === id)) {
-          shouldScrollToElementRef.current = true;
+        // Always land on a section when opening the protocol: the remembered one if it
+        // still exists, otherwise the first visible one (selected by the effect below).
+        // Without this the document pane stays at scrollTop 0, i.e. on the empty
+        // accordion spacer above the first heading.
+        isInitialScrollRef.current = true;
+        shouldScrollToElementRef.current = true;
+        const id = data?.element_id;
+        if (id && initialElements.some((e) => e.id === id)) {
           setSelectedElementId(id);
         }
+        setScrollRequestId((current) => current + 1);
       })
-      .catch(() => { isRestoringRef.current = false; });
+      .catch(() => {
+        isRestoringRef.current = false;
+        isInitialScrollRef.current = true;
+        shouldScrollToElementRef.current = true;
+        setScrollRequestId((current) => current + 1);
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [protocol.id]);
 
@@ -406,6 +416,8 @@ export function ProtocolEditor({
   // it - must not also autofocus a form field (usability-audit finding F9, 2026-10-01: a
   // freshly opened protocol jumped straight into an input with the cursor already blinking).
   const shouldAutoFocusRef = useRef(false);
+  // The first scroll after opening jumps instantly instead of animating from the top.
+  const isInitialScrollRef = useRef(false);
   const passiveScrollTargetRef = useRef<string | null>(null);
   // True while a programmatic smooth scroll (search, nav click, Ctrl+Enter) is in flight.
   // The scroll-spy must stay passive during that time - otherwise it selects every section
@@ -588,6 +600,8 @@ export function ProtocolEditor({
     }
 
     shouldScrollToElementRef.current = false;
+    const scrollBehavior = (isInitialScrollRef.current ? "instant" : "smooth") as ScrollBehavior;
+    isInitialScrollRef.current = false;
 
     window.requestAnimationFrame(() => {
       // Scroll panel to top (new element replaces old one)
@@ -630,7 +644,7 @@ export function ProtocolEditor({
           container.addEventListener("scrollend", release);
           // Fallback for browsers without `scrollend` and for no-op scrolls (delta ~ 0).
           programmaticScrollTimerRef.current = window.setTimeout(release, 1200);
-          container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
+          container.scrollTo({ top: container.scrollTop + delta, behavior: scrollBehavior });
         }
       }
 
