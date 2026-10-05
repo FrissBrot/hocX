@@ -18855,7 +18855,7 @@ input[type="radio"] {
 .photos-filter-row .tag-input-wrap { min-width: 0; }
 .photos-filter-row input.tag-input-text { min-height: 0; padding: 0; border: none; border-radius: 0; background: transparent; box-shadow: none; }
 .photos-filter-row .tag-input-field { min-height: 38px; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--panel-solid); border-color: var(--border-strong); }
-.photos-overview .photo-grid { --photo-grid-gap: var(--space-3); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 1px; grid-auto-flow: dense; column-gap: var(--photo-grid-gap); align-items: start; }
+.photos-overview .photo-grid { --photo-grid-gap: var(--space-2); display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); grid-auto-rows: 1px; grid-auto-flow: dense; column-gap: var(--photo-grid-gap); align-items: start; }
 .photos-overview .photo-tile { min-width: 0; margin-bottom: var(--photo-grid-gap, var(--space-3)); border-radius: var(--radius-md); }
 .photos-overview .photo-tile { --photo-placeholder: color-mix(in srgb, var(--info-fg) 22%, var(--panel-solid)); }
 .photos-overview .photo-tile-tone-1 { --photo-placeholder: color-mix(in srgb, var(--danger-fg) 18%, var(--panel-solid)); }
@@ -18889,7 +18889,6 @@ input[type="radio"] {
 .photo-bulk-album-popover { display: grid; gap: var(--space-3); padding: var(--space-3); min-width: 240px; }
 
 @media (max-width: 900px) {
-  .photos-overview .photo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .photos-page-header { flex-wrap: wrap; }
   .photos-page-header > div:first-child { flex-basis: 100%; }
   .photo-bulk-actions { margin-left: 0; }
@@ -18897,7 +18896,6 @@ input[type="radio"] {
 
 @media (max-width: 640px) {
   .photos-page { padding: var(--space-4); }
-  .photos-overview .photo-grid { --photo-grid-gap: var(--space-2); grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .photos-overview .photo-tile { margin-bottom: var(--space-2); }
   .photos-filter-row > .filter-tabs { width: 100%; }
   .photos-filter-row > .filter-tabs .filter-tabs-option { flex: 1; padding: var(--space-2); font-size: var(--text-xs); justify-content: center; }
