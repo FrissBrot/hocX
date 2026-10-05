@@ -2358,6 +2358,18 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
               title={t("sessionDateTitle")}
               description={t("sessionDateDescription")}
             >
+              <label className="field-stack">
+                <span className="field-label">{t("sessionDateTagFilterLabel")}</span>
+                <TagInput
+                  value={createBlockForm.event_tag_filter}
+                  onChange={(v) => setCreateBlockForm((current) => ({ ...current, event_tag_filter: v }))}
+                  suggestions={knownEventTags}
+                  tagConfig={tagConfig}
+                  onTagColorChange={updateTagColor}
+                  onTagRename={renameTag}
+                  placeholder={t("eventTagFilterPlaceholder")}
+                />
+              </label>
               <p className="info-note">{t("sessionDateNote")}</p>
             </SettingsSection>
           ) : null}
@@ -3014,6 +3026,26 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     </>
                   ) : null}
                 </div>
+              </SettingsSection>
+            ) : null}
+            {blockForm.element_type_id === "10" ? (
+              <SettingsSection
+                title={t("sessionDateTitle")}
+                description={t("sessionDateDescription")}
+              >
+                <label className="field-stack">
+                  <span className="field-label">{t("sessionDateTagFilterLabel")}</span>
+                  <TagInput
+                    value={blockForm.event_tag_filter}
+                    onChange={(v) => setBlockForm((current) => ({ ...current, event_tag_filter: v }))}
+                    suggestions={knownEventTags}
+                    tagConfig={tagConfig}
+                    onTagColorChange={updateTagColor}
+                    onTagRename={renameTag}
+                    placeholder={t("eventTagFilterPlaceholder")}
+                  />
+                </label>
+                <p className="info-note">{t("sessionDateNote")}</p>
               </SettingsSection>
             ) : null}
             {(blockForm.element_type_id === "12" || blockForm.element_type_id === "13") ? (

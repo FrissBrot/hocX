@@ -18020,6 +18020,12 @@ input[type="radio"] {
   min-height: 0;
 }
 
+/* Auswahlmodus (Date-Picker, z. B. „Nächster Hock"): ohne Seitenleiste. */
+.event-cal-body.event-cal-body-pick {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .event-cal-main {
   min-height: 0;
   overflow: auto;

@@ -127,6 +127,7 @@ Für **jedes** Datumsfeld: `DateInput` aus `@/components/ui/date-input`. Nie `<i
 
 - **Anzeige/Eingabe** `TT.MM.JJJJ` per Tastatur, **Wert** immer ISO (`JJJJ-MM-TT`) über `onChange`. Kein eigenes Parsen/Formatieren von Daten in Komponenten, das übernehmen `formatDateInputValue`/`parseDateInputValue` aus `lib/utils/format.ts`.
 - Der runde Kalender-Button rechts öffnet den nativen Picker über `showPicker()`. Er ist Teil von `DateInput` selbst (`.date-input-picker`) und bekommt **keine** eigene Klasse oder Nachbau.
+- Soll der Button statt des nativen Pickers etwas Eigenes öffnen (z. B. „Nächster Hock": Kalenderansicht mit Terminen via `EventCalendarModal` mit `pick`), über `onPickerClick` — nicht durch einen zusätzlichen Button daneben.
 - Einschränkungen (kein Datum vor/nach X) über `min`/`max` (ISO-Strings), nicht per Validierung nach dem Speichern.
 - **Zeitraum (von/bis):** zwei eigenständige `DateInput`-Felder nebeneinander in `.two-col`, je mit eigenem `field-label` ("Datum" / "Enddatum" o. ä.). Kein kombiniertes Range-Picker-Widget.
 - **Tabellenzeile/kompakter Kontext:** `DateInput` bleibt gleich, nur der Picker-Button darf über eine Feature-Klasse verschmälert werden (z. B. `.event-field-date .date-input-picker { width: 40px; }`), niemals Inline-Style.

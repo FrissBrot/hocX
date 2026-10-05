@@ -19,6 +19,8 @@ import { Modal } from "@/components/ui/modal";
 import { LightboxImage } from "@/components/ui/lightbox-image";
 import { StructuredListEditModal } from "@/components/protocol/planning/structured-list-edit-modal";
 import { EventOverviewModal } from "@/components/protocol/planning/event-overview-modal";
+import { EventCalendarModal } from "@/components/events/event-calendar-modal";
+import { fallbackTagColor } from "@/components/events/event-utils";
 import { CheckboxCandidateModal, CandidateItem } from "@/components/protocol/planning/checkbox-candidate-modal";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
@@ -253,6 +255,8 @@ export function FocusedElementEditor({
   const [matrixPickerBlockId, setMatrixPickerBlockId] = useState<string | null>(null);
   // Planning-mode consolidated checkbox popup for "Termine pro Element".
   const [showEventBlockPicker, setShowEventBlockPicker] = useState(false);
+  // „Nächster Hock": Kalenderansicht als Date-Picker (Block-ID + heutiges Datum beim Öffnen).
+  const [sessionDatePicker, setSessionDatePicker] = useState<{ blockId: string; todayIso: string } | null>(null);
   const [eventBlockScope, setEventBlockScope] = useState<"current" | "all">("current");
   const [eventBlockCandidates, setEventBlockCandidates] = useState<EventSummary[]>([]);
   const [eventBlockCandidatesLoading, setEventBlockCandidatesLoading] = useState(false);
@@ -3017,8 +3021,31 @@ export function FocusedElementEditor({
                       value={String(blockConfig.selected_date ?? "")}
                       readOnly={!blockEditable}
                       onChange={(value) => { if (blockEditable) patchBlockConfigValue(block.id, "selected_date", value || null, blockConfig); }}
+                      onPickerClick={() => setSessionDatePicker({ blockId: block.id, todayIso: new Date().toISOString().slice(0, 10) })}
                     />
                   </div>
+                  {sessionDatePicker?.blockId === block.id && (() => {
+                    // Tag-Filter aus der Elementvorlage (wie bei der Terminliste: kommagetrennt, Teiltreffer).
+                    const tagFilters = String(blockConfig.event_tag_filter ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+                    const calendarEvents = tagFilters.length
+                      ? availableEvents.filter((eventRow) => tagFilters.some((tag) => (eventRow.tag ?? "").toLowerCase().includes(tag)))
+                      : availableEvents;
+                    return (
+                      <EventCalendarModal
+                        open
+                        onClose={() => setSessionDatePicker(null)}
+                        events={calendarEvents}
+                        todayIso={sessionDatePicker.todayIso}
+                        tagColor={(tag) => tagConfig[tag]?.color ?? fallbackTagColor(tag)}
+                        pick={{
+                          value: blockConfig.selected_date ? String(blockConfig.selected_date) : null,
+                          title: t("sessionDatePickerTitle"),
+                          hint: t("sessionDatePickerHint"),
+                          onPick: (iso) => patchBlockConfigValue(block.id, "selected_date", iso, blockConfig),
+                        }}
+                      />
+                    );
+                  })()}
                   {availableTemplates.filter((t) => t.status !== "archived").length > 1 && (() => {
                     const activeFollowupId = blockConfig.followup_template_id
                       ? String(blockConfig.followup_template_id)

@@ -15,8 +15,8 @@
   "blockTypeAttendance": "Présence",
   "blockTypeBulletList": "Liste à puces",
   "blockTypeChart": "Graphique",
-  "blockTypeEntryExit": "Entrées/sorties",
   "blockTypeDisplay": "Affichage",
+  "blockTypeEntryExit": "Entrées/sorties",
   "blockTypeFinanceBalance": "Solde du compte",
   "blockTypeFinanceTransactions": "Transactions",
   "blockTypeFineList": "Liste des amendes",
@@ -386,6 +386,8 @@
   },
   "searchLabel": "Recherche",
   "searchParticipantsPlaceholder": "Rechercher des participants",
+  "sessionDatePickerHint": "Cliquez sur un jour pour le sélectionner.",
+  "sessionDatePickerTitle": "Date de la prochaine séance",
   "sessionPanel": {
     "assignPlaceholder": "Attribuer à une personne…",
     "createTodoButton": "Créer une tâche",

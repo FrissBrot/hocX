@@ -8,6 +8,8 @@ import { formatDateInputValue, parseDateInputValue } from "@/lib/utils/format";
 type DateInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange"> & {
   value: string | null | undefined;
   onChange: (value: string) => void;
+  /** Ersetzt den nativen Picker, z. B. durch die Kalenderansicht mit Terminen. */
+  onPickerClick?: () => void;
 };
 
 export function DateInput({
@@ -20,6 +22,7 @@ export function DateInput({
   onBlur,
   min,
   max,
+  onPickerClick,
   ...props
 }: DateInputProps) {
   const t = useTranslations("common");
@@ -68,6 +71,10 @@ export function DateInput({
 
   function openNativePicker() {
     if (disabled || readOnly) {
+      return;
+    }
+    if (onPickerClick) {
+      onPickerClick();
       return;
     }
     if (nativeInputRef.current && typeof nativeInputRef.current.showPicker === "function") {

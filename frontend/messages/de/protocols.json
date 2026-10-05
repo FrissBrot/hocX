@@ -15,8 +15,8 @@
   "blockTypeAttendance": "Anwesenheit",
   "blockTypeBulletList": "Aufzählung",
   "blockTypeChart": "Diagramm",
-  "blockTypeEntryExit": "Ein-/Austritte",
   "blockTypeDisplay": "Anzeige",
+  "blockTypeEntryExit": "Ein-/Austritte",
   "blockTypeFinanceBalance": "Kontostand",
   "blockTypeFinanceTransactions": "Transaktionen",
   "blockTypeFineList": "Bussenliste",
@@ -386,6 +386,8 @@
   },
   "searchLabel": "Suche",
   "searchParticipantsPlaceholder": "Teilnehmer suchen",
+  "sessionDatePickerHint": "Klicke auf einen Tag, um ihn zu übernehmen.",
+  "sessionDatePickerTitle": "Datum für den nächsten Hock",
   "sessionPanel": {
     "assignPlaceholder": "Person zuweisen…",
     "createTodoButton": "Todo erstellen",

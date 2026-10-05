@@ -15,8 +15,8 @@
   "blockTypeAttendance": "Presenza",
   "blockTypeBulletList": "Elenco puntato",
   "blockTypeChart": "Grafico",
-  "blockTypeEntryExit": "Entrate/uscite",
   "blockTypeDisplay": "Visualizzazione",
+  "blockTypeEntryExit": "Entrate/uscite",
   "blockTypeFinanceBalance": "Saldo conto",
   "blockTypeFinanceTransactions": "Transazioni",
   "blockTypeFineList": "Elenco multe",
@@ -386,6 +386,8 @@
   },
   "searchLabel": "Ricerca",
   "searchParticipantsPlaceholder": "Cerca partecipanti",
+  "sessionDatePickerHint": "Clicca su un giorno per selezionarlo.",
+  "sessionDatePickerTitle": "Data della prossima sessione",
   "sessionPanel": {
     "assignPlaceholder": "Assegna persona…",
     "createTodoButton": "Crea attività",

@@ -15,8 +15,8 @@
   "blockTypeAttendance": "Attendance",
   "blockTypeBulletList": "Bullet list",
   "blockTypeChart": "Chart",
-  "blockTypeEntryExit": "Entries/exits",
   "blockTypeDisplay": "Display",
+  "blockTypeEntryExit": "Entries/exits",
   "blockTypeFinanceBalance": "Account balance",
   "blockTypeFinanceTransactions": "Transactions",
   "blockTypeFineList": "Fines list",
@@ -386,6 +386,8 @@
   },
   "searchLabel": "Search",
   "searchParticipantsPlaceholder": "Search participants",
+  "sessionDatePickerHint": "Click a day to select it.",
+  "sessionDatePickerTitle": "Date for the next session",
   "sessionPanel": {
     "assignPlaceholder": "Assign person…",
     "createTodoButton": "Create todo",

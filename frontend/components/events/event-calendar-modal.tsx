@@ -19,8 +19,13 @@ type Props = {
   events: EventSummary[];
   todayIso: string;
   tagColor: (tag: string) => string;
-  onOpenEvent: (event: EventSummary) => void;
-  onCreateForDate: (iso: string) => void;
+  onOpenEvent?: (event: EventSummary) => void;
+  onCreateForDate?: (iso: string) => void;
+  /**
+   * Auswahlmodus (Date-Picker): ein Klick auf einen Tag übernimmt ihn über `onPick` und schliesst den
+   * Kalender. Die Seitenleiste mit Termindetails/Anlegen entfällt, der Kalender startet beim Wert.
+   */
+  pick?: { value: string | null; title: string; hint: string; onPick: (iso: string) => void };
 };
 
 function monthStartIso(year: number, month: number): string {
@@ -106,7 +111,7 @@ function tagStyle(color: string) {
   return { "--tag-color": color } as React.CSSProperties;
 }
 
-export function EventCalendarModal({ open, onClose, events, todayIso, tagColor, onOpenEvent, onCreateForDate }: Props) {
+export function EventCalendarModal({ open, onClose, events, todayIso, tagColor, onOpenEvent, onCreateForDate, pick }: Props) {
   const t = useTranslations("events");
   const locale = useLocale();
   const intlLocale = toIntlLocale(locale);
@@ -114,13 +119,24 @@ export function EventCalendarModal({ open, onClose, events, todayIso, tagColor, 
   const [cursor, setCursor] = useState(() => ({ year: 2000, month: 0 }));
   const [selectedIso, setSelectedIso] = useState(todayIso);
 
-  // Beim Öffnen immer auf heute springen.
+  // Beim Öffnen auf heute springen, im Auswahlmodus auf den aktuellen Wert.
+  const pickValue = pick?.value || null;
   useEffect(() => {
     if (!open) return;
-    const today = isoToUtcDate(todayIso);
-    setCursor({ year: today.getUTCFullYear(), month: today.getUTCMonth() });
-    setSelectedIso(todayIso);
-  }, [open, todayIso]);
+    const startIso = pickValue ?? todayIso;
+    const start = isoToUtcDate(startIso);
+    setCursor({ year: start.getUTCFullYear(), month: start.getUTCMonth() });
+    setSelectedIso(startIso);
+  }, [open, todayIso, pickValue]);
+
+  function selectDay(day: string) {
+    if (pick) {
+      pick.onPick(day);
+      onClose();
+      return;
+    }
+    setSelectedIso(day);
+  }
 
   const dayMap = useMemo(() => eventsByDay(events), [events]);
 
@@ -188,8 +204,9 @@ export function EventCalendarModal({ open, onClose, events, todayIso, tagColor, 
 
   const selectedEvents = dayMap.get(selectedIso) ?? [];
   const title = view === "month" ? formatters.monthYear.format(new Date(Date.UTC(cursor.year, cursor.month, 1))) : String(cursor.year);
-  const subtitle =
-    view === "month"
+  const subtitle = pick
+    ? pick.hint
+    : view === "month"
       ? t("calendar.monthSummary", { busy: monthStats.busy, total: monthStats.total })
       : t("calendar.yearSummary", { count: yearStats.count, busy: yearStats.busy });
 
@@ -234,7 +251,7 @@ export function EventCalendarModal({ open, onClose, events, todayIso, tagColor, 
                       aria-label={formatters.dayLong.format(date)}
                       className={className}
                       style={{ gridColumn: column + 1 }}
-                      onClick={() => setSelectedIso(day)}
+                      onClick={() => selectDay(day)}
                     >
                       <span className={`event-cal-day-number${hasEvents ? " event-cal-day-number-busy" : ""}`}>{label}</span>
                     </button>
@@ -345,7 +362,7 @@ export function EventCalendarModal({ open, onClose, events, todayIso, tagColor, 
                         aria-label={formatters.dayLong.format(isoToUtcDate(day))}
                         aria-pressed={day === selectedIso}
                         title={dayEvents.map((event) => event.title).join(", ") || undefined}
-                        onClick={() => setSelectedIso(day)}
+                        onClick={() => selectDay(day)}
                       >
                         {index + 1}
                       </button>
@@ -364,7 +381,7 @@ export function EventCalendarModal({ open, onClose, events, todayIso, tagColor, 
     <Modal
       open={open}
       onClose={onClose}
-      title={t("calendar.title")}
+      title={pick?.title ?? t("calendar.title")}
       size="fullscreen"
       className="event-calendar-modal"
       header={
@@ -397,60 +414,64 @@ export function EventCalendarModal({ open, onClose, events, todayIso, tagColor, 
         />
       }
     >
-      <div className="event-cal-body">
+      <div className={`event-cal-body${pick ? " event-cal-body-pick" : ""}`}>
         <div className="event-cal-main">{view === "month" ? renderMonth() : renderYear()}</div>
-        <aside className="event-cal-side">
-          <div className="event-cal-side-head">
-            <span className="event-cal-side-eyebrow">
-              {selectedEvents.length > 0 ? t("calendar.eventCount", { count: selectedEvents.length }) : t("calendar.freeDay")}
-            </span>
-            <h3 className="event-cal-side-title">{formatters.dayLong.format(isoToUtcDate(selectedIso))}</h3>
-          </div>
-          <div className="event-cal-side-body">
-            {selectedEvents.length === 0 ? (
-              <div className="event-cal-side-empty">
-                <strong>{t("calendar.noEventTitle")}</strong>
-                <span className="muted">{t("calendar.noEventDescription")}</span>
-              </div>
-            ) : (
-              <div className="event-cal-side-list">
-                {selectedEvents.map((event) => {
-                  const tag = (event.tag ?? "").trim();
-                  return (
-                    <button key={event.id} type="button" className="event-cal-side-event" onClick={() => onOpenEvent(event)}>
-                      <span className={`event-cal-side-event-title${event.is_cancelled ? " event-cal-side-event-cancelled" : ""}`}>{event.title}</span>
-                      <span className="event-list-row-meta">
-                        {tag ? (
-                          <span className="badge event-tag-badge" style={tagStyle(tagColor(tag))}>
-                            <span className="badge-dot" />
-                            {tag}
-                          </span>
-                        ) : null}
-                        {event.is_cancelled ? <Badge variant="danger">{t("columns.cancelled")}</Badge> : null}
-                        {event.location ? (
-                          <span className="event-list-meta-item">
-                            <EventIcon name="pin" width={14} height={14} />
-                            {event.location}
-                          </span>
-                        ) : null}
-                        {(event.participant_count ?? 0) > 0 ? (
-                          <span className="event-list-meta-item">
-                            <EventIcon name="users" width={14} height={14} />
-                            {event.participant_count}
-                          </span>
-                        ) : null}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <button type="button" className="button-primary event-cal-create" onClick={() => onCreateForDate(selectedIso)}>
-              <EventIcon name="plus" />
-              {t("calendar.createOnDay")}
-            </button>
-          </div>
-        </aside>
+        {pick ? null : (
+          <aside className="event-cal-side">
+            <div className="event-cal-side-head">
+              <span className="event-cal-side-eyebrow">
+                {selectedEvents.length > 0 ? t("calendar.eventCount", { count: selectedEvents.length }) : t("calendar.freeDay")}
+              </span>
+              <h3 className="event-cal-side-title">{formatters.dayLong.format(isoToUtcDate(selectedIso))}</h3>
+            </div>
+            <div className="event-cal-side-body">
+              {selectedEvents.length === 0 ? (
+                <div className="event-cal-side-empty">
+                  <strong>{t("calendar.noEventTitle")}</strong>
+                  <span className="muted">{t("calendar.noEventDescription")}</span>
+                </div>
+              ) : (
+                <div className="event-cal-side-list">
+                  {selectedEvents.map((event) => {
+                    const tag = (event.tag ?? "").trim();
+                    return (
+                      <button key={event.id} type="button" className="event-cal-side-event" onClick={() => onOpenEvent?.(event)}>
+                        <span className={`event-cal-side-event-title${event.is_cancelled ? " event-cal-side-event-cancelled" : ""}`}>{event.title}</span>
+                        <span className="event-list-row-meta">
+                          {tag ? (
+                            <span className="badge event-tag-badge" style={tagStyle(tagColor(tag))}>
+                              <span className="badge-dot" />
+                              {tag}
+                            </span>
+                          ) : null}
+                          {event.is_cancelled ? <Badge variant="danger">{t("columns.cancelled")}</Badge> : null}
+                          {event.location ? (
+                            <span className="event-list-meta-item">
+                              <EventIcon name="pin" width={14} height={14} />
+                              {event.location}
+                            </span>
+                          ) : null}
+                          {(event.participant_count ?? 0) > 0 ? (
+                            <span className="event-list-meta-item">
+                              <EventIcon name="users" width={14} height={14} />
+                              {event.participant_count}
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {onCreateForDate ? (
+                <button type="button" className="button-primary event-cal-create" onClick={() => onCreateForDate(selectedIso)}>
+                  <EventIcon name="plus" />
+                  {t("calendar.createOnDay")}
+                </button>
+              ) : null}
+            </div>
+          </aside>
+        )}
       </div>
     </Modal>
   );
