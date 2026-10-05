@@ -8,6 +8,42 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+Enthält die Migration `0101`; sie läuft beim Deploy automatisch.
+
+### Neu
+
+- Neuer Blocktyp «Sitzungsnotizen»: zeigt die freien Notizen aus dem Sitzungspanel als
+  eigenen Block im Protokoll und im PDF-Export, ohne die Sitzungs-Todos. Der Block ist
+  nur drin, wenn er in einer Vorlage hinzugefügt wird; bestehende Vorlagen und
+  Protokolle bleiben unverändert. Im Protokoll ist er schreibgeschützt, geschrieben wird
+  weiterhin im Sitzungspanel. Migration `0101` legt den Typ (id 17) an.
+- Der Kalender-Button beim Sitzungsdatum öffnet die Terminübersicht; ein Klick auf einen
+  Tag übernimmt das Datum («Nächster Hock»). In der Elementvorlage Sitzungsdatum legt
+  ein Tag-Filter fest, welche Termine im Kalender erscheinen (leer = alle).
+
+### Geändert
+
+- Monatskalender in Wochenzeilen: mehrtägige Termine laufen als durchgehender Balken
+  über ihre Tage, überlappende Termine bekommen eigene Zeilen, ab der vierten Zeile
+  «+N weitere».
+- Die Terminübersicht startet bei der «Heute»-Linie; vergangene Termine per
+  Hochscrollen. Auf dem Desktop scrollt nur die Terminliste, Kopfzeile, Toolbar und
+  Tag-Leiste bleiben stehen. Beginnt ein Monat mit dem ersten kommenden Termin, steht
+  die «Heute»-Linie vor dessen Monatsüberschrift.
+- Beim Öffnen eines Protokolls springt die Ansicht direkt zum zuletzt aktiven bzw.
+  ersten Punkt, statt auf dem Leerraum über dem ersten Punkt stehenzubleiben.
+- Fotogalerie: Kacheln wieder in der Grösse vor dem Umbau (automatische Spaltenzahl,
+  ca. 180px breit, schmalerer Abstand) statt fester 4/3/2 Spalten; das
+  Vergrössern-Icon auf den Kacheln entfällt.
+- Dateityp-Icons in der Dateiliste sind kleiner.
+
+### Behoben
+
+- Die Anwesenheitsauswahl im Protokoll verschwand nach dem Klick sofort wieder, weil
+  die Serverantwort die interne statt der öffentlichen Teilnehmer-ID enthielt. Dieselbe
+  Ursache setzte die Anwesenheit beim Neuladen eines Protokolls auf «Unentschuldigt»
+  zurück.
+
 ## [1.1.7] - 2026-10-05
 
 Feature-Release auf 1.1.6 mit zyklusbasierter Protokoll-Gruppierung, automatischem
