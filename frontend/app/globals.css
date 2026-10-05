@@ -18935,3 +18935,97 @@ input[type="radio"] {
   .photo-bulk-actions > * { flex-shrink: 0; }
   .photo-date-heading .photo-date-weekday { font-size: var(--text-lg); }
 }
+
+/* Block-Konfiguration: ruhige Formularflaechen und kompakte Zyklusauswahl. */
+.element-edit-modal.modal-shell {
+  width: min(1040px, 100%);
+  background: var(--panel-solid);
+}
+
+.element-edit-modal .modal-header {
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.element-edit-modal .modal-header h2 {
+  font-size: var(--text-xl);
+}
+
+.element-edit-modal .settings-section {
+  border-radius: var(--radius-lg);
+  background: var(--panel-solid);
+}
+
+.element-edit-modal .settings-section-copy p,
+.element-edit-modal .rule-option-card .muted {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+.element-edit-modal .field-label {
+  font-size: var(--text-sm);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.element-edit-modal .rule-option-grid {
+  gap: var(--space-3);
+}
+
+.element-edit-modal .rule-option-card {
+  border-radius: var(--radius-md);
+  align-content: start;
+}
+
+.element-edit-modal .rule-option-card-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.chart-cycle-selection {
+  gap: var(--space-3);
+}
+
+.chart-cycle-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+
+.chart-cycle-options .button-pill {
+  min-height: 40px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text);
+  --button-bg: var(--panel-solid);
+  --button-hover-bg: var(--neutral-bg);
+  background: var(--button-bg);
+}
+
+.chart-cycle-options .button-pill-active {
+  border-color: var(--accent);
+  --button-bg: var(--accent-soft);
+  --button-hover-bg: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .chart-cycle-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chart-cycle-options .button-pill {
+    width: 100%;
+    padding: var(--space-2);
+    white-space: normal;
+  }
+}

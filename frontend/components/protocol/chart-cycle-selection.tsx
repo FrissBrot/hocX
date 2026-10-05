@@ -21,7 +21,7 @@ export function ChartCycleSelection({ config, onChange }: { config: CycleSelecti
     return () => { cancelled = true; };
   }, []);
   return (
-    <div className="field-stack">
+    <div className="field-stack chart-cycle-selection">
       <span className="field-label">{t("cycleLabel")}</span>
       <SearchableSelect
         options={configs}
@@ -32,9 +32,9 @@ export function ChartCycleSelection({ config, onChange }: { config: CycleSelecti
         onChange={(c) => onChange({ cycle_config_id: c?.id ?? null, cycle_offset: config.cycle_offset ?? 0 })}
       />
       {config.cycle_config_id && (
-        <div className="subm-edit-chips">
+        <div className="chart-cycle-options" role="group" aria-label={t("cycleLabel")}>
           {CYCLE_OFFSET_OPTIONS.map((offset) => (
-            <button key={offset} type="button" className="subm-edit-chip"
+            <button key={offset} type="button" className={`button-pill${(config.cycle_offset ?? 0) === offset ? " button-pill-active" : ""}`}
               aria-pressed={(config.cycle_offset ?? 0) === offset}
               onClick={() => onChange({ ...config, cycle_offset: offset })}>
               {cycleOffsetLabel(offset, t)}
