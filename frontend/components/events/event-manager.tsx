@@ -23,7 +23,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
-import { getCycleYear } from "@/lib/utils/cycle";
+import { formatCycleName, getCycleYear } from "@/lib/utils/cycle";
 import { formatDate, formatDateRange, toIntlLocale } from "@/lib/utils/format";
 import {
   CycleConfigSummary,
@@ -69,6 +69,9 @@ type TimeFilter = "upcoming" | "all" | "past";
 // Sidebar-Eintrag für Termine ohne Tag.
 const NO_TAG_FILTER = "__no_tag__";
 
+// Zyklus-Filter: aktuelle Periode aller Zyklen oder nur eines bestimmten (Zyklus-ID).
+const ALL_CYCLES_FILTER = "all";
+
 type Props = {
   initialEvents: EventSummary[];
   documentTemplates?: DocumentTemplate[];
@@ -97,6 +100,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const { tagConfig, updateTagColor, renameTag } = useTagConfig();
   const [cycleConfigs, setCycleConfigs] = useState<CycleConfigSummary[]>([]);
   const [showAllPeriods, setShowAllPeriods] = useState(false);
+  const [cycleFilter, setCycleFilter] = useState(ALL_CYCLES_FILTER);
 
 
   const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; event: EventSummary } | null>(null);
@@ -252,14 +256,26 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       ).sort((left, right) => left.localeCompare(right)),
     [events]
   );
+  // Zyklen, deren aktuelle Periode gilt: standardmässig alle, im Filter wählbar ein einzelner.
+  const activeCycles = useMemo(() => {
+    const selected = cycleConfigs.filter((config) => cycleFilter === ALL_CYCLES_FILTER || config.id === cycleFilter);
+    return (selected.length > 0 ? selected : cycleConfigs).map((config) => ({
+      config,
+      currentYear: getCycleYear(todayIso, config.reset_month, config.reset_day),
+    }));
+  }, [cycleConfigs, cycleFilter, todayIso]);
+
+  // Ein Termin gehört zur aktuellen Periode, wenn er zeitlich in sie fällt (auch mehrtägig
+  // überlappend) oder ausdrücklich mit ihr verknüpft ist.
   function isInCurrentPeriod(event: EventSummary): boolean {
-    if (!event.cycle_assignments || event.cycle_assignments.length === 0 || cycleConfigs.length === 0) {
-      return true;
-    }
-    return event.cycle_assignments.some((assignment) => {
-      const config = cycleConfigs.find((c) => c.id === assignment.cycle_config_id);
-      if (!config) return true;
-      return assignment.cycle_year === getCycleYear(todayIso, config.reset_month, config.reset_day);
+    if (activeCycles.length === 0) return true;
+    return activeCycles.some(({ config, currentYear }) => {
+      const startYear = getCycleYear(event.event_date, config.reset_month, config.reset_day);
+      const endYear = getCycleYear(effectiveEndDate(event), config.reset_month, config.reset_day);
+      if (startYear <= currentYear && currentYear <= endYear) return true;
+      return (event.cycle_assignments ?? []).some(
+        (assignment) => assignment.cycle_config_id === config.id && assignment.cycle_year === currentYear
+      );
     });
   }
 
@@ -267,7 +283,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const periodEvents = useMemo(
     () => (showAllPeriods ? events : events.filter((event) => isInCurrentPeriod(event))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cycleConfigs, events, showAllPeriods, todayIso]
+    [activeCycles, events, showAllPeriods]
   );
 
   const tagCounts = useMemo(() => {
@@ -281,6 +297,14 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     const tags = Array.from(counts.entries()).sort(([left], [right]) => left.localeCompare(right));
     return { tags, untagged };
   }, [periodEvents]);
+
+  // Verschwindet der gewählte Tag durch einen Zykluswechsel aus der Seitenleiste, wieder alle zeigen.
+  useEffect(() => {
+    if (tagFilter === "all") return;
+    const stillListed =
+      tagFilter === NO_TAG_FILTER ? tagCounts.untagged > 0 : tagCounts.tags.some(([tag]) => tag === tagFilter);
+    if (!stillListed) setTagFilter("all");
+  }, [tagCounts, tagFilter]);
 
   const upcomingCount = useMemo(() => events.filter((event) => effectiveEndDate(event) >= todayIso).length, [events, todayIso]);
 
@@ -359,23 +383,36 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     };
   }, [events.length === 0 && !hasMore]);
 
-  // Beim ersten Anzeigen so scrollen, dass die „Heute"-Linie oben steht: darunter die kommenden,
-  // darüber (per Hochscrollen) die vergangenen Termine.
+  // Beim ersten Anzeigen und nach jedem Filterwechsel (Tag, Zeit, Zyklus) so scrollen, dass die
+  // „Heute"-Linie mit etwas Abstand oben steht: darunter die kommenden, darüber die vergangenen
+  // Termine. Den Abstand liefert `scroll-margin-top` der Linie (globals.css).
   const todayMarkerRef = useRef<HTMLDivElement | null>(null);
-  const scrolledToTodayRef = useRef(false);
-  useEffect(() => {
-    const marker = todayMarkerRef.current;
+  const scrolledFilterKeyRef = useRef<string | null>(null);
+  // Datum und Zyklen kommen erst nach dem ersten Rendern an und zählen deshalb ebenfalls als Wechsel.
+  const scrollFilterKey = `${todayIso}|${cycleConfigs.length}|${tagFilter}|${timeFilter}|${showAllPeriods}|${cycleFilter}`;
+  useLayoutEffect(() => {
     const list = eventListRef.current;
     // Erst nach dem Messen, sonst hat die Liste noch keine Höhenbegrenzung.
-    if (scrolledToTodayRef.current || eventListTop === null || !todayMarkerEventId || !marker || !list) return;
-    scrolledToTodayRef.current = true;
-    if (list.scrollHeight > list.clientHeight) {
-      // Desktop: nur die Liste scrollt, nicht die Seite.
-      list.scrollTop = marker.offsetTop;
-    } else {
-      marker.scrollIntoView({ block: "start" });
+    if (scrolledFilterKeyRef.current === scrollFilterKey || eventListTop === null || !list) return;
+    if (filteredEvents.length === 0) return;
+    scrolledFilterKeyRef.current = scrollFilterKey;
+    const marker = todayMarkerEventId ? todayMarkerRef.current : null;
+    const listScrolls = list.scrollHeight > list.clientHeight;
+    if (marker) {
+      if (listScrolls) {
+        // Desktop: nur die Liste scrollt, nicht die Seite.
+        const margin = parseFloat(window.getComputedStyle(marker).scrollMarginTop) || 0;
+        const offset = marker.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+        list.scrollTop = Math.max(0, offset - margin);
+      } else {
+        marker.scrollIntoView({ block: "start" });
+      }
+    } else if (listScrolls) {
+      // Ohne Linie: nur Vergangenes → ans Ende (neueste zuerst sichtbar), sonst an den Anfang.
+      const allPast = timeFilter !== "upcoming" && filteredEvents.every((event) => effectiveEndDate(event) < todayIso);
+      list.scrollTop = allPast ? list.scrollHeight : 0;
     }
-  }, [todayMarkerEventId, eventListTop]);
+  }, [scrollFilterKey, todayMarkerEventId, eventListTop, filteredEvents, timeFilter, todayIso]);
 
   function renderTodayMarker() {
     return (
@@ -796,6 +833,35 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                       />
                       <span className="mini-menu-switch" aria-hidden="true" />
                     </label>
+                  </div>
+                )}
+                {cycleConfigs.length > 1 && !showAllPeriods && (
+                  <div className="mini-menu-section" role="radiogroup" aria-label={t("cycleFilter.title")}>
+                    <div className="mini-menu-section-title">{t("cycleFilter.title")}</div>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={cycleFilter === ALL_CYCLES_FILTER}
+                      className={`mini-menu-option${cycleFilter === ALL_CYCLES_FILTER ? " mini-menu-option-active" : ""}`}
+                      onClick={() => setCycleFilter(ALL_CYCLES_FILTER)}
+                    >
+                      <span>{t("cycleFilter.all")}</span>
+                    </button>
+                    {cycleConfigs.map((config) => (
+                      <button
+                        key={config.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={cycleFilter === config.id}
+                        className={`mini-menu-option${cycleFilter === config.id ? " mini-menu-option-active" : ""}`}
+                        onClick={() => setCycleFilter(config.id)}
+                      >
+                        <span>{config.name}</span>
+                        <span className="mini-menu-option-subtle">
+                          {formatCycleName(config.name_pattern, getCycleYear(todayIso, config.reset_month, config.reset_day))}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 )}
                 <div className="mini-menu-section">

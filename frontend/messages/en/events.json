@@ -195,6 +195,10 @@
   "searchPlaceholder": "Search events",
   "selectedCount": "{count} selected",
   "showAllPeriods": "Show all cycle periods",
+  "cycleFilter": {
+    "title": "Cycle",
+    "all": "All cycles"
+  },
   "tagSidebar": {
     "all": "All events",
     "title": "Tags"

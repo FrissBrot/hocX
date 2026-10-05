@@ -195,6 +195,10 @@
   "searchPlaceholder": "Termine durchsuchen",
   "selectedCount": "{count} ausgewählt",
   "showAllPeriods": "Alle Zyklus-Perioden anzeigen",
+  "cycleFilter": {
+    "title": "Zyklus",
+    "all": "Alle Zyklen"
+  },
   "tagSidebar": {
     "all": "Alle Termine",
     "title": "Tags"

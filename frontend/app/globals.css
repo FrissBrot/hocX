@@ -17680,7 +17680,8 @@ input[type="radio"] {
 }
 
 .event-today-marker {
-  scroll-margin-top: var(--space-4);
+  /* Abstand beim automatischen Scrollen: etwas Vergangenes bleibt über der Linie sichtbar. */
+  scroll-margin-top: 112px;
   display: flex;
   align-items: center;
   gap: var(--space-3);
