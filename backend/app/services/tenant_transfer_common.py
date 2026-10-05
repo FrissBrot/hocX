@@ -320,6 +320,8 @@ def remap_block_configuration(
     list_definition_map: dict[int, int],
     list_entry_map: dict[int, int],
     finance_account_map: dict[int, int],
+    participant_public_ids: dict[str, int] | None = None,
+    event_public_ids: dict[str, int] | None = None,
 ) -> dict:
     """Remaps every participant/event/list/finance-account id embedded in a block's
     configuration. Shape is shared between template_element_block.configuration_json (the
@@ -329,14 +331,32 @@ def remap_block_configuration(
     pointing at a row from the source tenant/instance."""
     config = copy.deepcopy(config or {})
 
+    # Teilnehmer/Events, die im Protokoll-Editor gewaehlt wurden, stehen im Snapshot als
+    # public UUID statt als interne int-ID (siehe snapshot_reference_ids.py). Ohne diese
+    # Rueckuebersetzung ueber participant_public_ids/event_public_ids (str(public_id) ->
+    # alte interne ID) wuerden sie beim Klonen/Importieren stillschweigend verworfen
+    # (Bug 2026-10-05).
+    def map_participant(ref):
+        if isinstance(ref, str) and participant_public_ids:
+            ref = participant_public_ids.get(ref.lower(), ref)
+        return participant_map.get(ref)
+
+    def map_event(ref):
+        if isinstance(ref, str) and event_public_ids:
+            ref = event_public_ids.get(ref.lower(), ref)
+        return event_map.get(ref)
+
+    def map_participants(refs: list) -> list:
+        return [mapped for mapped in (map_participant(ref) for ref in refs) if mapped is not None]
+
     def remap_value(value: dict) -> dict:
         value = dict(value)
         if "participant_id" in value:
-            value["participant_id"] = participant_map.get(value["participant_id"])
+            value["participant_id"] = map_participant(value["participant_id"])
         if isinstance(value.get("participant_ids"), list):
-            value["participant_ids"] = [participant_map[i] for i in value["participant_ids"] if i in participant_map]
+            value["participant_ids"] = map_participants(value["participant_ids"])
         if "event_id" in value:
-            value["event_id"] = event_map.get(value["event_id"])
+            value["event_id"] = map_event(value["event_id"])
         return value
 
     def remap_list_link(container: dict) -> dict:
@@ -368,7 +388,7 @@ def remap_block_configuration(
     entries = config.get("attendance_entries")
     if isinstance(entries, list):
         config["attendance_entries"] = [
-            {**entry, "participant_id": participant_map.get(entry.get("participant_id"))} if isinstance(entry, dict) else entry
+            {**entry, "participant_id": map_participant(entry.get("participant_id"))} if isinstance(entry, dict) else entry
             for entry in entries
         ]
 
@@ -383,13 +403,11 @@ def remap_block_configuration(
             if isinstance(new_row.get("row_config"), dict):
                 new_row["row_config"] = remap_list_link(new_row["row_config"])
             if "template_participant_id" in new_row:
-                new_row["template_participant_id"] = participant_map.get(new_row["template_participant_id"])
+                new_row["template_participant_id"] = map_participant(new_row["template_participant_id"])
             if isinstance(new_row.get("template_participant_ids"), list):
-                new_row["template_participant_ids"] = [
-                    participant_map[i] for i in new_row["template_participant_ids"] if i in participant_map
-                ]
+                new_row["template_participant_ids"] = map_participants(new_row["template_participant_ids"])
             if "template_event_id" in new_row:
-                new_row["template_event_id"] = event_map.get(new_row["template_event_id"])
+                new_row["template_event_id"] = map_event(new_row["template_event_id"])
             new_rows.append(new_row)
         config["rows"] = new_rows
 

@@ -21,7 +21,7 @@ from app.schemas.protocol import (
     ProtocolTextUpdate,
 )
 from app.services import list_snapshot_service, public_id_service
-from app.services.snapshot_reference_ids import snapshot_reference_ids, translate_attendance_entries
+from app.services.snapshot_reference_ids import normalize_attendance_entries, snapshot_reference_ids, translate_attendance_entries, translate_participant_refs
 from app.services.autosave_service import AutosaveService
 from app.services.access_service import AccessService
 from app.services.collaboration_service import conflicting_lock_holder_sync, protocol_channel
@@ -91,6 +91,7 @@ def _block_to_read(db: Session, block) -> ProtocolElementBlockRead:
     element = db.get(ProtocolElement, block.protocol_element_id)
     protocol = db.get(Protocol, element.protocol_id)
     config = translate_attendance_entries(db, block.configuration_snapshot_json or {})
+    config = translate_participant_refs(db, config, protocol.tenant_id)
     return ProtocolElementBlockRead(
         id=block.public_id,
         protocol_element_id=public_id_service.resolve_public_id(db, ProtocolElement, block.protocol_element_id),
@@ -186,6 +187,8 @@ def patch_protocol_element_block(
     require_writer(user)
     existing, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     _ensure_block_not_locked_by_other(protocol.id, existing.id, user)
+    if payload.configuration_snapshot_json is not None:
+        payload.configuration_snapshot_json = normalize_attendance_entries(db, payload.configuration_snapshot_json, protocol.tenant_id)
     try:
         protocol_element_block = service.update_protocol_element_block(db, existing.id, payload)
     except SQLAlchemyError as exc:

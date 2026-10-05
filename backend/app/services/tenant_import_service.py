@@ -198,6 +198,10 @@ class TenantImportService:
         part_map = self._import_document_template_parts(new_tenant.id)
         document_template_map = self._import_document_templates(new_tenant.id, part_map)
         event_map = self._import_events(new_tenant.id, group_map, participant_map)
+        # Fuer im Editor gewaehlte (als public UUID gespeicherte) Referenzen in Block-Snapshots,
+        # siehe remap_block_configuration. Exporte vor Format 2 haben keine public_id-Spalte.
+        self._participant_public_ids = {str(row["public_id"]).lower(): row["id"] for row in self._t("participant") if row.get("public_id")}
+        self._event_public_ids = {str(row["public_id"]).lower(): row["id"] for row in self._t("event") if row.get("public_id")}
         self._import_event_cycles(event_map, cycle_config_map)
         list_definition_map = self._import_simple(ListDefinition, self._t("list_definition"), "list_definition", {"tenant_id": new_tenant.id})
         list_entry_map = self._import_list_entries(list_definition_map, participant_map, event_map)
@@ -631,6 +635,7 @@ class TenantImportService:
                     row.get("configuration_override_json"), participant_map=participant_map,
                     event_map=event_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
                     finance_account_map=finance_account_map,
+                    participant_public_ids=self._participant_public_ids, event_public_ids=self._event_public_ids,
                 ),
             })
             self.db.add(new_row)
@@ -871,6 +876,7 @@ class TenantImportService:
                     data.get("configuration_snapshot_json"), participant_map=participant_map,
                     event_map=event_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
                     finance_account_map=finance_account_map,
+                    participant_public_ids=self._participant_public_ids, event_public_ids=self._event_public_ids,
                 ),
             })
             self.db.add(new_row)

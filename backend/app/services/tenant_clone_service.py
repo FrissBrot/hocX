@@ -189,6 +189,16 @@ class TenantCloneService:
         part_map = self._clone_document_template_parts(db, source.id, new_tenant.id)
         document_template_map = self._clone_document_templates(db, source.id, new_tenant.id, part_map)
         event_map = self._clone_events(db, source.id, new_tenant.id, group_map=group_map, participant_map=participant_map)
+        # Fuer im Editor gewaehlte (als public UUID gespeicherte) Referenzen in Block-Snapshots,
+        # siehe remap_block_configuration.
+        self._participant_public_ids = {
+            str(public_id): internal_id
+            for internal_id, public_id in db.execute(select(Participant.id, Participant.public_id).where(Participant.tenant_id == source.id)).all()
+        }
+        self._event_public_ids = {
+            str(public_id): internal_id
+            for internal_id, public_id in db.execute(select(Event.id, Event.public_id).where(Event.tenant_id == source.id)).all()
+        }
         self._clone_event_cycles(db, event_map=event_map, cycle_config_map=cycle_config_map)
         list_definition_map = self._clone_list_definitions(db, source.id, new_tenant.id)
         list_entry_map = self._clone_list_entries(
@@ -484,6 +494,8 @@ class TenantCloneService:
                         list_definition_map=list_definition_map,
                         list_entry_map=list_entry_map,
                         finance_account_map=finance_account_map,
+                        participant_public_ids=self._participant_public_ids,
+                        event_public_ids=self._event_public_ids,
                     ),
                 })
                 db.add(new_row)
@@ -821,6 +833,7 @@ class TenantCloneService:
                     row.configuration_snapshot_json, participant_map=participant_map,
                     event_map=event_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
                     finance_account_map=finance_account_map,
+                    participant_public_ids=self._participant_public_ids, event_public_ids=self._event_public_ids,
                 ),
             })
             db.add(new_row)

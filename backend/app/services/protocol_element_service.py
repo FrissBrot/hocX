@@ -14,7 +14,7 @@ from app.schemas.protocol import (
     ProtocolElementRead,
     ProtocolElementUpdate,
 )
-from app.services.snapshot_reference_ids import snapshot_reference_ids, translate_attendance_entries
+from app.services.snapshot_reference_ids import snapshot_reference_ids, translate_attendance_entries, translate_participant_refs
 from app.services import public_id_service
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 
@@ -61,6 +61,8 @@ class ProtocolElementService:
                         config[fine_key] = fine_source[fine_key]
             if row.element_type_code == "attendance":
                 config = translate_attendance_entries(db, config)
+            if protocol_tenant_id is not None:
+                config = translate_participant_refs(db, config, protocol_tenant_id)
             blocks_by_element.setdefault(block.protocol_element_id, []).append(
                 ProtocolElementBlockRead(
                     id=block.public_id,

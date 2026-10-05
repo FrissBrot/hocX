@@ -955,7 +955,7 @@ Status: {protocol_status}
                 )
             return "\n".join(parts)
         if block.element_type_id == 6:
-            linked_list_id = int((block.configuration_snapshot_json or {}).get("linked_list_id") or 0)
+            linked_list_id = self._ref_to_internal_id(db, ListDefinition, (block.configuration_snapshot_json or {}).get("linked_list_id"), tenant_id)
             if linked_list_id:
                 return self._linked_list_content(db, linked_list_id, block.configuration_snapshot_json or {}, tenant_id)
             rows = block.configuration_snapshot_json.get("rows", []) if block.configuration_snapshot_json else []
@@ -1018,7 +1018,7 @@ Status: {protocol_status}
             for entry in entries:
                 participant_name = entry.get("participant_name")
                 if not participant_name and entry.get("participant_id"):
-                    participant = db.get(Participant, int(entry["participant_id"]))
+                    participant = self._participant_by_ref(db, entry["participant_id"], tenant_id)
                     participant_name = participant.display_name if participant else "Unbekannt"
                 raw_status = entry.get("status", "absent")
                 if raw_status in counts:
@@ -1401,7 +1401,7 @@ Status: {protocol_status}
         return "\n".join(lines)
 
     def _finance_balance_content(self, db: Session, config: dict, tenant_id: int) -> str:
-        account_id = int(config.get("finance_account_id") or 0)
+        account_id = self._ref_to_internal_id(db, FinanceAccount, config.get("finance_account_id"), tenant_id)
         if not account_id:
             return "Kein Konto konfiguriert."
         account = db.get(FinanceAccount, account_id)
@@ -1421,7 +1421,7 @@ Status: {protocol_status}
         return self._escape_latex(f"{account.name}: {amount_str} {account.currency_label}") + "\n\n"
 
     def _finance_transactions_content(self, db: Session, config: dict, block, tenant_id: int) -> str:
-        account_id = int(config.get("finance_account_id") or 0)
+        account_id = self._ref_to_internal_id(db, FinanceAccount, config.get("finance_account_id"), tenant_id)
         if not account_id:
             return "Kein Konto konfiguriert."
         account = db.get(FinanceAccount, account_id)
@@ -1487,6 +1487,37 @@ Status: {protocol_status}
                 return f"{day}.{month}.{year}"
             return value
 
+    @staticmethod
+    def _ref_to_internal_id(db: Session, model: type, ref, tenant_id: int) -> int | None:
+        """Referenzen in configuration_snapshot_json (Teilnehmer, Events, Listen, Konten, ...)
+        sind gemischt: aus der Vorlage vorbefuellte Werte sind interne ints, im Editor
+        gewaehlte bzw. vom Lesepfad (snapshot_reference_ids.translate_*) uebersetzte und vom
+        Client zurueckgespeicherte Werte sind public UUIDs. Ein nacktes int(ref) crasht den
+        Export dann mit "invalid literal for int() with base 10: '<uuid>'" (Bug 2026-10-05).
+        UUIDs werden tenant-gebunden aufgeloest; die Tenant-Pruefung fuer interne ints bleibt
+        Sache des Aufrufers. Unbekanntes/Leeres ergibt None."""
+        if ref is None or isinstance(ref, bool) or ref == "":
+            return None
+        if isinstance(ref, int):
+            return ref or None
+        try:
+            public_id = uuid.UUID(str(ref))
+        except ValueError:
+            return int(str(ref)) or None if str(ref).isdigit() else None
+        return public_id_service.resolve_internal_id(db, model, public_id, tenant_id=tenant_id)
+
+    def _participant_by_ref(self, db: Session, ref, tenant_id: int) -> Participant | None:
+        return self._entity_by_ref(db, Participant, ref, tenant_id)
+
+    def _event_by_ref(self, db: Session, ref, tenant_id: int) -> Event | None:
+        return self._entity_by_ref(db, Event, ref, tenant_id)
+
+    def _entity_by_ref(self, db: Session, model: type, ref, tenant_id: int):
+        """Wie _ref_to_internal_id, laedt aber direkt das Objekt und prueft den Tenant."""
+        internal_id = self._ref_to_internal_id(db, model, ref, tenant_id)
+        entity = db.get(model, internal_id) if internal_id is not None else None
+        return entity if entity is not None and entity.tenant_id == tenant_id else None
+
     def _form_row_value(self, db: Session, row: dict, tenant_id: int) -> str:
         # participant_id/participant_ids/event_id are client-supplied via
         # configuration_snapshot_json - without the tenant checks below a writer could embed
@@ -1494,17 +1525,14 @@ Status: {protocol_status}
         # via PDF export (audit finding, 2026-08-25).
         value_type = row.get("value_type") or row.get("row_type") or "text"
         if value_type == "participant" and row.get("participant_id"):
-            participant = db.get(Participant, int(row["participant_id"]))
-            return participant.display_name if participant and participant.tenant_id == tenant_id else ""
+            participant = self._participant_by_ref(db, row["participant_id"], tenant_id)
+            return participant.display_name if participant else ""
         if value_type == "participants" and row.get("participant_ids"):
-            participants = [
-                db.get(Participant, int(participant_id))
-                for participant_id in row.get("participant_ids", [])
-            ]
-            return ", ".join(participant.display_name for participant in participants if participant and participant.tenant_id == tenant_id)
+            participants = [self._participant_by_ref(db, participant_id, tenant_id) for participant_id in row.get("participant_ids", [])]
+            return ", ".join(participant.display_name for participant in participants if participant)
         if value_type == "event" and row.get("event_id"):
-            event = db.get(Event, int(row["event_id"]))
-            if not event or event.tenant_id != tenant_id:
+            event = self._event_by_ref(db, row["event_id"], tenant_id)
+            if not event:
                 return ""
             event_end_date = event.event_end_date or event.event_date
             date_part = (
@@ -1540,8 +1568,10 @@ Status: {protocol_status}
             entry_id = row.get("linked_list_entry_id")
             if not list_id or not entry_id:
                 return str(row.get("label") or "").strip(), ""
-            definition = db.get(ListDefinition, int(list_id))
-            entry = db.get(ListEntry, int(entry_id))
+            definition_id = self._ref_to_internal_id(db, ListDefinition, list_id, tenant_id)
+            entry_internal_id = self._ref_to_internal_id(db, ListEntry, entry_id, tenant_id)
+            definition = db.get(ListDefinition, definition_id) if definition_id else None
+            entry = db.get(ListEntry, entry_internal_id) if entry_internal_id else None
             if (
                 definition is None
                 or entry is None
@@ -1573,29 +1603,22 @@ Status: {protocol_status}
 
     def _linked_list_sort_text(self, db: Session, *, value_type: str, value: dict, tenant_id: int) -> str:
         if value_type == "participant":
-            participant_id = int(value.get("participant_id") or 0)
-            if not participant_id:
-                return ""
-            participant = db.get(Participant, participant_id)
-            return str(participant.display_name if participant and participant.tenant_id == tenant_id else "").strip()
+            participant = self._participant_by_ref(db, value.get("participant_id"), tenant_id)
+            return str(participant.display_name if participant else "").strip()
         if value_type == "participants":
-            participant_ids = [int(item) for item in (value.get("participant_ids") or []) if int(item)]
-            if not participant_ids:
-                return ""
             participants = [
                 participant
-                for participant_id in participant_ids
-                for participant in [db.get(Participant, participant_id)]
-                if participant is not None and participant.tenant_id == tenant_id
+                for participant_id in (value.get("participant_ids") or [])
+                for participant in [self._participant_by_ref(db, participant_id, tenant_id)]
+                if participant is not None
             ]
+            if not participants:
+                return ""
             participants.sort(key=lambda participant: (participant.display_name.casefold(), participant.id))
             return ", ".join(participant.display_name for participant in participants)
         if value_type == "event":
-            event_id = int(value.get("event_id") or 0)
-            if not event_id:
-                return ""
-            event = db.get(Event, event_id)
-            return str(event.title if event and event.tenant_id == tenant_id else "").strip()
+            event = self._event_by_ref(db, value.get("event_id"), tenant_id)
+            return str(event.title if event else "").strip()
         return str(value.get("text_value") or "").strip()
 
     def _linked_list_sort_key(self, value: str) -> str:
@@ -1650,8 +1673,8 @@ Status: {protocol_status}
         filter_column = str(config.get("linked_list_filter_column") or "").strip()
         if filter_column in {"column_one", "column_two"}:
             _, filter_value_type = self._linked_list_column_meta(definition, filter_column)
-            filter_participant_id = config.get("linked_list_filter_participant_id")
-            filter_event_id = config.get("linked_list_filter_event_id")
+            filter_participant_id = self._ref_to_internal_id(db, Participant, config.get("linked_list_filter_participant_id"), tenant_id)
+            filter_event_id = self._ref_to_internal_id(db, Event, config.get("linked_list_filter_event_id"), tenant_id)
             filter_text = str(config.get("linked_list_filter_text") or "").strip().lower()
 
             def _entry_matches(entry: ListEntry) -> bool:
@@ -1659,16 +1682,16 @@ Status: {protocol_status}
                 if filter_value_type == "participant":
                     if not filter_participant_id:
                         return True
-                    return int(value.get("participant_id") or 0) == int(filter_participant_id)
+                    return self._ref_to_internal_id(db, Participant, value.get("participant_id"), tenant_id) == filter_participant_id
                 if filter_value_type == "participants":
                     if not filter_participant_id:
                         return True
-                    ids = [int(x) for x in (value.get("participant_ids") or []) if x]
-                    return int(filter_participant_id) in ids
+                    ids = [self._ref_to_internal_id(db, Participant, x, tenant_id) for x in (value.get("participant_ids") or [])]
+                    return filter_participant_id in ids
                 if filter_value_type == "event":
                     if not filter_event_id:
                         return True
-                    return int(value.get("event_id") or 0) == int(filter_event_id)
+                    return self._ref_to_internal_id(db, Event, value.get("event_id"), tenant_id) == filter_event_id
                 if not filter_text:
                     return True
                 return filter_text in str(value.get("text_value") or "").lower()
@@ -1966,7 +1989,7 @@ Status: {protocol_status}
             return self._latex_multiline("\n".join(labels))
 
         if element_type_id == 6:
-            linked_list_id = int(config.get("linked_list_id") or 0)
+            linked_list_id = self._ref_to_internal_id(db, ListDefinition, config.get("linked_list_id"), protocol.tenant_id)
             if linked_list_id:
                 return self._linked_list_content(db, linked_list_id, config, protocol.tenant_id)
             rows = config.get("rows") if isinstance(config.get("rows"), list) else []
@@ -2069,20 +2092,20 @@ Status: {protocol_status}
             participant_id = cell.get(f"{prefix}participant_id") or row.get("template_participant_id")
             if not participant_id:
                 return ""
-            participant = db.get(Participant, int(participant_id))
-            return self._latex_multiline(participant.display_name if participant and participant.tenant_id == protocol.tenant_id else "")
+            participant = self._participant_by_ref(db, participant_id, protocol.tenant_id)
+            return self._latex_multiline(participant.display_name if participant else "")
         if value_type == "participants":
             participant_ids = cell.get(f"{prefix}participant_ids") or row.get("template_participant_ids") or []
             if not participant_ids:
                 return ""
-            participants = [db.get(Participant, int(participant_id)) for participant_id in participant_ids]
-            return self._latex_multiline(", ".join(participant.display_name for participant in participants if participant and participant.tenant_id == protocol.tenant_id))
+            participants = [self._participant_by_ref(db, participant_id, protocol.tenant_id) for participant_id in participant_ids]
+            return self._latex_multiline(", ".join(participant.display_name for participant in participants if participant))
         if value_type == "event":
             event_id = cell.get(f"{prefix}event_id") or row.get("template_event_id")
             if not event_id:
                 return ""
-            event = db.get(Event, int(event_id))
-            if not event or event.tenant_id != protocol.tenant_id:
+            event = self._event_by_ref(db, event_id, protocol.tenant_id)
+            if not event:
                 return ""
             return self._latex_multiline(self._event_inline_label(event))
         if value_type == "events":
