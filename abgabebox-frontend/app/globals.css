@@ -160,10 +160,13 @@ a.card-link:active {
   transform: scale(0.985);
 }
 
-a.card-link.card-colored-0:hover { border-color: var(--c0); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c0) 12%, transparent); }
-a.card-link.card-colored-1:hover { border-color: var(--c1); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c1) 12%, transparent); }
-a.card-link.card-colored-2:hover { border-color: var(--c2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c2) 12%, transparent); }
-a.card-link.card-colored-3:hover { border-color: var(--c3); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c3) 12%, transparent); }
+/* Hover nur bei echtem Zeiger - auf Touch bliebe der Effekt nach dem Antippen haengen. */
+@media (hover: hover) {
+  a.card-link.card-colored-0:hover { border-color: var(--c0); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c0) 12%, transparent); }
+  a.card-link.card-colored-1:hover { border-color: var(--c1); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c1) 12%, transparent); }
+  a.card-link.card-colored-2:hover { border-color: var(--c2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c2) 12%, transparent); }
+  a.card-link.card-colored-3:hover { border-color: var(--c3); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c3) 12%, transparent); }
+}
 
 .card-stripe-0 { background: color-mix(in srgb, var(--c0) 8%, var(--panel)); }
 .card-stripe-1 { background: color-mix(in srgb, var(--c1) 8%, var(--panel)); }
@@ -184,6 +187,7 @@ a.card-link.card-colored-3:hover { border-color: var(--c3); box-shadow: 0 0 0 3p
 .card-dot-3 { background: var(--c3); }
 
 .card-title {
+  overflow-wrap: anywhere;
   font-weight: 600;
   font-size: var(--text-lg);
   display: flex;
@@ -363,12 +367,19 @@ input[type="file"] {
 }
 
 .file-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Touch-Ziel mindestens 44 px, negativer Rand haelt die Zeilenhoehe kompakt. */
+  min-width: 44px;
+  min-height: 44px;
+  margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-2)) calc(-1 * var(--space-3)) 0;
   background: none;
   border: none;
   color: var(--muted);
   cursor: pointer;
   font-size: var(--text-sm);
-  padding: 2px var(--space-1);
+  padding: 0;
   border-radius: var(--radius-xs);
   flex-shrink: 0;
   transition: color var(--dur-fast), background var(--dur-fast);
@@ -377,6 +388,23 @@ input[type="file"] {
 .file-remove:hover {
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.upload-error {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  background: color-mix(in srgb, var(--danger) 8%, var(--panel));
+  color: var(--danger);
+  font-size: var(--text-base);
+}
+
+.drop-label-touch { display: none; }
+
+@media (hover: none) and (pointer: coarse) {
+  .drop-label-pointer { display: none; }
+  .drop-label-touch { display: inline; }
 }
 
 .captcha-status {
@@ -437,4 +465,6 @@ input[type="file"] {
   h1 { font-size: var(--text-xl); }
   .card { padding: var(--space-4) var(--space-4); }
   .drop-zone { padding: var(--space-5) var(--space-4); }
+  /* Unter 16 px zoomt iOS Safari beim Fokussieren ins Formular. */
+  .page-header-language select { font-size: var(--text-lg); }
 }

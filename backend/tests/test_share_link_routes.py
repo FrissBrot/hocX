@@ -280,6 +280,38 @@ def test_download_public_share_all_zips_even_a_single_file(db):
     assert response.media_type == "application/zip"
 
 
+def test_download_public_share_all_is_not_used_up_by_loading_the_gallery_thumbnails(db):
+    """Regression: alle Endpunkte teilten sich einen Zaehler pro IP - eine Galerie mit mehr als
+    20 Vorschaubildern brauchte das ZIP-Limit schon beim Seitenaufruf auf, und "Alle
+    herunterladen" lieferte ein 429-JSON (vom Browser als fehlgeschlagene download.json
+    angezeigt) statt des ZIPs."""
+    tenant = make_tenant(db)
+    user = make_current_user(tenant.id, role="writer")
+    a = _make_file(db, tenant.id, "a.png")
+    created = share_links_routes.create_share_link(ShareLinkCreate(name="X", file_ids=[a.public_id]), db, user)
+    token = created.url.removeprefix("/share/")
+    request = _FakeRequest()
+
+    public_share_routes.get_public_share(token, request, db)
+    for _ in range(30):
+        public_share_routes.get_public_share_thumbnail(token, a.public_id, request, db)
+    response = public_share_routes.download_public_share_all(token, request, db)
+
+    assert response.media_type == "application/zip"
+
+
+def test_public_share_thumbnails_cover_an_album_with_several_hundred_photos(db):
+    tenant = make_tenant(db)
+    user = make_current_user(tenant.id, role="writer")
+    a = _make_file(db, tenant.id, "a.png")
+    created = share_links_routes.create_share_link(ShareLinkCreate(name="X", file_ids=[a.public_id]), db, user)
+    token = created.url.removeprefix("/share/")
+    request = _FakeRequest()
+
+    for _ in range(500):
+        public_share_routes.get_public_share_thumbnail(token, a.public_id, request, db)
+
+
 def test_download_public_share_all_limits_the_zip_to_the_selection(db):
     tenant = make_tenant(db)
     user = make_current_user(tenant.id, role="writer")

@@ -24,6 +24,7 @@
     "typeLabelDefault": "Images, PDF and Office documents",
     "dropLabelSelected": "{count, plural, one {# file selected} other {# files selected}}",
     "dropLabelEmpty": "Select a file or drag it here",
+    "dropLabelEmptyTouch": "Select a file",
     "hintMaxFilesUnbounded": "max. 50 files per upload",
     "hintMaxFilesRemaining": "{count, plural, one {max. # more file} other {max. # more files}}",
     "hintPerFile": "{size} MiB each",

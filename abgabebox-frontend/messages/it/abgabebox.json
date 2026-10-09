@@ -24,6 +24,7 @@
     "typeLabelDefault": "Immagini, PDF e documenti Office",
     "dropLabelSelected": "{count, plural, one {# file selezionato} other {# file selezionati}}",
     "dropLabelEmpty": "Seleziona un file o trascinalo qui",
+    "dropLabelEmptyTouch": "Seleziona un file",
     "hintMaxFilesUnbounded": "max. 50 file per caricamento",
     "hintMaxFilesRemaining": "{count, plural, one {max. # file aggiuntivo} other {max. # file aggiuntivi}}",
     "hintPerFile": "{size} MiB ciascuno",

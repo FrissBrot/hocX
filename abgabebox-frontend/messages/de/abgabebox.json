@@ -24,6 +24,7 @@
     "typeLabelDefault": "Bilder, PDF und Office-Dokumente",
     "dropLabelSelected": "{count, plural, one {# Datei ausgewählt} other {# Dateien ausgewählt}}",
     "dropLabelEmpty": "Datei auswählen oder hierher ziehen",
+    "dropLabelEmptyTouch": "Datei auswählen",
     "hintMaxFilesUnbounded": "max. 50 Dateien pro Upload",
     "hintMaxFilesRemaining": "{count, plural, one {max. # weitere Datei} other {max. # weitere Dateien}}",
     "hintPerFile": "je {size} MiB",
