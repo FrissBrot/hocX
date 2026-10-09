@@ -168,6 +168,68 @@ jobs:
         working-directory: backend
         run: python3 scripts/check_audit_coverage.py
 
+  wanderplaner-backend-tests:
+    runs-on: ubuntu-latest
+    # Eigene Datenbank mit PostGIS + pgRouting, getrennt von der hocX-Kern-DB (postgres:16).
+    services:
+      postgres:
+        image: pgrouting/pgrouting:16-3.5-3.6
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: wanderplaner_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Wanderplaner dependencies
+        run: pip install -r wanderplaner-backend/requirements-dev.txt
+
+      # Kartendruck-Tests nutzen denselben echten pdflatex-Lauf wie wanderplaner-backend/Dockerfile.
+      - name: Install LaTeX toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            texlive-latex-base \
+            texlive-latex-recommended \
+            texlive-fonts-recommended \
+            texlive-pictures \
+            fonts-lmodern
+
+      - name: Run migrations and pytest
+        working-directory: wanderplaner-backend
+        env:
+          WANDERPLANER_DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/wanderplaner_ci
+          WANDERPLANER_TEST_APP_DATABASE_URL: postgresql+psycopg://wanderplaner_app:ci-wanderplaner-app-password@localhost:5432/wanderplaner_ci
+          WANDERPLANER_APP_DB_PASSWORD: ci-wanderplaner-app-password
+          WANDERPLANER_REDIS_URL: redis://localhost:6379/2
+          WANDERPLANER_WORK_ROOT: ${{ runner.temp }}/wanderplaner-work
+          WANDERPLANER_ENVIRONMENT: test
+        run: |
+          python3 -m alembic upgrade head
+          python3 -m pytest tests/ -v --cov=app --cov-report=term-missing
+
   abgabebox-backend-tests:
     runs-on: ubuntu-latest
     services:

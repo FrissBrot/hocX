@@ -427,14 +427,32 @@ def test_gallery_upload_job_reports_a_zip_with_no_images(db):
     assert job.errors == ["ZIP enthält keine Bilddateien"]
 
 
-def test_gallery_upload_matches_tour_and_retains_event_context(db):
-    from app.services.hiking_tour_service import HikingTourService
-    from tests.test_hiking_tour_service import _basic_payload
+
+def _wanderplaner_tenant(db, monkeypatch, tour_day):
+    """Mandant mit gebuchtem Wanderplaner; der Service wird durch eine feste Zuordnung
+    ersetzt (die Geo-Zuordnung selbst testet wanderplaner-backend)."""
+    from uuid import uuid4
+
+    from app.models.entities import TenantFeature
+    from app.services import wanderplaner_client
 
     tenant = make_tenant(db)
+    db.add(TenantFeature(tenant_id=tenant.id, feature_code="wanderplaner"))
+    db.flush()
+    tour_id = uuid4()
+
+    def match(tenant_id, photos):
+        return {tour_id: "Rigi Kulm ab Goldau"}, {p.file_id: tour_id for p in photos if p.taken_on == tour_day}
+
+    monkeypatch.setattr(wanderplaner_client, "is_configured", lambda: True)
+    monkeypatch.setattr(wanderplaner_client, "match_photos", match)
+    return tenant, tour_id
+
+
+def test_gallery_upload_matches_tour_and_retains_event_context(db, monkeypatch):
     day = date(2026, 7, 10)
+    tenant, tour_id = _wanderplaner_tenant(db, monkeypatch, day)
     event = make_event(db, tenant.id, title='Sommerlager', event_date=day)
-    tour = HikingTourService().create_tour(db, _basic_payload(tour_date=day), tenant_id=tenant.id)
     exif = Image.Exif()
     exif[306] = '2026:07:10 12:00:00'
     exif[0x8825] = {1: 'N', 2: (47.0, 3.0, 4.32), 3: 'E', 4: (8.0, 32.0, 52.08)}
@@ -442,20 +460,19 @@ def test_gallery_upload_matches_tour_and_retains_event_context(db):
     Image.new('RGB', (48, 48)).save(buffer, format='JPEG', exif=exif)
     items, errors = asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant.id, files=[('tour.jpg', buffer.getvalue())], tags=[], created_by=None))
     assert errors == []
-    assert items[0].hiking_tour_id == tour.public_id
-    assert items[0].hiking_tour_title == tour.title
+    assert items[0].hiking_tour_id == tour_id
+    assert items[0].hiking_tour_title == "Rigi Kulm ab Goldau"
     assert items[0].context_label == event.title
-    album = db.query(PhotoAlbum).filter_by(hiking_tour_id=tour.id).one()
+    album = db.query(PhotoAlbum).filter_by(hiking_tour_public_id=tour_id).one()
     assert db.get(PhotoAlbumItem, (album.id, items[0].id)) is not None
     fetched = service.list_tenant_files(db, tenant.id)
-    assert fetched[0].hiking_tour_id == tour.public_id
+    assert fetched[0].hiking_tour_id == tour_id
 
 
-def test_new_tour_backfills_gps_from_existing_photo(db):
-    from app.services.hiking_tour_service import HikingTourService
-    from tests.test_hiking_tour_service import _basic_payload
+def test_new_tour_backfills_gps_from_existing_photo(db, monkeypatch):
+    from app.services.photo_tour_link_service import sync_photos_for_tours
 
-    tenant = make_tenant(db)
+    tenant, tour_id = _wanderplaner_tenant(db, monkeypatch, date(2026, 7, 10))
     exif = Image.Exif()
     exif[306] = '2026:07:10 12:00:00'
     exif[0x8825] = {1: 'N', 2: (47.0, 3.0, 4.32), 3: 'E', 4: (8.0, 32.0, 52.08)}
@@ -465,8 +482,10 @@ def test_new_tour_backfills_gps_from_existing_photo(db):
     stored = db.query(StoredFile).filter_by(public_id=items[0].id).one()
     stored.scan_status = "clean"
     stored.gps_latitude = stored.gps_longitude = stored.gps_analyzed_at = stored.exif_taken_at = None
+    db.query(PhotoAlbumItem).filter_by(file_id=stored.public_id).delete()
     db.flush()
-    tour = HikingTourService().create_tour(db, _basic_payload(tour_date=date(2026, 7, 10)), tenant_id=tenant.id)
-    album = db.query(PhotoAlbum).filter_by(hiking_tour_id=tour.id).one()
+    # Nach dem Anlegen einer Tour gleicht das Gateway alle Fotos des Mandanten ab.
+    sync_photos_for_tours(db, tenant.id)
+    album = db.query(PhotoAlbum).filter_by(hiking_tour_public_id=tour_id).one()
     assert db.get(PhotoAlbumItem, (album.id, stored.public_id)) is not None
     assert stored.gps_analyzed_at is not None

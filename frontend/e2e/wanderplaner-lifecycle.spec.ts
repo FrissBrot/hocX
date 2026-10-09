@@ -5,11 +5,11 @@ import { authFiles } from "./auth";
 // Wanderplaner Phase 3-7: Hoehenprofil/Marschzeit, automatische Analyse, Rekognoszierung/
 // Freigabe, Druck-PDF, GPX-Import/-Export. Anders als wanderplaner.spec.ts (Phase 1+2, testet
 // die Kartenklick-Erstellung selbst) legt dieser Test die Tour direkt per API mit den festen
-// Koordinaten des Test-Fixture-Wegenetzes an (tests/fixtures/routing_network_sample.geojson)
+// Koordinaten des Test-Fixture-Wegenetzes an (wanderplaner-backend/tests/fixtures/routing_network_sample.geojson)
 // und prueft die UI-Folgeschritte im Browser - ein Kartenklick auf exakt diese winzige
 // Netzflaeche (Zug, ca. 8.50-8.52 Grad Ost) waere ueber Pixelkoordinaten kaum zuverlaessig
 // zu treffen. Braucht ein importiertes Wegenetz (siehe
-// scripts/import_routing_network.py-Docstring) - in der geteilten E2E-Umgebung normalerweise
+// wanderplaner-backend/scripts/import_routing_network.py-Docstring) - in der geteilten E2E-Umgebung normalerweise
 // nicht vorhanden, deshalb bislang nicht Teil des Standard-E2E-Laufs (siehe Wiki
 // "Wanderplaner", Phase-7-Notiz).
 const A = { lat: 47.0, lon: 8.5 };

@@ -19,7 +19,7 @@ declare -a SUITE_DURATIONS=()
 
 usage() {
   cat <<EOF
-Aufruf: $0 [backend|abgabebox-backend|photo-analysis-worker|frontend|abgabebox-frontend|scripts|e2e|unit|all]
+Aufruf: $0 [backend|abgabebox-backend|wanderplaner-backend|photo-analysis-worker|frontend|abgabebox-frontend|scripts|e2e|unit|all]
 
   unit  Alle Unit-/Integrations- und Skript-Tests, ohne Browser-E2E
   all   Wirklich alle Tests inklusive Browser-E2E (Standard)
@@ -108,6 +108,7 @@ print_summary() {
 run_unit() {
   run_compose_suite "Backend (pytest)" backend-test
   run_compose_suite "Abgabebox-Backend (pytest)" abgabebox-backend-test
+  run_compose_suite "Wanderplaner-Backend (pytest)" wanderplaner-backend-test
   run_compose_suite "Photo-Analysis-Worker (pytest)" photo-analysis-worker-test
   run_compose_suite "Frontend (Vitest)" frontend-test
   run_compose_suite "Abgabebox-Frontend (Vitest)" abgabebox-frontend-test
@@ -116,7 +117,7 @@ run_unit() {
 
 case "$ACTION" in
   -h|--help) usage; exit 0 ;;
-  backend|abgabebox-backend|photo-analysis-worker|frontend|abgabebox-frontend|scripts|e2e|unit|all) ;;
+  backend|abgabebox-backend|wanderplaner-backend|photo-analysis-worker|frontend|abgabebox-frontend|scripts|e2e|unit|all) ;;
   *) usage >&2; exit 2 ;;
 esac
 
@@ -126,6 +127,7 @@ trap cleanup EXIT INT TERM
 case "$ACTION" in
   backend) run_compose_suite "Backend (pytest)" backend-test ;;
   abgabebox-backend) run_compose_suite "Abgabebox-Backend (pytest)" abgabebox-backend-test ;;
+  wanderplaner-backend) run_compose_suite "Wanderplaner-Backend (pytest)" wanderplaner-backend-test ;;
   photo-analysis-worker) run_compose_suite "Photo-Analysis-Worker (pytest)" photo-analysis-worker-test ;;
   frontend) run_compose_suite "Frontend (Vitest)" frontend-test ;;
   abgabebox-frontend) run_compose_suite "Abgabebox-Frontend (Vitest)" abgabebox-frontend-test ;;

@@ -31,6 +31,9 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
 
+  wanderplaner-backend:
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
   abgabebox-backend:
     environment:
       # Coordination note, 2026-08-27: new setting from abgabebox-backend/app/config.py -

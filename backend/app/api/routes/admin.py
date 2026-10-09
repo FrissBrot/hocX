@@ -14,8 +14,9 @@ from starlette.background import BackgroundTask
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.error_log import record_system_error
 from app.models.entities import AppUser, PlatformAdmin, Tenant, TenantDomain, UserMfaFactor
-from app.services import public_id_service
+from app.services import public_id_service, wanderplaner_client
 from app.schemas.admin import (
     AdminDomainPage,
     AdminDomainRead,
@@ -295,6 +296,20 @@ def delete_tenant(tenant_id: uuid.UUID, db: Session = Depends(get_db), current_a
     # tenant_id darf hier NICHT gesetzt werden: der Tenant wurde oben bereits geloescht+committed,
     # audit_log.tenant_id hat eine FK auf tenant(id) - welcher Tenant betroffen war steht in entity_id.
     audit.log(db, action="admin.tenant_deleted", actor_email=current_admin.email, entity_type="tenant", entity_id=internal_tenant_id)
+    _delete_wanderplaner_data(db, internal_tenant_id, actor_email=current_admin.email)
+
+
+def _delete_wanderplaner_data(db: Session, tenant_id: int, *, actor_email: str) -> None:
+    """Die Touren liegen in der eigenen Wanderplaner-Datenbank, ohne Fremdschluessel auf tenant
+    - sie werden deshalb hier explizit mitgeloescht. Der Mandant ist zu diesem Zeitpunkt schon
+    weg; ein Fehler darf das Loeschen nicht scheitern lassen, landet aber in
+    system_error_log, damit die verwaisten Touren auffallen."""
+    if not wanderplaner_client.is_configured():
+        return
+    try:
+        wanderplaner_client.delete_tenant_data(tenant_id)
+    except Exception as exc:
+        record_system_error(db, exc=exc, actor_email=actor_email)
 
 
 @router.get("/tenants/{tenant_id}/cleanup/preview", response_model=TenantCleanupCounts)

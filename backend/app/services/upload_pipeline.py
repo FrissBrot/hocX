@@ -588,11 +588,11 @@ def ingest_file(
     if mime.startswith("image/"):
         from datetime import UTC, datetime
         from app.services.file_service import _extract_image_metadata
-        from app.services.photo_tour_link_service import extract_gps, sync_photos_for_tours
+        from app.services.photo_tour_link_service import extract_gps, sync_photos_for_tours_best_effort
         stored_file.gps_latitude, stored_file.gps_longitude = extract_gps(content)
         stored_file.gps_analyzed_at = datetime.now(UTC)
         _, _, stored_file.exif_taken_at, _ = _extract_image_metadata(content)
-        sync_photos_for_tours(db, tenant_id, file_ids=[stored_file.public_id])
+        sync_photos_for_tours_best_effort(db, tenant_id, file_ids=[stored_file.public_id])
 
     if tenant_hashes is not None and perceptual_hash is not None:
         tenant_hashes.append((stored_file.id, perceptual_hash))

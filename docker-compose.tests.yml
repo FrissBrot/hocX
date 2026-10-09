@@ -1,9 +1,6 @@
 services:
   test-db:
-    # postgis/postgis statt reinem postgres:16 - siehe docker-compose.yml (dev) fuer die
-    # Begruendung (Wanderplaner-Feature, Migration 0097). Backend-Tests laufen gegen
-    # diese DB, brauchen also dieselbe Extension wie dev/release.
-    image: pgrouting/pgrouting:16-3.5-3.6
+    image: postgres:16
     environment:
       POSTGRES_DB: hocx_test
       POSTGRES_USER: hocx_test
@@ -100,6 +97,45 @@ services:
       - ./backend/tests/fixtures:/backend/tests/fixtures:ro
       - ./docker-compose.yml:/docker-compose.yml:ro
       - ./docker-compose.release.yml:/docker-compose.release.yml:ro
+    profiles: [tests]
+
+  # Eigene Test-DB fuer den Wanderplaner-Service (PostGIS + pgRouting), wie in dev/release
+  # getrennt von der hocX-Test-DB.
+  wanderplaner-test-db:
+    image: pgrouting/pgrouting:16-3.5-3.6
+    environment:
+      POSTGRES_DB: wanderplaner_test
+      POSTGRES_USER: wanderplaner_test
+      POSTGRES_PASSWORD: wanderplaner_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wanderplaner_test -d wanderplaner_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+    profiles: [tests]
+
+  wanderplaner-backend-test:
+    build:
+      context: ./wanderplaner-backend
+      dockerfile: Dockerfile.test
+    environment:
+      WANDERPLANER_DATABASE_URL: postgresql+psycopg://wanderplaner_test:wanderplaner_test@wanderplaner-test-db:5432/wanderplaner_test
+      # Tests laufen wie in hocX mit der Admin-Rolle (Fixtures schreiben Wegenetz/Umgebungsdaten);
+      # die Rechte der Laufzeitrolle prueft tests/test_app_role_privileges.py ueber diese URL.
+      WANDERPLANER_TEST_APP_DATABASE_URL: postgresql+psycopg://wanderplaner_app:wanderplaner_app_test@wanderplaner-test-db:5432/wanderplaner_test
+      WANDERPLANER_APP_DB_PASSWORD: wanderplaner_app_test
+      WANDERPLANER_REDIS_URL: redis://test-redis:6379/2
+      WANDERPLANER_ENVIRONMENT: test
+    depends_on:
+      wanderplaner-test-db:
+        condition: service_healthy
+      test-redis:
+        condition: service_healthy
+    volumes:
+      - ./wanderplaner-backend:/app
+    command: sh -c "alembic upgrade head && python3 -m pytest tests/ -v"
     profiles: [tests]
 
   photo-analysis-worker-test:

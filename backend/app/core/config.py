@@ -18,7 +18,7 @@ _INSECURE_DEFAULTS = {
 
 def _load_file_secrets() -> None:
     """Resolve Docker-style VAR_FILE inputs without exposing values in Config.Env."""
-    for variable in ("DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD"):
+    for variable in ("DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD", "WANDERPLANER_INTERNAL_TOKEN"):
         file_variable = f"{variable}_FILE"
         if variable not in os.environ and (path := os.environ.get(file_variable)):
             os.environ[variable] = Path(path).read_text(encoding="utf-8").rstrip("\r\n")
@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     thumbnail_root: str = "/app/storage-local/thumbnails"
     abgabebox_storage_root: str = "/app/abgabebox-storage"
     abgabebox_base_url: str = "https://upload.example.com"
+    # Wanderplaner-Fachservice (wanderplaner-backend/, eigene DB). Nur im internen Docker-Netz
+    # erreichbar; hocX prueft Login/Mandant/Rolle/Feature und ruft ihn mit diesem gemeinsamen
+    # Token auf (siehe app/services/wanderplaner_client.py). Leeres Token = Wanderplaner aus.
+    wanderplaner_url: str = "http://wanderplaner-backend:8000"
+    wanderplaner_internal_token: str = ""
+    # Der Kartendruck (pdflatex + Kacheln) dauert deutlich laenger als normale Aufrufe.
+    wanderplaner_timeout_seconds: float = 30.0
+    wanderplaner_print_timeout_seconds: float = 300.0
     traefik_domain: str | None = None
     traefik_abgabebox_domain: str | None = None
     router_prefix: str = "hocx"

@@ -1,0 +1,21 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+# Druck-Tests nutzen denselben echten LaTeX-Lauf wie die Produktion.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    texlive-latex-base \
+    texlive-latex-recommended \
+    texlive-fonts-recommended \
+    texlive-pictures \
+    fonts-lmodern \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-dev.txt requirements.txt ./
+RUN pip install --no-cache-dir -r requirements-dev.txt
+
+COPY . .
+CMD ["python3", "-m", "pytest", "tests/", "-v"]

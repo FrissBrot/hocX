@@ -29,59 +29,7 @@ from app.models import *  # noqa: F401,F403  (registers every model onto Base.me
 #  - attendance_fine.delete_comment: added by migration 0012 for a soft-delete flow that was
 #    since replaced by a hard DELETE endpoint (see api/routes/fines.py) - confirmed unused
 #    anywhere in current app code, a harmless leftover column rather than active drift.
-#  - the postgis_tiger_geocoder/postgis_topology tables below: bundled unconditionally by the
-#    official postgis/postgis:16-3.4 image's own docker-entrypoint-initdb.d scripts (Migration
-#    0097 switched the db image from postgres:16 to add PostGIS for the Wanderplaner-Feature,
-#    see Wiki-Seite "Wanderplaner") - not created by any hocX migration, never ORM-mapped, only
-#    ever change if that image tag is bumped (a deliberate, visible change, not silent drift).
-#    hocX itself only uses the plain `postgis` extension (spatial_ref_sys); tiger_geocoder/
-#    topology are unused but can't be selectively disabled in this image without a custom build.
-#  - routing_edge_vertices_pgr: von pgr_createTopology() beim Wegenetz-Import angelegt
-#    (scripts/import_routing_network.py), nicht von einer Migration - nur intern von
-#    routing_service.py per Rohtext-SQL abgefragt, absichtlich nicht ORM-gemappt. Taucht in
-#    einer frisch migrierten DB erst auf, nachdem ein Import gelaufen ist (z.B. durch die
-#    `routing_network`-Fixture in conftest.py waehrend derselben Testsession).
-_KNOWN_UNMAPPED_TABLES = {
-    "audit_log",
-    "routing_edge_vertices_pgr",
-    "spatial_ref_sys",
-    "topology",
-    "layer",
-    "addr",
-    "addrfeat",
-    "bg",
-    "county",
-    "county_lookup",
-    "countysub_lookup",
-    "cousub",
-    "direction_lookup",
-    "edges",
-    "faces",
-    "featnames",
-    "geocode_settings",
-    "geocode_settings_default",
-    "loader_lookuptables",
-    "loader_platform",
-    "loader_variables",
-    "pagc_gaz",
-    "pagc_lex",
-    "pagc_rules",
-    "place",
-    "place_lookup",
-    "secondary_unit_lookup",
-    "state",
-    "state_lookup",
-    "street_type_lookup",
-    "tabblock",
-    "tabblock20",
-    "tract",
-    "zcta5",
-    "zip_lookup",
-    "zip_lookup_all",
-    "zip_lookup_base",
-    "zip_state",
-    "zip_state_loc",
-}
+_KNOWN_UNMAPPED_TABLES = {"audit_log"}
 _KNOWN_UNMAPPED_COLUMNS = {("attendance_fine", "delete_comment")}
 
 

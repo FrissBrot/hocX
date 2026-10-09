@@ -1,0 +1,43 @@
+{
+  "type": "FeatureCollection",
+  "properties": {
+    "description": "Kleines, handgebautes Testnetz fuer den Wanderplaner-Routing-Importer (wanderplaner-backend/scripts/import_routing_network.py) - KEIN echter swissTLM3D-Auszug. A/B/C/D bilden ein Dreieck bei Zug (CH): A-B-C ist ein laengerer, amtlicher Wanderweg-Umweg, A-D-C ein kuerzerer Forststrassen-Direktweg - so lassen sich 'wanderwege_bevorzugen' (waehlt trotz Umweg den Wanderweg) und 'schnellste_route' (waehlt den kuerzeren Forstweg) unterscheidbar testen. G ist eine nicht begehbare Autobahn-Kante (muss beim Import uebersprungen werden). N7/N8 sind ein vom Rest isoliertes Wanderweg-Stueck, fuer den 'kein Routing moeglich'-Testfall."
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "external_ref": "E1", "wanderweg_status": "wanderweg", "wegtyp": "fussweg", "is_walkable": true },
+      "geometry": { "type": "LineString", "coordinates": [[8.50, 47.00, 1000], [8.51, 47.01, 1100]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "external_ref": "E2", "wanderweg_status": "wanderweg", "wegtyp": "fussweg", "is_walkable": true },
+      "geometry": { "type": "LineString", "coordinates": [[8.51, 47.01, 1100], [8.52, 47.00, 1000]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "external_ref": "E3", "wanderweg_status": null, "wegtyp": "forststrasse", "is_walkable": true },
+      "geometry": { "type": "LineString", "coordinates": [[8.50, 47.00, 1000], [8.51, 47.001, 1020]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "external_ref": "E4", "wanderweg_status": null, "wegtyp": "forststrasse", "is_walkable": true },
+      "geometry": { "type": "LineString", "coordinates": [[8.51, 47.001, 1020], [8.52, 47.00, 1000]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "external_ref": "E5", "wanderweg_status": null, "wegtyp": "normalstrasse", "is_walkable": true },
+      "geometry": { "type": "LineString", "coordinates": [[8.50, 47.00, 1000], [8.495, 46.995, 990]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "external_ref": "E6", "wanderweg_status": null, "wegtyp": "autobahn", "is_walkable": false },
+      "geometry": { "type": "LineString", "coordinates": [[8.50, 47.00, 1000], [8.49, 46.99, 995]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "external_ref": "E7", "wanderweg_status": "wanderweg", "wegtyp": "fussweg", "is_walkable": true },
+      "geometry": { "type": "LineString", "coordinates": [[7.7491, 46.0207, 1600], [7.7400, 46.0300, 1650]] }
+    }
+  ]
+}

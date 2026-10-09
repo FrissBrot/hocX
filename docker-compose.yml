@@ -33,11 +33,7 @@ services:
       - --configFile=/etc/traefik/traefik.yml
 
   db:
-    # postgis/postgis statt reinem postgres:16 - Wanderplaner-Feature (Migration 0097)
-    # braucht die PostGIS-Extension fuer Geometrie-Spalten (Tour-Start/-Ziel/-Wegpunkte)
-    # und spaeter pgRouting fuer die Routing-Engine (siehe Wiki-Seite "Wanderplaner").
-    # Gleiche Postgres-Major-Version (16) wie vorher, keine weiteren Aenderungen noetig.
-    image: pgrouting/pgrouting:16-3.5-3.6
+    image: postgres:16
     restart: unless-stopped
     mem_limit: 768m
     cpus: 1.0
@@ -158,6 +154,10 @@ services:
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD}
       CLAMAV_HOST: clamav
       REDIS_URL: redis://redis:6379/0
+      # Wanderplaner-Fachservice (siehe wanderplaner-backend unten). Gleiches Token auf beiden
+      # Seiten; der Default gilt nur fuer den lokalen Stack, Release setzt es als Secret.
+      WANDERPLANER_URL: http://wanderplaner-backend:8000
+      WANDERPLANER_INTERNAL_TOKEN: ${WANDERPLANER_INTERNAL_TOKEN:-hocx-local-dev-wanderplaner-token}
       TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
       ROUTER_PREFIX: hocx
       TRAEFIK_MIDDLEWARE_PREFIX: ""
@@ -305,6 +305,82 @@ services:
       - "traefik.http.routers.hocx-gallery-upload.middlewares=gallery-upload-inflight"
       - "traefik.http.services.hocx-gallery-upload.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.gallery-upload-inflight.inflightreq.amount=2"
+
+  # Wanderplaner: eigene Datenbank (PostGIS + pgRouting) fuer Touren, Wegenetz und OSM-
+  # Umgebungsdaten - getrennt von der hocX-Kerndatenbank, damit diese bei postgres:16 bleibt
+  # und das mehrere hundert MB grosse Geodaten-Volumen nicht in Backups/Upgrades der Kern-DB
+  # einfliesst. Kein Port nach aussen: nur wanderplaner-backend greift darauf zu.
+  wanderplaner-db:
+    image: pgrouting/pgrouting:16-3.5-3.6
+    restart: unless-stopped
+    mem_limit: 768m
+    cpus: 1.0
+    # Der Wegenetz-Import (pgr_createTopology, GIST-Indizes) profitiert vor allem von
+    # maintenance_work_mem; Werte wie beim Kern-db oben auf das 768m-Limit abgestimmt.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=192MB
+      - -c
+      - effective_cache_size=460MB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=128MB
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      POSTGRES_DB: wanderplaner
+      POSTGRES_USER: wanderplaner
+      POSTGRES_PASSWORD: ${WANDERPLANER_POSTGRES_PASSWORD:-wanderplaner}
+    volumes:
+      - wanderplaner_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wanderplaner -d wanderplaner"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Wanderplaner-Fachservice (Routing, Hoehenprofil, Analyse, Kartendruck). Ohne Traefik-Labels
+  # und ohne Port: Browser sprechen nur mit dem hocX-backend, das Login/Mandant/Rolle/Feature
+  # prueft und hierher weiterleitet (backend/app/api/routes/hiking_tours.py).
+  wanderplaner-backend:
+    build:
+      context: ./wanderplaner-backend
+    restart: unless-stopped
+    # Kartendruck rendert Kartenblaetter + pdflatex; der OSM-Import (osmium) braucht kurzzeitig
+    # ebenfalls Speicher.
+    mem_limit: 1536m
+    cpus: 1.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      WANDERPLANER_DATABASE_URL: postgresql+psycopg://wanderplaner:${WANDERPLANER_POSTGRES_PASSWORD:-wanderplaner}@wanderplaner-db:5432/wanderplaner
+      WANDERPLANER_APP_DATABASE_URL: postgresql+psycopg://wanderplaner_app:${WANDERPLANER_APP_DB_PASSWORD:-wanderplaner_app}@wanderplaner-db:5432/wanderplaner
+      WANDERPLANER_APP_DB_PASSWORD: ${WANDERPLANER_APP_DB_PASSWORD:-wanderplaner_app}
+      WANDERPLANER_INTERNAL_TOKEN: ${WANDERPLANER_INTERNAL_TOKEN:-hocx-local-dev-wanderplaner-token}
+      WANDERPLANER_REDIS_URL: redis://redis:6379/2
+      WANDERPLANER_ENVIRONMENT: development
+    depends_on:
+      wanderplaner-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./wanderplaner-backend:/app
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 75"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # Photo-culling Phase 3: scores face quality for photo_analysis_job batches. Its own
   # container/resource budget rather than living inside `backend` - see
@@ -603,4 +679,5 @@ services:
 
 volumes:
   postgres_data:
+  wanderplaner_postgres_data:
   clamav_db:

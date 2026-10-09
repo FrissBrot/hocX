@@ -3,19 +3,48 @@
 Die Kartenansicht liegt unter `/hiking-planner`. Die Hintergrundkarte liefert keine
 Routingdaten: Für die Wegsuche muss das Wegenetz einmal separat importiert werden.
 
+## Architektur
+
+Der Wanderplaner ist ein eigener Fachservice mit eigener Datenbank:
+
+```
+Browser ─► frontend ─► backend  /api/hiking-tours/*   (Login, Mandant, Rolle, Feature,
+                         │                              Audit, Druck-PDF als StoredFile,
+                         │  internes Token +            Fotoalben pro Tour)
+                         │  X-Hocx-Tenant-Id/-User-*
+                         ▼
+                   wanderplaner-backend   (Routing, Höhenprofil, Analyse, Kartendruck)
+                         ▼
+                   wanderplaner-db        (PostGIS + pgRouting: Touren, Wegenetz, OSM-Daten)
+```
+
+- `wanderplaner-backend` ist nur im internen Docker-Netz erreichbar und lehnt jede Anfrage
+  ohne `WANDERPLANER_INTERNAL_TOKEN` ab. Das Frontend spricht unverändert mit
+  `/api/hiking-tours` im hocX-Backend.
+- Touren referenzieren Mandanten und Benutzer nur per ID. Beim Löschen eines Mandanten
+  ruft hocX `DELETE /internal/tenants/{id}` auf.
+- Fotos bleiben in hocX. Für die automatischen Alben schickt hocX nur Koordinaten und
+  Aufnahmedatum an `POST /internal/tenants/{id}/photo-matches`.
+- Die hocX-Kerndatenbank bleibt `postgres:16` ohne Geo-Erweiterungen.
+- Ein Mandant, bei dem nur das Feature `wanderplaner` freigeschaltet ist, nutzt hocX als
+  reinen Wanderplaner.
+
 ## Erstimport und Aktualisierung
 
 Im gewünschten Stack (korrekten Compose-Projektnamen und dessen Dateien verwenden):
 
 ```sh
-docker compose exec backend python -m scripts.import_swisstopo_network --download
+docker compose exec wanderplaner-backend python -m scripts.import_swisstopo_network --download
 ```
 
 Für den lokalen Wanderplaner-Branch:
 
 ```sh
-docker exec hocx-dev-wanderplaner-backend-1 python -m scripts.import_swisstopo_network --download
+docker exec hocx-dev-wanderplaner-wanderplaner-backend-1 python -m scripts.import_swisstopo_network --download
 ```
+
+Die Importskripte verwenden die Admin-Rolle (`WANDERPLANER_DATABASE_URL`), der laufende
+Service die eingeschränkte Rolle `wanderplaner_app` (`WANDERPLANER_APP_DATABASE_URL`).
 
 Quelle ist das offizielle [swissTLM3D-Wanderwegenetz](https://opendata.swiss/de/dataset/swisstlm3d-wanderwege)
 von swisstopo, schweizweit einschließlich Liechtenstein. Der Download benötigt ca.
@@ -64,16 +93,18 @@ ausschließlich im separaten Test-Stack ausführen; die Fixture ersetzt dessen N
 
 ```sh
 docker compose -p hocx-tests-wanderplaner -f docker-compose.tests.yml --profile tests \
-  run --rm backend-test python -m pytest \
-  tests/test_routing_service.py tests/test_routing_cost.py tests/test_swisstopo_import.py
+  run --rm wanderplaner-backend-test sh -c "alembic upgrade head && python -m pytest \
+  tests/test_routing_service.py tests/test_routing_cost.py tests/test_swisstopo_import.py"
 ```
+
+Alle Wanderplaner-Tests: `./scripts/test.sh wanderplaner-backend`.
 
 Die Tests prüfen gekrümmte Teilkanten in beiden Richtungen, Profilunterschiede,
 Netzlücken, entfernte Punkte, Rundtouren, Höhenprofil-Invalidierung und GeoPackage-Mapping.
 
 ## Automatische Wegpunkte aus lokalen Umgebungsdaten
 
-Nach der Migration `0102_local_landmarks` einmalig im Backend-Container ausführen:
+Einmalig im `wanderplaner-backend`-Container ausführen:
 
 ```sh
 python -m scripts.import_osm_landmarks --download
