@@ -22,6 +22,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
+import { MobileFab, MobileSegmented } from "@/components/mobile/mobile-ui";
 import { browserApiFetch } from "@/lib/api/client";
 import { useFileDrop } from "@/lib/hooks/use-file-drop";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
@@ -59,10 +60,14 @@ type Props = {
   sharePendingOnly?: boolean;
   // Nach einer Freigabe aus dieser Ansicht (Albumzähler/Hinweis neu laden).
   onReleased?: () => void;
+  // Mobile-Oberflaeche: Kopf kommt von MobilePhotos, Upload als schwebender Plus-Button,
+  // Reiter als Segment, Sortierung/Tag-Filter entfallen (Suche bleibt).
+  mobile?: boolean;
 };
 
-export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Props) {
+export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobile = false }: Props) {
   const t = useTranslations("photos.view");
+  const tMobile = useTranslations("mobile");
   const embedded = Boolean(albumId);
   const router = useRouter();
   const showToast = useToast();
@@ -363,6 +368,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
     <div className="grid grid-tight photos-overview">
       {!embedded && (
         <>
+          {!mobile ? (
           <div className="page-header photos-page-header">
             <div>
               <h1 className="page-title">{t("pageTitle")}</h1>
@@ -393,6 +399,20 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
               </button>
             </div>
           </div>
+          ) : (
+            <>
+              {analysisProgress && analysisProgress.pending_images > 0 ? (
+                <span className="pill photos-mobile-pill">{t("analysisPill", { count: analysisProgress.active_job_image_count || analysisProgress.pending_images })}</span>
+              ) : null}
+              <MobileFab
+                label={tMobile("photos.fab")}
+                onClick={() => {
+                  setDroppedFiles([]);
+                  setUploadModalOpen(true);
+                }}
+              />
+            </>
+          )}
           {pendingReleaseTotal > 0 && (
             <AlbumReleaseNotice
               message={
@@ -422,22 +442,36 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
             </AlbumReleaseNotice>
           )}
           <div className="list-filter-row list-filter-row-compact photos-filter-row">
-            <FilterTabs
-              options={[
-                { value: "all", label: t("tabs.all") },
-                { value: "albums", label: t("tabs.albums") },
-                { value: "duplicates", label: t("tabs.duplicates") },
-                { value: "series", label: t("tabs.series") },
-              ]}
-              value={tab}
-              onChange={setTab}
-            />
+            {mobile ? (
+              <MobileSegmented<Tab>
+                ariaLabel={t("pageTitle")}
+                value={tab}
+                onChange={setTab}
+                options={[
+                  { value: "all", label: t("tabs.all") },
+                  { value: "albums", label: t("tabs.albums") },
+                  { value: "duplicates", label: t("tabs.duplicates") },
+                  { value: "series", label: t("tabs.series") },
+                ]}
+              />
+            ) : (
+              <FilterTabs
+                options={[
+                  { value: "all", label: t("tabs.all") },
+                  { value: "albums", label: t("tabs.albums") },
+                  { value: "duplicates", label: t("tabs.duplicates") },
+                  { value: "series", label: t("tabs.series") },
+                ]}
+                value={tab}
+                onChange={setTab}
+              />
+            )}
             {tab !== "albums" && (
               <div className="list-filter-search">
                 <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
               </div>
             )}
-            {tab === "all" && (
+            {tab === "all" && !mobile && (
               <SearchableSelect
                 className="files-sort-select"
                 options={SORT_OPTIONS}
@@ -451,7 +485,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
                 }}
               />
             )}
-            {tab !== "albums" && (
+            {tab !== "albums" && !mobile && (
               <div className="list-filter-tags">
                 <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((tag) => tag.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder={t("tagPlaceholder")} />
               </div>

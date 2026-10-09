@@ -1,3 +1,5 @@
+import { MobileFinances } from "@/components/mobile/areas/mobile-finances";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
@@ -19,10 +21,17 @@ export default async function FinancesPage() {
 
   return (
     <AppShell initialSession={session}>
-      <RouteTabs tabs={financeTabs(t)} activeHref="/finances" />
-      <FinancesView
-        initialAccounts={accounts}
-        canWrite={["admin", "kassier"].includes(session.current_role ?? "")}
+      <ResponsiveView
+        mobile={<MobileFinances initialAccounts={accounts} canWrite={["admin", "kassier"].includes(session.current_role ?? "")} />}
+        desktop={
+          <>
+          <RouteTabs tabs={financeTabs(t)} activeHref="/finances" />
+          <FinancesView
+            initialAccounts={accounts}
+            canWrite={["admin", "kassier"].includes(session.current_role ?? "")}
+          />
+          </>
+        }
       />
     </AppShell>
   );

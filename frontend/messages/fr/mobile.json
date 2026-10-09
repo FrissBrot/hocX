@@ -15,7 +15,9 @@
     "save": "Enregistrer",
     "search": "Rechercher",
     "searchPlaceholder": "Rechercher …",
-    "undo": "Annuler l’action"
+    "undo": "Annuler l’action",
+    "sendLinkToMe": "M’envoyer le lien",
+    "desktopOnly": "Cette zone se modifie sur ordinateur. Ouvre hocX dans un navigateur – le lien mène directement ici."
   },
   "relative": {
     "today": "Aujourd’hui",
@@ -25,8 +27,7 @@
     "daysAgo": "{count, plural, one {Il y a # jour} other {Il y a # jours}}"
   },
   "more": {
-    "account": "Compte",
-    "desktopHint": "D’autres domaines comme les procès-verbaux, les finances ou les participants sont disponibles sur ordinateur."
+    "account": "Compte"
   },
   "dashboard": {
     "greeting": "Bonjour {name}",
@@ -175,5 +176,64 @@
     "tools": "Outils",
     "unassigned": "Non attribuée",
     "you": "{name} (vous)"
+  },
+  "protocols": {
+    "fab": "Procès-verbal",
+    "wordImportHint": "Les documents Word s’importent sur ordinateur."
+  },
+  "finances": {
+    "thisYear": "Cette année",
+    "fab": "Transaction",
+    "add": "Ajouter"
+  },
+  "fines": {
+    "collected": "Amende de {name} encaissée",
+    "fab": "Amende"
+  },
+  "participants": {
+    "selected": "{count, plural, =0 {Sélectionner} one {# sélectionné} other {# sélectionnés}}",
+    "select": "Sélectionner",
+    "selectedCount": "{count, plural, one {# participant} other {# participants}}",
+    "fab": "Participant",
+    "chooseCsv": "Choisir un fichier CSV"
+  },
+  "cycles": {
+    "fab": "Cycle",
+    "deleteHint": "La suppression n’est possible que tant qu’aucun modèle n’est attribué."
+  },
+  "users": {
+    "fab": "Inviter"
+  },
+  "files": {
+    "sort": "Tri",
+    "fab": "Téléverser"
+  },
+  "lists": {
+    "historyHint": "Les cycles précédents et les états historiques de cette liste s’affichent sur ordinateur.",
+    "entryFab": "Entrée",
+    "inactive": "Inactive",
+    "fab": "Liste",
+    "editEntry": "Modifier l’entrée"
+  },
+  "stats": {
+    "todosDone": "ouvertes · {count} terminées",
+    "finesCount": "{count, plural, one {# amende} other {# amendes}}",
+    "attendancePerMember": "Présence par membre",
+    "cardTitle": "Statistiques · 6 derniers mois",
+    "todosOpen": "Tâches ouvertes"
+  },
+  "submissions": {
+    "fab": "Dépôt"
+  },
+  "templates": {
+    "subtitle": "Conteneurs pour des éléments réutilisables",
+    "desktopHint": "Les éléments et mises en page se modifient sur ordinateur.",
+    "fab": "Modèle",
+    "editSettings": "Modifier les paramètres",
+    "participantCount": "{count, plural, one {# participant} other {# participants}} dans le contrôle des présences",
+    "elementsHint": "Les éléments, l’ordre et les blocs se modifient sur ordinateur."
+  },
+  "photos": {
+    "fab": "Photos"
   }
 }

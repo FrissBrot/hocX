@@ -1,3 +1,5 @@
+import { MobilePhotos } from "@/components/mobile/areas/mobile-misc";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 
 import { PhotosView } from "@/components/photos/photos-view";
@@ -14,9 +16,16 @@ export default async function PhotosPage() {
 
   return (
     <AppShell initialSession={session}>
-      <section className="photos-page">
-        <PhotosView />
-      </section>
+      <ResponsiveView
+        mobile={<MobilePhotos />}
+        desktop={
+          <>
+          <section className="photos-page">
+            <PhotosView />
+          </section>
+          </>
+        }
+      />
     </AppShell>
   );
 }

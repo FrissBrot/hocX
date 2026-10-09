@@ -1,3 +1,5 @@
+import { MobileTenantSettings } from "@/components/mobile/areas/mobile-admin";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { getTranslations } from "next-intl/server";
 
 import { TenantGeneralSettings } from "@/components/settings/tenant-general-settings";
@@ -14,18 +16,25 @@ export default async function TenantSettingsPage({ searchParams }: { searchParam
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
-        <div className="section-stack">
-          <div className="page-header">
-            <div>
-              <h1 className="page-title">{tTenant("pageTitle")}</h1>
-              <p className="muted">{tTenant("pageDescription", { tenant: tenant.name })}</p>
+      <ResponsiveView
+        mobile={<MobileTenantSettings title={tTenant("pageTitle")}><TenantGeneralSettings initialTenant={tenant} /></MobileTenantSettings>}
+        desktop={
+          <>
+          <section className="panel">
+            <div className="section-stack">
+              <div className="page-header">
+                <div>
+                  <h1 className="page-title">{tTenant("pageTitle")}</h1>
+                  <p className="muted">{tTenant("pageDescription", { tenant: tenant.name })}</p>
+                </div>
+              </div>
+              <RouteTabs tabs={tenantSettingsTabs(t)} activeHref="/tenant-settings" variant="pill" />
+              <TenantGeneralSettings initialTenant={tenant} />
             </div>
-          </div>
-          <RouteTabs tabs={tenantSettingsTabs(t)} activeHref="/tenant-settings" variant="pill" />
-          <TenantGeneralSettings initialTenant={tenant} />
-        </div>
-      </section>
+          </section>
+          </>
+        }
+      />
     </AppShell>
   );
 }

@@ -1,3 +1,5 @@
+import { MobileUsers } from "@/components/mobile/areas/mobile-admin";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 
 import { UserManagement } from "@/components/users/user-management";
@@ -17,9 +19,16 @@ export default async function UsersPage() {
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
-        <UserManagement initialUsers={users ?? []} />
-      </section>
+      <ResponsiveView
+        mobile={<MobileUsers initialUsers={users ?? []} />}
+        desktop={
+          <>
+          <section className="panel">
+            <UserManagement initialUsers={users ?? []} />
+          </section>
+          </>
+        }
+      />
     </AppShell>
   );
 }

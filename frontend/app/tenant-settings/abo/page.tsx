@@ -1,3 +1,5 @@
+import { MobileTenantSettings } from "@/components/mobile/areas/mobile-admin";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { getTranslations } from "next-intl/server";
 
 import { TenantSubscriptionView } from "@/components/settings/tenant-subscription-view";
@@ -14,18 +16,25 @@ export default async function TenantSubscriptionPage({ searchParams }: { searchP
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
-        <div className="section-stack">
-          <div className="page-header">
-            <div>
-              <h1 className="page-title">{tTenant("pageTitle")}</h1>
-              <p className="muted">{tTenant("pageDescription", { tenant: tenant.name })}</p>
+      <ResponsiveView
+        mobile={<MobileTenantSettings title={tTenant("pageTitle")}><TenantSubscriptionView initialTenant={tenant} /></MobileTenantSettings>}
+        desktop={
+          <>
+          <section className="panel">
+            <div className="section-stack">
+              <div className="page-header">
+                <div>
+                  <h1 className="page-title">{tTenant("pageTitle")}</h1>
+                  <p className="muted">{tTenant("pageDescription", { tenant: tenant.name })}</p>
+                </div>
+              </div>
+              <RouteTabs tabs={tenantSettingsTabs(t)} activeHref="/tenant-settings/abo" variant="pill" />
+              <TenantSubscriptionView initialTenant={tenant} />
             </div>
-          </div>
-          <RouteTabs tabs={tenantSettingsTabs(t)} activeHref="/tenant-settings/abo" variant="pill" />
-          <TenantSubscriptionView initialTenant={tenant} />
-        </div>
-      </section>
+          </section>
+          </>
+        }
+      />
     </AppShell>
   );
 }

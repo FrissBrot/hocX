@@ -15,7 +15,9 @@
     "save": "Sichern",
     "search": "Suchen",
     "searchPlaceholder": "Suchen …",
-    "undo": "Rückgängig"
+    "undo": "Rückgängig",
+    "sendLinkToMe": "Link an mich senden",
+    "desktopOnly": "Diesen Bereich bearbeitest du am Computer. Öffne hocX dort im Browser – der Link führt direkt hierher."
   },
   "relative": {
     "today": "Heute",
@@ -25,8 +27,7 @@
     "daysAgo": "{count, plural, one {Vor # Tag} other {Vor # Tagen}}"
   },
   "more": {
-    "account": "Konto",
-    "desktopHint": "Weitere Bereiche wie Protokolle, Finanzen oder Teilnehmer sind am Computer verfügbar."
+    "account": "Konto"
   },
   "dashboard": {
     "greeting": "Hallo {name}",
@@ -175,5 +176,64 @@
     "tools": "Werkzeuge",
     "unassigned": "Nicht zugewiesen",
     "you": "{name} (du)"
+  },
+  "protocols": {
+    "fab": "Protokoll",
+    "wordImportHint": "Word-Dokumente importierst du am Computer."
+  },
+  "finances": {
+    "thisYear": "Dieses Jahr",
+    "fab": "Transaktion",
+    "add": "Hinzufügen"
+  },
+  "fines": {
+    "collected": "Busse von {name} kassiert",
+    "fab": "Busse"
+  },
+  "participants": {
+    "selected": "{count, plural, =0 {Auswählen} one {# ausgewählt} other {# ausgewählt}}",
+    "select": "Auswählen",
+    "selectedCount": "{count, plural, one {# Teilnehmer} other {# Teilnehmer}}",
+    "fab": "Teilnehmer",
+    "chooseCsv": "CSV-Datei auswählen"
+  },
+  "cycles": {
+    "fab": "Zyklus",
+    "deleteHint": "Löschen ist nur möglich, solange keine Vorlage zugeordnet ist."
+  },
+  "users": {
+    "fab": "Einladen"
+  },
+  "files": {
+    "sort": "Sortierung",
+    "fab": "Hochladen"
+  },
+  "lists": {
+    "historyHint": "Frühere Zyklen und historische Stände dieser Liste siehst du am Computer.",
+    "entryFab": "Eintrag",
+    "inactive": "Inaktiv",
+    "fab": "Liste",
+    "editEntry": "Eintrag bearbeiten"
+  },
+  "stats": {
+    "todosDone": "offen · {count} erledigt",
+    "finesCount": "{count, plural, one {# Busse} other {# Bussen}}",
+    "attendancePerMember": "Anwesenheit pro Mitglied",
+    "cardTitle": "Statistik · letzte 6 Monate",
+    "todosOpen": "Todos offen"
+  },
+  "submissions": {
+    "fab": "Abgabe"
+  },
+  "templates": {
+    "subtitle": "Container für wiederverwendbare Elemente",
+    "desktopHint": "Elemente und Dokument-Layouts bearbeitest du am Computer.",
+    "fab": "Vorlage",
+    "editSettings": "Einstellungen bearbeiten",
+    "participantCount": "{count, plural, one {# Teilnehmer} other {# Teilnehmer}} in der Anwesenheitskontrolle",
+    "elementsHint": "Elemente, Reihenfolge und Blöcke bearbeitest du am Computer."
+  },
+  "photos": {
+    "fab": "Bilder"
   }
 }

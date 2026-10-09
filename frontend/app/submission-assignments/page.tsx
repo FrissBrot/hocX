@@ -1,3 +1,5 @@
+import { MobileSubmissions } from "@/components/mobile/areas/mobile-submissions";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 
 import { SubmissionAssignmentManager } from "@/components/submission-assignments/submission-assignment-manager";
@@ -25,9 +27,16 @@ export default async function SubmissionAssignmentsPage() {
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
-        <SubmissionAssignmentManager initialAssignments={assignments ?? []} initialLinks={links ?? []} availableLists={lists ?? []} availableEvents={events ?? []} availableParticipants={participants ?? []} availableCycleConfigs={cycleConfigs ?? []} tenantName={session.current_tenant?.name ?? null} />
-      </section>
+      <ResponsiveView
+        mobile={<MobileSubmissions initialAssignments={assignments ?? []} initialLinks={links ?? []} availableLists={lists ?? []} availableEvents={events ?? []} availableParticipants={participants ?? []} availableCycleConfigs={cycleConfigs ?? []} tenantName={session.current_tenant?.name ?? null} />}
+        desktop={
+          <>
+          <section className="panel">
+            <SubmissionAssignmentManager initialAssignments={assignments ?? []} initialLinks={links ?? []} availableLists={lists ?? []} availableEvents={events ?? []} availableParticipants={participants ?? []} availableCycleConfigs={cycleConfigs ?? []} tenantName={session.current_tenant?.name ?? null} />
+          </section>
+          </>
+        }
+      />
     </AppShell>
   );
 }

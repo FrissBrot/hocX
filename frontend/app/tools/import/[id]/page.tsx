@@ -1,3 +1,5 @@
+import { MobileDesktopOnly } from "@/components/mobile/areas/mobile-misc";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
@@ -28,15 +30,22 @@ export default async function WordImportDocumentPage({ params }: { params: Promi
 
   return (
     <AppShell initialSession={session}>
-      <div className="grid">
-        <div className="page-header">
-          <div>
-            <h1 className="page-title">{document.display_name}</h1>
-            <p className="muted">{t("documentPageIntro")}</p>
+      <ResponsiveView
+        mobile={<MobileDesktopOnly navKey="import" />}
+        desktop={
+          <>
+          <div className="grid">
+            <div className="page-header">
+              <div>
+                <h1 className="page-title">{document.display_name}</h1>
+                <p className="muted">{t("documentPageIntro")}</p>
+              </div>
+            </div>
+            <WordImportWizard templates={activeTemplates} participants={activeParticipants} documentId={documentId} />
           </div>
-        </div>
-        <WordImportWizard templates={activeTemplates} participants={activeParticipants} documentId={documentId} />
-      </div>
+          </>
+        }
+      />
     </AppShell>
   );
 }

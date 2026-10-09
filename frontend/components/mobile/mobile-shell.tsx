@@ -9,7 +9,8 @@ import { useTranslations } from "next-intl";
 import { MobileIcon, MobileIconName } from "@/components/mobile/mobile-icons";
 import { isTodoOverdue } from "@/components/mobile/mobile-utils";
 import { MobileAvatar, MobileListRow } from "@/components/mobile/mobile-ui";
-import { formatRoleLabel } from "@/components/ui/app-shell-nav";
+import { buildNav, formatRoleLabel, isNavLinkActive, NavLink } from "@/components/ui/app-shell-nav";
+import { NavIcon } from "@/components/ui/nav-icons";
 import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { browserApiFetch } from "@/lib/api/client";
 import type { SessionInfo, TodoListItem } from "@/types/api";
@@ -17,10 +18,38 @@ import type { SessionInfo, TodoListItem } from "@/types/api";
 type ThemePreference = "light" | "dark" | "auto";
 
 const MobileSessionContext = createContext<SessionInfo | null>(null);
+const MobileMoreContext = createContext<() => void>(() => {});
 
 /** Aktuelle Session fuer Mobile-Ansichten (Benutzer-ID fuer "Meine", Rolle fuer Schreibrechte). */
 export function useMobileSession(): SessionInfo | null {
   return useContext(MobileSessionContext);
+}
+
+/** Oeffnet das "Mehr"-Panel - Ziel des "‹ Mehr"-Zurueck-Buttons der Bereichsseiten. */
+export function useOpenMore(): () => void {
+  return useContext(MobileMoreContext);
+}
+
+// Bereiche unter "Mehr": dieselbe rollenabhaengige Navigation wie die Desktop-Sidebar
+// (buildNav), ohne Übersicht/Termine/Todos (eigene Tabs) und ohne Import (nur Computer).
+// Bussen bekommen einen eigenen Eintrag - am Desktop sind sie ein Tab der Finanzen.
+const TAB_ROUTES = new Set(["/", "/events", "/todos", "/tools/import"]);
+
+export function mobileMoreGroups(session: SessionInfo | null) {
+  const hasFinance = session?.current_tenant?.enabled_features?.includes("finance") ?? false;
+  return buildNav(session)
+    .filter((group) => group.titleKey !== null)
+    .map((group) => ({
+      titleKey: group.titleKey as string,
+      links: group.links
+        .filter((link) => !TAB_ROUTES.has(link.href))
+        .flatMap((link): NavLink[] =>
+          link.href === "/finances" && hasFinance
+            ? [{ ...link, match: [] }, { href: "/fines", labelKey: "fines", icon: "fines" }]
+            : [link]
+        ),
+    }))
+    .filter((group) => group.links.length > 0);
 }
 
 type TabKey = "overview" | "events" | "todos" | "more";
@@ -44,7 +73,8 @@ function activeTabFor(pathname: string): TabKey | null {
   if (pathname === "/" || pathname.startsWith("/statistics")) return "overview";
   if (pathname === "/events" || pathname.startsWith("/events/")) return "events";
   if (pathname === "/todos" || pathname.startsWith("/todos/")) return "todos";
-  return null;
+  // Alle Bereiche unter "Mehr" (Protokolle, Finanzen, Fotos ...).
+  return "more";
 }
 
 export function MobileShell({
@@ -91,6 +121,7 @@ export function MobileShell({
 
   return (
     <MobileSessionContext.Provider value={session}>
+      <MobileMoreContext.Provider value={() => setMoreOpen(true)}>
       <div className="mobile-shell">
         <ConnectivityStatus />
         {/* Inhalt bleibt beim Oeffnen von "Mehr" montiert, damit Filter/Scrollposition erhalten bleiben. */}
@@ -143,6 +174,7 @@ export function MobileShell({
           })}
         </nav>
       </div>
+      </MobileMoreContext.Provider>
     </MobileSessionContext.Provider>
   );
 }
@@ -164,6 +196,7 @@ function MobileMorePanel({
 }) {
   const t = useTranslations("mobile");
   const tNav = useTranslations("nav");
+  const pathname = usePathname();
   const name = session?.user?.display_name ?? "…";
   const subtitle = [session?.current_tenant?.name, formatRoleLabel(session?.current_role, tNav)].filter(Boolean).join(" · ");
   const themes: [ThemePreference, string][] = [
@@ -182,6 +215,22 @@ function MobileMorePanel({
           <div className="mobile-muted-sm">{subtitle}</div>
         </div>
       </div>
+
+      {mobileMoreGroups(session).map((group) => (
+        <MobileGroup key={group.titleKey} label={tNav(group.titleKey)}>
+          {group.links.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href as Route}
+              className={`mobile-list-row${isNavLinkActive(link, pathname) ? " mobile-list-row-current" : ""}`}
+            >
+              <NavIcon name={link.icon} className="mobile-list-row-navicon" />
+              <span className="mobile-list-row-label">{tNav(link.labelKey)}</span>
+              <MobileIcon name="chevronRight" size={16} strokeWidth={2.2} className="mobile-list-row-chevron" />
+            </Link>
+          ))}
+        </MobileGroup>
+      ))}
 
       <MobileGroup label={tNav("appearance")}>
         {themes.map(([value, label]) => (
@@ -202,7 +251,6 @@ function MobileMorePanel({
         </button>
       </MobileGroup>
 
-      <p className="mobile-more-hint">{t("more.desktopHint")}</p>
     </div>
   );
 }

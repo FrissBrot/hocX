@@ -59,7 +59,8 @@
     "tagsTitle": "Tag",
     "saving": "Salvataggio…",
     "tagPlaceholder": "Aggiungi tag…",
-    "openOriginalNewTab": "Apri originale in nuova scheda"
+    "openOriginalNewTab": "Apri originale in nuova scheda",
+    "shareLink": "Condividi link"
   },
   "table": {
     "columnName": "Nome",

@@ -15,6 +15,7 @@ import {
   cycleOffsetLabel,
   formFromAssignment,
   initialForm,
+  assignmentPayload,
 } from "@/components/submission-assignments/submission-assignment-form";
 import { SubmissionLinkManager } from "@/components/submission-assignments/submission-link-manager";
 import { browserApiFetch } from "@/lib/api/client";
@@ -415,28 +416,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
   }, []);
 
   async function submit() {
-    const isEvents = form.source_type === "events";
-    const payload = {
-      title: form.title.trim(),
-      description: form.description || null,
-      public_slug: form.public_slug,
-      source_type: form.source_type,
-      // Nur was zur gewählten Verknüpfung gehört, wird gesendet – der Rest wird beim Wechsel geleert.
-      tag_filter: isEvents ? form.tag_filter : null,
-      offset_days_before: isEvents && form.offset_days_before !== "" ? Number(form.offset_days_before) : null,
-      offset_days_after: isEvents && form.offset_days_after !== "" ? Number(form.offset_days_after) : null,
-      cycle_config_id: isEvents ? form.cycle_config_id || null : null,
-      cycle_offsets: isEvents && form.cycle_config_id ? form.cycle_offsets : [],
-      list_definition_id: form.source_type === "list" ? form.list_definition_id || null : null,
-      deadline: isEvents ? null : form.deadline || null,
-      allowed_file_types: form.allowed_file_types,
-      max_files_per_element: form.max_files_per_element === "" ? null : Number(form.max_files_per_element),
-      max_file_size_mb: Number(form.max_file_size_mb),
-      sort_order: form.sort_order,
-      auto_close: form.auto_close,
-      responsible_participant_source: form.source_type === "manual" ? null : form.responsible_participant_source || null,
-      link_ids: form.link_ids,
-    };
+    const payload = assignmentPayload(form);
 
     try {
       const saved = editingId

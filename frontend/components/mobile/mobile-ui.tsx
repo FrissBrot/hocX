@@ -1,10 +1,11 @@
 "use client";
 
-import { CSSProperties, ReactNode } from "react";
+import { CSSProperties, ReactNode, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { MobileIcon } from "@/components/mobile/mobile-icons";
 import { avatarColor, dateParts, initials } from "@/components/mobile/mobile-utils";
+import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 
 // Kleine Darstellungsbausteine der Mobile-Oberflaeche. Optik liegt komplett in globals.css
@@ -256,5 +257,130 @@ export function MobileListRow({
     </button>
   ) : (
     <div className="mobile-list-row">{content}</div>
+  );
+}
+
+/** Kopf einer Bereichsseite unter "Mehr": "‹ Mehr" (oder eigenes Ziel), Titel, Untertitel, Aktionen. */
+export function MobileSubHeader({
+  title,
+  subtitle,
+  backLabel,
+  onBack,
+  actions,
+}: {
+  title: string;
+  subtitle?: string;
+  backLabel: string;
+  onBack: () => void;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="mobile-subheader">
+      <button type="button" className="mobile-sheet-back" onClick={onBack}>
+        <MobileIcon name="chevronLeft" size={22} strokeWidth={2.2} />
+        {backLabel}
+      </button>
+      <div className="mobile-page-header mobile-subheader-row">
+        <div className="mobile-subheader-text">
+          <h1 className="mobile-page-title">{title}</h1>
+          {subtitle ? <div className="mobile-muted-sm">{subtitle}</div> : null}
+        </div>
+        {actions ? <div className="mobile-subheader-actions">{actions}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+export type MobileAction = { label: string; onClick: () => void; danger?: boolean; disabled?: boolean };
+
+/** Aktionen zu einem Objekt als Bottom-Sheet - mobiles Gegenstueck zu ActionMenu. */
+export function MobileActionSheet({ title, actions, onClose }: { title: string; actions: MobileAction[]; onClose: () => void }) {
+  return (
+    <Modal open size="sheet" title={title} onClose={onClose} className="mobile-sheet">
+      <div className="mobile-action-list">
+        {actions.map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            className={`mobile-action${action.danger ? " mobile-action-danger" : ""}`}
+            disabled={action.disabled}
+            onClick={() => {
+              onClose();
+              action.onClick();
+            }}
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+/** Hinweis fuer Funktionen, die bewusst am Computer bleiben - mit Link an die eigene E-Mail. */
+export function MobileDesktopHint({ text, email }: { text: string; email?: string | null }) {
+  const t = useTranslations("mobile");
+  // Erst nach dem Mount: die aktuelle URL gibt es nur im Browser (sonst Hydration-Abweichung).
+  const [href, setHref] = useState<string | null>(null);
+  useEffect(() => {
+    setHref(email ? `mailto:${email}?subject=${encodeURIComponent("hocX")}&body=${encodeURIComponent(window.location.href)}` : null);
+  }, [email]);
+  return (
+    <div className="mobile-desktop-hint">
+      <p className="mobile-desktop-hint-text">{text}</p>
+      {href ? (
+        <a className="mobile-list-row mobile-desktop-hint-link" href={href}>
+          <span className="mobile-list-row-label">
+            {t("common.sendLinkToMe")}
+            <small className="mobile-muted-sm">{email}</small>
+          </span>
+          <MobileIcon name="chevronRight" size={16} strokeWidth={2.2} className="mobile-list-row-chevron" />
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
+/** Schwebende Leiste fuer eine Mehrfachauswahl (Teilnehmer, Fotos). */
+export function MobileSelectionBar({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="mobile-selection-bar" role="toolbar" aria-label={label}>
+      <span className="mobile-selection-bar-label">{label}</span>
+      <div className="mobile-selection-bar-actions">{children}</div>
+    </div>
+  );
+}
+
+/** Kompakte Kennzahl-Kachel (Statistik, Bussen, Abo). */
+export function MobileStat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
+  return (
+    <div className="mobile-card mobile-stat">
+      <div className="mobile-eyebrow">{label}</div>
+      <div className="mobile-stat-value">{value}</div>
+      {sub ? <div className="mobile-muted-sm">{sub}</div> : null}
+    </div>
+  );
+}
+
+/** Zeile mit Fortschrittsbalken (Abgaben, Speicher, Nutzer). */
+export function MobileProgress({ value, max, label }: { value: number; max: number; label?: ReactNode }) {
+  const percent = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
+  return (
+    <div className="mobile-progress">
+      <div className="mobile-progress-track">
+        <span style={{ width: `${percent}%` }} />
+      </div>
+      {label ? <span className="mobile-muted-sm">{label}</span> : null}
+    </div>
+  );
+}
+
+/** Beschriftete Gruppe von Zeilen in einer Karte (Einstellungen, "Mehr"). */
+export function MobileGroupCard({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="mobile-group">
+      <div className="mobile-group-label">{label}</div>
+      <div className="mobile-card mobile-group-card">{children}</div>
+    </div>
   );
 }

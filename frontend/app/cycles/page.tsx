@@ -1,3 +1,5 @@
+import { MobileCycles } from "@/components/mobile/areas/mobile-admin";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 
 import { CycleConfigManager } from "@/components/cycles/cycle-config-manager";
@@ -14,9 +16,16 @@ export default async function CyclesPage() {
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
-        <CycleConfigManager initialConfigs={configs} />
-      </section>
+      <ResponsiveView
+        mobile={<MobileCycles initialConfigs={configs} />}
+        desktop={
+          <>
+          <section className="panel">
+            <CycleConfigManager initialConfigs={configs} />
+          </section>
+          </>
+        }
+      />
     </AppShell>
   );
 }

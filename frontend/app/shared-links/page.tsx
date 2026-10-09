@@ -1,3 +1,5 @@
+import { MobileSharedLinks } from "@/components/mobile/areas/mobile-admin";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 
 import { SharedLinksView } from "@/components/shared-links/shared-links-view";
@@ -17,9 +19,16 @@ export default async function SharedLinksPage() {
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
-        <SharedLinksView initialLinks={links ?? []} />
-      </section>
+      <ResponsiveView
+        mobile={<MobileSharedLinks initialLinks={links ?? []} />}
+        desktop={
+          <>
+          <section className="panel">
+            <SharedLinksView initialLinks={links ?? []} />
+          </section>
+          </>
+        }
+      />
     </AppShell>
   );
 }

@@ -15,7 +15,9 @@
     "save": "Salva",
     "search": "Cerca",
     "searchPlaceholder": "Cerca …",
-    "undo": "Annulla azione"
+    "undo": "Annulla azione",
+    "sendLinkToMe": "Inviami il link",
+    "desktopOnly": "Quest’area si modifica sul computer. Apri hocX nel browser – il link porta direttamente qui."
   },
   "relative": {
     "today": "Oggi",
@@ -25,8 +27,7 @@
     "daysAgo": "{count, plural, one {# giorno fa} other {# giorni fa}}"
   },
   "more": {
-    "account": "Account",
-    "desktopHint": "Altre aree come verbali, finanze o partecipanti sono disponibili sul computer."
+    "account": "Account"
   },
   "dashboard": {
     "greeting": "Ciao {name}",
@@ -175,5 +176,64 @@
     "tools": "Strumenti",
     "unassigned": "Non assegnata",
     "you": "{name} (tu)"
+  },
+  "protocols": {
+    "fab": "Verbale",
+    "wordImportHint": "I documenti Word si importano sul computer."
+  },
+  "finances": {
+    "thisYear": "Quest’anno",
+    "fab": "Transazione",
+    "add": "Aggiungi"
+  },
+  "fines": {
+    "collected": "Multa di {name} incassata",
+    "fab": "Multa"
+  },
+  "participants": {
+    "selected": "{count, plural, =0 {Seleziona} one {# selezionato} other {# selezionati}}",
+    "select": "Seleziona",
+    "selectedCount": "{count, plural, one {# partecipante} other {# partecipanti}}",
+    "fab": "Partecipante",
+    "chooseCsv": "Scegli file CSV"
+  },
+  "cycles": {
+    "fab": "Ciclo",
+    "deleteHint": "L’eliminazione è possibile solo finché nessun modello è assegnato."
+  },
+  "users": {
+    "fab": "Invita"
+  },
+  "files": {
+    "sort": "Ordinamento",
+    "fab": "Carica"
+  },
+  "lists": {
+    "historyHint": "I cicli precedenti e gli stati storici di questa lista si vedono sul computer.",
+    "entryFab": "Voce",
+    "inactive": "Inattiva",
+    "fab": "Lista",
+    "editEntry": "Modifica voce"
+  },
+  "stats": {
+    "todosDone": "aperte · {count} completate",
+    "finesCount": "{count, plural, one {# multa} other {# multe}}",
+    "attendancePerMember": "Presenza per membro",
+    "cardTitle": "Statistiche · ultimi 6 mesi",
+    "todosOpen": "Attività aperte"
+  },
+  "submissions": {
+    "fab": "Consegna"
+  },
+  "templates": {
+    "subtitle": "Contenitori per elementi riutilizzabili",
+    "desktopHint": "Elementi e layout dei documenti si modificano sul computer.",
+    "fab": "Modello",
+    "editSettings": "Modifica impostazioni",
+    "participantCount": "{count, plural, one {# partecipante} other {# partecipanti}} nel controllo presenze",
+    "elementsHint": "Elementi, ordine e blocchi si modificano sul computer."
+  },
+  "photos": {
+    "fab": "Foto"
   }
 }

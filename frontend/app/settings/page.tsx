@@ -1,3 +1,5 @@
+import { MobileDesktopOnly } from "@/components/mobile/areas/mobile-misc";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
@@ -21,16 +23,23 @@ export default async function SettingsPage() {
 
   return (
     <AppShell initialSession={session}>
-      <RouteTabs tabs={templateTabs(t)} activeHref="/settings" />
-      <section className="panel">
-        <div className="section-stack">
-          <DocumentTemplateManager
-            initialTemplates={documentTemplates ?? []}
-            initialParts={documentTemplateParts ?? []}
-            tenantId={session.current_tenant?.id ?? null}
-          />
-        </div>
-      </section>
+      <ResponsiveView
+        mobile={<MobileDesktopOnly navKey="documentLayouts" backHref="/templates" backNavKey="templates" />}
+        desktop={
+          <>
+          <RouteTabs tabs={templateTabs(t)} activeHref="/settings" />
+          <section className="panel">
+            <div className="section-stack">
+              <DocumentTemplateManager
+                initialTemplates={documentTemplates ?? []}
+                initialParts={documentTemplateParts ?? []}
+                tenantId={session.current_tenant?.id ?? null}
+              />
+            </div>
+          </section>
+          </>
+        }
+      />
     </AppShell>
   );
 }

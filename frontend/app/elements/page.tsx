@@ -1,3 +1,5 @@
+import { MobileDesktopOnly } from "@/components/mobile/areas/mobile-misc";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
@@ -27,19 +29,26 @@ export default async function ElementsPage({ searchParams }: { searchParams: Pro
 
   return (
     <AppShell initialSession={session}>
-      <RouteTabs tabs={templateTabs(t)} activeHref="/elements" />
-      <section className="panel">
-        <ElementDefinitionManager
-          initialDefinitions={definitions ?? []}
-          knownEventTags={knownEventTags}
-          availableParticipants={participants}
-          availableEvents={events}
-          availableLists={lists}
-          availableAccounts={accounts}
-          tenantId={session.current_tenant?.id ?? null}
-          autoOpenCreate={create === "1"}
-        />
-      </section>
+      <ResponsiveView
+        mobile={<MobileDesktopOnly navKey="elements" backHref="/templates" backNavKey="templates" />}
+        desktop={
+          <>
+          <RouteTabs tabs={templateTabs(t)} activeHref="/elements" />
+          <section className="panel">
+            <ElementDefinitionManager
+              initialDefinitions={definitions ?? []}
+              knownEventTags={knownEventTags}
+              availableParticipants={participants}
+              availableEvents={events}
+              availableLists={lists}
+              availableAccounts={accounts}
+              tenantId={session.current_tenant?.id ?? null}
+              autoOpenCreate={create === "1"}
+            />
+          </section>
+          </>
+        }
+      />
     </AppShell>
   );
 }

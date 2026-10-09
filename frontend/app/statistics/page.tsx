@@ -1,3 +1,5 @@
+import { MobileStatistics } from "@/components/mobile/areas/mobile-statistics";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { getTranslations } from "next-intl/server";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
@@ -13,8 +15,15 @@ export default async function StatisticsPage() {
 
   return (
     <AppShell initialSession={session}>
-      <RouteTabs tabs={dashboardTabs(t)} activeHref="/statistics" />
-      <StatisticsView data={data} />
+      <ResponsiveView
+        mobile={<MobileStatistics data={data} />}
+        desktop={
+          <>
+          <RouteTabs tabs={dashboardTabs(t)} activeHref="/statistics" />
+          <StatisticsView data={data} />
+          </>
+        }
+      />
     </AppShell>
   );
 }

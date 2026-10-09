@@ -1,3 +1,5 @@
+import { MobileProtocols } from "@/components/mobile/areas/mobile-protocols";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { AppShell } from "@/components/ui/app-shell";
 import { ProtocolBuilder } from "@/components/protocol/protocol-builder";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
@@ -14,13 +16,18 @@ export default async function ProtocolsPage() {
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
-        <ProtocolBuilder
-          initialProtocols={items ?? []}
-          templates={templates ?? []}
-          readOnly={!canWrite}
-        />
-      </section>
+      <ResponsiveView
+        mobile={<MobileProtocols initialProtocols={items ?? []} templates={templates ?? []} readOnly={!canWrite} />}
+        desktop={
+          <section className="panel">
+            <ProtocolBuilder
+              initialProtocols={items ?? []}
+              templates={templates ?? []}
+              readOnly={!canWrite}
+            />
+          </section>
+        }
+      />
     </AppShell>
   );
 }

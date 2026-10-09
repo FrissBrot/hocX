@@ -1,3 +1,5 @@
+import { MobileTemplateDetail } from "@/components/mobile/areas/mobile-templates";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/ui/app-shell";
@@ -29,19 +31,26 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
-        <TemplateEditor
-          initialTemplate={template}
-          initialElements={elements ?? []}
-          initialDefinitions={definitions ?? []}
-          availableEvents={events ?? []}
-          availableParticipants={participants ?? []}
-          availableLists={lists ?? []}
-          initialAssignedParticipants={selectedParticipants ?? []}
-          availableDocumentTemplates={documentTemplates ?? []}
-          availableCycleConfigs={cycleConfigs ?? []}
-        />
-      </section>
+      <ResponsiveView
+        mobile={<MobileTemplateDetail initialTemplate={template} elements={elements ?? []} participants={participants ?? []} initialAssigned={selectedParticipants ?? []} documentTemplates={documentTemplates ?? []} cycleConfigs={cycleConfigs ?? []} />}
+        desktop={
+          <>
+          <section className="panel">
+            <TemplateEditor
+              initialTemplate={template}
+              initialElements={elements ?? []}
+              initialDefinitions={definitions ?? []}
+              availableEvents={events ?? []}
+              availableParticipants={participants ?? []}
+              availableLists={lists ?? []}
+              initialAssignedParticipants={selectedParticipants ?? []}
+              availableDocumentTemplates={documentTemplates ?? []}
+              availableCycleConfigs={cycleConfigs ?? []}
+            />
+          </section>
+          </>
+        }
+      />
     </AppShell>
   );
 }

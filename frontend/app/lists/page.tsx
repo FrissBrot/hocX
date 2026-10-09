@@ -1,3 +1,5 @@
+import { MobileLists } from "@/components/mobile/areas/mobile-lists";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 
 import { ListManager } from "@/components/lists/list-manager";
@@ -36,15 +38,22 @@ export default async function ListsPage() {
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel lists-page">
-        <ListManager
-          initialLists={lists ?? []}
-          initialEntriesByList={initialEntriesByList}
-          availableParticipants={participants ?? []}
-          availableEvents={events ?? []}
-          documentTemplates={documentTemplates ?? []}
-        />
-      </section>
+      <ResponsiveView
+        mobile={<MobileLists initialLists={lists ?? []} initialEntriesByList={initialEntriesByList} participants={participants ?? []} events={events ?? []} />}
+        desktop={
+          <>
+          <section className="panel lists-page">
+            <ListManager
+              initialLists={lists ?? []}
+              initialEntriesByList={initialEntriesByList}
+              availableParticipants={participants ?? []}
+              availableEvents={events ?? []}
+              documentTemplates={documentTemplates ?? []}
+            />
+          </section>
+          </>
+        }
+      />
     </AppShell>
   );
 }

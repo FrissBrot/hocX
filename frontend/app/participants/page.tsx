@@ -1,3 +1,5 @@
+import { MobileParticipants } from "@/components/mobile/areas/mobile-participants";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 
 import { ParticipantManager } from "@/components/participants/participant-manager";
@@ -20,13 +22,20 @@ export default async function ParticipantsPage() {
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
-        <ParticipantManager
-          initialParticipants={participants ?? []}
-          templates={templates ?? []}
-          tenantId={session.current_tenant?.id ?? null}
-        />
-      </section>
+      <ResponsiveView
+        mobile={<MobileParticipants initialParticipants={participants ?? []} templates={templates ?? []} tenantId={session.current_tenant?.id ?? null} />}
+        desktop={
+          <>
+          <section className="panel">
+            <ParticipantManager
+              initialParticipants={participants ?? []}
+              templates={templates ?? []}
+              tenantId={session.current_tenant?.id ?? null}
+            />
+          </section>
+          </>
+        }
+      />
     </AppShell>
   );
 }

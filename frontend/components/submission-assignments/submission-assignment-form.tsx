@@ -143,6 +143,32 @@ export function formFromAssignment(assignment: SubmissionAssignment): FormState 
 }
 
 /** Grund, warum das Formular noch nicht gespeichert werden kann (null = gültig). */
+/** POST/PATCH-Body aus dem Formular - gemeinsam fuer Desktop-Manager und Mobile-Ansicht.
+ * Nur was zur gewaehlten Verknuepfung gehoert, wird gesendet - der Rest wird beim Wechsel geleert. */
+export function assignmentPayload(form: FormState) {
+  const isEvents = form.source_type === "events";
+  return {
+    title: form.title.trim(),
+    description: form.description || null,
+    public_slug: form.public_slug,
+    source_type: form.source_type,
+    tag_filter: isEvents ? form.tag_filter : null,
+    offset_days_before: isEvents && form.offset_days_before !== "" ? Number(form.offset_days_before) : null,
+    offset_days_after: isEvents && form.offset_days_after !== "" ? Number(form.offset_days_after) : null,
+    cycle_config_id: isEvents ? form.cycle_config_id || null : null,
+    cycle_offsets: isEvents && form.cycle_config_id ? form.cycle_offsets : [],
+    list_definition_id: form.source_type === "list" ? form.list_definition_id || null : null,
+    deadline: isEvents ? null : form.deadline || null,
+    allowed_file_types: form.allowed_file_types,
+    max_files_per_element: form.max_files_per_element === "" ? null : Number(form.max_files_per_element),
+    max_file_size_mb: Number(form.max_file_size_mb),
+    sort_order: form.sort_order,
+    auto_close: form.auto_close,
+    responsible_participant_source: form.source_type === "manual" ? null : form.responsible_participant_source || null,
+    link_ids: form.link_ids,
+  };
+}
+
 export function formProblem(form: FormState, t: TFunc): string | null {
   if (!form.title.trim()) return t("titleMissing");
   if (form.source_type === "events") {

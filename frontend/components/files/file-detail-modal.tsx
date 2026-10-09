@@ -33,12 +33,15 @@ export function FileDetailModal({
   onClose,
   onNavigate,
   onTagsSaved,
+  onShare,
 }: {
   item: FileOverviewItem;
   tagSuggestions: string[];
   onClose: () => void;
   onNavigate: (href: string) => void;
   onTagsSaved: (tags: string[]) => void;
+  /** Optional: "Link teilen" direkt im Dialog (Mobile - dort gibt es keine Tabellen-Aktionen). */
+  onShare?: () => void;
 }) {
   const t = useTranslations("files");
   const [metadata, setMetadata] = useState<StoredFileMetadata | null>(null);
@@ -172,6 +175,11 @@ export function FileDetailModal({
           <a href={fileUrl} target="_blank" rel="noreferrer" className="button-secondary button-ghost file-detail-open">
             {t("detail.openOriginalNewTab")}
           </a>
+          {onShare ? (
+            <button type="button" className="button-secondary file-detail-open" onClick={onShare}>
+              {t("detail.shareLink")}
+            </button>
+          ) : null}
         </div>
       </div>
     </Modal>

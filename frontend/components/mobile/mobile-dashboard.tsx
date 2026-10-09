@@ -8,6 +8,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useAllEvents, useAllPages, useParticipants, useProtocolsByEvent } from "@/components/mobile/mobile-data";
 import { EventDetailSheet, EventFormSheet } from "@/components/mobile/mobile-event-sheets";
 import { MobileEventRow } from "@/components/mobile/mobile-events";
+import { MobileStatsCard } from "@/components/mobile/areas/mobile-statistics";
 import { MobileIcon } from "@/components/mobile/mobile-icons";
 import { useMobileSession } from "@/components/mobile/mobile-shell";
 import { TodoDetailSheet } from "@/components/mobile/mobile-todo-sheets";
@@ -249,6 +250,8 @@ export function MobileDashboard({
           ))}
         </MobileCard>
       ) : null}
+
+      <MobileStatsCard />
 
       {excuseOpen && protocol ? (
         <Modal

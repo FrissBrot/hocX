@@ -15,7 +15,9 @@
     "save": "Save",
     "search": "Search",
     "searchPlaceholder": "Search …",
-    "undo": "Undo"
+    "undo": "Undo",
+    "sendLinkToMe": "Send link to me",
+    "desktopOnly": "You edit this area on a computer. Open hocX in a browser there – the link leads straight here."
   },
   "relative": {
     "today": "Today",
@@ -25,8 +27,7 @@
     "daysAgo": "{count, plural, one {# day ago} other {# days ago}}"
   },
   "more": {
-    "account": "Account",
-    "desktopHint": "Further areas such as protocols, finances or participants are available on a computer."
+    "account": "Account"
   },
   "dashboard": {
     "greeting": "Hello {name}",
@@ -175,5 +176,64 @@
     "tools": "Tools",
     "unassigned": "Unassigned",
     "you": "{name} (you)"
+  },
+  "protocols": {
+    "fab": "Protocol",
+    "wordImportHint": "Word documents are imported on a computer."
+  },
+  "finances": {
+    "thisYear": "This year",
+    "fab": "Transaction",
+    "add": "Add"
+  },
+  "fines": {
+    "collected": "Fine from {name} collected",
+    "fab": "Fine"
+  },
+  "participants": {
+    "selected": "{count, plural, =0 {Select} one {# selected} other {# selected}}",
+    "select": "Select",
+    "selectedCount": "{count, plural, one {# participant} other {# participants}}",
+    "fab": "Participant",
+    "chooseCsv": "Choose CSV file"
+  },
+  "cycles": {
+    "fab": "Cycle",
+    "deleteHint": "Deleting is only possible while no template is assigned."
+  },
+  "users": {
+    "fab": "Invite"
+  },
+  "files": {
+    "sort": "Sort order",
+    "fab": "Upload"
+  },
+  "lists": {
+    "historyHint": "Earlier cycles and historical states of this list are shown on a computer.",
+    "entryFab": "Entry",
+    "inactive": "Inactive",
+    "fab": "List",
+    "editEntry": "Edit entry"
+  },
+  "stats": {
+    "todosDone": "open · {count} done",
+    "finesCount": "{count, plural, one {# fine} other {# fines}}",
+    "attendancePerMember": "Attendance per member",
+    "cardTitle": "Statistics · last 6 months",
+    "todosOpen": "Open todos"
+  },
+  "submissions": {
+    "fab": "Submission"
+  },
+  "templates": {
+    "subtitle": "Containers for reusable elements",
+    "desktopHint": "Elements and document layouts are edited on a computer.",
+    "fab": "Template",
+    "editSettings": "Edit settings",
+    "participantCount": "{count, plural, one {# participant} other {# participants}} in attendance tracking",
+    "elementsHint": "Elements, order and blocks are edited on a computer."
+  },
+  "photos": {
+    "fab": "Photos"
   }
 }

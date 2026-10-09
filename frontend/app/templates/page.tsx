@@ -1,3 +1,5 @@
+import { MobileTemplates } from "@/components/mobile/areas/mobile-templates";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
@@ -21,10 +23,17 @@ export default async function TemplatesPage() {
 
   return (
     <AppShell initialSession={session}>
-      <RouteTabs tabs={templateTabs(t)} activeHref="/templates" />
-      <section className="panel">
-        <TemplateBuilder initialTemplates={data ?? []} availableCycleConfigs={cycleConfigs ?? []} />
-      </section>
+      <ResponsiveView
+        mobile={<MobileTemplates initialTemplates={data ?? []} cycleConfigs={cycleConfigs ?? []} />}
+        desktop={
+          <>
+          <RouteTabs tabs={templateTabs(t)} activeHref="/templates" />
+          <section className="panel">
+            <TemplateBuilder initialTemplates={data ?? []} availableCycleConfigs={cycleConfigs ?? []} />
+          </section>
+          </>
+        }
+      />
     </AppShell>
   );
 }

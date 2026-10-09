@@ -1,3 +1,5 @@
+import { MobileDesktopOnly } from "@/components/mobile/areas/mobile-misc";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { getTranslations } from "next-intl/server";
 
 import { AppShell } from "@/components/ui/app-shell";
@@ -17,15 +19,22 @@ export default async function WordImportPage() {
 
   return (
     <AppShell initialSession={session}>
-      <div className="grid">
-        <div className="page-header">
-          <div>
-            <h1 className="page-title">{t("pageTitle")}</h1>
-            <p className="muted">{t("pageIntro")}</p>
+      <ResponsiveView
+        mobile={<MobileDesktopOnly navKey="import" />}
+        desktop={
+          <>
+          <div className="grid">
+            <div className="page-header">
+              <div>
+                <h1 className="page-title">{t("pageTitle")}</h1>
+                <p className="muted">{t("pageIntro")}</p>
+              </div>
+            </div>
+            <WordImportWizard templates={activeTemplates} participants={activeParticipants} />
           </div>
-        </div>
-        <WordImportWizard templates={activeTemplates} participants={activeParticipants} />
-      </div>
+          </>
+        }
+      />
     </AppShell>
   );
 }
