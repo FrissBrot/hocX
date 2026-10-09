@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 
 import { ProtocolEditor } from "@/components/protocol/protocol-editor";
 import { ProtocolOverview } from "@/components/protocol/protocol-builder";
+import { MobileProtocolEditor } from "@/components/mobile/mobile-protocol-editor";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import {
@@ -95,28 +97,45 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
 
   return (
     <AppShell initialSession={session}>
-      <section className={`panel${protocol.status !== "abgeschlossen" ? " protocol-panel-document" : ""}`}>
-        {protocol.status === "abgeschlossen" && <ProtocolOverview protocol={protocol} />}
-        <ProtocolEditor
-          protocol={protocol}
-          initialElements={elements}
-          initialTodos={initialTodos}
-          initialImages={initialImages}
-          availableParticipants={participants}
-          participantDirectory={participantDirectory}
-          availableEvents={events}
-          availableLists={lists}
-          initialListEntries={initialListEntries}
-          availableTemplates={templates}
-          availableAccounts={financeAccounts}
-          initialFinanceTransactions={initialFinanceTransactions}
-          initialPendingTodos={pendingTodos}
-          documentTemplates={documentTemplates}
-          forceReadOnly={isRestricted}
-          canViewFines={canViewFines}
-          accordionEnabled={session.user?.protocol_accordion_enabled ?? true}
-        />
-      </section>
+      <ResponsiveView
+        mobile={
+          <MobileProtocolEditor
+            protocol={protocol}
+            initialElements={elements}
+            initialTodos={initialTodos}
+            initialImages={initialImages}
+            availableParticipants={participants}
+            availableAccounts={financeAccounts}
+            initialFinanceTransactions={initialFinanceTransactions}
+            initialPendingTodos={pendingTodos}
+            forceReadOnly={isRestricted}
+          />
+        }
+        desktop={
+          <section className={`panel${protocol.status !== "abgeschlossen" ? " protocol-panel-document" : ""}`}>
+            {protocol.status === "abgeschlossen" && <ProtocolOverview protocol={protocol} />}
+            <ProtocolEditor
+              protocol={protocol}
+              initialElements={elements}
+              initialTodos={initialTodos}
+              initialImages={initialImages}
+              availableParticipants={participants}
+              participantDirectory={participantDirectory}
+              availableEvents={events}
+              availableLists={lists}
+              initialListEntries={initialListEntries}
+              availableTemplates={templates}
+              availableAccounts={financeAccounts}
+              initialFinanceTransactions={initialFinanceTransactions}
+              initialPendingTodos={pendingTodos}
+              documentTemplates={documentTemplates}
+              forceReadOnly={isRestricted}
+              canViewFines={canViewFines}
+              accordionEnabled={session.user?.protocol_accordion_enabled ?? true}
+            />
+          </section>
+        }
+      />
     </AppShell>
   );
 }

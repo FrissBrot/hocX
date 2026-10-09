@@ -1,8 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { Inter } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { getMainAppUrl } from "@/lib/site-config";
+import { ViewportProvider } from "@/lib/hooks/use-is-mobile";
+import { isMobileUserAgent } from "@/lib/utils/viewport";
 import "./tokens.css";
 import "./globals.css";
 
@@ -19,6 +22,10 @@ export async function generateMetadata(): Promise<Metadata> {
     description: t("description"),
   };
 }
+
+// viewport-fit=cover: die Mobile-Tableiste reserviert ueber env(safe-area-inset-bottom) selbst
+// Platz fuer den Home-Indikator, statt dass der Browser einen leeren Streifen darunter laesst.
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 // Ohne das wuerde Next.js Routen ohne eigene dynamische Datenabhaengigkeit (z.B. /login)
 // statisch zur Build-Zeit vorrendern - dann wuerde das untenstehende __HOCX_CONFIG__-Script
@@ -39,6 +46,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // volle Prioritaetskette inkl. der gespeicherten Benutzerpraeferenz.
   const locale = await getLocale();
   const messages = await getMessages();
+  const initialMobile = isMobileUserAgent((await headers()).get("user-agent"));
 
   return (
     <html lang={locale} className={inter.variable} suppressHydrationWarning>
@@ -73,7 +81,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       </head>
       <body suppressHydrationWarning>
         <NextIntlClientProvider locale={locale} messages={messages}>
-          {children}
+          <ViewportProvider initialMobile={initialMobile}>{children}</ViewportProvider>
         </NextIntlClientProvider>
       </body>
     </html>

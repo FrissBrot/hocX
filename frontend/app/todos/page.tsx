@@ -1,5 +1,7 @@
 import { AppShell } from "@/components/ui/app-shell";
 import { TodoListView } from "@/components/todos/todo-list-view";
+import { MobileTodos } from "@/components/mobile/mobile-todos";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { DocumentTemplate, EventSummary, ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
 
@@ -20,17 +22,22 @@ export default async function TodosPage() {
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
-        <TodoListView
-          allTodos={allTodos ?? null}
-          myTodos={myTodos ?? []}
-          canEdit={canEdit}
-          todoBlocks={todoBlocks ?? []}
-          participants={participants ?? []}
-          documentTemplates={documentTemplates ?? []}
-          events={events ?? []}
-        />
-      </section>
+      <ResponsiveView
+        mobile={<MobileTodos allTodos={allTodos ?? null} myTodos={myTodos ?? []} canEdit={canEdit} participants={participants ?? []} />}
+        desktop={
+          <section className="panel">
+            <TodoListView
+              allTodos={allTodos ?? null}
+              myTodos={myTodos ?? []}
+              canEdit={canEdit}
+              todoBlocks={todoBlocks ?? []}
+              participants={participants ?? []}
+              documentTemplates={documentTemplates ?? []}
+              events={events ?? []}
+            />
+          </section>
+        }
+      />
     </AppShell>
   );
 }

@@ -31,7 +31,8 @@ type ModalProps = {
   children: ReactNode;
   onClose: () => void;
   onEscape?: () => void | Promise<void>;
-  size?: "default" | "wide" | "fullscreen";
+  /** `sheet`: Bottom-Sheet der Mobile-Oberflaeche (volle Breite, unten angedockt). */
+  size?: "default" | "wide" | "fullscreen" | "sheet";
   headerActions?: ReactNode;
   hideCloseButton?: boolean;
   /** Skips the title bar entirely (no h2, no close button) for shells that build their own

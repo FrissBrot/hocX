@@ -78,6 +78,7 @@ import {
   trimSectionName,
   visibleBlockTitle,
 } from "@/components/protocol/protocol-editor-shared";
+import { attendanceFineConfig, syncAttendanceFine } from "@/components/protocol/attendance-fines";
 import { MatrixEmbeddedBlockEditor } from "@/components/protocol/matrix-embedded-block-editor";
 import { ChartBlockRenderer } from "@/components/protocol/chart-block-renderer";
 import { SessionTodosSection } from "@/components/protocol/session-todos-section";
@@ -2841,10 +2842,8 @@ export function FocusedElementEditor({
               {elementType === "attendance" && (() => {
                 const attendanceEntries = Array.isArray(blockConfig.attendance_entries) ? (blockConfig.attendance_entries as Array<Record<string, any>>) : [];
                 const eligibleAttendanceParticipants = protocolAttendanceParticipants(availableParticipants, attendanceEntries, protocol);
-                const fineAccountId = blockConfig.fine_account_id ? String(blockConfig.fine_account_id) : null;
-                const fineAmountLate = Number(blockConfig.fine_amount_late ?? 0);
-                const fineAmountAbsent = Number(blockConfig.fine_amount_absent ?? 0);
-                const hasFineConfig = fineAccountId != null && (fineAmountLate > 0 || fineAmountAbsent > 0);
+                const fineConfig = attendanceFineConfig(blockConfig);
+                const hasFineConfig = fineConfig.enabled;
 
                 async function handleAttendanceChange(participant: ParticipantSummary, newStatus: string) {
                   const previousEntry = attendanceEntries.find((entry) => String(entry.participant_id) === participant.id);
@@ -2864,42 +2863,16 @@ export function FocusedElementEditor({
                   try {
                     await saveAttendanceStatus(block.id, participant.id, participant.display_name, newStatus);
 
-                    if (hasFineConfig) {
-                      const existingFine = protocolFines.find(
-                        (f) => f.participant_id === participant.id && (f.fine_type === "late" || f.fine_type === "absent") && f.status === "pending"
-                      );
-
-                      if (newStatus === "late" && fineAmountLate > 0) {
-                        if (!existingFine || existingFine.fine_type !== "late") {
-                          if (existingFine) {
-                            await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
-                            setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
-                          }
-                          const created = await browserApiFetch<AttendanceFine>("/api/fines", {
-                            method: "POST",
-                            body: JSON.stringify({ protocol_id: protocol.id, participant_id: participant.id, participant_name_snapshot: participant.display_name, fine_type: "late", amount: fineAmountLate, account_id: fineAccountId }),
-                          });
-                          if (created) setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]);
-                        }
-                      } else if (newStatus === "absent" && fineAmountAbsent > 0) {
-                        if (!existingFine || existingFine.fine_type !== "absent") {
-                          if (existingFine) {
-                            await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
-                            setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
-                          }
-                          const created = await browserApiFetch<AttendanceFine>("/api/fines", {
-                            method: "POST",
-                            body: JSON.stringify({ protocol_id: protocol.id, participant_id: participant.id, participant_name_snapshot: participant.display_name, fine_type: "absent", amount: fineAmountAbsent, account_id: fineAccountId }),
-                          });
-                          if (created) setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]);
-                        }
-                      } else {
-                        if (existingFine) {
-                          await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
-                          setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
-                        }
-                      }
-                    }
+                    await syncAttendanceFine({
+                      protocolId: protocol.id,
+                      participant,
+                      status: newStatus,
+                      config: fineConfig,
+                      fines: protocolFines,
+                      onRemoved: (fineId) => setProtocolFines((prev) => prev.filter((f) => f.id !== fineId)),
+                      onCreated: (created) =>
+                        setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]),
+                    });
 
                     bumpStatsCharts();
                   } catch (error) {

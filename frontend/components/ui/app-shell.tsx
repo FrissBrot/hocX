@@ -19,6 +19,8 @@ import { ProfileModal } from "@/components/ui/profile-modal";
 import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
 import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
+import { MobileShell } from "@/components/mobile/mobile-shell";
+import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 
 // Login rendert nie auf einer Mandanten-Custom-Domain — von dort muss eine volle Navigation
 // (nicht SPA-Routing) zur Hauptdomain erfolgen, sonst gäbe es dort keine Login-Seite zu zeigen.
@@ -64,6 +66,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const tSettings = useTranslations("settings");
   const tCommon = useTranslations("common");
   const showToast = useToast();
+  const isMobile = useIsMobile();
   const pathname = usePathname();
   const router = useRouter();
   const avatarTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -215,6 +218,39 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
     } catch {
       showToast(tSettings("logoutFailed"), "error");
     }
+  }
+
+  const profileModal = (
+    <ProfileModal
+      open={profileModalOpen}
+      onClose={() => setProfileModalOpen(false)}
+      language={language}
+      onLanguageChange={setLanguage}
+      protocolAccordionEnabled={protocolAccordionEnabled}
+      onProtocolAccordionChange={setProtocolAccordionEnabled}
+      onSave={saveProfile}
+      onLogout={() => void logout()}
+    />
+  );
+
+  // Mobile (bis 900 px): eigene Shell mit Tableiste statt Sidebar. Dieselben Routen, nur die
+  // Bereiche aus dem Mobile-Design stehen in der Navigation (siehe mobile-shell.tsx).
+  if (isMobile) {
+    return (
+      <>
+        <MobileShell
+          session={session}
+          themePreference={themePreference}
+          themeReady={themeReady}
+          onSelectTheme={selectTheme}
+          onOpenProfile={() => setProfileModalOpen(true)}
+          onLogout={() => void logout()}
+        >
+          {children}
+        </MobileShell>
+        {profileModal}
+      </>
+    );
   }
 
   return (
@@ -379,16 +415,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
         </div>
       </div>
 
-      <ProfileModal
-        open={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
-        language={language}
-        onLanguageChange={setLanguage}
-        protocolAccordionEnabled={protocolAccordionEnabled}
-        onProtocolAccordionChange={setProtocolAccordionEnabled}
-        onSave={saveProfile}
-        onLogout={() => void logout()}
-      />
+      {profileModal}
     </main>
   );
 }

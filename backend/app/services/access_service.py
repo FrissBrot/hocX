@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import CurrentUser
-from app.models.entities import PhotoAlbumItem, StoredFile
+from app.models.entities import PhotoAlbumItem, ProtocolTodo, StoredFile
 from app.repositories.access_repository import AccessRepository
 from app.services import photo_album_share_service
 
@@ -81,9 +81,20 @@ class AccessService:
 
     def ensure_can_read_todo(self, db: Session, user: CurrentUser, todo_id: int) -> None:
         protocol_id = self.repository.protocol_id_for_todo(db, todo_id=todo_id)
-        if protocol_id is None:
+        if protocol_id is not None:
+            self.ensure_can_read_protocol(db, user, protocol_id)
+            return
+        # Standalone-Todo (POST /todos, an keinem Protokollblock): Zugriff ueber den eigenen
+        # Mandanten statt ueber ein Protokoll. Vorher endete hier jedes Standalone-Todo in 404,
+        # obwohl patch_todo/delete_todo sie ausdruecklich als bearbeitbar behandeln - Abhaken,
+        # Bearbeiten und Loeschen schlugen damit sowohl in der Todo-Liste als auch mobil fehl.
+        # Eingeschraenkte Leser sehen (wie in list_todos_for_protocols_or_assigned) nur, was
+        # ihnen selbst zugewiesen ist.
+        todo = db.get(ProtocolTodo, todo_id)
+        if todo is None or todo.tenant_id is None or todo.tenant_id != user.current_tenant_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
-        self.ensure_can_read_protocol(db, user, protocol_id)
+        if self._is_restricted_reader(db, user) and todo.assigned_user_id != user.user_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
 
     def ensure_can_read_stored_file(self, db: Session, user: CurrentUser, stored_file_id: int) -> None:
         protocol_id = self.repository.protocol_id_for_stored_file(db, stored_file_id=stored_file_id)
