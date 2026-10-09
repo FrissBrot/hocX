@@ -24,6 +24,7 @@
     "typeLabelDefault": "Images, PDF et documents Office",
     "dropLabelSelected": "{count, plural, one {# fichier sélectionné} other {# fichiers sélectionnés}}",
     "dropLabelEmpty": "Sélectionner un fichier ou le déposer ici",
+    "dropLabelEmptyTouch": "Sélectionner un fichier",
     "hintMaxFilesUnbounded": "max. 50 fichiers par envoi",
     "hintMaxFilesRemaining": "{count, plural, one {max. # fichier supplémentaire} other {max. # fichiers supplémentaires}}",
     "hintPerFile": "{size} MiB chacun",

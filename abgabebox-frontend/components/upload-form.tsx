@@ -248,9 +248,15 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
         />
         <div className="drop-zone-icon">{files.length > 0 ? "📄" : "⬆"}</div>
         <div className="drop-zone-label">
-          {files.length > 0
-            ? t("dropLabelSelected", { count: files.length })
-            : t("dropLabelEmpty")}
+          {files.length > 0 ? (
+            t("dropLabelSelected", { count: files.length })
+          ) : (
+            <>
+              {/* Auf Touch-Geraeten gibt es kein Drag & Drop - dort nur "Datei auswaehlen" zeigen. */}
+              <span className="drop-label-pointer">{t("dropLabelEmpty")}</span>
+              <span className="drop-label-touch">{t("dropLabelEmptyTouch")}</span>
+            </>
+          )}
         </div>
         <div className="drop-zone-hint">
           {typeLabel} · {remaining === null ? t("hintMaxFilesUnbounded") : t("hintMaxFilesRemaining", { count: remaining })} · {t("hintPerFile", { size: maxFileSizeMb })} · {t("hintTotal")}
