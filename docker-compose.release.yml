@@ -362,10 +362,12 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.priority=10"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
       # Oeffentliche Website (Landing Page) auf der Hauptdomain - proxy.ts schreibt dort jeden
-      # Pfad auf /website um. Ohne TRAEFIK_WEBSITE_DOMAIN greift der Platzhalter nie.
+      # Pfad auf /website um. Ohne TRAEFIK_WEBSITE_DOMAIN greift der Platzhalter nie, und der
+      # Cert-Resolver bleibt leer - sonst versucht Traefik ein ACME-Zertifikat fuer
+      # website.invalid zu holen und loggt bei jedem Start einen Fehler.
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.rule=Host(`${TRAEFIK_WEBSITE_DOMAIN:-website.invalid}`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.entrypoints=websecure"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.tls.certresolver=${TRAEFIK_WEBSITE_DOMAIN:+${TRAEFIK_CERTRESOLVER:-letsencrypt}}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.priority=10"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
 

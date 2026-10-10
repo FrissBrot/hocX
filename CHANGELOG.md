@@ -28,8 +28,9 @@ dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` aus
   kein Verein erscheint ohne Freigabe im Adminportal auf der Website.
 - Neue optionale Variablen `TRAEFIK_WEBSITE_DOMAIN` (Domain der Landing Page, z. B. die
   Hauptdomain) und `WEBSITE_CONTACT_EMAIL` (mailto-Ziel der Demo-/Kontakt-Buttons).
-  Leer bleibt die Website deaktiviert. Für eine eigene Website-Domain muss deren DNS auf
-  den Server zeigen, damit Traefik ein Zertifikat beziehen kann.
+  Leer bleibt die Website deaktiviert, und Traefik fordert kein Zertifikat für sie an.
+  Für eine eigene Website-Domain muss deren DNS auf den Server zeigen, damit Traefik ein
+  Zertifikat beziehen kann.
 - Git-Tag und GitHub-Release entstehen erst nach erfolgreicher Promotion aller Images
   durch den Release-Workflow. Der Push dieser Vorbereitung veröffentlicht noch kein
   Release.
