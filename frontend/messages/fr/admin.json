@@ -207,7 +207,9 @@
       "userLimitPlanLimit": "Limite du plan : {limit}",
       "userLimitUnlimited": "Limite du plan : illimitée",
       "userLimitHelp": "Vide = la limite du plan s'applique. Actuellement {count} utilisateur(s){suffix}",
-      "userLimitExceeded": " – limite atteinte ou dépassée."
+      "userLimitExceeded": " – limite atteinte ou dépassée.",
+      "showOnWebsite": "Afficher comme client sur le site web",
+      "showOnWebsiteHelp": "Apparaît sur le site web public sous « Ils nous font confiance » (nom uniquement). À activer uniquement avec l’accord de l’association."
     },
     "meta": {
       "createdAt": "Créé le",

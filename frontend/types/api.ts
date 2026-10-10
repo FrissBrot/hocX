@@ -525,6 +525,7 @@ export type AdminTenantSummary = {
   assigned_storage_packages: AdminTenantStoragePackage[];
   discount_percent: number;
   billing_note: string | null;
+  show_on_website: boolean;
 };
 
 export type AdminTenantStoragePackage = {
@@ -615,6 +616,11 @@ export type PublicPlan = {
   included_storage_bytes: number | null;
   is_featured: boolean;
   features: { code: string; name: string }[];
+};
+
+/** Kunde fuer "Im Einsatz bei" auf der oeffentlichen Website (GET /api/public/customers). */
+export type PublicCustomer = {
+  name: string;
 };
 
 export type AdminTenantSubscriptionUpdate = {

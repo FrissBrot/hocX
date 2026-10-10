@@ -82,6 +82,8 @@ class Tenant(Base, TimestampMixin):
     # + Zusatzmodule und eine nur intern sichtbare Notiz (z.B. "Vereinsrabatt bis 2027").
     discount_percent: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"))
     billing_note: Mapped[str | None] = mapped_column(Text)
+    # Auf der oeffentlichen Website unter "Im Einsatz bei" gelistet (0104_tenant_show_on_website).
+    show_on_website: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
 
 
 class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):

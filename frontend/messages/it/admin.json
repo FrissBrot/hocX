@@ -207,7 +207,9 @@
       "userLimitPlanLimit": "Limite del piano: {limit}",
       "userLimitUnlimited": "Limite del piano: illimitato",
       "userLimitHelp": "Vuoto = vale il limite del piano. Attualmente {count} utenti{suffix}",
-      "userLimitExceeded": " – limite raggiunto o superato."
+      "userLimitExceeded": " – limite raggiunto o superato.",
+      "showOnWebsite": "Mostra come cliente sul sito web",
+      "showOnWebsiteHelp": "Compare sul sito web pubblico sotto «Lo usano» (solo il nome). Attivare solo con il consenso dell’associazione."
     },
     "meta": {
       "createdAt": "Creato il",

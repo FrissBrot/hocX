@@ -22369,6 +22369,29 @@ a.mobile-list-row { color: var(--text); }
   background: var(--success);
 }
 
+/* --- Kunden ("Im Einsatz bei", im Adminportal pro Mandant freigegeben) ------------------- */
+.ws-customers {
+  padding-top: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-3) 44px;
+}
+
+.ws-customers-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.ws-customer {
+  font-family: var(--ws-font-serif), Georgia, serif;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: color-mix(in srgb, var(--muted) 85%, var(--bg));
+}
+
 /* --- Ablauf ------------------------------------------------------------------------------- */
 .ws-section-intro-split {
   display: grid;

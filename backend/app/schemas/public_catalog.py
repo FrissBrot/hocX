@@ -8,6 +8,12 @@ class PublicPlanFeature(BaseModel):
     name: str
 
 
+class PublicCustomerRead(BaseModel):
+    """Kunde fuer "Im Einsatz bei" - bewusst nur der Name, keine IDs/Slugs."""
+
+    name: str
+
+
 class PublicPlanRead(BaseModel):
     """Preiskarte der oeffentlichen Website. Bewusst ohne interne Felder (tenant_count,
     sort_order, is_bookable) - nur, was auf der Landing Page sichtbar ist."""

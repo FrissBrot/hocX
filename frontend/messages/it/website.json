@@ -154,5 +154,8 @@
     "copyright": "© {year} hocX · Fatto in Svizzera",
     "contact": "Contatto",
     "login": "Accedi"
+  },
+  "customers": {
+    "label": "Lo usano"
   }
 }

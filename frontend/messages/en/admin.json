@@ -207,7 +207,9 @@
       "userLimitPlanLimit": "Plan limit: {limit}",
       "userLimitUnlimited": "Plan limit: unlimited",
       "userLimitHelp": "Empty = plan limit applies. Currently {count} user(s){suffix}",
-      "userLimitExceeded": " – limit reached or exceeded."
+      "userLimitExceeded": " – limit reached or exceeded.",
+      "showOnWebsite": "Show as customer on the website",
+      "showOnWebsiteHelp": "Appears on the public website under “Used by” (name only). Only enable with the organisation’s consent."
     },
     "meta": {
       "createdAt": "Created on",

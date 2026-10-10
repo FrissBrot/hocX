@@ -154,5 +154,8 @@
     "copyright": "© {year} hocX · Gemacht in der Schweiz",
     "contact": "Kontakt",
     "login": "Anmelden"
+  },
+  "customers": {
+    "label": "Im Einsatz bei"
   }
 }

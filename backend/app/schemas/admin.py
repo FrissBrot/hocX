@@ -109,6 +109,11 @@ class AdminTenantRead(BaseModel):
     assigned_storage_packages: list[AdminTenantStoragePackageRead] = []
     discount_percent: int = 0
     billing_note: str | None = None
+    show_on_website: bool = False
+
+
+class AdminTenantWebsiteListingUpdate(BaseModel):
+    show_on_website: bool
 
 
 class AdminTenantStorageQuotaUpdate(BaseModel):

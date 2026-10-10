@@ -207,7 +207,9 @@
       "userLimitPlanLimit": "Plan-Limit: {limit}",
       "userLimitUnlimited": "Plan-Limit: unbegrenzt",
       "userLimitHelp": "Leer = Plan-Limit gilt. Aktuell {count} Benutzer{suffix}",
-      "userLimitExceeded": " – Limit erreicht oder überschritten."
+      "userLimitExceeded": " – Limit erreicht oder überschritten.",
+      "showOnWebsite": "Auf der Website als Kunde anzeigen",
+      "showOnWebsiteHelp": "Erscheint auf der öffentlichen Website unter «Im Einsatz bei» (nur der Name). Nur mit Einverständnis des Vereins aktivieren."
     },
     "meta": {
       "createdAt": "Erstellt am",

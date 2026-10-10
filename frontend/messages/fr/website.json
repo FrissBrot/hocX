@@ -154,5 +154,8 @@
     "copyright": "© {year} hocX · Fabriqué en Suisse",
     "contact": "Contact",
     "login": "Se connecter"
+  },
+  "customers": {
+    "label": "Ils nous font confiance"
   }
 }

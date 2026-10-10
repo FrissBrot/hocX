@@ -371,3 +371,24 @@ def test_public_plans_lists_only_bookable_plans_with_feature_names(db):
     assert visible.price_monthly_rp == 1000
     assert [f.code for f in visible.features] == ["finance"]
     assert visible.features[0].name == db.get(Feature, "finance").name
+
+
+def test_public_customers_lists_only_tenants_marked_for_website(db):
+    """Nur ausdruecklich freigegebene Mandanten erscheinen auf der Website unter "Im Einsatz bei"."""
+    service = AdminTenantService()
+    listed = make_tenant(db, name="Website Verein Gelistet")
+    hidden = make_tenant(db, name="Website Verein Versteckt")
+
+    result = service.set_tenant_website_listing(db, listed.id, True)
+    assert result is not None and result.show_on_website is True
+
+    names = [c.name for c in service.list_public_customers(db)]
+    assert listed.name in names
+    assert hidden.name not in names
+
+    service.set_tenant_website_listing(db, listed.id, False)
+    assert listed.name not in [c.name for c in service.list_public_customers(db)]
+
+
+def test_set_tenant_website_listing_unknown_tenant_returns_none(db):
+    assert AdminTenantService().set_tenant_website_listing(db, -1, True) is None

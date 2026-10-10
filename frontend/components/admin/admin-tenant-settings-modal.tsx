@@ -47,9 +47,10 @@ type TenantFormState = {
   publicSlug: string;
   profileImage: File | null;
   profileImageUrl: string | null;
+  showOnWebsite: boolean;
 };
 
-const emptyTenantForm: TenantFormState = { name: "", publicSlug: "", profileImage: null, profileImageUrl: null };
+const emptyTenantForm: TenantFormState = { name: "", publicSlug: "", profileImage: null, profileImageUrl: null, showOnWebsite: false };
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
@@ -147,6 +148,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     setTenantForm({
       name: tenant.name,
       publicSlug: tenant.public_slug ?? "",
+      showOnWebsite: tenant.show_on_website,
       profileImage: null,
       profileImageUrl: tenant.profile_image_url
     });
@@ -393,10 +395,16 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       if (tenantForm.profileImage) {
         formData.append("profile_image", tenantForm.profileImage);
       }
-      const updated = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}`, {
+      let updated = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}`, {
         method: "PATCH",
         body: formData
       });
+      if (updated.show_on_website !== tenantForm.showOnWebsite) {
+        updated = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}/website-listing`, {
+          method: "PUT",
+          body: JSON.stringify({ show_on_website: tenantForm.showOnWebsite })
+        });
+      }
       setTenantForm((current) => ({ ...current, profileImage: null, profileImageUrl: updated.profile_image_url }));
       showToast(t("tenantModal.toasts.tenantSaved"), "success");
       onSaved(updated);
@@ -562,6 +570,17 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                       onChange={(event) => pickProfileImage(event.target.files?.[0])}
                     />
                   </div>
+                </div>
+                <div className="field-stack">
+                  <label className="admin-inline-check">
+                    <input
+                      type="checkbox"
+                      checked={tenantForm.showOnWebsite}
+                      onChange={(event) => setTenantForm((current) => ({ ...current, showOnWebsite: event.target.checked }))}
+                    />
+                    {t("tenantModal.fields.showOnWebsite")}
+                  </label>
+                  <span className="field-help">{t("tenantModal.fields.showOnWebsiteHelp")}</span>
                 </div>
                 <div className="admin-tenant-meta">
                   <span>

@@ -32,6 +32,7 @@ from app.schemas.admin import (
     AdminTenantStoragePackagesUpdate,
     AdminTenantStorageQuotaUpdate,
     AdminTenantSubscriptionUpdate,
+    AdminTenantWebsiteListingUpdate,
     AdminTenantUserGrant,
     AdminTenantUserRead,
     AdminUserMergeRequest,
@@ -367,6 +368,24 @@ def update_tenant_storage_quota(
     result = tenant_service.get_tenant(db, internal_tenant_id)
     if result is None:
         raise HTTPException(status_code=500, detail="Tenant could not be reloaded")
+    return result
+
+
+@router.put("/tenants/{tenant_id}/website-listing", response_model=AdminTenantRead)
+def update_tenant_website_listing(
+    tenant_id: uuid.UUID,
+    payload: AdminTenantWebsiteListingUpdate,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    result = tenant_service.set_tenant_website_listing(db, internal_tenant_id, payload.show_on_website)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    audit.log(
+        db, action="admin.tenant_website_listing_updated", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+        entity_type="tenant", entity_id=internal_tenant_id, details={"show_on_website": payload.show_on_website},
+    )
     return result
 
 

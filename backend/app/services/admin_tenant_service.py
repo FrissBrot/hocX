@@ -43,7 +43,7 @@ from app.schemas.admin import (
     AdminTenantStoragePackageRead,
     AdminTenantSubscriptionUpdate,
 )
-from app.schemas.public_catalog import PublicPlanFeature, PublicPlanRead
+from app.schemas.public_catalog import PublicCustomerRead, PublicPlanFeature, PublicPlanRead
 from app.schemas.user import TenantUpdate
 from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import _safe_storage_path
@@ -122,6 +122,7 @@ class AdminTenantService:
             assigned_storage_packages=assigned_storage_packages,
             discount_percent=tenant.discount_percent,
             billing_note=tenant.billing_note,
+            show_on_website=tenant.show_on_website,
         )
 
     def _assigned_storage_packages(self, db: Session, tenant_id: int) -> list[AdminTenantStoragePackageRead]:
@@ -252,6 +253,19 @@ class AdminTenantService:
             db.execute(select(Tenant.plan_code, func.count(Tenant.id)).where(Tenant.plan_code.is_not(None)).group_by(Tenant.plan_code)).all()
         )
         return [self._plan_read_model(db, plan, tenant_count=int(tenant_counts.get(plan.code, 0))) for plan in plans]
+
+    def set_tenant_website_listing(self, db: Session, tenant_id: int, show_on_website: bool) -> AdminTenantRead | None:
+        tenant = db.get(Tenant, tenant_id)
+        if tenant is None:
+            return None
+        tenant.show_on_website = show_on_website
+        db.commit()
+        return self.get_tenant(db, tenant_id)
+
+    def list_public_customers(self, db: Session) -> list[PublicCustomerRead]:
+        """Fuer die Website freigegebene Mandanten, alphabetisch."""
+        names = db.scalars(select(Tenant.name).where(Tenant.show_on_website.is_(True)).order_by(func.lower(Tenant.name)))
+        return [PublicCustomerRead(name=name) for name in names]
 
     def list_public_plans(self, db: Session) -> list[PublicPlanRead]:
         """Buchbare Plaene fuer die oeffentliche Website, gleiche Reihenfolge wie im Adminportal

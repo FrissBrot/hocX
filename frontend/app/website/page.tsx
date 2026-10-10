@@ -4,11 +4,12 @@ import { getTranslations } from "next-intl/server";
 import { WebsitePricing } from "@/components/website/website-pricing";
 import { backendFetch } from "@/lib/api/client";
 import { getMainAppUrl } from "@/lib/site-config";
-import type { PublicPlan } from "@/types/api";
+import type { PublicCustomer, PublicPlan } from "@/types/api";
 
 // Oeffentliche Landing Page (Hauptdomain, siehe TRAEFIK_WEBSITE_DOMAIN in proxy.ts). Texte kommen
 // aus messages/<locale>/website.json, Preise und Abos bei jedem Request frisch aus dem
-// Preiskatalog (GET /api/public/plans) - Aenderungen im Adminportal sind sofort sichtbar.
+// Preiskatalog (GET /api/public/plans), die Kundenliste aus den im Adminportal freigegebenen
+// Mandanten (GET /api/public/customers) - Aenderungen dort sind sofort sichtbar.
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("website.meta");
@@ -31,7 +32,10 @@ const AVATARS = [
 
 export default async function WebsitePage() {
   const t = await getTranslations("website");
-  const plans = (await backendFetch<PublicPlan[]>("/api/public/plans")) ?? [];
+  const [plans, customers] = await Promise.all([
+    backendFetch<PublicPlan[]>("/api/public/plans").then((result) => result ?? []),
+    backendFetch<PublicCustomer[]>("/api/public/customers").then((result) => result ?? []),
+  ]);
   const appUrl = getMainAppUrl() ?? "";
   const appLoginUrl = `${appUrl}/login`;
   const contactEmail = process.env.WEBSITE_CONTACT_EMAIL?.trim() || null;
@@ -166,6 +170,17 @@ export default async function WebsitePage() {
             </div>
           </div>
         </section>
+
+        {customers.length > 0 ? (
+          <section className="ws-container ws-customers" aria-label={t("customers.label")}>
+            <span className="ws-customers-label">{t("customers.label")}</span>
+            {customers.map((customer, index) => (
+              <span key={`${customer.name}-${index}`} className="ws-customer">
+                {customer.name}
+              </span>
+            ))}
+          </section>
+        ) : null}
 
         <section id="ablauf" className="ws-container ws-section">
           <div className="ws-section-intro-split">
