@@ -26,4 +26,18 @@ describe("proxy", () => {
     expect(response.headers.get("location")).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("schreibt die Website-Domain ohne Login auf /website um", async () => {
+    vi.stubEnv("TRAEFIK_WEBSITE_DOMAIN", "www.example.ch");
+    vi.resetModules();
+    const { proxy: websiteProxy } = await import("./proxy");
+    const fetchSpy = unauthenticatedBackend();
+
+    const response = await websiteProxy(new NextRequest("http://0.0.0.0:3000/", { headers: { host: "www.example.ch" } }));
+
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-middleware-rewrite")).toBe("http://0.0.0.0:3000/website");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+  });
 });

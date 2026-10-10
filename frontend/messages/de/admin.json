@@ -600,6 +600,9 @@
     "featureSaved": "Modul gespeichert",
     "featureSaveFailed": "Modul konnte nicht gespeichert werden",
     "packageSaved": "Speicherpaket gespeichert",
-    "packageSaveFailed": "Speicherpaket konnte nicht gespeichert werden"
+    "packageSaveFailed": "Speicherpaket konnte nicht gespeichert werden",
+    "featuredBadge": "Beliebteste Wahl",
+    "featuredOnWebsite": "Auf der Website als «Beliebteste Wahl» hervorheben",
+    "featuredOnWebsiteHelp": "Höchstens ein Plan – beim Speichern wird die Markierung bei allen anderen Plänen entfernt. Nur buchbare Pläne erscheinen auf der Website."
   }
 }

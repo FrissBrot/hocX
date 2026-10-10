@@ -329,3 +329,45 @@ def test_update_tenant_subscription_rejects_unknown_plan_code(db):
             AdminTenantSubscriptionUpdate(plan_code="does_not_exist", billing_cycle="monthly", user_limit_override=None),
             admin_id=admin.id,
         )
+
+
+def _named_plan_write(name: str, **overrides) -> AdminPlanWrite:
+    values = dict(
+        name=name,
+        price_monthly_rp=1000,
+        price_yearly_rp=10000,
+        included_user_limit=5,
+        included_storage_bytes=1_000_000,
+        sort_order=0,
+        feature_codes=[],
+    )
+    values.update(overrides)
+    return AdminPlanWrite(**values)
+
+
+def test_featured_plan_is_exclusive(db):
+    """Die Website hebt genau einen Plan als "Beliebteste Wahl" hervor - einen neuen Plan zu
+    markieren, setzt den bisher markierten zurueck."""
+    service = AdminTenantService()
+    service.upsert_plan(db, "test_feat_a", _named_plan_write("Feat A", is_featured=True))
+    service.upsert_plan(db, "test_feat_b", _named_plan_write("Feat B", is_featured=True))
+
+    featured = [p.code for p in service.list_plans(db) if p.is_featured]
+    assert featured == ["test_feat_b"]
+
+
+def test_public_plans_lists_only_bookable_plans_with_feature_names(db):
+    """Die oeffentliche Website zeigt nur buchbare Plaene, inklusive der Feature-Namen aus dem
+    Katalog - Aenderungen im Adminportal schlagen damit ohne Deployment durch."""
+    service = AdminTenantService()
+    service.upsert_plan(db, "test_pub_visible", _named_plan_write("Pub Visible", feature_codes=["finance"], is_featured=True))
+    service.upsert_plan(db, "test_pub_hidden", _named_plan_write("Pub Hidden", is_bookable=False))
+
+    plans = {p.code: p for p in service.list_public_plans(db)}
+    assert "test_pub_hidden" not in plans
+    assert "legacy" not in plans
+    visible = plans["test_pub_visible"]
+    assert visible.is_featured is True
+    assert visible.price_monthly_rp == 1000
+    assert [f.code for f in visible.features] == ["finance"]
+    assert visible.features[0].name == db.get(Feature, "finance").name

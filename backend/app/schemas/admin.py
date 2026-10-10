@@ -153,6 +153,7 @@ class AdminPlanRead(BaseModel):
     feature_codes: list[str] = []
     description: str | None = None
     is_bookable: bool = True
+    is_featured: bool = False
     # Anzahl Mandanten mit diesem Plan (Karten auf der Preisseite, Filter der Mandantenliste).
     tenant_count: int = 0
 
@@ -169,6 +170,8 @@ class AdminPlanWrite(BaseModel):
     feature_codes: list[str] = []
     description: str | None = None
     is_bookable: bool = True
+    # "Beliebteste Wahl" auf der oeffentlichen Website; setzt beim Speichern alle anderen zurueck.
+    is_featured: bool = False
     # Nur bei POST /api/admin/plans ausgewertet: gewuenschter Code. Leer = aus dem Namen erzeugt.
     code: str | None = Field(default=None, pattern=r"^[a-z0-9_]+$")
 

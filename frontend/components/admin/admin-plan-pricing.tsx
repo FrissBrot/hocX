@@ -38,6 +38,7 @@ type PlanFormState = {
   name: string;
   description: string;
   isBookable: boolean;
+  isFeatured: boolean;
   priceMonthlyChf: string;
   priceYearlyChf: string;
   userLimit: string;
@@ -154,6 +155,7 @@ function planToForm(plan: AdminPlan): PlanFormState {
     name: plan.name,
     description: plan.description ?? "",
     isBookable: plan.is_bookable,
+    isFeatured: plan.is_featured,
     priceMonthlyChf: rpToChfInput(plan.price_monthly_rp),
     priceYearlyChf: rpToChfInput(plan.price_yearly_rp),
     userLimit: plan.included_user_limit === null ? "" : String(plan.included_user_limit),
@@ -171,6 +173,7 @@ const emptyPlanForm: PlanFormState = {
   name: "",
   description: "",
   isBookable: true,
+  isFeatured: false,
   priceMonthlyChf: "",
   priceYearlyChf: "",
   userLimit: "10",
@@ -244,6 +247,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
         name: planForm.name.trim(),
         description: planForm.description.trim() === "" ? null : planForm.description.trim(),
         is_bookable: planForm.isBookable,
+        is_featured: planForm.isFeatured,
         price_monthly_rp: chfInputToRp(planForm.priceMonthlyChf),
         price_yearly_rp: chfInputToRp(planForm.priceYearlyChf),
         included_user_limit: planForm.userUnlimited || planForm.userLimit.trim() === "" ? null : Number(planForm.userLimit),
@@ -377,6 +381,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                   <article key={plan.code} className={`card admin-plan-card admin-plan-card-${tone}`}>
                     <div className="admin-plan-card-head">
                       <h2>{plan.name}</h2>
+                      {plan.is_featured ? <Badge variant="info">{t("featuredBadge")}</Badge> : null}
                       <Badge variant={plan.is_bookable ? "success" : "neutral"}>{plan.is_bookable ? t("bookable") : t("notBookable")}</Badge>
                     </div>
                     <p className="muted admin-plan-card-description">{plan.description ?? "\u00a0"}</p>
@@ -570,6 +575,17 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                     </div>
                   </div>
                   <p className="field-help">{planForm.isBookable ? t("tenantsCanBookThemselves") : t("onlyAdminCanAssign")}</p>
+                </div>
+                <div className="field-stack">
+                  <label className="admin-inline-check">
+                    <input
+                      type="checkbox"
+                      checked={planForm.isFeatured}
+                      onChange={(event) => updatePlanForm({ isFeatured: event.target.checked })}
+                    />
+                    {t("featuredOnWebsite")}
+                  </label>
+                  <span className="field-help">{t("featuredOnWebsiteHelp")}</span>
                 </div>
                 <label className="field-stack">
                   <span className="field-label">{t("description2")}</span>

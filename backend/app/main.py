@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, auth, calendar_feeds, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, public_share, share_links, statistics, storage, submission_assignments, table_snapshots, tag_config, templates, tenants, todos, users, word_import
+from app.api.routes import admin, admin_auth, auth, calendar_feeds, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, table_snapshots, tag_config, templates, tenants, todos, users, word_import
 from app.core.background_loops import BACKGROUND_LOCK_IDS, run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
@@ -470,6 +470,7 @@ app.include_router(todos.router, prefix="/api", tags=["todos"])
 app.include_router(files.router, prefix="/api", tags=["files"])
 app.include_router(share_links.router, prefix="/api", tags=["share-links"])
 app.include_router(public_share.router, prefix="/api", tags=["public-share"])
+app.include_router(public_catalog.router, prefix="/api", tags=["public-catalog"])
 app.include_router(calendar_feeds.router, prefix="/api", tags=["calendar-feeds"])
 app.include_router(storage.router, prefix="/api", tags=["storage"])
 app.include_router(exports.router, prefix="/api", tags=["exports"])

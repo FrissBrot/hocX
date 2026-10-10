@@ -600,6 +600,9 @@
     "featureSaved": "Module saved",
     "featureSaveFailed": "Module could not be saved",
     "packageSaved": "Storage package saved",
-    "packageSaveFailed": "Storage package could not be saved"
+    "packageSaveFailed": "Storage package could not be saved",
+    "featuredBadge": "Most popular",
+    "featuredOnWebsite": "Highlight as “Most popular” on the website",
+    "featuredOnWebsiteHelp": "At most one plan – saving removes the highlight from all other plans. Only bookable plans appear on the website."
   }
 }

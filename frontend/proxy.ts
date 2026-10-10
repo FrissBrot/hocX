@@ -39,6 +39,12 @@ const internalApiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_A
 // which made it look like a routing bug in Traefik or the browser instead.
 const adminDomain = process.env.TRAEFIK_ADMIN_DOMAIN;
 
+// Oeffentliche Website (Landing Page) auf eigener Domain, typischerweise der Hauptdomain:
+// Traefik routet sie auf denselben Frontend-Service, hier wird jeder Pfad analog zur
+// Admin-Domain auf /website umgeschrieben. Die Seite braucht keine Session.
+const websiteDomain = process.env.TRAEFIK_WEBSITE_DOMAIN;
+const WEBSITE_PATH = "/website";
+
 async function isAuthenticated(cookie: string, sessionPath: string): Promise<boolean | null> {
   try {
     const res = await fetch(`${internalApiUrl}${sessionPath}`, {
@@ -58,8 +64,15 @@ async function isAuthenticated(cookie: string, sessionPath: string): Promise<boo
 export async function proxy(request: NextRequest) {
   const { pathname, hostname } = request.nextUrl;
 
-  const rewrittenPathname =
-    adminDomain && hostname === adminDomain && !pathname.startsWith("/admin")
+  // Host-Header statt nextUrl.hostname: hinter `HOSTNAME=0.0.0.0` (Dev-Server/standalone) liefert
+  // nextUrl.hostname die Bind-Adresse statt der angefragten Domain.
+  const requestHost = request.headers.get("host")?.split(":")[0] ?? hostname;
+  const isWebsiteHost = !!websiteDomain && requestHost === websiteDomain;
+  const rewrittenPathname = isWebsiteHost
+    ? pathname.startsWith(WEBSITE_PATH)
+      ? pathname
+      : `${WEBSITE_PATH}${pathname === "/" ? "" : pathname}`
+    : adminDomain && hostname === adminDomain && !pathname.startsWith("/admin")
       ? `/admin${pathname === "/" ? "" : pathname}`
       : pathname;
 
@@ -76,7 +89,11 @@ export async function proxy(request: NextRequest) {
   // Öffentliche Freigabe-Links (/share/<token>) sind per Design ohne Login erreichbar - der
   // Token in der URL IST die Authentifizierung (siehe backend public_share.py). Ohne diese
   // Ausnahme landeten Empfänger ohne hocX-Konto auf /login statt bei den Fotos.
-  const isPublicPath = rewrittenPathname === "/share" || rewrittenPathname.startsWith("/share/");
+  const isPublicPath =
+    rewrittenPathname === "/share" ||
+    rewrittenPathname.startsWith("/share/") ||
+    rewrittenPathname === WEBSITE_PATH ||
+    rewrittenPathname.startsWith(`${WEBSITE_PATH}/`);
   if (rewrittenPathname !== loginPath && !isPublicPath) {
     const cookie = request.headers.get("cookie") ?? "";
     const authenticated = await isAuthenticated(cookie, sessionPath);

@@ -162,6 +162,9 @@ class Plan(Base):
     # False = erscheint nicht bei "Neuer Mandant", kann aber einzelnen Mandanten zugewiesen
     # werden (z.B. 'legacy' fuer Bestandsmandanten).
     is_bookable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    # Auf der oeffentlichen Website als "Beliebteste Wahl" hervorgehoben (0103_plan_is_featured).
+    # Hoechstens ein Plan - upsert_plan setzt beim Markieren alle anderen zurueck.
+    is_featured: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
 
 
 class PlanFeature(Base):

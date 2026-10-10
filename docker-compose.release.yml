@@ -332,6 +332,8 @@ services:
       INTERNAL_API_URL: ${INTERNAL_API_URL}
       TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
       TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
+      TRAEFIK_WEBSITE_DOMAIN: ${TRAEFIK_WEBSITE_DOMAIN:-}
+      WEBSITE_CONTACT_EMAIL: ${WEBSITE_CONTACT_EMAIL:-}
       HOCX_VERSION: ${HOCX_VERSION}
       HOCX_APP_URL: ${HOCX_APP_URL:-}
     depends_on:
@@ -359,6 +361,13 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.priority=10"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
+      # Oeffentliche Website (Landing Page) auf der Hauptdomain - proxy.ts schreibt dort jeden
+      # Pfad auf /website um. Ohne TRAEFIK_WEBSITE_DOMAIN greift der Platzhalter nie.
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.rule=Host(`${TRAEFIK_WEBSITE_DOMAIN:-website.invalid}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.priority=10"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
 
   abgabebox-backend:
     image: ${HOCX_ABGABEBOX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}}

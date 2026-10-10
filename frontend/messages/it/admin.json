@@ -600,6 +600,9 @@
     "featureSaved": "Modulo salvato",
     "featureSaveFailed": "Impossibile salvare il modulo",
     "packageSaved": "Pacchetto di archiviazione salvato",
-    "packageSaveFailed": "Impossibile salvare il pacchetto di archiviazione"
+    "packageSaveFailed": "Impossibile salvare il pacchetto di archiviazione",
+    "featuredBadge": "La scelta più popolare",
+    "featuredOnWebsite": "Evidenzia sul sito web come «La scelta più popolare»",
+    "featuredOnWebsiteHelp": "Al massimo un piano – al salvataggio l’evidenziazione viene rimossa da tutti gli altri piani. Sul sito web compaiono solo i piani prenotabili."
   }
 }

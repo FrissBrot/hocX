@@ -600,6 +600,9 @@
     "featureSaved": "Module enregistré",
     "featureSaveFailed": "Le module n'a pas pu être enregistré",
     "packageSaved": "Forfait de stockage enregistré",
-    "packageSaveFailed": "Le forfait de stockage n'a pas pu être enregistré"
+    "packageSaveFailed": "Le forfait de stockage n'a pas pu être enregistré",
+    "featuredBadge": "Le plus populaire",
+    "featuredOnWebsite": "Mettre en avant comme « Le plus populaire » sur le site web",
+    "featuredOnWebsiteHelp": "Un seul plan au maximum – l’enregistrement retire la mise en avant de tous les autres plans. Seuls les plans réservables apparaissent sur le site web."
   }
 }

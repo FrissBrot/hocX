@@ -366,6 +366,8 @@ services:
       # --env-file actually intended (e2e sets it to "" to disable the bridge entirely).
       TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
       TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
+      TRAEFIK_WEBSITE_DOMAIN: ${TRAEFIK_WEBSITE_DOMAIN:-}
+      WEBSITE_CONTACT_EMAIL: ${WEBSITE_CONTACT_EMAIL:-}
     depends_on:
       - backend
     volumes:
@@ -398,6 +400,13 @@ services:
       - "traefik.http.routers.hocx-admin-frontend.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.hocx-admin-frontend.priority=10"
       - "traefik.http.routers.hocx-admin-frontend.service=hocx-frontend"
+      # Oeffentliche Website (Landing Page) auf der Hauptdomain - proxy.ts schreibt dort jeden
+      # Pfad auf /website um. Ohne TRAEFIK_WEBSITE_DOMAIN greift der Platzhalter nie.
+      - "traefik.http.routers.hocx-website-frontend.rule=Host(`${TRAEFIK_WEBSITE_DOMAIN:-website.invalid}`)"
+      - "traefik.http.routers.hocx-website-frontend.entrypoints=websecure"
+      - "traefik.http.routers.hocx-website-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hocx-website-frontend.priority=10"
+      - "traefik.http.routers.hocx-website-frontend.service=hocx-frontend"
 
   # Oeffentliche Abgabebox (kein Login) auf eigener Subdomain, eigener Codebase,
   # eigene restricted DB-Rolle (siehe backend/alembic/versions/0020_abgabebox.py).

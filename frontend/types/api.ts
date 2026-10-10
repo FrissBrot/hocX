@@ -585,6 +585,7 @@ export type AdminPlan = {
   feature_codes: string[];
   description: string | null;
   is_bookable: boolean;
+  is_featured: boolean;
   tenant_count: number;
 };
 
@@ -598,8 +599,22 @@ export type AdminPlanWrite = {
   feature_codes: string[];
   description: string | null;
   is_bookable: boolean;
+  is_featured: boolean;
   /** Nur beim Anlegen ausgewertet; leer = aus dem Namen erzeugt. */
   code?: string | null;
+};
+
+/** Preiskarte der oeffentlichen Website (GET /api/public/plans) - nur buchbare Plaene. */
+export type PublicPlan = {
+  code: string;
+  name: string;
+  description: string | null;
+  price_monthly_rp: number | null;
+  price_yearly_rp: number | null;
+  included_user_limit: number | null;
+  included_storage_bytes: number | null;
+  is_featured: boolean;
+  features: { code: string; name: string }[];
 };
 
 export type AdminTenantSubscriptionUpdate = {

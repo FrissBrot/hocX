@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import UploadFile
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -43,6 +43,7 @@ from app.schemas.admin import (
     AdminTenantStoragePackageRead,
     AdminTenantSubscriptionUpdate,
 )
+from app.schemas.public_catalog import PublicPlanFeature, PublicPlanRead
 from app.schemas.user import TenantUpdate
 from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import _safe_storage_path
@@ -234,6 +235,7 @@ class AdminTenantService:
             feature_codes=feature_codes,
             description=plan.description,
             is_bookable=plan.is_bookable,
+            is_featured=plan.is_featured,
             tenant_count=tenant_count,
         )
 
@@ -250,6 +252,41 @@ class AdminTenantService:
             db.execute(select(Tenant.plan_code, func.count(Tenant.id)).where(Tenant.plan_code.is_not(None)).group_by(Tenant.plan_code)).all()
         )
         return [self._plan_read_model(db, plan, tenant_count=int(tenant_counts.get(plan.code, 0))) for plan in plans]
+
+    def list_public_plans(self, db: Session) -> list[PublicPlanRead]:
+        """Buchbare Plaene fuer die oeffentliche Website, gleiche Reihenfolge wie im Adminportal
+        (guenstigster zuerst). Feature-Namen kommen aus dem Katalog, damit Umbenennungen im
+        Adminportal ebenfalls direkt sichtbar sind."""
+        plans = (
+            db.query(Plan)
+            .filter(Plan.is_bookable.is_(True))
+            .order_by(
+                Plan.price_yearly_rp.asc().nulls_last(), Plan.price_monthly_rp.asc().nulls_last(), Plan.code.asc()
+            )
+            .all()
+        )
+        features_by_plan: dict[str, list[PublicPlanFeature]] = {}
+        rows = db.execute(
+            select(PlanFeature.plan_code, Feature.code, Feature.name)
+            .join(Feature, Feature.code == PlanFeature.feature_code)
+            .order_by(Feature.name.asc())
+        ).all()
+        for plan_code, feature_code, feature_name in rows:
+            features_by_plan.setdefault(plan_code, []).append(PublicPlanFeature(code=feature_code, name=feature_name))
+        return [
+            PublicPlanRead(
+                code=plan.code,
+                name=plan.name,
+                description=plan.description,
+                price_monthly_rp=plan.price_monthly_rp,
+                price_yearly_rp=plan.price_yearly_rp,
+                included_user_limit=plan.included_user_limit,
+                included_storage_bytes=plan.included_storage_bytes,
+                is_featured=plan.is_featured,
+                features=features_by_plan.get(plan.code, []),
+            )
+            for plan in plans
+        ]
 
     @staticmethod
     def _generate_code(db: Session, model: type, name: str) -> str:
@@ -283,8 +320,11 @@ class AdminTenantService:
         plan.sort_order = payload.sort_order
         plan.description = (payload.description or "").strip() or None
         plan.is_bookable = payload.is_bookable
+        plan.is_featured = payload.is_featured
         db.add(plan)
         db.flush()
+        if plan.is_featured:
+            db.execute(update(Plan).where(Plan.code != code, Plan.is_featured.is_(True)).values(is_featured=False))
 
         wanted = set(payload.feature_codes)
         current = {
