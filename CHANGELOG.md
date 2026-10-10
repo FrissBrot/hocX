@@ -8,6 +8,69 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.1.10] - 2026-10-10
+
+Feature-Release auf 1.1.9 mit einer vollständigen Mobile-Oberfläche, Kalender-Abos für
+Termine und Todos, einer öffentlichen Landing Page mit Preisen aus dem Katalog sowie
+Korrekturen an Freigabeseite und Standalone-Todos. Enthält die Migrationen `0102` bis
+`0104`; sie laufen beim Deploy automatisch. Keine neuen Pflicht-Umgebungsvariablen.
+
+### Update von 1.1.9 auf 1.1.10
+
+Nach Veröffentlichung der Release-Images `HOCX_VERSION` in `.env` auf `v1.1.10` setzen,
+dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` ausführen.
+
+- Migration `0102` legt die Tabelle `calendar_feed` an (Kalender-Abos). Tokens werden
+  nur als SHA-256-Hash und Fernet-verschlüsselt mit `ADMIN_AUTH_SECRET` gespeichert.
+- Migration `0103` ergänzt `plan.is_featured` und markiert den Plan `standard` als
+  «Beliebteste Wahl». Fehlt dieser Plan, bleibt keiner markiert.
+- Migration `0104` ergänzt `tenant.show_on_website`. Standard ist «nicht gelistet»;
+  kein Verein erscheint ohne Freigabe im Adminportal auf der Website.
+- Neue optionale Variablen `TRAEFIK_WEBSITE_DOMAIN` (Domain der Landing Page, z. B. die
+  Hauptdomain) und `WEBSITE_CONTACT_EMAIL` (mailto-Ziel der Demo-/Kontakt-Buttons).
+  Leer bleibt die Website deaktiviert. Für eine eigene Website-Domain muss deren DNS auf
+  den Server zeigen, damit Traefik ein Zertifikat beziehen kann.
+- Git-Tag und GitHub-Release entstehen erst nach erfolgreicher Promotion aller Images
+  durch den Release-Workflow. Der Push dieser Vorbereitung veröffentlicht noch kein
+  Release.
+
+### Neu
+
+- Mobile-Oberfläche: Bis 900 px zeigen dieselben URLs eine eigene Mobile-Ansicht mit
+  Tableiste (Übersicht, Termine, Todos, Mehr). Unter «Mehr» hat jeder Bereich der
+  Desktop-Navigation eine eigene Ansicht, rollenabhängig gelistet. Der mobile
+  Protokoll-Editor bearbeitet Text, Anwesenheit, Todos, Fotos, Notizen und Status mit
+  Live-Abgleich und erzeugt PDFs. Dialoge erscheinen als Bottom-Sheet. Element-Editor,
+  Dokument-Layouts und Import verweisen auf den Computer.
+- Verknüpfungen (Benutzermenü): Termine (Schreiber/Admins) und Todos (alle Rollen, eigene
+  oder alle sichtbaren) als abonnierbarer Kalender für Apple und Google. Optionen für
+  erledigte Todos und «nur Titel und Datum»; URL neu erzeugen oder entfernen. Ein
+  deaktivierter Benutzer, eine Rollenänderung oder «überall abmelden» wirkt sofort auf
+  den Feed.
+- Öffentliche Landing Page unter `TRAEFIK_WEBSITE_DOMAIN` mit Preiskarten direkt aus dem
+  Preiskatalog (Monat/Jahr-Umschalter, Ersparnis). Im Admin-Preiskatalog lässt sich ein
+  Plan als «Beliebteste Wahl» markieren, im Mandanten-Dialog ein Verein als Kunde unter
+  «Im Einsatz bei» freigeben. Indexierung per `robots.txt` nur auf der Website-Domain.
+- Toasts können eine Aktion tragen (z. B. «Rückgängig»).
+
+### Geändert
+
+- Mandant-Einstellungen (Allgemein, Domains, Abo & Nutzung) haben eigene
+  Mobile-Ansichten statt eingebetteter Desktop-Karten.
+- Profil-Dialog: Sprachauswahl mit Chevron, «Protokollpunkte automatisch einklappen» als
+  Karte mit Schalter.
+- Abgabebox mobil: kein iOS-Zoom bei der Sprachauswahl, grössere Touch-Ziele, «Datei
+  auswählen» statt Drag-and-drop-Hinweis auf Touch-Geräten, lange Titel brechen um.
+
+### Behoben
+
+- Freigabeseite: «Alle herunterladen» schlug bei Alben ab etwa 20 Fotos mit einer
+  fehlerhaften `download.json` fehl, weil die Vorschaubilder das gemeinsame Rate-Limit
+  verbrauchten. Jede Endpunkt-Art hat jetzt einen eigenen Zähler; das
+  Vorschaubild-Limit liegt bei 3000/min.
+- Todos ohne Protokoll liessen sich nicht abhaken, bearbeiten oder löschen.
+- Abgabebox: fehlende Gestaltung des Offline-Hinweises ergänzt.
+
 ## [1.1.9] - 2026-10-05
 
 Feature- und Fix-Release auf 1.1.8 mit einem Zyklus-Filter in der Terminübersicht,
