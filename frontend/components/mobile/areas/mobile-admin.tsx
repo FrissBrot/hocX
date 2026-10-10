@@ -629,7 +629,7 @@ export function MobileTenantSettings({ title, children }: { title: string; child
   const active = TENANT_TABS.find((tab) => tab.href === pathname)?.key ?? "general";
   const labels = { general: tNav("general"), domains: tNav("domains"), subscription: tNav("subscriptionAndUsage") };
   return (
-    <div className="mobile-page">
+    <div className={`mobile-page${active === "domains" ? " mobile-page-list" : ""}`}>
       <MobileSubHeader title={title} backLabel={tMobile("tabs.more")} onBack={openMore} />
       <div className="mobile-section">
         <MobileSegmented<(typeof TENANT_TABS)[number]["key"]>
@@ -639,7 +639,7 @@ export function MobileTenantSettings({ title, children }: { title: string; child
           options={TENANT_TABS.map((tab) => ({ value: tab.key, label: labels[tab.key] }))}
         />
       </div>
-      <div className="mobile-section mobile-embedded">{children}</div>
+      {children}
     </div>
   );
 }

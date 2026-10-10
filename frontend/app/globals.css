@@ -21360,6 +21360,64 @@ a.mobile-list-row { color: var(--text); }
 
 .mobile-stats-row .mobile-stat-value { font-size: var(--text-xl); }
 
+/* ── Mandant-Einstellungen (Mobile) ── */
+.mobile-tenant-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.mobile-tenant-avatar {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  font-size: var(--text-xl);
+}
+
+.mobile-tenant-avatar-button {
+  justify-self: start;
+  padding-left: 0;
+}
+
+.mobile-tenant-fields {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.mobile-tenant-fields .wizard-dns-value { overflow-wrap: anywhere; }
+
+.mobile-tenant-domain-host {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.mobile-tenant-plan { padding-bottom: var(--space-4); }
+
+.mobile-tenant-plan-body {
+  display: grid;
+  gap: var(--space-1);
+  padding: 0 var(--space-4);
+}
+
+.mobile-tenant-plan-name {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.mobile-tenant-plan-body .mobile-hint-box { margin-top: var(--space-2); }
+
+.mobile-stat .mobile-progress { margin-top: var(--space-1); }
+
+.mobile-list-row .storage-legend-dot { flex: none; margin-right: 0; }
+
+.mobile-tenant-quota-note {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
 .mobile-hbar-list {
   display: grid;
   gap: var(--space-4);

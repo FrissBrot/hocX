@@ -235,5 +235,10 @@
   },
   "photos": {
     "fab": "Foto"
+  },
+  "tenant": {
+    "fab": "Dominio",
+    "resumeSetup": "Continua configurazione",
+    "manageUsers": "Gestisci utenti"
   }
 }

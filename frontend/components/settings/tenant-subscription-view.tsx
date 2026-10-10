@@ -17,17 +17,13 @@ type Props = {
   initialTenant: TenantSummary;
 };
 
-const FEATURE_ICONS: Record<string, NavIconKey> = {
+export const FEATURE_ICONS: Record<string, NavIconKey> = {
   abgabebox: "submissions",
   finance: "finances",
 };
 
-export function TenantSubscriptionView({ initialTenant }: Props) {
-  const t = useTranslations("tenantSettings");
-  const storageHints = categoryHints(useTranslations("storage"));
-  const locale = useLocale();
-  const tenantId = initialTenant.id;
-
+/** Abo, Speichernutzung und Nutzerliste eines Mandanten - geteilt zwischen Desktop und Mobile. */
+export function useTenantSubscriptionData(tenantId: string) {
   const [subscription, setSubscription] = useState<TenantSubscription | null>(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [storageUsage, setStorageUsage] = useState<StorageUsageRead | null>(null);
@@ -70,6 +66,20 @@ export function TenantSubscriptionView({ initialTenant }: Props) {
     }
   }
 
+  return { subscription, subscriptionLoading, storageUsage, tenantUsers };
+}
+
+/** Kosten im gewählten Abrechnungsintervall, oder null wenn (noch) kein Preis gesetzt ist. */
+export function subscriptionCostRp(subscription: TenantSubscription): number | null {
+  return subscription.billing_cycle === "monthly" ? subscription.estimated_monthly_cost_rp : subscription.estimated_yearly_cost_rp;
+}
+
+export function TenantSubscriptionView({ initialTenant }: Props) {
+  const t = useTranslations("tenantSettings");
+  const storageHints = categoryHints(useTranslations("storage"));
+  const locale = useLocale();
+  const { subscription, subscriptionLoading, storageUsage, tenantUsers } = useTenantSubscriptionData(initialTenant.id);
+
   return (
     <>
       {subscriptionLoading && !subscription ? (
@@ -103,16 +113,7 @@ export function TenantSubscriptionView({ initialTenant }: Props) {
               <div>
                 <div className="tenant-usage-stat-label">{t("costLabel")}</div>
                 <div className="tenant-usage-stat-value">
-                  {(subscription.billing_cycle === "monthly"
-                    ? subscription.estimated_monthly_cost_rp
-                    : subscription.estimated_yearly_cost_rp) === null
-                    ? t("costNotSet")
-                    : formatRappen(
-                        subscription.billing_cycle === "monthly"
-                          ? subscription.estimated_monthly_cost_rp
-                          : subscription.estimated_yearly_cost_rp,
-                        locale as Locale
-                      )}
+                  {subscriptionCostRp(subscription) === null ? t("costNotSet") : formatRappen(subscriptionCostRp(subscription), locale as Locale)}
                 </div>
               </div>
             </div>

@@ -1,15 +1,16 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { initials } from "@/components/protocol/collaboration-presence";
 import { domainStatus, TenantDomainRowContent } from "@/components/settings/tenant-domain-row";
+import { useTenantDomains } from "@/components/settings/tenant-domains-manager";
 import { CopyField } from "@/components/ui/copy-field";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
-import { TenantDomain, TenantSummary } from "@/types/api";
+import { TenantSummary } from "@/types/api";
 
 type Props = {
   initialTenant: TenantSummary;
@@ -22,9 +23,9 @@ type TenantFormState = {
   profileImageUrl: string | null;
 };
 
-export function TenantGeneralSettings({ initialTenant }: Props) {
+/** Formularzustand und Speichern der Stammdaten - geteilt zwischen Desktop und Mobile. */
+export function useTenantGeneralForm(initialTenant: TenantSummary) {
   const t = useTranslations("tenantSettings");
-  const tCommon = useTranslations("common");
   const router = useRouter();
   const showToast = useToast();
   const tenantId = initialTenant.id;
@@ -35,25 +36,12 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
     profileImage: null,
     profileImageUrl: initialTenant.profile_image_url,
   });
-  const [domains, setDomains] = useState<TenantDomain[]>([]);
-  const profileImageInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    void loadDomains();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId]);
-
-  async function loadDomains() {
-    try {
-      const rows = await browserApiFetch<TenantDomain[]>(`/api/tenants/${tenantId}/domains`);
-      setDomains(rows);
-    } catch {
-      // keine Domains bzw. Fehler beim Laden — kein Vorschau-Eintrag
-    }
-  }
+  const [saving, setSaving] = useState(false);
+  const { domains } = useTenantDomains(tenantId);
 
   async function submitTenant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSaving(true);
     try {
       const formData = new FormData();
       formData.append("name", tenantForm.name);
@@ -72,10 +60,21 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
       showToast(t("saveSuccess"), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("saveFailed"), "error");
+    } finally {
+      setSaving(false);
     }
   }
 
   const primaryDomain = domains.find((d) => d.purpose === "app") ?? domains[0] ?? null;
+
+  return { tenantForm, setTenantForm, submitTenant, saving, primaryDomain };
+}
+
+export function TenantGeneralSettings({ initialTenant }: Props) {
+  const t = useTranslations("tenantSettings");
+  const tCommon = useTranslations("common");
+  const { tenantForm, setTenantForm, submitTenant, primaryDomain } = useTenantGeneralForm(initialTenant);
+  const profileImageInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <>

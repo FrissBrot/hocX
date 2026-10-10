@@ -1,4 +1,5 @@
 import { MobileTenantSettings } from "@/components/mobile/areas/mobile-admin";
+import { MobileTenantSubscription } from "@/components/mobile/areas/mobile-tenant";
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { getTranslations } from "next-intl/server";
 
@@ -17,7 +18,7 @@ export default async function TenantSubscriptionPage({ searchParams }: { searchP
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
-        mobile={<MobileTenantSettings title={tTenant("pageTitle")}><TenantSubscriptionView initialTenant={tenant} /></MobileTenantSettings>}
+        mobile={<MobileTenantSettings title={tTenant("pageTitle")}><MobileTenantSubscription initialTenant={tenant} /></MobileTenantSettings>}
         desktop={
           <>
           <section className="panel">

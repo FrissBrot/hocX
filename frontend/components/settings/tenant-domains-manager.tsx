@@ -16,17 +16,13 @@ type Props = {
   initialTenant: TenantSummary;
 };
 
-export function TenantDomainsManager({ initialTenant }: Props) {
+/** Domain-Liste eines Mandanten samt Löschen (mit Rückfrage) - geteilt zwischen Desktop und Mobile. */
+export function useTenantDomains(tenantId: string) {
   const t = useTranslations("tenantSettings");
   const tCommon = useTranslations("common");
   const showToast = useToast();
   const confirm = useConfirm();
-  const tenantId = initialTenant.id;
-  const hasCustomDomainFeature = initialTenant.enabled_features.includes("custom_domain");
-
   const [domains, setDomains] = useState<TenantDomain[]>([]);
-  const [wizardOpen, setWizardOpen] = useState(false);
-  const [wizardDomain, setWizardDomain] = useState<TenantDomain | null>(null);
 
   useEffect(() => {
     void loadDomains();
@@ -42,16 +38,6 @@ export function TenantDomainsManager({ initialTenant }: Props) {
     }
   }
 
-  function openWizardForNewDomain() {
-    setWizardDomain(null);
-    setWizardOpen(true);
-  }
-
-  function openWizardToResume(domain: TenantDomain) {
-    setWizardDomain(domain);
-    setWizardOpen(true);
-  }
-
   async function deleteDomain(domainId: string, hostname: string) {
     const ok = await confirm({
       message: t("deleteDomainConfirm", { hostname }),
@@ -65,6 +51,29 @@ export function TenantDomainsManager({ initialTenant }: Props) {
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("deleteDomainFailed"), "error");
     }
+  }
+
+  return { domains, loadDomains, deleteDomain };
+}
+
+export function TenantDomainsManager({ initialTenant }: Props) {
+  const t = useTranslations("tenantSettings");
+  const tCommon = useTranslations("common");
+  const tenantId = initialTenant.id;
+  const hasCustomDomainFeature = initialTenant.enabled_features.includes("custom_domain");
+  const { domains, loadDomains, deleteDomain } = useTenantDomains(tenantId);
+
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardDomain, setWizardDomain] = useState<TenantDomain | null>(null);
+
+  function openWizardForNewDomain() {
+    setWizardDomain(null);
+    setWizardOpen(true);
+  }
+
+  function openWizardToResume(domain: TenantDomain) {
+    setWizardDomain(domain);
+    setWizardOpen(true);
   }
 
   function renderRow(d: TenantDomain) {
