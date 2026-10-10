@@ -58,24 +58,28 @@ export function ProfileModal({
               <div className="grid">
                 <label className="field-stack">
                   <span className="field-label">{t("languageLabel")}</span>
-                  <select value={language} onChange={(event) => onLanguageChange(event.target.value)}>
-                    {locales.map((code) => (
-                      <option key={code} value={code}>
-                        {localeConfig[code].nativeLabel}
-                      </option>
-                    ))}
-                  </select>
+                  <span className="profile-select">
+                    <select value={language} onChange={(event) => onLanguageChange(event.target.value)}>
+                      {locales.map((code) => (
+                        <option key={code} value={code}>
+                          {localeConfig[code].nativeLabel}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
                 </label>
-                <label className="field-radio-option">
+                <label className="profile-toggle">
+                  <span className="profile-toggle-text">
+                    <span>{t("accordionLabel")}</span>
+                    <span className="field-help">{t("accordionHint")}</span>
+                  </span>
                   <input
                     type="checkbox"
+                    role="switch"
                     checked={protocolAccordionEnabled}
                     onChange={(event) => onProtocolAccordionChange(event.target.checked)}
                   />
-                  <span className="field-radio-option-label">
-                    <strong>{t("accordionLabel")}</strong>
-                    <small className="muted">{t("accordionHint")}</small>
-                  </span>
+                  <span className="album-picker-switch-track" aria-hidden="true" />
                 </label>
                 <div className="table-actions table-actions-start">
                   <button type="button" className="button-secondary" onClick={onSave}>

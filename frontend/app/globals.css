@@ -17001,6 +17001,99 @@ input[type="radio"] {
   font-weight: 400;
 }
 
+/* Profil-Dialog (profile-modal.tsx): Sprach-Dropdown mit Chevron und Einstellungs-Schalter
+   als Karte. Schalter-Optik geteilt mit .album-picker-switch oben. */
+.profile-select {
+  position: relative;
+  display: block;
+}
+
+.modal-content .profile-select select {
+  background-image: none;
+  padding-right: 44px;
+  font-size: var(--text-base);
+  font-weight: 500;
+}
+
+.profile-select::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+  transition: border-color var(--dur-base) ease, transform var(--dur-base) var(--ease-out);
+}
+
+.profile-select:hover::after,
+.profile-select:focus-within::after {
+  border-color: var(--accent);
+}
+
+.profile-select:focus-within::after {
+  transform: translateY(-30%) rotate(225deg);
+}
+
+.profile-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color var(--dur-base) ease;
+}
+
+.profile-toggle:hover {
+  border-color: var(--border-strong);
+}
+
+.grid .profile-toggle input,
+.profile-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  min-height: 0;
+  height: 1px;
+  padding: 0;
+  pointer-events: none;
+}
+
+.profile-toggle-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.profile-toggle-text .field-help {
+  font-weight: 400;
+}
+
+.profile-toggle input:checked + .album-picker-switch-track {
+  background: var(--accent);
+}
+
+.profile-toggle input:checked + .album-picker-switch-track::after {
+  transform: translateX(14px);
+}
+
+.profile-toggle input:focus-visible + .album-picker-switch-track {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
 .album-picker-body {
   display: flex;
   flex-direction: column;
