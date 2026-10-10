@@ -25,7 +25,11 @@ export default defineConfig({
   },
   projects: [
     { name: "setup", testMatch: /auth\.setup\.ts/ },
-    { name: "chromium", use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" }, dependencies: ["setup"], testIgnore: /auth\.setup\.ts/ },
+    { name: "chromium", use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" }, dependencies: ["setup"], testIgnore: [/auth\.setup\.ts/, /feature-gating\.spec\.ts/] },
+    // feature-gating.spec.ts schaltet alle Module des gemeinsamen Demo-Mandanten kurz ab. Parallel
+    // zu anderen Specs liefen deren Abgabebox-/Finanz-Aufrufe dann zufaellig in 403 (z.B.
+    // captcha-verify in abgabebox-photo-album-sync.spec.ts) - deshalb erst nach allen anderen.
+    { name: "tenant-wide", use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" }, dependencies: ["chromium"], testMatch: /feature-gating\.spec\.ts/ },
   ],
   outputDir: "test-results/playwright",
 });

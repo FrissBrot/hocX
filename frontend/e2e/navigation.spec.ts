@@ -27,7 +27,9 @@ test("main navigation pages can be opened", async ({ page }) => {
 });
 
 test("mobile navigation closes when clicking outside the sidebar", async ({ page }) => {
-  await page.setViewportSize({ width: 900, height: 800 });
+  // Bis 900 px rendert die Mobile-Shell mit Tableiste (use-is-mobile.tsx), die einklappbare
+  // Sidebar gibt es nur noch im Tablet-Bereich 901-1100 px (globals.css).
+  await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto("/todos");
 
   const sidebar = page.locator(".sidebar");

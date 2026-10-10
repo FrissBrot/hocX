@@ -165,6 +165,10 @@ test.describe("Word import testbook", () => {
       loadingDocument = false;
       await route.fulfill({ response });
     });
+    // Nach dem Upload laedt router.refresh() die Liste neu; ein Klick mitten in dieses
+    // Re-Rendering loeste die Navigation aus, Playwright sah die Zeile aber als "detached"
+    // und lief in den Timeout.
+    await page.waitForLoadState("networkidle");
     await page.getByRole("row").filter({ hasText: seed.template.name }).getByRole("button", { name: "Prüfen & importieren" }).click();
     await expect(page).toHaveURL(new RegExp(`/tools/import/${document.id}$`));
     await page.getByRole("button", { name: "31.07.2024", exact: true }).click();
