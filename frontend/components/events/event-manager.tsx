@@ -4,6 +4,7 @@ import { ChangeEvent, Fragment, useEffect, useLayoutEffect, useMemo, useRef, use
 import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 
+import { CalendarLinkHint } from "@/components/connections/calendar-link-hint";
 import { EventCalendarModal } from "@/components/events/event-calendar-modal";
 import { EventCreateModal } from "@/components/events/event-create-modal";
 import { EventIcon } from "@/components/events/event-icons";
@@ -707,6 +708,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
           <p className="muted">
             {hasNoEvents ? t("pageDescriptionEmpty") : t("pageSummary", { total: events.length, upcoming: upcomingCount })}
           </p>
+          <CalendarLinkHint kind="events" />
         </div>
         {hasNoEvents ? null : (
           <div className="event-header-actions">

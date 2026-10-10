@@ -48,5 +48,6 @@
   "tenantLogoAlt": "Logo von {tenant}",
   "defaultTenantName": "Mandant",
   "sessionReady": "Bereit",
-  "sessionLoading": "Arbeitsbereich wird geladen…"
+  "sessionLoading": "Arbeitsbereich wird geladen…",
+  "connections": "Verknüpfungen"
 }

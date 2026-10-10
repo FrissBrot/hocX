@@ -13,6 +13,7 @@ import { buildNav, formatRoleLabel, isNavLinkActive, NavLink } from "@/component
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { browserApiFetch } from "@/lib/api/client";
+import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import type { SessionInfo, TodoListItem } from "@/types/api";
 
 type ThemePreference = "light" | "dark" | "auto";
@@ -246,6 +247,13 @@ function MobileMorePanel({
 
       <MobileGroup label={t("more.account")}>
         <MobileListRow label={tNav("profileEdit")} onClick={onOpenProfile} />
+        <Link
+          href={CONNECTIONS_HREF as Route}
+          className={`mobile-list-row${pathname === CONNECTIONS_HREF ? " mobile-list-row-current" : ""}`}
+        >
+          <span className="mobile-list-row-label">{tNav("connections")}</span>
+          <MobileIcon name="chevronRight" size={16} strokeWidth={2.2} className="mobile-list-row-chevron" />
+        </Link>
         <button type="button" className="mobile-list-row mobile-list-row-danger" onClick={onLogout}>
           <span className="mobile-list-row-label">{tNav("logout")}</span>
         </button>

@@ -48,5 +48,6 @@
   "tenantLogoAlt": "Logo di {tenant}",
   "defaultTenantName": "Organizzazione",
   "sessionReady": "Pronto",
-  "sessionLoading": "Caricamento dell'area di lavoro…"
+  "sessionLoading": "Caricamento dell'area di lavoro…",
+  "connections": "Collegamenti"
 }

@@ -1594,6 +1594,39 @@ class ShareLinkFile(Base):
     file_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
 
 
+class CalendarFeed(Base, TimestampMixin, UpdatedAtMixin):
+    """Abonnierbarer iCal-Feed eines Benutzers ("Verknuepfungen") - je einer fuer Termine und
+    Todos (`kind`). Der Token in der URL ist die Authentifizierung; gespeichert werden nur sein
+    Hash (Nachschlagen) und eine verschluesselte Kopie (erneutes Anzeigen), siehe
+    calendar_feed_service.py und Migration 0102."""
+
+    __tablename__ = "calendar_feed"
+    __table_args__ = (
+        UniqueConstraint("user_id", "kind", name="uq_calendar_feed_user_kind"),
+        CheckConstraint("kind IN ('events', 'todos')", name="ck_calendar_feed_kind"),
+        CheckConstraint("todo_scope IN ('mine', 'all')", name="ck_calendar_feed_todo_scope"),
+        Index("idx_calendar_feed_tenant", "tenant_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    calendar_name: Mapped[str] = mapped_column(Text, nullable=False)
+    token_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    # Gegen app_user.session_revoke_at geprueft: "ueberall abmelden"/Passwortwechsel macht auch
+    # vorher ausgestellte Feed-URLs ungueltig (wie App-Passwoerter bei Google/Apple).
+    token_created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    todo_scope: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'mine'"), default="mine")
+    include_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    hide_details: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class PhotoAnalysisJob(Base, TimestampMixin):
     """Phase 3 of the photo-culling feature: a batch of stored_file rows queued for the
     separate photo-analysis-worker container to score (currently: face_quality_score).

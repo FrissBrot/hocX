@@ -1,0 +1,73 @@
+{
+  "page": {
+    "title": "Connections",
+    "description": "Show your events and todos from hocX in Apple Calendar or Google Calendar. The calendars update automatically – you keep editing in hocX."
+  },
+  "status": {
+    "active": "Connected",
+    "invalid": "Invalid",
+    "off": "Not connected"
+  },
+  "events": {
+    "title": "Events",
+    "description": "All events of {tenant} as a separate calendar.",
+    "calendarName": "hocX – Events ({tenant})"
+  },
+  "todos": {
+    "title": "Todos",
+    "description": "Todos with a due date as all-day entries – open ones with ☐, completed ones with ✓.",
+    "calendarName": "hocX – Todos ({tenant})"
+  },
+  "options": {
+    "scope": "Which todos",
+    "scopeMine": "Only my todos",
+    "scopeAll": "All todos I can see",
+    "includeCompleted": "Show completed todos",
+    "hideDetails": "Only share title and date",
+    "hideDetailsHelp": "Without description, location and names. Google stores subscribed calendars on its own servers."
+  },
+  "actions": {
+    "enable": "Create connection",
+    "apple": "Apple Calendar",
+    "google": "Google Calendar",
+    "regenerate": "Generate new URL",
+    "remove": "Remove connection",
+    "more": "More actions"
+  },
+  "url": {
+    "label": "Subscription URL",
+    "help": "This address is secret: anyone who knows it can read the calendar. Generate a new URL if in doubt."
+  },
+  "meta": {
+    "lastAccess": "Last fetched: {date}",
+    "neverAccessed": "Not fetched by a calendar app yet"
+  },
+  "invalid": "This URL is no longer valid because you signed out everywhere or changed your password. Generate a new URL and set up the subscription again.",
+  "confirm": {
+    "regenerate": "The current URL will stop working. You will need to set up existing subscriptions in Apple or Google again.",
+    "regenerateLabel": "Generate new URL",
+    "remove": "The calendar will no longer update in Apple or Google. Remove the subscription there manually as well.",
+    "removeLabel": "Remove"
+  },
+  "toasts": {
+    "enabled": "Connection created",
+    "saved": "Saved",
+    "regenerated": "New URL generated",
+    "removed": "Connection removed",
+    "failed": "That didn't work. Please try again."
+  },
+  "howto": {
+    "title": "How to set it up",
+    "apple": "Apple (iPhone, iPad, Mac): tap “Apple Calendar” and confirm the subscription. It refreshes about every hour.",
+    "google": "Google: open “Google Calendar” and add it. Google only reloads subscribed calendars every few hours – changes show up with a delay.",
+    "android": "Android: use the Google option – the calendar then also appears in the calendar app on your phone.",
+    "readOnly": "The connection works in one direction: you make changes in hocX, not in the calendar."
+  },
+  "hint": {
+    "events": "Show events in Apple or Google Calendar",
+    "todos": "Show todos in Apple or Google Calendar",
+    "action": "Connect",
+    "linked": "Connected to your calendar",
+    "manage": "Manage"
+  }
+}

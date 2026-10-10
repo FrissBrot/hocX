@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
+import { CalendarLinkHint } from "@/components/connections/calendar-link-hint";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
@@ -410,6 +411,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         <div>
           <h1 className="page-title">{t("pageTitle")}</h1>
           <p className="muted">{t("pageIntro")}</p>
+          <CalendarLinkHint kind="todos" />
         </div>
         <div className="table-toolbar-actions">
           <button type="button" className="button-secondary button-ghost" onClick={() => setExportModalOpen(true)}>

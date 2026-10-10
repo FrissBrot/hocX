@@ -1,0 +1,73 @@
+{
+  "page": {
+    "title": "Collegamenti",
+    "description": "Mostra i tuoi appuntamenti e le tue attività di hocX in Calendario Apple o Google Calendar. I calendari si aggiornano automaticamente – le modifiche si fanno sempre in hocX."
+  },
+  "status": {
+    "active": "Collegato",
+    "invalid": "Non valido",
+    "off": "Non collegato"
+  },
+  "events": {
+    "title": "Appuntamenti",
+    "description": "Tutti gli appuntamenti di {tenant} in un calendario separato.",
+    "calendarName": "hocX – Appuntamenti ({tenant})"
+  },
+  "todos": {
+    "title": "Attività",
+    "description": "Attività con scadenza come voci di tutto il giorno – aperte con ☐, completate con ✓.",
+    "calendarName": "hocX – Attività ({tenant})"
+  },
+  "options": {
+    "scope": "Quali attività",
+    "scopeMine": "Solo le mie attività",
+    "scopeAll": "Tutte le attività che vedo",
+    "includeCompleted": "Mostra attività completate",
+    "hideDetails": "Trasmetti solo titolo e data",
+    "hideDetailsHelp": "Senza descrizione, luogo e nomi. Google salva i calendari sottoscritti sui propri server."
+  },
+  "actions": {
+    "enable": "Crea collegamento",
+    "apple": "Calendario Apple",
+    "google": "Google Calendar",
+    "regenerate": "Genera nuovo URL",
+    "remove": "Rimuovi collegamento",
+    "more": "Altre azioni"
+  },
+  "url": {
+    "label": "URL di sottoscrizione",
+    "help": "Questo indirizzo è segreto: chi lo conosce può leggere il calendario. In caso di dubbio genera un nuovo URL."
+  },
+  "meta": {
+    "lastAccess": "Ultimo accesso: {date}",
+    "neverAccessed": "Non ancora letto da un'app di calendario"
+  },
+  "invalid": "Questo URL non è più valido perché ti sei disconnesso ovunque o hai cambiato la password. Genera un nuovo URL e configura di nuovo la sottoscrizione.",
+  "confirm": {
+    "regenerate": "L'URL attuale smetterà di funzionare. Dovrai configurare di nuovo le sottoscrizioni esistenti in Apple o Google.",
+    "regenerateLabel": "Genera nuovo URL",
+    "remove": "Il calendario non verrà più aggiornato in Apple o Google. Rimuovi lì anche la sottoscrizione manualmente.",
+    "removeLabel": "Rimuovi"
+  },
+  "toasts": {
+    "enabled": "Collegamento creato",
+    "saved": "Salvato",
+    "regenerated": "Nuovo URL generato",
+    "removed": "Collegamento rimosso",
+    "failed": "Non ha funzionato. Riprova."
+  },
+  "howto": {
+    "title": "Come configurarlo",
+    "apple": "Apple (iPhone, iPad, Mac): tocca «Calendario Apple» e conferma la sottoscrizione. L'aggiornamento avviene circa ogni ora.",
+    "google": "Google: apri «Google Calendar» e aggiungilo. Google ricarica i calendari sottoscritti solo ogni poche ore – le modifiche compaiono con ritardo.",
+    "android": "Android: usa l'opzione Google – il calendario compare poi anche nell'app calendario del telefono.",
+    "readOnly": "Il collegamento funziona in una sola direzione: le modifiche si fanno in hocX, non nel calendario."
+  },
+  "hint": {
+    "events": "Mostra gli appuntamenti in Calendario Apple o Google Calendar",
+    "todos": "Mostra le attività in Calendario Apple o Google Calendar",
+    "action": "Collega",
+    "linked": "Collegato al tuo calendario",
+    "manage": "Gestisci"
+  }
+}

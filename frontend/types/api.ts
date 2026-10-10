@@ -320,6 +320,22 @@ export type ShareLink = {
   share_camera: boolean;
 };
 
+export type CalendarFeedKind = "events" | "todos";
+
+// Kalender-Abo ("Verknuepfungen"): `path` ist relativ, die eigene Origin kommt im Browser davor.
+export type CalendarFeed = {
+  kind: CalendarFeedKind;
+  calendar_name: string;
+  path: string;
+  todo_scope: "mine" | "all";
+  include_completed: boolean;
+  hide_details: boolean;
+  created_at: string;
+  token_created_at: string;
+  last_accessed_at: string | null;
+  status: "active" | "invalid";
+};
+
 export type PublicShareFile = {
   id: string;
   original_name: string;

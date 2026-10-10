@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 
 import { attemptBridgeRedirect } from "@/lib/bridge-redirect";
 import { browserApiFetch } from "@/lib/api/client";
+import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { SessionInfo } from "@/types/api";
 
@@ -178,6 +179,10 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
           return { group: group.titleKey ? t(group.titleKey) : null, label: t(link.labelKey) };
         }
       }
+    }
+    // Seiten aus dem Benutzermenue stehen nicht in der Sidebar-Navigation.
+    if (pathname === CONNECTIONS_HREF) {
+      return { group: null, label: t("connections") };
     }
     return { group: null, label: t("dashboard") };
   }, [navGroups, pathname, t]);
@@ -386,6 +391,15 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                   }}
                 >
                   {t("profileEdit")}
+                </MenuItem>
+                <MenuItem
+                  selected={pathname === CONNECTIONS_HREF}
+                  onSelect={() => {
+                    setAvatarMenuOpen(false);
+                    router.push(CONNECTIONS_HREF as Route);
+                  }}
+                >
+                  {t("connections")}
                 </MenuItem>
                 <MenuDivider />
                 <div className="menu-header menu-header-tight">{t("appearance")}</div>

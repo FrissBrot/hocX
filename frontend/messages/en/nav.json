@@ -48,5 +48,6 @@
   "tenantLogoAlt": "Logo of {tenant}",
   "defaultTenantName": "Organization",
   "sessionReady": "Ready",
-  "sessionLoading": "Loading workspace…"
+  "sessionLoading": "Loading workspace…",
+  "connections": "Connections"
 }

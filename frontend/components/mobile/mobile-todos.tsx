@@ -4,6 +4,7 @@ import { CSSProperties, Dispatch, SetStateAction, useCallback, useMemo, useState
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
+import { CalendarLinkHint } from "@/components/connections/calendar-link-hint";
 import { useAllPages, useParticipants } from "@/components/mobile/mobile-data";
 import { MobileIcon } from "@/components/mobile/mobile-icons";
 import { useMobileSession } from "@/components/mobile/mobile-shell";
@@ -198,6 +199,7 @@ export function MobileTodos({
         searchPlaceholder={t("todos.searchPlaceholder")}
       />
       <div className="mobile-page-inset">
+        <CalendarLinkHint kind="todos" mobile />
         <MobileSegmented<StatusFilter>
           ariaLabel={tTodos("statusLabel")}
           value={status}

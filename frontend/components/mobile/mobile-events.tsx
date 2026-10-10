@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
+import { CalendarLinkHint } from "@/components/connections/calendar-link-hint";
 import { useAllEvents, useParticipants, useProtocolsByEvent } from "@/components/mobile/mobile-data";
 import { EventDetailSheet, EventFormSheet } from "@/components/mobile/mobile-event-sheets";
 import { MobileIcon } from "@/components/mobile/mobile-icons";
@@ -142,6 +143,7 @@ export function MobileEvents({
         searchPlaceholder={t("events.searchPlaceholder")}
       />
       <div className="mobile-page-inset">
+        <CalendarLinkHint kind="events" mobile />
         <MobileSegmented<Period>
           ariaLabel={t("events.period")}
           value={period}
