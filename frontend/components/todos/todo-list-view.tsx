@@ -398,7 +398,10 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
   );
 
   const showEmptyState = filtered.length === 0 && !hasMore && statusFilter === "open" && !search.trim() && tagFilter === null;
-  const hasNoTodos = showEmptyState && activeTodos.length === 0;
+  // Filterleiste nur ausblenden, wenn es in keinem Scope Todos gibt – sonst sitzt man
+  // nach einem Wechsel auf das leere „Meine" fest, weil der Scope-Umschalter mit verschwindet.
+  const hasNoTodos =
+    showEmptyState && todos.all.length === 0 && todos.my.length === 0 && !hasMoreAll && !hasMoreMy;
 
   const scopeOptions: FilterTabOption<"all" | "my">[] = [
     { value: "all", label: t("scopeAll") },

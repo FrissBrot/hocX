@@ -3,7 +3,6 @@
   "pageDescriptionEmpty": "Membres et invités de cette organisation.",
   "pageDescription": "Personnes de l'organisation pouvant ensuite être associées à des modèles et des tâches.",
   "csvImport": "Import CSV",
-  "deleteSelection": "Supprimer la sélection",
   "newParticipant": "Nouveau participant",
   "emptyState": {
     "title": "Aucun participant pour l'instant",
@@ -11,17 +10,17 @@
     "addParticipant": "+ Participant",
     "importList": "Importer une liste"
   },
-  "searchPlaceholder": "Rechercher des participants",
+  "searchPlaceholder": "Rechercher un nom ou un e-mail",
   "columns": {
     "name": "Participant",
     "firstName": "Prénom",
     "lastName": "Nom",
     "email": "E-mail",
     "status": "Statut",
-    "actions": "Actions"
+    "actions": "Actions",
+    "membership": "Adhésion"
   },
   "emptyFiltered": "Aucun participant trouvé pour le filtre actuel.",
-  "fallbackName": "Participant",
   "statusActive": "Actif",
   "statusInactive": "Inactif",
   "delete": "Supprimer",
@@ -81,6 +80,23 @@
   },
   "membership": {
     "leftSince": "Sorti le {date}",
-    "joinsFrom": "Entrée à partir du {date}"
-  }
+    "joinsFrom": "Entrée à partir du {date}",
+    "leavesOn": "Sortie le {date}",
+    "memberSince": "Membre depuis {year}",
+    "noJoinDate": "Pas de date d'entrée"
+  },
+  "deleteSelectionCount": "Supprimer {count}",
+  "selectAll": "Sélectionner tout ce qui est visible",
+  "selectParticipant": "Sélectionner {name}",
+  "noEmail": "Pas d'e-mail",
+  "rowActions": "Actions pour {name}",
+  "edit": "Modifier",
+  "filters": {
+    "all": "Tous",
+    "active": "Actifs",
+    "inactive": "Inactifs",
+    "left": "Sortis"
+  },
+  "footerCount": "{count, plural, one {# participant} other {# participants}}",
+  "footerHint": "Cliquer sur une ligne pour modifier"
 }

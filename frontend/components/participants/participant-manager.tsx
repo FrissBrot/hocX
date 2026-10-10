@@ -1,12 +1,15 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { ActionIcon } from "@/components/ui/action-icons";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataTable } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
@@ -71,25 +74,60 @@ const emptyForm: ParticipantFormState = {
   left_at: "",
 };
 
-/** "Ausgetreten (seit dd.mm.yyyy)" / "Noch nicht eingetreten (ab dd.mm.yyyy)" - membership-window
- * status derived from joined_at/left_at, shown alongside the existing is_active toggle since the
- * two are independent: is_active/inactive is a manual switch, join/leave dates gate which
- * protocols' attendance rosters a participant appears in. Plain helper (no component), so `t`
- * is passed in by the caller instead of calling useTranslations() here. */
-function membershipStatus(participant: ParticipantSummary, t: (key: string, values?: Record<string, string | number | Date>) => string): string | null {
-  const today = new Date().toISOString().slice(0, 10);
-  // left_at is inclusive - the participant is still a member through the end of that day
-  // itself (see participant_eligible_on / the help text "Erscheint ab dem Folgetag nicht
-  // mehr in Anwesenheitslisten") - `<= today` showed the "Ausgetreten" badge one day
-  // early, on left_at itself, contradicting that same help text (audit finding,
-  // 2026-08-25).
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
+type StatusFilter = "all" | "active" | "inactive" | "left";
+type MembershipTone = "success" | "warning" | "info" | "neutral";
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Filter-Kategorie für die Tabs: "Ausgetreten" (Austrittsdatum vorbei) hat Vorrang vor dem
+ * manuellen is_active-Schalter, damit sich die drei Tabs zu "Alle" aufsummieren. */
+function participantCategory(participant: ParticipantSummary, today: string): Exclude<StatusFilter, "all"> {
+  // left_at ist inklusiv - am Austrittstag selbst ist die Person noch Mitglied
+  // (siehe participant_eligible_on und den Hilfetext "Erscheint ab dem Folgetag nicht
+  // mehr in Anwesenheitslisten").
+  if (participant.left_at && participant.left_at < today) return "left";
+  return participant.is_active ? "active" : "inactive";
+}
+
+/** Mitgliedschafts-Zeile ("Ausgetreten seit …" / "Eintritt ab …" / "Mitglied seit JJJJ") aus
+ * joined_at/left_at. Unabhängig vom is_active-Schalter: die Daten steuern, in welchen
+ * Anwesenheitslisten jemand erscheint. Reine Hilfsfunktion, daher `t` als Parameter. */
+function membershipInfo(participant: ParticipantSummary, today: string, t: TFunc): { label: string; tone: MembershipTone } {
   if (participant.left_at && participant.left_at < today) {
-    return t("membership.leftSince", { date: formatDate(participant.left_at) });
+    return { label: t("membership.leftSince", { date: formatDate(participant.left_at) }), tone: "warning" };
   }
   if (participant.joined_at && participant.joined_at > today) {
-    return t("membership.joinsFrom", { date: formatDate(participant.joined_at) });
+    return { label: t("membership.joinsFrom", { date: formatDate(participant.joined_at) }), tone: "info" };
   }
-  return null;
+  if (participant.left_at) {
+    return { label: t("membership.leavesOn", { date: formatDate(participant.left_at) }), tone: "warning" };
+  }
+  if (participant.joined_at) {
+    return { label: t("membership.memberSince", { year: participant.joined_at.slice(0, 4) }), tone: "success" };
+  }
+  return { label: t("membership.noJoinDate"), tone: "neutral" };
+}
+
+/** Initialen bevorzugt aus Vor-/Nachname (Übernamen wie "Kiwi" sagen wenig), sonst aus dem Anzeigenamen. */
+function participantInitials(participant: ParticipantSummary): string {
+  if (participant.first_name && participant.last_name) {
+    return (participant.first_name[0] + participant.last_name[0]).toUpperCase();
+  }
+  const parts = participant.display_name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/** Stabiler Farbton (0-4) aus der ID, damit ein Avatar beim Umbenennen seine Farbe behält. */
+function avatarTone(key: string): number {
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) | 0;
+  return Math.abs(hash) % 5;
 }
 
 export function ParticipantManager({ initialParticipants, templates, tenantId }: ParticipantManagerProps) {
@@ -100,6 +138,8 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantSummary | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const csvInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<ParticipantFormState>(emptyForm);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
   const [assignedTemplateIds, setAssignedTemplateIds] = useState<string[]>([]);
@@ -107,7 +147,6 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
 
-  const [sortKey, setSortKey] = useState<"display_name" | "first_name" | "last_name" | "email" | "is_active">("display_name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [hasMore, setHasMore] = useState(initialParticipants.length === PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -131,28 +170,35 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
     onLoadMore: () => void loadMore(),
   });
 
-  function toggleSort(key: typeof sortKey) {
-    setSortKey((cur) => {
-      if (cur === key) { setSortDirection((d) => d === "asc" ? "desc" : "asc"); return cur; }
-      setSortDirection("asc");
-      return key;
-    });
-  }
+  const today = todayIso();
+
+  const statusCounts = useMemo(() => {
+    const counts = { all: participants.length, active: 0, inactive: 0, left: 0 };
+    for (const participant of participants) counts[participantCategory(participant, today)] += 1;
+    return counts;
+  }, [participants, today]);
 
   const filteredParticipants = useMemo(() => {
     const dir = sortDirection === "asc" ? 1 : -1;
+    const query = search.trim().toLowerCase();
     return participants
+      .filter((participant) => statusFilter === "all" || participantCategory(participant, today) === statusFilter)
       .filter((participant) => {
         const haystack = `${participant.display_name} ${participant.first_name ?? ""} ${participant.last_name ?? ""} ${participant.email ?? ""}`.toLowerCase();
-        return !search || haystack.includes(search.toLowerCase());
+        return !query || haystack.includes(query);
       })
-      .sort((a, b) => {
-        if (sortKey === "is_active") return ((a.is_active ? 1 : 0) - (b.is_active ? 1 : 0)) * dir;
-        const av = String(a[sortKey] ?? "").toLowerCase();
-        const bv = String(b[sortKey] ?? "").toLowerCase();
-        return av.localeCompare(bv) * dir;
-      });
-  }, [participants, search, sortKey, sortDirection]);
+      .sort((a, b) => a.display_name.toLowerCase().localeCompare(b.display_name.toLowerCase()) * dir);
+  }, [participants, search, statusFilter, sortDirection, today]);
+
+  const visibleIds = filteredParticipants.map((participant) => participant.id);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedParticipantIds.includes(id));
+  const someVisibleSelected = !allVisibleSelected && visibleIds.some((id) => selectedParticipantIds.includes(id));
+
+  function toggleSelectAllVisible(checked: boolean) {
+    setSelectedParticipantIds((current) =>
+      checked ? [...new Set([...current, ...visibleIds])] : current.filter((id) => !visibleIds.includes(id))
+    );
+  }
 
   function openCreate() {
     setSelectedParticipant(null);
@@ -325,23 +371,22 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
         </div>
         {hasNoParticipants ? null : (
         <div className="table-toolbar-actions">
-          <label className="button-secondary button-ghost participant-import-button">
+          {selectedParticipantIds.length > 0 ? (
+            <button type="button" className="button-secondary button-danger" onClick={() => void bulkDeleteParticipants()}>
+              {t("deleteSelectionCount", { count: selectedParticipantIds.length })}
+            </button>
+          ) : null}
+          <button type="button" className="button-secondary participant-header-button" onClick={() => csvInputRef.current?.click()}>
+            <ActionIcon name="upload" />
             {t("csvImport")}
-            <input type="file" accept=".csv,text/csv" onChange={(e) => void handleCsvFileSelected(e)} hidden />
-          </label>
-          <button
-            type="button"
-            className="button-secondary button-danger"
-            onClick={() => void bulkDeleteParticipants()}
-            disabled={selectedParticipantIds.length === 0}
-          >
-            {t("deleteSelection")}
           </button>
-          <button type="button" className="button-secondary" onClick={openCreate}>
+          <button type="button" className="button-primary participant-header-button" onClick={openCreate}>
+            <ActionIcon name="add" />
             {t("newParticipant")}
           </button>
         </div>
         )}
+        <input ref={csvInputRef} type="file" accept=".csv,text/csv" onChange={(e) => void handleCsvFileSelected(e)} hidden />
       </div>
 
       {hasNoParticipants ? (
@@ -353,42 +398,75 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
               <button type="button" className="button-primary" onClick={openCreate}>
                 {t("emptyState.addParticipant")}
               </button>
-              <label className="button-secondary participant-import-button">
+              <button type="button" className="button-secondary participant-header-button" onClick={() => csvInputRef.current?.click()}>
                 {t("emptyState.importList")}
-                <input type="file" accept=".csv,text/csv" onChange={(e) => void handleCsvFileSelected(e)} hidden />
-              </label>
+              </button>
             </>
           }
         />
       ) : (
       <>
       <div className="list-filter-row">
-        <div />
+        <FilterTabs<StatusFilter>
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={[
+            { value: "all", label: t("filters.all"), count: statusCounts.all },
+            { value: "active", label: t("filters.active"), count: statusCounts.active },
+            { value: "inactive", label: t("filters.inactive"), count: statusCounts.inactive },
+            { value: "left", label: t("filters.left"), count: statusCounts.left },
+          ]}
+        />
         <div className="list-filter-search">
           <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
         </div>
       </div>
 
       <DataTable
-        className="data-table-lg"
+        className="data-table-lg participant-table"
         columns={[
-          "",
-          { key: "display_name", label: t("columns.name"), sortable: true, sortDirection: sortKey === "display_name" ? sortDirection : null, onSort: () => toggleSort("display_name") },
-          { key: "first_name", label: t("columns.firstName"), sortable: true, sortDirection: sortKey === "first_name" ? sortDirection : null, onSort: () => toggleSort("first_name") },
-          { key: "last_name", label: t("columns.lastName"), sortable: true, sortDirection: sortKey === "last_name" ? sortDirection : null, onSort: () => toggleSort("last_name") },
-          { key: "email", label: t("columns.email"), sortable: true, sortDirection: sortKey === "email" ? sortDirection : null, onSort: () => toggleSort("email") },
-          { key: "is_active", label: t("columns.status"), sortable: true, sortDirection: sortKey === "is_active" ? sortDirection : null, onSort: () => toggleSort("is_active") },
-          t("columns.actions"),
+          {
+            key: "select",
+            label: t("selectAll"),
+            header: (
+              <input
+                type="checkbox"
+                aria-label={t("selectAll")}
+                checked={allVisibleSelected}
+                ref={(element) => {
+                  if (element) element.indeterminate = someVisibleSelected;
+                }}
+                onChange={(event) => toggleSelectAllVisible(event.target.checked)}
+              />
+            ),
+          },
+          { key: "display_name", label: t("columns.name"), sortable: true, sortDirection, onSort: () => setSortDirection((d) => (d === "asc" ? "desc" : "asc")) },
+          { key: "email", label: t("columns.email") },
+          { key: "membership", label: t("columns.membership") },
+          { key: "is_active", label: t("columns.status") },
+          { key: "actions", label: t("columns.actions"), header: <span className="participant-sr-only">{t("columns.actions")}</span> },
         ]}
         emptyMessage={t("emptyFiltered")}
+        footer={
+          <>
+            <span>{t("footerCount", { count: filteredParticipants.length })}</span>
+            <span>{t("footerHint")}</span>
+          </>
+        }
       >
         {filteredParticipants.map((participant) => {
           const isSelected = selectedParticipantIds.includes(participant.id);
+          const fullName = [participant.first_name, participant.last_name].filter(Boolean).join(" ");
+          const membership = membershipInfo(participant, today, t);
           return (
-            <tr key={participant.id} className="table-row-clickable" onClick={() => void openEdit(participant)}>
+            <tr
+              key={participant.id}
+              className={`table-row-clickable${participant.is_active ? "" : " participant-row-inactive"}`}
+              onClick={() => void openEdit(participant)}>
               <td onClick={(event) => event.stopPropagation()}>
                 <input
                   type="checkbox"
+                  aria-label={t("selectParticipant", { name: participant.display_name })}
                   checked={isSelected}
                   onChange={(event) =>
                     setSelectedParticipantIds((current) =>
@@ -398,30 +476,37 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
                 />
               </td>
               <td>
-                <strong>{participant.display_name}</strong>
-                <div className="muted">
-                  {[participant.first_name, participant.last_name].filter(Boolean).join(" ") || (participant.email ?? t("fallbackName"))}
+                <div className="participant-name-cell">
+                  <span className={`participant-avatar participant-avatar-tone-${avatarTone(participant.id)}`} aria-hidden="true">
+                    {participantInitials(participant)}
+                  </span>
+                  <div className="participant-name-text">
+                    <strong>{participant.display_name}</strong>
+                    {fullName && fullName !== participant.display_name ? <span className="participant-name-sub">{fullName}</span> : null}
+                  </div>
                 </div>
               </td>
-              <td>{participant.first_name ?? "—"}</td>
-              <td>{participant.last_name ?? "—"}</td>
-              <td>{participant.email ?? "—"}</td>
+              <td>{participant.email ?? <span className="muted">{t("noEmail")}</span>}</td>
               <td>
-                <span className="pill">{participant.is_active ? t("statusActive") : t("statusInactive")}</span>
-                {membershipStatus(participant, t) && <div className="muted">{membershipStatus(participant, t)}</div>}
+                <span className={`participant-membership participant-membership-${membership.tone}`}>
+                  <span className="participant-membership-dot" aria-hidden="true" />
+                  {membership.label}
+                </span>
               </td>
               <td>
-                <div className="table-actions">
-                  <button
-                    type="button"
-                    className="button-secondary button-danger"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void deleteParticipant(participant.id);
-                    }}
-                  >
-                    {t("delete")}
-                  </button>
+                <Badge variant={participant.is_active ? "success" : "neutral"}>
+                  {participant.is_active ? t("statusActive") : t("statusInactive")}
+                </Badge>
+              </td>
+              <td>
+                <div className="table-actions table-actions-end">
+                  <ActionMenu
+                    ariaLabel={t("rowActions", { name: participant.display_name })}
+                    items={[
+                      { label: t("edit"), onClick: () => void openEdit(participant) },
+                      { label: t("delete"), onClick: () => void deleteParticipant(participant.id), danger: true },
+                    ]}
+                  />
                 </div>
               </td>
             </tr>

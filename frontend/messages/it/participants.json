@@ -3,7 +3,6 @@
   "pageDescriptionEmpty": "Membri e ospiti di questa organizzazione.",
   "pageDescription": "Persone a livello di organizzazione che potranno poi essere assegnate a modelli e attività.",
   "csvImport": "Importa CSV",
-  "deleteSelection": "Elimina selezione",
   "newParticipant": "Nuovo partecipante",
   "emptyState": {
     "title": "Nessun partecipante registrato",
@@ -11,17 +10,17 @@
     "addParticipant": "+ Partecipante",
     "importList": "Importa elenco"
   },
-  "searchPlaceholder": "Cerca partecipanti",
+  "searchPlaceholder": "Cerca nome o e-mail",
   "columns": {
     "name": "Partecipante",
     "firstName": "Nome",
     "lastName": "Cognome",
     "email": "E-mail",
     "status": "Stato",
-    "actions": "Azioni"
+    "actions": "Azioni",
+    "membership": "Adesione"
   },
   "emptyFiltered": "Nessun partecipante trovato per il filtro attuale.",
-  "fallbackName": "Partecipante",
   "statusActive": "Attivo",
   "statusInactive": "Inattivo",
   "delete": "Elimina",
@@ -81,6 +80,23 @@
   },
   "membership": {
     "leftSince": "Uscito il {date}",
-    "joinsFrom": "Ingresso dal {date}"
-  }
+    "joinsFrom": "Ingresso dal {date}",
+    "leavesOn": "Uscita il {date}",
+    "memberSince": "Membro dal {year}",
+    "noJoinDate": "Nessuna data di ingresso"
+  },
+  "deleteSelectionCount": "Elimina {count}",
+  "selectAll": "Seleziona tutti i visibili",
+  "selectParticipant": "Seleziona {name}",
+  "noEmail": "Nessuna e-mail",
+  "rowActions": "Azioni per {name}",
+  "edit": "Modifica",
+  "filters": {
+    "all": "Tutti",
+    "active": "Attivi",
+    "inactive": "Inattivi",
+    "left": "Usciti"
+  },
+  "footerCount": "{count, plural, one {# partecipante} other {# partecipanti}}",
+  "footerHint": "Clicca su una riga per modificare"
 }

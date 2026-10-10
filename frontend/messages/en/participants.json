@@ -3,7 +3,6 @@
   "pageDescriptionEmpty": "Members and guests of this organization.",
   "pageDescription": "Organization-wide people who can later be assigned to templates and todos.",
   "csvImport": "CSV import",
-  "deleteSelection": "Delete selection",
   "newParticipant": "New participant",
   "emptyState": {
     "title": "No participants yet",
@@ -11,17 +10,17 @@
     "addParticipant": "+ Participant",
     "importList": "Import list"
   },
-  "searchPlaceholder": "Search participants",
+  "searchPlaceholder": "Search name or email",
   "columns": {
     "name": "Participant",
     "firstName": "First name",
     "lastName": "Last name",
     "email": "Email",
     "status": "Status",
-    "actions": "Actions"
+    "actions": "Actions",
+    "membership": "Membership"
   },
   "emptyFiltered": "No participants found for the current filter.",
-  "fallbackName": "Participant",
   "statusActive": "Active",
   "statusInactive": "Inactive",
   "delete": "Delete",
@@ -81,6 +80,23 @@
   },
   "membership": {
     "leftSince": "Left on {date}",
-    "joinsFrom": "Joining from {date}"
-  }
+    "joinsFrom": "Joining from {date}",
+    "leavesOn": "Leaving on {date}",
+    "memberSince": "Member since {year}",
+    "noJoinDate": "No join date"
+  },
+  "deleteSelectionCount": "Delete {count}",
+  "selectAll": "Select all visible",
+  "selectParticipant": "Select {name}",
+  "noEmail": "No email",
+  "rowActions": "Actions for {name}",
+  "edit": "Edit",
+  "filters": {
+    "all": "All",
+    "active": "Active",
+    "inactive": "Inactive",
+    "left": "Left"
+  },
+  "footerCount": "{count, plural, one {# participant} other {# participants}}",
+  "footerHint": "Click a row to edit"
 }

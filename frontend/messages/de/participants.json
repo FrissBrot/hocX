@@ -1,9 +1,8 @@
 {
   "pageTitle": "Teilnehmer",
   "pageDescriptionEmpty": "Mitglieder und Gäste dieses Mandanten.",
-  "pageDescription": "Mandantenweite Personen, die später Templates und Todos zugeordnet werden können.",
+  "pageDescription": "Mandantenweite Personen, die später Vorlagen und Todos zugeordnet werden können.",
   "csvImport": "CSV-Import",
-  "deleteSelection": "Auswahl löschen",
   "newParticipant": "Neuer Teilnehmer",
   "emptyState": {
     "title": "Noch keine Teilnehmer erfasst",
@@ -11,17 +10,17 @@
     "addParticipant": "+ Teilnehmer",
     "importList": "Liste importieren"
   },
-  "searchPlaceholder": "Teilnehmer durchsuchen",
+  "searchPlaceholder": "Name oder E-Mail suchen",
   "columns": {
     "name": "Teilnehmer",
     "firstName": "Vorname",
     "lastName": "Nachname",
     "email": "E-Mail",
     "status": "Status",
-    "actions": "Aktionen"
+    "actions": "Aktionen",
+    "membership": "Mitgliedschaft"
   },
   "emptyFiltered": "Keine Teilnehmer für den aktuellen Filter gefunden.",
-  "fallbackName": "Teilnehmer",
   "statusActive": "Aktiv",
   "statusInactive": "Inaktiv",
   "delete": "Löschen",
@@ -81,6 +80,23 @@
   },
   "membership": {
     "leftSince": "Ausgetreten seit {date}",
-    "joinsFrom": "Eintritt ab {date}"
-  }
+    "joinsFrom": "Eintritt ab {date}",
+    "leavesOn": "Austritt per {date}",
+    "memberSince": "Mitglied seit {year}",
+    "noJoinDate": "Kein Eintrittsdatum"
+  },
+  "deleteSelectionCount": "{count} löschen",
+  "selectAll": "Alle sichtbaren auswählen",
+  "selectParticipant": "{name} auswählen",
+  "noEmail": "Keine E-Mail",
+  "rowActions": "Aktionen für {name}",
+  "edit": "Bearbeiten",
+  "filters": {
+    "all": "Alle",
+    "active": "Aktiv",
+    "inactive": "Inaktiv",
+    "left": "Ausgetreten"
+  },
+  "footerCount": "{count, plural, one {# Teilnehmer} other {# Teilnehmer}}",
+  "footerHint": "Zeile anklicken zum Bearbeiten"
 }
