@@ -141,6 +141,7 @@ def create_tenant_and_users(db) -> tuple[Tenant, dict[str, AppUser]]:
             display_name=f"{first_name} {last_name}",
             email=f"{role_code}@{DEMO_TENANT_SLUG}.hocx.local",
             password_hash=password_hash,
+            login_enabled=True,
             is_active=True,
         )
         db.add(user)
