@@ -23,6 +23,12 @@ load_env_file "$ENV_FILE"
 test "$APP_DB_PASSWORD" = "s3cret"
 test "$APP_DATABASE_URL" = "postgresql+psycopg://hocx_app:s3cret@db:5432/hocx"
 
+# Jede Variable aus .env.example muss load_env_file passieren, sonst bricht deploy.sh auf
+# Servern ab, die sie gesetzt haben.
+grep -E '^[A-Z_][A-Z0-9_]*=' "$REPO_DIR/.env.example" | cut -d= -f1 | while read -r key; do
+  is_allowed_env_key "$key" || { echo "Variable $key aus .env.example ist nicht erlaubt." >&2; exit 1; }
+done
+
 printf 'PATH=/attacker-controlled\n' > "$ENV_FILE"
 chmod 600 "$ENV_FILE"
 if load_env_file "$ENV_FILE" 2> /dev/null; then

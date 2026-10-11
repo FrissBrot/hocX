@@ -8,6 +8,13 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Behoben
+
+- `deploy.sh` brach mit «Nicht erlaubte Variable TRAEFIK_WEBSITE_DOMAIN» ab, sobald die mit
+  1.1.10 eingeführten Variablen `TRAEFIK_WEBSITE_DOMAIN` oder `WEBSITE_CONTACT_EMAIL` (oder
+  `ABGABEBOX_ENVIRONMENT`) in der `.env` gesetzt waren. Ein Test stellt jetzt sicher, dass
+  jede Variable aus `.env.example` von den Deploy-Skripten akzeptiert wird.
+
 ## [1.1.10] - 2026-10-11
 
 Feature-Release auf 1.1.9 mit einer vollständigen Mobile-Oberfläche, Kalender-Abos für
