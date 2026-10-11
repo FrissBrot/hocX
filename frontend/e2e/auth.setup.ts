@@ -106,6 +106,7 @@ setup("creates reproducible role and tenant sessions", async () => {
       password: process.env.E2E_USER_PASSWORD ?? "ChangeMe123!",
       tenant_id: regional.id,
       role_code: "reader",
+      login_enabled: true,
     },
   });
   await platformAdmin.dispose();

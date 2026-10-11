@@ -16,7 +16,7 @@ export default async function ParticipantsPage() {
   }
 
   const [participants, templates] = await Promise.all([
-    backendFetchWithSession<ParticipantSummary[]>("/api/participants"),
+    backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=50"),
     backendFetchWithSession<TemplateSummary[]>("/api/templates"),
   ]);
 
@@ -30,6 +30,7 @@ export default async function ParticipantsPage() {
             <ParticipantManager
               initialParticipants={participants ?? []}
               templates={templates ?? []}
+              canAdmin={session.current_role === "admin"}
               tenantId={session.current_tenant?.id ?? null}
             />
           </section>

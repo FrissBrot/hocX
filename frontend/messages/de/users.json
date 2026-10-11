@@ -1,20 +1,20 @@
 {
-  "pageTitle": "Benutzer",
+  "pageTitle": "Teilnehmer",
   "ownAccessOnlyHint": "Zugänge und Rollen dieses Mandanten.",
   "pageHint": "Die Konten dieses Mandanten und ihre Rollen.",
-  "newUser": "+ Neuer Benutzer",
+  "newUser": "Neuer Teilnehmer",
   "emptyState": {
     "title": "Nur dein eigener Zugang",
     "description": "Lade weitere Personen ein und weise ihnen eine Rolle zu: Admin, Schreiber, Kassier oder Leser.",
-    "invite": "+ Benutzer einladen"
+    "invite": "+ Teilnehmer einladen"
   },
   "explainRoles": "Rollen erklären",
   "explainRolesDescription": "Jedes Konto hat pro Mandant genau eine Rolle.",
   "tabs": {
-    "active": "Aktive Benutzer ({count})",
-    "participants": "Teilnehmer ({count})"
+    "active": "Teilnehmer mit Login",
+    "participants": "Teilnehmer"
   },
-  "searchUsers": "Benutzer durchsuchen",
+  "searchUsers": "Teilnehmer durchsuchen",
   "searchParticipants": "Teilnehmer durchsuchen",
   "columns": {
     "displayName": "Anzeigename",
@@ -27,8 +27,8 @@
   "mfaButton": "MFA",
   "delete": "Löschen",
   "close": "Schliessen",
-  "editUserTitle": "Benutzer bearbeiten",
-  "createUserTitle": "Benutzer erstellen",
+  "editUserTitle": "Teilnehmer bearbeiten",
+  "createUserTitle": "Teilnehmer erstellen",
   "userModalDescription": "Kontodaten und Rolle pflegen.",
   "firstName": "Vorname",
   "lastName": "Nachname",
@@ -37,20 +37,19 @@
   "newPassword": "Neues Passwort",
   "password": "Passwort",
   "passwordHelpEdit": "Nur ausfüllen, um das Passwort zu ändern. Mindestens 12 Zeichen.",
-  "passwordHelpCreate": "Wird hier direkt vergeben, mindestens 12 Zeichen. Es gibt keine automatische Einladungs-E-Mail – das Passwort dem Benutzer separat mitteilen.",
+  "passwordHelpCreate": "Nur für einen Login erforderlich. Mindestens 12 Zeichen.",
   "role": "Rolle",
   "active": "Aktiv",
   "enableLogin": "Login aktivieren",
-  "participantAutoNote": "Dieses Konto wurde automatisch aus einem Teilnehmer erstellt. Für den ersten Login bitte Login aktivieren und ein neues Passwort setzen.",
   "cancel": "Abbrechen",
   "save": "Speichern",
   "enableLoginForTitle": "Login aktivieren für {name}",
   "enableLoginTitle": "Login aktivieren",
-  "enableLoginDescription": "Vergib E-Mail und Passwort, damit sich dieser Teilnehmer einloggen kann. Er bleibt weiterhin als Teilnehmer verknüpft.",
+  "enableLoginDescription": "Vergib E-Mail-Adresse und Passwort für den Login dieses Teilnehmers.",
   "mfaTitle": "MFA von {name}",
   "mfaTitleFallback": "MFA",
   "roleDescriptions": {
-    "admin": "Voller Zugriff innerhalb des Mandanten, inklusive Struktur (Vorlagen, Zyklen, Einstellungen) und Benutzerverwaltung.",
+    "admin": "Voller Zugriff innerhalb des Mandanten, inklusive Struktur (Vorlagen, Zyklen, Einstellungen) und Teilnehmerverwaltung.",
     "writer": "Arbeitet im Protokoll-Bereich mit und pflegt operative Daten, ändert aber weder Struktur noch Finanzen.",
     "kassier": "Wie Leser, zusätzlich voller Schreibzugriff auf Finanzen und Bussen.",
     "reader": "Nur Lesezugriff, kann PDF-Exporte auslösen und sieht nur die eigenen Bussen."
@@ -58,11 +57,11 @@
   "toasts": {
     "loginEnabled": "Login aktiviert",
     "loginEnableFailed": "Login konnte nicht aktiviert werden",
-    "userSaved": "Benutzer gespeichert",
-    "userCreated": "Benutzer erstellt",
-    "userSaveFailed": "Benutzer konnte nicht gespeichert werden",
-    "deleteConfirm": "Benutzer \"{name}\" endgültig löschen? Das Konto und der Zugriff gehen sofort verloren.",
-    "userDeleted": "Benutzer gelöscht",
-    "userDeleteFailed": "Benutzer konnte nicht gelöscht werden"
+    "userSaved": "Teilnehmer gespeichert",
+    "userCreated": "Teilnehmer erstellt",
+    "userSaveFailed": "Teilnehmer konnte nicht gespeichert werden",
+    "deleteConfirm": "Teilnehmer \"{name}\" endgültig löschen? Das Konto und der Zugriff gehen sofort verloren.",
+    "userDeleted": "Teilnehmer gelöscht",
+    "userDeleteFailed": "Teilnehmer konnte nicht gelöscht werden"
   }
 }

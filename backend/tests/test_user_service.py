@@ -4,7 +4,7 @@
     an account of another tenant can't be read, changed (password/email/role/active flag) or
     deleted, and looks like "not found" rather than "forbidden";
 (2) the "last tenant admin" guard - a tenant must never end up with zero active admins;
-(3) capability-aware role handling in merge_users(), which is now same-tenant only."""
+(3) Teilnehmer verwenden dieselbe Identität mit optionalem Login."""
 from __future__ import annotations
 
 import uuid
@@ -30,7 +30,6 @@ def _admin_actor(tenant, *, user_id: int = 999999) -> CurrentUser:
         display_name="Admin Actor",
         email="admin-actor@example.com",
         preferred_language="de",
-        is_participant_account=False,
         current_tenant_id=tenant.id,
         current_tenant_public_id=tenant.public_id,
         current_tenant_name=tenant.name,
@@ -48,101 +47,6 @@ def _payload(email: str, **overrides) -> UserCreate:
         password="a-very-long-password-123",
         **overrides,
     )
-
-
-# --- merge_users: capability-aware role merge logic --------------------------------------
-
-
-def test_merge_users_prefers_higher_role_writer_over_reader(db):
-    tenant = make_tenant(db, "Merge Tenant")
-    target = make_app_user(db, email="target@example.com", tenant_id=tenant.id, role_code="reader")
-    source = make_app_user(db, email="source@example.com", tenant_id=tenant.id, role_code="writer")
-
-    result = UserService().merge_users(db, source_user_id=source.id, target_user_id=target.id)
-
-    assert result.role_code == "writer"
-
-
-def test_merge_users_kassier_supersedes_reader_but_conflicts_with_writer(db):
-    tenant = make_tenant(db, "Kassier Merge Tenant")
-    target_a = make_app_user(db, email="target-a@example.com", tenant_id=tenant.id, role_code="reader")
-    source_a = make_app_user(db, email="source-a@example.com", tenant_id=tenant.id, role_code="kassier")
-
-    service = UserService()
-    assert service.merge_users(db, source_user_id=source_a.id, target_user_id=target_a.id).role_code == "kassier"
-
-    target_b = make_app_user(db, email="target-b@example.com", tenant_id=tenant.id, role_code="kassier")
-    source_b = make_app_user(db, email="source-b@example.com", tenant_id=tenant.id, role_code="writer")
-    with pytest.raises(HTTPException) as exc_info:
-        service.merge_users(db, source_user_id=source_b.id, target_user_id=target_b.id)
-    assert exc_info.value.status_code == 409
-
-
-def test_merge_users_prefers_active_account_when_role_priority_equal(db):
-    tenant = make_tenant(db, "Active Merge Tenant")
-    target = make_app_user(db, email="target-inactive@example.com", tenant_id=tenant.id, is_active=False)
-    source = make_app_user(db, email="source-active@example.com", tenant_id=tenant.id, is_active=True)
-
-    result = UserService().merge_users(db, source_user_id=source.id, target_user_id=target.id)
-
-    assert result.is_active is True
-
-
-def test_merge_users_raises_when_source_equals_target(db):
-    user = make_app_user(db)
-
-    with pytest.raises(HTTPException) as exc_info:
-        UserService().merge_users(db, source_user_id=user.id, target_user_id=user.id)
-    assert exc_info.value.status_code == 400
-
-
-def test_merge_users_refuses_accounts_of_different_tenants(db):
-    """Accounts don't span tenants, so two accounts of different tenants can never be one person."""
-    target = make_app_user(db, email="merge-target-a@example.com")
-    source = make_app_user(db, email="merge-source-b@example.com")
-
-    service = UserService()
-    with pytest.raises(HTTPException) as exc_info:
-        service.merge_users(db, source_user_id=source.id, target_user_id=target.id)
-    assert exc_info.value.status_code == 400
-    assert service.repository.get(db, source.id) is not None
-
-
-def test_merge_users_raises_on_conflicting_participant_links(db):
-    """Both accounts already linked to a (different) participant - merging would silently
-    orphan one of the two participant links, so the service must refuse."""
-    tenant = make_tenant(db, "Conflict Tenant")
-    target = make_app_user(db, email="target-conflict@example.com", tenant_id=tenant.id)
-    source = make_app_user(db, email="source-conflict@example.com", tenant_id=tenant.id)
-
-    participant_target = make_participant(db, tenant.id, display_name="Target Person")
-    participant_target.app_user_id = target.id
-    participant_source = make_participant(db, tenant.id, display_name="Source Person")
-    participant_source.app_user_id = source.id
-    db.add_all([participant_target, participant_source])
-    db.flush()
-
-    with pytest.raises(HTTPException) as exc_info:
-        UserService().merge_users(db, source_user_id=source.id, target_user_id=target.id)
-    assert exc_info.value.status_code == 400
-
-
-def test_merge_users_moves_participant_link_and_deletes_source(db):
-    tenant = make_tenant(db, "Move Link Tenant")
-    target = make_app_user(db, email="target-move@example.com", tenant_id=tenant.id)
-    source = make_app_user(db, email="source-move@example.com", tenant_id=tenant.id)
-
-    participant = make_participant(db, tenant.id, display_name="Moving Person")
-    participant.app_user_id = source.id
-    db.add(participant)
-    db.flush()
-
-    service = UserService()
-    service.merge_users(db, source_user_id=source.id, target_user_id=target.id)
-
-    db.refresh(participant)
-    assert participant.app_user_id == target.id
-    assert service.repository.get(db, source.id) is None
 
 
 # --- last-tenant-admin guard ---------------------------------------------------------------
@@ -370,67 +274,3 @@ def test_admin_create_user_requires_and_uses_the_given_tenant(db):
     result = service.admin_create_user(db, _payload("platform-created@example.com", tenant_id=tenant.public_id, role_code="admin"))
     assert result.tenant_id == tenant.public_id
     assert result.role_code == "admin"
-
-
-# --- participant login promotion ---------------------------------------------------------------
-
-
-def _shadow_user(db, tenant, *, real_email: str):
-    user = make_app_user(db, email=f"participant-{tenant.id}-1@participants.hocx.local", tenant_id=tenant.id)
-    user.external_identity_json = {"source": "participant_auto", "login_enabled": False, "participant_email": real_email}
-    db.add(user)
-    db.flush()
-    return user
-
-
-def test_enabling_login_adopts_the_participants_real_email(db):
-    tenant = make_tenant(db, "Promote Tenant")
-    shadow = _shadow_user(db, tenant, real_email="real-person@example.com")
-
-    result = UserService().update_user(
-        db, shadow.id, UserUpdate(login_enabled=True, password="a-very-long-password-123"), _admin_actor(tenant)
-    )
-
-    assert result.email == "real-person@example.com"
-    assert result.login_enabled is True
-
-
-def test_enabling_login_merges_into_an_existing_account_of_the_same_tenant(db):
-    tenant = make_tenant(db, "Promote Merge Tenant")
-    existing = make_app_user(db, email="already-here@example.com", tenant_id=tenant.id, role_code="writer")
-    acting_admin = make_app_user(db, email="promote-admin@example.com", tenant_id=tenant.id, role_code="admin")
-    shadow = _shadow_user(db, tenant, real_email="already-here@example.com")
-    original_hash = existing.password_hash
-    service = UserService()
-
-    result = service.update_user(
-        db,
-        shadow.id,
-        UserUpdate(login_enabled=True, password="a-very-long-password-123"),
-        _admin_actor(tenant, user_id=acting_admin.id),
-    )
-
-    assert result.id == existing.public_id
-    assert service.repository.get(db, shadow.id) is None
-    db.refresh(existing)
-    # The unverified, admin-typed email must never overwrite the existing account's credentials.
-    assert existing.password_hash == original_hash
-
-
-def test_enabling_login_is_refused_when_the_email_belongs_to_another_tenant(db):
-    tenant_a = make_tenant(db, "Promote Tenant A")
-    tenant_b = make_tenant(db, "Promote Tenant B")
-    foreign = make_app_user(db, email="taken@example.com", tenant_id=tenant_b.id)
-    shadow = _shadow_user(db, tenant_a, real_email="taken@example.com")
-    foreign_hash = foreign.password_hash
-    service = UserService()
-
-    with pytest.raises(HTTPException) as exc_info:
-        service.update_user(
-            db, shadow.id, UserUpdate(login_enabled=True, password="a-very-long-password-123"), _admin_actor(tenant_a)
-        )
-
-    assert exc_info.value.status_code == 409
-    db.refresh(foreign)
-    assert foreign.password_hash == foreign_hash
-    assert foreign.tenant_id == tenant_b.id

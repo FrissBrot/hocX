@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { useAllPages } from "@/components/mobile/mobile-data";
 import { MobileIcon } from "@/components/mobile/mobile-icons";
-import { useOpenMore } from "@/components/mobile/mobile-shell";
+import { useMobileSession, useOpenMore } from "@/components/mobile/mobile-shell";
 import {
   MobileAvatar,
   MobileChip,
@@ -14,6 +14,7 @@ import {
   MobileFab,
   MobileListRow,
   MobileSelectionBar,
+  MobileSegmented,
   MobileSubHeader,
   MobileSwitch,
 } from "@/components/mobile/mobile-ui";
@@ -46,6 +47,7 @@ export function MobileParticipants({ initialParticipants, templates, tenantId }:
   const showToast = useToast();
   const [participants, setParticipants] = useAllPages<ParticipantSummary>("/api/participants", initialParticipants);
   const [search, setSearch] = useState("");
+  const [loginTab, setLoginTab] = useState<"withoutLogin" | "withLogin">("withoutLogin");
   const [status, setStatus] = useState<StatusFilter>("active");
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -55,10 +57,11 @@ export function MobileParticipants({ initialParticipants, templates, tenantId }:
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return participants
+      .filter((participant) => Boolean(participant.login_enabled) === (loginTab === "withLogin"))
       .filter((participant) => (status === "all" ? true : status === "active" ? participant.is_active : !participant.is_active))
       .filter((participant) => !needle || `${participant.display_name} ${participant.email ?? ""}`.toLowerCase().includes(needle))
       .sort((a, b) => a.display_name.localeCompare(b.display_name));
-  }, [participants, search, status]);
+  }, [participants, search, status, loginTab]);
 
   function toggle(id: string) {
     setSelected((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
@@ -105,6 +108,15 @@ export function MobileParticipants({ initialParticipants, templates, tenantId }:
         }
       />
       <div className="mobile-section">
+        <MobileSegmented
+          ariaLabel={t("pageTitle")}
+          value={loginTab}
+          onChange={(value) => { setLoginTab(value); setSelected([]); }}
+          options={[
+            { value: "withoutLogin", label: t("loginTabs.withoutLogin") },
+            { value: "withLogin", label: t("loginTabs.withLogin") },
+          ]}
+        />
         <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
       </div>
       <MobileChipRow>
@@ -203,6 +215,8 @@ function ParticipantSheet({
   onDeleted: (id: string) => void;
 }) {
   const t = useTranslations("participants");
+  const tUsers = useTranslations("users");
+  const canAdmin = useMobileSession()?.current_role === "admin";
   const tMobile = useTranslations("mobile");
   const confirm = useConfirm();
   const showToast = useToast();
@@ -214,6 +228,8 @@ function ParticipantSheet({
     is_active: participant?.is_active ?? true,
     joined_at: participant?.joined_at ?? "",
     left_at: participant?.left_at ?? "",
+    login_enabled: Boolean(participant?.login_enabled),
+    password: "",
   });
   const [templateIds, setTemplateIds] = useState<string[] | null>(participant ? null : []);
   const [saving, setSaving] = useState(false);
@@ -237,6 +253,8 @@ function ParticipantSheet({
     };
   }, [participant, showToast, t]);
 
+  const canSave = Boolean(displayName) && (!form.login_enabled || (Boolean(form.email.trim()) && (Boolean(participant?.login_enabled) || form.password.length >= 12))) && (form.password.length === 0 || form.password.length >= 12);
+
   async function save() {
     if (!displayName || saving) return;
     if (form.joined_at && form.left_at && form.left_at < form.joined_at) {
@@ -252,6 +270,10 @@ function ParticipantSheet({
       is_active: form.is_active,
       joined_at: form.joined_at || null,
       left_at: form.left_at || null,
+      ...(participant && canAdmin ? {
+        login_enabled: form.login_enabled,
+        ...(form.password ? { password: form.password } : {}),
+      } : {}),
     };
     try {
       const saved = participant
@@ -298,7 +320,7 @@ function ParticipantSheet({
               {tMobile("common.cancel")}
             </button>
           )}
-          <button type="button" className="button-primary" data-modal-save disabled={!displayName || saving} onClick={() => void save()}>
+          <button type="button" className="button-primary" data-modal-save disabled={!canSave || saving} onClick={() => void save()}>
             {participant ? t("editModal.save") : t("editModal.create")}
           </button>
         </div>
@@ -319,6 +341,21 @@ function ParticipantSheet({
           <span className="field-label">{t("editModal.displayName")}</span>
           <input value={form.display_name} placeholder={displayName} onChange={(event) => update({ display_name: event.target.value })} />
         </label>
+        {participant && canAdmin ? (
+          <>
+            <label className="checkbox-line">
+              <input type="checkbox" checked={form.login_enabled} onChange={(event) => update({ login_enabled: event.target.checked })} />
+              {tUsers("enableLogin")}
+            </label>
+            {form.login_enabled ? (
+              <label className="field-stack">
+                <span className="field-label">{tUsers("newPassword")}</span>
+                <input type="password" autoComplete="new-password" value={form.password} onChange={(event) => update({ password: event.target.value })} />
+                <span className="field-help">{tUsers("passwordHelpEdit")}</span>
+              </label>
+            ) : null}
+          </>
+        ) : null}
         <label className="field-stack">
           <span className="field-label">{t("editModal.email")}</span>
           <input type="email" inputMode="email" value={form.email} onChange={(event) => update({ email: event.target.value })} />

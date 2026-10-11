@@ -98,5 +98,9 @@
     "left": "Sortis"
   },
   "footerCount": "{count, plural, one {# participant} other {# participants}}",
-  "footerHint": "Cliquer sur une ligne pour modifier"
+  "footerHint": "Cliquer sur une ligne pour modifier",
+  "loginTabs": {
+    "withoutLogin": "Participants",
+    "withLogin": "Participants avec connexion"
+  }
 }

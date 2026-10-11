@@ -11,6 +11,7 @@ from app.schemas.fines import AttendanceFineCreate, AttendanceFineListItem, Atte
 from app.services import public_id_service
 
 ClosedProtocol = aliased(Protocol)
+Collector = aliased(AppUser)
 
 
 class DuplicateFineError(Exception):
@@ -32,12 +33,12 @@ class FinesRepository:
                 Protocol.protocol_number,
                 Protocol.protocol_date,
                 FinanceAccount.currency_label,
-                AppUser.display_name.label("collected_by_display_name"),
+                Collector.display_name.label("collected_by_display_name"),
                 func.coalesce(ClosedProtocol.status, Protocol.status).label("tracking_protocol_status"),
             )
             .join(Protocol, Protocol.id == AttendanceFine.protocol_id)
             .join(FinanceAccount, FinanceAccount.id == AttendanceFine.account_id)
-            .outerjoin(AppUser, AppUser.id == AttendanceFine.collected_by_user_id)
+            .outerjoin(Collector, Collector.id == AttendanceFine.collected_by_user_id)
             .outerjoin(ClosedProtocol, ClosedProtocol.id == AttendanceFine.closed_in_protocol_id)
         )
 
@@ -77,7 +78,7 @@ class FinesRepository:
             .where(
                 Protocol.tenant_id == tenant_id,
                 Participant.tenant_id == tenant_id,
-                Participant.app_user_id == user_id,
+                Participant.id == user_id,
             )
             .order_by(AttendanceFine.created_at.desc())
             .offset(skip)

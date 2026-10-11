@@ -102,7 +102,7 @@ from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
     USER_ID_COLUMNS,
     LookupCodeCache,
-    UserEmailCache,
+    UserIdentityCache,
     json_safe,
     row_to_dict,
 )
@@ -114,7 +114,7 @@ from app.services.tenant_transfer_common import (
 # tenant's own users are bundled. TenantImportService still reads version 2.
 # Format 3 also gained (without a version bump - purely additive tables an older importer just
 # ignores) photo albums, table snapshots, links/feeds/shares and tenant settings.
-FORMAT_VERSION = 3
+FORMAT_VERSION = 4
 ExportScope = Literal["structure", "structure_lists", "full", "full_abgabebox"]
 
 
@@ -125,7 +125,7 @@ class TenantExportService:
             raise ValueError("Tenant not found")
 
         self._lookup_cache = LookupCodeCache(db)
-        self._user_cache = UserEmailCache(db, tenant_id=tenant_id)
+        self._user_cache = UserIdentityCache(db, tenant_id=tenant_id)
         self._pending_files: list[tuple[Path, str]] = []
 
         tables: dict[str, Any] = {}
@@ -144,7 +144,7 @@ class TenantExportService:
         # move/restore, and the members keep the login they already have (see
         # TenantImportService._import_app_users). Every user belongs to exactly one tenant, so
         # there is nobody else to bundle - references to any other tenant's user were already
-        # exported as NULL by UserEmailCache. The role is exported as a code (LOOKUP_COLUMNS);
+        # exported as NULL by UserIdentityCache. The role is exported as a code (LOOKUP_COLUMNS);
         # tenant_id is dropped, the import assigns the new tenant.
         users = db.scalars(select(AppUser).where(AppUser.tenant_id == tenant_id).order_by(AppUser.id)).all()
         user_rows = self._rows(users, "app_user")
@@ -164,7 +164,7 @@ class TenantExportService:
         factor_rows = []
         for factor in factors:
             row = row_to_dict(factor)
-            row["user_id"] = self._user_cache.email_for(factor.user_id)
+            row["user_id"] = self._user_cache.reference_for(factor.user_id)
             row["totp_secret"] = decrypt_secret(factor.secret_encrypted) if factor.secret_encrypted else None
             row.pop("secret_encrypted", None)
             factor_rows.append(row)
@@ -202,7 +202,7 @@ class TenantExportService:
                 data[column] = self._lookup_cache.code_for(model, data[column])
         for column in USER_ID_COLUMNS.get(table_name, []):
             if column in data:
-                data[column] = self._user_cache.email_for(data[column])
+                data[column] = self._user_cache.reference_for(data[column])
         return data
 
     def _rows(self, objs: list[Any], table_name: str) -> list[dict[str, Any]]:
@@ -303,8 +303,6 @@ class TenantExportService:
         )
         tables["leader"] = self._rows(db.scalars(select(Leader).where(Leader.tenant_id == tenant_id)).all(), "leader")
 
-        participants = db.scalars(select(Participant).where(Participant.tenant_id == tenant_id)).all()
-        tables["participant"] = self._rows(participants, "participant")
 
         events = db.scalars(select(Event).where(Event.tenant_id == tenant_id)).all()
         tables["event"] = self._rows(events, "event")

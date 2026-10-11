@@ -18,10 +18,7 @@ class AccessService:
         return bool(
             user.current_role == "reader"
             and user.current_tenant_id is not None
-            and (
-                user.is_participant_account
-                or self.repository.has_scoped_access(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
-            )
+            and self.repository.has_scoped_access(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
         )
 
     def is_restricted_reader(self, db: Session, user: CurrentUser) -> bool:

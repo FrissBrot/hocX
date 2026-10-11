@@ -114,11 +114,11 @@
     "admin": "Admin"
   },
   "userManagement": {
-    "toolbarTitle": "Utenti",
-    "toolbarDescription": "Tutti gli utenti di tutte le organizzazioni. Ogni account appartiene esattamente a un'organizzazione.",
-    "newUser": "Nuovo utente",
+    "toolbarTitle": "Partecipanti",
+    "toolbarDescription": "Tutti gli partecipanti di tutte le organizzazioni. Ogni account appartiene esattamente a un'organizzazione.",
+    "newUser": "Nuovo partecipante",
     "searchLabel": "Ricerca",
-    "searchPlaceholder": "Cerca utenti",
+    "searchPlaceholder": "Cerca partecipanti",
     "columns": {
       "displayName": "Nome visualizzato",
       "email": "E-mail",
@@ -128,14 +128,12 @@
       "actions": "Azioni"
     },
     "loading": "Caricamento…",
-    "emptyUsers": "Nessun utente trovato.",
-    "participantAccount": "Account partecipante",
+    "emptyUsers": "Nessun partecipante trovato.",
     "loginActive": "Attivo",
     "loginDisabled": "Disattivato",
     "mfaButton": "MFA",
-    "mergeButton": "Unisci",
-    "editUserTitle": "Modifica utente",
-    "createUserTitle": "Crea utente",
+    "editUserTitle": "Modifica partecipante",
+    "createUserTitle": "Crea partecipante",
     "firstName": "Nome",
     "lastName": "Cognome",
     "displayName": "Nome visualizzato",
@@ -143,28 +141,18 @@
     "newPassword": "Nuova password",
     "password": "Password",
     "passwordHelpEdit": "Compila solo per cambiare la password. Almeno 12 caratteri.",
-    "passwordHelpCreate": "Impostata direttamente qui, almeno 12 caratteri. Non esiste un'e-mail di invito automatica - comunica la password all'utente separatamente.",
+    "passwordHelpCreate": "Impostata direttamente qui, almeno 12 caratteri. Non esiste un'e-mail di invito automatica - comunica la password all'partecipante separatamente.",
     "language": "Lingua",
     "active": "Attivo",
     "enableLogin": "Attiva accesso",
-    "participantAutoNote": "Questo account è stato creato automaticamente da un partecipante. Per il primo accesso, attiva l'accesso e imposta una nuova password.",
     "tenant": "Organizzazione",
     "tenantFixedHelp": "L'organizzazione di un account è fissa e non può essere modificata.",
     "role": "Ruolo",
     "save": "Salva",
-    "mergeUserTitle": "Unisci utenti",
-    "mergeUserDescription": "L'utente di origine viene unito all'utente di destinazione (incluso ruolo e collegamenti partecipante) e quindi eliminato. Possibile solo all'interno della stessa organizzazione.",
-    "sourceUser": "Utente di origine",
-    "targetUser": "Utente di destinazione",
-    "mergeNow": "Unisci ora",
     "toasts": {
-      "userSaved": "Utente salvato",
-      "userCreated": "Utente creato",
-      "userSaveFailed": "Impossibile salvare l'utente",
-      "userListLoadFailed": "Impossibile caricare l'elenco utenti",
-      "mergeConfirm": "Unire davvero gli utenti? L'utente di origine verrà quindi eliminato definitivamente.",
-      "userMerged": "Utenti uniti",
-      "mergeFailed": "Impossibile unire gli utenti"
+      "userSaved": "Partecipante salvato",
+      "userCreated": "Partecipante creato",
+      "userSaveFailed": "Impossibile salvare l'partecipante"
     }
   },
   "tenantModal": {
@@ -295,8 +283,8 @@
           "description": "Attività autonome. Le attività legate a un verbale scompaiono già con \"Verbali\"."
         },
         "participants": {
-          "title": "Partecipanti/persone",
-          "description": "Tutti i dati anagrafici di partecipanti/persone."
+          "title": "Partecipanti senza accesso",
+          "description": "Rimuove i partecipanti senza accesso. I partecipanti con accesso vengono mantenuti."
         },
         "documents": {
           "title": "Documenti caricati",

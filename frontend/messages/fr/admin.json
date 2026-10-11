@@ -114,11 +114,11 @@
     "admin": "Admin"
   },
   "userManagement": {
-    "toolbarTitle": "Utilisateurs",
-    "toolbarDescription": "Tous les utilisateurs de toutes les organisations. Chaque compte appartient à exactement une organisation.",
-    "newUser": "Nouvel utilisateur",
+    "toolbarTitle": "Participants",
+    "toolbarDescription": "Tous les participants de toutes les organisations. Chaque compte appartient à exactement une organisation.",
+    "newUser": "Nouvel participant",
     "searchLabel": "Recherche",
-    "searchPlaceholder": "Rechercher des utilisateurs",
+    "searchPlaceholder": "Rechercher des participants",
     "columns": {
       "displayName": "Nom affiché",
       "email": "E-mail",
@@ -128,14 +128,12 @@
       "actions": "Actions"
     },
     "loading": "Chargement…",
-    "emptyUsers": "Aucun utilisateur trouvé.",
-    "participantAccount": "Compte participant",
+    "emptyUsers": "Aucun participant trouvé.",
     "loginActive": "Actif",
     "loginDisabled": "Désactivé",
     "mfaButton": "MFA",
-    "mergeButton": "Fusionner",
-    "editUserTitle": "Modifier l'utilisateur",
-    "createUserTitle": "Créer un utilisateur",
+    "editUserTitle": "Modifier l'participant",
+    "createUserTitle": "Créer un participant",
     "firstName": "Prénom",
     "lastName": "Nom",
     "displayName": "Nom affiché",
@@ -143,28 +141,18 @@
     "newPassword": "Nouveau mot de passe",
     "password": "Mot de passe",
     "passwordHelpEdit": "Ne remplir que pour changer le mot de passe. Au moins 12 caractères.",
-    "passwordHelpCreate": "Défini directement ici, au moins 12 caractères. Il n'y a pas d'e-mail d'invitation automatique - communiquez le mot de passe séparément à l'utilisateur.",
+    "passwordHelpCreate": "Défini directement ici, au moins 12 caractères. Il n'y a pas d'e-mail d'invitation automatique - communiquez le mot de passe séparément à l'participant.",
     "language": "Langue",
     "active": "Actif",
     "enableLogin": "Activer la connexion",
-    "participantAutoNote": "Ce compte a été créé automatiquement à partir d'un participant. Pour la première connexion, veuillez activer la connexion et définir un nouveau mot de passe.",
     "tenant": "Organisation",
     "tenantFixedHelp": "L'organisation d'un compte est fixe et ne peut pas être modifiée.",
     "role": "Rôle",
     "save": "Enregistrer",
-    "mergeUserTitle": "Fusionner des utilisateurs",
-    "mergeUserDescription": "L'utilisateur source est fusionné dans l'utilisateur cible (y compris le rôle et les liens participants) puis supprimé. Possible uniquement au sein de la même organisation.",
-    "sourceUser": "Utilisateur source",
-    "targetUser": "Utilisateur cible",
-    "mergeNow": "Fusionner maintenant",
     "toasts": {
-      "userSaved": "Utilisateur enregistré",
-      "userCreated": "Utilisateur créé",
-      "userSaveFailed": "L'utilisateur n'a pas pu être enregistré",
-      "userListLoadFailed": "La liste des utilisateurs n'a pas pu être chargée",
-      "mergeConfirm": "Vraiment fusionner les utilisateurs ? L'utilisateur source sera ensuite définitivement supprimé.",
-      "userMerged": "Utilisateurs fusionnés",
-      "mergeFailed": "Les utilisateurs n'ont pas pu être fusionnés"
+      "userSaved": "Participant enregistré",
+      "userCreated": "Participant créé",
+      "userSaveFailed": "L'participant n'a pas pu être enregistré"
     }
   },
   "tenantModal": {
@@ -295,8 +283,8 @@
           "description": "Tâches autonomes. Les tâches liées à un procès-verbal disparaissent déjà avec « Procès-verbaux »."
         },
         "participants": {
-          "title": "Participants/personnes",
-          "description": "Toutes les données de base des participants/personnes."
+          "title": "Participants sans connexion",
+          "description": "Supprime les participants sans connexion. Les participants avec connexion sont conservés."
         },
         "documents": {
           "title": "Documents téléversés",

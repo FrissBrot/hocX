@@ -18,7 +18,7 @@ point outside the exported tenant's own row set entirely:
 - AppUser ids from the source installation mean nothing on the target. These columns are
   exported/imported by email instead (see USER_ID_COLUMNS). A user belongs to exactly one
   tenant, so only the exported tenant's own users are ever exported, and on import only the
-  accounts of the newly created tenant can be referenced (UserEmailCache.tenant_id) - never
+  accounts of the newly created tenant can be referenced (UserIdentityCache.tenant_id) - never
   a same-email account that happens to exist in another tenant of the target. If a reference
   can't be resolved the column is set to NULL (or, where NULL isn't allowed - e.g.
   user_template_access.user_id - the row is skipped) and reported back to the admin as a
@@ -59,7 +59,6 @@ and generates a random unusable hash instead of ever writing this literal string
 password_hash column."""
 
 USER_ID_COLUMNS: dict[str, list[str]] = {
-    "participant": ["app_user_id"],
     "template": ["created_by"],
     "protocol": ["created_by"],
     "stored_file": ["created_by"],
@@ -187,54 +186,50 @@ class LookupCodeCache:
             ) from exc
 
 
-class UserEmailCache:
-    """Resolves app_user ids <-> emails, caching one query per set of ids/emails looked up.
-
-    When `tenant_id` is set, only that tenant's own users are ever resolved (both directions):
-    a user of any other tenant looks like "no such user". Export sets it to the exported
-    tenant, so a stray reference to a foreign tenant's user (e.g. created_by copied over by a
-    tenant clone) is exported as NULL instead of leaking that user's email; import sets it to
-    the newly created tenant once it exists, so a reference can never link to a same-email
-    account of another tenant of the target installation.
-    """
+class UserIdentityCache:
+    """Portable Identitätsverweise via UUID; alte Archive können weiter E-Mails liefern."""
 
     def __init__(self, db: Session, *, tenant_id: int | None = None) -> None:
         self.db = db
         self.tenant_id = tenant_id
-        self._email_by_id: dict[int, str | None] = {}
-        self._id_by_email: dict[str, int | None] = {}
+        self._id_by_reference: dict[str, int | None] = {}
+        self._reference_by_id: dict[int, str | None] = {}
 
-    def _in_scope(self, user: AppUser | None) -> bool:
-        return user is not None and (self.tenant_id is None or user.tenant_id == self.tenant_id)
-
-    def email_for(self, user_id: int | None) -> str | None:
+    def reference_for(self, user_id: int | None) -> str | None:
         if user_id is None:
             return None
-        if user_id not in self._email_by_id:
+        if user_id not in self._reference_by_id:
             user = self.db.get(AppUser, user_id)
-            self._email_by_id[user_id] = user.email if self._in_scope(user) else None
-        return self._email_by_id[user_id]
+            self._reference_by_id[user_id] = (
+                str(user.public_id) if user is not None and (self.tenant_id is None or user.tenant_id == self.tenant_id) else None
+            )
+        return self._reference_by_id[user_id]
 
-    def email_exists(self, email: str) -> bool:
-        """Whether ANY account (of any tenant) already owns this email - for import's
-        "would creating this account collide" check, deliberately not scoped by tenant_id."""
-        return self.db.query(AppUser.id).filter(AppUser.email == email).first() is not None
+    def email_exists(self, email: str | None) -> bool:
+        if not email:
+            return False
+        return self.db.query(AppUser.id).filter(AppUser.email == email.strip().lower(), AppUser.login_enabled.is_(True)).first() is not None
 
-    def set_id(self, email: str, user_id: int) -> None:
-        """Used on import right after creating a brand new account (see
-        TenantImportService._import_app_users) - without this, the `id_for` call that was
-        used to check "does this email already exist" would have already cached the answer
-        as None, and every later lookup for that email would keep returning None forever
-        even though the account exists now."""
-        self._id_by_email[email] = user_id
+    def set_id(self, reference: str | None, user_id: int) -> None:
+        if reference is not None:
+            self._id_by_reference[reference] = user_id
 
-    def id_for(self, email: str | None) -> int | None:
-        if email is None:
+    def id_for(self, reference: str | None) -> int | None:
+        if reference is None:
             return None
-        if email not in self._id_by_email:
-            user = self.db.query(AppUser).filter(AppUser.email == email).first()
-            self._id_by_email[email] = user.id if self._in_scope(user) else None
-        return self._id_by_email[email]
+        if reference not in self._id_by_reference:
+            query = self.db.query(AppUser)
+            if self.tenant_id is not None:
+                query = query.filter(AppUser.tenant_id == self.tenant_id)
+            try:
+                public_id = uuid.UUID(reference)
+            except ValueError:
+                query = query.filter(AppUser.email == reference)
+            else:
+                query = query.filter(AppUser.public_id == public_id)
+            user = query.first()
+            self._id_by_reference[reference] = user.id if user is not None else None
+        return self._id_by_reference[reference]
 
 
 # ── JSONB config remapping ───────────────────────────────────────────────────

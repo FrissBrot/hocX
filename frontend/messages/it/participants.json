@@ -98,5 +98,9 @@
     "left": "Usciti"
   },
   "footerCount": "{count, plural, one {# partecipante} other {# partecipanti}}",
-  "footerHint": "Clicca su una riga per modificare"
+  "footerHint": "Clicca su una riga per modificare",
+  "loginTabs": {
+    "withoutLogin": "Partecipanti",
+    "withLogin": "Partecipanti con accesso"
+  }
 }

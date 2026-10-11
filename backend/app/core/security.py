@@ -32,7 +32,6 @@ class CurrentUser:
     display_name: str
     email: str
     preferred_language: str
-    is_participant_account: bool
     # A user belongs to exactly one tenant with exactly one role (app_user.tenant_id/role_id);
     # the "current_" prefix is historical from when a session could switch between tenants.
     current_tenant_id: int
@@ -175,7 +174,6 @@ def build_current_user(db: Session, user: AppUser, *, mfa_verified: bool = False
         email=user.email,
         preferred_language=user.preferred_language,
         protocol_accordion_enabled=(user.external_identity_json or {}).get("protocol_accordion_enabled", True) is not False,
-        is_participant_account=(user.external_identity_json or {}).get("source") == "participant_auto",
         current_tenant_id=tenant.id,
         current_tenant_public_id=tenant.public_id,
         current_tenant_name=tenant.name,
@@ -210,7 +208,7 @@ def get_optional_current_user(
     if session_data is None:
         return None
     user = db.get(AppUser, int(session_data["user_id"]))
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or not user.login_enabled:
         return None
     if user.session_revoke_at is not None:
         token_iat = int(session_data.get("iat", 0))

@@ -202,7 +202,7 @@
     "deleteHint": "La suppression n’est possible que tant qu’aucun modèle n’est attribué."
   },
   "users": {
-    "fab": "Inviter"
+    "fab": "Nouveau participant"
   },
   "files": {
     "sort": "Tri",

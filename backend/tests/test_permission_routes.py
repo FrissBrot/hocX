@@ -90,8 +90,7 @@ def test_fine_delete_http_permission_matrix(db, role, expected_status):
 def test_reader_fines_http_listing_only_returns_own_participant_fines(db):
     tenant = make_tenant(db, "Reader Own Fines")
     user = make_app_user(db, email="reader-fines@example.com", tenant_id=tenant.id)
-    own_participant = make_participant(db, tenant.id, display_name="Own Person")
-    own_participant.app_user_id = user.id
+    own_participant = user
     other_participant = make_participant(db, tenant.id, display_name="Other Person")
     template = make_template(db, tenant.id)
     protocol = make_protocol(db, tenant.id, template.id)

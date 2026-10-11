@@ -28,6 +28,15 @@ Installationen aktualisieren können.
 
 ### Geändert
 
+- Teilnehmer und Benutzer verwenden einen gemeinsamen Datensatz. Die Oberfläche unterscheidet
+  „Teilnehmer“ und „Teilnehmer mit Login“. E-Mail und Passwort sind nur für einen Login nötig;
+  Kontaktadressen ohne Login dürfen mehrfach vorkommen. Nur Administratoren schalten Logins frei.
+- Migration `0108` übernimmt Teilnehmer-Verweise und entfernt die separate Teilnehmer-Tabelle,
+  Schattenkonten und Merge-Funktionen. Vor der Migration ein Datenbank-Backup erstellen;
+  ein Rückweg benötigt dieses Backup. Authentifizierungs-IDs bleiben erhalten.
+- Exportformat 4 referenziert Teilnehmer über UUIDs statt E-Mail-Adressen. Alte Archive
+  (Format 2/3) bleiben importierbar. Geklonte Teilnehmer erhalten keinen aktiven Login.
+
 - Der Mandanten-Export ist jetzt ein vollständiges, mandantenspezifisches Backup: Er enthält
   zusätzlich Abgabebox-Links (mit Abgabe-Zuordnung), öffentliche Freigabe-Links,
   Kalender-Abos, gebuchte Features und Speicherpakete, Vertrauensbeziehungen und

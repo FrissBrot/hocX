@@ -149,7 +149,7 @@ def test_export_bundles_only_own_users_and_nulls_foreign_references(db):
         assert "foreign@x.example" not in json.dumps(manifest)
         assert manifest["tables"]["template"][0]["created_by"] is None
         assert "user_tenant_role" not in manifest["tables"]
-        assert manifest["format_version"] == 3
+        assert manifest["format_version"] == 4
     finally:
         zip_path.unlink(missing_ok=True)
 
@@ -293,7 +293,7 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
         assert len(manifest["tables"]["word_import_profile"]) == 1
         assert len(manifest["tables"]["word_import_suggestion_outcome"]) == 1
         assert len(manifest["tables"]["protocol_export_cache"]) == 1
-        assert manifest["tables"]["user_protocol_scroll"][0]["user_id"] == user.email
+        assert manifest["tables"]["user_protocol_scroll"][0]["user_id"] == str(user.public_id)
         # Fresh target installation: the source account isn't there (see the word import test).
         db.delete(user)
         db.flush()
@@ -1054,7 +1054,7 @@ def test_export_import_roundtrip_remaps_responsible_assignments_snapshot(db):
 
     def drop_second_participant(zip_path):
         _rewrite_manifest(zip_path, lambda m: m["tables"].update(
-            participant=[row for row in m["tables"]["participant"] if row["id"] != gone.id]
+            app_user=[row for row in m["tables"]["app_user"] if row["id"] != gone.id]
         ))
 
     new_tenant, _ = _export_import(db, tenant.id, before_import=drop_second_participant)

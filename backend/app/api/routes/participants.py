@@ -25,6 +25,8 @@ from app.services.participant_service import ParticipantService
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.template_service import TemplateService
+from app.services.user_service import UserService
+from app.schemas.user import UserUpdate
 from app.schemas.template import TemplateRead
 
 router = APIRouter()
@@ -119,8 +121,15 @@ def patch_participant(
 ):
     require_writer(user)
     participant = _get_participant_or_404(db, participant_id, user)
+    if participant.login_enabled and payload.model_fields_set & {"email", "is_active"}:
+        require_admin(user)
     try:
-        updated = participant_service.update_participant(db, participant.id, payload, tenant_id=user.current_tenant_id)
+        if payload.model_fields_set & {"login_enabled", "password", "role_code"}:
+            require_admin(user)
+            UserService().update_user(db, participant.id, UserUpdate(**payload.model_dump(exclude_unset=True)), user)
+            updated = participant
+        else:
+            updated = participant_service.update_participant(db, participant.id, payload, tenant_id=user.current_tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
@@ -139,6 +148,10 @@ def delete_participant(
 ):
     require_writer(user)
     participant = _get_participant_or_404(db, participant_id, user)
+    if participant.login_enabled:
+        require_admin(user)
+    if participant.id == user.user_id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
     try:
         deleted = participant_service.delete_participant(db, participant.id, tenant_id=user.current_tenant_id)
     except SQLAlchemyError as exc:
@@ -178,6 +191,12 @@ def bulk_delete_participants(
 ):
     require_writer(user)
     id_map = public_id_service.resolve_internal_ids(db, Participant, payload.participant_ids, tenant_id=user.current_tenant_id)
+    for participant_id in id_map.values():
+        participant = db.get(Participant, participant_id)
+        if participant.login_enabled:
+            require_admin(user)
+    if user.user_id in id_map.values():
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
     try:
         deleted_count = participant_service.delete_participants(db, list(id_map.values()), tenant_id=user.current_tenant_id)
     except SQLAlchemyError as exc:

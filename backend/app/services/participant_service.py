@@ -1,25 +1,20 @@
 import csv
-import secrets
 from io import StringIO
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.locale_config_generated import DEFAULT_LOCALE
-from app.core.security import hash_password
-from app.models import AppUser, ListDefinition, ListEntry, Participant, Role, Template
+from app.models import ListDefinition, ListEntry, Participant, Role, Template
 from app.repositories.participant_repository import ParticipantRepository
-from app.repositories.user_repository import UserRepository
 from app.schemas.participant import ParticipantCreate, ParticipantImportResult, ParticipantUpdate
-from app.services import public_id_service
 from app.services.access_service import AccessService
 
 
 class ParticipantService:
     def __init__(self, repository: ParticipantRepository | None = None) -> None:
         self.repository = repository or ParticipantRepository()
-        self.user_repository = UserRepository()
         self.access_service = AccessService()
 
     def _reader_role_id(self, db: Session) -> int:
@@ -27,87 +22,6 @@ class ParticipantService:
         if role_id is None:
             raise ValueError("Reader role missing")
         return int(role_id)
-
-    def _synthetic_email(self, *, tenant_id: int, participant_id: int) -> str:
-        return f"participant-{tenant_id}-{participant_id}@participants.hocx.local"
-
-    def _create_user_for_participant(self, db: Session, participant: Participant) -> AppUser:
-        secret = secrets.token_urlsafe(24)
-        user = AppUser(
-            tenant_id=participant.tenant_id,
-            role_id=self._reader_role_id(db),
-            first_name=participant.first_name or participant.display_name,
-            last_name=participant.last_name or "Participant",
-            display_name=participant.display_name,
-            email=self._synthetic_email(tenant_id=participant.tenant_id, participant_id=participant.id),
-            password_hash=hash_password(secret),
-            preferred_language=DEFAULT_LOCALE,
-            is_active=participant.is_active,
-            external_identity_json={
-                "source": "participant_auto",
-                "login_enabled": False,
-                "participant_email": participant.email,
-            },
-        )
-        self.user_repository.create(db, user)
-        return user
-
-    def _ensure_linked_user(self, db: Session, participant: Participant) -> Participant:
-        if participant.app_user_id is None:
-            user = self._create_user_for_participant(db, participant)
-            participant.app_user_id = user.id
-            db.add(participant)
-            db.flush()
-        self.access_service.sync_user_access_from_participants(
-            db,
-            user_id=participant.app_user_id,
-            tenant_id=participant.tenant_id,
-        )
-        return participant
-
-    def _sync_linked_user_if_unambiguous(self, db: Session, participant: Participant) -> None:
-        if participant.app_user_id is None:
-            return
-        linked_count = int(
-            db.scalar(select(func.count(Participant.id)).where(Participant.app_user_id == participant.app_user_id)) or 0
-        )
-        if linked_count != 1:
-            self.access_service.sync_user_access_from_participants(
-                db,
-                user_id=participant.app_user_id,
-                tenant_id=participant.tenant_id,
-            )
-            return
-        user = self.user_repository.get(db, participant.app_user_id)
-        if user is None:
-            return
-        self.user_repository.update(
-            db,
-            user,
-            {
-                "first_name": participant.first_name or participant.display_name,
-                "last_name": participant.last_name or "Participant",
-                # app_user.name is `GENERATED ALWAYS AS (display_name) STORED` (see the
-                # baseline schema) - Postgres rejects any explicit value for it outright,
-                # which made every participant update with a linked user fail with a
-                # generic "could not be updated" 400 (masked SQLAlchemyError, found via
-                # e2e once auth was fixed enough for the suite to reach this code at all;
-                # no existing backend test covered update_participant with a linked user).
-                "display_name": participant.display_name,
-                "is_active": participant.is_active,
-                "external_identity_json": {
-                    **(user.external_identity_json or {}),
-                    "source": "participant_auto",
-                    "login_enabled": (user.external_identity_json or {}).get("login_enabled", False),
-                    "participant_email": participant.email,
-                },
-            },
-        )
-        self.access_service.sync_user_access_from_participants(
-            db,
-            user_id=participant.app_user_id,
-            tenant_id=participant.tenant_id,
-        )
 
     def list_participants(self, db: Session, *, tenant_id: int, active_only: bool = False, skip: int = 0, limit: int = 100) -> list[Participant]:
         return self.repository.list(db, tenant_id=tenant_id, active_only=active_only, skip=skip, limit=limit)
@@ -122,26 +36,12 @@ class ParticipantService:
             return None
         return participant
 
-    def _ensure_app_user_belongs_to_tenant(self, db: Session, app_user_id: int, *, tenant_id: int) -> None:
-        app_user = self.user_repository.get(db, app_user_id)
-        if app_user is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App user not found")
-        if app_user.tenant_id != tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="App user does not belong to the current tenant",
-            )
-
     def create_participant(self, db: Session, payload: ParticipantCreate, *, tenant_id: int) -> Participant:
-        app_user_id: int | None = None
-        if payload.app_user_id is not None:
-            app_user_id = public_id_service.resolve_internal_id(db, AppUser, payload.app_user_id)
-            if app_user_id is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App user not found")
-            self._ensure_app_user_belongs_to_tenant(db, app_user_id, tenant_id=tenant_id)
         participant = Participant(
             tenant_id=tenant_id,
-            app_user_id=app_user_id,
+            role_id=self._reader_role_id(db),
+            login_enabled=False,
+            preferred_language=DEFAULT_LOCALE,
             first_name=payload.first_name,
             last_name=payload.last_name,
             display_name=payload.display_name,
@@ -152,12 +52,8 @@ class ParticipantService:
         )
         try:
             created = self.repository.create(db, participant, commit=False)
-            created = self._ensure_linked_user(db, created)
         except Exception:
-            # Repository used to commit the new row immediately, before this and the
-            # linked-user creation could still fail - leaving a Participant permanently
-            # in the DB (unlinked, or worse half-linked) despite the client seeing an
-            # error response. Roll back everything so a failure here is all-or-nothing.
+            # Fehlgeschlagene Erstellung darf keinen halbfertigen Datensatz hinterlassen.
             db.rollback()
             raise
         db.commit()
@@ -172,9 +68,21 @@ class ParticipantService:
         values = payload.model_dump(exclude_unset=True)
         if not values:
             return participant
+        from app.services.user_service import UserService
+        UserService().guard_last_tenant_admin(db, participant, is_active=payload.is_active)
+        if participant.login_enabled:
+            email = values.get("email", participant.email)
+            if not email or not email.strip():
+                raise ValueError("Eine E-Mail-Adresse ist für einen Login erforderlich")
+            values["email"] = email.strip().lower()
+            UserService().ensure_login_email_available(db, values["email"], excluding_user_id=participant.id)
+        joined_at = values.get("joined_at", participant.joined_at)
+        left_at = values.get("left_at", participant.left_at)
+        if joined_at and left_at and left_at < joined_at:
+            raise ValueError("left_at must not be before joined_at")
         try:
             updated = self.repository.update(db, participant, values, commit=False)
-            self._sync_linked_user_if_unambiguous(db, updated)
+            self.access_service.sync_user_access_from_participants(db, user_id=updated.id, tenant_id=tenant_id)
         except Exception:
             db.rollback()
             raise
@@ -219,6 +127,8 @@ class ParticipantService:
         participant = self.repository.get(db, participant_id)
         if participant is None or participant.tenant_id != tenant_id:
             return False
+        from app.services.user_service import UserService
+        UserService().guard_last_tenant_admin(db, participant, removed=True)
         self._clear_orphaned_list_references(db, tenant_id, {participant_id})
         self.repository.delete(db, participant)
         db.commit()
@@ -232,10 +142,14 @@ class ParticipantService:
         ]
         if not participants:
             return 0
-        self._clear_orphaned_list_references(db, tenant_id, {participant.id for participant in participants})
-        deleted = self.repository.delete_many(db, participants)
+        from app.services.user_service import UserService
+        for participant in participants:
+            UserService().guard_last_tenant_admin(db, participant, removed=True)
+            self._clear_orphaned_list_references(db, tenant_id, {participant.id})
+            db.delete(participant)
+            db.flush()
         db.commit()
-        return deleted
+        return len(participants)
 
     def import_csv(self, db: Session, csv_text: str, *, tenant_id: int) -> ParticipantImportResult:
         normalized = csv_text.lstrip("\ufeff")
@@ -268,6 +182,9 @@ class ParticipantService:
                     continue
                 participant = Participant(
                     tenant_id=tenant_id,
+                    role_id=self._reader_role_id(db),
+                    login_enabled=False,
+                    preferred_language=DEFAULT_LOCALE,
                     first_name=first_name,
                     last_name=last_name,
                     display_name=display_name,
@@ -283,8 +200,7 @@ class ParticipantService:
                     db.add(participant)
                     db.flush()
                     db.refresh(participant)
-                    linked = self._ensure_linked_user(db, participant)
-                imported.append(linked)
+                imported.append(participant)
                 existing_names.add(display_name.lower())
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"Zeile {i}: {exc}")
@@ -298,10 +214,10 @@ class ParticipantService:
     def replace_templates_for_participant(self, db: Session, participant_id: int, template_ids: list[int]) -> list[Template]:
         templates = self.repository.replace_templates_for_participant(db, participant_id, template_ids)
         participant = self.repository.get(db, participant_id)
-        if participant is not None and participant.app_user_id is not None:
+        if participant is not None:
             self.access_service.sync_user_access_from_participants(
                 db,
-                user_id=participant.app_user_id,
+                user_id=participant.id,
                 tenant_id=participant.tenant_id,
             )
         db.commit()

@@ -15,7 +15,6 @@ export type UserFormState = {
   preferred_language: string;
   is_active: boolean;
   login_enabled: boolean;
-  is_participant_account: boolean;
   // Leer im mandanten-gebundenen Formular: das Backend nimmt dort immer den eigenen Mandanten.
   tenant_id: string;
   role_code: string;
@@ -33,11 +32,9 @@ const MIN_PASSWORD_LENGTH = 12;
 export function isUserFormValid(form: UserFormState, { requireTenant = false }: { requireTenant?: boolean } = {}): boolean {
   const isEdit = Boolean(form.id);
   return (
-    form.first_name.trim() !== "" &&
-    form.last_name.trim() !== "" &&
     form.display_name.trim() !== "" &&
-    form.email.trim() !== "" &&
-    (isEdit ? form.password === "" || form.password.length >= MIN_PASSWORD_LENGTH : form.password.length >= MIN_PASSWORD_LENGTH) &&
+    (!form.login_enabled || form.email.trim() !== "") &&
+    (!form.login_enabled || (isEdit && form.password === "") || form.password.length >= MIN_PASSWORD_LENGTH) &&
     (!requireTenant || isEdit || form.tenant_id !== "")
   );
 }
@@ -52,8 +49,7 @@ export function emptyUserForm(tenantId = ""): UserFormState {
     password: "",
     preferred_language: "de",
     is_active: true,
-    login_enabled: true,
-    is_participant_account: false,
+    login_enabled: false,
     tenant_id: tenantId,
     role_code: DEFAULT_ROLE_CODE
   };
@@ -65,7 +61,7 @@ export function userFormToPayload(form: UserFormState) {
     first_name: form.first_name,
     last_name: form.last_name,
     display_name: form.display_name,
-    email: form.email,
+    email: form.email.trim() || null,
     preferred_language: form.preferred_language,
     is_active: form.is_active,
     login_enabled: form.login_enabled,

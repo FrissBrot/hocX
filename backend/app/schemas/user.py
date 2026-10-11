@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.locale_config_generated import SUPPORTED_LOCALES
 
@@ -86,10 +86,12 @@ class TenantSubscriptionRead(BaseModel):
 
 
 class UserBase(BaseModel):
-    first_name: str
-    last_name: str
-    display_name: str
-    email: str
+    first_name: str | None = None
+    last_name: str | None = None
+    display_name: str = Field(min_length=1)
+    email: str | None = None
+    joined_at: date | None = None
+    left_at: date | None = None
     preferred_language: str = "de"
     is_active: bool = True
     external_identity_json: dict[str, Any] = Field(default_factory=dict)
@@ -98,12 +100,20 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str = Field(min_length=12)
+    password: str | None = Field(default=None, min_length=12)
     role_code: str = "reader"
     # Only the platform-admin panel picks the tenant; a tenant admin always creates users in
     # their own tenant (a differing tenant_id is rejected there).
     tenant_id: uuid.UUID | None = None
-    login_enabled: bool = True
+    login_enabled: bool = False
+
+    @model_validator(mode="after")
+    def _login_credentials(self) -> "UserCreate":
+        if self.login_enabled and (not self.email or not self.email.strip() or not self.password):
+            raise ValueError("E-Mail-Adresse und Passwort sind für einen Login erforderlich")
+        if self.joined_at and self.left_at and self.left_at < self.joined_at:
+            raise ValueError("left_at must not be before joined_at")
+        return self
 
 
 class UserUpdate(BaseModel):
@@ -111,6 +121,8 @@ class UserUpdate(BaseModel):
     last_name: str | None = None
     display_name: str | None = None
     email: str | None = None
+    joined_at: date | None = None
+    left_at: date | None = None
     preferred_language: str | None = None
     is_active: bool | None = None
     password: str | None = Field(default=None, min_length=12)
@@ -145,7 +157,6 @@ class UserRead(UserBase):
     tenant_name: str
     role_code: str
     login_enabled: bool = True
-    is_participant_account: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -163,8 +174,8 @@ class TenantByDomainRead(BaseModel):
 
 class SessionUserRead(BaseModel):
     id: uuid.UUID
-    first_name: str
-    last_name: str
+    first_name: str | None
+    last_name: str | None
     display_name: str
     email: str
     preferred_language: str

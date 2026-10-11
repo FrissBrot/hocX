@@ -202,7 +202,7 @@
     "deleteHint": "Löschen ist nur möglich, solange keine Vorlage zugeordnet ist."
   },
   "users": {
-    "fab": "Einladen"
+    "fab": "Neuer Teilnehmer"
   },
   "files": {
     "sort": "Sortierung",

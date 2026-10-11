@@ -25,7 +25,7 @@ class AdminTenantUserService:
             email=user.email,
             display_name=user.display_name,
             role_code=role_code,
-            login_enabled=(user.external_identity_json or {}).get("login_enabled", True) is not False,
+            login_enabled=user.login_enabled,
             is_active=user.is_active,
         )
 
@@ -57,6 +57,5 @@ class AdminTenantUserService:
         if user is None:
             return False
         self.user_service.guard_last_tenant_admin(db, user, removed=True)
-        self.repository.delete(db, user)
-        db.commit()
-        return True
+        from app.services.participant_service import ParticipantService
+        return ParticipantService().delete_participant(db, user_id, tenant_id=tenant_id)

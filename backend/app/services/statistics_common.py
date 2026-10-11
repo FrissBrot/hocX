@@ -204,7 +204,7 @@ def fetch_fines_by_participant(db: Session, tenant_id: int, bounds: tuple[date, 
                 SUM(af.amount) AS amount
             FROM attendance_fine af
             JOIN protocol p ON p.id = af.protocol_id
-            LEFT JOIN participant p2 ON p2.id = af.participant_id
+            LEFT JOIN app_user p2 ON p2.id = af.participant_id
             WHERE p.tenant_id = :tenant_id
               AND (CAST(:date_start AS date) IS NULL OR p.protocol_date >= :date_start)
               AND (CAST(:date_end AS date) IS NULL OR p.protocol_date <= :date_end)

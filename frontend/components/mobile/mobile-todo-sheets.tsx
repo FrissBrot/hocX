@@ -36,7 +36,7 @@ export function todoDueLabel(todo: TodoListItem, locale: string): string | null 
 
 /** Eigener Teilnehmer-Datensatz des eingeloggten Benutzers (fuer "Mir zuweisen"). */
 export function ownParticipant(participants: ParticipantSummary[], userId: string | null | undefined): ParticipantSummary | null {
-  return (userId && participants.find((participant) => participant.app_user_id === userId)) || null;
+  return (userId && participants.find((participant) => participant.id === userId)) || null;
 }
 
 export function TodoDetailSheet({
@@ -300,7 +300,7 @@ function AssigneePicker({
         <PickerOption
           key={participant.id}
           label={participant.display_name}
-          sub={participant.app_user_id && participant.app_user_id === session?.user?.id ? t("todos.me") : undefined}
+          sub={participant.id && participant.id === session?.user?.id ? t("todos.me") : undefined}
           leading={<MobileAvatar name={participant.display_name} size="sm" />}
           selected={participant.id === activeId}
           onClick={() => onPick(participant)}

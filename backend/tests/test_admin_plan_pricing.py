@@ -179,7 +179,7 @@ def test_tenant_subscription_view_computes_estimated_cost_including_extra_featur
             display_name="Test Admin",
             email="test@example.com",
             preferred_language="de",
-            is_participant_account=False,
+
             current_tenant_id=tenant.id,
             current_tenant_public_id=tenant.public_id,
             current_tenant_name=tenant.name,
@@ -297,7 +297,7 @@ def test_discount_and_note_are_stored_and_reduce_estimated_cost(db):
         display_name="Test Admin",
         email="test@example.com",
         preferred_language="de",
-        is_participant_account=False,
+
         current_tenant_id=tenant.id,
         current_tenant_public_id=tenant.public_id,
         current_tenant_name=tenant.name,

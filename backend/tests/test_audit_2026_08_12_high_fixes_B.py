@@ -84,8 +84,7 @@ def test_h6_reader_can_now_reach_endpoint_for_own_participant(db):
     template2 = make_template(db, tenant.id, name="Template 2")
 
     reader_user = make_app_user(db, email="reader@example.com", tenant_id=tenant.id, role_code="reader")
-    participant_reader = make_participant(db, tenant.id, display_name="Reader Participant")
-    participant_reader.app_user_id = reader_user.id
+    participant_reader = reader_user
     db.flush()
 
     participant_other = make_participant(db, tenant.id, display_name="Other Participant")
@@ -110,8 +109,7 @@ def test_h6_restricted_reader_scoped_when_querying_other_participant(db):
     template2 = make_template(db, tenant.id, name="Template 2")
 
     reader_user = make_app_user(db, email="reader2@example.com", tenant_id=tenant.id, role_code="reader")
-    participant_reader = make_participant(db, tenant.id, display_name="Reader Participant 2")
-    participant_reader.app_user_id = reader_user.id
+    participant_reader = reader_user
     db.flush()
 
     participant_other = make_participant(db, tenant.id, display_name="Other Participant 2")

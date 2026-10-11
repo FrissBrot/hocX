@@ -1,20 +1,20 @@
 {
-  "pageTitle": "Users",
+  "pageTitle": "Participants",
   "ownAccessOnlyHint": "Access and roles for this organization.",
   "pageHint": "This organization's accounts and their roles.",
-  "newUser": "+ New user",
+  "newUser": "New participant",
   "emptyState": {
     "title": "Only your own access",
     "description": "Invite more people and assign them a role: Admin, Writer, Treasurer or Reader.",
-    "invite": "+ Invite user"
+    "invite": "+ Invite participant"
   },
   "explainRoles": "Explain roles",
   "explainRolesDescription": "Each account has exactly one role per organization.",
   "tabs": {
-    "active": "Active users ({count})",
-    "participants": "Participants ({count})"
+    "active": "Participants with login",
+    "participants": "Participants"
   },
-  "searchUsers": "Search users",
+  "searchUsers": "Search participants",
   "searchParticipants": "Search participants",
   "columns": {
     "displayName": "Display name",
@@ -27,8 +27,8 @@
   "mfaButton": "MFA",
   "delete": "Delete",
   "close": "Close",
-  "editUserTitle": "Edit user",
-  "createUserTitle": "Create user",
+  "editUserTitle": "Edit participant",
+  "createUserTitle": "Create participant",
   "userModalDescription": "Maintain account data and role.",
   "firstName": "First name",
   "lastName": "Last name",
@@ -37,20 +37,19 @@
   "newPassword": "New password",
   "password": "Password",
   "passwordHelpEdit": "Only fill in to change the password. At least 12 characters.",
-  "passwordHelpCreate": "Set directly here, at least 12 characters. There is no automatic invitation email - share the password with the user separately.",
+  "passwordHelpCreate": "Required only for login. At least 12 characters.",
   "role": "Role",
   "active": "Active",
   "enableLogin": "Enable login",
-  "participantAutoNote": "This account was created automatically from a participant. For the first login, please enable login and set a new password.",
   "cancel": "Cancel",
   "save": "Save",
   "enableLoginForTitle": "Enable login for {name}",
   "enableLoginTitle": "Enable login",
-  "enableLoginDescription": "Assign an email and password so this participant can log in. They remain linked as a participant.",
+  "enableLoginDescription": "Set an email address and password for this participant’s login.",
   "mfaTitle": "MFA for {name}",
   "mfaTitleFallback": "MFA",
   "roleDescriptions": {
-    "admin": "Full access within the organization, including structure (templates, cycles, settings) and user management.",
+    "admin": "Full access within the organization, including structure (templates, cycles, settings) and participant management.",
     "writer": "Works in the protocol area and maintains operational data, but changes neither structure nor finances.",
     "kassier": "Like reader, plus full write access to finances and fines.",
     "reader": "Read-only access, can trigger PDF exports and only sees their own fines."
@@ -58,11 +57,11 @@
   "toasts": {
     "loginEnabled": "Login enabled",
     "loginEnableFailed": "Login could not be enabled",
-    "userSaved": "User saved",
-    "userCreated": "User created",
-    "userSaveFailed": "User could not be saved",
-    "deleteConfirm": "Permanently delete user \"{name}\"? The account and access are lost immediately.",
-    "userDeleted": "User deleted",
-    "userDeleteFailed": "User could not be deleted"
+    "userSaved": "Participant saved",
+    "userCreated": "Participant created",
+    "userSaveFailed": "Participant could not be saved",
+    "deleteConfirm": "Permanently delete participant \"{name}\"? The account and access are lost immediately.",
+    "userDeleted": "Participant deleted",
+    "userDeleteFailed": "Participant could not be deleted"
   }
 }

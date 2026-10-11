@@ -35,7 +35,6 @@ from app.schemas.admin import (
     AdminTenantWebsiteListingUpdate,
     AdminTenantUserGrant,
     AdminTenantUserRead,
-    AdminUserMergeRequest,
     AdminUserPage,
     PlatformAdminCreate,
     PlatformAdminRead,
@@ -851,22 +850,6 @@ def update_user(
         details={"password_changed": bool(payload.password), "is_active": payload.is_active},
     )
     return user
-
-
-@router.post("/users/merge", response_model=UserRead)
-def merge_users(payload: AdminUserMergeRequest, db: Session = Depends(get_db), current_admin: CurrentAdmin = Depends(require_admin_write)):
-    internal_source_user_id = _resolve_user_id(db, payload.source_user_id)
-    internal_target_user_id = _resolve_user_id(db, payload.target_user_id)
-    try:
-        result = user_service.merge_users(db, source_user_id=internal_source_user_id, target_user_id=internal_target_user_id)
-    except SQLAlchemyError as exc:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Users could not be merged") from exc
-    audit.log(
-        db, action="admin.users_merged", actor_email=current_admin.email, entity_type="user", entity_id=internal_target_user_id,
-        details={"source_user_id": internal_source_user_id, "target_user_id": internal_target_user_id},
-    )
-    return result
 
 
 @router.get("/users/{user_id}/mfa", response_model=UserMfaRead)

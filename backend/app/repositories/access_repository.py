@@ -86,7 +86,7 @@ class AccessRepository:
             select(distinct(TemplateParticipant.template_id))
             .join(Participant, Participant.id == TemplateParticipant.participant_id)
             .where(
-                Participant.app_user_id == user_id,
+                Participant.id == user_id,
                 Participant.tenant_id == tenant_id,
                 Participant.is_active.is_(True),
             )

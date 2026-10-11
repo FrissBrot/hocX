@@ -114,11 +114,11 @@
     "admin": "Admin"
   },
   "userManagement": {
-    "toolbarTitle": "Benutzer",
-    "toolbarDescription": "Alle Benutzer über alle Mandanten hinweg. Jedes Konto gehört genau einem Mandanten.",
-    "newUser": "Neuer Benutzer",
+    "toolbarTitle": "Teilnehmer",
+    "toolbarDescription": "Alle Teilnehmer über alle Mandanten hinweg. Jedes Konto gehört genau einem Mandanten.",
+    "newUser": "Neuer Teilnehmer",
     "searchLabel": "Suche",
-    "searchPlaceholder": "Benutzer durchsuchen",
+    "searchPlaceholder": "Teilnehmer durchsuchen",
     "columns": {
       "displayName": "Anzeigename",
       "email": "E-Mail",
@@ -128,14 +128,12 @@
       "actions": "Aktionen"
     },
     "loading": "Wird geladen…",
-    "emptyUsers": "Keine Benutzer gefunden.",
-    "participantAccount": "Teilnehmer-Konto",
+    "emptyUsers": "Keine Teilnehmer gefunden.",
     "loginActive": "Aktiv",
     "loginDisabled": "Deaktiviert",
     "mfaButton": "MFA",
-    "mergeButton": "Merge",
-    "editUserTitle": "Benutzer bearbeiten",
-    "createUserTitle": "Benutzer erstellen",
+    "editUserTitle": "Teilnehmer bearbeiten",
+    "createUserTitle": "Teilnehmer erstellen",
     "firstName": "Vorname",
     "lastName": "Nachname",
     "displayName": "Anzeigename",
@@ -143,28 +141,18 @@
     "newPassword": "Neues Passwort",
     "password": "Passwort",
     "passwordHelpEdit": "Nur ausfüllen, um das Passwort zu ändern. Mindestens 12 Zeichen.",
-    "passwordHelpCreate": "Wird hier direkt vergeben, mindestens 12 Zeichen. Es gibt keine automatische Einladungs-E-Mail – das Passwort dem Benutzer separat mitteilen.",
+    "passwordHelpCreate": "Wird hier direkt vergeben, mindestens 12 Zeichen. Es gibt keine automatische Einladungs-E-Mail – das Passwort dem Teilnehmer separat mitteilen.",
     "language": "Sprache",
     "active": "Aktiv",
     "enableLogin": "Login aktivieren",
-    "participantAutoNote": "Dieses Konto wurde automatisch aus einem Teilnehmer erstellt. Für den ersten Login bitte Login aktivieren und ein neues Passwort setzen.",
     "tenant": "Mandant",
     "tenantFixedHelp": "Der Mandant eines Kontos steht fest und lässt sich nicht ändern.",
     "role": "Rolle",
     "save": "Speichern",
-    "mergeUserTitle": "Benutzer zusammenführen",
-    "mergeUserDescription": "Der Quellbenutzer wird in den Zielbenutzer gemergt (inkl. Rolle und Teilnehmer-Links) und danach gelöscht. Möglich nur innerhalb desselben Mandanten.",
-    "sourceUser": "Quellbenutzer",
-    "targetUser": "Zielbenutzer",
-    "mergeNow": "Jetzt mergen",
     "toasts": {
-      "userSaved": "Benutzer gespeichert",
-      "userCreated": "Benutzer erstellt",
-      "userSaveFailed": "Benutzer konnte nicht gespeichert werden",
-      "userListLoadFailed": "Benutzerliste konnte nicht geladen werden",
-      "mergeConfirm": "Benutzer wirklich zusammenführen? Der Quellbenutzer wird danach unwiderruflich gelöscht.",
-      "userMerged": "Benutzer zusammengeführt",
-      "mergeFailed": "Benutzer konnten nicht zusammengeführt werden"
+      "userSaved": "Teilnehmer gespeichert",
+      "userCreated": "Teilnehmer erstellt",
+      "userSaveFailed": "Teilnehmer konnte nicht gespeichert werden"
     }
   },
   "tenantModal": {
@@ -295,8 +283,8 @@
           "description": "Eigenständige Todos. Todos, die an ein Protokoll gebunden sind, verschwinden bereits mit „Protokolle\"."
         },
         "participants": {
-          "title": "Teilnehmer/Personen",
-          "description": "Alle angelegten Teilnehmer/Personen-Stammdaten."
+          "title": "Teilnehmer ohne Login",
+          "description": "Entfernt Teilnehmer ohne Login. Teilnehmer mit Login bleiben erhalten."
         },
         "documents": {
           "title": "Hochgeladene Dokumente",

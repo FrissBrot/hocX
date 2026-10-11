@@ -43,7 +43,7 @@ export function UserManagement({ initialUsers }: Props) {
   const showToast = useToast();
   const confirm = useConfirm();
   const [users, setUsers] = useState(initialUsers);
-  const [userTab, setUserTab] = useState<"active" | "nologin">("active");
+  const [userTab, setUserTab] = useState<"active" | "nologin">("nologin");
   const [search, setSearch] = useState("");
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [userForm, setUserForm] = useState<UserFormState>(() => emptyUserForm());
@@ -79,15 +79,15 @@ export function UserManagement({ initialUsers }: Props) {
   function openEditUser(user: UserSummary) {
     setUserForm({
       id: user.id,
-      first_name: user.first_name,
-      last_name: user.last_name,
+      first_name: user.first_name ?? "",
+      last_name: user.last_name ?? "",
       display_name: user.display_name,
-      email: user.email,
+      email: user.email ?? "",
       password: "",
       preferred_language: user.preferred_language,
       is_active: user.is_active,
       login_enabled: user.login_enabled,
-      is_participant_account: user.is_participant_account,
+
       tenant_id: user.tenant_id,
       role_code: user.role_code
     });
@@ -118,14 +118,7 @@ export function UserManagement({ initialUsers }: Props) {
         method: "PATCH",
         body: JSON.stringify({ email: loginEmail, password: loginPassword, login_enabled: true })
       });
-      // Enabling login can merge this participant's shadow account into an already-existing
-      // user with the same real email (see backend _link_or_promote_participant_login) - the
-      // id we PATCHed might no longer exist, and `updated` might collide with an entry already
-      // in the list, so replace both possibilities rather than just swapping the old id in place.
-      setUsers((current) => {
-        const withoutOldAndTarget = current.filter((user) => user.id !== loginModalUser.id && user.id !== updated.id);
-        return [updated, ...withoutOldAndTarget];
-      });
+      setUsers((current) => current.map((user) => user.id === updated.id ? updated : user));
       setLoginModalOpen(false);
       showToast(t("toasts.loginEnabled"), "success");
     } catch (error) {
@@ -271,7 +264,7 @@ export function UserManagement({ initialUsers }: Props) {
       ) : (
         <DataTable className="data-table-lg" columns={[t("columns.name"), t("columns.participantEmail"), t("columns.role"), t("columns.actions")]}>
           {visibleUsers.map((user) => (
-            <tr key={user.id}>
+            <tr key={user.id} className="table-row-clickable" onClick={() => openEditUser(user)}>
               <td>
                 <strong>{user.display_name}</strong>
               </td>
@@ -281,10 +274,8 @@ export function UserManagement({ initialUsers }: Props) {
               </td>
               <td>
                 <div className="table-actions table-actions-start">
-                  <button type="button" className="button-secondary button-ghost" onClick={() => openMfa(user)}>
-                    {t("mfaButton")}
-                  </button>
-                  <button type="button" className="button-secondary" onClick={() => openEnableLogin(user)}>
+
+                  <button type="button" className="button-secondary" onClick={(event) => { event.stopPropagation(); openEnableLogin(user); }}>
                     {t("enableLogin")}
                   </button>
                 </div>
@@ -378,12 +369,6 @@ export function UserManagement({ initialUsers }: Props) {
             </label>
           </div>
 
-          {userForm.is_participant_account ? (
-            <div className="info-note">
-              {t("participantAutoNote")}
-            </div>
-          ) : null}
-
           {formError && (
             <div className="form-error-banner">{formError}</div>
           )}
@@ -418,7 +403,7 @@ export function UserManagement({ initialUsers }: Props) {
               value={loginPassword}
               onChange={(event) => setLoginPassword(event.target.value)}
               required
-              minLength={8}
+              minLength={12}
             />
           </label>
 

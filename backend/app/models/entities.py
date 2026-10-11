@@ -236,10 +236,11 @@ class Role(Base):
     description: Mapped[str | None] = mapped_column(Text)
 
 
-class AppUser(Base, TimestampMixin, UpdatedAtMixin):
+class Participant(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "app_user"
     __table_args__ = (
-        UniqueConstraint("email", name="uq_app_user_email"),
+        Index("uq_app_user_login_email", "email", unique=True, postgresql_where=text("login_enabled")),
+        CheckConstraint("NOT login_enabled OR (email IS NOT NULL AND email <> '' AND password_hash IS NOT NULL)", name="ck_app_user_login_credentials"),
         CheckConstraint(
             "preferred_mfa_factor_type IN ('totp', 'webauthn')",
             name="ck_app_user_preferred_mfa_factor_type",
@@ -256,17 +257,24 @@ class AppUser(Base, TimestampMixin, UpdatedAtMixin):
     # its users (every other FK into app_user is CASCADE or SET NULL, so this never blocks).
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     role_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("role.id", ondelete="RESTRICT"), nullable=False)
-    first_name: Mapped[str] = mapped_column(Text, nullable=False)
-    last_name: Mapped[str] = mapped_column(Text, nullable=False)
+    first_name: Mapped[str | None] = mapped_column(Text)
+    last_name: Mapped[str | None] = mapped_column(Text)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
     name: Mapped[str] = mapped_column(Text, Computed("display_name", persisted=True))
-    email: Mapped[str] = mapped_column(Text, nullable=False)
-    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str | None] = mapped_column(Text)
+    password_hash: Mapped[str | None] = mapped_column(Text)
+    login_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    joined_at: Mapped[date | None] = mapped_column(Date)
+    left_at: Mapped[date | None] = mapped_column(Date)
     preferred_language: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'de'"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     session_revoke_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     preferred_mfa_factor_type: Mapped[str | None] = mapped_column(Text)
     external_identity_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+
+
+# Authentifizierung und Teilnahme verwenden denselben Datensatz.
+AppUser = Participant
 
 
 class UserMfaFactor(Base, TimestampMixin, UpdatedAtMixin):
@@ -365,30 +373,6 @@ class Leader(Base, TimestampMixin, UpdatedAtMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     valid_from: Mapped[date | None] = mapped_column(Date)
     valid_until: Mapped[date | None] = mapped_column(Date)
-
-
-class Participant(Base, TimestampMixin, UpdatedAtMixin):
-    __tablename__ = "participant"
-    __table_args__ = (
-        Index("idx_participant_tenant_active", "tenant_id", "is_active"),
-        Index("idx_participant_app_user_id", "app_user_id"),
-        UniqueConstraint("tenant_id", "display_name", name="uq_participant_tenant_display_name"),
-        UniqueConstraint("tenant_id", "app_user_id", name="uq_participant_tenant_app_user"),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    public_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
-    )
-    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
-    app_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
-    first_name: Mapped[str | None] = mapped_column(Text)
-    last_name: Mapped[str | None] = mapped_column(Text)
-    display_name: Mapped[str] = mapped_column(Text, nullable=False)
-    email: Mapped[str | None] = mapped_column(Text)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
-    joined_at: Mapped[date | None] = mapped_column(Date)
-    left_at: Mapped[date | None] = mapped_column(Date)
 
 
 class EventCategory(Base):
@@ -748,7 +732,7 @@ class TemplateParticipant(Base, TimestampMixin):
     )
 
     template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="CASCADE"), nullable=False)
-    participant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("participant.id", ondelete="CASCADE"), nullable=False)
+    participant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
     exclude_from_attendance: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
 
 
@@ -1089,7 +1073,7 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     task: Mapped[str] = mapped_column(Text, nullable=False)
     assigned_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
-    assigned_participant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("participant.id", ondelete="SET NULL"))
+    assigned_participant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     todo_status_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("todo_status.id", ondelete="RESTRICT"), nullable=False)
     due_date: Mapped[date | None] = mapped_column(Date)
     due_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
@@ -1255,7 +1239,7 @@ class AttendanceFine(Base, TimestampMixin):
         PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
     )
     protocol_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"), nullable=False)
-    participant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("participant.id", ondelete="SET NULL"))
+    participant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     participant_name_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
     fine_type: Mapped[str] = mapped_column(Text, nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)

@@ -1,20 +1,20 @@
 {
-  "pageTitle": "Utenti",
+  "pageTitle": "Partecipanti",
   "ownAccessOnlyHint": "Accessi e ruoli di questa organizzazione.",
   "pageHint": "Gli account di questa organizzazione e i loro ruoli.",
-  "newUser": "+ Nuovo utente",
+  "newUser": "Nuovo partecipante",
   "emptyState": {
     "title": "Solo il tuo accesso",
     "description": "Invita altre persone e assegna loro un ruolo: Admin, Redattore, Cassiere o Lettore.",
-    "invite": "+ Invita utente"
+    "invite": "+ Invita partecipante"
   },
   "explainRoles": "Spiega i ruoli",
   "explainRolesDescription": "Ogni account ha esattamente un ruolo per organizzazione.",
   "tabs": {
-    "active": "Utenti attivi ({count})",
-    "participants": "Partecipanti ({count})"
+    "active": "Partecipanti con accesso",
+    "participants": "Partecipanti"
   },
-  "searchUsers": "Cerca utenti",
+  "searchUsers": "Cerca partecipanti",
   "searchParticipants": "Cerca partecipanti",
   "columns": {
     "displayName": "Nome visualizzato",
@@ -27,8 +27,8 @@
   "mfaButton": "MFA",
   "delete": "Elimina",
   "close": "Chiudi",
-  "editUserTitle": "Modifica utente",
-  "createUserTitle": "Crea utente",
+  "editUserTitle": "Modifica partecipante",
+  "createUserTitle": "Crea partecipante",
   "userModalDescription": "Gestisci i dati dell'account e il ruolo.",
   "firstName": "Nome",
   "lastName": "Cognome",
@@ -37,20 +37,19 @@
   "newPassword": "Nuova password",
   "password": "Password",
   "passwordHelpEdit": "Compila solo per cambiare la password. Almeno 12 caratteri.",
-  "passwordHelpCreate": "Impostata direttamente qui, almeno 12 caratteri. Non esiste un'e-mail di invito automatica - comunica la password all'utente separatamente.",
+  "passwordHelpCreate": "Richiesta solo per l’accesso. Almeno 12 caratteri.",
   "role": "Ruolo",
   "active": "Attivo",
   "enableLogin": "Attiva accesso",
-  "participantAutoNote": "Questo account è stato creato automaticamente da un partecipante. Per il primo accesso, attiva l'accesso e imposta una nuova password.",
   "cancel": "Annulla",
   "save": "Salva",
   "enableLoginForTitle": "Attiva accesso per {name}",
   "enableLoginTitle": "Attiva accesso",
-  "enableLoginDescription": "Assegna e-mail e password per permettere a questo partecipante di accedere. Rimane comunque collegato come partecipante.",
+  "enableLoginDescription": "Imposta un indirizzo e-mail e una password per l’accesso di questo partecipante.",
   "mfaTitle": "MFA di {name}",
   "mfaTitleFallback": "MFA",
   "roleDescriptions": {
-    "admin": "Accesso completo all'interno dell'organizzazione, inclusa la struttura (modelli, cicli, impostazioni) e la gestione utenti.",
+    "admin": "Accesso completo all'interno dell'organizzazione, inclusa la struttura (modelli, cicli, impostazioni) e la gestione partecipanti.",
     "writer": "Lavora nell'area verbali e gestisce i dati operativi, senza modificare struttura o finanze.",
     "kassier": "Come lettore, con in più accesso completo in scrittura a finanze e multe.",
     "reader": "Accesso in sola lettura, può avviare esportazioni PDF e vede solo le proprie multe."
@@ -58,11 +57,11 @@
   "toasts": {
     "loginEnabled": "Accesso attivato",
     "loginEnableFailed": "Impossibile attivare l'accesso",
-    "userSaved": "Utente salvato",
-    "userCreated": "Utente creato",
-    "userSaveFailed": "Impossibile salvare l'utente",
-    "deleteConfirm": "Eliminare definitivamente l'utente \"{name}\"? L'account e l'accesso andranno persi immediatamente.",
-    "userDeleted": "Utente eliminato",
-    "userDeleteFailed": "Impossibile eliminare l'utente"
+    "userSaved": "Partecipante salvato",
+    "userCreated": "Partecipante creato",
+    "userSaveFailed": "Impossibile salvare l'partecipante",
+    "deleteConfirm": "Eliminare definitivamente l'partecipante \"{name}\"? L'account e l'accesso andranno persi immediatamente.",
+    "userDeleted": "Partecipante eliminato",
+    "userDeleteFailed": "Impossibile eliminare l'partecipante"
   }
 }

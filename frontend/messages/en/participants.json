@@ -98,5 +98,9 @@
     "left": "Left"
   },
   "footerCount": "{count, plural, one {# participant} other {# participants}}",
-  "footerHint": "Click a row to edit"
+  "footerHint": "Click a row to edit",
+  "loginTabs": {
+    "withoutLogin": "Participants",
+    "withLogin": "Participants with login"
+  }
 }

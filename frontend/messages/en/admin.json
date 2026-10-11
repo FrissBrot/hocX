@@ -114,11 +114,11 @@
     "admin": "Admin"
   },
   "userManagement": {
-    "toolbarTitle": "Users",
-    "toolbarDescription": "All users across every organization. Each account belongs to exactly one organization.",
-    "newUser": "New user",
+    "toolbarTitle": "Participants",
+    "toolbarDescription": "All participants across every organization. Each account belongs to exactly one organization.",
+    "newUser": "New participant",
     "searchLabel": "Search",
-    "searchPlaceholder": "Search users",
+    "searchPlaceholder": "Search participants",
     "columns": {
       "displayName": "Display name",
       "email": "Email",
@@ -128,14 +128,12 @@
       "actions": "Actions"
     },
     "loading": "Loading…",
-    "emptyUsers": "No users found.",
-    "participantAccount": "Participant account",
+    "emptyUsers": "No participants found.",
     "loginActive": "Active",
     "loginDisabled": "Disabled",
     "mfaButton": "MFA",
-    "mergeButton": "Merge",
-    "editUserTitle": "Edit user",
-    "createUserTitle": "Create user",
+    "editUserTitle": "Edit participant",
+    "createUserTitle": "Create participant",
     "firstName": "First name",
     "lastName": "Last name",
     "displayName": "Display name",
@@ -143,28 +141,18 @@
     "newPassword": "New password",
     "password": "Password",
     "passwordHelpEdit": "Only fill in to change the password. At least 12 characters.",
-    "passwordHelpCreate": "Set directly here, at least 12 characters. There is no automatic invitation email - share the password with the user separately.",
+    "passwordHelpCreate": "Set directly here, at least 12 characters. There is no automatic invitation email - share the password with the participant separately.",
     "language": "Language",
     "active": "Active",
     "enableLogin": "Enable login",
-    "participantAutoNote": "This account was created automatically from a participant. For the first login, please enable login and set a new password.",
     "tenant": "Organization",
     "tenantFixedHelp": "An account's organization is fixed and cannot be changed.",
     "role": "Role",
     "save": "Save",
-    "mergeUserTitle": "Merge users",
-    "mergeUserDescription": "The source user is merged into the target user (including role and participant links) and then deleted. Only possible within the same organization.",
-    "sourceUser": "Source user",
-    "targetUser": "Target user",
-    "mergeNow": "Merge now",
     "toasts": {
-      "userSaved": "User saved",
-      "userCreated": "User created",
-      "userSaveFailed": "User could not be saved",
-      "userListLoadFailed": "User list could not be loaded",
-      "mergeConfirm": "Really merge users? The source user will be permanently deleted afterwards.",
-      "userMerged": "Users merged",
-      "mergeFailed": "Users could not be merged"
+      "userSaved": "Participant saved",
+      "userCreated": "Participant created",
+      "userSaveFailed": "Participant could not be saved"
     }
   },
   "tenantModal": {
@@ -295,8 +283,8 @@
           "description": "Standalone todos. Todos tied to a protocol already disappear with \"Protocols\"."
         },
         "participants": {
-          "title": "Participants/people",
-          "description": "All participant/people master data."
+          "title": "Participants without login",
+          "description": "Removes participants without login. Participants with login are retained."
         },
         "documents": {
           "title": "Uploaded documents",

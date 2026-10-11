@@ -13,7 +13,6 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
-import { useConfirm } from "@/contexts/confirm-context";
 import { AdminTenantSummary, AdminUserPage, UserSummary } from "@/types/api";
 import { emptyUserForm, isUserFormValid, userFormToPayload, UserFormState } from "@/components/users/user-form-shared";
 
@@ -24,13 +23,6 @@ type Props = {
 
 const PAGE_SIZE = 50;
 
-function isEligible(user: UserSummary) {
-  // Nur Benutzer mit freigeschaltetem Login und echter (nicht automatisch generierter
-  // Teilnehmer-Platzhalter-) E-Mail sind hier relevant - Schattenaccounts ohne Login
-  // sind nur internes Implementierungsdetail der Teilnehmerverwaltung.
-  return user.login_enabled && !user.email.endsWith("@participants.hocx.local");
-}
-
 export function AdminUserManagement({ initialPage, allTenants }: Props) {
   const t = useTranslations("admin");
   const tUm = useTranslations("admin.userManagement");
@@ -40,7 +32,6 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
     return (roleCode: string) => byCode.get(roleCode) ?? roleCode;
   }, [roleOptions]);
   const showToast = useToast();
-  const confirm = useConfirm();
   const [page, setPage] = useState(initialPage);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -49,19 +40,8 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [userForm, setUserForm] = useState<UserFormState>(() => emptyUserForm(allTenants[0]?.id ?? ""));
   const [formError, setFormError] = useState<string | null>(null);
-  const [mergeModalOpen, setMergeModalOpen] = useState(false);
-  const [mergeSourceUserId, setMergeSourceUserId] = useState<string | null>(null);
-  const [mergeTargetUserId, setMergeTargetUserId] = useState("");
   const [mfaModalUser, setMfaModalUser] = useState<UserSummary | null>(null);
-  // The merge target can be any eligible user tenant-wide, not just one on the currently
-  // displayed page, so it's loaded separately (unpaginated) when the merge modal opens.
-  const [mergeCandidates, setMergeCandidates] = useState<UserSummary[]>([]);
-
-  // eligibleUsers/visibleUsers: server now applies `search` before pagination (audit A1,
-  // 2026-08-16 - fetchPage below sends it as `q`), so `page.items` is already the matching
-  // set for the current page. Only the login_enabled/participant-placeholder filter stays
-  // client-side (unrelated to search, always applied on top).
-  const visibleUsers = useMemo(() => users.filter(isEligible), [users]);
+  const visibleUsers = users;
 
   async function fetchPage(nextOffset: number, query: string) {
     setLoading(true);
@@ -107,15 +87,15 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
   function openEditUser(user: UserSummary) {
     setUserForm({
       id: user.id,
-      first_name: user.first_name,
-      last_name: user.last_name,
+      first_name: user.first_name ?? "",
+      last_name: user.last_name ?? "",
       display_name: user.display_name,
-      email: user.email,
+      email: user.email ?? "",
       password: "",
       preferred_language: user.preferred_language,
       is_active: user.is_active,
       login_enabled: user.login_enabled,
-      is_participant_account: user.is_participant_account,
+
       tenant_id: user.tenant_id,
       role_code: user.role_code
     });
@@ -150,49 +130,8 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
     }
   }
 
-  async function openMerge(user: UserSummary) {
-    setMergeSourceUserId(user.id);
-    setMergeCandidates([]);
-    setMergeTargetUserId("");
-    setMergeModalOpen(true);
-    try {
-      const result = await browserApiFetch<AdminUserPage>("/api/admin/users");
-      // Ein Konto gehört genau einem Mandanten - zusammenführen lässt sich nur innerhalb desselben.
-      const eligible = result.items.filter((candidate) => isEligible(candidate) && candidate.tenant_id === user.tenant_id);
-      setMergeCandidates(eligible);
-      const fallbackTarget = eligible.find((candidate) => candidate.id !== user.id);
-      setMergeTargetUserId(fallbackTarget ? String(fallbackTarget.id) : "");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : tUm("toasts.userListLoadFailed"), "error");
-    }
-  }
-
   function openMfa(user: UserSummary) {
     setMfaModalUser(user);
-  }
-
-  async function mergeUsers() {
-    if (!mergeSourceUserId || !mergeTargetUserId) return;
-    const ok = await confirm({
-      message: tUm("toasts.mergeConfirm"),
-      tone: "danger",
-      confirmLabel: tUm("mergeNow"),
-    });
-    if (!ok) return;
-    try {
-      await browserApiFetch<UserSummary>("/api/admin/users/merge", {
-        method: "POST",
-        body: JSON.stringify({
-          source_user_id: mergeSourceUserId,
-          target_user_id: mergeTargetUserId,
-        }),
-      });
-      await fetchPage(offset, search);
-      setMergeModalOpen(false);
-      showToast(tUm("toasts.userMerged"), "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : tUm("toasts.mergeFailed"), "error");
-    }
   }
 
   return (
@@ -222,7 +161,6 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
           <tr key={user.id} className="table-row-clickable" onClick={() => openEditUser(user)}>
             <td>
               <strong>{user.display_name}</strong>
-              {user.is_participant_account ? <div className="muted">{tUm("participantAccount")}</div> : null}
             </td>
             <td>{user.email}</td>
             <td>{user.tenant_name}</td>
@@ -241,16 +179,6 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
                   }}
                 >
                   {tUm("mfaButton")}
-                </button>
-                <button
-                  type="button"
-                  className="button-secondary"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openMerge(user);
-                  }}
-                >
-                  {tUm("mergeButton")}
                 </button>
               </div>
             </td>
@@ -318,11 +246,6 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
               <input type="checkbox" checked={userForm.login_enabled} onChange={(event) => setUserForm((current) => ({ ...current, login_enabled: event.target.checked }))} />
               {tUm("enableLogin")}
             </label>
-            {userForm.is_participant_account ? (
-              <div className="info-note">
-                {tUm("participantAutoNote")}
-              </div>
-            ) : null}
           </div>
 
           <div className="two-col">
@@ -374,34 +297,6 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
         deletePathBase={mfaModalUser ? `/api/admin/users/${mfaModalUser.id}/mfa/factors` : null}
       />
 
-      <Modal
-        open={mergeModalOpen}
-        onClose={() => setMergeModalOpen(false)}
-        title={tUm("mergeUserTitle")}
-        description={tUm("mergeUserDescription")}
-      >
-        <div className="grid">
-          <label className="field-stack">
-            <span className="field-label">{tUm("sourceUser")}</span>
-            <input value={users.find((user) => user.id === mergeSourceUserId)?.display_name ?? ""} readOnly />
-          </label>
-          <label className="field-stack">
-            <span className="field-label">{tUm("targetUser")}</span>
-            <SearchableSelect
-              options={mergeCandidates.filter((user) => user.id !== mergeSourceUserId)}
-              getId={(user) => String(user.id)}
-              getLabel={(user) => `${user.display_name} (${user.email})`}
-              value={mergeTargetUserId || null}
-              onChange={(user) => setMergeTargetUserId(user ? String(user.id) : "")}
-            />
-          </label>
-          <div className="modal-actions">
-            <button type="button" className="button-secondary" onClick={() => void mergeUsers()} disabled={!mergeTargetUserId}>
-              {tUm("mergeNow")}
-            </button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

@@ -69,7 +69,7 @@ class ProtocolTodoRepository:
         # Inline subquery avoids a separate round-trip to find the linked participant
         linked_participant_subq = (
             select(Participant.id)
-            .where(Participant.app_user_id == user_id, Participant.tenant_id == tenant_id)
+            .where(Participant.id == user_id, Participant.tenant_id == tenant_id)
             .limit(1)
             .scalar_subquery()
         )
@@ -97,7 +97,7 @@ class ProtocolTodoRepository:
         directly assigned to them (covers standalone tenant todos with no protocol link)."""
         linked_participant_subq = (
             select(Participant.id)
-            .where(Participant.app_user_id == user_id, Participant.tenant_id == tenant_id)
+            .where(Participant.id == user_id, Participant.tenant_id == tenant_id)
             .limit(1)
             .scalar_subquery()
         )

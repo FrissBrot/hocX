@@ -206,6 +206,7 @@ def make_app_user(
         role_id=role_id_by_code(db, role_code),
         email=email,
         password_hash=hash_password(password),
+        login_enabled=True,
         first_name=first_name,
         last_name=last_name,
         display_name=f"{first_name} {last_name}",
@@ -276,7 +277,6 @@ def make_current_user(
         display_name="Test User",
         email="test@example.com",
         preferred_language="de",
-        is_participant_account=False,
         current_tenant_id=tenant_id,
         current_tenant_public_id=uuid.uuid4(),
         current_tenant_name="Test Tenant",
@@ -300,7 +300,7 @@ def make_cycle_config(
 
 
 def make_participant(db, tenant_id: int, display_name: str = "Test Person") -> Participant:
-    participant = Participant(tenant_id=tenant_id, display_name=display_name)
+    participant = Participant(tenant_id=tenant_id, role_id=role_id_by_code(db, "reader"), display_name=display_name, login_enabled=False)
     db.add(participant)
     db.flush()
     return participant

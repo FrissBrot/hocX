@@ -82,7 +82,7 @@ class TenantCleanupService:
             lists_full=self._count(db, ListDefinition, tenant_id),
             events=self._count(db, Event, tenant_id),
             todos=self._count(db, ProtocolTodo, tenant_id),
-            participants=self._count(db, Participant, tenant_id),
+            participants=int(db.scalar(select(func.count(Participant.id)).where(Participant.tenant_id == tenant_id, Participant.login_enabled.is_(False))) or 0),
             documents=documents,
         )
 
@@ -130,7 +130,10 @@ class TenantCleanupService:
             counts.todos = result.rowcount or 0
 
         if "participants" in selected:
-            result = db.execute(delete(Participant).where(Participant.tenant_id == tenant_id))
+            from app.services.participant_service import ParticipantService
+            participant_ids = list(db.scalars(select(Participant.id).where(Participant.tenant_id == tenant_id, Participant.login_enabled.is_(False))))
+            ParticipantService()._clear_orphaned_list_references(db, tenant_id, set(participant_ids))
+            result = db.execute(delete(Participant).where(Participant.id.in_(participant_ids)))
             counts.participants = result.rowcount or 0
 
         if "documents" in selected:

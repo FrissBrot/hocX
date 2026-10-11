@@ -9,10 +9,9 @@ from fastapi import HTTPException, status
 
 from app.core.rate_limit import check_account_lockout, record_failed_attempt
 from app.core.security import CurrentUser, hash_password, require_admin, verify_password
-from app.models import AppUser, Participant, Tenant
+from app.models import AppUser, Tenant
 from app.services import public_id_service
 from app.services.access_service import AccessService
-from app.services.audit_service import AuditService
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import (
     UserCreate,
@@ -33,16 +32,6 @@ _PASSWORD_CHANGE_ATTEMPT_LIMIT = 10
 _PASSWORD_CHANGE_WINDOW_SECONDS = 15 * 60
 
 
-# Roles are capability bundles, not a linear rank: writer and kassier are deliberately
-# incomparable, admin is the only role containing both. Used when merging two accounts.
-_ROLE_CAPABILITIES = {
-    "reader": frozenset({"read"}),
-    "writer": frozenset({"read", "workspace_write"}),
-    "kassier": frozenset({"read", "finance_write"}),
-    "admin": frozenset({"read", "workspace_write", "finance_write", "tenant_admin"}),
-}
-
-
 class UserService:
     """A user belongs to exactly one tenant with exactly one role (app_user.tenant_id/role_id).
     The tenant-admin entry points (list_users/get_user/create_user/update_user/delete_user)
@@ -53,7 +42,6 @@ class UserService:
     def __init__(self, repository: UserRepository | None = None) -> None:
         self.repository = repository or UserRepository()
         self.access_service = AccessService()
-        self.audit_service = AuditService()
 
     def _role_id_by_code(self, db: Session) -> dict[str, int]:
         return {role.code: role.id for role in self.repository.list_roles(db)}
@@ -89,8 +77,9 @@ class UserService:
                     preferred_language=user.preferred_language,
                     is_active=user.is_active,
                     external_identity_json=external_identity,
-                    login_enabled=external_identity.get("login_enabled") is not False,
-                    is_participant_account=external_identity.get("source") == "participant_auto",
+                    login_enabled=user.login_enabled,
+                    joined_at=user.joined_at,
+                    left_at=user.left_at,
                     created_at=user.created_at,
                     updated_at=user.updated_at,
                 )
@@ -135,20 +124,22 @@ class UserService:
         return self._read_model(db, user)
 
     def _new_app_user(self, db: Session, payload: UserCreate, *, tenant_id: int) -> AppUser:
+        if payload.login_enabled:
+            self.ensure_login_email_available(db, payload.email)
         return AppUser(
             tenant_id=tenant_id,
             role_id=self._role_id(db, payload.role_code),
             first_name=payload.first_name,
             last_name=payload.last_name,
             display_name=payload.display_name,
-            email=payload.email,
-            password_hash=hash_password(payload.password),
+            email=payload.email.strip().lower() if payload.email and payload.email.strip() else None,
+            login_enabled=payload.login_enabled,
+            joined_at=payload.joined_at,
+            left_at=payload.left_at,
+            password_hash=hash_password(payload.password) if payload.password else None,
             preferred_language=payload.preferred_language,
             is_active=payload.is_active,
-            external_identity_json={
-                **(payload.external_identity_json or {}),
-                "login_enabled": payload.login_enabled,
-            },
+            external_identity_json=payload.external_identity_json or {},
         )
 
     def create_user(self, db: Session, payload: UserCreate, actor: CurrentUser):
@@ -186,7 +177,7 @@ class UserService:
         values the user is about to get (None = unchanged). Shared with AdminTenantUserService
         so every entry point enforces the same rule."""
         current_role_code = next((r.code for r in self.repository.list_roles(db) if r.id == user.role_id), None)
-        if not (user.is_active and current_role_code == "admin"):
+        if not (user.is_active and user.login_enabled and current_role_code == "admin"):
             return
         next_role_code = role_code or current_role_code
         next_is_active = user.is_active if is_active is None else is_active
@@ -215,27 +206,27 @@ class UserService:
         return self._update_user_core(db, user, payload, actor=None)
 
     def _update_user_core(self, db: Session, user: AppUser, payload: UserUpdate, actor: CurrentUser | None):
-        previous_external = user.external_identity_json or {}
-        is_promoting_participant_login = (
-            bool(payload.login_enabled)
-            and previous_external.get("login_enabled") is False
-            and previous_external.get("source") == "participant_auto"
-        )
-
-        values = payload.model_dump(exclude_unset=True, exclude={"password", "role_code", "login_enabled"})
+        values = payload.model_dump(exclude_unset=True, exclude={"password", "role_code"})
+        if "email" in values:
+            values["email"] = values["email"].strip().lower() if values["email"] and values["email"].strip() else None
         if payload.role_code is not None:
             values["role_id"] = self._role_id(db, payload.role_code)
-        self.guard_last_tenant_admin(db, user, role_code=payload.role_code, is_active=payload.is_active)
-        if payload.login_enabled is not None:
-            if payload.login_enabled and previous_external.get("login_enabled") is False and not payload.password:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Set a password to enable login for this account",
-                )
-            values["external_identity_json"] = {
-                **previous_external,
-                "login_enabled": payload.login_enabled,
-            }
+        self.guard_last_tenant_admin(
+            db, user, role_code=payload.role_code, is_active=payload.is_active,
+            removed=payload.login_enabled is False,
+        )
+        login_enabled = user.login_enabled if payload.login_enabled is None else payload.login_enabled
+        if login_enabled:
+            email = values.get("email", user.email)
+            if not email or not email.strip():
+                raise HTTPException(status_code=400, detail="Eine E-Mail-Adresse ist für einen Login erforderlich")
+            if not user.login_enabled and not payload.password:
+                raise HTTPException(status_code=400, detail="Set a password to enable login for this account")
+            self.ensure_login_email_available(db, email, excluding_user_id=user.id)
+        joined_at = values.get("joined_at", user.joined_at)
+        left_at = values.get("left_at", user.left_at)
+        if joined_at and left_at and left_at < joined_at:
+            raise ValueError("left_at must not be before joined_at")
         if payload.password:
             values["password_hash"] = hash_password(payload.password)
             # Password change invalidates all existing sessions
@@ -249,63 +240,17 @@ class UserService:
         if values:
             self.repository.update(db, user, values)
 
-        if is_promoting_participant_login:
-            user = self._link_or_promote_participant_login(db, user, previous_external, actor)
-
+        if payload.is_active is not None:
+            self.access_service.sync_user_access_from_participants(db, user_id=user.id, tenant_id=user.tenant_id)
         db.commit()
         return self._read_model(db, user)
 
-    def _link_or_promote_participant_login(
-        self, db: Session, user: AppUser, previous_external: dict, actor: CurrentUser | None
-    ) -> AppUser:
-        """When a participant shadow account's login gets enabled, adopt its real email.
-
-        If another AppUser of the same tenant already owns that email, merge the shadow
-        account into it instead of creating a duplicate identity. An account of another tenant
-        owning that email is a conflict (409): accounts don't span tenants, and the email is
-        admin-typed and unverified (see the password_hash note below), so it must never reach
-        into a foreign tenant's account.
-        `user` already carries the just-applied password/login_enabled at this point.
-        """
-        real_email = previous_external.get("participant_email")
-        if not real_email or real_email == user.email:
-            return user
-
-        existing = self.repository.get_by_email(db, real_email)
-        if existing is None or existing.id == user.id:
-            return self.repository.update(db, user, {"email": real_email})
-
-        if existing.tenant_id != user.tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Diese E-Mail-Adresse wird bereits von einem Konto in einem anderen Mandanten verwendet",
-            )
-
-        self.audit_service.log(
-            db,
-            action="user.merged_via_participant_login_promotion",
-            actor=actor,
-            tenant_id=actor.current_tenant_id if actor else None,
-            entity_type="app_user",
-            entity_id=existing.id,
-            details={"merged_from_user_id": user.id, "email": real_email},
-        )
-
-        # SECURITY: `real_email` is whatever email the tenant admin typed in when creating the
-        # participant record - it is never verified to belong to the person setting it. Do NOT
-        # carry the shadow account's password_hash/session_revoke_at over onto the pre-existing
-        # target account here: that would let any tenant admin silently overwrite an unrelated
-        # user's password just by creating a participant with that user's email and enabling
-        # login with a password of the admin's choosing - full account takeover without ever
-        # knowing the victim's real password. The merge below only folds the shadow account's
-        # participant links into the target; the target keeps its own existing credentials.
-        self.merge_users(db, source_user_id=user.id, target_user_id=existing.id)
-        target = self.repository.get(db, existing.id)
-        return self.repository.update(
-            db,
-            target,
-            {"external_identity_json": {**(target.external_identity_json or {}), "login_enabled": True}},
-        )
+    def ensure_login_email_available(self, db: Session, email: str, *, excluding_user_id: int | None = None) -> None:
+        statement = select(AppUser.id).where(AppUser.login_enabled.is_(True), AppUser.email == email.strip().lower())
+        if excluding_user_id is not None:
+            statement = statement.where(AppUser.id != excluding_user_id)
+        if db.scalar(statement) is not None:
+            raise HTTPException(status_code=409, detail="Diese E-Mail-Adresse wird bereits für einen Login verwendet")
 
     def delete_user(self, db: Session, user_id: int, actor: CurrentUser) -> bool:
         require_admin(actor)
@@ -318,9 +263,8 @@ class UserService:
             # 404, not 403 - see _tenant_user (avoids cross-tenant user-id enumeration).
             return False
         self.guard_last_tenant_admin(db, user, removed=True)
-        self.repository.delete(db, user)
-        db.commit()
-        return True
+        from app.services.participant_service import ParticipantService
+        return ParticipantService().delete_participant(db, user_id, tenant_id=user.tenant_id)
 
     def update_self(self, db: Session, actor: CurrentUser, payload: UserSelfUpdate):
         user = self.repository.get(db, actor.user_id)
@@ -363,69 +307,3 @@ class UserService:
         )
         db.commit()
         return self._read_model(db, user)
-
-    def merge_users(self, db: Session, *, source_user_id: int, target_user_id: int) -> UserRead:
-        """Merges source into target: participant links carry over, the role is the one with
-        the larger capability set, source is deleted. Both accounts must belong to the same
-        tenant. Callers are responsible for authorization (platform-admin route, or the
-        internal participant-login auto-link in update_user)."""
-        if source_user_id == target_user_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Source and target user must differ")
-
-        source = self.repository.get(db, source_user_id)
-        target = self.repository.get(db, target_user_id)
-        if source is None or target is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source or target user not found")
-        if source.tenant_id != target.tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Users of different tenants cannot be merged",
-            )
-
-        source_participants = list(db.scalars(select(Participant).where(Participant.app_user_id == source_user_id)))
-        if source_participants and db.scalar(
-            select(Participant.id).where(Participant.app_user_id == target_user_id).limit(1)
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Users cannot be merged because both are already linked to participants in the same tenant",
-            )
-
-        role_codes = {role.id: role.code for role in self.repository.list_roles(db)}
-        target_role, source_role = role_codes[target.role_id], role_codes[source.role_id]
-        target_capabilities = _ROLE_CAPABILITIES.get(target_role, frozenset())
-        source_capabilities = _ROLE_CAPABILITIES.get(source_role, frozenset())
-        if target_capabilities and source_capabilities and not (
-            target_capabilities <= source_capabilities or source_capabilities <= target_capabilities
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    f"Users cannot be merged automatically: roles '{target_role}' and "
-                    f"'{source_role}' are incompatible in the same tenant"
-                ),
-            )
-        merged: dict = {
-            "external_identity_json": {
-                **(target.external_identity_json or {}),
-                "merged_user_ids": sorted(
-                    {*(target.external_identity_json or {}).get("merged_user_ids", []), source_user_id}
-                ),
-            },
-        }
-        if source_capabilities > target_capabilities:
-            merged["role_id"] = source.role_id
-            merged["is_active"] = source.is_active
-        elif source_capabilities == target_capabilities and source.is_active and not target.is_active:
-            merged["is_active"] = True
-        self.repository.update(db, target, merged)
-
-        for participant in source_participants:
-            participant.app_user_id = target_user_id
-            db.add(participant)
-
-        self.access_service.sync_user_access_from_participants(db, user_id=target_user_id, tenant_id=target.tenant_id)
-
-        self.repository.delete(db, source)
-        db.commit()
-        return self._read_model(db, target)

@@ -108,7 +108,7 @@ from app.services.tenant_transfer_common import (
     REDACTED_PASSWORD_HASH_MARKER,
     USER_ID_COLUMNS,
     LookupCodeCache,
-    UserEmailCache,
+    UserIdentityCache,
     WordImportIdMaps,
     build_row,
     coerce_value,
@@ -126,7 +126,7 @@ from app.services.tenant_transfer_common import (
     replace_public_ids,
 )
 
-SUPPORTED_FORMAT_VERSIONS = {2, 3}  # 2: separate user_tenant_role table; 3: role on app_user
+SUPPORTED_FORMAT_VERSIONS = {2, 3, 4}  # 2: separate user_tenant_role table; 3: role on app_user
 
 # Zip-bomb guard, same idea as file_service.py's MAX_ZIP_ENTRIES/MAX_ZIP_TOTAL_BYTES for the
 # word-import ZIP upload, just scaled up: a full-tenant export can legitimately contain many
@@ -158,8 +158,10 @@ class TenantImportService:
             self.db = db
             self.extract_dir = extract_dir
             self.tables: dict[str, Any] = manifest.get("tables", {})
+            self.format_version = manifest["format_version"]
+            self._user_id_map: dict[int, int] = {}
             self.lookup_cache = LookupCodeCache(db)
-            self.user_cache = UserEmailCache(db)
+            self.user_cache = UserIdentityCache(db)
             self.warnings: list[str] = []
             self._created_tenant_id: int | None = None
             # old public_id (lowercase) -> newly assigned one, only for the rare rows whose
@@ -287,7 +289,7 @@ class TenantImportService:
     # ── generic helpers ───────────────────────────────────────────────────
 
     def _resolve_row(self, table_name: str, data: dict[str, Any]) -> dict[str, Any]:
-        """Applies lookup-code and user-email resolution in place, returns the (possibly mutated) dict."""
+        """Applies lookup-code and user-identity resolution in place, returns the (possibly mutated) dict."""
         data = dict(data)
         for column, model in LOOKUP_COLUMNS.get(table_name, {}).items():
             if data.get(column) is not None:
@@ -336,14 +338,14 @@ class TenantImportService:
         self._import_tenant_trusts(new_tenant.id)
         group_map = self._import_simple(GroupEntity, self._t("group_entity"), "group_entity", {"tenant_id": new_tenant.id})
         self._import_simple(Leader, self._t("leader"), "leader", {"tenant_id": new_tenant.id})
-        participant_map = self._import_simple(Participant, self._t("participant"), "participant", {"tenant_id": new_tenant.id})
+        participant_map = self._import_participants(new_tenant.id)
         cycle_config_map = self._import_simple(CycleConfig, self._t("cycle_config"), "cycle_config", {"tenant_id": new_tenant.id})
         part_map = self._import_document_template_parts(new_tenant.id)
         document_template_map = self._import_document_templates(new_tenant.id, part_map)
         event_map = self._import_events(new_tenant.id, group_map, participant_map)
         # Fuer im Editor gewaehlte (als public UUID gespeicherte) Referenzen in Block-Snapshots,
         # siehe remap_block_configuration. Exporte vor Format 2 haben keine public_id-Spalte.
-        self._participant_public_ids = {str(row["public_id"]).lower(): row["id"] for row in self._t("participant") if row.get("public_id")}
+        self._participant_public_ids = {str(row["public_id"]).lower(): row["id"] for row in self._t("app_user" if self.format_version >= 4 else "participant") if row.get("public_id")}
         self._event_public_ids = {str(row["public_id"]).lower(): row["id"] for row in self._t("event") if row.get("public_id")}
         self._import_event_cycles(event_map, cycle_config_map)
         list_definition_map = self._import_simple(ListDefinition, self._t("list_definition"), "list_definition", {"tenant_id": new_tenant.id})
@@ -485,11 +487,12 @@ class TenantImportService:
         A user belongs to exactly one tenant, so an email that already has an account on this
         installation can NOT be linked to the new tenant: that account lives in another tenant.
         It is left completely untouched (password included), reported as a warning, and every
-        reference to it resolves to nobody (UserEmailCache.tenant_id is the new tenant)."""
+        reference to it resolves to nobody (UserIdentityCache.tenant_id is the new tenant)."""
         legacy_roles = self._legacy_role_codes_by_email()
         for row in self._t("app_user"):
             email = row.get("email")
-            if self.user_cache.email_exists(email):
+            login_enabled = row.get("login_enabled", (row.get("external_identity_json") or {}).get("login_enabled", True))
+            if login_enabled and self.user_cache.email_exists(email):
                 self.warnings.append(
                     f"Benutzer '{email}' existiert auf dieser Installation bereits in einem anderen Mandanten - "
                     "nicht übernommen, Verknüpfungen entfallen."
@@ -505,8 +508,17 @@ class TenantImportService:
             except ValueError:
                 role_id = self.lookup_cache.id_for(Role, "reader")
                 self.warnings.append(f"Benutzer '{email}': Rolle {role_code!r} unbekannt - als 'reader' importiert.")
-            overrides: dict[str, Any] = {"tenant_id": new_tenant_id, "role_id": role_id}
-            if row.get("password_hash") == REDACTED_PASSWORD_HASH_MARKER or not row.get("password_hash"):
+            overrides: dict[str, Any] = {"tenant_id": new_tenant_id, "role_id": role_id, "login_enabled": login_enabled}
+            if login_enabled and email:
+                overrides["email"] = email.strip().lower()
+            if not login_enabled:
+                overrides["password_hash"] = None
+            overrides["external_identity_json"] = {
+                k: v for k, v in (row.get("external_identity_json") or {}).items()
+                if k not in {"participant_email", "login_enabled", "merged_user_ids"}
+                and not (k == "source" and v == "participant_auto")
+            }
+            if login_enabled and (row.get("password_hash") == REDACTED_PASSWORD_HASH_MARKER or not row.get("password_hash")):
                 # Defensive: a (legacy) row without a real password hash still needs a
                 # NOT NULL, properly-hashed password - a random one, so the account can't be
                 # logged into until a tenant admin sets a real password (UserUpdate.password).
@@ -532,12 +544,38 @@ class TenantImportService:
             new_user = self._build(AppUser, row, overrides)
             self.db.add(new_user)
             self.db.flush()
-            self.user_cache.set_id(email, new_user.id)
+            self._user_id_map[row["id"]] = new_user.id
+            self.user_cache.set_id(str(row.get("public_id")), new_user.id)
+            if self.format_version < 4:
+                self.user_cache.set_id(email, new_user.id)
         self.db.commit()
+
+    def _import_participants(self, tenant_id: int) -> dict[int, int]:
+        if self.format_version >= 4:
+            return dict(self._user_id_map)
+        # Alte Archive enthielten Stammdaten und Zugang als getrennte Zeilen.
+        id_map: dict[int, int] = {}
+        reader_role = self.lookup_cache.id_for(Role, "reader")
+        for row in self._t("participant"):
+            user_id = self.user_cache.id_for(row.get("app_user_id"))
+            user = self.db.get(AppUser, user_id) if user_id is not None else None
+            if user is None:
+                user = self._build(AppUser, row, {"tenant_id": tenant_id, "role_id": reader_role, "login_enabled": False, "password_hash": None})
+                self.db.add(user)
+            else:
+                for field in ("first_name", "last_name", "display_name", "email", "is_active", "joined_at", "left_at"):
+                    if field in row:
+                        setattr(user, field, coerce_value(AppUser.__table__.c[field], row[field]))
+                if row.get("public_id"):
+                    self._public_id_map[str(row["public_id"])] = str(user.public_id)
+            self.db.flush()
+            id_map[row["id"]] = user.id
+        self.db.commit()
+        return id_map
 
     def _import_user_mfa_factors(self) -> None:
         """Restore member MFA configuration, merging safely into existing target users."""
-        exported_users = {row.get("email"): row for row in self._t("app_user")}
+        exported_users = {str(row.get("public_id")) if self.format_version >= 4 else row.get("email"): row for row in self._t("app_user")}
         imported_factor_types: dict[int, set[str]] = {}
 
         for row in self._t("user_mfa_factor"):

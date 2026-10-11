@@ -52,6 +52,7 @@ type ParticipantManagerProps = {
   initialParticipants: ParticipantSummary[];
   templates: TemplateSummary[];
   tenantId: string | null;
+  canAdmin?: boolean;
 };
 
 type ParticipantFormState = {
@@ -62,6 +63,8 @@ type ParticipantFormState = {
   is_active: boolean;
   joined_at: string;
   left_at: string;
+  login_enabled: boolean;
+  password: string;
 };
 
 const emptyForm: ParticipantFormState = {
@@ -72,6 +75,8 @@ const emptyForm: ParticipantFormState = {
   is_active: true,
   joined_at: "",
   left_at: "",
+  login_enabled: false,
+  password: "",
 };
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
@@ -130,14 +135,16 @@ function avatarTone(key: string): number {
   return Math.abs(hash) % 5;
 }
 
-export function ParticipantManager({ initialParticipants, templates, tenantId }: ParticipantManagerProps) {
+export function ParticipantManager({ initialParticipants, templates, tenantId, canAdmin = false }: ParticipantManagerProps) {
   const t = useTranslations("participants");
+  const tUsers = useTranslations("users");
   const showToast = useToast();
   const confirm = useConfirm();
   const [participants, setParticipants] = useState(initialParticipants);
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantSummary | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
+  const [loginTab, setLoginTab] = useState<"withoutLogin" | "withLogin">("withoutLogin");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const csvInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<ParticipantFormState>(emptyForm);
@@ -173,22 +180,24 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
   const today = todayIso();
 
   const statusCounts = useMemo(() => {
-    const counts = { all: participants.length, active: 0, inactive: 0, left: 0 };
-    for (const participant of participants) counts[participantCategory(participant, today)] += 1;
+    const group = participants.filter((participant) => Boolean(participant.login_enabled) === (loginTab === "withLogin"));
+    const counts = { all: group.length, active: 0, inactive: 0, left: 0 };
+    for (const participant of group) counts[participantCategory(participant, today)] += 1;
     return counts;
-  }, [participants, today]);
+  }, [participants, today, loginTab]);
 
   const filteredParticipants = useMemo(() => {
     const dir = sortDirection === "asc" ? 1 : -1;
     const query = search.trim().toLowerCase();
     return participants
+      .filter((participant) => Boolean(participant.login_enabled) === (loginTab === "withLogin"))
       .filter((participant) => statusFilter === "all" || participantCategory(participant, today) === statusFilter)
       .filter((participant) => {
         const haystack = `${participant.display_name} ${participant.first_name ?? ""} ${participant.last_name ?? ""} ${participant.email ?? ""}`.toLowerCase();
         return !query || haystack.includes(query);
       })
       .sort((a, b) => a.display_name.toLowerCase().localeCompare(b.display_name.toLowerCase()) * dir);
-  }, [participants, search, statusFilter, sortDirection, today]);
+  }, [participants, search, statusFilter, sortDirection, today, loginTab]);
 
   const visibleIds = filteredParticipants.map((participant) => participant.id);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedParticipantIds.includes(id));
@@ -217,6 +226,8 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
       is_active: participant.is_active,
       joined_at: participant.joined_at ?? "",
       left_at: participant.left_at ?? "",
+      login_enabled: Boolean(participant.login_enabled),
+      password: "",
     });
     try {
       const assignedTemplates = await browserApiFetch<TemplateSummary[]>(`/api/participants/${participant.id}/templates`);
@@ -230,6 +241,8 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
     }
     setShowModal(true);
   }
+
+  const canSave = Boolean(form.display_name.trim()) && (!form.login_enabled || (Boolean(form.email.trim()) && (Boolean(selectedParticipant?.login_enabled) || form.password.length >= 12))) && (form.password.length === 0 || form.password.length >= 12);
 
   async function saveParticipant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -248,6 +261,10 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
         is_active: form.is_active,
         joined_at: form.joined_at || null,
         left_at: form.left_at || null,
+        ...(selectedParticipant && canAdmin ? {
+          login_enabled: form.login_enabled,
+          ...(form.password ? { password: form.password } : {}),
+        } : {}),
       };
 
       let participantId: string;
@@ -406,6 +423,14 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
         />
       ) : (
       <>
+      <FilterTabs
+        value={loginTab}
+        onChange={(value) => { setLoginTab(value); setSelectedParticipantIds([]); }}
+        options={[
+          { value: "withoutLogin", label: t("loginTabs.withoutLogin"), count: participants.filter((p) => !p.login_enabled).length },
+          { value: "withLogin", label: t("loginTabs.withLogin"), count: participants.filter((p) => p.login_enabled).length },
+        ]}
+      />
       <div className="list-filter-row">
         <FilterTabs<StatusFilter>
           value={statusFilter}
@@ -630,6 +655,21 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
             <span className="field-label">{t("editModal.email")}</span>
             <input value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
           </label>
+          {selectedParticipant && canAdmin ? (
+            <>
+              <label className="checkbox-line">
+                <input type="checkbox" checked={form.login_enabled} onChange={(event) => setForm((current) => ({ ...current, login_enabled: event.target.checked }))} />
+                {tUsers("enableLogin")}
+              </label>
+              {form.login_enabled ? (
+                <label className="field-stack">
+                  <span className="field-label">{tUsers("newPassword")}</span>
+                  <input type="password" autoComplete="new-password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} />
+                  <span className="field-help">{tUsers("passwordHelpEdit")}</span>
+                </label>
+              ) : null}
+            </>
+          ) : null}
           <div className="two-col">
             <label className="field-stack">
               <span className="field-label">{t("editModal.joinedAt")}</span>
@@ -672,7 +712,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId }:
             </div>
           </div>
           <div className="table-toolbar-actions">
-            <button data-modal-save type="submit" className="button-secondary">
+            <button data-modal-save type="submit" className="button-secondary" disabled={!canSave}>
               {selectedParticipant ? t("editModal.save") : t("editModal.create")}
             </button>
           </div>

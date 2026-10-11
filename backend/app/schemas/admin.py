@@ -253,11 +253,6 @@ class AdminUserPage(BaseModel):
     total: int
 
 
-class AdminUserMergeRequest(BaseModel):
-    source_user_id: uuid.UUID
-    target_user_id: uuid.UUID
-
-
 class TenantCloneRequest(BaseModel):
     new_name: str
     mode: Literal["structure", "full"] = "structure"
@@ -270,7 +265,7 @@ class TenantImportResult(BaseModel):
 
 class AdminTenantUserRead(BaseModel):
     user_id: uuid.UUID
-    email: str
+    email: str | None
     display_name: str
     role_code: str
     login_enabled: bool

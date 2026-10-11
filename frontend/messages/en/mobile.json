@@ -202,7 +202,7 @@
     "deleteHint": "Deleting is only possible while no template is assigned."
   },
   "users": {
-    "fab": "Invite"
+    "fab": "New participant"
   },
   "files": {
     "sort": "Sort order",

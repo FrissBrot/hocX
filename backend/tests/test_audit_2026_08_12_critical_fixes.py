@@ -352,12 +352,12 @@ def test_k6_statistics_todo_query_counts_standalone_todos(db):
 # --- K8: Partial-Commit-Muster hinterlässt Karteileichen trotz Fehlerantwort ---------------
 
 
-def test_k8_create_participant_rolls_back_when_linked_user_creation_fails(db, monkeypatch):
+def test_k8_create_participant_rolls_back_when_creation_fails(db, monkeypatch):
     tenant = make_tenant(db)
     service = ParticipantService()
     monkeypatch.setattr(
-        ParticipantService, "_ensure_linked_user",
-        lambda self, db, participant: (_ for _ in ()).throw(ValueError("Reader role missing")),
+        service.repository, "create",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("Creation failed")),
     )
 
     with pytest.raises(ValueError):
@@ -405,16 +405,14 @@ def test_k9_csv_import_continues_after_row_failure(db, monkeypatch):
     tenant = make_tenant(db)
     service = ParticipantService()
 
-    original_ensure_linked_user = ParticipantService._ensure_linked_user
-    call_count = {"n": 0}
+    original_flush = db.flush
 
-    def _flaky_ensure_linked_user(self, db, participant):
-        call_count["n"] += 1
-        if participant.display_name == "Kaputt":
+    def flaky_flush(*args, **kwargs):
+        if any(isinstance(row, Participant) and row.display_name == "Kaputt" for row in db.new):
             raise ValueError("Simulated failure for row 2")
-        return original_ensure_linked_user(self, db, participant)
+        return original_flush(*args, **kwargs)
 
-    monkeypatch.setattr(ParticipantService, "_ensure_linked_user", _flaky_ensure_linked_user)
+    monkeypatch.setattr(db, "flush", flaky_flush)
 
     csv_text = (
         "Vorname;Nachname;Übername;Firmenname;Haupt-E-Mail\n"

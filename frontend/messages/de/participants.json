@@ -98,5 +98,9 @@
     "left": "Ausgetreten"
   },
   "footerCount": "{count, plural, one {# Teilnehmer} other {# Teilnehmer}}",
-  "footerHint": "Zeile anklicken zum Bearbeiten"
+  "footerHint": "Zeile anklicken zum Bearbeiten",
+  "loginTabs": {
+    "withoutLogin": "Teilnehmer",
+    "withLogin": "Teilnehmer mit Login"
+  }
 }

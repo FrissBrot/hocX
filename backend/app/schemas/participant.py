@@ -6,15 +6,14 @@ from typing import ClassVar
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.models.entities import AppUser, Tenant
+from app.models.entities import Tenant
 from app.schemas.base import PublicIdModel
 
 
 class ParticipantBase(BaseModel):
-    app_user_id: uuid.UUID | None = None
     first_name: str | None = None
     last_name: str | None = None
-    display_name: str
+    display_name: str = Field(min_length=1)
     email: str | None = None
     is_active: bool = True
     joined_at: date | None = None
@@ -32,6 +31,9 @@ class ParticipantCreate(ParticipantBase):
 
 
 class ParticipantUpdate(BaseModel):
+    login_enabled: bool | None = None
+    password: str | None = Field(default=None, min_length=12)
+    role_code: str | None = None
     first_name: str | None = None
     last_name: str | None = None
     display_name: str | None = None
@@ -48,8 +50,9 @@ class ParticipantUpdate(BaseModel):
 
 
 class ParticipantRead(PublicIdModel, ParticipantBase):
-    _fk_models: ClassVar[dict[str, type]] = {"tenant_id": Tenant, "app_user_id": AppUser}
+    _fk_models: ClassVar[dict[str, type]] = {"tenant_id": Tenant}
 
+    login_enabled: bool = False
     id: uuid.UUID
     tenant_id: uuid.UUID
     created_at: datetime

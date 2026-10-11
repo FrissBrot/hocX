@@ -208,10 +208,9 @@ export function MobileUsers({ initialUsers }: { initialUsers: UserSummary[] }) {
   const openMore = useOpenMore();
   const roleLabel = useMemo(() => new Map(getRoleOptions(tAdmin).map((role) => [role.code, role.label])), [tAdmin]);
   const [users, setUsers] = useState(initialUsers);
-  const [tab, setTab] = useState<"active" | "nologin">("active");
+  const [tab, setTab] = useState<"active" | "nologin">("nologin");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<UserSummary | "new" | null>(null);
-  const [enableFor, setEnableFor] = useState<UserSummary | null>(null);
   const [mfaFor, setMfaFor] = useState<UserSummary | null>(null);
   const active = users.filter((user) => user.login_enabled);
   const withoutLogin = users.filter((user) => !user.login_enabled);
@@ -241,7 +240,7 @@ export function MobileUsers({ initialUsers }: { initialUsers: UserSummary[] }) {
             {visible.map((user) => (
               <MobileListRow
                 key={user.id}
-                onClick={() => (user.login_enabled ? setEditing(user) : setEnableFor(user))}
+                onClick={() => setEditing(user)}
                 leading={<MobileAvatar name={user.display_name} size="md" />}
                 label={
                   <span className="mobile-row-stack">
@@ -283,16 +282,6 @@ export function MobileUsers({ initialUsers }: { initialUsers: UserSummary[] }) {
           }}
         />
       ) : null}
-      {enableFor ? (
-        <EnableLoginSheet
-          user={enableFor}
-          onClose={() => setEnableFor(null)}
-          onEnabled={(updated) => {
-            setUsers((list) => [updated, ...list.filter((item) => item.id !== enableFor.id && item.id !== updated.id)]);
-            setEnableFor(null);
-          }}
-        />
-      ) : null}
       <MfaAdminModal
         open={!!mfaFor}
         onClose={() => setMfaFor(null)}
@@ -328,15 +317,15 @@ function UserSheet({
     user
       ? {
           id: user.id,
-          first_name: user.first_name,
-          last_name: user.last_name,
+          first_name: user.first_name ?? "",
+          last_name: user.last_name ?? "",
           display_name: user.display_name,
-          email: user.email,
+          email: user.email ?? "",
           password: "",
           preferred_language: user.preferred_language,
           is_active: user.is_active,
           login_enabled: user.login_enabled,
-          is_participant_account: user.is_participant_account,
+
           tenant_id: user.tenant_id,
           role_code: user.role_code,
         }
@@ -451,73 +440,15 @@ function UserSheet({
             <span className="mobile-list-row-label">{t("active")}</span>
             <MobileSwitch checked={form.is_active} />
           </button>
+          <button type="button" className="mobile-list-row" aria-pressed={form.login_enabled} onClick={() => update({ login_enabled: !form.login_enabled })}>
+            <span className="mobile-list-row-label">{t("enableLogin")}</span>
+            <MobileSwitch checked={form.login_enabled} />
+          </button>
         </div>
-        {form.is_participant_account ? <p className="mobile-desktop-hint-text">{t("participantAutoNote")}</p> : null}
       </div>
     </Modal>
   );
 }
-
-function EnableLoginSheet({ user, onClose, onEnabled }: { user: UserSummary; onClose: () => void; onEnabled: (user: UserSummary) => void }) {
-  const t = useTranslations("users");
-  const showToast = useToast();
-  const [email, setEmail] = useState(user.email ?? "");
-  const [password, setPassword] = useState("");
-  const [saving, setSaving] = useState(false);
-  const valid = email.trim().length > 0 && password.length >= 12;
-
-  async function submit() {
-    if (!valid || saving) return;
-    setSaving(true);
-    try {
-      const updated = await browserApiFetch<UserSummary>(`/api/users/${user.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ email: email.trim(), password, login_enabled: true }),
-      });
-      showToast(t("toasts.loginEnabled"), "success");
-      onEnabled(updated);
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.loginEnableFailed"), "error");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal
-      open
-      size="sheet"
-      title={t("enableLoginForTitle", { name: user.display_name })}
-      description={t("enableLoginDescription")}
-      onClose={onClose}
-      className="mobile-sheet"
-      footer={
-        <div className="modal-actions mobile-sheet-footer">
-          <button type="button" className="button-ghost" onClick={onClose}>
-            {t("cancel")}
-          </button>
-          <button type="button" className="button-primary" data-modal-save disabled={!valid || saving} onClick={() => void submit()}>
-            {t("enableLogin")}
-          </button>
-        </div>
-      }
-    >
-      <div className="grid mobile-sheet-body">
-        <label className="field-stack">
-          <span className="field-label">{t("email")}</span>
-          <input type="email" inputMode="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-        </label>
-        <label className="field-stack">
-          <span className="field-label">{t("password")}</span>
-          <input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} />
-          <span className="field-help">{t("passwordHelpCreate")}</span>
-        </label>
-      </div>
-    </Modal>
-  );
-}
-
-// ── Geteilte Links ──────────────────────────────────────────────────────
 
 export function MobileSharedLinks({ initialLinks }: { initialLinks: ShareLink[] }) {
   const t = useTranslations("sharedLinks");

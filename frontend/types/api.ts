@@ -6,8 +6,8 @@ export type SessionInfo = {
   authenticated: boolean;
   user: {
     id: string;
-    first_name: string;
-    last_name: string;
+    first_name: string | null;
+    last_name: string | null;
     display_name: string;
     email: string;
     preferred_language: string;
@@ -467,10 +467,10 @@ export type PlatformOidcConfigWrite = { enabled: boolean; issuer_url: string; cl
 
 export type UserSummary = {
   id: string;
-  first_name: string;
-  last_name: string;
+  first_name: string | null;
+  last_name: string | null;
   display_name: string;
-  email: string;
+  email: string | null;
   preferred_language: string;
   is_active: boolean;
   external_identity_json: Record<string, unknown>;
@@ -478,14 +478,13 @@ export type UserSummary = {
   tenant_name: string;
   role_code: string;
   login_enabled: boolean;
-  is_participant_account: boolean;
   created_at: string;
   updated_at: string;
 };
 
 export type AdminTenantUser = {
   user_id: string;
-  email: string;
+  email: string | null;
   display_name: string;
   role_code: string;
   login_enabled: boolean;
@@ -883,7 +882,7 @@ export type TableSnapshotRowsRead = {
 export type ParticipantSummary = {
   id: string;
   tenant_id: string;
-  app_user_id?: string | null;
+  login_enabled?: boolean;
   first_name: string | null;
   last_name: string | null;
   display_name: string;

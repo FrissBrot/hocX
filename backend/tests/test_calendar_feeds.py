@@ -12,7 +12,7 @@ from app.api.routes import calendar_feeds as routes
 from app.models.entities import CalendarFeed, ProtocolTodo, TodoStatus
 from app.schemas.calendar_feed import CalendarFeedUpsert
 from app.services import calendar_feed_service
-from tests.factories import make_app_user, make_current_user, make_event, make_participant, make_tenant, role_id_by_code
+from tests.factories import make_app_user, make_current_user, make_event, make_participant, make_tenant, make_template, role_id_by_code
 
 
 class _FakeClient:
@@ -332,9 +332,9 @@ def test_all_todos_feed_respects_restricted_reader_scope(db):
     ihnen zeigt - hier: nur direkt Zugewiesenes."""
     tenant = make_tenant(db)
     app_user, user = _user(db, tenant.id, role="reader")
-    app_user.external_identity_json = {"source": "participant_auto"}
-    participant = make_participant(db, tenant.id, "Kim")
-    participant.app_user_id = app_user.id
+    template = make_template(db, tenant.id)
+    from app.services.participant_service import ParticipantService
+    ParticipantService().replace_templates_for_participant(db, app_user.id, [template.id])
     colleague, _ = _user(db, tenant.id)
     db.flush()
     token = _token(_enable(db, user, "todos", todo_scope="all"))

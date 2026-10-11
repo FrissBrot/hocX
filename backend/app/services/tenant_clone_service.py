@@ -80,7 +80,7 @@ def _copy_row(source: Any, overrides: dict[str, Any] | None = None) -> Any:
 
     `id`/`created_at`/`updated_at` are always dropped so the DB assigns fresh ones. JSONB/other
     mutable values are deep-copied so the new row never shares object identity with `source`.
-    References to users (created_by, participant.app_user_id, ...) are reset to NULL: a user
+    References to users (created_by, assigned_user_id, ...) are reset to NULL: a user
     belongs to exactly one tenant, so a clone can never point at the source tenant's accounts.
     """
     model = type(source)
@@ -89,7 +89,7 @@ def _copy_row(source: Any, overrides: dict[str, Any] | None = None) -> Any:
     values = {
         column.key: None if column.key in user_columns else copy.deepcopy(getattr(source, column.key))
         for column in mapper.columns
-        if column.key not in _ALWAYS_EXCLUDE
+        if column.key not in _ALWAYS_EXCLUDE and column.computed is None
     }
     if overrides:
         values.update(overrides)
@@ -542,7 +542,7 @@ class TenantCloneService:
         rows = db.scalars(select(Participant).where(Participant.tenant_id == source_tenant_id)).all()
         id_map: dict[int, int] = {}
         for row in rows:
-            new_row = _copy_row(row, {"tenant_id": new_tenant_id})
+            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "login_enabled": False, "password_hash": None, "external_identity_json": {}})
             db.add(new_row)
             db.flush()
             id_map[row.id] = new_row.id

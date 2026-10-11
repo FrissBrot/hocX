@@ -23,14 +23,14 @@ class UserRepository:
             select(func.count())
             .select_from(AppUser)
             .join(Role, Role.id == AppUser.role_id)
-            .where(AppUser.tenant_id == tenant_id, AppUser.is_active.is_(True), Role.code == "admin")
+            .where(AppUser.tenant_id == tenant_id, AppUser.is_active.is_(True), AppUser.login_enabled.is_(True), Role.code == "admin")
         )
         if excluding_user_id is not None:
             statement = statement.where(AppUser.id != excluding_user_id)
         return int(db.scalar(statement) or 0)
 
     def get_by_email(self, db: Session, email: str) -> AppUser | None:
-        statement = select(AppUser).where(AppUser.email == email)
+        statement = select(AppUser).where(AppUser.email == email.strip().lower(), AppUser.login_enabled.is_(True))
         return db.scalar(statement)
 
     def create(self, db: Session, user: AppUser) -> AppUser:

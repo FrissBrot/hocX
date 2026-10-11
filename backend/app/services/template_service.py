@@ -213,9 +213,8 @@ class TemplateService:
         previous = self.repository.list_participant_assignments(db, template_id)
         current = self.repository.replace_participants(db, template_id, assignments)
         affected_user_ids = {
-            participant.app_user_id
+            participant.id
             for participant, _ in [*previous, *current]
-            if participant.app_user_id is not None
         }
         template = self.repository.get(db, template_id)
         if template is not None:
