@@ -249,7 +249,8 @@ def create_participants(db, tenant: Tenant) -> list[Participant]:
     for name in PARTICIPANTS:
         first_name, last_name = name.split(" ", 1)
         participant = Participant(
-            tenant_id=tenant.id, first_name=first_name, last_name=last_name, display_name=name, is_active=True,
+            tenant_id=tenant.id, role_id=ROLE_READER, first_name=first_name, last_name=last_name, display_name=name,
+            is_active=True,
             joined_at=date.today() - timedelta(days=365 * 2),
         )
         db.add(participant)
