@@ -151,7 +151,7 @@
     "demo": "Book a demo"
   },
   "footer": {
-    "copyright": "© {year} hocX · Made in Switzerland",
+    "copyright": "© {year} hocX",
     "contact": "Contact",
     "login": "Sign in"
   },

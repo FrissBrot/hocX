@@ -151,7 +151,7 @@
     "demo": "Demander une démo"
   },
   "footer": {
-    "copyright": "© {year} hocX · Fabriqué en Suisse",
+    "copyright": "© {year} hocX",
     "contact": "Contact",
     "login": "Se connecter"
   },
