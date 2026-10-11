@@ -42,13 +42,21 @@ test("Stammlisten: Vorschau, Zuordnung, Suche und Unbesetzt-Filter", async ({ pa
         }
         await page.screenshot({ path: `test-results/lists-${theme}-${width}.png`, fullPage: true });
         if (width === 1440) {
-          await page.getByRole("button", { name: "+ Neue Liste", exact: true }).click();
           const dialog = page.getByRole("dialog", { name: "Liste erstellen" });
-          await expect(dialog).toBeVisible();
-          await dialog.getByRole("group", { name: "Spalte 2", exact: true }).getByRole("button", { name: /Ein Termin/ }).click();
-          await expect(dialog.locator(".list-definition-preview")).toContainText("Herbstlager");
-          await page.screenshot({ path: `test-results/lists-dialog-${theme}-${width}.png`, fullPage: true });
-          await dialog.getByRole("button", { name: "Abbrechen" }).click();
+          // Der E2E-Stack läuft mit `next dev`: Routen, die parallele Worker zum ersten Mal
+          // aufrufen, kompilieren nach und lösen per HMR einen Remount aus, der den offenen
+          // Dialog schliesst (CI). Öffnen/Auswählen/Screenshot daher als Ganzes wiederholen
+          // und nur abbrechen, wenn er danach noch offen ist.
+          await expect(async () => {
+            if (!(await dialog.isVisible())) await page.getByRole("button", { name: "+ Neue Liste", exact: true }).click();
+            await expect(dialog).toBeVisible({ timeout: 5_000 });
+            await dialog.getByRole("group", { name: "Spalte 2", exact: true }).getByRole("button", { name: /Ein Termin/ }).click({ timeout: 5_000 });
+            await expect(dialog.locator(".list-definition-preview")).toContainText("Herbstlager", { timeout: 5_000 });
+            await page.screenshot({ path: `test-results/lists-dialog-${theme}-${width}.png`, fullPage: true });
+          }).toPass({ timeout: 30_000 });
+          const cancel = dialog.getByRole("button", { name: "Abbrechen" });
+          if (await cancel.isVisible()) await cancel.click({ timeout: 5_000 }).catch(() => undefined);
+          await expect(dialog).toBeHidden();
         }
       }
     }
