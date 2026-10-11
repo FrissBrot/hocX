@@ -79,5 +79,8 @@
   "untilEvent": "Jusqu'à l'événement",
   "untilEventNamed": "Jusqu'à l'événement : {title}",
   "untilEventWithDate": "Jusqu'à {title} ({date})",
-  "untilNextHock": "Jusqu'au prochain événement"
+  "untilNextHock": "Jusqu'au prochain événement",
+  "endOfWeek": "Fin de semaine",
+  "endOfMonth": "Fin du mois",
+  "inTwoWeeks": "Dans 2 semaines"
 }

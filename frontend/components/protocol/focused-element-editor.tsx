@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { StructuredListTable, TrackedEntryInfo } from "@/components/lists/structured-list-table";
+import { TODO_DUE_PRESETS, todoDuePresetDate } from "@/lib/utils/todo-due";
 import { DateInput } from "@/components/ui/date-input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
@@ -234,6 +235,7 @@ export function FocusedElementEditor({
   const isParticipantSelectable = useParticipantSelectable();
   const participantNames = useParticipantNameSource(availableParticipants);
   const t = useTranslations("protocols");
+  const tTodos = useTranslations("todos");
   const confirm = useConfirm();
   const showToast = useToast();
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -1502,6 +1504,14 @@ export function FocusedElementEditor({
                                     closeMenu();
                                   }}
                                 />
+                                {TODO_DUE_PRESETS.map((preset) => (
+                                  <TodoMenuOption key={preset} label={tTodos(preset)}
+                                    active={todo.due_date === todoDuePresetDate(preset) && !todo.due_event_id && !todo.due_marker}
+                                    onClick={() => {
+                                      void updateTodo(block.id, todo.id, { due_date: todoDuePresetDate(preset), due_event_id: null, due_marker: null });
+                                      closeMenu();
+                                    }} />
+                                ))}
                                 <TodoMenuOption
                                   label={t("freeDate")}
                                   active={!!todo.due_date && !todo.due_event_id && !todo.due_marker}

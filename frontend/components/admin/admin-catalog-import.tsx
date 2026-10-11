@@ -143,16 +143,16 @@ export function AdminCatalogImportModal({ open, onClose, onImported }: Props) {
   const canApply = preview !== null && preview.errors.length === 0 && preview.changes.length > 0;
 
   return (
-    <Modal open={open} onClose={close} title={t("title")} description={t("description")} size="wide">
+    <Modal open={open} onClose={close} title={t("title")} description={t("description")} size={preview ? "wide" : "default"} className="admin-catalog-import-modal">
       <div className="grid">
         <label className="field-stack">
           <span className="field-label">{t("file")}</span>
-          <input type="file" accept=".json,application/json" onChange={(event) => void selectFile(event)} disabled={busy} />
+          <input className="admin-catalog-file-input" type="file" accept=".json,application/json" onChange={(event) => void selectFile(event)} disabled={busy} />
           <span className="field-help">{fileName ? fileName : t("fileHelp")}</span>
         </label>
         {parseError ? <StatusBanner tone="error" message={parseError} /> : null}
 
-        <div className="field-stack">
+        <div className="field-stack admin-catalog-import-options">
           <label className="admin-inline-check">
             <input type="checkbox" checked={overwrite} onChange={(event) => changeOverwrite(event.target.checked)} disabled={busy} />
             {t("overwrite")}

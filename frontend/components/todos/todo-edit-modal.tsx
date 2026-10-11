@@ -88,7 +88,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
       </div>
       <aside className="todo-edit-sidebar">
         <div className="field-stack"><span className="field-label">{t("assignedToLabel")}</span>{editable ? <TodoAssigneeMenu label={draft.assigned_participant_name || t("nobodyLabel")} participants={participants} isOptionSelectable={(option) => isParticipantSelectable(participants.find((p) => p.id === option.id) ?? {})} activeId={draft.assigned_participant_id} onChange={(option) => setDraft({ ...draft, assigned_participant_id: option.id, assigned_participant_name: option.id ? option.display_name : null })} /> : <span>{draft.assigned_participant_name || t("nobodyLabel")}</span>}</div>
-        <div className="field-stack"><span className="field-label">{t("dueFieldLabel")}</span>{editable && todo.protocol_id ? <TodoDueMenu todoId={todo.id} label={dueLabel} onApply={(patch, label) => { setDuePatch(patch); setDraft({ ...draft, resolved_due_label: label }); }} /> : <span>{dueLabel}</span>}
+        <div className="field-stack"><span className="field-label">{t("dueFieldLabel")}</span>{editable ? <TodoDueMenu todoId={todo.id} label={dueLabel} dueDate={draft.due_date} onApply={(patch, label) => { setDuePatch(patch); setDraft({ ...draft, ...patch, resolved_due_date: patch.due_date ?? null, resolved_due_label: label }); }} /> : <span>{dueLabel}</span>}
           {duePatch && <small className="muted">{t("appliedOnSaveHint")}</small>}
           {!duePatch && overdueDays > 0 && !['done', 'cancelled'].includes(draft.todo_status_code || '') && <small className="todo-edit-overdue">{t("overdueSince", { count: overdueDays })}</small>} {/* i18n-ok: JS-Ausdruck, kein UI-Text */}
         </div>

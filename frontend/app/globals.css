@@ -16137,11 +16137,12 @@ input[type="radio"] {
 /* Preise: Plan-Karten */
 .admin-plan-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
   gap: var(--space-4);
 }
 
 .admin-plan-card {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -16154,9 +16155,8 @@ input[type="radio"] {
 .admin-plan-card-warning { border-top-color: var(--warning); }
 
 .admin-plan-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  align-content: start;
   gap: var(--space-2);
 }
 
@@ -16172,6 +16172,7 @@ input[type="radio"] {
 .admin-plan-card-description {
   margin: 0;
   min-height: 3em;
+  overflow-wrap: anywhere;
   font-size: var(--text-sm);
 }
 
@@ -16186,6 +16187,7 @@ input[type="radio"] {
   font-size: var(--text-3xl);
   font-weight: 700;
   line-height: 1.1;
+  white-space: nowrap;
 }
 
 .admin-plan-card-features {
@@ -16272,6 +16274,42 @@ input[type="radio"] {
 }
 
 /* Preiskatalog: Export/Import und Umbuchen */
+.admin-catalog-import-modal .modal-header > div:first-child {
+  min-width: 0;
+}
+
+.admin-catalog-import-modal .modal-header-actions {
+  flex-shrink: 0;
+}
+
+.admin-catalog-file-input {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-catalog-file-input::file-selector-button {
+  margin-right: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-catalog-file-input::file-selector-button:hover {
+  background: var(--accent-soft);
+}
+
+.admin-catalog-import-options {
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+}
+
 .admin-pricing-header-actions {
   display: flex;
   flex-wrap: wrap;

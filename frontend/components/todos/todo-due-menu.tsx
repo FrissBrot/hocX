@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Popover } from "@/components/ui/popover";
+import { DateInput } from "@/components/ui/date-input";
+import { TODO_DUE_PRESETS, todoDuePresetDate } from "@/lib/utils/todo-due";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -31,16 +33,18 @@ export type DuePatch = {
 type Props = {
   todoId: string;
   label: string;
+  dueDate?: string | null;
   onApply: (patch: DuePatch, label: string) => void;
 };
 
-export function TodoDueMenu({ todoId, label, onApply }: Props) {
+export function TodoDueMenu({ todoId, label, dueDate, onApply }: Props) {
   const t = useTranslations("todos");
   const tCommon = useTranslations("common");
   const showToast = useToast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<DueEventsResponse | null>(null);
+  const [customDate, setCustomDate] = useState(dueDate ?? "");
   const [search, setSearch] = useState("");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -70,7 +74,7 @@ export function TodoDueMenu({ todoId, label, onApply }: Props) {
     : [];
 
   function pick(patch: DuePatch) {
-    const label = patch.due_event_id ? data?.events.find((event) => event.id === patch.due_event_id)?.title ?? t("eventFallback") : patch.due_marker ? t("nextHockLabel") : t("noEndDate");
+    const label = patch.due_event_id ? data?.events.find((event) => event.id === patch.due_event_id)?.title ?? t("eventFallback") : patch.due_marker ? t("nextHockLabel") : patch.due_date ? formatDate(patch.due_date) : t("noEndDate");
     onApply(patch, label);
     setOpen(false);
   }
@@ -100,6 +104,19 @@ export function TodoDueMenu({ todoId, label, onApply }: Props) {
                 <span className="due-menu-option-sub">{formatDate(data.events.find((e) => e.id === data.next_event_id)!.event_date)}</span>
               )}
             </button>
+            {TODO_DUE_PRESETS.map((preset) => (
+              <button key={preset} type="button" className="due-menu-option" onClick={() => pick({ due_date: todoDuePresetDate(preset), due_event_id: null, due_marker: null })}>
+                {t(preset)}
+                <span className="due-menu-option-sub">{formatDate(todoDuePresetDate(preset))}</span>
+              </button>
+            ))}
+            <label className="field-stack">
+              <span className="field-label">{t("customDateLabel")}</span>
+              <DateInput value={customDate} onChange={(value) => {
+                setCustomDate(value);
+                if (value) pick({ due_date: value, due_event_id: null, due_marker: null });
+              }} />
+            </label>
             {data && data.events.length > 0 && (
               <>
                 <div className="due-menu-divider" />

@@ -451,8 +451,10 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                   <article key={plan.code} className={`card admin-plan-card admin-plan-card-${tone}`}>
                     <div className="admin-plan-card-head">
                       <h2>{plan.name}</h2>
-                      {plan.is_featured ? <Badge variant="info">{t("featuredBadge")}</Badge> : null}
-                      <Badge variant={plan.is_bookable ? "success" : "neutral"}>{plan.is_bookable ? t("bookable") : t("notBookable")}</Badge>
+                      <div className="admin-badge-row">
+                        {plan.is_featured ? <Badge variant="info">{t("featuredBadge")}</Badge> : null}
+                        <Badge variant={plan.is_bookable ? "success" : "neutral"}>{plan.is_bookable ? t("bookable") : t("notBookable")}</Badge>
+                      </div>
                     </div>
                     <p className="muted admin-plan-card-description">{plan.description ?? "\u00a0"}</p>
                     {hasPlanPrice(plan) ? (

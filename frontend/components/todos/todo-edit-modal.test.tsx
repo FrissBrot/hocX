@@ -2,8 +2,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { TodoListItem } from "@/types/api";
 const api = vi.hoisted(() => vi.fn());
+const toast = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api/client", () => ({ browserApiFetch: api }));
-vi.mock("@/contexts/toast-context", () => ({ useToast: () => vi.fn() }));
+vi.mock("@/contexts/toast-context", () => ({ useToast: () => toast }));
 vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn().mockResolvedValue(true) }));
 import { TodoEditModal } from "./todo-edit-modal";
 const todo = { id: 'todo-1', task: 'Bankvollmacht einreichen', tags: ['Finanzen'], todo_status_id: 1, todo_status_code: 'open', assigned_participant_id: null, protocol_id: null } as TodoListItem;
@@ -43,4 +44,15 @@ it('prevents editing with read-only access', () => {
   expect(screen.getByRole('button', { name: 'In Arbeit' })).toBeDisabled();
   expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Todo löschen' })).not.toBeInTheDocument();
+});
+it('sets a custom due date for a standalone todo and saves all due fields', async () => {
+  api.mockResolvedValueOnce({ events: [], next_event_id: null, tag_filter: null });
+  mount();
+  fireEvent.click(screen.getByRole('button', { name: /Kein Enddatum/ }));
+  const input = await screen.findByLabelText('Eigenes Datum');
+  fireEvent.change(input, { target: { value: '25.10.2026' } });
+  expect(screen.getByRole('button', { name: /25.10.2026/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+  await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  expect(JSON.parse(api.mock.calls[1][1].body)).toMatchObject({ due_date: '2026-10-25', due_event_id: null, due_marker: null });
 });

@@ -79,5 +79,8 @@
   "untilEvent": "Until event",
   "untilEventNamed": "Until event: {title}",
   "untilEventWithDate": "Until {title} ({date})",
-  "untilNextHock": "Until next event"
+  "untilNextHock": "Until next event",
+  "endOfWeek": "End of week",
+  "endOfMonth": "End of month",
+  "inTwoWeeks": "In 2 weeks"
 }

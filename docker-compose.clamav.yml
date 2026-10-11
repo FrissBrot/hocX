@@ -2,6 +2,11 @@ services:
   clamav:
     image: clamav/clamav@sha256:9cb27d7660bdf66e9878c832cb433dd8aa152cfbe16f3c2c0084c80b04ae22b4
     restart: unless-stopped
+    # Das Image prueft per Default nur 1x taeglich auf neue Signaturen. Verpasst clamd beim
+    # Containerstart die Reload-Benachrichtigung (Socket noch nicht bereit), bliebe es sonst
+    # bis zum naechsten Tag auf dem alten Stand - mit 12 Checks spaetestens nach 2 Stunden.
+    environment:
+      FRESHCLAM_CHECKS: "12"
     # Audit finding, 2026-08-27: this file had NONE of the hardening docker-compose.yml
     # (dev) already applies to its own (profile-gated) clamav service - the actual prod
     # ClamAV ran with no memory/cpu ceiling and no container-hardening flags at all, because

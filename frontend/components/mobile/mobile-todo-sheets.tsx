@@ -1,5 +1,7 @@
 "use client";
 
+import { TODO_DUE_PRESETS, todoDuePresetDate } from "@/lib/utils/todo-due";
+
 import Link from "next/link";
 import type { Route } from "next";
 import { CSSProperties, useEffect, useMemo, useState } from "react";
@@ -345,6 +347,12 @@ function DuePicker({ todo, onPick }: { todo: TodoListItem; onPick: (patch: DuePa
         selected={todo.due_marker === "next_session"}
         onClick={() => onPick({ due_date: null, due_event_id: null, due_marker: "next_session" })}
       />
+      {TODO_DUE_PRESETS.map((preset) => (
+        <PickerOption key={preset} label={tTodos(preset)}
+          sub={dateParts.dayMonth(todoDuePresetDate(preset), locale)}
+          selected={todo.due_date === todoDuePresetDate(preset) && !todo.due_event_id && !todo.due_marker}
+          onClick={() => onPick({ due_date: todoDuePresetDate(preset), due_event_id: null, due_marker: null })} />
+      ))}
       <label className="grid mobile-picker-date">
         <span className="mobile-picker-option-label">{t("todos.pickDate")}</span>
         <DateInput
