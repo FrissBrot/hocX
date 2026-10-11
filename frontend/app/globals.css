@@ -296,6 +296,12 @@ pre {
   border-top: 1px solid var(--border);
 }
 
+.version-notice {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-bottom: var(--space-1);
+}
+
 .copyright-notice {
   margin: 0;
   color: var(--muted);

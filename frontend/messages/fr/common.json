@@ -33,6 +33,13 @@
   "breadcrumbNav": "Fil d'Ariane",
   "notificationsRegion": "Notifications",
   "copyright": "Copyright © {year} hocX Project · Tous droits réservés.",
+  "build": {
+    "production": "hocX {version}",
+    "test": "Test · {image}",
+    "development": "Dev · {branch} · {commit}",
+    "unknown": "inconnu",
+    "releaseLinkTitle": "Voir la version sur GitHub"
+  },
   "connectionLost": {
     "title": "Connexion interrompue",
     "description": "Le serveur est actuellement inaccessible. Les données déjà confirmées sont conservées ; après reconnexion, vérifiez l'état d'enregistrement des modifications en cours."

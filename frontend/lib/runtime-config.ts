@@ -3,6 +3,9 @@ declare global {
     __HOCX_CONFIG__?: {
       mainAppDomain: string | null;
       version: string;
+      environment?: string;
+      commit?: string | null;
+      branch?: string | null;
     };
   }
 }

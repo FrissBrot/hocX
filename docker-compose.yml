@@ -358,6 +358,7 @@ services:
       - path: .env
         required: false
     environment:
+      HOCX_ENVIRONMENT: development
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       INTERNAL_API_URL: ${INTERNAL_API_URL}
       # See the backend service's comment above on why this needs to be explicit: without

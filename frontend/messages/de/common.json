@@ -31,6 +31,13 @@
   "breadcrumbNav": "Brotkrumen",
   "notificationsRegion": "Benachrichtigungen",
   "copyright": "Copyright © {year} hocX Project · Alle Rechte vorbehalten.",
+  "build": {
+    "production": "hocX {version}",
+    "test": "Test · {image}",
+    "development": "Dev · {branch} · {commit}",
+    "unknown": "unbekannt",
+    "releaseLinkTitle": "Release auf GitHub ansehen"
+  },
   "connectionLost": {
     "title": "Verbindung unterbrochen",
     "description": "Der Server ist momentan nicht erreichbar. Bereits bestätigte Daten bleiben erhalten; prüfe nach dem erneuten Verbinden den Speicherstatus offener Änderungen."

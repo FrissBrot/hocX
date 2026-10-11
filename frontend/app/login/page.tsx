@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { attemptBridgeRedirect } from "@/lib/bridge-redirect";
 import { browserApiFetch } from "@/lib/api/client";
-import { getReleaseUrl } from "@/lib/release-url";
+import { VersionNotice } from "@/components/ui/version-notice";
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { browserSupportsPasskeys, createPasskeyCredential, getPasskeyAssertion } from "@/lib/webauthn";
 import { LoginResponse, PasskeyAssertionStart, PasskeyRegistrationStart, PendingMfaLogin, SessionInfo, TotpEnrollmentStart } from "@/types/api";
@@ -75,7 +75,6 @@ export default function LoginPage() {
   const [totpLabel, setTotpLabel] = useState("");
   const [totpSetup, setTotpSetup] = useState<TotpEnrollmentStart | null>(null);
   const [passkeyLabel, setPasskeyLabel] = useState("");
-  const [appVersion, setAppVersion] = useState("");
   const [showMethodChooser, setShowMethodChooser] = useState(false);
   const autoStartedPasskeyTicketRef = useRef<string | null>(null);
   const totpDigitRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -109,10 +108,6 @@ export default function LoginPage() {
     if (mainDomain && window.location.hostname !== mainDomain) {
       window.location.replace(`https://${mainDomain}/login?from=${encodeURIComponent(window.location.hostname)}`);
     }
-  }, []);
-
-  useEffect(() => {
-    setAppVersion(getRuntimeConfig().version);
   }, []);
 
   useEffect(() => {
@@ -764,9 +759,8 @@ export default function LoginPage() {
         ) : null}
 
         {statusMsg && <p className={isVerifyScreen ? "login-status login-status-mfa" : "login-status"}>{statusMsg}</p>}
-        {appVersion && isVerifyScreen ? <p className="login-version login-version-in-panel"><a href={getReleaseUrl(appVersion)} target="_blank" rel="noopener noreferrer" title={t("releaseLinkTitle")}>hocX {appVersion}</a></p> : null}
+        {isVerifyScreen ? <VersionNotice className="login-version login-version-in-panel" /> : null}
       </section>
-      {appVersion && !isVerifyScreen ? <p className="login-version"><a href={getReleaseUrl(appVersion)} target="_blank" rel="noopener noreferrer" title={t("releaseLinkTitle")}>hocX {appVersion}</a></p> : null}
       {!isVerifyScreen ? <CopyrightNotice className="login-copyright" /> : null}
     </main>
   );

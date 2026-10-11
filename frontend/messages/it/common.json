@@ -31,6 +31,13 @@
   "breadcrumbNav": "Percorso di navigazione",
   "notificationsRegion": "Notifiche",
   "copyright": "Copyright © {year} hocX Project · Tutti i diritti riservati.",
+  "build": {
+    "production": "hocX {version}",
+    "test": "Test · {image}",
+    "development": "Dev · {branch} · {commit}",
+    "unknown": "sconosciuto",
+    "releaseLinkTitle": "Visualizza la versione su GitHub"
+  },
   "connectionLost": {
     "title": "Connessione interrotta",
     "description": "Il server non è al momento raggiungibile. I dati già confermati vengono conservati; dopo la riconnessione controlla lo stato di salvataggio delle modifiche in corso."

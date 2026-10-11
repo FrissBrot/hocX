@@ -31,6 +31,13 @@
   "breadcrumbNav": "Breadcrumb",
   "notificationsRegion": "Notifications",
   "copyright": "Copyright © {year} hocX Project · All rights reserved.",
+  "build": {
+    "production": "hocX {version}",
+    "test": "Test · {image}",
+    "development": "Dev · {branch} · {commit}",
+    "unknown": "unknown",
+    "releaseLinkTitle": "View release on GitHub"
+  },
   "connectionLost": {
     "title": "Connection lost",
     "description": "The server is currently unreachable. Already confirmed data is kept; after reconnecting, check the save status of any open changes."

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { getServerVersion } from "@/lib/server-version";
 import { headers } from "next/headers";
 import { Inter } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
@@ -39,7 +40,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // Werte zur Build-Zeit im Client-Bundle eingefroren werden.
   const runtimeConfig = {
     mainAppDomain: process.env.TRAEFIK_DOMAIN || null,
-    version: process.env.HOCX_VERSION || "dev"
+    ...getServerVersion()
   };
 
   // Aufgeloest von i18n/request.ts (Cookie > Accept-Language > Default) - siehe dort fuer die
