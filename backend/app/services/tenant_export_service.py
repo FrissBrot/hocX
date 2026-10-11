@@ -2,12 +2,23 @@
 
 Three cumulative scopes, mirroring the three options in the admin panel:
 - "structure": config only - cycles, templates/forms, document templates, lists, finance
-  accounts, verified custom domains, and the tenant's users with their role. No
-  participants, events, or protocols.
+  accounts, verified custom domains, the tenant's users with their role/MFA/calendar
+  subscriptions, booked features and storage packages, trust relations to partner
+  tenants. No participants, events, or protocols.
+- "structure_lists": structure + the list entries themselves.
 - "full": structure + all operational data - participants, events, protocols (with all
-  their content), finance transactions/fines, todos. No Abgabebox (public upload box)
-  data.
-- "full_abgabebox": full + Abgabebox assignments/uploads/uploaded files.
+  their content), finance transactions/fines, todos, files/gallery, photo albums incl.
+  partner shares, public share links, cycle snapshots of the lists. No Abgabebox (public
+  upload box) data.
+- "full_abgabebox": full + Abgabebox assignments/links/uploads/uploaded files and the
+  albums bound to an Abgabe - a complete backup of the tenant.
+
+The archive therefore holds credentials (password hashes, plaintext TOTP secrets, link and
+calendar-feed tokens) and has to be treated like a database dump.
+
+Every row keeps its public_id; the import reuses it whenever it is still free on the
+target (see TenantImportService._claim_public_id), so references stored by public_id
+(element_ref strings, album items, word-import drafts, bookmarked URLs) keep working.
 
 See tenant_transfer_common.py for why lookup-table and app_user references are exported
 by code/email rather than by (installation-specific) numeric id.
@@ -44,6 +55,7 @@ from app.models import (
     ListDefinition,
     ListEntry,
     Participant,
+    PlatformAdmin,
     Protocol,
     ProtocolDisplaySnapshot,
     ProtocolElement,
@@ -54,15 +66,20 @@ from app.models import (
     ProtocolTodo,
     StoredFile,
     SubmissionAssignment,
+    SubmissionLink,
     SubmissionUpload,
     SubmissionUploadFile,
     SubmissionUploadLog,
+    TableSnapshot,
     Template,
     TemplateElement,
     TemplateElementBlock,
     TemplateParticipant,
     Tenant,
     TenantDomain,
+    TenantFeature,
+    TenantStoragePackage,
+    TenantTrust,
     UserProtocolAccess,
     UserProtocolScroll,
     UserMfaFactor,
@@ -71,12 +88,22 @@ from app.models import (
     WordImportProfile,
     WordImportSuggestionOutcome,
 )
+from app.models.entities import (
+    CalendarFeed,
+    PhotoAlbum,
+    PhotoAlbumItem,
+    PhotoAlbumTenantShare,
+    ShareLink,
+    ShareLinkFile,
+    submission_assignment_link_table,
+)
 from app.services.file_service import _safe_storage_path
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
     USER_ID_COLUMNS,
     LookupCodeCache,
     UserEmailCache,
+    json_safe,
     row_to_dict,
 )
 
@@ -85,6 +112,8 @@ from app.services.tenant_transfer_common import (
 # Bumped 2 -> 3: users belong to exactly one tenant - app_user rows carry their role as
 # `role_id` (a role code) instead of a separate user_tenant_role table, and only the exported
 # tenant's own users are bundled. TenantImportService still reads version 2.
+# Format 3 also gained (without a version bump - purely additive tables an older importer just
+# ignores) photo albums, table snapshots, links/feeds/shares and tenant settings.
 FORMAT_VERSION = 3
 ExportScope = Literal["structure", "structure_lists", "full", "full_abgabebox"]
 
@@ -140,6 +169,9 @@ class TenantExportService:
             row.pop("secret_encrypted", None)
             factor_rows.append(row)
         tables["user_mfa_factor"] = factor_rows
+        self._export_tenant_settings(db, tenant_id, tables)
+        self._export_calendar_feeds(db, tenant_id, tables)
+        self._export_tenant_trusts(db, tenant_id, tables)
 
         manifest = {
             "format_version": FORMAT_VERSION,
@@ -313,6 +345,23 @@ class TenantExportService:
                 else [],
                 "submission_upload_log",
             )
+            # Abgabebox-Links travel WITH their token: a restore must keep every link that was
+            # handed out working. The import only issues a fresh token if this exact token is
+            # already in use on the target (i.e. the source tenant still exists there).
+            tables["submission_link"] = self._rows(
+                db.scalars(select(SubmissionLink).where(SubmissionLink.tenant_id == tenant_id)).all(), "submission_link"
+            )
+            link_ids = [row["id"] for row in tables["submission_link"]]
+            tables["submission_assignment_link"] = [
+                {"assignment_id": assignment_id, "link_id": link_id}
+                for assignment_id, link_id in (
+                    db.execute(
+                        select(submission_assignment_link_table).where(submission_assignment_link_table.c.link_id.in_(link_ids))
+                    ).all()
+                    if link_ids
+                    else []
+                )
+            ]
 
         tables["finance_transaction"] = self._rows(
             db.scalars(
@@ -442,9 +491,147 @@ class TenantExportService:
             else [],
             "user_protocol_scroll",
         )
+        # Cycle snapshots of the Listen feature (historical record, see
+        # table_snapshot_service.py) - the import remaps the row copies inside snapshot_json.
+        tables["table_snapshot"] = self._rows(
+            db.scalars(select(TableSnapshot).where(TableSnapshot.tenant_id == tenant_id)).all(), "table_snapshot"
+        )
+        self._export_photo_albums(db, tenant_id, tables, include_abgabebox=include_abgabebox)
         tables["protocol_export_cache"] = self._rows(
             db.scalars(select(ProtocolExportCache).where(ProtocolExportCache.protocol_id.in_(protocol_ids))).all()
             if protocol_ids
             else [],
             "protocol_export_cache",
         )
+
+    def _export_photo_albums(self, db: Session, tenant_id: int, tables: dict[str, Any], *, include_abgabebox: bool) -> None:
+        """Own albums (not the partner side of a shared album - photo_album_tenant_share and
+        tenant_trust describe a relationship to another tenant, which a single-tenant export
+        can't carry). Abgabe-bound albums only travel with the Abgabebox scope, because their
+        submission_assignment isn't part of a plain "full" export. Items reference files by
+        public_id (StoredFile or SubmissionUploadFile); only items whose file is itself part of
+        this export are included - a partner tenant's photo in one of our shared albums stays
+        behind."""
+        albums = db.scalars(select(PhotoAlbum).where(PhotoAlbum.tenant_id == tenant_id)).all()
+        if not include_abgabebox:
+            albums = [album for album in albums if album.submission_assignment_id is None]
+        tables["photo_album"] = self._rows(albums, "photo_album")
+        exported_file_ids = {row["public_id"] for row in tables.get("stored_file", []) if row.get("public_id")}
+        exported_file_ids |= {row["public_id"] for row in tables.get("submission_upload_file", []) if row.get("public_id")}
+        album_ids = [album.id for album in albums]
+        items = (
+            db.scalars(select(PhotoAlbumItem).where(PhotoAlbumItem.album_id.in_(album_ids))).all() if album_ids else []
+        )
+        tables["photo_album_item"] = [
+            row for row in self._rows(items, "photo_album_item") if row.get("file_id") in exported_file_ids
+        ]
+
+        # Album-Freigaben, both directions. A partner tenant is referenced by its public_id (the
+        # only identity that survives a move to another installation) - the import restores the
+        # relation only if that tenant exists on the target.
+        # 1) partners invited into one of our own albums
+        own_shares = (
+            db.scalars(select(PhotoAlbumTenantShare).where(PhotoAlbumTenantShare.album_id.in_(album_ids))).all()
+            if album_ids
+            else []
+        )
+        # 2) albums of other tenants we were invited into (+ the photos we contributed there)
+        received_shares = db.scalars(
+            select(PhotoAlbumTenantShare)
+            .join(PhotoAlbum, PhotoAlbum.id == PhotoAlbumTenantShare.album_id)
+            .where(PhotoAlbumTenantShare.tenant_id == tenant_id, PhotoAlbum.tenant_id != tenant_id)
+        ).all()
+        share_rows = []
+        for share, direction in [(s, "own_album") for s in own_shares] + [(s, "partner_album") for s in received_shares]:
+            row = self._row(share, "photo_album_tenant_share")
+            row["direction"] = direction
+            if direction == "own_album":
+                row["partner_tenant_public_id"] = self._tenant_public_id(db, share.tenant_id)
+            else:
+                row["partner_tenant_public_id"] = self._tenant_public_id(db, db.get(PhotoAlbum, share.album_id).tenant_id)
+            row.pop("tenant_id", None)
+            share_rows.append(row)
+        tables["photo_album_tenant_share"] = share_rows
+        received_album_ids = [share.album_id for share in received_shares]
+        contributed = (
+            db.scalars(select(PhotoAlbumItem).where(PhotoAlbumItem.album_id.in_(received_album_ids))).all()
+            if received_album_ids
+            else []
+        )
+        tables["partner_album_item"] = [
+            row for row in self._rows(contributed, "photo_album_item") if row.get("file_id") in exported_file_ids
+        ]
+
+        # Öffentliche Freigabe-Links (Album live oder feste Dateiauswahl), mit Token - see
+        # submission_link above for why. A link to an album that isn't part of this export
+        # (Abgabe album in scope "full") would have nothing to show and is left out.
+        exported_album_ids = {str(album_id) for album_id in album_ids}
+        links = [
+            link
+            for link in db.scalars(select(ShareLink).where(ShareLink.tenant_id == tenant_id)).all()
+            if link.album_id is None or str(link.album_id) in exported_album_ids
+        ]
+        tables["share_link"] = self._rows(links, "share_link")
+        link_ids = [link.id for link in links]
+        tables["share_link_file"] = [
+            row
+            for row in self._rows(
+                db.scalars(select(ShareLinkFile).where(ShareLinkFile.share_link_id.in_(link_ids))).all() if link_ids else [],
+                "share_link_file",
+            )
+            if row.get("file_id") in exported_file_ids
+        ]
+
+    # ── tenant-level settings / relations (every scope) ──────────────────
+
+    def _tenant_public_id(self, db: Session, tenant_id: int) -> str | None:
+        tenant = db.get(Tenant, tenant_id)
+        return str(tenant.public_id) if tenant is not None else None
+
+    def _admin_email(self, db: Session, admin_id: int | None) -> str | None:
+        admin = db.get(PlatformAdmin, admin_id) if admin_id is not None else None
+        return admin.email if admin is not None else None
+
+    def _export_tenant_settings(self, db: Session, tenant_id: int, tables: dict[str, Any]) -> None:
+        """Freigeschaltete Features und zugebuchte Speicherpakete - like plan_code on the tenant
+        row itself, part of what the tenant is entitled to. The platform admin who granted them
+        is exported by email (platform_admin ids are installation-specific)."""
+        feature_rows = []
+        for feature in db.scalars(select(TenantFeature).where(TenantFeature.tenant_id == tenant_id)).all():
+            row = row_to_dict(feature)
+            row["enabled_by_admin_id"] = self._admin_email(db, feature.enabled_by_admin_id)
+            feature_rows.append(row)
+        tables["tenant_feature"] = feature_rows
+        package_rows = []
+        for package in db.scalars(select(TenantStoragePackage).where(TenantStoragePackage.tenant_id == tenant_id)).all():
+            row = row_to_dict(package)
+            row["added_by_admin_id"] = self._admin_email(db, package.added_by_admin_id)
+            package_rows.append(row)
+        tables["tenant_storage_package"] = package_rows
+
+    def _export_calendar_feeds(self, db: Session, tenant_id: int, tables: dict[str, Any]) -> None:
+        """Kalender-Abos der Benutzer. The token is stored Fernet-encrypted with this
+        installation's ADMIN_AUTH_SECRET (like the TOTP secrets above), so it's exported in
+        plaintext and re-encrypted by the target - keeping every subscribed calendar URL valid."""
+        feed_rows = []
+        for feed in db.scalars(select(CalendarFeed).where(CalendarFeed.tenant_id == tenant_id)).all():
+            row = self._row(feed, "calendar_feed")
+            row["token"] = decrypt_secret(feed.token_encrypted)
+            row.pop("token_encrypted", None)
+            row.pop("token_hash", None)
+            feed_rows.append(row)
+        tables["calendar_feed"] = feed_rows
+
+    def _export_tenant_trusts(self, db: Session, tenant_id: int, tables: dict[str, Any]) -> None:
+        trusts = db.scalars(
+            select(TenantTrust).where((TenantTrust.tenant_low_id == tenant_id) | (TenantTrust.tenant_high_id == tenant_id))
+        ).all()
+        tables["tenant_trust"] = [
+            {
+                "partner_tenant_public_id": self._tenant_public_id(
+                    db, trust.tenant_high_id if trust.tenant_low_id == tenant_id else trust.tenant_low_id
+                ),
+                "created_at": json_safe(trust.created_at),
+            }
+            for trust in trusts
+        ]

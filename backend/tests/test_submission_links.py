@@ -283,7 +283,12 @@ def test_clone_of_a_tenant_without_links_still_gets_a_default_link(db):
     assert cloned_links[0].is_default is True
 
 
-def test_export_never_contains_link_tokens_and_import_creates_a_fresh_default_link(db):
+def test_reimport_keeps_links_and_assignments_but_never_shares_a_live_token(db):
+    """Since 2026-10-11 a full_abgabebox export is a complete backup and carries the links
+    WITH their tokens (a restore onto another installation keeps every handed-out URL
+    working, see test_tenant_export_import.py). As long as the source tenant still exists
+    on the same installation, though, its tokens stay its credentials: the import keeps
+    names, default flag and Abgabe assignments, but issues fresh tokens."""
     import json
     import zipfile
 
@@ -293,22 +298,43 @@ def test_export_never_contains_link_tokens_and_import_creates_a_fresh_default_li
     source = make_tenant(db, "Quelle")
     link = links.create_link(db, SubmissionLinkCreate(name="Eltern"), tenant_id=source.id)
     SubmissionService().create_assignment(db, _assignment_payload(link_ids=[link.id]), tenant_id=source.id)
+    source_tokens = {item.token for item in db.scalars(select(SubmissionLink).where(SubmissionLink.tenant_id == source.id))}
 
     zip_path, _ = TenantExportService().export(db, source.id, "full_abgabebox")
     try:
         with zipfile.ZipFile(zip_path) as zf:
-            manifest_text = zf.read("manifest.json").decode("utf-8")
-        assert link.token not in manifest_text
-        assert "submission_link" not in json.loads(manifest_text)["tables"]
+            manifest = json.loads(zf.read("manifest.json").decode("utf-8"))
+        assert link.token in {row["token"] for row in manifest["tables"]["submission_link"]}
+        imported, warnings = TenantImportService().import_zip(db, zip_path, "Quelle (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    imported_links = {
+        item.name: item for item in db.scalars(select(SubmissionLink).where(SubmissionLink.tenant_id == imported.id))
+    }
+    assert "Eltern" in imported_links
+    assert not ({item.token for item in imported_links.values()} & source_tokens)
+    assert any("Token" in warning for warning in warnings)
+    imported_assignment = db.scalar(select(SubmissionAssignment).where(SubmissionAssignment.tenant_id == imported.id))
+    assert [item.id for item in imported_assignment.links] == [imported_links["Eltern"].id]
+
+
+def test_import_without_links_in_the_archive_creates_a_fresh_default_link(db):
+    """Scope "full" (no Abgabebox) and archives from before 2026-10-11 carry no links."""
+    from app.services.tenant_export_service import TenantExportService
+    from app.services.tenant_import_service import TenantImportService
+
+    source = make_tenant(db, "Quelle")
+    links.create_link(db, SubmissionLinkCreate(name="Eltern"), tenant_id=source.id)
+
+    zip_path, _ = TenantExportService().export(db, source.id, "full")
+    try:
         imported, _warnings = TenantImportService().import_zip(db, zip_path, "Quelle (Import)")
     finally:
         zip_path.unlink(missing_ok=True)
 
     imported_links = db.scalars(select(SubmissionLink).where(SubmissionLink.tenant_id == imported.id)).all()
     assert [(item.name, item.is_default) for item in imported_links] == [("Standard", True)]
-    assert imported_links[0].token != link.token
-    imported_assignment = db.scalar(select(SubmissionAssignment).where(SubmissionAssignment.tenant_id == imported.id))
-    assert [item.id for item in imported_assignment.links] == [imported_links[0].id]
 
 
 # ── Isolation: what the restricted public role may and may not do ─────────

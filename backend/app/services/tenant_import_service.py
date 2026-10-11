@@ -17,11 +17,15 @@ import json
 import secrets
 import shutil
 import tempfile
+import uuid
 import zipfile
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app import scanner
@@ -44,7 +48,10 @@ from app.models import (
     Leader,
     ListDefinition,
     ListEntry,
+    Feature,
     Participant,
+    Plan,
+    PlatformAdmin,
     Protocol,
     ProtocolDisplaySnapshot,
     ProtocolElement,
@@ -54,17 +61,22 @@ from app.models import (
     ProtocolText,
     ProtocolTodo,
     Role,
+    StoragePackage,
     StoredFile,
     SubmissionAssignment,
+    SubmissionLink,
     SubmissionUpload,
     SubmissionUploadFile,
     SubmissionUploadLog,
+    TableSnapshot,
     Template,
     TemplateElement,
     TemplateElementBlock,
     TemplateParticipant,
     Tenant,
     TenantDomain,
+    TenantFeature,
+    TenantStoragePackage,
     UserMfaFactor,
     UserProtocolAccess,
     UserProtocolScroll,
@@ -73,7 +85,23 @@ from app.models import (
     WordImportProfile,
     WordImportSuggestionOutcome,
 )
-from app.services import domain_verification_service, submission_link_service, traefik_config_service
+from app.models.entities import (
+    CalendarFeed,
+    PhotoAlbum,
+    PhotoAlbumItem,
+    PhotoAlbumTenantShare,
+    ShareLink,
+    ShareLinkFile,
+    submission_assignment_link_table,
+)
+from app.services import (
+    calendar_feed_service,
+    domain_verification_service,
+    share_link_service,
+    submission_link_service,
+    tenant_trust_service,
+    traefik_config_service,
+)
 from app.services.document_template_service import DocumentTemplateService
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
@@ -81,12 +109,21 @@ from app.services.tenant_transfer_common import (
     USER_ID_COLUMNS,
     LookupCodeCache,
     UserEmailCache,
+    WordImportIdMaps,
     build_row,
+    coerce_value,
+    new_uuid7,
     remap_block_configuration,
     remap_document_template_config,
     remap_element_definition_config,
     remap_list_value,
+    remap_repeat_source_todo,
+    remap_responsible_assignments,
+    remap_table_snapshot_rows,
     remap_template_element_config,
+    remap_word_import_analysis,
+    remap_word_import_profile_config,
+    replace_public_ids,
 )
 
 SUPPORTED_FORMAT_VERSIONS = {2, 3}  # 2: separate user_tenant_role table; 3: role on app_user
@@ -125,6 +162,18 @@ class TenantImportService:
             self.user_cache = UserEmailCache(db)
             self.warnings: list[str] = []
             self._created_tenant_id: int | None = None
+            # old public_id (lowercase) -> newly assigned one, only for the rare rows whose
+            # exported public_id is already taken on this installation (see _claim_uuid).
+            self._public_id_map: dict[str, str] = {}
+            self._taken_public_ids: dict[tuple[type, str], set[str]] = {}
+            # Partner tenants a relation (trust, album share) was restored to - reported once.
+            self._linked_partner_names: set[str] = set()
+            # Exported public_ids of the StoredFile/SubmissionUploadFile rows that actually
+            # made it in (a file can be skipped: missing from the archive, or infected).
+            self._imported_file_public_ids: set[str] = set()
+            # New ids of protocol blocks whose repeat_source points at a todo - remapped in a
+            # second pass once the todos exist (see _remap_todo_repeat_sources).
+            self._todo_repeat_block_ids: list[int] = []
 
             try:
                 new_tenant = self._run(new_name)
@@ -143,6 +192,97 @@ class TenantImportService:
 
     def _t(self, name: str) -> list[dict[str, Any]]:
         return self.tables.get(name, [])
+
+    # ── public_id preservation ────────────────────────────────────────────
+
+    def _build(self, model: type, data: dict[str, Any], overrides: dict[str, Any] | None = None) -> Any:
+        """build_row() plus public_id handling: the exported public_id is reused whenever it
+        is still free on this installation, so everything that references a row by public_id
+        instead of by FK (element_ref strings, photo_album_item.file_id, table snapshots,
+        word-import drafts, bookmarked URLs) keeps working after a restore. Only when it is
+        already taken - typically re-importing an export while the source tenant still exists
+        here - a fresh one is assigned and recorded in _public_id_map, which every
+        public_id-based reference is rewritten through (replace_public_ids).
+
+        Reusing a manifest-supplied value is safe: public_id is UNIQUE, a value already in use
+        is never reused (so an archive can't hijack an existing row's identity), and access is
+        always tenant-scoped on top of the public_id lookup."""
+        row = build_row(model, data, overrides)
+        old_public_id = data.get("public_id")
+        if old_public_id is not None and "public_id" in sa_inspect(model).columns:
+            row.public_id = self._claim_uuid(model, "public_id", str(old_public_id))
+        return row
+
+    def _claim_uuid(self, model: type, column: str, old_value: str) -> uuid.UUID:
+        """Reuses `old_value` for `model.<column>` (a UNIQUE uuid column: public_id, or the
+        uuid primary key of photo_album/share_link) if it's still free, otherwise assigns a
+        fresh one and records old -> new in _public_id_map. One map serves every column -
+        uuids are globally unique, so nothing can get mixed up."""
+        key = old_value.lower()
+        taken = self._taken_public_ids.get((model, column))
+        if taken is None:
+            taken = self._load_taken_uuids(model, column)
+        try:
+            parsed = uuid.UUID(key)
+        except ValueError:
+            parsed = None
+        if parsed is None or key in taken:
+            new_value = new_uuid7()
+            self._public_id_map[key] = str(new_value)
+            return new_value
+        # Also guards against the same value appearing twice inside one archive.
+        taken.add(key)
+        return parsed
+
+    def _load_taken_uuids(self, model: type, column: str) -> set[str]:
+        """One query per table (chunked) instead of one per row: which of the exported values
+        of this column already exist on the installation."""
+        rows = self.tables.get(model.__tablename__, [])
+        rows = [rows] if isinstance(rows, dict) else rows
+        candidates: list[uuid.UUID] = []
+        for row in rows:
+            try:
+                candidates.append(uuid.UUID(str(row.get(column))))
+            except ValueError:
+                continue
+        attribute = getattr(model, column)
+        taken: set[str] = set()
+        for start in range(0, len(candidates), 1000):
+            chunk = candidates[start:start + 1000]
+            taken.update(str(value) for value in self.db.scalars(select(attribute).where(attribute.in_(chunk))))
+        self._taken_public_ids[(model, column)] = taken
+        return taken
+
+    def _claim_token(self, model: type, token: str | None, generate, label: str) -> str:
+        """Link tokens ARE the credential and stay unique installation-wide. The exported token
+        is kept, so every handed-out URL keeps working after a restore - unless it's already in
+        use here: then the source tenant still exists on this installation, and sharing its
+        credential would open the source's link for the imported tenant as well."""
+        if token and self.db.scalar(select(model.id).where(model.token == token)) is None:
+            return token
+        if token:
+            self.warnings.append(
+                f"{label}: Token ist auf dieser Installation bereits vergeben - neuer Link erzeugt, die alte URL gilt weiter für den Quell-Mandanten."
+            )
+        return generate()
+
+    def _lookup_tenant_by_public_id(self, public_id: str | None) -> Tenant | None:
+        if not public_id:
+            return None
+        try:
+            parsed = uuid.UUID(str(public_id))
+        except ValueError:
+            return None
+        tenant = self.db.scalar(select(Tenant).where(Tenant.public_id == parsed))
+        return tenant if tenant is not None and tenant.id != self._created_tenant_id else None
+
+    def _admin_id_for(self, email: str | None) -> int | None:
+        if not email:
+            return None
+        return self.db.scalar(select(PlatformAdmin.id).where(PlatformAdmin.email == email))
+
+    def _remap_public_refs(self, value: Any) -> Any:
+        return replace_public_ids(value, self._public_id_map)
 
     # ── generic helpers ───────────────────────────────────────────────────
 
@@ -191,6 +331,9 @@ class TenantImportService:
         self._import_app_users(new_tenant.id)
         self._import_user_mfa_factors()
         self._import_tenant_domains(new_tenant.id)
+        self._import_tenant_settings(new_tenant.id)
+        self._import_calendar_feeds(new_tenant.id)
+        self._import_tenant_trusts(new_tenant.id)
         group_map = self._import_simple(GroupEntity, self._t("group_entity"), "group_entity", {"tenant_id": new_tenant.id})
         self._import_simple(Leader, self._t("leader"), "leader", {"tenant_id": new_tenant.id})
         participant_map = self._import_simple(Participant, self._t("participant"), "participant", {"tenant_id": new_tenant.id})
@@ -221,18 +364,17 @@ class TenantImportService:
             list_entry_map=list_entry_map,
             finance_account_map=finance_account_map,
         )
-        self._import_word_import_profiles(new_tenant.id, template_map)
+        self._import_word_import_profiles(
+            new_tenant.id, template_map,
+            WordImportIdMaps(
+                participant_map=participant_map, event_map=event_map, list_definition_map=list_definition_map,
+                list_entry_map=list_entry_map, template_element_map=template_element_map,
+            ),
+        )
         self._restore_last_word_import_template(new_tenant, template_map)
         self._import_template_participants(template_map, participant_map)
-        submission_assignment_map = self._import_submission_assignments(new_tenant.id, list_definition_map)
-        # Links (and their tokens) are never part of an export - they are credentials of the
-        # source tenant. The imported tenant gets a fresh default link with every imported Abgabe.
-        submission_link_service.attach_assignments(
-            self.db,
-            submission_link_service.create_default_link(self.db, new_tenant.id),
-            list(submission_assignment_map.values()),
-        )
-        self.db.commit()
+        submission_assignment_map = self._import_submission_assignments(new_tenant.id, list_definition_map, cycle_config_map)
+        self._import_submission_links(new_tenant.id, submission_assignment_map)
         submission_upload_map = self._import_submission_uploads(submission_assignment_map, event_map, list_entry_map)
         self._import_submission_upload_logs(submission_assignment_map)
         stored_file_map = self._import_stored_files(new_tenant.id)
@@ -242,9 +384,18 @@ class TenantImportService:
             cycle_config_map=cycle_config_map, submission_assignment_map=submission_assignment_map,
         )
         protocol_map = self._import_protocols(new_tenant.id, template_map, document_template_map, event_map)
-        self._import_word_import_documents(new_tenant.id, template_map, stored_file_map, protocol_map)
+        self._import_word_import_documents(
+            new_tenant.id, template_map, stored_file_map, protocol_map,
+            WordImportIdMaps(
+                participant_map=participant_map, event_map=event_map, list_definition_map=list_definition_map,
+                list_entry_map=list_entry_map, template_element_map=template_element_map, protocol_map=protocol_map,
+            ),
+        )
         self._import_word_import_suggestion_outcomes(new_tenant.id, template_map)
-        protocol_element_map = self._import_protocol_elements(protocol_map, template_element_map)
+        protocol_element_map = self._import_protocol_elements(
+            protocol_map, template_element_map,
+            participant_map=participant_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+        )
         protocol_element_block_map = self._import_protocol_element_blocks(
             protocol_element_map, template_element_block_map, element_definition_map, participant_map,
             event_map=event_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
@@ -256,10 +407,24 @@ class TenantImportService:
         self._import_protocol_export_caches(protocol_map, stored_file_map)
         finance_transaction_map = self._import_finance_transactions(finance_account_map, protocol_map)
         self._import_attendance_fines(protocol_map, participant_map, finance_account_map, finance_transaction_map)
-        self._import_protocol_todos(new_tenant.id, protocol_element_block_map, participant_map, event_map, protocol_map, submission_assignment_map)
+        todo_map = self._import_protocol_todos(new_tenant.id, protocol_element_block_map, participant_map, event_map, protocol_map, submission_assignment_map)
+        self._remap_todo_repeat_sources(todo_map)
+        album_map = self._import_photo_albums(new_tenant.id, cycle_config_map, submission_assignment_map)
+        self._import_album_shares(new_tenant.id, album_map)
+        self._import_share_links(new_tenant.id, album_map)
+        self._import_table_snapshots(
+            new_tenant.id, cycle_config_map,
+            list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+            participant_map=participant_map, event_map=event_map,
+        )
         self._import_user_template_access(new_tenant.id, template_map)
         self._import_user_protocol_access(new_tenant.id, protocol_map)
         self._import_user_protocol_scrolls(protocol_map)
+        if self._linked_partner_names:
+            self.warnings.append(
+                "Hinweis: Beziehungen zu bestehenden Mandanten wiederhergestellt (Vertrauen/Album-Freigaben): "
+                + ", ".join(sorted(self._linked_partner_names))
+            )
         return new_tenant
 
     # ── tenant base ───────────────────────────────────────────────────────
@@ -273,9 +438,15 @@ class TenantImportService:
         # (no template with that id exists yet on the target) or, on a coincidental id
         # collision, silently point at a template belonging to a completely different
         # tenant.
-        new_tenant = build_row(
-            Tenant, data, {"name": new_name, "profile_image_path": None, "public_slug": None, "last_word_import_template_id": None}
-        )
+        overrides: dict[str, Any] = {
+            "name": new_name, "profile_image_path": None, "public_slug": None, "last_word_import_template_id": None,
+        }
+        # plan.code is installation-wide seed data maintained in the admin panel - a plan
+        # the source had doesn't necessarily exist here (FK would abort the whole import).
+        if data.get("plan_code") and self.db.get(Plan, data["plan_code"]) is None:
+            self.warnings.append(f"Preisplan '{data['plan_code']}' existiert auf dieser Installation nicht - Mandant ohne Plan importiert.")
+            overrides["plan_code"] = None
+        new_tenant = self._build(Tenant, data, overrides)
         self.db.add(new_tenant)
         self.db.commit()
         self.db.refresh(new_tenant)
@@ -358,7 +529,7 @@ class TenantImportService:
             # password-change-while-logged-in endpoint lands (see user_service.py), an operator
             # can already tell freshly imported members to rotate their password by convention
             # without any code change here.
-            new_user = build_row(AppUser, row, overrides)
+            new_user = self._build(AppUser, row, overrides)
             self.db.add(new_user)
             self.db.flush()
             self.user_cache.set_id(email, new_user.id)
@@ -405,7 +576,7 @@ class TenantImportService:
                 self.warnings.append(f"MFA von '{email}': Unbekannter Faktor-Typ '{factor_type}' - Faktor übersprungen.")
                 continue
 
-            self.db.add(build_row(UserMfaFactor, row, overrides))
+            self.db.add(self._build(UserMfaFactor, row, overrides))
             imported_factor_types.setdefault(user_id, set()).add(factor_type)
 
         self.db.flush()
@@ -446,7 +617,7 @@ class TenantImportService:
             if self.db.query(TenantDomain).filter(TenantDomain.domain == domain).first() is not None:
                 self.warnings.append(f"Domain '{domain}' ist auf dieser Installation bereits vergeben, wurde nicht importiert.")
                 continue
-            new_row = build_row(TenantDomain, data, {"tenant_id": new_tenant_id})
+            new_row = self._build(TenantDomain, data, {"tenant_id": new_tenant_id})
             self.db.add(new_row)
             if data.get("status") == "active":
                 needs_traefik_regenerate = True
@@ -460,7 +631,7 @@ class TenantImportService:
         id_map: dict[int, int] = {}
         for row in rows:
             data = self._resolve_row(table_name, row)
-            new_row = build_row(model, data, overrides)
+            new_row = self._build(model, data, overrides)
             self.db.add(new_row)
             self.db.flush()
             id_map[row["id"]] = new_row.id
@@ -475,7 +646,7 @@ class TenantImportService:
         id_map: dict[int, int] = {}
         for row in self._t("element_definition"):
             data = self._resolve_row("element_definition", row)
-            new_row = build_row(ElementDefinition, data, {
+            new_row = self._build(ElementDefinition, data, {
                 "tenant_id": new_tenant_id,
                 "configuration_json": remap_element_definition_config(
                     data.get("configuration_json"), participant_map=participant_map, event_map=event_map,
@@ -500,7 +671,7 @@ class TenantImportService:
             if new_storage_path is None:
                 self.warnings.append(f"document_template_part '{row.get('code')}' (v{row.get('version')}): Datei fehlte im Export, übersprungen.")
                 continue
-            new_row = build_row(DocumentTemplatePart, data, {"tenant_id": new_tenant_id, "storage_path": new_storage_path})
+            new_row = self._build(DocumentTemplatePart, data, {"tenant_id": new_tenant_id, "storage_path": new_storage_path})
             self.db.add(new_row)
             self.db.flush()
             id_map[row["id"]] = new_row.id
@@ -511,7 +682,7 @@ class TenantImportService:
         id_map: dict[int, int] = {}
         for row in self._t("document_template"):
             data = self._resolve_row("document_template", row)
-            new_row = build_row(DocumentTemplate, data, {
+            new_row = self._build(DocumentTemplate, data, {
                 "tenant_id": new_tenant_id,
                 "filesystem_path": "",
                 "configuration_json": remap_document_template_config(data.get("configuration_json"), part_map),
@@ -536,11 +707,13 @@ class TenantImportService:
         def remap_ids(ids: list[int] | None) -> list[int] | None:
             if not ids:
                 return ids
-            return [participant_map.get(i, i) for i in ids]
+            # An id that can't be resolved is dropped, never kept: it would be a source-tenant
+            # participant id, i.e. nobody (or somebody of another tenant) on this installation.
+            return [participant_map[i] for i in ids if i in participant_map]
 
         for row in self._t("event"):
             data = self._resolve_row("event", row)
-            new_row = build_row(Event, data, {
+            new_row = self._build(Event, data, {
                 "tenant_id": new_tenant_id,
                 "group_id": group_map.get(data["group_id"]) if data.get("group_id") else None,
                 "organizer_ids": remap_ids(data.get("organizer_ids")),
@@ -575,7 +748,7 @@ class TenantImportService:
             if new_definition_id is None:
                 continue
             col1_type, col2_type = value_types_by_old_definition_id.get(row["list_definition_id"], (None, None))
-            new_row = build_row(ListEntry, row, {
+            new_row = self._build(ListEntry, row, {
                 "list_definition_id": new_definition_id,
                 "column_one_value_json": remap_list_value(col1_type, row.get("column_one_value_json"), participant_map, event_map),
                 "column_two_value_json": remap_list_value(col2_type, row.get("column_two_value_json"), participant_map, event_map),
@@ -593,7 +766,7 @@ class TenantImportService:
         template_map: dict[int, int] = {}
         for row in self._t("template"):
             data = self._resolve_row("template", row)
-            new_row = build_row(Template, data, {
+            new_row = self._build(Template, data, {
                 "tenant_id": new_tenant_id,
                 "document_template_id": document_template_map.get(data["document_template_id"]) if data.get("document_template_id") else None,
                 "next_event_id": event_map.get(data["next_event_id"]) if data.get("next_event_id") else None,
@@ -608,11 +781,18 @@ class TenantImportService:
         template_element_map: dict[int, int] = {}
         for row in self._t("template_element"):
             new_template_id = template_map.get(row["template_id"])
+            new_element_definition_id = element_definition_map.get(row["element_definition_id"])
             if new_template_id is None:
                 continue
-            new_row = build_row(TemplateElement, row, {
+            if new_element_definition_id is None:
+                # element_definition is always tenant-owned and exported with the template -
+                # only a corrupted/hand-edited archive gets here. Never fall back to the
+                # source id: that would link the element to another tenant's definition.
+                self.warnings.append(f"Vorlagen-Element {row.get('id')}: Elementdefinition fehlt im Export, übersprungen.")
+                continue
+            new_row = self._build(TemplateElement, row, {
                 "template_id": new_template_id,
-                "element_definition_id": element_definition_map.get(row["element_definition_id"], row["element_definition_id"]),
+                "element_definition_id": new_element_definition_id,
                 "configuration_json": remap_template_element_config(
                     row.get("configuration_json"), participant_map=participant_map,
                     list_definition_map=list_definition_map, list_entry_map=list_entry_map,
@@ -626,11 +806,12 @@ class TenantImportService:
         template_element_block_map: dict[int, int] = {}
         for row in self._t("template_element_block"):
             new_template_element_id = template_element_map.get(row["template_element_id"])
-            if new_template_element_id is None:
+            new_element_definition_id = element_definition_map.get(row["element_definition_id"])
+            if new_template_element_id is None or new_element_definition_id is None:
                 continue
-            new_row = build_row(TemplateElementBlock, row, {
+            new_row = self._build(TemplateElementBlock, row, {
                 "template_element_id": new_template_element_id,
-                "element_definition_id": element_definition_map.get(row["element_definition_id"], row["element_definition_id"]),
+                "element_definition_id": new_element_definition_id,
                 "configuration_override_json": remap_block_configuration(
                     row.get("configuration_override_json"), participant_map=participant_map,
                     event_map=event_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
@@ -657,23 +838,35 @@ class TenantImportService:
             ))
         self.db.commit()
 
-    def _import_word_import_profiles(self, new_tenant_id: int, template_map: dict[int, int]) -> None:
+    def _import_word_import_profiles(self, new_tenant_id: int, template_map: dict[int, int], maps: WordImportIdMaps) -> None:
         for row in self._t("word_import_profile"):
             old_template_id = row.get("template_id")
-            self.db.add(build_row(WordImportProfile, row, {
+            self.db.add(self._build(WordImportProfile, row, {
                 "tenant_id": new_tenant_id,
                 "template_id": template_map.get(old_template_id) if old_template_id else None,
+                # Learned mappings point at participants/events/lists/template elements by id.
+                "mapping_config_json": remap_word_import_profile_config(row.get("mapping_config_json"), maps),
             }))
         self.db.commit()
 
-    def _import_submission_assignments(self, new_tenant_id: int, list_definition_map: dict[int, int]) -> dict[int, int]:
+    def _import_submission_assignments(
+        self, new_tenant_id: int, list_definition_map: dict[int, int], cycle_config_map: dict[int, int]
+    ) -> dict[int, int]:
         id_map: dict[int, int] = {}
         for row in self._t("submission_assignment"):
             data = self._resolve_row("submission_assignment", row)
-            new_row = build_row(SubmissionAssignment, data, {
+            overrides: dict[str, Any] = {
                 "tenant_id": new_tenant_id,
                 "list_definition_id": list_definition_map.get(data["list_definition_id"]) if data.get("list_definition_id") else None,
-            })
+            }
+            if data.get("cycle_config_id"):
+                # Zyklus-Filter (Migration 0079): cycle_config_id and cycle_offsets belong together
+                # (ck_submission_assignment_cycle_filter) - clear both if the cycle is missing.
+                overrides["cycle_config_id"] = cycle_config_map.get(data["cycle_config_id"])
+                if overrides["cycle_config_id"] is None:
+                    overrides["cycle_offsets"] = []
+                    self.warnings.append(f"Abgabe '{data.get('title')}': Zyklus fehlt im Export, Zyklus-Filter entfernt.")
+            new_row = self._build(SubmissionAssignment, data, overrides)
             self.db.add(new_row)
             self.db.flush()
             id_map[row["id"]] = new_row.id
@@ -692,7 +885,7 @@ class TenantImportService:
                 continue
             if row.get("list_entry_id") and new_list_entry_id is None:
                 continue
-            new_row = build_row(SubmissionUpload, row, {
+            new_row = self._build(SubmissionUpload, row, {
                 "assignment_id": new_assignment_id, "event_id": new_event_id, "list_entry_id": new_list_entry_id,
             })
             self.db.add(new_row)
@@ -706,7 +899,10 @@ class TenantImportService:
             new_assignment_id = submission_assignment_map.get(row["assignment_id"])
             if new_assignment_id is None:
                 continue
-            self.db.add(build_row(SubmissionUploadLog, row, {"assignment_id": new_assignment_id}))
+            self.db.add(self._build(SubmissionUploadLog, row, {
+                "assignment_id": new_assignment_id,
+                "element_ref": self._remap_public_refs(row.get("element_ref")),
+            }))
         self.db.commit()
 
     def _import_stored_files(self, new_tenant_id: int) -> dict[int, int]:
@@ -721,7 +917,7 @@ class TenantImportService:
                 self.warnings.append(f"Datei '{row.get('original_name')}' fehlte im Export, übersprungen.")
                 continue
             # SECURITY (audit S4, 2026-08-16): never trust data["scan_status"] from the
-            # manifest (build_row() forces it to "pending" regardless, see
+            # manifest (self._build() forces it to "pending" regardless, see
             # FORCED_SECURE_DEFAULTS) - actually run the restored bytes past ClamAV here,
             # the same way a fresh upload does (file_service.py's save_word_import_document),
             # so an imported file goes through the real scan workflow instead of either
@@ -734,8 +930,10 @@ class TenantImportService:
                 absolute_path.unlink(missing_ok=True)
                 self.warnings.append(f"Datei '{row.get('original_name')}' wurde von der Virenprüfung als infiziert erkannt und wurde nicht importiert.")
                 continue
-            new_row = build_row(StoredFile, data, {"tenant_id": new_tenant_id, "storage_path": new_storage_path, "scan_status": scan_status})
+            new_row = self._build(StoredFile, data, {"tenant_id": new_tenant_id, "storage_path": new_storage_path, "scan_status": scan_status})
             self.db.add(new_row)
+            if row.get("public_id"):
+                self._imported_file_public_ids.add(str(row["public_id"]).lower())
             self.db.flush()
             id_map[row["id"]] = new_row.id
         self.db.commit()
@@ -747,7 +945,9 @@ class TenantImportService:
             new_stored_file_id = stored_file_map.get(row["stored_file_id"])
             if new_upload_id is None or new_stored_file_id is None:
                 continue
-            self.db.add(build_row(SubmissionUploadFile, row, {"upload_id": new_upload_id, "stored_file_id": new_stored_file_id}))
+            self.db.add(self._build(SubmissionUploadFile, row, {"upload_id": new_upload_id, "stored_file_id": new_stored_file_id}))
+            if row.get("public_id"):
+                self._imported_file_public_ids.add(str(row["public_id"]).lower())
         self.db.commit()
 
     def _import_gallery_images(
@@ -767,7 +967,7 @@ class TenantImportService:
                 # or flagged infected on re-scan - see _import_stored_files) - nothing left to
                 # mark as a gallery image.
                 continue
-            self.db.add(build_row(GalleryImage, data, {
+            self.db.add(self._build(GalleryImage, data, {
                 "tenant_id": new_tenant_id,
                 "stored_file_id": new_stored_file_id,
                 # Live Photo clip: a stored_file of the same tenant, so it goes through the same
@@ -790,6 +990,13 @@ class TenantImportService:
                     if data.get("submission_assignment_id")
                     else None
                 ),
+                # "event-<public_id>"/"entry-<public_id>" of the Abgabe-Element - only
+                # meaningful together with the assignment above.
+                "submission_element_ref": (
+                    self._remap_public_refs(data.get("submission_element_ref"))
+                    if data.get("submission_assignment_id") and submission_assignment_map.get(data["submission_assignment_id"])
+                    else None
+                ),
             }))
         self.db.commit()
 
@@ -800,7 +1007,7 @@ class TenantImportService:
             new_template_id = template_map.get(data["template_id"])
             if new_template_id is None:
                 continue
-            new_row = build_row(Protocol, data, {
+            new_row = self._build(Protocol, data, {
                 "tenant_id": new_tenant_id,
                 "template_id": new_template_id,
                 "document_template_id": document_template_map.get(data["document_template_id"]) if data.get("document_template_id") else None,
@@ -814,7 +1021,7 @@ class TenantImportService:
 
     def _import_word_import_documents(
         self, new_tenant_id: int, template_map: dict[int, int], stored_file_map: dict[int, int],
-        protocol_map: dict[int, int],
+        protocol_map: dict[int, int], maps: WordImportIdMaps,
     ) -> None:
         for row in self._t("word_import_document"):
             data = self._resolve_row("word_import_document", row)
@@ -825,32 +1032,44 @@ class TenantImportService:
                     f"Word-Import '{data.get('original_filename')}': Vorlage oder Quelldatei fehlt, übersprungen."
                 )
                 continue
-            self.db.add(build_row(WordImportDocument, data, {
+            self.db.add(self._build(WordImportDocument, data, {
                 "tenant_id": new_tenant_id,
                 "template_id": new_template_id,
                 "stored_file_id": new_stored_file_id,
                 "protocol_id": protocol_map.get(data["protocol_id"]) if data.get("protocol_id") else None,
+                # The analysis holds internal ids (participants, events, lists, template
+                # elements, protocols) ...
+                "analysis_snapshot_json": remap_word_import_analysis(data.get("analysis_snapshot_json"), maps),
+                # ... the reviewer's draft only public ids (it's written by the frontend).
+                "review_draft_json": self._remap_public_refs(data.get("review_draft_json") or {}),
             }))
         self.db.commit()
 
     def _import_word_import_suggestion_outcomes(self, new_tenant_id: int, template_map: dict[int, int]) -> None:
         for row in self._t("word_import_suggestion_outcome"):
             old_template_id = row.get("template_id")
-            self.db.add(build_row(WordImportSuggestionOutcome, row, {
+            self.db.add(self._build(WordImportSuggestionOutcome, row, {
                 "tenant_id": new_tenant_id,
                 "template_id": template_map.get(old_template_id) if old_template_id else None,
             }))
         self.db.commit()
 
-    def _import_protocol_elements(self, protocol_map: dict[int, int], template_element_map: dict[int, int]) -> dict[int, int]:
+    def _import_protocol_elements(
+        self, protocol_map: dict[int, int], template_element_map: dict[int, int], *,
+        participant_map: dict[int, int], list_definition_map: dict[int, int], list_entry_map: dict[int, int],
+    ) -> dict[int, int]:
         id_map: dict[int, int] = {}
         for row in self._t("protocol_element"):
             new_protocol_id = protocol_map.get(row["protocol_id"])
             if new_protocol_id is None:
                 continue
-            new_row = build_row(ProtocolElement, row, {
+            new_row = self._build(ProtocolElement, row, {
                 "protocol_id": new_protocol_id,
                 "template_element_id": template_element_map.get(row["template_element_id"]) if row.get("template_element_id") else None,
+                "responsible_assignments_snapshot": remap_responsible_assignments(
+                    row.get("responsible_assignments_snapshot"), participant_map=participant_map,
+                    list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+                ),
             })
             self.db.add(new_row)
             self.db.flush()
@@ -868,7 +1087,7 @@ class TenantImportService:
             new_protocol_element_id = protocol_element_map.get(data["protocol_element_id"])
             if new_protocol_element_id is None:
                 continue
-            new_row = build_row(ProtocolElementBlock, data, {
+            new_row = self._build(ProtocolElementBlock, data, {
                 "protocol_element_id": new_protocol_element_id,
                 "template_element_block_id": template_element_block_map.get(data["template_element_block_id"]) if data.get("template_element_block_id") else None,
                 "element_definition_id": element_definition_map.get(data["element_definition_id"]) if data.get("element_definition_id") else None,
@@ -882,6 +1101,8 @@ class TenantImportService:
             self.db.add(new_row)
             self.db.flush()
             id_map[row["id"]] = new_row.id
+            if (new_row.configuration_snapshot_json or {}).get("repeat_source_type") == "todo":
+                self._todo_repeat_block_ids.append(new_row.id)
         self.db.commit()
         return id_map
 
@@ -890,7 +1111,7 @@ class TenantImportService:
             new_block_id = protocol_element_block_map.get(row["protocol_element_block_id"])
             if new_block_id is None:
                 continue
-            self.db.add(build_row(ProtocolText, row, {"protocol_element_block_id": new_block_id}))
+            self.db.add(self._build(ProtocolText, row, {"protocol_element_block_id": new_block_id}))
         self.db.commit()
 
     def _import_protocol_display_snapshots(self, protocol_element_block_map: dict[int, int]) -> None:
@@ -898,7 +1119,7 @@ class TenantImportService:
             new_block_id = protocol_element_block_map.get(row["protocol_element_block_id"])
             if new_block_id is None:
                 continue
-            self.db.add(build_row(ProtocolDisplaySnapshot, row, {"protocol_element_block_id": new_block_id}))
+            self.db.add(self._build(ProtocolDisplaySnapshot, row, {"protocol_element_block_id": new_block_id}))
         self.db.commit()
 
     def _import_protocol_images(self, protocol_element_block_map: dict[int, int], stored_file_map: dict[int, int]) -> None:
@@ -907,7 +1128,7 @@ class TenantImportService:
             new_stored_file_id = stored_file_map.get(row["stored_file_id"])
             if new_block_id is None or new_stored_file_id is None:
                 continue
-            self.db.add(build_row(ProtocolImage, row, {"protocol_element_block_id": new_block_id, "stored_file_id": new_stored_file_id}))
+            self.db.add(self._build(ProtocolImage, row, {"protocol_element_block_id": new_block_id, "stored_file_id": new_stored_file_id}))
         self.db.commit()
 
     def _import_protocol_export_caches(self, protocol_map: dict[int, int], stored_file_map: dict[int, int]) -> None:
@@ -916,7 +1137,7 @@ class TenantImportService:
             if new_protocol_id is None:
                 continue
             old_file_id = row.get("generated_file_id")
-            self.db.add(build_row(ProtocolExportCache, row, {
+            self.db.add(self._build(ProtocolExportCache, row, {
                 "protocol_id": new_protocol_id,
                 "generated_file_id": stored_file_map.get(old_file_id) if old_file_id else None,
             }))
@@ -928,7 +1149,7 @@ class TenantImportService:
             new_account_id = finance_account_map.get(row["account_id"])
             if new_account_id is None:
                 continue
-            new_row = build_row(FinanceTransaction, row, {
+            new_row = self._build(FinanceTransaction, row, {
                 "account_id": new_account_id,
                 "protocol_id": protocol_map.get(row["protocol_id"]) if row.get("protocol_id") else None,
             })
@@ -945,7 +1166,7 @@ class TenantImportService:
             new_account_id = finance_account_map.get(data["account_id"])
             if new_protocol_id is None or new_account_id is None:
                 continue
-            new_row = build_row(AttendanceFine, data, {
+            new_row = self._build(AttendanceFine, data, {
                 "protocol_id": new_protocol_id,
                 "participant_id": participant_map.get(data["participant_id"]) if data.get("participant_id") else None,
                 "account_id": new_account_id,
@@ -955,19 +1176,270 @@ class TenantImportService:
             self.db.add(new_row)
         self.db.commit()
 
-    def _import_protocol_todos(self, new_tenant_id, protocol_element_block_map, participant_map, event_map, protocol_map, submission_assignment_map) -> None:
+    def _import_protocol_todos(self, new_tenant_id, protocol_element_block_map, participant_map, event_map, protocol_map, submission_assignment_map) -> dict[int, int]:
+        id_map: dict[int, int] = {}
         for row in self._t("protocol_todo"):
             data = self._resolve_row("protocol_todo", row)
-            new_row = build_row(ProtocolTodo, data, {
+            new_row = self._build(ProtocolTodo, data, {
                 "tenant_id": new_tenant_id,
                 "protocol_element_block_id": protocol_element_block_map.get(data["protocol_element_block_id"]) if data.get("protocol_element_block_id") else None,
                 "assigned_participant_id": participant_map.get(data["assigned_participant_id"]) if data.get("assigned_participant_id") else None,
                 "due_event_id": event_map.get(data["due_event_id"]) if data.get("due_event_id") else None,
                 "closed_in_protocol_id": protocol_map.get(data["closed_in_protocol_id"]) if data.get("closed_in_protocol_id") else None,
                 "submission_assignment_id": submission_assignment_map.get(data["submission_assignment_id"]) if data.get("submission_assignment_id") else None,
+                "element_ref": self._remap_public_refs(data.get("element_ref")),
             })
             self.db.add(new_row)
+            self.db.flush()
+            id_map[row["id"]] = new_row.id
         self.db.commit()
+        return id_map
+
+    def _remap_todo_repeat_sources(self, todo_map: dict[int, int]) -> None:
+        """Second pass for blocks bound to a todo ("Wiederholen aus Todo") - the todos are
+        created after the blocks, see remap_repeat_source_todo."""
+        for block_id in self._todo_repeat_block_ids:
+            block = self.db.get(ProtocolElementBlock, block_id)
+            new_config = remap_repeat_source_todo(block.configuration_snapshot_json if block else None, todo_map)
+            if new_config is not None:
+                block.configuration_snapshot_json = new_config
+                self.db.add(block)
+        self.db.commit()
+
+    # ── photo albums / cycle snapshots ────────────────────────────────────
+
+    def _import_photo_albums(
+        self, new_tenant_id: int, cycle_config_map: dict[int, int], submission_assignment_map: dict[int, int]
+    ) -> dict[str, uuid.UUID]:
+        album_map: dict[str, uuid.UUID] = {}
+        for row in self._t("photo_album"):
+            overrides: dict[str, Any] = {"tenant_id": new_tenant_id}
+            if row.get("cycle_config_id") is not None:
+                overrides["cycle_config_id"] = cycle_config_map.get(row["cycle_config_id"])
+                if overrides["cycle_config_id"] is None:
+                    continue
+            if row.get("submission_assignment_id") is not None:
+                overrides["submission_assignment_id"] = submission_assignment_map.get(row["submission_assignment_id"])
+                if overrides["submission_assignment_id"] is None:
+                    # Abgabe not part of this import (scope "full") - ck_photo_album_kind_fields
+                    # needs it, so the auto album can't exist; it's re-created on demand.
+                    continue
+                overrides["submission_element_ref"] = self._remap_public_refs(row.get("submission_element_ref"))
+            # photo_album's primary key IS its public identity (album URLs, partner shares,
+            # share links) - kept like a public_id whenever it's still free.
+            new_album = self._build(PhotoAlbum, row, overrides)
+            new_album.id = self._claim_uuid(PhotoAlbum, "id", str(row["id"]))
+            self.db.add(new_album)
+            album_map[str(row["id"]).lower()] = new_album.id
+        self.db.flush()
+        for row in self._t("photo_album_item"):
+            new_album_id = album_map.get(str(row.get("album_id")).lower())
+            old_file_id = str(row.get("file_id")).lower()
+            if new_album_id is None or old_file_id not in self._imported_file_public_ids:
+                continue
+            self.db.add(PhotoAlbumItem(
+                album_id=new_album_id,
+                file_id=uuid.UUID(self._public_id_map.get(old_file_id, old_file_id)),
+                is_best=bool(row.get("is_best")),
+                best_override=row.get("best_override"),
+                share_pending=bool(row.get("share_pending")),
+            ))
+        self.db.commit()
+        return album_map
+
+    # ── links, feeds, partner relations, tenant settings ──────────────────
+
+    def _import_submission_links(self, new_tenant_id: int, submission_assignment_map: dict[int, int]) -> None:
+        """Abgabebox-Links with their tokens and Abgabe assignment (scope full_abgabebox). Older
+        archives and exports without Abgabebox carry none - the tenant then gets the default
+        link every new tenant starts with, with every imported Abgabe attached."""
+        if not self._t("submission_link"):
+            submission_link_service.attach_assignments(
+                self.db,
+                submission_link_service.create_default_link(self.db, new_tenant_id),
+                list(submission_assignment_map.values()),
+            )
+            self.db.commit()
+            return
+        link_map: dict[int, int] = {}
+        for row in self._t("submission_link"):
+            new_link = self._build(SubmissionLink, row, {
+                "tenant_id": new_tenant_id,
+                "token": self._claim_token(
+                    SubmissionLink, row.get("token"), submission_link_service.generate_token, f"Abgabebox-Link '{row.get('name')}'"
+                ),
+            })
+            self.db.add(new_link)
+            self.db.flush()
+            link_map[row["id"]] = new_link.id
+        for row in self._t("submission_assignment_link"):
+            new_assignment_id = submission_assignment_map.get(row.get("assignment_id"))
+            new_link_id = link_map.get(row.get("link_id"))
+            if new_assignment_id is not None and new_link_id is not None:
+                self.db.execute(
+                    pg_insert(submission_assignment_link_table)
+                    .values(assignment_id=new_assignment_id, link_id=new_link_id)
+                    .on_conflict_do_nothing()
+                )
+        self.db.commit()
+
+    def _import_share_links(self, new_tenant_id: int, album_map: dict[str, uuid.UUID]) -> None:
+        for row in self._t("share_link"):
+            data = self._resolve_row("share_link", row)
+            overrides: dict[str, Any] = {
+                "tenant_id": new_tenant_id,
+                "token": self._claim_token(
+                    ShareLink, data.get("token"), share_link_service.generate_token, f"Freigabe-Link '{data.get('name')}'"
+                ),
+            }
+            if data.get("album_id") is not None:
+                overrides["album_id"] = album_map.get(str(data["album_id"]).lower())
+                if overrides["album_id"] is None:
+                    continue
+            new_link = self._build(ShareLink, data, overrides)
+            new_link.id = self._claim_uuid(ShareLink, "id", str(row["id"]))
+            self.db.add(new_link)
+            self.db.flush()
+            for file_row in self._t("share_link_file"):
+                if str(file_row.get("share_link_id")).lower() != str(row["id"]).lower():
+                    continue
+                old_file_id = str(file_row.get("file_id")).lower()
+                if old_file_id not in self._imported_file_public_ids:
+                    continue
+                self.db.add(ShareLinkFile(
+                    share_link_id=new_link.id, file_id=uuid.UUID(self._public_id_map.get(old_file_id, old_file_id))
+                ))
+        self.db.commit()
+
+    def _import_calendar_feeds(self, new_tenant_id: int) -> None:
+        """Kalender-Abos with their token (exported in plaintext, re-encrypted with this
+        installation's ADMIN_AUTH_SECRET) - subscribed calendar URLs keep working."""
+        for row in self._t("calendar_feed"):
+            data = self._resolve_row("calendar_feed", row)
+            if data.get("user_id") is None:
+                self._warn_missing_user("calendar_feed", row.get("user_id"))
+                continue
+            token = row.get("token")
+            if not token or self.db.scalar(
+                select(CalendarFeed.id).where(CalendarFeed.token_hash == calendar_feed_service.hash_token(token))
+            ) is not None:
+                if token:
+                    self.warnings.append(
+                        f"Kalender-Abo von '{row.get('user_id')}': Token bereits vergeben - neue Abo-URL erzeugt."
+                    )
+                token = calendar_feed_service.generate_token()
+            self.db.add(self._build(CalendarFeed, data, {
+                "tenant_id": new_tenant_id,
+                "token_hash": calendar_feed_service.hash_token(token),
+                "token_encrypted": encrypt_secret(token),
+            }))
+        self.db.commit()
+
+    def _import_tenant_settings(self, new_tenant_id: int) -> None:
+        for row in self._t("tenant_feature"):
+            if self.db.get(Feature, row.get("feature_code")) is None:
+                self.warnings.append(f"Feature '{row.get('feature_code')}' existiert auf dieser Installation nicht - übersprungen.")
+                continue
+            self.db.add(self._build(TenantFeature, row, {
+                "tenant_id": new_tenant_id, "enabled_by_admin_id": self._admin_id_for(row.get("enabled_by_admin_id")),
+            }))
+        for row in self._t("tenant_storage_package"):
+            if self.db.get(StoragePackage, row.get("package_code")) is None:
+                self.warnings.append(f"Speicherpaket '{row.get('package_code')}' existiert auf dieser Installation nicht - übersprungen.")
+                continue
+            self.db.add(self._build(TenantStoragePackage, row, {
+                "tenant_id": new_tenant_id, "added_by_admin_id": self._admin_id_for(row.get("added_by_admin_id")),
+            }))
+        self.db.commit()
+
+    def _import_tenant_trusts(self, new_tenant_id: int) -> None:
+        for row in self._t("tenant_trust"):
+            partner = self._lookup_tenant_by_public_id(row.get("partner_tenant_public_id"))
+            if partner is None:
+                self.warnings.append("Vertrauensbeziehung zu einem Mandanten, der auf dieser Installation fehlt - übersprungen.")
+                continue
+            tenant_trust_service.establish(self.db, new_tenant_id, partner.id)
+            self._linked_partner_names.add(partner.name)
+        self.db.commit()
+
+    def _import_album_shares(self, new_tenant_id: int, album_map: dict[str, uuid.UUID]) -> None:
+        """Album-Freigaben in both directions. Only restored when the partner tenant (matched by
+        public_id) exists on this installation - otherwise there is nobody to share with."""
+        received_album_ids: set[uuid.UUID] = set()
+        for row in self._t("photo_album_tenant_share"):
+            data = self._resolve_row("photo_album_tenant_share", row)
+            partner = self._lookup_tenant_by_public_id(data.get("partner_tenant_public_id"))
+            if partner is None:
+                self.warnings.append("Album-Freigabe mit einem Mandanten, der auf dieser Installation fehlt - übersprungen.")
+                continue
+            if data.get("direction") == "partner_album":
+                # Invited into the partner's album: that album must still exist and belong to it.
+                try:
+                    album_id = uuid.UUID(str(data.get("album_id")))
+                except ValueError:
+                    continue
+                album = self.db.get(PhotoAlbum, album_id)
+                if album is None or album.tenant_id != partner.id:
+                    self.warnings.append(f"Album-Freigabe von '{partner.name}': Album existiert nicht mehr - übersprungen.")
+                    continue
+                share_tenant_id = new_tenant_id
+                received_album_ids.add(album_id)
+            else:
+                album_id = album_map.get(str(data.get("album_id")).lower())
+                if album_id is None:
+                    continue
+                share_tenant_id = partner.id
+            self.db.execute(
+                pg_insert(PhotoAlbumTenantShare)
+                .values(
+                    album_id=album_id, tenant_id=share_tenant_id, status=data.get("status") or "pending",
+                    invited_by=data.get("invited_by"), responded_by=data.get("responded_by"),
+                    responded_at=coerce_value(PhotoAlbumTenantShare.__table__.c.responded_at, data.get("responded_at")),
+                )
+                .on_conflict_do_nothing()
+            )
+            self._linked_partner_names.add(partner.name)
+        # Our own photos inside a partner's album.
+        for row in self._t("partner_album_item"):
+            try:
+                album_id = uuid.UUID(str(row.get("album_id")))
+            except ValueError:
+                continue
+            old_file_id = str(row.get("file_id")).lower()
+            if album_id not in received_album_ids or old_file_id not in self._imported_file_public_ids:
+                continue
+            self.db.execute(
+                pg_insert(PhotoAlbumItem)
+                .values(
+                    album_id=album_id, file_id=uuid.UUID(self._public_id_map.get(old_file_id, old_file_id)),
+                    is_best=bool(row.get("is_best")), best_override=row.get("best_override"),
+                    share_pending=bool(row.get("share_pending")),
+                )
+                .on_conflict_do_nothing()
+            )
+        self.db.commit()
+
+    def _import_table_snapshots(
+        self, new_tenant_id: int, cycle_config_map: dict[int, int], *,
+        list_definition_map: dict[int, int], list_entry_map: dict[int, int],
+        participant_map: dict[int, int], event_map: dict[int, int],
+    ) -> None:
+        for row in self._t("table_snapshot"):
+            data = self._resolve_row("table_snapshot", row)
+            new_cycle_config_id = cycle_config_map.get(data.get("cycle_config_id"))
+            if new_cycle_config_id is None:
+                continue
+            self.db.add(self._build(TableSnapshot, data, {
+                "tenant_id": new_tenant_id,
+                "cycle_config_id": new_cycle_config_id,
+                "snapshot_json": remap_table_snapshot_rows(
+                    data.get("table_name"), data.get("snapshot_json"), new_tenant_id=new_tenant_id,
+                    list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+                    participant_map=participant_map, event_map=event_map, public_id_map=self._public_id_map,
+                ),
+            }))
+        self.db.commit()
+
 
     def _import_user_template_access(self, new_tenant_id: int, template_map: dict[int, int]) -> None:
         for row in self._t("user_template_access"):
@@ -978,7 +1450,7 @@ class TenantImportService:
             if data.get("user_id") is None:
                 self._warn_missing_user("user_template_access", row.get("user_id"))
                 continue
-            self.db.add(build_row(UserTemplateAccess, data, {"tenant_id": new_tenant_id, "template_id": new_template_id}))
+            self.db.add(self._build(UserTemplateAccess, data, {"tenant_id": new_tenant_id, "template_id": new_template_id}))
         self.db.commit()
 
     def _import_user_protocol_access(self, new_tenant_id: int, protocol_map: dict[int, int]) -> None:
@@ -990,7 +1462,7 @@ class TenantImportService:
             if data.get("user_id") is None:
                 self._warn_missing_user("user_protocol_access", row.get("user_id"))
                 continue
-            self.db.add(build_row(UserProtocolAccess, data, {"tenant_id": new_tenant_id, "protocol_id": new_protocol_id}))
+            self.db.add(self._build(UserProtocolAccess, data, {"tenant_id": new_tenant_id, "protocol_id": new_protocol_id}))
         self.db.commit()
 
     def _import_user_protocol_scrolls(self, protocol_map: dict[int, int]) -> None:
@@ -1004,7 +1476,7 @@ class TenantImportService:
                 continue
             # Composite primary key: build_row intentionally only drops a literal `id`,
             # so both remapped key columns are supplied explicitly here.
-            self.db.add(build_row(UserProtocolScroll, data, {"protocol_id": new_protocol_id}))
+            self.db.add(self._build(UserProtocolScroll, data, {"protocol_id": new_protocol_id}))
         self.db.commit()
 
 

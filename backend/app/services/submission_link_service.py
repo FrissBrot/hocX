@@ -47,8 +47,8 @@ def link_url(base_url: str, link: SubmissionLink) -> str:
 
 
 def create_default_link(db: Session, tenant_id: int, *, commit: bool = True) -> SubmissionLink:
-    """The link every new tenant starts with (also used when cloning/importing a tenant, which
-    must never carry over the source tenant's tokens). Commits unless commit=False (then only
+    """The link every new tenant starts with (also used by a clone/import that has no links of
+    its own to carry over - a clone never reuses the source's tokens). Commits unless commit=False (then only
     flushes, for callers inside a larger transaction)."""
     link = SubmissionLink(tenant_id=tenant_id, name=DEFAULT_LINK_NAME, token=generate_token(), is_default=True)
     db.add(link)

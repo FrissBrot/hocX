@@ -55,7 +55,10 @@ from app.services.tenant_transfer_common import (
     remap_document_template_config,
     remap_element_definition_config,
     remap_list_value,
+    remap_repeat_source_todo,
+    remap_responsible_assignments,
     remap_template_element_config,
+    replace_public_ids,
 )
 
 _ALWAYS_EXCLUDE = {"id", "public_id", "created_at", "updated_at"}
@@ -205,6 +208,13 @@ class TenantCloneService:
             db, list_definition_map=list_definition_map, participant_map=participant_map, event_map=event_map
         )
         finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
+        # Abgabe-Element references ("event-<public_id>"/"entry-<public_id>" in
+        # submission_upload_log.element_ref and protocol_todo.element_ref) - every cloned row
+        # gets a fresh public_id, so these strings have to be rewritten old -> new.
+        self._element_ref_public_ids = {
+            **self._public_id_map(db, Event, event_map),
+            **self._public_id_map(db, ListEntry, list_entry_map),
+        }
         element_definition_map = self._clone_element_definitions(
             db, source.id, new_tenant.id,
             participant_map=participant_map, event_map=event_map,
@@ -236,7 +246,10 @@ class TenantCloneService:
         protocol_map = self._clone_protocols(
             db, source.id, new_tenant.id, template_map=template_map, document_template_map=document_template_map, event_map=event_map
         )
-        protocol_element_map = self._clone_protocol_elements(db, protocol_map=protocol_map, template_element_map=template_element_map)
+        protocol_element_map = self._clone_protocol_elements(
+            db, protocol_map=protocol_map, template_element_map=template_element_map,
+            participant_map=participant_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+        )
         protocol_element_block_map = self._clone_protocol_element_blocks(
             db,
             protocol_element_map=protocol_element_map,
@@ -259,7 +272,7 @@ class TenantCloneService:
             finance_account_map=finance_account_map,
             finance_transaction_map=finance_transaction_map,
         )
-        self._clone_protocol_todos(
+        todo_map = self._clone_protocol_todos(
             db, source.id, new_tenant.id,
             protocol_element_block_map=protocol_element_block_map,
             participant_map=participant_map,
@@ -267,6 +280,7 @@ class TenantCloneService:
             protocol_map=protocol_map,
             submission_assignment_map=submission_assignment_map,
         )
+        self._remap_todo_repeat_sources(db, protocol_element_block_map=protocol_element_block_map, todo_map=todo_map)
         return new_tenant
 
     # ── tenant base + physical files ───────────────────────────────────────
@@ -717,8 +731,25 @@ class TenantCloneService:
             new_assignment_id = submission_assignment_map.get(row.assignment_id)
             if new_assignment_id is None:
                 continue
-            db.add(_copy_row(row, {"assignment_id": new_assignment_id}))
+            db.add(_copy_row(row, {
+                "assignment_id": new_assignment_id,
+                "element_ref": replace_public_ids(row.element_ref, self._element_ref_public_ids),
+            }))
         db.commit()
+
+    @staticmethod
+    def _public_id_map(db: Session, model: type, id_map: dict[int, int]) -> dict[str, str]:
+        """old public_id -> new public_id for every row cloned through `id_map`."""
+        if not id_map:
+            return {}
+        old_ids, new_ids = list(id_map.keys()), list(id_map.values())
+        old_public = dict(db.execute(select(model.id, model.public_id).where(model.id.in_(old_ids))).all())
+        new_public = dict(db.execute(select(model.id, model.public_id).where(model.id.in_(new_ids))).all())
+        return {
+            str(old_public[old_id]).lower(): str(new_public[new_id])
+            for old_id, new_id in id_map.items()
+            if old_id in old_public and new_id in new_public
+        }
 
     def _clone_stored_files(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> dict[int, int]:
         rows = db.scalars(select(StoredFile).where(StoredFile.tenant_id == source_tenant_id)).all()
@@ -783,7 +814,10 @@ class TenantCloneService:
         db.commit()
         return id_map
 
-    def _clone_protocol_elements(self, db: Session, *, protocol_map: dict[int, int], template_element_map: dict[int, int]) -> dict[int, int]:
+    def _clone_protocol_elements(
+        self, db: Session, *, protocol_map: dict[int, int], template_element_map: dict[int, int],
+        participant_map: dict[int, int], list_definition_map: dict[int, int], list_entry_map: dict[int, int],
+    ) -> dict[int, int]:
         if not protocol_map:
             return {}
         rows = db.scalars(select(ProtocolElement).where(ProtocolElement.protocol_id.in_(protocol_map.keys()))).all()
@@ -795,6 +829,10 @@ class TenantCloneService:
             new_row = _copy_row(row, {
                 "protocol_id": new_protocol_id,
                 "template_element_id": template_element_map.get(row.template_element_id) if row.template_element_id else None,
+                "responsible_assignments_snapshot": remap_responsible_assignments(
+                    row.responsible_assignments_snapshot, participant_map=participant_map,
+                    list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+                ),
             })
             db.add(new_row)
             db.flush()
@@ -935,8 +973,9 @@ class TenantCloneService:
         event_map: dict[int, int],
         protocol_map: dict[int, int],
         submission_assignment_map: dict[int, int],
-    ) -> None:
+    ) -> dict[int, int]:
         rows = db.scalars(select(ProtocolTodo).where(ProtocolTodo.tenant_id == source_tenant_id)).all()
+        id_map: dict[int, int] = {}
         for row in rows:
             new_row = _copy_row(row, {
                 "tenant_id": new_tenant_id,
@@ -945,6 +984,27 @@ class TenantCloneService:
                 "due_event_id": event_map.get(row.due_event_id) if row.due_event_id else None,
                 "closed_in_protocol_id": protocol_map.get(row.closed_in_protocol_id) if row.closed_in_protocol_id else None,
                 "submission_assignment_id": submission_assignment_map.get(row.submission_assignment_id) if row.submission_assignment_id else None,
+                "element_ref": replace_public_ids(row.element_ref, self._element_ref_public_ids),
             })
             db.add(new_row)
+            db.flush()
+            id_map[row.id] = new_row.id
+        db.commit()
+        return id_map
+
+    def _remap_todo_repeat_sources(
+        self, db: Session, *, protocol_element_block_map: dict[int, int], todo_map: dict[int, int]
+    ) -> None:
+        """Second pass for blocks bound to a todo ("Wiederholen aus Todo"): the todos are
+        cloned after the blocks, see remap_repeat_source_todo."""
+        new_block_ids = list(protocol_element_block_map.values())
+        for start in range(0, len(new_block_ids), 1000):
+            blocks = db.scalars(
+                select(ProtocolElementBlock).where(ProtocolElementBlock.id.in_(new_block_ids[start:start + 1000]))
+            ).all()
+            for block in blocks:
+                new_config = remap_repeat_source_todo(block.configuration_snapshot_json, todo_map)
+                if new_config is not None:
+                    block.configuration_snapshot_json = new_config
+                    db.add(block)
         db.commit()

@@ -8,6 +8,37 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Behoben
+
+- Mandanten-Export/-Import als vollständiges Backup: Fotoalben (inkl. Best-of-Auswahl)
+  und die Zyklus-Snapshots der Listen werden jetzt mitexportiert und wiederhergestellt.
+- Import übernimmt die öffentlichen IDs (`public_id`), solange sie auf der Zielinstanz frei
+  sind. URLs, Lesezeichen und per `public_id` gespeicherte Bezüge (Abgabe-Element von
+  Galerie-Fotos, Upload-Protokoll und Todos, Album-Einträge, Entwürfe offener Word-Importe)
+  bleiben so gültig; bei einer Kollision werden sie konsistent umgeschrieben.
+- Import verknüpfte einige Daten weiterhin mit dem Quell-Mandanten bzw. brach auf einer
+  frischen Instanz ab: Zyklus-Filter von Abgaben, Verantwortliche eines Protokolls,
+  „Wiederholen aus Termin/Todo“-Blöcke sowie die gelernten Zuordnungen und Analysen des
+  Word-Imports werden jetzt umgemappt. Verantwortliche und Wiederhol-Blöcke waren auch
+  beim Mandanten-Klon betroffen.
+- Ein auf der Zielinstanz unbekannter Preisplan bricht den Import nicht mehr ab, sondern
+  wird mit Warnung weggelassen.
+- Mandanten-Klon: Abgabe-Bezüge (`element_ref`) in Upload-Protokoll und Todos zeigen jetzt
+  auf die geklonten Termine/Listeneinträge statt auf die des Quell-Mandanten.
+
+### Geändert
+
+- Der Mandanten-Export ist jetzt ein vollständiges, mandantenspezifisches Backup: Er enthält
+  zusätzlich Abgabebox-Links (mit Abgabe-Zuordnung), öffentliche Freigabe-Links,
+  Kalender-Abos, gebuchte Features und Speicherpakete, Vertrauensbeziehungen und
+  Album-Freigaben mit Partner-Mandanten. Tokens bleiben beim Import erhalten, damit verteilte
+  URLs nach einem Restore weiter funktionieren; ist ein Token auf der Zielinstanz bereits
+  vergeben, wird mit Warnung ein neuer erzeugt. Beziehungen zu anderen Mandanten werden nur
+  wiederhergestellt, wenn der Partner auf der Zielinstanz existiert.
+- **Sicherheit:** Export-Archive enthalten damit Zugangsdaten (Passwort-Hashes, MFA-Secrets,
+  Link- und Abo-Tokens) und sind wie ein Datenbank-Dump aufzubewahren. Der Export-Dialog
+  weist darauf hin.
+
 ## [1.1.10] - 2026-10-10
 
 Feature-Release auf 1.1.9 mit einer vollständigen Mobile-Oberfläche, Kalender-Abos für
