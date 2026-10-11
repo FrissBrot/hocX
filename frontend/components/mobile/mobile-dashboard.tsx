@@ -17,12 +17,12 @@ import { MobileAvatar, MobileCard, MobileCardHeader, MobileEmpty, MobileSwitch }
 import { dateParts, daysBetween, isTodoDone, isTodoOverdue, todayIso } from "@/components/mobile/mobile-utils";
 import { effectiveEndDate } from "@/components/events/event-utils";
 import { Modal } from "@/components/ui/modal";
-import { useToast } from "@/contexts/toast-context";
-import { browserApiFetch } from "@/lib/api/client";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
 import { useCycleOptions } from "@/lib/hooks/use-cycle-options";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
-import type { AttendanceFineListItem, NextSessionAttendanceEntry, NextSessionInfo, TodoListItem } from "@/types/api";
+import type { AttendanceFineListItem, NextSessionInfo, TodoListItem } from "@/types/api";
+
+import { useSessionAttendance } from "@/components/dashboard/use-session-attendance";
 
 const DASHBOARD_TODO_LIMIT = 4;
 const DASHBOARD_EVENT_LIMIT = 3;
@@ -31,14 +31,14 @@ const DASHBOARD_FINE_LIMIT = 5;
 export function MobileDashboard({
   todos: initialTodos,
   fines,
-  nextSession,
+  upcomingSessions,
   canExcuse,
   canWrite,
   hasProtocols,
 }: {
   todos: TodoListItem[];
   fines: AttendanceFineListItem[];
-  nextSession: NextSessionInfo;
+  upcomingSessions: NextSessionInfo[];
   canExcuse: boolean;
   canWrite: boolean;
   hasProtocols: boolean;
@@ -48,7 +48,6 @@ export function MobileDashboard({
   const fineTypeLabel = fineTypeLabels(useTranslations("finances"));
   const locale = useLocale();
   const router = useRouter();
-  const showToast = useToast();
   const session = useMobileSession();
   const { tagConfig } = useTagConfig();
   const { options: cycleOptions } = useCycleOptions();
@@ -58,13 +57,14 @@ export function MobileDashboard({
   const participants = useParticipants(canWrite);
   const protocolsByEvent = useProtocolsByEvent(true);
   const toggleTodo = useTodoToggle(setTodos);
-  const [entries, setEntries] = useState<NextSessionAttendanceEntry[]>(nextSession.entries);
-  const [excuseOpen, setExcuseOpen] = useState(false);
+  const { sessions, busy, toggleExcused } = useSessionAttendance(upcomingSessions, canExcuse);
+  const [excuseSessionId, setExcuseSessionId] = useState<string | null>(null);
   const [openTodoId, setOpenTodoId] = useState<string | null>(null);
   const [openEventId, setOpenEventId] = useState<string | null>(null);
   const [editEventId, setEditEventId] = useState<string | null>(null);
 
-  const protocol = nextSession.protocol;
+  const protocol = sessions[0]?.protocol;
+  const excuseSession = sessions.find((item) => item.protocol?.id === excuseSessionId);
   const today = todayIso();
   const firstName = session?.user?.first_name || session?.user?.display_name || "";
   const tenantName = session?.current_tenant?.name ?? "";
@@ -88,25 +88,7 @@ export function MobileDashboard({
   const openFines = useMemo(() => fines.filter((fine) => fine.status === "pending"), [fines]);
   const fineTotal = openFines.reduce((sum, fine) => sum + fine.amount, 0);
   const finePeople = new Set(openFines.map((fine) => fine.participant_id ?? fine.participant_name_snapshot)).size;
-  const excused = entries.filter((entry) => entry.status === "excused");
   const tagSuggestions = useMemo(() => [...new Set(todos.flatMap((todo) => todo.tags ?? []))], [todos]);
-
-  async function toggleExcused(entry: NextSessionAttendanceEntry) {
-    if (!canExcuse || !protocol) return;
-    const nextExcused = entry.status !== "excused";
-    const setStatus = (status: string) =>
-      setEntries((current) => current.map((item) => (item.participant_id === entry.participant_id ? { ...item, status } : item)));
-    setStatus(nextExcused ? "excused" : "absent");
-    try {
-      await browserApiFetch(`/api/protocols/${protocol.id}/attendance/${entry.participant_id}/excuse`, {
-        method: "POST",
-        body: JSON.stringify({ excused: nextExcused }),
-      });
-    } catch (error) {
-      setStatus(entry.status);
-      showToast(error instanceof Error ? error.message : tDashboard("statusChangeFailed"), "error");
-    }
-  }
 
   const openTodo = todos.find((todo) => todo.id === openTodoId) ?? null;
   const openEvent = events.find((event) => event.id === openEventId) ?? null;
@@ -136,7 +118,7 @@ export function MobileDashboard({
       ) : (
         <section className="mobile-hero">
           <div className="mobile-hero-top">
-            <span className="mobile-hero-eyebrow">{tDashboard("nextSessionEyebrow")}</span>
+            {protocol ? <span className="mobile-hero-eyebrow">{tDashboard("nextSessionEyebrow")}</span> : null}
             {protocol?.protocol_date && daysBetween(today, protocol.protocol_date) >= 0 ? (
               <span className="mobile-hero-pill">
                 {daysBetween(today, protocol.protocol_date) === 0
@@ -167,27 +149,37 @@ export function MobileDashboard({
         </section>
       )}
 
-      {protocol && entries.length > 0 ? (
-        <button type="button" className="mobile-card mobile-excuse-card" onClick={() => setExcuseOpen(true)}>
-          <span className="mobile-excuse-card-text">
-            <span className="mobile-eyebrow">{tDashboard("excuseParticipantsEyebrow")}</span>
-            <span className="mobile-excuse-card-summary">
-              {excused.length > 0
-                ? t("dashboard.excuseSummary", { excused: excused.length, expected: entries.length - excused.length })
-                : t("dashboard.allExpected", { count: entries.length })}
+      {sessions.map((item) => {
+        const sessionProtocol = item.protocol;
+        if (!sessionProtocol) return null;
+        const entries = item.entries;
+        const excused = entries.filter((entry) => entry.status === "excused");
+        return (
+          <button key={sessionProtocol.id} type="button" className="mobile-card mobile-excuse-card" onClick={() => setExcuseSessionId(sessionProtocol.id)}>
+            <span className="mobile-excuse-card-text">
+              <span className="mobile-eyebrow">{tDashboard("excuseParticipantsEyebrow")}</span>
+              <span className="mobile-excuse-card-summary">{sessionProtocol.title || sessionProtocol.protocol_number}</span>
+              <span className="mobile-muted-sm">{sessionProtocol.protocol_date ? dateParts.long(sessionProtocol.protocol_date, locale) : ""} · {sessionProtocol.protocol_number}</span>
+              <span className="mobile-excuse-card-summary">
+                {entries.length === 0
+                  ? tDashboard("noAttendanceList")
+                  : excused.length > 0
+                  ? t("dashboard.excuseSummary", { excused: excused.length, expected: entries.length - excused.length })
+                  : t("dashboard.allExpected", { count: entries.length })}
+              </span>
+              {entries.length > 0 ? <span className="mobile-muted-sm mobile-ellipsis">
+                {excused.length > 0 ? excused.map((entry) => entry.participant_name).join(", ") : t("dashboard.nobodyExcused")}
+              </span> : null}
             </span>
-            <span className="mobile-muted-sm mobile-ellipsis">
-              {excused.length > 0 ? excused.map((entry) => entry.participant_name).join(", ") : t("dashboard.nobodyExcused")}
+            <span className="mobile-avatar-stack">
+              {excused.slice(0, 3).map((entry) => (
+                <MobileAvatar key={entry.participant_id} name={entry.participant_name} size="sm" />
+              ))}
             </span>
-          </span>
-          <span className="mobile-avatar-stack">
-            {excused.slice(0, 3).map((entry) => (
-              <MobileAvatar key={entry.participant_id} name={entry.participant_name} size="sm" />
-            ))}
-          </span>
-          <MobileIcon name="chevronRight" size={16} strokeWidth={2.2} className="mobile-muted" />
-        </button>
-      ) : null}
+            <MobileIcon name="chevronRight" size={16} strokeWidth={2.2} className="mobile-muted" />
+          </button>
+        );
+      })}
 
       <MobileCard className="mobile-list-card">
         <MobileCardHeader
@@ -253,17 +245,18 @@ export function MobileDashboard({
 
       <MobileStatsCard />
 
-      {excuseOpen && protocol ? (
+      {excuseSession?.protocol ? (
         <Modal
           open
           size="sheet"
           title={tDashboard("excuseParticipantsEyebrow")}
-          description={[protocol.title || protocol.protocol_number, protocol.protocol_date ? dateParts.dayMonth(protocol.protocol_date, locale) : null].filter(Boolean).join(" · ")}
-          onClose={() => setExcuseOpen(false)}
+          description={`${excuseSession.protocol.title || excuseSession.protocol.protocol_number} · ${excuseSession.protocol.protocol_date ? dateParts.long(excuseSession.protocol.protocol_date, locale) : ""} · ${excuseSession.protocol.protocol_number}`}
+          onClose={() => setExcuseSessionId(null)}
           className="mobile-sheet"
         >
           <div className="mobile-sheet-list">
-            {entries.map((entry) => {
+            {excuseSession.entries.length === 0 ? <p className="mobile-card-empty">{tDashboard("noAttendanceList")}</p> : null}
+            {excuseSession.entries.map((entry) => {
               const isExcused = entry.status === "excused";
               return (
                 <button
@@ -271,8 +264,8 @@ export function MobileDashboard({
                   type="button"
                   className="mobile-excuse-row"
                   aria-pressed={isExcused}
-                  disabled={!canExcuse}
-                  onClick={() => void toggleExcused(entry)}
+                  disabled={!canExcuse || busy[`${excuseSession.protocol!.id}:${entry.participant_id}`]}
+                  onClick={() => void toggleExcused(excuseSession, entry)}
                 >
                   <MobileAvatar name={entry.participant_name} size="md" />
                   <span className="mobile-excuse-row-name">{entry.participant_name}</span>

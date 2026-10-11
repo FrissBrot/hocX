@@ -193,6 +193,15 @@ def get_next_session(db: Session = Depends(get_db), user: CurrentUser = Depends(
     return service.get_next_session_attendance(db, user.current_tenant_id)
 
 
+@router.get("/protocols/upcoming-sessions", response_model=list[NextSessionRead])
+def get_upcoming_sessions(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    require_reader(user)
+    protocol_ids = None
+    if access_service._is_restricted_reader(db, user):
+        protocol_ids = access_service.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
+    return service.get_upcoming_sessions_attendance(db, user.current_tenant_id, protocol_ids=protocol_ids)
+
+
 @router.post("/protocols/{protocol_id}/attendance/{participant_id}/excuse", response_model=dict[str, str])
 def excuse_participant(
     protocol_id: uuid.UUID,

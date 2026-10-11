@@ -1,20 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { EmptyState } from "@/components/ui/empty-state";
-import { browserApiFetch } from "@/lib/api/client";
-import { useToast } from "@/contexts/toast-context";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
 import { formatDate } from "@/lib/utils/format";
-import { AttendanceFineListItem, NextSessionAttendanceEntry, NextSessionInfo, TodoListItem } from "@/types/api";
+import { AttendanceFineListItem, NextSessionInfo, TodoListItem } from "@/types/api";
+
+import { useSessionAttendance } from "./use-session-attendance";
 
 type Props = {
   todos: TodoListItem[];
   fines: AttendanceFineListItem[];
-  nextSession: NextSessionInfo;
+  upcomingSessions: NextSessionInfo[];
   canExcuse: boolean;
   canWrite: boolean;
   hasProtocols: boolean;
@@ -42,13 +42,11 @@ function sessionCountdownLabel(dateStr: string, t: TFunc): string {
   return "";
 }
 
-export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, hasProtocols, canConfigure }: Props) {
+export function DashboardView({ todos, fines, upcomingSessions, canExcuse, canWrite, hasProtocols, canConfigure }: Props) {
   const t = useTranslations("dashboard");
   const router = useRouter();
-  const showToast = useToast();
   const fineTypeLabel = fineTypeLabels(useTranslations("finances"));
-  const [entries, setEntries] = useState<NextSessionAttendanceEntry[]>(nextSession.entries);
-  const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const { sessions, busy, toggleExcused } = useSessionAttendance(upcomingSessions, canExcuse);
 
   const overdueTodos = useMemo(
     () =>
@@ -68,34 +66,8 @@ export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, 
     [fines]
   );
 
-  const protocol = nextSession.protocol;
+  const protocol = sessions[0]?.protocol;
   const countdown = protocol ? sessionCountdownLabel(protocol.protocol_date ?? "", t) : "";
-
-  async function toggleExcused(entry: NextSessionAttendanceEntry) {
-    if (!canExcuse || !protocol || busy[entry.participant_id]) return;
-    const nextExcused = entry.status !== "excused";
-    const previousStatus = entry.status;
-    setBusy((b) => ({ ...b, [entry.participant_id]: true }));
-    setEntries((current) =>
-      current.map((e) => (e.participant_id === entry.participant_id ? { ...e, status: nextExcused ? "excused" : "absent" } : e))
-    );
-    try {
-      await browserApiFetch(`/api/protocols/${protocol.id}/attendance/${entry.participant_id}/excuse`, {
-        method: "POST",
-        body: JSON.stringify({ excused: nextExcused }),
-      });
-    } catch (err: unknown) {
-      setEntries((current) =>
-        current.map((e) => (e.participant_id === entry.participant_id ? { ...e, status: previousStatus } : e))
-      );
-      // The optimistic status flip was already reverted above - without this, that revert
-      // was the only visible feedback, so a real failure just looked like the click didn't
-      // register (audit F8, 2026-08-16).
-      showToast(err instanceof Error ? err.message : t("statusChangeFailed"), "error");
-    } finally {
-      setBusy((b) => ({ ...b, [entry.participant_id]: false }));
-    }
-  }
 
   if (!hasProtocols && !protocol) {
     return (
@@ -134,7 +106,7 @@ export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, 
   return (
     <div className="dashboard-grid">
       <section className="panel dashboard-hero">
-        <div className="eyebrow">{t("nextSessionEyebrow")}</div>
+        {protocol ? <div className="eyebrow">{t("nextSessionEyebrow")}</div> : null}
         {protocol ? (
           <>
             <h1 className="dashboard-hero-title">{protocol.title || protocol.protocol_number}</h1>
@@ -156,35 +128,40 @@ export function DashboardView({ todos, fines, nextSession, canExcuse, canWrite, 
         )}
       </section>
 
-      <section className="card dashboard-tile dashboard-excuse-card">
-        <div className="dashboard-list-header">
-          <div className="eyebrow">{t("excuseParticipantsEyebrow")}</div>
-        </div>
-        {!protocol ? (
-          <p className="muted">{t("noSessionForExcuse")}</p>
-        ) : entries.length === 0 ? (
-          <p className="muted">{t("noAttendanceList")}</p>
-        ) : (
-          <div className="excuse-chip-grid">
-            {entries.map((entry) => {
-              const excused = entry.status === "excused";
-              return (
-                <button
-                  key={entry.participant_id}
-                  type="button"
-                  className={`excuse-chip${excused ? " excuse-chip-excused" : ""}`}
-                  disabled={!canExcuse || busy[entry.participant_id]}
-                  title={!canExcuse ? "" : excused ? t("unexcuseTitle") : t("excuseTitle")}
-                  onClick={() => void toggleExcused(entry)}
-                >
-                  <span className="excuse-chip-status-icon">{excused ? "✓" : "○"}</span>
-                  <span className="excuse-chip-name">{entry.participant_name}</span>
-                </button>
-              );
-            })}
+      {sessions.map((session) => session.protocol ? (
+        <section key={session.protocol.id} className="card dashboard-tile dashboard-excuse-card">
+          <div className="dashboard-list-header">
+            <div className="eyebrow">{t("excuseParticipantsEyebrow")}</div>
           </div>
-        )}
-      </section>
+          <div className="grid">
+            <strong>{session.protocol.title || session.protocol.protocol_number}</strong>
+            <span className="muted">{formatDate(session.protocol.protocol_date)} · {session.protocol.protocol_number}</span>
+            {session.entries.length === 0 ? (
+              <p className="muted">{t("noAttendanceList")}</p>
+            ) : (
+              <div className="excuse-chip-grid">
+                {session.entries.map((entry) => {
+                  const excused = entry.status === "excused";
+                  return (
+                    <button
+                      key={entry.participant_id}
+                      type="button"
+                      className={`excuse-chip${excused ? " excuse-chip-excused" : ""}`}
+                      aria-pressed={excused}
+                      disabled={!canExcuse || busy[`${session.protocol!.id}:${entry.participant_id}`]}
+                      title={!canExcuse ? "" : excused ? t("unexcuseTitle") : t("excuseTitle")}
+                      onClick={() => void toggleExcused(session, entry)}
+                    >
+                      <span className="excuse-chip-status-icon">{excused ? "✓" : "○"}</span>
+                      <span className="excuse-chip-name">{entry.participant_name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      ) : null)}
 
       <section className="card dashboard-tile">
         <div className="dashboard-list-header">

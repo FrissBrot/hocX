@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 import uuid
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -48,6 +52,17 @@ class ProtocolRepository:
             .limit(1)
         )
         return db.scalar(statement)
+
+    def upcoming_open(self, db: Session, *, tenant_id: int, protocol_ids: list[int] | None = None) -> list[Protocol]:
+        """Offene Sitzungen ab heute, unabhängig von Vorlage und Zyklus."""
+        statement = select(Protocol).where(
+            Protocol.tenant_id == tenant_id,
+            Protocol.status.in_(("geplant", "vorbereitet")),
+            Protocol.protocol_date >= datetime.now(ZoneInfo("Europe/Zurich")).date(),
+        )
+        if protocol_ids is not None:
+            statement = statement.where(Protocol.id.in_(protocol_ids))
+        return list(db.scalars(statement.order_by(Protocol.protocol_date.asc(), Protocol.id.asc())))
 
     def next_template_sequence(self, db: Session, *, tenant_id: int, template_id: int) -> int:
         statement = select(func.count(Protocol.id)).where(

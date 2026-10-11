@@ -87,8 +87,10 @@ def test_refresh_uses_protocol_date_instead_of_today(db):
     assert {e["participant_id"] for e in attendance.configuration_snapshot_json["attendance_entries"]} == {joiner.id, remaining.id}
 
 
-def test_dashboard_attendance_refreshes_memberships(db):
+def test_dashboard_attendance_refreshes_memberships(db, monkeypatch):
     protocol, attendance, changes, leaver, joiner, remaining = _setup(db)
+    from app.repositories.protocol_repository import ProtocolRepository
+    monkeypatch.setattr(ProtocolRepository, "upcoming_open", lambda *args, **kwargs: [protocol])
     result = ProtocolService().get_next_session_attendance(db, protocol.tenant_id)
     assert {entry.participant_id for entry in result.entries} == {joiner.public_id, remaining.public_id}
 

@@ -162,12 +162,18 @@ class ProtocolService:
         return db.scalar(select(ElementType.id).where(ElementType.code == "attendance"))
 
     def get_next_session_attendance(self, db: Session, tenant_id: int) -> NextSessionRead:
-        """The tenant's next open protocol plus its attendance list, if it has one - used by
-        the dashboard's quick-excuse tile."""
-        protocol = self.repository.next_open(db, tenant_id=tenant_id)
-        if protocol is None:
-            return NextSessionRead(protocol=None, attendance_block_id=None, entries=[])
+        protocols = self.repository.upcoming_open(db, tenant_id=tenant_id)
+        return self._session_attendance(db, protocols[0]) if protocols else NextSessionRead()
 
+    def get_upcoming_sessions_attendance(
+        self, db: Session, tenant_id: int, *, protocol_ids: list[int] | None = None,
+    ) -> list[NextSessionRead]:
+        return [
+            self._session_attendance(db, protocol)
+            for protocol in self.repository.upcoming_open(db, tenant_id=tenant_id, protocol_ids=protocol_ids)
+        ]
+
+    def _session_attendance(self, db: Session, protocol: Protocol) -> NextSessionRead:
         self.refresh_membership_blocks(db, protocol.id)
         attendance_type_id = self._attendance_type_id(db)
         block = None

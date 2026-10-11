@@ -13,14 +13,13 @@ export default async function HomePage() {
   const t = await getTranslations("nav");
   const canExcuse = ["admin", "writer"].includes(session.current_role ?? "");
 
-  const [todos, fines, nextSession, protocols] = await Promise.all([
+  const [todos, fines, upcomingSessions, protocols] = await Promise.all([
     backendFetchWithSession<TodoListItem[]>("/api/todos"),
     backendFetchWithSession<AttendanceFineListItem[]>("/api/fines"),
-    backendFetchWithSession<NextSessionInfo>("/api/protocols/next-session"),
+    backendFetchWithSession<NextSessionInfo[]>("/api/protocols/upcoming-sessions"),
     backendFetchWithSession<ProtocolSummary[]>("/api/protocols?limit=1"),
   ]);
 
-  const resolvedNextSession = nextSession ?? { protocol: null, attendance_block_id: null, entries: [] };
   const hasProtocols = (protocols ?? []).length > 0;
 
   return (
@@ -30,7 +29,7 @@ export default async function HomePage() {
           <MobileDashboard
             todos={todos ?? []}
             fines={fines ?? []}
-            nextSession={resolvedNextSession}
+            upcomingSessions={upcomingSessions ?? []}
             canExcuse={canExcuse}
             canWrite={canExcuse}
             hasProtocols={hasProtocols}
@@ -42,7 +41,7 @@ export default async function HomePage() {
             <DashboardView
               todos={todos ?? []}
               fines={fines ?? []}
-              nextSession={resolvedNextSession}
+              upcomingSessions={upcomingSessions ?? []}
               canExcuse={canExcuse}
               canWrite={canExcuse}
               canConfigure={session.current_role === "admin"}
