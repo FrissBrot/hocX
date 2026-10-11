@@ -141,8 +141,10 @@ list_entry_table = Table(
     Column("column_two_value_json", JSONB),
 )
 
+# Seit 0108 sind Teilnehmer Zeilen in app_user; hocx_abgabebox darf dort nur diese Spalten
+# lesen (Grant in 0109_abgabebox_participant_grant.py), keine Login-/Kontodaten.
 participant_table = Table(
-    "participant",
+    "app_user",
     metadata,
     Column("id", BigInteger, primary_key=True),
     Column("public_id", UUID(as_uuid=True)),

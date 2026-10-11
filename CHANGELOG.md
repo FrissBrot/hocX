@@ -8,85 +8,39 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
-### Hinzugefügt
-
-- Platform-Admin: neue Seite „Jobs“ (`/admin/jobs`) mit allen periodischen Hintergrundjobs –
-  Virenprüfung, Bildanalyse, Uploads, Aufräum- und Wartungsjobs – samt letztem Lauf, Dauer,
-  Status (OK, läuft, fehlgeschlagen, überfällig, nie gelaufen), letzter Fehlermeldung und
-  Verlauf. Der Bildanalyse-Worker wird über ein Lebenszeichen überwacht. Jobs, die sich melden,
-  aber nicht registriert sind (z. B. künftige Host-Cronjobs), erscheinen unter „Weitere“.
-- Platform-Admin: neue Seite „Systemstatus“ (`/admin/system`) mit allen Containern (Status,
-  Healthcheck, Neustarts, CPU/RAM, Version) und den Diensten, von denen hocX abhängt (Datenbank,
-  Redis, Virenscanner inkl. Alter der Signaturen, Speicherplatz, Fehlerrate, Rückstand der
-  Virenprüfung, Bildanalyse-Warteschlange), offenen Problemen und Ereignisverlauf. Container-Daten
-  kommen über einen neuen, nur lesenden `docker-socket-proxy` in einem internen Netz.
-- Platform-Admin: Benachrichtigungen per ntfy (`/admin/notifications`), konfigurierbar mit
-  Server, Topic, Token, Erinnerungsintervall und Testnachricht. Gemeldet werden neue (nach 90 s
-  Karenzzeit), verschärfte, weiterhin offene und behobene Probleme sowie Container-Neustarts.
-- Statusendpunkt `/api/system-status/summary` (per Token) für externe Überwachung, z. B. mit
-  Uptime Kuma: HTTP 503 bei kritischen Problemen oder veraltetem Systemstatus.
-- `scripts/run_job.sh`: Wrapper für Host-Cronjobs, meldet Läufe an die Job-Übersicht
-  (Backup und Speicher-Aufräumen sind dort bereits registriert, siehe RUNBOOK Abschnitt 10/12).
-
-### Behoben
-
-- Der Quarantäne-Aufräumjob der Abgabebox und das Aufräumen alter Exporte im Backend teilten
-  sich denselben Datenbank-Lock und haben sich dadurch gegenseitig Durchläufe weggenommen.
-- Ein Hintergrund-Loop konnte dauerhaft und ohne jede Spur stehen bleiben, wenn schon das
-  Holen seiner Datenbankverbindung fehlschlug (z. B. Pool-Timeout). Solche Fehler beenden jetzt
-  nur den einzelnen Durchlauf. Ausserdem starten die Loops zeitversetzt, statt beim Hochfahren
-  alle gleichzeitig um den Connection-Pool zu konkurrieren.
-
-- Mandanten-Export/-Import als vollständiges Backup: Fotoalben (inkl. Best-of-Auswahl)
-  und die Zyklus-Snapshots der Listen werden jetzt mitexportiert und wiederhergestellt.
-- Import übernimmt die öffentlichen IDs (`public_id`), solange sie auf der Zielinstanz frei
-  sind. URLs, Lesezeichen und per `public_id` gespeicherte Bezüge (Abgabe-Element von
-  Galerie-Fotos, Upload-Protokoll und Todos, Album-Einträge, Entwürfe offener Word-Importe)
-  bleiben so gültig; bei einer Kollision werden sie konsistent umgeschrieben.
-- Import verknüpfte einige Daten weiterhin mit dem Quell-Mandanten bzw. brach auf einer
-  frischen Instanz ab: Zyklus-Filter von Abgaben, Verantwortliche eines Protokolls,
-  „Wiederholen aus Termin/Todo“-Blöcke sowie die gelernten Zuordnungen und Analysen des
-  Word-Imports werden jetzt umgemappt. Verantwortliche und Wiederhol-Blöcke waren auch
-  beim Mandanten-Klon betroffen.
-- Ein auf der Zielinstanz unbekannter Preisplan bricht den Import nicht mehr ab, sondern
-  wird mit Warnung weggelassen.
-- Mandanten-Klon: Abgabe-Bezüge (`element_ref`) in Upload-Protokoll und Todos zeigen jetzt
-  auf die geklonten Termine/Listeneinträge statt auf die des Quell-Mandanten.
-
-### Geändert
-
-- Teilnehmer und Benutzer verwenden einen gemeinsamen Datensatz. Die Oberfläche unterscheidet
-  „Teilnehmer“ und „Teilnehmer mit Login“. E-Mail und Passwort sind nur für einen Login nötig;
-  Kontaktadressen ohne Login dürfen mehrfach vorkommen. Nur Administratoren schalten Logins frei.
-- Migration `0108` übernimmt Teilnehmer-Verweise und entfernt die separate Teilnehmer-Tabelle,
-  Schattenkonten und Merge-Funktionen. Vor der Migration ein Datenbank-Backup erstellen;
-  ein Rückweg benötigt dieses Backup. Authentifizierungs-IDs bleiben erhalten.
-- Exportformat 4 referenziert Teilnehmer über UUIDs statt E-Mail-Adressen. Alte Archive
-  (Format 2/3) bleiben importierbar. Geklonte Teilnehmer erhalten keinen aktiven Login.
-
-- Der Mandanten-Export ist jetzt ein vollständiges, mandantenspezifisches Backup: Er enthält
-  zusätzlich Abgabebox-Links (mit Abgabe-Zuordnung), öffentliche Freigabe-Links,
-  Kalender-Abos, gebuchte Features und Speicherpakete, Vertrauensbeziehungen und
-  Album-Freigaben mit Partner-Mandanten. Tokens bleiben beim Import erhalten, damit verteilte
-  URLs nach einem Restore weiter funktionieren; ist ein Token auf der Zielinstanz bereits
-  vergeben, wird mit Warnung ein neuer erzeugt. Beziehungen zu anderen Mandanten werden nur
-  wiederhergestellt, wenn der Partner auf der Zielinstanz existiert.
-- **Sicherheit:** Export-Archive enthalten damit Zugangsdaten (Passwort-Hashes, MFA-Secrets,
-  Link- und Abo-Tokens) und sind wie ein Datenbank-Dump aufzubewahren. Der Export-Dialog
-  weist darauf hin.
-
-## [1.1.10] - 2026-10-10
+## [1.1.10] - 2026-10-11
 
 Feature-Release auf 1.1.9 mit einer vollständigen Mobile-Oberfläche, Kalender-Abos für
-Termine und Todos, einer öffentlichen Landing Page mit Preisen aus dem Katalog sowie
-Korrekturen an Freigabeseite und Standalone-Todos. Enthält die Migrationen `0102` bis
-`0104`; sie laufen beim Deploy automatisch. Keine neuen Pflicht-Umgebungsvariablen.
+Termine und Todos, einer öffentlichen Landing Page mit Preisen aus dem Katalog,
+Systemstatus, Job-Übersicht und ntfy-Benachrichtigungen im Platform-Admin, einer
+gemeinsamen Identität für Teilnehmer und Benutzer sowie einem vollständigen
+Mandanten-Backup per Export/Import. Enthält die Migrationen `0102` bis `0109`; sie laufen
+beim Deploy automatisch. **Migration `0108` ist nicht umkehrbar** (siehe unten). Keine
+neuen Pflicht-Umgebungsvariablen.
 
 ### Update von 1.1.9 auf 1.1.10
 
 Nach Veröffentlichung der Release-Images `HOCX_VERSION` in `.env` auf `v1.1.10` setzen,
 dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` ausführen.
 
+- **Backup vor dem Update:** Migration `0108` führt Teilnehmer und Benutzerkonten zu einer
+  Identität zusammen und entfernt die Tabelle `participant`. Ein Downgrade ist nicht
+  möglich; zurück geht es nur mit dem Datenbank-Backup von vor dem Update. `deploy.sh`
+  legt dieses Backup automatisch unter `backups/*-pre-v1.1.10.sql.gz` an – vor dem
+  Weitermachen prüfen, dass die Datei existiert und nicht leer ist.
+- Migration `0108` übernimmt alle Teilnehmer-Verweise (Vorlagen, Todos, Bussen,
+  Termin-Rollen, Anwesenheit, Listen, Verantwortliche, Word-Import-Entwürfe) auf die
+  bestehende Benutzer-ID. Unverknüpfte Teilnehmer erhalten ein Konto ohne Login,
+  Schattenkonten verlieren ihre Platzhalter-E-Mail und ihr Passwort. Login-E-Mails werden
+  kleingeschrieben und müssen danach eindeutig sein: Gibt es zwei Konten, deren E-Mail sich
+  nur in Gross-/Kleinschreibung unterscheidet, bricht die Migration ab – vorher prüfen mit
+  `SELECT lower(trim(email)), count(*) FROM app_user GROUP BY 1 HAVING count(*) > 1;`
+- Migration `0109` gibt dem Abgabebox-Dienst Lesezugriff auf die Namensspalten von
+  `app_user` (ohne E-Mail und Kontodaten), damit Abgaben mit Teilnehmer-Elementen nach
+  `0108` weiter funktionieren.
+- Migrationen `0105` und `0107` legen die Tabellen für Job-Übersicht, Systemstatus und
+  Benachrichtigungen an, `0106` ergänzt `storage_package.is_bookable` (bestehende Pakete
+  bleiben buchbar).
 - Migration `0102` legt die Tabelle `calendar_feed` an (Kalender-Abos). Tokens werden
   nur als SHA-256-Hash und Fernet-verschlüsselt mit `ADMIN_AUTH_SECRET` gespeichert.
 - Migration `0103` ergänzt `plan.is_featured` und markiert den Plan `standard` als
@@ -98,6 +52,16 @@ dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` aus
   Leer bleibt die Website deaktiviert, und Traefik fordert kein Zertifikat für sie an.
   Für eine eigene Website-Domain muss deren DNS auf den Server zeigen, damit Traefik ein
   Zertifikat beziehen kann.
+- Neuer Container `docker-socket-proxy` (nur lesender Zugriff auf die Docker-API, im
+  internen Netz `docker-api`, nur für das Backend erreichbar). Er bindet
+  `/var/run/docker.sock` read-only ein; `deploy.sh` startet ihn automatisch mit.
+- Der Virenscanner sucht jetzt alle zwei Stunden nach neuen Signaturen
+  (`FRESHCLAM_CHECKS=12` in den Compose-Dateien), keine Aktion nötig.
+- Optional nach dem Update: ntfy unter `/admin/notifications` einrichten, Host-Cronjobs
+  (Backup, Speicher-Aufräumen) über `scripts/run_job.sh` starten und den Statusendpunkt in
+  Uptime Kuma eintragen (RUNBOOK Abschnitt 10 und 12).
+- Exportformat 4: Alte Archive (Format 2/3) bleiben importierbar. Archive ab 1.1.10
+  enthalten Zugangsdaten und sind wie ein Datenbank-Dump aufzubewahren.
 - Git-Tag und GitHub-Release entstehen erst nach erfolgreicher Promotion aller Images
   durch den Release-Workflow. Der Push dieser Vorbereitung veröffentlicht noch kein
   Release.
@@ -120,6 +84,26 @@ dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` aus
   Plan als «Beliebteste Wahl» markieren, im Mandanten-Dialog ein Verein als Kunde unter
   «Im Einsatz bei» freigeben. Indexierung per `robots.txt` nur auf der Website-Domain.
 - Toasts können eine Aktion tragen (z. B. «Rückgängig»).
+- Platform-Admin: neue Seite „Jobs“ (`/admin/jobs`) mit allen periodischen Hintergrundjobs –
+  Virenprüfung, Bildanalyse, Uploads, Aufräum- und Wartungsjobs – samt letztem Lauf, Dauer,
+  Status (OK, läuft, fehlgeschlagen, überfällig, nie gelaufen), letzter Fehlermeldung und
+  Verlauf. Der Bildanalyse-Worker wird über ein Lebenszeichen überwacht. Jobs, die sich melden,
+  aber nicht registriert sind (z. B. künftige Host-Cronjobs), erscheinen unter „Weitere“.
+- Platform-Admin: neue Seite „Systemstatus“ (`/admin/system`) mit allen Containern (Status,
+  Healthcheck, Neustarts, CPU/RAM, Version) und den Diensten, von denen hocX abhängt (Datenbank,
+  Redis, Virenscanner inkl. Alter der Signaturen, Speicherplatz, Fehlerrate, Rückstand der
+  Virenprüfung, Bildanalyse-Warteschlange), offenen Problemen und Ereignisverlauf. Container-Daten
+  kommen über einen neuen, nur lesenden `docker-socket-proxy` in einem internen Netz.
+- Platform-Admin: Benachrichtigungen per ntfy (`/admin/notifications`), konfigurierbar mit
+  Server, Topic, Token, Erinnerungsintervall und Testnachricht. Gemeldet werden neue (nach 90 s
+  Karenzzeit), verschärfte, weiterhin offene und behobene Probleme sowie Container-Neustarts.
+- Statusendpunkt `/api/system-status/summary` (per Token) für externe Überwachung, z. B. mit
+  Uptime Kuma: HTTP 503 bei kritischen Problemen oder veraltetem Systemstatus.
+- `scripts/run_job.sh`: Wrapper für Host-Cronjobs, meldet Läufe an die Job-Übersicht
+  (Backup und Speicher-Aufräumen sind dort bereits registriert, siehe RUNBOOK Abschnitt 10/12).
+- Todos: Fälligkeit per Schnellauswahl „Ende der Woche“, „Ende des Monats“ und „In zwei
+  Wochen“ sowie mit frei wählbarem Datum – im Fälligkeitsmenü am Desktop und in der
+  Mobile-Ansicht.
 
 ### Geändert
 
@@ -129,6 +113,24 @@ dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` aus
   Karte mit Schalter.
 - Abgabebox mobil: kein iOS-Zoom bei der Sprachauswahl, grössere Touch-Ziele, «Datei
   auswählen» statt Drag-and-drop-Hinweis auf Touch-Geräten, lange Titel brechen um.
+- Teilnehmer und Benutzer verwenden einen gemeinsamen Datensatz. Die Oberfläche unterscheidet
+  „Teilnehmer“ und „Teilnehmer mit Login“. E-Mail und Passwort sind nur für einen Login nötig;
+  Kontaktadressen ohne Login dürfen mehrfach vorkommen. Nur Administratoren schalten Logins frei.
+  Schattenkonten und Merge-Funktionen entfallen; Authentifizierungs-IDs bleiben erhalten.
+- Exportformat 4 referenziert Teilnehmer über UUIDs statt E-Mail-Adressen. Alte Archive
+  (Format 2/3) bleiben importierbar. Geklonte Teilnehmer erhalten keinen aktiven Login.
+- Der Mandanten-Export ist jetzt ein vollständiges, mandantenspezifisches Backup: Er enthält
+  zusätzlich Abgabebox-Links (mit Abgabe-Zuordnung), öffentliche Freigabe-Links,
+  Kalender-Abos, gebuchte Features und Speicherpakete, Vertrauensbeziehungen und
+  Album-Freigaben mit Partner-Mandanten. Tokens bleiben beim Import erhalten, damit verteilte
+  URLs nach einem Restore weiter funktionieren; ist ein Token auf der Zielinstanz bereits
+  vergeben, wird mit Warnung ein neuer erzeugt. Beziehungen zu anderen Mandanten werden nur
+  wiederhergestellt, wenn der Partner auf der Zielinstanz existiert.
+- **Sicherheit:** Export-Archive enthalten damit Zugangsdaten (Passwort-Hashes, MFA-Secrets,
+  Link- und Abo-Tokens) und sind wie ein Datenbank-Dump aufzubewahren. Der Export-Dialog
+  weist darauf hin.
+- Adminportal: Katalog-Import-Dialog ist vor dem Laden einer Datei schmal und wird erst für
+  die Vorschau breit; Badges der Plankarten im Preiskatalog brechen sauber um.
 
 ### Behoben
 
@@ -138,6 +140,30 @@ dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` aus
   Vorschaubild-Limit liegt bei 3000/min.
 - Todos ohne Protokoll liessen sich nicht abhaken, bearbeiten oder löschen.
 - Abgabebox: fehlende Gestaltung des Offline-Hinweises ergänzt.
+- Der Quarantäne-Aufräumjob der Abgabebox und das Aufräumen alter Exporte im Backend teilten
+  sich denselben Datenbank-Lock und haben sich dadurch gegenseitig Durchläufe weggenommen.
+- Ein Hintergrund-Loop konnte dauerhaft und ohne jede Spur stehen bleiben, wenn schon das
+  Holen seiner Datenbankverbindung fehlschlug (z. B. Pool-Timeout). Solche Fehler beenden jetzt
+  nur den einzelnen Durchlauf. Ausserdem starten die Loops zeitversetzt, statt beim Hochfahren
+  alle gleichzeitig um den Connection-Pool zu konkurrieren.
+- Der Virenscanner konnte nach einem Neustart bis zu einem Tag mit veralteten Signaturen
+  arbeiten, wenn das Signatur-Update genau beim Hochfahren lief. Er sucht jetzt alle zwei
+  Stunden statt einmal täglich nach neuen Signaturen.
+- Mandanten-Export/-Import als vollständiges Backup: Fotoalben (inkl. Best-of-Auswahl)
+  und die Zyklus-Snapshots der Listen werden jetzt mitexportiert und wiederhergestellt.
+- Import übernimmt die öffentlichen IDs (`public_id`), solange sie auf der Zielinstanz frei
+  sind. URLs, Lesezeichen und per `public_id` gespeicherte Bezüge (Abgabe-Element von
+  Galerie-Fotos, Upload-Protokoll und Todos, Album-Einträge, Entwürfe offener Word-Importe)
+  bleiben so gültig; bei einer Kollision werden sie konsistent umgeschrieben.
+- Import verknüpfte einige Daten weiterhin mit dem Quell-Mandanten bzw. brach auf einer
+  frischen Instanz ab: Zyklus-Filter von Abgaben, Verantwortliche eines Protokolls,
+  „Wiederholen aus Termin/Todo“-Blöcke sowie die gelernten Zuordnungen und Analysen des
+  Word-Imports werden jetzt umgemappt. Verantwortliche und Wiederhol-Blöcke waren auch
+  beim Mandanten-Klon betroffen.
+- Ein auf der Zielinstanz unbekannter Preisplan bricht den Import nicht mehr ab, sondern
+  wird mit Warnung weggelassen.
+- Mandanten-Klon: Abgabe-Bezüge (`element_ref`) in Upload-Protokoll und Todos zeigen jetzt
+  auf die geklonten Termine/Listeneinträge statt auf die des Quell-Mandanten.
 
 ## [1.1.9] - 2026-10-05
 
