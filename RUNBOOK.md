@@ -145,6 +145,29 @@ mehreren Mandanten (`HOCX_SINGLE_TENANT_RESOLUTION=auto`) stehen im CHANGELOG un
 "Update von 1.0.x auf 1.1.0". Bricht die Migration `0078` ab, ist nichts veraendert: die
 alte Version laeuft weiter, Ursache beheben und `deploy.sh` erneut starten.
 
+### Vor dem Update auf 1.1.10: Vorab-Check Migration 0108
+
+`0108_unified_participants` fuehrt Teilnehmer und Login-Konten zusammen und legt dabei eine
+Check-Constraint (Login-Konto braucht E-Mail und Passwort) sowie einen Unique-Index auf die
+kleingeschriebene Login-E-Mail an. Bestehende Daten, die das verletzen, lassen die Migration
+abbrechen. Vor dem Deploy auf Prod (alter Stand laeuft noch) pruefen:
+
+```bash
+docker compose -p hocx exec -T db psql -U hocx hocx < scripts/precheck_0108.sql
+```
+
+Jede der drei Abfragen muss `(0 rows)` liefern:
+
+| Check | Bedeutung | Bereinigen |
+|---|---|---|
+| `login_ohne_credentials` | Login-Konto ohne E-Mail oder Passwort | E-Mail/Passwort setzen oder Login deaktivieren |
+| `email_kollision` | Login-E-Mails, die sich nur in Gross-/Kleinschreibung oder Leerzeichen unterscheiden | Ein Konto umbenennen oder zusammenfuehren |
+| `teilnehmer_doppelt_verknuepft` | Mehrere Teilnehmer haengen am selben Konto | Teilnehmer zusammenfuehren, bis je Konto hoechstens einer verknuepft ist |
+
+Am sichersten zusaetzlich: das letzte Backup in eine Wegwerf-DB einspielen und dort
+`alembic upgrade head` laufen lassen. Bricht die Migration trotzdem ab, ist nichts
+veraendert (eine Transaktion); die alte Version laeuft weiter.
+
 ## 5. Rollback
 
 Schlagen Containerstart oder Smoke-Checks fehl, startet `deploy.sh` automatisch das

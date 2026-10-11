@@ -80,7 +80,12 @@ def upgrade() -> None:
                 continue
             column = fk["constrained_columns"][0]
             op.drop_constraint(fk["name"], table, type_="foreignkey")
-            conn.execute(sa.text(f'UPDATE "{table}" t SET "{column}"=p.app_user_id FROM participant p WHERE t."{column}"=p.id'))
+            # Zweistufig über negative Zwischenwerte: participant- und app_user-IDs überlappen,
+            # und Postgres prüft nicht aufschiebbare Unique-Constraints (z.B. PK von
+            # template_participant) pro Zeile - ein direktes Umschreiben kann je nach
+            # Zeilenreihenfolge mit einer noch nicht umgeschriebenen Zeile kollidieren.
+            conn.execute(sa.text(f'UPDATE "{table}" t SET "{column}"=-p.app_user_id FROM participant p WHERE t."{column}"=p.id'))
+            conn.execute(sa.text(f'UPDATE "{table}" SET "{column}"=-"{column}" WHERE "{column}"<0'))
             op.create_foreign_key(fk["name"], table, "app_user", [column], ["id"], ondelete=fk["options"].get("ondelete"))
     # JSONB enthält Teilnehmer-IDs in Anwesenheit, Listen, Verantwortlichen und Importentwürfen.
     metadata = sa.MetaData()
