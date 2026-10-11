@@ -16271,6 +16271,41 @@ input[type="radio"] {
   gap: var(--space-1);
 }
 
+/* Preiskatalog: Export/Import und Umbuchen */
+.admin-pricing-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-rebooking-tenant {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-catalog-errors,
+.admin-catalog-change-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.admin-catalog-errors {
+  max-height: 280px;
+  overflow-y: auto;
+  color: var(--danger-fg);
+}
+
+.admin-catalog-change-list {
+  list-style: none;
+  padding-left: 0;
+  overflow-wrap: anywhere;
+}
+
 .admin-status-dot {
   display: inline-flex;
   align-items: center;

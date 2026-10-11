@@ -5,6 +5,8 @@ import type { Route } from "next";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
+import { AdminCatalogImportModal, downloadCatalogConfig } from "@/components/admin/admin-catalog-import";
+import { AdminCatalogRebooking, needsRebooking } from "@/components/admin/admin-catalog-rebooking";
 import { AdminAvatar, featureIcon, formatChfShort, hasPlanPrice, PlanBadge, planTones } from "@/components/admin/admin-plan-utils";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +62,7 @@ type StoragePackageFormState = {
   code: string;
   isNew: boolean;
   name: string;
+  isBookable: boolean;
   storageGb: string;
   priceMonthlyChf: string;
   priceYearlyChf: string;
@@ -71,6 +74,7 @@ function storagePackageToForm(pkg: AdminStoragePackage): StoragePackageFormState
     code: pkg.code,
     isNew: false,
     name: pkg.name,
+    isBookable: pkg.is_bookable,
     storageGb: bytesToGbInput(pkg.bytes),
     priceMonthlyChf: rpToChfInput(pkg.price_monthly_rp),
     priceYearlyChf: rpToChfInput(pkg.price_yearly_rp),
@@ -82,6 +86,7 @@ const emptyStoragePackageForm: StoragePackageFormState = {
   code: "",
   isNew: true,
   name: "",
+  isBookable: true,
   storageGb: "",
   priceMonthlyChf: "",
   priceYearlyChf: "",
@@ -193,7 +198,7 @@ function featureToForm(feature: AdminFeature): FeatureFormState {
   };
 }
 
-type PricingView = "plans" | "modules" | "packages";
+type PricingView = "plans" | "modules" | "packages" | "rebooking";
 
 export function AdminPlanPricing({ initialPlans, initialFeatures, initialStoragePackages }: Props) {
   const t = useTranslations("admin.pricing");
@@ -213,6 +218,10 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
   const [featureBusy, setFeatureBusy] = useState(false);
   const [storagePackageForm, setStoragePackageForm] = useState<StoragePackageFormState | null>(null);
   const [storagePackageBusy, setStoragePackageBusy] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  // Mandanten auf nicht buchbaren Plänen/Paketen (Tab "Umbuchen"), null = wird geladen.
+  const [rebookingTenants, setRebookingTenants] = useState<AdminTenantSummary[] | null>(null);
 
   const tones = useMemo(() => planTones(plans), [plans]);
 
@@ -233,6 +242,55 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
       cancelled = true;
     };
   }, [editedPlanCode]);
+
+  async function loadRebookingTenants() {
+    try {
+      const page = await browserApiFetch<AdminTenantPage>("/api/admin/tenants?limit=500&offset=0&needs_rebooking=true");
+      setRebookingTenants(page.items);
+    } catch {
+      setRebookingTenants((current) => current ?? []);
+    }
+  }
+
+  useEffect(() => {
+    void loadRebookingTenants();
+  }, []);
+
+  // Nach einem Katalog-Import alles neu laden, statt die Vorschau-Daten nachzubauen.
+  async function reloadCatalog() {
+    try {
+      const [nextPlans, nextFeatures, nextPackages] = await Promise.all([
+        browserApiFetch<AdminPlan[]>("/api/admin/plans"),
+        browserApiFetch<AdminFeature[]>("/api/admin/features"),
+        browserApiFetch<AdminStoragePackage[]>("/api/admin/storage-packages"),
+      ]);
+      setPlans([...nextPlans].sort(comparePlans));
+      setFeatures(nextFeatures);
+      setStoragePackages([...nextPackages].sort(compareStoragePackages));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("reloadFailed"), "error");
+    }
+    await loadRebookingTenants();
+  }
+
+  async function downloadConfig() {
+    setDownloadBusy(true);
+    try {
+      await downloadCatalogConfig();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("downloadFailed"), "error");
+    } finally {
+      setDownloadBusy(false);
+    }
+  }
+
+  function handleRebookedTenant(updated: AdminTenantSummary) {
+    setRebookingTenants((current) =>
+      (current ?? []).flatMap((tenant) =>
+        tenant.id !== updated.id ? [tenant] : needsRebooking(updated, plans, storagePackages) ? [updated] : []
+      )
+    );
+  }
 
   function updatePlanForm(patch: Partial<PlanFormState>) {
     setPlanForm((current) => (current ? { ...current, ...patch } : current));
@@ -263,6 +321,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
       setPlans((current) => [...current.filter((p) => p.code !== updated.code), updated].sort(comparePlans));
       setPlanForm(null);
       showToast(t("planSaved"), "success");
+      void loadRebookingTenants();
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("planSaveFailed"), "error");
     } finally {
@@ -305,6 +364,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
         price_monthly_rp: chfInputToRp(storagePackageForm.priceMonthlyChf),
         price_yearly_rp: chfInputToRp(storagePackageForm.priceYearlyChf),
         sort_order: 0,
+        is_bookable: storagePackageForm.isBookable,
       };
       const updated = await browserApiFetch<AdminStoragePackage>(
         storagePackageForm.isNew
@@ -317,6 +377,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
       );
       setStoragePackageForm(null);
       showToast(t("packageSaved"), "success");
+      void loadRebookingTenants();
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("packageSaveFailed"), "error");
     } finally {
@@ -354,7 +415,15 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
           <h1 className="page-title">{t("title")}</h1>
           <p className="muted">{t("description")}</p>
         </div>
-        {headerAction}
+        <div className="admin-pricing-header-actions">
+          <button type="button" className="button-secondary" onClick={() => void downloadConfig()} disabled={downloadBusy}>
+            {t("downloadConfig")}
+          </button>
+          <button type="button" className="button-secondary" onClick={() => setImportOpen(true)}>
+            {t("importConfig")}
+          </button>
+          {headerAction}
+        </div>
       </div>
 
       <div>
@@ -365,6 +434,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
             { value: "plans", label: t("tabPlans"), count: plans.length },
             { value: "modules", label: t("tabModules"), count: features.length },
             { value: "packages", label: t("tabStoragePackages"), count: storagePackages.length },
+            { value: "rebooking", label: t("tabRebooking"), count: rebookingTenants?.length },
           ]}
         />
       </div>
@@ -503,15 +573,22 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
 
       {view === "packages" ? (
         <>
-          <DataTable columns={[t("colPackage"), t("colSize"), t("colPricePerYear"), t("colPricePerMonth"), ""]} emptyMessage={t("noPackagesYet")}>
+          <DataTable
+            columns={[t("colPackage"), t("colSize"), t("colPricePerYear"), t("colPricePerMonth"), t("colAvailability"), ""]}
+            emptyMessage={t("noPackagesYet")}
+          >
             {storagePackages.map((pkg) => (
               <tr key={pkg.code}>
                 <td>
                   <strong>{pkg.name}</strong>
+                  <div className="muted admin-cell-sub">{t("tenantCount", { count: pkg.tenant_count })}</div>
                 </td>
                 <td>{formatFileSize(pkg.bytes)}</td>
                 <td>{formatRappen(pkg.price_yearly_rp, locale)}</td>
                 <td>{formatRappen(pkg.price_monthly_rp, locale)}</td>
+                <td>
+                  <Badge variant={pkg.is_bookable ? "success" : "neutral"}>{pkg.is_bookable ? t("bookable") : t("notBookable")}</Badge>
+                </td>
                 <td className="admin-cell-end">
                   <ActionMenu items={[{ label: t("edit"), onClick: () => setStoragePackageForm(storagePackageToForm(pkg)) }]} />
                 </td>
@@ -521,6 +598,17 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
           <p className="muted admin-page-footnote">{t("storagePackagesFootnote")}</p>
         </>
       ) : null}
+
+      {view === "rebooking" ? (
+        <AdminCatalogRebooking
+          tenants={rebookingTenants}
+          plans={plans}
+          storagePackages={storagePackages}
+          onTenantSaved={handleRebookedTenant}
+        />
+      ) : null}
+
+      <AdminCatalogImportModal open={importOpen} onClose={() => setImportOpen(false)} onImported={() => void reloadCatalog()} />
 
       <Modal
         open={planForm !== null}
@@ -793,6 +881,22 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                   required
                 />
               </label>
+            </div>
+            <div className="field-stack">
+              <span className="field-label">{t("availability")}</span>
+              <div>
+                <FilterTabs
+                  value={storagePackageForm.isBookable ? "bookable" : "hidden"}
+                  onChange={(value) =>
+                    setStoragePackageForm((current) => (current ? { ...current, isBookable: value === "bookable" } : current))
+                  }
+                  options={[
+                    { value: "bookable", label: t("bookable") },
+                    { value: "hidden", label: t("notBookable") },
+                  ]}
+                />
+              </div>
+              <span className="field-help">{storagePackageForm.isBookable ? t("packageBookableHelp") : t("packageNotBookableHelp")}</span>
             </div>
             <PriceFields
               yearlyChf={storagePackageForm.priceYearlyChf}

@@ -605,6 +605,69 @@
     "packageSaveFailed": "Le forfait de stockage n'a pas pu être enregistré",
     "featuredBadge": "Le plus populaire",
     "featuredOnWebsite": "Mettre en avant comme « Le plus populaire » sur le site web",
-    "featuredOnWebsiteHelp": "Un seul plan au maximum – l’enregistrement retire la mise en avant de tous les autres plans. Seuls les plans réservables apparaissent sur le site web."
+    "featuredOnWebsiteHelp": "Un seul plan au maximum – l’enregistrement retire la mise en avant de tous les autres plans. Seuls les plans réservables apparaissent sur le site web.",
+    "downloadConfig": "Télécharger la configuration",
+    "importConfig": "Importer la configuration",
+    "downloadFailed": "Impossible de télécharger la configuration.",
+    "reloadFailed": "Impossible de recharger le catalogue de prix.",
+    "tabRebooking": "À réaffecter",
+    "colAvailability": "Disponibilité",
+    "packageBookableHelp": "Peut être ajouté aux organisations.",
+    "packageNotBookableHelp": "Ne peut plus être ajouté. Les attributions existantes restent et apparaissent sous « À réaffecter »."
+  },
+  "catalogImport": {
+    "title": "Importer la configuration",
+    "description": "Téléversez un fichier JSON avec les modules, plans et packs de stockage. Toutes les modifications s'affichent avant l'enregistrement.",
+    "file": "Fichier JSON",
+    "fileHelp": "Le plus simple : télécharger la configuration actuelle, la modifier puis la téléverser. Le fichier contient un mode d'emploi.",
+    "invalidJson": "Le fichier n'est pas un objet JSON valide.",
+    "overwrite": "Tout écraser",
+    "mergeHelp": "Désactivé : seuls les entrées et champs du fichier sont créés ou modifiés, le reste est conservé.",
+    "overwriteHelp": "Activé : le catalogue est remplacé par le fichier. Les plans et packs absents sont supprimés, ou rendus non réservables s'ils sont encore attribués à des organisations.",
+    "previewTitle": "Aperçu",
+    "errorsTitle": "{count, plural, one {# erreur} other {# erreurs}} dans le fichier. Veuillez corriger et téléverser à nouveau.",
+    "noChanges": "Aucune modification : le fichier correspond au catalogue actuel.",
+    "colEntry": "Entrée",
+    "colAction": "Action",
+    "colChanges": "Modifications",
+    "tenantCount": "{count, plural, one {# organisation concernée} other {# organisations concernées}}",
+    "cancel": "Annuler",
+    "showPreview": "Afficher l'aperçu",
+    "checking": "Vérification …",
+    "apply": "Appliquer l'import",
+    "applying": "Application …",
+    "applied": "Import appliqué : {count, plural, one {# modification} other {# modifications}}.",
+    "previewFailed": "Impossible de créer l'aperçu.",
+    "applyFailed": "L'import a échoué.",
+    "confirmTitle": "Appliquer l'import avec suppressions ?",
+    "confirmMessage": "{deleted, plural, =0 {Rien ne sera supprimé} one {# entrée sera supprimée} other {# entrées seront supprimées}}, {deactivated, plural, =0 {rien ne sera rendu non réservable} one {# entrée sera rendue non réservable} other {# entrées seront rendues non réservables}}. Les organisations concernées apparaîtront ensuite sous « À réaffecter ».",
+    "summary": {
+      "create": "{count} nouveau(x)",
+      "update": "{count} modifié(s)",
+      "deactivate": "{count} plus réservable(s)",
+      "delete": "{count} supprimé(s)",
+      "unchanged": "{count} inchangé(s)"
+    },
+    "action": {
+      "create": "Nouveau",
+      "update": "Modifié",
+      "deactivate": "Plus réservable",
+      "delete": "Supprimé"
+    },
+    "entity": {
+      "feature": "Module",
+      "plan": "Plan",
+      "storage_package": "Pack de stockage"
+    }
+  },
+  "catalogRebooking": {
+    "colTenant": "Organisation",
+    "colPlan": "Plan",
+    "colPackages": "Packs de stockage",
+    "loading": "Chargement …",
+    "empty": "Toutes les organisations n'ont que des plans et packs réservables.",
+    "packageQuantity": "{name} × {count}",
+    "rebook": "Réaffecter",
+    "footnote": "Organisations avec un plan ou un pack de stockage non réservable (mis en évidence). « Réaffecter » ouvre les paramètres de l'organisation : modifiez le plan dans l'onglet « Plan & abonnement » et les packs dans l'onglet « Stockage »."
   }
 }

@@ -543,6 +543,8 @@ export type AdminStoragePackage = {
   price_monthly_rp: number | null;
   price_yearly_rp: number | null;
   sort_order: number;
+  is_bookable: boolean;
+  tenant_count: number;
 };
 
 export type AdminStoragePackageWrite = {
@@ -551,6 +553,37 @@ export type AdminStoragePackageWrite = {
   price_monthly_rp: number | null;
   price_yearly_rp: number | null;
   sort_order: number;
+  is_bookable: boolean;
+};
+
+// JSON-Export/-Import des Preiskatalogs (backend/app/schemas/catalog_config.py).
+export type CatalogImportRequest = {
+  config: Record<string, unknown>;
+  overwrite: boolean;
+  base_fingerprint?: string | null;
+};
+
+export type CatalogFieldChange = {
+  field: string;
+  old: unknown;
+  new: unknown;
+};
+
+export type CatalogImportChange = {
+  entity: "feature" | "plan" | "storage_package";
+  code: string;
+  name: string;
+  action: "create" | "update" | "delete" | "deactivate";
+  changes: CatalogFieldChange[];
+  tenant_count: number;
+};
+
+export type CatalogImportPreview = {
+  overwrite: boolean;
+  changes: CatalogImportChange[];
+  errors: string[];
+  unchanged_count: number;
+  base_fingerprint: string;
 };
 
 export type AdminTenantStoragePackageItem = {

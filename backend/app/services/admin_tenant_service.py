@@ -138,7 +138,14 @@ class AdminTenantService:
         ]
 
     def list_tenants(
-        self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None, plan_code: str | None = None
+        self,
+        db: Session,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+        q: str | None = None,
+        plan_code: str | None = None,
+        needs_rebooking: bool = False,
     ) -> AdminTenantPage:
         query = db.query(Tenant).order_by(Tenant.name.asc())
         # Applied before the offset/limit slice (audit A1, 2026-08-16) - the frontend used
@@ -150,6 +157,17 @@ class AdminTenantService:
         # Plan-Filter der Mandantenliste (Chips "Alle / <Plan>") - ebenfalls vor der Paginierung.
         if plan_code:
             query = query.filter(Tenant.plan_code == plan_code)
+        # Übersicht "Umbuchen" im Preiskatalog: Mandanten auf einem nicht (mehr) buchbaren Plan
+        # oder mit einem nicht buchbaren Speicherpaket, z.B. nach einem Katalog-Import mit
+        # Überschreiben (catalog_config_service).
+        if needs_rebooking:
+            non_bookable_plan = select(Plan.code).where(Plan.is_bookable.is_(False))
+            non_bookable_package_tenants = (
+                select(TenantStoragePackage.tenant_id)
+                .join(StoragePackage, StoragePackage.code == TenantStoragePackage.package_code)
+                .where(StoragePackage.is_bookable.is_(False))
+            )
+            query = query.filter(or_(Tenant.plan_code.in_(non_bookable_plan), Tenant.id.in_(non_bookable_package_tenants)))
         total = query.count()
         query = query.offset(offset)
         if limit is not None:
@@ -399,9 +417,15 @@ class AdminTenantService:
         0 - upload_pipeline.py's _enforce_tenant_storage_quota treats NULL as "no limit" and 0
         as "no uploads allowed at all", and naively defaulting a NULL plan limit to 0 would
         silently lock out every tenant on a plan without a storage cap."""
+        if self.apply_effective_storage_quota(db, tenant_id):
+            db.commit()
+
+    def apply_effective_storage_quota(self, db: Session, tenant_id: int) -> bool:
+        """Wie recompute_effective_storage_quota, aber ohne Commit - für Aufrufer, die mehrere
+        Mandanten in einer Transaktion nachführen (Katalog-Import). True, wenn etwas gesetzt wurde."""
         tenant = db.get(Tenant, tenant_id)
         if tenant is None or tenant.storage_quota_manual_override:
-            return
+            return False
         plan = db.get(Plan, tenant.plan_code) if tenant.plan_code is not None else None
         plan_bytes = plan.included_storage_bytes if plan is not None else None
         package_bytes = int(
@@ -415,13 +439,32 @@ class AdminTenantService:
         )
         tenant.storage_quota_bytes = None if plan_bytes is None and package_bytes == 0 else (plan_bytes or 0) + package_bytes
         db.add(tenant)
-        db.commit()
+        return True
 
     def list_storage_packages(self, db: Session) -> list[AdminStoragePackageRead]:
         packages = db.query(StoragePackage).order_by(StoragePackage.bytes.asc(), StoragePackage.code.asc()).all()
-        return [self._storage_package_read_model(package) for package in packages]
+        tenant_counts = dict(
+            db.execute(
+                select(TenantStoragePackage.package_code, func.count(TenantStoragePackage.tenant_id)).group_by(
+                    TenantStoragePackage.package_code
+                )
+            ).all()
+        )
+        return [
+            self._storage_package_read_model(db, package, tenant_count=int(tenant_counts.get(package.code, 0)))
+            for package in packages
+        ]
 
-    def _storage_package_read_model(self, package: StoragePackage) -> AdminStoragePackageRead:
+    def _storage_package_read_model(
+        self, db: Session, package: StoragePackage, *, tenant_count: int | None = None
+    ) -> AdminStoragePackageRead:
+        if tenant_count is None:
+            tenant_count = int(
+                db.scalar(
+                    select(func.count(TenantStoragePackage.tenant_id)).where(TenantStoragePackage.package_code == package.code)
+                )
+                or 0
+            )
         return AdminStoragePackageRead(
             code=package.code,
             name=package.name,
@@ -429,6 +472,8 @@ class AdminTenantService:
             price_monthly_rp=package.price_monthly_rp,
             price_yearly_rp=package.price_yearly_rp,
             sort_order=package.sort_order,
+            is_bookable=package.is_bookable,
+            tenant_count=tenant_count,
         )
 
     def create_storage_package(self, db: Session, payload: AdminStoragePackageWrite) -> AdminStoragePackageRead:
@@ -443,9 +488,10 @@ class AdminTenantService:
         package.price_monthly_rp = payload.price_monthly_rp
         package.price_yearly_rp = payload.price_yearly_rp
         package.sort_order = payload.sort_order
+        package.is_bookable = payload.is_bookable
         db.add(package)
         db.commit()
-        return self._storage_package_read_model(package)
+        return self._storage_package_read_model(db, package)
 
     def update_tenant_storage_packages(
         self, db: Session, tenant_id: int, items: list[AdminTenantStoragePackageItem], *, admin_id: int

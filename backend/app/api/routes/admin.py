@@ -56,6 +56,7 @@ from app.schemas.mfa import (
     UserMfaRead,
 )
 from app.schemas.oidc import PlatformOidcConfigRead, PlatformOidcConfigWrite
+from app.schemas.catalog_config import CatalogImportPreview, CatalogImportRequest
 from app.schemas.storage import StorageUsageRead
 from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
 from app.services.admin_domain_service import AdminDomainService
@@ -68,6 +69,7 @@ from app.services.admin_user_service import AdminUserService, PlatformAdminServi
 from app.services.file_service import _safe_storage_path
 from app.services.mfa_service import MfaService
 from app.services.audit_service import AuditService
+from app.services.catalog_config_service import CatalogChangedError, CatalogConfigService
 from app.services.platform_oidc_service import PlatformOidcService
 from app.services.storage_service import StorageService
 from app.services.tenant_clone_service import TenantCloneService
@@ -78,6 +80,7 @@ from app.services.tenant_import_service import TenantImportService
 router = APIRouter(dependencies=[Depends(get_current_admin)])
 
 tenant_service = AdminTenantService()
+catalog_config_service = CatalogConfigService(tenant_service)
 tenant_user_service = AdminTenantUserService()
 user_service = AdminUserService()
 admin_account_service = PlatformAdminService()
@@ -147,9 +150,10 @@ def list_tenants(
     offset: int = Query(0, ge=0),
     q: str | None = Query(None),
     plan: Annotated[str | None, Query()] = None,
+    needs_rebooking: Annotated[bool, Query()] = False,
     db: Session = Depends(get_db),
 ):
-    return tenant_service.list_tenants(db, limit=limit, offset=offset, q=q, plan_code=plan)
+    return tenant_service.list_tenants(db, limit=limit, offset=offset, q=q, plan_code=plan, needs_rebooking=needs_rebooking)
 
 
 @router.get("/domains", response_model=AdminDomainPage)
@@ -479,6 +483,49 @@ def upsert_storage_package(
     audit.log(
         db, action="admin.storage_package_upserted", actor_email=current_admin.email,
         entity_type="storage_package", entity_id=None, details={"code": code},
+    )
+    return result
+
+
+@router.get("/catalog/export")
+def export_catalog(db: Session = Depends(get_db)):
+    """Preiskatalog (Module, Pläne, Speicherpakete) als bearbeitbares JSON inkl. Anleitung."""
+    return catalog_config_service.export_config(db)
+
+
+@router.post("/catalog/import/preview", response_model=CatalogImportPreview)
+def preview_catalog_import(
+    payload: CatalogImportRequest,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    return catalog_config_service.preview(db, payload.config, overwrite=payload.overwrite)
+
+
+@router.post("/catalog/import", response_model=CatalogImportPreview)
+def apply_catalog_import(
+    payload: CatalogImportRequest,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    try:
+        result = catalog_config_service.apply(
+            db, payload.config, overwrite=payload.overwrite, base_fingerprint=payload.base_fingerprint
+        )
+    except CatalogChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    audit.log(
+        db, action="admin.catalog_imported", actor_email=current_admin.email,
+        entity_type="catalog", entity_id=None,
+        details={
+            "overwrite": payload.overwrite,
+            "changes": [
+                {"entity": change.entity, "code": change.code, "action": change.action, "fields": [c.field for c in change.changes]}
+                for change in result.changes
+            ],
+        },
     )
     return result
 

@@ -605,6 +605,69 @@
     "packageSaveFailed": "Impossibile salvare il pacchetto di archiviazione",
     "featuredBadge": "La scelta più popolare",
     "featuredOnWebsite": "Evidenzia sul sito web come «La scelta più popolare»",
-    "featuredOnWebsiteHelp": "Al massimo un piano – al salvataggio l’evidenziazione viene rimossa da tutti gli altri piani. Sul sito web compaiono solo i piani prenotabili."
+    "featuredOnWebsiteHelp": "Al massimo un piano – al salvataggio l’evidenziazione viene rimossa da tutti gli altri piani. Sul sito web compaiono solo i piani prenotabili.",
+    "downloadConfig": "Scarica configurazione",
+    "importConfig": "Importa configurazione",
+    "downloadFailed": "Impossibile scaricare la configurazione.",
+    "reloadFailed": "Impossibile ricaricare il listino prezzi.",
+    "tabRebooking": "Da riassegnare",
+    "colAvailability": "Disponibilità",
+    "packageBookableHelp": "Può essere aggiunto alle organizzazioni.",
+    "packageNotBookableHelp": "Non può più essere aggiunto. Le assegnazioni esistenti restano e compaiono in «Da riassegnare»."
+  },
+  "catalogImport": {
+    "title": "Importa configurazione",
+    "description": "Carica un file JSON con moduli, piani e pacchetti di spazio. Prima del salvataggio vedrai tutte le modifiche.",
+    "file": "File JSON",
+    "fileHelp": "La via più semplice: scaricare la configurazione attuale, modificarla e ricaricarla. Il file contiene le istruzioni.",
+    "invalidJson": "Il file non è un oggetto JSON valido.",
+    "overwrite": "Sovrascrivi tutto",
+    "mergeHelp": "Disattivato: vengono creati o modificati solo le voci e i campi del file, il resto rimane.",
+    "overwriteHelp": "Attivato: il listino viene sostituito dal file. Piani e pacchetti mancanti vengono eliminati, o resi non prenotabili se sono ancora assegnati a organizzazioni.",
+    "previewTitle": "Anteprima",
+    "errorsTitle": "{count, plural, one {# errore} other {# errori}} nel file. Correggi e ricarica.",
+    "noChanges": "Nessuna modifica: il file corrisponde al listino attuale.",
+    "colEntry": "Voce",
+    "colAction": "Azione",
+    "colChanges": "Modifiche",
+    "tenantCount": "{count, plural, one {# organizzazione interessata} other {# organizzazioni interessate}}",
+    "cancel": "Annulla",
+    "showPreview": "Mostra anteprima",
+    "checking": "Verifica …",
+    "apply": "Applica importazione",
+    "applying": "Applicazione …",
+    "applied": "Importazione applicata: {count, plural, one {# modifica} other {# modifiche}}.",
+    "previewFailed": "Impossibile creare l'anteprima.",
+    "applyFailed": "Importazione non riuscita.",
+    "confirmTitle": "Applicare l'importazione con eliminazioni?",
+    "confirmMessage": "{deleted, plural, =0 {Nulla verrà eliminato} one {# voce verrà eliminata} other {# voci verranno eliminate}}, {deactivated, plural, =0 {nulla verrà reso non prenotabile} one {# voce verrà resa non prenotabile} other {# voci verranno rese non prenotabili}}. Le organizzazioni interessate saranno elencate in «Da riassegnare».",
+    "summary": {
+      "create": "{count} nuovi",
+      "update": "{count} modificati",
+      "deactivate": "{count} non più prenotabili",
+      "delete": "{count} eliminati",
+      "unchanged": "{count} invariati"
+    },
+    "action": {
+      "create": "Nuovo",
+      "update": "Modificato",
+      "deactivate": "Non più prenotabile",
+      "delete": "Eliminato"
+    },
+    "entity": {
+      "feature": "Modulo",
+      "plan": "Piano",
+      "storage_package": "Pacchetto di spazio"
+    }
+  },
+  "catalogRebooking": {
+    "colTenant": "Organizzazione",
+    "colPlan": "Piano",
+    "colPackages": "Pacchetti di spazio",
+    "loading": "Caricamento …",
+    "empty": "Tutte le organizzazioni hanno solo piani e pacchetti prenotabili.",
+    "packageQuantity": "{name} × {count}",
+    "rebook": "Riassegna",
+    "footnote": "Organizzazioni con un piano o un pacchetto di spazio non prenotabile (evidenziato). «Riassegna» apre le impostazioni dell'organizzazione: modifica il piano nella scheda «Piano e abbonamento» e i pacchetti nella scheda «Archiviazione»."
   }
 }

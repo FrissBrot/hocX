@@ -180,7 +180,9 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
 
   async function loadStoragePackageCatalog() {
     try {
-      const result = await browserApiFetch<AdminStoragePackage[]>("/api/admin/storage-packages");
+      // Nicht buchbare Pakete (z.B. nach einem Katalog-Import mit Überschreiben) können nicht
+      // mehr neu zugebucht werden; bestehende Zuweisungen bleiben oben in der Liste sichtbar.
+      const result = (await browserApiFetch<AdminStoragePackage[]>("/api/admin/storage-packages")).filter((pkg) => pkg.is_bookable);
       setStoragePackageCatalog(result);
       setPackageToAdd((current) => current || (result[0]?.code ?? ""));
     } catch (error) {

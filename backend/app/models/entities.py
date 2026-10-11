@@ -204,6 +204,9 @@ class StoragePackage(Base):
     price_monthly_rp: Mapped[int | None] = mapped_column(Integer)
     price_yearly_rp: Mapped[int | None] = mapped_column(Integer)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    # False = kann keinem Mandanten mehr neu zugebucht werden, bestehende Zuweisungen bleiben
+    # (0106_storage_package_is_bookable, gesetzt u.a. vom Katalog-Import im Überschreiben-Modus).
+    is_bookable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
 
 
 class TenantStoragePackage(Base):

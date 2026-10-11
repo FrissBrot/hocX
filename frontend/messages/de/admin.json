@@ -605,6 +605,69 @@
     "packageSaveFailed": "Speicherpaket konnte nicht gespeichert werden",
     "featuredBadge": "Beliebteste Wahl",
     "featuredOnWebsite": "Auf der Website als «Beliebteste Wahl» hervorheben",
-    "featuredOnWebsiteHelp": "Höchstens ein Plan – beim Speichern wird die Markierung bei allen anderen Plänen entfernt. Nur buchbare Pläne erscheinen auf der Website."
+    "featuredOnWebsiteHelp": "Höchstens ein Plan – beim Speichern wird die Markierung bei allen anderen Plänen entfernt. Nur buchbare Pläne erscheinen auf der Website.",
+    "downloadConfig": "Konfiguration herunterladen",
+    "importConfig": "Konfiguration importieren",
+    "downloadFailed": "Konfiguration konnte nicht heruntergeladen werden.",
+    "reloadFailed": "Preiskatalog konnte nicht neu geladen werden.",
+    "tabRebooking": "Umbuchen",
+    "colAvailability": "Verfügbarkeit",
+    "packageBookableHelp": "Kann Mandanten zugebucht werden.",
+    "packageNotBookableHelp": "Kann nicht mehr neu zugebucht werden. Bestehende Zuweisungen bleiben bestehen und erscheinen unter «Umbuchen»."
+  },
+  "catalogImport": {
+    "title": "Konfiguration importieren",
+    "description": "JSON-Datei mit Modulen, Plänen und Speicherpaketen hochladen. Vor dem Speichern siehst du alle Änderungen.",
+    "file": "JSON-Datei",
+    "fileHelp": "Am einfachsten zuerst die aktuelle Konfiguration herunterladen, anpassen und wieder hochladen. Die Datei enthält eine Anleitung.",
+    "invalidJson": "Die Datei ist kein gültiges JSON-Objekt.",
+    "overwrite": "Alles überschreiben",
+    "mergeHelp": "Aus: Nur die Einträge und Felder aus der Datei werden angelegt oder geändert, alles andere bleibt.",
+    "overwriteHelp": "An: Der Katalog wird durch die Datei ersetzt. Fehlende Pläne und Pakete werden gelöscht, oder auf nicht buchbar gesetzt, wenn sie noch Mandanten zugewiesen sind.",
+    "previewTitle": "Vorschau",
+    "errorsTitle": "{count, plural, one {# Fehler} other {# Fehler}} in der Datei. Bitte korrigieren und neu hochladen.",
+    "noChanges": "Keine Änderungen: Die Datei entspricht dem aktuellen Katalog.",
+    "colEntry": "Eintrag",
+    "colAction": "Aktion",
+    "colChanges": "Änderungen",
+    "tenantCount": "{count, plural, one {# Mandant betroffen} other {# Mandanten betroffen}}",
+    "cancel": "Abbrechen",
+    "showPreview": "Vorschau anzeigen",
+    "checking": "Wird geprüft …",
+    "apply": "Import anwenden",
+    "applying": "Wird übernommen …",
+    "applied": "Import übernommen: {count, plural, one {# Änderung} other {# Änderungen}}.",
+    "previewFailed": "Vorschau konnte nicht erstellt werden.",
+    "applyFailed": "Import fehlgeschlagen.",
+    "confirmTitle": "Import mit Löschungen anwenden?",
+    "confirmMessage": "{deleted, plural, =0 {Nichts wird gelöscht} one {# Eintrag wird gelöscht} other {# Einträge werden gelöscht}}, {deactivated, plural, =0 {nichts wird auf nicht buchbar gesetzt} one {# Eintrag wird auf nicht buchbar gesetzt} other {# Einträge werden auf nicht buchbar gesetzt}}. Betroffene Mandanten findest du danach unter «Umbuchen».",
+    "summary": {
+      "create": "{count} neu",
+      "update": "{count} geändert",
+      "deactivate": "{count} nicht mehr buchbar",
+      "delete": "{count} gelöscht",
+      "unchanged": "{count} unverändert"
+    },
+    "action": {
+      "create": "Neu",
+      "update": "Geändert",
+      "deactivate": "Nicht mehr buchbar",
+      "delete": "Gelöscht"
+    },
+    "entity": {
+      "feature": "Modul",
+      "plan": "Plan",
+      "storage_package": "Speicherpaket"
+    }
+  },
+  "catalogRebooking": {
+    "colTenant": "Mandant",
+    "colPlan": "Plan",
+    "colPackages": "Speicherpakete",
+    "loading": "Wird geladen …",
+    "empty": "Alle Mandanten haben nur buchbare Pläne und Pakete.",
+    "packageQuantity": "{name} × {count}",
+    "rebook": "Umbuchen",
+    "footnote": "Mandanten auf einem nicht buchbaren Plan oder mit einem nicht buchbaren Speicherpaket (markiert). «Umbuchen» öffnet die Einstellungen des Mandanten, dort Plan im Tab «Plan & Abo» und Pakete im Tab «Speicher» ändern."
   }
 }

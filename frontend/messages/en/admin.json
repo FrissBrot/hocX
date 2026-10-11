@@ -605,6 +605,69 @@
     "packageSaveFailed": "Storage package could not be saved",
     "featuredBadge": "Most popular",
     "featuredOnWebsite": "Highlight as “Most popular” on the website",
-    "featuredOnWebsiteHelp": "At most one plan – saving removes the highlight from all other plans. Only bookable plans appear on the website."
+    "featuredOnWebsiteHelp": "At most one plan – saving removes the highlight from all other plans. Only bookable plans appear on the website.",
+    "downloadConfig": "Download configuration",
+    "importConfig": "Import configuration",
+    "downloadFailed": "Could not download the configuration.",
+    "reloadFailed": "Could not reload the price catalog.",
+    "tabRebooking": "Rebook",
+    "colAvailability": "Availability",
+    "packageBookableHelp": "Can be added to organizations.",
+    "packageNotBookableHelp": "Can no longer be added. Existing assignments remain and appear under \"Rebook\"."
+  },
+  "catalogImport": {
+    "title": "Import configuration",
+    "description": "Upload a JSON file with modules, plans and storage packages. You will see all changes before anything is saved.",
+    "file": "JSON file",
+    "fileHelp": "Easiest: download the current configuration, edit it and upload it again. The file contains instructions.",
+    "invalidJson": "The file is not a valid JSON object.",
+    "overwrite": "Overwrite everything",
+    "mergeHelp": "Off: only the entries and fields in the file are created or changed, everything else stays.",
+    "overwriteHelp": "On: the catalog is replaced by the file. Missing plans and packages are deleted, or set to not bookable if they are still assigned to organizations.",
+    "previewTitle": "Preview",
+    "errorsTitle": "{count, plural, one {# error} other {# errors}} in the file. Please fix and upload again.",
+    "noChanges": "No changes: the file matches the current catalog.",
+    "colEntry": "Entry",
+    "colAction": "Action",
+    "colChanges": "Changes",
+    "tenantCount": "{count, plural, one {# organization affected} other {# organizations affected}}",
+    "cancel": "Cancel",
+    "showPreview": "Show preview",
+    "checking": "Checking …",
+    "apply": "Apply import",
+    "applying": "Applying …",
+    "applied": "Import applied: {count, plural, one {# change} other {# changes}}.",
+    "previewFailed": "Could not create the preview.",
+    "applyFailed": "Import failed.",
+    "confirmTitle": "Apply import with deletions?",
+    "confirmMessage": "{deleted, plural, =0 {Nothing will be deleted} one {# entry will be deleted} other {# entries will be deleted}}, {deactivated, plural, =0 {nothing will be set to not bookable} one {# entry will be set to not bookable} other {# entries will be set to not bookable}}. Affected organizations are listed under \"Rebook\" afterwards.",
+    "summary": {
+      "create": "{count} new",
+      "update": "{count} changed",
+      "deactivate": "{count} no longer bookable",
+      "delete": "{count} deleted",
+      "unchanged": "{count} unchanged"
+    },
+    "action": {
+      "create": "New",
+      "update": "Changed",
+      "deactivate": "No longer bookable",
+      "delete": "Deleted"
+    },
+    "entity": {
+      "feature": "Module",
+      "plan": "Plan",
+      "storage_package": "Storage package"
+    }
+  },
+  "catalogRebooking": {
+    "colTenant": "Organization",
+    "colPlan": "Plan",
+    "colPackages": "Storage packages",
+    "loading": "Loading …",
+    "empty": "All organizations only have bookable plans and packages.",
+    "packageQuantity": "{name} × {count}",
+    "rebook": "Rebook",
+    "footnote": "Organizations on a plan or with a storage package that is not bookable (highlighted). \"Rebook\" opens the organization's settings: change the plan in the \"Plan & subscription\" tab and packages in the \"Storage\" tab."
   }
 }

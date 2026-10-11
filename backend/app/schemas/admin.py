@@ -188,6 +188,9 @@ class AdminStoragePackageRead(BaseModel):
     price_monthly_rp: int | None = None
     price_yearly_rp: int | None = None
     sort_order: int = 0
+    is_bookable: bool = True
+    # Anzahl Mandanten, denen das Paket zugewiesen ist.
+    tenant_count: int = 0
 
 
 class AdminStoragePackageWrite(BaseModel):
@@ -197,6 +200,8 @@ class AdminStoragePackageWrite(BaseModel):
     price_monthly_rp: int | None = Field(default=None, ge=0)
     price_yearly_rp: int | None = Field(default=None, ge=0)
     sort_order: int = 0
+    # False = kann nicht mehr neu zugebucht werden, bestehende Zuweisungen bleiben.
+    is_bookable: bool = True
 
 
 class AdminTenantStoragePackageItem(BaseModel):
