@@ -32,8 +32,10 @@ test("Stammlisten: Vorschau, Zuordnung, Suche und Unbesetzt-Filter", async ({ pa
     for (const theme of ["light", "dark"]) {
       for (const width of [1440, 390]) {
         await page.setViewportSize({ width, height: 1000 });
+        // Theme vor dem Reload setzen: nachträglich gesetzt gleicht die App es asynchron ab,
+        // rendert neu und schliesst dabei einen schon geöffneten Dialog (CI, Dark-Durchlauf).
+        await page.evaluate((value) => localStorage.setItem("hocx-theme", value), theme);
         await page.reload();
-        await page.evaluate((value) => { localStorage.setItem("hocx-theme", value); document.documentElement.dataset.theme = value; }, theme);
         if (width === 1440) {
           await page.getByRole("tab", { name: new RegExp(name) }).click();
           await expect(page.getByRole("button", { name: `${person.display_name} entfernen` })).toBeVisible();

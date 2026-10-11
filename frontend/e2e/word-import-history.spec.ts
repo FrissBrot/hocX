@@ -11,11 +11,11 @@ async function importFile(request: any, seed: ImportSeed, filename: string, over
     commitPayload(seed, analysis, overrideDate ?? fixture.protocolDate!));
 }
 
-// The list sidebar button's accessible name is "<name> <n> Einträge" (name + entry-count
+// The list tab's accessible name is "<name> <n> Einträge" (name + entry-count
 // spans), so it can't be matched exactly by name alone, and the "Ansicht" picker is a
 // SearchableSelect (button + listbox), not a native <select>.
 async function openHistoricalView(page: Page, seed: ImportSeed) {
-  await page.getByRole("button", { name: seed.list.name }).click();
+  await page.getByRole("tab", { name: seed.list.name }).click();
   await page.getByRole("button", { name: "Ansicht", exact: true }).click();
   await page.getByRole("option", { name: `${seed.cycle.name} 2023 (historisch)` }).click();
 }
