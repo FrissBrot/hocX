@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { StructuredListTable } from "./structured-list-table";
 import { ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
 
@@ -63,4 +63,35 @@ it("markiert die bestehende Einzelauswahl orange und erhält ihre Verknüpfung",
   expect(trigger.closest(".structured-list-departed")).not.toBeNull();
   expect(trigger).toHaveAttribute("title", "Ausgetreten am 15.08.2026");
   vi.useRealTimers();
+});
+
+
+it("entfernt einen Teilnehmerchip und speichert nur die verbleibende Zuordnung", async () => {
+  vi.useFakeTimers();
+  const definition = { id: "list", name: "Gruppen", column_one_title: "Gruppe", column_one_value_type: "text",
+    column_two_title: "Leitende", column_two_value_type: "participants" } as StructuredListDefinition;
+  const entries = [{ id: "entry", sort_index: 0, column_one_value: { text_value: "Wölfe" },
+    column_two_value: { participant_ids: ["anna", "beat"] } }] as unknown as StructuredListEntry[];
+  const onUpdateEntry = vi.fn().mockResolvedValue(true);
+  render(<StructuredListTable definition={definition} entries={entries} masterList
+    availableParticipants={[{ id: "anna", display_name: "Anna" }, { id: "beat", display_name: "Beat" }] as ParticipantSummary[]}
+    availableEvents={[]} onCreateEntry={vi.fn()} onUpdateEntry={onUpdateEntry} onDeleteEntry={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Anna entfernen" }));
+  expect(screen.queryByRole("button", { name: "Anna entfernen" })).not.toBeInTheDocument();
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+  expect(onUpdateEntry).toHaveBeenCalledWith("entry", { column_two_value: { participant_ids: ["beat"] } });
+});
+
+it("fügt bei aktiver Suche hinter dem vollständigen Datenbestand hinzu", async () => {
+  vi.useFakeTimers();
+  const definition = { id: "list", name: "Gruppen", column_one_title: "Gruppe", column_one_value_type: "text",
+    column_two_title: "Notiz", column_two_value_type: "text" } as StructuredListDefinition;
+  const entries = [{ id: "hidden", sort_index: 9, column_one_value: { text_value: "Versteckt" }, column_two_value: { text_value: "" } }] as unknown as StructuredListEntry[];
+  const onCreateEntry = vi.fn().mockResolvedValue(true);
+  render(<StructuredListTable definition={definition} entries={entries} masterList visibleEntryIds={[]}
+    availableParticipants={[]} availableEvents={[]} onCreateEntry={onCreateEntry} onUpdateEntry={vi.fn()} onDeleteEntry={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "+ Eintrag hinzufügen" }));
+  fireEvent.change(screen.getAllByPlaceholderText("Wert")[0], { target: { value: "Neu" } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+  expect(onCreateEntry).toHaveBeenCalledWith(expect.objectContaining({ sort_index: 19 }));
 });

@@ -6,10 +6,12 @@ import { useParticipantNameSource } from "@/contexts/participant-directory-conte
 import { Fragment, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { ListValueTypeIcon } from "@/components/lists/list-value-type-icon";
 import { Badge } from "@/components/ui/badge";
 import { localDateToday } from "@/lib/utils/participant-membership";
 import { Modal } from "@/components/ui/modal";
-import { SearchableSelect } from "@/components/ui/searchable-select";
+import { ActionIcon } from "@/components/ui/action-icons";
+import { SearchableMultiSelect, SearchableSelect } from "@/components/ui/searchable-select";
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import {
@@ -42,6 +44,10 @@ type StructuredListTableProps = {
    * cycle's data and aren't something the guarded historical-edit API supports adding. */
   allowCreate?: boolean;
   fullWidth?: boolean;
+  /** Kompakte Stammdatenansicht mit Teilnehmerchips und Zeilenaktion im Fuss. */
+  masterList?: boolean;
+  /** Nur die Anzeige filtern; neue Zeilen bleiben hinter dem vollständigen Bestand. */
+  visibleEntryIds?: string[];
   heading?: ReactNode;
   headingActions?: ReactNode;
   emptyMessage?: string;
@@ -212,6 +218,8 @@ export function StructuredListTable({
   highlightDepartedParticipants = false,
   allowCreate = true,
   fullWidth = false,
+  masterList = false,
+  visibleEntryIds,
   heading,
   headingActions,
   emptyMessage,
@@ -231,6 +239,7 @@ export function StructuredListTable({
     isParticipantSelectable(participant) && availableParticipants.some((entry) => entry.id === participant.id),
   [availableParticipants, isParticipantSelectable]);
   const t = useTranslations("lists.table");
+  const listT = useTranslations("lists");
   const today = localDateToday();
   const resolvedEmptyMessage = emptyMessage ?? t("emptyMessage");
   const sortedEvents = useMemo(
@@ -480,6 +489,31 @@ export function StructuredListTable({
     }
 
     if (valueType === "participants") {
+      if (masterList) {
+        const ids = Array.isArray(value.participant_ids) ? value.participant_ids.map(String) : [];
+        const save = (nextIds: string[]) => {
+          const nextValue = { participant_ids: nextIds };
+          if (options.isNewRow) patchNewRow({ [columnKey]: nextValue });
+          else if (entryId) queueRowSave(entryId, { [columnKey]: nextValue });
+        };
+        return <div className="list-manager-people">
+          {ids.map((id, index) => {
+            const participant = participantNames.find((person) => person.id === id);
+            const frozenNames = Array.isArray(value.participant_names) ? value.participant_names : [];
+            const name = String(frozenNames[index] || participant?.display_name || t("participantNullLabel"));
+            const departed = departedParticipant(id);
+            return <span key={id} className={`list-manager-person${departed ? " structured-list-departed" : ""}`} title={departed ? departedTitle(departed) : undefined}>
+              <span className="list-manager-avatar">{name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("")}</span>{name}
+              <button type="button" className="button-icon-soft" disabled={options.disabled} aria-label={listT("removePerson", { name })} onClick={() => save(ids.filter((personId) => personId !== id))}>×</button>
+            </span>;
+          })}
+          <SearchableMultiSelect options={participantNames} isOptionSelectable={isPickableParticipant}
+            getId={(person) => person.id} getLabel={(person) => person.display_name} values={ids}
+            onChange={save} disabled={options.disabled} emptySelectionLabel={listT("assign")}
+            className={ids.length ? "list-manager-add-person" : "list-manager-assign"}
+            triggerProps={{ "aria-label": t("participantPickerTitle") }} />
+        </div>;
+      }
       return (
         <button
           type="button"
@@ -550,7 +584,7 @@ export function StructuredListTable({
     const manualCompare = (left: StructuredListEntry, right: StructuredListEntry) =>
       (left.sort_index - right.sort_index) || compareIsoDate(left.created_at, right.created_at);
 
-    return [...entries].sort((left, right) => {
+    return entries.filter((entry) => !visibleEntryIds || visibleEntryIds.includes(entry.id)).sort((left, right) => {
       if (sortByColumn) {
         const leftText = entrySortText(left, sortByColumn).trim();
         const rightText = entrySortText(right, sortByColumn).trim();
@@ -567,7 +601,7 @@ export function StructuredListTable({
       }
       return manualCompare(left, right);
     });
-  }, [entries, entryDrafts, sortByColumn, sortDirection, textCollator, participantNames, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
+  }, [entries, visibleEntryIds, entryDrafts, sortByColumn, sortDirection, textCollator, participantNames, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
 
   const groupedEntries = useMemo(() => {
     if (!groupByColumn) {
@@ -640,7 +674,7 @@ export function StructuredListTable({
           {heading}
           <div className="table-toolbar-actions">
           {headingActions}
-          {editable && allowCreate && (
+          {editable && allowCreate && !masterList && (
             <button
               type="button"
               className="button-secondary"
@@ -656,7 +690,7 @@ export function StructuredListTable({
           </div>
         </div>
       )}
-      <div className={`${heading ? "table-shell" : "event-table-wrap"}${fullWidth ? " structured-list-table-flat" : ""}`} style={fullWidth ? { width: "100%" } : undefined}>
+      <div className={`${heading ? "table-shell" : "event-table-wrap"}${fullWidth ? " structured-list-table-flat" : ""}${masterList ? " list-manager-table-shell" : ""}`} style={fullWidth ? { width: "100%" } : undefined}>
         <table className={`data-table structured-list-table${heading ? " data-table-lg" : " event-table event-table-compact"}`} style={fullWidth ? { width: "100%" } : undefined}>
           <thead>
             <tr>
@@ -665,6 +699,7 @@ export function StructuredListTable({
                 style={onHeaderSort ? { cursor: "pointer", userSelect: "none" } : undefined}
               >
                 {definition.column_one_title}
+                {masterList && <span className="list-manager-column-type"><ListValueTypeIcon type={definition.column_one_value_type} />{listT(`valueTypes.${definition.column_one_value_type}`)}</span>}
                 {onHeaderSort && (
                   <span style={{ marginLeft: "var(--space-1)", opacity: sortByColumn === "column_one" ? 1 : 0.25, fontSize: "0.8em" }}>
                     {sortByColumn === "column_one" ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
@@ -676,6 +711,7 @@ export function StructuredListTable({
                 style={onHeaderSort ? { cursor: "pointer", userSelect: "none" } : undefined}
               >
                 {definition.column_two_title}
+                {masterList && <span className="list-manager-column-type"><ListValueTypeIcon type={definition.column_two_value_type} />{listT(`valueTypes.${definition.column_two_value_type}`)}</span>}
                 {onHeaderSort && (
                   <span style={{ marginLeft: "var(--space-1)", opacity: sortByColumn === "column_two" ? 1 : 0.25, fontSize: "0.8em" }}>
                     {sortByColumn === "column_two" ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
@@ -684,8 +720,8 @@ export function StructuredListTable({
               </th>
               {editable ? (
                 <th className="event-column-actions" aria-label={t("actionsLabel")}>
-                  {heading ? t("actionsLabel") : null}
-                  {allowCreate && !heading && (
+                  {heading && !masterList ? t("actionsLabel") : null}
+                  {allowCreate && !heading && !masterList && (
                   <button
                     type="button"
                     className="button-ghost button-icon"
@@ -826,12 +862,12 @@ export function StructuredListTable({
                               <div className="event-row-actions">
                                 <button
                                   type="button"
-                                  className={heading ? "button-secondary button-danger" : "button-ghost button-icon button-icon-danger"}
+                                  className={masterList ? "button-icon-soft button-icon-soft-danger" : heading ? "button-secondary button-danger" : "button-ghost button-icon button-icon-danger"}
                                   title={t("deleteRowTitle")}
                                   aria-label={t("deleteRowTitle")}
                                   onClick={() => void onDeleteEntry(entry.id)}
                                 >
-                                  {heading ? t("deleteButton") : "x"}
+                                  {masterList ? <ActionIcon name="delete" /> : heading ? t("deleteButton") : "x"}
                                 </button>
                               </div>
                             </td>
@@ -850,6 +886,7 @@ export function StructuredListTable({
               </tr>
             ) : null}
           </tbody>
+          {masterList && editable && allowCreate && <tfoot><tr><td colSpan={3}><button type="button" className="button-ghost list-manager-add-row" disabled={showNewRow || creatingNewRow} onClick={() => { setShowNewRow(true); setNewRowDraft(createNewRowDraft(definition)); }}>{listT("addEntry")}</button></td></tr></tfoot>}
         </table>
       </div>
 

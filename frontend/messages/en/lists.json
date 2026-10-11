@@ -7,9 +7,9 @@
   },
   "defaultColumnOne": "Column 1",
   "defaultColumnTwo": "Column 2",
-  "pageTitle": "Lists",
+  "pageTitle": "Master lists",
   "pageDescriptionEmpty": "Freely definable lists for materials, roles or registrations.",
-  "pageDescription": "All lists for this organization.",
+  "pageDescription": "Roles, groups, sponsors – available in minutes and submissions.",
   "newList": "+ New list",
   "emptyState": {
     "title": "No list yet",
@@ -61,13 +61,19 @@
     "name": "List name",
     "active": "Active",
     "description2": "Description",
-    "descriptionPlaceholder": "Optional",
+    "descriptionPlaceholder": "What is this list used for?",
     "column1": "Column 1",
     "column2": "Column 2",
     "title": "Title",
     "dataType": "Data type",
     "save": "Save list",
-    "create": "Create list"
+    "create": "Create list",
+    "namePlaceholder": "e.g. Roles",
+    "optional": "optional",
+    "columns": "Columns",
+    "columnsHint": "Always two – choose any title and data type.",
+    "preview": "How the list appears in the table block",
+    "cancel": "Cancel"
   },
   "toasts": {
     "pdfExportFailed": "PDF export failed",
@@ -114,5 +120,37 @@
     "valuePlaceholder": "Value",
     "participantNullLabel": "Participant",
     "eventNullLabel": "Event"
+  },
+  "inactive": "inactive",
+  "searchList": "Search in “{name}”",
+  "unassigned": "{count} unassigned",
+  "changed": "updated {date}",
+  "currentView": "View: Current",
+  "assign": "+ Assign",
+  "addEntry": "+ Add entry",
+  "removePerson": "Remove {name}",
+  "typeHints": {
+    "text": "Any input",
+    "participant": "Exactly one person",
+    "participants": "Any number of people",
+    "event": "Links an event"
+  },
+  "previewValues": {
+    "text": {
+      "0": "Outbound journey",
+      "1": "Camp funds"
+    },
+    "participant": {
+      "0": "Noah Durrer",
+      "1": "Elias Imfeld"
+    },
+    "participants": {
+      "0": "Noah Durrer, Elias Imfeld",
+      "1": "Lino Enz, Timo Weber"
+    },
+    "event": {
+      "0": "05.10. · Autumn camp",
+      "1": "19.12. · Forest Christmas"
+    }
   }
 }

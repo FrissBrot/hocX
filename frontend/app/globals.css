@@ -23266,3 +23266,82 @@ a.mobile-list-row { color: var(--text); }
     grid-template-columns: 56px minmax(0, 1fr) 80px;
   }
 }
+
+/* Stammlisten: Reiter, kompakte Zuordnungen und Spaltenvorschau. */
+.lists-page { background: transparent; border: 0; box-shadow: none; }
+.list-manager-layout { display: flex; flex-direction: column; gap: var(--space-4); }
+.list-manager-content { width: 100%; }
+.list-manager-tabs { display: flex; width: 100%; overflow-x: auto; border-bottom: 1px solid var(--border); gap: var(--space-2); }
+.list-manager-tabs .tabs-trigger { display: flex; align-items: center; gap: var(--space-2); white-space: nowrap; }
+.list-manager-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--warning); flex-shrink: 0; }
+.list-manager-filter { display: flex; align-items: center; gap: var(--space-3); flex: 1; flex-wrap: wrap; }
+.list-manager-filter > .search-input { width: 310px; max-width: 100%; }
+.list-manager-filter > .muted { font-size: var(--text-sm); }
+.list-manager-filter-active { background: var(--warning-bg); color: var(--warning-fg); border-color: var(--warning); }
+.list-manager-table-shell { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-solid); overflow-x: auto; }
+.list-manager-column-type { display: block; font-size: var(--text-xs); color: var(--muted); font-weight: 400; margin-top: 2px; }
+.list-manager-content .structured-list-table .event-column-actions { width: 56px; }
+.list-manager-content .event-row-actions { justify-content: flex-end; }
+.list-manager-people { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.list-manager-person { display: inline-flex; align-items: center; gap: var(--space-1); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 1px var(--space-1) 1px 1px; font-size: var(--text-sm); white-space: nowrap; }
+.list-manager-person .button-icon-soft { min-height: 28px; width: 28px; color: var(--muted); background: transparent; }
+.list-manager-avatar { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: var(--text-xs); font-weight: 700; }
+.list-manager-people .mini-menu-trigger { width: auto; min-height: 28px; padding: 1px var(--space-2); }
+.list-manager-add-person .mini-menu-trigger { background: transparent; border: 0; color: var(--muted); }
+.list-manager-add-person .mini-menu-trigger-label, .list-manager-people .mini-menu-trigger-icon { display: none; }
+.list-manager-add-person .mini-menu-trigger::after { content: "+"; }
+.list-manager-assign .mini-menu-trigger { border: 1px dashed var(--warning); border-radius: var(--radius-pill); background: var(--warning-bg); color: var(--warning-fg); font-size: var(--text-sm); }
+.list-manager-add-row { color: var(--accent); padding: 0; }
+.list-manager-table-shell tfoot td { border-top: 1px solid var(--border); }
+.list-definition-modal { max-width: 940px; }
+.list-definition-form .field-label { text-transform: none; letter-spacing: 0; }
+.list-definition-section { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.list-definition-section .muted { font-size: var(--text-sm); }
+.list-definition-column { margin: 0; min-width: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel); }
+.list-definition-title { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+.list-definition-number { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; background: var(--accent); color: var(--on-solid); border-radius: var(--radius-sm); font-weight: 700; }
+.list-definition-types { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.list-definition-type { display: flex; align-items: center; gap: var(--space-2); text-align: left; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-solid); color: var(--text); min-height: 56px; }
+.list-definition-type:hover { background: var(--accent-soft); transform: none; }
+.list-definition-type-selected { border-color: var(--accent); box-shadow: var(--focus-ring); background: var(--accent-soft); }
+.list-definition-type .muted { display: block; font-size: var(--text-sm); font-weight: 400; }
+.list-definition-type-icon { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; background: var(--neutral-bg); color: var(--neutral-fg); border-radius: var(--radius-sm); }
+.list-definition-type-selected .list-definition-type-icon { background: var(--accent); color: var(--on-solid); }
+.list-definition-preview { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.list-definition-preview table { width: 100%; table-layout: fixed; }
+.list-definition-preview th .muted { font-weight: 400; }
+.list-definition-example { display: inline-block; border: 1px solid var(--border); border-radius: var(--radius-pill); padding: var(--space-1) var(--space-2); background: var(--accent-soft); }
+.list-definition-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); width: 100%; }
+.list-definition-footer .modal-actions { margin: 0; padding: 0; border: 0; }
+.list-definition-active { display: flex; align-items: center; gap: var(--space-2); }
+.list-definition-active input { appearance: none; width: 36px; height: 22px; border-radius: var(--radius-pill); background: var(--border-strong); padding: 2px; cursor: pointer; }
+.list-definition-active input::before { content: ""; display: block; width: 18px; height: 18px; border-radius: 50%; background: var(--panel-solid); }
+.list-definition-active input:checked { background: var(--accent); }
+.list-definition-active input:checked::before { transform: translateX(14px); }
+@media (max-width: 640px) {
+  .list-definition-section, .list-definition-footer { align-items: flex-start; flex-direction: column; }
+  .list-definition-types { grid-template-columns: minmax(0, 1fr); }
+  .list-definition-footer .modal-actions { width: 100%; }
+}
+.list-manager-table-shell { max-width: none; box-shadow: none; }
+.list-manager-table-shell .structured-list-table td:first-child, .list-manager-table-shell .structured-list-table th:first-child { width: 40%; }
+.list-manager-table-shell .structured-list-table td:nth-child(2), .list-manager-table-shell .structured-list-table th:nth-child(2) { width: auto; }
+.list-manager-tabs .badge { font-size: var(--text-xs); }
+.list-definition-type { --button-bg: var(--panel-solid); --button-hover-bg: var(--accent-soft); }
+.list-definition-type-selected { --button-bg: var(--accent-soft); }
+.list-manager-filter .button-secondary, .list-definition-footer .button-secondary { --button-bg: var(--panel-solid); --button-hover-bg: var(--accent-soft); background: var(--button-bg); border-color: var(--border); color: var(--text); }
+.list-manager-filter .list-manager-filter-active { --button-bg: var(--warning-bg); --button-hover-bg: var(--warning-bg); border-color: var(--warning); color: var(--warning-fg); }
+.list-manager-add-row { border: 0; min-height: 28px; }
+.list-manager-person.structured-list-departed { background: var(--warning-bg); color: var(--warning-fg); border-color: var(--warning); }
+.list-manager-table-shell .data-table th, .list-definition-preview .data-table th { text-transform: none; letter-spacing: 0; font-size: var(--text-base); color: var(--text); }
+.list-manager-table-shell .data-table th, .list-manager-table-shell .data-table td { padding: var(--space-2) var(--space-5); }
+.list-definition-modal .modal-header h2 { font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif; font-size: var(--text-2xl); }
+.list-definition-modal .modal-header { padding-bottom: var(--space-4); border-bottom: 1px solid var(--border); }
+.list-definition-form input { background: var(--panel-solid); }
+.list-manager-column-type { display: flex; align-items: center; gap: var(--space-1); }
+.list-manager-column-type svg { width: 12px; height: 12px; }
+.list-manager-filter .search-input input { border-color: var(--border); background: var(--panel-solid); }
+.list-manager-filter .search-input input:focus { border-color: var(--accent); }
+.list-manager-layout, .list-manager-tabs { min-width: 0; max-width: 100%; }
+.list-manager-tabs .tabs-trigger { flex-shrink: 0; }
+.lists-page > .grid { min-width: 0; grid-template-columns: minmax(0, 1fr); }

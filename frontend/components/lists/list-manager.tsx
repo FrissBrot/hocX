@@ -6,11 +6,15 @@ import { FormEvent, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { EmptyState } from "@/components/ui/empty-state";
+import { ListValueTypeIcon } from "@/components/lists/list-value-type-icon";
 import { StructuredListTable } from "@/components/lists/structured-list-table";
 import { HistoricalEditConfirmModal, HistoricalViewBanner, ReconstructionBanner } from "@/components/ui/historical-view-banner";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { usePopoverDismiss } from "@/components/ui/popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { ActionMenu } from "@/components/ui/action-menu";
+import { Badge } from "@/components/ui/badge";
+import { formatDate } from "@/lib/utils/format";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -93,6 +97,7 @@ export function ListManager({
   const [entriesByList, setEntriesByList] = useState(initialEntriesByList);
   const [selectedListId, setSelectedListId] = useState<string | null>(initialLists[0]?.id ?? null);
   const [search, setSearch] = useState("");
+  const [onlyUnassigned, setOnlyUnassigned] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingListId, setEditingListId] = useState<string | null>(null);
   const [form, setForm] = useState(() => initialFormState(t));
@@ -210,13 +215,6 @@ export function ListManager({
     }
   }
 
-  const filteredLists = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return lists
-      .filter((definition) => !query || `${definition.name} ${definition.description ?? ""}`.toLowerCase().includes(query))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [lists, search]);
-
   const selectedList = useMemo(
     () => lists.find((definition) => definition.id === selectedListId) ?? null,
     [lists, selectedListId]
@@ -230,6 +228,31 @@ export function ListManager({
   const [isConfirmingReconstruction, setIsConfirmingReconstruction] = useState(false);
   const displayedDefinition = isLive ? selectedList : historical.definition;
   const displayedEntries = isLive ? entriesByList[selectedList?.id ?? ""] ?? [] : historical.entries;
+
+  function isUnassigned(entry: StructuredListEntry) {
+    if (!displayedDefinition) return false;
+    return (["one", "two"] as const).some((column) => {
+      const type = displayedDefinition[`column_${column}_value_type`];
+      const value = entry[`column_${column}_value`];
+      return type === "participant" ? !value.participant_id
+        : type === "participants" ? !Array.isArray(value.participant_ids) || !value.participant_ids.length
+        : type === "event" ? !value.event_id : false;
+    });
+  }
+  const unassignedCount = displayedEntries.filter(isUnassigned).length;
+  const showUnassignedFilter = unassignedCount > 0 || onlyUnassigned;
+  const visibleEntries = displayedEntries.filter((entry) => {
+    if (onlyUnassigned && !isUnassigned(entry)) return false;
+    const query = search.trim().toLocaleLowerCase();
+    if (!query) return true;
+    const searchable = [entry.column_one_value, entry.column_two_value].map((value) => {
+      const ids = Array.isArray(value.participant_ids) ? value.participant_ids : [value.participant_id];
+      return [value.text_value, value.participant_name, ...(Array.isArray(value.participant_names) ? value.participant_names : []),
+        ...availableParticipants.filter((p) => ids.includes(p.id)).map((p) => p.display_name),
+        availableEvents.find((event) => event.id === value.event_id)?.title].join(" ");
+    }).join(" ");
+    return searchable.toLocaleLowerCase().includes(query);
+  });
 
   function openCreate() {
     setEditingListId(null);
@@ -452,47 +475,22 @@ export function ListManager({
       ) : (
       <div className="list-manager-layout">
 
-        {/* Left sidebar */}
-        <div className="list-manager-sidebar">
-          <div className="list-manager-sidebar-header">
-            <h2 className="list-manager-sidebar-title">{t("sidebar.title")}</h2>
-            <span className="pill">{t("sidebar.totalCount", { count: lists.length })}</span>
-          </div>
-          <label className="field-stack list-manager-search">
-            <span className="field-label">{t("sidebar.search")}</span>
-            <SearchInput value={search} onChange={setSearch} placeholder={t("sidebar.searchPlaceholder")} />
-          </label>
-
-          {/* List items — scrollable, fills available height */}
-          <div className="list-manager-items">
-            {filteredLists.length === 0 ? (
-              <span className="muted" style={{ fontSize: "var(--text-base)", padding: "var(--space-2) var(--space-1)", display: "block" }}>{t("sidebar.empty")}</span>
-            ) : filteredLists.map((definition) => {
-              const isSelected = selectedListId === definition.id;
-              const entryCount = (entriesByList[definition.id] ?? []).length;
-              return (
-                <div
-                  key={definition.id}
-                  className="list-manager-item-wrap"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSelectedListId(definition.id)}
-                    className={`list-manager-item-button${isSelected ? " list-manager-item-button-active" : ""}`}
-                    aria-pressed={isSelected}
-                  >
-                    <span className="list-manager-item-name">{definition.name}</span>
-                    <span className="list-manager-item-count">{t("sidebar.entryCount", { count: entryCount })}</span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
+        <div className="list-manager-tabs" role="tablist" aria-label={t("pageTitle")}>
+          {lists.map((definition) => (
+            <button type="button" role="tab" key={definition.id}
+              aria-selected={selectedListId === definition.id}
+              aria-controls="list-manager-panel"
+              className={`tabs-trigger${selectedListId === definition.id ? " tabs-trigger-active" : ""}`}
+              onClick={() => { setSelectedListId(definition.id); setSearch(""); setOnlyUnassigned(false); }}>
+              {definition.name} <span className="muted">{(entriesByList[definition.id] ?? []).length}</span>
+              {!definition.is_active && <Badge variant="neutral">{t("inactive")}</Badge>}
+              <span className="list-manager-dot" aria-hidden="true" />
+            </button>
+          ))}
         </div>
 
         {/* Right: content */}
-        <div className="list-manager-content">
+        <div className="list-manager-content" id="list-manager-panel" role="tabpanel">
           {selectedList ? (
             <div className="grid">
 
@@ -528,19 +526,20 @@ export function ListManager({
                   <StructuredListTable
                     key={`${selectedList.id}-${historical.mode}-${historical.cycleConfigId}-${historical.cycleYear}`}
                     definition={displayedDefinition}
+                    masterList
                     heading={
-                      <div>
-                        <h2 className="list-manager-title">{displayedDefinition.name}</h2>
-                        <p className="list-manager-description muted">{t("columnsLabel", { one: displayedDefinition.column_one_title, two: displayedDefinition.column_two_title })}</p>
-                        {displayedDefinition.description && <p className="list-manager-description muted">{displayedDefinition.description}</p>}
+                      <div className="list-manager-filter">
+                        <SearchInput value={search} onChange={setSearch} placeholder={t("searchList", { name: displayedDefinition.name })} />
+                        {showUnassignedFilter && <button type="button" className={`button-secondary${onlyUnassigned ? " list-manager-filter-active" : ""}`} aria-pressed={onlyUnassigned} onClick={() => setOnlyUnassigned((value) => !value)}><span className="list-manager-dot" />{t("unassigned", { count: unassignedCount })}</button>}
+                        <span className="muted">{displayedDefinition.description} · {t("sidebar.entryCount", { count: displayedEntries.length })}{displayedDefinition.updated_at ? ` · ${t("changed", { date: formatDate(displayedDefinition.updated_at) })}` : ""}</span>
                       </div>
                     }
                     headingActions={
                       <>
-                  {historical.availableCycles.length > 0 && (
+                  {(
                     <SearchableSelect
                       options={[
-                        { id: "live", label: t("viewOption.current"), cycle: null },
+                        { id: "live", label: t("currentView"), cycle: null },
                         ...historical.availableCycles.map((cycle) => ({
                           id: `${cycle.cycle_config_id}:${cycle.cycle_year}`,
                           label: `${cycle.cycle_config_name} ${cycle.cycle_year}${cycle.has_snapshot ? ` ${t("viewOption.historical")}` : ` ${t("viewOption.noSnapshot")}`}`,
@@ -561,19 +560,16 @@ export function ListManager({
                       }}
                     />
                   )}
-                  {isLive && landscapeTemplates.length > 0 && (
-                    <button type="button" className="button-secondary button-ghost" onClick={() => { setExportListId(selectedListId ?? ""); setExportUrl(null); setExportModalOpen(true); }}>
-                      {t("export")}
-                    </button>
-                  )}
-                        {isLive && <>
-                        <button type="button" className="button-secondary button-ghost" onClick={() => openEdit(selectedList)}>{t("edit")}</button>
-                        <button type="button" className="button-secondary button-ghost" onClick={() => void deleteDefinition(selectedList.id)}>{t("deleteList")}</button>
-                        </>}
+                  {isLive && <ActionMenu items={[
+                    ...(landscapeTemplates.length > 0 ? [{ label: t("export"), onClick: () => { setExportListId(selectedListId ?? ""); setExportUrl(null); setExportModalOpen(true); } }] : []),
+                    { label: t("edit"), onClick: () => openEdit(selectedList) },
+                    { label: t("deleteList"), danger: true, onClick: () => void deleteDefinition(selectedList.id) },
+                  ]} />}
                       </>
                     }
                     highlightDepartedParticipants={isLive}
                     entries={displayedEntries}
+                    visibleEntryIds={visibleEntries.map((entry) => entry.id)}
                     availableParticipants={availableParticipants}
                     availableEvents={availableEvents}
                     fullWidth
@@ -832,94 +828,47 @@ export function ListManager({
         onClose={() => setModalOpen(false)}
         title={editingListId ? t("formModal.editTitle") : t("formModal.createTitle")}
         description={t("formModal.description")}
+        size="wide"
+        className="list-definition-modal"
+        footer={<div className="list-definition-footer">
+          <label className="list-definition-active"><input type="checkbox" role="switch" checked={form.is_active} onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))} />{t("formModal.active")}</label>
+          <div className="modal-actions"><button type="button" className="button-secondary" onClick={() => setModalOpen(false)}>{t("formModal.cancel")}</button>
+            <button data-modal-save form="list-definition-form" type="submit" className="button-primary" disabled={!form.name.trim() || !form.column_one_title.trim() || !form.column_two_title.trim()}>{editingListId ? t("formModal.save") : t("formModal.create")}</button></div>
+        </div>}
       >
-        <ModalSaveForm className="grid" onSubmit={saveDefinition}>
+        <ModalSaveForm id="list-definition-form" className="grid list-definition-form" onSubmit={saveDefinition}>
           <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">{t("formModal.name")}</span>
-              <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
+            <label className="field-stack"><span className="field-label">{t("formModal.name")}</span>
+              <input value={form.name} placeholder={t("formModal.namePlaceholder")} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
             </label>
-            <label className="checkbox-line">
-              <input
-                type="checkbox"
-                checked={form.is_active}
-                onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))}
-              />
-              {t("formModal.active")}
+            <label className="field-stack"><span className="field-label">{t("formModal.description2")} · <span className="muted">{t("formModal.optional")}</span></span>
+              <input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder={t("formModal.descriptionPlaceholder")} />
             </label>
           </div>
-          <label className="field-stack">
-            <span className="field-label">{t("formModal.description2")}</span>
-            <input
-              value={form.description}
-              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-              placeholder={t("formModal.descriptionPlaceholder")}
-            />
-          </label>
+          <div className="list-definition-section"><strong>{t("formModal.columns")}</strong><span className="muted">{t("formModal.columnsHint")}</span></div>
           <div className="two-col">
-            <div className="card grid">
-              <div className="eyebrow">{t("formModal.column1")}</div>
-              <label className="field-stack">
-                <span className="field-label">{t("formModal.title")}</span>
-                <input
-                  value={form.column_one_title}
-                  onChange={(event) => setForm((current) => ({ ...current, column_one_title: event.target.value }))}
-                  required
-                />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">{t("formModal.dataType")}</span>
-                <select
-                  value={form.column_one_value_type}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      column_one_value_type: event.target.value as StructuredListValueType,
-                    }))
-                  }
-                >
+            {(["one", "two"] as const).map((column, index) => (
+              <fieldset className="list-definition-column" key={column} aria-label={t(index === 0 ? "formModal.column1" : "formModal.column2")}>
+                <label className="list-definition-title"><span className="list-definition-number">{index + 1}</span>
+                  <input aria-label={t(index === 0 ? "formModal.column1" : "formModal.column2")} value={form[`column_${column}_title`]} onChange={(event) => setForm((current) => ({ ...current, [`column_${column}_title`]: event.target.value }))} required />
+                </label>
+                <div className="list-definition-types" role="group" aria-label={t("formModal.dataType")}>
                   {valueTypeOptions(t).map((option) => (
-                    <option key={`list-column-one-type-${option.value}`} value={option.value}>
-                      {option.label}
-                    </option>
+                    <button type="button" key={option.value} aria-pressed={form[`column_${column}_value_type`] === option.value}
+                      className={`list-definition-type${form[`column_${column}_value_type`] === option.value ? " list-definition-type-selected" : ""}`}
+                      onClick={() => setForm((current) => ({ ...current, [`column_${column}_value_type`]: option.value }))}>
+                      <span className="list-definition-type-icon" aria-hidden="true"><ListValueTypeIcon type={option.value} /></span>
+                      <span><strong>{option.label}</strong><span className="muted">{t(`typeHints.${option.value}`)}</span></span>
+                    </button>
                   ))}
-                </select>
-              </label>
-            </div>
-            <div className="card grid">
-              <div className="eyebrow">{t("formModal.column2")}</div>
-              <label className="field-stack">
-                <span className="field-label">{t("formModal.title")}</span>
-                <input
-                  value={form.column_two_title}
-                  onChange={(event) => setForm((current) => ({ ...current, column_two_title: event.target.value }))}
-                  required
-                />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">{t("formModal.dataType")}</span>
-                <select
-                  value={form.column_two_value_type}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      column_two_value_type: event.target.value as StructuredListValueType,
-                    }))
-                  }
-                >
-                  {valueTypeOptions(t).map((option) => (
-                    <option key={`list-column-two-type-${option.value}`} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+                </div>
+              </fieldset>
+            ))}
           </div>
-          <div className="table-toolbar-actions">
-            <button data-modal-save type="submit" className="button-secondary">
-              {editingListId ? t("formModal.save") : t("formModal.create")}
-            </button>
+          <div className="field-stack"><span className="field-label">{t("formModal.preview")}</span>
+            <div className="list-definition-preview"><table className="data-table"><thead><tr>{(["one", "two"] as const).map((column) => <th key={column}>{form[`column_${column}_title`]} <span className="muted">· {t(`valueTypes.${form[`column_${column}_value_type`]}`)}</span></th>)}</tr></thead>
+              <tbody>{[0, 1].map((row) => <tr key={row}>{(["one", "two"] as const).map((column) => <td key={column}><span className={form[`column_${column}_value_type`] === "text" ? "" : "list-definition-example"}>{t(`previewValues.${form[`column_${column}_value_type`]}.${row}`)}</span></td>)}</tr>)}</tbody>
+            </table></div>
           </div>
         </ModalSaveForm>
       </Modal>

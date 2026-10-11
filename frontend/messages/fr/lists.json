@@ -7,9 +7,9 @@
   },
   "defaultColumnOne": "Colonne 1",
   "defaultColumnTwo": "Colonne 2",
-  "pageTitle": "Listes",
+  "pageTitle": "Listes de référence",
   "pageDescriptionEmpty": "Listes librement définissables pour le matériel, les fonctions ou les inscriptions.",
-  "pageDescription": "Toutes les listes de cette organisation.",
+  "pageDescription": "Fonctions, groupes, sponsors – utilisables dans les procès-verbaux et les remises.",
   "newList": "+ Nouvelle liste",
   "emptyState": {
     "title": "Aucune liste pour l'instant",
@@ -61,13 +61,19 @@
     "name": "Nom de la liste",
     "active": "Actif",
     "description2": "Description",
-    "descriptionPlaceholder": "Facultatif",
+    "descriptionPlaceholder": "À quoi sert cette liste ?",
     "column1": "Colonne 1",
     "column2": "Colonne 2",
     "title": "Titre",
     "dataType": "Type de données",
     "save": "Enregistrer la liste",
-    "create": "Créer la liste"
+    "create": "Créer la liste",
+    "namePlaceholder": "p. ex. Fonctions",
+    "optional": "facultatif",
+    "columns": "Colonnes",
+    "columnsHint": "Toujours deux – titre et type de données au choix.",
+    "preview": "Aperçu de la liste dans le bloc de tableau",
+    "cancel": "Annuler"
   },
   "toasts": {
     "pdfExportFailed": "Échec de l'export PDF",
@@ -114,5 +120,37 @@
     "valuePlaceholder": "Valeur",
     "participantNullLabel": "Participant",
     "eventNullLabel": "Événement"
+  },
+  "inactive": "inactive",
+  "searchList": "Rechercher dans « {name} »",
+  "unassigned": "{count} non attribués",
+  "changed": "modifiée le {date}",
+  "currentView": "Vue : Actuelle",
+  "assign": "+ Attribuer",
+  "addEntry": "+ Ajouter une entrée",
+  "removePerson": "Retirer {name}",
+  "typeHints": {
+    "text": "Saisie libre",
+    "participant": "Une seule personne",
+    "participants": "Nombre libre de personnes",
+    "event": "Associe un événement"
+  },
+  "previewValues": {
+    "text": {
+      "0": "Trajet aller",
+      "1": "Caisse du camp"
+    },
+    "participant": {
+      "0": "Noah Durrer",
+      "1": "Elias Imfeld"
+    },
+    "participants": {
+      "0": "Noah Durrer, Elias Imfeld",
+      "1": "Lino Enz, Timo Weber"
+    },
+    "event": {
+      "0": "05.10. · Camp d’automne",
+      "1": "19.12. · Noël en forêt"
+    }
   }
 }

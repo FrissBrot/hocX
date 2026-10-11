@@ -7,9 +7,9 @@
   },
   "defaultColumnOne": "Colonna 1",
   "defaultColumnTwo": "Colonna 2",
-  "pageTitle": "Liste",
+  "pageTitle": "Liste principali",
   "pageDescriptionEmpty": "Liste liberamente definibili per materiale, incarichi o iscrizioni.",
-  "pageDescription": "Tutte le liste di questa organizzazione.",
+  "pageDescription": "Incarichi, gruppi, sponsor – utilizzabili nei verbali e nelle consegne.",
   "newList": "+ Nuova lista",
   "emptyState": {
     "title": "Nessuna lista ancora presente",
@@ -61,13 +61,19 @@
     "name": "Nome lista",
     "active": "Attivo",
     "description2": "Descrizione",
-    "descriptionPlaceholder": "Facoltativo",
+    "descriptionPlaceholder": "A cosa serve questa lista?",
     "column1": "Colonna 1",
     "column2": "Colonna 2",
     "title": "Titolo",
     "dataType": "Tipo di dato",
     "save": "Salva lista",
-    "create": "Crea lista"
+    "create": "Crea lista",
+    "namePlaceholder": "ad es. Incarichi",
+    "optional": "facoltativo",
+    "columns": "Colonne",
+    "columnsHint": "Sempre due – titolo e tipo di dati a scelta.",
+    "preview": "Anteprima della lista nel blocco tabella",
+    "cancel": "Annulla"
   },
   "toasts": {
     "pdfExportFailed": "Esportazione PDF non riuscita",
@@ -114,5 +120,37 @@
     "valuePlaceholder": "Valore",
     "participantNullLabel": "Partecipante",
     "eventNullLabel": "Evento"
+  },
+  "inactive": "inattiva",
+  "searchList": "Cerca in «{name}»",
+  "unassigned": "{count} non assegnati",
+  "changed": "modificata il {date}",
+  "currentView": "Vista: Attuale",
+  "assign": "+ Assegna",
+  "addEntry": "+ Aggiungi voce",
+  "removePerson": "Rimuovi {name}",
+  "typeHints": {
+    "text": "Inserimento libero",
+    "participant": "Una sola persona",
+    "participants": "Qualsiasi numero di persone",
+    "event": "Collega un evento"
+  },
+  "previewValues": {
+    "text": {
+      "0": "Viaggio di andata",
+      "1": "Cassa del campo"
+    },
+    "participant": {
+      "0": "Noah Durrer",
+      "1": "Elias Imfeld"
+    },
+    "participants": {
+      "0": "Noah Durrer, Elias Imfeld",
+      "1": "Lino Enz, Timo Weber"
+    },
+    "event": {
+      "0": "05.10. · Campo autunnale",
+      "1": "19.12. · Natale nel bosco"
+    }
   }
 }
