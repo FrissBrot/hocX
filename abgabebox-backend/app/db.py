@@ -21,9 +21,9 @@ def get_db():
 
 
 # H12 (2026-08-12 Audit): namespace offset for tenant_upload_lock below, kept well clear of the
-# small fixed advisory-lock ids (202600001-202600007) used for the cross-process singleton
-# background loops in this service's and the main backend's main.py, so the two can never
-# collide regardless of tenant_id.
+# small fixed advisory-lock ids (2026000xx, ledger in backend/app/core/background_loops.py) used
+# for the cross-process singleton background loops in this service's and the main backend's
+# main.py, so the two can never collide regardless of tenant_id.
 _TENANT_UPLOAD_LOCK_OFFSET = 300_000_000_000
 
 
@@ -42,7 +42,7 @@ def tenant_upload_lock(tenant_id: int) -> Iterator[None]:
     main backend - checked app/config.py and docker-compose.yml's abgabebox-backend service
     environment first). This mirrors the existing pg_advisory_lock/pg_advisory_unlock pattern
     used for this service's own cross-process singleton background loop
-    (app/main.py:quarantine_cleanup_loop, lock id 202600007) and the main backend's equivalents -
+    (app/main.py:quarantine_cleanup_loop, QUARANTINE_CLEANUP_LOCK_ID) and the main backend's equivalents -
     advisory locks are a plain function call, not a table grant, so they work fine under the
     'hocx_abgabebox' restricted DB role even though it has no SELECT/UPDATE/DELETE on most
     tables (see backend/alembic/versions/0020_abgabebox.py).

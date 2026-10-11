@@ -8,8 +8,11 @@
     "pricing": "Prezzi",
     "users": "Utenti",
     "domains": "Domini",
+    "systemStatus": "Stato del sistema",
     "errorLogs": "Registro errori",
     "uploadPipeline": "Pipeline file",
+    "notifications": "Notifiche",
+    "jobs": "Job",
     "admins": "Account amministratore",
     "sso": "SSO",
     "security": "Sicurezza"

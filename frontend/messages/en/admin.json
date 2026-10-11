@@ -71,6 +71,309 @@
       "infected": "Infected"
     }
   },
+  "system": {
+    "title": "System status",
+    "description": "State of all containers and of the services hocX depends on. Refreshes every 30 seconds.",
+    "notificationsLink": "Notifications",
+    "allGood": "All good - no open problems.",
+    "problemCount": "{count, plural, one {# open problem} other {# open problems}}",
+    "staleSince": "The system status is out of date (last updated {time}). Monitoring in the backend is not running.",
+    "noData": "No data yet - monitoring collects on its next run.",
+    "collectedAt": "As of {time}",
+    "since": "since {time}",
+    "checksTitle": "Services",
+    "containersTitle": "Containers",
+    "composeProject": "Compose project {project}",
+    "dockerNotConfigured": "The container overview is not set up (DOCKER_API_URL missing, see RUNBOOK).",
+    "dockerUnavailable": "Container status unavailable: {error}",
+    "containerColumns": {
+      "service": "Service",
+      "status": "Status",
+      "uptime": "Up for",
+      "restarts": "Restarts",
+      "cpu": "CPU",
+      "memory": "Memory",
+      "version": "Version"
+    },
+    "eventsTitle": "Events",
+    "eventsDescription": "The last 50 status changes - the same ones that are sent via ntfy.",
+    "eventColumns": {
+      "time": "Time",
+      "kind": "Type",
+      "event": "Event"
+    },
+    "noEvents": "No events yet.",
+    "eventKinds": {
+      "problem": "Problem",
+      "resolved": "Resolved",
+      "container_restart": "Restart"
+    },
+    "severity": {
+      "warning": "Warning",
+      "critical": "Critical"
+    },
+    "status": {
+      "ok": "OK",
+      "warning": "Warning",
+      "critical": "Critical",
+      "unknown": "Unknown"
+    },
+    "checkError": "Unreachable: {error}",
+    "noDetails": "No details.",
+    "memoryOfLimit": "{used} of {limit}",
+    "uptime": {
+      "minutes": "{count, plural, one {# minute} other {# minutes}}",
+      "hours": "{count, plural, one {# hour} other {# hours}}",
+      "days": "{count, plural, one {# day} other {# days}}"
+    },
+    "containerReasons": {
+      "not_running": "Not running",
+      "unhealthy": "Health check failing",
+      "oom_killed": "Killed (out of memory)",
+      "starting": "Still starting",
+      "memory_high": "Memory almost full"
+    },
+    "checks": {
+      "postgres": {
+        "title": "Database",
+        "detail": "{latencyMs, number} ms · {connections, number}/{maxConnections, number} connections · {sizeMb, number} MB",
+        "problem": "Database slow or overloaded"
+      },
+      "redis": {
+        "title": "Redis",
+        "detail": "{latencyMs, number} ms · {usedMb, number} MB used",
+        "problem": "Redis memory almost full"
+      },
+      "clamav": {
+        "title": "Virus scanner",
+        "detail": "{version} · {latencyMs, number} ms",
+        "problem": "Virus scanner impaired"
+      },
+      "clamav_signatures": {
+        "title": "Virus signatures",
+        "detail": "Version {signatureVersion} · {ageHours, number} h old",
+        "problem": "Virus signatures out of date"
+      },
+      "storage": {
+        "title": "Disk space",
+        "detail": "{freePercent, number} % free · {freeGb, number} of {totalGb, number} GB",
+        "problem": "Disk space running low"
+      },
+      "error_rate": {
+        "title": "Error log",
+        "detail": "{lastHour, number} in the last hour · {lastDay, number} in 24 h",
+        "problem": "Many entries in the error log"
+      },
+      "scan_backlog": {
+        "title": "Virus scanning",
+        "detail": "{count, number} files waiting longer than 1 h",
+        "problem": "Virus scanning backlog"
+      },
+      "photo_queue": {
+        "title": "Image analysis",
+        "detail": "{queued, number} queued · oldest {oldestMinutes, number} min",
+        "problem": "Image analysis queue is backing up"
+      }
+    },
+    "problems": {
+      "monitor": {
+        "stale": "System monitoring is not delivering data",
+        "unavailable": "Container status unavailable"
+      },
+      "container": {
+        "not_running": "Container {subject} is not running",
+        "unhealthy": "Container {subject} is unhealthy",
+        "oom_killed": "Container {subject} was killed (out of memory)",
+        "starting": "Container {subject} is stuck starting",
+        "memory_high": "Container {subject} is almost out of memory",
+        "restart_loop": "Container {subject} keeps restarting"
+      },
+      "check": {
+        "unreachable": "{subject} unreachable"
+      },
+      "job": {
+        "failing": "Job {subject} failed",
+        "overdue": "Job {subject} is overdue",
+        "never_run": "Job {subject} has never run"
+      }
+    },
+    "events": {
+      "containerRestart": "Container {subject} was restarted",
+      "resolved": "Resolved: {text}"
+    }
+  },
+  "jobs": {
+    "title": "Jobs",
+    "description": "All periodic background jobs - when they last ran, how long they took and whether they failed. Refreshes every 30 seconds.",
+    "empty": "No jobs reported yet.",
+    "loading": "Loading…",
+    "unregistered": "Not registered",
+    "consecutiveFailures": "{count, plural, one {# failure in a row} other {# failures in a row}}",
+    "columns": {
+      "job": "Job",
+      "service": "Service",
+      "interval": "Schedule",
+      "lastActivity": "Last run",
+      "duration": "Duration",
+      "state": "Status"
+    },
+    "state": {
+      "ok": "OK",
+      "running": "Running",
+      "failing": "Failed",
+      "overdue": "Overdue",
+      "never_run": "Never ran"
+    },
+    "category": {
+      "virus_scan": "Virus scanning",
+      "photo_analysis": "Image analysis",
+      "uploads": "Uploads",
+      "backup": "Backup",
+      "cleanup": "Cleanup",
+      "maintenance": "Maintenance",
+      "other": "Other"
+    },
+    "service": {
+      "backend": "Backend",
+      "abgabebox-backend": "Abgabebox backend",
+      "photo-analysis-worker": "Image analysis worker",
+      "host": "Server (cron)"
+    },
+    "interval": {
+      "onDemand": "On demand",
+      "seconds": "{count, plural, one {every second} other {every # seconds}}",
+      "minutes": "{count, plural, one {every minute} other {every # minutes}}",
+      "hours": "{count, plural, one {hourly} other {every # hours}}",
+      "days": "{count, plural, one {daily} other {every # days}}"
+    },
+    "details": {
+      "state": "Status",
+      "interval": "Schedule",
+      "maxSilence": "Alert after",
+      "lastSuccess": "Last success",
+      "lastFailure": "Last failure",
+      "lastHeartbeat": "Last heartbeat",
+      "runs": "Runs",
+      "runCounts": "{runs, plural, one {# run} other {# runs}}, {failures, plural, one {# failed} other {# failed}}",
+      "lastError": "Last error message"
+    },
+    "history": {
+      "title": "History",
+      "description": "The most recent runs. For very frequent jobs, only failures and the first success afterwards.",
+      "empty": "No runs recorded yet.",
+      "columns": {
+        "finished": "Finished",
+        "duration": "Duration",
+        "result": "Result"
+      },
+      "status": {
+        "success": "Succeeded",
+        "failure": "Failed"
+      }
+    },
+    "jobNames": {
+      "upload_pipeline_rescan": {
+        "title": "Rescan internal uploads",
+        "description": "Rescans protocol images, gallery uploads and Word imports that could not be virus-scanned at upload time."
+      },
+      "abgabebox_rescan": {
+        "title": "Rescan Abgabebox",
+        "description": "Rescans Abgabebox files that could not be virus-scanned at upload time and releases clean files."
+      },
+      "gallery_upload_ingest": {
+        "title": "Gallery import",
+        "description": "Processes images and ZIP archives from \"Upload images\": virus scan, thumbnails, storage."
+      },
+      "photo_analysis_auto_queue": {
+        "title": "Schedule image analysis",
+        "description": "Schedules face detection for new images - only within the configured time window and when server load is low."
+      },
+      "photo_quality_backfill": {
+        "title": "Backfill image quality",
+        "description": "Computes sharpness and exposure for images that are still missing them."
+      },
+      "photo_album_sync": {
+        "title": "Sync albums",
+        "description": "Adds new and removes deleted Abgabebox images in the automatic albums."
+      },
+      "photo_analysis_worker": {
+        "title": "Image analysis worker",
+        "description": "Separate container that runs scheduled image analyses. Monitored through its heartbeat every few seconds."
+      },
+      "domain_health_check": {
+        "title": "Domain check",
+        "description": "Checks that tenants' custom domains still point to hocX correctly."
+      },
+      "cycle_snapshot": {
+        "title": "Cycle snapshots",
+        "description": "Automatically creates a table snapshot once a cycle has ended."
+      },
+      "export_cleanup": {
+        "title": "Clean up exports",
+        "description": "Deletes old generated export files."
+      },
+      "log_cleanup": {
+        "title": "Clean up logs",
+        "description": "Deletes old audit log, error log and job history entries."
+      },
+      "abgabebox_quarantine_cleanup": {
+        "title": "Clean up quarantine",
+        "description": "Removes leftover files from the Abgabebox quarantine, e.g. after aborted uploads."
+      },
+      "system_monitor": {
+        "title": "System monitoring",
+        "description": "Collects the state of containers and services and sends notifications when something is wrong."
+      },
+      "backup_db": {
+        "title": "Database backup",
+        "description": "Nightly database backup (cron job on the server via scripts/run_job.sh)."
+      },
+      "cleanup_storage": {
+        "title": "Storage cleanup",
+        "description": "Nightly cleanup of old export files under storage/exports (cron job on the server via scripts/run_job.sh)."
+      }
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "description": "Alerts for problems from system status and jobs via ntfy - plus a status endpoint for external monitoring (e.g. Uptime Kuma).",
+    "ntfyTitle": "ntfy",
+    "ntfyDescription": "Notifies when a problem appears (after 90 seconds, so deployments don't trigger alerts), gets worse, persists or is resolved.",
+    "enabledLabel": "Notifications enabled",
+    "no": "No",
+    "yes": "Yes",
+    "serverUrl": "ntfy server",
+    "topic": "Topic",
+    "topicHelp": "Letters, digits, - and _ (max. 64 characters).",
+    "token": "Access token",
+    "tokenPlaceholder": "Optional",
+    "tokenSetPlaceholder": "Saved - leave empty to keep it",
+    "tokenHelp": "Access token (tk_…) or user:password. Stored encrypted and never shown again.",
+    "adminUrl": "Admin portal address",
+    "adminUrlHelp": "Optional. Tapping a notification then opens the matching page directly.",
+    "reminderHours": "Remind after (hours)",
+    "reminderHelp": "Notify again about problems that are still open. 0 = no reminders.",
+    "lastError": "Last delivery failed ({time}): {error}",
+    "lastSent": "Last notification delivered: {time}",
+    "removeToken": "Remove token",
+    "removeTokenConfirm": "Remove the ntfy access token?",
+    "sendTest": "Send test message",
+    "save": "Save",
+    "saveBeforeTest": "Save first - the test message uses the saved settings.",
+    "saved": "Settings saved.",
+    "saveFailed": "Saving failed.",
+    "testSent": "Test message sent.",
+    "testFailed": "Test message failed: {error}",
+    "statusTitle": "External monitoring (Uptime Kuma)",
+    "statusDescription": "Responds with HTTP 200 as long as no critical problem is open, otherwise with 503 - even if monitoring itself is stuck or ntfy is unreachable.",
+    "createToken": "Create token",
+    "rotate": "Create new token",
+    "rotateConfirm": "Create a new token? The current URL will stop working - update it in Uptime Kuma.",
+    "rotated": "New token created.",
+    "statusUrl": "URL for the HTTP monitor",
+    "statusHelp": "Add it in Uptime Kuma as monitor type HTTP(s). Accepted status codes: 200-299. The response only contains counts, no details.",
+    "noStatusToken": "No token created yet."
+  },
   "login": {
     "title": "Admin sign-in",
     "loginWithSso": "Sign in with {host}",

@@ -1,12 +1,15 @@
 import os
 import tempfile
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Literal
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import Path as PathParam
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
@@ -14,7 +17,7 @@ from starlette.background import BackgroundTask
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.config import settings
 from app.core.db import get_db
-from app.models.entities import AppUser, PlatformAdmin, Tenant, TenantDomain, UserMfaFactor
+from app.models.entities import AppUser, PlatformAdmin, SystemHealthEvent, Tenant, TenantDomain, UserMfaFactor
 from app.services import public_id_service
 from app.schemas.admin import (
     AdminDomainPage,
@@ -36,11 +39,18 @@ from app.schemas.admin import (
     AdminTenantUserGrant,
     AdminTenantUserRead,
     AdminUserPage,
+    JobRunPage,
+    JobStatusOverview,
+    NotificationSettingsRead,
+    NotificationSettingsWrite,
+    NotificationTestResult,
     PlatformAdminCreate,
     PlatformAdminRead,
     PlatformAdminUpdate,
     SystemErrorLogFilterOptions,
     SystemErrorLogPage,
+    SystemHealthEventRead,
+    SystemStatusRead,
     TenantCleanupCounts,
     TenantCleanupRequest,
     TenantCloneRequest,
@@ -60,6 +70,9 @@ from app.schemas.storage import StorageUsageRead
 from app.schemas.user import TenantUpdate, UserCreate, UserRead, UserUpdate
 from app.services.admin_domain_service import AdminDomainService
 from app.services.admin_error_log_service import AdminErrorLogService
+from app.services.admin_job_status_service import AdminJobStatusService
+from app.services import ntfy_client, system_alert_service, system_health_service
+from app.services.notification_settings_service import NotificationSettingsService
 from app.services.admin_upload_pipeline_status_service import AdminUploadPipelineStatusService
 from app.services.admin_tenant_service import AdminTenantService
 from app.services.admin_tenant_user_service import AdminTenantUserService
@@ -89,6 +102,8 @@ cleanup_service = TenantCleanupService()
 domain_service = AdminDomainService()
 error_log_service = AdminErrorLogService()
 upload_pipeline_status_service = AdminUploadPipelineStatusService()
+job_status_service = AdminJobStatusService()
+notification_settings_service = NotificationSettingsService()
 export_service = TenantExportService()
 import_service = TenantImportService()
 storage_service = StorageService()
@@ -205,6 +220,100 @@ def error_log_filter_options(
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
     return error_log_service.filter_options(db)
+
+
+@router.get("/jobs", response_model=JobStatusOverview)
+def get_job_status(
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    return job_status_service.get_overview(db)
+
+
+@router.get("/jobs/{job_name}/runs", response_model=JobRunPage)
+def list_job_runs(
+    job_name: Annotated[str, PathParam(pattern=r"^[a-z0-9][a-z0-9_.-]{0,99}$")],
+    limit: int = Query(50, gt=0),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    return job_status_service.list_runs(db, job_name=job_name, limit=min(limit, 200), offset=offset)
+
+
+@router.get("/system-status", response_model=SystemStatusRead)
+def get_system_status(
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    now = datetime.now(timezone.utc)
+    snapshot = system_health_service.load_snapshot()
+    events = db.scalars(select(SystemHealthEvent).order_by(SystemHealthEvent.id.desc()).limit(50))
+    return SystemStatusRead(
+        snapshot=snapshot,
+        stale=system_health_service.is_stale(snapshot, now),
+        problems=system_alert_service.current_problems(db, snapshot, now=now),
+        events=[SystemHealthEventRead.model_validate(event, from_attributes=True) for event in events],
+    )
+
+
+@router.get("/notifications", response_model=NotificationSettingsRead)
+def get_notification_settings(
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    return notification_settings_service.read(db)
+
+
+@router.put("/notifications", response_model=NotificationSettingsRead)
+def update_notification_settings(
+    payload: NotificationSettingsWrite,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    try:
+        result = notification_settings_service.update(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    audit.log(
+        db, action="admin.notification_settings_updated", actor_email=current_admin.email,
+        details={
+            "ntfy_enabled": payload.ntfy_enabled,
+            "ntfy_server_url": result.ntfy_server_url,
+            "ntfy_topic": result.ntfy_topic,
+            "ntfy_token_changed": payload.ntfy_token is not None,
+        },
+    )
+    return result
+
+
+@router.post("/notifications/test", response_model=NotificationTestResult)
+def send_test_notification(
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    try:
+        notification_settings_service.send(db, ntfy_client.NtfyMessage(
+            title="hocX: Testnachricht",
+            message=f"Benachrichtigungen funktionieren. Ausgelöst von {current_admin.email}.",
+            tags=["white_check_mark"],
+            click="/admin/notifications",
+        ))
+    except ntfy_client.NtfyError as exc:
+        # Erwarteter, kuratierter Fehler (falsche URL/Token) - gehört auf die Seite, nicht ins
+        # Fehlerprotokoll.
+        return NotificationTestResult(ok=False, error=str(exc))
+    return NotificationTestResult(ok=True)
+
+
+@router.post("/notifications/status-token", response_model=NotificationSettingsRead)
+def rotate_status_token(
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    result = notification_settings_service.rotate_status_token(db)
+    audit.log(db, action="admin.status_token_rotated", actor_email=current_admin.email, details={})
+    return result
 
 
 @router.get("/upload-pipeline-status", response_model=UploadPipelineOverview)

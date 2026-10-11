@@ -119,3 +119,22 @@ def finish_job(engine: Engine, job_id, *, status: str, error: str | None = None)
             text("UPDATE photo_analysis_job SET status = :status, finished_at = NOW(), error = :error WHERE id = :id"),
             {"status": status, "error": error, "id": job_id},
         )
+
+
+# Jobname in backend/app/core/job_registry.py (Übersicht unter /admin/jobs).
+JOB_NAME = "photo_analysis_worker"
+
+
+def record_heartbeat(engine: Engine) -> None:
+    """Lebenszeichen aus der Poll-Schleife. Über die SECURITY-DEFINER-Funktion aus Migration
+    0105 - hocx_photo_worker hat kein DML auf system_job_status, nur EXECUTE."""
+    with engine.begin() as conn:
+        conn.execute(text("SELECT record_job_heartbeat(:job_name)"), {"job_name": JOB_NAME})
+
+
+def record_job_run(engine: Engine, *, status: str, started_at, error: str | None = None) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text("SELECT record_job_run(:job_name, :status, :started_at, NOW(), :error, TRUE)"),
+            {"job_name": JOB_NAME, "status": status, "started_at": started_at, "error": error},
+        )

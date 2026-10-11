@@ -796,6 +796,148 @@ export type UploadPipelineOverview = {
   abgabebox_quarantine: AbgabeboxQuarantineEntry[];
 };
 
+export type JobState = "ok" | "running" | "failing" | "overdue" | "never_run";
+export type JobCategory = "virus_scan" | "photo_analysis" | "uploads" | "cleanup" | "maintenance" | "backup";
+
+export type JobStatusEntry = {
+  name: string;
+  // false = Job meldet sich, steht aber nicht in backend/app/core/job_registry.py
+  registered: boolean;
+  kind: "loop" | "worker" | "host_cron" | null;
+  service: string | null;
+  category: JobCategory | null;
+  interval_seconds: number | null;
+  max_silence_seconds: number | null;
+  state: JobState;
+  last_status: "running" | "success" | "failure" | null;
+  last_started_at: string | null;
+  last_finished_at: string | null;
+  last_success_at: string | null;
+  last_failure_at: string | null;
+  last_heartbeat_at: string | null;
+  last_duration_ms: number | null;
+  last_error: string | null;
+  consecutive_failures: number;
+  run_count: number;
+  failure_count: number;
+};
+
+export type JobStatusOverview = {
+  items: JobStatusEntry[];
+  generated_at: string;
+};
+
+export type JobRunEntry = {
+  id: number;
+  status: "success" | "failure";
+  started_at: string;
+  finished_at: string;
+  duration_ms: number;
+  error: string | null;
+};
+
+export type JobRunPage = {
+  items: JobRunEntry[];
+  total: number;
+};
+
+export type HealthStatus = "ok" | "warning" | "critical" | "unknown";
+
+export type ContainerStatusEntry = {
+  name: string;
+  service: string;
+  container_id: string;
+  state: string;
+  health: string | null;
+  health_output: string | null;
+  restart_count: number;
+  started_at: string | null;
+  exit_code: number | null;
+  oom_killed: boolean;
+  image: string | null;
+  version: string | null;
+  cpu_percent: number | null;
+  memory_bytes: number | null;
+  memory_limit_bytes: number | null;
+  status: HealthStatus;
+  reasons: string[];
+};
+
+export type HealthCheckEntry = {
+  key: string;
+  status: HealthStatus;
+  params: Record<string, string | number | null>;
+  error: string | null;
+};
+
+export type SystemHealthSnapshot = {
+  collected_at: string;
+  docker_configured: boolean;
+  docker_available: boolean;
+  docker_error: string | null;
+  compose_project: string | null;
+  containers: ContainerStatusEntry[];
+  checks: HealthCheckEntry[];
+};
+
+export type SystemProblem = {
+  key: string;
+  source: "monitor" | "container" | "check" | "job";
+  subject: string;
+  reason: string;
+  severity: "warning" | "critical";
+  title: string;
+  message: string;
+  first_seen_at: string | null;
+};
+
+export type SystemHealthEvent = {
+  id: number;
+  kind: "problem" | "resolved" | "container_restart";
+  subject: string;
+  reason: string | null;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  message: string;
+  created_at: string;
+};
+
+export type SystemStatus = {
+  snapshot: SystemHealthSnapshot | null;
+  stale: boolean;
+  problems: SystemProblem[];
+  events: SystemHealthEvent[];
+};
+
+export type NotificationSettings = {
+  ntfy_enabled: boolean;
+  ntfy_server_url: string | null;
+  ntfy_topic: string | null;
+  ntfy_token_set: boolean;
+  admin_url: string | null;
+  reminder_hours: number;
+  status_token: string | null;
+  status_url: string | null;
+  last_sent_at: string | null;
+  last_send_error: string | null;
+  last_send_error_at: string | null;
+};
+
+export type NotificationSettingsWrite = {
+  ntfy_enabled: boolean;
+  ntfy_server_url: string | null;
+  ntfy_topic: string | null;
+  // null = unverändert, "" = entfernen
+  ntfy_token: string | null;
+  admin_url: string | null;
+  reminder_hours: number;
+};
+
+export type NotificationTestResult = {
+  ok: boolean;
+  error: string | null;
+};
+
 export type PlatformAdminSummary = {
   id: string;
   email: string;

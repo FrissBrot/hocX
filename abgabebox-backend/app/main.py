@@ -2,6 +2,7 @@ import asyncio
 import logging
 import traceback as traceback_module
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -73,20 +74,48 @@ def _record_background_error(exc: Exception) -> None:
         db.close()
 
 
+# Muss in backend/app/core/background_loops.py (EXTERNAL_LOCK_IDS) eingetragen bleiben: beide
+# Dienste teilen sich dieselbe Datenbank und damit denselben Advisory-Lock-Raum. Bis 2026-10-11
+# stand hier 202600007 - dieselbe ID wie export_cleanup im Backend, sodass sich die beiden Loops
+# gegenseitig Ticks weggenommen haben.
+QUARANTINE_CLEANUP_LOCK_ID = 202600016
+# Jobname in backend/app/core/job_registry.py (Übersicht unter /admin/jobs).
+QUARANTINE_CLEANUP_JOB_NAME = "abgabebox_quarantine_cleanup"
+
+
+def _record_job_run(*, status: str, started_at: datetime, error: str | None = None) -> None:
+    """Meldet einen Lauf an system_job_status über die SECURITY-DEFINER-Funktion record_job_run
+    (Migration 0105) - die Rolle hocx_abgabebox hat kein DML auf die Tabelle, nur EXECUTE.
+    Best effort: ein Fehler hier darf den Loop nicht stoppen, landet aber in system_error_log."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("SELECT record_job_run(:job_name, :status, :started_at, NOW(), :error, TRUE)"),
+                {"job_name": QUARANTINE_CLEANUP_JOB_NAME, "status": status, "started_at": started_at, "error": error},
+            )
+    except Exception as exc:
+        _logger.exception("Lauf von %s konnte nicht protokolliert werden", QUARANTINE_CLEANUP_JOB_NAME)
+        _record_background_error(exc)
+
+
 async def quarantine_cleanup_loop() -> None:
     """Entfernt alte verwaiste Quarantänedateien; registrierte Uploads bleiben erhalten."""
     interval_seconds = settings.quarantine_cleanup_interval_minutes * 60
     max_age_seconds = max(24 * 60 * 60, settings.quarantine_max_age_minutes * 60)
     while True:
         with engine.begin() as conn:
-            acquired = conn.execute(text("SELECT pg_try_advisory_xact_lock(202600007)")).scalar()
+            acquired = conn.execute(text(f"SELECT pg_try_advisory_xact_lock({QUARANTINE_CLEANUP_LOCK_ID})")).scalar()
             if acquired:
+                started_at = datetime.now(timezone.utc)
                 try:
                     with SessionLocal() as db:
                         await asyncio.to_thread(cleanup_stale_quarantine_files, max_age_seconds, is_referenced=lambda path: upload_path_referenced(db, path))
                 except Exception as exc:
                     _logger.exception("Quarantäne-Cleanup fehlgeschlagen; beim nächsten Durchlauf erneut versuchen")
                     _record_background_error(exc)
+                    await asyncio.to_thread(_record_job_run, status="failure", started_at=started_at, error=f"{type(exc).__name__}: {exc}"[:4000])
+                else:
+                    await asyncio.to_thread(_record_job_run, status="success", started_at=started_at)
         await asyncio.sleep(interval_seconds)
 
 

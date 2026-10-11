@@ -95,6 +95,26 @@ Beim Schreiben oder Ändern von Backend-Code (Routen, Services) gilt deshalb:
 4. Ein `except Exception`-Block, der eine Exception **schluckt** (nur `logger.exception(...)`, `pass`, oder in eine Ergebnisliste/Toast-Text umwandelt, ohne erneut zu raisen) — auch innerhalb eines Requests — verliert den Fehler ebenfalls für `system_error_log`. Sofern es sich nicht um einen bewusst harmlosen Best-Effort-Fall handelt (z. B. optionale EXIF-Metadaten, DNS-Lookup mit Fallback), zusätzlich `record_system_error(...)`/`insert_error_log(...)` aufrufen.
 5. Nach jeder Änderung an einem `except Exception`-Block in `backend/`/`abgabebox-backend/` kurz gegenprüfen: landet ein hier auftretender, bislang unbekannter Fehler tatsächlich in `system_error_log` (inkl. eines Blicks auf den tatsächlich verwendeten `source`-Wert), oder wird die Kette (raise mit `from exc` / expliziter Logging-Call / Constraint) unterbrochen?
 
+## Hintergrundjobs (verbindlich)
+
+Jeder periodische Job erscheint unter `/admin/jobs` und braucht dafür drei Dinge im selben Change:
+
+1. Einen Eintrag in `backend/app/core/job_registry.py` (`JOB_DEFINITIONS`: Takt, Kategorie, `max_silence_seconds`). Backend-Loops zusätzlich mit eindeutiger Lock-ID in `BACKGROUND_LOCK_IDS` und Aufruf `run_advisory_locked_loop(name="<job>", ...)` – das meldet jeden Lauf automatisch. Lock-IDs anderer Dienste auf derselben DB (abgabebox) gehören in `EXTERNAL_LOCK_IDS`.
+2. Übersetzungen `admin.jobs.jobNames.<job>.title/description` in allen Locales (`frontend/messages/<locale>/admin.json`).
+3. Dienste ausserhalb des Backends (abgabebox, Worker, künftige Host-Cronjobs) melden über die SQL-Funktionen `record_job_run`/`record_job_start`/`record_job_heartbeat` (Migration `0105_system_job_status.py`), nie per direktem `INSERT`. Ein Job, der meldet, aber nicht registriert ist, erscheint als „Nicht registriert“.
+
+Meldungen erst schreiben, nachdem Lock-Verbindung und Session des Ticks freigegeben sind (siehe Kommentar in `run_advisory_locked_loop`), sonst erschöpft der gleichzeitige Start aller Loops den Connection-Pool.
+
+Host-Cronjobs immer über `scripts/run_job.sh <job> <befehl>` starten (meldet Läufe, siehe RUNBOOK Abschnitt 10).
+
+## Systemmonitoring (verbindlich)
+
+`/admin/system` und die ntfy-Alarme beruhen auf `backend/app/services/system_health_service.py` (Sammeln, Schwellwerte) und `system_alert_service.py` (Probleme ableiten, entprellen, benachrichtigen). Beim Erweitern:
+
+- Neue Dienst-Prüfung: in `collect_checks` ergänzen, deutscher Titel/Text für ntfy in `system_alert_service.py` (`_CHECK_TITLES_DE`, `_CHECK_PROBLEM_TITLES_DE`, `_check_message`) und Übersetzungen `admin.system.checks.<key>.title/detail/problem` in allen Locales. Zahlen in `detail` immer als `{param, number}`.
+- Probleme haben stabile Schlüssel `<quelle>:<subjekt>[:<zusatz>]` und einen `reason`; die Oberfläche übersetzt über `admin.system.problems.<quelle>.<reason>` - neue Gründe dort ergänzen.
+- Das Backend bekommt nie den Docker-Socket, nur den `docker-socket-proxy` (nur GET auf Container) im internen Netz `docker-api`. Keine weiteren Proxy-Rechte (`POST`, `EXEC`, ...) freischalten.
+
 ## Prüfen
 
 Projektabhängigkeiten und Projektbefehle laufen in Containern. Auf dem Host installiertes Node/Python dient auch Dev-Tools und ist kein Grund, Frontend- oder Backend-Abhängigkeiten auf dem Host zu installieren oder Projektbefehle dorthin zu verlagern.

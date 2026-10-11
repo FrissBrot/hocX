@@ -23386,3 +23386,101 @@ a.mobile-list-row { color: var(--text); }
 .list-manager-layout, .list-manager-tabs { min-width: 0; max-width: 100%; }
 .list-manager-tabs .tabs-trigger { flex-shrink: 0; }
 .lists-page > .grid { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+
+/* Job-Übersicht im Platform-Admin (/admin/jobs) */
+.admin-job-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.admin-job-name {
+  font-weight: 500;
+}
+
+.admin-job-description {
+  font-size: var(--text-sm);
+}
+
+.admin-job-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.admin-job-details dt {
+  color: var(--muted);
+}
+
+.admin-job-details dd {
+  margin: 0;
+}
+
+.admin-job-error-block {
+  gap: var(--space-2);
+}
+
+.admin-job-error {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+  font-size: var(--text-sm);
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+@media (max-width: 640px) {
+  .admin-job-details {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+
+  .admin-job-details dd {
+    margin-bottom: var(--space-2);
+  }
+}
+
+/* Systemstatus im Platform-Admin (/admin/system) */
+.admin-system-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-3);
+}
+
+.admin-system-check {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+}
+
+.admin-system-check-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.admin-system-check p {
+  margin: 0;
+}
+
+.admin-system-problems {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-system-problems li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}

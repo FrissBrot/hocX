@@ -292,6 +292,15 @@ Zwei eigenständige Skripte in `scripts/`, gedacht für periodische Ausführung 
 macht). Beide sind idempotent, loggen mit Zeitstempel nach stdout/stderr und brechen bei
 Fehlern mit Exit-Code ≠ 0 ab (wichtig für Cron-Fehlerbenachrichtigung/Monitoring).
 
+Beide Cron-Einträge laufen über `scripts/run_job.sh <jobname> <befehl>`: der Wrapper meldet
+Start, Dauer und Ergebnis (inkl. der letzten Ausgabezeilen bei einem Fehler) an die Job-Übersicht
+im Platform-Admin (`/admin/jobs`) und gibt den Exit-Code des Skripts unverändert zurück. Ein
+fehlgeschlagener Lauf löst darüber eine ntfy-Benachrichtigung aus, ein ausbleibender Lauf (>26 h)
+ebenfalls - siehe Abschnitt 12. Solange die Crons nicht eingerichtet sind, zeigt `/admin/jobs`
+beide Jobs als „Nie gelaufen“ (ohne Alarm). Neue Cronjobs mit ihrem Namen in
+`backend/app/core/job_registry.py` eintragen, sonst erscheinen sie nur als „Nicht registriert“
+und werden bei Ausbleiben nicht gemeldet.
+
 ### `scripts/backup_db.sh`
 
 - **Zweck**: nächtlicher Postgres-Dump, unabhängig vom Deploy-Zyklus. Nutzt denselben
@@ -307,7 +316,7 @@ Fehlern mit Exit-Code ≠ 0 ab (wichtig für Cron-Fehlerbenachrichtigung/Monitor
   Pre-Deploy-Backups, gut unterscheidbar am `-cron`-Suffix).
 - **Empfohlener Cron-Zeitplan**: täglich 03:15 Uhr, mit Logdatei im selben `backups/`-Ordner:
   ```
-  15 3 * * * /docker/hocX/scripts/backup_db.sh >> /docker/hocX/backups/backup_db.log 2>&1
+  15 3 * * * /docker/hocX/scripts/run_job.sh backup_db /docker/hocX/scripts/backup_db.sh >> /docker/hocX/backups/backup_db.log 2>&1
   ```
 - **Manuell testen**: `./scripts/backup_db.sh` direkt im Repo-Root ausführen und danach
   `ls -lh backups/` prüfen.
@@ -338,7 +347,7 @@ Fehlern mit Exit-Code ≠ 0 ab (wichtig für Cron-Fehlerbenachrichtigung/Monitor
 - **Empfohlener Cron-Zeitplan**: täglich 03:45 Uhr, also nach `backup_db.sh`, damit ein
   Backup immer vor einer Cleanup-Runde derselben Nacht liegt:
   ```
-  45 3 * * * /docker/hocX/scripts/cleanup_storage.sh >> /docker/hocX/backups/cleanup_storage.log 2>&1
+  45 3 * * * /docker/hocX/scripts/run_job.sh cleanup_storage /docker/hocX/scripts/cleanup_storage.sh >> /docker/hocX/backups/cleanup_storage.log 2>&1
   ```
 - **Manuell testen**: erst `./scripts/cleanup_storage.sh --dry-run` (zeigt betroffene
   Dateien, löscht nichts), danach bei Bedarf ohne Flag fuer den echten Lauf.
@@ -374,3 +383,76 @@ keine Pipeline-Umstellung auf GHCR-Images ist im Rahmen dieses Punkts vorgesehen
      Alembic-Fehler beim Start
 4. **Bei Problemen**: Rollback wie in Abschnitt 4 beschrieben, mit dem in Schritt 1
    frisch gezogenen Backup statt eines älteren Cron-Backups.
+
+## 12. Monitoring und Benachrichtigungen
+
+Im Platform-Admin unter **System**:
+
+- **Systemstatus** (`/admin/system`): Container (Status, Healthcheck, Neustarts, CPU/RAM,
+  Version) und Dienste (Postgres, Redis, ClamAV inkl. Signaturalter, Speicherplatz,
+  Fehlerrate, Rückstand der Virenprüfung, Bildanalyse-Warteschlange), offene Probleme und
+  die letzten Ereignisse. Gesammelt alle 30 s vom Loop `system_monitor` im Backend
+  (`app/services/system_health_service.py`, Schwellwerte dort oben).
+- **Jobs** (`/admin/jobs`): alle Hintergrund-Loops, der Bildanalyse-Worker und die
+  Host-Cronjobs aus Abschnitt 10.
+- **Benachrichtigungen** (`/admin/notifications`): ntfy-Konfiguration und das Status-Token
+  für Uptime Kuma.
+
+### Container-Übersicht: docker-socket-proxy
+
+Das Backend liest Container-Daten über den Dienst `docker-socket-proxy`
+(`lscr.io/linuxserver/socket-proxy`, per Digest gepinnt) - nur GET auf `/containers`,
+`/_ping`, `/version`; alles andere beantwortet der Proxy mit 403. Er hängt allein mit dem
+Backend im internen Netz `docker-api`, damit die öffentlich erreichbaren Dienste die
+Docker-API (und darüber die Umgebungsvariablen aller Container) nicht erreichen. Das Backend
+hat deshalb zwei Netze; das Label `traefik.docker.network=${COMPOSE_PROJECT_NAME}_default`
+sorgt dafür, dass Traefik die richtige Backend-IP nimmt. Nach dem ersten Deploy mit diesem
+Stand ist `docker compose up -d` nötig (neuer Dienst + Netz), nicht nur ein Neustart.
+
+Ohne `DOCKER_API_URL` zeigt die Seite „Container-Übersicht nicht eingerichtet“; alle übrigen
+Prüfungen laufen trotzdem.
+
+### ntfy einrichten
+
+1. `/admin/notifications` öffnen, Server-URL (z. B. `https://ntfy.example.com`), Topic und
+   - falls der Server Zugriffsschutz hat - ein Access Token (`tk_…`) oder `benutzer:passwort`
+   eintragen. Optional die Adresse des Admin-Portals, dann öffnet ein Tipp auf die Nachricht
+   direkt die passende Seite.
+2. Speichern, dann **Testnachricht senden**. Fehler (falsche URL, 401/403) erscheinen direkt
+   auf der Seite.
+
+Gemeldet wird:
+
+| Ereignis | Priorität |
+|---|---|
+| Neues Problem, erst nach 90 s Bestand (Deploys lösen so keinen Alarm aus) | 3 (Warnung) / 4 (kritisch) |
+| Problem verschärft sich (Warnung → kritisch) | 4 |
+| Problem weiterhin offen (Erinnerung, Standard alle 6 h, 0 = aus) | wie das Problem |
+| Problem behoben | 2 |
+| Container neu gestartet (gleicher Container, neuer Start; ein Deploy zählt nicht) | 3 |
+
+Mehr als fünf Meldungen auf einmal gehen als eine Sammelnachricht raus. Der Token liegt
+verschlüsselt in `platform_notification_settings` (Schlüssel aus `ADMIN_AUTH_SECRET`) - wird
+`ADMIN_AUTH_SECRET` rotiert, das ntfy-Token und das Status-Token neu setzen.
+
+### Uptime Kuma (Überwachung von aussen)
+
+Fällt das Backend oder der ganze Host aus, kann es selbst nichts mehr melden. Dafür:
+
+1. In `/admin/notifications` unter „Überwachung von aussen“ ein Token erzeugen und die
+   angezeigte URL kopieren (`https://<TRAEFIK_DOMAIN>/api/system-status/summary?token=…`).
+2. In Uptime Kuma einen Monitor vom Typ **HTTP(s)** mit dieser URL anlegen, akzeptierte
+   Statuscodes `200-299`, Intervall z. B. 60 s, Benachrichtigung über denselben ntfy-Server.
+
+Der Endpunkt antwortet `200` (`status` = `ok` oder `warning`) bzw. `503` bei einem offenen
+kritischen Problem oder wenn der Systemstatus älter als 3 Minuten ist (`status` = `critical`
+/ `stale`). Die Antwort enthält nur Zähler. Wer auch bei Warnungen alarmiert werden will:
+Monitor-Typ **HTTP(s) - Keyword** mit dem Keyword `"warnings":0`.
+
+### Wenn etwas nicht stimmt
+
+- „Systemstatus veraltet“: Backend-Logs auf `Background-Loop system_monitor` prüfen;
+  `/admin/jobs` zeigt den letzten Lauf und Fehler des Loops `system_monitor`.
+- „Container-Status nicht verfügbar“: `docker compose ps docker-socket-proxy`, Logs des
+  Proxys; läuft das Backend im Netz `docker-api`?
+- Virensignaturen veraltet: Logs des `clamav`-Containers (freshclam) prüfen.

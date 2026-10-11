@@ -17,13 +17,16 @@ sure neither of those literal ids collides with a periodic loop's either."""
 import re
 from pathlib import Path
 
-from app.core.background_loops import BACKGROUND_LOCK_IDS
+from app.core.background_loops import BACKGROUND_LOCK_IDS, EXTERNAL_LOCK_IDS
+from app.core.job_registry import JOBS_BY_NAME
 
 MAIN_PY = Path(__file__).resolve().parents[1] / "app" / "main.py"
 
 
 def test_background_lock_ids_are_unique():
-    values = list(BACKGROUND_LOCK_IDS.values())
+    # Inklusive der Lock-IDs anderer Dienste auf derselben Datenbank (abgabebox-backend) -
+    # dort lag bis 2026-10-11 eine Kollision mit export_cleanup.
+    values = [*BACKGROUND_LOCK_IDS.values(), *EXTERNAL_LOCK_IDS.values()]
     duplicates = {value for value in values if values.count(value) > 1}
     assert not duplicates, f"BACKGROUND_LOCK_IDS has a lock id shared by more than one loop: {sorted(duplicates)}"
 
@@ -36,7 +39,7 @@ def test_one_shot_startup_locks_in_main_do_not_collide_with_a_periodic_loop_or_e
     duplicates = {lock_id for lock_id in literal_ids if literal_ids.count(lock_id) > 1}
     assert not duplicates, f"one-shot startup lock id(s) used more than once in main.py: {sorted(duplicates)}"
 
-    overlap = set(literal_ids) & set(BACKGROUND_LOCK_IDS.values())
+    overlap = set(literal_ids) & {*BACKGROUND_LOCK_IDS.values(), *EXTERNAL_LOCK_IDS.values()}
     assert not overlap, f"main.py's one-shot startup lock id(s) collide with a periodic loop's: {sorted(overlap)}"
 
 
@@ -50,8 +53,20 @@ def test_every_background_lock_id_key_referenced_in_main_is_defined():
     only a duplicate one, so this checks the other direction: every symbolic key main.py
     subscripts BACKGROUND_LOCK_IDS with must actually be defined."""
     source = MAIN_PY.read_text(encoding="utf-8")
-    referenced_keys = set(re.findall(r'BACKGROUND_LOCK_IDS\["([^"]+)"\]', source))
-    assert referenced_keys, "expected to find symbolic BACKGROUND_LOCK_IDS[...] lookups in main.py"
+    # Seit 2026-10-11 übergeben die Loops nur noch name="..." an run_advisory_locked_loop,
+    # das die Lock-ID selbst in BACKGROUND_LOCK_IDS nachschlägt.
+    referenced_keys = set(re.findall(r'run_advisory_locked_loop\(\s*name="([^"]+)"', source))
+    assert referenced_keys, "expected to find run_advisory_locked_loop(name=...) calls in main.py"
 
     missing = referenced_keys - set(BACKGROUND_LOCK_IDS.keys())
     assert not missing, f"main.py references BACKGROUND_LOCK_IDS key(s) not defined in the dict: {sorted(missing)}"
+
+
+def test_every_loop_in_main_has_a_job_definition():
+    """Jeder Loop braucht einen Eintrag in job_registry.py, sonst stirbt er beim ersten Tick an
+    JOBS_BY_NAME[name] (KeyError) - genau die Art stiller Ausfall, die
+    test_app_lifespan_smoke.py sonst erst zur Laufzeit fängt."""
+    source = MAIN_PY.read_text(encoding="utf-8")
+    referenced_keys = set(re.findall(r'run_advisory_locked_loop\(\s*name="([^"]+)"', source))
+    missing = referenced_keys - set(JOBS_BY_NAME)
+    assert not missing, f"main.py loop(s) without a JOB_DEFINITIONS entry in job_registry.py: {sorted(missing)}"

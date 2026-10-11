@@ -345,6 +345,152 @@ class UploadPipelineOverview(BaseModel):
     abgabebox_quarantine: list[AbgabeboxQuarantineEntry]
 
 
+JobState = Literal["ok", "running", "failing", "overdue", "never_run"]
+
+
+class JobStatusRead(BaseModel):
+    name: str
+    # False = Job meldet sich, steht aber nicht in job_registry.py (z. B. neuer Host-Cronjob).
+    registered: bool
+    kind: str | None = None
+    service: str | None = None
+    category: str | None = None
+    interval_seconds: int | None = None
+    max_silence_seconds: int | None = None
+    state: JobState
+    last_status: str | None = None
+    last_started_at: datetime | None = None
+    last_finished_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_failure_at: datetime | None = None
+    last_heartbeat_at: datetime | None = None
+    last_duration_ms: int | None = None
+    last_error: str | None = None
+    consecutive_failures: int = 0
+    run_count: int = 0
+    failure_count: int = 0
+
+
+class JobStatusOverview(BaseModel):
+    items: list[JobStatusRead]
+    generated_at: datetime
+
+
+class JobRunRead(BaseModel):
+    id: int
+    status: str
+    started_at: datetime
+    finished_at: datetime
+    duration_ms: int
+    error: str | None = None
+
+
+class JobRunPage(BaseModel):
+    items: list[JobRunRead]
+    total: int
+
+HealthStatus = Literal["ok", "warning", "critical", "unknown"]
+ProblemSeverity = Literal["warning", "critical"]
+
+
+class ContainerStatusRead(BaseModel):
+    name: str
+    service: str
+    container_id: str
+    state: str
+    health: str | None = None
+    health_output: str | None = None
+    restart_count: int = 0
+    started_at: datetime | None = None
+    exit_code: int | None = None
+    oom_killed: bool = False
+    image: str | None = None
+    version: str | None = None
+    cpu_percent: float | None = None
+    memory_bytes: int | None = None
+    memory_limit_bytes: int | None = None
+    status: HealthStatus
+    # Strukturierte Gründe für status != ok, z. B. "unhealthy", "not_running", "memory_high".
+    reasons: list[str] = Field(default_factory=list)
+
+
+class HealthCheckRead(BaseModel):
+    key: str
+    status: HealthStatus
+    # Werte für die übersetzten Detailtexte im Frontend (admin.system.checks.<key>.detail).
+    params: dict[str, str | int | float | None] = Field(default_factory=dict)
+    error: str | None = None
+
+
+class SystemHealthSnapshot(BaseModel):
+    collected_at: datetime
+    docker_configured: bool
+    docker_available: bool
+    docker_error: str | None = None
+    compose_project: str | None = None
+    containers: list[ContainerStatusRead] = Field(default_factory=list)
+    checks: list[HealthCheckRead] = Field(default_factory=list)
+
+
+class SystemProblemRead(BaseModel):
+    key: str
+    source: str
+    subject: str
+    reason: str
+    severity: ProblemSeverity
+    title: str
+    message: str
+    first_seen_at: datetime | None = None
+
+
+class SystemHealthEventRead(BaseModel):
+    id: int
+    kind: str
+    subject: str
+    reason: str | None = None
+    severity: str
+    title: str
+    message: str
+    created_at: datetime
+
+
+class SystemStatusRead(BaseModel):
+    snapshot: SystemHealthSnapshot | None = None
+    stale: bool
+    problems: list[SystemProblemRead]
+    events: list[SystemHealthEventRead]
+
+
+class NotificationSettingsRead(BaseModel):
+    ntfy_enabled: bool
+    ntfy_server_url: str | None = None
+    ntfy_topic: str | None = None
+    # Das Token selbst verlässt das Backend nie wieder - nur ob eins gesetzt ist.
+    ntfy_token_set: bool
+    admin_url: str | None = None
+    reminder_hours: int
+    status_token: str | None = None
+    # Fertige URL für den HTTP-Monitor in Uptime Kuma (ohne bekannte Domain nur der Pfad).
+    status_url: str | None = None
+    last_sent_at: datetime | None = None
+    last_send_error: str | None = None
+    last_send_error_at: datetime | None = None
+
+
+class NotificationSettingsWrite(BaseModel):
+    ntfy_enabled: bool
+    ntfy_server_url: str | None = Field(default=None, max_length=500)
+    ntfy_topic: str | None = Field(default=None, max_length=64)
+    # None = unverändert lassen, "" = entfernen, sonst neues Token.
+    ntfy_token: str | None = Field(default=None, max_length=500)
+    admin_url: str | None = Field(default=None, max_length=500)
+    reminder_hours: int = Field(default=6, ge=0, le=168)
+
+
+class NotificationTestResult(BaseModel):
+    ok: bool
+    error: str | None = None
+
 TenantCleanupCategory = Literal[
     "protocols", "list_entries", "lists_full", "events", "todos", "participants", "documents"
 ]

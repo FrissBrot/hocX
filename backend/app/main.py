@@ -10,8 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, auth, calendar_feeds, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, table_snapshots, tag_config, templates, tenants, todos, users, word_import
-from app.core.background_loops import BACKGROUND_LOCK_IDS, run_advisory_locked_loop
+from app.api.routes import admin, admin_auth, auth, calendar_feeds, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, templates, tenants, todos, users, word_import
+from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
 from app.core.error_log import best_effort_actor_from_request, record_system_error
@@ -20,6 +20,7 @@ from app.core.security import hash_password
 from app.models import AppUser, ElementType, PlatformAdmin, Role, Tenant
 from app.services import domain_health_check_service, traefik_config_service
 from app.services.admin_error_log_service import AdminErrorLogService
+from app.services.admin_job_status_service import AdminJobStatusService
 from app.services.audit_service import AuditService
 from app.services.submission_service import SubmissionService
 from app.services.document_template_service import DocumentTemplateService
@@ -27,7 +28,7 @@ from app.services.export_service import ExportService
 from app.services.file_service import FileService
 from app.services.isolated_parse import shutdown_pool as shutdown_word_import_parse_pool
 from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
-from app.services import photo_album_service
+from app.services import photo_album_service, system_alert_service
 from app.services.table_snapshot_service import TableSnapshotService, run_due_cycle_snapshots
 
 
@@ -185,7 +186,7 @@ async def domain_health_check_loop() -> None:
     single-instance process in this deployment), so each tick is guarded by a Postgres advisory
     lock - only the worker that acquires it does the check, the other(s) skip that tick."""
     await run_advisory_locked_loop(
-        lock_id=BACKGROUND_LOCK_IDS["domain_health_check"],
+        name="domain_health_check",
         interval_seconds=settings.domain_health_check_interval_minutes * 60,
         task=domain_health_check_service.run_health_check,
     )
@@ -200,7 +201,7 @@ async def abgabebox_rescan_loop() -> None:
     abgabebox DB role can't itself move them out of, so this needs SubmissionService's own
     move-from-quarantine logic, not FileService's."""
     await run_advisory_locked_loop(
-        lock_id=BACKGROUND_LOCK_IDS["abgabebox_rescan"],
+        name="abgabebox_rescan",
         interval_seconds=settings.abgabebox_rescan_interval_minutes * 60,
         task=SubmissionService().rescan_all_pending,
     )
@@ -212,7 +213,7 @@ async def upload_pipeline_rescan_loop() -> None:
     upload time). One consolidated loop instead of three near-identical ones - see
     FileService.rescan_pending_internal_files and the upload-pipeline unification plan."""
     await run_advisory_locked_loop(
-        lock_id=BACKGROUND_LOCK_IDS["upload_pipeline_rescan"],
+        name="upload_pipeline_rescan",
         interval_seconds=settings.upload_pipeline_rescan_interval_minutes * 60,
         task=FileService().rescan_pending_internal_files,
     )
@@ -227,7 +228,7 @@ async def export_cleanup_loop() -> None:
     pattern as the loops above."""
     export_service = ExportService()
     await run_advisory_locked_loop(
-        lock_id=BACKGROUND_LOCK_IDS["export_cleanup"],
+        name="export_cleanup",
         interval_seconds=settings.export_cleanup_interval_minutes * 60,
         task=lambda _db: export_service.cleanup_old_generated_exports(),
     )
@@ -239,13 +240,16 @@ async def log_cleanup_loop() -> None:
     loop above, which already existed). Same every-worker-but-advisory-locked pattern."""
     audit_service = AuditService()
     error_log_service = AdminErrorLogService()
+    job_status_service = AdminJobStatusService()
 
     def _cleanup(db) -> None:
         audit_service.cleanup_old_entries(db, retention_days=settings.audit_log_retention_days)
         error_log_service.cleanup_old_entries(db, retention_days=settings.error_log_retention_days)
+        job_status_service.cleanup_old_runs(db, retention_days=settings.job_run_retention_days)
+        system_alert_service.cleanup_old_events(db, retention_days=settings.health_event_retention_days)
 
     await run_advisory_locked_loop(
-        lock_id=BACKGROUND_LOCK_IDS["log_cleanup"],
+        name="log_cleanup",
         interval_seconds=settings.log_cleanup_interval_minutes * 60,
         task=_cleanup,
     )
@@ -262,7 +266,7 @@ async def cycle_snapshot_loop() -> None:
     silently starving one of the two loops every tick) argued for."""
     snapshot_service = TableSnapshotService()
     await run_advisory_locked_loop(
-        lock_id=BACKGROUND_LOCK_IDS["cycle_snapshot"],
+        name="cycle_snapshot",
         interval_seconds=settings.cycle_snapshot_check_interval_minutes * 60,
         task=lambda db: run_due_cycle_snapshots(db, snapshot_service),
     )
@@ -300,7 +304,7 @@ async def photo_analysis_auto_queue_loop() -> None:
     up missing the to_thread offload and exception isolation every other loop has."""
     file_service = FileService()
     await run_advisory_locked_loop(
-        lock_id=BACKGROUND_LOCK_IDS["photo_analysis_auto_queue"],
+        name="photo_analysis_auto_queue",
         interval_seconds=settings.photo_analysis_auto_queue_interval_minutes * 60,
         task=file_service.create_pending_analysis_jobs,
         should_run=lambda: _photo_analysis_auto_queue_window_is_open() and _host_load_is_low(),
@@ -314,7 +318,7 @@ async def photo_quality_backfill_loop() -> None:
     photo_analysis_auto_queue_loop. Same every-worker-but-advisory-locked pattern."""
     file_service = FileService()
     await run_advisory_locked_loop(
-        lock_id=BACKGROUND_LOCK_IDS["photo_quality_backfill"],
+        name="photo_quality_backfill",
         interval_seconds=settings.photo_quality_backfill_interval_minutes * 60,
         task=file_service.backfill_missing_quality_scores,
     )
@@ -327,7 +331,7 @@ async def photo_album_sync_loop() -> None:
     advisory-locked pattern as the loops above."""
     file_service = FileService()
     await run_advisory_locked_loop(
-        lock_id=BACKGROUND_LOCK_IDS["photo_album_sync"],
+        name="photo_album_sync",
         interval_seconds=settings.photo_album_sync_interval_minutes * 60,
         task=lambda db: photo_album_service.sync_submission_uploads(db, file_service),
     )
@@ -343,9 +347,20 @@ async def gallery_upload_ingest_loop() -> None:
     within a few seconds rather than waiting for an off-peak window."""
     file_service = FileService()
     await run_advisory_locked_loop(
-        lock_id=BACKGROUND_LOCK_IDS["gallery_upload_ingest"],
+        name="gallery_upload_ingest",
         interval_seconds=5,
         task=file_service.process_pending_gallery_upload_jobs,
+    )
+
+
+async def system_monitor_loop() -> None:
+    """Systemstatus sammeln (Container, Dienste) und bei Statuswechseln per ntfy benachrichtigen -
+    siehe system_health_service/system_alert_service. Same every-worker-but-advisory-locked
+    pattern as the loops above."""
+    await run_advisory_locked_loop(
+        name="system_monitor",
+        interval_seconds=settings.system_monitor_interval_seconds,
+        task=system_alert_service.run_monitor_tick,
     )
 
 
@@ -369,12 +384,14 @@ async def lifespan(_: FastAPI):
         photo_quality_backfill_task = asyncio.create_task(photo_quality_backfill_loop())
         photo_album_sync_task = asyncio.create_task(photo_album_sync_loop())
         gallery_upload_ingest_task = asyncio.create_task(gallery_upload_ingest_loop())
+        system_monitor_task = asyncio.create_task(system_monitor_loop())
         yield
         health_check_task.cancel()
         photo_analysis_auto_queue_task.cancel()
         photo_quality_backfill_task.cancel()
         photo_album_sync_task.cancel()
         gallery_upload_ingest_task.cancel()
+        system_monitor_task.cancel()
         rescan_task.cancel()
         upload_pipeline_rescan_task.cancel()
         export_cleanup_task.cancel()
@@ -477,6 +494,7 @@ app.include_router(exports.router, prefix="/api", tags=["exports"])
 app.include_router(finance.router, prefix="/api", tags=["finance"])
 app.include_router(fines.router, prefix="/api", tags=["fines"])
 app.include_router(statistics.router, prefix="/api", tags=["statistics"])
+app.include_router(system_status.router, prefix="/api", tags=["system-status"])
 app.include_router(submission_assignments.router, prefix="/api", tags=["submission-assignments"])
 app.include_router(word_import.router, prefix="/api", tags=["word-import"])
 app.include_router(collaboration_ws.router, tags=["collaboration"])

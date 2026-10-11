@@ -10,9 +10,10 @@ from __future__ import annotations
 import logging
 import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
-from app.db import build_engine, claim_next_job, fetch_files, finish_job, write_face_quality_scores_batch
+from app.db import build_engine, claim_next_job, fetch_files, finish_job, record_heartbeat, record_job_run, write_face_quality_scores_batch
 from app.face_quality import load_detector, score_face_quality
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -51,15 +52,27 @@ def _process_job(engine, detector, job: dict) -> None:
     finish_job(engine, job["id"], status="done")
 
 
+def _report(fn, *args, **kwargs) -> None:
+    """Meldungen an /admin/jobs (Heartbeat, Läufe) sind best effort: scheitern sie, soll die
+    Analyse trotzdem weiterlaufen. Dieser Container hat keinen Zugriff auf system_error_log -
+    ein dauerhaft fehlendes Lebenszeichen fällt dort stattdessen als überfälliger Worker auf."""
+    try:
+        fn(*args, **kwargs)
+    except Exception:
+        logger.warning("job status report failed", exc_info=True)
+
+
 def run() -> None:
     engine = build_engine()
     detector = load_detector(MODEL_PATH)
     logger.info("photo-analysis-worker started, polling every %ss", POLL_INTERVAL_SECONDS)
     while True:
+        _report(record_heartbeat, engine)
         job = claim_next_job(engine)
         if job is None:
             time.sleep(POLL_INTERVAL_SECONDS)
             continue
+        started_at = datetime.now(timezone.utc)
         try:
             _process_job(engine, detector, job)
         except Exception as exc:
@@ -67,6 +80,9 @@ def run() -> None:
             # never crash the loop - mark it failed and keep polling for the next one.
             logger.exception("job %s failed", job["id"])
             finish_job(engine, job["id"], status="failed", error=str(exc))
+            _report(record_job_run, engine, status="failure", started_at=started_at, error=f"{type(exc).__name__}: {exc}"[:4000])
+        else:
+            _report(record_job_run, engine, status="success", started_at=started_at)
 
 
 if __name__ == "__main__":

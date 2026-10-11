@@ -85,6 +85,15 @@ class Settings(BaseSettings):
     log_cleanup_interval_minutes: int = 1440
     audit_log_retention_days: int = 730
     error_log_retention_days: int = 90
+    # Verlauf der Job-Läufe für /admin/jobs (system_job_run, siehe job_registry.py) - der aktuelle
+    # Stand pro Job in system_job_status bleibt unabhängig davon erhalten.
+    job_run_retention_days: int = 30
+    # Systemmonitoring (/admin/system, ntfy-Alarme). docker_api_url zeigt auf den
+    # docker-socket-proxy (nur Container-Lesezugriff, eigenes internes Netz - siehe Compose);
+    # leer = keine Container-Übersicht, die übrigen Prüfungen laufen trotzdem.
+    docker_api_url: str | None = None
+    system_monitor_interval_seconds: int = 30
+    health_event_retention_days: int = 90
     # How often the cycle-snapshot loop checks whether any CycleConfig's reset boundary
     # was crossed since the last snapshot (see main.py's cycle_snapshot_loop and
     # table_snapshot_service.run_due_cycle_snapshots). Daily is enough - a cycle boundary

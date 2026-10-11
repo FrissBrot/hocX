@@ -12,7 +12,7 @@ import { ConfirmProvider } from "@/contexts/confirm-context";
 import { AdminSessionInfo, AdminTenantPage } from "@/types/api";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
-type AdminIconKey = "dashboard" | "tenants" | "pricing" | "users" | "domains" | "errors" | "pipeline" | "admins" | "sso" | "security";
+type AdminIconKey = "dashboard" | "tenants" | "pricing" | "users" | "domains" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security";
 
 type AdminNavLink = { href: string; labelKey: string; icon: AdminIconKey; badge?: "count" };
 
@@ -32,8 +32,11 @@ const navGroups: { titleKey: string | null; links: AdminNavLink[] }[] = [
   {
     titleKey: "groups.system",
     links: [
+      { href: "/admin/system", labelKey: "nav.systemStatus", icon: "system" },
       { href: "/admin/error-logs", labelKey: "nav.errorLogs", icon: "errors" },
       { href: "/admin/upload-pipeline", labelKey: "nav.uploadPipeline", icon: "pipeline" },
+      { href: "/admin/jobs", labelKey: "nav.jobs", icon: "jobs" },
+      { href: "/admin/notifications", labelKey: "nav.notifications", icon: "notifications" },
     ],
   },
   {
@@ -107,6 +110,23 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
       <>
         <circle cx="7.5" cy="15.5" r="4" />
         <path d="M10.4 12.6L20 3M16 7l2.5 2.5M13.5 9.5l2 2" />
+      </>
+    ),
+    system: (
+      <>
+        <path d="M3 12h4l2.5-6 4 12 2.5-6H21" />
+      </>
+    ),
+    notifications: (
+      <>
+        <path d="M6 16.5V11a6 6 0 0112 0v5.5l1.5 2h-15z" />
+        <path d="M10 20.5a2 2 0 004 0" />
+      </>
+    ),
+    jobs: (
+      <>
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M12 7.5V12l3 2" />
       </>
     ),
     security: (

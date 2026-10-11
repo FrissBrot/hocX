@@ -5,7 +5,11 @@ conftest.py), since hocx_photo_worker has no INSERT grant at all on stored_file/
 photo_analysis_job and only column-level SELECT/UPDATE on stored_file.
 """
 
-from app.db import build_engine, claim_next_job, fetch_files, finish_job, write_face_quality_score, write_face_quality_scores_batch
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import text
+
+from app.db import JOB_NAME, build_engine, claim_next_job, fetch_files, finish_job, record_heartbeat, record_job_run, write_face_quality_score, write_face_quality_scores_batch
 
 
 def test_write_face_quality_score_sets_both_the_score_and_face_analyzed_at(make_tenant, make_stored_file, fetch_stored_file):
@@ -121,3 +125,36 @@ def test_finish_job_sets_status_and_error(make_tenant, make_stored_file, make_an
     assert row["status"] == "failed"
     assert row["error"] == "boom"
     assert row["finished_at"] is not None
+
+
+def _fetch_job_status(admin_engine):
+    with admin_engine.begin() as conn:
+        return conn.execute(text("SELECT * FROM system_job_status WHERE job_name = :name"), {"name": JOB_NAME}).mappings().one()
+
+
+def test_record_heartbeat_works_through_the_restricted_role(admin_engine):
+    """hocx_photo_worker hat nur EXECUTE auf record_job_heartbeat (Migration 0105), kein DML
+    auf system_job_status - ohne funktionierenden Grant wäre der Worker in /admin/jobs immer
+    "überfällig", obwohl er läuft."""
+    before = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+    record_heartbeat(build_engine())
+
+    assert _fetch_job_status(admin_engine)["last_heartbeat_at"] >= before
+
+
+def test_record_job_run_counts_failures_and_resets_on_success(admin_engine):
+    engine = build_engine()
+    started_at = datetime.now(timezone.utc)
+
+    record_job_run(engine, status="failure", started_at=started_at, error="RuntimeError: kaputt")
+    failed = _fetch_job_status(admin_engine)
+    assert failed["last_status"] == "failure"
+    assert failed["consecutive_failures"] >= 1
+    assert failed["last_error"] == "RuntimeError: kaputt"
+
+    record_job_run(engine, status="success", started_at=started_at)
+    succeeded = _fetch_job_status(admin_engine)
+    assert succeeded["last_status"] == "success"
+    assert succeeded["consecutive_failures"] == 0
+    assert succeeded["run_count"] == failed["run_count"] + 1

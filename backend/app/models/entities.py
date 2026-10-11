@@ -1472,6 +1472,114 @@ class SystemErrorLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
 
 
+
+class SystemJobStatus(Base):
+    """Aktueller Stand eines periodischen Jobs (Loop, Worker, Host-Cron) für /admin/jobs. Wird
+    nur über die SQL-Funktionen record_job_run/record_job_start/record_job_heartbeat geschrieben
+    (Migration 0105), damit auch die eingeschränkten DB-Rollen melden können - hier nur lesen."""
+
+    __tablename__ = "system_job_status"
+    __table_args__ = (
+        CheckConstraint("last_status IN ('running', 'success', 'failure')", name="ck_system_job_status_last_status"),
+    )
+
+    job_name: Mapped[str] = mapped_column(Text, primary_key=True)
+    last_status: Mapped[str | None] = mapped_column(Text)
+    last_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_failure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_duration_ms: Mapped[int | None] = mapped_column(Integer)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    run_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
+    failure_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+
+
+class SystemJobRun(Base):
+    """Verlauf der Läufe eines Jobs (siehe SystemJobStatus). Bei hochfrequenten Jobs nur Fehler und
+    der erste Erfolg danach, Aufräumen über log_cleanup_loop."""
+
+    __tablename__ = "system_job_run"
+    __table_args__ = (
+        CheckConstraint("status IN ('success', 'failure')", name="ck_system_job_run_status"),
+        Index("idx_system_job_run_job_id", "job_name", "id"),
+        Index("idx_system_job_run_finished", "finished_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    job_name: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text)
+
+
+class SystemAlertState(Base):
+    """Aktuell offenes Problem aus dem Systemmonitoring (siehe app/services/system_alert_service.py)."""
+
+    __tablename__ = "system_alert_state"
+    __table_args__ = (CheckConstraint("severity IN ('warning', 'critical')", name="ck_system_alert_state_severity"),)
+
+    problem_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    severity: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    notified_severity: Mapped[str | None] = mapped_column(Text)
+    last_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SystemHealthEvent(Base):
+    """Verlauf des Systemmonitorings für /admin/system: Problem aufgetreten/behoben, Container neu gestartet."""
+
+    __tablename__ = "system_health_event"
+    __table_args__ = (
+        CheckConstraint("kind IN ('problem', 'resolved', 'container_restart')", name="ck_system_health_event_kind"),
+        CheckConstraint("severity IN ('info', 'warning', 'critical')", name="ck_system_health_event_severity"),
+        Index("idx_system_health_event_created", "created_at"),
+        Index("idx_system_health_event_subject", "subject", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    subject: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    severity: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PlatformNotificationSettings(Base):
+    """ntfy-Konfiguration aus /admin/notifications - genau eine Zeile (id = 1, DB-CHECK). Tokens
+    nur verschlüsselt (secret_crypto); status_token_hash prüft der öffentliche Summary-Endpoint."""
+
+    __tablename__ = "platform_notification_settings"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_platform_notification_settings_singleton"),
+        CheckConstraint("reminder_hours BETWEEN 0 AND 168", name="ck_platform_notification_settings_reminder_hours"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ntfy_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    ntfy_server_url: Mapped[str | None] = mapped_column(Text)
+    ntfy_topic: Mapped[str | None] = mapped_column(Text)
+    ntfy_token_encrypted: Mapped[str | None] = mapped_column(Text)
+    admin_url: Mapped[str | None] = mapped_column(Text)
+    reminder_hours: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("6"))
+    status_token_hash: Mapped[str | None] = mapped_column(Text)
+    status_token_encrypted: Mapped[str | None] = mapped_column(Text)
+    last_send_error: Mapped[str | None] = mapped_column(Text)
+    last_send_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+
 class PhotoAlbum(Base, TimestampMixin):
     """`kind` distinguishes an admin-created album ("manual") from the three auto-generated
     kinds this table also holds (see photo_album_service.py): one per Zyklus+Periode

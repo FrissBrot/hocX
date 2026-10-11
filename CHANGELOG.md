@@ -8,7 +8,34 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Hinzugefügt
+
+- Platform-Admin: neue Seite „Jobs“ (`/admin/jobs`) mit allen periodischen Hintergrundjobs –
+  Virenprüfung, Bildanalyse, Uploads, Aufräum- und Wartungsjobs – samt letztem Lauf, Dauer,
+  Status (OK, läuft, fehlgeschlagen, überfällig, nie gelaufen), letzter Fehlermeldung und
+  Verlauf. Der Bildanalyse-Worker wird über ein Lebenszeichen überwacht. Jobs, die sich melden,
+  aber nicht registriert sind (z. B. künftige Host-Cronjobs), erscheinen unter „Weitere“.
+- Platform-Admin: neue Seite „Systemstatus“ (`/admin/system`) mit allen Containern (Status,
+  Healthcheck, Neustarts, CPU/RAM, Version) und den Diensten, von denen hocX abhängt (Datenbank,
+  Redis, Virenscanner inkl. Alter der Signaturen, Speicherplatz, Fehlerrate, Rückstand der
+  Virenprüfung, Bildanalyse-Warteschlange), offenen Problemen und Ereignisverlauf. Container-Daten
+  kommen über einen neuen, nur lesenden `docker-socket-proxy` in einem internen Netz.
+- Platform-Admin: Benachrichtigungen per ntfy (`/admin/notifications`), konfigurierbar mit
+  Server, Topic, Token, Erinnerungsintervall und Testnachricht. Gemeldet werden neue (nach 90 s
+  Karenzzeit), verschärfte, weiterhin offene und behobene Probleme sowie Container-Neustarts.
+- Statusendpunkt `/api/system-status/summary` (per Token) für externe Überwachung, z. B. mit
+  Uptime Kuma: HTTP 503 bei kritischen Problemen oder veraltetem Systemstatus.
+- `scripts/run_job.sh`: Wrapper für Host-Cronjobs, meldet Läufe an die Job-Übersicht
+  (Backup und Speicher-Aufräumen sind dort bereits registriert, siehe RUNBOOK Abschnitt 10/12).
+
 ### Behoben
+
+- Der Quarantäne-Aufräumjob der Abgabebox und das Aufräumen alter Exporte im Backend teilten
+  sich denselben Datenbank-Lock und haben sich dadurch gegenseitig Durchläufe weggenommen.
+- Ein Hintergrund-Loop konnte dauerhaft und ohne jede Spur stehen bleiben, wenn schon das
+  Holen seiner Datenbankverbindung fehlschlug (z. B. Pool-Timeout). Solche Fehler beenden jetzt
+  nur den einzelnen Durchlauf. Ausserdem starten die Loops zeitversetzt, statt beim Hochfahren
+  alle gleichzeitig um den Connection-Pool zu konkurrieren.
 
 - Mandanten-Export/-Import als vollständiges Backup: Fotoalben (inkl. Best-of-Auswahl)
   und die Zyklus-Snapshots der Listen werden jetzt mitexportiert und wiederhergestellt.

@@ -71,6 +71,309 @@
       "infected": "Infetto"
     }
   },
+  "system": {
+    "title": "Stato del sistema",
+    "description": "Stato di tutti i container e dei servizi da cui dipende hocX. Aggiornato ogni 30 secondi.",
+    "notificationsLink": "Notifiche",
+    "allGood": "Tutto a posto - nessun problema aperto.",
+    "problemCount": "{count, plural, one {# problema aperto} other {# problemi aperti}}",
+    "staleSince": "Lo stato del sistema non è aggiornato (ultimo aggiornamento {time}). Il monitoraggio nel backend non è attivo.",
+    "noData": "Nessun dato finora - il monitoraggio li raccoglie al prossimo passaggio.",
+    "collectedAt": "Aggiornato: {time}",
+    "since": "dal {time}",
+    "checksTitle": "Servizi",
+    "containersTitle": "Container",
+    "composeProject": "Progetto Compose {project}",
+    "dockerNotConfigured": "La panoramica dei container non è configurata (manca DOCKER_API_URL, vedi RUNBOOK).",
+    "dockerUnavailable": "Stato dei container non disponibile: {error}",
+    "containerColumns": {
+      "service": "Servizio",
+      "status": "Stato",
+      "uptime": "Attivo da",
+      "restarts": "Riavvii",
+      "cpu": "CPU",
+      "memory": "Memoria",
+      "version": "Versione"
+    },
+    "eventsTitle": "Eventi",
+    "eventsDescription": "Gli ultimi 50 cambi di stato - gli stessi inviati tramite ntfy.",
+    "eventColumns": {
+      "time": "Data",
+      "kind": "Tipo",
+      "event": "Evento"
+    },
+    "noEvents": "Nessun evento finora.",
+    "eventKinds": {
+      "problem": "Problema",
+      "resolved": "Risolto",
+      "container_restart": "Riavvio"
+    },
+    "severity": {
+      "warning": "Avviso",
+      "critical": "Critico"
+    },
+    "status": {
+      "ok": "OK",
+      "warning": "Avviso",
+      "critical": "Critico",
+      "unknown": "Sconosciuto"
+    },
+    "checkError": "Non raggiungibile: {error}",
+    "noDetails": "Nessun dettaglio.",
+    "memoryOfLimit": "{used} di {limit}",
+    "uptime": {
+      "minutes": "{count, plural, one {# minuto} other {# minuti}}",
+      "hours": "{count, plural, one {# ora} other {# ore}}",
+      "days": "{count, plural, one {# giorno} other {# giorni}}"
+    },
+    "containerReasons": {
+      "not_running": "Non in esecuzione",
+      "unhealthy": "Health check non superato",
+      "oom_killed": "Terminato (memoria insufficiente)",
+      "starting": "Ancora in avvio",
+      "memory_high": "Memoria quasi piena"
+    },
+    "checks": {
+      "postgres": {
+        "title": "Database",
+        "detail": "{latencyMs, number} ms · {connections, number}/{maxConnections, number} connessioni · {sizeMb, number} MB",
+        "problem": "Database lento o sovraccarico"
+      },
+      "redis": {
+        "title": "Redis",
+        "detail": "{latencyMs, number} ms · {usedMb, number} MB occupati",
+        "problem": "Memoria Redis quasi piena"
+      },
+      "clamav": {
+        "title": "Antivirus",
+        "detail": "{version} · {latencyMs, number} ms",
+        "problem": "Antivirus non funzionante"
+      },
+      "clamav_signatures": {
+        "title": "Firme antivirus",
+        "detail": "Versione {signatureVersion} · {ageHours, number} h",
+        "problem": "Firme antivirus obsolete"
+      },
+      "storage": {
+        "title": "Spazio su disco",
+        "detail": "{freePercent, number} % libero · {freeGb, number} di {totalGb, number} GB",
+        "problem": "Spazio su disco in esaurimento"
+      },
+      "error_rate": {
+        "title": "Registro errori",
+        "detail": "{lastHour, number} nell'ultima ora · {lastDay, number} in 24 h",
+        "problem": "Molte voci nel registro errori"
+      },
+      "scan_backlog": {
+        "title": "Scansione antivirus",
+        "detail": "{count, number} file in attesa da più di 1 h",
+        "problem": "Scansione antivirus in ritardo"
+      },
+      "photo_queue": {
+        "title": "Analisi immagini",
+        "detail": "{queued, number} in coda · il più vecchio {oldestMinutes, number} min",
+        "problem": "La coda di analisi immagini si accumula"
+      }
+    },
+    "problems": {
+      "monitor": {
+        "stale": "Il monitoraggio del sistema non fornisce dati",
+        "unavailable": "Stato dei container non disponibile"
+      },
+      "container": {
+        "not_running": "Il container {subject} non è in esecuzione",
+        "unhealthy": "Il container {subject} non è in salute",
+        "oom_killed": "Il container {subject} è stato terminato (memoria insufficiente)",
+        "starting": "Il container {subject} resta bloccato in avvio",
+        "memory_high": "Il container {subject} ha quasi esaurito la memoria",
+        "restart_loop": "Il container {subject} si riavvia continuamente"
+      },
+      "check": {
+        "unreachable": "{subject} non raggiungibile"
+      },
+      "job": {
+        "failing": "Il job {subject} non è riuscito",
+        "overdue": "Il job {subject} è in ritardo",
+        "never_run": "Il job {subject} non è mai stato eseguito"
+      }
+    },
+    "events": {
+      "containerRestart": "Il container {subject} è stato riavviato",
+      "resolved": "Risolto: {text}"
+    }
+  },
+  "jobs": {
+    "title": "Job",
+    "description": "Tutti i job periodici in background: quando sono stati eseguiti l'ultima volta, per quanto tempo e se ci sono stati errori. Aggiornato ogni 30 secondi.",
+    "empty": "Nessun job segnalato finora.",
+    "loading": "Caricamento…",
+    "unregistered": "Non registrato",
+    "consecutiveFailures": "{count, plural, one {# errore consecutivo} other {# errori consecutivi}}",
+    "columns": {
+      "job": "Job",
+      "service": "Servizio",
+      "interval": "Frequenza",
+      "lastActivity": "Ultima esecuzione",
+      "duration": "Durata",
+      "state": "Stato"
+    },
+    "state": {
+      "ok": "OK",
+      "running": "In corso",
+      "failing": "Non riuscito",
+      "overdue": "In ritardo",
+      "never_run": "Mai eseguito"
+    },
+    "category": {
+      "virus_scan": "Scansione antivirus",
+      "photo_analysis": "Analisi immagini",
+      "uploads": "Caricamenti",
+      "backup": "Backup",
+      "cleanup": "Pulizia",
+      "maintenance": "Manutenzione",
+      "other": "Altri"
+    },
+    "service": {
+      "backend": "Backend",
+      "abgabebox-backend": "Backend Abgabebox",
+      "photo-analysis-worker": "Worker analisi immagini",
+      "host": "Server (cron)"
+    },
+    "interval": {
+      "onDemand": "Su richiesta",
+      "seconds": "{count, plural, one {ogni secondo} other {ogni # secondi}}",
+      "minutes": "{count, plural, one {ogni minuto} other {ogni # minuti}}",
+      "hours": "{count, plural, one {ogni ora} other {ogni # ore}}",
+      "days": "{count, plural, one {giornaliero} other {ogni # giorni}}"
+    },
+    "details": {
+      "state": "Stato",
+      "interval": "Frequenza",
+      "maxSilence": "Allarme dopo",
+      "lastSuccess": "Ultimo successo",
+      "lastFailure": "Ultimo errore",
+      "lastHeartbeat": "Ultimo segnale di vita",
+      "runs": "Esecuzioni",
+      "runCounts": "{runs, plural, one {# esecuzione} other {# esecuzioni}}, di cui {failures, plural, one {# non riuscita} other {# non riuscite}}",
+      "lastError": "Ultimo messaggio di errore"
+    },
+    "history": {
+      "title": "Cronologia",
+      "description": "Le ultime esecuzioni. Per i job molto frequenti solo gli errori e il primo successo successivo.",
+      "empty": "Nessuna esecuzione registrata finora.",
+      "columns": {
+        "finished": "Terminato",
+        "duration": "Durata",
+        "result": "Risultato"
+      },
+      "status": {
+        "success": "Riuscito",
+        "failure": "Non riuscito"
+      }
+    },
+    "jobNames": {
+      "upload_pipeline_rescan": {
+        "title": "Nuova scansione caricamenti interni",
+        "description": "Scansiona di nuovo immagini dei verbali, caricamenti della galleria e importazioni Word che non è stato possibile scansionare al caricamento."
+      },
+      "abgabebox_rescan": {
+        "title": "Nuova scansione Abgabebox",
+        "description": "Scansiona di nuovo i file Abgabebox che non è stato possibile scansionare al caricamento e sblocca i file puliti."
+      },
+      "gallery_upload_ingest": {
+        "title": "Importazione galleria",
+        "description": "Elabora immagini e archivi ZIP da «Carica immagini»: scansione antivirus, anteprime, archiviazione."
+      },
+      "photo_analysis_auto_queue": {
+        "title": "Pianificare l'analisi immagini",
+        "description": "Pianifica il riconoscimento dei volti per le nuove immagini, solo nella fascia oraria configurata e con basso carico del server."
+      },
+      "photo_quality_backfill": {
+        "title": "Completare la qualità immagine",
+        "description": "Calcola nitidezza ed esposizione per le immagini in cui mancano ancora."
+      },
+      "photo_album_sync": {
+        "title": "Sincronizzare gli album",
+        "description": "Aggiunge le nuove immagini Abgabebox agli album automatici e rimuove quelle eliminate."
+      },
+      "photo_analysis_worker": {
+        "title": "Worker analisi immagini",
+        "description": "Container separato che esegue le analisi immagini pianificate. Monitorato tramite il suo segnale di vita ogni pochi secondi."
+      },
+      "domain_health_check": {
+        "title": "Verifica domini",
+        "description": "Verifica che i domini personalizzati delle organizzazioni puntino ancora correttamente a hocX."
+      },
+      "cycle_snapshot": {
+        "title": "Snapshot di ciclo",
+        "description": "Crea automaticamente uno snapshot della tabella al termine di un ciclo."
+      },
+      "export_cleanup": {
+        "title": "Pulizia esportazioni",
+        "description": "Elimina i vecchi file di esportazione generati."
+      },
+      "log_cleanup": {
+        "title": "Pulizia registri",
+        "description": "Elimina le voci vecchie del registro di audit, del registro errori e della cronologia dei job."
+      },
+      "abgabebox_quarantine_cleanup": {
+        "title": "Pulizia quarantena",
+        "description": "Rimuove i file rimasti nella quarantena Abgabebox, ad es. dopo caricamenti interrotti."
+      },
+      "system_monitor": {
+        "title": "Monitoraggio del sistema",
+        "description": "Raccoglie lo stato di container e servizi e invia notifiche in caso di problemi."
+      },
+      "backup_db": {
+        "title": "Backup del database",
+        "description": "Backup notturno del database (cron job sul server tramite scripts/run_job.sh)."
+      },
+      "cleanup_storage": {
+        "title": "Pulizia dello spazio",
+        "description": "Pulizia notturna dei vecchi file di esportazione in storage/exports (cron job sul server tramite scripts/run_job.sh)."
+      }
+    }
+  },
+  "notifications": {
+    "title": "Notifiche",
+    "description": "Avvisi ntfy per i problemi dello stato del sistema e dei job - e un endpoint di stato per il monitoraggio esterno (ad es. Uptime Kuma).",
+    "ntfyTitle": "ntfy",
+    "ntfyDescription": "Notifica quando un problema compare (dopo 90 secondi, così i deploy non generano allarmi), peggiora, persiste o viene risolto.",
+    "enabledLabel": "Notifiche attive",
+    "no": "No",
+    "yes": "Sì",
+    "serverUrl": "Server ntfy",
+    "topic": "Topic",
+    "topicHelp": "Lettere, cifre, - e _ (max. 64 caratteri).",
+    "token": "Token di accesso",
+    "tokenPlaceholder": "Facoltativo",
+    "tokenSetPlaceholder": "Salvato - lasciare vuoto per mantenerlo",
+    "tokenHelp": "Access token (tk_…) oppure utente:password. Salvato cifrato e mai più mostrato.",
+    "adminUrl": "Indirizzo del portale di amministrazione",
+    "adminUrlHelp": "Facoltativo. Toccando la notifica si apre direttamente la pagina giusta.",
+    "reminderHours": "Promemoria dopo (ore)",
+    "reminderHelp": "Segnalare di nuovo i problemi ancora aperti. 0 = nessun promemoria.",
+    "lastError": "Ultimo invio non riuscito ({time}): {error}",
+    "lastSent": "Ultima notifica inviata: {time}",
+    "removeToken": "Rimuovi token",
+    "removeTokenConfirm": "Rimuovere il token di accesso ntfy?",
+    "sendTest": "Invia messaggio di prova",
+    "save": "Salva",
+    "saveBeforeTest": "Prima salvare - il messaggio di prova usa le impostazioni salvate.",
+    "saved": "Impostazioni salvate.",
+    "saveFailed": "Salvataggio non riuscito.",
+    "testSent": "Messaggio di prova inviato.",
+    "testFailed": "Messaggio di prova non riuscito: {error}",
+    "statusTitle": "Monitoraggio esterno (Uptime Kuma)",
+    "statusDescription": "Risponde con HTTP 200 finché non c'è alcun problema critico aperto, altrimenti con 503 - anche se il monitoraggio stesso è bloccato o ntfy non è raggiungibile.",
+    "createToken": "Crea token",
+    "rotate": "Crea nuovo token",
+    "rotateConfirm": "Creare un nuovo token? L'URL attuale smetterà di funzionare - aggiornarlo in Uptime Kuma.",
+    "rotated": "Nuovo token creato.",
+    "statusUrl": "URL per il monitor HTTP",
+    "statusHelp": "Aggiungerlo in Uptime Kuma come monitor di tipo HTTP(s). Codici accettati: 200-299. La risposta contiene solo conteggi, nessun dettaglio.",
+    "noStatusToken": "Nessun token creato finora."
+  },
   "login": {
     "title": "Accesso amministratore",
     "loginWithSso": "Accedi con {host}",
