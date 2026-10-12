@@ -119,7 +119,23 @@
     "participantFilterPlaceholder": "Filtrer les participants",
     "valuePlaceholder": "Valeur",
     "participantNullLabel": "Participant",
-    "eventNullLabel": "Événement"
+    "eventNullLabel": "Événement",
+    "protocol": {
+      "occupied": "{filled} sur {total} attribués",
+      "occupiedRich": "<strong>{filled}</strong> sur {total} attribués",
+      "filterAll": "Tous",
+      "filterOpen": "Ouverts",
+      "filterChanged": "Modifiés",
+      "filterEmpty": "Aucune ligne dans cette vue.",
+      "nobodyAssigned": "Personne n’est encore attribué",
+      "addPerson": "+ Personne",
+      "addPersonTo": "Attribuer une personne à « {row} »",
+      "addedPerson": "Nouvellement attribué",
+      "removedPerson": "Retiré",
+      "source": "Les lignes proviennent de Données de base › Listes de base › {name}",
+      "legendNew": "Nouveau",
+      "legendRemoved": "Retiré"
+    }
   },
   "inactive": "inactive",
   "searchList": "Rechercher dans « {name} »",

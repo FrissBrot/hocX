@@ -119,7 +119,23 @@
     "participantFilterPlaceholder": "Filter participants",
     "valuePlaceholder": "Value",
     "participantNullLabel": "Participant",
-    "eventNullLabel": "Event"
+    "eventNullLabel": "Event",
+    "protocol": {
+      "occupied": "{filled} of {total} assigned",
+      "occupiedRich": "<strong>{filled}</strong> of {total} assigned",
+      "filterAll": "All",
+      "filterOpen": "Open",
+      "filterChanged": "Changed",
+      "filterEmpty": "No rows in this view.",
+      "nobodyAssigned": "Nobody assigned yet",
+      "addPerson": "+ Person",
+      "addPersonTo": "Assign a person to “{row}”",
+      "addedPerson": "Newly assigned",
+      "removedPerson": "Removed",
+      "source": "Rows come from Master data › Master lists › {name}",
+      "legendNew": "New",
+      "legendRemoved": "Removed"
+    }
   },
   "inactive": "inactive",
   "searchList": "Search in “{name}”",

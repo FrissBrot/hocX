@@ -351,7 +351,8 @@
         "description": "Automatically filled content around events, attendance and meetings.",
         "title": "Organisation"
       }
-    }
+    },
+    "linkedListHighlightEmptyLabel": "Highlight empty rows in the protocol"
   },
   "block": "Block",
   "elementTypes": {

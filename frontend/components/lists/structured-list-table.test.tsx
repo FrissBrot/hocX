@@ -95,3 +95,55 @@ it("fügt bei aktiver Suche hinter dem vollständigen Datenbestand hinzu", async
   await act(async () => { await vi.advanceTimersByTimeAsync(500); });
   expect(onCreateEntry).toHaveBeenCalledWith(expect.objectContaining({ sort_index: 19 }));
 });
+
+const protocolDefinition = { id: "list", name: "Ämtli", column_one_title: "Ämtli", column_one_value_type: "text",
+  column_two_title: "Verantwortlich", column_two_value_type: "participants" } as StructuredListDefinition;
+const protocolEntries = [
+  { id: "a", sort_index: 0, column_one_value: { text_value: "Material" },
+    column_two_value: { participant_ids: ["rafael", "tim"], participant_names: ["Rafael Omlin", "Tim Grisiger"] } },
+  { id: "b", sort_index: 1, column_one_value: { text_value: "Coach" }, column_two_value: { participant_ids: [] } },
+] as unknown as StructuredListEntry[];
+
+it("zeigt im Protokoll alle Namen als Chips, den Besetzungsgrad und hebt Leere nur auf Wunsch hervor", () => {
+  const props = { definition: protocolDefinition, entries: protocolEntries, availableParticipants: [], availableEvents: [],
+    editable: false, onCreateEntry: vi.fn(), onUpdateEntry: vi.fn(), onDeleteEntry: vi.fn() };
+  const { rerender } = render(<StructuredListTable {...props} protocolView={{ highlightEmpty: false }} />);
+  expect(screen.getByText("Rafael Omlin")).toBeInTheDocument();
+  expect(screen.getByText("Tim Grisiger")).toBeInTheDocument();
+  // Nur lesbar: kein Besetzungsgrad.
+  expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  expect(document.querySelector(".linked-list-row-open")).toBeNull();
+  // Ohne Tracking-Daten gibt es weder Änderungsfarben noch den Filter "Geändert".
+  expect(document.querySelector(".linked-list-person-added, .linked-list-person-removed")).toBeNull();
+  expect(screen.queryByRole("tab", { name: /Geändert/ })).not.toBeInTheDocument();
+  rerender(<StructuredListTable {...props} protocolView={{ highlightEmpty: true }} />);
+  expect(screen.getByText("Coach").closest("tr")).toHaveClass("linked-list-row-open");
+  fireEvent.click(screen.getByRole("tab", { name: /Offen/ }));
+  expect(screen.queryByText("Material")).not.toBeInTheDocument();
+});
+
+it("markiert bei aktiver Änderungsverfolgung neu zugeteilte und entfernte Personen", () => {
+  const entries = [{ ...protocolEntries[0] }] as StructuredListEntry[];
+  render(<StructuredListTable definition={protocolDefinition} entries={entries} availableParticipants={[]} availableEvents={[]}
+    editable={false} protocolView={{ highlightEmpty: true }}
+    entryTrackedStatusById={{ a: { status: "changed", before: { column_one_value: { text_value: "Material" },
+      column_two_value: { participant_ids: ["rafael", "anna"], participant_names: ["Rafael Omlin", "Anna Berger"] } } } }}
+    onAcceptTrackedEntry={vi.fn()} onCreateEntry={vi.fn()} onUpdateEntry={vi.fn()} onDeleteEntry={vi.fn()} />);
+  expect(screen.getByText("Tim Grisiger").closest(".linked-list-person")).toHaveClass("linked-list-person-added");
+  expect(screen.getByText("Rafael Omlin").closest(".linked-list-person")).not.toHaveClass("linked-list-person-added");
+  expect(screen.getByText("Anna Berger").closest(".linked-list-person")).toHaveClass("linked-list-person-removed");
+  expect(screen.getByRole("tab", { name: /Geändert/ })).toBeInTheDocument();
+});
+
+it("entfernt im Protokoll eine Person über den Chip", async () => {
+  vi.useFakeTimers();
+  const onUpdateEntry = vi.fn().mockResolvedValue(true);
+  render(<StructuredListTable definition={protocolDefinition} entries={protocolEntries} availableEvents={[]}
+    availableParticipants={[{ id: "rafael", display_name: "Rafael Omlin" }, { id: "tim", display_name: "Tim Grisiger" }] as ParticipantSummary[]}
+    protocolView={{ highlightEmpty: true }} onCreateEntry={vi.fn()} onUpdateEntry={onUpdateEntry} onDeleteEntry={vi.fn()} />);
+  expect(screen.getByText("Noch niemand zugeteilt")).toBeInTheDocument();
+  expect(screen.getByRole("progressbar")).toHaveAttribute("aria-label", "1 von 2 besetzt");
+  fireEvent.click(screen.getByRole("button", { name: "Tim Grisiger entfernen" }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(600); });
+  expect(onUpdateEntry).toHaveBeenCalledWith("a", { column_two_value: { participant_ids: ["rafael"] } });
+});

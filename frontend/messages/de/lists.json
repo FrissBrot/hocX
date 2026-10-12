@@ -119,7 +119,23 @@
     "participantFilterPlaceholder": "Teilnehmer filtern",
     "valuePlaceholder": "Wert",
     "participantNullLabel": "Teilnehmer",
-    "eventNullLabel": "Termin"
+    "eventNullLabel": "Termin",
+    "protocol": {
+      "occupied": "{filled} von {total} besetzt",
+      "occupiedRich": "<strong>{filled}</strong> von {total} besetzt",
+      "filterAll": "Alle",
+      "filterOpen": "Offen",
+      "filterChanged": "Geändert",
+      "filterEmpty": "Keine Zeilen in dieser Ansicht.",
+      "nobodyAssigned": "Noch niemand zugeteilt",
+      "addPerson": "+ Person",
+      "addPersonTo": "Person zu «{row}» zuteilen",
+      "addedPerson": "Neu zugeteilt",
+      "removedPerson": "Entfernt",
+      "source": "Zeilen kommen aus Stammdaten › Stammlisten › {name}",
+      "legendNew": "Neu",
+      "legendRemoved": "Entfernt"
+    }
   },
   "inactive": "inaktiv",
   "searchList": "In «{name}» suchen",

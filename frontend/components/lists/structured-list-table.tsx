@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 
 import { ListValueTypeIcon } from "@/components/lists/list-value-type-icon";
 import { Badge } from "@/components/ui/badge";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { localDateToday } from "@/lib/utils/participant-membership";
 import { Modal } from "@/components/ui/modal";
 import { ActionIcon } from "@/components/ui/action-icons";
@@ -48,6 +49,10 @@ type StructuredListTableProps = {
   masterList?: boolean;
   /** Nur die Anzeige filtern; neue Zeilen bleiben hinter dem vollständigen Bestand. */
   visibleEntryIds?: string[];
+  /** Protokoll-Darstellung eines mit einer Stammliste verknüpften Tabellenblocks: Zeilen
+   * kommen fix aus der Liste, zugeteilte Personen als Chips, Besetzungsgrad oben.
+   * `highlightEmpty` kommt aus der Block-Konfiguration im Template. Gilt nur ohne Gruppierung. */
+  protocolView?: { highlightEmpty?: boolean };
   heading?: ReactNode;
   headingActions?: ReactNode;
   emptyMessage?: string;
@@ -220,6 +225,7 @@ export function StructuredListTable({
   fullWidth = false,
   masterList = false,
   visibleEntryIds,
+  protocolView,
   heading,
   headingActions,
   emptyMessage,
@@ -254,6 +260,7 @@ export function StructuredListTable({
   const [creatingNewRow, setCreatingNewRow] = useState(false);
   const [participantPicker, setParticipantPicker] = useState<ParticipantPickerState | null>(null);
   const [participantSearch, setParticipantSearch] = useState("");
+  const [protocolFilter, setProtocolFilter] = useState<"all" | "open" | "changed">("all");
   const rowTimers = useRef<Record<string, number>>({});
   const newRowTimer = useRef<number | null>(null);
 
@@ -666,6 +673,258 @@ export function StructuredListTable({
     definition.column_one_value_type,
     definition.column_two_value_type,
   ]);
+
+  function personRefs(valueType: StructuredListValueType, value: StructuredListValue | undefined) {
+    if (!value) return [];
+    if (valueType === "participant") {
+      const id = typeof value.participant_id === "string" && value.participant_id ? value.participant_id : "";
+      if (!id) return [];
+      const frozenName = typeof value.participant_name === "string" ? value.participant_name : "";
+      const name = frozenName || participantNames.find((person) => person.id === id)?.display_name || t("participantNullLabel");
+      return [{ id, name }];
+    }
+    if (valueType !== "participants" || !Array.isArray(value.participant_ids)) return [];
+    const frozenNames = Array.isArray(value.participant_names) ? value.participant_names : [];
+    return value.participant_ids.map(String).filter(Boolean).map((id, index) => ({
+      id,
+      name: String(frozenNames[index] || participantNames.find((person) => person.id === id)?.display_name || t("participantNullLabel")),
+    }));
+  }
+
+  function personInitials(name: string) {
+    return name.split(/\s+/).filter(Boolean).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
+  }
+
+  function renderProtocolView() {
+    const isPersonType = (valueType: StructuredListValueType) => valueType === "participant" || valueType === "participants";
+    // Die Personen-Spalte bestimmt "besetzt"; die andere Spalte ist die fixe Zeilenbeschriftung.
+    const assignmentColumn: StructuredListDisplayColumn =
+      isPersonType(definition.column_two_value_type) || !isPersonType(definition.column_one_value_type) ? "column_two" : "column_one";
+    const labelColumn: StructuredListDisplayColumn = assignmentColumn === "column_two" ? "column_one" : "column_two";
+    const assignmentKey = displayColumnKey(assignmentColumn);
+    const assignmentType = displayColumnType(assignmentColumn);
+    const labelKey = displayColumnKey(labelColumn);
+    const labelType = displayColumnType(labelColumn);
+    const highlightEmpty = !!protocolView?.highlightEmpty;
+
+    const rows = sortedEntries.map((entry) => {
+      const tracked = entryTrackedStatusById?.[entry.id];
+      const removed = tracked?.status === "removed";
+      return { entry, tracked, removed, filled: !removed && hasValueContent(assignmentType, rowValue(entry, assignmentKey)) };
+    });
+    const activeRows = rows.filter((row) => !row.removed);
+    const filledCount = activeRows.filter((row) => row.filled).length;
+    const openCount = activeRows.length - filledCount;
+    const changedCount = rows.filter((row) => !!row.tracked).length;
+    const activeFilter = protocolFilter === "changed" && !changedCount ? "all" : protocolFilter;
+    const visibleRows = rows.filter((row) =>
+      activeFilter === "open" ? !row.removed && !row.filled : activeFilter === "changed" ? !!row.tracked : true
+    );
+    const showActions = editable || (changedCount > 0 && !!onAcceptTrackedEntry);
+    const percent = activeRows.length ? Math.round((filledCount / activeRows.length) * 100) : 0;
+
+    const saveAssignment = (entryId: string, current: string[], ids: string[]) => {
+      // Einzelperson-Spalte: die neu angeklickte Person ersetzt die bisherige.
+      const nextValue = assignmentType === "participant"
+        ? { participant_id: ids.find((id) => !current.includes(id)) ?? (ids.includes(current[0]) ? current[0] : null) }
+        : { participant_ids: ids };
+      queueRowSave(entryId, { [assignmentKey]: nextValue });
+    };
+
+    function renderPeople(row: (typeof rows)[number]) {
+      const value = rowValue(row.entry, assignmentKey);
+      const current = personRefs(assignmentType, value);
+      const before = row.tracked?.status === "changed" && row.tracked.before
+        ? personRefs(assignmentType, row.tracked.before[assignmentKey])
+        : null;
+      const addedIds = new Set(
+        row.tracked?.status === "added" ? current.map((person) => person.id)
+          : before ? current.filter((person) => !before.some((old) => old.id === person.id)).map((person) => person.id)
+          : []
+      );
+      const removedPeople = row.removed ? current
+        : before ? before.filter((old) => !current.some((person) => person.id === old.id)) : [];
+      const chipsEditable = editable && !row.removed;
+      return (
+        <div className="linked-list-people">
+          {!row.removed && current.map((person) => {
+            const departed = departedParticipant(person.id);
+            const added = addedIds.has(person.id);
+            return (
+              <span
+                key={person.id}
+                className={`linked-list-person${added ? " linked-list-person-added" : ""}${departed ? " structured-list-departed" : ""}`}
+                title={departed ? departedTitle(departed) : added ? t("protocol.addedPerson") : undefined}
+              >
+                <span className="linked-list-avatar" aria-hidden="true">{personInitials(person.name)}</span>
+                <span className="linked-list-person-name">{person.name}</span>
+                {chipsEditable && (
+                  <button
+                    type="button"
+                    className="linked-list-person-remove"
+                    aria-label={listT("removePerson", { name: person.name })}
+                    onClick={() => saveAssignment(row.entry.id, current.map((other) => other.id), current.filter((other) => other.id !== person.id).map((other) => other.id))}
+                  >
+                    ×
+                  </button>
+                )}
+              </span>
+            );
+          })}
+          {removedPeople.map((person) => (
+            <span key={`removed-${person.id}`} className="linked-list-person linked-list-person-removed" title={t("protocol.removedPerson")}>
+              <span className="linked-list-avatar" aria-hidden="true">{personInitials(person.name)}</span>
+              <span className="linked-list-person-name">{person.name}</span>
+            </span>
+          ))}
+          {!row.removed && !current.length && (
+            <span className={highlightEmpty ? "linked-list-empty linked-list-empty-highlight" : "linked-list-empty"}>
+              {editable ? t("protocol.nobodyAssigned") : "—"}
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    function renderOtherValue(row: (typeof rows)[number]) {
+      const value = rowValue(row.entry, assignmentKey);
+      const changed = row.tracked?.status === "changed" && !valuesEqual(value, row.tracked.before?.[assignmentKey]);
+      return (
+        <>
+          {changed && (
+            <div className="tracked-before-caption tracked-strike">
+              {valueSummary(assignmentType, row.tracked?.before?.[assignmentKey] ?? {}, participantNames, sortedEvents, t)}
+            </div>
+          )}
+          {editable && !row.removed
+            ? renderEditableCell(row.entry.id, assignmentKey, assignmentType, value, { isNewRow: false })
+            : <span className={row.removed ? "tracked-strike" : undefined}>{renderValueSummary(assignmentType, value)}</span>}
+        </>
+      );
+    }
+
+    return (
+      <div className="linked-list-block">
+        <div className="linked-list-summary">
+          {/* Besetzungsgrad nur, solange im Protokoll noch zugeteilt werden kann. */}
+          {editable && (
+            <>
+          <div
+            className="linked-list-progress"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={activeRows.length}
+            aria-valuenow={filledCount}
+            aria-label={t("protocol.occupied", { filled: filledCount, total: activeRows.length })}
+          >
+            <span className="linked-list-progress-bar" style={{ width: `${percent}%` }} />
+          </div>
+          <span className="linked-list-count">
+            {t.rich("protocol.occupiedRich", { filled: filledCount, total: activeRows.length, strong: (chunks) => <strong>{chunks}</strong> })}
+          </span>
+            </>
+          )}
+          <FilterTabs
+            value={activeFilter}
+            onChange={setProtocolFilter}
+            options={[
+              { value: "all", label: t("protocol.filterAll"), count: activeRows.length },
+              { value: "open", label: t("protocol.filterOpen"), count: openCount },
+              ...(changedCount ? [{ value: "changed" as const, label: t("protocol.filterChanged"), count: changedCount }] : []),
+            ]}
+          />
+        </div>
+        <div className="linked-list-table-wrap">
+          <table className="data-table linked-list-table">
+            <thead>
+              <tr>
+                <th>{labelColumn === "column_one" ? definition.column_one_title : definition.column_two_title}</th>
+                <th>{assignmentColumn === "column_one" ? definition.column_one_title : definition.column_two_title}</th>
+                {showActions ? <th className="linked-list-actions" aria-label={t("actionsLabel")} /> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.length ? visibleRows.map((row) => {
+                const isOpen = !row.removed && !row.filled;
+                const dotClass = row.removed ? " linked-list-dot-removed"
+                  : row.tracked ? " linked-list-dot-changed"
+                  : isOpen && highlightEmpty ? " linked-list-dot-open"
+                  : "";
+                const labelValue = rowValue(row.entry, labelKey);
+                const labelChanged = row.tracked?.status === "changed" && !valuesEqual(labelValue, row.tracked.before?.[labelKey]);
+                return (
+                  <tr
+                    key={row.entry.id}
+                    className={`${isOpen && highlightEmpty ? "linked-list-row-open" : ""}${row.removed ? " linked-list-row-removed" : ""}`.trim() || undefined}
+                  >
+                    <td className="linked-list-label">
+                      <span className={`linked-list-dot${dotClass}`} aria-hidden="true" />
+                      <span className={row.removed ? "tracked-strike" : undefined}>
+                        {labelChanged && (
+                          <span className="tracked-before-caption tracked-strike linked-list-label-before">
+                            {valueSummary(labelType, row.tracked?.before?.[labelKey] ?? {}, participantNames, sortedEvents, t)}
+                          </span>
+                        )}
+                        {renderValueSummary(labelType, labelValue)}
+                      </span>
+                    </td>
+                    <td>{isPersonType(assignmentType) ? renderPeople(row) : renderOtherValue(row)}</td>
+                    {showActions ? (
+                      <td className="linked-list-actions">
+                        <div className="linked-list-actions-inner">
+                          {row.tracked && onAcceptTrackedEntry && (
+                            <TrackedChangeHideButton
+                              title={row.removed ? t("hideRemovedEntryTitle") : undefined}
+                              onAccept={() => onAcceptTrackedEntry(row.entry.id)}
+                            />
+                          )}
+                          {editable && !row.removed && isPersonType(assignmentType) && (() => {
+                            const currentIds = personRefs(assignmentType, rowValue(row.entry, assignmentKey)).map((person) => person.id);
+                            return (
+                            <SearchableMultiSelect
+                              options={participantNames}
+                              isOptionSelectable={isPickableParticipant}
+                              getId={(person) => person.id}
+                              getLabel={(person) => person.display_name}
+                              values={currentIds}
+                              onChange={(ids) => saveAssignment(row.entry.id, currentIds, ids)}
+                              triggerLabel={t("protocol.addPerson")}
+                              className="linked-list-add-person"
+                              triggerProps={{ "aria-label": t("protocol.addPersonTo", { row: valueSortText(labelType, labelValue, participantNames, sortedEvents) }) }}
+                            />
+                            );
+                          })()}
+                        </div>
+                      </td>
+                    ) : null}
+                  </tr>
+                );
+              }) : (
+                <tr>
+                  <td colSpan={showActions ? 3 : 2}>
+                    <span className="muted">{rows.length ? t("protocol.filterEmpty") : resolvedEmptyMessage}</span>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="linked-list-footer">
+          <span>{t("protocol.source", { name: definition.name })}</span>
+          {changedCount > 0 && (
+            <span className="linked-list-legend">
+              <span><span className="linked-list-dot linked-list-dot-changed" aria-hidden="true" />{t("protocol.legendNew")}</span>
+              <span><span className="linked-list-dot linked-list-dot-removed" aria-hidden="true" />{t("protocol.legendRemoved")}</span>
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (protocolView && !groupByColumn) {
+    return renderProtocolView();
+  }
 
   return (
     <>

@@ -351,7 +351,8 @@
         "description": "Contenuti compilati automaticamente su appuntamenti, presenze e sedute.",
         "title": "Organizzazione"
       }
-    }
+    },
+    "linkedListHighlightEmptyLabel": "Evidenzia le righe vuote nel verbale"
   },
   "block": "Blocco",
   "elementTypes": {

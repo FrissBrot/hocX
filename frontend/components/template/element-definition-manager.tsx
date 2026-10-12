@@ -99,6 +99,7 @@ type BlockFormState = {
   linked_list_group_by: "" | "column_one" | "column_two";
   linked_list_sort_by: "" | "column_one" | "column_two";
   linked_list_sort_direction: "asc" | "desc";
+  linked_list_highlight_empty: boolean;
   is_editable: boolean;
   export_visible: boolean;
   is_visible: boolean;
@@ -298,6 +299,7 @@ const initialBlockForm: BlockFormState = {
   linked_list_group_by: "",
   linked_list_sort_by: "",
   linked_list_sort_direction: "asc",
+  linked_list_highlight_empty: false,
   is_editable: true,
   export_visible: true,
   is_visible: true,
@@ -568,6 +570,7 @@ function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
         ? block.configuration_json.linked_list_sort_by
         : "",
     linked_list_sort_direction: block.configuration_json?.linked_list_sort_direction === "desc" ? "desc" : "asc",
+    linked_list_highlight_empty: Boolean(block.configuration_json?.linked_list_highlight_empty),
     event_fields: mergeEventFields(
       Array.isArray(block.configuration_json?.event_fields)
         ? (block.configuration_json.event_fields as EventFieldConfig[])
@@ -713,6 +716,7 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
         form.element_type_id === "6" && form.linked_list_id && form.linked_list_sort_by ? form.linked_list_sort_by : null,
       linked_list_sort_direction:
         form.element_type_id === "6" && form.linked_list_id && form.linked_list_sort_by ? form.linked_list_sort_direction : null,
+      linked_list_highlight_empty: form.element_type_id === "6" && !!form.linked_list_id && form.linked_list_highlight_empty,
       event_fields:
         form.element_type_id === "6" && form.repeat_source === "event" && !form.linked_list_id
           ? selectedEventFields(form)
@@ -2625,6 +2629,10 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                       </select>
                     </label>
                   </div>
+                  <label className="checkbox-row">
+                    <input type="checkbox" checked={createBlockForm.linked_list_highlight_empty} onChange={(event) => setCreateBlockForm((current) => ({ ...current, linked_list_highlight_empty: event.target.checked }))} />
+                    {t("linkedListHighlightEmptyLabel")}
+                  </label>
                   <p className="muted">
                     Diese Anzeigeoptionen gelten nur fuer diesen Tabellenblock und werden auch im PDF-Export beruecksichtigt.
                   </p>
@@ -3262,6 +3270,10 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         </select>
                       </label>
                     </div>
+                    <label className="checkbox-row">
+                      <input type="checkbox" checked={blockForm.linked_list_highlight_empty} onChange={(event) => setBlockForm((current) => ({ ...current, linked_list_highlight_empty: event.target.checked }))} />
+                      {t("linkedListHighlightEmptyLabel")}
+                    </label>
                     <p className="muted">
                       Diese Anzeigeoptionen gelten nur fuer diesen Tabellenblock und werden auch im PDF-Export beruecksichtigt.
                     </p>

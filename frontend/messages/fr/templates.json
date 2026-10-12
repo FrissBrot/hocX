@@ -351,7 +351,8 @@
         "description": "Contenus remplis automatiquement autour des événements, des présences et des séances.",
         "title": "Organisation"
       }
-    }
+    },
+    "linkedListHighlightEmptyLabel": "Mettre en évidence les lignes vides dans le procès-verbal"
   },
   "block": "Bloc",
   "elementTypes": {

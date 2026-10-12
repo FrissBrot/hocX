@@ -187,6 +187,8 @@ type MultiProps<T, Id extends string | number> = BaseProps<T> & { // i18n-ok: TS
   onChange: (ids: Id[]) => void;
   /** Trigger label when nothing is selected. Defaults to `placeholder`. */
   emptySelectionLabel?: string;
+  /** Fixes the trigger label regardless of the selection (e.g. "+ Person" next to chips). */
+  triggerLabel?: string;
 };
 
 // Multi-select counterpart to SearchableSelect: toggles membership on click and keeps
@@ -201,6 +203,7 @@ export function SearchableMultiSelect<T, Id extends string | number>({
   onChange,
   placeholder,
   emptySelectionLabel,
+  triggerLabel: fixedTriggerLabel,
   searchPlaceholder,
   emptyLabel,
   disabled,
@@ -230,6 +233,9 @@ export function SearchableMultiSelect<T, Id extends string | number>({
     }
   } else if (values.length > 1) {
     triggerLabel = t("selectedCount", { count: values.length });
+  }
+  if (fixedTriggerLabel) {
+    triggerLabel = fixedTriggerLabel;
   }
 
   useEffect(() => {

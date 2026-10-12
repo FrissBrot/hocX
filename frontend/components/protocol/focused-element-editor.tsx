@@ -1769,10 +1769,8 @@ export function FocusedElementEditor({
                         ? blockConfig.linked_list_sort_by
                         : "";
                     const linkedListSortDirection = blockConfig.linked_list_sort_direction === "desc" ? "desc" : "asc";
-                    const listColOptions = [
-                      { value: "column_one", label: linkedListDefinition.column_one_title },
-                      { value: "column_two", label: linkedListDefinition.column_two_title },
-                    ];
+                    // Leere Zeilen hervorheben wird pro Block im Template konfiguriert.
+                    const linkedListProtocolView = { highlightEmpty: Boolean(blockConfig.linked_list_highlight_empty) };
                     if (isPlanningMode) {
                       return (
                         <div className="grid">
@@ -1790,6 +1788,7 @@ export function FocusedElementEditor({
                             groupByColumn={linkedListGroupBy}
                             sortByColumn={linkedListSortBy}
                             sortDirection={linkedListSortDirection}
+                            protocolView={linkedListProtocolView}
                             entryTrackedStatusById={entryTrackedStatusById}
                             onAcceptTrackedEntry={(entryId) => void acceptTrackedListEntry(block.id, entryId)}
                             onCreateEntry={() => Promise.resolve(false)}
@@ -1819,42 +1818,6 @@ export function FocusedElementEditor({
                     return (
                       <div className="grid">
                         {listSnapshotBanner}
-                        <div className="list-block-config-bar">
-                          <label className="list-block-config-item">
-                            <span className="list-block-config-label">{t("groupByLabel")}</span>
-                            <SearchableSelect
-                              options={listColOptions}
-                              getId={(o) => o.value}
-                              getLabel={(o) => o.label}
-                              value={linkedListGroupBy || null}
-                              disabled={!blockEditable}
-                              onChange={(o) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_group_by: o?.value || null })}
-                              nullLabel={t("noGrouping")}
-                            />
-                          </label>
-                          <label className="list-block-config-item">
-                            <span className="list-block-config-label">{t("sortLabel")}</span>
-                            <SearchableSelect
-                              options={listColOptions}
-                              getId={(o) => o.value}
-                              getLabel={(o) => o.label}
-                              value={linkedListSortBy || null}
-                              disabled={!blockEditable}
-                              onChange={(o) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_sort_by: o?.value || null, linked_list_sort_direction: o?.value ? linkedListSortDirection : "asc" })}
-                              nullLabel={t("manualLabel")}
-                            />
-                          </label>
-                          <label className="list-block-config-item">
-                            <select
-                              value={linkedListSortDirection}
-                              disabled={!blockEditable || !linkedListSortBy}
-                              onChange={(e) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_sort_direction: e.target.value })}
-                            >
-                              <option value="asc">A–Z</option>
-                              <option value="desc">Z–A</option>
-                            </select>
-                          </label>
-                        </div>
                         <StructuredListTable
                           definition={displayDefinition}
                           entries={displayEntries}
@@ -1865,6 +1828,7 @@ export function FocusedElementEditor({
                           groupByColumn={linkedListGroupBy}
                           sortByColumn={linkedListSortBy}
                           sortDirection={linkedListSortDirection}
+                          protocolView={linkedListProtocolView}
                           entryTrackedStatusById={entryTrackedStatusById}
                           onAcceptTrackedEntry={(entryId) => void acceptTrackedListEntry(block.id, entryId)}
                           onCreateEntry={(payload) => createListEntryFromBlock(block.id, linkedListId, payload)}
