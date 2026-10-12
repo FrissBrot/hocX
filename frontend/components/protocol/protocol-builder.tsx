@@ -492,32 +492,3 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
     </div>
   );
 }
-
-type ProtocolOverviewProps = {
-  protocol: ProtocolSummary;
-};
-
-export function ProtocolOverview({ protocol }: ProtocolOverviewProps) {
-  const t = useTranslations("protocols.overview");
-  const tRoot = useTranslations("protocols");
-  const locale = useLocale();
-  const unknown = t("unknown");
-  return (
-    <div className="grid">
-      <div className="status-row">
-        <span className="pill">{protocol.protocol_number}</span>
-        <Badge variant={protocolStatusVariant(protocol.status)}>{t("status", { status: protocolStatusLabel(protocol.status, tRoot) })}</Badge>
-        <span className="pill">{t("templateAssigned")}</span>
-        <span className="pill">{t("layoutFromSnapshot")}</span>
-      </div>
-
-      <article className="card">
-        <div className="eyebrow">{t("overview")}</div>
-        <h3>{protocol.title ?? t("unnamedProtocol")}</h3>
-        <p className="muted">{t("protocolDate", { date: formatDate(protocol.protocol_date) || unknown })}</p>
-        <p className="muted">{t("templateVersionSnapshot", { version: protocol.template_version ?? unknown })}</p>
-        <p className="muted">{t("createdAt", { date: formatDateTime(protocol.created_at, locale) || unknown })}</p>
-      </article>
-    </div>
-  );
-}

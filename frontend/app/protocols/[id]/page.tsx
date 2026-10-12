@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 
 import { ProtocolEditor } from "@/components/protocol/protocol-editor";
-import { ProtocolOverview } from "@/components/protocol/protocol-builder";
 import { MobileProtocolEditor } from "@/components/mobile/mobile-protocol-editor";
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { AppShell } from "@/components/ui/app-shell";
@@ -112,8 +111,7 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
           />
         }
         desktop={
-          <section className={`panel${protocol.status !== "abgeschlossen" ? " protocol-panel-document" : ""}`}>
-            {protocol.status === "abgeschlossen" && <ProtocolOverview protocol={protocol} />}
+          <section className="panel protocol-panel-document">
             <ProtocolEditor
               protocol={protocol}
               initialElements={elements}

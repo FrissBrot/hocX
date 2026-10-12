@@ -531,19 +531,7 @@ export function FocusedElementEditor({
   }
 
   function handleFormInputKeyDown(e: React.KeyboardEvent<HTMLElement>) {
-    if (e.key === "Tab") {
-      const container = (e.currentTarget as HTMLElement).closest("[data-form-block-id]");
-      if (!container) return;
-      const inputs = Array.from(container.querySelectorAll<HTMLElement>("[data-form-input]"));
-      const idx = inputs.indexOf(e.currentTarget);
-      if (idx === -1) return;
-      const atLast = !e.shiftKey && idx === inputs.length - 1;
-      const atFirst = e.shiftKey && idx === 0;
-      if (atLast || atFirst) {
-        e.preventDefault();
-        document.querySelector<HTMLElement>(".editor-fixed-actions [data-editor-primary-action]")?.focus();
-      }
-    } else if (e.key === "Enter" && (e.currentTarget as HTMLElement).tagName === "SELECT") {
+    if (e.key === "Enter" && (e.currentTarget as HTMLElement).tagName === "SELECT") {
       const el = e.currentTarget as HTMLElement;
       setTimeout(() => { if (document.activeElement !== el) el.focus(); }, 10);
     }

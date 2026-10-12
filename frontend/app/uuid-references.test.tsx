@@ -19,7 +19,6 @@ vi.mock("@/lib/api/server", () => ({
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/components/ui/app-shell", () => ({ AppShell: ({ children }: any) => children }));
 vi.mock("@/components/protocol/protocol-editor", () => ({ ProtocolEditor: editorMock }));
-vi.mock("@/components/protocol/protocol-builder", () => ({ ProtocolOverview: () => null }));
 vi.mock("@/components/settings/tenant-general-settings", () => ({ TenantGeneralSettings: settingsMock }));
 
 import ProtocolDetailPage from "./protocols/[id]/page";
