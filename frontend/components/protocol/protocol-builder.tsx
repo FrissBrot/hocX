@@ -20,7 +20,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { usePdfExport, PdfExportResult } from "@/lib/hooks/use-pdf-export";
 import { formatDate, formatDateTime, toIntlLocale } from "@/lib/utils/format";
-import { ProtocolListCycle, ProtocolSummary, TemplateSummary } from "@/types/api";
+import { ProtocolListCycle, ProtocolSummary, ProtocolTemplateSyncResult, TemplateSummary } from "@/types/api";
 import { protocolStatusLabel, protocolStatusVariant } from "@/components/protocol/protocol-status";
 import { ProtocolCycleGroup, groupProtocolsByCycle, visibleCycleGroupCount } from "@/components/protocol/protocol-cycle-groups";
 
@@ -270,6 +270,42 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
     }
   }
 
+  // Elemente aus der aktuellen Vorlage neu aufbauen, erfasste Daten bleiben erhalten. Erst
+  // eine Vorschau (dry_run), damit klar ist, was hinzukommt, wegfällt oder stehen bleibt.
+  async function syncWithTemplate(protocolId: string) {
+    const url = `/api/protocols/${protocolId}/sync-template`;
+    try {
+      const preview = await browserApiFetch<ProtocolTemplateSyncResult>(`${url}?dry_run=true`, { method: "POST" });
+      const listFormat = new Intl.ListFormat(toIntlLocale(locale), { style: "long", type: "conjunction" });
+      const message = [
+        t("syncTemplateConfirmMessage", {
+          updated: preview.updated_elements.length,
+          added: preview.added_elements.length,
+          removed: preview.removed_elements.length,
+        }),
+        preview.removed_elements.length
+          ? t("syncTemplateConfirmRemoved", { names: listFormat.format(preview.removed_elements) })
+          : null,
+        preview.kept_elements.length
+          ? t("syncTemplateConfirmKept", { count: preview.kept_elements.length, names: listFormat.format(preview.kept_elements) })
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const ok = await confirm({
+        title: t("syncTemplateConfirmTitle"),
+        message,
+        confirmLabel: t("syncTemplateConfirmLabel"),
+      });
+      if (!ok) return;
+      await browserApiFetch<ProtocolTemplateSyncResult>(url, { method: "POST" });
+      showToast(t("syncTemplateDone"), "success");
+      router.refresh();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("syncTemplateFailed"), "error");
+    }
+  }
+
   function renderProtocolRow(protocol: ProtocolSummary) {
     const isFinal = protocol.status === "abgeschlossen";
     const previousStatus = ({
@@ -283,6 +319,12 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
       actions.push({
         label: pdfLabel,
         onClick: () => void openOrGeneratePdf(protocol, (result) => handlePdfExported(protocol.id, result)),
+      });
+    }
+    if (!isFinal) {
+      actions.push({
+        label: t("syncTemplate"),
+        onClick: () => void syncWithTemplate(protocol.id),
       });
     }
     if (previousStatus) {

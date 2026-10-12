@@ -85,7 +85,15 @@
     "unnamed": "Unnamed",
     "previewLoading": "Calculating preview …",
     "previewFailed": "Could not load preview.",
-    "templateSaveFailed": "Could not save template selection."
+    "templateSaveFailed": "Could not save template selection.",
+    "syncTemplate": "Reload elements from template",
+    "syncTemplateConfirmTitle": "Reload elements from template?",
+    "syncTemplateConfirmMessage": "Titles, default texts, filters and settings are taken from the current template. Entered texts, to-dos, images and values are kept. {updated, plural, one {# element will be updated} other {# elements will be updated}}, {added, plural, one {# will be added} other {# will be added}}, {removed, plural, one {# will be removed} other {# will be removed}}.",
+    "syncTemplateConfirmRemoved": "Removed (empty, no longer in the template): {names}.",
+    "syncTemplateConfirmKept": "{count, plural, one {No longer in the template but contains data, so it stays at the end: {names}.} other {No longer in the template but contain data, so they stay at the end: {names}.}}",
+    "syncTemplateConfirmLabel": "Reload",
+    "syncTemplateDone": "Elements reloaded from the template",
+    "syncTemplateFailed": "Elements could not be reloaded"
   },
   "byName": "by {name}",
   "cancel": "Cancel",
@@ -226,7 +234,8 @@
     "workflowFinishSession": "Finish session",
     "workflowPostProcessingMode": "Follow-up mode",
     "workflowPreparationMode": "Preparation mode",
-    "workflowSessionMode": "Session mode"
+    "workflowSessionMode": "Session mode",
+    "templateSyncedByOther": "{name} reloaded the elements from the template. The view is being refreshed."
   },
   "embeddedBlock": {
     "attendance": "Attendance",

@@ -85,7 +85,15 @@
     "unnamed": "Sans nom",
     "previewLoading": "Calcul de l’aperçu …",
     "previewFailed": "Impossible de charger l’aperçu.",
-    "templateSaveFailed": "Impossible d’enregistrer le choix du modèle."
+    "templateSaveFailed": "Impossible d’enregistrer le choix du modèle.",
+    "syncTemplate": "Recharger les éléments depuis le modèle",
+    "syncTemplateConfirmTitle": "Recharger les éléments depuis le modèle ?",
+    "syncTemplateConfirmMessage": "Les titres, textes par défaut, filtres et paramètres sont repris du modèle actuel. Les textes, tâches, images et valeurs saisis sont conservés. {updated, plural, one {# élément sera mis à jour} other {# éléments seront mis à jour}}, {added, plural, one {# sera ajouté} other {# seront ajoutés}}, {removed, plural, one {# sera supprimé} other {# seront supprimés}}.",
+    "syncTemplateConfirmRemoved": "Supprimés (vides, plus dans le modèle) : {names}.",
+    "syncTemplateConfirmKept": "{count, plural, one {Plus dans le modèle mais contient des données, reste donc à la fin : {names}.} other {Plus dans le modèle mais contiennent des données, restent donc à la fin : {names}.}}",
+    "syncTemplateConfirmLabel": "Recharger",
+    "syncTemplateDone": "Éléments rechargés depuis le modèle",
+    "syncTemplateFailed": "Impossible de recharger les éléments"
   },
   "byName": "par {name}",
   "cancel": "Annuler",
@@ -226,7 +234,8 @@
     "workflowFinishSession": "Terminer la séance",
     "workflowPostProcessingMode": "Mode post-traitement",
     "workflowPreparationMode": "Mode préparation",
-    "workflowSessionMode": "Mode séance"
+    "workflowSessionMode": "Mode séance",
+    "templateSyncedByOther": "{name} a rechargé les éléments depuis le modèle. L’affichage est actualisé."
   },
   "embeddedBlock": {
     "attendance": "Présence",

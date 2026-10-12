@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import date
 
@@ -13,10 +14,12 @@ from app.core.cycle_utils import format_cycle_name
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.core.db import get_db, SessionLocal
 from app.core.error_log import record_system_error
-from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolListCycle, ProtocolRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
+from app.core.redis_client import get_redis_sync
+from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolListCycle, ProtocolRead, ProtocolTemplateSyncRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
 from app.services import public_id_service
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
+from app.services.collaboration_service import protocol_channel
 from app.services.event_service import EventService
 from app.services.export_service import ExportService
 from app.services.protocol_service import ProtocolService
@@ -29,6 +32,21 @@ todo_service = ProtocolTodoService()
 access_service = AccessService()
 audit = AuditService()
 event_service = EventService()
+
+
+def _broadcast_template_synced(protocol_id: int, user: CurrentUser) -> None:
+    """Offene Editoren dieses Protokolls laden nach einem Vorlagen-Abgleich neu (Blöcke
+    wurden ersetzt/ergänzt) - gleicher Kanal wie protocol_elements._broadcast_block_update."""
+    get_redis_sync().publish(
+        protocol_channel(protocol_id),
+        json.dumps({
+            "type": "field_update",
+            "field_key": "template-synced",
+            "patch": None,
+            "user_id": user.user_id,
+            "display_name": user.display_name,
+        }),
+    )
 
 
 def _get_protocol_or_404(db: Session, protocol_id: uuid.UUID, user: CurrentUser) -> Protocol:
@@ -338,6 +356,33 @@ def revert_protocol_status(
     audit.log(db, action="protocol.status_reverted", actor=user, entity_type="protocol", entity_id=existing.id,
               details={"from": existing.status, "to": prev})
     return protocol
+
+
+@router.post("/protocols/{protocol_id}/sync-template", response_model=ProtocolTemplateSyncRead)
+def sync_protocol_with_template(
+    protocol_id: uuid.UUID,
+    dry_run: bool = Query(False),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Elemente eines offenen Protokolls aus der aktuellen Vorlage neu laden, erfasste Daten
+    bleiben erhalten. Mit dry_run=true nur die Übersicht der Änderungen."""
+    require_writer(user)
+    existing = _get_protocol_or_404(db, protocol_id, user)
+    access_service.ensure_can_read_protocol(db, user, existing.id)
+    try:
+        summary = service.sync_with_template(db, existing.id, dry_run=dry_run)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Protocol could not be synced with its template") from exc
+    if summary["applied"]:
+        audit.log(db, action="protocol.template_synced", actor=user, entity_type="protocol", entity_id=existing.id,
+                  details={key: value for key, value in summary.items() if key != "applied"})
+        _broadcast_template_synced(existing.id, user)
+    return summary
 
 
 @router.get("/protocols/{protocol_id}/pending-todos", response_model=list[TodoListItem])

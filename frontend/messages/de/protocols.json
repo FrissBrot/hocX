@@ -85,7 +85,15 @@
     "unnamed": "Unbenannt",
     "previewLoading": "Vorschau wird berechnet …",
     "previewFailed": "Vorschau konnte nicht geladen werden.",
-    "templateSaveFailed": "Template-Auswahl konnte nicht gespeichert werden."
+    "templateSaveFailed": "Template-Auswahl konnte nicht gespeichert werden.",
+    "syncTemplate": "Elemente aus Vorlage neu laden",
+    "syncTemplateConfirmTitle": "Elemente aus Vorlage neu laden?",
+    "syncTemplateConfirmMessage": "Titel, Vorgabetexte, Filter und Einstellungen werden aus der aktuellen Vorlage übernommen. Erfasste Texte, Todos, Bilder und Werte bleiben erhalten. {updated, plural, one {# Element wird aktualisiert} other {# Elemente werden aktualisiert}}, {added, plural, one {# kommt neu dazu} other {# kommen neu dazu}}, {removed, plural, one {# wird entfernt} other {# werden entfernt}}.",
+    "syncTemplateConfirmRemoved": "Entfernt (leer, nicht mehr in der Vorlage): {names}.",
+    "syncTemplateConfirmKept": "{count, plural, one {Nicht mehr in der Vorlage, enthält aber Daten und bleibt am Ende stehen: {names}.} other {Nicht mehr in der Vorlage, enthalten aber Daten und bleiben am Ende stehen: {names}.}}",
+    "syncTemplateConfirmLabel": "Neu laden",
+    "syncTemplateDone": "Elemente aus der Vorlage neu geladen",
+    "syncTemplateFailed": "Elemente konnten nicht neu geladen werden"
   },
   "byName": "von {name}",
   "cancel": "Abbrechen",
@@ -226,7 +234,8 @@
     "workflowFinishSession": "Sitzung abschliessen",
     "workflowPostProcessingMode": "Nachbearbeitungsmodus",
     "workflowPreparationMode": "Vorbereitungsmodus",
-    "workflowSessionMode": "Sitzungsmodus"
+    "workflowSessionMode": "Sitzungsmodus",
+    "templateSyncedByOther": "{name} hat die Elemente aus der Vorlage neu geladen. Die Ansicht wird aktualisiert."
   },
   "embeddedBlock": {
     "attendance": "Anwesenheit",

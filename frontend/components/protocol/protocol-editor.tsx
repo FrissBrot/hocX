@@ -194,7 +194,15 @@ export function ProtocolEditor({
 
   useEffect(
     () =>
-      collab.onFieldUpdate(({ field_key, patch }) => {
+      collab.onFieldUpdate(({ field_key, patch, display_name }) => {
+        // Vorlagen-Abgleich (Protokollliste, "Elemente aus Vorlage neu laden") ersetzt und
+        // ergänzt Blöcke - der lokale Stand (Entwürfe, Todos/Bilder je Block) passt dann
+        // nicht mehr, deshalb die Seite neu laden statt einzelne Blöcke zu patchen.
+        if (field_key === "template-synced") {
+          showToast(t("templateSyncedByOther", { name: display_name }), "info");
+          window.setTimeout(() => window.location.reload(), 1500);
+          return;
+        }
         if (field_key === "element-titles") {
           void refreshElementTitles();
           return;

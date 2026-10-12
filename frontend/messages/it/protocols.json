@@ -85,7 +85,15 @@
     "unnamed": "Senza nome",
     "previewLoading": "Calcolo dell’anteprima …",
     "previewFailed": "Impossibile caricare l’anteprima.",
-    "templateSaveFailed": "Impossibile salvare la scelta del modello."
+    "templateSaveFailed": "Impossibile salvare la scelta del modello.",
+    "syncTemplate": "Ricarica elementi dal modello",
+    "syncTemplateConfirmTitle": "Ricaricare gli elementi dal modello?",
+    "syncTemplateConfirmMessage": "Titoli, testi predefiniti, filtri e impostazioni vengono ripresi dal modello attuale. Testi, attività, immagini e valori inseriti vengono mantenuti. {updated, plural, one {# elemento verrà aggiornato} other {# elementi verranno aggiornati}}, {added, plural, one {# verrà aggiunto} other {# verranno aggiunti}}, {removed, plural, one {# verrà rimosso} other {# verranno rimossi}}.",
+    "syncTemplateConfirmRemoved": "Rimossi (vuoti, non più nel modello): {names}.",
+    "syncTemplateConfirmKept": "{count, plural, one {Non più nel modello ma contiene dati, quindi resta alla fine: {names}.} other {Non più nel modello ma contengono dati, quindi restano alla fine: {names}.}}",
+    "syncTemplateConfirmLabel": "Ricarica",
+    "syncTemplateDone": "Elementi ricaricati dal modello",
+    "syncTemplateFailed": "Impossibile ricaricare gli elementi"
   },
   "byName": "da {name}",
   "cancel": "Annulla",
@@ -226,7 +234,8 @@
     "workflowFinishSession": "Termina sessione",
     "workflowPostProcessingMode": "Modalità post-elaborazione",
     "workflowPreparationMode": "Modalità preparazione",
-    "workflowSessionMode": "Modalità sessione"
+    "workflowSessionMode": "Modalità sessione",
+    "templateSyncedByOther": "{name} ha ricaricato gli elementi dal modello. La vista viene aggiornata."
   },
   "embeddedBlock": {
     "attendance": "Presenza",

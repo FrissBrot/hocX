@@ -1153,6 +1153,18 @@ export type ProtocolListCycle = {
   is_current: boolean;
 };
 
+// POST /api/protocols/{id}/sync-template (mit ?dry_run=true nur Vorschau).
+export type ProtocolTemplateSyncResult = {
+  applied: boolean;
+  added_elements: string[];
+  updated_elements: string[];
+  removed_elements: string[];
+  kept_elements: string[];
+  added_blocks: number;
+  removed_blocks: number;
+  kept_blocks: number;
+};
+
 export type ProtocolSummary = {
   id: string;
   tenant_id?: string;

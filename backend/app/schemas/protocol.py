@@ -124,6 +124,20 @@ class ProtocolCycleEventsRead(BaseModel):
     cycle: ProtocolCycleInfo | None = None
 
 
+class ProtocolTemplateSyncRead(BaseModel):
+    """Ergebnis von POST /protocols/{id}/sync-template (bei dry_run nur die Vorschau)."""
+
+    applied: bool
+    added_elements: list[str] = Field(default_factory=list)
+    updated_elements: list[str] = Field(default_factory=list)
+    removed_elements: list[str] = Field(default_factory=list)
+    # Nicht mehr in der Vorlage, enthalten aber Daten - bleiben am Ende des Protokolls.
+    kept_elements: list[str] = Field(default_factory=list)
+    added_blocks: int = 0
+    removed_blocks: int = 0
+    kept_blocks: int = 0
+
+
 class AttendanceExcusePayload(BaseModel):
     excused: bool = True
 
