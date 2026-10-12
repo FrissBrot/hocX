@@ -6,6 +6,7 @@ const { fetchMock, editorMock, settingsMock } = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/api/server", () => ({
   backendFetchWithSession: fetchMock,
+  backendFetchAllPagesWithSession: async (path: string) => (await fetchMock(path)) ?? [],
   requireSession: async () => ({ current_role: "admin", current_tenant: { id: "first-tenant" } }),
   // Mirrors the real resolveManageableTenant (lib/api/server.ts) closely enough for this test:
   // picks the requested tenant by id out of the (mocked) manageable-tenants list, falling back
