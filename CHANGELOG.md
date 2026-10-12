@@ -8,6 +8,29 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.1.11] - 2026-10-12
+
+Feature-Release auf 1.1.10 mit Aufgabenpaketen für wiederkehrende Todos, mehreren
+Verantwortlichen pro Todo, einem überarbeiteten Dashboard, einem neu gestalteten
+Stammlisten-Block im Protokoll und einem Redesign der Abgabebox. Enthält die Migrationen
+`0110` und `0111`; sie laufen beim Deploy automatisch und sind umkehrbar. Keine neuen
+Pflicht-Umgebungsvariablen.
+
+### Update von 1.1.10 auf 1.1.11
+
+Nach Veröffentlichung der Release-Images `HOCX_VERSION` in `.env` auf `v1.1.11` setzen,
+dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` ausführen.
+
+- Migration `0110` legt `user_protocol_template_preference` an (zuletzt gewählte
+  Protokollvorlage pro Benutzer und Mandant).
+- Migration `0111` legt die Tabellen für Aufgabenpakete (`task_package`,
+  `task_package_cycle`, `task_package_item`) und mehrere Verantwortliche pro Todo
+  (`protocol_todo_assignee`) an. Bestehende Todos behalten ihren Verantwortlichen.
+- Neuer täglicher Job `task_package_rollover`, erscheint automatisch unter `/admin/jobs`.
+- Ist `TRAEFIK_WEBSITE_DOMAIN` gesetzt, prüft `verify_release.sh` nach dem Deploy, dass die
+  Website-Domain die Landing Page ausliefert. Optional einen zweiten Uptime-Kuma-Monitor für
+  die Website-Domain anlegen (RUNBOOK).
+
 ### Neu
 
 - **Aufgabenpakete** (Vorlagen → Aufgabenpakete): Pakete wie «Sommerlager» oder
@@ -21,11 +44,41 @@ Installationen aktualisieren können.
   Beim Löschen eines Pakets oder einer Zyklus-Zuweisung wird gefragt, ob alle, nur künftige
   oder keine Aufgaben gelöscht werden. Neuer täglicher Job `task_package_rollover`
   (`/admin/jobs`) legt beim Zykluswechsel die Aufgaben des neuen Zyklus an.
-- Todos können mehrere Verantwortliche haben; «Meine Todos», Kalender-Abo und Export
-  berücksichtigen alle. Migration `0111_task_packages`.
+- Todos können mehrere Verantwortliche haben; «Meine Todos», Kalender-Abo, Export und
+  Mandanten-Export/-Import berücksichtigen alle. Migration `0111_task_packages`.
+- Termine: Tags lassen sich mit einem Stern als wichtig markieren. Sie stehen in der
+  Seitenleiste direkt unter «Alle Termine», mobil zuvorderst in der Tag-Leiste.
+- Neue Protokolle merken sich die zuletzt gewählte Vorlage pro Benutzer; die
+  Namensvorschau zeigt den tatsächlich entstehenden Protokollnamen (Migration `0110`).
+- Dashboard: Kontostände (Kassier/Admin) und Abgaben mit Frist (Schreiber/Admin mit
+  Abgabebox) als neue Kacheln.
+- Preiskatalog: Ungenutzte Speicherpakete lassen sich löschen.
+
+### Geändert
+
+- Dashboard: Desktop und Mobile nutzen dieselben Daten und rollenbasierten Kacheln. Am
+  Desktop neu mit Begrüssung, «Meine Todos» (eigene und überfällige), kommenden Terminen
+  und Statistik. Offene Bussen erscheinen nur mit gebuchtem Finanzmodul, Leser sehen ihre
+  eigenen offenen Bussen.
+- Stammlisten-Tabellenblock im Protokoll neu gestaltet: Personen als Chips mit Initialen,
+  Besetzungsgrad, Filter Alle/Offen/Geändert, Änderungsfarben nur bei aktiver
+  Änderungsverfolgung. «Leere Zeilen hervorheben» ist pro Block im Template einstellbar;
+  Gruppieren/Sortieren kommt aus dem Template statt aus dem Protokolleditor.
+- Abgabebox neu gestaltet (Desktop und Mobile): Seitenleiste bzw. Kopfzeile mit
+  Schrittanzeige, Abgaben als Karten, Upload mit Dropzone und Sicherheitsprüfung als
+  Statuskarte, Erfolgsansicht mit Quittung.
+- Aufgabenpaket-Dialog vereinfacht: Verantwortliche als ein Feld mit Chips, Wiederholung
+  und Fälligkeit als Segment-Auswahl.
+- Teilnehmerfilter: «Aktiv» steht zuerst und ist standardmässig ausgewählt.
+- Platform-Admin: Kontoeinstellungen sind ins Profilmenü umgezogen.
+- Footer: Versionsanzeige kompakter, Test- und Entwicklungsumgebungen mit Badge.
 
 ### Behoben
 
+- Beim Tippen im Protokolltext erschien eine falsche Konflikt-Meldung, und der getippte
+  Text wurde durch den Serverstand ersetzt, obwohl niemand sonst bearbeitete.
+- Mobile: iOS zoomte beim Fokus ins Login-Formular, Doppeltipp zoomte ungewollt.
+- Dashboard: Summe und Personenzahl offener Bussen brachen nach 50 Einträgen ab.
 - `deploy.sh` brach mit «Nicht erlaubte Variable TRAEFIK_WEBSITE_DOMAIN» ab, sobald die mit
   1.1.10 eingeführten Variablen `TRAEFIK_WEBSITE_DOMAIN` oder `WEBSITE_CONTACT_EMAIL` (oder
   `ABGABEBOX_ENVIRONMENT`) in der `.env` gesetzt waren. Ein Test stellt jetzt sicher, dass
