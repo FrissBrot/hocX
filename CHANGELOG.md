@@ -11,19 +11,28 @@ Installationen aktualisieren können.
 ## [1.1.12] - 2026-10-12
 
 Feature- und Bugfix-Release auf 1.1.11 mit neu gestaltetem Matrix-Designer, Zyklus-Filter
-für automatische Termin-Spalten und mehreren Korrekturen am PDF-Export. Keine Migrationen,
-keine neuen Pflicht-Umgebungsvariablen.
+für automatische Termin-Spalten, Todos, die nach dem Protokollabschluss bearbeitbar bleiben,
+und mehreren Korrekturen am PDF-Export. Enthält die Migration `0112`; sie läuft beim Deploy
+automatisch und ist umkehrbar. Keine neuen Pflicht-Umgebungsvariablen.
 
 ### Update von 1.1.11 auf 1.1.12
 
 Nach Veröffentlichung der Release-Images `HOCX_VERSION` in `.env` auf `v1.1.12` setzen,
 dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` ausführen.
 
+- Migration `0112` ergänzt `protocol.todos_snapshot_json` (Todo-Stand beim Abschluss).
+  Bereits abgeschlossene Protokolle haben keine Momentaufnahme und zeigen weiterhin den
+  aktuellen Stand ihrer Todos, bis sie erneut abgeschlossen werden.
 - Optional: `HOCX_APP_URL` (z. B. `https://app.hocx.ch`) bestimmt das Ziel von «Anmelden»
   auf der Website. Leer oder nicht gesetzt gilt weiterhin `https://${TRAEFIK_DOMAIN}`.
 
 ### Neu
 
+- Todos bleiben nach dem Abschluss ihres Protokolls bearbeitbar: ändern, erledigen,
+  löschen und neu anlegen (ohne Änderungsverfolgung). Beim Abschliessen wird der Stand
+  aller Todos, inklusive offener Todos aus früheren Protokollen, als Momentaufnahme
+  eingefroren; Ansicht und PDF-Export des abgeschlossenen Protokolls zeigen diesen Stand.
+  Zurücksetzen verwirft die Momentaufnahme nach einer Warnung.
 - Matrix-Designer: Automatische Termin-Spalten lassen sich auf einen Zyklus einschränken
   (aktueller, vorheriger, … Zyklus relativ zum Protokolldatum). Der Tag-Filter
   automatischer Termin-Spalten akzeptiert mehrere Tags.
