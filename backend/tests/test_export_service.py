@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import os
 import tempfile
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import select
@@ -24,6 +24,7 @@ from app.models.entities import StoredFile, TodoStatus
 from app.services import public_id_service
 from app.services.export_service import ExportService
 from tests.factories import (
+    make_event,
     make_participant,
     make_protocol,
     make_protocol_element,
@@ -192,6 +193,64 @@ def test_matrix_embedded_attendance_resolves_participant_by_public_id(db):
     )
 
     assert "Anna Muster" in content
+
+
+# --- Termine im Export = Termine im Protokolleditor ---------------------------------------
+
+
+def _tagged_event(db, tenant_id: int, title: str, event_date: date, tag: str, *, session_marker: bool = False):
+    event = make_event(db, tenant_id, title=title, event_date=event_date)
+    event.tag = tag
+    event.is_session_marker = session_marker
+    db.flush()
+    return event
+
+
+def test_event_list_export_skips_session_markers_like_the_editor(db):
+    """Auto-generierte "Nächster Hock"-Platzhalter ohne Protokoll liefert GET /api/events nicht
+    aus, also zeigt sie auch die Terminliste im Editor nicht - der PDF-Export hat sie trotzdem
+    gerendert (mehr Termine im PDF als im Editor, Bug 2026-10-12)."""
+    tenant, _template, protocol = _protocol_with_template_dir(db)
+    _tagged_event(db, tenant.id, "Echter Termin", date(2026, 2, 1), "hock")
+    _tagged_event(db, tenant.id, "Platzhalter", date(2026, 3, 1), "hock", session_marker=True)
+
+    content = ExportService()._event_list_content(db, protocol=protocol, config={})
+
+    assert "Echter Termin" in content
+    assert "Platzhalter" not in content
+
+
+def test_matrix_event_list_row_uses_event_list_filters(db):
+    """Matrixzeilen vom Typ 7 rendert der Editor als eingebetteten Terminlisten-Block - der
+    Export muss dieselben Filter anwenden (u. a. "nur vor Protokolldatum", Spaltentitel nur bei
+    event_use_column_tag_filter), nicht die der "events"-Zeilen."""
+    tenant, _template, protocol = _protocol_with_template_dir(db)
+    protocol.protocol_date = date(2026, 6, 1)
+    db.flush()
+    _tagged_event(db, tenant.id, "Vorher", date(2026, 5, 1), "lager")
+    _tagged_event(db, tenant.id, "Nachher", date(2026, 7, 1), "lager")
+
+    row = {
+        "row_type": "7",
+        "row_config": {"event_only_before_protocol_date": True, "event_only_from_protocol_date": False, "event_show_date": False},
+    }
+    content = ExportService()._matrix_event_row_value(db, row=row, protocol=protocol, column={"title": "Spalte A"})
+
+    assert "Vorher" in content
+    assert "Nachher" not in content
+
+
+def test_matrix_events_row_applies_column_tag_filter_like_the_editor(db):
+    """matrixEventsForRow wendet column.event_tag_filter immer an (kommagetrennt), auch wenn
+    use_column_title_as_tag aus ist - der Export hat den Filter dann ignoriert."""
+    tenant, _template, protocol = _protocol_with_template_dir(db)
+    _tagged_event(db, tenant.id, "Lager", date(2026, 2, 1), "lager")
+    _tagged_event(db, tenant.id, "Hock", date(2026, 2, 2), "hock")
+
+    row = {"row_type": "events", "row_config": {"use_column_title_as_tag": False, "hide_past_events": True}}
+    events = ExportService()._matrix_events(db, row=row, protocol=protocol, column={"title": "X", "event_tag_filter": "lager, zelt"})
+
+    assert [event.title for event in events] == ["Lager"]
 
 
 # --- edge case: empty protocol (no elements at all) --------------------------------------

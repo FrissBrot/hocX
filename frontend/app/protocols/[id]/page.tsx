@@ -5,7 +5,7 @@ import { ProtocolOverview } from "@/components/protocol/protocol-builder";
 import { MobileProtocolEditor } from "@/components/mobile/mobile-protocol-editor";
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { AppShell } from "@/components/ui/app-shell";
-import { backendFetchWithSession, requireSession } from "@/lib/api/server";
+import { backendFetchAllPagesWithSession, backendFetchWithSession, requireSession } from "@/lib/api/server";
 import {
   DocumentTemplate,
   EventSummary,
@@ -36,7 +36,7 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
   const [documentTemplates, templates, events, lists, elements, participants, participantDirectory] = await Promise.all([
     backendFetchWithSession<DocumentTemplate[]>("/api/document-templates").then((v) => v ?? []),
     backendFetchWithSession<TemplateSummary[]>("/api/templates").then((v) => v ?? []),
-    backendFetchWithSession<EventSummary[]>("/api/events").then((v) => v ?? []),
+    backendFetchAllPagesWithSession<EventSummary>("/api/events"),
     backendFetchWithSession<StructuredListDefinition[]>("/api/lists").then((v) => v ?? []),
     backendFetchWithSession<ProtocolElement[]>(`/api/protocols/${id}/elements`).then((v) => v ?? []),
     backendFetchWithSession<ParticipantSummary[]>(

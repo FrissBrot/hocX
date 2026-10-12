@@ -19,6 +19,21 @@ export async function backendFetchWithSession<T>(path: string): Promise<T | null
   });
 }
 
+// Lädt eine skip/limit-paginierte Liste vollständig. Für Daten, die clientseitig gefiltert
+// werden und dabei mit dem (ungekürzten) PDF-Export übereinstimmen müssen, z. B. Termine im
+// Protokolleditor - der Standard-limit von /api/events (100) hat dort ältere Termine abgeschnitten.
+export async function backendFetchAllPagesWithSession<T>(path: string, pageSize = 500): Promise<T[]> {
+  const separator = path.includes("?") ? "&" : "?";
+  const items: T[] = [];
+  for (let skip = 0; ; skip += pageSize) {
+    const page = await backendFetchWithSession<T[]>(`${path}${separator}skip=${skip}&limit=${pageSize}`);
+    if (!page) break;
+    items.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return items;
+}
+
 export async function requireSession(): Promise<SessionInfo> {
   const session = await backendFetchWithSession<SessionInfo>("/api/auth/session");
   if (session === null) {

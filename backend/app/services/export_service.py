@@ -13,7 +13,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -1271,12 +1271,57 @@ Status: {protocol_status}
             columns["title"] = True
         return columns
 
-    def _event_list_content(self, db: Session, *, protocol, config: dict, extra_tag_filter: str | None = None) -> str:
+    def _tenant_events(self, db: Session, tenant_id: int) -> list[Event]:
+        """Alle Termine, die der Protokolleditor kennt (gleiche Sichtbarkeit wie GET /api/events).
+
+        Automatisch erzeugte "Nächster Hock"-Platzhalter (is_session_marker) ohne zugehöriges
+        Protokoll blendet EventRepository.list aus - der Export muss sie ebenfalls weglassen,
+        sonst erscheinen im PDF Termine, die im Editor fehlen.
+        """
+        has_protocol = exists().where(ProtocolModel.event_id == Event.id)
+        return list(
+            db.scalars(
+                select(Event)
+                .where(
+                    Event.tenant_id == tenant_id,
+                    or_(Event.is_session_marker.is_(False), has_protocol),
+                )
+                .order_by(Event.event_date.asc(), Event.id.asc())
+            )
+        )
+
+    def _filter_event_list_events(self, db: Session, *, protocol, config: dict, extra_tag_filter: str | None = None) -> list[Event]:
+        """Filter einer Terminliste (Elementtyp 7), identisch zu eventRowsForBlock/matrix-embedded-block-editor im Frontend."""
         tag_filters = [t.strip() for t in str(config.get("event_tag_filter") or "").lower().split(",") if t.strip()]
         combined_extra_tag_filters = [t.strip() for t in str(extra_tag_filter or "").lower().split(",") if t.strip()]
         only_from_protocol_date = bool(config.get("event_only_from_protocol_date", True))
         only_before_protocol_date = bool(config.get("event_only_before_protocol_date", False))
         only_current_cycle = bool(config.get("event_only_current_cycle", False))
+        cycle_event_ids: set[int] | None = None
+        if only_current_cycle:
+            resolved_cycle = resolve_protocol_cycle(db, protocol)
+            if resolved_cycle:
+                cycle_cfg, cycle_year = resolved_cycle
+                cycle_event_ids = list_cycle_event_ids(db, cycle_cfg.id, cycle_year)
+
+        filtered: list[Event] = []
+        for event in self._tenant_events(db, protocol.tenant_id):
+            event_end_date = event.event_end_date or event.event_date
+            event_tag_lower = (event.tag or "").lower()
+            if tag_filters and not any(t in event_tag_lower for t in tag_filters):
+                continue
+            if combined_extra_tag_filters and not any(t in event_tag_lower for t in combined_extra_tag_filters):
+                continue
+            if only_before_protocol_date and protocol.protocol_date and event_end_date >= protocol.protocol_date:
+                continue
+            elif not only_before_protocol_date and only_from_protocol_date and protocol.protocol_date and event_end_date < protocol.protocol_date:
+                continue
+            if cycle_event_ids is not None and event.id not in cycle_event_ids:
+                continue
+            filtered.append(event)
+        return filtered
+
+    def _event_list_content(self, db: Session, *, protocol, config: dict, extra_tag_filter: str | None = None) -> str:
         gray_past = bool(config.get("event_gray_past", True))
         show_tag_colors = bool(config.get("event_show_tag_colors", False))
         tag_config: dict = {}
@@ -1285,17 +1330,7 @@ Status: {protocol_status}
             if tenant is not None:
                 tag_config = tenant.tag_config_json or {}
         columns = self._event_list_columns(config)
-        events = list(
-            db.scalars(
-                select(Event).where(Event.tenant_id == protocol.tenant_id).order_by(Event.event_date.asc(), Event.id.asc())
-            )
-        )
-        cycle_event_ids: set[int] | None = None
-        if only_current_cycle:
-            resolved_cycle = resolve_protocol_cycle(db, protocol)
-            if resolved_cycle:
-                cycle_cfg, cycle_year = resolved_cycle
-                cycle_event_ids = list_cycle_event_ids(db, cycle_cfg.id, cycle_year)
+        events = self._filter_event_list_events(db, protocol=protocol, config=config, extra_tag_filter=extra_tag_filter)
 
         column_specs: list[str] = []
         headers: list[str] = []
@@ -1318,18 +1353,6 @@ Status: {protocol_status}
         rows: list[str] = []
         for event in events:
             event_end_date = event.event_end_date or event.event_date
-            event_tag_lower = (event.tag or "").lower()
-            if tag_filters and not any(t in event_tag_lower for t in tag_filters):
-                continue
-            if combined_extra_tag_filters and not any(t in event_tag_lower for t in combined_extra_tag_filters):
-                continue
-            if only_before_protocol_date and protocol.protocol_date and event_end_date >= protocol.protocol_date:
-                continue
-            elif not only_before_protocol_date and only_from_protocol_date and protocol.protocol_date and event_end_date < protocol.protocol_date:
-                continue
-            if cycle_event_ids is not None and event.id not in cycle_event_ids:
-                continue
-
             cells: list[str] = []
             if columns["date"]:
                 if event_end_date == event.event_date:
@@ -1952,8 +1975,16 @@ Status: {protocol_status}
 
     def _matrix_event_row_value(self, db: Session, *, row: dict, protocol, column: dict) -> str:
         """Render event list row as newline-separated text for a matrix cell."""
-        row_config = row.get("row_config") or {}
-        events = self._matrix_events(db, row=row, protocol=protocol, column=column)
+        # Der Editor rendert diese Zeile als eingebetteten Terminlisten-Block
+        # (matrixEmbeddedBlockForRow -> matrix-embedded-block-editor), also gelten dieselben
+        # Filter wie bei Elementtyp 7 und nicht die der "events"-Zeilen (_matrix_events).
+        row_config = row.get("row_config")
+        if not isinstance(row_config, dict):
+            row_config = row.get("embedded_configuration_json") if isinstance(row.get("embedded_configuration_json"), dict) else {}
+        column_tag_filter = None
+        if bool(row_config.get("event_use_column_tag_filter", False)) and isinstance(column, dict):
+            column_tag_filter = str(column.get("event_tag_filter") or column.get("title") or "").strip() or None
+        events = self._filter_event_list_events(db, protocol=protocol, config=row_config, extra_tag_filter=column_tag_filter)
         if not events:
             return ""
         show_date = bool(row_config.get("event_show_date", True))
@@ -2152,42 +2183,32 @@ Status: {protocol_status}
         return self._latex_multiline(str(cell.get(f"{prefix}text_value") or row.get("template_value") or "").strip())
 
     def _matrix_events(self, db: Session, *, row: dict, protocol, column: dict) -> list[Event]:
+        """Termine einer "events"-Matrixzeile, identisch zu matrixEventsForRow im Frontend."""
         # New schema: event filters live in row_config; old schema: directly on row
-        _row_config = row.get("row_config") or {}
-        tag_filter_raw = str(row.get("event_tag_filter") or _row_config.get("event_tag_filter") or "").strip().lower()
-        tag_filters_matrix = [t.strip() for t in tag_filter_raw.split(",") if t.strip()]
-        title_filter = str(row.get("event_title_filter") or _row_config.get("event_title_filter") or "").strip().lower()
-        # hide_past_events / event_only_from_protocol_date are the same concept under different names
-        hide_past_events = bool(
-            row.get("hide_past_events",
-            _row_config.get("hide_past_events",
-            _row_config.get("event_only_from_protocol_date", True)))
-        )
-        # Column tag: prefer explicit event_tag_filter on the column, fall back to column title
-        use_col_tag = bool(
-            row.get("event_use_column_tag_filter")
-            or _row_config.get("event_use_column_tag_filter")
-            or row.get("use_column_title_as_tag", _row_config.get("use_column_title_as_tag", True))
-        )
-        column_tag_filter = ""
-        if use_col_tag:
-            column_tag_filter = str(column.get("event_tag_filter") or column.get("title") or "").strip().lower()
-        events = list(
-            db.scalars(
-                select(Event)
-                .where(Event.tenant_id == protocol.tenant_id)
-                .order_by(Event.event_date.asc(), Event.id.asc())
-            )
-        )
+        _row_config = row.get("row_config") if isinstance(row.get("row_config"), dict) else {}
+
+        def _setting(key: str):
+            value = row.get(key)
+            return value if value is not None else _row_config.get(key)
+
+        tag_filters_matrix = [t.strip() for t in str(_setting("event_tag_filter") or "").lower().split(",") if t.strip()]
+        column_tag_filters = [t.strip() for t in str(column.get("event_tag_filter") or "").lower().split(",") if t.strip()]
+        title_filter = str(_setting("event_title_filter") or "").strip().lower()
+        use_column_title_as_tag = _setting("use_column_title_as_tag") is not False
+        hide_past_events = _setting("hide_past_events") is not False
+        column_title = str(column.get("title") or "").strip().lower()
+
         filtered: list[Event] = []
-        for event in events:
+        for event in self._tenant_events(db, protocol.tenant_id):
             effective_end_date = event.event_end_date or event.event_date
-            if hide_past_events and effective_end_date < protocol.protocol_date:
+            if hide_past_events and protocol.protocol_date and effective_end_date < protocol.protocol_date:
                 continue
             event_tag_lower_m = (event.tag or "").lower()
             if tag_filters_matrix and not any(t in event_tag_lower_m for t in tag_filters_matrix):
                 continue
-            if column_tag_filter and column_tag_filter not in event_tag_lower_m:
+            if column_tag_filters and not any(t in event_tag_lower_m for t in column_tag_filters):
+                continue
+            if use_column_title_as_tag and column_title and column_title not in event_tag_lower_m:
                 continue
             if title_filter and title_filter not in event.title.lower():
                 continue
