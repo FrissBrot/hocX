@@ -402,7 +402,9 @@
         "events": "Remplit automatiquement chaque cellule avec les événements correspondants.",
         "list_entry": "Une entrée d'une liste par cellule.",
         "embedded": "Un bloc intégré «{type}» par cellule."
-      }
+      },
+      "sourceSentenceEventsCycle": "Une colonne par événement du cycle «{cycle}» ({offset}, par rapport à la date du procès-verbal).",
+      "sourceSentenceEventsTagCycle": "Une colonne par événement avec le tag «{tag}» du cycle «{cycle}» ({offset}, par rapport à la date du procès-verbal)."
     }
   },
   "block": "Bloc",

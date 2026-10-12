@@ -21,7 +21,9 @@ import { browserApiFetch } from "@/lib/api/client";
 import { formatDateRange } from "@/lib/utils/format";
 import { elementTypeOptions as buildElementTypeOptions, elementTypeLabels as buildElementTypeLabels } from "@/lib/constants/element-types";
 import { EVENT_SYNC_FIELDS, TODO_SYNC_FIELDS } from "@/lib/constants/event-sync-fields";
-import { ElementDefinition, ElementDefinitionBlock, EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
+import { CycleConfigSummary, ElementDefinition, ElementDefinitionBlock, EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
+import { eventMatchesCycleFilter } from "@/lib/utils/cycle";
+import { CYCLE_OFFSET_OPTIONS, cycleOffsetLabel } from "@/components/submission-assignments/submission-assignment-form";
 import { ChartCycleSelection } from "@/components/protocol/chart-cycle-selection";
 import { asObject } from "@/components/protocol/protocol-editor-shared";
 
@@ -76,6 +78,9 @@ type BlockFormState = {
   auto_source_type: "" | "participants" | "events" | "list";
   auto_source_list_id: string;
   auto_source_event_tag: string;
+  // Zyklus-Filter für automatische Termin-Spalten (öffentliche CycleConfig-ID, Offset relativ zum Protokolldatum)
+  auto_source_cycle_config_id: string;
+  auto_source_cycle_offset: number;
   todo_block_title_filter: string;
   todo_task_filter: string;
   todo_open_only: boolean;
@@ -276,6 +281,8 @@ const initialBlockForm: BlockFormState = {
   auto_source_type: "" as "" | "participants" | "events" | "list",
   auto_source_list_id: "",
   auto_source_event_tag: "",
+  auto_source_cycle_config_id: "",
+  auto_source_cycle_offset: 0,
   todo_block_title_filter: "",
   todo_task_filter: "",
   todo_open_only: true,
@@ -541,6 +548,8 @@ function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
       if (autoSrc && typeof autoSrc === "object") return String(asObject(autoSrc).event_tag_filter ?? "");
       return String(block.configuration_json?.matrix_column_source_event_tag ?? "");
     })(),
+    auto_source_cycle_config_id: String(asObject(block.configuration_json?.auto_source).cycle_config_id ?? ""),
+    auto_source_cycle_offset: Number(asObject(block.configuration_json?.auto_source).cycle_offset ?? 0) || 0,
     todo_block_title_filter: String(block.configuration_json?.todo_block_title_filter ?? ""),
     todo_task_filter: String(block.configuration_json?.todo_task_filter ?? ""),
     todo_open_only: Boolean(block.configuration_json?.todo_open_only ?? true),
@@ -688,6 +697,8 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
         type: form.auto_source_type,
         list_id: form.auto_source_type === "list" && form.auto_source_list_id ? form.auto_source_list_id : null,
         event_tag_filter: form.auto_source_type === "events" ? (form.auto_source_event_tag || null) : null,
+        cycle_config_id: form.auto_source_type === "events" && form.auto_source_cycle_config_id ? form.auto_source_cycle_config_id : null,
+        cycle_offset: form.auto_source_type === "events" && form.auto_source_cycle_config_id ? form.auto_source_cycle_offset : 0,
       } : null,
       todo_block_title_filter: form.todo_block_title_filter || null,
       todo_task_filter: form.todo_task_filter || null,
@@ -919,6 +930,7 @@ export function ElementDefinitionManager({
   const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("templates.elementDefinitions");
   const tTypes = useTranslations("templates");
+  const tCycle = useTranslations("submissionAssignments");
   const locale = useLocale();
   const elementTypeOptions = buildElementTypeOptions(tTypes);
   const matrixEmbeddedBlockOptions = matrixEmbeddedBlockOptionsList(tTypes);
@@ -962,6 +974,7 @@ export function ElementDefinitionManager({
   const [draggedBlockId, setDraggedBlockId] = useState<number | null>(null);
   const [matrixPreviewColumns, setMatrixPreviewColumns] = useState<Array<{ id: string; title: string }> | null>(null);
   const [matrixPreviewLoading, setMatrixPreviewLoading] = useState(false);
+  const [cycleConfigs, setCycleConfigs] = useState<CycleConfigSummary[]>([]);
   const [listEntryOptionsByListId, setListEntryOptionsByListId] = useState<Record<string, StructuredListEntry[]>>({});
   const participantOptions = Array.isArray(availableParticipants) ? availableParticipants : [];
   const eventOptions = Array.isArray(availableEvents) ? availableEvents : [];
@@ -1008,7 +1021,7 @@ export function ElementDefinitionManager({
 
   // Clear preview when source settings change
   const matrixSourceKey = matrixDesignerForm
-    ? `${matrixDesignerForm.auto_source_type}:${matrixDesignerForm.auto_source_list_id}:${matrixDesignerForm.auto_source_event_tag}`
+    ? `${matrixDesignerForm.auto_source_type}:${matrixDesignerForm.auto_source_list_id}:${matrixDesignerForm.auto_source_event_tag}:${matrixDesignerForm.auto_source_cycle_config_id}:${matrixDesignerForm.auto_source_cycle_offset}`
     : "";
   useEffect(() => {
     setMatrixPreviewColumns(null);
@@ -1038,10 +1051,15 @@ export function ElementDefinitionManager({
           participantOptions.filter(isParticipantSelectable).map((p) => ({ id: `prev-p-${p.id}`, title: p.display_name }))
         );
       } else if (source === "events") {
-        const tagFilter = matrixDesignerForm.auto_source_event_tag.trim().toLowerCase();
-        const filtered = tagFilter
-          ? sortedAvailableEvents.filter((e) => String(e.tag ?? "").toLowerCase() === tagFilter)
-          : sortedAvailableEvents;
+        // Gleiche Regeln wie beim Erzeugen im Protokoll (focused-element-editor.tsx::matrixEventPool);
+        // die Vorschau bezieht den Zyklus aufs heutige Datum, das Protokoll auf sein Protokolldatum.
+        const tagFilters = matrixDesignerForm.auto_source_event_tag.split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+        const cycleConfig = cycleConfigs.find((c) => c.id === matrixDesignerForm.auto_source_cycle_config_id) ?? null;
+        const todayIso = new Date().toISOString().slice(0, 10);
+        const filtered = sortedAvailableEvents.filter((e) =>
+          (!tagFilters.length || tagFilters.includes(String(e.tag ?? "").trim().toLowerCase())) &&
+          eventMatchesCycleFilter(e.cycle_assignments, cycleConfig, todayIso, matrixDesignerForm.auto_source_cycle_offset)
+        );
         setMatrixPreviewColumns(filtered.map((e) => ({ id: `prev-e-${e.id}`, title: e.title })));
       } else if (source === "list") {
         const listDefId = matrixDesignerForm.auto_source_list_id || null;
@@ -1368,6 +1386,11 @@ export function ElementDefinitionManager({
   }
 
   function openMatrixDesigner(mode: "create" | "edit") {
+    if (!cycleConfigs.length) {
+      browserApiFetch<CycleConfigSummary[]>("/api/cycle-configs")
+        .then((rows) => setCycleConfigs(rows ?? []))
+        .catch(() => setCycleConfigs([]));
+    }
     setMatrixDesignerSnapshot(mode === "create" ? createBlockForm : blockForm);
     ensureMatrixDesignerDefaults(mode);
     setMatrixInspectorKind("row");
@@ -3545,12 +3568,20 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
           const activeColumnId = !isAuto && matrixInspectorKind !== "row" ? selectedMatrixColumn?.id ?? null : null;
           const selectedListName = listOptions.find((list) => String(list.id) === matrixDesignerForm.auto_source_list_id)?.name ?? "";
           const eventTag = matrixDesignerForm.auto_source_event_tag.trim();
+          const selectedCycle = cycleConfigs.find((c) => c.id === matrixDesignerForm.auto_source_cycle_config_id) ?? null;
+          const cycleOffset = matrixDesignerForm.auto_source_cycle_offset;
+          const cycleSentenceValues = selectedCycle ? { cycle: selectedCycle.name, offset: cycleOffsetLabel(cycleOffset, tCycle) } : null;
+          const eventsSentence = cycleSentenceValues
+            ? (eventTag
+              ? t("matrixDesigner.sourceSentenceEventsTagCycle", { tag: eventTag, ...cycleSentenceValues })
+              : t("matrixDesigner.sourceSentenceEventsCycle", cycleSentenceValues))
+            : (eventTag ? t("matrixDesigner.sourceSentenceEventsTag", { tag: eventTag }) : t("matrixDesigner.sourceSentenceEvents"));
           const sourceSentence = !autoSource
             ? t("matrixDesigner.sourceSentenceNone")
             : autoSource === "participants"
             ? t("matrixDesigner.sourceSentenceParticipants")
             : autoSource === "events"
-            ? (eventTag ? t("matrixDesigner.sourceSentenceEventsTag", { tag: eventTag }) : t("matrixDesigner.sourceSentenceEvents"))
+            ? eventsSentence
             : (selectedListName ? t("matrixDesigner.sourceSentenceList", { list: selectedListName }) : t("matrixDesigner.sourceSentenceListNone"));
           const rowCount = matrixDesignerRows.length;
           const countLabel = !isAuto
@@ -3666,6 +3697,38 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     onTagRename={renameTag}
                     placeholder={t("matrixDesigner.allTagsPlaceholder")}
                   />
+                </div>
+              ) : null}
+              {isAuto && autoSource === "events" ? (
+                <div className="matrix-designer-strip-group">
+                  <span className="field-label">{tCycle("cycleLabel")}</span>
+                  <div className="matrix-designer-cycle-row">
+                    <div className="matrix-designer-strip-field">
+                      <SearchableSelect
+                        options={cycleConfigs}
+                        getId={(c) => c.id}
+                        getLabel={(c) => c.name}
+                        value={matrixDesignerForm.auto_source_cycle_config_id || null}
+                        nullLabel={tCycle("allCyclesNoFilter")}
+                        onChange={(c) => updateMatrixDesignerForm((current) => ({ ...current, auto_source_cycle_config_id: c?.id ?? "", auto_source_cycle_offset: 0 }))}
+                      />
+                    </div>
+                    {matrixDesignerForm.auto_source_cycle_config_id ? (
+                      <div className="matrix-designer-cycle-options" role="group" aria-label={tCycle("cycleLabel")}>
+                        {CYCLE_OFFSET_OPTIONS.map((offset) => (
+                          <button
+                            key={offset}
+                            type="button"
+                            className={`button-pill${cycleOffset === offset ? " button-pill-active" : ""}`}
+                            aria-pressed={cycleOffset === offset}
+                            onClick={() => updateMatrixDesignerForm((current) => ({ ...current, auto_source_cycle_offset: offset }))}
+                          >
+                            {cycleOffsetLabel(offset, tCycle)}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
               <div className="matrix-designer-strip-group matrix-designer-strip-end">

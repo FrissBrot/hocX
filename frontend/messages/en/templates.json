@@ -402,7 +402,9 @@
         "events": "Fills every cell automatically with matching events.",
         "list_entry": "One entry from a list per cell.",
         "embedded": "An embedded «{type}» block per cell."
-      }
+      },
+      "sourceSentenceEventsCycle": "One column per event in the cycle «{cycle}» ({offset}, relative to the protocol date).",
+      "sourceSentenceEventsTagCycle": "One column per event tagged «{tag}» in the cycle «{cycle}» ({offset}, relative to the protocol date)."
     }
   },
   "block": "Block",

@@ -22,10 +22,22 @@ export type ProtocolCycleEvents = {
  */
 export async function fetchCycleEvents(
   protocolId: string,
-  options: { scope?: "current" | "all"; search?: string; skip?: number; limit?: number } = {}
+  options: {
+    scope?: "current" | "all";
+    search?: string;
+    skip?: number;
+    limit?: number;
+    /** Zyklus-Filter (überschreibt scope): Termine dieses Zyklus relativ zum Protokolldatum. */
+    cycleConfigId?: string | null;
+    cycleOffset?: number;
+  } = {}
 ): Promise<ProtocolCycleEvents> {
   const params = new URLSearchParams();
   params.set("scope", options.scope ?? "current");
+  if (options.cycleConfigId) {
+    params.set("cycle_config_id", options.cycleConfigId);
+    params.set("cycle_offset", String(options.cycleOffset ?? 0));
+  }
   if (options.search) params.set("search", options.search);
   if (options.skip) params.set("skip", String(options.skip));
   params.set("limit", String(options.limit ?? 500));

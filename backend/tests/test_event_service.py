@@ -13,7 +13,7 @@ import pytest
 from app.models.entities import EventCycle
 from app.schemas.event import CycleAssignment, EventCreate, EventUpdate
 from app.services.event_service import EventService
-from tests.factories import make_cycle_config, make_event, make_tenant
+from tests.factories import make_cycle_config, make_event, make_protocol, make_template, make_tenant
 
 
 # --- create_event / update_event validation -------------------------------------------------
@@ -191,3 +191,61 @@ def test_preview_csv_empty_input_returns_empty_result(db):
     service = EventService()
     preview = service.preview_csv(db, "")
     assert preview == {"detected_columns": [], "resolved_map": {}, "rows": [], "valid_count": 0, "error_count": 0}
+
+
+# --- list_for_protocol_cycle: Zyklus-Filter automatischer Matrix-Spalten --------------------
+
+
+def _event_in_cycle(db, tenant_id, cycle, cycle_year, title):
+    event = make_event(db, tenant_id, title=title)
+    db.add(EventCycle(event_id=event.id, cycle_config_id=cycle.id, cycle_year=cycle_year))
+    db.flush()
+    return event
+
+
+def test_list_for_protocol_cycle_filters_by_chosen_cycle_and_offset(db):
+    tenant = make_tenant(db, "Matrix Zyklus Verein")
+    vereinsjahr = make_cycle_config(db, tenant.id, name="Vereinsjahr", reset_month=7, reset_day=31)
+    semester = make_cycle_config(db, tenant.id, name="Semester", reset_month=1, reset_day=31)
+    template = make_template(db, tenant.id)
+    protocol = make_protocol(db, tenant.id, template.id, protocol_date=date(2026, 10, 12))
+    current = _event_in_cycle(db, tenant.id, vereinsjahr, 2026, "Herbstlager")
+    previous = _event_in_cycle(db, tenant.id, vereinsjahr, 2025, "Sommerlager")
+    _event_in_cycle(db, tenant.id, semester, 2026, "Semesterstart")
+    service = EventService()
+
+    items, total, cycle = service.list_for_protocol_cycle(db, protocol=protocol, cycle_config_public_id=vereinsjahr.public_id)
+    assert [e.id for e in items] == [current.id]
+    assert total == 1
+    assert cycle is not None and cycle.cycle_year == 2026
+
+    items, _, cycle = service.list_for_protocol_cycle(
+        db, protocol=protocol, cycle_config_public_id=vereinsjahr.public_id, cycle_offset=-1
+    )
+    assert [e.id for e in items] == [previous.id]
+    assert cycle is not None and cycle.cycle_year == 2025
+
+
+def test_list_for_protocol_cycle_rejects_foreign_cycle(db):
+    tenant = make_tenant(db, "Eigener Verein")
+    other = make_tenant(db, "Fremder Verein")
+    foreign_cycle = make_cycle_config(db, other.id)
+    template = make_template(db, tenant.id)
+    protocol = make_protocol(db, tenant.id, template.id)
+
+    with pytest.raises(ValueError):
+        EventService().list_for_protocol_cycle(db, protocol=protocol, cycle_config_public_id=foreign_cycle.public_id)
+
+
+def test_event_read_includes_cycle_assignments(db):
+    # Regression: PublicIdModel übernahm nur Spalten, cycle_assignments war in jeder
+    # Termin-Antwort leer - Zyklus-Filter im Frontend griffen dadurch nie.
+    from app.schemas.event import EventRead
+
+    tenant = make_tenant(db, "Read Verein")
+    cycle = make_cycle_config(db, tenant.id, reset_month=7, reset_day=31)
+    event = EventService().create_event(db, EventCreate(event_date="2026-10-17", title="Herbstlager"), tenant_id=tenant.id)
+    db.refresh(event)
+
+    read = EventRead.model_validate(event)
+    assert [(a.cycle_config_id, a.cycle_year) for a in read.cycle_assignments] == [(cycle.public_id, 2026)]

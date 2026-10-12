@@ -364,6 +364,8 @@ def get_cycle_events(
     search: str = Query(""),
     skip: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=500),
+    cycle_config_id: uuid.UUID | None = Query(None),
+    cycle_offset: int = Query(0, ge=-10, le=10),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -372,12 +374,18 @@ def get_cycle_events(
     scope=current: nur Termine des aktuellen Zyklus des Protokolls (Template-CycleConfig
     + protocol_date). Fällt auf alle Termine zurück (cycle=null), wenn kein Zyklus
     konfiguriert ist. scope=all: alle Termine des Mandanten, unabhängig vom Zyklus.
+    cycle_config_id/cycle_offset: Termine eines bestimmten Zyklus relativ zum
+    Protokolldatum (Zyklus-Filter automatischer Matrix-Spalten), überschreibt scope.
     """
     require_reader(user)
     protocol = _get_protocol_or_404(db, protocol_id, user)
-    items, total, cycle = event_service.list_for_protocol_cycle(
-        db, protocol=protocol, scope=scope, search=search, skip=skip, limit=limit
-    )
+    try:
+        items, total, cycle = event_service.list_for_protocol_cycle(
+            db, protocol=protocol, scope=scope, search=search, skip=skip, limit=limit,
+            cycle_config_public_id=cycle_config_id, cycle_offset=cycle_offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return ProtocolCycleEventsRead(items=items, total=total, cycle=cycle)
 
 
