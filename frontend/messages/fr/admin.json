@@ -908,7 +908,11 @@
     "tabRebooking": "À réaffecter",
     "colAvailability": "Disponibilité",
     "packageBookableHelp": "Peut être ajouté aux organisations.",
-    "packageNotBookableHelp": "Ne peut plus être ajouté. Les attributions existantes restent et apparaissent sous « À réaffecter »."
+    "packageNotBookableHelp": "Ne peut plus être ajouté. Les attributions existantes restent et apparaissent sous « À réaffecter ».",
+    "delete": "Supprimer",
+    "deleteConfirm": "Supprimer définitivement « {name} » ?",
+    "deleted": "Offre supprimée",
+    "deleteFailed": "Impossible de supprimer l’offre."
   },
   "catalogImport": {
     "title": "Importer la configuration",

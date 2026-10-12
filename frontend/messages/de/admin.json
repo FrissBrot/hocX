@@ -908,7 +908,11 @@
     "tabRebooking": "Umbuchen",
     "colAvailability": "Verfügbarkeit",
     "packageBookableHelp": "Kann Mandanten zugebucht werden.",
-    "packageNotBookableHelp": "Kann nicht mehr neu zugebucht werden. Bestehende Zuweisungen bleiben bestehen und erscheinen unter «Umbuchen»."
+    "packageNotBookableHelp": "Kann nicht mehr neu zugebucht werden. Bestehende Zuweisungen bleiben bestehen und erscheinen unter «Umbuchen».",
+    "delete": "Löschen",
+    "deleteConfirm": "„{name}“ endgültig löschen?",
+    "deleted": "Paket gelöscht",
+    "deleteFailed": "Das Paket konnte nicht gelöscht werden."
   },
   "catalogImport": {
     "title": "Konfiguration importieren",

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -10,6 +10,8 @@ import { browserApiFetch } from "@/lib/api/client";
 import { ToastProvider } from "@/contexts/toast-context";
 import { ConfirmProvider } from "@/contexts/confirm-context";
 import { AdminSessionInfo, AdminTenantPage } from "@/types/api";
+import { AdminAccountSettings } from "@/components/admin/admin-account-settings";
+import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
 type AdminIconKey = "dashboard" | "tenants" | "pricing" | "users" | "domains" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security";
@@ -44,7 +46,6 @@ const navGroups: { titleKey: string | null; links: AdminNavLink[] }[] = [
     links: [
       { href: "/admin/admins", labelKey: "nav.admins", icon: "admins" },
       { href: "/admin/sso", labelKey: "nav.sso", icon: "sso" },
-      { href: "/admin/security", labelKey: "nav.security", icon: "security" },
     ],
   },
 ];
@@ -147,6 +148,9 @@ export function AdminShell({ children, session }: { children: ReactNode; session
   const t = useTranslations("adminShell");
   const pathname = usePathname();
   const router = useRouter();
+  const avatarTriggerRef = useRef<HTMLButtonElement>(null);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [tenantTotal, setTenantTotal] = useState<number | null>(null);
 
@@ -156,6 +160,10 @@ export function AdminShell({ children, session }: { children: ReactNode; session
       .then((page) => setTenantTotal(page.total))
       .catch(() => setTenantTotal(null));
   }, []);
+
+  useEffect(() => {
+    if (pathname === "/admin/security") setAccountSettingsOpen(true);
+  }, [pathname]);
 
   const activeLink = allNavLinks.find((link) => isActiveLink(link.href, pathname));
   // The backend's require_admin_write already rejects every create/update/delete for a
@@ -211,9 +219,9 @@ export function AdminShell({ children, session }: { children: ReactNode; session
           </nav>
           <div className="sidebar-footer">
             <div className="admin-identity">
-              <div className="identity-avatar admin-identity-avatar">
-                <span>{session.admin?.display_name?.slice(0, 1) ?? "A"}</span>
-              </div>
+              <button ref={avatarTriggerRef} type="button" className="identity-button admin-identity-trigger" aria-label={t("accountSettings")} aria-haspopup="menu" aria-expanded={avatarMenuOpen} onClick={() => setAvatarMenuOpen((current) => !current)}>
+                <span className="identity-avatar admin-identity-avatar">{session.admin?.display_name?.slice(0, 1) ?? "A"}</span>
+              </button>
               <div className="admin-identity-copy">
                 <strong>{session.admin?.display_name ?? "..."}</strong>
                 <div className="identity-subtle">{session.admin?.email}</div>
@@ -257,6 +265,20 @@ export function AdminShell({ children, session }: { children: ReactNode; session
         </div>
       </div>
     </main>
+    <Popover open={avatarMenuOpen} onOpenChange={setAvatarMenuOpen} anchorRef={avatarTriggerRef} align="start">
+      <Menu>
+        <div className="menu-header">
+          <div className="menu-header-name">{session.admin?.display_name}</div>
+          <div className="menu-header-role">{session.admin?.email}</div>
+        </div>
+        <MenuDivider />
+        <MenuItem onSelect={() => { setAvatarMenuOpen(false); setMobileNavOpen(false); setAccountSettingsOpen(true); }}>
+          {t("accountSettings")}
+        </MenuItem>
+        <MenuItem onSelect={() => { setAvatarMenuOpen(false); void logout(); }}>{t("logout")}</MenuItem>
+      </Menu>
+    </Popover>
+    <AdminAccountSettings open={accountSettingsOpen} onClose={() => { setAccountSettingsOpen(false); if (pathname === "/admin/security") router.replace("/admin"); }} />
     </ConfirmProvider>
     </ToastProvider>
   );

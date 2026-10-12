@@ -595,6 +595,38 @@ def upsert_storage_package(
     return result
 
 
+@router.delete("/plans/{code}", status_code=204)
+def delete_plan(
+    code: str,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    try:
+        removed = tenant_service.delete_plan(db, code)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not removed:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    audit.log(db, action="admin.plan_deleted", actor_email=current_admin.email,
+              entity_type="plan", entity_id=None, details={"code": code})
+
+
+@router.delete("/storage-packages/{code}", status_code=204)
+def delete_storage_package(
+    code: str,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    try:
+        removed = tenant_service.delete_storage_package(db, code)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not removed:
+        raise HTTPException(status_code=404, detail="Storage package not found")
+    audit.log(db, action="admin.storage_package_deleted", actor_email=current_admin.email,
+              entity_type="storage_package", entity_id=None, details={"code": code})
+
+
 @router.get("/catalog/export")
 def export_catalog(db: Session = Depends(get_db)):
     """Preiskatalog (Module, Pläne, Speicherpakete) als bearbeitbares JSON inkl. Anleitung."""

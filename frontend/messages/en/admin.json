@@ -908,7 +908,11 @@
     "tabRebooking": "Rebook",
     "colAvailability": "Availability",
     "packageBookableHelp": "Can be added to organizations.",
-    "packageNotBookableHelp": "Can no longer be added. Existing assignments remain and appear under \"Rebook\"."
+    "packageNotBookableHelp": "Can no longer be added. Existing assignments remain and appear under \"Rebook\".",
+    "delete": "Delete",
+    "deleteConfirm": "Permanently delete \"{name}\"?",
+    "deleted": "Package deleted",
+    "deleteFailed": "Could not delete the package."
   },
   "catalogImport": {
     "title": "Import configuration",

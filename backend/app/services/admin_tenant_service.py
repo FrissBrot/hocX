@@ -331,6 +331,27 @@ class AdminTenantService:
             code, suffix = f"{base}_{suffix}", suffix + 1
         return code
 
+    def delete_plan(self, db: Session, code: str) -> bool:
+        # Sperre verhindert eine neue FK-Zuweisung zwischen Prüfung und Löschen.
+        plan = db.scalar(select(Plan).where(Plan.code == code).with_for_update())
+        if plan is None:
+            return False
+        if db.scalar(select(Tenant.id).where(Tenant.plan_code == code).limit(1)) is not None:
+            raise ValueError("Plan is still assigned to an organization")
+        db.delete(plan)
+        db.commit()
+        return True
+
+    def delete_storage_package(self, db: Session, code: str) -> bool:
+        package = db.scalar(select(StoragePackage).where(StoragePackage.code == code).with_for_update())
+        if package is None:
+            return False
+        if db.scalar(select(TenantStoragePackage.tenant_id).where(TenantStoragePackage.package_code == code).limit(1)) is not None:
+            raise ValueError("Storage package is still assigned to an organization")
+        db.delete(package)
+        db.commit()
+        return True
+
     def create_plan(self, db: Session, payload: AdminPlanWrite) -> AdminPlanRead:
         """Legt einen neuen Plan an. Ein vorgegebener Code darf noch nicht existieren (ValueError),
         sonst wuerde "Plan anlegen" still einen bestehenden Plan ueberschreiben."""

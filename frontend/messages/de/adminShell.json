@@ -1,7 +1,11 @@
 {
   "title": "Platform-Admin",
   "tagline": "Mandanten und Benutzer über das ganze System verwalten.",
-  "groups": { "tenants": "Mandanten", "system": "System", "access": "Zugang" },
+  "groups": {
+    "tenants": "Mandanten",
+    "system": "System",
+    "access": "Zugang"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "tenants": "Mandanten",
@@ -20,5 +24,7 @@
   "logout": "Logout",
   "menuToggleClose": "Schliessen",
   "breadcrumbNav": "Brotkrumen",
-  "readOnlyBanner": "Nur-Lesezugriff (support): Änderungen sind mit diesem Account nicht möglich."
+  "readOnlyBanner": "Nur-Lesezugriff (support): Änderungen sind mit diesem Account nicht möglich.",
+  "accountSettings": "Account Settings",
+  "accountSettingsLoadFailed": "Die Account-Einstellungen konnten nicht geladen werden."
 }

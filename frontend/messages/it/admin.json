@@ -908,7 +908,11 @@
     "tabRebooking": "Da riassegnare",
     "colAvailability": "Disponibilità",
     "packageBookableHelp": "Può essere aggiunto alle organizzazioni.",
-    "packageNotBookableHelp": "Non può più essere aggiunto. Le assegnazioni esistenti restano e compaiono in «Da riassegnare»."
+    "packageNotBookableHelp": "Non può più essere aggiunto. Le assegnazioni esistenti restano e compaiono in «Da riassegnare».",
+    "delete": "Elimina",
+    "deleteConfirm": "Eliminare definitivamente «{name}»?",
+    "deleted": "Pacchetto eliminato",
+    "deleteFailed": "Impossibile eliminare il pacchetto."
   },
   "catalogImport": {
     "title": "Importa configurazione",

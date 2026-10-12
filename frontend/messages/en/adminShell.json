@@ -1,7 +1,11 @@
 {
   "title": "Platform admin",
   "tagline": "Manage organizations and users across the whole system.",
-  "groups": { "tenants": "Organizations", "system": "System", "access": "Access" },
+  "groups": {
+    "tenants": "Organizations",
+    "system": "System",
+    "access": "Access"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "tenants": "Organizations",
@@ -20,5 +24,7 @@
   "logout": "Log out",
   "menuToggleClose": "Close",
   "breadcrumbNav": "Breadcrumb",
-  "readOnlyBanner": "Read-only access (support): changes aren't possible with this account."
+  "readOnlyBanner": "Read-only access (support): changes aren't possible with this account.",
+  "accountSettings": "Account Settings",
+  "accountSettingsLoadFailed": "Could not load account settings."
 }

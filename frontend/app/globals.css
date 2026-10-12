@@ -23774,3 +23774,10 @@ a.mobile-list-row { color: var(--text); }
 .task-package-mode-list { display: grid; gap: var(--space-2); }
 .task-package-option-help { display: block; margin-top: var(--space-1); }
 .todo-row-package { display: block; margin-top: var(--space-1); }
+
+.admin-identity-trigger {
+  display: flex;
+  width: auto;
+  flex-shrink: 0;
+  padding: 0;
+}

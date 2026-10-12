@@ -1,7 +1,11 @@
 {
   "title": "Administration de la plateforme",
   "tagline": "Gérer les organisations et les utilisateurs sur l'ensemble du système.",
-  "groups": { "tenants": "Organisations", "system": "Système", "access": "Accès" },
+  "groups": {
+    "tenants": "Organisations",
+    "system": "Système",
+    "access": "Accès"
+  },
   "nav": {
     "dashboard": "Tableau de bord",
     "tenants": "Organisations",
@@ -20,5 +24,7 @@
   "logout": "Se déconnecter",
   "menuToggleClose": "Fermer",
   "breadcrumbNav": "Fil d'Ariane",
-  "readOnlyBanner": "Accès en lecture seule (support) : les modifications ne sont pas possibles avec ce compte."
+  "readOnlyBanner": "Accès en lecture seule (support) : les modifications ne sont pas possibles avec ce compte.",
+  "accountSettings": "Paramètres du compte",
+  "accountSettingsLoadFailed": "Impossible de charger les paramètres du compte."
 }

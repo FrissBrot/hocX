@@ -392,3 +392,51 @@ def test_public_customers_lists_only_tenants_marked_for_website(db):
 
 def test_set_tenant_website_listing_unknown_tenant_returns_none(db):
     assert AdminTenantService().set_tenant_website_listing(db, -1, True) is None
+
+
+@pytest.mark.parametrize("kind", ["plan", "storage_package"])
+def test_delete_unused_catalog_entry_and_reject_missing(db, kind):
+    from sqlalchemy import select
+    from app.models.entities import Plan, PlanFeature, StoragePackage
+    from app.schemas.admin import AdminStoragePackageWrite
+
+    service = AdminTenantService()
+    code = "test_delete_unused"
+    if kind == "plan":
+        service.upsert_plan(db, code, _plan_write())
+        model, remove = Plan, service.delete_plan
+    else:
+        service.upsert_storage_package(db, code, AdminStoragePackageWrite(name="Unused", bytes=1024))
+        model, remove = StoragePackage, service.delete_storage_package
+    assert remove(db, code) is True
+    assert db.get(model, code) is None
+    if kind == "plan":
+        assert db.scalar(select(PlanFeature).where(PlanFeature.plan_code == code)) is None
+        assert db.get(Feature, "finance") is not None
+    assert remove(db, code) is False
+
+
+@pytest.mark.parametrize("kind", ["plan", "storage_package"])
+def test_delete_assigned_catalog_entry_preserves_assignment(db, kind):
+    from app.models.entities import Plan, StoragePackage, Tenant, TenantStoragePackage
+    from app.schemas.admin import AdminStoragePackageWrite
+
+    service = AdminTenantService()
+    code = "test_delete_assigned"
+    tenant = make_tenant(db)
+    if kind == "plan":
+        service.upsert_plan(db, code, _plan_write())
+        service.update_tenant_subscription(db, tenant.id, AdminTenantSubscriptionUpdate(plan_code=code), admin_id=None)
+        model, remove = Plan, service.delete_plan
+    else:
+        service.upsert_storage_package(db, code, AdminStoragePackageWrite(name="Assigned", bytes=1024))
+        db.add(TenantStoragePackage(tenant_id=tenant.id, package_code=code, quantity=1))
+        db.commit()
+        model, remove = StoragePackage, service.delete_storage_package
+    with pytest.raises(ValueError, match="still assigned"):
+        remove(db, code)
+    assert db.get(model, code) is not None
+    if kind == "plan":
+        assert db.get(Tenant, tenant.id).plan_code == code
+    else:
+        assert db.query(TenantStoragePackage).filter_by(tenant_id=tenant.id, package_code=code).count() == 1

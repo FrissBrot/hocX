@@ -15,6 +15,7 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { browserApiFetch } from "@/lib/api/client";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { formatFileSize, formatRappen } from "@/lib/utils/format";
 import {
@@ -204,6 +205,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
   const t = useTranslations("admin.pricing");
   const locale = useLocale();
   const showToast = useToast();
+  const confirm = useConfirm();
   const [view, setView] = useState<PricingView>("plans");
   const [plans, setPlans] = useState<AdminPlan[]>(() => [...initialPlans].sort(comparePlans));
   const [features, setFeatures] = useState<AdminFeature[]>(initialFeatures);
@@ -385,6 +387,20 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
     }
   }
 
+  async function deleteCatalogEntry(kind: "plans" | "storage-packages", entry: AdminPlan | AdminStoragePackage) {
+    if (entry.tenant_count !== 0) return;
+    if (!(await confirm({ message: t("deleteConfirm", { name: entry.name }), confirmLabel: t("delete"), tone: "danger" }))) return;
+    try {
+      await browserApiFetch(`/api/admin/${kind}/${encodeURIComponent(entry.code)}`, { method: "DELETE" });
+      if (kind === "plans") setPlans((current) => current.filter((plan) => plan.code !== entry.code));
+      else setStoragePackages((current) => current.filter((pkg) => pkg.code !== entry.code));
+      showToast(t("deleted"), "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("deleteFailed"), "error");
+      void reloadCatalog();
+    }
+  }
+
   function toggleFeatureCode(code: string) {
     setPlanForm((current) => {
       if (!current) return current;
@@ -505,9 +521,10 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                       <Link href={`/admin/tenants?plan=${encodeURIComponent(plan.code)}` as Route} className="admin-plan-card-link">
                         {t("tenantCount", { count: plan.tenant_count })} →
                       </Link>
-                      <button type="button" className="button-ghost" onClick={() => setPlanForm(planToForm(plan))}>
-                        {t("edit")}
-                      </button>
+                      <div className="table-actions">
+                        <button type="button" className="button-ghost" onClick={() => setPlanForm(planToForm(plan))}>{t("edit")}</button>
+                        {plan.tenant_count === 0 && <button type="button" className="button-danger" onClick={() => void deleteCatalogEntry("plans", plan)}>{t("delete")}</button>}
+                      </div>
                     </div>
                   </article>
                 );
@@ -592,7 +609,10 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                   <Badge variant={pkg.is_bookable ? "success" : "neutral"}>{pkg.is_bookable ? t("bookable") : t("notBookable")}</Badge>
                 </td>
                 <td className="admin-cell-end">
-                  <ActionMenu items={[{ label: t("edit"), onClick: () => setStoragePackageForm(storagePackageToForm(pkg)) }]} />
+                  <ActionMenu items={[
+                    { label: t("edit"), onClick: () => setStoragePackageForm(storagePackageToForm(pkg)) },
+                    ...(pkg.tenant_count === 0 ? [{ label: t("delete"), danger: true, onClick: () => void deleteCatalogEntry("storage-packages", pkg) }] : []),
+                  ]} />
                 </td>
               </tr>
             ))}
