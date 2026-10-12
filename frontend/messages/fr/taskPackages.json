@@ -90,7 +90,7 @@
   "responsibleTitle": "Responsables",
   "responsibleHelp": "Les charges d’une liste reprennent les personnes qui y sont inscrites – si la liste change, les tâches ouvertes du cycle en cours suivent. Les personnes fixes restent toujours les mêmes.",
   "noResponsibleLists": "Aucune liste adaptée (une colonne texte et une colonne personnes).",
-  "addEntry": "+ Charge d’une liste",
+  "addEntry": "+ Depuis une liste",
   "addPerson": "+ Personne",
   "entryWithList": "{list} · {entry}",
   "removeResponsible": "Retirer {name}",

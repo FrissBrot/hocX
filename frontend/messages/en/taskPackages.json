@@ -90,7 +90,7 @@
   "responsibleTitle": "Responsible",
   "responsibleHelp": "Duties from a list take over the people entered there – if the list changes, open tasks of the current cycle follow. Fixed people always stay the same.",
   "noResponsibleLists": "No suitable list available (one text and one people column).",
-  "addEntry": "+ Duty from list",
+  "addEntry": "+ From list",
   "addPerson": "+ Person",
   "entryWithList": "{list} · {entry}",
   "removeResponsible": "Remove {name}",

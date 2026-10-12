@@ -90,7 +90,7 @@
   "responsibleTitle": "Verantwortlich",
   "responsibleHelp": "Ämtli aus einer Liste übernehmen die dort eingetragenen Personen – ändert sich die Liste, passen sich offene Aufgaben des laufenden Zyklus an. Feste Personen bleiben immer gleich.",
   "noResponsibleLists": "Keine passende Liste vorhanden (eine Text- und eine Personenspalte).",
-  "addEntry": "+ Ämtli aus Liste",
+  "addEntry": "+ Aus Liste",
   "addPerson": "+ Person",
   "entryWithList": "{list} · {entry}",
   "removeResponsible": "{name} entfernen",

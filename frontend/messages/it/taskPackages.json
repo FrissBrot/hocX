@@ -90,7 +90,7 @@
   "responsibleTitle": "Responsabili",
   "responsibleHelp": "Gli incarichi di una lista riprendono le persone indicate – se la lista cambia, le attività aperte del ciclo in corso si adeguano. Le persone fisse restano sempre le stesse.",
   "noResponsibleLists": "Nessuna lista adatta (una colonna di testo e una di persone).",
-  "addEntry": "+ Incarico da lista",
+  "addEntry": "+ Da lista",
   "addPerson": "+ Persona",
   "entryWithList": "{list} · {entry}",
   "removeResponsible": "Rimuovi {name}",
