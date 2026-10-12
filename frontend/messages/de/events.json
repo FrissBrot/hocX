@@ -201,6 +201,8 @@
   },
   "tagSidebar": {
     "all": "Alle Termine",
+    "markImportant": "Als wichtig markieren",
+    "unmarkImportant": "Wichtig-Markierung entfernen",
     "title": "Tags"
   },
   "timeFilter": {

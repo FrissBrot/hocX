@@ -28,9 +28,11 @@ def patch_tag_config(
     tenant = db.get(Tenant, user.current_tenant_id)
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    # Merge: existing + new (allows partial update)
-    incoming = {tag: entry.model_dump(exclude_none=True) for tag, entry in payload.root.items()}
-    merged = {**(tenant.tag_config_json or {}), **incoming}
+    # Merge per tag (e.g. a color change keeps the "important" flag); an empty entry clears the tag.
+    merged = dict(tenant.tag_config_json or {})
+    for tag, entry in payload.root.items():
+        fields = entry.model_dump(exclude_none=True)
+        merged[tag] = {**(merged.get(tag) or {}), **fields} if fields else {}
     tenant.tag_config_json = merged
     db.commit()
     db.refresh(tenant)

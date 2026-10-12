@@ -201,6 +201,8 @@
   },
   "tagSidebar": {
     "all": "All events",
+    "markImportant": "Mark as important",
+    "unmarkImportant": "Remove important mark",
     "title": "Tags"
   },
   "timeFilter": {

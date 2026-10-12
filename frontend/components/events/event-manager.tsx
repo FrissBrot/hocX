@@ -23,7 +23,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { useTagConfig } from "@/lib/hooks/use-tag-config";
+import { sortTagsByImportance, useTagConfig } from "@/lib/hooks/use-tag-config";
 import { formatCycleName, getCycleYear } from "@/lib/utils/cycle";
 import { formatDate, formatDateRange, toIntlLocale } from "@/lib/utils/format";
 import {
@@ -98,7 +98,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [todayIso, setTodayIso] = useState("0000-01-01");
   const [detailEvent, setDetailEvent] = useState<EventSummary | null>(null);
-  const { tagConfig, updateTagColor, renameTag } = useTagConfig();
+  const { tagConfig, updateTagColor, toggleTagImportant, renameTag } = useTagConfig();
   const [cycleConfigs, setCycleConfigs] = useState<CycleConfigSummary[]>([]);
   const [showAllPeriods, setShowAllPeriods] = useState(false);
   const [cycleFilter, setCycleFilter] = useState(ALL_CYCLES_FILTER);
@@ -295,9 +295,9 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       if (tag) counts.set(tag, (counts.get(tag) ?? 0) + 1);
       else untagged += 1;
     });
-    const tags = Array.from(counts.entries()).sort(([left], [right]) => left.localeCompare(right));
+    const tags = sortTagsByImportance(Array.from(counts.entries()), tagConfig, ([tag]) => tag);
     return { tags, untagged };
-  }, [periodEvents]);
+  }, [periodEvents, tagConfig]);
 
   // Verschwindet der gewählte Tag durch einen Zykluswechsel aus der Seitenleiste, wieder alle zeigen.
   useEffect(() => {
@@ -762,19 +762,38 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                 <span className="event-tag-sidebar-label">{t("tagSidebar.all")}</span>
                 <span className="event-tag-sidebar-count">{periodEvents.length}</span>
               </button>
-              {tagCounts.tags.map(([tag, count]) => (
-                <button
-                  key={tag}
-                  type="button"
-                  className={`event-tag-sidebar-item${tagFilter === tag ? " event-tag-sidebar-item-active" : ""}`}
-                  aria-pressed={tagFilter === tag}
-                  onClick={() => setTagFilter(tag)}
-                >
-                  <span className="event-tag-dot" style={{ "--tag-color": tagColor(tag) } as React.CSSProperties} />
-                  <span className="event-tag-sidebar-label">{tag}</span>
-                  <span className="event-tag-sidebar-count">{count}</span>
-                </button>
-              ))}
+              {tagCounts.tags.map(([tag, count]) => {
+                const important = !!tagConfig[tag]?.important;
+                return (
+                  <div
+                    key={tag}
+                    className={`event-tag-sidebar-row${tagFilter === tag ? " event-tag-sidebar-row-active" : ""}${important ? " event-tag-sidebar-row-important" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      className={`event-tag-sidebar-item${tagFilter === tag ? " event-tag-sidebar-item-active" : ""}`}
+                      aria-pressed={tagFilter === tag}
+                      onClick={() => setTagFilter(tag)}
+                    >
+                      <span className="event-tag-dot" style={{ "--tag-color": tagColor(tag) } as React.CSSProperties} />
+                      <span className="event-tag-sidebar-label">{tag}</span>
+                      <span className="event-tag-sidebar-count">{count}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="event-tag-star"
+                      aria-pressed={important}
+                      aria-label={important ? t("tagSidebar.unmarkImportant") : t("tagSidebar.markImportant")}
+                      title={important ? t("tagSidebar.unmarkImportant") : t("tagSidebar.markImportant")}
+                      onClick={() => void toggleTagImportant(tag)}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                        <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
+                      </svg>
+                    </button>
+                  </div>
+                );
+              })}
               {tagCounts.untagged > 0 && (
                 <button
                   type="button"

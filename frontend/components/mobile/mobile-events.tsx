@@ -12,7 +12,7 @@ import { MobileChip, MobileChipRow, MobileDateTile, MobileEmpty, MobileFab, Mobi
 import { dateParts, tagColor, todayIso } from "@/components/mobile/mobile-utils";
 import { effectiveEndDate } from "@/components/events/event-utils";
 import { useCycleOptions } from "@/lib/hooks/use-cycle-options";
-import { TagConfig, useTagConfig } from "@/lib/hooks/use-tag-config";
+import { sortTagsByImportance, TagConfig, useTagConfig } from "@/lib/hooks/use-tag-config";
 import type { EventSummary, ParticipantSummary } from "@/types/api";
 
 type Period = "upcoming" | "all" | "past";
@@ -95,7 +95,7 @@ export function MobileEvents({
   const [formFor, setFormFor] = useState<string | null>(null);
 
   const tags = useMemo(
-    () => [...new Set([...events.map((event) => event.tag).filter((tag): tag is string => !!tag), ...Object.keys(tagConfig)])].sort((a, b) => a.localeCompare(b)),
+    () => sortTagsByImportance([...new Set([...events.map((event) => event.tag).filter((tag): tag is string => !!tag), ...Object.keys(tagConfig)])], tagConfig, (tag) => tag),
     [events, tagConfig]
   );
 

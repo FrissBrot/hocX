@@ -3,7 +3,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 
-export type TagConfig = Record<string, { color?: string }>;
+export type TagConfigEntry = { color?: string; important?: boolean };
+export type TagConfig = Record<string, TagConfigEntry>;
+
+/** Als wichtig markierte Tags zuerst (alphabetisch), danach die übrigen alphabetisch. */
+export function sortTagsByImportance<T>(items: T[], config: TagConfig, tagOf: (item: T) => string): T[] {
+  return [...items].sort((left, right) => {
+    const leftTag = tagOf(left);
+    const rightTag = tagOf(right);
+    const importance = Number(!!config[rightTag]?.important) - Number(!!config[leftTag]?.important);
+    return importance || leftTag.localeCompare(rightTag);
+  });
+}
 
 export function useTagConfig() {
   const [tagConfig, setTagConfig] = useState<TagConfig>({});
@@ -17,13 +28,13 @@ export function useTagConfig() {
       .catch(() => {});
   }, []);
 
-  const updateTagColor = useCallback(async (tag: string, color: string) => {
+  const patchTagEntry = useCallback(async (tag: string, patch: TagConfigEntry, errorMessage: string) => {
     const previousEntry = configRef.current[tag];
-    setTagConfig((prev) => ({ ...prev, [tag]: { ...(prev[tag] ?? {}), color } }));
+    setTagConfig((prev) => ({ ...prev, [tag]: { ...(prev[tag] ?? {}), ...patch } }));
     try {
       await browserApiFetch("/api/tag-config", {
         method: "PATCH",
-        body: JSON.stringify({ [tag]: { color } }),
+        body: JSON.stringify({ [tag]: patch }),
       });
     } catch (error) {
       // Roll back only this tag's entry so a failed save doesn't clobber other
@@ -37,9 +48,19 @@ export function useTagConfig() {
         }
         return next;
       });
-      showToast(error instanceof Error ? error.message : "Farbe konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : errorMessage, "error");
     }
   }, [showToast]);
+
+  const updateTagColor = useCallback(
+    (tag: string, color: string) => patchTagEntry(tag, { color }, "Farbe konnte nicht gespeichert werden"),
+    [patchTagEntry]
+  );
+
+  const toggleTagImportant = useCallback(
+    (tag: string) => patchTagEntry(tag, { important: !configRef.current[tag]?.important }, "Markierung konnte nicht gespeichert werden"),
+    [patchTagEntry]
+  );
 
   const renameTag = useCallback(async (oldTag: string, newTag: string): Promise<void> => {
     const nt = newTag.trim();
@@ -70,5 +91,5 @@ export function useTagConfig() {
     }
   }, [showToast]);
 
-  return { tagConfig, updateTagColor, renameTag };
+  return { tagConfig, updateTagColor, toggleTagImportant, renameTag };
 }

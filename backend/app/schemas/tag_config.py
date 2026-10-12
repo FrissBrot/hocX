@@ -13,6 +13,7 @@ class TagConfigEntry(BaseModel):
     model_config = {"extra": "forbid"}
 
     color: str | None = Field(default=None)
+    important: bool | None = Field(default=None)
 
     @field_validator("color")
     @classmethod
@@ -23,7 +24,8 @@ class TagConfigEntry(BaseModel):
 
 
 class TagConfigPatch(RootModel[dict[str, TagConfigEntry]]):
-    """PATCH /tag-config payload: a partial map of tag name -> {color}. An empty entry
+    """PATCH /tag-config payload: a partial map of tag name -> {color, important}. Fields are
+    merged into the tag's existing entry; an empty entry
     ({}) is how the frontend clears a tag's config (e.g. when renaming - see
     frontend/lib/hooks/use-tag-config.ts renameTag)."""
 

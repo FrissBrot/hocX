@@ -120,6 +120,18 @@ def test_tag_config_patch_http_permission_matrix(db, role, expected_status):
     assert response.status_code == expected_status
 
 
+def test_tag_config_patch_merges_fields_per_tag(db):
+    tenant = make_tenant(db, "Tag Config Merge")
+    client = _tenant_client(db, make_current_user(tenant.id, role="admin"))
+
+    client.patch("/api/tag-config", json={"Vorstand": {"color": "#112233"}})
+    response = client.patch("/api/tag-config", json={"Vorstand": {"important": True}})
+    assert response.json()["Vorstand"] == {"color": "#112233", "important": True}
+
+    response = client.patch("/api/tag-config", json={"Vorstand": {}})
+    assert response.json()["Vorstand"] == {}
+
+
 def _platform_client(db, role: str):
     app = FastAPI()
     app.include_router(admin.router, prefix="/api/admin")
