@@ -5,8 +5,9 @@ import { useEffect, useState } from "react";
 import { browserApiFetch } from "@/lib/api/client";
 import type { EventSummary, ParticipantSummary, ProtocolSummary } from "@/types/api";
 
-// Nachladen fuer die Mobile-Ansichten. Bewusst clientseitig statt in page.tsx, damit die
-// Desktop-Ansicht derselben Route keine zusaetzlichen Requests bezahlt.
+// Nachladen fuer die Mobile-Ansichten (und das Dashboard beider Ansichten, siehe
+// components/dashboard/use-dashboard-data.ts). Bewusst clientseitig statt in page.tsx, damit die
+// Desktop-Ansicht anderer Routen keine zusaetzlichen Requests bezahlt.
 
 const PAGE_SIZE = 500;
 // Obergrenze gegen Endlosschleifen bei einem fehlerhaften Backend (20 Seiten = 10'000 Eintraege).

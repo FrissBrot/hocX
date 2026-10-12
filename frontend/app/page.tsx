@@ -4,6 +4,7 @@ import { RouteTabs } from "@/components/ui/route-tabs";
 import { dashboardTabs } from "@/components/ui/section-tabs";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { MobileDashboard } from "@/components/mobile/mobile-dashboard";
+import { dashboardPermissions } from "@/components/dashboard/dashboard-permissions";
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { AttendanceFineListItem, NextSessionInfo, ProtocolSummary, TodoListItem } from "@/types/api";
@@ -11,11 +12,14 @@ import { AttendanceFineListItem, NextSessionInfo, ProtocolSummary, TodoListItem 
 export default async function HomePage() {
   const session = await requireSession();
   const t = await getTranslations("nav");
-  const canExcuse = ["admin", "writer"].includes(session.current_role ?? "");
+  const access = { role: session.current_role ?? null, features: session.current_tenant?.enabled_features ?? [] };
+  const permissions = dashboardPermissions(access);
 
+  // Bussen nur laden, wenn Finanzen gebucht sind (sonst 403). Limit 200 = Backend-Maximum, damit
+  // Summe und Personenzahl der offenen Bussen nicht nach 50 Eintraegen abbrechen.
   const [todos, fines, upcomingSessions, protocols] = await Promise.all([
     backendFetchWithSession<TodoListItem[]>("/api/todos"),
-    backendFetchWithSession<AttendanceFineListItem[]>("/api/fines"),
+    permissions.hasFinance ? backendFetchWithSession<AttendanceFineListItem[]>("/api/fines?limit=200") : Promise.resolve([]),
     backendFetchWithSession<NextSessionInfo[]>("/api/protocols/upcoming-sessions"),
     backendFetchWithSession<ProtocolSummary[]>("/api/protocols?limit=1"),
   ]);
@@ -30,8 +34,7 @@ export default async function HomePage() {
             todos={todos ?? []}
             fines={fines ?? []}
             upcomingSessions={upcomingSessions ?? []}
-            canExcuse={canExcuse}
-            canWrite={canExcuse}
+            access={access}
             hasProtocols={hasProtocols}
           />
         }
@@ -42,10 +45,9 @@ export default async function HomePage() {
               todos={todos ?? []}
               fines={fines ?? []}
               upcomingSessions={upcomingSessions ?? []}
-              canExcuse={canExcuse}
-              canWrite={canExcuse}
-              canConfigure={session.current_role === "admin"}
+              access={access}
               hasProtocols={hasProtocols}
+              userName={session.user?.first_name || session.user?.display_name || ""}
             />
           </>
         }

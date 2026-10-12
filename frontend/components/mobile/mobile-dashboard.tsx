@@ -5,7 +5,7 @@ import type { Route } from "next";
 import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
-import { useAllEvents, useAllPages, useParticipants, useProtocolsByEvent } from "@/components/mobile/mobile-data";
+import { useParticipants, useProtocolsByEvent } from "@/components/mobile/mobile-data";
 import { EventDetailSheet, EventFormSheet } from "@/components/mobile/mobile-event-sheets";
 import { MobileEventRow } from "@/components/mobile/mobile-events";
 import { MobileStatsCard } from "@/components/mobile/areas/mobile-statistics";
@@ -14,33 +14,33 @@ import { useMobileSession } from "@/components/mobile/mobile-shell";
 import { TodoDetailSheet } from "@/components/mobile/mobile-todo-sheets";
 import { MobileTodoRow, useTodoToggle } from "@/components/mobile/mobile-todos";
 import { MobileAvatar, MobileCard, MobileCardHeader, MobileEmpty, MobileSwitch } from "@/components/mobile/mobile-ui";
-import { dateParts, daysBetween, isTodoDone, isTodoOverdue, todayIso } from "@/components/mobile/mobile-utils";
-import { effectiveEndDate } from "@/components/events/event-utils";
+import { dateParts, daysBetween, relativeDay } from "@/components/mobile/mobile-utils";
 import { Modal } from "@/components/ui/modal";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
 import { useCycleOptions } from "@/lib/hooks/use-cycle-options";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import type { AttendanceFineListItem, NextSessionInfo, TodoListItem } from "@/types/api";
 
+import { DashboardAccess, dashboardPermissions } from "@/components/dashboard/dashboard-permissions";
+import { useDashboardData } from "@/components/dashboard/use-dashboard-data";
 import { useSessionAttendance } from "@/components/dashboard/use-session-attendance";
 
 const DASHBOARD_TODO_LIMIT = 4;
 const DASHBOARD_EVENT_LIMIT = 3;
 const DASHBOARD_FINE_LIMIT = 5;
+const DASHBOARD_DEADLINE_LIMIT = 3;
 
 export function MobileDashboard({
   todos: initialTodos,
   fines,
   upcomingSessions,
-  canExcuse,
-  canWrite,
+  access,
   hasProtocols,
 }: {
   todos: TodoListItem[];
   fines: AttendanceFineListItem[];
   upcomingSessions: NextSessionInfo[];
-  canExcuse: boolean;
-  canWrite: boolean;
+  access: DashboardAccess;
   hasProtocols: boolean;
 }) {
   const t = useTranslations("mobile");
@@ -51,9 +51,10 @@ export function MobileDashboard({
   const session = useMobileSession();
   const { tagConfig } = useTagConfig();
   const { options: cycleOptions } = useCycleOptions();
-  const [todos, setTodos] = useState<TodoListItem[]>(initialTodos);
-  const [mine] = useAllPages<TodoListItem>("/api/todos/my", null);
-  const [events, setEvents] = useAllEvents(null);
+  const permissions = dashboardPermissions(access);
+  const { canExcuse, canWrite } = permissions;
+  const data = useDashboardData({ todos: initialTodos, fines, permissions });
+  const { todos, setTodos, events, setEvents, today, fineTotal, finePeople } = data;
   const participants = useParticipants(canWrite);
   const protocolsByEvent = useProtocolsByEvent(true);
   const toggleTodo = useTodoToggle(setTodos);
@@ -65,29 +66,13 @@ export function MobileDashboard({
 
   const protocol = sessions[0]?.protocol;
   const excuseSession = sessions.find((item) => item.protocol?.id === excuseSessionId);
-  const today = todayIso();
   const firstName = session?.user?.first_name || session?.user?.display_name || "";
   const tenantName = session?.current_tenant?.name ?? "";
 
-  const myTodos = useMemo(() => {
-    const mineIds = new Set(mine.map((todo) => todo.id));
-    return todos
-      .filter((todo) => !isTodoDone(todo) && (mineIds.has(todo.id) || isTodoOverdue(todo)))
-      .sort((a, b) => (a.resolved_due_date ?? "9999").localeCompare(b.resolved_due_date ?? "9999"))
-      .slice(0, DASHBOARD_TODO_LIMIT);
-  }, [todos, mine]);
-  const overdueCount = useMemo(() => todos.filter(isTodoOverdue).length, [todos]);
-  const upcoming = useMemo(
-    () =>
-      events
-        .filter((event) => !event.is_cancelled && effectiveEndDate(event).slice(0, 10) >= today)
-        .sort((a, b) => a.event_date.localeCompare(b.event_date))
-        .slice(0, DASHBOARD_EVENT_LIMIT),
-    [events, today]
-  );
-  const openFines = useMemo(() => fines.filter((fine) => fine.status === "pending"), [fines]);
-  const fineTotal = openFines.reduce((sum, fine) => sum + fine.amount, 0);
-  const finePeople = new Set(openFines.map((fine) => fine.participant_id ?? fine.participant_name_snapshot)).size;
+  const myTodos = data.myTodos.slice(0, DASHBOARD_TODO_LIMIT);
+  const overdueCount = data.overdueCount;
+  const upcoming = data.upcomingEvents.slice(0, DASHBOARD_EVENT_LIMIT);
+  const openFines = data.openFines;
   const tagSuggestions = useMemo(() => [...new Set(todos.flatMap((todo) => todo.tags ?? []))], [todos]);
 
   const openTodo = todos.find((todo) => todo.id === openTodoId) ?? null;
@@ -222,22 +207,71 @@ export function MobileDashboard({
         ))}
       </MobileCard>
 
-      {openFines.length > 0 ? (
+      {permissions.hasFinance ? (
         <MobileCard className="mobile-list-card">
-          <div className="mobile-fines-header">
-            <div>
-              <div className="mobile-eyebrow">{tDashboard("openFinesEyebrow")}</div>
-              <div className="mobile-fines-total">
-                {openFines[0]?.currency_label ?? ""} {fineTotal.toFixed(2)}
+          {openFines.length === 0 ? (
+            <>
+              <MobileCardHeader label={permissions.ownFinesOnly ? tDashboard("myOpenFinesEyebrow") : tDashboard("openFinesEyebrow")} />
+              <p className="mobile-card-empty">{permissions.ownFinesOnly ? tDashboard("noOwnOpenFines") : tDashboard("noOpenFines")}</p>
+            </>
+          ) : (
+            <div className="mobile-fines-header">
+              <div>
+                <div className="mobile-eyebrow">{permissions.ownFinesOnly ? tDashboard("myOpenFinesEyebrow") : tDashboard("openFinesEyebrow")}</div>
+                <div className="mobile-fines-total">
+                  {data.fineCurrency} {fineTotal.toFixed(2)}
+                </div>
               </div>
+              {permissions.ownFinesOnly ? null : <span className="mobile-muted-sm">{tDashboard("finePeople", { count: finePeople })}</span>}
             </div>
-            <span className="mobile-muted-sm">{t("dashboard.finePeople", { count: finePeople })}</span>
-          </div>
+          )}
           {openFines.slice(0, DASHBOARD_FINE_LIMIT).map((fine) => (
             <div key={fine.id} className="mobile-fine-row">
               <span className="mobile-fine-row-name">{fine.participant_name_snapshot}</span>
               <span className="mobile-muted-sm">{fineTypeLabel[fine.fine_type] ?? fine.fine_type}</span>
               <span className="mobile-fine-row-amount">{fine.amount.toFixed(2)}</span>
+            </div>
+          ))}
+        </MobileCard>
+      ) : null}
+
+      {permissions.showAccounts ? (
+        <MobileCard className="mobile-list-card">
+          <MobileCardHeader
+            label={tDashboard("accountsEyebrow")}
+            action={
+              <button type="button" className="mobile-text-button" onClick={() => router.push("/finances" as Route)}>
+                {tDashboard("allButton")}
+              </button>
+            }
+          />
+          {data.accounts.length === 0 ? <p className="mobile-card-empty">{tDashboard("noAccounts")}</p> : null}
+          {data.accounts.map((account) => (
+            <div key={account.id} className="mobile-fine-row">
+              <span className="mobile-fine-row-name">{account.name}</span>
+              <span className="mobile-fine-row-amount">
+                {account.balance.toFixed(2)} {account.currency_label}
+              </span>
+            </div>
+          ))}
+        </MobileCard>
+      ) : null}
+
+      {permissions.showSubmissions ? (
+        <MobileCard className="mobile-list-card">
+          <MobileCardHeader
+            label={tDashboard("deadlinesEyebrow")}
+            action={
+              <button type="button" className="mobile-text-button" onClick={() => router.push("/submission-assignments" as Route)}>
+                {tDashboard("allButton")}
+              </button>
+            }
+          />
+          {data.upcomingDeadlines.length === 0 ? <p className="mobile-card-empty">{tDashboard("noDeadlines")}</p> : null}
+          {data.upcomingDeadlines.slice(0, DASHBOARD_DEADLINE_LIMIT).map((assignment) => (
+            <div key={assignment.id} className="mobile-fine-row">
+              <span className="mobile-fine-row-name">{assignment.title}</span>
+              <span className="mobile-muted-sm">{assignment.deadline ? relativeDay(assignment.deadline, t) : ""}</span>
             </div>
           ))}
         </MobileCard>
