@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
+import { WebsiteLanguageSwitcher } from "@/components/website/website-language-switcher";
 import { WebsitePricing } from "@/components/website/website-pricing";
 import { backendFetch } from "@/lib/api/client";
 import { getMainAppUrl } from "@/lib/site-config";
@@ -58,6 +59,7 @@ export default async function WebsitePage() {
             <a href="#preise">{t("nav.pricing")}</a>
           </nav>
           <div className="ws-header-actions">
+            <WebsiteLanguageSwitcher />
             <a href={appLoginUrl} className="ws-link-quiet">
               {t("nav.login")}
             </a>

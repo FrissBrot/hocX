@@ -9,7 +9,8 @@
     "features": "Fonctionnalités",
     "pricing": "Tarifs",
     "login": "Se connecter",
-    "tryFree": "Essai gratuit"
+    "tryFree": "Essai gratuit",
+    "language": "Langue"
   },
   "hero": {
     "badgeNew": "Nouveau",
@@ -19,7 +20,7 @@
     "lead": "hocX organise les séances des associations et PME : procès-verbaux, rendez-vous, tâches, présences et finances au même endroit – et à la fin, un PDF soigné à votre image.",
     "ctaPrimary": "Essai gratuit de 30 jours",
     "ctaSecondary": "Comment ça marche →",
-    "note": "Sans carte de crédit · Hébergé en Suisse"
+    "note": "Sans carte de crédit"
   },
   "mock": {
     "url": "seetal.hocx.ch/protokolle/P-2026-014",

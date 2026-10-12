@@ -22496,6 +22496,30 @@ a.mobile-list-row { color: var(--text); }
   gap: var(--space-2);
 }
 
+.ws-language select {
+  font: inherit;
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.ws-language select:hover {
+  color: var(--text);
+}
+
+.ws-language select:focus-visible {
+  outline: none;
+  color: var(--text);
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
 /* --- Buttons ------------------------------------------------------------------------------ */
 .website .ws-button {
   display: inline-flex;

@@ -9,7 +9,8 @@
     "features": "Features",
     "pricing": "Pricing",
     "login": "Sign in",
-    "tryFree": "Try for free"
+    "tryFree": "Try for free",
+    "language": "Language"
   },
   "hero": {
     "badgeNew": "New",
@@ -19,7 +20,7 @@
     "lead": "hocX organises meetings for associations and SMEs: minutes, events, action items, attendance and finances in one place – ending with a clean PDF in your own corporate design.",
     "ctaPrimary": "Try free for 30 days",
     "ctaSecondary": "How it works →",
-    "note": "No credit card · Hosted in Switzerland"
+    "note": "No credit card"
   },
   "mock": {
     "url": "seetal.hocx.ch/protokolle/P-2026-014",

@@ -9,7 +9,8 @@
     "features": "Funktionen",
     "pricing": "Preise",
     "login": "Anmelden",
-    "tryFree": "Kostenlos testen"
+    "tryFree": "Kostenlos testen",
+    "language": "Sprache"
   },
   "hero": {
     "badgeNew": "Neu",
@@ -19,7 +20,7 @@
     "lead": "hocX organisiert Sitzungen für Vereine und KMU: Protokolle, Termine, Pendenzen, Anwesenheit und Finanzen an einem Ort – und am Ende ein sauberes PDF in Ihrem eigenen Erscheinungsbild.",
     "ctaPrimary": "30 Tage kostenlos testen",
     "ctaSecondary": "So funktioniert's →",
-    "note": "Keine Kreditkarte · Hosting in der Schweiz"
+    "note": "Keine Kreditkarte"
   },
   "mock": {
     "url": "seetal.hocx.ch/protokolle/P-2026-014",

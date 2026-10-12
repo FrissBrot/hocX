@@ -9,7 +9,8 @@
     "features": "Funzioni",
     "pricing": "Prezzi",
     "login": "Accedi",
-    "tryFree": "Prova gratis"
+    "tryFree": "Prova gratis",
+    "language": "Lingua"
   },
   "hero": {
     "badgeNew": "Novità",
@@ -19,7 +20,7 @@
     "lead": "hocX organizza le riunioni di associazioni e PMI: verbali, appuntamenti, attività, presenze e finanze in un unico posto – e alla fine un PDF pulito con la vostra immagine.",
     "ctaPrimary": "Prova gratis per 30 giorni",
     "ctaSecondary": "Come funziona →",
-    "note": "Nessuna carta di credito · Hosting in Svizzera"
+    "note": "Nessuna carta di credito"
   },
   "mock": {
     "url": "seetal.hocx.ch/protokolle/P-2026-014",
