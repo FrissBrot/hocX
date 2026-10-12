@@ -145,7 +145,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
   const [loginTab, setLoginTab] = useState<"withoutLogin" | "withLogin">("withoutLogin");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const csvInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<ParticipantFormState>(emptyForm);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
@@ -436,8 +436,8 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
           value={statusFilter}
           onChange={setStatusFilter}
           options={[
-            { value: "all", label: t("filters.all"), count: statusCounts.all },
             { value: "active", label: t("filters.active"), count: statusCounts.active },
+            { value: "all", label: t("filters.all"), count: statusCounts.all },
             { value: "inactive", label: t("filters.inactive"), count: statusCounts.inactive },
             { value: "left", label: t("filters.left"), count: statusCounts.left },
           ]}
