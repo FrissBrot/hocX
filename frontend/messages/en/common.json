@@ -32,9 +32,11 @@
   "notificationsRegion": "Notifications",
   "copyright": "Copyright © {year} hocX Project · All rights reserved.",
   "build": {
-    "production": "hocX {version}",
-    "test": "Test · {image}",
-    "development": "Dev · {branch} · {commit}",
+    "production": "{version}",
+    "test": "{image}",
+    "development": "{branch}@{commit}",
+    "developmentBadge": "DEV",
+    "testBadge": "TEST",
     "unknown": "unknown",
     "releaseLinkTitle": "View release on GitHub"
   },
