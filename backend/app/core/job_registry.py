@@ -70,6 +70,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
     _loop("photo_album_sync", "photo_analysis", settings.photo_album_sync_interval_minutes),
     _loop("domain_health_check", "maintenance", settings.domain_health_check_interval_minutes),
     _loop("cycle_snapshot", "maintenance", settings.cycle_snapshot_check_interval_minutes),
+    _loop("task_package_rollover", "maintenance", settings.task_package_rollover_interval_minutes),
     _loop("export_cleanup", "cleanup", settings.export_cleanup_interval_minutes),
     _loop("log_cleanup", "cleanup", settings.log_cleanup_interval_minutes),
     # Sammelt den Systemstatus und verschickt ntfy-Alarme. Hängt er, fällt das nicht hier auf

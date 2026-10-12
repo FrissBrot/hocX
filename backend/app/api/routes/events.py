@@ -16,6 +16,7 @@ from app.services.event_service import EventService
 from app.services.submission_service import SubmissionService
 from app.services.audit_service import AuditService
 from app.services import photo_event_link_service
+from app.services.task_package_service import sync_packages_after_change
 from app.models.entities import Event
 
 router = APIRouter()
@@ -49,6 +50,7 @@ def create_event(
         raise HTTPException(status_code=400, detail="Event could not be created") from exc
     submission_service.sync_todos_for_event(db, created)
     photo_event_link_service.sync_photos_for_event(db, created)
+    sync_packages_after_change(db, tenant_id=user.current_tenant_id, event_tag=created.tag)
     return created
 
 
@@ -95,6 +97,8 @@ async def import_events_csv(
         raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "CSV import failed") from exc
     for event in created:
         photo_event_link_service.sync_photos_for_event(db, event)
+    for tag in sorted({event.tag for event in created if event.tag}):
+        sync_packages_after_change(db, tenant_id=user.current_tenant_id, event_tag=tag)
     return created
 
 
@@ -118,6 +122,7 @@ def patch_event(
         raise HTTPException(status_code=404, detail="Event not found")
     submission_service.sync_todos_for_event(db, updated)
     photo_event_link_service.sync_photos_for_event(db, updated)
+    sync_packages_after_change(db, tenant_id=user.current_tenant_id, event_tag=updated.tag)
     return updated
 
 

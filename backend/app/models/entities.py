@@ -1062,6 +1062,13 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
         Index("idx_protocol_todo_assigned_participant", "assigned_participant_id"),
         Index("idx_protocol_todo_closed_in_protocol", "closed_in_protocol_id"),
         Index("idx_protocol_todo_created_by", "created_by"),
+        Index(
+            "uq_protocol_todo_package_occurrence",
+            "task_package_item_id", "cycle_config_id", "cycle_year", "occurrence_key",
+            unique=True,
+            postgresql_where=text("task_package_item_id IS NOT NULL"),
+        ),
+        Index("idx_protocol_todo_cycle", "cycle_config_id", "cycle_year"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -1088,6 +1095,94 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
     tracked_change: Mapped[str | None] = mapped_column(Text)
     tracked_change_before_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     pending_delete: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    # Instanz einer Paket-Aufgabe (Migration 0111_task_packages): eine Zeile je
+    # (Paket-Aufgabe, Zyklus, Zyklusjahr, Wiederholung). overridden_fields listet die Felder,
+    # die von Hand geändert wurden und die das Paket darum nicht mehr überschreibt.
+    task_package_item_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("task_package_item.id", ondelete="SET NULL"))
+    cycle_config_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cycle_config.id", ondelete="SET NULL"))
+    cycle_year: Mapped[int | None] = mapped_column(Integer)
+    occurrence_key: Mapped[str | None] = mapped_column(Text)
+    overridden_fields: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+
+
+class ProtocolTodoAssignee(Base):
+    """Weitere Verantwortliche eines Todos (z. B. alle Personen eines Ämtlis). Die erste Person
+    steht zusätzlich in protocol_todo.assigned_participant_id, damit ältere Leser weiter
+    funktionieren."""
+
+    __tablename__ = "protocol_todo_assignee"
+    __table_args__ = (
+        PrimaryKeyConstraint("protocol_todo_id", "participant_id", name="pk_protocol_todo_assignee"),
+        Index("idx_protocol_todo_assignee_participant", "participant_id"),
+    )
+
+    protocol_todo_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol_todo.id", ondelete="CASCADE"), nullable=False)
+    participant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+
+
+class TaskPackage(Base, TimestampMixin, UpdatedAtMixin):
+    """Aufgabenpaket (z. B. "Sommerlager"): Sammlung wiederkehrender Aufgaben, die pro Zyklus
+    als Todos erzeugt werden. Siehe app/services/task_package_service.py."""
+
+    __tablename__ = "task_package"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_task_package_tenant_name"),
+        Index("idx_task_package_tenant", "tenant_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"), default=True)
+
+
+class TaskPackageCycle(Base, TimestampMixin, UpdatedAtMixin):
+    """Zuweisung eines Pakets an einen Zyklus ab start_cycle_year (inklusive)."""
+
+    __tablename__ = "task_package_cycle"
+    __table_args__ = (
+        UniqueConstraint("task_package_id", "cycle_config_id", name="uq_task_package_cycle_package_config"),
+        Index("idx_task_package_cycle_config", "cycle_config_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    task_package_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("task_package.id", ondelete="CASCADE"), nullable=False)
+    cycle_config_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cycle_config.id", ondelete="CASCADE"), nullable=False)
+    start_cycle_year: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class TaskPackageItem(Base, TimestampMixin, UpdatedAtMixin):
+    """Eine Aufgabe im Paket. responsible_json hat dieselbe Form wie die Verantwortlichen im
+    Protokoll: [{"list_definition_id", "list_entry_id"}] (Ämtli, live aufgelöst) oder
+    [{"participant_id"}] (feste Person), jeweils interne IDs."""
+
+    __tablename__ = "task_package_item"
+    __table_args__ = (Index("idx_task_package_item_package_sort", "task_package_id", "sort_index"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    task_package_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("task_package.id", ondelete="CASCADE"), nullable=False)
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    task: Mapped[str] = mapped_column(Text, nullable=False)
+    reference_link: Mapped[str | None] = mapped_column(Text)
+    tags: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+    responsible_json: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+    recurrence_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{\"type\": \"once\"}'::jsonb"), default=lambda: {"type": "once"}
+    )
+    due_rule_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{\"type\": \"none\"}'::jsonb"), default=lambda: {"type": "none"}
+    )
 
 
 class ProtocolImage(Base, TimestampMixin):

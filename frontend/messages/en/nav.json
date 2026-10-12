@@ -49,5 +49,6 @@
   "defaultTenantName": "Organization",
   "sessionReady": "Ready",
   "sessionLoading": "Loading workspace…",
-  "connections": "Connections"
+  "connections": "Connections",
+  "taskPackages": "Task packages"
 }

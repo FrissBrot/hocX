@@ -16,6 +16,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { formatDateRange } from "@/lib/utils/format";
 import { elementTypeLabels } from "@/lib/constants/element-types";
+import { EligibleResponsibleList, eligibleResponsibleList, listParticipantIds, listTextValue } from "@/lib/utils/responsible-lists";
 import {
   CycleConfigSummary,
   DocumentTemplate,
@@ -89,13 +90,6 @@ type ResponsibilityDisplayGroup = {
   locked: boolean;
 };
 
-type EligibleResponsibleList = {
-  definition: StructuredListDefinition;
-  textColumn: "column_one" | "column_two";
-  participantColumn: "column_one" | "column_two";
-  participantValueType: "participant" | "participants";
-};
-
 const initialTemplateCreate: TemplateCreateState = {
   name: "",
   description: "",
@@ -147,31 +141,6 @@ function definitionTypeSummary(definition: ElementDefinition) {
 
 function normalizeMatchText(value: string) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-function eligibleResponsibleList(definition: StructuredListDefinition): EligibleResponsibleList | null {
-  const firstIsText = definition.column_one_value_type === "text";
-  const secondIsText = definition.column_two_value_type === "text";
-  const firstIsParticipants = definition.column_one_value_type === "participant" || definition.column_one_value_type === "participants";
-  const secondIsParticipants = definition.column_two_value_type === "participant" || definition.column_two_value_type === "participants";
-
-  if (firstIsText && secondIsParticipants) {
-    return {
-      definition,
-      textColumn: "column_one",
-      participantColumn: "column_two",
-      participantValueType: definition.column_two_value_type === "participant" ? "participant" : "participants",
-    };
-  }
-  if (secondIsText && firstIsParticipants) {
-    return {
-      definition,
-      textColumn: "column_two",
-      participantColumn: "column_one",
-      participantValueType: definition.column_one_value_type === "participant" ? "participant" : "participants",
-    };
-  }
-  return null;
 }
 
 function parseResponsibilityConfig(configurationJson: Record<string, unknown> | null | undefined): ResponsibilityConfig {
@@ -261,24 +230,6 @@ function titleWithResponsibility(
     .map((assignment) => participantName(participantsById.get(assignment.participant_id), mode, t))
     .filter(Boolean);
   return names.length ? `${item.title} (${names.join(", ")})` : item.title;
-}
-
-function listTextValue(entry: StructuredListEntry, column: "column_one" | "column_two") {
-  const value = column === "column_one" ? entry.column_one_value : entry.column_two_value;
-  return String(value?.text_value ?? "").trim();
-}
-
-function listParticipantIds(
-  entry: StructuredListEntry,
-  column: "column_one" | "column_two",
-  valueType: "participant" | "participants"
-): string[] {
-  const value = column === "column_one" ? entry.column_one_value : entry.column_two_value;
-  if (valueType === "participant") {
-    const participantId = typeof value?.participant_id === "string" ? value.participant_id : null;
-    return participantId ? [participantId] : [];
-  }
-  return Array.isArray(value?.participant_ids) ? value.participant_ids.filter((id): id is string => typeof id === "string") : [];
 }
 
 function rowOptionLabel(

@@ -331,6 +331,10 @@
       "cleanup_storage": {
         "title": "Nettoyage du stockage",
         "description": "Nettoyage nocturne des anciens fichiers d'export dans storage/exports (tâche cron sur le serveur via scripts/run_job.sh)."
+      },
+      "task_package_rollover": {
+        "title": "Mettre à jour les paquets de tâches",
+        "description": "Crée chaque jour les tâches du cycle en cours à partir de tous les paquets actifs (celles du nouveau cycle lors d’un changement) et ajoute les nouvelles répétitions."
       }
     }
   },

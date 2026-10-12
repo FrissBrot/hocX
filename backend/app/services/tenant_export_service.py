@@ -40,6 +40,10 @@ from app.core.config import settings
 from app.core.secret_crypto import decrypt_secret
 from app.models import (
     AppUser,
+    ProtocolTodoAssignee,
+    TaskPackage,
+    TaskPackageCycle,
+    TaskPackageItem,
     AttendanceFine,
     CycleConfig,
     DocumentTemplate,
@@ -285,6 +289,23 @@ class TenantExportService:
             db.scalars(select(WordImportProfile).where(WordImportProfile.tenant_id == tenant_id)).all(),
             "word_import_profile",
         )
+        # Aufgabenpakete sind Konfiguration (wie Vorlagen). responsible_json enthält interne
+        # Listen-/Personen-IDs, die der Import umschlüsselt.
+        task_packages = db.scalars(select(TaskPackage).where(TaskPackage.tenant_id == tenant_id)).all()
+        tables["task_package"] = self._rows(task_packages, "task_package")
+        task_package_ids = [package.id for package in task_packages]
+        tables["task_package_cycle"] = self._rows(
+            db.scalars(select(TaskPackageCycle).where(TaskPackageCycle.task_package_id.in_(task_package_ids))).all()
+            if task_package_ids
+            else [],
+            "task_package_cycle",
+        )
+        tables["task_package_item"] = self._rows(
+            db.scalars(select(TaskPackageItem).where(TaskPackageItem.task_package_id.in_(task_package_ids))).all()
+            if task_package_ids
+            else [],
+            "task_package_item",
+        )
 
     def _export_list_entries(self, db: Session, tables: dict[str, Any]) -> None:
         list_definition_ids = [row["id"] for row in tables["list_definition"]]
@@ -474,6 +495,13 @@ class TenantExportService:
         )
         tables["protocol_todo"] = self._rows(
             db.scalars(select(ProtocolTodo).where(ProtocolTodo.tenant_id == tenant_id)).all(), "protocol_todo"
+        )
+        todo_ids = [row["id"] for row in tables["protocol_todo"]]
+        tables["protocol_todo_assignee"] = self._rows(
+            db.scalars(select(ProtocolTodoAssignee).where(ProtocolTodoAssignee.protocol_todo_id.in_(todo_ids))).all()
+            if todo_ids
+            else [],
+            "protocol_todo_assignee",
         )
         tables["user_template_access"] = self._rows(
             db.scalars(select(UserTemplateAccess).where(UserTemplateAccess.tenant_id == tenant_id)).all(),

@@ -19,6 +19,7 @@ from app.schemas.list_definition import (
 )
 from app.services import public_id_service
 from app.services.list_service import ListService
+from app.services.task_package_service import sync_packages_after_change
 
 router = APIRouter()
 service = ListService()
@@ -185,6 +186,7 @@ def create_entry(
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "Eintrag konnte nicht erstellt werden") from exc
+    sync_packages_after_change(db, tenant_id=definition.tenant_id, list_definition_id=definition.id)
     return created
 
 
@@ -204,6 +206,7 @@ def patch_entry(
         raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "Eintrag konnte nicht gespeichert werden") from exc
     if updated is None:
         raise HTTPException(status_code=404, detail="Eintrag nicht gefunden")
+    sync_packages_after_change(db, tenant_id=user.current_tenant_id, list_definition_id=current.list_definition_id)
     return updated
 
 
@@ -215,6 +218,7 @@ def delete_entry(
 ):
     require_writer(user)
     current = _get_entry_or_404(db, list_entry_id, user)
+    list_definition_id = current.list_definition_id
     try:
         deleted = service.delete_entry(db, current.id)
     except SQLAlchemyError as exc:
@@ -222,4 +226,5 @@ def delete_entry(
         raise HTTPException(status_code=400, detail="Eintrag konnte nicht geloescht werden") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Eintrag nicht gefunden")
+    sync_packages_after_change(db, tenant_id=user.current_tenant_id, list_definition_id=list_definition_id)
     return {"message": "Eintrag geloescht"}

@@ -1321,6 +1321,13 @@ export type ProtocolTodo = {
   tracked_change?: "added" | "changed" | null;
   tracked_change_before_json?: { task?: string; tags?: string[] } | null;
   pending_delete?: boolean;
+  /** Alle Verantwortlichen (z. B. mehrere Personen eines Ämtlis). Leer = nur assigned_participant_id. */
+  assigned_participant_ids?: string[];
+  /** Herkunft aus einem Aufgabenpaket. */
+  task_package_id?: string | null;
+  task_package_name?: string | null;
+  cycle_year?: number | null;
+  overridden_fields?: string[];
 };
 
 export type TodoListItem = ProtocolTodo & {
@@ -1462,3 +1469,82 @@ export type StatisticsOverview = {
   cycles: { cycle_config_id: string; cycle_config_name: string; cycle_year: number; label: string }[];
   groups_stats: { group_name: string; cycle_config_id: string | null; cycle_year: number | null; session_count: number; session_count_with_participants: number; avg_participants: number }[];
 };
+
+// ── Aufgabenpakete ───────────────────────────────────────────────────────
+
+export type TaskPackageResponsible = {
+  list_definition_id?: string | null;
+  list_entry_id?: string | null;
+  participant_id?: string | null;
+};
+
+export type TaskPackageRecurrenceType = "once" | "monthly" | "weekly" | "events";
+
+export type TaskPackageRecurrence = {
+  type: TaskPackageRecurrenceType;
+  day_of_month?: number | null;
+  /** 0 = Montag ... 6 = Sonntag */
+  weekday?: number | null;
+  event_tag?: string | null;
+};
+
+export type TaskPackageDueRuleType = "none" | "fixed" | "offset";
+
+export type TaskPackageDueRule = {
+  type: TaskPackageDueRuleType;
+  month?: number | null;
+  day?: number | null;
+  offset_days?: number | null;
+};
+
+export type TaskPackageItem = {
+  id: string;
+  sort_index: number;
+  task: string;
+  reference_link: string | null;
+  tags: string[];
+  responsible: TaskPackageResponsible[];
+  recurrence: TaskPackageRecurrence;
+  due_rule: TaskPackageDueRule;
+};
+
+export type TaskPackageCycle = {
+  id: string;
+  cycle_config_id: string;
+  cycle_config_name: string;
+  start_cycle_year: number;
+  current_cycle_year: number;
+  current_cycle_label: string;
+};
+
+export type TaskPackage = {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  cycles: TaskPackageCycle[];
+  items: TaskPackageItem[];
+  open_todo_count: number;
+  todo_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TaskPackagePreviewEntry = {
+  item_id: string;
+  task: string;
+  occurrence_key: string;
+  occurrence_date: string;
+  due_date: string | null;
+  assignee_names: string[];
+  exists: boolean;
+};
+
+export type TaskPackagePreview = {
+  cycle_config_id: string;
+  cycle_year: number;
+  cycle_label: string;
+  entries: TaskPackagePreviewEntry[];
+};
+
+export type TaskPackageTodoDeleteMode = "all" | "future" | "none";

@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import CurrentUser
-from app.models.entities import PhotoAlbumItem, ProtocolTodo, StoredFile
+from app.models.entities import PhotoAlbumItem, ProtocolTodo, ProtocolTodoAssignee, StoredFile
 from app.repositories.access_repository import AccessRepository
 from app.services import photo_album_share_service
 
@@ -90,8 +90,17 @@ class AccessService:
         todo = db.get(ProtocolTodo, todo_id)
         if todo is None or todo.tenant_id is None or todo.tenant_id != user.current_tenant_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
-        if self._is_restricted_reader(db, user) and todo.assigned_user_id != user.user_id:
+        if self._is_restricted_reader(db, user) and user.user_id not in self._todo_assignee_user_ids(db, todo):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found")
+
+    def _todo_assignee_user_ids(self, db: Session, todo: ProtocolTodo) -> set[int]:
+        """Seit der Identitätsvereinheitlichung (0108) sind Teilnehmende und Konten dieselbe
+        ID - zugewiesen ist man als Konto, als Hauptverantwortliche oder als eine von mehreren
+        Verantwortlichen (protocol_todo_assignee, z. B. aus einem Aufgabenpaket)."""
+        ids = {todo.assigned_user_id, todo.assigned_participant_id}
+        ids.update(db.scalars(select(ProtocolTodoAssignee.participant_id).where(ProtocolTodoAssignee.protocol_todo_id == todo.id)))
+        ids.discard(None)
+        return ids
 
     def ensure_can_read_stored_file(self, db: Session, user: CurrentUser, stored_file_id: int) -> None:
         protocol_id = self.repository.protocol_id_for_stored_file(db, stored_file_id=stored_file_id)

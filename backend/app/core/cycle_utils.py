@@ -43,6 +43,20 @@ def get_cycle_year(d: date, reset_month: int, reset_day: int) -> int:
     return cycle_start.year
 
 
+def cycle_bounds(cycle_year: int, reset_month: int, reset_day: int) -> tuple[date, date]:
+    """First and last day (inclusive) of the cycle whose start year is `cycle_year` - the
+    inverse of get_cycle_year(): get_cycle_year(d) == cycle_year for every d in the range.
+    Example: reset 31.07. and cycle_year 2025 -> (2025-08-01, 2026-07-31); reset 31.12.
+    and cycle_year 2025 -> (2025-01-01, 2025-12-31)."""
+    start = reset_boundary(cycle_year, reset_month, reset_day) + timedelta(days=1)
+    if start.year != cycle_year:
+        start = reset_boundary(cycle_year - 1, reset_month, reset_day) + timedelta(days=1)
+    end = reset_boundary(start.year, reset_month, reset_day)
+    if end < start:
+        end = reset_boundary(start.year + 1, reset_month, reset_day)
+    return start, end
+
+
 def cycle_years_for_offsets(today: date, reset_month: int, reset_day: int, offsets: list[int]) -> set[int]:
     """Cycle years selected by `offsets` relative to the cycle containing `today`
     (0 = current cycle, -1 = previous, ...). cycle_year is the cycle's start year, so an

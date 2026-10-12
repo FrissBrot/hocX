@@ -80,6 +80,20 @@ USER_ID_COLUMNS: dict[str, list[str]] = {
 # can't be resolved by email.
 
 
+def remap_occurrence_key(key: str | None, event_map: dict[int, int]) -> str | None:
+    """protocol_todo.occurrence_key einer Paket-Instanz mit Wiederholung "pro Termin" enthält
+    die interne Termin-ID ("event:<id>") und muss beim Kopieren mit umgeschlüsselt werden.
+    Ist der Termin nicht (mehr) da, bleibt der Schlüssel eindeutig, verweist aber auf nichts."""
+    if not key or not key.startswith("event:"):
+        return key
+    try:
+        old_id = int(key.split(":", 1)[1])
+    except ValueError:
+        return key
+    new_id = event_map.get(old_id)
+    return f"event:{new_id}" if new_id is not None else f"event:missing-{old_id}"
+
+
 def json_safe(value: Any) -> Any:
     if isinstance(value, (datetime, date)):
         return value.isoformat()

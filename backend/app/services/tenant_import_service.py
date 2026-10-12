@@ -34,6 +34,10 @@ from app.core.secret_crypto import decrypt_secret, encrypt_secret
 from app.core.security import hash_password
 from app.models import (
     AppUser,
+    ProtocolTodoAssignee,
+    TaskPackage,
+    TaskPackageCycle,
+    TaskPackageItem,
     AttendanceFine,
     CycleConfig,
     DocumentTemplate,
@@ -116,6 +120,7 @@ from app.services.tenant_transfer_common import (
     remap_block_configuration,
     remap_document_template_config,
     remap_element_definition_config,
+    remap_occurrence_key,
     remap_list_value,
     remap_repeat_source_todo,
     remap_responsible_assignments,
@@ -409,7 +414,15 @@ class TenantImportService:
         self._import_protocol_export_caches(protocol_map, stored_file_map)
         finance_transaction_map = self._import_finance_transactions(finance_account_map, protocol_map)
         self._import_attendance_fines(protocol_map, participant_map, finance_account_map, finance_transaction_map)
-        todo_map = self._import_protocol_todos(new_tenant.id, protocol_element_block_map, participant_map, event_map, protocol_map, submission_assignment_map)
+        task_package_item_map = self._import_task_packages(
+            new_tenant.id, cycle_config_map=cycle_config_map, participant_map=participant_map,
+            list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+        )
+        todo_map = self._import_protocol_todos(
+            new_tenant.id, protocol_element_block_map, participant_map, event_map, protocol_map, submission_assignment_map,
+            task_package_item_map=task_package_item_map, cycle_config_map=cycle_config_map,
+        )
+        self._import_protocol_todo_assignees(todo_map, participant_map)
         self._remap_todo_repeat_sources(todo_map)
         album_map = self._import_photo_albums(new_tenant.id, cycle_config_map, submission_assignment_map)
         self._import_album_shares(new_tenant.id, album_map)
@@ -1214,12 +1227,60 @@ class TenantImportService:
             self.db.add(new_row)
         self.db.commit()
 
-    def _import_protocol_todos(self, new_tenant_id, protocol_element_block_map, participant_map, event_map, protocol_map, submission_assignment_map) -> dict[int, int]:
+    def _import_task_packages(self, new_tenant_id, *, cycle_config_map, participant_map, list_definition_map, list_entry_map) -> dict[int, int]:
+        package_map = self._import_simple(TaskPackage, self._t("task_package"), "task_package", {"tenant_id": new_tenant_id})
+        for row in self._t("task_package_cycle"):
+            package_id = package_map.get(row["task_package_id"])
+            cycle_config_id = cycle_config_map.get(row["cycle_config_id"])
+            if package_id is None or cycle_config_id is None:
+                continue
+            self.db.add(self._build(TaskPackageCycle, row, {"task_package_id": package_id, "cycle_config_id": cycle_config_id}))
+        item_map: dict[int, int] = {}
+        for row in self._t("task_package_item"):
+            package_id = package_map.get(row["task_package_id"])
+            if package_id is None:
+                continue
+            responsible = []
+            for entry in row.get("responsible_json") or []:
+                if entry.get("participant_id"):
+                    participant_id = participant_map.get(entry["participant_id"])
+                    if participant_id:
+                        responsible.append({"participant_id": participant_id})
+                elif entry.get("list_definition_id") and entry.get("list_entry_id"):
+                    list_definition_id = list_definition_map.get(entry["list_definition_id"])
+                    list_entry_id = list_entry_map.get(entry["list_entry_id"])
+                    if list_definition_id and list_entry_id:
+                        responsible.append({"list_definition_id": list_definition_id, "list_entry_id": list_entry_id})
+            new_row = self._build(TaskPackageItem, row, {"task_package_id": package_id, "responsible_json": responsible})
+            self.db.add(new_row)
+            self.db.flush()
+            item_map[row["id"]] = new_row.id
+        self.db.commit()
+        return item_map
+
+    def _import_protocol_todo_assignees(self, todo_map: dict[int, int], participant_map: dict[int, int]) -> None:
+        for row in self._t("protocol_todo_assignee"):
+            todo_id = todo_map.get(row["protocol_todo_id"])
+            participant_id = participant_map.get(row["participant_id"])
+            if todo_id is None or participant_id is None:
+                continue
+            self.db.add(ProtocolTodoAssignee(protocol_todo_id=todo_id, participant_id=participant_id, sort_index=row.get("sort_index") or 0))
+        self.db.commit()
+
+    def _import_protocol_todos(
+        self, new_tenant_id, protocol_element_block_map, participant_map, event_map, protocol_map, submission_assignment_map,
+        *, task_package_item_map: dict[int, int] | None = None, cycle_config_map: dict[int, int] | None = None,
+    ) -> dict[int, int]:
         id_map: dict[int, int] = {}
+        task_package_item_map = task_package_item_map or {}
+        cycle_config_map = cycle_config_map or {}
         for row in self._t("protocol_todo"):
             data = self._resolve_row("protocol_todo", row)
             new_row = self._build(ProtocolTodo, data, {
                 "tenant_id": new_tenant_id,
+                "task_package_item_id": task_package_item_map.get(data["task_package_item_id"]) if data.get("task_package_item_id") else None,
+                "cycle_config_id": cycle_config_map.get(data["cycle_config_id"]) if data.get("cycle_config_id") else None,
+                "occurrence_key": remap_occurrence_key(data.get("occurrence_key"), event_map),
                 "protocol_element_block_id": protocol_element_block_map.get(data["protocol_element_block_id"]) if data.get("protocol_element_block_id") else None,
                 "assigned_participant_id": participant_map.get(data["assigned_participant_id"]) if data.get("assigned_participant_id") else None,
                 "due_event_id": event_map.get(data["due_event_id"]) if data.get("due_event_id") else None,

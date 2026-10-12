@@ -222,6 +222,13 @@ def patch_todo(
             db, action="todo.status_changed", actor=user, entity_type="protocol_todo", entity_id=existing.id,
             details={"from_status_id": previous_status_id, "to_status_id": payload.todo_status_id},
         )
+    if todo.protocol_element_block_id is None:
+        # Standalone (z. B. aus einem Aufgabenpaket): nur diese eine Zeile laden statt aller
+        # protokollfreien Todos.
+        row = service.repository.get_row(db, todo.id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Todo not found")
+        return service._row_to_todo_read(db, row)
     todos = service.list_todos(db, todo.protocol_element_block_id)
     return next(item for item in todos if item.id == todo_id)
 

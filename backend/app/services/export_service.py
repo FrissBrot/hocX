@@ -491,7 +491,11 @@ class ExportService:
         if todo_filter == "open":
             rows = [r for r in rows if (getattr(r, "todo_status_code", None) or "open") not in ("done", "cancelled")]
         if participant_id is not None:
-            rows = [r for r in rows if getattr(r.ProtocolTodo, "assigned_participant_id", None) == participant_id]
+            rows = [
+                r for r in rows
+                if getattr(r.ProtocolTodo, "assigned_participant_id", None) == participant_id
+                or participant_id in (getattr(r, "assignee_ids", None) or [])
+            ]
         if until_date:
             cutoff = date.fromisoformat(until_date)
             rows = [

@@ -51,6 +51,7 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "photo_album_sync": 202600014,
     "gallery_upload_ingest": 202600015,
     "system_monitor": 202600017,
+    "task_package_rollover": 202600018,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

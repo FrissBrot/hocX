@@ -49,5 +49,6 @@
   "defaultTenantName": "Mandant",
   "sessionReady": "Bereit",
   "sessionLoading": "Arbeitsbereich wird geladen…",
-  "connections": "Verknüpfungen"
+  "connections": "Verknüpfungen",
+  "taskPackages": "Aufgabenpakete"
 }

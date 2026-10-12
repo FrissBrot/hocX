@@ -34,6 +34,7 @@ from app.models import (
     ProtocolImage,
     ProtocolText,
     ProtocolTodo,
+    ProtocolTodoAssignee,
     StoredFile,
     SubmissionAssignment,
     SubmissionLink,
@@ -43,6 +44,9 @@ from app.models import (
     Template,
     TemplateElement,
     TemplateElementBlock,
+    TaskPackage,
+    TaskPackageCycle,
+    TaskPackageItem,
     TemplateParticipant,
     Tenant,
 )
@@ -55,6 +59,7 @@ from app.services.tenant_transfer_common import (
     remap_document_template_config,
     remap_element_definition_config,
     remap_list_value,
+    remap_occurrence_key,
     remap_repeat_source_todo,
     remap_responsible_assignments,
     remap_template_element_config,
@@ -176,6 +181,11 @@ class TenantCloneService:
             list_entry_map={},
             finance_account_map=finance_account_map,
         )
+        # Ohne Listeneinträge/Personen bleiben nur Aufgaben ohne Verantwortliche übrig.
+        self._clone_task_packages(
+            db, source.id, new_tenant.id,
+            cycle_config_map=cycle_config_map, participant_map={}, list_definition_map=list_definition_map, list_entry_map={},
+        )
         return new_tenant
 
     def _clone_full_impl(self, db: Session, source_tenant_id: int, new_name: str) -> Tenant:
@@ -272,6 +282,11 @@ class TenantCloneService:
             finance_account_map=finance_account_map,
             finance_transaction_map=finance_transaction_map,
         )
+        task_package_item_map = self._clone_task_packages(
+            db, source.id, new_tenant.id,
+            cycle_config_map=cycle_config_map, participant_map=participant_map,
+            list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+        )
         todo_map = self._clone_protocol_todos(
             db, source.id, new_tenant.id,
             protocol_element_block_map=protocol_element_block_map,
@@ -279,7 +294,10 @@ class TenantCloneService:
             event_map=event_map,
             protocol_map=protocol_map,
             submission_assignment_map=submission_assignment_map,
+            task_package_item_map=task_package_item_map,
+            cycle_config_map=cycle_config_map,
         )
+        self._clone_protocol_todo_assignees(db, todo_map=todo_map, participant_map=participant_map)
         self._remap_todo_repeat_sources(db, protocol_element_block_map=protocol_element_block_map, todo_map=todo_map)
         return new_tenant
 
@@ -973,12 +991,19 @@ class TenantCloneService:
         event_map: dict[int, int],
         protocol_map: dict[int, int],
         submission_assignment_map: dict[int, int],
+        task_package_item_map: dict[int, int] | None = None,
+        cycle_config_map: dict[int, int] | None = None,
     ) -> dict[int, int]:
         rows = db.scalars(select(ProtocolTodo).where(ProtocolTodo.tenant_id == source_tenant_id)).all()
         id_map: dict[int, int] = {}
+        task_package_item_map = task_package_item_map or {}
+        cycle_config_map = cycle_config_map or {}
         for row in rows:
             new_row = _copy_row(row, {
                 "tenant_id": new_tenant_id,
+                "task_package_item_id": task_package_item_map.get(row.task_package_item_id) if row.task_package_item_id else None,
+                "cycle_config_id": cycle_config_map.get(row.cycle_config_id) if row.cycle_config_id else None,
+                "occurrence_key": remap_occurrence_key(row.occurrence_key, event_map),
                 "protocol_element_block_id": protocol_element_block_map.get(row.protocol_element_block_id) if row.protocol_element_block_id else None,
                 "assigned_participant_id": participant_map.get(row.assigned_participant_id) if row.assigned_participant_id else None,
                 "due_event_id": event_map.get(row.due_event_id) if row.due_event_id else None,
@@ -991,6 +1016,60 @@ class TenantCloneService:
             id_map[row.id] = new_row.id
         db.commit()
         return id_map
+
+    def _clone_task_packages(
+        self,
+        db: Session,
+        source_tenant_id: int,
+        new_tenant_id: int,
+        *,
+        cycle_config_map: dict[int, int],
+        participant_map: dict[int, int],
+        list_definition_map: dict[int, int],
+        list_entry_map: dict[int, int],
+    ) -> dict[int, int]:
+        """Aufgabenpakete samt Zyklus-Zuweisungen und Aufgaben. Verweise auf Listenzeilen/
+        Personen, die nicht mitkopiert wurden, fallen weg."""
+        item_map: dict[int, int] = {}
+        for package in db.scalars(select(TaskPackage).where(TaskPackage.tenant_id == source_tenant_id)).all():
+            new_package = _copy_row(package, {"tenant_id": new_tenant_id})
+            db.add(new_package)
+            db.flush()
+            for package_cycle in db.scalars(select(TaskPackageCycle).where(TaskPackageCycle.task_package_id == package.id)).all():
+                cycle_config_id = cycle_config_map.get(package_cycle.cycle_config_id)
+                if cycle_config_id is not None:
+                    db.add(_copy_row(package_cycle, {"task_package_id": new_package.id, "cycle_config_id": cycle_config_id}))
+            for item in db.scalars(select(TaskPackageItem).where(TaskPackageItem.task_package_id == package.id)).all():
+                responsible = []
+                for entry in item.responsible_json or []:
+                    if entry.get("participant_id"):
+                        participant_id = participant_map.get(int(entry["participant_id"]))
+                        if participant_id:
+                            responsible.append({"participant_id": participant_id})
+                    elif entry.get("list_definition_id") and entry.get("list_entry_id"):
+                        list_definition_id = list_definition_map.get(int(entry["list_definition_id"]))
+                        list_entry_id = list_entry_map.get(int(entry["list_entry_id"]))
+                        if list_definition_id and list_entry_id:
+                            responsible.append({"list_definition_id": list_definition_id, "list_entry_id": list_entry_id})
+                new_item = _copy_row(item, {"task_package_id": new_package.id, "responsible_json": responsible})
+                db.add(new_item)
+                db.flush()
+                item_map[item.id] = new_item.id
+        db.commit()
+        return item_map
+
+    def _clone_protocol_todo_assignees(self, db: Session, *, todo_map: dict[int, int], participant_map: dict[int, int]) -> None:
+        source_todo_ids = list(todo_map)
+        for start in range(0, len(source_todo_ids), 1000):
+            rows = db.scalars(
+                select(ProtocolTodoAssignee).where(ProtocolTodoAssignee.protocol_todo_id.in_(source_todo_ids[start:start + 1000]))
+            ).all()
+            for row in rows:
+                participant_id = participant_map.get(row.participant_id)
+                if participant_id is None:
+                    continue
+                db.add(ProtocolTodoAssignee(protocol_todo_id=todo_map[row.protocol_todo_id], participant_id=participant_id, sort_index=row.sort_index))
+        db.commit()
 
     def _remap_todo_repeat_sources(
         self, db: Session, *, protocol_element_block_map: dict[int, int], todo_map: dict[int, int]

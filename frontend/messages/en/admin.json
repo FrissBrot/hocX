@@ -331,6 +331,10 @@
       "cleanup_storage": {
         "title": "Storage cleanup",
         "description": "Nightly cleanup of old export files under storage/exports (cron job on the server via scripts/run_job.sh)."
+      },
+      "task_package_rollover": {
+        "title": "Update task packages",
+        "description": "Daily creates the tasks of the current cycle from all active task packages (the new cycle’s tasks after a cycle change) and adds new recurrences."
       }
     }
   },

@@ -82,5 +82,6 @@
   "untilNextHock": "Jusqu'au prochain événement",
   "endOfWeek": "Fin de semaine",
   "endOfMonth": "Fin du mois",
-  "inTwoWeeks": "Dans 2 semaines"
+  "inTwoWeeks": "Dans 2 semaines",
+  "fromPackageTitle": "Créé à partir d’un paquet de tâches"
 }

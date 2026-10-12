@@ -331,6 +331,10 @@
       "cleanup_storage": {
         "title": "Pulizia dello spazio",
         "description": "Pulizia notturna dei vecchi file di esportazione in storage/exports (cron job sul server tramite scripts/run_job.sh)."
+      },
+      "task_package_rollover": {
+        "title": "Aggiorna pacchetti di attività",
+        "description": "Crea ogni giorno le attività del ciclo in corso da tutti i pacchetti attivi (quelle del nuovo ciclo al cambio) e aggiunge le nuove ripetizioni."
       }
     }
   },

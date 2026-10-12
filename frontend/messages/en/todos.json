@@ -82,5 +82,6 @@
   "untilNextHock": "Until next event",
   "endOfWeek": "End of week",
   "endOfMonth": "End of month",
-  "inTwoWeeks": "In 2 weeks"
+  "inTwoWeeks": "In 2 weeks",
+  "fromPackageTitle": "Created from a task package"
 }

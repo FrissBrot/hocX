@@ -82,5 +82,6 @@
   "untilNextHock": "Fino al prossimo evento",
   "endOfWeek": "Fine settimana",
   "endOfMonth": "Fine mese",
-  "inTwoWeeks": "Tra 2 settimane"
+  "inTwoWeeks": "Tra 2 settimane",
+  "fromPackageTitle": "Creato da un pacchetto di attività"
 }

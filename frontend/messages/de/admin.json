@@ -331,6 +331,10 @@
       "cleanup_storage": {
         "title": "Speicher aufräumen",
         "description": "Nächtliches Aufräumen alter Exportdateien unter storage/exports (Cronjob auf dem Server über scripts/run_job.sh)."
+      },
+      "task_package_rollover": {
+        "title": "Aufgabenpakete nachführen",
+        "description": "Legt täglich die Aufgaben des laufenden Zyklus aus allen aktiven Aufgabenpaketen an (beim Zykluswechsel die des neuen Zyklus) und ergänzt neue Wiederholungen."
       }
     }
   },

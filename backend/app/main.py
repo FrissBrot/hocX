@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, auth, calendar_feeds, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, templates, tenants, todos, users, word_import
+from app.api.routes import admin, admin_auth, auth, calendar_feeds, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
@@ -30,6 +30,7 @@ from app.services.isolated_parse import shutdown_pool as shutdown_word_import_pa
 from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
 from app.services import photo_album_service, system_alert_service
 from app.services.table_snapshot_service import TableSnapshotService, run_due_cycle_snapshots
+from app.services.task_package_service import run_due_task_packages
 
 
 def ensure_roles() -> None:
@@ -272,6 +273,17 @@ async def cycle_snapshot_loop() -> None:
     )
 
 
+async def task_package_rollover_loop() -> None:
+    """Täglich: legt für jedes aktive Aufgabenpaket die Aufgaben des laufenden Zyklus an
+    (beim Zykluswechsel also die des neuen Zyklus) und ergänzt neue Wiederholungen, z. B.
+    neu erfasste Termine. Idempotent - siehe task_package_service.run_due_task_packages."""
+    await run_advisory_locked_loop(
+        name="task_package_rollover",
+        interval_seconds=settings.task_package_rollover_interval_minutes * 60,
+        task=lambda db: run_due_task_packages(db),
+    )
+
+
 def _photo_analysis_auto_queue_window_is_open() -> bool:
     hour = datetime.now(timezone.utc).hour
     start, end = settings.photo_analysis_auto_queue_start_hour, settings.photo_analysis_auto_queue_end_hour
@@ -380,6 +392,7 @@ async def lifespan(_: FastAPI):
         export_cleanup_task = asyncio.create_task(export_cleanup_loop())
         log_cleanup_task = asyncio.create_task(log_cleanup_loop())
         cycle_snapshot_task = asyncio.create_task(cycle_snapshot_loop())
+        task_package_rollover_task = asyncio.create_task(task_package_rollover_loop())
         photo_analysis_auto_queue_task = asyncio.create_task(photo_analysis_auto_queue_loop())
         photo_quality_backfill_task = asyncio.create_task(photo_quality_backfill_loop())
         photo_album_sync_task = asyncio.create_task(photo_album_sync_loop())
@@ -397,6 +410,7 @@ async def lifespan(_: FastAPI):
         export_cleanup_task.cancel()
         log_cleanup_task.cancel()
         cycle_snapshot_task.cancel()
+        task_package_rollover_task.cancel()
         await close_redis_pool()
     finally:
         shutdown_word_import_parse_pool()
@@ -476,6 +490,7 @@ app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(document_templates.router, prefix="/api", tags=["document-templates"])
 app.include_router(templates.router, prefix="/api", tags=["templates"])
 app.include_router(cycle_configs.router, prefix="/api", tags=["cycle-configs"])
+app.include_router(task_packages.router, prefix="/api", tags=["task-packages"])
 app.include_router(table_snapshots.router, prefix="/api", tags=["table-snapshots"])
 app.include_router(participants.router, prefix="/api", tags=["participants"])
 app.include_router(events.router, prefix="/api", tags=["events"])

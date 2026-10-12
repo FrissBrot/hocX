@@ -49,5 +49,6 @@
   "defaultTenantName": "Organizzazione",
   "sessionReady": "Pronto",
   "sessionLoading": "Caricamento dell'area di lavoro…",
-  "connections": "Collegamenti"
+  "connections": "Collegamenti",
+  "taskPackages": "Pacchetti di attività"
 }

@@ -99,6 +99,10 @@ class Settings(BaseSettings):
     # table_snapshot_service.run_due_cycle_snapshots). Daily is enough - a cycle boundary
     # is crossed at most once a year per config, and the loop self-heals a missed day.
     cycle_snapshot_check_interval_minutes: int = 1440
+    # Aufgabenpakete: Aufgaben des laufenden Zyklus anlegen/nachführen (siehe main.py's
+    # task_package_rollover_loop). Täglich reicht - beim Zuweisen, bei Paket-, Listen- und
+    # Terminänderungen wird zusätzlich sofort nachgeführt.
+    task_package_rollover_interval_minutes: int = 1440
     # Photo-culling Phase 3 auto-queue (main.py's photo_analysis_auto_queue_loop): how
     # often to check for unanalyzed images, and the UTC hour window it's allowed to queue
     # them in. Default 0/24 = rund um die Uhr - die Analyse läuft automatisch, es gibt keinen

@@ -1,11 +1,38 @@
 import uuid
 
-from sqlalchemy import case, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import case, func, literal_column, or_, select
+from sqlalchemy.dialects.postgresql import aggregate_order_by
+from sqlalchemy.orm import Session, aliased
 
-from app.models import AppUser, ElementType, Event, Participant, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo, Template, TemplateParticipant, TodoStatus
+from app.models import (
+    AppUser,
+    ElementType,
+    Event,
+    Participant,
+    Protocol,
+    ProtocolElement,
+    ProtocolElementBlock,
+    ProtocolTodo,
+    ProtocolTodoAssignee,
+    TaskPackage,
+    TaskPackageItem,
+    Template,
+    TemplateParticipant,
+    TodoStatus,
+)
 from app.repositories.participant_repository import participant_eligible_on
 from app.services import public_id_service
+
+
+def _assigned_to_participant(participant_id):
+    """Todo ist der Person zugewiesen: als Hauptverantwortliche oder als eine von mehreren
+    (protocol_todo_assignee, z. B. alle Personen eines Ämtlis aus einem Aufgabenpaket)."""
+    return or_(
+        ProtocolTodo.assigned_participant_id == participant_id,
+        ProtocolTodo.id.in_(
+            select(ProtocolTodoAssignee.protocol_todo_id).where(ProtocolTodoAssignee.participant_id == participant_id)
+        ),
+    )
 
 
 class ProtocolTodoRepository:
@@ -14,11 +41,31 @@ class ProtocolTodoRepository:
         due_event = Event.__table__.alias("due_event")
         next_event = Event.__table__.alias("next_event")
         last_event = Event.__table__.alias("last_event")
+        assignee = aliased(Participant)
+        # Mehrere Verantwortliche: Namen kommasepariert (bestehende Anzeigen/Exporte lesen
+        # assigned_participant_name), IDs als Arrays für Filter und API.
+        assignee_names = (
+            select(func.string_agg(assignee.display_name, aggregate_order_by(literal_column("', '"), ProtocolTodoAssignee.sort_index)))
+            .select_from(ProtocolTodoAssignee)
+            .join(assignee, assignee.id == ProtocolTodoAssignee.participant_id)
+            .where(ProtocolTodoAssignee.protocol_todo_id == ProtocolTodo.id)
+            .correlate(ProtocolTodo)
+            .scalar_subquery()
+        )
+        assignee_ids = (
+            select(func.array_agg(aggregate_order_by(ProtocolTodoAssignee.participant_id, ProtocolTodoAssignee.sort_index)))
+            .where(ProtocolTodoAssignee.protocol_todo_id == ProtocolTodo.id)
+            .correlate(ProtocolTodo)
+            .scalar_subquery()
+        )
         return (
             select(
                 ProtocolTodo,
                 TodoStatus.code.label("todo_status_code"),
-                Participant.display_name.label("assigned_participant_name"),
+                func.coalesce(assignee_names, Participant.display_name).label("assigned_participant_name"),
+                assignee_ids.label("assignee_ids"),
+                TaskPackage.public_id.label("task_package_public_id"),
+                TaskPackage.name.label("task_package_name"),
                 due_event.c.title.label("due_event_title"),
                 due_event.c.event_date.label("due_event_date"),
                 case(
@@ -43,6 +90,8 @@ class ProtocolTodoRepository:
             )
             .join(TodoStatus, TodoStatus.id == ProtocolTodo.todo_status_id)
             .outerjoin(Participant, Participant.id == ProtocolTodo.assigned_participant_id)
+            .outerjoin(TaskPackageItem, TaskPackageItem.id == ProtocolTodo.task_package_item_id)
+            .outerjoin(TaskPackage, TaskPackage.id == TaskPackageItem.task_package_id)
             .outerjoin(ProtocolElementBlock, ProtocolElementBlock.id == ProtocolTodo.protocol_element_block_id)
             .outerjoin(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
             .outerjoin(Protocol, Protocol.id == ProtocolElement.protocol_id)
@@ -81,7 +130,7 @@ class ProtocolTodoRepository:
         ).where(
             or_(
                 ProtocolTodo.assigned_user_id == user_id,
-                ProtocolTodo.assigned_participant_id == linked_participant_subq,
+                _assigned_to_participant(linked_participant_subq),
             )
         ).order_by(
             ProtocolTodo.todo_status_id.asc(),
@@ -103,7 +152,7 @@ class ProtocolTodoRepository:
         )
         conditions = [
             ProtocolTodo.assigned_user_id == user_id,
-            ProtocolTodo.assigned_participant_id == linked_participant_subq,
+            _assigned_to_participant(linked_participant_subq),
         ]
         if protocol_ids:
             conditions.append(Protocol.id.in_(protocol_ids))

@@ -68,7 +68,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
       {
         titleKey: "groups.configuration",
         links: [
-          { href: "/templates", labelKey: "templates", icon: "templates", match: ["/elements", "/settings"] },
+          { href: "/templates", labelKey: "templates", icon: "templates", match: ["/elements", "/settings", "/task-packages"] },
           { href: "/cycles", labelKey: "cycles", icon: "cycles" },
         ],
       },

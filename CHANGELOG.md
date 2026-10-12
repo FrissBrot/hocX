@@ -8,6 +8,22 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Neu
+
+- **Aufgabenpakete** (Vorlagen → Aufgabenpakete): Pakete wie «Sommerlager» oder
+  «Scharleitung» bündeln wiederkehrende Aufgaben und werden einem oder mehreren Zyklen
+  zugewiesen. Für den laufenden Zyklus entstehen daraus automatisch Todos – einmal pro
+  Zyklus, monatlich, wöchentlich oder pro Termin mit einem bestimmten Tag, mit fester oder
+  relativer Fälligkeit. Verantwortliche kommen wie im Protokoll aus Listenzeilen (z. B. der
+  Ämtliliste): alle Personen eines Ämtlis werden gemeinsam einer Aufgabe zugewiesen. Ändert
+  sich die Liste oder das Paket, werden offene Aufgaben des laufenden Zyklus angepasst;
+  vergangene Zyklen, erledigte Aufgaben und von Hand geänderte Felder bleiben unverändert.
+  Beim Löschen eines Pakets oder einer Zyklus-Zuweisung wird gefragt, ob alle, nur künftige
+  oder keine Aufgaben gelöscht werden. Neuer täglicher Job `task_package_rollover`
+  (`/admin/jobs`) legt beim Zykluswechsel die Aufgaben des neuen Zyklus an.
+- Todos können mehrere Verantwortliche haben; «Meine Todos», Kalender-Abo und Export
+  berücksichtigen alle. Migration `0111_task_packages`.
+
 ### Behoben
 
 - `deploy.sh` brach mit «Nicht erlaubte Variable TRAEFIK_WEBSITE_DOMAIN» ab, sobald die mit

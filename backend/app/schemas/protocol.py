@@ -269,6 +269,9 @@ class ProtocolTodoRead(BaseModel):
     assigned_user_id: uuid.UUID | None = None
     assigned_participant_id: uuid.UUID | None = None
     assigned_participant_name: str | None = None
+    # Alle Verantwortlichen (z. B. mehrere Personen eines Ämtlis). Leer bei Todos mit nur
+    # assigned_participant_id.
+    assigned_participant_ids: list[uuid.UUID] = []
     todo_status_id: int
     todo_status_code: str | None = None
     due_date: date | None = None
@@ -288,6 +291,11 @@ class ProtocolTodoRead(BaseModel):
     tracked_change: str | None = None
     tracked_change_before_json: dict | None = None
     pending_delete: bool = False
+    # Herkunft aus einem Aufgabenpaket (siehe task_package_service)
+    task_package_id: uuid.UUID | None = None
+    task_package_name: str | None = None
+    cycle_year: int | None = None
+    overridden_fields: list[str] = []
 
     _validate_reference_link_read = field_validator("reference_link")(_validate_reference_link)
 

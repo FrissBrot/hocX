@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.models import AppUser, Event, Participant, Protocol, ProtocolElementBlock, ProtocolTodo, SubmissionAssignment, TodoStatus
 from app.repositories.protocol_todo_repository import ProtocolTodoRepository
 from app.schemas.protocol import ProtocolTodoCreate, ProtocolTodoRead, ProtocolTodoUpdate, TodoListItem
-from app.services import public_id_service
+from app.services import public_id_service, task_package_service
 
 # Status codes that count as "closed"/completed for completed_at purposes - mirrors the
 # closed_status_ids grouping used elsewhere (e.g. ProtocolService._open_todos_for_template_block)
@@ -48,11 +48,20 @@ class ProtocolTodoService:
             else None,
             "todo_status_code": row.todo_status_code,
             "assigned_participant_name": row.assigned_participant_name,
+            "assigned_participant_ids": self._assignee_public_ids(db, row.assignee_ids),
+            "task_package_id": row.task_package_public_id,
+            "task_package_name": row.task_package_name,
             "due_event_title": row.due_event_title,
             "due_event_date": row.due_event_date,
             "resolved_due_date": row.resolved_due_date,
             "resolved_due_label": row.resolved_due_label,
         }
+
+    def _assignee_public_ids(self, db: Session, internal_ids: list[int] | None) -> list:
+        if not internal_ids:
+            return []
+        mapping = public_id_service.resolve_public_ids(db, Participant, internal_ids)
+        return [mapping[i] for i in internal_ids if i in mapping]
 
     def _row_to_todo_read(self, db: Session, row) -> ProtocolTodoRead:
         return ProtocolTodoRead(**self._common_fields(db, row))
@@ -268,6 +277,13 @@ class ProtocolTodoService:
         if track_changes_active and todo.tracked_change is None and ("task" in values or "tags" in values):
             values["tracked_change"] = "changed"
             values["tracked_change_before_json"] = {"task": todo.task, "tags": todo.tags}
+        # Paket-Instanz: von Hand geänderte Felder überschreibt das Paket danach nicht mehr.
+        task_package_service.mark_overrides(todo, (field for field in values if values[field] != getattr(todo, field, None)))
+        # Eine Person von Hand zuweisen ersetzt alle (ggf. aus einem Ämtli stammenden)
+        # Verantwortlichen.
+        if "assigned_participant_id" in values and (todo.task_package_item_id is not None or task_package_service.todo_assignee_ids(db, todo.id)):
+            participant_id = values["assigned_participant_id"]
+            task_package_service.set_todo_assignees(db, todo, [participant_id] if participant_id else [])
         return self.repository.update(db, todo, values)
 
     def accept_tracked_change(self, db: Session, todo_id: int) -> tuple[bool, int | None] | None:
