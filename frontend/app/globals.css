@@ -12200,6 +12200,12 @@ input[type="radio"] {
   font-size: var(--text-sm);
 }
 
+.subm-avatar.subm-avatar-empty {
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  color: var(--muted);
+}
+
 .subm-participant-info {
   flex: 1;
   min-width: 0;
