@@ -151,7 +151,8 @@ export function ProtocolSearchModal({
       }
     });
 
-    return hits;
+    // Titeltreffer zuerst; innerhalb beider Gruppen bleibt die Kapitelreihenfolge erhalten.
+    return hits.sort((a, b) => Number(Boolean(b.titleMatch)) - Number(Boolean(a.titleMatch)));
   }, [elements, todosByBlock, textDrafts, query]);
 
   useEffect(() => {
