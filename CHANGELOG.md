@@ -8,6 +8,35 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.1.13] - 2026-10-13
+
+Feature-Release auf 1.1.12: Offene Protokolle lassen sich nach Änderungen an der Vorlage
+neu aufbauen, ohne erfasste Daten zu verlieren; Terminlisten in Matrizen filtern nach
+Zyklus und Protokolldatum. Keine Migration, keine neuen Umgebungsvariablen.
+
+### Update von 1.1.12 auf 1.1.13
+
+Nach Veröffentlichung der Release-Images `HOCX_VERSION` in `.env` auf `v1.1.13` setzen,
+dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` ausführen.
+Keine weiteren Schritte nötig.
+
+### Neu
+
+- Protokollliste: «Elemente aus Vorlage neu laden» im Drei-Punkte-Menü nicht
+  abgeschlossener Protokolle. Übernimmt neue und entfernte Elemente, Titel, Beschreibungen,
+  Vorgabetexte, Filter (z. B. Tag-Filter wiederholter Termin-Blöcke), Formularzeilen,
+  Matrix-Zeilen/-Spalten und weitere Einstellungen aus der aktuellen Vorlage. Erfasste
+  Texte, Todos, Bilder, Formular- und Matrixwerte, Anwesenheiten und ausgeblendete Blöcke
+  bleiben erhalten; unveränderte Vorgabetexte folgen der Vorlage. Elemente und Blöcke, die
+  nicht mehr in der Vorlage sind, werden nur entfernt, wenn sie leer sind, sonst bleiben
+  sie am Ende stehen. Vor dem Anwenden zeigt eine Rückfrage, was sich ändert; offene
+  Editoren desselben Protokolls laden danach neu.
+- API: `POST /api/protocols/{id}/sync-template` (mit `?dry_run=true` nur Vorschau).
+- Matrix-Designer: Terminlisten-Zeilen lassen sich auf einen Zyklus relativ zum
+  Protokolldatum (aktueller, vorheriger, … Zyklus) und auf Termine vor dem Protokolldatum
+  einschränken. Matrix-Zelle und PDF-Export filtern gleich; bestehende Einstellungen «Nur
+  im aktuellen Zyklus» gelten als aktueller Zyklus.
+
 ## [1.1.12] - 2026-10-12
 
 Feature- und Bugfix-Release auf 1.1.11 mit neu gestaltetem Matrix-Designer, Zyklus-Filter
