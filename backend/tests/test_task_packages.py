@@ -391,3 +391,28 @@ def test_export_import_roundtrip_keeps_packages(db, setup):
 
     assert warnings == []
     _assert_copied_package(db, new_tenant.id, source_item=item)
+
+
+def test_multiple_manual_assignees_persist_after_package_sync(db, setup):
+    package, item, _ = _package(db, setup)
+    packages.sync_package(db, package, today=TODAY)
+    (todo,) = _instances(db, item)
+    ids = [setup["ben"].public_id, setup["cleo"].public_id]
+    todo_service.update_todo(db, todo.id, ProtocolTodoUpdate(assigned_participant_ids=ids))
+    packages.sync_package(db, package, today=TODAY)
+    assert packages.todo_assignee_ids(db, todo.id) == [setup["ben"].id, setup["cleo"].id]
+    assert todo.assigned_participant_id == setup["ben"].id
+    assert "assignees" in todo.overridden_fields
+    todo_service.update_todo(db, todo.id, ProtocolTodoUpdate(assigned_participant_ids=[]))
+    assert packages.todo_assignee_ids(db, todo.id) == []
+    assert todo.assigned_participant_id is None
+
+
+def test_multiple_assignees_reject_foreign_tenant_atomically(db, setup):
+    package, item, _ = _package(db, setup)
+    packages.sync_package(db, package, today=TODAY)
+    (todo,) = _instances(db, item)
+    foreign = make_participant(db, make_tenant(db, "Andere").id, "Andere Person")
+    with pytest.raises(ValueError):
+        todo_service.update_todo(db, todo.id, ProtocolTodoUpdate(assigned_participant_ids=[setup["cleo"].public_id, foreign.public_id]))
+    assert packages.todo_assignee_ids(db, todo.id) == [setup["anna"].id, setup["ben"].id]

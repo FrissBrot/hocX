@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
-import type { TodoListItem } from "@/types/api";
+import type { ParticipantSummary, TodoListItem } from "@/types/api";
 const api = vi.hoisted(() => vi.fn());
 const toast = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api/client", () => ({ browserApiFetch: api }));
@@ -55,4 +55,27 @@ it('sets a custom due date for a standalone todo and saves all due fields', asyn
   fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
   expect(JSON.parse(api.mock.calls[1][1].body)).toMatchObject({ due_date: '2026-10-25', due_event_id: null, due_marker: null });
+});
+it('shows package origin and preserves all assignees when saving', async () => {
+  const people = [{ id: 'anna', display_name: 'Anna' }, { id: 'ben', display_name: 'Ben' }];
+  render(<TodoEditModal todo={{ ...todo, task_package_name: 'Scharleitung', assigned_participant_id: 'anna', assigned_participant_ids: ['anna', 'ben'] }} canEdit participants={people as ParticipantSummary[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
+  expect(screen.getByText('Scharleitung')).toBeInTheDocument();
+  expect(screen.queryByText('Manuell erstellt')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Zugewiesen an' })).toHaveTextContent('Anna, Ben');
+  fireEvent.click(screen.getByRole('button', { name: 'Zugewiesen an' }));
+  expect(screen.getByRole('option', { name: /Ben/ })).toHaveAttribute('aria-selected', 'true');
+  fireEvent.click(screen.getByRole('option', { name: /Ben/ }));
+  fireEvent.click(screen.getByRole('option', { name: /Ben/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+  await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  expect(JSON.parse(api.mock.calls[0][1].body)).toMatchObject({ assigned_participant_ids: ['anna', 'ben'] });
+});
+it('allows selecting and clearing multiple assignees', async () => {
+  const people = [{ id: 'anna', display_name: 'Anna' }, { id: 'ben', display_name: 'Ben' }];
+  render(<TodoEditModal todo={todo} canEdit participants={people as ParticipantSummary[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Zugewiesen an' }));
+  for (const name of ['Anna', 'Ben', 'Anna', 'Ben']) fireEvent.click(screen.getByRole('option', { name: new RegExp(name) }));
+  fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+  await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  expect(JSON.parse(api.mock.calls[0][1].body).assigned_participant_ids).toEqual([]);
 });

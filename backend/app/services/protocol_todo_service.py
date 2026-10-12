@@ -224,6 +224,23 @@ class ProtocolTodoService:
         # so every assignment to a standalone todo failed unconditionally before this fix
         # (audit D5, 2026-08-16).
         is_standalone = todo.protocol_element_block_id is None
+        assignee_ids = None
+        if "assigned_participant_ids" in values:
+            public_ids = values.pop("assigned_participant_ids")
+            if public_ids is None:
+                raise ValueError("Assigned participants must be a list")
+            assignee_ids = []
+            for public_id in dict.fromkeys(public_ids):
+                resolved = public_id_service.resolve_internal_id(db, Participant, public_id)
+                allowed = resolved is not None and (
+                    self.repository.participant_allowed_for_tenant(db, todo.tenant_id, resolved)
+                    if is_standalone
+                    else self.repository.participant_allowed_for_block(db, todo.protocol_element_block_id, resolved)
+                )
+                if not allowed:
+                    raise ValueError("Assigned participant is not available for this template")
+                assignee_ids.append(resolved)
+            values["assigned_participant_id"] = assignee_ids[0] if assignee_ids else None
         participant_id = values.get("assigned_participant_id")
         if participant_id is not None:
             allowed = (
@@ -279,9 +296,14 @@ class ProtocolTodoService:
             values["tracked_change_before_json"] = {"task": todo.task, "tags": todo.tags}
         # Paket-Instanz: von Hand geänderte Felder überschreibt das Paket danach nicht mehr.
         task_package_service.mark_overrides(todo, (field for field in values if values[field] != getattr(todo, field, None)))
-        # Eine Person von Hand zuweisen ersetzt alle (ggf. aus einem Ämtli stammenden)
-        # Verantwortlichen.
-        if "assigned_participant_id" in values and (todo.task_package_item_id is not None or task_package_service.todo_assignee_ids(db, todo.id)):
+        # Mehrfachzuweisungen vollständig erhalten; Änderungen am Paket als manuelle
+        # Überschreibung merken. Ältere Clients können weiterhin eine Person zuweisen.
+        if assignee_ids is not None:
+            current_ids = task_package_service.todo_assignee_ids(db, todo.id) or ([todo.assigned_participant_id] if todo.assigned_participant_id else [])
+            if current_ids != assignee_ids:
+                task_package_service.mark_overrides(todo, ["assigned_participant_id"])
+            task_package_service.set_todo_assignees(db, todo, assignee_ids)
+        elif "assigned_participant_id" in values and (todo.task_package_item_id is not None or task_package_service.todo_assignee_ids(db, todo.id)):
             participant_id = values["assigned_participant_id"]
             task_package_service.set_todo_assignees(db, todo, [participant_id] if participant_id else [])
         return self.repository.update(db, todo, values)

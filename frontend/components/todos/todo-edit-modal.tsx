@@ -7,7 +7,8 @@ import { useTranslations } from "next-intl";
 import { Modal } from "@/components/ui/modal";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { TagInput } from "@/components/ui/tag-input";
-import { TodoAssigneeMenu } from "./todo-assignee-menu";
+import { SearchableMultiSelect } from "@/components/ui/searchable-select";
+import { Badge } from "@/components/ui/badge";
 import { TodoDueMenu, DuePatch } from "./todo-due-menu";
 import { TODO_STATUS } from "@/components/protocol/protocol-editor-shared";
 import { browserApiFetch } from "@/lib/api/client";
@@ -29,6 +30,8 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
   const t = useTranslations("todos");
   const tCommon = useTranslations("common");
   const [draft, setDraft] = useState(todo);
+  const assignedIds = draft.assigned_participant_ids?.length ? draft.assigned_participant_ids : draft.assigned_participant_id ? [draft.assigned_participant_id] : [];
+  const assignedLabel = assignedIds.map((id) => participants.find((person) => person.id === id)?.display_name).filter(Boolean).join(", ") || draft.assigned_participant_name || t("nobodyLabel");
   const [duePatch, setDuePatch] = useState<DuePatch | null>(null);
   const [busy, setBusy] = useState(false);
   const confirm = useConfirm();
@@ -43,7 +46,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
     try {
       const updated = await browserApiFetch<TodoListItem>(`/api/protocol-todos/${todo.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ task: draft.task.trim(), tags: draft.tags, assigned_participant_id: draft.assigned_participant_id,
+        body: JSON.stringify({ task: draft.task.trim(), tags: draft.tags, assigned_participant_ids: assignedIds,
           ...(!todo.submission_assignment_id ? { todo_status_id: draft.todo_status_id } : {}), ...duePatch }),
       });
       onSaved({ ...draft, ...updated });
@@ -80,14 +83,33 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
         </div>
         <div className="field-stack"><span className="field-label">{t("colTags")}</span><TagInput value={draft.tags.join(',')} onChange={(value) => setDraft({ ...draft, tags: value.split(',').map((tag) => tag.trim()).filter(Boolean) })} suggestions={tagSuggestions} alwaysShowPlaceholder placeholder={t("addTagPlaceholder")} readOnly={!editable} /></div>
         <div className="field-stack"><span className="field-label">{t("originLabel")}</span>
-          {todo.protocol_id ? <a className="todo-edit-source" href={`/protocols/${todo.protocol_id}`}>
+          {todo.task_package_name ? (
+            <span title={t("fromPackageTitle")}><Badge variant="info">{todo.task_package_name}</Badge></span>
+          ) : todo.protocol_id ? <a className="todo-edit-source" href={`/protocols/${todo.protocol_id}`}>
             <span className="todo-edit-source-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 3h8l4 4v14H6zM14 3v5h4" /></svg></span>
             <span><strong>{todo.protocol_number}{todo.protocol_title ? ` · ${todo.protocol_title}` : ''}</strong>{todo.block_title && <small>{t("agendaItemNamed", { title: todo.block_title })}</small>}</span><span className="todo-edit-source-arrow" aria-hidden="true">↗</span>
           </a> : todo.reference_link && /^https?:\/\//i.test(todo.reference_link) ? <a className="todo-edit-source" href={todo.reference_link} target="_blank" rel="noreferrer">{t("submissionBoxLink")} <span aria-hidden="true">↗</span></a> : <span className="muted">{todo.submission_assignment_id ? t("submissionBoxLink") : t("manuallyCreated")}</span>} {/* i18n-ok: JS-Ausdruck, kein UI-Text */}
         </div>
       </div>
       <aside className="todo-edit-sidebar">
-        <div className="field-stack"><span className="field-label">{t("assignedToLabel")}</span>{editable ? <TodoAssigneeMenu label={draft.assigned_participant_name || t("nobodyLabel")} participants={participants} isOptionSelectable={(option) => isParticipantSelectable(participants.find((p) => p.id === option.id) ?? {})} activeId={draft.assigned_participant_id} onChange={(option) => setDraft({ ...draft, assigned_participant_id: option.id, assigned_participant_name: option.id ? option.display_name : null })} /> : <span>{draft.assigned_participant_name || t("nobodyLabel")}</span>}</div>
+        <div className="field-stack">
+          <span className="field-label">{t("assignedToLabel")}</span>
+          {editable ? <SearchableMultiSelect
+            options={participants}
+            getId={(person) => person.id}
+            getLabel={(person) => person.display_name}
+            isOptionSelectable={(person) => assignedIds.includes(person.id) || isParticipantSelectable(person)}
+            values={assignedIds}
+            triggerLabel={assignedLabel}
+            triggerProps={{ "aria-label": t("assignedToLabel") }}
+            onChange={(ids) => setDraft({
+              ...draft,
+              assigned_participant_ids: ids,
+              assigned_participant_id: ids[0] ?? null,
+              assigned_participant_name: ids.map((id) => participants.find((person) => person.id === id)?.display_name).filter(Boolean).join(", ") || null,
+            })}
+          /> : <span>{assignedLabel}</span>}
+        </div>
         <div className="field-stack"><span className="field-label">{t("dueFieldLabel")}</span>{editable ? <TodoDueMenu todoId={todo.id} label={dueLabel} dueDate={draft.due_date} onApply={(patch, label) => { setDuePatch(patch); setDraft({ ...draft, ...patch, resolved_due_date: patch.due_date ?? null, resolved_due_label: label }); }} /> : <span>{dueLabel}</span>}
           {duePatch && <small className="muted">{t("appliedOnSaveHint")}</small>}
           {!duePatch && overdueDays > 0 && !['done', 'cancelled'].includes(draft.todo_status_code || '') && <small className="todo-edit-overdue">{t("overdueSince", { count: overdueDays })}</small>} {/* i18n-ok: JS-Ausdruck, kein UI-Text */}

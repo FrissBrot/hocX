@@ -244,6 +244,7 @@ class ProtocolTodoCreate(BaseModel):
 
 
 class ProtocolTodoUpdate(BaseModel):
+    assigned_participant_ids: list[uuid.UUID] | None = None
     task: str | None = None
     assigned_user_id: uuid.UUID | None = None
     assigned_participant_id: uuid.UUID | None = None

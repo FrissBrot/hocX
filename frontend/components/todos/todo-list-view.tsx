@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { CalendarLinkHint } from "@/components/connections/calendar-link-hint";
-import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
@@ -515,11 +514,6 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
               </td>
               <td>
                 <span className="todo-row-task-text">{todo.task}</span>
-                {todo.task_package_name ? (
-                  <span className="todo-row-package" title={t("fromPackageTitle")}>
-                    <Badge variant="info">{todo.task_package_name}</Badge>
-                  </span>
-                ) : null}
               </td>
               <td>
                 {tags.length > 0 ? (
