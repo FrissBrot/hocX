@@ -400,18 +400,18 @@ export function ProtocolEditor({
     router.push("/protocols");
   };
   const timers = useRef<Record<string, number>>({});
-  // Tracks, per text block, the content we most recently sent (or are about to send) as the
-  // save's optimistic-concurrency baseline (see handleTextChange's expected_content). Reading
-  // this straight from `elements` state instead used to go stale whenever a user resumed
-  // typing before the *previous* debounced save's response had come back and updated
-  // `elements`: the new save then sent the *old* baseline while the server already held the
-  // first save's content, so the backend correctly reported a 409 against a conflict that
-  // never really involved another person - just this same user's own two in-flight saves -
-  // and the conflict handler then visibly replaced the just-typed text with the (by-then
-  // outdated) server version. Updated optimistically the instant a save is dispatched, not
-  // only once its response lands, so a same-user save fired while the previous one is still
-  // in flight always chains off the right baseline.
+  // Per text block: the content the server is known to hold right now - the
+  // optimistic-concurrency baseline sent as expected_content (see handleTextChange). Only
+  // ever set from a confirmed server state (save response, conflict refresh, another user's
+  // collab update), never from merely typed text. An earlier version advanced it on every
+  // keystroke; since the save is debounced, intermediate keystrokes are never sent, so the
+  // next real save claimed a baseline the server had never seen -> 409 on practically every
+  // edit of more than one character, and the conflict handler replaced the just-typed text
+  // with the server version even though nobody else was editing.
   const textBaselineRef = useRef<Record<string, string>>({});
+  // Per text block: the currently running save. Saves of the same block are serialized so a
+  // save never reads the baseline before the previous save's response has updated it.
+  const textSaveChainRef = useRef<Record<string, Promise<void>>>({});
   const shouldScrollToElementRef = useRef(false);
   // Separate from shouldScrollToElementRef: only an explicit jump (sidebar/keyboard/search,
   // set in focusElement below) should steal focus into a field. Restoring the remembered
@@ -1066,20 +1066,22 @@ export function ProtocolEditor({
     }
   }
 
+  // See textBaselineRef's declaration.
+  function knownServerText(protocolElementBlockId: string) {
+    return (
+      textBaselineRef.current[protocolElementBlockId] ??
+      (elements.flatMap((element) => element.blocks).find((block) => block.id === protocolElementBlockId)?.text_content ?? "")
+    );
+  }
+
   function handleTextChange(protocolElementBlockId: string, content: string) {
     const mutationKey = `protocol-text:${protocolElementBlockId}`;
-    // See textBaselineRef's declaration: prefer the baseline of a still-in-flight save over
-    // `elements` state, which only catches up once that save's response has landed.
-    const expectedContent =
-      textBaselineRef.current[protocolElementBlockId] ??
-      (elements.flatMap((element) => element.blocks).find((block) => block.id === protocolElementBlockId)?.text_content ?? "");
-    textBaselineRef.current[protocolElementBlockId] = content;
     saveDraft(mutationKey, content);
     queueMutation({
       key: mutationKey,
       path: `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
       method: "PUT",
-      body: JSON.stringify({ content, expected_content: expectedContent }),
+      body: JSON.stringify({ content, expected_content: knownServerText(protocolElementBlockId) }),
     });
     setTextDrafts((current) => ({ ...current, [protocolElementBlockId]: content }));
     setStatus(protocolElementBlockId, "saving");
@@ -1088,59 +1090,75 @@ export function ProtocolEditor({
       window.clearTimeout(timers.current[protocolElementBlockId]);
     }
 
-    timers.current[protocolElementBlockId] = window.setTimeout(async () => {
-      try {
-        const result = await browserApiFetch<{ tracked_dirty: boolean; tracked_baseline_content: string | null }>(
-          `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
-          { method: "PUT", body: JSON.stringify({ content, expected_content: expectedContent }) }
-        );
-        updateBlockInState(protocolElementBlockId, (block) => ({
-          ...block,
-          text_content: content,
-          tracked_dirty: result.tracked_dirty,
-          tracked_baseline_content: result.tracked_baseline_content,
-        }));
+    timers.current[protocolElementBlockId] = window.setTimeout(() => {
+      const previousSave = textSaveChainRef.current[protocolElementBlockId] ?? Promise.resolve();
+      textSaveChainRef.current[protocolElementBlockId] = previousSave.then(() => sendTextSave(protocolElementBlockId, content));
+    }, 700);
+  }
+
+  // Runs serialized per block (see textSaveChainRef), so expected_content is read only after
+  // any previous save of this block has landed and updated the baseline.
+  async function sendTextSave(protocolElementBlockId: string, content: string) {
+    const mutationKey = `protocol-text:${protocolElementBlockId}`;
+    const expectedContent = knownServerText(protocolElementBlockId);
+    // The user may have kept typing while this save was waiting/in flight; that newer text
+    // has its own draft, outbox entry and pending save, which this one must not clobber.
+    const isLatestEdit = () => readDraft(mutationKey) === content;
+    try {
+      const result = await browserApiFetch<{ tracked_dirty: boolean; tracked_baseline_content: string | null }>(
+        `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
+        { method: "PUT", body: JSON.stringify({ content, expected_content: expectedContent }) }
+      );
+      textBaselineRef.current[protocolElementBlockId] = content;
+      updateBlockInState(protocolElementBlockId, (block) => ({
+        ...block,
+        text_content: content,
+        tracked_dirty: result.tracked_dirty,
+        tracked_baseline_content: result.tracked_baseline_content,
+      }));
+      if (isLatestEdit()) {
         setStatus(protocolElementBlockId, "saved");
         clearDraft(mutationKey);
         removeMutation(mutationKey);
-        collab.sendFieldUpdate(`block-${protocolElementBlockId}`, {
-          text_content: content,
-          tracked_dirty: result.tracked_dirty,
-          tracked_baseline_content: result.tracked_baseline_content,
-        });
-      } catch (err: unknown) {
-        setStatus(protocolElementBlockId, "error");
-        if (err instanceof ApiError && err.kind === "conflict") {
-          // A real edit conflict, not a connectivity problem: someone else already saved a
-          // newer version of this exact text since we last loaded it. `content` here is
-          // already-rejected - re-queueing it (the generic path below) would just keep
-          // losing to the same 409 on every future flush with the misleading "will save
-          // automatically once back online" toast. Instead: drop it from the outbox so it
-          // stops being retried (fix for the outbox-stall issue above applies to this item
-          // too - it must end up explicitly discarded, not silently stuck), pull in the
-          // current server content, and tell the user plainly what happened. Their locally
-          // typed text isn't lost - saveDraft() above already wrote it to
-          // `protocol-text:${id}` in localStorage as a fallback; it's just not queued for
-          // silent resend anymore.
-          discardMutation(mutationKey);
-          void refreshBlockTextFromServer(protocolElementBlockId);
-          showToast(
-            "Konflikt: Diese Stelle wurde inzwischen von jemand anderem gespeichert. Die aktuelle Version wurde geladen – Ihre letzte Änderung wurde nicht übernommen, ist aber als lokaler Entwurf gesichert.",
-            "error",
-            { onMessageClick: () => void refreshBlockTextFromServer(protocolElementBlockId) }
-          );
-          return;
-        }
-        queueMutation({
-          key: mutationKey,
-          path: `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
-          method: "PUT",
-          body: JSON.stringify({ content, expected_content: expectedContent }),
-          lastError: err instanceof Error ? err.message : t("textSaveFailed"),
-        });
-        showToast(t("textSavedLocallyOffline"), "error");
       }
-    }, 700);
+      collab.sendFieldUpdate(`block-${protocolElementBlockId}`, {
+        text_content: content,
+        tracked_dirty: result.tracked_dirty,
+        tracked_baseline_content: result.tracked_baseline_content,
+      });
+    } catch (err: unknown) {
+      setStatus(protocolElementBlockId, "error");
+      if (err instanceof ApiError && err.kind === "conflict") {
+        // A real edit conflict, not a connectivity problem: someone else already saved a
+        // newer version of this exact text since we last loaded it. `content` here is
+        // already-rejected - re-queueing it (the generic path below) would just keep
+        // losing to the same 409 on every future flush with the misleading "will save
+        // automatically once back online" toast. Instead: drop it from the outbox so it
+        // stops being retried (fix for the outbox-stall issue above applies to this item
+        // too - it must end up explicitly discarded, not silently stuck), pull in the
+        // current server content, and tell the user plainly what happened. Their locally
+        // typed text isn't lost - saveDraft() above already wrote it to
+        // `protocol-text:${id}` in localStorage as a fallback; it's just not queued for
+        // silent resend anymore.
+        discardMutation(mutationKey);
+        void refreshBlockTextFromServer(protocolElementBlockId);
+        showToast(
+          "Konflikt: Diese Stelle wurde inzwischen von jemand anderem gespeichert. Die aktuelle Version wurde geladen – Ihre letzte Änderung wurde nicht übernommen, ist aber als lokaler Entwurf gesichert.",
+          "error",
+          { onMessageClick: () => void refreshBlockTextFromServer(protocolElementBlockId) }
+        );
+        return;
+      }
+      if (!isLatestEdit()) return;
+      queueMutation({
+        key: mutationKey,
+        path: `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
+        method: "PUT",
+        body: JSON.stringify({ content, expected_content: expectedContent }),
+        lastError: err instanceof Error ? err.message : t("textSaveFailed"),
+      });
+      showToast(t("textSavedLocallyOffline"), "error");
+    }
   }
 
   // "Ausblenden" for a text block's red tracked-change highlight (whole block at once -

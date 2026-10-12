@@ -34,3 +34,23 @@ def test_text_update_rejects_stale_expected_content(db, monkeypatch):
 
     assert exc_info.value.status_code == 409
     assert "lokale Entwurf bleibt erhalten" in exc_info.value.detail
+
+
+def test_text_update_resending_already_stored_content_is_not_a_conflict(db, monkeypatch):
+    # The offline outbox may resend a save the direct autosave request already stored.
+    tenant = make_tenant(db)
+    template = make_template(db, tenant.id)
+    protocol = make_protocol(db, tenant.id, template.id)
+    element = make_protocol_element(db, protocol.id)
+    block = make_protocol_element_block(db, element.id, configuration_snapshot_json={})
+    user = make_current_user(tenant.id)
+    monkeypatch.setattr(protocol_elements, "_ensure_block_not_locked_by_other", lambda *args: None)
+
+    protocol_elements.put_protocol_text(
+        block.public_id, ProtocolTextUpdate(content="erste Version", expected_content=""), db=db, user=user
+    )
+    saved = protocol_elements.put_protocol_text(
+        block.public_id, ProtocolTextUpdate(content="erste Version", expected_content=""), db=db, user=user
+    )
+
+    assert saved.content == "erste Version"
