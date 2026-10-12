@@ -79,6 +79,13 @@ probe_from_backend() {
   "${DC[@]}" exec -T backend python3 -c "import urllib.request,sys; resp=urllib.request.urlopen('$url', timeout=10); sys.exit(0 if resp.status < 500 else 1)"
 }
 
+# Landet die Website-Domain auf /login, erkennt das Frontend sie nicht als Website (z. B.
+# TRAEFIK_WEBSITE_DOMAIN fehlt im Container) - der reine Statuscode waere trotzdem 200.
+probe_website_from_backend() {
+  local url="$1"
+  "${DC[@]}" exec -T backend python3 -c "import urllib.request,urllib.parse,sys; resp=urllib.request.urlopen('$url', timeout=10); path=urllib.parse.urlparse(resp.url).path; sys.exit(0 if resp.status < 400 and not path.startswith('/login') else 1)"
+}
+
 check_backend_health() {
   probe_from_backend "http://localhost:8000/api/health"
 }
@@ -128,11 +135,17 @@ if [ "${TRAEFIK_WEBSECURE_BIND:-0.0.0.0}" != "0.0.0.0" ]; then
   if [ -n "${TRAEFIK_DOCS_DOMAIN:-}" ]; then
     note "  Manuell ueber den privaten Tunnel pruefen: https://${TRAEFIK_DOCS_DOMAIN}/"
   fi
+  if [ -n "${TRAEFIK_WEBSITE_DOMAIN:-}" ]; then
+    note "  Manuell ueber den privaten Tunnel pruefen: https://${TRAEFIK_WEBSITE_DOMAIN}/"
+  fi
 else
   run_check "Hauptdomain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_DOMAIN}/login"
   run_check "Abgabebox antwortet via Traefik" probe_from_backend "https://${TRAEFIK_ABGABEBOX_DOMAIN}/"
   if [ -n "${TRAEFIK_DOCS_DOMAIN:-}" ]; then
     run_check "Docs-Domain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_DOCS_DOMAIN}/"
+  fi
+  if [ -n "${TRAEFIK_WEBSITE_DOMAIN:-}" ]; then
+    run_check "Website-Domain liefert die Landing Page via Traefik" probe_website_from_backend "https://${TRAEFIK_WEBSITE_DOMAIN}/"
   fi
 fi
 

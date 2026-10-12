@@ -472,6 +472,12 @@ kritischen Problem oder wenn der Systemstatus älter als 3 Minuten ist (`status`
 / `stale`). Die Antwort enthält nur Zähler. Wer auch bei Warnungen alarmiert werden will:
 Monitor-Typ **HTTP(s) - Keyword** mit dem Keyword `"warnings":0`.
 
+Ist die Landing Page aktiv (`TRAEFIK_WEBSITE_DOMAIN` gesetzt), einen zweiten Monitor anlegen:
+Typ **HTTP(s)** auf `https://<TRAEFIK_WEBSITE_DOMAIN>/`, akzeptierte Statuscodes `200-299`,
+**Zertifikatsablauf-Benachrichtigung** aktivieren. Die Website läuft im `frontend`-Container
+mit; der Systemstatus sieht deshalb nur den Container, nicht ein falsches Routing, fehlendes
+DNS oder ein abgelaufenes Zertifikat der Website-Domain.
+
 ### Wenn etwas nicht stimmt
 
 - „Systemstatus veraltet“: Backend-Logs auf `Background-Loop system_monitor` prüfen;
