@@ -6,9 +6,9 @@ import { useTranslations } from "next-intl";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { Badge } from "@/components/ui/badge";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
-import { SearchableMultiSelect, SearchableSelect } from "@/components/ui/searchable-select";
+import { SearchableMultiSelect } from "@/components/ui/searchable-select";
 import { TagInput } from "@/components/ui/tag-input";
-import { EligibleResponsibleList, eligibleResponsibleList } from "@/lib/utils/responsible-lists";
+import { eligibleResponsibleList } from "@/lib/utils/responsible-lists";
 import {
   ParticipantSummary,
   StructuredListDefinition,
@@ -51,6 +51,12 @@ const RECURRENCE_TYPES: TaskPackageRecurrenceType[] = ["once", "monthly", "weekl
 const DUE_TYPES: TaskPackageDueRuleType[] = ["none", "fixed", "offset"];
 const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6];
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+type EntryOption = { key: string; listId: string; entryId: string; label: string };
+
+function entryKey(listId: string, entryId: string) {
+  return `${listId}:${entryId}`;
+}
 
 function formFromItem(item: TaskPackageItem | null): FormState {
   const offset = item?.due_rule.offset_days ?? 0;
@@ -117,37 +123,65 @@ export function TaskPackageItemModal({
   const t = useTranslations("taskPackages");
   const tCommon = useTranslations("common");
   const [form, setForm] = useState<FormState>(() => formFromItem(item));
-  const [listId, setListId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     const initial = formFromItem(item);
     setForm(initial);
-    setListId(initial.responsible.find((entry) => entry.list_definition_id)?.list_definition_id ?? responsibleLists[0]?.id ?? null);
-  }, [open, item, responsibleLists]);
+  }, [open, item]);
 
   const participantsById = useMemo(() => new Map(participants.map((participant) => [participant.id, participant])), [participants]);
   const context: ResponsibleContext = useMemo(
     () => ({ listsById: new Map(responsibleLists.map((definition) => [definition.id, definition])), entriesByList, participantsById }),
     [responsibleLists, entriesByList, participantsById]
   );
-  const selectedListMeta: EligibleResponsibleList | null = useMemo(() => {
-    const definition = responsibleLists.find((candidate) => candidate.id === listId);
-    return definition ? eligibleResponsibleList(definition) : null;
-  }, [responsibleLists, listId]);
-  const selectedEntryIds = form.responsible.filter((entry) => entry.list_definition_id === listId).map((entry) => entry.list_entry_id ?? "");
+  // Zeilen aller passenden Listen in einer Auswahl; der Listenname steht nur davor, wenn es mehrere gibt.
+  const entryOptions: EntryOption[] = useMemo(() => {
+    const options: EntryOption[] = [];
+    for (const definition of responsibleLists) {
+      const meta = eligibleResponsibleList(definition);
+      for (const entry of entriesByList[definition.id] ?? []) {
+        const label = meta ? entryLabel(entry, meta, participantsById, t) : entry.id;
+        options.push({
+          key: entryKey(definition.id, entry.id),
+          listId: definition.id,
+          entryId: entry.id,
+          label: responsibleLists.length > 1 ? t("entryWithList", { list: definition.name, entry: label }) : label,
+        });
+      }
+    }
+    return options;
+  }, [responsibleLists, entriesByList, participantsById, t]);
+  const selectedEntryKeys = form.responsible
+    .filter((entry) => entry.list_definition_id && entry.list_entry_id)
+    .map((entry) => entryKey(entry.list_definition_id ?? "", entry.list_entry_id ?? ""));
   const fixedParticipantIds = form.responsible.filter((entry) => entry.participant_id).map((entry) => entry.participant_id ?? "");
+  const offsetAnchor = form.recurrenceType === "once" ? t("anchor.cycleStart") : form.recurrenceType === "events" ? t("anchor.event") : t("anchor.occurrence");
 
-  function setEntriesForList(entryIds: string[]) {
-    if (!listId) return;
-    const others = form.responsible.filter((entry) => entry.list_definition_id !== listId);
-    setForm({ ...form, responsible: [...others, ...entryIds.map((id) => ({ list_definition_id: listId, list_entry_id: id }))] });
+  // Reihenfolge der bestehenden Verantwortlichen bleibt erhalten, neu gewählte kommen ans Ende.
+  function setEntries(keys: string[]) {
+    const wanted = new Set(keys);
+    const kept = form.responsible.filter((entry) => entry.participant_id || wanted.has(entryKey(entry.list_definition_id ?? "", entry.list_entry_id ?? "")));
+    const existing = new Set(selectedEntryKeys);
+    const added = entryOptions
+      .filter((option) => wanted.has(option.key) && !existing.has(option.key))
+      .map((option) => ({ list_definition_id: option.listId, list_entry_id: option.entryId }));
+    setForm({ ...form, responsible: [...kept, ...added] });
   }
 
   function setFixedParticipants(ids: string[]) {
-    const lists = form.responsible.filter((entry) => !entry.participant_id);
-    setForm({ ...form, responsible: [...lists, ...ids.map((id) => ({ participant_id: id }))] });
+    const wanted = new Set(ids);
+    const kept = form.responsible.filter((entry) => !entry.participant_id || wanted.has(entry.participant_id));
+    const existing = new Set(fixedParticipantIds);
+    const added = ids.filter((id) => !existing.has(id)).map((id) => ({ participant_id: id }));
+    setForm({ ...form, responsible: [...kept, ...added] });
+  }
+
+  // Ein festes Datum gibt es nur bei "Einmal pro Zyklus" - beim Wechsel fällt es auf "Keine" zurück.
+  function setRecurrenceType(type: TaskPackageRecurrenceType) {
+    const dueType = type !== "once" && form.dueType === "fixed" ? "none" : form.dueType;
+    setForm({ ...form, recurrenceType: type, dueType });
   }
 
   function removeResponsible(index: number) {
@@ -186,166 +220,144 @@ export function TaskPackageItemModal({
           </div>
         </div>
 
-        <fieldset className="task-package-fieldset">
-          <legend className="field-label">{t("responsibleTitle")}</legend>
-          <p className="field-help">{t("responsibleHelp")}</p>
-          {responsibleLists.length === 0 ? (
-            <p className="muted">{t("noResponsibleLists")}</p>
-          ) : (
-            <div className="two-col">
-              <div className="field-stack">
-                <span className="field-label">{t("listLabel")}</span>
-                <SearchableSelect
-                  options={responsibleLists}
-                  getId={(definition) => definition.id}
-                  getLabel={(definition) => definition.name}
-                  value={listId}
-                  onChange={(definition) => setListId(definition?.id ?? null)}
-                  placeholder={t("listPlaceholder")}
-                />
-              </div>
-              <div className="field-stack">
-                <span className="field-label">{t("entriesLabel")}</span>
+        <div className="field-stack">
+          <span className="field-label">{t("responsibleTitle")}</span>
+          <div className="task-package-responsible-box">
+            {form.responsible.map((entry, index) => (
+              <span key={`${entry.list_entry_id ?? entry.participant_id}-${index}`} className="task-package-chip">
+                <Badge variant={entry.participant_id ? "neutral" : "info"}>{responsibleLabel(entry, context, t)}</Badge>
+                <button
+                  type="button"
+                  className="button-icon-soft button-icon-soft-sm"
+                  aria-label={t("removeResponsible", { name: responsibleLabel(entry, context, t) })}
+                  onClick={() => removeResponsible(index)}
+                >
+                  <ActionIcon name="close" />
+                </button>
+              </span>
+            ))}
+            {form.responsible.length === 0 ? <span className="muted task-package-responsible-empty">{t("responsibleNone")}</span> : null}
+            <span className="task-package-responsible-add">
+              {entryOptions.length > 0 ? (
                 <SearchableMultiSelect
-                  options={listId ? entriesByList[listId] ?? [] : []}
-                  getId={(entry) => entry.id}
-                  getLabel={(entry) => (selectedListMeta ? entryLabel(entry, selectedListMeta, participantsById, t) : entry.id)}
-                  values={selectedEntryIds}
-                  onChange={setEntriesForList}
-                  placeholder={t("entriesPlaceholder")}
-                  disabled={!listId}
+                  options={entryOptions}
+                  getId={(option) => option.key}
+                  getLabel={(option) => option.label}
+                  values={selectedEntryKeys}
+                  onChange={setEntries}
+                  triggerLabel={t("addEntry")}
+                  className="task-package-add-trigger"
                 />
-              </div>
-            </div>
-          )}
-          <div className="field-stack">
-            <span className="field-label">{t("fixedPeopleLabel")}</span>
-            <SearchableMultiSelect
-              options={participants}
-              getId={(participant) => participant.id}
-              getLabel={(participant) => participant.display_name}
-              values={fixedParticipantIds}
-              onChange={setFixedParticipants}
-              placeholder={t("fixedPeoplePlaceholder")}
-            />
+              ) : null}
+              <SearchableMultiSelect
+                options={participants}
+                getId={(participant) => participant.id}
+                getLabel={(participant) => participant.display_name}
+                values={fixedParticipantIds}
+                onChange={setFixedParticipants}
+                triggerLabel={t("addPerson")}
+                className="task-package-add-trigger"
+              />
+            </span>
           </div>
-          {form.responsible.length > 0 ? (
-            <div className="task-package-chips">
-              {form.responsible.map((entry, index) => (
-                <span key={`${entry.list_entry_id ?? entry.participant_id}-${index}`} className="task-package-chip">
-                  <Badge variant={entry.participant_id ? "neutral" : "info"}>{responsibleLabel(entry, context, t)}</Badge>
-                  <button
-                    type="button"
-                    className="button-icon-soft button-icon-soft-sm"
-                    aria-label={t("removeResponsible", { name: responsibleLabel(entry, context, t) })}
-                    onClick={() => removeResponsible(index)}
-                  >
-                    <ActionIcon name="close" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="muted">{t("responsibleNone")}</p>
-          )}
-        </fieldset>
+          <span className="field-help">{responsibleLists.length > 0 ? t("responsibleHelp") : t("noResponsibleLists")}</span>
+        </div>
 
-        <div className="two-col task-package-rules">
-          <div className="field-stack">
-            <label className="field-stack">
-              <span className="field-label">{t("recurrenceLabel")}</span>
-              <select value={form.recurrenceType} onChange={(event) => setForm({ ...form, recurrenceType: event.target.value as TaskPackageRecurrenceType })}>
-                {RECURRENCE_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {t(`recurrenceType.${type}`)}
+        <div className="field-stack" role="radiogroup" aria-label={t("recurrenceLabel")}>
+          <span className="field-label">{t("recurrenceLabel")}</span>
+          <div className="role-picker">
+            {RECURRENCE_TYPES.map((type) => (
+              <label key={type} className="role-picker-option">
+                <input type="radio" name="task-package-recurrence" value={type} checked={form.recurrenceType === type} onChange={() => setRecurrenceType(type)} />
+                {t(`recurrenceType.${type}`)}
+              </label>
+            ))}
+          </div>
+          {form.recurrenceType === "monthly" ? (
+            <label className="field-stack task-package-subfield">
+              <span className="field-label">{t("dayOfMonthLabel")}</span>
+              <input type="number" min={1} max={31} required value={form.dayOfMonth} onChange={(event) => setForm({ ...form, dayOfMonth: event.target.value })} />
+              <span className="field-help">{t("dayOfMonthHelp")}</span>
+            </label>
+          ) : null}
+          {form.recurrenceType === "weekly" ? (
+            <label className="field-stack task-package-subfield">
+              <span className="field-label">{t("weekdayLabel")}</span>
+              <select value={form.weekday} onChange={(event) => setForm({ ...form, weekday: event.target.value })}>
+                {WEEKDAYS.map((weekday) => (
+                  <option key={weekday} value={weekday}>
+                    {t(`weekdays.${weekday}`)}
                   </option>
                 ))}
               </select>
             </label>
-            {form.recurrenceType === "monthly" ? (
-              <label className="field-stack">
-                <span className="field-label">{t("dayOfMonthLabel")}</span>
-                <input type="number" min={1} max={31} required value={form.dayOfMonth} onChange={(event) => setForm({ ...form, dayOfMonth: event.target.value })} />
-                <span className="field-help">{t("dayOfMonthHelp")}</span>
+          ) : null}
+          {form.recurrenceType === "events" ? (
+            <div className="field-stack task-package-subfield">
+              <span className="field-label">{t("eventTagLabel")}</span>
+              <TagInput
+                value={form.eventTag}
+                onChange={(value) => setForm({ ...form, eventTag: value })}
+                suggestions={eventTags}
+                multi={false}
+                placeholder={t("eventTagPlaceholder")}
+              />
+              <span className="field-help">{t("eventTagHelp")}</span>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="field-stack" role="radiogroup" aria-label={t("dueLabel")}>
+          <span className="field-label">{t("dueLabel")}</span>
+          <div className="role-picker">
+            {DUE_TYPES.map((type) => (
+              <label key={type} className="role-picker-option">
+                <input
+                  type="radio"
+                  name="task-package-due"
+                  value={type}
+                  checked={form.dueType === type}
+                  disabled={type === "fixed" && form.recurrenceType !== "once"}
+                  onChange={() => setForm({ ...form, dueType: type })}
+                />
+                {t(`dueType.${type}`)}
               </label>
-            ) : null}
-            {form.recurrenceType === "weekly" ? (
+            ))}
+          </div>
+          {form.recurrenceType !== "once" ? <span className="field-help">{t("fixedOnlyOnceHint")}</span> : null}
+          {form.dueType === "fixed" ? (
+            <div className="two-col task-package-subfield">
               <label className="field-stack">
-                <span className="field-label">{t("weekdayLabel")}</span>
-                <select value={form.weekday} onChange={(event) => setForm({ ...form, weekday: event.target.value })}>
-                  {WEEKDAYS.map((weekday) => (
-                    <option key={weekday} value={weekday}>
-                      {t(`weekdays.${weekday}`)}
+                <span className="field-label">{t("dueDayLabel")}</span>
+                <input type="number" min={1} max={31} required value={form.dueDay} onChange={(event) => setForm({ ...form, dueDay: event.target.value })} />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">{t("dueMonthLabel")}</span>
+                <select value={form.dueMonth} onChange={(event) => setForm({ ...form, dueMonth: event.target.value })}>
+                  {MONTHS.map((month) => (
+                    <option key={month} value={month}>
+                      {t(`months.${month}`)}
                     </option>
                   ))}
                 </select>
               </label>
-            ) : null}
-            {form.recurrenceType === "events" ? (
-              <div className="field-stack">
-                <span className="field-label">{t("eventTagLabel")}</span>
-                <TagInput
-                  value={form.eventTag}
-                  onChange={(value) => setForm({ ...form, eventTag: value })}
-                  suggestions={eventTags}
-                  multi={false}
-                  placeholder={t("eventTagPlaceholder")}
-                />
-                <span className="field-help">{t("eventTagHelp")}</span>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="field-stack">
-            <label className="field-stack">
-              <span className="field-label">{t("dueLabel")}</span>
-              <select value={form.dueType} onChange={(event) => setForm({ ...form, dueType: event.target.value as TaskPackageDueRuleType })}>
-                {DUE_TYPES.map((type) => (
-                  <option key={type} value={type} disabled={type === "fixed" && form.recurrenceType !== "once"}>
-                    {t(`dueType.${type}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {form.dueType === "fixed" ? (
-              <div className="two-col">
-                <label className="field-stack">
-                  <span className="field-label">{t("dueDayLabel")}</span>
-                  <input type="number" min={1} max={31} required value={form.dueDay} onChange={(event) => setForm({ ...form, dueDay: event.target.value })} />
-                </label>
-                <label className="field-stack">
-                  <span className="field-label">{t("dueMonthLabel")}</span>
-                  <select value={form.dueMonth} onChange={(event) => setForm({ ...form, dueMonth: event.target.value })}>
-                    {MONTHS.map((month) => (
-                      <option key={month} value={month}>
-                        {t(`months.${month}`)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            ) : null}
-            {form.dueType === "offset" ? (
-              <div className="two-col">
-                <label className="field-stack">
-                  <span className="field-label">{t("offsetDaysLabel")}</span>
-                  <input type="number" min={0} max={366} required value={form.offsetDays} onChange={(event) => setForm({ ...form, offsetDays: event.target.value })} />
-                </label>
-                <label className="field-stack">
-                  <span className="field-label">{t("offsetDirectionLabel")}</span>
-                  <select value={form.offsetDirection} onChange={(event) => setForm({ ...form, offsetDirection: event.target.value as "after" | "before" })}>
-                    <option value="after">
-                      {t("offsetAfter", { anchor: form.recurrenceType === "once" ? t("anchor.cycleStart") : form.recurrenceType === "events" ? t("anchor.event") : t("anchor.occurrence") })}
-                    </option>
-                    <option value="before">
-                      {t("offsetBefore", { anchor: form.recurrenceType === "once" ? t("anchor.cycleStart") : form.recurrenceType === "events" ? t("anchor.event") : t("anchor.occurrence") })}
-                    </option>
-                  </select>
-                </label>
-              </div>
-            ) : null}
-            {fixedNotAllowed ? <p className="field-help">{t("fixedOnlyOnceHint")}</p> : null}
-          </div>
+            </div>
+          ) : null}
+          {form.dueType === "offset" ? (
+            <div className="two-col task-package-subfield">
+              <label className="field-stack">
+                <span className="field-label">{t("offsetDaysLabel")}</span>
+                <input type="number" min={0} max={366} required value={form.offsetDays} onChange={(event) => setForm({ ...form, offsetDays: event.target.value })} />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">{t("offsetDirectionLabel")}</span>
+                <select value={form.offsetDirection} onChange={(event) => setForm({ ...form, offsetDirection: event.target.value as "after" | "before" })}>
+                  <option value="after">{t("offsetAfter", { anchor: offsetAnchor })}</option>
+                  <option value="before">{t("offsetBefore", { anchor: offsetAnchor })}</option>
+                </select>
+              </label>
+            </div>
+          ) : null}
         </div>
 
         <p className="field-help">{t("propagationHelp")}</p>
