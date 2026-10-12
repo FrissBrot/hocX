@@ -586,6 +586,47 @@ class ProtocolService:
             rendered = rendered.replace(token, value)
         return rendered
 
+    def _pick_available_number(self, db: Session, *, tenant_id: int, template: Template,
+                               counts: dict[str, int], protocol_date: date) -> str | None:
+        has_counter = any(self._pattern_uses_token(template.protocol_number_pattern, token)
+                          for token in ("n", "n_year", "n_month", "n_cycle", "n_cycle_all"))
+        for bump in range(100 if has_counter else 1):
+            bumped = {**counts, **{key: counts[key] + bump
+                       for key in ("n", "n_year", "n_month", "n_cycle", "n_cycle_all")}}
+            candidate = self._format_pattern(template.protocol_number_pattern, counts=bumped, protocol_date=protocol_date)
+            if not candidate:
+                break
+            if not db.scalar(select(Protocol.id).where(
+                Protocol.tenant_id == tenant_id, Protocol.protocol_number == candidate
+            )):
+                return candidate
+        return None
+
+    def preview_names(self, db: Session, *, tenant_id: int, template: Template,
+                      protocol_date: date) -> dict[str, str | None]:
+        """Dieselbe Nummernwahl wie beim Erstellen, ohne bleibende Änderungen.
+
+        Rückdatierte Protokolle verschieben offene Geschwister. Diese Verschiebung
+        wird in einem stets zurückgerollten Savepoint simuliert, damit auch dort
+        die Vorschau die tatsächliche freie Nummer zeigt.
+        """
+        from app.models import CycleConfig
+        cfg = db.get(CycleConfig, template.cycle_config_id) if template.cycle_config_id else None
+        reset_month, reset_day = (cfg.reset_month, cfg.reset_day) if cfg else (12, 31)
+        counts = self._sequence_counts(db, tenant_id=tenant_id, template_id=template.id,
+                                      protocol_date=protocol_date, reset_month=reset_month, reset_day=reset_day)
+        savepoint = db.begin_nested()
+        try:
+            self._renumber_later_siblings(db, tenant_id=tenant_id, template=template,
+                                         protocol_date=protocol_date, reset_month=reset_month, reset_day=reset_day)
+            return {
+                "protocol_number": self._pick_available_number(db, tenant_id=tenant_id, template=template,
+                                                               counts=counts, protocol_date=protocol_date),
+                "title": self._format_pattern(template.title_pattern, counts=counts, protocol_date=protocol_date),
+            }
+        finally:
+            savepoint.rollback()
+
     def preview_title(
         self,
         db: Session,
@@ -1397,31 +1438,11 @@ class ProtocolService:
                 "{cycle_year_end}": str(counts["cycle_year_end"]),
             }
 
-        _has_counter_token = any(
-            self._pattern_uses_token(template.protocol_number_pattern, token)
-            for token in ("n", "n_year", "n_month", "n_cycle", "n_cycle_all")
-        )
-
         def _pick_protocol_number(current_counts: dict[str, int]) -> str | None:
-            # Ausweich-Bump bei Kollision betrifft nur die Nummer, nicht die Zähler für den
-            # Titel: kollidiert z. B. "2025/2026.1" mit einem Protokoll einer anderen Vorlage,
-            # bleibt der Titel trotzdem "1. Hock ..." statt mit hochgezählt zu werden.
-            if payload.protocol_number:
-                return payload.protocol_number
-            # A pattern with no counter token at all formats identically regardless of
-            # `bump` - every one of the 100 iterations below would recompute the exact
-            # same candidate and re-run the exact same collision SELECT (audit finding,
-            # 2026-08-25). Try it exactly once instead.
-            bump_range = range(100) if _has_counter_token else range(1)
-            for bump in bump_range:
-                bumped = {**current_counts, "n": current_counts["n"] + bump, "n_year": current_counts["n_year"] + bump, "n_month": current_counts["n_month"] + bump, "n_cycle": current_counts["n_cycle"] + bump, "n_cycle_all": current_counts["n_cycle_all"] + bump}
-                candidate = self._format_pattern(template.protocol_number_pattern, counts=bumped, protocol_date=payload.protocol_date)
-                if not candidate:
-                    break
-                exists = db.scalar(select(Protocol.id).where(Protocol.tenant_id == tenant_id, Protocol.protocol_number == candidate))
-                if not exists:
-                    return candidate
-            return None
+            return payload.protocol_number or self._pick_available_number(
+                db, tenant_id=tenant_id, template=template,
+                counts=current_counts, protocol_date=payload.protocol_date,
+            )
 
         if not payload.protocol_number:
             # Auto-derived number/title: slot this protocol into its true chronological position

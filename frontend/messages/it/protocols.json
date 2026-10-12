@@ -79,7 +79,10 @@
     "titleManual": "Titolo: manuale",
     "titlePlaceholder": "Titolo facoltativo",
     "titlePreview": "Titolo: {preview}",
-    "unnamed": "Senza nome"
+    "unnamed": "Senza nome",
+    "previewLoading": "Calcolo dell’anteprima …",
+    "previewFailed": "Impossibile caricare l’anteprima.",
+    "templateSaveFailed": "Impossibile salvare la scelta del modello."
   },
   "byName": "da {name}",
   "cancel": "Annulla",

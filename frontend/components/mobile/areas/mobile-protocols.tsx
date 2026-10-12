@@ -18,13 +18,14 @@ import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { useProtocolCreation } from "@/lib/hooks/use-protocol-creation";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
 import type { ProtocolListCycle, ProtocolSummary, TemplateSummary } from "@/types/api";
 
 const STATUSES = ["geplant", "vorbereitet", "durchgeführt", "abgeschlossen"] as const;
 const PREVIOUS_STATUS: Record<string, string> = { vorbereitet: "geplant", durchgeführt: "vorbereitet", abgeschlossen: "durchgeführt" };
 
-export function MobileProtocols({ initialProtocols, templates, readOnly }: { initialProtocols: ProtocolSummary[]; templates: TemplateSummary[]; readOnly: boolean }) {
+export function MobileProtocols({ initialProtocols, templates, readOnly, preferredTemplateId }: { initialProtocols: ProtocolSummary[]; templates: TemplateSummary[]; readOnly: boolean; preferredTemplateId?: string | null }) {
   const t = useTranslations("protocols.builder");
   const tRoot = useTranslations("protocols");
   const tMobile = useTranslations("mobile");
@@ -40,6 +41,7 @@ export function MobileProtocols({ initialProtocols, templates, readOnly }: { ini
   const [showOlder, setShowOlder] = useState(false);
   const [actionsFor, setActionsFor] = useState<ProtocolSummary | null>(null);
   const [creating, setCreating] = useState(false);
+  const [rememberedTemplateId, setRememberedTemplateId] = useState(preferredTemplateId);
 
   const groups = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -156,17 +158,17 @@ export function MobileProtocols({ initialProtocols, templates, readOnly }: { ini
           ]}
         />
       ) : null}
-      {creating ? <CreateProtocolSheet templates={templates} onClose={() => setCreating(false)} /> : null}
+      {creating ? <CreateProtocolSheet templates={templates} preferredTemplateId={rememberedTemplateId} onTemplateChange={setRememberedTemplateId} onClose={() => setCreating(false)} /> : null}
     </div>
   );
 }
 
-function CreateProtocolSheet({ templates, onClose }: { templates: TemplateSummary[]; onClose: () => void }) {
+function CreateProtocolSheet({ templates, onClose, preferredTemplateId, onTemplateChange }: { templates: TemplateSummary[]; onClose: () => void; preferredTemplateId?: string | null; onTemplateChange: (id: string) => void }) {
   const t = useTranslations("protocols.builder");
   const tMobile = useTranslations("mobile");
   const router = useRouter();
   const showToast = useToast();
-  const [templateId, setTemplateId] = useState(templates[0]?.id ?? "");
+  const [templateId, setTemplateId] = useState(templates.find((template) => template.id === preferredTemplateId)?.id ?? templates[0]?.id ?? "");
   const [date, setDate] = useState(todayIso());
   const [number, setNumber] = useState("");
   const [title, setTitle] = useState("");
@@ -175,10 +177,14 @@ function CreateProtocolSheet({ templates, onClose }: { templates: TemplateSummar
   const numberPattern = template?.protocol_number_pattern?.trim() || null;
   const titlePattern = template?.title_pattern?.trim() || null;
 
+  const { preview, previewMessage, rememberTemplate } = useProtocolCreation(true, templateId, date);
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!templateId || !date || saving) return;
     setSaving(true);
+    rememberTemplate(templateId);
+    onTemplateChange(templateId);
     try {
       const created = await browserApiFetch<{ id: string }>("/api/protocols/from-template", {
         method: "POST",
@@ -205,7 +211,7 @@ function CreateProtocolSheet({ templates, onClose }: { templates: TemplateSummar
       <form className="grid mobile-sheet-body" onSubmit={submit}>
         <label className="field-stack">
           <span className="field-label">{t("template")}</span>
-          <select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
+          <select value={templateId} onChange={(event) => { setTemplateId(event.target.value); onTemplateChange(event.target.value); rememberTemplate(event.target.value); }}>
             {templates.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
@@ -220,7 +226,7 @@ function CreateProtocolSheet({ templates, onClose }: { templates: TemplateSummar
         <label className="field-stack">
           <span className="field-label">{t("number")}</span>
           {numberPattern ? (
-            <span className="mobile-muted-sm">{t("numberPreview", { preview: numberPattern })}</span>
+            <span className="mobile-muted-sm">{preview ? t("numberPreview", { preview: preview.protocol_number ?? "" }) : previewMessage}</span>
           ) : (
             <input value={number} onChange={(event) => setNumber(event.target.value)} placeholder={t("numberPlaceholder")} />
           )}
@@ -228,7 +234,7 @@ function CreateProtocolSheet({ templates, onClose }: { templates: TemplateSummar
         <label className="field-stack">
           <span className="field-label">{t("protocolTitle")}</span>
           {titlePattern ? (
-            <span className="mobile-muted-sm">{t("titlePreview", { preview: titlePattern })}</span>
+            <span className="mobile-muted-sm">{preview ? t("titlePreview", { preview: preview.title ?? "" }) : previewMessage}</span>
           ) : (
             <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={t("titlePlaceholder")} />
           )}

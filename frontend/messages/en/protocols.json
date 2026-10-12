@@ -79,7 +79,10 @@
     "titleManual": "Title: manual",
     "titlePlaceholder": "Optional title",
     "titlePreview": "Title: {preview}",
-    "unnamed": "Unnamed"
+    "unnamed": "Unnamed",
+    "previewLoading": "Calculating preview …",
+    "previewFailed": "Could not load preview.",
+    "templateSaveFailed": "Could not save template selection."
   },
   "byName": "by {name}",
   "cancel": "Cancel",

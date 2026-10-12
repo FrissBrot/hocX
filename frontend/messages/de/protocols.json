@@ -79,7 +79,10 @@
     "titleManual": "Titel: manuell",
     "titlePlaceholder": "Optionaler Titel",
     "titlePreview": "Titel: {preview}",
-    "unnamed": "Unbenannt"
+    "unnamed": "Unbenannt",
+    "previewLoading": "Vorschau wird berechnet …",
+    "previewFailed": "Vorschau konnte nicht geladen werden.",
+    "templateSaveFailed": "Template-Auswahl konnte nicht gespeichert werden."
   },
   "byName": "von {name}",
   "cancel": "Abbrechen",

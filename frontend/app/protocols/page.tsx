@@ -9,20 +9,21 @@ export default async function ProtocolsPage() {
   const session = await requireSession();
   const canWrite = ["admin", "writer"].includes(session.current_role ?? "");
 
-  const [items, templates] = await Promise.all([
+  const [items, templates, preference] = await Promise.all([
     backendFetchWithSession<ProtocolSummary[]>("/api/protocols"),
     canWrite ? backendFetchWithSession<TemplateSummary[]>("/api/templates") : Promise.resolve([]),
+    canWrite ? backendFetchWithSession<{ template_id: string | null }>("/api/protocols/template-preference") : Promise.resolve(null),
   ]);
 
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
-        mobile={<MobileProtocols initialProtocols={items ?? []} templates={templates ?? []} readOnly={!canWrite} />}
+        mobile={<MobileProtocols initialProtocols={items ?? []} templates={templates ?? []} preferredTemplateId={preference?.template_id} readOnly={!canWrite} />}
         desktop={
           <section className="panel">
             <ProtocolBuilder
               initialProtocols={items ?? []}
-              templates={templates ?? []}
+              templates={templates ?? []} preferredTemplateId={preference?.template_id}
               readOnly={!canWrite}
             />
           </section>

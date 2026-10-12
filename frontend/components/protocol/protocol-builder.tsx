@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { useProtocolCreation } from "@/lib/hooks/use-protocol-creation";
 import { useRefreshOnRestore } from "@/lib/hooks/use-refresh-on-restore";
 
 import { Badge } from "@/components/ui/badge";
@@ -24,15 +25,6 @@ import { protocolStatusLabel, protocolStatusVariant } from "@/components/protoco
 import { ProtocolCycleGroup, groupProtocolsByCycle, visibleCycleGroupCount } from "@/components/protocol/protocol-cycle-groups";
 
 const PAGE_SIZE = 100;
-
-// Resolves a template pattern ("Sitzung {n} - {date:DD.MM.YYYY}") into a readable preview
-// for the create dialog - audit finding F4, 2026-10-01: the raw placeholder syntax was
-// shown unlabeled and unresolved, which non-technical users read as a display bug rather
-// than a preview. {n} (the server-assigned sequence number) isn't known until creation, so
-// it's spelled out instead of faked with a specific number.
-function resolvePatternPreview(pattern: string, protocolDateIso: string, t: (key: string) => string): string {
-  return pattern.replace(/\{n\}/g, t("builder.sequenceNumberPlaceholder")).replace(/\{date(?::[^}]*)?\}/g, formatDate(protocolDateIso) || t("builder.datePlaceholder"));
-}
 
 type TFunc = (key: string, values?: Record<string, string | number>) => string;
 
@@ -66,6 +58,7 @@ type ProtocolBuilderProps = {
   initialProtocols: ProtocolSummary[];
   templates: TemplateSummary[];
   readOnly?: boolean;
+  preferredTemplateId?: string | null;
 };
 
 type ProtocolFormState = {
@@ -75,7 +68,7 @@ type ProtocolFormState = {
   title: string;
 };
 
-export function ProtocolBuilder({ initialProtocols, templates, readOnly = false }: ProtocolBuilderProps) {
+export function ProtocolBuilder({ initialProtocols, templates, readOnly = false, preferredTemplateId }: ProtocolBuilderProps) {
   const t = useTranslations("protocols.builder");
   const tRoot = useTranslations("protocols");
   const locale = useLocale();
@@ -101,7 +94,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   const [showOlderCycles, setShowOlderCycles] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [form, setForm] = useState<ProtocolFormState>({
-    template_id: templates[0] ? String(templates[0].id) : "",
+    template_id: templates.find((template) => template.id === preferredTemplateId)?.id ?? templates[0]?.id ?? "",
     protocol_number: "",
     protocol_date: new Date().toISOString().slice(0, 10),
     title: ""
@@ -112,6 +105,8 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   );
   const autoProtocolNumber = !!selectedTemplate?.protocol_number_pattern?.trim();
   const autoTitle = !!selectedTemplate?.title_pattern?.trim();
+
+  const { preview, previewMessage, rememberTemplate } = useProtocolCreation(showCreateForm, form.template_id, form.protocol_date);
 
   useEffect(() => {
     if (readOnly) return;
@@ -172,6 +167,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
 
   async function createProtocol(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    rememberTemplate(form.template_id);
 
     try {
       const created = await browserApiFetch<{ id: string }>("/api/protocols/from-template", {
@@ -371,20 +367,24 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
               getId={(template) => String(template.id)}
               getLabel={(template) => template.name}
               value={form.template_id || null}
-              onChange={(template) => setForm((current) => ({ ...current, template_id: template ? String(template.id) : "" }))}
+              onChange={(template) => {
+                const id = template ? String(template.id) : "";
+                setForm((current) => ({ ...current, template_id: id }));
+                rememberTemplate(id);
+              }}
             />
           </label>
           {selectedTemplate?.protocol_number_pattern || selectedTemplate?.title_pattern ? (
             <div className="field-stack">
               <span className="field-label">{t("preview")}</span>
-              <div className="info-note">
-                {selectedTemplate.protocol_number_pattern
-                  ? t("numberPreview", { preview: resolvePatternPreview(selectedTemplate.protocol_number_pattern, form.protocol_date, tRoot) })
-                  : t("numberManual")}
-                {" · "}
-                {selectedTemplate.title_pattern
-                  ? t("titlePreview", { preview: resolvePatternPreview(selectedTemplate.title_pattern, form.protocol_date, tRoot) })
-                  : t("titleManual")}
+              <div className="info-note" aria-live="polite">
+                {preview ? (
+                  <>
+                    {autoProtocolNumber ? t("numberPreview", { preview: preview.protocol_number ?? "" }) : t("numberPreview", { preview: form.protocol_number || t("numberManual") })}
+                    {" · "}
+                    {autoTitle ? t("titlePreview", { preview: preview.title ?? "" }) : t("titlePreview", { preview: form.title || t("titleManual") })}
+                  </>
+                ) : previewMessage}
               </div>
             </div>
           ) : null}

@@ -21,7 +21,7 @@ from app.services.event_service import EventService
 from app.services.export_service import ExportService
 from app.services.protocol_service import ProtocolService
 from app.services.protocol_todo_service import ProtocolTodoService
-from app.models.entities import CycleConfig, Participant, Protocol, ProtocolElement, ProtocolExportCache, StoredFile, Template, UserProtocolScroll, WordImportDocument
+from app.models.entities import CycleConfig, Participant, Protocol, ProtocolElement, ProtocolExportCache, StoredFile, Template, UserProtocolScroll, UserProtocolTemplatePreference, WordImportDocument
 
 router = APIRouter()
 service = ProtocolService()
@@ -166,6 +166,43 @@ def list_protocols(
         limit=limit,
     )
     return _build_protocol_reads(db, protocols)
+
+
+class TemplatePreferencePayload(BaseModel):
+    template_id: uuid.UUID | None = None
+
+
+@router.get("/protocols/template-preference", response_model=TemplatePreferencePayload)
+def get_template_preference(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    require_writer(user)
+    row = db.get(UserProtocolTemplatePreference, (user.user_id, user.current_tenant_id))
+    template = db.get(Template, row.template_id) if row and row.template_id else None
+    return {"template_id": template.public_id if template and template.tenant_id == user.current_tenant_id else None}
+
+
+@router.put("/protocols/template-preference", status_code=status.HTTP_204_NO_CONTENT)
+def save_template_preference(payload: TemplatePreferencePayload, db: Session = Depends(get_db),
+                             user: CurrentUser = Depends(get_current_user)):
+    require_writer(user)
+    template_id = None
+    if payload.template_id is not None:
+        template_id = public_id_service.resolve_internal_id(db, Template, payload.template_id, tenant_id=user.current_tenant_id)
+        if template_id is None:
+            raise HTTPException(status_code=404, detail="Template not found")
+    db.execute(pg_insert(UserProtocolTemplatePreference)
+               .values(user_id=user.user_id, tenant_id=user.current_tenant_id, template_id=template_id)
+               .on_conflict_do_update(index_elements=["user_id", "tenant_id"], set_={"template_id": template_id}))
+    db.commit()
+
+
+@router.get("/protocols/preview", response_model=dict[str, str | None])
+def preview_protocol(template_id: uuid.UUID, protocol_date: date,
+                     db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    require_writer(user)
+    template = public_id_service.get_by_public_id(db, Template, template_id, tenant_id=user.current_tenant_id)
+    if template is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return service.preview_names(db, tenant_id=user.current_tenant_id, template=template, protocol_date=protocol_date)
 
 
 @router.post("/protocols/from-template", response_model=dict[str, uuid.UUID], status_code=status.HTTP_201_CREATED)

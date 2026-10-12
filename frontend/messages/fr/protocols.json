@@ -79,7 +79,10 @@
     "titleManual": "Titre : manuel",
     "titlePlaceholder": "Titre facultatif",
     "titlePreview": "Titre : {preview}",
-    "unnamed": "Sans nom"
+    "unnamed": "Sans nom",
+    "previewLoading": "Calcul de l’aperçu …",
+    "previewFailed": "Impossible de charger l’aperçu.",
+    "templateSaveFailed": "Impossible d’enregistrer le choix du modèle."
   },
   "byName": "par {name}",
   "cancel": "Annuler",

@@ -1211,6 +1211,14 @@ class FinanceTransaction(Base, TimestampMixin):
     protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
 
 
+class UserProtocolTemplatePreference(Base):
+    __tablename__ = "user_protocol_template_preference"
+
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("app_user.id", ondelete="CASCADE"), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="SET NULL"))
+
+
 class UserProtocolScroll(Base):
     __tablename__ = "user_protocol_scroll"
     __table_args__ = (
