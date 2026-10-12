@@ -307,6 +307,7 @@ pre {
   margin-top: auto;
   position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   padding-top: var(--space-4);
   border-top: 1px solid var(--border);
@@ -344,15 +345,17 @@ pre {
 }
 
 .copyright-label {
-  flex-shrink: 0;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .copyright-notice {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
   margin: 0;
   color: var(--muted);
   font-size: var(--text-xs);
