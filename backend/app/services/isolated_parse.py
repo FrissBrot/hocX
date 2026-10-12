@@ -156,6 +156,21 @@ def parse_document_isolated(raw_bytes: bytes) -> "ParsedDocx":
         raise ValueError(
             "Server ist aktuell ausgelastet - bitte in Kürze erneut versuchen"
         )
+    status, payload = _run_on_worker(worker, raw_bytes)
+    if status == "error" and worker.completed_tasks > 1:
+        # Ein bereits benutzter Worker kann an seinem eigenen, über frühere Dokumente
+        # angesammelten Speicher unter RLIMIT_AS scheitern - libxml2 meldet das nur als
+        # "XMLSyntaxError: unknown error". Einmal in einem frischen Worker wiederholen:
+        # ein wirklich defektes Dokument scheitert dort erneut, ein Speicherartefakt nicht.
+        status, payload = _run_on_worker(_Worker(), raw_bytes)
+    if status == "error":
+        raise ValueError(f"Datei konnte nicht gelesen werden: {payload}")
+    return payload
+
+
+def _run_on_worker(worker: _Worker, raw_bytes: bytes) -> tuple[str, object]:
+    """Parst ein Dokument auf genau diesem Worker und gibt danach immer genau einen
+    Worker an den Pool zurück (denselben oder einen frischen Ersatz)."""
     worker.task_queue.put(raw_bytes)
     try:
         status, payload = worker.result_queue.get(timeout=PARSE_TIMEOUT_SECONDS)
@@ -168,11 +183,15 @@ def parse_document_isolated(raw_bytes: bytes) -> "ParsedDocx":
         )
 
     worker.completed_tasks += 1
-    if status == "error" or worker.completed_tasks >= MAX_TASKS_PER_WORKER:
+    if status == "error":
+        # Kein Ersatz in den Pool, wenn gleich ein frischer Worker für den Retry
+        # entsteht - der übernimmt den Platz; sonst bliebe der Pool um einen größer.
+        worker.kill()
+        if worker.completed_tasks <= 1:
+            _pool.put(_Worker())
+    elif worker.completed_tasks >= MAX_TASKS_PER_WORKER:
         worker.kill()
         _pool.put(_Worker())
     else:
         _pool.put(worker)
-    if status == "error":
-        raise ValueError(f"Datei konnte nicht gelesen werden: {payload}")
-    return payload
+    return status, payload

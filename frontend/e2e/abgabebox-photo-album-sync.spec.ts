@@ -89,7 +89,7 @@ test("a public Abgabebox photo upload is folded into its Abgabe-Element auto-alb
       await fileChooser.setFiles(path.resolve("e2e/fixtures/photos/sample.png"));
       await expect(publicPage.getByRole("button", { name: "Abgeben" })).toBeEnabled();
       await publicPage.getByRole("button", { name: "Abgeben" }).click();
-      await expect(publicPage.getByText("Abgabe erfolgreich")).toBeVisible();
+      await expect(publicPage.getByRole("heading", { name: "Danke, Abgabe eingegangen" })).toBeVisible();
     } finally {
       await publicContext.close();
     }

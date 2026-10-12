@@ -46,6 +46,38 @@ def test_failed_worker_does_not_poison_later_documents(monkeypatch):
     assert parser.parse_document_isolated(b"next") == "parsed"
 
 
+def test_error_in_used_worker_is_retried_once_on_fresh_worker(monkeypatch):
+    used = worker("error", "XMLSyntaxError: unknown error", completed=3)
+    fresh = worker()
+    pool = Queue()
+    pool.put(used)
+    monkeypatch.setattr(parser, "_pool", pool)
+    monkeypatch.setattr(parser, "_ensure_pool", lambda: None)
+    factory = Mock(side_effect=[fresh])
+    monkeypatch.setattr(parser, "_Worker", factory)
+    assert parser.parse_document_isolated(b"document") == "parsed"
+    used.kill.assert_called_once()
+    assert factory.call_count == 1
+    assert pool.get_nowait() is fresh
+    assert pool.empty()
+
+
+def test_document_failing_on_fresh_retry_still_raises(monkeypatch):
+    used = worker("error", "XMLSyntaxError: broken", completed=3)
+    fresh = worker("error", "XMLSyntaxError: broken")
+    replacement = worker()
+    pool = Queue()
+    pool.put(used)
+    monkeypatch.setattr(parser, "_pool", pool)
+    monkeypatch.setattr(parser, "_ensure_pool", lambda: None)
+    monkeypatch.setattr(parser, "_Worker", Mock(side_effect=[fresh, replacement]))
+    with pytest.raises(ValueError, match="broken"):
+        parser.parse_document_isolated(b"document")
+    fresh.kill.assert_called_once()
+    assert pool.get_nowait() is replacement
+    assert pool.empty()
+
+
 def test_shutdown_kills_workers_and_allows_pool_restart(monkeypatch):
     originals = [worker() for _ in range(parser.POOL_SIZE)]
     pool = Queue()

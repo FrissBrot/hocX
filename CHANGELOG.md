@@ -78,6 +78,9 @@ dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` aus
 - Beim Tippen im Protokolltext erschien eine falsche Konflikt-Meldung, und der getippte
   Text wurde durch den Serverstand ersetzt, obwohl niemand sonst bearbeitete.
 - Mobile: iOS zoomte beim Fokus ins Login-Formular, Doppeltipp zoomte ungewollt.
+- Word-Import: Nach mehreren Importen scheiterte ein gültiges Dokument gelegentlich mit
+  «Datei konnte nicht gelesen werden: XMLSyntaxError». Ein solcher Fehler wird jetzt
+  einmal in einem frischen Parser-Prozess wiederholt.
 - Dashboard: Summe und Personenzahl offener Bussen brachen nach 50 Einträgen ab.
 - `deploy.sh` brach mit «Nicht erlaubte Variable TRAEFIK_WEBSITE_DOMAIN» ab, sobald die mit
   1.1.10 eingeführten Variablen `TRAEFIK_WEBSITE_DOMAIN` oder `WEBSITE_CONTACT_EMAIL` (oder
