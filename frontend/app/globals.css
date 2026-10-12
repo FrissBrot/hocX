@@ -17864,6 +17864,7 @@ input[type="radio"] {
 
 .event-tag-sidebar {
   position: sticky;
+  min-width: 0;
   top: var(--space-4);
   display: grid;
   gap: var(--space-2);
@@ -17885,6 +17886,7 @@ input[type="radio"] {
 
 .event-tag-sidebar-list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
 }
 
@@ -17906,6 +17908,11 @@ input[type="radio"] {
   text-align: left;
   box-shadow: none;
   transform: none !important;
+}
+
+/* Eintraege ohne Stern ("Alle", "Ohne Tag") reservieren dessen Platz, damit die Zaehler buendig sind. */
+.event-tag-sidebar-list > .event-tag-sidebar-item {
+  padding-right: calc(var(--space-1) * 2 + 24px);
 }
 
 .event-tag-sidebar-item-active,
@@ -17935,8 +17942,9 @@ input[type="radio"] {
 .event-tag-sidebar-row .event-tag-sidebar-item:hover:not(:disabled) {
   --button-bg: transparent;
   --button-hover-bg: transparent;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
+  width: auto;
   padding-right: var(--space-1);
 }
 
@@ -17948,7 +17956,9 @@ input[type="radio"] {
   align-items: center;
   justify-content: center;
   width: 24px;
+  min-width: 0;
   height: 24px;
+  min-height: 0;
   margin-right: var(--space-1);
   padding: 0;
   border: none;
@@ -18016,6 +18026,7 @@ input[type="radio"] {
 }
 
 .event-tag-sidebar-count {
+  flex-shrink: 0;
   margin-left: auto;
   color: var(--muted);
   font-size: var(--text-sm);
@@ -18390,6 +18401,10 @@ input[type="radio"] {
     flex: 0 0 auto;
     width: auto;
     white-space: nowrap;
+  }
+
+  .event-tag-sidebar-list > .event-tag-sidebar-item {
+    padding-right: var(--space-3);
   }
 
   .event-tag-sidebar-row {
