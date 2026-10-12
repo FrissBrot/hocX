@@ -691,7 +691,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
               </Badge>
             )}
 
-            <div className="subm-modal-section-title">{selectedAssignment?.source_type === "manual" ? t("assignmentLabel") : t("participantsLabel")}</div>
+            <div className="subm-modal-section-title">{selectedAssignment?.source_type === "manual" ? t("assignmentLabel") : selectedAssignment?.source_type === "events" ? t("eventElementsLabel") : t("listElementsLabel")}</div>
 
             {elementsLoading ? (
               <div className="subm-skeleton-box">
@@ -707,13 +707,19 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                   const responsibleName = element.responsible_participant_id
                     ? (availableParticipants.find((p) => p.id === element.responsible_participant_id)?.display_name ?? t("unknownParticipant"))
                     : null;
-                  const displayName = responsibleName ?? element.label;
+                  // Titel ist immer das Element (Termin/Listeneintrag), die verantwortliche Person steht in der Metazeile
+                  // - auch "Niemand zugewiesen", sofern die Abgabe überhaupt eine Verantwortlichen-Quelle hat.
+                  const tracksResponsible = Boolean(selectedAssignment?.responsible_participant_source);
                   const hasFiles = element.files.length > 0;
                   const variant = statusVariant(element);
                   const label = statusLabel(element, t);
-                  const meta = hasFiles
+                  const status = hasFiles
                     ? `${t("fileCount", { count: element.files.length })}${element.submitted_at ? ` · ${relativeTime(element.submitted_at, t)}` : ""}`
                     : t("notSubmittedYet");
+                  const responsible = responsibleName
+                    ? t("responsibleMeta", { name: responsibleName })
+                    : tracksResponsible ? t("noResponsibleAssigned") : null;
+                  const meta = responsible ? `${responsible} · ${status}` : status;
                   return (
                     <div
                       key={element.element_ref}
@@ -721,9 +727,13 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                       style={{ animationDelay: `${Math.min(rowIndex, 14) * 25}ms` }}
                       onClick={() => void openElementModal(selectedId, element)}
                     >
-                      <span className="subm-avatar subm-avatar-lg">{initials(displayName)}</span>
+                      {responsibleName ? (
+                        <span className="subm-avatar subm-avatar-lg" title={responsibleName}>{initials(responsibleName)}</span>
+                      ) : (
+                        <span className={`subm-avatar subm-avatar-lg${tracksResponsible ? " subm-avatar-empty" : ""}`}>{tracksResponsible ? "?" : initials(element.label)}</span>
+                      )}
                       <div className="subm-participant-info">
-                        <div className="subm-participant-name">{displayName}</div>
+                        <div className="subm-participant-name">{element.label}</div>
                         <div className="subm-participant-meta">{meta}</div>
                       </div>
                       <div className="subm-participant-status">

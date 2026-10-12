@@ -272,6 +272,7 @@ export function FocusedElementEditor({
   );
   const [creatingEventBlockNew, setCreatingEventBlockNew] = useState(false);
   const focusedTemplate = availableTemplates.find((t) => t.id === protocol.template_id) ?? null;
+  const [matrixCycleEvents, setMatrixCycleEvents] = useState<Record<string, EventSummary[]>>({});
 
   const currentCycleYear: number | null = protocol.protocol_date && focusedTemplate?.cycle_config
     ? getCycleYear(protocol.protocol_date, focusedTemplate.cycle_config.reset_month, focusedTemplate.cycle_config.reset_day)
@@ -1132,11 +1133,32 @@ export function FocusedElementEditor({
       (autoSrc && typeof autoSrc === "object" ? autoSrc.list_id : null) ??
       blockConfig.matrix_column_source_list_id ?? null;
     const listId = rawListId ? String(rawListId) : null;
-    return { source, eventTagFilter, listId };
+    const rawCycleConfigId = autoSrc && typeof autoSrc === "object" ? autoSrc.cycle_config_id : null;
+    const cycleConfigId = source === "events" && rawCycleConfigId ? String(rawCycleConfigId) : null;
+    const cycleOffset = cycleConfigId ? Number(autoSrc.cycle_offset ?? 0) || 0 : 0;
+    return { source, eventTagFilter, listId, cycleConfigId, cycleOffset };
+  }
+
+  function matrixCycleEventsKey(cycleConfigId: string, cycleOffset: number) {
+    return `${cycleConfigId}:${cycleOffset}:${protocol.protocol_date ?? ""}`;
+  }
+
+  // Termin-Pool für automatische Termin-Spalten: mit Zyklus-Filter die vom Backend
+  // geladenen Termine dieses Zyklus (availableEvents hält nur die neuesten 100 Termine
+  // des Mandanten), sonst availableEvents. Tagfilter: kommagetrennt, exakter Treffer.
+  function matrixEventPool(blockConfig: Record<string, any>): EventSummary[] {
+    const { eventTagFilter, cycleConfigId, cycleOffset } = matrixAutoSourceInfo(blockConfig);
+    const pool = cycleConfigId
+      ? matrixCycleEvents[matrixCycleEventsKey(cycleConfigId, cycleOffset)] ?? []
+      : availableEvents;
+    const tagFilters = eventTagFilter.split(",").map((tag) => tag.trim()).filter(Boolean);
+    return tagFilters.length
+      ? pool.filter((e) => tagFilters.includes(String(e.tag ?? "").trim().toLowerCase()))
+      : pool;
   }
 
   function generateMatrixColumns(blockId: string, blockConfig: Record<string, any>) {
-    const { source, eventTagFilter, listId } = matrixAutoSourceInfo(blockConfig);
+    const { source, listId } = matrixAutoSourceInfo(blockConfig);
     const rows = matrixRows(blockConfig);
 
     let nextColumns: Array<Record<string, any>> = [];
@@ -1144,10 +1166,7 @@ export function FocusedElementEditor({
     if (source === "participants") {
       nextColumns = availableParticipants.filter(isParticipantSelectable).map((participant) => buildMatrixColumnForParticipant(rows, participant));
     } else if (source === "events") {
-      const filtered = eventTagFilter
-        ? availableEvents.filter((e) => String(e.tag ?? "").toLowerCase() === eventTagFilter)
-        : availableEvents;
-      nextColumns = filtered.map((event) => buildMatrixColumnForEvent(rows, event));
+      nextColumns = matrixEventPool(blockConfig).map((event) => buildMatrixColumnForEvent(rows, event));
     } else if (source === "list") {
       const entries = listId ? (listEntriesByDefinition[listId] ?? []) : [];
       nextColumns = entries.map((entry) => buildMatrixColumnForListEntry(rows, entry));
@@ -1161,7 +1180,7 @@ export function FocusedElementEditor({
   // candidate on/off only adds a column or flips its `hidden` flag, never overwrites or
   // drops existing (possibly manually edited) columns like the bulk "Generieren" button does.
   function matrixCandidateItems(blockConfig: Record<string, any>): CandidateItem[] {
-    const { source, eventTagFilter, listId } = matrixAutoSourceInfo(blockConfig);
+    const { source, listId } = matrixAutoSourceInfo(blockConfig);
     const columns = matrixColumns(blockConfig);
     const columnById = new Map(columns.map((c) => [String(c.id ?? ""), c]));
 
@@ -1179,10 +1198,7 @@ export function FocusedElementEditor({
       return availableParticipants.filter(isParticipantSelectable).map((p) => toItem(`gen-p-${p.id}`, p.display_name));
     }
     if (source === "events") {
-      const filtered = eventTagFilter
-        ? availableEvents.filter((e) => String(e.tag ?? "").toLowerCase() === eventTagFilter)
-        : availableEvents;
-      return filtered
+      return [...matrixEventPool(blockConfig)]
         .sort((a, b) => a.event_date.localeCompare(b.event_date))
         .map((e) => toItem(`gen-e-${e.id}`, e.title, `${formatDate(e.event_date)}${e.tag ? ` · ${e.tag}` : ""}`));
     }
@@ -1219,7 +1235,7 @@ export function FocusedElementEditor({
       const participant = availableParticipants.find((p) => `gen-p-${p.id}` === candidateId);
       if (participant) newColumn = buildMatrixColumnForParticipant(rows, participant);
     } else if (source === "events") {
-      const event = availableEvents.find((e) => `gen-e-${e.id}` === candidateId);
+      const event = matrixEventPool(blockConfig).find((e) => `gen-e-${e.id}` === candidateId);
       if (event) newColumn = buildMatrixColumnForEvent(rows, event);
     } else if (source === "list") {
       const { listId } = matrixAutoSourceInfo(blockConfig);
@@ -1230,6 +1246,25 @@ export function FocusedElementEditor({
     if (!newColumn) return;
     saveMatrixColumns(blockId, blockConfig, [...columns, newColumn]);
   }
+
+  // Lädt die Termine für Matrix-Blöcke mit Zyklus-Filter (automatische Termin-Spalten).
+  const matrixCycleRequests = element.blocks
+    .map((block) => matrixAutoSourceInfo(asObject(block.configuration_snapshot_json)))
+    .filter((info) => info.cycleConfigId)
+    .map((info) => ({ cycleConfigId: info.cycleConfigId as string, cycleOffset: info.cycleOffset }));
+  const matrixCycleRequestKeys = [...new Set(matrixCycleRequests.map((r) => matrixCycleEventsKey(r.cycleConfigId, r.cycleOffset)))].sort().join("|");
+  useEffect(() => {
+    let cancelled = false;
+    for (const request of matrixCycleRequests) {
+      const key = matrixCycleEventsKey(request.cycleConfigId, request.cycleOffset);
+      if (matrixCycleEvents[key]) continue;
+      fetchCycleEvents(protocol.id, { cycleConfigId: request.cycleConfigId, cycleOffset: request.cycleOffset, limit: 500 })
+        .then((result) => { if (!cancelled) setMatrixCycleEvents((current) => ({ ...current, [key]: result.items })); })
+        .catch((error) => { if (!cancelled) showToast(error instanceof Error ? error.message : String(error), "error"); });
+    }
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matrixCycleRequestKeys, protocol.id]);
 
   useEffect(() => {
     const fields = sectionRef.current?.querySelectorAll<HTMLTextAreaElement>(".todo-main-compact .todo-input") ?? [];

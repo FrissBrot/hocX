@@ -21,7 +21,9 @@ import { browserApiFetch } from "@/lib/api/client";
 import { formatDateRange } from "@/lib/utils/format";
 import { elementTypeOptions as buildElementTypeOptions, elementTypeLabels as buildElementTypeLabels } from "@/lib/constants/element-types";
 import { EVENT_SYNC_FIELDS, TODO_SYNC_FIELDS } from "@/lib/constants/event-sync-fields";
-import { ElementDefinition, ElementDefinitionBlock, EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
+import { CycleConfigSummary, ElementDefinition, ElementDefinitionBlock, EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
+import { eventMatchesCycleFilter } from "@/lib/utils/cycle";
+import { CYCLE_OFFSET_OPTIONS, cycleOffsetLabel } from "@/components/submission-assignments/submission-assignment-form";
 import { ChartCycleSelection } from "@/components/protocol/chart-cycle-selection";
 import { asObject } from "@/components/protocol/protocol-editor-shared";
 
@@ -76,6 +78,9 @@ type BlockFormState = {
   auto_source_type: "" | "participants" | "events" | "list";
   auto_source_list_id: string;
   auto_source_event_tag: string;
+  // Zyklus-Filter für automatische Termin-Spalten (öffentliche CycleConfig-ID, Offset relativ zum Protokolldatum)
+  auto_source_cycle_config_id: string;
+  auto_source_cycle_offset: number;
   todo_block_title_filter: string;
   todo_task_filter: string;
   todo_open_only: boolean;
@@ -276,6 +281,8 @@ const initialBlockForm: BlockFormState = {
   auto_source_type: "" as "" | "participants" | "events" | "list",
   auto_source_list_id: "",
   auto_source_event_tag: "",
+  auto_source_cycle_config_id: "",
+  auto_source_cycle_offset: 0,
   todo_block_title_filter: "",
   todo_task_filter: "",
   todo_open_only: true,
@@ -541,6 +548,8 @@ function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
       if (autoSrc && typeof autoSrc === "object") return String(asObject(autoSrc).event_tag_filter ?? "");
       return String(block.configuration_json?.matrix_column_source_event_tag ?? "");
     })(),
+    auto_source_cycle_config_id: String(asObject(block.configuration_json?.auto_source).cycle_config_id ?? ""),
+    auto_source_cycle_offset: Number(asObject(block.configuration_json?.auto_source).cycle_offset ?? 0) || 0,
     todo_block_title_filter: String(block.configuration_json?.todo_block_title_filter ?? ""),
     todo_task_filter: String(block.configuration_json?.todo_task_filter ?? ""),
     todo_open_only: Boolean(block.configuration_json?.todo_open_only ?? true),
@@ -688,6 +697,8 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
         type: form.auto_source_type,
         list_id: form.auto_source_type === "list" && form.auto_source_list_id ? form.auto_source_list_id : null,
         event_tag_filter: form.auto_source_type === "events" ? (form.auto_source_event_tag || null) : null,
+        cycle_config_id: form.auto_source_type === "events" && form.auto_source_cycle_config_id ? form.auto_source_cycle_config_id : null,
+        cycle_offset: form.auto_source_type === "events" && form.auto_source_cycle_config_id ? form.auto_source_cycle_offset : 0,
       } : null,
       todo_block_title_filter: form.todo_block_title_filter || null,
       todo_task_filter: form.todo_task_filter || null,
@@ -919,6 +930,7 @@ export function ElementDefinitionManager({
   const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("templates.elementDefinitions");
   const tTypes = useTranslations("templates");
+  const tCycle = useTranslations("submissionAssignments");
   const locale = useLocale();
   const elementTypeOptions = buildElementTypeOptions(tTypes);
   const matrixEmbeddedBlockOptions = matrixEmbeddedBlockOptionsList(tTypes);
@@ -951,6 +963,10 @@ export function ElementDefinitionManager({
   const [matrixDesignerMode, setMatrixDesignerMode] = useState<"create" | "edit" | null>(null);
   const [selectedMatrixRowId, setSelectedMatrixRowId] = useState<string | null>(null);
   const [selectedMatrixColumnId, setSelectedMatrixColumnId] = useState<string | null>(null);
+  // Rechtes Panel zeigt entweder die gewählte Zeile oder die gewählte Spalte.
+  const [matrixInspectorKind, setMatrixInspectorKind] = useState<"row" | "col" | "cell">("row");
+  // Stand beim Öffnen, damit «Abbrechen» die Änderungen im Designer verwirft.
+  const [matrixDesignerSnapshot, setMatrixDesignerSnapshot] = useState<BlockFormState | null>(null);
   const [tableDesignerMode, setTableDesignerMode] = useState<"create" | "edit" | null>(null);
   const [selectedTableRowId, setSelectedTableRowId] = useState<string | null>(null);
   const [draggedTableRowId, setDraggedTableRowId] = useState<string | null>(null);
@@ -958,6 +974,7 @@ export function ElementDefinitionManager({
   const [draggedBlockId, setDraggedBlockId] = useState<number | null>(null);
   const [matrixPreviewColumns, setMatrixPreviewColumns] = useState<Array<{ id: string; title: string }> | null>(null);
   const [matrixPreviewLoading, setMatrixPreviewLoading] = useState(false);
+  const [cycleConfigs, setCycleConfigs] = useState<CycleConfigSummary[]>([]);
   const [listEntryOptionsByListId, setListEntryOptionsByListId] = useState<Record<string, StructuredListEntry[]>>({});
   const participantOptions = Array.isArray(availableParticipants) ? availableParticipants : [];
   const eventOptions = Array.isArray(availableEvents) ? availableEvents : [];
@@ -1004,7 +1021,7 @@ export function ElementDefinitionManager({
 
   // Clear preview when source settings change
   const matrixSourceKey = matrixDesignerForm
-    ? `${matrixDesignerForm.auto_source_type}:${matrixDesignerForm.auto_source_list_id}:${matrixDesignerForm.auto_source_event_tag}`
+    ? `${matrixDesignerForm.auto_source_type}:${matrixDesignerForm.auto_source_list_id}:${matrixDesignerForm.auto_source_event_tag}:${matrixDesignerForm.auto_source_cycle_config_id}:${matrixDesignerForm.auto_source_cycle_offset}`
     : "";
   useEffect(() => {
     setMatrixPreviewColumns(null);
@@ -1034,10 +1051,15 @@ export function ElementDefinitionManager({
           participantOptions.filter(isParticipantSelectable).map((p) => ({ id: `prev-p-${p.id}`, title: p.display_name }))
         );
       } else if (source === "events") {
-        const tagFilter = matrixDesignerForm.auto_source_event_tag.trim().toLowerCase();
-        const filtered = tagFilter
-          ? sortedAvailableEvents.filter((e) => String(e.tag ?? "").toLowerCase() === tagFilter)
-          : sortedAvailableEvents;
+        // Gleiche Regeln wie beim Erzeugen im Protokoll (focused-element-editor.tsx::matrixEventPool);
+        // die Vorschau bezieht den Zyklus aufs heutige Datum, das Protokoll auf sein Protokolldatum.
+        const tagFilters = matrixDesignerForm.auto_source_event_tag.split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+        const cycleConfig = cycleConfigs.find((c) => c.id === matrixDesignerForm.auto_source_cycle_config_id) ?? null;
+        const todayIso = new Date().toISOString().slice(0, 10);
+        const filtered = sortedAvailableEvents.filter((e) =>
+          (!tagFilters.length || tagFilters.includes(String(e.tag ?? "").trim().toLowerCase())) &&
+          eventMatchesCycleFilter(e.cycle_assignments, cycleConfig, todayIso, matrixDesignerForm.auto_source_cycle_offset)
+        );
         setMatrixPreviewColumns(filtered.map((e) => ({ id: `prev-e-${e.id}`, title: e.title })));
       } else if (source === "list") {
         const listDefId = matrixDesignerForm.auto_source_list_id || null;
@@ -1087,6 +1109,13 @@ export function ElementDefinitionManager({
     () => listOptions.find((entry) => entry.id === blockForm.linked_list_id) ?? null,
     [blockForm.linked_list_id, listOptions]
   );
+
+  function matrixSourceLabel(source: BlockFormState["auto_source_type"]) {
+    if (source === "participants") return t("sourceParticipants");
+    if (source === "events") return t("sourceEvents");
+    if (source === "list") return t("sourceList");
+    return "";
+  }
 
   function updateMatrixDesignerForm(updater: (current: BlockFormState) => BlockFormState) {
     if (matrixDesignerMode === "create") {
@@ -1326,7 +1355,7 @@ export function ElementDefinitionManager({
         <input
           value={field.template_value ?? ""}
           onChange={(event) => applyPatch({ template_value: event.target.value })}
-          placeholder={t("valuePlaceholderGeneric")}
+          placeholder={t("valuePlaceholderGeneric", { title: "{title}" })} // i18n-ok: Platzhalter-Token, kein UI-Text
         />
       </label>
     );
@@ -1357,7 +1386,14 @@ export function ElementDefinitionManager({
   }
 
   function openMatrixDesigner(mode: "create" | "edit") {
+    if (!cycleConfigs.length) {
+      browserApiFetch<CycleConfigSummary[]>("/api/cycle-configs")
+        .then((rows) => setCycleConfigs(rows ?? []))
+        .catch(() => setCycleConfigs([]));
+    }
+    setMatrixDesignerSnapshot(mode === "create" ? createBlockForm : blockForm);
     ensureMatrixDesignerDefaults(mode);
+    setMatrixInspectorKind("row");
     setMatrixDesignerMode(mode);
   }
 
@@ -1512,6 +1548,15 @@ export function ElementDefinitionManager({
   // they're picked up by that form's own explicit "Speichern"/"anlegen" submit exactly like a
   // title or description edit would be. Use "Übernehmen" below to save immediately instead.
   function closeMatrixDesigner() {
+    setMatrixDesignerMode(null);
+  }
+
+  function cancelMatrixDesigner() {
+    if (matrixDesignerSnapshot) {
+      if (matrixDesignerMode === "create") setCreateBlockForm(matrixDesignerSnapshot);
+      if (matrixDesignerMode === "edit") setBlockForm(matrixDesignerSnapshot);
+    }
+    setMatrixDesignerSnapshot(null);
     setMatrixDesignerMode(null);
   }
 
@@ -3485,216 +3530,424 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
         title={t("matrixDesignerTitle")}
         description={t("matrixDesignerDescription")}
         size="fullscreen"
-        headerActions={
-          matrixDesignerMode === "edit" ? (
-            <button type="button" className="button-secondary" onClick={() => { void saveMatrixDesigner(); }}>
-              Übernehmen
-            </button>
+        className="matrix-designer-modal"
+        footer={
+          matrixDesignerForm ? (
+            <>
+              <span className="muted">
+                {matrixDesignerForm.matrix_mode === "auto"
+                  ? matrixDesignerForm.auto_source_type
+                    ? t("matrixDesigner.footerAuto", { source: matrixSourceLabel(matrixDesignerForm.auto_source_type) })
+                    : t("matrixDesigner.footerAutoNoSource")
+                  : t("matrixDesigner.footerManual")}
+              </span>
+              <div className="modal-footer-actions">
+                <button type="button" className="button-ghost" onClick={cancelMatrixDesigner}>
+                  {t("cancel")}
+                </button>
+                <button type="button" className="button-primary" onClick={() => { void saveMatrixDesigner(); }}>
+                  {t("matrixDesigner.apply")}
+                </button>
+              </div>
+            </>
           ) : undefined
         }
       >
-        {matrixDesignerForm ? (
+        {matrixDesignerForm ? (() => {
+          const isAuto = matrixDesignerForm.matrix_mode === "auto";
+          const autoSource = matrixDesignerForm.auto_source_type;
+          const showPreviewColumns = isAuto && !!matrixPreviewColumns && matrixPreviewColumns.length > 0;
+          const designerColCount = isAuto
+            ? (showPreviewColumns ? matrixPreviewColumns.length : 1)
+            : matrixDesignerColumns.length || 1;
+          const gridStyle = { gridTemplateColumns: `minmax(180px, 200px) repeat(${designerColCount}, minmax(130px, 1fr))` };
+          const gridMinWidth = { minWidth: `${200 + designerColCount * 136}px` };
+          const inspectColumn = !isAuto && matrixInspectorKind === "col" && !!selectedMatrixColumn;
+          // Spalte, die im Raster mitmarkiert wird (Kopf + Zellen dieser Spalte): nur nach Klick
+          // auf einen Spaltenkopf oder eine Zelle, nicht bei reiner Zeilenauswahl.
+          const activeColumnId = !isAuto && matrixInspectorKind !== "row" ? selectedMatrixColumn?.id ?? null : null;
+          const selectedListName = listOptions.find((list) => String(list.id) === matrixDesignerForm.auto_source_list_id)?.name ?? "";
+          const eventTag = matrixDesignerForm.auto_source_event_tag.trim();
+          const selectedCycle = cycleConfigs.find((c) => c.id === matrixDesignerForm.auto_source_cycle_config_id) ?? null;
+          const cycleOffset = matrixDesignerForm.auto_source_cycle_offset;
+          const cycleSentenceValues = selectedCycle ? { cycle: selectedCycle.name, offset: cycleOffsetLabel(cycleOffset, tCycle) } : null;
+          const eventsSentence = cycleSentenceValues
+            ? (eventTag
+              ? t("matrixDesigner.sourceSentenceEventsTagCycle", { tag: eventTag, ...cycleSentenceValues })
+              : t("matrixDesigner.sourceSentenceEventsCycle", cycleSentenceValues))
+            : (eventTag ? t("matrixDesigner.sourceSentenceEventsTag", { tag: eventTag }) : t("matrixDesigner.sourceSentenceEvents"));
+          const sourceSentence = !autoSource
+            ? t("matrixDesigner.sourceSentenceNone")
+            : autoSource === "participants"
+            ? t("matrixDesigner.sourceSentenceParticipants")
+            : autoSource === "events"
+            ? eventsSentence
+            : (selectedListName ? t("matrixDesigner.sourceSentenceList", { list: selectedListName }) : t("matrixDesigner.sourceSentenceListNone"));
+          const rowCount = matrixDesignerRows.length;
+          const countLabel = !isAuto
+            ? t("matrixDesigner.countManual", { rows: rowCount, columns: matrixDesignerColumns.length })
+            : showPreviewColumns
+            ? t("matrixDesigner.countPreview", { rows: rowCount, columns: matrixPreviewColumns.length })
+            : autoSource
+            ? t("matrixDesigner.countAuto", { rows: rowCount, source: matrixSourceLabel(autoSource) })
+            : t("matrixDesigner.countRowsOnly", { rows: rowCount });
+          const emptyHeadText = !autoSource
+            ? t("matrixDesigner.emptyHeadNoSource")
+            : matrixPreviewLoading
+            ? t("loadingDots")
+            : matrixPreviewColumns
+            ? t("matrixDesigner.emptyHeadNoMatches")
+            : t("matrixDesigner.emptyHeadPending", { source: matrixSourceLabel(autoSource) });
+          const rowTypeLabel = (rowType: string) =>
+            matrixEmbeddedBlockLabel(rowType, tTypes, t) !== t("valueType.value")
+              ? matrixEmbeddedBlockLabel(rowType, tTypes, t)
+              : valueTypeLabel(rowType as Parameters<typeof valueTypeLabel>[0], t);
+          const rowTypeHelp = (rowType: string) =>
+            ["text", "participant", "participants", "event", "events", "list_entry"].includes(rowType)
+              ? t(`matrixDesigner.typeHelp.${rowType}`)
+              : t("matrixDesigner.typeHelp.embedded", { type: matrixEmbeddedBlockLabel(rowType, tTypes, t) });
+          const addRow = () => {
+            const nextId = nextTableFieldId(matrixDesignerRows);
+            updateMatrixDesignerForm((c) => ({ ...c, table_fields: [...c.table_fields, defaultFieldRow(nextId)] }));
+            setSelectedMatrixRowId(nextId);
+            setMatrixInspectorKind("row");
+          };
+          const addColumn = () => {
+            const nextId = nextMatrixColumnConfigId(matrixDesignerColumns);
+            updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: [...c.matrix_columns, defaultMatrixColumn(nextId)] }));
+            setSelectedMatrixColumnId(nextId);
+            setMatrixInspectorKind("col");
+          };
+          const renderSwitch = (key: string, label: string, checked: boolean, onChange: (checked: boolean) => void) => (
+            <label key={key} className="matrix-designer-switch-row">
+              <input
+                type="checkbox"
+                className="mini-menu-switch-input"
+                checked={checked}
+                onChange={(event) => onChange(event.target.checked)}
+              />
+              <span className="mini-menu-switch" aria-hidden="true" />
+              <span>{label}</span>
+            </label>
+          );
+          const eventFieldChips: Array<{ key: string; label: string; on: boolean }> = [
+            { key: "event_show_date", label: t("fieldDate"), on: selectedMatrixEmbeddedConfig.event_show_date !== false },
+            { key: "event_show_tag", label: t("fieldTag"), on: selectedMatrixEmbeddedConfig.event_show_tag !== false },
+            { key: "event_show_title", label: t("fieldTitle"), on: selectedMatrixEmbeddedConfig.event_show_title !== false },
+            { key: "event_show_description", label: t("fieldDescription"), on: selectedMatrixEmbeddedConfig.event_show_description !== false },
+            { key: "event_show_participant_count", label: t("fieldParticipantCount"), on: selectedMatrixEmbeddedConfig.event_show_participant_count === true },
+            { key: "event_show_cancelled", label: t("fieldCancelled"), on: selectedMatrixEmbeddedConfig.event_show_cancelled === true },
+          ];
+
+          return (
           <div className="matrix-designer-layout">
 
-            {/* ── Settings strip ── */}
+            {/* ── Einstellungsleiste ── */}
             <div className="matrix-designer-strip">
-              <div className="matrix-designer-strip-left">
-                <label className="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={matrixDesignerForm.allow_column_management}
-                    onChange={(e) => updateMatrixDesignerForm((c) => ({ ...c, allow_column_management: e.target.checked }))}
-                  />
-                  Spalten im Protokoll editierbar
-                </label>
-                <div className="matrix-designer-source-row">
-                  <span className="field-label" style={{ whiteSpace: "nowrap" }}>{t("modeLabel")}</span>
-                  <select
-                    value={matrixDesignerForm.matrix_mode}
-                    onChange={(e) => updateMatrixDesignerForm((c) => ({ ...c, matrix_mode: e.target.value as "manual" | "auto" }))}
-                    style={{ minWidth: 100 }}
-                  >
-                    <option value="manual">{t("modeManual")}</option>
-                    <option value="auto">{t("modeAuto")}</option>
-                  </select>
-                  {matrixDesignerForm.matrix_mode === "auto" ? (
-                    <>
-                      <span className="field-label" style={{ whiteSpace: "nowrap" }}>{t("sourceLabel")}</span>
-                      <select
-                        value={matrixDesignerForm.auto_source_type}
-                        onChange={(e) => updateMatrixDesignerForm((c) => ({ ...c, auto_source_type: e.target.value as "" | "participants" | "events" | "list" }))}
-                        style={{ minWidth: 130 }}
-                      >
-                        <option value="">{t("pleaseChoose")}</option>
-                        <option value="participants">{t("sourceParticipants")}</option>
-                        <option value="events">{t("sourceEvents")}</option>
-                        <option value="list">{t("sourceList")}</option>
-                      </select>
-                      {matrixDesignerForm.auto_source_type === "events" ? (
-                        <TagInput
-                          value={matrixDesignerForm.auto_source_event_tag}
-                          onChange={(v) => updateMatrixDesignerForm((c) => ({ ...c, auto_source_event_tag: v }))}
-                          suggestions={knownEventTags}
-                  tagConfig={tagConfig}
-                  onTagColorChange={updateTagColor}
-                  onTagRename={renameTag}
-                          placeholder={t("tagFilterOptionalPlaceholder")}
-                        />
-                      ) : null}
-                      {matrixDesignerForm.auto_source_type === "list" ? (
-                        <span style={{ minWidth: 160, display: "inline-block" }}>
-                          <SearchableSelect
-                            options={listOptions}
-                            getId={(list) => list.id}
-                            getLabel={(list) => list.name}
-                            value={matrixDesignerForm.auto_source_list_id || null}
-                            onChange={(list) => updateMatrixDesignerForm((c) => ({ ...c, auto_source_list_id: list ? String(list.id) : "" }))}
-                            nullLabel={t("chooseListPlaceholderDots")}
-                          />
-                        </span>
-                      ) : null}
-                    </>
-                  ) : null}
-                </div>
-              </div>
-              <div className="matrix-designer-strip-actions">
-                <button
-                  type="button"
-                  className="button-secondary"
-                  onClick={() => {
-                    const nextId = nextTableFieldId(matrixDesignerRows);
-                    updateMatrixDesignerForm((c) => ({ ...c, table_fields: [...c.table_fields, defaultFieldRow(nextId)] }));
-                    setSelectedMatrixRowId(nextId);
+              <div className="matrix-designer-strip-group">
+                <span className="field-label">{t("matrixDesigner.columnsLabel")}</span>
+                <FilterTabs
+                  options={[
+                    { value: "manual", label: t("modeManual") },
+                    { value: "auto", label: t("modeAuto") },
+                  ]}
+                  value={matrixDesignerForm.matrix_mode}
+                  onChange={(mode) => {
+                    updateMatrixDesignerForm((c) => ({ ...c, matrix_mode: mode as "manual" | "auto" }));
+                    if (mode === "auto") setMatrixInspectorKind("row");
                   }}
-                >
-                  + Zeile
-                </button>
-                {matrixDesignerForm.matrix_mode !== "auto" ? (
-                  <button
-                    type="button"
-                    className="button-secondary"
-                    onClick={() => {
-                      const nextId = nextMatrixColumnConfigId(matrixDesignerColumns);
-                      updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: [...c.matrix_columns, defaultMatrixColumn(nextId)] }));
-                      setSelectedMatrixColumnId(nextId);
-                    }}
-                  >
-                    + Spalte
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="button-secondary"
-                    disabled={matrixPreviewLoading}
-                    onClick={() => { void loadMatrixPreview(); }}
-                  >
-                    {matrixPreviewLoading ? t("loadingDots") : matrixPreviewColumns ? t("refresh") : t("previewAction")}
-                  </button>
+                />
+              </div>
+              {isAuto ? (
+                <div className="matrix-designer-strip-group">
+                  <span className="field-label">{t("sourceLabel")}</span>
+                  <FilterTabs
+                    options={[
+                      { value: "participants", label: t("sourceParticipants") },
+                      { value: "events", label: t("sourceEvents") },
+                      { value: "list", label: t("sourceList") },
+                    ]}
+                    value={autoSource}
+                    onChange={(source) => updateMatrixDesignerForm((c) => ({ ...c, auto_source_type: source as "participants" | "events" | "list" }))}
+                  />
+                </div>
+              ) : null}
+              {isAuto && autoSource === "list" ? (
+                <div className="matrix-designer-strip-group matrix-designer-strip-field">
+                  <span className="field-label">{t("sourceList")}</span>
+                  <SearchableSelect
+                    options={listOptions}
+                    getId={(list) => list.id}
+                    getLabel={(list) => list.name}
+                    value={matrixDesignerForm.auto_source_list_id || null}
+                    onChange={(list) => updateMatrixDesignerForm((c) => ({ ...c, auto_source_list_id: list ? String(list.id) : "" }))}
+                    nullLabel={t("chooseListPlaceholderDots")}
+                  />
+                </div>
+              ) : null}
+              {isAuto && autoSource === "events" ? (
+                <div className="matrix-designer-strip-group matrix-designer-strip-field">
+                  <span className="field-label">{t("matrixDesigner.eventTagLabel")}</span>
+                  <TagInput
+                    value={matrixDesignerForm.auto_source_event_tag}
+                    onChange={(v) => updateMatrixDesignerForm((c) => ({ ...c, auto_source_event_tag: v }))}
+                    suggestions={knownEventTags}
+                    tagConfig={tagConfig}
+                    onTagColorChange={updateTagColor}
+                    onTagRename={renameTag}
+                    placeholder={t("matrixDesigner.allTagsPlaceholder")}
+                  />
+                </div>
+              ) : null}
+              {isAuto && autoSource === "events" ? (
+                <div className="matrix-designer-strip-group">
+                  <span className="field-label">{tCycle("cycleLabel")}</span>
+                  <div className="matrix-designer-cycle-row">
+                    <div className="matrix-designer-strip-field">
+                      <SearchableSelect
+                        options={cycleConfigs}
+                        getId={(c) => c.id}
+                        getLabel={(c) => c.name}
+                        value={matrixDesignerForm.auto_source_cycle_config_id || null}
+                        nullLabel={tCycle("allCyclesNoFilter")}
+                        onChange={(c) => updateMatrixDesignerForm((current) => ({ ...current, auto_source_cycle_config_id: c?.id ?? "", auto_source_cycle_offset: 0 }))}
+                      />
+                    </div>
+                    {matrixDesignerForm.auto_source_cycle_config_id ? (
+                      <div className="matrix-designer-cycle-options" role="group" aria-label={tCycle("cycleLabel")}>
+                        {CYCLE_OFFSET_OPTIONS.map((offset) => (
+                          <button
+                            key={offset}
+                            type="button"
+                            className={`button-pill${cycleOffset === offset ? " button-pill-active" : ""}`}
+                            aria-pressed={cycleOffset === offset}
+                            onClick={() => updateMatrixDesignerForm((current) => ({ ...current, auto_source_cycle_offset: offset }))}
+                          >
+                            {cycleOffsetLabel(offset, tCycle)}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+              <div className="matrix-designer-strip-group matrix-designer-strip-end">
+                <span className="field-label">{t("matrixDesigner.inProtocolLabel")}</span>
+                {renderSwitch(
+                  "column-management",
+                  t("matrixDesigner.columnManagementLabel"),
+                  matrixDesignerForm.allow_column_management,
+                  (checked) => updateMatrixDesignerForm((c) => ({ ...c, allow_column_management: checked }))
                 )}
               </div>
             </div>
 
-            {/* ── Main body: grid + editor panel ── */}
-            <div className="matrix-designer-body">
+            {isAuto ? <div className="matrix-designer-source-note">{sourceSentence}</div> : null}
 
-              {/* Grid */}
-              <div className="matrix-designer-grid-scroll">
-                {(() => {
-                  const designerColCount = matrixDesignerForm.matrix_mode === "auto"
-                    ? (matrixPreviewColumns ? matrixPreviewColumns.length : 1)
-                    : matrixDesignerColumns.length || 1;
-                  return (
-                <div
-                  className="matrix-designer-grid matrix-designer-grid--compact"
-                  style={{ gridTemplateColumns: `minmax(140px, 180px) repeat(${designerColCount}, minmax(140px, 1fr))` }}
-                >
-                  <div className="matrix-designer-corner">{t("matrixSectionTitle")}</div>
-                  {matrixDesignerForm.matrix_mode !== "auto" && matrixDesignerColumns.map((column, index) => (
-                    <button
-                      key={`mc-${column.id}`}
-                      type="button"
-                      className={`matrix-designer-column-button${selectedMatrixColumn?.id === column.id ? " matrix-designer-column-button-active" : ""}`}
-                      onClick={() => setSelectedMatrixColumnId(column.id)}
-                    >
-                      <strong>{column.title || `Spalte ${index + 1}`}</strong>
-                      {column.event_tag_filter ? <span className="muted">{column.event_tag_filter}</span> : null}
-                    </button>
-                  ))}
-                  {matrixDesignerForm.matrix_mode === "auto" && matrixPreviewColumns && matrixPreviewColumns.map((col) => (
-                    <div key={col.id} className="matrix-designer-column-button matrix-designer-column-preview">
-                      <strong>{col.title}</strong>
-                    </div>
-                  ))}
-                  {matrixDesignerForm.matrix_mode === "auto" && !matrixPreviewColumns && (
-                    <div className="matrix-designer-column-button matrix-designer-column-placeholder">
-                      <span className="muted">{matrixPreviewLoading ? "Lädt…" : "↑ Vorschau"}</span>
-                    </div>
-                  )}
-                  {matrixDesignerRows.map((row, rowIndex) => (
-                    <Fragment key={`mr-${row.id}`}>
+            {/* ── Raster + Inspektor ── */}
+            <div className="matrix-designer-body">
+              <div className="matrix-designer-main">
+                <div className="matrix-designer-toolbar">
+                  <span className="matrix-designer-count">{countLabel}</span>
+                  <div className="matrix-designer-toolbar-actions">
+                    {isAuto ? (
                       <button
                         type="button"
-                        className={`matrix-designer-row-button${selectedMatrixRow?.id === row.id ? " matrix-designer-row-button-active" : ""}`}
-                        onClick={() => setSelectedMatrixRowId(row.id)}
+                        className="button-secondary"
+                        disabled={matrixPreviewLoading || !autoSource}
+                        onClick={() => { void loadMatrixPreview(); }}
                       >
-                        <strong>{row.label || `Zeile ${rowIndex + 1}`}</strong>
-                        <span className="muted">{matrixEmbeddedBlockLabel(row.row_type, tTypes, t) !== t("valueType.value") ? matrixEmbeddedBlockLabel(row.row_type, tTypes, t) : valueTypeLabel(row.row_type as Parameters<typeof valueTypeLabel>[0], t)}</span>
+                        <svg className="matrix-designer-refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5" /></svg>
+                        {matrixPreviewLoading ? t("loadingDots") : matrixPreviewColumns ? t("refresh") : t("matrixDesigner.loadPreview")}
                       </button>
-                      {matrixDesignerForm.matrix_mode !== "auto" && matrixDesignerColumns.map((column, columnIndex) => (
+                    ) : (
+                      <button type="button" className="button-secondary" onClick={addColumn}>
+                        {t("matrixDesigner.addColumn")}
+                      </button>
+                    )}
+                    <button type="button" className="button-secondary" onClick={addRow}>
+                      {t("matrixDesigner.addRow")}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="matrix-designer-grid-scroll">
+                  <div className="matrix-designer-rows" style={gridMinWidth}>
+                    <div className="matrix-designer-grid-row" style={gridStyle}>
+                      <div className="matrix-designer-corner">{t("matrixDesigner.cornerLabel")}</div>
+                      {!isAuto && matrixDesignerColumns.map((column, index) => (
                         <button
-                          key={`cell-${row.id}-${column.id}`}
+                          key={`mc-${column.id}`}
                           type="button"
-                          className={`matrix-designer-cell${selectedMatrixRow?.id === row.id && selectedMatrixColumn?.id === column.id ? " matrix-designer-cell-active" : ""}`}
-                          onClick={() => { setSelectedMatrixRowId(row.id); setSelectedMatrixColumnId(column.id); }}
+                          className={`matrix-designer-head${activeColumnId === column.id ? " matrix-designer-head-active" : ""}`}
+                          onClick={() => { setSelectedMatrixColumnId(column.id); setMatrixInspectorKind("col"); }}
                         >
-                          <strong>{column.title || `Sp. ${columnIndex + 1}`}</strong>
-                          <span className="muted">
-                            {matrixEmbeddedBlockLabel(row.row_type, tTypes, t) !== t("valueType.value")
-                              ? matrixEmbeddedBlockLabel(row.row_type, tTypes, t)
-                              : row.row_type === "events"
-                              ? (column.event_tag_filter || (row.row_config?.event_tag_filter as string | undefined) || t("allEvents"))
-                              : valueTypeLabel(row.row_type as Parameters<typeof valueTypeLabel>[0], t)}
+                          <span className="matrix-designer-head-title">{column.title || t("newColumn")}</span>
+                          <span className="matrix-designer-head-sub">
+                            {column.event_tag_filter
+                              ? t("matrixDesigner.columnTagSub", { tag: column.event_tag_filter })
+                              : t("matrixDesigner.columnNumber", { number: index + 1 })}
                           </span>
                         </button>
                       ))}
-                      {matrixDesignerForm.matrix_mode === "auto" && matrixPreviewColumns && matrixPreviewColumns.map((col) => (
-                        <div key={`pv-${row.id}-${col.id}`} className="matrix-designer-cell matrix-designer-cell-preview">
-                          <span className="muted">{row.auto_source_field || valueTypeLabel(row.row_type as Parameters<typeof valueTypeLabel>[0], t)}</span>
+                      {showPreviewColumns && matrixPreviewColumns.map((col) => (
+                        <div key={col.id} className="matrix-designer-head matrix-designer-head-preview">
+                          <span className="matrix-designer-head-title">{col.title}</span>
+                          <span className="matrix-designer-head-sub">{matrixSourceLabel(autoSource)}</span>
                         </div>
                       ))}
-                      {matrixDesignerForm.matrix_mode === "auto" && !matrixPreviewColumns && (
-                        <div className="matrix-designer-cell matrix-designer-column-placeholder" />
-                      )}
-                    </Fragment>
-                  ))}
+                      {isAuto && !showPreviewColumns ? (
+                        <div className="matrix-designer-head-empty">{emptyHeadText}</div>
+                      ) : null}
+                    </div>
+
+                    {matrixDesignerRows.map((row, rowIndex) => {
+                      const rowActive = matrixInspectorKind !== "col" && selectedMatrixRow?.id === row.id;
+                      return (
+                        <div key={`mr-${row.id}`} className="matrix-designer-grid-row" style={gridStyle}>
+                          <button
+                            type="button"
+                            className={`matrix-designer-row-head${rowActive ? " matrix-designer-row-head-active" : ""}`}
+                            onClick={() => { setSelectedMatrixRowId(row.id); setMatrixInspectorKind("row"); }}
+                          >
+                            <span className="matrix-designer-row-num">{rowIndex + 1}</span>
+                            <span className="matrix-designer-row-text">
+                              <span className="matrix-designer-head-title">{row.label || t("newRow")}</span>
+                              <span className="matrix-designer-head-sub">
+                                {row.locked_in_protocol
+                                  ? t("matrixDesigner.typeLocked", { type: rowTypeLabel(row.row_type) })
+                                  : rowTypeLabel(row.row_type)}
+                              </span>
+                            </span>
+                          </button>
+                          {!isAuto && matrixDesignerColumns.map((column) => {
+                            const cellActive = rowActive && activeColumnId === column.id;
+                            const columnActive = activeColumnId === column.id;
+                            return (
+                              <button
+                                key={`cell-${row.id}-${column.id}`}
+                                type="button"
+                                className={`matrix-designer-cell${cellActive ? " matrix-designer-cell-active" : columnActive ? " matrix-designer-cell-column" : ""}`}
+                                onClick={() => { setSelectedMatrixRowId(row.id); setSelectedMatrixColumnId(column.id); setMatrixInspectorKind("cell"); }}
+                              >
+                                <span className="matrix-designer-cell-text">
+                                  {row.row_type === "events"
+                                    ? (column.event_tag_filter || (row.row_config?.event_tag_filter as string | undefined) || t("allEvents"))
+                                    : rowTypeLabel(row.row_type)}
+                                </span>
+                                <span className={`matrix-designer-cell-bar${row.row_type === "text" || row.row_type === "1" ? " matrix-designer-cell-bar-wide" : ""}`} />
+                              </button>
+                            );
+                          })}
+                          {showPreviewColumns && matrixPreviewColumns.map((col) => (
+                            <button
+                              key={`pv-${row.id}-${col.id}`}
+                              type="button"
+                              className={`matrix-designer-cell${selectedMatrixRow?.id === row.id ? " matrix-designer-cell-column" : ""}`}
+                              onClick={() => { setSelectedMatrixRowId(row.id); setMatrixInspectorKind("row"); }}
+                            >
+                              <span className="matrix-designer-cell-text">{row.auto_source_field || rowTypeLabel(row.row_type)}</span>
+                              <span className="matrix-designer-cell-bar" />
+                            </button>
+                          ))}
+                          {isAuto && !showPreviewColumns ? (
+                            <button
+                              type="button"
+                              className="matrix-designer-cell"
+                              onClick={() => { setSelectedMatrixRowId(row.id); setMatrixInspectorKind("row"); }}
+                            >
+                              <span className="matrix-designer-cell-text">{rowTypeLabel(row.row_type)}</span>
+                              <span className="matrix-designer-cell-bar matrix-designer-cell-bar-short" />
+                            </button>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+
+                    <button type="button" className="matrix-designer-add-row" onClick={addRow}>
+                      {t("matrixDesigner.addRowLong")}
+                    </button>
+                  </div>
                 </div>
-                  );
-                })()}
               </div>
 
-              {/* Editor panel */}
-              <div className="matrix-designer-panel">
-                {selectedMatrixRow ? (
-                  <div className="matrix-designer-panel-section">
-                    <div className="matrix-designer-panel-header">
+              {/* ── Inspektor ── */}
+              <aside className="matrix-designer-panel">
+                {inspectColumn && selectedMatrixColumn ? (
+                  <div className="matrix-designer-inspector">
+                    <div className="matrix-designer-inspector-header">
                       <div>
-                        <div className="eyebrow">{t("rowWord")}</div>
-                        <strong>{selectedMatrixRow.label || t("newRow")}</strong>
+                        <div className="eyebrow">
+                          {t("matrixDesigner.columnNumber", { number: matrixDesignerColumns.findIndex((c) => c.id === selectedMatrixColumn.id) + 1 })}
+                        </div>
+                        <div className="matrix-designer-inspector-title">{selectedMatrixColumn.title || t("newColumn")}</div>
                       </div>
                       <button
                         type="button"
-                        className="button-secondary button-danger"
+                        className="button-ghost button-danger"
+                        onClick={() => {
+                          updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: c.matrix_columns.filter((e) => e.id !== selectedMatrixColumn.id) }));
+                          const next = matrixDesignerColumns.find((e) => e.id !== selectedMatrixColumn.id) ?? null;
+                          setSelectedMatrixColumnId(next?.id ?? null);
+                          if (!next) setMatrixInspectorKind("row");
+                        }}
+                      >
+                        {t("matrixDesigner.remove")}
+                      </button>
+                    </div>
+                    <label className="field-stack">
+                      <span className="field-label">{t("columnTitleLabel")}</span>
+                      <input
+                        value={selectedMatrixColumn.title}
+                        onChange={(e) => updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: c.matrix_columns.map((col) => col.id === selectedMatrixColumn.id ? { ...col, title: e.target.value } : col) }))}
+                        placeholder={t("columnTitlePlaceholder")}
+                      />
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">{t("columnPlaceholderLabel")}</span>
+                      <input
+                        value={selectedMatrixColumn.title_placeholder ?? ""}
+                        onChange={(e) => updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: c.matrix_columns.map((col) => col.id === selectedMatrixColumn.id ? { ...col, title_placeholder: e.target.value } : col) }))}
+                        placeholder={t("columnPlaceholderPlaceholder")}
+                      />
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">{t("columnTagFilterLabel")}</span>
+                      <TagInput
+                        value={selectedMatrixColumn.event_tag_filter ?? ""}
+                        onChange={(v) => updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: c.matrix_columns.map((col) => col.id === selectedMatrixColumn.id ? { ...col, event_tag_filter: v } : col) }))}
+                        suggestions={knownEventTags}
+                        tagConfig={tagConfig}
+                        onTagColorChange={updateTagColor}
+                        onTagRename={renameTag}
+                        placeholder={t("emptyForAllTags")}
+                      />
+                      <span className="field-help">{t("matrixDesigner.columnTagFilterHelp")}</span>
+                    </label>
+                  </div>
+                ) : selectedMatrixRow ? (
+                  <div className="matrix-designer-inspector">
+                    <div className="matrix-designer-inspector-header">
+                      <div>
+                        <div className="eyebrow">
+                          {t("matrixDesigner.rowNumber", { number: matrixDesignerRows.findIndex((r) => r.id === selectedMatrixRow.id) + 1 })}
+                        </div>
+                        <div className="matrix-designer-inspector-title">{selectedMatrixRow.label || t("newRow")}</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="button-ghost button-danger"
                         onClick={() => {
                           updateMatrixDesignerForm((c) => ({ ...c, table_fields: c.table_fields.filter((e) => e.id !== selectedMatrixRow.id) }));
                           const next = matrixDesignerRows.find((e) => e.id !== selectedMatrixRow.id) ?? null;
                           setSelectedMatrixRowId(next?.id ?? null);
                         }}
                       >
-                        Entfernen
+                        {t("matrixDesigner.remove")}
                       </button>
                     </div>
                     <label className="field-stack">
-                      <span className="field-label">{t("rowLabelLabel")}</span>
+                      <span className="field-label">{t("matrixDesigner.rowLabel")}</span>
                       <input
                         value={selectedMatrixRow.label}
                         onChange={(event) =>
@@ -3707,21 +3960,6 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         }
                         placeholder={t("rowLabelPlaceholder")}
                       />
-                    </label>
-                    <label className="checkbox-row">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(selectedMatrixRow.locked_in_protocol)}
-                        onChange={(event) =>
-                          updateMatrixDesignerForm((current) => ({
-                            ...current,
-                            table_fields: current.table_fields.map((entry) =>
-                              entry.id === selectedMatrixRow.id ? { ...entry, locked_in_protocol: event.target.checked } : entry
-                            ),
-                          }))
-                        }
-                      />
-                      Diese Zeile ist im Protokoll gesperrt
                     </label>
                     <label className="field-stack">
                       <span className="field-label">{t("rowTypeLabel")}</span>
@@ -3761,117 +3999,21 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                           ))}
                         </optgroup>
                       </select>
+                      <span className="field-help">{rowTypeHelp(selectedMatrixRow.row_type)}</span>
                     </label>
-                    {selectedMatrixRow.row_type === "7" ? (
-                      <div className="grid">
-                        <div className="three-col">
-                          <label className="field-stack">
-                            <span className="field-label">{t("eventTagFilterLabel")}</span>
-                            <TagInput
-                              value={String(selectedMatrixEmbeddedConfig.event_tag_filter ?? "")}
-                              onChange={(v) => updateSelectedMatrixRowConfig({ event_tag_filter: v })}
-                              suggestions={knownEventTags}
-                  tagConfig={tagConfig}
-                  onTagColorChange={updateTagColor}
-                  onTagRename={renameTag}
-                              placeholder={t("emptyForAllTags")}
-                            />
-                          </label>
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={selectedMatrixEmbeddedConfig.event_only_from_protocol_date !== false}
-                              onChange={(event) =>
-                                updateSelectedMatrixRowConfig({ event_only_from_protocol_date: event.target.checked })
-                              }
-                            />
-                            Nur Termine ab Protokolldatum anzeigen
-                          </label>
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={selectedMatrixEmbeddedConfig.event_gray_past !== false}
-                              onChange={(event) => updateSelectedMatrixRowConfig({ event_gray_past: event.target.checked })}
-                            />
-                            Vergangene Termine ausgegraut darstellen
-                          </label>
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={selectedMatrixEmbeddedConfig.event_allow_end_date === true}
-                              onChange={(event) => updateSelectedMatrixRowConfig({ event_allow_end_date: event.target.checked })}
-                            />
-                            Mehrtägige Termine erlauben
-                          </label>
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={selectedMatrixEmbeddedConfig.event_use_column_tag_filter === true}
-                              onChange={(event) =>
-                                updateSelectedMatrixRowConfig({ event_use_column_tag_filter: event.target.checked })
-                              }
-                            />
-                            Spalten-Tagfilter zusätzlich anwenden
-                          </label>
-                        </div>
-                        <div className="three-col">
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={selectedMatrixEmbeddedConfig.event_show_date !== false}
-                              onChange={(event) => updateSelectedMatrixRowConfig({ event_show_date: event.target.checked })}
-                            />
-                            Spalte Datum
-                          </label>
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={selectedMatrixEmbeddedConfig.event_show_tag !== false}
-                              onChange={(event) => updateSelectedMatrixRowConfig({ event_show_tag: event.target.checked })}
-                            />
-                            Spalte Tag
-                          </label>
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={selectedMatrixEmbeddedConfig.event_show_title !== false}
-                              onChange={(event) => updateSelectedMatrixRowConfig({ event_show_title: event.target.checked })}
-                            />
-                            Spalte Titel
-                          </label>
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={selectedMatrixEmbeddedConfig.event_show_description !== false}
-                              onChange={(event) =>
-                                updateSelectedMatrixRowConfig({ event_show_description: event.target.checked })
-                              }
-                            />
-                            Spalte Beschreibung
-                          </label>
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={selectedMatrixEmbeddedConfig.event_show_participant_count === true}
-                              onChange={(event) =>
-                                updateSelectedMatrixRowConfig({ event_show_participant_count: event.target.checked })
-                              }
-                            />
-                            Spalte Teilnehmerzahl
-                          </label>
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={selectedMatrixEmbeddedConfig.event_show_cancelled === true}
-                              onChange={(event) =>
-                                updateSelectedMatrixRowConfig({ event_show_cancelled: event.target.checked })
-                              }
-                            />
-                            Spalte Abgesagt
-                          </label>
-                        </div>
-                      </div>
-                    ) : null}
+                    {renderSwitch(
+                      "locked",
+                      t("matrixDesigner.lockedInProtocol"),
+                      Boolean(selectedMatrixRow.locked_in_protocol),
+                      (checked) =>
+                        updateMatrixDesignerForm((current) => ({
+                          ...current,
+                          table_fields: current.table_fields.map((entry) =>
+                            entry.id === selectedMatrixRow.id ? { ...entry, locked_in_protocol: checked } : entry
+                          ),
+                        }))
+                    )}
+
                     {["text", "participant", "participants", "event"].includes(selectedMatrixRow.row_type) ? (
                       renderTypedInitialValueEditor(selectedMatrixRow, (patch) =>
                         updateMatrixDesignerForm((current) => ({
@@ -3882,53 +4024,75 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         }))
                       )
                     ) : null}
-                    {selectedMatrixRow.row_type === "events" ? (
-                      <div className="two-col">
+
+                    {selectedMatrixRow.row_type === "7" || selectedMatrixRow.row_type === "events" ? (
+                      <div className="matrix-designer-inspector-section">
+                        <div className="eyebrow">{t("matrixDesigner.filterEventsHeading")}</div>
+                        {selectedMatrixRow.row_type === "events" ? (
+                          <label className="field-stack">
+                            <span className="field-label">{t("eventTitleFilterLabel")}</span>
+                            <input
+                              value={String(selectedMatrixRow.row_config?.event_title_filter ?? "")}
+                              onChange={(event) => updateSelectedMatrixRowConfig({ event_title_filter: event.target.value })}
+                              placeholder={t("containsPlaceholder")}
+                            />
+                          </label>
+                        ) : null}
                         <label className="field-stack">
-                          <span className="field-label">{t("eventTitleFilterLabel")}</span>
-                          <input
-                            value={String(selectedMatrixRow.row_config?.event_title_filter ?? "")}
-                            onChange={(event) => updateSelectedMatrixRowConfig({ event_title_filter: event.target.value })}
-                            placeholder={t("containsPlaceholder")}
-                          />
-                        </label>
-                        <label className="field-stack">
-                          <span className="field-label">{t("eventTagFilterLabel")}</span>
+                          <span className="field-label">{t("fieldTag")}</span>
                           <TagInput
-                            value={String(selectedMatrixRow.row_config?.event_tag_filter ?? "")}
+                            value={String(selectedMatrixEmbeddedConfig.event_tag_filter ?? "")}
                             onChange={(v) => updateSelectedMatrixRowConfig({ event_tag_filter: v })}
                             suggestions={knownEventTags}
-                  tagConfig={tagConfig}
-                  onTagColorChange={updateTagColor}
-                  onTagRename={renameTag}
+                            tagConfig={tagConfig}
+                            onTagColorChange={updateTagColor}
+                            onTagRename={renameTag}
                             placeholder={t("emptyForAllTags")}
                           />
                         </label>
-                        <label className="checkbox-row">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(selectedMatrixRow.row_config?.use_column_title_as_tag ?? true)}
-                            onChange={(event) => updateSelectedMatrixRowConfig({ use_column_title_as_tag: event.target.checked })}
-                          />
-                          Spaltentitel als Tag verwenden
-                        </label>
-                        <label className="checkbox-row">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(selectedMatrixRow.row_config?.hide_past_events ?? true)}
-                            onChange={(event) => updateSelectedMatrixRowConfig({ hide_past_events: event.target.checked })}
-                          />
-                          Vergangene Termine ausblenden
-                        </label>
+                        <div className="matrix-designer-switch-list">
+                          {selectedMatrixRow.row_type === "7" ? (
+                            <>
+                              {renderSwitch("only-from", t("onlyFromProtocolDateLabel"), selectedMatrixEmbeddedConfig.event_only_from_protocol_date !== false, (checked) => updateSelectedMatrixRowConfig({ event_only_from_protocol_date: checked }))}
+                              {renderSwitch("gray-past", t("grayPastLabel"), selectedMatrixEmbeddedConfig.event_gray_past !== false, (checked) => updateSelectedMatrixRowConfig({ event_gray_past: checked }))}
+                              {renderSwitch("multi-day", t("allowMultiDayLabel"), selectedMatrixEmbeddedConfig.event_allow_end_date === true, (checked) => updateSelectedMatrixRowConfig({ event_allow_end_date: checked }))}
+                              {renderSwitch("column-tag", t("matrixDesigner.useColumnTagFilter"), selectedMatrixEmbeddedConfig.event_use_column_tag_filter === true, (checked) => updateSelectedMatrixRowConfig({ event_use_column_tag_filter: checked }))}
+                            </>
+                          ) : (
+                            <>
+                              {renderSwitch("title-as-tag", t("matrixDesigner.useColumnTitleAsTag"), Boolean(selectedMatrixRow.row_config?.use_column_title_as_tag ?? true), (checked) => updateSelectedMatrixRowConfig({ use_column_title_as_tag: checked }))}
+                              {renderSwitch("hide-past", t("matrixDesigner.hidePastEvents"), Boolean(selectedMatrixRow.row_config?.hide_past_events ?? true), (checked) => updateSelectedMatrixRowConfig({ hide_past_events: checked }))}
+                            </>
+                          )}
+                        </div>
+                        {selectedMatrixRow.row_type === "7" ? (
+                          <div className="field-stack">
+                            <span className="field-label">{t("matrixDesigner.displayedFields")}</span>
+                            <div className="matrix-designer-chips">
+                              {eventFieldChips.map((chip) => (
+                                <button
+                                  key={chip.key}
+                                  type="button"
+                                  aria-pressed={chip.on}
+                                  className={`matrix-designer-chip${chip.on ? " matrix-designer-chip-active" : ""}`}
+                                  onClick={() => updateSelectedMatrixRowConfig({ [chip.key]: !chip.on })}
+                                >
+                                  {chip.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
-                    {matrixDesignerForm.matrix_mode === "auto" && matrixDesignerForm.auto_source_type ? (
-                      <div className="grid">
+
+                    {isAuto && autoSource ? (
+                      <div className="matrix-designer-inspector-section">
                         <div className="eyebrow">{t("columnPlaceholdersHeading")}</div>
                         <label className="field-stack">
                           <span className="field-label">
-                            {matrixDesignerForm.auto_source_type === "participants" ? t("valueFromParticipant") :
-                             matrixDesignerForm.auto_source_type === "events" ? t("valueFromEvent") :
+                            {autoSource === "participants" ? t("valueFromParticipant") :
+                             autoSource === "events" ? t("valueFromEvent") :
                              t("valueFromList")}
                           </span>
                           <select
@@ -3943,14 +4107,14 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                             }
                           >
                             <option value="">{t("noPlaceholder")}</option>
-                            {matrixDesignerForm.auto_source_type === "participants" ? (
+                            {autoSource === "participants" ? (
                               <>
                                 <option value="display_name">{t("fieldDisplayName")}</option>
                                 <option value="first_name">{t("fieldFirstName")}</option>
                                 <option value="last_name">{t("fieldLastName")}</option>
                                 <option value="email">{t("fieldEmail")}</option>
                               </>
-                            ) : matrixDesignerForm.auto_source_type === "events" ? (
+                            ) : autoSource === "events" ? (
                               <>
                                 <option value="title">{t("fieldTitle")}</option>
                                 <option value="event_date">{t("fieldDate")}</option>
@@ -3970,62 +4134,13 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                     ) : null}
                   </div>
                 ) : (
-                  <p className="muted">{t("selectRowHint")}</p>
+                  <p className="muted matrix-designer-inspector">{t("selectRowHint")}</p>
                 )}
-
-                {matrixDesignerForm.matrix_mode !== "auto" && selectedMatrixColumn ? (
-                  <div className="matrix-designer-panel-section">
-                    <div className="matrix-designer-panel-header">
-                      <div>
-                        <div className="eyebrow">{t("columnWord")}</div>
-                        <strong>{selectedMatrixColumn.title || t("newColumn")}</strong>
-                      </div>
-                      <button
-                        type="button"
-                        className="button-secondary button-danger"
-                        onClick={() => {
-                          updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: c.matrix_columns.filter((e) => e.id !== selectedMatrixColumn.id) }));
-                          const next = matrixDesignerColumns.find((e) => e.id !== selectedMatrixColumn.id) ?? null;
-                          setSelectedMatrixColumnId(next?.id ?? null);
-                        }}
-                      >
-                        Entfernen
-                      </button>
-                    </div>
-                    <label className="field-stack">
-                      <span className="field-label">{t("columnTitleLabel")}</span>
-                      <input
-                        value={selectedMatrixColumn.title}
-                        onChange={(e) => updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: c.matrix_columns.map((col) => col.id === selectedMatrixColumn.id ? { ...col, title: e.target.value } : col) }))}
-                        placeholder={t("columnTitlePlaceholder")}
-                      />
-                    </label>
-                    <label className="field-stack">
-                      <span className="field-label">{t("columnPlaceholderLabel")}</span>
-                      <input
-                        value={selectedMatrixColumn.title_placeholder ?? ""}
-                        onChange={(e) => updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: c.matrix_columns.map((col) => col.id === selectedMatrixColumn.id ? { ...col, title_placeholder: e.target.value } : col) }))}
-                        placeholder={t("columnPlaceholderPlaceholder")}
-                      />
-                    </label>
-                    <label className="field-stack">
-                      <span className="field-label">{t("columnTagFilterLabel")}</span>
-                      <TagInput
-                        value={selectedMatrixColumn.event_tag_filter ?? ""}
-                        onChange={(v) => updateMatrixDesignerForm((c) => ({ ...c, matrix_columns: c.matrix_columns.map((col) => col.id === selectedMatrixColumn.id ? { ...col, event_tag_filter: v } : col) }))}
-                        suggestions={knownEventTags}
-                  tagConfig={tagConfig}
-                  onTagColorChange={updateTagColor}
-                  onTagRename={renameTag}
-                        placeholder={t("optional")}
-                      />
-                    </label>
-                  </div>
-                ) : null}
-              </div>
+              </aside>
             </div>
           </div>
-        ) : null}
+          );
+        })() : null}
       </Modal>
 
       <Modal

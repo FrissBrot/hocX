@@ -5,6 +5,7 @@ import uuid
 from datetime import date, datetime
 from io import StringIO
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.cycle_utils import format_cycle_name, get_cycle_year
@@ -33,6 +34,8 @@ class EventService:
         search: str = "",
         skip: int = 0,
         limit: int = 200,
+        cycle_config_public_id: uuid.UUID | None = None,
+        cycle_offset: int = 0,
     ) -> tuple[list[Event], int, ProtocolCycleInfo | None]:
         """Event pool for the planning-mode "Terminübersicht"/candidate popups.
 
@@ -40,10 +43,32 @@ class EventService:
         CycleConfig + protocol_date); falls back to the full tenant event list
         (cycle=None in the result) if the template has no cycle configured, so
         the popup is never silently empty. scope="all" ignores cycles entirely.
+
+        cycle_config_public_id (optional, überschreibt scope): Termine eines frei gewählten
+        Zyklus, relativ zum Protokolldatum um cycle_offset verschoben (0 = Zyklus des
+        Protokolls, -1 = vorheriger, ...). Genutzt vom Zyklus-Filter automatischer
+        Matrix-Spalten. Ohne Protokolldatum ist der Bezug der heutige Tag.
         """
         event_ids: set[int] | None = None
         cycle_info: ProtocolCycleInfo | None = None
-        if scope == "current":
+        if cycle_config_public_id is not None:
+            cycle_cfg = db.scalar(
+                select(CycleConfig).where(
+                    CycleConfig.tenant_id == protocol.tenant_id,
+                    CycleConfig.public_id == cycle_config_public_id,
+                )
+            )
+            if cycle_cfg is None:
+                raise ValueError("Zyklus nicht gefunden")
+            reference_date = protocol.protocol_date or date.today()
+            cycle_year = get_cycle_year(reference_date, cycle_cfg.reset_month, cycle_cfg.reset_day) + cycle_offset
+            event_ids = list_cycle_event_ids(db, cycle_cfg.id, cycle_year)
+            cycle_info = ProtocolCycleInfo(
+                cycle_config_id=cycle_cfg.public_id,
+                cycle_year=cycle_year,
+                label=format_cycle_name(cycle_cfg.name_pattern, cycle_year),
+            )
+        elif scope == "current":
             resolved = resolve_protocol_cycle(db, protocol)
             if resolved:
                 cycle_cfg, cycle_year = resolved

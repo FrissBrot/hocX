@@ -40,6 +40,9 @@ class PublicIdModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     _fk_models: ClassVar[dict[str, type]] = {}
     _fk_list_models: ClassVar[dict[str, type]] = {}
+    # ORM-Relationen, die zusätzlich zu den Spalten übernommen werden (die Übersetzung
+    # unten liest sonst nur mapper.columns - ein Relationsfeld bliebe immer leer).
+    _relationship_fields: ClassVar[tuple[str, ...]] = ()
 
     @model_validator(mode="before")
     @classmethod
@@ -48,6 +51,8 @@ class PublicIdModel(BaseModel):
             return data
         values = {column.key: getattr(data, column.key) for column in sa_inspect(data).mapper.columns}
         values["id"] = values.pop("public_id")
+        for field in cls._relationship_fields:
+            values[field] = getattr(data, field)
         db = object_session(data) if (cls._fk_models or cls._fk_list_models) else None
         for field, model in cls._fk_models.items():
             internal_id = values.get(field)
