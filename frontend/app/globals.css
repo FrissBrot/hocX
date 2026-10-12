@@ -23592,6 +23592,9 @@ a.mobile-list-row { color: var(--text); }
 .list-manager-add-person .mini-menu-trigger-label, .list-manager-people .mini-menu-trigger-icon { display: none; }
 .list-manager-add-person .mini-menu-trigger::after { content: "+"; }
 .list-manager-assign .mini-menu-trigger { border: 1px dashed var(--warning); border-radius: var(--radius-pill); background: var(--warning-bg); color: var(--warning-fg); font-size: var(--text-sm); }
+.list-manager-person-select.mini-menu-compact { min-width: 0; }
+.list-manager-person-select .mini-menu-trigger { min-height: 24px; padding: 0 var(--space-1); border: 0; border-radius: var(--radius-pill); background: transparent; color: inherit; }
+.list-manager-person-select .mini-menu-trigger-label { font-size: var(--text-sm); }
 .list-manager-add-row { color: var(--accent); padding: 0; }
 .list-manager-table-shell tfoot td { border-top: 1px solid var(--border); }
 .list-definition-modal { max-width: 940px; }

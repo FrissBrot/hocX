@@ -472,6 +472,37 @@ export function StructuredListTable({
   ) {
     if (valueType === "participant") {
       const departed = departedParticipant(value.participant_id);
+      if (masterList) {
+        // Gleiche Chip-Optik wie bei "Mehrere Teilnehmer": Person als Chip (Klick öffnet Auswahl, × entfernt), leer als "Zuweisen".
+        const id = (value.participant_id as string | null | undefined) ?? null;
+        const save = (nextId: string | null) => {
+          const nextValue = { participant_id: nextId };
+          if (options.isNewRow) patchNewRow({ [columnKey]: nextValue });
+          else if (entryId) queueRowSave(entryId, { [columnKey]: nextValue });
+        };
+        if (!id) {
+          return <div className="list-manager-people">
+            <SearchableSelect options={participantNames} isOptionSelectable={isPickableParticipant}
+              getId={(person) => person.id} getLabel={(person) => person.display_name} value={null}
+              onChange={(person) => save(person ? person.id : null)} disabled={options.disabled}
+              placeholder={listT("assign")} className="list-manager-assign"
+              triggerProps={{ "aria-label": t("participantPickerTitle") }} />
+          </div>;
+        }
+        const participant = participantNames.find((person) => person.id === id);
+        const name = String(value.participant_name || participant?.display_name || t("participantNullLabel"));
+        return <div className="list-manager-people">
+          <span className={`list-manager-person${departed ? " structured-list-departed" : ""}`} title={departed ? departedTitle(departed) : undefined}>
+            <span className="list-manager-avatar">{name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("")}</span>
+            <SearchableSelect options={participantNames} isOptionSelectable={isPickableParticipant}
+              getId={(person) => person.id} getLabel={(person) => person.display_name} value={id}
+              onChange={(person) => save(person ? person.id : null)} disabled={options.disabled}
+              placeholder={name} className="list-manager-person-select"
+              triggerProps={{ "aria-label": t("participantPickerTitle") }} />
+            <button type="button" className="button-icon-soft" disabled={options.disabled} aria-label={listT("removePerson", { name })} onClick={() => save(null)}>×</button>
+          </span>
+        </div>;
+      }
       return (
         <SearchableSelect
           options={participantNames}
