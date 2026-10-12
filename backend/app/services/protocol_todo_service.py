@@ -3,7 +3,17 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import AppUser, Event, Participant, Protocol, ProtocolElementBlock, ProtocolTodo, SubmissionAssignment, TodoStatus
+from app.models import (
+    AppUser,
+    Event,
+    Participant,
+    Protocol,
+    ProtocolElement,
+    ProtocolElementBlock,
+    ProtocolTodo,
+    SubmissionAssignment,
+    TodoStatus,
+)
 from app.repositories.protocol_todo_repository import ProtocolTodoRepository
 from app.schemas.protocol import ProtocolTodoCreate, ProtocolTodoRead, ProtocolTodoUpdate, TodoListItem
 from app.services import public_id_service, task_package_service
@@ -108,6 +118,49 @@ class ProtocolTodoService:
     def list_pending_for_protocol(self, db: Session, protocol_id: int, template_id: int, protocol_date) -> list[TodoListItem]:
         rows = self.repository.list_pending_for_protocol(db, protocol_id, template_id, protocol_date)
         return [self._row_to_list_item(db, row) for row in rows]
+
+    # --- Momentaufnahme abgeschlossener Protokolle -------------------------------------
+    # Todos leben über ihr Protokoll hinaus (Todo-Liste: bearbeiten, erledigen, löschen,
+    # neu anlegen). Damit ein abgeschlossenes Protokoll trotzdem zeigt, was beim Abschluss
+    # galt, wird der Stand beim Übergang nach "abgeschlossen" in
+    # protocol.todos_snapshot_json eingefroren und beim Zurücksetzen wieder verworfen
+    # (siehe ProtocolService._run_status_transition_hooks). Ältere abgeschlossene
+    # Protokolle ohne Snapshot fallen auf die Live-Daten zurück.
+
+    def build_protocol_snapshot(self, db: Session, protocol: Protocol) -> dict:
+        block_ids = db.scalars(
+            select(ProtocolElementBlock.id)
+            .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+            .where(ProtocolElement.protocol_id == protocol.id)
+        ).all()
+        blocks: dict[str, list] = {}
+        for block_id in block_ids:
+            todos = [todo for todo in self.list_todos(db, block_id) if not todo.pending_delete]
+            if todos:
+                blocks[str(block_id)] = [todo.model_dump(mode="json") for todo in todos]
+        pending = self.list_pending_for_protocol(db, protocol.id, protocol.template_id, protocol.protocol_date)
+        return {
+            "version": 1,
+            "taken_at": datetime.now(timezone.utc).isoformat(),
+            "blocks": blocks,
+            "pending": [item.model_dump(mode="json") for item in pending],
+        }
+
+    @staticmethod
+    def frozen_snapshot(protocol: Protocol | None) -> dict | None:
+        """Snapshot nur für abgeschlossene Protokolle - in allen anderen Status gelten die
+        Live-Daten, auch wenn (theoretisch) noch ein Rest-Snapshot existieren sollte."""
+        if protocol is None or protocol.status != "abgeschlossen":
+            return None
+        snapshot = protocol.todos_snapshot_json
+        return snapshot if isinstance(snapshot, dict) else None
+
+    def snapshot_todos_for_block(self, snapshot: dict, protocol_element_block_id: int) -> list[ProtocolTodoRead]:
+        items = (snapshot.get("blocks") or {}).get(str(protocol_element_block_id)) or []
+        return [ProtocolTodoRead.model_validate(item) for item in items]
+
+    def snapshot_pending(self, snapshot: dict) -> list[TodoListItem]:
+        return [TodoListItem.model_validate(item) for item in snapshot.get("pending") or []]
 
     def _normalize_due_fields(self, values: dict) -> dict:
         if values.get("due_marker"):

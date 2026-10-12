@@ -73,6 +73,16 @@ export function MobileProtocols({ initialProtocols, templates, readOnly, preferr
   }
 
   async function revert(protocol: ProtocolSummary) {
+    // Zurücksetzen eines abgeschlossenen Protokolls verwirft die Todo-Momentaufnahme.
+    if (
+      protocol.status === "abgeschlossen" &&
+      !(await confirm({
+        title: t("revertClosedConfirmTitle"),
+        message: t("revertClosedConfirmMessage"),
+        tone: "danger",
+        confirmLabel: t("revertClosedConfirmLabel"),
+      }))
+    ) return;
     try {
       const updated = await browserApiFetch<ProtocolSummary>(`/api/protocols/${protocol.id}/revert-status`, { method: "POST" });
       setProtocols((list) => list.map((item) => (item.id === protocol.id ? { ...updated, cycle: item.cycle } : item)));

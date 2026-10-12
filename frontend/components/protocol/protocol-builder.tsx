@@ -249,6 +249,16 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
   });
 
   async function revertStatus(protocolId: string) {
+    // Zurücksetzen eines abgeschlossenen Protokolls verwirft die Todo-Momentaufnahme.
+    if (protocols.find((p) => p.id === protocolId)?.status === "abgeschlossen") {
+      const ok = await confirm({
+        title: t("revertClosedConfirmTitle"),
+        message: t("revertClosedConfirmMessage"),
+        tone: "danger",
+        confirmLabel: t("revertClosedConfirmLabel"),
+      });
+      if (!ok) return;
+    }
     try {
       const updated = await browserApiFetch<ProtocolSummary>(`/api/protocols/${protocolId}/revert-status`, { method: "POST" });
       // Der Einzel-Endpunkt liefert keinen Listen-Zyklus - den bisherigen behalten.

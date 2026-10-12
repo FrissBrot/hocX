@@ -34,6 +34,7 @@ from app.services.access_service import AccessService
 from app.services.block_behavior import resolve_block_behavior
 from app.repositories.participant_repository import participant_eligible_on
 from app.services import list_snapshot_service
+from app.services.protocol_todo_service import ProtocolTodoService
 from app.services.responsible_label_service import (
     resolve_display_section_title,
     resolve_responsible_label,
@@ -2163,8 +2164,8 @@ class ProtocolService:
         """Replays every stage-change hook between previous_status and updated.status, in
         order - so a validated forward skip (e.g. geplant -> abgeschlossen for Word-Import)
         still fires every hook a step-by-step transition would have fired instead of silently
-        skipping them. No-op for backward moves (single-step revert only reuses already-frozen
-        data, nothing to (re-)run).
+        skipping them. Backward moves only discard the todo snapshot when leaving
+        abgeschlossen; everything else frozen is reused as-is.
 
         The status change itself (already applied via repository.update(..., commit=False))
         and every hook below run uncommitted until the single db.commit() at the end, so a
@@ -2183,7 +2184,16 @@ class ProtocolService:
                 if stage_to == "abgeschlossen":
                     self._freeze_responsible_titles(db, protocol_id, updated.tenant_id, commit=False)
                     list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol_id, updated.tenant_id, commit=False)
+                    # Todos bleiben danach live bearbeitbar - das Protokoll selbst zeigt ab
+                    # jetzt diese Momentaufnahme (siehe ProtocolTodoService.frozen_snapshot).
+                    updated.todos_snapshot_json = ProtocolTodoService().build_protocol_snapshot(db, updated)
+                    db.add(updated)
                     crossed_into_abgeschlossen = True
+        elif new_idx < prev_idx and previous_status == "abgeschlossen":
+            # Zurücksetzen verwirft die Momentaufnahme (das Frontend warnt davor): das
+            # Protokoll zeigt wieder die Live-Todos, inkl. aller Änderungen seit Abschluss.
+            updated.todos_snapshot_json = None
+            db.add(updated)
         try:
             db.commit()
         except Exception:

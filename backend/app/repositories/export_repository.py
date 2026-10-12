@@ -1,3 +1,6 @@
+from datetime import date
+from types import SimpleNamespace
+
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
@@ -48,7 +51,41 @@ class ExportRepository:
     def get_protocol_text(self, db: Session, protocol_element_block_id: int) -> ProtocolText | None:
         return db.scalar(select(ProtocolText).where(ProtocolText.protocol_element_block_id == protocol_element_block_id))
 
+    def _frozen_todo_snapshot(self, protocol: Protocol | None) -> dict | None:
+        # Gleiche Regel wie ProtocolTodoService.frozen_snapshot: nur abgeschlossene Protokolle.
+        if protocol is None or protocol.status != "abgeschlossen":
+            return None
+        snapshot = protocol.todos_snapshot_json
+        return snapshot if isinstance(snapshot, dict) else None
+
+    @staticmethod
+    def _snapshot_rows(items: list[dict]) -> list[SimpleNamespace]:
+        """Snapshot-Einträge (ProtocolTodoRead als JSON) in dieselbe Zeilenform bringen wie
+        die Live-Abfragen unten (row.ProtocolTodo.task, row.todo_status_code, ...)."""
+        rows = []
+        for item in items:
+            due = item.get("resolved_due_date")
+            rows.append(SimpleNamespace(
+                ProtocolTodo=SimpleNamespace(task=item.get("task") or "", tags=item.get("tags") or []),
+                todo_status_code=item.get("todo_status_code"),
+                assigned_participant_name=item.get("assigned_participant_name"),
+                due_event_title=item.get("due_event_title"),
+                due_event_date=date.fromisoformat(item["due_event_date"]) if item.get("due_event_date") else None,
+                resolved_due_date=date.fromisoformat(due) if due else None,
+                resolved_due_label=item.get("resolved_due_label"),
+            ))
+        return rows
+
     def list_protocol_todos(self, db: Session, protocol_element_block_id: int):
+        protocol = db.scalar(
+            select(Protocol)
+            .join(ProtocolElement, ProtocolElement.protocol_id == Protocol.id)
+            .join(ProtocolElementBlock, ProtocolElementBlock.protocol_element_id == ProtocolElement.id)
+            .where(ProtocolElementBlock.id == protocol_element_block_id)
+        )
+        snapshot = self._frozen_todo_snapshot(protocol)
+        if snapshot is not None:
+            return self._snapshot_rows((snapshot.get("blocks") or {}).get(str(protocol_element_block_id)) or [])
         due_event = Event.__table__.alias("due_event")
         next_event = Event.__table__.alias("next_event")
         last_event = Event.__table__.alias("last_event")
@@ -89,6 +126,11 @@ class ExportRepository:
         return db.execute(query).all()
 
     def list_todos_by_tag(self, db: Session, protocol_id: int, tag: str):
+        snapshot = self._frozen_todo_snapshot(db.get(Protocol, protocol_id))
+        if snapshot is not None:
+            items = [item for block in (snapshot.get("blocks") or {}).values() for item in block if tag in (item.get("tags") or [])]
+            items.sort(key=lambda item: item.get("sort_index") or 0)
+            return self._snapshot_rows(items)
         due_event = Event.__table__.alias("due_event")
         next_event = Event.__table__.alias("next_event")
         last_event = Event.__table__.alias("last_event")

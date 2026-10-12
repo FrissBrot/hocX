@@ -1063,6 +1063,9 @@ class TenantImportService:
                 "template_id": new_template_id,
                 "document_template_id": document_template_map.get(data["document_template_id"]) if data.get("document_template_id") else None,
                 "event_id": event_map.get(data["event_id"]) if data.get("event_id") else None,
+                # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - nach dem
+                # Import gelten die (ebenfalls importierten) Live-Todos.
+                "todos_snapshot_json": None,
             })
             self.db.add(new_row)
             self.db.flush()

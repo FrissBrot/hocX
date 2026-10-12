@@ -346,9 +346,13 @@ def get_pending_todos(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    """Open session todos from earlier protocols of the same template."""
+    """Open session todos from earlier protocols of the same template. Abgeschlossene
+    Protokolle zeigen den Stand beim Abschluss (Momentaufnahme)."""
     require_reader(user)
     protocol = _get_protocol_or_404(db, protocol_id, user)
+    snapshot = todo_service.frozen_snapshot(protocol)
+    if snapshot is not None:
+        return todo_service.snapshot_pending(snapshot)
     return todo_service.list_pending_for_protocol(
         db,
         protocol_id=protocol.id,

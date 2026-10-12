@@ -24,6 +24,17 @@ audit = AuditService()
 protocol_service = ProtocolService()
 
 
+def _get_protocol_or_404(db: Session, protocol_id: int):
+    """Todos leben über ihr Protokoll hinaus: auch nach "abgeschlossen" dürfen sie angelegt,
+    bearbeitet, erledigt und gelöscht werden. Deshalb hier bewusst nicht
+    get_protocol_or_404_not_frozen - das abgeschlossene Protokoll selbst zeigt die beim
+    Abschluss eingefrorene Momentaufnahme (protocol.todos_snapshot_json)."""
+    protocol = protocol_service.get_protocol(db, protocol_id)
+    if protocol is None:
+        raise HTTPException(status_code=404, detail="Protocol not found")
+    return protocol
+
+
 @router.post("/todos", response_model=TodoListItem, status_code=status.HTTP_201_CREATED)
 def create_standalone_todo(
     payload: ProtocolTodoCreate,
@@ -93,6 +104,10 @@ def list_todos(
     if block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
     access_service.ensure_can_read_protocol_block(db, user, block.id)
+    protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=block.id)
+    snapshot = service.frozen_snapshot(protocol_service.get_protocol(db, protocol_id) if protocol_id else None)
+    if snapshot is not None:
+        return service.snapshot_todos_for_block(snapshot, block.id)
     return service.list_todos(db, block.id)
 
 
@@ -113,7 +128,7 @@ def create_todo(
         raise HTTPException(status_code=404, detail="Protocol element block not found")
     access_service.ensure_can_read_protocol_block(db, user, block.id)
     protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=block.id)
-    protocol = protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
+    protocol = _get_protocol_or_404(db, protocol_id)
     track_changes_active = bool(protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
         todo = service.create_todo(db, block.id, payload, track_changes_active=track_changes_active)
@@ -206,9 +221,8 @@ def patch_todo(
     access_service.ensure_can_read_todo(db, user, existing.id)
     previous_status_id = existing.todo_status_id
     protocol_id = access_service.repository.protocol_id_for_todo(db, todo_id=existing.id)
-    # Standalone todos (protocol_id None, not tied to any block) have no "abgeschlossen"
-    # concept and stay editable; block-linked todos are rejected once their protocol froze.
-    protocol = protocol_service.get_protocol_or_404_not_frozen(db, protocol_id) if protocol_id else None
+    # Standalone todos (protocol_id None) have no protocol at all.
+    protocol = _get_protocol_or_404(db, protocol_id) if protocol_id else None
     track_changes_active = bool(protocol and protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
         todo = service.update_todo(db, existing.id, payload, track_changes_active=track_changes_active)
@@ -278,8 +292,8 @@ def delete_todo(
         raise HTTPException(status_code=404, detail="Todo not found")
     access_service.ensure_can_read_todo(db, user, existing.id)
     protocol_id = access_service.repository.protocol_id_for_todo(db, todo_id=existing.id)
-    # Standalone todos (protocol_id None) stay deletable regardless of any protocol status.
-    protocol = protocol_service.get_protocol_or_404_not_frozen(db, protocol_id) if protocol_id else None
+    # Standalone todos (protocol_id None) have no protocol at all.
+    protocol = _get_protocol_or_404(db, protocol_id) if protocol_id else None
     track_changes_active = bool(protocol and protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
         result = service.delete_todo(db, existing.id, track_changes_active=track_changes_active)

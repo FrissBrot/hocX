@@ -873,6 +873,9 @@ class Protocol(Base, TimestampMixin, UpdatedAtMixin):
     version_final_minor: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     session_notes: Mapped[str | None] = mapped_column(Text)
     track_changes_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    # Stand aller Todos beim Abschliessen (siehe ProtocolTodoService.build_protocol_snapshot);
+    # NULL solange nicht abgeschlossen bzw. nach dem Zurücksetzen.
+    todos_snapshot_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 

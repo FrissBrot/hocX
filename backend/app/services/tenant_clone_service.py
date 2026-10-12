@@ -825,6 +825,9 @@ class TenantCloneService:
                 "event_id": event_map.get(row.event_id) if row.event_id else None,
                 # document_template_path_snapshot intentionally left pointing at the ORIGINAL
                 # tenant's immutable snapshot directory - see class docstring.
+                # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - die
+                # Kopie zeigt deshalb die (ebenfalls geklonten) Live-Todos.
+                "todos_snapshot_json": None,
             })
             db.add(new_row)
             db.flush()
