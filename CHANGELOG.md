@@ -8,6 +8,59 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+## [1.1.12] - 2026-10-12
+
+Feature- und Bugfix-Release auf 1.1.11 mit neu gestaltetem Matrix-Designer, Zyklus-Filter
+für automatische Termin-Spalten und mehreren Korrekturen am PDF-Export. Keine Migrationen,
+keine neuen Pflicht-Umgebungsvariablen.
+
+### Update von 1.1.11 auf 1.1.12
+
+Nach Veröffentlichung der Release-Images `HOCX_VERSION` in `.env` auf `v1.1.12` setzen,
+dann `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>` ausführen.
+
+- Optional: `HOCX_APP_URL` (z. B. `https://app.hocx.ch`) bestimmt das Ziel von «Anmelden»
+  auf der Website. Leer oder nicht gesetzt gilt weiterhin `https://${TRAEFIK_DOMAIN}`.
+
+### Neu
+
+- Matrix-Designer: Automatische Termin-Spalten lassen sich auf einen Zyklus einschränken
+  (aktueller, vorheriger, … Zyklus relativ zum Protokolldatum). Der Tag-Filter
+  automatischer Termin-Spalten akzeptiert mehrere Tags.
+- Website: Sprachumschalter im Header; «Anmelden» zeigt auf `HOCX_APP_URL`.
+
+### Geändert
+
+- Matrix-Designer neu gestaltet: Einstellungsleiste für Spaltenquelle, Raster mit
+  nummerierten Zeilen und Spaltenköpfen, Inspektor für Zeile oder Spalte, Abbrechen
+  verwirft alle Änderungen seit dem Öffnen.
+- Abgeschlossene Protokolle öffnen im selben Dokument-Layout wie der Protokolleditor
+  (schreibgeschützt); die alte Einzelabschnitt-Ansicht entfällt.
+- Stammlisten: Einzel-Teilnehmer erscheinen als Chip mit Initialen wie bei
+  Mehrfach-Teilnehmern.
+- Abgabe-Detail: Termin bzw. Listeneintrag als Titel, verantwortliche Person in der
+  Metazeile.
+- Todo-Dialog: Verantwortliche als Mehrfachauswahl; die Herkunft aus einem Aufgabenpaket
+  steht im Dialog statt als Badge in der Todo-Liste.
+- Aufgabenpakete: Button «Aus Liste» statt «Ämtli aus Liste».
+- Website: Hinweis «Hosting in der Schweiz» aus dem Hero entfernt.
+
+### Behoben
+
+- Todo bearbeiten ersetzte mehrere Verantwortliche (z. B. aus einem Aufgabenpaket) durch
+  eine einzige Person.
+- PDF-Export zeigte andere Termine als der Protokolleditor: Der Editor lud nur die
+  neuesten 100 Termine, der Export enthielt «Nächster Hock»-Platzhalter, und
+  Terminlisten-Zeilen in Matrizen filterten anders als im Editor.
+- Termine «Nur im aktuellen Zyklus» funktionierten nicht, weil die Zyklus-Zuordnungen in
+  der Termin-Antwort fehlten.
+- PDF-Export: Kleine Bilder wurden auf Textbreite hochskaliert und unscharf;
+  Bildunterschriften erschienen als «Figure 1: *».
+- Protokollsuche: Treffer im Titel stehen vor Treffern im Inhalt.
+- Termine: Tag-Zeilen in der Seitenleiste waren zu hoch, der Stern ragte über den Rand.
+- Sidebar: Eine lange Copyright-Zeile schnitt Identitätskarte und Footer ab.
+- Website: Ein leeres `HOCX_APP_URL` führte nicht auf `TRAEFIK_DOMAIN` zurück.
+
 ## [1.1.11] - 2026-10-12
 
 Feature-Release auf 1.1.10 mit Aufgabenpaketen für wiederkehrende Todos, mehreren
