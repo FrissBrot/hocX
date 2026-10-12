@@ -36,6 +36,11 @@ _COMPILE_CPU_LIMIT_SECONDS = 90
 _COMPILE_CONCURRENCY_LIMIT = 4
 _compile_semaphore = asyncio.Semaphore(_COMPILE_CONCURRENCY_LIMIT)
 
+# Protocol images are never stretched beyond their on-screen size (pixels at 96 dpi):
+# upscaling a small screenshot to the full text width made it visibly blurry in the PDF.
+_IMAGE_NATURAL_DPI = 96
+_IMAGE_MAX_TEXTWIDTH_FRACTION = "0.82"
+
 
 def _limit_compile_resources() -> None:
     """preexec_fn for the pdflatex/xelatex subprocess (POSIX-only, runs in the forked
@@ -948,12 +953,16 @@ Status: {protocol_status}
                 copied_path = image_export_dir / f"block-{block.id}-{index}{source_path.suffix}"
                 shutil.copy2(source_path, copied_path)
                 caption = row.ProtocolImage.caption or row.ProtocolImage.title or row.StoredFile.original_name
+                escaped_caption = self._escape_latex(caption)
                 parts.extend(
                     [
                         "\\begin{figure}[H]",
                         "\\centering",
-                        f"\\includegraphics[width=0.82\\textwidth]{{{copied_path.as_posix()}}}",
-                        f"\\caption*{{{self._escape_latex(caption)}}}",
+                        *self._image_width_latex(copied_path),
+                        f"\\includegraphics[width=\\HocxImageWidth]{{{copied_path.as_posix()}}}",
+                        # \caption* only exists with the caption package; without it LaTeX
+                        # printed "Figure 1: *" followed by the caption as plain text.
+                        f"\\ifdefined\\captionsetup\\caption*{{{escaped_caption}}}\\else\\par\\smallskip{{\\small {escaped_caption}}}\\par\\fi",
                         "\\end{figure}",
                     ]
                 )
@@ -1120,6 +1129,29 @@ Status: {protocol_status}
         if not lines:
             return "Keine Ein- oder Austritte."
         return "\n".join(lines)
+
+    @staticmethod
+    def _image_width_latex(image_path: Path) -> list[str]:
+        """Sets \\HocxImageWidth to the image's natural size, capped at the usual text width
+        fraction. The cap is applied in TeX because \\textwidth depends on the template."""
+        max_width = f"{_IMAGE_MAX_TEXTWIDTH_FRACTION}\\textwidth"
+        lines = [
+            "\\ifdefined\\HocxImageWidth\\else\\newlength{\\HocxImageWidth}\\fi",
+            f"\\setlength{{\\HocxImageWidth}}{{{max_width}}}",
+        ]
+        try:
+            from PIL import Image
+
+            with Image.open(image_path) as image:
+                pixel_width = image.width
+        except Exception:
+            # Unreadable for Pillow: keep the old behaviour and let LaTeX report real problems.
+            return lines
+        natural_width_bp = pixel_width * 72 / _IMAGE_NATURAL_DPI
+        lines.append(
+            f"\\ifdim{natural_width_bp:.2f}bp<\\HocxImageWidth\\setlength{{\\HocxImageWidth}}{{{natural_width_bp:.2f}bp}}\\fi"
+        )
+        return lines
 
     def _chart_block_content(self, db: Session, block, image_export_dir: Path) -> str:
         from app.services.chart_service import generate_chart_png
