@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 
 import { UploadForm } from "@/components/upload-form";
 import { getAssignmentDetail, getElement } from "@/lib/api";
+import { formatDate } from "@/lib/format";
 
 export default async function ElementUploadPage({
   params,
@@ -22,26 +23,36 @@ export default async function ElementUploadPage({
 
   const sitekey = process.env.NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY ?? "";
   const t = await getTranslations("abgabebox.elements");
+  const windowText = element.window_start && element.window_end
+    ? `${formatDate(element.window_start)} – ${formatDate(element.window_end)}`
+    : element.window_start
+      ? t("windowFrom", { date: formatDate(element.window_start) })
+      : element.window_end
+        ? t("windowUntil", { date: formatDate(element.window_end) })
+        : null;
 
   return (
-    <div>
-      <h1>{element.label}</h1>
-      <p className="muted">{assignment.title}</p>
+    <div className="box-step">
+      <div className="box-step-head">
+        <Link href={`/${linkToken}/${assignmentSlug}`} className="back-link">
+          {t("backTo", { title: assignment.title })}
+        </Link>
+        <h1>{element.label}</h1>
+        <p className="muted">{windowText ?? assignment.title}</p>
+      </div>
 
       <UploadForm
         linkToken={linkToken}
         assignmentSlug={assignmentSlug}
         elementRef={elementRef}
+        assignmentTitle={assignment.title}
+        elementLabel={element.label}
         allowedFileTypes={assignment.allowed_file_types}
         maxFiles={assignment.max_files_per_element}
         maxFileSizeMb={assignment.max_file_size_mb}
         alreadyUploadedCount={element.uploaded_count}
         sitekey={sitekey}
       />
-
-      <Link href={`/${linkToken}/${assignmentSlug}`} className="back-btn">
-        {t("backToOverview")}
-      </Link>
     </div>
   );
 }

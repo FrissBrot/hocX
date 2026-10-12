@@ -1,24 +1,62 @@
 {
-  "meta": { "description": "Déposer des fichiers sans connexion" },
-  "home": { "title": "Abgabebox", "hint": "Merci d'utiliser le lien de dépôt complet que vous avez reçu de l'association." },
-  "notFound": { "title": "Introuvable", "hint": "Cette page n'existe pas ou n'est actuellement pas disponible." },
-  "error": { "title": "Une erreur s'est produite", "hint": "La page n'a pas pu être chargée. Cela peut être dû à une panne temporaire - veuillez réessayer dans un instant.", "retry": "Réessayer" },
+  "meta": {
+    "description": "Déposer des fichiers sans connexion"
+  },
+  "brand": {
+    "subtitle": "Boîte de dépôt",
+    "headline": "Déposer des documents – sans compte.",
+    "lead": "Choisis le dépôt correspondant, téléverse ton fichier et reçois immédiatement une confirmation.",
+    "securityNote": "Les fichiers sont transmis de manière chiffrée et analysés contre les virus avant d’être enregistrés."
+  },
+  "flow": {
+    "steps": {
+      "assignment": {
+        "label": "Choisir le dépôt",
+        "hint": "Pour quoi déposes-tu ?"
+      },
+      "element": {
+        "label": "Choisir le document",
+        "hint": "Quel élément ?"
+      },
+      "upload": {
+        "label": "Téléverser le fichier",
+        "hint": "Aucune connexion requise"
+      }
+    },
+    "stepOf": "Étape {step} sur {total}",
+    "finished": "Terminé"
+  },
+  "home": {
+    "title": "Abgabebox",
+    "hint": "Merci d'utiliser le lien de dépôt complet que vous avez reçu de l'association."
+  },
+  "notFound": {
+    "title": "Introuvable",
+    "hint": "Cette page n'existe pas ou n'est actuellement pas disponible."
+  },
+  "error": {
+    "title": "Une erreur s'est produite",
+    "hint": "La page n'a pas pu être chargée. Cela peut être dû à une panne temporaire - veuillez réessayer dans un instant.",
+    "retry": "Réessayer"
+  },
   "assignments": {
     "disabledTitle": "Dépôt non disponible",
     "disabledHint": "Le dépôt n'est actuellement pas disponible pour cette association.",
     "title": "Dépôts ouverts",
-    "hint": "Choisissez un dépôt pour envoyer votre fichier.",
+    "hint": "Pour quoi souhaites-tu déposer quelque chose ?",
     "empty": "Il n'y a actuellement aucun dépôt ouvert.",
     "backToOverview": "← Retour à l'aperçu"
   },
   "elements": {
     "title": "Éléments",
-    "hint": "Choisissez votre élément pour téléverser le fichier.",
+    "hint": "Quel document déposes-tu ?",
     "empty": "Il n'y a actuellement aucun élément ouvert.",
     "windowFrom": "à partir du {date}",
     "windowUntil": "jusqu'au {date}",
     "uploadedCount": "{count, plural, one {# fichier déjà téléversé} other {# fichiers déjà téléversés}}",
-    "backToOverview": "← Retour à l'aperçu"
+    "backToAssignments": "← Tous les dépôts",
+    "backTo": "← {title}",
+    "statusOpen": "Ouvert"
   },
   "upload": {
     "typeLabelDefault": "Images, PDF et documents Office",
@@ -38,9 +76,9 @@
     "captchaPlaceholder": "Vérification de sécurité (aucun FriendlyCaptcha configuré – environnement de test/dev)",
     "submit": "Envoyer",
     "submitting": "Envoi en cours…",
-    "successTitle": "Dépôt réussi",
+    "successTitle": "Merci, dépôt reçu",
     "successCount": "{count, plural, one {# fichier téléversé pour ce dépôt.} other {# fichiers téléversés pour ce dépôt.}}",
-    "uploadMore": "Téléverser un autre fichier",
+    "uploadMore": "Déposer un autre fichier",
     "errors": {
       "noFileSelected": "Veuillez sélectionner au moins un fichier",
       "offline": "Pas de connexion internet – les fichiers sélectionnés sont conservés. Veuillez renvoyer une fois reconnecté.",
@@ -55,8 +93,21 @@
       "unsupportedType": "« {filename} » n'est pas pris en charge. Veuillez choisir une image, un PDF ou un document Office.",
       "disallowedType": "« {filename} » a un format de fichier non autorisé (autorisés : {allowed})",
       "fileTooLarge": "« {filename} » est trop volumineux (max. {maxFileSizeMb} Mo)"
+    },
+    "dropLabelRelease": "Relâcher pour ajouter",
+    "captchaTitle": "Contrôle de sécurité",
+    "submitCount": "{count, plural, one {Déposer # fichier} other {Déposer # fichiers}}",
+    "otherElement": "Déposer un autre document",
+    "toOverview": "Retour à l’aperçu",
+    "receipt": {
+      "assignment": "Dépôt",
+      "element": "Document",
+      "files": "Fichiers",
+      "receivedAt": "Reçu le"
     }
   },
-  "language": { "label": "Langue" },
+  "language": {
+    "label": "Langue"
+  },
   "copyright": "Copyright © {year} hocX Project · Tous droits réservés."
 }

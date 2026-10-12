@@ -1,24 +1,62 @@
 {
-  "meta": { "description": "Submit files without logging in" },
-  "home": { "title": "Abgabebox", "hint": "Please use the full submission link you received from the organization." },
-  "notFound": { "title": "Not found", "hint": "This page doesn't exist or isn't currently available." },
-  "error": { "title": "Something went wrong", "hint": "The page could not be loaded. This can be caused by a brief outage - please try again in a moment.", "retry": "Try again" },
+  "meta": {
+    "description": "Submit files without logging in"
+  },
+  "brand": {
+    "subtitle": "Submission box",
+    "headline": "Submit documents – no account needed.",
+    "lead": "Choose the right submission, upload your file and get a confirmation right away.",
+    "securityNote": "Files are transferred encrypted and scanned for viruses before they are stored."
+  },
+  "flow": {
+    "steps": {
+      "assignment": {
+        "label": "Choose submission",
+        "hint": "What are you submitting for?"
+      },
+      "element": {
+        "label": "Choose document",
+        "hint": "Which item?"
+      },
+      "upload": {
+        "label": "Upload file",
+        "hint": "No login required"
+      }
+    },
+    "stepOf": "Step {step} of {total}",
+    "finished": "Done"
+  },
+  "home": {
+    "title": "Abgabebox",
+    "hint": "Please use the full submission link you received from the organization."
+  },
+  "notFound": {
+    "title": "Not found",
+    "hint": "This page doesn't exist or isn't currently available."
+  },
+  "error": {
+    "title": "Something went wrong",
+    "hint": "The page could not be loaded. This can be caused by a brief outage - please try again in a moment.",
+    "retry": "Try again"
+  },
   "assignments": {
     "disabledTitle": "Submission box not available",
     "disabledHint": "The submission box is currently not available for this organization.",
     "title": "Open submissions",
-    "hint": "Choose a submission to upload your file.",
+    "hint": "What would you like to submit something for?",
     "empty": "There are currently no open submissions.",
     "backToOverview": "← Back to overview"
   },
   "elements": {
     "title": "Items",
-    "hint": "Choose your item to upload the file.",
+    "hint": "Which document are you submitting?",
     "empty": "There are currently no open items.",
     "windowFrom": "from {date}",
     "windowUntil": "until {date}",
     "uploadedCount": "{count, plural, one {# file already uploaded} other {# files already uploaded}}",
-    "backToOverview": "← Back to overview"
+    "backToAssignments": "← All submissions",
+    "backTo": "← {title}",
+    "statusOpen": "Open"
   },
   "upload": {
     "typeLabelDefault": "Images, PDF and Office documents",
@@ -38,9 +76,9 @@
     "captchaPlaceholder": "Security check (no FriendlyCaptcha configured – test/dev environment)",
     "submit": "Submit",
     "submitting": "Uploading…",
-    "successTitle": "Submission successful",
+    "successTitle": "Thank you, submission received",
     "successCount": "{count, plural, one {# file uploaded for this submission.} other {# files uploaded for this submission.}}",
-    "uploadMore": "Upload another file",
+    "uploadMore": "Submit another file",
     "errors": {
       "noFileSelected": "Please select at least one file",
       "offline": "No internet connection – the selected files are kept. Please resend once you're connected again.",
@@ -55,8 +93,21 @@
       "unsupportedType": "\"{filename}\" isn't supported. Please choose an image, PDF or Office document.",
       "disallowedType": "\"{filename}\" has a disallowed file format (allowed: {allowed})",
       "fileTooLarge": "\"{filename}\" is too large (max. {maxFileSizeMb} MB)"
+    },
+    "dropLabelRelease": "Release to add",
+    "captchaTitle": "Security check",
+    "submitCount": "{count, plural, one {Submit # file} other {Submit # files}}",
+    "otherElement": "Submit another document",
+    "toOverview": "Back to overview",
+    "receipt": {
+      "assignment": "Submission",
+      "element": "Document",
+      "files": "Files",
+      "receivedAt": "Received"
     }
   },
-  "language": { "label": "Language" },
+  "language": {
+    "label": "Language"
+  },
   "copyright": "Copyright © {year} hocX Project · All rights reserved."
 }

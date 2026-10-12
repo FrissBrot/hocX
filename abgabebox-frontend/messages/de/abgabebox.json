@@ -1,24 +1,62 @@
 {
-  "meta": { "description": "Dateien ohne Anmeldung einreichen" },
-  "home": { "title": "Abgabebox", "hint": "Bitte den vollständigen Abgabe-Link verwenden, den du vom Verein erhalten hast." },
-  "notFound": { "title": "Nicht gefunden", "hint": "Diese Seite existiert nicht oder ist aktuell nicht verfügbar." },
-  "error": { "title": "Etwas ist schiefgelaufen", "hint": "Die Seite konnte nicht geladen werden. Das kann an einer kurzzeitigen Störung liegen - bitte versuche es gleich nochmal.", "retry": "Erneut versuchen" },
+  "meta": {
+    "description": "Dateien ohne Anmeldung einreichen"
+  },
+  "brand": {
+    "subtitle": "Abgabebox",
+    "headline": "Dokumente einreichen – ohne Konto.",
+    "lead": "Wähle die passende Abgabe, lade deine Datei hoch und erhalte direkt eine Bestätigung.",
+    "securityNote": "Dateien werden verschlüsselt übertragen und vor der Ablage virengeprüft."
+  },
+  "flow": {
+    "steps": {
+      "assignment": {
+        "label": "Abgabe wählen",
+        "hint": "Wofür reichst du ein?"
+      },
+      "element": {
+        "label": "Dokument wählen",
+        "hint": "Welches Element?"
+      },
+      "upload": {
+        "label": "Datei hochladen",
+        "hint": "Kein Login nötig"
+      }
+    },
+    "stepOf": "Schritt {step} von {total}",
+    "finished": "Fertig"
+  },
+  "home": {
+    "title": "Abgabebox",
+    "hint": "Bitte den vollständigen Abgabe-Link verwenden, den du vom Verein erhalten hast."
+  },
+  "notFound": {
+    "title": "Nicht gefunden",
+    "hint": "Diese Seite existiert nicht oder ist aktuell nicht verfügbar."
+  },
+  "error": {
+    "title": "Etwas ist schiefgelaufen",
+    "hint": "Die Seite konnte nicht geladen werden. Das kann an einer kurzzeitigen Störung liegen - bitte versuche es gleich nochmal.",
+    "retry": "Erneut versuchen"
+  },
   "assignments": {
     "disabledTitle": "Abgabebox nicht verfügbar",
     "disabledHint": "Die Abgabebox ist für diesen Verein aktuell nicht verfügbar.",
     "title": "Offene Abgaben",
-    "hint": "Wähle eine Abgabe aus, um deine Datei einzureichen.",
+    "hint": "Wofür möchtest du etwas einreichen?",
     "empty": "Aktuell sind keine Abgaben offen.",
     "backToOverview": "← Zurück zur Übersicht"
   },
   "elements": {
     "title": "Elemente",
-    "hint": "Wähle dein Element aus, um die Datei hochzuladen.",
+    "hint": "Welches Dokument reichst du ein?",
     "empty": "Aktuell sind keine Elemente offen.",
     "windowFrom": "ab {date}",
     "windowUntil": "bis {date}",
     "uploadedCount": "{count, plural, one {# Datei bereits hochgeladen} other {# Dateien bereits hochgeladen}}",
-    "backToOverview": "← Zurück zur Übersicht"
+    "backToAssignments": "← Alle Abgaben",
+    "backTo": "← {title}",
+    "statusOpen": "Offen"
   },
   "upload": {
     "typeLabelDefault": "Bilder, PDF und Office-Dokumente",
@@ -38,9 +76,9 @@
     "captchaPlaceholder": "Sicherheitscheck (kein FriendlyCaptcha konfiguriert – Test-/Dev-Betrieb)",
     "submit": "Abgeben",
     "submitting": "Wird hochgeladen…",
-    "successTitle": "Abgabe erfolgreich",
+    "successTitle": "Danke, Abgabe eingegangen",
     "successCount": "{count, plural, one {# Datei für diese Abgabe hochgeladen.} other {# Dateien für diese Abgabe hochgeladen.}}",
-    "uploadMore": "Weitere Datei hochladen",
+    "uploadMore": "Weitere Datei einreichen",
     "errors": {
       "noFileSelected": "Bitte mindestens eine Datei auswählen",
       "offline": "Keine Internetverbindung – die ausgewählten Dateien bleiben erhalten. Bitte nach dem Verbinden erneut senden.",
@@ -55,8 +93,21 @@
       "unsupportedType": "„{filename}“ wird nicht unterstützt. Bitte ein Bild, PDF oder Office-Dokument wählen.",
       "disallowedType": "„{filename}“ hat ein nicht erlaubtes Dateiformat (erlaubt: {allowed})",
       "fileTooLarge": "„{filename}“ ist zu gross (max. {maxFileSizeMb} MB)"
+    },
+    "dropLabelRelease": "Loslassen zum Hinzufügen",
+    "captchaTitle": "Sicherheitsprüfung",
+    "submitCount": "{count, plural, one {# Datei abgeben} other {# Dateien abgeben}}",
+    "otherElement": "Anderes Dokument einreichen",
+    "toOverview": "Zur Übersicht",
+    "receipt": {
+      "assignment": "Abgabe",
+      "element": "Dokument",
+      "files": "Dateien",
+      "receivedAt": "Eingegangen"
     }
   },
-  "language": { "label": "Sprache" },
+  "language": {
+    "label": "Sprache"
+  },
   "copyright": "Copyright © {year} hocX Project · Alle Rechte vorbehalten."
 }

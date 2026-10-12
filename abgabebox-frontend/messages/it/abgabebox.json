@@ -1,24 +1,62 @@
 {
-  "meta": { "description": "Invia file senza accesso" },
-  "home": { "title": "Abgabebox", "hint": "Utilizza il link di consegna completo ricevuto dall'associazione." },
-  "notFound": { "title": "Non trovato", "hint": "Questa pagina non esiste o non è attualmente disponibile." },
-  "error": { "title": "Qualcosa è andato storto", "hint": "Impossibile caricare la pagina. Potrebbe trattarsi di un problema temporaneo - riprova tra poco.", "retry": "Riprova" },
+  "meta": {
+    "description": "Invia file senza accesso"
+  },
+  "brand": {
+    "subtitle": "Casella di consegna",
+    "headline": "Consegnare documenti – senza account.",
+    "lead": "Scegli la consegna giusta, carica il tuo file e ricevi subito una conferma.",
+    "securityNote": "I file vengono trasmessi in forma crittografata e controllati contro i virus prima dell’archiviazione."
+  },
+  "flow": {
+    "steps": {
+      "assignment": {
+        "label": "Scegli la consegna",
+        "hint": "Per cosa stai consegnando?"
+      },
+      "element": {
+        "label": "Scegli il documento",
+        "hint": "Quale elemento?"
+      },
+      "upload": {
+        "label": "Carica il file",
+        "hint": "Nessun login necessario"
+      }
+    },
+    "stepOf": "Passo {step} di {total}",
+    "finished": "Fatto"
+  },
+  "home": {
+    "title": "Abgabebox",
+    "hint": "Utilizza il link di consegna completo ricevuto dall'associazione."
+  },
+  "notFound": {
+    "title": "Non trovato",
+    "hint": "Questa pagina non esiste o non è attualmente disponibile."
+  },
+  "error": {
+    "title": "Qualcosa è andato storto",
+    "hint": "Impossibile caricare la pagina. Potrebbe trattarsi di un problema temporaneo - riprova tra poco.",
+    "retry": "Riprova"
+  },
   "assignments": {
     "disabledTitle": "Consegna non disponibile",
     "disabledHint": "La consegna non è attualmente disponibile per questa associazione.",
     "title": "Consegne aperte",
-    "hint": "Scegli una consegna per inviare il tuo file.",
+    "hint": "Per cosa vuoi consegnare qualcosa?",
     "empty": "Al momento non ci sono consegne aperte.",
     "backToOverview": "← Torna alla panoramica"
   },
   "elements": {
     "title": "Elementi",
-    "hint": "Scegli il tuo elemento per caricare il file.",
+    "hint": "Quale documento stai consegnando?",
     "empty": "Al momento non ci sono elementi aperti.",
     "windowFrom": "dal {date}",
     "windowUntil": "fino al {date}",
     "uploadedCount": "{count, plural, one {# file già caricato} other {# file già caricati}}",
-    "backToOverview": "← Torna alla panoramica"
+    "backToAssignments": "← Tutte le consegne",
+    "backTo": "← {title}",
+    "statusOpen": "Aperto"
   },
   "upload": {
     "typeLabelDefault": "Immagini, PDF e documenti Office",
@@ -38,9 +76,9 @@
     "captchaPlaceholder": "Verifica di sicurezza (nessun FriendlyCaptcha configurato – ambiente di test/sviluppo)",
     "submit": "Invia",
     "submitting": "Caricamento in corso…",
-    "successTitle": "Consegna riuscita",
+    "successTitle": "Grazie, consegna ricevuta",
     "successCount": "{count, plural, one {# file caricato per questa consegna.} other {# file caricati per questa consegna.}}",
-    "uploadMore": "Carica un altro file",
+    "uploadMore": "Consegna un altro file",
     "errors": {
       "noFileSelected": "Seleziona almeno un file",
       "offline": "Nessuna connessione internet – i file selezionati vengono mantenuti. Invia di nuovo una volta ricollegato.",
@@ -55,8 +93,21 @@
       "unsupportedType": "\"{filename}\" non è supportato. Scegli un'immagine, un PDF o un documento Office.",
       "disallowedType": "\"{filename}\" ha un formato file non consentito (consentiti: {allowed})",
       "fileTooLarge": "\"{filename}\" è troppo grande (max. {maxFileSizeMb} MB)"
+    },
+    "dropLabelRelease": "Rilascia per aggiungere",
+    "captchaTitle": "Controllo di sicurezza",
+    "submitCount": "{count, plural, one {Consegna # file} other {Consegna # file}}",
+    "otherElement": "Consegna un altro documento",
+    "toOverview": "Torna alla panoramica",
+    "receipt": {
+      "assignment": "Consegna",
+      "element": "Documento",
+      "files": "File",
+      "receivedAt": "Ricevuto"
     }
   },
-  "language": { "label": "Lingua" },
+  "language": {
+    "label": "Lingua"
+  },
   "copyright": "Copyright © {year} hocX Project · Tutti i diritti riservati."
 }
