@@ -404,7 +404,8 @@
         "embedded": "Un blocco incorporato «{type}» per cella."
       },
       "sourceSentenceEventsCycle": "Una colonna per evento del ciclo «{cycle}» ({offset}, rispetto alla data del verbale).",
-      "sourceSentenceEventsTagCycle": "Una colonna per evento con tag «{tag}» del ciclo «{cycle}» ({offset}, rispetto alla data del verbale)."
+      "sourceSentenceEventsTagCycle": "Una colonna per evento con tag «{tag}» del ciclo «{cycle}» ({offset}, rispetto alla data del verbale).",
+      "cycleFilterHelp": "Rispetto al ciclo in cui cade la data del verbale."
     }
   },
   "block": "Blocco",

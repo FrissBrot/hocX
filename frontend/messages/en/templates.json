@@ -404,7 +404,8 @@
         "embedded": "An embedded «{type}» block per cell."
       },
       "sourceSentenceEventsCycle": "One column per event in the cycle «{cycle}» ({offset}, relative to the protocol date).",
-      "sourceSentenceEventsTagCycle": "One column per event tagged «{tag}» in the cycle «{cycle}» ({offset}, relative to the protocol date)."
+      "sourceSentenceEventsTagCycle": "One column per event tagged «{tag}» in the cycle «{cycle}» ({offset}, relative to the protocol date).",
+      "cycleFilterHelp": "Relative to the cycle the protocol date falls into."
     }
   },
   "block": "Block",

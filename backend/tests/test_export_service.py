@@ -437,3 +437,12 @@ def test_export_latex_session_notes_block_without_notes_shows_placeholder(db):
     _protocol, _export_dir, _latex_source, body_content = service._build_export_context(db, protocol.id)
 
     assert "Keine Sitzungsnotizen." in body_content
+
+
+def test_event_list_cycle_offset_relative_to_protocol_cycle():
+    """Terminlisten filtern relativ zum Protokollzyklus; die alte Einstellung «nur aktueller Zyklus» ist Offset 0."""
+    assert ExportService._event_list_cycle_offset({"event_cycle_offset": -2}) == -2
+    assert ExportService._event_list_cycle_offset({"event_cycle_offset": 0}) == 0
+    assert ExportService._event_list_cycle_offset({"event_only_current_cycle": True}) == 0
+    assert ExportService._event_list_cycle_offset({"event_cycle_offset": None, "event_only_current_cycle": False}) is None
+    assert ExportService._event_list_cycle_offset({}) is None

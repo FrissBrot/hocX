@@ -1290,19 +1290,31 @@ Status: {protocol_status}
             )
         )
 
+    @staticmethod
+    def _event_list_cycle_offset(config: dict) -> int | None:
+        """Zyklus-Filter relativ zum Protokollzyklus (0 = aktueller, -1 = vorheriger, …), None = kein Filter.
+
+        Ältere Konfigurationen mit `event_only_current_cycle: true` entsprechen Offset 0
+        (identisch zu embeddedEventCycleOffset in frontend/lib/utils/cycle.ts).
+        """
+        offset = config.get("event_cycle_offset")
+        if isinstance(offset, (int, float)) and not isinstance(offset, bool):
+            return int(offset)
+        return 0 if bool(config.get("event_only_current_cycle", False)) else None
+
     def _filter_event_list_events(self, db: Session, *, protocol, config: dict, extra_tag_filter: str | None = None) -> list[Event]:
         """Filter einer Terminliste (Elementtyp 7), identisch zu eventRowsForBlock/matrix-embedded-block-editor im Frontend."""
         tag_filters = [t.strip() for t in str(config.get("event_tag_filter") or "").lower().split(",") if t.strip()]
         combined_extra_tag_filters = [t.strip() for t in str(extra_tag_filter or "").lower().split(",") if t.strip()]
         only_from_protocol_date = bool(config.get("event_only_from_protocol_date", True))
         only_before_protocol_date = bool(config.get("event_only_before_protocol_date", False))
-        only_current_cycle = bool(config.get("event_only_current_cycle", False))
+        cycle_offset = self._event_list_cycle_offset(config)
         cycle_event_ids: set[int] | None = None
-        if only_current_cycle:
+        if cycle_offset is not None:
             resolved_cycle = resolve_protocol_cycle(db, protocol)
             if resolved_cycle:
                 cycle_cfg, cycle_year = resolved_cycle
-                cycle_event_ids = list_cycle_event_ids(db, cycle_cfg.id, cycle_year)
+                cycle_event_ids = list_cycle_event_ids(db, cycle_cfg.id, cycle_year + cycle_offset)
 
         filtered: list[Event] = []
         for event in self._tenant_events(db, protocol.tenant_id):

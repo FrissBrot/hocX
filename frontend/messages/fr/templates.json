@@ -404,7 +404,8 @@
         "embedded": "Un bloc intégré «{type}» par cellule."
       },
       "sourceSentenceEventsCycle": "Une colonne par événement du cycle «{cycle}» ({offset}, par rapport à la date du procès-verbal).",
-      "sourceSentenceEventsTagCycle": "Une colonne par événement avec le tag «{tag}» du cycle «{cycle}» ({offset}, par rapport à la date du procès-verbal)."
+      "sourceSentenceEventsTagCycle": "Une colonne par événement avec le tag «{tag}» du cycle «{cycle}» ({offset}, par rapport à la date du procès-verbal).",
+      "cycleFilterHelp": "Par rapport au cycle dans lequel tombe la date du procès-verbal."
     }
   },
   "block": "Bloc",

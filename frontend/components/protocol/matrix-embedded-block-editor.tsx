@@ -14,6 +14,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { EventOverviewModal } from "@/components/protocol/planning/event-overview-modal";
 import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
 import { TagConfig } from "@/lib/hooks/use-tag-config";
+import { embeddedEventCycleOffset } from "@/lib/utils/cycle";
 import { formatDateRange } from "@/lib/utils/format";
 import { EventSummary, ParticipantSummary, ProtocolSummary } from "@/types/api";
 import {
@@ -648,6 +649,7 @@ export function MatrixEmbeddedBlockEditor({
     const tagFilters = String(embeddedConfig.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
     const columnTagFilters = embeddedConfig.event_use_column_tag_filter === true
       ? String(matrixColumn?.event_tag_filter || matrixColumn?.title || "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean) : [];
+    const cycleOffset = embeddedEventCycleOffset(embeddedConfig);
     const matchingEvents = sortedEvents.filter((eventRow) => {
       const effectiveEndDate = eventRow.event_end_date || eventRow.event_date;
       const eventTag = (eventRow.tag ?? "").toLowerCase();
@@ -655,10 +657,10 @@ export function MatrixEmbeddedBlockEditor({
         (!tagFilters.length || tagFilters.some((t) => eventTag.includes(t))) &&
         (!columnTagFilters.length || columnTagFilters.some((t) => eventTag.includes(t)));
       const matchesDate = !protocol.protocol_date ? true : embeddedConfig.event_only_before_protocol_date === true ? effectiveEndDate < protocol.protocol_date : embeddedConfig.event_only_from_protocol_date === false ? true : effectiveEndDate >= protocol.protocol_date;
-      const matchesCycle = embeddedConfig.event_only_current_cycle !== true || currentCycleYear === null
+      const matchesCycle = cycleOffset === null || currentCycleYear === null
         ? true
         : (eventRow.cycle_assignments ?? []).some(
-            (a) => a.cycle_config_id === cycleConfigId && a.cycle_year === currentCycleYear
+            (a) => a.cycle_config_id === cycleConfigId && a.cycle_year === currentCycleYear + cycleOffset
           );
       return matchesTag && matchesDate && matchesCycle;
     });

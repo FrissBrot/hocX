@@ -404,7 +404,8 @@
         "embedded": "Pro Zelle ein eingebetteter Block «{type}»."
       },
       "sourceSentenceEventsCycle": "Eine Spalte pro Termin im Zyklus «{cycle}» ({offset}, bezogen auf das Protokolldatum).",
-      "sourceSentenceEventsTagCycle": "Eine Spalte pro Termin mit Tag «{tag}» im Zyklus «{cycle}» ({offset}, bezogen auf das Protokolldatum)."
+      "sourceSentenceEventsTagCycle": "Eine Spalte pro Termin mit Tag «{tag}» im Zyklus «{cycle}» ({offset}, bezogen auf das Protokolldatum).",
+      "cycleFilterHelp": "Bezogen auf den Zyklus, in den das Protokolldatum fällt."
     }
   },
   "block": "Block",

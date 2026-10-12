@@ -22,7 +22,7 @@ import { formatDateRange } from "@/lib/utils/format";
 import { elementTypeOptions as buildElementTypeOptions, elementTypeLabels as buildElementTypeLabels } from "@/lib/constants/element-types";
 import { EVENT_SYNC_FIELDS, TODO_SYNC_FIELDS } from "@/lib/constants/event-sync-fields";
 import { CycleConfigSummary, ElementDefinition, ElementDefinitionBlock, EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
-import { eventMatchesCycleFilter } from "@/lib/utils/cycle";
+import { embeddedEventCycleOffset, eventMatchesCycleFilter } from "@/lib/utils/cycle";
 import { CYCLE_OFFSET_OPTIONS, cycleOffsetLabel } from "@/components/submission-assignments/submission-assignment-form";
 import { ChartCycleSelection } from "@/components/protocol/chart-cycle-selection";
 import { asObject } from "@/components/protocol/protocol-editor-shared";
@@ -460,6 +460,7 @@ function matrixEmbeddedBlockConfiguration(elementTypeId: string | number | null 
       event_only_from_protocol_date: true,
       event_only_before_protocol_date: false,
       event_only_current_cycle: false,
+      event_cycle_offset: null,
       event_gray_past: true,
       event_allow_end_date: false,
       event_use_column_tag_filter: false,
@@ -4053,7 +4054,8 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                         <div className="matrix-designer-switch-list">
                           {selectedMatrixRow.row_type === "7" ? (
                             <>
-                              {renderSwitch("only-from", t("onlyFromProtocolDateLabel"), selectedMatrixEmbeddedConfig.event_only_from_protocol_date !== false, (checked) => updateSelectedMatrixRowConfig({ event_only_from_protocol_date: checked }))}
+                              {renderSwitch("only-from", t("onlyFromProtocolDateLabel"), selectedMatrixEmbeddedConfig.event_only_from_protocol_date !== false && selectedMatrixEmbeddedConfig.event_only_before_protocol_date !== true, (checked) => updateSelectedMatrixRowConfig({ event_only_from_protocol_date: checked, ...(checked ? { event_only_before_protocol_date: false } : {}) }))}
+                              {renderSwitch("only-before", t("onlyBeforeProtocolDateLabel"), selectedMatrixEmbeddedConfig.event_only_before_protocol_date === true, (checked) => updateSelectedMatrixRowConfig({ event_only_before_protocol_date: checked, ...(checked ? { event_only_from_protocol_date: false } : {}) }))}
                               {renderSwitch("gray-past", t("grayPastLabel"), selectedMatrixEmbeddedConfig.event_gray_past !== false, (checked) => updateSelectedMatrixRowConfig({ event_gray_past: checked }))}
                               {renderSwitch("multi-day", t("allowMultiDayLabel"), selectedMatrixEmbeddedConfig.event_allow_end_date === true, (checked) => updateSelectedMatrixRowConfig({ event_allow_end_date: checked }))}
                               {renderSwitch("column-tag", t("matrixDesigner.useColumnTagFilter"), selectedMatrixEmbeddedConfig.event_use_column_tag_filter === true, (checked) => updateSelectedMatrixRowConfig({ event_use_column_tag_filter: checked }))}
@@ -4065,6 +4067,29 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
                             </>
                           )}
                         </div>
+                        {selectedMatrixRow.row_type === "7" ? (() => {
+                          const selectedCycleOffset = embeddedEventCycleOffset(selectedMatrixEmbeddedConfig);
+                          const cycleOffsetChoices: (number | null)[] = [null, ...CYCLE_OFFSET_OPTIONS];
+                          return (
+                            <div className="field-stack">
+                              <span className="field-label">{tCycle("cycleLabel")}</span>
+                              <div className="matrix-designer-cycle-options" role="group" aria-label={tCycle("cycleLabel")}>
+                                {cycleOffsetChoices.map((offset) => (
+                                  <button
+                                    key={offset ?? "none"}
+                                    type="button"
+                                    className={`button-pill${selectedCycleOffset === offset ? " button-pill-active" : ""}`}
+                                    aria-pressed={selectedCycleOffset === offset}
+                                    onClick={() => updateSelectedMatrixRowConfig({ event_cycle_offset: offset, event_only_current_cycle: false })}
+                                  >
+                                    {offset === null ? tCycle("allCyclesNoFilter") : cycleOffsetLabel(offset, tCycle)}
+                                  </button>
+                                ))}
+                              </div>
+                              <span className="field-help">{t("matrixDesigner.cycleFilterHelp")}</span>
+                            </div>
+                          );
+                        })() : null}
                         {selectedMatrixRow.row_type === "7" ? (
                           <div className="field-stack">
                             <span className="field-label">{t("matrixDesigner.displayedFields")}</span>
