@@ -485,3 +485,19 @@ def test_export_latex_session_notes_block_without_notes_shows_placeholder(db):
     _protocol, _export_dir, _latex_source, body_content = service._build_export_context(db, protocol.id)
 
     assert "Keine Sitzungsnotizen." in body_content
+
+
+def test_event_list_export_shows_location_and_organizers_when_configured(db):
+    tenant, _template, protocol = _protocol_with_template_dir(db)
+    organizer = make_participant(db, tenant.id, display_name="Anna Muster")
+    event = _tagged_event(db, tenant.id, "Hock", date(2026, 2, 1), "hock")
+    event.location = "Pfarreiheim"
+    event.organizer_ids = [organizer.id]
+    db.flush()
+
+    content = ExportService()._event_list_content(
+        db, protocol=protocol, config={"event_filter": {"range": {"mode": "all"}}, "event_show_location": True, "event_show_organizers": True}
+    )
+
+    assert "Ort" in content and "Pfarreiheim" in content
+    assert "Organisatoren" in content and "Anna Muster" in content

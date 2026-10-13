@@ -433,6 +433,10 @@ def remap_block_configuration(
     for account_key in ("fine_account_id", "fine_list_account_id"):
         if config.get(account_key) is not None:
             config[account_key] = finance_account_map.get(config[account_key])
+    if config.get("todo_assignee_participant_id") is not None:
+        config["todo_assignee_participant_id"] = map_participant(config["todo_assignee_participant_id"])
+    if isinstance(config.get("attendance_excluded_participant_ids"), list):
+        config["attendance_excluded_participant_ids"] = map_participants(config["attendance_excluded_participant_ids"])
     if config.get("finance_account_id") is not None:
         config["finance_account_id"] = finance_account_map.get(config["finance_account_id"])
 

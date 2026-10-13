@@ -114,6 +114,12 @@ def encode_block_config(db: Session, config: dict | None) -> dict:
         result["finance_account_id"] = _encode_id(db, FinanceAccount, result["finance_account_id"])
     if result.get("fine_list_account_id") is not None:
         result["fine_list_account_id"] = _encode_id(db, FinanceAccount, result["fine_list_account_id"])
+    if result.get("todo_assignee_participant_id") is not None:
+        result["todo_assignee_participant_id"] = _encode_id(db, Participant, result["todo_assignee_participant_id"])
+    excluded = [int(pid) for pid in (result.get("attendance_excluded_participant_ids") or []) if pid]
+    if excluded:
+        mapping = public_id_service.resolve_public_ids(db, Participant, excluded)
+        result["attendance_excluded_participant_ids"] = [mapping[pid] for pid in excluded if pid in mapping]
     auto_source = result.get("auto_source")
     if isinstance(auto_source, dict) and auto_source.get("list_id") is not None:
         result["auto_source"] = {**auto_source, "list_id": _encode_id(db, ListDefinition, auto_source["list_id"])}
@@ -139,6 +145,12 @@ def decode_block_config(db: Session, config: dict | None, *, tenant_id: int) -> 
         result["finance_account_id"] = _decode_id(db, FinanceAccount, result["finance_account_id"], tenant_id=tenant_id)
     if result.get("fine_list_account_id") is not None:
         result["fine_list_account_id"] = _decode_id(db, FinanceAccount, result["fine_list_account_id"], tenant_id=tenant_id)
+    if result.get("todo_assignee_participant_id") is not None:
+        result["todo_assignee_participant_id"] = _decode_id(db, Participant, result["todo_assignee_participant_id"], tenant_id=tenant_id)
+    if result.get("attendance_excluded_participant_ids"):
+        result["attendance_excluded_participant_ids"] = [
+            _decode_id(db, Participant, pid, tenant_id=tenant_id) for pid in result["attendance_excluded_participant_ids"] if pid
+        ]
     auto_source = result.get("auto_source")
     if isinstance(auto_source, dict) and auto_source.get("list_id") is not None:
         result["auto_source"] = {**auto_source, "list_id": _decode_id(db, ListDefinition, auto_source["list_id"], tenant_id=tenant_id)}

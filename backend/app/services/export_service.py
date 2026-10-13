@@ -21,6 +21,7 @@ from app.models import AttendanceFine, DocumentTemplate, ElementType, Event, Fin
 from app.repositories.export_repository import ExportRepository
 from app.services import public_id_service
 from app.services.event_filter import default_event_filter, filter_events, normalize_event_filter, split_tags
+from app.services.protocol_period_service import protocol_period, transaction_matches
 from app.services.file_service import _safe_storage_path
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 from app.schemas.protocol import ProtocolExportRead
@@ -1063,15 +1064,17 @@ Status: {protocol_status}
             if protocol is None:
                 return ""
             return self._matrix_block_content(db, block.configuration_snapshot_json or {}, protocol)
-        if block.element_type_id == 12:
-            return self._finance_balance_content(db, block.configuration_snapshot_json or {}, tenant_id)
-        if block.element_type_id == 13:
-            return self._finance_transactions_content(db, block.configuration_snapshot_json or {}, block, tenant_id)
-        if block.element_type_id == 14:
+        if block.element_type_id in (12, 13, 14):
             protocol_element = db.get(ProtocolElement, block.protocol_element_id)
-            if protocol_element is None:
+            protocol = self.repository.get_protocol(db, protocol_element.protocol_id) if protocol_element else None
+            config = block.configuration_snapshot_json or {}
+            if block.element_type_id == 12:
+                return self._finance_balance_content(db, config, tenant_id, protocol=protocol)
+            if block.element_type_id == 13:
+                return self._finance_transactions_content(db, config, block, tenant_id, protocol=protocol)
+            if protocol is None:
                 return "Keine Bussen."
-            return self._fine_list_content(db, protocol_element.protocol_id)
+            return self._fine_list_content(db, protocol.id, config=config)
         # Chart block (element_type code="chart", id determined at runtime)
         chart_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "chart"))
         if chart_type_id and block.element_type_id == chart_type_id:
@@ -1270,9 +1273,23 @@ Status: {protocol_status}
         }
         if not any(columns.values()):
             columns["title"] = True
-        # «Abgesagt» ist eine Zusatzspalte wie im Editor und zählt nicht als Inhaltsspalte.
+        # Ort/Organisatoren/«Abgesagt» sind Zusatzspalten wie im Editor und zählen nicht als
+        # Inhaltsspalte (ohne Inhaltsspalte bleibt der Titel sichtbar).
+        columns["location"] = config.get("event_show_location", False) is True
+        columns["organizers"] = config.get("event_show_organizers", False) is True
         columns["cancelled"] = config.get("event_show_cancelled", False) is True
         return columns
+
+    def _event_organizer_names(self, db: Session, events: list[Event]) -> dict[int, str]:
+        """Organisatoren pro Termin (Event.organizer_ids) als kommagetrennte Namen."""
+        participant_ids = {int(pid) for event in events for pid in (event.organizer_ids or []) if str(pid).isdigit()}
+        if not participant_ids:
+            return {}
+        names = dict(db.execute(select(Participant.id, Participant.display_name).where(Participant.id.in_(participant_ids))).all())
+        return {
+            event.id: ", ".join(names[int(pid)] for pid in (event.organizer_ids or []) if str(pid).isdigit() and int(pid) in names)
+            for event in events
+        }
 
     def _tenant_events(self, db: Session, tenant_id: int) -> list[Event]:
         """Alle Termine, die der Protokolleditor kennt (gleiche Sichtbarkeit wie GET /api/events).
@@ -1309,6 +1326,7 @@ Status: {protocol_status}
                 tag_config = tenant.tag_config_json or {}
         columns = self._event_list_columns(config)
         events = self._filter_event_list_events(db, protocol=protocol, event_filter=config.get("event_filter"), column=column)
+        organizer_names = self._event_organizer_names(db, events) if columns["organizers"] else {}
 
         column_specs: list[str] = []
         headers: list[str] = []
@@ -1327,6 +1345,12 @@ Status: {protocol_status}
         if columns["participant_count"]:
             column_specs.append("p{0.10\\textwidth}")
             headers.append("Teilnehmer")
+        if columns["location"]:
+            column_specs.append("p{0.14\\textwidth}")
+            headers.append("Ort")
+        if columns["organizers"]:
+            column_specs.append("p{0.18\\textwidth}")
+            headers.append("Organisatoren")
         if columns["cancelled"]:
             column_specs.append("p{0.10\\textwidth}")
             headers.append("Abgesagt")
@@ -1363,6 +1387,10 @@ Status: {protocol_status}
                 cells.append(self._escape_latex(event.description or "-"))
             if columns["participant_count"]:
                 cells.append(self._escape_latex(str(max(0, int(event.participant_count or 0)))))
+            if columns["location"]:
+                cells.append(self._escape_latex(event.location or "-"))
+            if columns["organizers"]:
+                cells.append(self._escape_latex(organizer_names.get(event.id) or "-"))
             if columns["cancelled"]:
                 cells.append("abgesagt" if event.is_cancelled else "-")
 
@@ -1383,8 +1411,9 @@ Status: {protocol_status}
             ]
         )
 
-    def _fine_list_content(self, db: Session, protocol_id: int) -> str:
+    def _fine_list_content(self, db: Session, protocol_id: int, config: dict | None = None) -> str:
         current_protocol = db.get(ProtocolModel, protocol_id)
+        config = config or {}
 
         # Own fines (created in this protocol)
         own_fines = db.scalars(
@@ -1400,6 +1429,28 @@ Status: {protocol_status}
             .where(AttendanceFine.closed_in_protocol_id == protocol_id)
             .order_by(AttendanceFine.collected_at.asc())
         ).all()
+
+        # Optionen der Bussenliste wie im Editor (lib/element-types/period.ts::filterFines).
+        account_filter = config.get("fine_list_account_id")
+        if account_filter:
+            own_fines = [fine for fine in own_fines if fine.account_id == account_filter]
+            collected_here = [fine for fine in collected_here if fine.account_id == account_filter]
+        if config.get("fine_list_status") == "open":
+            own_fines = [fine for fine in own_fines if fine.status == "pending"]
+            collected_here = []
+        fine_range = config.get("fine_list_range") or "all"
+        if fine_range == "this_protocol":
+            collected_here = []
+        elif fine_range == "this_cycle" and current_protocol is not None:
+            bounds = protocol_period(db, current_protocol)
+            if bounds.get("cycle_start"):
+                def _in_cycle(fine) -> bool:
+                    origin = db.get(ProtocolModel, fine.protocol_id)
+                    return origin is not None and bounds["cycle_start"] <= origin.protocol_date.isoformat() <= bounds["cycle_end"]
+                collected_here = [fine for fine in collected_here if _in_cycle(fine)]
+        if config.get("fine_list_group_by") == "participant":
+            own_fines = sorted(own_fines, key=lambda fine: fine.participant_name_snapshot.lower())
+            collected_here = sorted(collected_here, key=lambda fine: fine.participant_name_snapshot.lower())
 
         if not own_fines and not collected_here:
             return "Keine Bussen."
@@ -1442,7 +1493,7 @@ Status: {protocol_status}
         lines += ["\\end{tabular}", "\\end{flushleft}"]
         return "\n".join(lines)
 
-    def _finance_balance_content(self, db: Session, config: dict, tenant_id: int) -> str:
+    def _finance_balance_content(self, db: Session, config: dict, tenant_id: int, protocol=None) -> str:
         account_id = self._ref_to_internal_id(db, FinanceAccount, config.get("finance_account_id"), tenant_id)
         if not account_id:
             return "Kein Konto konfiguriert."
@@ -1453,16 +1504,16 @@ Status: {protocol_status}
         if account is None or account.tenant_id != tenant_id:
             return "Konto nicht gefunden."
         from sqlalchemy import func
-        result = db.execute(
-            select(func.coalesce(func.sum(FinanceTransaction.amount), 0).label("balance"))
-            .where(FinanceTransaction.account_id == account_id)
-        ).one()
-        balance = float(result.balance)
+        statement = select(func.coalesce(func.sum(FinanceTransaction.amount), 0).label("balance")).where(FinanceTransaction.account_id == account_id)
+        # Stichtag Protokolldatum: historisch korrekter Saldo statt des heutigen Stands.
+        if config.get("finance_balance_date") == "protocol_date" and protocol is not None and protocol.protocol_date:
+            statement = statement.where(FinanceTransaction.transaction_date <= protocol.protocol_date)
+        balance = float(db.execute(statement).one().balance)
         sign = "" if balance >= 0 else "-"
         amount_str = f"{sign}{abs(balance):,.2f}".replace(",", "'")
         return self._escape_latex(f"{account.name}: {amount_str} {account.currency_label}") + "\n\n"
 
-    def _finance_transactions_content(self, db: Session, config: dict, block, tenant_id: int) -> str:
+    def _finance_transactions_content(self, db: Session, config: dict, block, tenant_id: int, protocol=None) -> str:
         account_id = self._ref_to_internal_id(db, FinanceAccount, config.get("finance_account_id"), tenant_id)
         if not account_id:
             return "Kein Konto konfiguriert."
@@ -1472,23 +1523,14 @@ Status: {protocol_status}
             return "Konto nicht gefunden."
         filter_type = str(config.get("finance_filter_type") or "all")
         last_n = int(config.get("finance_last_n") or 10)
-        since_date = str(config.get("finance_since_date") or "")
 
         txs_query = select(FinanceTransaction).where(FinanceTransaction.account_id == account_id).order_by(FinanceTransaction.transaction_date.asc(), FinanceTransaction.id.asc())
         all_txs = list(db.scalars(txs_query))
 
-        from datetime import date as date_type
-        import datetime as dt_module
-        this_year = dt_module.date.today().year
-        filtered = []
-        for tx in all_txs:
-            if filter_type in ("since_last_session", "since_date"):
-                if since_date and str(tx.transaction_date) < since_date:
-                    continue
-            elif filter_type == "this_year":
-                if tx.transaction_date.year != this_year:
-                    continue
-            filtered.append(tx)
+        # Gleiche Regeln wie im Editor (protocol_period_service / lib/element-types/period.ts).
+        period = protocol_period(db, protocol) if protocol is not None else {}
+        protocol_date = protocol.protocol_date if protocol is not None else None
+        filtered = [tx for tx in all_txs if transaction_matches(tx.transaction_date, config, protocol_date=protocol_date, period=period)]
         if filter_type == "last_n":
             filtered = filtered[-last_n:] if len(filtered) > last_n else filtered
 
@@ -1738,7 +1780,17 @@ Status: {protocol_status}
                     return True
                 return filter_text in str(value.get("text_value") or "").lower()
 
-            entries = [e for e in entries if _entry_matches(e)]
+            def _entry_text_matches(entry: ListEntry) -> bool:
+                # Textfilter der Vorlage (linked_list_filter_text) auf den angezeigten Wert, auch
+                # bei Personen-/Terminspalten - wie StructuredListTable rowFilter im Editor.
+                if not filter_text:
+                    return True
+                rendered = self._linked_list_value(
+                    db, value_type=filter_value_type, value=self._linked_list_entry_value(entry, filter_column), tenant_id=tenant_id
+                )
+                return filter_text in str(rendered or "").lower()
+
+            entries = [e for e in entries if _entry_matches(e) and _entry_text_matches(e)]
 
         if not entries:
             return ""
@@ -2154,7 +2206,8 @@ Status: {protocol_status}
             events = self._matrix_events(db, row=row, protocol=protocol, column=column)
             if not events:
                 return ""
-            return "\\newline ".join(self._escape_latex(self._event_inline_label(event)) for event in events)
+            row_config = row.get("row_config") if isinstance(row.get("row_config"), dict) else {}
+            return "\\newline ".join(self._escape_latex(self._event_inline_label(event, row_config)) for event in events)
         return self._latex_multiline(str(cell.get(f"{prefix}text_value") or row.get("template_value") or "").strip())
 
     def _matrix_events(self, db: Session, *, row: dict, protocol, column: dict) -> list[Event]:
@@ -2163,14 +2216,24 @@ Status: {protocol_status}
         event_filter = normalize_event_filter(row_config.get("event_filter"), default_range_mode="future")
         return filter_events(db, self._tenant_events(db, protocol.tenant_id), event_filter, protocol=protocol, column=column)
 
-    def _event_inline_label(self, event: Event) -> str:
-        if event.event_end_date and event.event_end_date != event.event_date:
-            label = f"{event.event_date.strftime('%d.%m.%Y')} - {event.event_end_date.strftime('%d.%m.%Y')}"
-        else:
-            label = event.event_date.strftime("%d.%m.%Y")
-        if event.description:
+    def _event_inline_label(self, event: Event, row_config: dict | None = None) -> str:
+        """Ein Termin in einer Matrixzelle «Mehrere Termine» - Felder wie im Editor
+        (row_config.event_show_*, Vorgabe Datum + Beschreibung)."""
+        config = row_config or {}
+        parts: list[str] = []
+        if config.get("event_show_date", True) is not False:
+            if event.event_end_date and event.event_end_date != event.event_date:
+                parts.append(f"{event.event_date.strftime('%d.%m.%Y')} - {event.event_end_date.strftime('%d.%m.%Y')}")
+            else:
+                parts.append(event.event_date.strftime("%d.%m.%Y"))
+        if config.get("event_show_title", False) is True:
+            parts.append(event.title)
+        if config.get("event_show_location", False) is True and event.location:
+            parts.append(event.location)
+        label = " ".join(parts)
+        if config.get("event_show_description", True) is not False and event.description:
             label += f" ({event.description})"
-        return label
+        return label.strip()
 
     def _latex_multiline(self, value: str) -> str:
         text = str(value or "").strip()

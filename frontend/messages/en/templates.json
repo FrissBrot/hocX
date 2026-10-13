@@ -843,13 +843,19 @@
       "description": "Rules for tasks in this block.",
       "dueTagFilter": "Events for the due date",
       "dueTagFilterPlaceholder": "All events",
-      "dueTagFilterHelp": "Only events with these tags are suggested when setting the due date."
+      "dueTagFilterHelp": "Only events with these tags are suggested when setting the due date.",
+      "assignee": "Carry over open todos of",
+      "assigneeAll": "Everyone",
+      "assigneeHelp": "Open todos from the last protocol are carried over; with a person only theirs."
     },
     "attendance": {
       "title": "Attendance",
       "description": "Attendance check with optional fines.",
       "finesEnabled": "Fines active",
-      "finesHelp": "Set the account and amounts centrally under Finances › Fines › Fine rates."
+      "finesHelp": "Set the account and amounts centrally under Finances › Fines › Fine rates.",
+      "excluded": "Not on the list",
+      "excludedNone": "Nobody hidden",
+      "excludedHelp": "In addition to the people excluded from attendance in the template."
     },
     "sessionDate": {
       "title": "Session date",
@@ -885,18 +891,33 @@
       "show": "Show",
       "filter": {
         "all": "All transactions",
-        "since_last_session": "From protocol date",
+        "since_last_session": "Since last session",
         "since_date": "Since date",
         "this_year": "This year",
-        "last_n": "Last N"
+        "last_n": "Last N",
+        "this_cycle": "This cycle (e.g. club year)"
       },
       "lastN": "Number",
-      "sinceDate": "Since"
+      "sinceDate": "Since",
+      "balanceDate": "Balance as of",
+      "balanceToday": "Today (current balance)",
+      "balanceProtocolDate": "On the protocol date",
+      "balanceDateHelp": "On the protocol date, an older protocol also shows the balance valid back then."
     },
     "fineList": {
       "title": "Fine list",
       "description": "Shows the fines from the attendance check.",
-      "note": "The list shows all fines of this protocol and open ones from earlier protocols."
+      "account": "Account",
+      "allAccounts": "All accounts",
+      "range": "Open fines from earlier protocols",
+      "rangeOption": {
+        "all": "All",
+        "this_cycle": "Only from this cycle",
+        "this_protocol": "None (this protocol only)"
+      },
+      "rangeHelp": "Fines of this protocol are always shown.",
+      "openOnly": "Open fines only",
+      "byParticipant": "Order by person"
     },
     "image": {
       "title": "Image",
@@ -928,7 +949,10 @@
       "noHeading": "Empty for no heading",
       "noRows": "No rows yet.",
       "rowWord": "Row",
-      "valueWord": "Value"
+      "valueWord": "Value",
+      "filterColumn": "Only show rows whose column …",
+      "noFilter": "All rows",
+      "filterText": "… contains this text"
     },
     "eventField": {
       "title": "Title",

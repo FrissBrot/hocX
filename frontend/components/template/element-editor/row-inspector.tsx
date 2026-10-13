@@ -14,14 +14,14 @@ import type { TagConfig } from "@/lib/hooks/use-tag-config";
 import { formatDateRange } from "@/lib/utils/format";
 import type { EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
 
-import { defaultRowConfig, EVENT_DISPLAY_DEFAULTS, type EventDisplayKey, isSimpleRowType, rowTypeAllowed, SIMPLE_ROW_TYPES, type TableRow } from "./block-form";
+import { defaultRowConfig, EVENT_DISPLAY_DEFAULTS, EVENTS_ROW_DISPLAY_DEFAULTS, type EventDisplayKey, isSimpleRowType, rowTypeAllowed, SIMPLE_ROW_TYPES, type TableRow } from "./block-form";
 import { EventFilterEditor } from "./event-filter-editor";
 
 type TFunc = (key: string, values?: Record<string, string | number>) => string;
 
 export const AUTO_SOURCE_FIELDS: Record<"participants" | "events" | "list", string[]> = {
   participants: ["display_name", "first_name", "last_name", "email"],
-  events: ["title", "event_date", "tag", "participant_count"],
+  events: ["title", "event_date", "event_end_date", "tag", "location", "description", "organizers", "participant_count"],
   list: ["column_one", "column_two"],
 };
 
@@ -282,10 +282,19 @@ export function RowInspector({
         </div>
       ) : null}
 
-      {row.row_type === "7" ? (
+      {row.row_type === "7" || row.row_type === "events" ? (
         <div className="field-stack">
           <span className="field-label">{t("row.displayedFields")}</span>
-          <EventDisplayChips config={row.row_config} onChange={patchConfig} />
+          {row.row_type === "7" ? (
+            <EventDisplayChips config={row.row_config} onChange={patchConfig} />
+          ) : (
+            <EventDisplayChips
+              config={row.row_config}
+              onChange={patchConfig}
+              keys={Object.keys(EVENTS_ROW_DISPLAY_DEFAULTS) as EventDisplayKey[]}
+              defaults={EVENTS_ROW_DISPLAY_DEFAULTS}
+            />
+          )}
         </div>
       ) : null}
 
@@ -308,7 +317,7 @@ export function RowInspector({
   );
 }
 
-const DISPLAY_CHIPS: EventDisplayKey[] = [
+const EMBEDDED_DISPLAY_CHIPS: EventDisplayKey[] = [
   "event_show_date",
   "event_show_tag",
   "event_show_tag_colors",
@@ -318,13 +327,36 @@ const DISPLAY_CHIPS: EventDisplayKey[] = [
   "event_show_cancelled",
 ];
 
+/** Terminliste (Typ 7): zusätzlich Ort und Organisatoren. */
+export const EVENT_LIST_DISPLAY_CHIPS: EventDisplayKey[] = [
+  "event_show_date",
+  "event_show_tag",
+  "event_show_tag_colors",
+  "event_show_title",
+  "event_show_description",
+  "event_show_location",
+  "event_show_organizers",
+  "event_show_participant_count",
+  "event_show_cancelled",
+];
+
 /** Spalten/Felder einer Terminliste - gleiche Auswahl für Terminliste und eingebettete Liste. */
-export function EventDisplayChips({ config, onChange }: { config: Record<string, unknown>; onChange: (patch: Record<string, unknown>) => void }) {  // i18n-ok: TS-Signatur, kein UI-Text
+export function EventDisplayChips({
+  config,
+  onChange,
+  keys = EMBEDDED_DISPLAY_CHIPS,
+  defaults = EVENT_DISPLAY_DEFAULTS,
+}: {
+  config: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+  keys?: EventDisplayKey[];
+  defaults?: Partial<Record<EventDisplayKey, boolean>>;
+}) {  // i18n-ok: TS-Signatur, kein UI-Text
   const t = useTranslations("templates.elementEditor");
   return (
     <div className="matrix-designer-chips">
-      {DISPLAY_CHIPS.map((key) => {
-        const on = typeof config[key] === "boolean" ? (config[key] as boolean) : EVENT_DISPLAY_DEFAULTS[key];
+      {keys.map((key) => {
+        const on = typeof config[key] === "boolean" ? (config[key] as boolean) : Boolean(defaults[key]);
         return (
           <button
             key={key}

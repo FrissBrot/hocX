@@ -471,5 +471,8 @@
   "undoAction": "Annulla",
   "unknownEvent": "Evento sconosciuto",
   "uploadImageAction": "Carica immagine",
-  "valueFallback": "Valore"
+  "valueFallback": "Valore",
+  "locationLabel": "Luogo",
+  "organizersLabel": "Organizzatori",
+  "balanceAsOf": "Al {date}"
 }

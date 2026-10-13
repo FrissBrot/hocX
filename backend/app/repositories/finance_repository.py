@@ -128,6 +128,12 @@ class FinanceRepository:
         db.commit()
         return True
 
+    def balance_as_of(self, db: Session, account_id: int, as_of=None) -> float:
+        statement = select(func.coalesce(func.sum(FinanceTransaction.amount), 0)).where(FinanceTransaction.account_id == account_id)
+        if as_of is not None:
+            statement = statement.where(FinanceTransaction.transaction_date <= as_of)
+        return float(db.scalar(statement) or 0)
+
     def _account_with_balance(self, db: Session, account: FinanceAccount) -> FinanceAccountRead:
         result = db.execute(
             select(

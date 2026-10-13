@@ -75,6 +75,14 @@ export const EVENT_DISPLAY_DEFAULTS = {
 
 export type EventDisplayKey = keyof typeof EVENT_DISPLAY_DEFAULTS;
 
+/** Matrixzeile «Mehrere Termine»: was pro Termin in der Zelle steht (bisher fest Datum + Beschreibung). */
+export const EVENTS_ROW_DISPLAY_DEFAULTS = {
+  event_show_date: true,
+  event_show_title: false,
+  event_show_description: true,
+  event_show_location: false,
+} as const;
+
 export function defaultRow(id = "1"): TableRow {
   return {
     id,
@@ -96,7 +104,7 @@ export function defaultColumn(id = "matrix-column-1"): MatrixColumn {
 
 /** Zeilen-Konfiguration beim Wechsel des Zeilentyps (wie im Backend-Schema). */
 export function defaultRowConfig(rowType: string): BlockConfig {
-  if (rowType === "events") return { event_filter: defaultEventFilter("future") };
+  if (rowType === "events") return { ...EVENTS_ROW_DISPLAY_DEFAULTS, event_filter: defaultEventFilter("future") };
   if (rowType === "7") return { ...EVENT_DISPLAY_DEFAULTS, event_filter: defaultEventFilter("future") };
   return {};
 }
@@ -105,7 +113,7 @@ export function defaultConfig(code: ElementTypeCode): BlockConfig {
   const base: BlockConfig = { block_kind: code, repeat_source: "none" };
   switch (code) {
     case "todo":
-      return { ...base, todo_due_tag_filter: "", todo_assignee_participant_id: null, todo_carry_open_only: true };
+      return { ...base, todo_due_tag_filter: "", todo_assignee_participant_id: null };
     case "form":
       return {
         ...base,
@@ -117,7 +125,6 @@ export function defaultConfig(code: ElementTypeCode): BlockConfig {
         linked_list_sort_by: null,
         linked_list_sort_direction: null,
         linked_list_highlight_empty: false,
-        linked_list_hidden_columns: [],
         linked_list_filter_column: null,
         linked_list_filter_text: "",
         event_fields: null,
@@ -125,7 +132,7 @@ export function defaultConfig(code: ElementTypeCode): BlockConfig {
     case "event_list":
       return { ...base, ...EVENT_DISPLAY_DEFAULTS, event_filter: defaultEventFilter("future") };
     case "attendance":
-      return { ...base, fines_enabled: false, attendance_hidden_roles: [] };
+      return { ...base, fines_enabled: false, attendance_excluded_participant_ids: [] };
     case "session_date":
       return { ...base, event_filter: defaultEventFilter("all") };
     case "matrix":
@@ -321,7 +328,6 @@ export function configPayload(form: BlockForm): BlockConfig {
     if (!linked) {
       for (const key of ["linked_list_group_by", "linked_list_sort_by", "linked_list_sort_direction", "linked_list_filter_column"]) config[key] = null;
       config.linked_list_highlight_empty = false;
-      config.linked_list_hidden_columns = [];
       config.linked_list_filter_text = "";
     }
     if (repeat !== "event" || linked) config.event_fields = null;

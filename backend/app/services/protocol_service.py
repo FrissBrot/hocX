@@ -23,6 +23,7 @@ from app.models import (
     ProtocolElementBlock,
     ProtocolImage,
     ProtocolTodo,
+    ProtocolTodoAssignee,
     ProtocolText,
     RenderType,
     Template,
@@ -1058,10 +1059,12 @@ class ProtocolService:
             config = dict(block.configuration_snapshot_json or {})
             if code == "attendance":
                 previous = {entry.get("participant_id"): entry for entry in config.get("attendance_entries", [])}
+                excluded_ids = set(self._coerce_int_list(config.get("attendance_excluded_participant_ids")))
                 config["attendance_entries"] = [
                     {**previous.get(participant.id, {"status": "absent"}),
                      "participant_id": participant.id, "participant_name": participant.display_name}
                     for participant in participants
+                    if participant.id not in excluded_ids
                 ]
             else:
                 previous = {
@@ -1397,6 +1400,7 @@ class ProtocolService:
         current_protocol_id: int,
         repeat_source_type: str | None = None,
         repeat_source_id: int | None = None,
+        assignee_participant_id: int | None = None,
     ) -> list[ProtocolTodo]:
         latest_protocol_id = self._latest_previous_protocol_id(
             db,
@@ -1426,6 +1430,16 @@ class ProtocolService:
         )
         if closed_status_ids:
             query = query.where(ProtocolTodo.todo_status_id.not_in(closed_status_ids))
+        if assignee_participant_id is not None:
+            # Block-Option «Nur Todos dieser Person übernehmen» (todo_assignee_participant_id).
+            query = query.where(
+                or_(
+                    ProtocolTodo.assigned_participant_id == assignee_participant_id,
+                    ProtocolTodo.id.in_(
+                        select(ProtocolTodoAssignee.protocol_todo_id).where(ProtocolTodoAssignee.participant_id == assignee_participant_id)
+                    ),
+                )
+            )
         todos: list[ProtocolTodo] = []
         for todo, block in db.execute(query).all():
             block_config = block.configuration_snapshot_json or {}
@@ -2329,6 +2343,8 @@ class ProtocolService:
                 }
                 db.add(protocol_block)
             elif block["element_type_id"] == attendance_type_id:
+                # Zusätzlich zur Vorlage (exclude_from_attendance) pro Block ausgeblendete Personen.
+                excluded_ids = set(self._coerce_int_list(block_config.get("attendance_excluded_participant_ids")))
                 participants = list(
                     db.execute(
                         select(Participant)
@@ -2350,6 +2366,7 @@ class ProtocolService:
                             "status": "absent",
                         }
                         for participant in participants
+                        if participant.id not in excluded_ids
                     ],
                 }
                 db.add(protocol_block)
@@ -2394,6 +2411,7 @@ class ProtocolService:
                     current_protocol_id=protocol.id,
                     repeat_source_type=repeat_source_type or None,
                     repeat_source_id=repeat_source_id,
+                    assignee_participant_id=self._coerce_optional_int(block_config.get("todo_assignee_participant_id")),
                 )
                 next_sort_index = 0
                 for open_todo in open_todos:

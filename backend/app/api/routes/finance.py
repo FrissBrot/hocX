@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -96,6 +97,22 @@ def list_transactions(
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Account not found")
     return repo.list_transactions(db, internal_id, skip=skip, limit=limit)
+
+
+@router.get("/finance/accounts/{account_id}/balance", response_model=dict[str, float])
+def get_balance_as_of(
+    account_id: uuid.UUID,
+    as_of: date | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Kontostand inkl. aller Buchungen bis und mit `as_of` (Kontostand-Block mit Stichtag
+    Protokolldatum); ohne Datum der aktuelle Stand."""
+    require_finance_read(user)
+    internal_id = public_id_service.resolve_internal_id(db, FinanceAccount, account_id, tenant_id=user.current_tenant_id)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"balance": repo.balance_as_of(db, internal_id, as_of)}
 
 
 @router.post("/finance/accounts/{account_id}/transactions", response_model=FinanceTransactionRead, status_code=status.HTTP_201_CREATED)

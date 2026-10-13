@@ -843,13 +843,19 @@
       "description": "Regole per le attività di questo blocco.",
       "dueTagFilter": "Eventi per la scadenza",
       "dueTagFilterPlaceholder": "Tutti gli eventi",
-      "dueTagFilterHelp": "Per la scadenza vengono proposti solo eventi con questi tag."
+      "dueTagFilterHelp": "Per la scadenza vengono proposti solo eventi con questi tag.",
+      "assignee": "Riprendi le attività aperte di",
+      "assigneeAll": "Tutte le persone",
+      "assigneeHelp": "Le attività aperte dell’ultimo verbale vengono riprese; con una persona solo le sue."
     },
     "attendance": {
       "title": "Presenze",
       "description": "Controllo presenze con multe facoltative.",
       "finesEnabled": "Multe attive",
-      "finesHelp": "Conto e importi si impostano in Finanze › Multe › Tariffa."
+      "finesHelp": "Conto e importi si impostano in Finanze › Multe › Tariffa.",
+      "excluded": "Non in elenco",
+      "excludedNone": "Nessuno nascosto",
+      "excludedHelp": "Oltre alle persone escluse dalle presenze nel modello."
     },
     "sessionDate": {
       "title": "Data della seduta",
@@ -885,18 +891,33 @@
       "show": "Mostra",
       "filter": {
         "all": "Tutte le transazioni",
-        "since_last_session": "Dalla data del verbale",
+        "since_last_session": "Dall’ultima seduta",
         "since_date": "Da una data",
         "this_year": "Quest’anno",
-        "last_n": "Ultime N"
+        "last_n": "Ultime N",
+        "this_cycle": "Questo ciclo (p. es. anno sociale)"
       },
       "lastN": "Numero",
-      "sinceDate": "Da"
+      "sinceDate": "Da",
+      "balanceDate": "Saldo al",
+      "balanceToday": "Oggi (saldo attuale)",
+      "balanceProtocolDate": "Alla data del verbale",
+      "balanceDateHelp": "Alla data del verbale anche un verbale vecchio mostra il saldo di allora."
     },
     "fineList": {
       "title": "Elenco multe",
       "description": "Mostra le multe del controllo presenze.",
-      "note": "L’elenco mostra le multe di questo verbale e quelle ancora aperte."
+      "account": "Conto",
+      "allAccounts": "Tutti i conti",
+      "range": "Multe aperte dei verbali precedenti",
+      "rangeOption": {
+        "all": "Tutte",
+        "this_cycle": "Solo di questo ciclo",
+        "this_protocol": "Nessuna (solo questo verbale)"
+      },
+      "rangeHelp": "Le multe di questo verbale appaiono sempre.",
+      "openOnly": "Solo multe aperte",
+      "byParticipant": "Ordina per persona"
     },
     "image": {
       "title": "Immagine",
@@ -928,7 +949,10 @@
       "noHeading": "Vuoto per nessun titolo",
       "noRows": "Ancora nessuna riga.",
       "rowWord": "Riga",
-      "valueWord": "Valore"
+      "valueWord": "Valore",
+      "filterColumn": "Mostra solo le righe la cui colonna …",
+      "noFilter": "Tutte le righe",
+      "filterText": "… contiene questo testo"
     },
     "eventField": {
       "title": "Titolo",

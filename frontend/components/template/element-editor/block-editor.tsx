@@ -20,7 +20,7 @@ import type { CycleConfigSummary } from "@/types/api";
 
 import { type BehaviorField, type BlockForm, repeatEventFilter, repeatSourcesFor, setRepeatSource, showsRepeat, type TableRow } from "./block-form";
 import { EventFilterEditor } from "./event-filter-editor";
-import { EventDisplayChips, rowTypeLabel, type RowInspectorData } from "./row-inspector";
+import { EVENT_LIST_DISPLAY_CHIPS, EventDisplayChips, rowTypeLabel, type RowInspectorData } from "./row-inspector";
 import { BlockTypePreview } from "./type-picker";
 
 export type BlockEditorData = RowInspectorData & {
@@ -257,6 +257,18 @@ export function BlockEditor({
               />
               <span className="field-help">{t("todo.dueTagFilterHelp")}</span>
             </label>
+            <label className="field-stack">
+              <span className="field-label">{t("todo.assignee")}</span>
+              <SearchableSelect
+                options={data.participants}
+                getId={(participant) => participant.id}
+                getLabel={(participant) => participant.display_name}
+                value={(form.config.todo_assignee_participant_id as string | null) ?? null}
+                onChange={(participant) => setConfig({ todo_assignee_participant_id: participant?.id ?? null })}
+                nullLabel={t("todo.assigneeAll")}
+              />
+              <span className="field-help">{t("todo.assigneeHelp")}</span>
+            </label>
           </SettingsSection>
         ) : null}
 
@@ -267,6 +279,18 @@ export function BlockEditor({
               {t("attendance.finesEnabled")}
             </label>
             <span className="field-help">{t("attendance.finesHelp")}</span>
+            <label className="field-stack">
+              <span className="field-label">{t("attendance.excluded")}</span>
+              <SearchableMultiSelect
+                options={data.participants}
+                getId={(participant) => participant.id}
+                getLabel={(participant) => participant.display_name}
+                values={(form.config.attendance_excluded_participant_ids as string[] | undefined) ?? []}
+                onChange={(ids) => setConfig({ attendance_excluded_participant_ids: ids })}
+                emptySelectionLabel={t("attendance.excludedNone")}
+              />
+              <span className="field-help">{t("attendance.excludedHelp")}</span>
+            </label>
           </SettingsSection>
         ) : null}
 
@@ -308,7 +332,7 @@ export function BlockEditor({
             </div>
             <div className="field-stack">
               <span className="field-label">{t("eventList.columns")}</span>
-              <EventDisplayChips config={form.config} onChange={setConfig} />
+              <EventDisplayChips config={form.config} onChange={setConfig} keys={EVENT_LIST_DISPLAY_CHIPS} />
               <span className="field-help">{t("eventList.columnsHelp")}</span>
             </div>
           </SettingsSection>
@@ -328,12 +352,22 @@ export function BlockEditor({
                   nullLabel={t("finance.chooseAccount")}
                 />
               </label>
+              {code === "finance_balance" ? (
+                <label className="field-stack">
+                  <span className="field-label">{t("finance.balanceDate")}</span>
+                  <select value={String(form.config.finance_balance_date ?? "today")} onChange={(event) => setConfig({ finance_balance_date: event.target.value })}>
+                    <option value="today">{t("finance.balanceToday")}</option>
+                    <option value="protocol_date">{t("finance.balanceProtocolDate")}</option>
+                  </select>
+                  <span className="field-help">{t("finance.balanceDateHelp")}</span>
+                </label>
+              ) : null}
               {code === "finance_transactions" ? (
                 <>
                   <label className="field-stack">
                     <span className="field-label">{t("finance.show")}</span>
                     <select value={String(form.config.finance_filter_type ?? "all")} onChange={(event) => setConfig({ finance_filter_type: event.target.value })}>
-                      {["all", "since_last_session", "since_date", "this_year", "last_n"].map((value) => (
+                      {["all", "since_last_session", "since_date", "this_year", "this_cycle", "last_n"].map((value) => (
                         <option key={value} value={value}>{t(`finance.filter.${value}`)}</option>
                       ))}
                     </select>
@@ -358,7 +392,36 @@ export function BlockEditor({
 
         {code === "fine_list" ? (
           <SettingsSection title={t("fineList.title")} description={t("fineList.description")}>
-            <p className="info-note">{t("fineList.note")}</p>
+            <div className="two-col">
+              <label className="field-stack">
+                <span className="field-label">{t("fineList.account")}</span>
+                <SearchableSelect
+                  options={data.accounts}
+                  getId={(account) => account.id}
+                  getLabel={(account) => `${account.name} (${account.currency_label})`}
+                  value={(form.config.fine_list_account_id as string | null) ?? null}
+                  onChange={(account) => setConfig({ fine_list_account_id: account?.id ?? null })}
+                  nullLabel={t("fineList.allAccounts")}
+                />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">{t("fineList.range")}</span>
+                <select value={String(form.config.fine_list_range ?? "all")} onChange={(event) => setConfig({ fine_list_range: event.target.value })}>
+                  {["all", "this_cycle", "this_protocol"].map((value) => <option key={value} value={value}>{t(`fineList.rangeOption.${value}`)}</option>)}
+                </select>
+                <span className="field-help">{t("fineList.rangeHelp")}</span>
+              </label>
+            </div>
+            <div className="element-create-options">
+              <label className="element-create-option">
+                <input type="checkbox" checked={form.config.fine_list_status === "open"} onChange={(event) => setConfig({ fine_list_status: event.target.checked ? "open" : "all" })} />
+                <span><strong>{t("fineList.openOnly")}</strong></span>
+              </label>
+              <label className="element-create-option">
+                <input type="checkbox" checked={form.config.fine_list_group_by === "participant"} onChange={(event) => setConfig({ fine_list_group_by: event.target.checked ? "participant" : "none" })} />
+                <span><strong>{t("fineList.byParticipant")}</strong></span>
+              </label>
+            </div>
           </SettingsSection>
         ) : null}
 
@@ -417,6 +480,22 @@ export function BlockEditor({
                       <option value="desc">{t("table.sortDesc")}</option>
                     </select>
                   </label>
+                </div>
+                <div className="two-col">
+                  <label className="field-stack">
+                    <span className="field-label">{t("table.filterColumn")}</span>
+                    <select value={String(form.config.linked_list_filter_column ?? "")} onChange={(event) => setConfig({ linked_list_filter_column: event.target.value || null })}>
+                      <option value="">{t("table.noFilter")}</option>
+                      <option value="column_one">{linkedList.column_one_title}</option>
+                      <option value="column_two">{linkedList.column_two_title}</option>
+                    </select>
+                  </label>
+                  {form.config.linked_list_filter_column ? (
+                    <label className="field-stack">
+                      <span className="field-label">{t("table.filterText")}</span>
+                      <input value={String(form.config.linked_list_filter_text ?? "")} onChange={(event) => setConfig({ linked_list_filter_text: event.target.value })} placeholder={t("filter.containsPlaceholder")} />
+                    </label>
+                  ) : null}
                 </div>
                 <label className="checkbox-row">
                   <input type="checkbox" checked={form.config.linked_list_highlight_empty === true} onChange={(event) => setConfig({ linked_list_highlight_empty: event.target.checked })} />

@@ -843,13 +843,19 @@
       "description": "Règles pour les tâches de ce bloc.",
       "dueTagFilter": "Événements pour l’échéance",
       "dueTagFilterPlaceholder": "Tous les événements",
-      "dueTagFilterHelp": "Seuls les événements avec ces tags sont proposés pour l’échéance."
+      "dueTagFilterHelp": "Seuls les événements avec ces tags sont proposés pour l’échéance.",
+      "assignee": "Reprendre les tâches ouvertes de",
+      "assigneeAll": "Toutes les personnes",
+      "assigneeHelp": "Les tâches ouvertes du dernier procès-verbal sont reprises ; avec une personne, seulement les siennes."
     },
     "attendance": {
       "title": "Présences",
       "description": "Contrôle des présences avec amendes facultatives.",
       "finesEnabled": "Amendes actives",
-      "finesHelp": "Le compte et les montants se règlent sous Finances › Amendes › Barème."
+      "finesHelp": "Le compte et les montants se règlent sous Finances › Amendes › Barème.",
+      "excluded": "Absents de la liste",
+      "excludedNone": "Personne n’est masqué",
+      "excludedHelp": "En plus des personnes exclues des présences dans le modèle."
     },
     "sessionDate": {
       "title": "Date de séance",
@@ -885,18 +891,33 @@
       "show": "Afficher",
       "filter": {
         "all": "Toutes les transactions",
-        "since_last_session": "Dès la date du procès-verbal",
+        "since_last_session": "Depuis la dernière séance",
         "since_date": "Depuis une date",
         "this_year": "Cette année",
-        "last_n": "N dernières"
+        "last_n": "N dernières",
+        "this_cycle": "Ce cycle (p. ex. année associative)"
       },
       "lastN": "Nombre",
-      "sinceDate": "Depuis"
+      "sinceDate": "Depuis",
+      "balanceDate": "Solde au",
+      "balanceToday": "Aujourd’hui (solde actuel)",
+      "balanceProtocolDate": "À la date du procès-verbal",
+      "balanceDateHelp": "À la date du procès-verbal, un ancien procès-verbal affiche le solde d’alors."
     },
     "fineList": {
       "title": "Liste des amendes",
       "description": "Affiche les amendes du contrôle des présences.",
-      "note": "La liste affiche les amendes de ce procès-verbal et celles encore ouvertes."
+      "account": "Compte",
+      "allAccounts": "Tous les comptes",
+      "range": "Amendes ouvertes des procès-verbaux précédents",
+      "rangeOption": {
+        "all": "Toutes",
+        "this_cycle": "Seulement de ce cycle",
+        "this_protocol": "Aucune (ce procès-verbal seulement)"
+      },
+      "rangeHelp": "Les amendes de ce procès-verbal apparaissent toujours.",
+      "openOnly": "Amendes ouvertes seulement",
+      "byParticipant": "Trier par personne"
     },
     "image": {
       "title": "Image",
@@ -928,7 +949,10 @@
       "noHeading": "Vide pour aucun titre",
       "noRows": "Pas encore de lignes.",
       "rowWord": "Ligne",
-      "valueWord": "Valeur"
+      "valueWord": "Valeur",
+      "filterColumn": "N’afficher que les lignes dont la colonne …",
+      "noFilter": "Toutes les lignes",
+      "filterText": "… contient ce texte"
     },
     "eventField": {
       "title": "Titre",

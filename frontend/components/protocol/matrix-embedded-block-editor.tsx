@@ -85,6 +85,17 @@ export function MatrixEmbeddedBlockEditor({
   const [embeddedEventDrafts, setEmbeddedEventDrafts] = useState<Record<string, Partial<EventSummary>>>({});
   const embeddedEventAutosaveTimers = useRef<Record<string, number>>({});
   const embeddedEventFilter = blockEventFilter(embeddedConfig);
+  // Tag-Farben wie in der Terminliste (event_show_tag_colors), Farbe zur Laufzeit aus der Tag-Verwaltung.
+  const renderEmbeddedTag = (tag: string | null | undefined) => {
+    const color = tag && embeddedConfig.event_show_tag_colors === true ? tagConfig[tag]?.color : null;
+    if (!tag) return "—";
+    if (!color) return tag;
+    return (
+      <span className="tag-color-badge" style={{ backgroundColor: `${color}22`, color, borderColor: `${color}55` }}>
+        {tag}
+      </span>
+    );
+  };
   const forcedEmbeddedTag = eventFilterTagText(embeddedEventFilter, matrixColumn);
   const [newEmbeddedEventDraft, setNewEmbeddedEventDraft] = useState<ProtocolEventDraft>(() =>
     createInlineProtocolEventDraft(protocol.protocol_date, forcedEmbeddedTag, true, tRoot)
@@ -694,7 +705,7 @@ export function MatrixEmbeddedBlockEditor({
                           className={`${isPast && embeddedConfig.event_gray_past !== false ? "event-row-past" : ""}${showCancelledStyle ? " event-row-cancelled" : ""}`}
                         >
                           {embeddedEventColumns.showDate ? <td>{formatDateRange(eventRow.event_date, eventRow.event_end_date)}</td> : null}
-                          {embeddedEventColumns.showTag ? <td>{eventRow.tag || "—"}</td> : null}
+                          {embeddedEventColumns.showTag ? <td>{renderEmbeddedTag(eventRow.tag)}</td> : null}
                           {embeddedEventColumns.showTitle ? <td>{eventRow.title}</td> : null}
                           {embeddedEventColumns.showDescription ? <td>{eventRow.description || "—"}</td> : null}
                           {embeddedEventColumns.showParticipantCount ? <td className="event-column-count">{eventRow.participant_count ?? 0}</td> : null}
@@ -904,7 +915,7 @@ export function MatrixEmbeddedBlockEditor({
                               onChange={(event) => queueEmbeddedEventSave(eventRow, { tag: event.target.value || null })}
                             />
                           ) : (
-                            eventRow.tag || "—"
+                            renderEmbeddedTag(eventRow.tag)
                           )}
                         </td>
                       ) : null}

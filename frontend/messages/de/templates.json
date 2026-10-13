@@ -843,13 +843,19 @@
       "description": "Regeln für Aufgaben in diesem Block.",
       "dueTagFilter": "Termine für das Fälligkeitsdatum",
       "dueTagFilterPlaceholder": "Alle Termine",
-      "dueTagFilterHelp": "Beim Setzen der Fälligkeit werden nur Termine mit diesen Tags vorgeschlagen."
+      "dueTagFilterHelp": "Beim Setzen der Fälligkeit werden nur Termine mit diesen Tags vorgeschlagen.",
+      "assignee": "Offene Todos übernehmen von",
+      "assigneeAll": "Allen Personen",
+      "assigneeHelp": "Offene Todos aus dem letzten Protokoll werden übernommen; mit Person nur ihre."
     },
     "attendance": {
       "title": "Anwesenheit",
       "description": "Anwesenheitskontrolle mit optionalen Bussen.",
       "finesEnabled": "Bussen aktiv",
-      "finesHelp": "Konto und Beträge legst du zentral unter Finanzen › Bussen › Bussentarif fest."
+      "finesHelp": "Konto und Beträge legst du zentral unter Finanzen › Bussen › Bussentarif fest.",
+      "excluded": "Nicht in der Liste",
+      "excludedNone": "Niemand ausgeblendet",
+      "excludedHelp": "Zusätzlich zu den Personen, die in der Vorlage von der Anwesenheit ausgenommen sind."
     },
     "sessionDate": {
       "title": "Sitzungsdatum",
@@ -885,18 +891,33 @@
       "show": "Anzeigen",
       "filter": {
         "all": "Alle Transaktionen",
-        "since_last_session": "Ab Protokolldatum",
+        "since_last_session": "Seit letzter Sitzung",
         "since_date": "Seit Datum",
         "this_year": "Dieses Jahr",
-        "last_n": "Letzte N"
+        "last_n": "Letzte N",
+        "this_cycle": "Dieser Zyklus (z. B. Vereinsjahr)"
       },
       "lastN": "Anzahl",
-      "sinceDate": "Seit"
+      "sinceDate": "Seit",
+      "balanceDate": "Stand",
+      "balanceToday": "Heute (aktueller Stand)",
+      "balanceProtocolDate": "Am Protokolldatum",
+      "balanceDateHelp": "Am Protokolldatum zeigt auch ein älteres Protokoll den damals gültigen Saldo."
     },
     "fineList": {
       "title": "Bussenliste",
       "description": "Zeigt die Bussen aus der Anwesenheitskontrolle.",
-      "note": "Die Liste zeigt alle Bussen dieses Protokolls und die offenen aus früheren."
+      "account": "Konto",
+      "allAccounts": "Alle Konten",
+      "range": "Offene Bussen aus früheren Protokollen",
+      "rangeOption": {
+        "all": "Alle",
+        "this_cycle": "Nur aus diesem Zyklus",
+        "this_protocol": "Keine (nur dieses Protokoll)"
+      },
+      "rangeHelp": "Die Bussen dieses Protokolls erscheinen immer.",
+      "openOnly": "Nur offene Bussen",
+      "byParticipant": "Nach Person ordnen"
     },
     "image": {
       "title": "Bild",
@@ -928,7 +949,10 @@
       "noHeading": "Leer für keine Überschrift",
       "noRows": "Noch keine Zeilen.",
       "rowWord": "Zeile",
-      "valueWord": "Wert"
+      "valueWord": "Wert",
+      "filterColumn": "Nur Zeilen zeigen, deren Spalte …",
+      "noFilter": "Alle Zeilen",
+      "filterText": "… diesen Text enthält"
     },
     "eventField": {
       "title": "Titel",

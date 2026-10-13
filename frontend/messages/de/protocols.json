@@ -471,5 +471,8 @@
   "undoAction": "Rückgängig",
   "unknownEvent": "Unbekannter Termin",
   "uploadImageAction": "Bild hochladen",
-  "valueFallback": "Wert"
+  "valueFallback": "Wert",
+  "locationLabel": "Ort",
+  "organizersLabel": "Organisatoren",
+  "balanceAsOf": "Stand {date}"
 }

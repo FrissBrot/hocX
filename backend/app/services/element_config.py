@@ -484,7 +484,6 @@ class TextConfig(BlockConfigBase):
 class TodoConfig(BlockConfigBase):
     todo_due_tag_filter: str | None = None
     todo_assignee_participant_id: Any = None
-    todo_carry_open_only: bool = True
 
 
 class FormConfig(BlockConfigBase):
@@ -496,7 +495,6 @@ class FormConfig(BlockConfigBase):
     linked_list_sort_by: Literal["column_one", "column_two"] | None = None
     linked_list_sort_direction: Literal["asc", "desc"] | None = None
     linked_list_highlight_empty: bool = False
-    linked_list_hidden_columns: list[Literal["column_one", "column_two"]] = Field(default_factory=list)
     linked_list_filter_column: Literal["column_one", "column_two"] | None = None
     linked_list_filter_text: str | None = None
     event_fields: list[EventFieldConfig] | None = None
@@ -523,7 +521,7 @@ class EventListConfig(BlockConfigBase, EventDisplayMixin):
 
 class AttendanceConfig(BlockConfigBase):
     fines_enabled: bool = False
-    attendance_hidden_roles: list[str] = Field(default_factory=list)
+    attendance_excluded_participant_ids: list[Any] = Field(default_factory=list)
 
 
 class SessionDateConfig(BlockConfigBase):
@@ -555,7 +553,7 @@ class FinanceTransactionsConfig(BlockConfigBase):
 class FineListConfig(BlockConfigBase):
     fine_list_account_id: Any = None
     fine_list_status: Literal["all", "open"] = "all"
-    fine_list_range: Literal["all", "this_protocol", "since_last_session", "this_cycle"] = "all"
+    fine_list_range: Literal["all", "this_protocol", "this_cycle"] = "all"
     fine_list_group_by: Literal["none", "participant"] = "none"
 
 
