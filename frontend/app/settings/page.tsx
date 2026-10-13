@@ -3,12 +3,13 @@ import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { DocumentTemplateManager } from "@/components/settings/document-template-manager";
+import { HouseStyleSettings } from "@/components/settings/house-style-settings";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
 import { templateTabs } from "@/components/ui/section-tabs";
+import { defaultLocale, locales } from "@/i18n/locale-config.generated";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
-import { DocumentTemplate, DocumentTemplatePart } from "@/types/api";
+import { DocumentStyle, DocumentStyleAsset } from "@/lib/documents/api";
 
 export default async function SettingsPage() {
   const session = await requireSession();
@@ -16,9 +17,10 @@ export default async function SettingsPage() {
     redirect("/");
   }
   const t = await getTranslations("nav");
-  const [documentTemplates, documentTemplateParts] = await Promise.all([
-    backendFetchWithSession<DocumentTemplate[]>("/api/document-templates"),
-    backendFetchWithSession<DocumentTemplatePart[]>("/api/document-template-parts")
+  const [styles, assets, documentSettings] = await Promise.all([
+    backendFetchWithSession<DocumentStyle[]>("/api/document-styles"),
+    backendFetchWithSession<DocumentStyleAsset[]>("/api/document-style-assets"),
+    backendFetchWithSession<{ language: string }>("/api/document-settings"),
   ]);
 
   return (
@@ -27,16 +29,14 @@ export default async function SettingsPage() {
         mobile={<MobileDesktopOnly navKey="documentLayouts" backHref="/templates" backNavKey="templates" />}
         desktop={
           <>
-          <RouteTabs tabs={templateTabs(t)} activeHref="/settings" />
-          <section className="panel">
-            <div className="section-stack">
-              <DocumentTemplateManager
-                initialTemplates={documentTemplates ?? []}
-                initialParts={documentTemplateParts ?? []}
-                tenantId={session.current_tenant?.id ?? null}
-              />
-            </div>
-          </section>
+            <RouteTabs tabs={templateTabs(t)} activeHref="/settings" />
+            <HouseStyleSettings
+              initialStyles={styles ?? []}
+              initialAssets={assets ?? []}
+              initialLanguage={documentSettings?.language ?? defaultLocale}
+              languages={[...locales]}
+              canEdit
+            />
           </>
         }
       />

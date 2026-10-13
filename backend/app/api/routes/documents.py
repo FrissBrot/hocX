@@ -572,3 +572,82 @@ def delete_document_recipe(recipe_id: uuid.UUID, db: Session = Depends(get_db), 
     db.commit()
     audit.log(db, action="document_recipe.delete", actor=user, entity_type="document_recipe", entity_id=recipe_db_id)
     return Response(status_code=204)
+
+
+# ── Auswahlquellen für die Parameterformulare ───────────────────────────────
+
+
+class SourceOption(BaseModel):
+    id: uuid.UUID
+    label: str
+    detail: str | None = None
+
+
+SOURCES = {"participants", "protocols", "protocol_elements", "protocol_blocks", "images", "cycles", "templates", "lists", "events", "finance_accounts"}
+
+
+@router.get("/documents/sources/{source}", response_model=list[SourceOption])
+def list_source_options(
+    source: str,
+    protocol_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Optionen für Referenzfelder (``x-source`` im Katalog-Schema), mandantengebunden und mit
+    denselben Rechten wie die Blöcke, die sie füllen."""
+    from app.core.security import require_finance_read
+    from app.documents.context import format_date
+    from app.models import CycleConfig, Event, FinanceAccount, ListDefinition, Participant, ProtocolElement, ProtocolElementBlock, Template
+
+    require_reader(user)
+    tenant_id = user.current_tenant_id
+    if source not in SOURCES:
+        raise HTTPException(status_code=404, detail=text(_lang(user), "apiError.notFound"))
+    if source == "participants":
+        rows = db.scalars(select(Participant).where(Participant.tenant_id == tenant_id, Participant.is_active.is_(True)).order_by(Participant.display_name))
+        return [SourceOption(id=row.public_id, label=row.display_name) for row in rows]
+    if source == "protocols":
+        rows = db.scalars(select(Protocol).where(Protocol.tenant_id == tenant_id).order_by(Protocol.protocol_date.desc()).limit(300))
+        return [
+            SourceOption(id=row.public_id, label=row.title or row.protocol_number, detail=f"{row.protocol_number} · {format_date(row.protocol_date)}")
+            for row in rows
+            if access_service.can_read_protocol(db, user, row.id)
+        ]
+    if source in ("protocol_elements", "protocol_blocks"):
+        internal = public_id_service.resolve_internal_id(db, Protocol, protocol_id, tenant_id=tenant_id) if protocol_id else None
+        if internal is None:
+            return []
+        access_service.ensure_can_read_protocol(db, user, internal)
+        elements = list(db.scalars(select(ProtocolElement).where(ProtocolElement.protocol_id == internal).order_by(ProtocolElement.sort_index)))
+        if source == "protocol_elements":
+            return [SourceOption(id=element.public_id, label=element.section_name_snapshot) for element in elements]
+        options: list[SourceOption] = []
+        for element in elements:
+            for block in db.scalars(select(ProtocolElementBlock).where(ProtocolElementBlock.protocol_element_id == element.id).order_by(ProtocolElementBlock.sort_index)):
+                options.append(SourceOption(id=block.public_id, label=block.block_title_snapshot or block.title_snapshot, detail=element.section_name_snapshot))
+        return options
+    if source == "images":
+        if access_service.is_restricted_reader(db, user):
+            return []
+        rows = db.scalars(
+            select(StoredFile)
+            .where(StoredFile.tenant_id == tenant_id, StoredFile.mime_type.like("image/%"), StoredFile.scan_status == "clean")
+            .order_by(StoredFile.created_at.desc())
+            .limit(300)
+        )
+        return [SourceOption(id=row.public_id, label=row.original_name) for row in rows]
+    if source == "cycles":
+        rows = db.scalars(select(CycleConfig).where(CycleConfig.tenant_id == tenant_id).order_by(CycleConfig.name))
+        return [SourceOption(id=row.public_id, label=row.name) for row in rows]
+    if source == "templates":
+        rows = db.scalars(select(Template).where(Template.tenant_id == tenant_id, Template.status == "active").order_by(Template.name))
+        return [SourceOption(id=row.public_id, label=row.name) for row in rows if access_service.can_read_template(db, user, row.id)]
+    if source == "lists":
+        rows = db.scalars(select(ListDefinition).where(ListDefinition.tenant_id == tenant_id, ListDefinition.is_active.is_(True)).order_by(ListDefinition.name))
+        return [SourceOption(id=row.public_id, label=row.name) for row in rows]
+    if source == "events":
+        rows = db.scalars(select(Event).where(Event.tenant_id == tenant_id, Event.is_session_marker.is_(False)).order_by(Event.event_date.desc()).limit(500))
+        return [SourceOption(id=row.public_id, label=row.title, detail=format_date(row.event_date)) for row in rows]
+    require_finance_read(user)
+    rows = db.scalars(select(FinanceAccount).where(FinanceAccount.tenant_id == tenant_id).order_by(FinanceAccount.name))
+    return [SourceOption(id=row.public_id, label=row.name) for row in rows]

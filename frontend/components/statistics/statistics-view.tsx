@@ -1,5 +1,6 @@
 "use client";
 
+import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -480,6 +481,7 @@ export function StatisticsView({ data }: Props) {
           <h1 className="page-title">{t("pageTitle")}</h1>
           <p className="muted">{t("pageIntro")}</p>
         </div>
+        <DocumentExportButton context={{ documentType: "statistics" }} />
       </div>
 
       {/* ── KPI row ── */}

@@ -15,7 +15,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
@@ -32,12 +32,19 @@ from app.documents.hashing import content_hash
 from app.documents.model import Document, RenderInfo
 from app.documents.renderer import RenderAssets, get_renderer
 from app.documents.strings import normalize_language
-from app.documents.style_tokens import ExportOptions
+from app.documents.style_tokens import DocumentStyleTokens, ExportOptions
 from app.models import DocumentExport, DocumentRecipe, DocumentStyle, Protocol, StoredFile, Template, Tenant
 
 logger = logging.getLogger(__name__)
 
 GENERATED_DIR = "generated"
+
+
+class StyleOverride(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    style_key: Literal["modern", "classic", "compact"] = "modern"
+    tokens: DocumentStyleTokens = Field(default_factory=DocumentStyleTokens)
 
 
 class DocumentRequest(BaseModel):
@@ -52,6 +59,9 @@ class DocumentRequest(BaseModel):
     # Parameter für die Standardblöcke eines Dokumenttyps (z. B. aktive Filter der Todo-Seite).
     params: dict[str, Any] = Field(default_factory=dict)
     style_id: uuid.UUID | None = None
+    # Ungespeicherte Hausstil-Tokens (Live-Vorschau in den Hausstil-Einstellungen). Assets werden
+    # wie bei gespeicherten Stilen mandantengebunden aufgelöst.
+    style_override: StyleOverride | None = None
     options: ExportOptions = Field(default_factory=ExportOptions)
     language: str | None = Field(None, max_length=10)
 
@@ -187,6 +197,15 @@ def prepare(db: Session, user: CurrentUser | None, tenant_id: int, request: Docu
         options = ExportOptions.model_validate(recipe.options_json or {})
 
     style = _resolve_style(db, ctx, request, recipe, protocol)
+    if request.style_override is not None:
+        # Transienter Stil (nie gespeichert): gleiche Auflösung wie ein gespeicherter.
+        style = DocumentStyle(
+            tenant_id=tenant_id,
+            name="preview",
+            style_key=request.style_override.style_key,
+            tokens_json=request.style_override.tokens.model_dump(mode="json"),
+            version=(style.version if style is not None else 1),
+        )
     resolved_style, tokens, fonts, style_files = style_service.resolve(db, tenant_id, style)
     document = build_document(
         ctx,
@@ -305,7 +324,7 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
         version_minor=minor,
         content_hash=prepared.content_hash,
         pdf_sha256=hashlib.sha256(pdf).hexdigest(),
-        style_id=prepared.style.id if prepared.style is not None else None,
+        style_id=prepared.style.id if prepared.style is not None and prepared.style.id else None,
         style_key=document.style.key,
         style_version=document.style.version,
         language=prepared.language,

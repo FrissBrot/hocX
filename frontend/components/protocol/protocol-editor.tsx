@@ -21,6 +21,7 @@ import { computePopoverPosition, usePopoverDismiss } from "@/components/ui/popov
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
+import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { ApiError, browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { clearDraft, discardMutation, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { getCycleYear } from "@/lib/utils/cycle";
@@ -1687,6 +1688,7 @@ export function ProtocolEditor({
           >
             {pdfBusyByProtocol[protocol.id] ? "…" : t("exportPdfButton")}
           </button>
+          <DocumentExportButton className="button-ghost" context={{ documentType: "protocol", protocolId: protocol.id }} />
           {!isReadOnly && workflowMeta[protocolStatus]?.ctaLabel && (
             <button
               type="button"

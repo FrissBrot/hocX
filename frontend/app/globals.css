@@ -24051,3 +24051,192 @@ a.mobile-list-row { color: var(--text); }
   flex-shrink: 0;
   padding: 0;
 }
+
+/* ── Dokument-Export-Dialog und Hausstile (components/documents, house-style-settings) ── */
+.docexport-layout,
+.housestyle-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+.docexport-panel,
+.housestyle-form {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.docexport-section {
+  display: grid;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.docexport-heading {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.docexport-blocks {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.docexport-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+}
+.docexport-block-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+}
+.docexport-drag {
+  color: var(--muted);
+  cursor: grab;
+  user-select: none;
+}
+.docexport-block-name {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-weight: 500;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.docexport-block-name:hover {
+  color: var(--accent-strong);
+}
+.docexport-block-body,
+.docexport-params {
+  display: grid;
+  gap: var(--space-3);
+}
+.docexport-block-body {
+  padding: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.docexport-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+}
+.docexport-checkgroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+.docexport-rows {
+  display: grid;
+  gap: var(--space-2);
+}
+.docexport-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) auto;
+  gap: var(--space-2);
+  align-items: center;
+}
+.docexport-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.docexport-preview {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+.docexport-preview-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.docexport-pages {
+  display: grid;
+  gap: var(--space-4);
+  justify-items: center;
+}
+.docexport-page {
+  width: 100%;
+  max-width: 720px;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  box-shadow: var(--shadow-soft);
+  /* Die Seiten sind gerenderte PDF-Seiten und bleiben in beiden Themes weiss. */
+  background: var(--panel);
+}
+.housestyle-list {
+  display: grid;
+  gap: var(--space-2);
+}
+.housestyle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+  color: var(--text);
+  text-align: left;
+}
+.housestyle-item-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.housestyle-item-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.housestyle-fields,
+.housestyle-assets {
+  display: grid;
+  gap: var(--space-3);
+}
+.housestyle-color {
+  width: 100%;
+  min-height: 40px;
+  padding: var(--space-1);
+}
+.housestyle-asset-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.housestyle-asset {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+@media (max-width: 900px) {
+  .docexport-layout,
+  .housestyle-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .docexport-preview {
+    position: static;
+  }
+}

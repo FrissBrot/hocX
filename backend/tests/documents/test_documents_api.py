@@ -160,3 +160,14 @@ def test_recipe_crud(db, setup):
     assert preview.pages
     routes.delete_document_recipe(recipe.id, db=db, user=writer)
     assert routes.list_document_recipes(db=db, user=writer) == []
+
+
+def test_sources_are_tenant_scoped(db, setup):
+    protocols = routes.list_source_options("protocols", protocol_id=None, db=db, user=setup["admin"])
+    assert [item.id for item in protocols] == [setup["protocol"].public_id]
+    assert routes.list_source_options("protocols", protocol_id=None, db=db, user=setup["other_admin"]) == []
+    elements = routes.list_source_options("protocol_elements", protocol_id=setup["protocol"].public_id, db=db, user=setup["admin"])
+    assert [item.label for item in elements] == ["Traktandum 1"]
+    assert routes.list_source_options("protocol_blocks", protocol_id=setup["protocol"].public_id, db=db, user=setup["other_admin"]) == []
+    with pytest.raises(HTTPException):
+        routes.list_source_options("geheim", protocol_id=None, db=db, user=setup["admin"])

@@ -1,5 +1,6 @@
 "use client";
 
+import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { ChangeEvent, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
@@ -28,7 +29,6 @@ import { formatCycleName, getCycleYear } from "@/lib/utils/cycle";
 import { formatDate, formatDateRange, toIntlLocale } from "@/lib/utils/format";
 import {
   CycleConfigSummary,
-  DocumentTemplate,
   EventImportPreview,
   EventSummary,
   ParticipantSummary,
@@ -75,12 +75,11 @@ const ALL_CYCLES_FILTER = "all";
 
 type Props = {
   initialEvents: EventSummary[];
-  documentTemplates?: DocumentTemplate[];
   availableParticipants?: ParticipantSummary[];
   tenantName?: string | null;
 };
 
-export function EventManager({ initialEvents, documentTemplates = [], availableParticipants = [], tenantName }: Props) {
+export function EventManager({ initialEvents, availableParticipants = [], tenantName }: Props) {
   const t = useTranslations("events");
   const locale = useLocale();
   const CSV_TARGET_FIELDS = useMemo(() => csvTargetFields(t), [t]);
@@ -116,94 +115,6 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const [importPreviewLoading, setImportPreviewLoading] = useState(false);
   const [importCommitting, setImportCommitting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
-
-  const landscapeTemplates = documentTemplates.filter(
-    (t) => t.is_active && (t.configuration_json as { options?: { orientation?: string } })?.options?.orientation === "landscape"
-  );
-
-  // Export modal state
-  const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [exportTemplateId, setExportTemplateId] = useState<string | "">(landscapeTemplates[0]?.id ?? "");
-  const [exportBusy, setExportBusy] = useState(false);
-  const [exportUrl, setExportUrl] = useState<string | null>(null);
-  const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
-  const templateDropdownRef = useRef<HTMLDivElement>(null);
-
-  usePopoverDismiss(templateDropdownOpen, () => setTemplateDropdownOpen(false), [templateDropdownRef]);
-  const [exportTagFilters, setExportTagFilters] = useState<string[]>([]);
-  const [exportTagSearch, setExportTagSearch] = useState("");
-  const [exportDateMode, setExportDateMode] = useState<"all" | "next-session" | "until-event">("all");
-  const [exportUntilEventId, setExportUntilEventId] = useState<string | "">("");
-
-  const knownExportTags = useMemo(() => {
-    const set = new Set<string>();
-    events.forEach((e) => { if (e.tag) set.add(e.tag); });
-    return Array.from(set).sort();
-  }, [events]);
-
-  const tagSuggestions = useMemo(() => {
-    if (!exportTagSearch.trim()) return [];
-    const q = exportTagSearch.toLowerCase();
-    return knownExportTags.filter((t) => t.toLowerCase().includes(q) && !exportTagFilters.includes(t));
-  }, [exportTagSearch, knownExportTags, exportTagFilters]);
-
-  const nextSessionEvent = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return events.find((e) => e.event_date >= today && e.tag?.toLowerCase().includes("sitzung")) ?? null;
-  }, [events]);
-
-  const sortedEvents = useMemo(() => [...events].sort((a, b) => a.event_date.localeCompare(b.event_date)), [events]);
-
-  function toggleExportTag(tag: string) {
-    setExportTagFilters((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
-    setExportUrl(null);
-  }
-
-  function getUntilDate(): string | null {
-    if (exportDateMode === "all") return null;
-    if (exportDateMode === "next-session") return nextSessionEvent?.event_date ?? null;
-    if (exportDateMode === "until-event" && exportUntilEventId) {
-      const ev = events.find((e) => e.id === exportUntilEventId);
-      return ev?.event_date ?? null;
-    }
-    return null;
-  }
-
-  function triggerDownload(url: string) {
-    const a = document.createElement("a");
-    a.href = `${url}?download=1`;
-    a.target = "_blank";
-    a.rel = "noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }
-
-  async function handlePdfClick() {
-    if (exportBusy) return;
-    if (exportUrl) { triggerDownload(exportUrl); return; }
-    if (!exportTemplateId) return;
-    setExportBusy(true);
-    try {
-      const result = await browserApiFetch<{ content_url?: string | null }>("/api/exports/events", {
-        method: "POST",
-        body: JSON.stringify({
-          template_id: exportTemplateId,
-          tag_filters: exportTagFilters,
-          until_date: getUntilDate(),
-        }),
-      });
-      const url = result.content_url ?? null;
-      setExportUrl(url);
-      if (url) triggerDownload(url);
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.pdfExportFailed"), "error");
-    } finally {
-      setExportBusy(false);
-    }
-  }
 
   useEffect(() => {
     setTodayIso(new Date().toISOString().slice(0, 10));
@@ -721,12 +632,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                 <EventIcon name="upload" />
                 {t("csvImport")}
               </button>
-              {landscapeTemplates.length > 0 && (
-                <button type="button" className="button-secondary button-ghost" onClick={() => setExportModalOpen(true)}>
-                  <EventIcon name="download" />
-                  {t("export")}
-                </button>
-              )}
+              <DocumentExportButton className="button-secondary button-ghost" label={t("export")} context={{ documentType: "events" }} />
             </div>
             <button type="button" className="button-primary event-new-button" onClick={() => openCreate()}>
               <EventIcon name="plus" />
@@ -1133,155 +1039,6 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         ) : null}
       </Modal>
 
-      <Modal open={exportModalOpen} title={t("exportModal.title")} onClose={() => setExportModalOpen(false)}>
-        <div style={{ display: "grid", gap: "var(--space-5)" }}>
-
-          {knownExportTags.length > 0 && (
-            <div className="field-stack">
-              <span className="field-label">{t("exportModal.tags")}</span>
-              <div style={{ position: "relative" }}>
-                <input
-                  className="dropdown-search-input"
-                  placeholder={t("exportModal.tagSearchPlaceholder")}
-                  value={exportTagSearch}
-                  onChange={(e) => setExportTagSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Tab" && tagSuggestions.length > 0) {
-                      e.preventDefault();
-                      toggleExportTag(tagSuggestions[0]);
-                      setExportTagSearch("");
-                    } else if (e.key === "Enter" && tagSuggestions.length > 0) {
-                      toggleExportTag(tagSuggestions[0]);
-                      setExportTagSearch("");
-                    } else if (e.key === "Escape") {
-                      setExportTagSearch("");
-                    }
-                  }}
-                />
-                {tagSuggestions.length > 0 && (
-                  <div className="dropdown-panel dropdown-panel-down">
-                    {tagSuggestions.map((tag, i) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        onMouseDown={(e) => { e.preventDefault(); toggleExportTag(tag); setExportTagSearch(""); }}
-                        className={i === 0 ? "dropdown-option dropdown-option-active dropdown-option-row" : "dropdown-option dropdown-option-row"}
-                      >
-                        <span>{tag}</span>
-                        {i === 0 && <span className="dropdown-hint">{t("exportModal.tabHint")}</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="tag-filter-bar">
-                {exportTagFilters.map((tag) => (
-                  <button key={tag} type="button" className="tag-filter-chip tag-filter-chip-active"
-                    onClick={() => toggleExportTag(tag)}
-                    style={{ width: "auto", minHeight: 0, padding: "var(--space-1) var(--space-3)", display: "inline-flex", fontSize: "var(--text-base)" }}
-                  >{tag} ×</button>
-                ))}
-                {knownExportTags.filter((t) => !exportTagFilters.includes(t)).map((tag) => (
-                  <button key={tag} type="button" className="tag-filter-chip"
-                    onClick={() => toggleExportTag(tag)}
-                    style={{ width: "auto", minHeight: 0, padding: "var(--space-1) var(--space-3)", display: "inline-flex", fontSize: "var(--text-base)" }}
-                  >{tag}</button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="field-stack">
-            <span className="field-label">{t("exportModal.period")}</span>
-            <div className="filter-pill-row">
-              {(["all", "next-session", "until-event"] as const).map((mode) => {
-                const label = mode === "all" ? t("exportModal.periodAll") : mode === "next-session" ? t("exportModal.periodNextSession") : t("exportModal.periodUntilEvent");
-                return (
-                  <button key={mode} type="button"
-                    className={`button-pill${exportDateMode === mode ? " button-pill-active" : ""}`}
-                    onClick={() => { setExportDateMode(mode); setExportUrl(null); }}
-                  >{label}</button>
-                );
-              })}
-            </div>
-            {exportDateMode === "next-session" && (
-              <span className="muted" style={{ fontSize: "var(--text-sm)", paddingLeft: "2px" }}>
-                {nextSessionEvent
-                  ? t("exportModal.untilLabel", { title: nextSessionEvent.title, date: formatDate(nextSessionEvent.event_date) })
-                  : t("exportModal.noSessionFound")}
-              </span>
-            )}
-            {exportDateMode === "until-event" && (
-              <SearchableSelect
-                options={sortedEvents}
-                getId={(ev) => ev.id}
-                getLabel={(ev) => `${formatDate(ev.event_date)}${ev.tag ? ` · ${ev.tag}` : ""} — ${ev.title}`}
-                value={exportUntilEventId === "" ? null : exportUntilEventId}
-                onChange={(ev) => { setExportUntilEventId(ev ? ev.id : ""); setExportUrl(null); }}
-                nullLabel={t("exportModal.noEventChosen")}
-              />
-            )}
-          </div>
-
-          <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid var(--border)", paddingTop: "var(--space-5)" }}>
-            <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center" }}>
-            <button
-              type="button"
-              className={`pdf-icon-link pdf-icon-link-success${exportBusy || (!exportUrl && (!exportTemplateId || (exportDateMode === "until-event" && !exportUntilEventId) || (exportDateMode === "next-session" && !nextSessionEvent))) ? " pdf-icon-disabled" : ""}`}
-              disabled={exportBusy || (!exportUrl && (!exportTemplateId || (exportDateMode === "until-event" && !exportUntilEventId) || (exportDateMode === "next-session" && !nextSessionEvent)))}
-              onClick={() => void handlePdfClick()}
-              title={exportUrl ? t("exportModal.redownloadPdf") : t("exportModal.generatePdf")}
-              style={{ width: "auto", minWidth: "56px", minHeight: 0, padding: "0 var(--space-4)", display: "inline-flex", justifyContent: "center" }}
-            >
-              {exportBusy ? "..." : "PDF"}
-            </button>
-            <button
-              type="button"
-              className="pdf-icon-link pdf-icon-link-soon"
-              disabled
-              title={t("exportModal.markdownSoon")}
-              style={{ width: "auto", minWidth: "56px", minHeight: 0, padding: "0 var(--space-4)", display: "inline-flex", justifyContent: "center" }}
-            >
-              MD
-            </button>
-            </div>
-            {landscapeTemplates.length > 0 && (
-              <div ref={templateDropdownRef} style={{ position: "relative" }}>
-                <button
-                  type="button"
-                  onClick={() => setTemplateDropdownOpen((v) => !v)}
-                  style={{
-                    width: "auto", minHeight: 0, height: "42px", padding: "0 var(--space-6) 0 var(--space-3)",
-                    borderRadius: "var(--radius-md)", fontSize: "var(--text-sm)",
-                    border: "1px solid var(--border)", backgroundColor: "transparent",
-                    color: "var(--text)", display: "flex", alignItems: "center", whiteSpace: "nowrap",
-                    backgroundImage: "linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%)",
-                    backgroundPosition: "calc(100% - 14px) calc(50% - 2px), calc(100% - 8px) calc(50% - 2px)",
-                    backgroundSize: "6px 6px, 6px 6px", backgroundRepeat: "no-repeat",
-                  }}
-                >
-                  {landscapeTemplates.find((tpl) => tpl.id === exportTemplateId)?.name ?? t("exportModal.templateFallback")}
-                </button>
-                {templateDropdownOpen && (
-                  <div className="dropdown-panel dropdown-panel-up" style={{ minWidth: "100%" }}>
-                    {landscapeTemplates.map((t, i) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onMouseDown={() => { setExportTemplateId(t.id); setExportUrl(null); setTemplateDropdownOpen(false); }}
-                        className={t.id === exportTemplateId ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
-                      >
-                        {t.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-        </div>
-      </Modal>
 
       {eventContextMenu && typeof document !== "undefined" && createPortal(
         <div

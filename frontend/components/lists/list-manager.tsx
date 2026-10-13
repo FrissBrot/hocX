@@ -1,8 +1,9 @@
 "use client";
 
+import { DocumentExportDialog } from "@/components/documents/export-dialog";
 import { useParticipantSelectable } from "@/contexts/participant-date-context";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { EmptyState } from "@/components/ui/empty-state";
@@ -10,7 +11,6 @@ import { ListValueTypeIcon } from "@/components/lists/list-value-type-icon";
 import { StructuredListTable } from "@/components/lists/structured-list-table";
 import { HistoricalEditConfirmModal, HistoricalViewBanner, ReconstructionBanner } from "@/components/ui/historical-view-banner";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
-import { usePopoverDismiss } from "@/components/ui/popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,6 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useHistoricalList } from "@/lib/hooks/use-historical-list";
 import {
-  DocumentTemplate,
   EventSummary,
   ParticipantSummary,
   StructuredListDefinition,
@@ -34,7 +33,6 @@ type ListManagerProps = {
   initialEntriesByList: Record<string, StructuredListEntry[]>;
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
-  documentTemplates?: DocumentTemplate[];
 };
 
 type ListDefinitionFormState = {
@@ -87,7 +85,6 @@ export function ListManager({
   initialEntriesByList,
   availableParticipants,
   availableEvents,
-  documentTemplates = [],
 }: ListManagerProps) {
   const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("lists");
@@ -102,118 +99,7 @@ export function ListManager({
   const [editingListId, setEditingListId] = useState<string | null>(null);
   const [form, setForm] = useState(() => initialFormState(t));
 
-  // Export modal state
-  const landscapeTemplates = documentTemplates.filter(
-    (t) => t.is_active && (t.configuration_json as { options?: { orientation?: string } })?.options?.orientation === "landscape"
-  );
-  const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [exportTemplateId, setExportTemplateId] = useState<string | "">(landscapeTemplates[0]?.id ?? "");
-  const [exportListId, setExportListId] = useState<string | "">(initialLists[0]?.id ?? "");
-  const [exportGroupBy, setExportGroupBy] = useState<"" | "column_one" | "column_two">("");
-  const [exportSortBy, setExportSortBy] = useState<"" | "column_one" | "column_two">("");
-  const [exportSortDirection, setExportSortDirection] = useState<"asc" | "desc">("asc");
-  const [exportFilterColumn, setExportFilterColumn] = useState<"" | "column_one" | "column_two">("");
-  const [exportFilterParticipantId, setExportFilterParticipantId] = useState<string | "">("");
-  const [exportFilterEventId, setExportFilterEventId] = useState<string | "">("");
-  const [exportFilterText, setExportFilterText] = useState("");
-  const [exportBusy, setExportBusy] = useState(false);
-  const [exportUrl, setExportUrl] = useState<string | null>(null);
-  const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
-  const templateDropdownRef = useRef<HTMLDivElement>(null);
-  const [listDropdownOpen, setListDropdownOpen] = useState(false);
-  const [listDropdownSearch, setListDropdownSearch] = useState("");
-  const listDropdownRef = useRef<HTMLDivElement>(null);
-
-  usePopoverDismiss(templateDropdownOpen, () => setTemplateDropdownOpen(false), [templateDropdownRef]);
-
-  usePopoverDismiss(listDropdownOpen, () => { setListDropdownOpen(false); setListDropdownSearch(""); }, [listDropdownRef]);
-
-  const listDropdownFiltered = useMemo(() => {
-    if (!listDropdownSearch.trim()) return lists;
-    const q = listDropdownSearch.toLowerCase();
-    return lists.filter((l) => l.name.toLowerCase().includes(q));
-  }, [lists, listDropdownSearch]);
-
-  function toggleExportSort(col: "column_one" | "column_two") {
-    if (exportSortBy === col) {
-      setExportSortDirection((d) => d === "asc" ? "desc" : "asc");
-    } else {
-      setExportSortBy(col);
-      setExportSortDirection("asc");
-    }
-    clearExportUrl();
-  }
-
-  const exportListDef = useMemo(
-    () => lists.find((l) => l.id === exportListId) ?? null,
-    [lists, exportListId]
-  );
-
-  const exportFilteredEntries = useMemo(() => {
-    if (!exportListId) return [];
-    const entries = entriesByList[exportListId] ?? [];
-    if (!exportFilterColumn || !exportListDef) return entries;
-    const valueType = exportFilterColumn === "column_one" ? exportListDef.column_one_value_type : exportListDef.column_two_value_type;
-    return entries.filter((entry) => {
-      const value = exportFilterColumn === "column_one" ? entry.column_one_value : entry.column_two_value;
-      if (valueType === "participant") {
-        if (!exportFilterParticipantId) return true;
-        return String(value.participant_id) === exportFilterParticipantId;
-      }
-      if (valueType === "participants") {
-        if (!exportFilterParticipantId) return true;
-        const ids = Array.isArray(value.participant_ids) ? (value.participant_ids as unknown[]).map(String) : [];
-        return ids.includes(exportFilterParticipantId);
-      }
-      if (valueType === "event") {
-        if (!exportFilterEventId) return true;
-        return String(value.event_id) === exportFilterEventId;
-      }
-      if (!exportFilterText) return true;
-      return String(value.text_value ?? "").toLowerCase().includes(exportFilterText.toLowerCase());
-    });
-  }, [entriesByList, exportListId, exportFilterColumn, exportFilterParticipantId, exportFilterEventId, exportFilterText, exportListDef]);
-
-  function clearExportUrl() { setExportUrl(null); }
-
-  function triggerDownload(url: string) {
-    const a = document.createElement("a");
-    a.href = `${url}?download=1`;
-    a.target = "_blank";
-    a.rel = "noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }
-
-  async function handlePdfClick() {
-    if (exportBusy || !exportListId || !exportTemplateId) return;
-    if (exportUrl) { triggerDownload(exportUrl); return; }
-    setExportBusy(true);
-    try {
-      const result = await browserApiFetch<{ content_url?: string | null }>("/api/exports/lists", {
-        method: "POST",
-        body: JSON.stringify({
-          template_id: exportTemplateId,
-          list_definition_id: exportListId,
-          group_by: exportGroupBy,
-          sort_by: exportSortBy,
-          sort_direction: exportSortDirection,
-          filter_column: exportFilterColumn,
-          filter_participant_id: exportFilterParticipantId || null,
-          filter_event_id: exportFilterEventId || null,
-          filter_text: exportFilterText || null,
-        }),
-      });
-      const url = result.content_url ?? null;
-      setExportUrl(url);
-      if (url) triggerDownload(url);
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.pdfExportFailed"), "error");
-    } finally {
-      setExportBusy(false);
-    }
-  }
+  const [exportOpen, setExportOpen] = useState(false);
 
   const selectedList = useMemo(
     () => lists.find((definition) => definition.id === selectedListId) ?? null,
@@ -561,7 +447,7 @@ export function ListManager({
                     />
                   )}
                   {isLive && <ActionMenu items={[
-                    ...(landscapeTemplates.length > 0 ? [{ label: t("export"), onClick: () => { setExportListId(selectedListId ?? ""); setExportUrl(null); setExportModalOpen(true); } }] : []),
+                    { label: t("export"), onClick: () => setExportOpen(true) },
                     { label: t("edit"), onClick: () => openEdit(selectedList) },
                     { label: t("deleteList"), danger: true, onClick: () => void deleteDefinition(selectedList.id) },
                   ]} />}
@@ -608,220 +494,9 @@ export function ListManager({
       </div>
       )}
 
-      <Modal
-        open={exportModalOpen}
-        onClose={() => setExportModalOpen(false)}
-        title={t("exportModal.title")}
-        size="wide"
-      >
-        <div style={{ display: "flex", gap: "var(--space-5)", height: "min(640px, calc(100dvh - 200px))", minHeight: 0 }}>
-          {/* Left: options */}
-          <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: "var(--space-5)", overflowY: "auto" }}>
-
-            {/* List dropdown with search */}
-            <div>
-              <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>{t("exportModal.listLabel")}</div>
-              <div ref={listDropdownRef} style={{ position: "relative" }}>
-                <button
-                  type="button"
-                  onClick={() => { setListDropdownOpen((v) => !v); setListDropdownSearch(""); }}
-                  className="dropdown-trigger"
-                >
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {exportListDef?.name ?? t("exportModal.chooseList")}
-                  </span>
-                  <span style={{ flexShrink: 0, opacity: 0.5 }}>▾</span>
-                </button>
-                {listDropdownOpen && (
-                  <div className="dropdown-panel dropdown-panel-down">
-                    <div className="dropdown-search">
-                      <input
-                        autoFocus
-                        type="text"
-                        placeholder={t("exportModal.searchPlaceholder")}
-                        value={listDropdownSearch}
-                        onChange={(e) => setListDropdownSearch(e.target.value)}
-                        className="dropdown-search-input"
-                      />
-                    </div>
-                    <div className="dropdown-panel-scroll">
-                      {listDropdownFiltered.length === 0 ? (
-                        <div className="muted" style={{ padding: "var(--space-2) var(--space-3)", fontSize: "var(--text-base)" }}>{t("exportModal.noListsFound")}</div>
-                      ) : listDropdownFiltered.map((l) => (
-                        <button
-                          key={l.id}
-                          type="button"
-                          onClick={() => { setExportListId(l.id); setExportFilterColumn(""); setExportFilterParticipantId(""); setExportFilterEventId(""); setExportFilterText(""); setExportGroupBy(""); setExportSortBy(""); clearExportUrl(); setListDropdownOpen(false); setListDropdownSearch(""); }}
-                          className={exportListId === l.id ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
-                        >
-                          {l.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Group by */}
-            {exportListDef && (
-              <div>
-                <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>{t("exportModal.groupBy")}</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
-                  {(["", "column_one", "column_two"] as const).map((col) => (
-                    <button
-                      key={col}
-                      type="button"
-                      className={exportGroupBy === col ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
-                      style={{ width: "auto", minHeight: 0 }}
-                      onClick={() => { setExportGroupBy(col); clearExportUrl(); }}
-                    >
-                      {col === "" ? t("exportModal.none") : col === "column_one" ? exportListDef.column_one_title : exportListDef.column_two_title}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Filter */}
-            {exportListDef && (
-              <div>
-                <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>{t("exportModal.filterByColumn")}</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
-                  {(["", "column_one", "column_two"] as const).map((col) => (
-                    <button
-                      key={col}
-                      type="button"
-                      className={exportFilterColumn === col ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
-                      style={{ width: "auto", minHeight: 0 }}
-                      onClick={() => { setExportFilterColumn(col); setExportFilterParticipantId(""); setExportFilterEventId(""); setExportFilterText(""); clearExportUrl(); }}
-                    >
-                      {col === "" ? t("exportModal.noFilter") : col === "column_one" ? exportListDef.column_one_title : exportListDef.column_two_title}
-                    </button>
-                  ))}
-                </div>
-                {exportFilterColumn && (() => {
-                  const vtype = exportFilterColumn === "column_one" ? exportListDef.column_one_value_type : exportListDef.column_two_value_type;
-                  if (vtype === "participant" || vtype === "participants") {
-                    return (
-                      <div style={{ marginTop: "var(--space-2)" }}>
-                        <SearchableSelect
-                          options={availableParticipants}
-                          isOptionSelectable={isParticipantSelectable}
-                          getId={(p) => p.id}
-                          getLabel={(p) => p.display_name}
-                          value={exportFilterParticipantId || null}
-                          nullLabel={t("exportModal.all")}
-                          onChange={(p) => { setExportFilterParticipantId(p ? p.id : ""); clearExportUrl(); }}
-                        />
-                      </div>
-                    );
-                  }
-                  if (vtype === "event") {
-                    return (
-                      <div style={{ marginTop: "var(--space-2)" }}>
-                        <SearchableSelect
-                          options={[...availableEvents].sort((a, b) => a.event_date.localeCompare(b.event_date))}
-                          getId={(e) => e.id}
-                          getLabel={(e) => `${e.event_date} — ${e.title}`}
-                          value={exportFilterEventId || null}
-                          nullLabel={t("exportModal.all")}
-                          onChange={(e) => { setExportFilterEventId(e ? e.id : ""); clearExportUrl(); }}
-                        />
-                      </div>
-                    );
-                  }
-                  return (
-                    <input
-                      className="input"
-                      type="text"
-                      placeholder={t("exportModal.searchTermPlaceholder")}
-                      value={exportFilterText}
-                      onChange={(e) => { setExportFilterText(e.target.value); clearExportUrl(); }}
-                      style={{ marginTop: "var(--space-2)" }}
-                    />
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* Action bar pinned to bottom */}
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: "auto", paddingTop: "var(--space-2)" }}>
-              <button
-                type="button"
-                className="pdf-icon-link pdf-icon-link-success"
-                style={{ minWidth: 56, textAlign: "center" }}
-                onClick={() => void handlePdfClick()}
-                disabled={!exportTemplateId || !exportListId}
-              >
-                {exportBusy ? "…" : exportUrl ? "PDF ↓" : "PDF"}
-              </button>
-              <button
-                type="button"
-                className="pdf-icon-link pdf-icon-link-soon"
-                style={{ minWidth: 56, textAlign: "center" }}
-                disabled
-              >
-                MD
-              </button>
-              <div style={{ flex: 1 }} />
-              {landscapeTemplates.length > 1 && (
-                <div ref={templateDropdownRef} style={{ position: "relative" }}>
-                  <button
-                    type="button"
-                    onClick={() => setTemplateDropdownOpen((v) => !v)}
-                    style={{ padding: "var(--space-1) var(--space-3)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text)", fontSize: "var(--text-base)", cursor: "pointer", minHeight: 0, whiteSpace: "nowrap", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}
-                  >
-                    {landscapeTemplates.find((t) => t.id === exportTemplateId)?.name ?? "Vorlage"} ▾
-                  </button>
-                  {templateDropdownOpen && (
-                    <div className="dropdown-panel dropdown-panel-up" style={{ padding: "var(--space-1) 0", overflow: "visible", minWidth: 160 }}>
-                      {landscapeTemplates.map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() => { setExportTemplateId(t.id); setTemplateDropdownOpen(false); clearExportUrl(); }}
-                          className={exportTemplateId === t.id ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
-                        >
-                          {t.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right: live preview */}
-          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflowY: "auto", borderLeft: "1px solid var(--border)", paddingLeft: "var(--space-5)" }}>
-            {exportListDef ? (
-              <>
-                <div className="field-label" style={{ marginBottom: "var(--space-3)" }}>
-                  Vorschau · {exportFilteredEntries.length} Einträge
-                </div>
-                <StructuredListTable
-                  definition={exportListDef}
-                  highlightDepartedParticipants
-                  entries={exportFilteredEntries}
-                  availableParticipants={availableParticipants}
-                  availableEvents={availableEvents}
-                  editable={false}
-                  groupByColumn={exportGroupBy}
-                  sortByColumn={exportSortBy}
-                  sortDirection={exportSortDirection}
-                  onHeaderSort={toggleExportSort}
-                  onCreateEntry={async () => false}
-                  onUpdateEntry={async () => false}
-                  onDeleteEntry={async () => {}}
-                />
-              </>
-            ) : (
-              <p className="muted">{t("exportModal.selectListPrompt")}</p>
-            )}
-          </div>
-        </div>
-      </Modal>
+      {exportOpen && selectedListId && (
+        <DocumentExportDialog open={exportOpen} onClose={() => setExportOpen(false)} context={{ documentType: "list", params: { list_id: selectedListId } }} />
+      )}
 
       <Modal
         open={modalOpen}
