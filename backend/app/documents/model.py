@@ -713,7 +713,9 @@ class ResolvedStyle(_Strict):
     version: int = 1
     primary_color: HexColor = "#174B7A"
     secondary_color: HexColor = "#4F6D7A"
-    fonts: list[str] = Field(default_factory=lambda: ["Inter"])
+    # Vorangestellte Schriftfamilien (z. B. hochgeladene Mandantenschrift); leer = Hausschrift
+    # des Stils. Fallbacks (Noto Sans, Noto Color Emoji) hängt der Stil selbst an.
+    fonts: list[Annotated[str, Field(max_length=120)]] = Field(default_factory=list, max_length=4)
     base_size: Literal[10, 11, 12] = 11
     line_spacing: Literal["tight", "normal", "relaxed"] = "normal"
     margins: Literal["narrow", "normal", "wide"] = "normal"

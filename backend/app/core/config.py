@@ -18,7 +18,14 @@ _INSECURE_DEFAULTS = {
 
 def _load_file_secrets() -> None:
     """Resolve Docker-style VAR_FILE inputs without exposing values in Config.Env."""
-    for variable in ("DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD"):
+    for variable in (
+        "DATABASE_URL",
+        "APP_DATABASE_URL",
+        "AUTH_SECRET",
+        "ADMIN_AUTH_SECRET",
+        "INITIAL_ADMIN_PASSWORD",
+        "DOCUMENT_SIGNING_KEY_PASSWORD",
+    ):
         file_variable = f"{variable}_FILE"
         if variable not in os.environ and (path := os.environ.get(file_variable)):
             os.environ[variable] = Path(path).read_text(encoding="utf-8").rstrip("\r\n")
@@ -147,6 +154,21 @@ class Settings(BaseSettings):
     clamav_host: str = "clamav"
     clamav_port: int = 3310
     redis_url: str = "redis://redis:6379/0"
+    # Dokument-Engine (app/documents): Grenzen für den Typst-Prozess-Pool. Der Timeout gilt
+    # pro Compile (Wall-Clock); bei Überschreitung wird der Pool beendet und neu gestartet.
+    document_render_concurrency: int = 4
+    document_render_timeout_seconds: int = 60
+    document_render_memory_limit_mb: int = 3072
+    document_preview_max_pages: int = 4
+    # PAdES-Signatur jedes erzeugten PDFs (app/documents/signing.py). Schlüssel und
+    # Zertifikat liegen nie im Repo; Passwort auch als DOCUMENT_SIGNING_KEY_PASSWORD_FILE.
+    # Fehlt die Konfiguration in Produktion, startet das Backend nicht (main.py lifespan).
+    document_signing_key_path: str | None = None
+    document_signing_cert_path: str | None = None
+    document_signing_key_password: str | None = None
+    document_signing_chain_path: str | None = None
+    # Optionaler Zeitstempeldienst (RFC 3161): mit URL wird PAdES B-T statt B-B erzeugt.
+    document_signing_tsa_url: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
