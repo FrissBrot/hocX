@@ -1,0 +1,2499 @@
+{
+ "schema_version": 1,
+ "meta": {
+  "document_type": "custom",
+  "title": "Fixture quer",
+  "subtitle": "Dokument-Engine",
+  "number": "P-2026-07",
+  "date": "13.10.2026",
+  "status": "held",
+  "version": "v0.3",
+  "tenant_name": "Testverein",
+  "language": "de"
+ },
+ "options": {
+  "title_page": "cover",
+  "toc": "on",
+  "toc_block_titles": true,
+  "numbering": true,
+  "orientation": "landscape",
+  "watermark": true
+ },
+ "style": {
+  "key": "modern",
+  "version": 1,
+  "primary_color": "#174B7A",
+  "secondary_color": "#4F6D7A",
+  "fonts": [],
+  "base_size": 11,
+  "line_spacing": "normal",
+  "margins": "normal",
+  "header": "standard",
+  "footer": "standard",
+  "logo": null,
+  "footer_image": null,
+  "sender": "Testverein\nPostfach 1\n8000 Zürich",
+  "place": "Zürich"
+ },
+ "strings": {
+  "attendanceShort.absent": "U",
+  "attendanceShort.excused": "E",
+  "attendanceShort.late": "V",
+  "attendanceShort.present": "A",
+  "attendanceStatus.absent": "Unentschuldigt",
+  "attendanceStatus.excused": "Entschuldigt",
+  "attendanceStatus.late": "Verspätet",
+  "attendanceStatus.present": "Anwesend",
+  "blockType.attendance": "Anwesenheit",
+  "blockType.attendance_matrix": "Anwesenheitsmatrix",
+  "blockType.attendance_sheet": "Präsenzliste",
+  "blockType.bullet_list": "Aufzählung",
+  "blockType.chart": "Diagramm",
+  "blockType.divider": "Trennlinie",
+  "blockType.entry_exit": "Ein- und Austritte",
+  "blockType.event_agenda": "Jahresprogramm",
+  "blockType.event_calendar_month": "Monatskalender",
+  "blockType.event_table": "Termine",
+  "blockType.finance_balance": "Kontostand",
+  "blockType.finance_transactions": "Buchungen",
+  "blockType.fines": "Bussen",
+  "blockType.form": "Formular",
+  "blockType.generic_table": "Tabelle",
+  "blockType.heading": "Überschrift",
+  "blockType.image": "Bild",
+  "blockType.image_gallery": "Bildergalerie",
+  "blockType.kpi_tiles": "Kennzahlen",
+  "blockType.list_table": "Liste",
+  "blockType.matrix": "Matrix",
+  "blockType.member_list": "Mitgliederliste",
+  "blockType.page_break": "Seitenumbruch",
+  "blockType.protocol_element": "Protokollelement",
+  "blockType.qr_link": "QR-Code",
+  "blockType.richtext": "Text",
+  "blockType.session_date": "Nächste Sitzung",
+  "blockType.session_notes": "Sitzungsnotizen",
+  "blockType.signature_fields": "Unterschriften",
+  "blockType.spacer": "Abstand",
+  "blockType.stat_table": "Statistiktabelle",
+  "blockType.static_text": "Fester Text",
+  "blockType.toc": "Inhaltsverzeichnis",
+  "blockType.todo_table": "Todos",
+  "chart.absent": "Unentschuldigt",
+  "chart.amount": "Betrag",
+  "chart.avgParticipants": "Ø Teilnehmende",
+  "chart.count": "Anzahl",
+  "chart.done": "Erledigt",
+  "chart.excused": "Entschuldigt",
+  "chart.expenses": "Ausgaben",
+  "chart.income": "Einnahmen",
+  "chart.late": "Verspätet",
+  "chart.open": "Offen",
+  "chart.present": "Anwesend",
+  "chart.sessions": "Alle Termine",
+  "chart.sessionsWithParticipants": "Mit Teilnehmenden",
+  "col.account": "Konto",
+  "col.amount": "Betrag",
+  "col.assignee": "Zuständig",
+  "col.avgParticipants": "Ø Teilnehmende",
+  "col.balance": "Saldo",
+  "col.cancelled": "Abgesagt",
+  "col.count": "Anzahl",
+  "col.date": "Datum",
+  "col.description": "Beschreibung",
+  "col.due": "Fällig",
+  "col.email": "E-Mail",
+  "col.expenses": "Ausgaben",
+  "col.group": "Gruppe",
+  "col.income": "Einnahmen",
+  "col.joined": "Eintritt",
+  "col.location": "Ort",
+  "col.month": "Monat",
+  "col.name": "Name",
+  "col.organizers": "Organisation",
+  "col.participants": "Teilnehmende",
+  "col.person": "Person",
+  "col.phone": "Telefon",
+  "col.protocol": "Protokoll",
+  "col.rate": "Quote",
+  "col.reason": "Grund",
+  "col.role": "Rolle",
+  "col.sessions": "Termine",
+  "col.sessionsWithParticipants": "Mit Teilnehmenden",
+  "col.signature": "Unterschrift",
+  "col.status": "Status",
+  "col.tags": "Tags",
+  "col.task": "Aufgabe",
+  "col.title": "Titel",
+  "col.total": "Total",
+  "col.value": "Wert",
+  "docType.attendance_sheet": "Präsenzliste",
+  "docType.custom": "Dokument",
+  "docType.events": "Terminplan",
+  "docType.finance": "Finanzbericht",
+  "docType.invitation": "Einladung",
+  "docType.list": "Liste",
+  "docType.members": "Mitgliederliste",
+  "docType.protocol": "Protokoll",
+  "docType.statistics": "Jahresbericht",
+  "docType.todos": "Pendenzenliste",
+  "empty.attendance": "Keine Anwesenheit erfasst.",
+  "empty.attendance_matrix": "Keine Sitzungen im Zeitraum.",
+  "empty.attendance_sheet": "Keine Personen.",
+  "empty.bullet_list": "Keine Punkte.",
+  "empty.chart": "Keine Daten für dieses Diagramm.",
+  "empty.divider": "–",
+  "empty.entry_exit": "Keine Ein- oder Austritte.",
+  "empty.event_agenda": "Keine Termine.",
+  "empty.event_calendar_month": "Keine Termine.",
+  "empty.event_table": "Keine passenden Termine.",
+  "empty.finance_balance": "Kein Konto konfiguriert.",
+  "empty.finance_transactions": "Keine Buchungen.",
+  "empty.fines": "Keine Bussen.",
+  "empty.form": "Keine Angaben.",
+  "empty.generic_table": "Keine Einträge.",
+  "empty.heading": "Keine Überschrift.",
+  "empty.image": "Kein Bild vorhanden.",
+  "empty.image_gallery": "Keine Bilder hochgeladen.",
+  "empty.kpi_tiles": "Keine Kennzahlen.",
+  "empty.list_table": "Keine Einträge vorhanden.",
+  "empty.matrix": "Keine Einträge.",
+  "empty.member_list": "Keine Mitglieder.",
+  "empty.page_break": "–",
+  "empty.protocol_element": "Keine Inhalte.",
+  "empty.qr_link": "Kein Link.",
+  "empty.richtext": "Kein Text erfasst.",
+  "empty.session_date": "Kein Datum festgelegt.",
+  "empty.session_notes": "Keine Sitzungsnotizen.",
+  "empty.signature_fields": "Keine Unterschriftsfelder.",
+  "empty.spacer": "–",
+  "empty.stat_table": "Keine Daten.",
+  "empty.static_text": "Kein Text vorhanden.",
+  "empty.toc": "–",
+  "empty.todo_table": "Keine Todos vorhanden.",
+  "error.block": "Der Block «{block}» konnte nicht dargestellt werden. Bitte Inhalt oder Einstellungen prüfen.",
+  "error.render": "Das Dokument konnte nicht erstellt werden. Bitte später erneut versuchen.",
+  "error.timeout": "Das Dokument ist zu umfangreich und konnte nicht rechtzeitig erstellt werden.",
+  "fineStatus.collected": "Kassiert",
+  "fineStatus.collectedHere": "Kassiert (aus {origin})",
+  "fineStatus.collectedLater": "Später beglichen",
+  "fineStatus.earlierProtocol": "früherem Protokoll",
+  "fineStatus.open": "Offen",
+  "fineType.absent": "Unentschuldigt",
+  "fineType.late": "Verspätet",
+  "group.noDue": "Ohne Fälligkeit",
+  "group.noTag": "Ohne Tag",
+  "group.noValue": "Ohne Wert",
+  "group.unassigned": "Ohne Zuweisung",
+  "kpi.attendanceRate": "Anwesenheitsquote",
+  "kpi.balance": "Kontostand",
+  "kpi.doneTodos": "Erledigte Todos",
+  "kpi.events": "Termine",
+  "kpi.finesTotal": "Bussen total",
+  "kpi.members": "Mitglieder",
+  "kpi.openTodos": "Offene Todos",
+  "kpi.sessions": "Sitzungen",
+  "label.asOf": "Stand {date}",
+  "label.attendanceCounts": "{present} anwesend · {late} verspätet · {excused} entschuldigt · {absent} unentschuldigt",
+  "label.cancelled": "abgesagt",
+  "label.imageMissing": "Bild nicht verfügbar",
+  "label.joins": "Eintritte",
+  "label.leaves": "Austritte",
+  "label.legend": "Legende",
+  "label.nextSession": "Nächste Sitzung",
+  "label.open": "offen",
+  "label.placeDate": "Ort, Datum",
+  "label.responsible": "Verantwortlich",
+  "label.scanToOpen": "Zum Öffnen scannen",
+  "label.sessionTodos": "Sitzungs-Todos",
+  "label.signature": "Unterschrift",
+  "label.subtotal": "Zwischensumme",
+  "label.total": "Total",
+  "label.yes": "Ja",
+  "month.1": "Januar",
+  "month.10": "Oktober",
+  "month.11": "November",
+  "month.12": "Dezember",
+  "month.2": "Februar",
+  "month.3": "März",
+  "month.4": "April",
+  "month.5": "Mai",
+  "month.6": "Juni",
+  "month.7": "Juli",
+  "month.8": "August",
+  "month.9": "September",
+  "page.of": "Seite {page} von {total}",
+  "page.short": "Seite {page}",
+  "protocolStatus.closed": "Abgeschlossen",
+  "protocolStatus.held": "Durchgeführt",
+  "protocolStatus.planned": "Geplant",
+  "protocolStatus.prepared": "Vorbereitet",
+  "signature.line": "Digital signiert von hocX · Dokument-ID {id} · Version {version}",
+  "signature.lineNoVersion": "Digital signiert von hocX · Dokument-ID {id}",
+  "signature.preview": "Vorschau · nicht signiert",
+  "titlePage.date": "Datum",
+  "titlePage.number": "Nummer",
+  "titlePage.place": "Ort",
+  "titlePage.status": "Status",
+  "titlePage.version": "Version",
+  "toc.title": "Inhaltsverzeichnis",
+  "todoStatus.cancelled": "Abgebrochen",
+  "todoStatus.done": "Erledigt",
+  "todoStatus.in_progress": "In Arbeit",
+  "todoStatus.open": "Offen",
+  "watermark.draft": "Entwurf",
+  "weekday.0": "Mo",
+  "weekday.1": "Di",
+  "weekday.2": "Mi",
+  "weekday.3": "Do",
+  "weekday.4": "Fr",
+  "weekday.5": "Sa",
+  "weekday.6": "So"
+ },
+ "render": {
+  "document_id": "0192f0aa-0000-7000-8000-000000000001",
+  "signed": true,
+  "preview": false
+ },
+ "blocks": [
+  {
+   "title": null,
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "heading",
+   "text": "Überschrift erster Stufe"
+  },
+  {
+   "title": "Rich Text",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "richtext",
+   "content": [
+    {
+     "t": "h",
+     "level": 2,
+     "c": [
+      {
+       "t": "text",
+       "v": "Zwischentitel",
+       "b": false,
+       "i": false,
+       "s": false,
+       "code": false,
+       "href": null
+      }
+     ]
+    },
+    {
+     "t": "p",
+     "c": [
+      {
+       "t": "text",
+       "v": "Normal, ",
+       "b": false,
+       "i": false,
+       "s": false,
+       "code": false,
+       "href": null
+      },
+      {
+       "t": "text",
+       "v": "fett",
+       "b": true,
+       "i": false,
+       "s": false,
+       "code": false,
+       "href": null
+      },
+      {
+       "t": "text",
+       "v": ", ",
+       "b": false,
+       "i": false,
+       "s": false,
+       "code": false,
+       "href": null
+      },
+      {
+       "t": "text",
+       "v": "kursiv",
+       "b": false,
+       "i": true,
+       "s": false,
+       "code": false,
+       "href": null
+      },
+      {
+       "t": "text",
+       "v": ", ",
+       "b": false,
+       "i": false,
+       "s": false,
+       "code": false,
+       "href": null
+      },
+      {
+       "t": "text",
+       "v": "durchgestrichen",
+       "b": false,
+       "i": false,
+       "s": true,
+       "code": false,
+       "href": null
+      },
+      {
+       "t": "text",
+       "v": ", ",
+       "b": false,
+       "i": false,
+       "s": false,
+       "code": false,
+       "href": null
+      },
+      {
+       "t": "text",
+       "v": "code",
+       "b": false,
+       "i": false,
+       "s": false,
+       "code": true,
+       "href": null
+      },
+      {
+       "t": "text",
+       "v": ", ",
+       "b": false,
+       "i": false,
+       "s": false,
+       "code": false,
+       "href": null
+      },
+      {
+       "t": "text",
+       "v": "Link",
+       "b": false,
+       "i": false,
+       "s": false,
+       "code": false,
+       "href": "https://hocx.ch"
+      },
+      {
+       "t": "br"
+      },
+      {
+       "t": "text",
+       "v": "nach hartem Umbruch",
+       "b": false,
+       "i": false,
+       "s": false,
+       "code": false,
+       "href": null
+      }
+     ]
+    },
+    {
+     "t": "ul",
+     "items": [
+      [
+       {
+        "t": "p",
+        "c": [
+         {
+          "t": "text",
+          "v": "Punkt eins",
+          "b": false,
+          "i": false,
+          "s": false,
+          "code": false,
+          "href": null
+         }
+        ]
+       }
+      ],
+      [
+       {
+        "t": "p",
+        "c": [
+         {
+          "t": "text",
+          "v": "Punkt zwei",
+          "b": false,
+          "i": false,
+          "s": false,
+          "code": false,
+          "href": null
+         }
+        ]
+       },
+       {
+        "t": "ul",
+        "items": [
+         [
+          {
+           "t": "p",
+           "c": [
+            {
+             "t": "text",
+             "v": "verschachtelt",
+             "b": false,
+             "i": false,
+             "s": false,
+             "code": false,
+             "href": null
+            }
+           ]
+          }
+         ]
+        ]
+       }
+      ]
+     ]
+    },
+    {
+     "t": "ol",
+     "start": 3,
+     "items": [
+      [
+       {
+        "t": "p",
+        "c": [
+         {
+          "t": "text",
+          "v": "drei",
+          "b": false,
+          "i": false,
+          "s": false,
+          "code": false,
+          "href": null
+         }
+        ]
+       }
+      ],
+      [
+       {
+        "t": "p",
+        "c": [
+         {
+          "t": "text",
+          "v": "vier",
+          "b": false,
+          "i": false,
+          "s": false,
+          "code": false,
+          "href": null
+         }
+        ]
+       }
+      ]
+     ]
+    },
+    {
+     "t": "quote",
+     "c": [
+      {
+       "t": "p",
+       "c": [
+        {
+         "t": "text",
+         "v": "Ein Zitat",
+         "b": false,
+         "i": false,
+         "s": false,
+         "code": false,
+         "href": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "t": "code",
+     "v": "#let x = 1\n$y$"
+    }
+   ]
+  },
+  {
+   "title": "Fester Text",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "static_text",
+   "content": [
+    {
+     "t": "p",
+     "c": [
+      {
+       "t": "text",
+       "v": "Dieser Text kommt aus der Vorlage.",
+       "b": false,
+       "i": false,
+       "s": false,
+       "code": false,
+       "href": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": null,
+   "hide_if_empty": false,
+   "level": 1,
+   "empty": false,
+   "type": "spacer",
+   "size": "s"
+  },
+  {
+   "title": null,
+   "hide_if_empty": false,
+   "level": 1,
+   "empty": false,
+   "type": "divider"
+  },
+  {
+   "title": "Inhalt",
+   "hide_if_empty": false,
+   "level": 1,
+   "empty": false,
+   "type": "toc",
+   "depth": 2
+  },
+  {
+   "title": "1. Begrüssung",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "protocol_element",
+   "responsible": "Anna Muster",
+   "children": [
+    {
+     "title": "Notizen",
+     "hide_if_empty": true,
+     "level": 2,
+     "empty": false,
+     "type": "richtext",
+     "content": [
+      {
+       "t": "p",
+       "c": [
+        {
+         "t": "text",
+         "v": "Die Präsidentin begrüsst die Anwesenden.",
+         "b": false,
+         "i": false,
+         "s": false,
+         "code": false,
+         "href": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": null,
+     "hide_if_empty": true,
+     "level": 2,
+     "empty": false,
+     "type": "session_date",
+     "label": null,
+     "date": "14.11.2026"
+    },
+    {
+     "title": "Sitzungsnotizen",
+     "hide_if_empty": true,
+     "level": 2,
+     "empty": false,
+     "type": "session_notes",
+     "content": [
+      {
+       "t": "p",
+       "c": [
+        {
+         "t": "text",
+         "v": "Zeile eins",
+         "b": false,
+         "i": false,
+         "s": false,
+         "code": false,
+         "href": null
+        }
+       ]
+      },
+      {
+       "t": "p",
+       "c": [
+        {
+         "t": "text",
+         "v": "Zeile zwei",
+         "b": false,
+         "i": false,
+         "s": false,
+         "code": false,
+         "href": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "Formular",
+     "hide_if_empty": true,
+     "level": 2,
+     "empty": false,
+     "type": "form",
+     "label_heading": "Feld",
+     "value_heading": "Wert",
+     "rows": [
+      {
+       "label": "Ort",
+       "value": [
+        {
+         "t": "p",
+         "c": [
+          {
+           "t": "text",
+           "v": "Vereinslokal",
+           "b": false,
+           "i": false,
+           "s": false,
+           "code": false,
+           "href": null
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "label": "Leitung",
+       "value": [
+        {
+         "t": "p",
+         "c": [
+          {
+           "t": "text",
+           "v": "Ben Beispiel",
+           "b": false,
+           "i": false,
+           "s": false,
+           "code": false,
+           "href": null
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "Aufzählung",
+     "hide_if_empty": true,
+     "level": 2,
+     "empty": false,
+     "type": "bullet_list",
+     "items": [
+      "Erstens",
+      "Zweitens"
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Matrix",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "matrix",
+   "tables": [
+    {
+     "columns": [
+      {
+       "key": "label",
+       "label": null,
+       "label_key": "col.name",
+       "align": "left",
+       "width": "auto"
+      },
+      {
+       "key": "a",
+       "label": null,
+       "label_key": "col.value",
+       "align": "left",
+       "width": "auto"
+      },
+      {
+       "key": "b",
+       "label": null,
+       "label_key": "col.value",
+       "align": "left",
+       "width": "auto"
+      }
+     ],
+     "groups": [
+      {
+       "label": null,
+       "label_key": null,
+       "rows": [
+        {
+         "cells": [
+          {
+           "k": "text",
+           "v": "Zeile A",
+           "status": null,
+           "tags": [],
+           "rich": [],
+           "checked": false,
+           "tone": "default",
+           "strike": false
+          },
+          {
+           "k": "rich",
+           "v": "",
+           "status": null,
+           "tags": [],
+           "rich": [
+            {
+             "t": "p",
+             "c": [
+              {
+               "t": "text",
+               "v": "Zelle 1",
+               "b": false,
+               "i": false,
+               "s": false,
+               "code": false,
+               "href": null
+              }
+             ]
+            }
+           ],
+           "checked": false,
+           "tone": "default",
+           "strike": false
+          },
+          {
+           "k": "rich",
+           "v": "",
+           "status": null,
+           "tags": [],
+           "rich": [
+            {
+             "t": "ul",
+             "items": [
+              [
+               {
+                "t": "p",
+                "c": [
+                 {
+                  "t": "text",
+                  "v": "x",
+                  "b": false,
+                  "i": false,
+                  "s": false,
+                  "code": false,
+                  "href": null
+                 }
+                ]
+               }
+              ],
+              [
+               {
+                "t": "p",
+                "c": [
+                 {
+                  "t": "text",
+                  "v": "y",
+                  "b": false,
+                  "i": false,
+                  "s": false,
+                  "code": false,
+                  "href": null
+                 }
+                ]
+               }
+              ]
+             ]
+            }
+           ],
+           "checked": false,
+           "tone": "default",
+           "strike": false
+          }
+         ],
+         "muted": false,
+         "strong": false
+        },
+        {
+         "cells": [
+          {
+           "k": "text",
+           "v": "Zeile B",
+           "status": null,
+           "tags": [],
+           "rich": [],
+           "checked": false,
+           "tone": "default",
+           "strike": false
+          },
+          {
+           "k": "text",
+           "v": "12.03.2026",
+           "status": null,
+           "tags": [],
+           "rich": [],
+           "checked": false,
+           "tone": "default",
+           "strike": false
+          },
+          {
+           "k": "rich",
+           "v": "",
+           "status": null,
+           "tags": [],
+           "rich": [
+            {
+             "t": "table",
+             "header": [
+              "K",
+              "W"
+             ],
+             "rows": [
+              [
+               "a",
+               "1"
+              ],
+              [
+               "b",
+               "2"
+              ]
+             ]
+            }
+           ],
+           "checked": false,
+           "tone": "default",
+           "strike": false
+          }
+         ],
+         "muted": false,
+         "strong": false
+        }
+       ],
+       "subtotal": null
+      }
+     ],
+     "totals": null,
+     "show_header": true
+    }
+   ]
+  },
+  {
+   "title": "Ein- und Austritte",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "entry_exit",
+   "joins": [
+    {
+     "name": "Neu Mitglied",
+     "date": "01.02.2026"
+    }
+   ],
+   "leaves": [
+    {
+     "name": "Alt Mitglied",
+     "date": "31.01.2026"
+    }
+   ]
+  },
+  {
+   "title": "Bild",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "image",
+   "image": {
+    "path": "assets/fixture-1.png",
+    "caption": "Bildunterschrift",
+    "width_pt": 240.0,
+    "missing": false
+   }
+  },
+  {
+   "title": "Galerie",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "image_gallery",
+   "images": [
+    {
+     "path": "assets/fixture-1.png",
+     "caption": "Eins",
+     "width_pt": null,
+     "missing": false
+    },
+    {
+     "path": "assets/fixture-2.png",
+     "caption": "Zwei",
+     "width_pt": null,
+     "missing": false
+    },
+    {
+     "path": "assets/missing.png",
+     "caption": "Fehlt",
+     "width_pt": null,
+     "missing": true
+    }
+   ],
+   "columns": 2
+  },
+  {
+   "title": "Anwesenheit",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "attendance",
+   "entries": [
+    {
+     "name": "Anna Muster",
+     "status": "present"
+    },
+    {
+     "name": "Ben Beispiel",
+     "status": "late"
+    },
+    {
+     "name": "Chloé Exemple",
+     "status": "excused"
+    },
+    {
+     "name": "Dario Esempio",
+     "status": "absent"
+    },
+    {
+     "name": "Eva Ohne",
+     "status": null
+    }
+   ],
+   "show_counts": true
+  },
+  {
+   "title": "Anwesenheitsmatrix",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "attendance_matrix",
+   "sessions": [
+    "05.01.",
+    "12.01.",
+    "19.01.",
+    "26.01."
+   ],
+   "people": [
+    "Anna Muster",
+    "Ben Beispiel"
+   ],
+   "cells": [
+    [
+     "present",
+     "late",
+     null,
+     "absent"
+    ],
+    [
+     "excused",
+     "present",
+     "present",
+     "present"
+    ]
+   ],
+   "rates": [
+    "50%",
+    "75%"
+   ]
+  },
+  {
+   "title": "Mitglieder",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "member_list",
+   "table": {
+    "columns": [
+     {
+      "key": "name",
+      "label": null,
+      "label_key": "col.name",
+      "align": "left",
+      "width": "auto"
+     },
+     {
+      "key": "email",
+      "label": null,
+      "label_key": "col.email",
+      "align": "left",
+      "width": "auto"
+     },
+     {
+      "key": "phone",
+      "label": null,
+      "label_key": "col.phone",
+      "align": "left",
+      "width": "auto"
+     }
+    ],
+    "groups": [
+     {
+      "label": null,
+      "label_key": null,
+      "rows": [
+       {
+        "cells": [
+         {
+          "k": "text",
+          "v": "Anna Muster",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "anna@example.ch",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "+41 79 000 00 00",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       }
+      ],
+      "subtotal": null
+     }
+    ],
+    "totals": null,
+    "show_header": true
+   }
+  },
+  {
+   "title": "Unterschriften",
+   "hide_if_empty": false,
+   "level": 1,
+   "empty": false,
+   "type": "signature_fields",
+   "fields": [
+    {
+     "label": "Präsidium",
+     "name": "Anna Muster"
+    },
+    {
+     "label": "Protokoll",
+     "name": "Ben Beispiel"
+    }
+   ],
+   "with_place_date": true
+  },
+  {
+   "title": "Präsenzliste",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "attendance_sheet",
+   "names": [
+    "Anna Muster",
+    "Ben Beispiel"
+   ],
+   "columns": [],
+   "blank_rows": 2
+  },
+  {
+   "title": "Pendenzen",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "todo_table",
+   "table": {
+    "columns": [
+     {
+      "key": "status",
+      "label": null,
+      "label_key": "col.status",
+      "align": "left",
+      "width": "auto"
+     },
+     {
+      "key": "task",
+      "label": null,
+      "label_key": "col.task",
+      "align": "left",
+      "width": "auto"
+     },
+     {
+      "key": "assignee",
+      "label": null,
+      "label_key": "col.assignee",
+      "align": "left",
+      "width": "auto"
+     },
+     {
+      "key": "due",
+      "label": null,
+      "label_key": "col.due",
+      "align": "left",
+      "width": "auto"
+     }
+    ],
+    "groups": [
+     {
+      "label": null,
+      "label_key": null,
+      "rows": [
+       {
+        "cells": [
+         {
+          "k": "status",
+          "v": "",
+          "status": "todoStatus.open",
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Aufgabe 001",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Anna Muster",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "01.01.2026",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       },
+       {
+        "cells": [
+         {
+          "k": "status",
+          "v": "",
+          "status": "todoStatus.in_progress",
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Aufgabe 002",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Ben Beispiel",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "02.02.2026",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       },
+       {
+        "cells": [
+         {
+          "k": "status",
+          "v": "",
+          "status": "todoStatus.done",
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Aufgabe 003",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Chloé Exemple",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "03.03.2026",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       },
+       {
+        "cells": [
+         {
+          "k": "status",
+          "v": "",
+          "status": "todoStatus.cancelled",
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Aufgabe 004",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "04.04.2026",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       },
+       {
+        "cells": [
+         {
+          "k": "status",
+          "v": "",
+          "status": "todoStatus.open",
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Aufgabe 005",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Anna Muster",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "05.05.2026",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       },
+       {
+        "cells": [
+         {
+          "k": "status",
+          "v": "",
+          "status": "todoStatus.in_progress",
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Aufgabe 006",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Ben Beispiel",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "06.06.2026",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       }
+      ],
+      "subtotal": null
+     }
+    ],
+    "totals": null,
+    "show_header": true
+   }
+  },
+  {
+   "title": "Termine",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "event_table",
+   "table": {
+    "columns": [
+     {
+      "key": "date",
+      "label": null,
+      "label_key": "col.date",
+      "align": "left",
+      "width": "auto"
+     },
+     {
+      "key": "title",
+      "label": null,
+      "label_key": "col.title",
+      "align": "left",
+      "width": "fill"
+     },
+     {
+      "key": "tags",
+      "label": null,
+      "label_key": "col.tags",
+      "align": "left",
+      "width": "auto"
+     }
+    ],
+    "groups": [
+     {
+      "label": null,
+      "label_key": null,
+      "rows": [
+       {
+        "cells": [
+         {
+          "k": "text",
+          "v": "05.01.2026",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Generalversammlung",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "tags",
+          "v": "",
+          "status": null,
+          "tags": [
+           {
+            "label": "GV",
+            "color": "#2f6df6"
+           }
+          ],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": true,
+        "strong": false
+       },
+       {
+        "cells": [
+         {
+          "k": "text",
+          "v": "12.02.2026 – 14.02.2026",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Skiweekend",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "tags",
+          "v": "",
+          "status": null,
+          "tags": [
+           {
+            "label": "Anlass",
+            "color": null
+           }
+          ],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       }
+      ],
+      "subtotal": null
+     }
+    ],
+    "totals": null,
+    "show_header": true
+   }
+  },
+  {
+   "title": "Kalender",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "event_calendar_month",
+   "months": [
+    {
+     "year": 2026,
+     "month": 2,
+     "first_weekday": 6,
+     "days": 28,
+     "events": {
+      "12": [
+       {
+        "title": "Skiweekend",
+        "muted": false,
+        "color": "#12805c",
+        "cancelled": false
+       }
+      ],
+      "20": [
+       {
+        "title": "Hock",
+        "muted": true,
+        "color": null,
+        "cancelled": false
+       },
+       {
+        "title": "Abgesagt",
+        "muted": false,
+        "color": null,
+        "cancelled": true
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "title": "Jahresprogramm",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "event_agenda",
+   "months": [
+    {
+     "year": 2026,
+     "month": 1,
+     "items": [
+      {
+       "date": "05.01.",
+       "title": "GV",
+       "detail": "Vereinslokal",
+       "tags": [
+        {
+         "label": "GV",
+         "color": "#a855f7"
+        }
+       ],
+       "muted": false,
+       "cancelled": false
+      }
+     ]
+    },
+    {
+     "year": 2026,
+     "month": 3,
+     "items": [
+      {
+       "date": "15.03.",
+       "title": "Frühlingsputz",
+       "detail": null,
+       "tags": [],
+       "muted": false,
+       "cancelled": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Liste",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "list_table",
+   "table": {
+    "columns": [
+     {
+      "key": "one",
+      "label": "Material",
+      "label_key": null,
+      "align": "left",
+      "width": "auto"
+     },
+     {
+      "key": "two",
+      "label": "Verantwortlich",
+      "label_key": null,
+      "align": "left",
+      "width": "auto"
+     }
+    ],
+    "groups": [
+     {
+      "label": "Küche",
+      "label_key": null,
+      "rows": [
+       {
+        "cells": [
+         {
+          "k": "text",
+          "v": "Pfanne",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Anna",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       }
+      ],
+      "subtotal": null
+     },
+     {
+      "label": null,
+      "label_key": "group.noValue",
+      "rows": [
+       {
+        "cells": [
+         {
+          "k": "text",
+          "v": "Zelt",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "—",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "warning",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       }
+      ],
+      "subtotal": null
+     }
+    ],
+    "totals": null,
+    "show_header": true
+   }
+  },
+  {
+   "title": "Kontostand",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "finance_balance",
+   "balances": [
+    {
+     "name": "Vereinskasse",
+     "amount": "1'234.50",
+     "currency": "CHF",
+     "negative": false,
+     "as_of": "31.12.2026"
+    },
+    {
+     "name": "Bussenkasse",
+     "amount": "-12.00",
+     "currency": "CHF",
+     "negative": true,
+     "as_of": null
+    }
+   ]
+  },
+  {
+   "title": "Buchungen",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "finance_transactions",
+   "table": {
+    "columns": [
+     {
+      "key": "date",
+      "label": null,
+      "label_key": "col.date",
+      "align": "left",
+      "width": "auto"
+     },
+     {
+      "key": "description",
+      "label": null,
+      "label_key": "col.description",
+      "align": "left",
+      "width": "fill"
+     },
+     {
+      "key": "amount",
+      "label": null,
+      "label_key": "col.amount",
+      "align": "right",
+      "width": "auto"
+     },
+     {
+      "key": "balance",
+      "label": null,
+      "label_key": "col.balance",
+      "align": "right",
+      "width": "auto"
+     }
+    ],
+    "groups": [
+     {
+      "label": "Januar 2026",
+      "label_key": null,
+      "rows": [
+       {
+        "cells": [
+         {
+          "k": "text",
+          "v": "05.01.2026",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Mitgliederbeitrag",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "amount",
+          "v": "+50.00 CHF",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "amount",
+          "v": "50.00 CHF",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       }
+      ],
+      "subtotal": [
+       {
+        "k": "text",
+        "v": "Zwischensumme",
+        "status": null,
+        "tags": [],
+        "rich": [],
+        "checked": false,
+        "tone": "default",
+        "strike": false
+       },
+       {
+        "k": "text",
+        "v": "",
+        "status": null,
+        "tags": [],
+        "rich": [],
+        "checked": false,
+        "tone": "default",
+        "strike": false
+       },
+       {
+        "k": "amount",
+        "v": "+50.00 CHF",
+        "status": null,
+        "tags": [],
+        "rich": [],
+        "checked": false,
+        "tone": "default",
+        "strike": false
+       },
+       {
+        "k": "amount",
+        "v": "",
+        "status": null,
+        "tags": [],
+        "rich": [],
+        "checked": false,
+        "tone": "default",
+        "strike": false
+       }
+      ]
+     }
+    ],
+    "totals": [
+     {
+      "k": "text",
+      "v": "Total",
+      "status": null,
+      "tags": [],
+      "rich": [],
+      "checked": false,
+      "tone": "default",
+      "strike": false
+     },
+     {
+      "k": "text",
+      "v": "",
+      "status": null,
+      "tags": [],
+      "rich": [],
+      "checked": false,
+      "tone": "default",
+      "strike": false
+     },
+     {
+      "k": "amount",
+      "v": "+50.00 CHF",
+      "status": null,
+      "tags": [],
+      "rich": [],
+      "checked": false,
+      "tone": "default",
+      "strike": false
+     },
+     {
+      "k": "amount",
+      "v": "50.00 CHF",
+      "status": null,
+      "tags": [],
+      "rich": [],
+      "checked": false,
+      "tone": "default",
+      "strike": false
+     }
+    ],
+    "show_header": true
+   }
+  },
+  {
+   "title": "Bussen",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "fines",
+   "table": {
+    "columns": [
+     {
+      "key": "person",
+      "label": null,
+      "label_key": "col.person",
+      "align": "left",
+      "width": "auto"
+     },
+     {
+      "key": "reason",
+      "label": null,
+      "label_key": "col.reason",
+      "align": "left",
+      "width": "auto"
+     },
+     {
+      "key": "amount",
+      "label": null,
+      "label_key": "col.amount",
+      "align": "right",
+      "width": "auto"
+     },
+     {
+      "key": "status",
+      "label": null,
+      "label_key": "col.status",
+      "align": "left",
+      "width": "auto"
+     }
+    ],
+    "groups": [
+     {
+      "label": null,
+      "label_key": null,
+      "rows": [
+       {
+        "cells": [
+         {
+          "k": "text",
+          "v": "Ben Beispiel",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "text",
+          "v": "Verspätet",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "amount",
+          "v": "5.00 CHF",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "status",
+          "v": "",
+          "status": "fineStatus.open",
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       }
+      ],
+      "subtotal": null
+     }
+    ],
+    "totals": [
+     {
+      "k": "text",
+      "v": "Total",
+      "status": null,
+      "tags": [],
+      "rich": [],
+      "checked": false,
+      "tone": "default",
+      "strike": false
+     },
+     {
+      "k": "text",
+      "v": "",
+      "status": null,
+      "tags": [],
+      "rich": [],
+      "checked": false,
+      "tone": "default",
+      "strike": false
+     },
+     {
+      "k": "amount",
+      "v": "5.00 CHF",
+      "status": null,
+      "tags": [],
+      "rich": [],
+      "checked": false,
+      "tone": "default",
+      "strike": false
+     },
+     {
+      "k": "text",
+      "v": "",
+      "status": null,
+      "tags": [],
+      "rich": [],
+      "checked": false,
+      "tone": "default",
+      "strike": false
+     }
+    ],
+    "show_header": true
+   }
+  },
+  {
+   "title": "Kennzahlen",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "kpi_tiles",
+   "tiles": [
+    {
+     "label": null,
+     "label_key": "kpi.sessions",
+     "value": "24",
+     "hint": null,
+     "tone": "default"
+    },
+    {
+     "label": null,
+     "label_key": "kpi.attendanceRate",
+     "value": "87%",
+     "hint": null,
+     "tone": "success"
+    },
+    {
+     "label": null,
+     "label_key": "kpi.openTodos",
+     "value": "7",
+     "hint": null,
+     "tone": "warning"
+    },
+    {
+     "label": "Eigene Zahl",
+     "label_key": null,
+     "value": "1'234",
+     "hint": "seit 2020",
+     "tone": "default"
+    }
+   ]
+  },
+  {
+   "title": "Balken",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "chart",
+   "kind": "bar",
+   "horizontal": false,
+   "categories": [
+    "Jan",
+    "Feb",
+    "Mär",
+    "Apr"
+   ],
+   "category_tones": [],
+   "series": [
+    {
+     "label": null,
+     "label_key": "chart.income",
+     "values": [
+      100.0,
+      250.0,
+      80.0,
+      300.0
+     ],
+     "tone": "success"
+    },
+    {
+     "label": null,
+     "label_key": "chart.expenses",
+     "values": [
+      50.0,
+      120.0,
+      160.0,
+      90.0
+     ],
+     "tone": "danger"
+    }
+   ],
+   "value_format": "amount"
+  },
+  {
+   "title": "Gestapelt horizontal",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "chart",
+   "kind": "stacked_bar",
+   "horizontal": true,
+   "categories": [
+    "Anna",
+    "Ben",
+    "Chloé"
+   ],
+   "category_tones": [],
+   "series": [
+    {
+     "label": null,
+     "label_key": "chart.present",
+     "values": [
+      10.0,
+      8.0,
+      5.0
+     ],
+     "tone": "success"
+    },
+    {
+     "label": null,
+     "label_key": "chart.late",
+     "values": [
+      1.0,
+      2.0,
+      0.0
+     ],
+     "tone": "info"
+    },
+    {
+     "label": null,
+     "label_key": "chart.absent",
+     "values": [
+      0.0,
+      1.0,
+      4.0
+     ],
+     "tone": "danger"
+    }
+   ],
+   "value_format": "number"
+  },
+  {
+   "title": "Linie",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "chart",
+   "kind": "line",
+   "horizontal": false,
+   "categories": [
+    "2022",
+    "2023",
+    "2024",
+    "2025",
+    "2026"
+   ],
+   "category_tones": [],
+   "series": [
+    {
+     "label": null,
+     "label_key": "chart.present",
+     "values": [
+      12.0,
+      15.0,
+      14.0,
+      18.0,
+      20.0
+     ],
+     "tone": "primary"
+    }
+   ],
+   "value_format": "number"
+  },
+  {
+   "title": "Donut",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "chart",
+   "kind": "donut",
+   "horizontal": false,
+   "categories": [
+    "Erledigt",
+    "Offen"
+   ],
+   "category_tones": [
+    "success",
+    "neutral"
+   ],
+   "series": [
+    {
+     "label": null,
+     "label_key": null,
+     "values": [
+      12.0,
+      5.0
+     ],
+     "tone": "primary"
+    }
+   ],
+   "value_format": "number"
+  },
+  {
+   "title": "Statistiktabelle",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "stat_table",
+   "table": {
+    "columns": [
+     {
+      "key": "group",
+      "label": null,
+      "label_key": "col.group",
+      "align": "left",
+      "width": "auto"
+     },
+     {
+      "key": "sessions",
+      "label": null,
+      "label_key": "col.sessions",
+      "align": "right",
+      "width": "auto"
+     },
+     {
+      "key": "avg",
+      "label": null,
+      "label_key": "col.avgParticipants",
+      "align": "right",
+      "width": "auto"
+     }
+    ],
+    "groups": [
+     {
+      "label": null,
+      "label_key": null,
+      "rows": [
+       {
+        "cells": [
+         {
+          "k": "text",
+          "v": "Jugend",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "amount",
+          "v": "12",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "amount",
+          "v": "8.5",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       }
+      ],
+      "subtotal": null
+     }
+    ],
+    "totals": null,
+    "show_header": true
+   }
+  },
+  {
+   "title": "QR-Code",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "qr_link",
+   "url": "https://hocx.ch/protocols/123",
+   "label": "Protokoll online",
+   "modules": [
+    "11111110001010011000101111111",
+    "10000010001101110111001000001",
+    "10111010100001001110001011101",
+    "10111010010110010010001011101",
+    "10111010111001111000001011101",
+    "10000010111111000111001000001",
+    "11111110101010101010101111111",
+    "00000000010011100101100000000",
+    "01001010101010001110010110100",
+    "11010000001100110100101111111",
+    "00001110101100111100110010101",
+    "11111000010001010101110101011",
+    "11010010001101100110100101001",
+    "10100001100001000010001010111",
+    "01011010001001001000000010001",
+    "00110100000110010110000101011",
+    "11001111110010111010110000000",
+    "10011100011111000110101110001",
+    "00011011000111010010100011101",
+    "00110100000000111101000011001",
+    "11111111110110100101111110011",
+    "00000000101010010011100010111",
+    "11111110010100111101101010001",
+    "10000010010100011101100011000",
+    "10111010110000110011111110011",
+    "10111010011100101010000100110",
+    "10111010001001001001110000011",
+    "10000010111111100111100101011",
+    "11111110000111010100100011010"
+   ]
+  },
+  {
+   "title": "Tabelle",
+   "hide_if_empty": true,
+   "level": 1,
+   "empty": false,
+   "type": "generic_table",
+   "table": {
+    "columns": [
+     {
+      "key": "a",
+      "label": null,
+      "label_key": "col.name",
+      "align": "left",
+      "width": "auto"
+     },
+     {
+      "key": "b",
+      "label": null,
+      "label_key": "col.value",
+      "align": "right",
+      "width": "auto"
+     }
+    ],
+    "groups": [
+     {
+      "label": null,
+      "label_key": null,
+      "rows": [
+       {
+        "cells": [
+         {
+          "k": "text",
+          "v": "Eins",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "amount",
+          "v": "1",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       },
+       {
+        "cells": [
+         {
+          "k": "check",
+          "v": "",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": true,
+          "tone": "default",
+          "strike": false
+         },
+         {
+          "k": "blank",
+          "v": "",
+          "status": null,
+          "tags": [],
+          "rich": [],
+          "checked": false,
+          "tone": "default",
+          "strike": false
+         }
+        ],
+        "muted": false,
+        "strong": false
+       }
+      ],
+      "subtotal": null
+     }
+    ],
+    "totals": null,
+    "show_header": true
+   }
+  },
+  {
+   "title": null,
+   "hide_if_empty": false,
+   "level": 1,
+   "empty": false,
+   "type": "page_break"
+  },
+  {
+   "title": null,
+   "hide_if_empty": true,
+   "level": 2,
+   "empty": false,
+   "type": "heading",
+   "text": "Nach dem Seitenumbruch"
+  }
+ ]
+}
