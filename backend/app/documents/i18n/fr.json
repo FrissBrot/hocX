@@ -1,4 +1,23 @@
 {
+  "apiError": {
+    "assetInUse": "Le fichier est encore utilisé par un style maison.",
+    "assetNotFound": "Le fichier choisi n’appartient pas à ce mandant ou n’est pas du bon type.",
+    "customFontMissing": "Le style normal manque pour la police personnalisée.",
+    "infected": "Le fichier a été refusé par l’antivirus.",
+    "invalidBlock": "Un bloc est mal configuré : {detail}",
+    "invalidFont": "Seules les polices TTF ou OTF valides sont autorisées.",
+    "invalidImage": "Seuls PNG, JPEG ou WebP jusqu’à 6000 pixels sont autorisés.",
+    "invalidKind": "Type de fichier inconnu.",
+    "lastStyle": "Le dernier style maison ne peut pas être supprimé.",
+    "noTable": "Le document ne contient aucun tableau pour ce format.",
+    "notFound": "L’élément demandé est introuvable.",
+    "permission": "Vous n’avez pas l’autorisation pour ce contenu.",
+    "protocolRequired": "Ce type de document nécessite un procès-verbal.",
+    "scanFailed": "Le fichier n’a pas pu être analysé. Veuillez réessayer plus tard.",
+    "tooLarge": "Le fichier est trop volumineux.",
+    "unknownStyle": "Style maison inconnu.",
+    "unknownType": "Type de document inconnu."
+  },
   "attendanceShort": {
     "absent": "A",
     "excused": "E",

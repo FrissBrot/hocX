@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, auth, calendar_feeds, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
+from app.api.routes import admin, admin_auth, auth, calendar_feeds, collaboration_ws, cycle_configs, document_templates, documents, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
@@ -177,6 +177,18 @@ def ensure_default_document_templates() -> None:
                 service.ensure_default_template_for_tenant(db, tenant.id, tenant.name)
 
 
+def ensure_default_document_styles() -> None:
+    """Jeder Mandant hat mindestens einen Hausstil (Dokument-Engine)."""
+    from app.documents import style_service
+
+    with engine.begin() as conn:
+        conn.execute(text("SELECT pg_advisory_xact_lock(202600002)"))
+        with SessionLocal() as db:
+            for tenant in db.scalars(select(Tenant).order_by(Tenant.id.asc())):
+                style_service.ensure_default_style(db, tenant.id)
+            db.commit()
+
+
 def ensure_traefik_dynamic_config() -> None:
     with SessionLocal() as db:
         traefik_config_service.regenerate(db)
@@ -222,16 +234,17 @@ async def upload_pipeline_rescan_loop() -> None:
 
 async def export_cleanup_loop() -> None:
     """Periodic retention sweep for old generated export files under EXPORT_ROOT/generated
-    (see export_service.py's cleanup_old_generated_exports). Unlike the rescan loops above
+    (see app/documents/service.py's cleanup_old_generated_exports). Unlike the rescan loops above
     this isn't a stuck/pending-state repair, just age-based deletion - every export run
     writes a brand-new uuid-suffixed file and never reuses an old one, so without this the
     directory grows unbounded on repeated re-exports. Same every-worker-but-advisory-locked
     pattern as the loops above."""
-    export_service = ExportService()
+    from app.documents.service import cleanup_old_generated_exports
+
     await run_advisory_locked_loop(
         name="export_cleanup",
         interval_seconds=settings.export_cleanup_interval_minutes * 60,
-        task=lambda _db: export_service.cleanup_old_generated_exports(),
+        task=lambda _db: cleanup_old_generated_exports(),
     )
 
 
@@ -378,6 +391,11 @@ async def system_monitor_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    from app.documents.renderer import shutdown_renderer
+    from app.documents.signing import validate_signing_configuration
+
+    # Wie AUTH_SECRET: ohne Signaturkonfiguration startet Produktion nicht (Dev: Warnung).
+    validate_signing_configuration()
     FileService().ensure_storage()
     warm_up_word_import_parse_pool()
     try:
@@ -385,6 +403,7 @@ async def lifespan(_: FastAPI):
         ensure_no_production_demo_data()
         ensure_startup_seed_data()
         ensure_default_document_templates()
+        ensure_default_document_styles()
         ensure_traefik_dynamic_config()
         health_check_task = asyncio.create_task(domain_health_check_loop())
         rescan_task = asyncio.create_task(abgabebox_rescan_loop())
@@ -414,6 +433,7 @@ async def lifespan(_: FastAPI):
         await close_redis_pool()
     finally:
         shutdown_word_import_parse_pool()
+        shutdown_renderer()
 
 
 app = FastAPI(
@@ -487,6 +507,7 @@ app.include_router(admin_auth.router, prefix="/api/admin/auth", tags=["admin-aut
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(tenants.router, prefix="/api", tags=["tenants"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(documents.router, prefix="/api", tags=["documents"])
 app.include_router(document_templates.router, prefix="/api", tags=["document-templates"])
 app.include_router(templates.router, prefix="/api", tags=["templates"])
 app.include_router(cycle_configs.router, prefix="/api", tags=["cycle-configs"])

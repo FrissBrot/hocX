@@ -1,4 +1,23 @@
 {
+  "apiError": {
+    "assetInUse": "The file is still used by a house style.",
+    "assetNotFound": "The selected file does not belong to this tenant or has the wrong type.",
+    "customFontMissing": "The regular style is missing for the custom font.",
+    "infected": "The file was rejected by the virus scanner.",
+    "invalidBlock": "A block is configured incorrectly: {detail}",
+    "invalidFont": "Only valid TTF or OTF fonts are allowed.",
+    "invalidImage": "Only PNG, JPEG or WebP up to 6000 pixels are allowed.",
+    "invalidKind": "Unknown file kind.",
+    "lastStyle": "The last house style cannot be deleted.",
+    "noTable": "The document contains no table for this format.",
+    "notFound": "The requested item was not found.",
+    "permission": "You do not have permission for this content.",
+    "protocolRequired": "This document type requires a protocol.",
+    "scanFailed": "The file could not be scanned for viruses. Please try again later.",
+    "tooLarge": "The file is too large.",
+    "unknownStyle": "Unknown house style.",
+    "unknownType": "Unknown document type."
+  },
   "attendanceShort": {
     "absent": "A",
     "excused": "E",

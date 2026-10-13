@@ -61,9 +61,9 @@ def _check_asset_refs(db: Session, tenant_id: int, tokens: DocumentStyleTokens) 
             continue
         asset = db.scalar(select(DocumentStyleAsset).where(DocumentStyleAsset.public_id == asset_id, DocumentStyleAsset.tenant_id == tenant_id))
         if asset is None or asset.kind != kind:
-            raise StyleValidationError("styles.errors.assetNotFound")
+            raise StyleValidationError("apiError.assetNotFound")
     if tokens.font == "custom" and tokens.custom_fonts.regular is None:
-        raise StyleValidationError("styles.errors.customFontMissing")
+        raise StyleValidationError("apiError.customFontMissing")
 
 
 def _set_default(db: Session, tenant_id: int, style_id: int) -> None:
@@ -72,7 +72,7 @@ def _set_default(db: Session, tenant_id: int, style_id: int) -> None:
 
 def create_style(db: Session, tenant_id: int, *, name: str, style_key: str, tokens: DocumentStyleTokens | None, is_default: bool = False) -> DocumentStyle:
     if style_key not in STYLE_KEYS:
-        raise StyleValidationError("styles.errors.unknownStyle")
+        raise StyleValidationError("apiError.unknownStyle")
     tokens = tokens or default_tokens(style_key)
     _check_asset_refs(db, tenant_id, tokens)
     if default_style(db, tenant_id) is None:
@@ -94,7 +94,7 @@ def update_style(db: Session, style: DocumentStyle, *, name: str | None = None, 
         style.name = name.strip()
     if style_key is not None and style_key != style.style_key:
         if style_key not in STYLE_KEYS:
-            raise StyleValidationError("styles.errors.unknownStyle")
+            raise StyleValidationError("apiError.unknownStyle")
         style.style_key = style_key
         changed = True
     if tokens is not None:
@@ -168,7 +168,7 @@ def font_family_of(content: bytes) -> str:
         name_table = font["name"]
         family = name_table.getDebugName(16) or name_table.getDebugName(1)
         if not family or not font.getBestCmap():
-            raise StyleValidationError("styles.errors.invalidFont")
+            raise StyleValidationError("apiError.invalidFont")
         return str(family).strip()
     finally:
         font.close()
@@ -182,38 +182,38 @@ def _validated_image(content: bytes) -> tuple[str, str]:
             image.verify()
         with Image.open(io.BytesIO(content)) as image:
             if image.format not in IMAGE_TYPES or max(image.size) > MAX_IMAGE_PIXELS:
-                raise StyleValidationError("styles.errors.invalidImage")
+                raise StyleValidationError("apiError.invalidImage")
             return IMAGE_TYPES[image.format]
     except StyleValidationError:
         raise
     except Exception as exc:  # noqa: BLE001 - jede Pillow-Ausnahme heisst «kein gültiges Bild»
-        raise StyleValidationError("styles.errors.invalidImage") from exc
+        raise StyleValidationError("apiError.invalidImage") from exc
 
 
 async def create_asset(db: Session, tenant_id: int, *, kind: str, filename: str, content: bytes, user_id: int | None) -> DocumentStyleAsset:
     if kind not in ("image", "font"):
-        raise StyleValidationError("styles.errors.invalidKind")
+        raise StyleValidationError("apiError.invalidKind")
     if len(content) > MAX_UPLOAD_BYTES:
-        raise StyleValidationError("styles.errors.tooLarge")
+        raise StyleValidationError("apiError.tooLarge")
     font_family = None
     if kind == "image":
         mime_type, suffix = _validated_image(content)
     else:
         suffix = Path(filename or "").suffix.lower()
         if suffix not in FONT_SUFFIXES:
-            raise StyleValidationError("styles.errors.invalidFont")
+            raise StyleValidationError("apiError.invalidFont")
         mime_type = FONT_SUFFIXES[suffix]
         try:
             font_family = font_family_of(content)
         except StyleValidationError:
             raise
         except Exception as exc:  # noqa: BLE001 - jede fontTools-Ausnahme heisst «keine gültige Schrift»
-            raise StyleValidationError("styles.errors.invalidFont") from exc
+            raise StyleValidationError("apiError.invalidFont") from exc
     status = (await scanner.scan_many([content], host=settings.clamav_host, port=settings.clamav_port))[0]
     if status == "infected":
-        raise StyleValidationError("styles.errors.infected")
+        raise StyleValidationError("apiError.infected")
     if status == "error":
-        raise StyleValidationError("styles.errors.scanFailed")
+        raise StyleValidationError("apiError.scanFailed")
     relative = Path(ASSET_DIR) / f"tenant-{tenant_id}" / f"{uuid.uuid4().hex}{suffix}"
     target = _safe_storage_path(settings.storage_root, str(relative))
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -241,7 +241,7 @@ async def create_asset(db: Session, tenant_id: int, *, kind: str, filename: str,
 
 def delete_asset(db: Session, asset: DocumentStyleAsset) -> None:
     if asset_in_use(db, asset):
-        raise StyleValidationError("styles.errors.assetInUse")
+        raise StyleValidationError("apiError.assetInUse")
     path = _safe_storage_path(settings.storage_root, asset.storage_path)
     db.delete(asset)
     db.flush()

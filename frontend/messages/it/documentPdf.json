@@ -269,5 +269,24 @@
   "memberStatus": {
     "active": "Attivo",
     "inactive": "Inattivo"
+  },
+  "apiError": {
+    "notFound": "L’elemento richiesto non è stato trovato.",
+    "permission": "Non hai l’autorizzazione per questo contenuto.",
+    "invalidBlock": "Un blocco non è configurato correttamente: {detail}",
+    "protocolRequired": "Questo tipo di documento richiede un verbale.",
+    "unknownType": "Tipo di documento sconosciuto.",
+    "noTable": "Il documento non contiene alcuna tabella per questo formato.",
+    "assetNotFound": "Il file scelto non appartiene a questo mandante o è del tipo sbagliato.",
+    "customFontMissing": "Manca lo stile normale per il carattere personalizzato.",
+    "unknownStyle": "Stile della casa sconosciuto.",
+    "invalidImage": "Sono ammessi solo PNG, JPEG o WebP fino a 6000 pixel.",
+    "invalidFont": "Sono ammessi solo caratteri TTF o OTF validi.",
+    "invalidKind": "Tipo di file sconosciuto.",
+    "tooLarge": "Il file è troppo grande.",
+    "infected": "Il file è stato rifiutato dall’antivirus.",
+    "scanFailed": "Impossibile controllare il file. Riprova più tardi.",
+    "assetInUse": "Il file è ancora usato da uno stile della casa.",
+    "lastStyle": "L’ultimo stile della casa non può essere eliminato."
   }
 }

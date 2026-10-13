@@ -1,4 +1,23 @@
 {
+  "apiError": {
+    "assetInUse": "Die Datei wird noch von einem Hausstil verwendet.",
+    "assetNotFound": "Die gewählte Datei gehört nicht zu diesem Mandanten oder hat die falsche Art.",
+    "customFontMissing": "Für die eigene Schrift fehlt der Normal-Schnitt.",
+    "infected": "Die Datei wurde vom Virenscanner abgelehnt.",
+    "invalidBlock": "Ein Block ist ungültig konfiguriert: {detail}",
+    "invalidFont": "Nur gültige TTF- oder OTF-Schriften sind erlaubt.",
+    "invalidImage": "Nur PNG, JPEG oder WebP bis 6000 Pixel sind erlaubt.",
+    "invalidKind": "Unbekannte Dateiart.",
+    "lastStyle": "Der letzte Hausstil kann nicht gelöscht werden.",
+    "noTable": "Das Dokument enthält keine Tabelle für dieses Format.",
+    "notFound": "Das gewünschte Objekt wurde nicht gefunden.",
+    "permission": "Für diesen Inhalt fehlt die Berechtigung.",
+    "protocolRequired": "Dieser Dokumenttyp braucht ein Protokoll.",
+    "scanFailed": "Die Datei konnte nicht auf Viren geprüft werden. Bitte später erneut versuchen.",
+    "tooLarge": "Die Datei ist zu gross.",
+    "unknownStyle": "Unbekannter Hausstil.",
+    "unknownType": "Unbekannter Dokumenttyp."
+  },
   "attendanceShort": {
     "absent": "U",
     "excused": "E",
