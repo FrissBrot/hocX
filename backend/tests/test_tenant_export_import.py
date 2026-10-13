@@ -605,6 +605,7 @@ def test_export_import_roundtrip_remaps_matrix_auto_source_list_link(db):
         db, tenant_a.id, "Matrix",
         blocks=[{
             "id": 1,
+            "element_type_id": 11,
             "configuration_json": {
                 "mode": "auto",
                 "auto_source": {"type": "list", "list_id": source_list.id, "event_tag_filter": None},
@@ -636,6 +637,7 @@ def test_export_import_roundtrip_remaps_matrix_row_list_entry_link(db):
         db, tenant_a.id, "Tabelle",
         blocks=[{
             "id": 1,
+            "element_type_id": 6,
             "configuration_json": {
                 "rows": [{
                     "id": "1",

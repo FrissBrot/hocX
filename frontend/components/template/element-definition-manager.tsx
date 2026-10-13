@@ -23,6 +23,7 @@ import { elementTypeOptions as buildElementTypeOptions, elementTypeLabels as bui
 import { EVENT_SYNC_FIELDS, TODO_SYNC_FIELDS } from "@/lib/constants/event-sync-fields";
 import { CycleConfigSummary, ElementDefinition, ElementDefinitionBlock, EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
 import { embeddedEventCycleOffset, eventMatchesCycleFilter } from "@/lib/utils/cycle";
+import { normalizeEventFilter } from "@/lib/element-types/event-filter";
 import { CYCLE_OFFSET_OPTIONS, cycleOffsetLabel } from "@/components/submission-assignments/submission-assignment-form";
 import { ChartCycleSelection } from "@/components/protocol/chart-cycle-selection";
 import { asObject } from "@/components/protocol/protocol-editor-shared";
@@ -500,7 +501,63 @@ function resequenceBlocks(blocks: ElementDefinitionBlock[]) {
   }));
 }
 
-function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
+// Übergang bis zum Editor-Umbau: liest das aktuelle Schema (event_filter, repeat_event_filter,
+// auto_source.event_filter, row_config.event_filter, title_as_subtitle am Block) in die flachen
+// Formularfelder. Beim Speichern hebt das Backend die flachen Felder wieder ins Schema
+// (element_config.upgrade_definition_block).
+function legacyViewOfBlock(block: ElementDefinitionBlock): ElementDefinitionBlock {
+  const config = { ...(block.configuration_json ?? {}) } as Record<string, any>;
+  const listFilter = normalizeEventFilter(config.event_filter, "future");
+  const repeatFilter = normalizeEventFilter(config.repeat_event_filter, "window");
+  if (config.event_filter) {
+    config.event_tag_filter = listFilter.tags.join(", ");
+    config.event_only_from_protocol_date = listFilter.range.mode === "future";
+    config.event_only_before_protocol_date = listFilter.range.mode === "past";
+    config.event_only_current_cycle = listFilter.cycle?.offset === 0;
+  }
+  if (config.repeat_event_filter) {
+    config.event_tag_filter = repeatFilter.tags.join(", ");
+    config.event_title_filter = repeatFilter.title;
+    config.event_description_filter = repeatFilter.description;
+    config.event_date_mode = repeatFilter.range.mode === "future" ? "all_future" : "relative_window";
+    config.event_window_start_days = repeatFilter.range.start_days;
+    config.event_window_end_days = repeatFilter.range.end_days;
+  }
+  const autoSource = asObject(config.auto_source);
+  if (autoSource.event_filter) {
+    const autoFilter = normalizeEventFilter(autoSource.event_filter);
+    config.auto_source = {
+      ...autoSource,
+      event_tag_filter: autoFilter.tags.join(", "),
+      cycle_config_id: autoFilter.cycle?.config_id ?? null,
+      cycle_offset: autoFilter.cycle?.offset ?? 0,
+    };
+  }
+  if (Array.isArray(config.rows)) {
+    config.rows = (config.rows as Array<Record<string, any>>).map((row) => {
+      const rowConfig = { ...asObject(row.row_config) } as Record<string, any>;
+      if (!rowConfig.event_filter) return row;
+      const filter = normalizeEventFilter(rowConfig.event_filter, "future");
+      delete rowConfig.event_filter;
+      Object.assign(rowConfig, {
+        event_tag_filter: filter.tags.join(", "),
+        event_title_filter: filter.title,
+        use_column_title_as_tag: filter.use_column_filter,
+        event_use_column_tag_filter: filter.use_column_filter,
+        hide_past_events: filter.range.mode === "future",
+        event_only_from_protocol_date: filter.range.mode === "future",
+        event_only_before_protocol_date: filter.range.mode === "past",
+        event_cycle_offset: filter.cycle ? filter.cycle.offset : null,
+      });
+      return { ...row, row_config: rowConfig };
+    });
+  }
+  config.title_as_subtitle = block.title_as_subtitle ?? config.title_as_subtitle ?? true;
+  return { ...block, configuration_json: config };
+}
+
+function blockFormFromBlock(sourceBlock: ElementDefinitionBlock): BlockFormState {
+  const block = legacyViewOfBlock(sourceBlock);
   return {
     id: String(block.id),
     title: block.title,

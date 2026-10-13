@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, timedelta
+from types import SimpleNamespace
 
 from fastapi import HTTPException
 from sqlalchemy import func, or_, select
@@ -32,6 +33,7 @@ from app.models import (
 from app.services.document_template_service import DocumentTemplateService
 from app.services.access_service import AccessService
 from app.services.block_behavior import resolve_block_behavior
+from app.services.event_filter import event_matches_filter, normalize_event_filter, resolve_cycle_event_ids, sort_and_limit
 from app.repositories.participant_repository import participant_eligible_on
 from app.services import list_snapshot_service
 from app.services.protocol_todo_service import ProtocolTodoService
@@ -43,34 +45,6 @@ from app.services.responsible_label_service import (
 from app.repositories.protocol_repository import ProtocolRepository
 from app.schemas.protocol import NextSessionAttendanceEntry, NextSessionRead, ProtocolCreateFromTemplate, ProtocolUpdate
 from app.services import public_id_service
-
-
-def _matrix_row_type(row: dict) -> str:
-    """Resolves a matrix row's type across schema generations: new schema uses `row_type`
-    directly; old schema used `embedded_element_type_id` (takes precedence when present) or
-    fell back to `value_type`, defaulting to "text" if none is set."""
-    if row.get("row_type"):
-        return str(row["row_type"])
-    if row.get("embedded_element_type_id"):
-        return str(row["embedded_element_type_id"])
-    return str(row.get("value_type") or "text")
-
-
-def _matrix_row_config(row: dict) -> dict:
-    """Resolves a matrix row's config across schema generations: new schema stores a
-    `row_config` dict directly; old schema spread relevant keys (event_tag_filter,
-    event_title_filter, use_column_title_as_tag, hide_past_events) onto the row itself,
-    alongside an `embedded_configuration_json` dict."""
-    if isinstance(row.get("row_config"), dict):
-        return row["row_config"]
-    cfg: dict = {}
-    old_embedded = row.get("embedded_configuration_json")
-    if isinstance(old_embedded, dict):
-        cfg.update(old_embedded)
-    for k in ("event_tag_filter", "event_title_filter", "use_column_title_as_tag", "hide_past_events"):
-        if k in row:
-            cfg.setdefault(k, row[k])
-    return cfg
 
 
 def _matrix_build_row_values(column: dict, rows: list[dict]) -> dict:
@@ -1175,20 +1149,13 @@ class ProtocolService:
         current_protocol_id: int,
         repeat_config: dict,
     ) -> list[dict[str, object]]:
-        statement = select(Event).where(Event.tenant_id == tenant_id)
-        tag_filters = [t.strip() for t in str(repeat_config.get("event_tag_filter") or "").lower().split(",") if t.strip()]
-        title_filter = str(repeat_config.get("event_title_filter") or "").strip().lower()
-        description_filter = str(repeat_config.get("event_description_filter") or "").strip().lower()
-        date_mode = str(repeat_config.get("event_date_mode") or "relative_window")
-        window_start_days = int(repeat_config.get("event_window_start_days") or 0)
-        window_end_days = int(repeat_config.get("event_window_end_days") or 14)
+        # Gemeinsamer Terminfilter (event_filter.py), gespeichert als repeat_event_filter.
+        event_filter = normalize_event_filter(repeat_config.get("repeat_event_filter"), default_range_mode="window")
         include_unlisted_past = bool(repeat_config.get("event_include_unlisted_past", False))
-        only_before_protocol_date = bool(repeat_config.get("event_only_before_protocol_date", False))
-        start_date = protocol_date + timedelta(days=min(window_start_days, window_end_days))
-        end_date = protocol_date + timedelta(days=max(window_start_days, window_end_days))
-        if date_mode == "all_future" and not include_unlisted_past:
-            statement = statement.where(Event.event_date >= protocol_date)
-        statement = statement.order_by(Event.event_date.asc(), Event.id.asc())
+        protocol_ref = SimpleNamespace(tenant_id=tenant_id, template_id=template_id, protocol_date=protocol_date)
+        cycle_event_ids = resolve_cycle_event_ids(db, event_filter, protocol_ref)
+        catchup_filter = {**event_filter, "range": {"mode": "all"}}
+        statement = select(Event).where(Event.tenant_id == tenant_id).order_by(Event.event_date.asc(), Event.id.asc())
         recently_listed_ids = (
             self._recently_listed_event_ids(
                 db,
@@ -1208,28 +1175,25 @@ class ProtocolService:
             template_element_id=template_element_id,
             current_protocol_id=current_protocol_id,
         )
-        contexts: list[dict[str, object]] = []
+        matching_events = []
         for event in db.scalars(statement):
-            event_end_date = event.event_end_date or event.event_date
-            event_tag_lower = (event.tag or "").lower()
-            if tag_filters and not any(t in event_tag_lower for t in tag_filters):
-                continue
-            if title_filter and title_filter not in (event.title or "").lower():
-                continue
-            if description_filter and description_filter not in (event.description or "").lower():
-                continue
             if event.id in manually_hidden_ids:
                 continue
-            if only_before_protocol_date and event.event_date > protocol_date:
-                continue
-            in_primary_window = (
-                event_end_date >= protocol_date
-                if date_mode == "all_future"
-                else event_end_date >= start_date and event.event_date <= end_date
+            event_end_date = event.event_end_date or event.event_date
+            in_primary_window = event_matches_filter(
+                event, event_filter, protocol_date=protocol_date, cycle_event_ids=cycle_event_ids
             )
-            include_as_past_catchup = include_unlisted_past and event_end_date < protocol_date and event.id not in recently_listed_ids
-            if not in_primary_window and not include_as_past_catchup:
-                continue
+            include_as_past_catchup = (
+                include_unlisted_past
+                and event_end_date < protocol_date
+                and event.id not in recently_listed_ids
+                and event_matches_filter(event, catchup_filter, protocol_date=protocol_date, cycle_event_ids=cycle_event_ids)
+            )
+            if in_primary_window or include_as_past_catchup:
+                matching_events.append(event)
+        contexts: list[dict[str, object]] = []
+        for event in sort_and_limit(matching_events, event_filter):
+            event_end_date = event.event_end_date or event.event_date
             date_range = event.event_date.strftime("%d.%m.%Y") if event_end_date == event.event_date else f"{event.event_date.strftime('%d.%m.%Y')} - {event_end_date.strftime('%d.%m.%Y')}"
             contexts.append(
                 {
@@ -2219,8 +2183,7 @@ class ProtocolService:
             elif block["element_type_id"] == form_type_id:
                 _form_cfg = protocol_block.configuration_snapshot_json or {}
                 linked_list_id = self._coerce_optional_int(_form_cfg.get("linked_list_id"))
-                # Support both new "rows" and old "field_rows" schema
-                _form_raw_rows = _form_cfg.get("rows") or _form_cfg.get("field_rows") or []
+                _form_raw_rows = _form_cfg.get("rows") or []
                 field_rows = (
                     []
                     if linked_list_id
@@ -2281,26 +2244,19 @@ class ProtocolService:
                 db.add(protocol_block)
             elif block["element_type_id"] == matrix_type_id:
                 _matrix_cfg = protocol_block.configuration_snapshot_json or {}
-                # Backward compat: support both old field_rows and new rows
-                _raw_rows = _matrix_cfg.get("rows") or _matrix_cfg.get("field_rows") or []
-                # Backward compat: support both old matrix_columns and new columns
-                _raw_columns = _matrix_cfg.get("columns") or _matrix_cfg.get("matrix_columns") or []
+                # Definitionen liegen im aktuellen Schema vor (Migration 0113, element_config.py).
+                _raw_rows = _matrix_cfg.get("rows") or []
+                _raw_columns = _matrix_cfg.get("columns") or []
 
                 matrix_rows = [
                     {
                         "id": row.get("id"),
-                        "label": self._render_context_text(row.get("label") or row.get("title") or "Feld", repeat_context) or "Feld",
-                        "row_type": _matrix_row_type(row),
-                        "locked_in_protocol": bool(
-                            row.get("locked_in_protocol") if "locked_in_protocol" in row
-                            else not bool(row.get("protocol_editable", True))
-                        ),
+                        "label": self._render_context_text(row.get("label") or "Feld", repeat_context) or "Feld",
+                        "row_type": str(row.get("row_type") or "text"),
+                        "locked_in_protocol": bool(row.get("locked_in_protocol", False)),
                         "sort_index": row.get("sort_index"),
-                        "row_config": _matrix_row_config(row),
-                        "auto_source_field": row.get("auto_source_field")
-                            or row.get("source_field_participant")
-                            or row.get("source_field_event")
-                            or row.get("source_field_list"),
+                        "row_config": row.get("row_config") if isinstance(row.get("row_config"), dict) else {},
+                        "auto_source_field": row.get("auto_source_field"),
                         # Keep for export_service backward compat
                         "template_value": self._render_context_text(row.get("template_value") or "", repeat_context) or "",
                         "template_participant_id": self._coerce_optional_int(row.get("template_participant_id")),
@@ -2310,16 +2266,7 @@ class ProtocolService:
                     for row in _raw_rows
                 ]
 
-                # auto_source: new schema or backward compat from matrix_column_source*
-                _old_src_type = _matrix_cfg.get("matrix_column_source") or ""
-                _auto_source = _matrix_cfg.get("auto_source") or (
-                    {
-                        "type": _old_src_type,
-                        "list_id": _matrix_cfg.get("matrix_column_source_list_id"),
-                        "event_tag_filter": _matrix_cfg.get("matrix_column_source_event_tag"),
-                    }
-                    if _old_src_type else None
-                )
+                _auto_source = _matrix_cfg.get("auto_source") if isinstance(_matrix_cfg.get("auto_source"), dict) else None
 
                 _matrix_mode = _matrix_cfg.get("mode") or "manual"
                 if _matrix_mode == "auto" and isinstance(_auto_source, dict) and _auto_source.get("type") == "list":
@@ -2375,10 +2322,7 @@ class ProtocolService:
                     **_matrix_cfg,
                     "block_kind": "matrix",
                     "mode": _matrix_cfg.get("mode") or "manual",
-                    "allow_column_management": bool(
-                        _matrix_cfg.get("allow_column_management",
-                        _matrix_cfg.get("matrix_allow_column_management", False))
-                    ),
+                    "allow_column_management": bool(_matrix_cfg.get("allow_column_management", False)),
                     "auto_source": _auto_source,
                     "rows": matrix_rows,
                     "columns": matrix_columns,
@@ -2434,7 +2378,6 @@ class ProtocolService:
             elif block["element_type_id"] == event_list_type_id:
                 protocol_block.configuration_snapshot_json = {
                     **(protocol_block.configuration_snapshot_json or {}),
-                    "event_only_from_protocol_date": bool((protocol_block.configuration_snapshot_json or {}).get("event_only_from_protocol_date", True)),
                     "event_gray_past": bool((protocol_block.configuration_snapshot_json or {}).get("event_gray_past", True)),
                     "event_allow_end_date": bool((protocol_block.configuration_snapshot_json or {}).get("event_allow_end_date", False)),
                 }
@@ -2814,7 +2757,7 @@ class ProtocolService:
         brand new to this protocol), so track_changes_active is always False - equivalent
         to leaving each row/entry untagged."""
         linked_list_id = self._coerce_optional_int(raw_config.get("linked_list_id"))
-        raw_rows = raw_config.get("rows") or raw_config.get("field_rows") or []
+        raw_rows = raw_config.get("rows") or []
         field_rows = (
             []
             if linked_list_id

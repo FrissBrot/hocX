@@ -69,6 +69,7 @@ from app.schemas.word_import import (
     WordImportTextTarget,
 )
 from app.services import block_field_sync
+from app.services.event_filter import event_matches_filter, normalize_event_filter
 from app.services.event_service import EventService
 from app.services.participant_service import ParticipantService
 from app.services.protocol_service import ProtocolService
@@ -1543,8 +1544,8 @@ def _template_matrices(db: Session, *, template_id: int, matrix_type_id: int | N
                     "title": definition.title,
                     "mode": config.get("mode") or "manual",
                     "auto_source": config.get("auto_source") or {},
-                    "rows": config.get("rows") or config.get("field_rows") or [],
-                    "columns": config.get("columns") or config.get("matrix_columns") or [],
+                    "rows": config.get("rows") or [],
+                    "columns": config.get("columns") or [],
                 }
             )
     return matrices
@@ -2903,10 +2904,13 @@ class WordImportService:
                         ],
                     )
             elif mode == "auto" and auto_type == "events":
-                tag_filters = [t.strip() for t in str(auto_source.get("event_tag_filter") or "").lower().split(",") if t.strip()]
+                # Gleiche Tag-Regel wie der Matrix-Automodus im Editor («enthält», event_filter.py);
+                # Zeitraum/Zyklus spielen für die Zuordnung bestehender Spalten keine Rolle.
+                auto_event_filter = normalize_event_filter(auto_source.get("event_filter"))
+                tag_only_filter = {**auto_event_filter, "title": "", "description": "", "range": {"mode": "all"}, "cycle": None}
                 candidate_events = [
                     event for event in all_events
-                    if not tag_filters or any(t in (event.tag or "").lower() for t in tag_filters)
+                    if event_matches_filter(event, tag_only_filter, protocol_date=None)
                 ]
                 labeled_col_indices = [col_idx for col_idx, label in enumerate(doc_column_labels) if label]
 
@@ -3100,7 +3104,7 @@ class WordImportService:
                 # (an embedded cell only ever overrides that with its own stored
                 # `embedded_block` content if one was manually edited in a specific live
                 # protocol - never the case for a freshly imported one) and share the same
-                # row_config shape (event_tag_filter/event_use_column_tag_filter/etc.), so
+                # row_config shape (row_config.event_filter, see event_filter.py), so
                 # both are handled identically here.
                 if row_type in ("events", "7"):
                     # A Matrix "events" row never stores its dates per cell - they're
@@ -3112,11 +3116,7 @@ class WordImportService:
                     # counter), carrying the tag this Event needs so it actually shows up
                     # in this Matrix column once committed.
                     row_config = best_row.get("row_config") or {}
-                    use_column_tag = bool(
-                        best_row.get("event_use_column_tag_filter")
-                        or row_config.get("event_use_column_tag_filter")
-                        or best_row.get("use_column_title_as_tag", row_config.get("use_column_title_as_tag", True))
-                    )
+                    use_column_tag = bool((row_config.get("event_filter") or {}).get("use_column_filter"))
                     for col_idx, column_label_raw in enumerate(doc_column_labels):
                         if not column_label_raw or col_idx + 1 >= len(row_cells):
                             continue

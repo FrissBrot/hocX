@@ -1,5 +1,6 @@
 "use client";
 
+import { eventFilterTagText, normalizeEventFilter } from "@/lib/element-types/event-filter";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -1288,7 +1289,8 @@ export function ProtocolEditor({
   }
 
   async function createEventFromBlock(protocolElementBlockId: string, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft): Promise<EventSummary | null> { // i18n-ok: TS-Generic-Signatur, kein UI-Text
-    const configuredTag = String(blockConfig.event_tag_filter ?? "").trim();
+    // Tag aus dem Filter des Blocks (Terminliste: event_filter, Wiederholung: repeat_event_filter).
+    const configuredTag = eventFilterTagText(normalizeEventFilter(blockConfig.event_filter ?? blockConfig.repeat_event_filter));
     const allowEndDate = blockConfig.event_allow_end_date === true;
     const draft = draftOverride ?? newEventDrafts[protocolElementBlockId] ?? createProtocolEventDraft(protocol.protocol_date, configuredTag);
     if (!draft.event_date.trim() || !draft.title.trim()) {

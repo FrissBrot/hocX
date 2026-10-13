@@ -23,8 +23,10 @@ from app.schemas.fines import (
     AttendanceFineListItem,
     AttendanceFineRead,
     CollectFinePayload,
+    FineTariffRead,
+    FineTariffUpdate,
 )
-from app.services import public_id_service
+from app.services import fine_tariff_service, public_id_service
 from app.services.audit_service import AuditService
 
 router = APIRouter()
@@ -66,6 +68,37 @@ def _resolve_fine_id(db: Session, fine_id: uuid.UUID) -> int:
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Fine not found")
     return internal_id
+
+
+@router.get("/fines/tariff", response_model=FineTariffRead)
+def get_fine_tariff(
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Zentraler Bussentarif des Mandanten (Konto + Beträge für «zu spät»/«abwesend»)."""
+    require_reader(user)
+    require_feature(user, "finance")
+    return fine_tariff_service.read_tariff(db, user.current_tenant_id)
+
+
+@router.put("/fines/tariff", response_model=FineTariffRead)
+def update_fine_tariff(
+    payload: FineTariffUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_finance_write(user)
+    require_feature(user, "finance")
+    try:
+        result = fine_tariff_service.update_tariff(db, user.current_tenant_id, payload)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    audit.log(
+        db, action="fine_tariff.updated", actor=user, entity_type="fine_tariff", entity_id=user.current_tenant_id,
+        details={"amount_late": float(result.amount_late), "amount_absent": float(result.amount_absent)},
+    )
+    return result
 
 
 @router.get("/protocols/{protocol_id}/pending-fines", response_model=list[AttendanceFineListItem])

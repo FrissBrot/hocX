@@ -36,6 +36,7 @@ import { TagConfig } from "@/lib/hooks/use-tag-config";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateRange, formatDateTime } from "@/lib/utils/format";
 import { getCycleYear } from "@/lib/utils/cycle";
+import { applyEventFilter, blockEventFilter, eventFilterTagText, eventMatchesFilter, normalizeEventFilter, splitTags, type EventFilter } from "@/lib/element-types/event-filter";
 import {
   AttendanceFine,
   AttendanceFineListItem,
@@ -272,7 +273,7 @@ export function FocusedElementEditor({
   );
   const [creatingEventBlockNew, setCreatingEventBlockNew] = useState(false);
   const focusedTemplate = availableTemplates.find((t) => t.id === protocol.template_id) ?? null;
-  const [matrixCycleEvents, setMatrixCycleEvents] = useState<Record<string, EventSummary[]>>({});
+  const [cycleEventPools, setCycleEventPools] = useState<Record<string, EventSummary[]>>({});
 
   const currentCycleYear: number | null = protocol.protocol_date && focusedTemplate?.cycle_config
     ? getCycleYear(protocol.protocol_date, focusedTemplate.cycle_config.reset_month, focusedTemplate.cycle_config.reset_day)
@@ -635,21 +636,22 @@ export function FocusedElementEditor({
     if (closeAfter) closeParticipantPicker();
   }
 
+  // Termin-Pool für einen Filter: mit Zyklus-Filter die vom Backend geladenen Termine dieses
+  // Zyklus (availableEvents hält nur die neuesten 100 Termine des Mandanten), sonst availableEvents.
+  function cyclePoolKey(filter: EventFilter): string | null {
+    if (!filter.cycle) return null;
+    const configId = filter.cycle.config_id ?? focusedTemplate?.cycle_config_id ?? null;
+    return configId ? `${configId}:${filter.cycle.offset}:${protocol.protocol_date ?? ""}` : null;
+  }
+
+  function filteredEvents(filter: EventFilter, column?: Record<string, any> | null): EventSummary[] {
+    const key = cyclePoolKey(filter);
+    const pool = key ? cycleEventPools[key] ?? [] : availableEvents;
+    return applyEventFilter(pool, filter, { protocolDate: protocol.protocol_date, column, cycleAlreadyApplied: true });
+  }
+
   function eventRowsForBlock(blockConfig: Record<string, any>) {
-    return [...availableEvents]
-      .filter((eventRow) => {
-        const tagFilters = String(blockConfig.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
-        const matchesTag = !tagFilters.length || tagFilters.some((t) => (eventRow.tag ?? "").toLowerCase().includes(t));
-        const effectiveEndDate = eventRow.event_end_date || eventRow.event_date;
-        const matchesDate = !protocol.protocol_date ? true : blockConfig.event_only_before_protocol_date === true ? effectiveEndDate < protocol.protocol_date : blockConfig.event_only_from_protocol_date === false ? true : effectiveEndDate >= protocol.protocol_date;
-        const matchesCycle = blockConfig.event_only_current_cycle !== true || currentCycleYear === null
-          ? true
-          : (eventRow.cycle_assignments ?? []).some(
-              (a) => a.cycle_config_id === focusedTemplate?.cycle_config_id && a.cycle_year === currentCycleYear
-            );
-        return matchesTag && matchesDate && matchesCycle;
-      })
-      .sort((left, right) => compareIsoDate(left.event_date, right.event_date));
+    return filteredEvents(blockEventFilter(blockConfig));
   }
 
   function eventColumnVisibility(blockConfig: Record<string, any>) {
@@ -742,7 +744,7 @@ export function FocusedElementEditor({
   }
 
   function newEventRowDraft(blockConfig: Record<string, any>) {
-    const forcedTag = String(blockConfig.event_tag_filter ?? "").trim();
+    const forcedTag = eventFilterTagText(blockEventFilter(blockConfig));
     const columns = eventColumnVisibility(blockConfig);
     return createInlineProtocolEventDraft(protocol.protocol_date, forcedTag, columns.showTitle);
   }
@@ -816,27 +818,7 @@ export function FocusedElementEditor({
   }
 
   function matrixEventsForRow(row: Record<string, any>, column: Record<string, any>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
-    // New schema: event filters in row_config; old schema: directly on row
-    const rc = (row.row_config && typeof row.row_config === "object" ? row.row_config : {}) as Record<string, any>;
-    const tagFilters = String(row.event_tag_filter ?? rc.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
-    const columnTagFilters = String(column.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
-    const titleFilter = String(row.event_title_filter ?? rc.event_title_filter ?? "").trim().toLowerCase();
-    const useColumnTitleAsTag = (row.use_column_title_as_tag ?? rc.use_column_title_as_tag) !== false;
-    const hidePastEvents = (row.hide_past_events ?? rc.hide_past_events) !== false;
-    const columnTitle = String(column.title ?? "").trim().toLowerCase();
-    return [...availableEvents]
-      .filter((event) => {
-        const effectiveEndDate = event.event_end_date || event.event_date;
-        const matchesPast = !hidePastEvents || !protocol.protocol_date || effectiveEndDate >= protocol.protocol_date;
-        const eventTag = (event.tag ?? "").toLowerCase();
-        const matchesTag =
-          (!tagFilters.length || tagFilters.some((t) => eventTag.includes(t))) &&
-          (!columnTagFilters.length || columnTagFilters.some((t) => eventTag.includes(t))) &&
-          (!useColumnTitleAsTag || !columnTitle || eventTag.includes(columnTitle));
-        const matchesTitle = !titleFilter || event.title.toLowerCase().includes(titleFilter);
-        return matchesPast && matchesTag && matchesTitle;
-      })
-      .sort((left, right) => compareIsoDate(left.event_date, right.event_date));
+    return filteredEvents(normalizeEventFilter(asObject(row.row_config).event_filter, "future"), column);
   }
 
   function matrixRows(blockConfig: Record<string, any>) {
@@ -1109,41 +1091,53 @@ export function FocusedElementEditor({
   }
 
   function matrixAutoSourceInfo(blockConfig: Record<string, any>) {
-    const autoSrc = blockConfig.auto_source;
-    const source = String(
-      (autoSrc && typeof autoSrc === "object" ? autoSrc.type : null) ?? blockConfig.matrix_column_source ?? ""
-    );
-    const eventTagFilter = String(
-      (autoSrc && typeof autoSrc === "object" ? autoSrc.event_tag_filter : null) ??
-      blockConfig.matrix_column_source_event_tag ?? ""
-    ).trim().toLowerCase();
-    const rawListId =
-      (autoSrc && typeof autoSrc === "object" ? autoSrc.list_id : null) ??
-      blockConfig.matrix_column_source_list_id ?? null;
-    const listId = rawListId ? String(rawListId) : null;
-    const rawCycleConfigId = autoSrc && typeof autoSrc === "object" ? autoSrc.cycle_config_id : null;
-    const cycleConfigId = source === "events" && rawCycleConfigId ? String(rawCycleConfigId) : null;
-    const cycleOffset = cycleConfigId ? Number(autoSrc.cycle_offset ?? 0) || 0 : 0;
-    return { source, eventTagFilter, listId, cycleConfigId, cycleOffset };
+    const autoSrc = asObject(blockConfig.auto_source);
+    const source = String(autoSrc.type ?? "");
+    const listId = source === "list" && autoSrc.list_id ? String(autoSrc.list_id) : null;
+    const eventFilter = normalizeEventFilter(autoSrc.event_filter);
+    const sort = String(autoSrc.sort ?? "source");
+    return { source, listId, eventFilter, sort };
   }
 
-  function matrixCycleEventsKey(cycleConfigId: string, cycleOffset: number) {
-    return `${cycleConfigId}:${cycleOffset}:${protocol.protocol_date ?? ""}`;
-  }
-
-  // Termin-Pool für automatische Termin-Spalten: mit Zyklus-Filter die vom Backend
-  // geladenen Termine dieses Zyklus (availableEvents hält nur die neuesten 100 Termine
-  // des Mandanten), sonst availableEvents. Tagfilter: kommagetrennt, «enthält» wie bei
-  // Terminliste, Wiederholung und Matrix-Terminzeilen.
+  // Termine für automatische Termin-Spalten (gemeinsamer Filter, siehe event-filter.ts).
   function matrixEventPool(blockConfig: Record<string, any>): EventSummary[] {
-    const { eventTagFilter, cycleConfigId, cycleOffset } = matrixAutoSourceInfo(blockConfig);
-    const pool = cycleConfigId
-      ? matrixCycleEvents[matrixCycleEventsKey(cycleConfigId, cycleOffset)] ?? []
-      : availableEvents;
-    const tagFilters = eventTagFilter.split(",").map((tag) => tag.trim()).filter(Boolean);
-    return tagFilters.length
-      ? pool.filter((e) => tagFilters.some((tag) => String(e.tag ?? "").toLowerCase().includes(tag)))
-      : pool;
+    const { eventFilter, sort } = matrixAutoSourceInfo(blockConfig);
+    const events = filteredEvents(eventFilter);
+    return sort === "alpha" || sort === "alpha_desc"
+      ? sortByLabel(events, (event) => event.title, sort === "alpha_desc")
+      : events;
+  }
+
+  function sortByLabel<T>(items: T[], label: (item: T) => string, descending = false): T[] {
+    const sorted = [...items].sort((left, right) => label(left).localeCompare(label(right), undefined, { sensitivity: "base" }));
+    return descending ? sorted.reverse() : sorted;
+  }
+
+  // Reihenfolge der automatischen Personen-Spalten (auto_source.sort).
+  function matrixParticipantPool(blockConfig: Record<string, any>) {
+    const { sort } = matrixAutoSourceInfo(blockConfig);
+    const participants = availableParticipants.filter(isParticipantSelectable);
+    if (sort === "last_name") {
+      return sortByLabel(participants, (p) => `${p.last_name ?? ""} ${p.first_name ?? ""} ${p.display_name}`);
+    }
+    if (sort === "alpha" || sort === "alpha_desc") {
+      return sortByLabel(participants, (p) => p.display_name, sort === "alpha_desc");
+    }
+    return participants;
+  }
+
+  function matrixListEntryTitle(entry: StructuredListEntry) {
+    return (
+      String((entry.column_one_value as any)?.text_value ?? "").trim() ||
+      String((entry.column_two_value as any)?.text_value ?? "").trim() ||
+      `Eintrag ${entry.id}`
+    );
+  }
+
+  function matrixListPool(blockConfig: Record<string, any>) {
+    const { listId, sort } = matrixAutoSourceInfo(blockConfig);
+    const entries = listId ? (listEntriesByDefinition[listId] ?? []) : [];
+    return sort === "alpha" || sort === "alpha_desc" ? sortByLabel(entries, matrixListEntryTitle, sort === "alpha_desc") : entries;
   }
 
   function generateMatrixColumns(blockId: string, blockConfig: Record<string, any>) {
@@ -1153,12 +1147,11 @@ export function FocusedElementEditor({
     let nextColumns: Array<Record<string, any>> = [];
 
     if (source === "participants") {
-      nextColumns = availableParticipants.filter(isParticipantSelectable).map((participant) => buildMatrixColumnForParticipant(rows, participant));
+      nextColumns = matrixParticipantPool(blockConfig).map((participant) => buildMatrixColumnForParticipant(rows, participant));
     } else if (source === "events") {
       nextColumns = matrixEventPool(blockConfig).map((event) => buildMatrixColumnForEvent(rows, event));
     } else if (source === "list") {
-      const entries = listId ? (listEntriesByDefinition[listId] ?? []) : [];
-      nextColumns = entries.map((entry) => buildMatrixColumnForListEntry(rows, entry));
+      nextColumns = matrixListPool(blockConfig).map((entry) => buildMatrixColumnForListEntry(rows, entry));
     }
 
     if (!nextColumns.length) return;
@@ -1169,7 +1162,7 @@ export function FocusedElementEditor({
   // candidate on/off only adds a column or flips its `hidden` flag, never overwrites or
   // drops existing (possibly manually edited) columns like the bulk "Generieren" button does.
   function matrixCandidateItems(blockConfig: Record<string, any>): CandidateItem[] {
-    const { source, listId } = matrixAutoSourceInfo(blockConfig);
+    const { source } = matrixAutoSourceInfo(blockConfig);
     const columns = matrixColumns(blockConfig);
     const columnById = new Map(columns.map((c) => [String(c.id ?? ""), c]));
 
@@ -1184,22 +1177,14 @@ export function FocusedElementEditor({
     }
 
     if (source === "participants") {
-      return availableParticipants.filter(isParticipantSelectable).map((p) => toItem(`gen-p-${p.id}`, p.display_name));
+      return matrixParticipantPool(blockConfig).map((p) => toItem(`gen-p-${p.id}`, p.display_name));
     }
     if (source === "events") {
-      return [...matrixEventPool(blockConfig)]
-        .sort((a, b) => a.event_date.localeCompare(b.event_date))
+      return matrixEventPool(blockConfig)
         .map((e) => toItem(`gen-e-${e.id}`, e.title, `${formatDate(e.event_date)}${e.tag ? ` · ${e.tag}` : ""}`));
     }
     if (source === "list") {
-      const entries = listId ? (listEntriesByDefinition[listId] ?? []) : [];
-      return entries.map((entry) => {
-        const titleText =
-          String((entry.column_one_value as any)?.text_value ?? "").trim() ||
-          String((entry.column_two_value as any)?.text_value ?? "").trim() ||
-          `Eintrag ${entry.id}`;
-        return toItem(`gen-l-${entry.id}`, titleText);
-      });
+      return matrixListPool(blockConfig).map((entry) => toItem(`gen-l-${entry.id}`, matrixListEntryTitle(entry)));
     }
     return [];
   }
@@ -1227,33 +1212,43 @@ export function FocusedElementEditor({
       const event = matrixEventPool(blockConfig).find((e) => `gen-e-${e.id}` === candidateId);
       if (event) newColumn = buildMatrixColumnForEvent(rows, event);
     } else if (source === "list") {
-      const { listId } = matrixAutoSourceInfo(blockConfig);
-      const entries = listId ? (listEntriesByDefinition[listId] ?? []) : [];
-      const entry = entries.find((e) => `gen-l-${e.id}` === candidateId);
+      const entry = matrixListPool(blockConfig).find((e) => `gen-l-${e.id}` === candidateId);
       if (entry) newColumn = buildMatrixColumnForListEntry(rows, entry);
     }
     if (!newColumn) return;
     saveMatrixColumns(blockId, blockConfig, [...columns, newColumn]);
   }
 
-  // Lädt die Termine für Matrix-Blöcke mit Zyklus-Filter (automatische Termin-Spalten).
-  const matrixCycleRequests = element.blocks
-    .map((block) => matrixAutoSourceInfo(asObject(block.configuration_snapshot_json)))
-    .filter((info) => info.cycleConfigId)
-    .map((info) => ({ cycleConfigId: info.cycleConfigId as string, cycleOffset: info.cycleOffset }));
-  const matrixCycleRequestKeys = [...new Set(matrixCycleRequests.map((r) => matrixCycleEventsKey(r.cycleConfigId, r.cycleOffset)))].sort().join("|");
+  // Lädt die Termine aller Filter mit Zyklus in diesem Element (Terminliste, Matrix-Automodus,
+  // Matrixzeilen, eingebettete Terminlisten), siehe filteredEvents.
+  const cycleFilters: EventFilter[] = element.blocks.flatMap((block) => {
+    const config = asObject(block.configuration_snapshot_json);
+    const rows = Array.isArray(config.rows) ? (config.rows as Array<Record<string, any>>) : [];
+    return [
+      blockEventFilter(config),
+      matrixAutoSourceInfo(config).eventFilter,
+      ...rows.map((row) => normalizeEventFilter(asObject(row.row_config).event_filter, "future")),
+    ];
+  });
+  const cycleRequests = new Map<string, { configId: string; offset: number }>();
+  for (const filter of cycleFilters) {
+    const key = cyclePoolKey(filter);
+    if (key && filter.cycle) {
+      cycleRequests.set(key, { configId: (filter.cycle.config_id ?? focusedTemplate?.cycle_config_id) as string, offset: filter.cycle.offset });
+    }
+  }
+  const cycleRequestKeys = [...cycleRequests.keys()].sort().join("|");
   useEffect(() => {
     let cancelled = false;
-    for (const request of matrixCycleRequests) {
-      const key = matrixCycleEventsKey(request.cycleConfigId, request.cycleOffset);
-      if (matrixCycleEvents[key]) continue;
-      fetchCycleEvents(protocol.id, { cycleConfigId: request.cycleConfigId, cycleOffset: request.cycleOffset, limit: 500 })
-        .then((result) => { if (!cancelled) setMatrixCycleEvents((current) => ({ ...current, [key]: result.items })); })
+    for (const [key, request] of cycleRequests) {
+      if (cycleEventPools[key]) continue;
+      fetchCycleEvents(protocol.id, { cycleConfigId: request.configId, cycleOffset: request.offset, limit: 500 })
+        .then((result) => { if (!cancelled) setCycleEventPools((current) => ({ ...current, [key]: result.items })); })
         .catch((error) => { if (!cancelled) showToast(error instanceof Error ? error.message : String(error), "error"); });
     }
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matrixCycleRequestKeys, protocol.id]);
+  }, [cycleRequestKeys, protocol.id]);
 
   useEffect(() => {
     const fields = sectionRef.current?.querySelectorAll<HTMLTextAreaElement>(".todo-main-compact .todo-input") ?? [];
@@ -1325,7 +1320,7 @@ export function FocusedElementEditor({
           const eventListInlineEditable = blockEditable && !isPlanningMode;
           const editableEventRows = elementType === "event_list" ? eventRowsForBlock(blockConfig) : [];
           const editableEventColumns = elementType === "event_list" ? eventColumnVisibility(blockConfig) : null;
-          const forcedEventTag = elementType === "event_list" ? String(blockConfig.event_tag_filter ?? "").trim() : "";
+          const forcedEventTag = elementType === "event_list" ? eventFilterTagText(blockEventFilter(blockConfig)) : "";
           const allowEventEndDate = elementType === "event_list" ? blockConfig.event_allow_end_date === true : false;
           const firstUpcomingIndex = elementType === "event_list" ? editableEventRows.findIndex((row) => {
             const endDate = row.event_end_date || row.event_date;
@@ -1340,7 +1335,7 @@ export function FocusedElementEditor({
           const showNewEventRow = elementType === "event_list" ? openNewEventRows[block.id] === true : false;
           const creatingNewEventRow = elementType === "event_list" ? creatingNewEventRows[block.id] === true : false;
           const allowMatrixColumnManagement =
-            elementType === "matrix" ? blockEditable && (blockConfig.allow_column_management === true || blockConfig.matrix_allow_column_management === true) : false;
+            elementType === "matrix" ? blockEditable && blockConfig.allow_column_management === true : false;
           const matrixAutoSourceType = elementType === "matrix" ? matrixAutoSourceInfo(blockConfig).source : "";
           // Planning mode ("geplant") replaces the inline column toolbar/"Generieren" for
           // auto-sourced matrices with the checkbox popup; manual matrices and "durchgeführt"
@@ -2270,7 +2265,7 @@ export function FocusedElementEditor({
                       >
                         {t("newColumnPlus")}
                       </button>
-                      {(blockConfig.auto_source?.type || blockConfig.matrix_column_source) ? (
+                      {blockConfig.auto_source?.type ? (
                         <button
                           type="button"
                           className="button-secondary"
@@ -2382,14 +2377,13 @@ export function FocusedElementEditor({
                                                 String(row.label ?? `Zeile ${rowIndex + 1}`), embeddedRow)}
                                             createEvent={(forcedTag, draft) =>
                                               createEventFromBlock(block.id, {
-                                                event_tag_filter: forcedTag,
+                                                event_filter: { tags: splitTags(forcedTag) },
                                                 event_allow_end_date:
                                                   asObject(embeddedBlock.configuration_snapshot_json).event_allow_end_date === true,
                                               }, draft)}
                                             updateEvent={(eventId, patch) => updateEventFromBlock(block.id, eventId, patch)}
                                             deleteEvent={(eventId) => deleteEventFromBlock(block.id, eventId)}
-                                            currentCycleYear={currentCycleYear}
-                                            cycleConfigId={focusedTemplate?.cycle_config_id ?? null}
+                                            filterEvents={filteredEvents}
                                             onEventContextMenu={(nativeEvent, eventRow) => onEventContextMenu(nativeEvent, eventRow, block.id)}
                                             isPlanningMode={isPlanningMode}
                                             knownEventTags={knownEventTags}
@@ -3011,11 +3005,9 @@ export function FocusedElementEditor({
                     />
                   </div>
                   {sessionDatePicker?.blockId === block.id && (() => {
-                    // Tag-Filter aus der Elementvorlage (wie bei der Terminliste: kommagetrennt, Teiltreffer).
-                    const tagFilters = String(blockConfig.event_tag_filter ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean);
-                    const calendarEvents = tagFilters.length
-                      ? availableEvents.filter((eventRow) => tagFilters.some((tag) => (eventRow.tag ?? "").toLowerCase().includes(tag)))
-                      : availableEvents;
+                    // Tag-Filter aus der Elementvorlage (gemeinsamer Terminfilter, nur Tags).
+                    const sessionFilter = { ...blockEventFilter(blockConfig, "all"), range: { mode: "all" as const, start_days: 0, end_days: 0 }, cycle: null };
+                    const calendarEvents = applyEventFilter(availableEvents, sessionFilter);
                     return (
                       <EventCalendarModal
                         open
@@ -3366,7 +3358,7 @@ export function FocusedElementEditor({
     {isPlanningMode && (() => {
       const referenceBlock = element.blocks.find((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event");
       const referenceConfig = referenceBlock ? asObject(referenceBlock.configuration_snapshot_json) : {};
-      const tagFilters = String(referenceConfig.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+      const repeatFilter = normalizeEventFilter(referenceConfig.repeat_event_filter);
       const usedEventIds = new Set(
         element.blocks
           .map(blockEventPublicId)
@@ -3398,12 +3390,10 @@ export function FocusedElementEditor({
       const availableCandidates = eventBlockCandidates
         .filter((evt) => !usedEventIds.has(evt.id))
         .sort((a, b) => a.event_date.localeCompare(b.event_date));
-      const matchingCandidates = tagFilters.length
-        ? availableCandidates.filter((evt) => tagFilters.some((t) => (evt.tag ?? "").toLowerCase().includes(t)))
-        : availableCandidates;
-      const otherCandidates = tagFilters.length
-        ? availableCandidates.filter((evt) => !tagFilters.some((t) => (evt.tag ?? "").toLowerCase().includes(t)))
-        : [];
+      // «Passt zum Filter»: Tag/Titel/Beschreibung der Wiederholung, unabhängig vom Zeitraum.
+      const candidateFilter: EventFilter = { ...repeatFilter, range: { ...repeatFilter.range, mode: "all" }, cycle: null };
+      const matchingCandidates = availableCandidates.filter((evt) => eventMatchesFilter(evt, candidateFilter));
+      const otherCandidates = availableCandidates.filter((evt) => !eventMatchesFilter(evt, candidateFilter));
       const candidateItems: CandidateItem[] = [
         ...matchingCandidates.map((evt) => toCandidateItem(evt, t("matchingFilterGroup"))),
         ...otherCandidates.map((evt) => toCandidateItem(evt, t("otherEventsGroup"))),
@@ -3447,12 +3437,12 @@ export function FocusedElementEditor({
         const created = await createEventFromBlock(referenceBlock?.id ?? "", referenceConfig, eventBlockNewDraft);
         if (created) {
           await addEventBlockToElement(element.id, created.id);
-          setEventBlockNewDraft(createProtocolEventDraft(protocol.protocol_date, String(referenceConfig.event_tag_filter ?? "").trim()));
+          setEventBlockNewDraft(createProtocolEventDraft(protocol.protocol_date, eventFilterTagText(repeatFilter)));
           setShowEventBlockCreateForm(false);
         }
         setCreatingEventBlockNew(false);
       }
-      const forcedTagForNew = String(referenceConfig.event_tag_filter ?? "").trim();
+      const forcedTagForNew = eventFilterTagText(repeatFilter);
       return (
         <CheckboxCandidateModal
           open={showEventBlockPicker}

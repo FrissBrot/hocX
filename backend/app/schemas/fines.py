@@ -63,3 +63,17 @@ class AttendanceFineListItem(AttendanceFineRead):
 
 class CollectFinePayload(BaseModel):
     collecting_protocol_id: uuid.UUID | None = None
+
+
+class FineTariffRead(BaseModel):
+    """Zentraler Bussentarif (fine_tariff). Ohne Konto werden keine Bussen erzeugt."""
+
+    account_id: uuid.UUID | None = None
+    amount_late: FinanceDecimal = Decimal("0")
+    amount_absent: FinanceDecimal = Decimal("0")
+
+
+class FineTariffUpdate(BaseModel):
+    account_id: uuid.UUID | None = None
+    amount_late: Decimal = Field(default=Decimal("0"), ge=0, le=100000)
+    amount_absent: Decimal = Field(default=Decimal("0"), ge=0, le=100000)

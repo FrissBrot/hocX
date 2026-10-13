@@ -14,7 +14,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { EventOverviewModal } from "@/components/protocol/planning/event-overview-modal";
 import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
 import { TagConfig } from "@/lib/hooks/use-tag-config";
-import { embeddedEventCycleOffset } from "@/lib/utils/cycle";
+import { blockEventFilter, eventFilterTagText, type EventFilter } from "@/lib/element-types/event-filter";
 import { formatDateRange } from "@/lib/utils/format";
 import { EventSummary, ParticipantSummary, ProtocolSummary } from "@/types/api";
 import {
@@ -44,8 +44,7 @@ export function MatrixEmbeddedBlockEditor({
   createEvent,
   updateEvent,
   deleteEvent,
-  currentCycleYear,
-  cycleConfigId,
+  filterEvents,
   onEventContextMenu,
   isPlanningMode,
   knownEventTags,
@@ -64,8 +63,8 @@ export function MatrixEmbeddedBlockEditor({
   createEvent: (forcedTag: string, draft: ProtocolEventDraft) => Promise<EventSummary | null>;
   updateEvent: (eventId: string, patch: Partial<EventSummary>) => Promise<boolean>;
   deleteEvent: (eventId: string) => Promise<void>;
-  currentCycleYear: number | null;
-  cycleConfigId: string | null;
+  /** Termine für einen Filter (inkl. Zyklus-Pool), siehe filteredEvents im focused-element-editor. */
+  filterEvents: (filter: EventFilter, column?: Record<string, any> | null) => EventSummary[];
   onEventContextMenu: (nativeEvent: React.MouseEvent, eventRow: EventSummary) => void;
   isPlanningMode: boolean;
   knownEventTags: string[];
@@ -85,9 +84,8 @@ export function MatrixEmbeddedBlockEditor({
   const embeddedBlockClassName = "matrix-embedded-block";
   const [embeddedEventDrafts, setEmbeddedEventDrafts] = useState<Record<string, Partial<EventSummary>>>({});
   const embeddedEventAutosaveTimers = useRef<Record<string, number>>({});
-  const forcedEmbeddedTag =
-    (embeddedConfig.event_use_column_tag_filter === true ? String(matrixColumn?.event_tag_filter || matrixColumn?.title || "").trim() : "") ||
-    String(embeddedConfig.event_tag_filter ?? "").trim();
+  const embeddedEventFilter = blockEventFilter(embeddedConfig);
+  const forcedEmbeddedTag = eventFilterTagText(embeddedEventFilter, matrixColumn);
   const [newEmbeddedEventDraft, setNewEmbeddedEventDraft] = useState<ProtocolEventDraft>(() =>
     createInlineProtocolEventDraft(protocol.protocol_date, forcedEmbeddedTag, true, tRoot)
   );
@@ -646,24 +644,7 @@ export function MatrixEmbeddedBlockEditor({
   }
 
   if (elementTypeId === 7) {
-    const tagFilters = String(embeddedConfig.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
-    const columnTagFilters = embeddedConfig.event_use_column_tag_filter === true
-      ? String(matrixColumn?.event_tag_filter || matrixColumn?.title || "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean) : [];
-    const cycleOffset = embeddedEventCycleOffset(embeddedConfig);
-    const matchingEvents = sortedEvents.filter((eventRow) => {
-      const effectiveEndDate = eventRow.event_end_date || eventRow.event_date;
-      const eventTag = (eventRow.tag ?? "").toLowerCase();
-      const matchesTag =
-        (!tagFilters.length || tagFilters.some((t) => eventTag.includes(t))) &&
-        (!columnTagFilters.length || columnTagFilters.some((t) => eventTag.includes(t)));
-      const matchesDate = !protocol.protocol_date ? true : embeddedConfig.event_only_before_protocol_date === true ? effectiveEndDate < protocol.protocol_date : embeddedConfig.event_only_from_protocol_date === false ? true : effectiveEndDate >= protocol.protocol_date;
-      const matchesCycle = cycleOffset === null || currentCycleYear === null
-        ? true
-        : (eventRow.cycle_assignments ?? []).some(
-            (a) => a.cycle_config_id === cycleConfigId && a.cycle_year === currentCycleYear + cycleOffset
-          );
-      return matchesTag && matchesDate && matchesCycle;
-    });
+    const matchingEvents = filterEvents(embeddedEventFilter, matrixColumn);
     const embeddedEventDraftValue = (eventRow: EventSummary) => ({
       ...eventRow,
       ...(embeddedEventDrafts[eventRow.id] ?? {}),

@@ -20,7 +20,7 @@ from app.core.config import settings
 from app.models import AttendanceFine, DocumentTemplate, ElementType, Event, FinanceAccount, FinanceTransaction, ListDefinition, ListEntry, Participant, Protocol as ProtocolModel, ProtocolElement, ProtocolExportCache, StoredFile, Tenant
 from app.repositories.export_repository import ExportRepository
 from app.services import public_id_service
-from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
+from app.services.event_filter import default_event_filter, filter_events, normalize_event_filter, split_tags
 from app.services.file_service import _safe_storage_path
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 from app.schemas.protocol import ProtocolExportRead
@@ -308,7 +308,7 @@ class ExportService:
 
     def _render_standalone_event_body(self, db: Session, protocol, export_dir: Path) -> str:
         config: dict = {
-            "event_only_from_protocol_date": False,
+            "event_filter": default_event_filter(range_mode="all"),
             "event_show_date": True,
             "event_show_tag": True,
             "event_show_title": True,
@@ -657,8 +657,9 @@ class ExportService:
         self, db: Session, fake_protocol, tag_filters: list[str] | None = None, until_date: str | None = None
     ) -> str:
         from datetime import date, timedelta
+        event_filter = default_event_filter(range_mode="all")
         config: dict = {
-            "event_only_from_protocol_date": False,
+            "event_filter": event_filter,
             "event_show_date": True,
             "event_show_tag": True,
             "event_show_title": True,
@@ -667,11 +668,11 @@ class ExportService:
             "event_gray_past": True,
         }
         if tag_filters:
-            config["event_tag_filter"] = ",".join(tag_filters)
+            event_filter["tags"] = split_tags(tag_filters)
         if until_date:
             until = date.fromisoformat(until_date)
             fake_protocol.protocol_date = until + timedelta(days=1)
-            config["event_only_before_protocol_date"] = True
+            event_filter["range"] = {**event_filter["range"], "mode": "past"}
         return self._event_list_content(db, protocol=fake_protocol, config=config)
 
     def _render_global_list_body(
@@ -1292,50 +1293,13 @@ Status: {protocol_status}
             )
         )
 
-    @staticmethod
-    def _event_list_cycle_offset(config: dict) -> int | None:
-        """Zyklus-Filter relativ zum Protokollzyklus (0 = aktueller, -1 = vorheriger, …), None = kein Filter.
+    def _filter_event_list_events(self, db: Session, *, protocol, event_filter: dict | None, column: dict | None = None) -> list[Event]:
+        """Terminliste (7, auch eingebettet in der Matrix) - gemeinsamer Filter wie im Editor
+        (frontend/lib/element-types/event-filter.ts, backend event_filter.py)."""
+        normalized = normalize_event_filter(event_filter, default_range_mode="future")
+        return filter_events(db, self._tenant_events(db, protocol.tenant_id), normalized, protocol=protocol, column=column)
 
-        Ältere Konfigurationen mit `event_only_current_cycle: true` entsprechen Offset 0
-        (identisch zu embeddedEventCycleOffset in frontend/lib/utils/cycle.ts).
-        """
-        offset = config.get("event_cycle_offset")
-        if isinstance(offset, (int, float)) and not isinstance(offset, bool):
-            return int(offset)
-        return 0 if bool(config.get("event_only_current_cycle", False)) else None
-
-    def _filter_event_list_events(self, db: Session, *, protocol, config: dict, extra_tag_filter: str | None = None) -> list[Event]:
-        """Filter einer Terminliste (Elementtyp 7), identisch zu eventRowsForBlock/matrix-embedded-block-editor im Frontend."""
-        tag_filters = [t.strip() for t in str(config.get("event_tag_filter") or "").lower().split(",") if t.strip()]
-        combined_extra_tag_filters = [t.strip() for t in str(extra_tag_filter or "").lower().split(",") if t.strip()]
-        only_from_protocol_date = bool(config.get("event_only_from_protocol_date", True))
-        only_before_protocol_date = bool(config.get("event_only_before_protocol_date", False))
-        cycle_offset = self._event_list_cycle_offset(config)
-        cycle_event_ids: set[int] | None = None
-        if cycle_offset is not None:
-            resolved_cycle = resolve_protocol_cycle(db, protocol)
-            if resolved_cycle:
-                cycle_cfg, cycle_year = resolved_cycle
-                cycle_event_ids = list_cycle_event_ids(db, cycle_cfg.id, cycle_year + cycle_offset)
-
-        filtered: list[Event] = []
-        for event in self._tenant_events(db, protocol.tenant_id):
-            event_end_date = event.event_end_date or event.event_date
-            event_tag_lower = (event.tag or "").lower()
-            if tag_filters and not any(t in event_tag_lower for t in tag_filters):
-                continue
-            if combined_extra_tag_filters and not any(t in event_tag_lower for t in combined_extra_tag_filters):
-                continue
-            if only_before_protocol_date and protocol.protocol_date and event_end_date >= protocol.protocol_date:
-                continue
-            elif not only_before_protocol_date and only_from_protocol_date and protocol.protocol_date and event_end_date < protocol.protocol_date:
-                continue
-            if cycle_event_ids is not None and event.id not in cycle_event_ids:
-                continue
-            filtered.append(event)
-        return filtered
-
-    def _event_list_content(self, db: Session, *, protocol, config: dict, extra_tag_filter: str | None = None) -> str:
+    def _event_list_content(self, db: Session, *, protocol, config: dict, column: dict | None = None) -> str:
         gray_past = bool(config.get("event_gray_past", True))
         show_tag_colors = bool(config.get("event_show_tag_colors", False))
         tag_config: dict = {}
@@ -1344,7 +1308,7 @@ Status: {protocol_status}
             if tenant is not None:
                 tag_config = tenant.tag_config_json or {}
         columns = self._event_list_columns(config)
-        events = self._filter_event_list_events(db, protocol=protocol, config=config, extra_tag_filter=extra_tag_filter)
+        events = self._filter_event_list_events(db, protocol=protocol, event_filter=config.get("event_filter"), column=column)
 
         column_specs: list[str] = []
         headers: list[str] = []
@@ -1963,20 +1927,12 @@ Status: {protocol_status}
         raw_cell = values.get(row_id)
         return raw_cell if isinstance(raw_cell, dict) else {}
 
-    def _matrix_row_type(self, row: dict) -> str:
-        """Resolve row_type from new or old schema."""
-        if row.get("row_type"):
-            return str(row["row_type"])
-        if row.get("embedded_element_type_id"):
-            return str(row["embedded_element_type_id"])
-        return str(row.get("value_type") or "text")
-
     def _matrix_row_value(self, db: Session, *, row: dict, cell: dict, protocol, column: dict) -> str:
         embedded_block = cell.get("embedded_block")
         if isinstance(embedded_block, dict) and embedded_block.get("element_type_id"):
             return self._matrix_embedded_block_content(db, embedded_block=embedded_block, protocol=protocol, column=column)
 
-        row_type = self._matrix_row_type(row)
+        row_type = str(row.get("row_type") or "text")
         # If row_type is a numeric string it refers to an embedded block element type
         _named_types = {"text", "participant", "participants", "event", "events"}
         if row_type not in _named_types:
@@ -2005,13 +1961,8 @@ Status: {protocol_status}
         # Der Editor rendert diese Zeile als eingebetteten Terminlisten-Block
         # (matrixEmbeddedBlockForRow -> matrix-embedded-block-editor), also gelten dieselben
         # Filter wie bei Elementtyp 7 und nicht die der "events"-Zeilen (_matrix_events).
-        row_config = row.get("row_config")
-        if not isinstance(row_config, dict):
-            row_config = row.get("embedded_configuration_json") if isinstance(row.get("embedded_configuration_json"), dict) else {}
-        column_tag_filter = None
-        if bool(row_config.get("event_use_column_tag_filter", False)) and isinstance(column, dict):
-            column_tag_filter = str(column.get("event_tag_filter") or column.get("title") or "").strip() or None
-        events = self._filter_event_list_events(db, protocol=protocol, config=row_config, extra_tag_filter=column_tag_filter)
+        row_config = row.get("row_config") if isinstance(row.get("row_config"), dict) else {}
+        events = self._filter_event_list_events(db, protocol=protocol, event_filter=row_config.get("event_filter"), column=column)
         if not events:
             return ""
         show_date = bool(row_config.get("event_show_date", True))
@@ -2113,10 +2064,7 @@ Status: {protocol_status}
             return "\n".join(parts)
 
         if element_type_id == 7:
-            column_tag_filter = None
-            if bool(config.get("event_use_column_tag_filter", False)) and isinstance(column, dict):
-                column_tag_filter = str(column.get("event_tag_filter") or column.get("title") or "").strip() or None
-            return self._event_list_content(db, protocol=protocol, config=config, extra_tag_filter=column_tag_filter)
+            return self._event_list_content(db, protocol=protocol, config=config, column=column)
 
         if element_type_id == 8:
             bullet_items = config.get("bullet_items") if isinstance(config.get("bullet_items"), list) else []
@@ -2211,36 +2159,9 @@ Status: {protocol_status}
 
     def _matrix_events(self, db: Session, *, row: dict, protocol, column: dict) -> list[Event]:
         """Termine einer "events"-Matrixzeile, identisch zu matrixEventsForRow im Frontend."""
-        # New schema: event filters live in row_config; old schema: directly on row
-        _row_config = row.get("row_config") if isinstance(row.get("row_config"), dict) else {}
-
-        def _setting(key: str):
-            value = row.get(key)
-            return value if value is not None else _row_config.get(key)
-
-        tag_filters_matrix = [t.strip() for t in str(_setting("event_tag_filter") or "").lower().split(",") if t.strip()]
-        column_tag_filters = [t.strip() for t in str(column.get("event_tag_filter") or "").lower().split(",") if t.strip()]
-        title_filter = str(_setting("event_title_filter") or "").strip().lower()
-        use_column_title_as_tag = _setting("use_column_title_as_tag") is not False
-        hide_past_events = _setting("hide_past_events") is not False
-        column_title = str(column.get("title") or "").strip().lower()
-
-        filtered: list[Event] = []
-        for event in self._tenant_events(db, protocol.tenant_id):
-            effective_end_date = event.event_end_date or event.event_date
-            if hide_past_events and protocol.protocol_date and effective_end_date < protocol.protocol_date:
-                continue
-            event_tag_lower_m = (event.tag or "").lower()
-            if tag_filters_matrix and not any(t in event_tag_lower_m for t in tag_filters_matrix):
-                continue
-            if column_tag_filters and not any(t in event_tag_lower_m for t in column_tag_filters):
-                continue
-            if use_column_title_as_tag and column_title and column_title not in event_tag_lower_m:
-                continue
-            if title_filter and title_filter not in event.title.lower():
-                continue
-            filtered.append(event)
-        return filtered
+        row_config = row.get("row_config") if isinstance(row.get("row_config"), dict) else {}
+        event_filter = normalize_event_filter(row_config.get("event_filter"), default_range_mode="future")
+        return filter_events(db, self._tenant_events(db, protocol.tenant_id), event_filter, protocol=protocol, column=column)
 
     def _event_inline_label(self, event: Event) -> str:
         if event.event_end_date and event.event_end_date != event.event_date:

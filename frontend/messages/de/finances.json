@@ -95,5 +95,17 @@
   "income": "Einnahme",
   "expense": "Ausgabe",
   "today": "Heute",
-  "bookedTo": "Wird auf <strong>{account}</strong> gebucht"
+  "bookedTo": "Wird auf <strong>{account}</strong> gebucht",
+  "tariffButton": "Bussentarif",
+  "tariffTitle": "Bussentarif",
+  "tariffDescription": "Gilt für alle Anwesenheitsblöcke, bei denen «Bussen aktiv» eingeschaltet ist.",
+  "tariffAccountLabel": "Bussenkonto",
+  "tariffAccountHelp": "Ohne Konto werden keine Bussen erzeugt.",
+  "tariffNoAccount": "Kein Konto (keine Bussen)",
+  "tariffLateLabel": "Betrag «zu spät»",
+  "tariffAbsentLabel": "Betrag «unentschuldigt»",
+  "tariffSaved": "Bussentarif gespeichert",
+  "tariffSaveFailed": "Bussentarif konnte nicht gespeichert werden",
+  "tariffSummary": "Tarif: zu spät {late} · unentschuldigt {absent} · Konto {account}",
+  "tariffNotSet": "Kein Bussentarif hinterlegt – Anwesenheitsblöcke erzeugen keine Bussen."
 }

@@ -1241,6 +1241,8 @@ export type ElementDefinitionBlock = {
   block_title: string | null;
   default_content: string | null;
   copy_from_last_protocol?: boolean;
+  /** Blocktitel im Export als Untertitel setzen (bis 0113 in configuration_json). */
+  title_as_subtitle?: boolean;
   // Lookup-table codes, deliberately kept as small numeric ids.
   element_type_id: number;
   render_type_id: number;
@@ -1283,11 +1285,19 @@ export type TemplateElementBlock = {
   export_visible: boolean;
   is_visible: boolean;
   title_as_subtitle: boolean;
+  /** Werte der Elementdefinition vor jedem Vorlagen-Override (für «weicht vom Default ab»). */
+  behavior_defaults?: Partial<Record<TemplateElementBehaviorField, boolean>>;
   sort_index: number;
   render_order: number | null;
   latex_template: string | null;
   configuration_json: Record<string, unknown>;
   created_at: string;
+};
+
+export type FineTariff = {
+  account_id: string | null;
+  amount_late: number;
+  amount_absent: number;
 };
 
 export type TemplateElementBehaviorField = "is_editable" | "is_visible" | "export_visible" | "copy_from_last_protocol" | "title_as_subtitle";

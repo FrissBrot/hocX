@@ -1330,6 +1330,24 @@ class UserProtocolScroll(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
 
 
+class FineTariff(Base):
+    """Zentraler Bussentarif eines Mandanten (0113_element_config_schema).
+
+    Vorher trug jeder Anwesenheitsblock eigene Beträge und ein eigenes Konto, sodass zwei
+    Vorlagen verschiedene Tarife haben konnten. Der Block wählt jetzt nur noch
+    «Bussen aktiv» (configuration_json.fines_enabled); Konto und Beträge kommen von hier.
+    """
+
+    __tablename__ = "fine_tariff"
+    __table_args__ = (Index("idx_fine_tariff_account", "account_id"),)
+
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    account_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("finance_account.id", ondelete="SET NULL"))
+    amount_late: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, server_default=text("0"))
+    amount_absent: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, server_default=text("0"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+
+
 class AttendanceFine(Base, TimestampMixin):
     __tablename__ = "attendance_fine"
     __table_args__ = (

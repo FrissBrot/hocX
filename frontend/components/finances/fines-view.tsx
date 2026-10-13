@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FineCreateModal } from "@/components/finances/fine-create-modal";
+import { FineTariffModal } from "@/components/finances/fine-tariff-modal";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
@@ -17,7 +18,7 @@ import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import type { Locale } from "@/i18n/locale-config.generated";
-import { AttendanceFineListItem, FinanceAccount } from "@/types/api";
+import { AttendanceFineListItem, FinanceAccount, FineTariff } from "@/types/api";
 
 const PAGE_SIZE = 50;
 
@@ -47,6 +48,17 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
   const [hasMore, setHasMore] = useState(initialFines.length === PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [tariff, setTariff] = useState<FineTariff | null>(null);
+  const [tariffOpen, setTariffOpen] = useState(false);
+
+  useEffect(() => {
+    if (ownOnly) return;
+    let cancelled = false;
+    browserApiFetch<FineTariff>("/api/fines/tariff")
+      .then((loaded) => { if (!cancelled) setTariff(loaded); })
+      .catch(() => { if (!cancelled) setTariff(null); });
+    return () => { cancelled = true; };
+  }, [ownOnly]);
 
   const accountMap = new Map(accounts.map((a) => [a.id, a]));
 
@@ -163,8 +175,27 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
         <div>
           <h1 className="page-title">{t("finesPageTitle")}</h1>
           <p className="muted">{ownOnly ? t("ownOnlyDescription") : t("allDescription")}</p>
+          {tariff ? (
+            <p className="muted">
+              {tariff.account_id
+                ? t("tariffSummary", {
+                    late: tariff.amount_late.toFixed(2),
+                    absent: tariff.amount_absent.toFixed(2),
+                    account: accountMap.get(tariff.account_id)?.name ?? t("unknownAccount"),
+                  })
+                : t("tariffNotSet")}
+            </p>
+          ) : null}
         </div>
+        {canWrite && tariff ? (
+          <button type="button" className="button-secondary" onClick={() => setTariffOpen(true)}>
+            {t("tariffButton")}
+          </button>
+        ) : null}
       </div>
+      {tariff ? (
+        <FineTariffModal open={tariffOpen} tariff={tariff} accounts={accounts} onClose={() => setTariffOpen(false)} onSaved={setTariff} />
+      ) : null}
 
       {hasNoFines ? (
         <EmptyState

@@ -21,6 +21,7 @@ from app.models import (
     Event,
     EventCycle,
     FinanceAccount,
+    FineTariff,
     FinanceTransaction,
     GroupEntity,
     Leader,
@@ -156,6 +157,7 @@ class TenantCloneService:
         part_map = self._clone_document_template_parts(db, source.id, new_tenant.id)
         document_template_map = self._clone_document_templates(db, source.id, new_tenant.id, part_map)
         finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
+        self._clone_fine_tariff(db, source.id, new_tenant.id, finance_account_map)
         # Cloned before element_definitions/templates (mirrors _clone_full_impl's ordering)
         # and its returned id map threaded through both, instead of the empty dict used
         # here before this fix (audit finding, 2026-08-25) - element/template
@@ -218,6 +220,7 @@ class TenantCloneService:
             db, list_definition_map=list_definition_map, participant_map=participant_map, event_map=event_map
         )
         finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
+        self._clone_fine_tariff(db, source.id, new_tenant.id, finance_account_map)
         # Abgabe-Element references ("event-<public_id>"/"entry-<public_id>" in
         # submission_upload_log.element_ref and protocol_todo.element_ref) - every cloned row
         # gets a fresh public_id, so these strings have to be rewritten old -> new.
@@ -449,6 +452,18 @@ class TenantCloneService:
             id_map[row.id] = new_row.id
         db.commit()
         return id_map
+
+    def _clone_fine_tariff(self, db: Session, source_tenant_id: int, new_tenant_id: int, finance_account_map: dict[int, int]) -> None:
+        tariff = db.get(FineTariff, source_tenant_id)
+        if tariff is None:
+            return
+        db.add(FineTariff(
+            tenant_id=new_tenant_id,
+            account_id=finance_account_map.get(tariff.account_id) if tariff.account_id else None,
+            amount_late=tariff.amount_late,
+            amount_absent=tariff.amount_absent,
+        ))
+        db.commit()
 
     def _clone_finance_accounts(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> dict[int, int]:
         rows = db.scalars(select(FinanceAccount).where(FinanceAccount.tenant_id == source_tenant_id)).all()

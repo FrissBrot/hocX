@@ -46,6 +46,7 @@ from app.models import (
     Event,
     EventCycle,
     FinanceAccount,
+    FineTariff,
     FinanceTransaction,
     GalleryImage,
     GroupEntity,
@@ -107,6 +108,7 @@ from app.services import (
     traefik_config_service,
 )
 from app.services.document_template_service import DocumentTemplateService
+from app.services.element_config import derive_fine_tariff, upgrade_snapshot_config, upgrade_template_element_config
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
     REDACTED_PASSWORD_HASH_MARKER,
@@ -356,6 +358,7 @@ class TenantImportService:
         list_definition_map = self._import_simple(ListDefinition, self._t("list_definition"), "list_definition", {"tenant_id": new_tenant.id})
         list_entry_map = self._import_list_entries(list_definition_map, participant_map, event_map)
         finance_account_map = self._import_simple(FinanceAccount, self._t("finance_account"), "finance_account", {"tenant_id": new_tenant.id})
+        self._import_fine_tariff(new_tenant.id, finance_account_map)
         element_definition_map = self._import_element_definitions(
             new_tenant.id, participant_map=participant_map, event_map=event_map,
             list_definition_map=list_definition_map, list_entry_map=list_entry_map, finance_account_map=finance_account_map,
@@ -844,10 +847,11 @@ class TenantImportService:
             new_row = self._build(TemplateElement, row, {
                 "template_id": new_template_id,
                 "element_definition_id": new_element_definition_id,
-                "configuration_json": remap_template_element_config(
+                # Exporte älterer Versionen können Altformate enthalten (element_config.py).
+                "configuration_json": upgrade_template_element_config(remap_template_element_config(
                     row.get("configuration_json"), participant_map=participant_map,
                     list_definition_map=list_definition_map, list_entry_map=list_entry_map,
-                ),
+                )),
             })
             self.db.add(new_row)
             self.db.flush()
@@ -1145,12 +1149,12 @@ class TenantImportService:
                 "protocol_element_id": new_protocol_element_id,
                 "template_element_block_id": template_element_block_map.get(data["template_element_block_id"]) if data.get("template_element_block_id") else None,
                 "element_definition_id": element_definition_map.get(data["element_definition_id"]) if data.get("element_definition_id") else None,
-                "configuration_snapshot_json": remap_block_configuration(
+                "configuration_snapshot_json": upgrade_snapshot_config(data.get("element_type_id"), remap_block_configuration(
                     data.get("configuration_snapshot_json"), participant_map=participant_map,
                     event_map=event_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
                     finance_account_map=finance_account_map,
                     participant_public_ids=self._participant_public_ids, event_public_ids=self._event_public_ids,
-                ),
+                )),
             })
             self.db.add(new_row)
             self.db.flush()
@@ -1435,6 +1439,29 @@ class TenantImportService:
                 "token_hash": calendar_feed_service.hash_token(token),
                 "token_encrypted": encrypt_secret(token),
             }))
+        self.db.commit()
+
+    def _import_fine_tariff(self, new_tenant_id: int, finance_account_map: dict[int, int]) -> None:
+        """Zentraler Bussentarif. Exporte vor 0113 kennen fine_tariff nicht - dann wird der
+        Tarif wie in der Migration aus den Anwesenheitsblöcken der Elementdefinitionen
+        abgeleitet (häufigster Wert), bevor element_config die Blockwerte entfernt."""
+        rows = self._t("fine_tariff")
+        if rows:
+            source = rows[0]
+            account_id = finance_account_map.get(source.get("account_id")) if source.get("account_id") is not None else None
+            amount_late = source.get("amount_late") or 0
+            amount_absent = source.get("amount_absent") or 0
+        else:
+            derived = derive_fine_tariff([row.get("configuration_json") for row in self._t("element_definition")])
+            if derived is None:
+                return
+            try:
+                account_id = finance_account_map.get(int(derived["account_id"]))
+            except (TypeError, ValueError):
+                account_id = None
+            amount_late = derived["amount_late"]
+            amount_absent = derived["amount_absent"]
+        self.db.add(FineTariff(tenant_id=new_tenant_id, account_id=account_id, amount_late=amount_late, amount_absent=amount_absent))
         self.db.commit()
 
     def _import_tenant_settings(self, new_tenant_id: int) -> None:

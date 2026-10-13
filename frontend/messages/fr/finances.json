@@ -95,5 +95,17 @@
   "income": "Recette",
   "expense": "Dépense",
   "today": "Aujourd’hui",
-  "bookedTo": "Comptabilisé sur <strong>{account}</strong>"
+  "bookedTo": "Comptabilisé sur <strong>{account}</strong>",
+  "tariffButton": "Barème des amendes",
+  "tariffTitle": "Barème des amendes",
+  "tariffDescription": "S’applique à tous les blocs de présence où « Amendes actives » est activé.",
+  "tariffAccountLabel": "Compte des amendes",
+  "tariffAccountHelp": "Sans compte, aucune amende n’est créée.",
+  "tariffNoAccount": "Aucun compte (pas d’amendes)",
+  "tariffLateLabel": "Montant « en retard »",
+  "tariffAbsentLabel": "Montant « non excusé »",
+  "tariffSaved": "Barème enregistré",
+  "tariffSaveFailed": "Impossible d’enregistrer le barème",
+  "tariffSummary": "Barème : retard {late} · non excusé {absent} · compte {account}",
+  "tariffNotSet": "Aucun barème défini – les blocs de présence ne créent pas d’amendes."
 }

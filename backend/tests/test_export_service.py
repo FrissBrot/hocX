@@ -232,7 +232,7 @@ def test_matrix_event_list_row_uses_event_list_filters(db):
 
     row = {
         "row_type": "7",
-        "row_config": {"event_only_before_protocol_date": True, "event_only_from_protocol_date": False, "event_show_date": False},
+        "row_config": {"event_filter": {"range": {"mode": "past"}}, "event_show_date": False},
     }
     content = ExportService()._matrix_event_row_value(db, row=row, protocol=protocol, column={"title": "Spalte A"})
 
@@ -241,16 +241,25 @@ def test_matrix_event_list_row_uses_event_list_filters(db):
 
 
 def test_matrix_events_row_applies_column_tag_filter_like_the_editor(db):
-    """matrixEventsForRow wendet column.event_tag_filter immer an (kommagetrennt), auch wenn
-    use_column_title_as_tag aus ist - der Export hat den Filter dann ignoriert."""
+    """Mit use_column_filter gilt der Spalten-Tag-Filter (kommagetrennt, «enthält»), ohne
+    eigenen Spalten-Tag-Filter der Spaltentitel - identisch zu matrixEventsForRow."""
     tenant, _template, protocol = _protocol_with_template_dir(db)
+    protocol.protocol_date = date(2026, 1, 1)
+    db.flush()
     _tagged_event(db, tenant.id, "Lager", date(2026, 2, 1), "lager")
     _tagged_event(db, tenant.id, "Hock", date(2026, 2, 2), "hock")
 
-    row = {"row_type": "events", "row_config": {"use_column_title_as_tag": False, "hide_past_events": True}}
-    events = ExportService()._matrix_events(db, row=row, protocol=protocol, column={"title": "X", "event_tag_filter": "lager, zelt"})
+    row = {"row_type": "events", "row_config": {"event_filter": {"range": {"mode": "future"}, "use_column_filter": True}}}
+    by_filter = ExportService()._matrix_events(db, row=row, protocol=protocol, column={"title": "X", "event_tag_filter": "lager, zelt"})
+    by_title = ExportService()._matrix_events(db, row=row, protocol=protocol, column={"title": "Hock"})
+    without_column_filter = ExportService()._matrix_events(
+        db, row={"row_type": "events", "row_config": {"event_filter": {"range": {"mode": "future"}}}}, protocol=protocol,
+        column={"title": "X", "event_tag_filter": "lager"},
+    )
 
-    assert [event.title for event in events] == ["Lager"]
+    assert [event.title for event in by_filter] == ["Lager"]
+    assert [event.title for event in by_title] == ["Hock"]
+    assert [event.title for event in without_column_filter] == ["Lager", "Hock"]
 
 
 def test_event_list_export_shows_cancelled_column_when_configured(db):
@@ -260,9 +269,10 @@ def test_event_list_export_shows_cancelled_column_when_configured(db):
     event.is_cancelled = True
     db.flush()
 
-    without = ExportService()._event_list_content(db, protocol=protocol, config={"event_only_from_protocol_date": False})
+    all_events = {"range": {"mode": "all"}}
+    without = ExportService()._event_list_content(db, protocol=protocol, config={"event_filter": all_events})
     with_column = ExportService()._event_list_content(
-        db, protocol=protocol, config={"event_only_from_protocol_date": False, "event_show_cancelled": True}
+        db, protocol=protocol, config={"event_filter": all_events, "event_show_cancelled": True}
     )
 
     assert "Abgesagt" not in without
@@ -475,12 +485,3 @@ def test_export_latex_session_notes_block_without_notes_shows_placeholder(db):
     _protocol, _export_dir, _latex_source, body_content = service._build_export_context(db, protocol.id)
 
     assert "Keine Sitzungsnotizen." in body_content
-
-
-def test_event_list_cycle_offset_relative_to_protocol_cycle():
-    """Terminlisten filtern relativ zum Protokollzyklus; die alte Einstellung «nur aktueller Zyklus» ist Offset 0."""
-    assert ExportService._event_list_cycle_offset({"event_cycle_offset": -2}) == -2
-    assert ExportService._event_list_cycle_offset({"event_cycle_offset": 0}) == 0
-    assert ExportService._event_list_cycle_offset({"event_only_current_cycle": True}) == 0
-    assert ExportService._event_list_cycle_offset({"event_cycle_offset": None, "event_only_current_cycle": False}) is None
-    assert ExportService._event_list_cycle_offset({}) is None

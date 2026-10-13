@@ -40,6 +40,7 @@ from sqlalchemy import Date, DateTime, Numeric
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
+from app.services.element_config import upgrade_definition_block
 from app.models import AppUser, ElementType, EventCategory, RenderType, Role, TodoStatus
 
 LOOKUP_COLUMNS: dict[str, dict[str, type]] = {
@@ -428,8 +429,10 @@ def remap_block_configuration(
 
     if config.get("linked_list_id") is not None:
         config["linked_list_id"] = list_definition_map.get(config["linked_list_id"])
-    if config.get("fine_account_id") is not None:
-        config["fine_account_id"] = finance_account_map.get(config["fine_account_id"])
+    # fine_account_id: nur noch in Exporten vor 0113 (danach zentral in fine_tariff).
+    for account_key in ("fine_account_id", "fine_list_account_id"):
+        if config.get(account_key) is not None:
+            config[account_key] = finance_account_map.get(config[account_key])
     if config.get("finance_account_id") is not None:
         config["finance_account_id"] = finance_account_map.get(config["finance_account_id"])
 
@@ -515,7 +518,9 @@ def remap_element_definition_config(
             list_definition_map=list_definition_map, list_entry_map=list_entry_map,
             finance_account_map=finance_account_map,
         )
-        new_blocks.append(new_block)
+        # Exporte älterer Versionen können Altformate enthalten - auf das aktuelle Schema
+        # heben (für bereits aktuelle Daten, z. B. beim Klonen, ein No-op).
+        new_blocks.append(upgrade_definition_block(new_block))
     config["blocks"] = new_blocks
     return config
 

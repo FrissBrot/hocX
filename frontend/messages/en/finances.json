@@ -95,5 +95,17 @@
   "income": "Income",
   "expense": "Expense",
   "today": "Today",
-  "bookedTo": "Booked to <strong>{account}</strong>"
+  "bookedTo": "Booked to <strong>{account}</strong>",
+  "tariffButton": "Fine rates",
+  "tariffTitle": "Fine rates",
+  "tariffDescription": "Applies to every attendance block with “Fines active” switched on.",
+  "tariffAccountLabel": "Fine account",
+  "tariffAccountHelp": "Without an account no fines are created.",
+  "tariffNoAccount": "No account (no fines)",
+  "tariffLateLabel": "Amount “late”",
+  "tariffAbsentLabel": "Amount “unexcused”",
+  "tariffSaved": "Fine rates saved",
+  "tariffSaveFailed": "Fine rates could not be saved",
+  "tariffSummary": "Rates: late {late} · unexcused {absent} · account {account}",
+  "tariffNotSet": "No fine rates set – attendance blocks create no fines."
 }
