@@ -253,6 +253,44 @@ def test_matrix_events_row_applies_column_tag_filter_like_the_editor(db):
     assert [event.title for event in events] == ["Lager"]
 
 
+def test_event_list_export_shows_cancelled_column_when_configured(db):
+    """event_show_cancelled wirkte nur im Editor (Spalte «Abgesagt»), der Export ignorierte es."""
+    tenant, _template, protocol = _protocol_with_template_dir(db)
+    event = _tagged_event(db, tenant.id, "Hock im Februar", date(2026, 2, 1), "hock")
+    event.is_cancelled = True
+    db.flush()
+
+    without = ExportService()._event_list_content(db, protocol=protocol, config={"event_only_from_protocol_date": False})
+    with_column = ExportService()._event_list_content(
+        db, protocol=protocol, config={"event_only_from_protocol_date": False, "event_show_cancelled": True}
+    )
+
+    assert "Abgesagt" not in without
+    assert "Abgesagt" in with_column
+    assert "abgesagt" in with_column
+
+
+def test_linked_list_export_highlights_empty_cells_when_configured(db):
+    """linked_list_highlight_empty wurde laut Hilfetext auch im PDF berücksichtigt, der Export
+    las den Schlüssel aber nie."""
+    tenant, _template, _protocol = _protocol_with_template_dir(db)
+    snapshot = {
+        "column_one_title": "Amt",
+        "column_one_value_type": "text",
+        "column_two_title": "Person",
+        "column_two_value_type": "text",
+        "entries": [{"id": 1, "sort_index": 1, "column_one_value": {"text_value": "Kassier"}, "column_two_value": {}}],
+    }
+
+    plain = ExportService()._linked_list_content(db, 0, {"list_snapshot": snapshot}, tenant.id)
+    highlighted = ExportService()._linked_list_content(
+        db, 0, {"list_snapshot": snapshot, "linked_list_highlight_empty": True}, tenant.id
+    )
+
+    assert "textcolor{orange}" not in plain
+    assert "Kassier & \\textbf{\\textcolor{orange}{---}}" in highlighted
+
+
 # --- edge case: empty protocol (no elements at all) --------------------------------------
 
 

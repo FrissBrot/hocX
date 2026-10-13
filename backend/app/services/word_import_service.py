@@ -2903,8 +2903,11 @@ class WordImportService:
                         ],
                     )
             elif mode == "auto" and auto_type == "events":
-                tag_filter = str(auto_source.get("event_tag_filter") or "").strip().lower()
-                candidate_events = [event for event in all_events if not tag_filter or (event.tag or "").lower() == tag_filter]
+                tag_filters = [t.strip() for t in str(auto_source.get("event_tag_filter") or "").lower().split(",") if t.strip()]
+                candidate_events = [
+                    event for event in all_events
+                    if not tag_filters or any(t in (event.tag or "").lower() for t in tag_filters)
+                ]
                 labeled_col_indices = [col_idx for col_idx, label in enumerate(doc_column_labels) if label]
 
                 def _event_column_score(col_idx: int, event: Event) -> float:

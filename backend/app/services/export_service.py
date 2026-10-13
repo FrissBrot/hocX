@@ -1269,6 +1269,8 @@ Status: {protocol_status}
         }
         if not any(columns.values()):
             columns["title"] = True
+        # «Abgesagt» ist eine Zusatzspalte wie im Editor und zählt nicht als Inhaltsspalte.
+        columns["cancelled"] = config.get("event_show_cancelled", False) is True
         return columns
 
     def _tenant_events(self, db: Session, tenant_id: int) -> list[Event]:
@@ -1361,6 +1363,9 @@ Status: {protocol_status}
         if columns["participant_count"]:
             column_specs.append("p{0.10\\textwidth}")
             headers.append("Teilnehmer")
+        if columns["cancelled"]:
+            column_specs.append("p{0.10\\textwidth}")
+            headers.append("Abgesagt")
 
         rows: list[str] = []
         for event in events:
@@ -1394,6 +1399,8 @@ Status: {protocol_status}
                 cells.append(self._escape_latex(event.description or "-"))
             if columns["participant_count"]:
                 cells.append(self._escape_latex(str(max(0, int(event.participant_count or 0)))))
+            if columns["cancelled"]:
+                cells.append("abgesagt" if event.is_cancelled else "-")
 
             if gray_past and protocol.protocol_date and event_end_date < protocol.protocol_date:
                 cells = [f"\\textcolor{{gray}}{{{cell}}}" for cell in cells]
@@ -1872,10 +1879,18 @@ Status: {protocol_status}
                 parts.append(f"{self._escape_latex(left_cell)} & {self._escape_latex(right_cell)} \\\\")
                 rendered_row_count += 1
         else:
+            # «Leere Werte hervorheben» (linked_list_highlight_empty) wie im Editor
+            # (structured-list-table.tsx): leere Zellen als hervorgehobener Strich.
+            highlight_empty = bool(config.get("linked_list_highlight_empty", False))
+
+            def _cell(value: object) -> str:
+                text = str(value or "")
+                if not text.strip() and highlight_empty:
+                    return "\\textbf{\\textcolor{orange}{---}}"
+                return self._escape_latex(text)
+
             for item in rendered_entries:
-                parts.append(
-                    f"{self._escape_latex(str(item['left_value']))} & {self._escape_latex(str(item['right_value']))} \\\\"
-                )
+                parts.append(f"{_cell(item['left_value'])} & {_cell(item['right_value'])} \\\\")
                 rendered_row_count += 1
         if rendered_row_count == 0:
             return ""

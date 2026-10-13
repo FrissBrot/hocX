@@ -230,6 +230,7 @@ def _sync_merge_matrix_columns(old_columns: list, fresh_columns: list, *, allow_
         merged.append({
             **old_column,
             "title": fresh_column.get("title"),
+            "title_placeholder": fresh_column.get("title_placeholder"),
             "event_tag_filter": fresh_column.get("event_tag_filter"),
             "sort_index": fresh_column.get("sort_index"),
             # Neue Vorlagen-Zeilen bekommen ihre Vorbelegung, erfasste Werte haben Vorrang.
@@ -2362,6 +2363,7 @@ class ProtocolService:
                         {
                             "id": column.get("id"),
                             "title": self._render_context_text(column.get("title") or "", repeat_context) or "",
+                            "title_placeholder": column.get("title_placeholder"),
                             "event_tag_filter": column.get("event_tag_filter"),
                             "sort_index": column.get("sort_index"),
                             "row_values": _matrix_build_row_values(column, matrix_rows),

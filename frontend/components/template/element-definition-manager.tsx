@@ -388,6 +388,7 @@ function blockKindForElementType(elementTypeId: string | number) {
     "11": "matrix",
     "12": "finance_balance",
     "13": "finance_transactions",
+    "14": "fine_list",
     "15": "chart",
     "16": "entry_exit",
     "17": "session_notes",
@@ -645,6 +646,7 @@ function blockFormFromBlock(block: ElementDefinitionBlock): BlockFormState {
         id: String(column.id ?? `matrix-column-${index + 1}`),
         title: String(column.title ?? ""),
         event_tag_filter: String(column.event_tag_filter ?? ""),
+        title_placeholder: String(column.title_placeholder ?? ""),
       }));
     })(),
   };
@@ -755,6 +757,7 @@ function blockPayload(form: BlockFormState): ElementDefinitionBlock {
               id: column.id || `matrix-column-${index + 1}`,
               title: column.title,
               event_tag_filter: column.event_tag_filter || null,
+              title_placeholder: column.title_placeholder?.trim() || null,
               sort_index: (index + 1) * 10,
             }))
           : [],
@@ -1058,7 +1061,7 @@ export function ElementDefinitionManager({
         const cycleConfig = cycleConfigs.find((c) => c.id === matrixDesignerForm.auto_source_cycle_config_id) ?? null;
         const todayIso = new Date().toISOString().slice(0, 10);
         const filtered = sortedAvailableEvents.filter((e) =>
-          (!tagFilters.length || tagFilters.includes(String(e.tag ?? "").trim().toLowerCase())) &&
+          (!tagFilters.length || tagFilters.some((tag) => String(e.tag ?? "").toLowerCase().includes(tag))) &&
           eventMatchesCycleFilter(e.cycle_assignments, cycleConfig, todayIso, matrixDesignerForm.auto_source_cycle_offset)
         );
         setMatrixPreviewColumns(filtered.map((e) => ({ id: `prev-e-${e.id}`, title: e.title })));
@@ -1702,6 +1705,8 @@ export function ElementDefinitionManager({
   }
 
 function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
+  // Der Typ-Default für «Im Protokoll editierbar» gilt nur beim Anlegen. Beim Bearbeiten
+  // bleibt die bewusst gesetzte Einstellung des Blocks erhalten.
   const nextEditable = !["5", "7", "9", "16"].includes(elementTypeId);
   if (mode === "create") {
     setCreateBlockForm((current) => ({
@@ -1721,7 +1726,6 @@ function applyBlockType(elementTypeId: string, mode: "create" | "edit") {
     setBlockForm((current) => ({
       ...current,
       element_type_id: elementTypeId,
-      is_editable: nextEditable,
       table_fields:
           ["6", "11"].includes(elementTypeId) && current.table_fields.length === 0
             ? [defaultFieldRow("1")]

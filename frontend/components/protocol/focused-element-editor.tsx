@@ -1133,7 +1133,8 @@ export function FocusedElementEditor({
 
   // Termin-Pool für automatische Termin-Spalten: mit Zyklus-Filter die vom Backend
   // geladenen Termine dieses Zyklus (availableEvents hält nur die neuesten 100 Termine
-  // des Mandanten), sonst availableEvents. Tagfilter: kommagetrennt, exakter Treffer.
+  // des Mandanten), sonst availableEvents. Tagfilter: kommagetrennt, «enthält» wie bei
+  // Terminliste, Wiederholung und Matrix-Terminzeilen.
   function matrixEventPool(blockConfig: Record<string, any>): EventSummary[] {
     const { eventTagFilter, cycleConfigId, cycleOffset } = matrixAutoSourceInfo(blockConfig);
     const pool = cycleConfigId
@@ -1141,7 +1142,7 @@ export function FocusedElementEditor({
       : availableEvents;
     const tagFilters = eventTagFilter.split(",").map((tag) => tag.trim()).filter(Boolean);
     return tagFilters.length
-      ? pool.filter((e) => tagFilters.includes(String(e.tag ?? "").trim().toLowerCase()))
+      ? pool.filter((e) => tagFilters.some((tag) => String(e.tag ?? "").toLowerCase().includes(tag)))
       : pool;
   }
 
