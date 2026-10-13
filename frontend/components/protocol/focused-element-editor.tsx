@@ -3100,7 +3100,7 @@ export function FocusedElementEditor({
                 const thisYear = new Date().getFullYear();
 
                 const filtered = txAll.filter((tx) => {
-                  if (filterType === "since_last_session") return !sinceDate || tx.transaction_date >= sinceDate;
+                  if (filterType === "since_last_session" || filterType === "since_date") return !sinceDate || tx.transaction_date >= sinceDate;
                   if (filterType === "this_year") return new Date(tx.transaction_date).getFullYear() === thisYear;
                   return true;
                 }).slice(0, filterType === "last_n" ? lastN : undefined);

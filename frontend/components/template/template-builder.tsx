@@ -132,7 +132,7 @@ function definitionTypeSummary(definition: ElementDefinition) {
   const labels = Array.from(
     new Set(
       definition.blocks
-        .map((block) => String(block.configuration_json?.block_type_code ?? block.title ?? "").trim())
+        .map((block) => String(block.title ?? "").trim())
         .filter(Boolean)
     )
   );
@@ -344,9 +344,12 @@ function blockBehaviorValues(block: TemplateElementBlock): Record<TemplateElemen
 
 function BehaviorIconRow({
   values,
+  defaults,
   onToggle,
 }: {
   values: Record<TemplateElementBehaviorField, boolean>;
+  /** Werte der Elementdefinition - abweichende Schalter werden markiert. */
+  defaults?: Partial<Record<TemplateElementBehaviorField, boolean>>;
   onToggle: (field: TemplateElementBehaviorField) => void;
 }) {
   const t = useTranslations("templates");
@@ -354,12 +357,13 @@ function BehaviorIconRow({
     <div className="behavior-icon-row">
       {behaviorIconFields(t).map(({ field, label, icon }) => {
         const active = values[field];
+        const overridden = defaults !== undefined && field in defaults && defaults[field] !== active;
         return (
           <button
             key={field}
             type="button"
-            className={`behavior-icon-button${active ? " behavior-icon-button-active" : ""}`}
-            title={label}
+            className={`behavior-icon-button${active ? " behavior-icon-button-active" : ""}${overridden ? " behavior-icon-button-overridden" : ""}`}
+            title={overridden ? t("editor.behaviorOverridden", { label }) : label}
             aria-pressed={active}
             onClick={() => onToggle(field)}
           >
@@ -736,7 +740,7 @@ export function TemplateEditor({
         definition.title,
         definition.description ?? "",
         definitionTypeSummary(definition),
-        ...definition.blocks.map((block) => String(block.title ?? block.configuration_json?.block_type_code ?? "")),
+        ...definition.blocks.map((block) => String(block.title ?? "")),
       ]
         .join(" ")
         .toLowerCase();
@@ -2089,6 +2093,7 @@ export function TemplateEditor({
                       <div className="template-element-behavior-row">
                         <BehaviorIconRow
                           values={item.behavior}
+                          defaults={item.blocks[0]?.behavior_defaults}
                           onToggle={(field) => void updateBlockBehavior(item.id, "element", field, !item.behavior[field])}
                         />
                         {item.blocks.length > 1 ? (
@@ -2156,6 +2161,7 @@ export function TemplateEditor({
                         <span className="muted">{blockDisplayLabel(block, tRoot)}</span>
                         <BehaviorIconRow
                           values={blockBehaviorValues(block)}
+                          defaults={block.behavior_defaults}
                           onToggle={(field) =>
                             void updateBlockBehavior(item.id, "block", field, !blockBehaviorValues(block)[field], block.id)
                           }

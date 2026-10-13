@@ -1482,7 +1482,7 @@ Status: {protocol_status}
         this_year = dt_module.date.today().year
         filtered = []
         for tx in all_txs:
-            if filter_type == "since_last_session":
+            if filter_type in ("since_last_session", "since_date"):
                 if since_date and str(tx.transaction_date) < since_date:
                     continue
             elif filter_type == "this_year":
