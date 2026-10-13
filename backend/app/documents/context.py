@@ -85,6 +85,7 @@ class AssetCollector:
     """Sammelt Bilder für den Compile-Root. Pfade erzeugt nur dieser Sammler."""
 
     files: dict[str, bytes] = field(default_factory=dict)
+    prefix: str = "img"
     _by_key: dict[str, str] = field(default_factory=dict)
 
     def add_image(self, source: Path | bytes, *, key: str | None = None, caption: str | None = None) -> ImageRef:
@@ -97,7 +98,7 @@ class AssetCollector:
         except Exception:  # noqa: BLE001 - kaputtes/unbekanntes Bild wird als «fehlt» gezeigt
             logger.info("Bild für Dokument nicht lesbar: %s", key or "bytes")
             return ImageRef(path="assets/missing.png", caption=caption, missing=True)
-        path = f"assets/img-{len(self.files) + 1}.{extension}"
+        path = f"assets/{self.prefix}-{len(self.files) + 1}.{extension}"
         self.files[path] = normalized
         if key:
             self._by_key[key] = path

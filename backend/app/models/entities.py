@@ -84,6 +84,9 @@ class Tenant(Base, TimestampMixin):
     billing_note: Mapped[str | None] = mapped_column(Text)
     # Auf der oeffentlichen Website unter "Im Einsatz bei" gelistet (0104_tenant_show_on_website).
     show_on_website: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    # Standardsprache erzeugter Dokumente (Dokument-Engine), pro Export überschreibbar.
+    # NULL = Standardsprache aus i18n/locales.json.
+    document_language: Mapped[str | None] = mapped_column(Text)
 
 
 class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
@@ -674,6 +677,114 @@ class DocumentTemplatePart(Base, TimestampMixin, UpdatedAtMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
 
 
+class DocumentStyle(Base, TimestampMixin, UpdatedAtMixin):
+    """Hausstil-Konfiguration eines Mandanten (Dokument-Engine). Anpassung nur über Daten:
+    ``style_key`` wählt den Stil im Repo, ``tokens_json`` folgt
+    app.documents.style_tokens.DocumentStyleTokens. ``version`` steigt bei jeder Änderung
+    und wird pro Export festgehalten (document_export.style_version)."""
+
+    __tablename__ = "document_style"
+    __table_args__ = (
+        CheckConstraint("style_key IN ('modern', 'classic', 'compact')", name="ck_document_style_key"),
+        CheckConstraint("version >= 1", name="ck_document_style_version_positive"),
+        Index("idx_document_style_tenant", "tenant_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    style_key: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'modern'"))
+    tokens_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+
+
+class DocumentStyleAsset(Base, TimestampMixin):
+    """Hochgeladene Schrift oder hochgeladenes Bild (Logo, Fussbild) für Hausstile. Kein Code:
+    Template-Dateien gibt es seit der Dokument-Engine nicht mehr."""
+
+    __tablename__ = "document_style_asset"
+    __table_args__ = (
+        CheckConstraint("kind IN ('image', 'font')", name="ck_document_style_asset_kind"),
+        Index("idx_document_style_asset_tenant", "tenant_id", "kind"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    original_name: Mapped[str | None] = mapped_column(Text)
+    mime_type: Mapped[str | None] = mapped_column(Text)
+    storage_path: Mapped[str] = mapped_column(Text, nullable=False)
+    file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    checksum_sha256: Mapped[str | None] = mapped_column(Text)
+    # Familienname aus der Schriftdatei (nur kind='font'), so referenziert der Stil die Schrift.
+    font_family: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentRecipe(Base, TimestampMixin, UpdatedAtMixin):
+    """Gespeicherte Zusammenstellung: Blöcke mit Parametern (app.documents.catalog.BlockSpec),
+    Hausstil, Export-Optionen und Sprache."""
+
+    __tablename__ = "document_recipe"
+    __table_args__ = (Index("idx_document_recipe_tenant", "tenant_id"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    document_type: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'custom'"))
+    blocks_json: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+    options_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    style_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_style.id", ondelete="SET NULL"))
+    language: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentExport(Base, TimestampMixin):
+    """Ein Datensatz pro erzeugtem PDF. ``public_id`` ist die Dokument-ID im PDF (Fusszeile,
+    XMP). Hält alles, was eine spätere Prüffunktion braucht: Inhalts-Hash, SHA-256 des
+    signierten PDFs, Version, Stil und Stil-Version, Signaturniveau."""
+
+    __tablename__ = "document_export"
+    __table_args__ = (
+        Index("idx_document_export_protocol", "protocol_id", "created_at"),
+        Index("idx_document_export_tenant", "tenant_id", "created_at"),
+        Index("idx_document_export_stored_file", "stored_file_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"))
+    document_type: Mapped[str] = mapped_column(Text, nullable=False)
+    recipe_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_recipe.id", ondelete="SET NULL"))
+    title: Mapped[str | None] = mapped_column(Text)
+    version_label: Mapped[str | None] = mapped_column(Text)
+    version_major: Mapped[int | None] = mapped_column(Integer)
+    version_minor: Mapped[int | None] = mapped_column(Integer)
+    content_hash: Mapped[str | None] = mapped_column(Text)
+    pdf_sha256: Mapped[str | None] = mapped_column(Text)
+    style_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_style.id", ondelete="SET NULL"))
+    style_key: Mapped[str | None] = mapped_column(Text)
+    style_version: Mapped[int | None] = mapped_column(Integer)
+    language: Mapped[str | None] = mapped_column(Text)
+    signature_level: Mapped[str | None] = mapped_column(Text)
+    stored_file_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="SET NULL"))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
 class ElementType(Base):
     __tablename__ = "element_type"
 
@@ -708,6 +819,7 @@ class Template(Base, TimestampMixin, UpdatedAtMixin):
     )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     document_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="RESTRICT"))
+    document_style_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_style.id", ondelete="SET NULL"))
     next_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
     last_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
     todo_due_event_tag: Mapped[str | None] = mapped_column(Text)
@@ -863,6 +975,7 @@ class Protocol(Base, TimestampMixin, UpdatedAtMixin):
     document_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="RESTRICT"))
     document_template_version: Mapped[int | None] = mapped_column(Integer)
     document_template_path_snapshot: Mapped[str | None] = mapped_column(Text)
+    document_style_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_style.id", ondelete="SET NULL"))
     protocol_number: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str | None] = mapped_column(Text)
     protocol_date: Mapped[date] = mapped_column(Date, nullable=False)
