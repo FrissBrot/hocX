@@ -5,9 +5,11 @@
 #import "base/page.typ": setup-page, title-page, toc-section
 #import "base/blocks.typ": render-blocks
 #import "modern.typ" as modern-style
+#import "classic.typ" as classic-style
+#import "compact.typ" as compact-style
 
 #let doc = json("/document.json")
-#let themes = (modern: modern-style.theme)
+#let themes = (modern: modern-style.theme, classic: classic-style.theme, compact: compact-style.theme)
 #let theme = themes.at(doc.style.key, default: modern-style.theme)(doc)
 #let ctx = (doc: doc, strings: doc.strings, theme: theme)
 
