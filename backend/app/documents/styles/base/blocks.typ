@@ -320,6 +320,7 @@
 
 #let block-title(ctx, b) = {
   let title = b.at("title", default: none)
+  if is-blank(title) and b.at("title_key", default: none) != none { title = tr(ctx, b.title_key) }
   if not is-blank(title) and b.type != "heading" {
     heading(level: b.level, outlined: b.level == 1 or ctx.doc.options.toc_block_titles)[#title]
   }

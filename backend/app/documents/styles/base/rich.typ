@@ -1,15 +1,17 @@
 // Rich-Text-Baum (model.py: RichBlock/RichInline) → Typst-Inhalt.
 // Jeder String wird als Text eingesetzt; es gibt keine Auswertung von Benutzerinhalt.
 
-#import "../lib/core.typ": colors, space, radius
+#import "../lib/core.typ": colors, space, radius, tr
 
-#let render-inline(nodes) = {
+#let render-inline(nodes, ctx: none) = {
   for node in nodes {
     if node.t == "br" {
       linebreak()
     } else {
       let body = if node.at("code", default: false) {
         box(fill: colors.neutral_bg, inset: (x: 2pt), outset: (y: 2pt), radius: 2pt, text(font: "DejaVu Sans Mono", size: 0.9em)[#node.v])
+      } else if node.at("key", default: none) != none and ctx != none {
+        tr(ctx, node.key)
       } else {
         [#node.v]
       }
@@ -29,10 +31,10 @@
   let gap = if compact { 0.35em } else { 0.65em }
   for node in nodes {
     if node.t == "p" {
-      block(above: gap, below: gap, render-inline(node.c))
+      block(above: gap, below: gap, render-inline(node.c, ctx: ctx))
     } else if node.t == "h" {
       let size = (1.2em, 1.1em, 1em).at(node.level - 1, default: 1em)
-      block(above: gap * 1.4, below: gap, sticky: true, text(weight: "bold", size: size, render-inline(node.c)))
+      block(above: gap * 1.4, below: gap, sticky: true, text(weight: "bold", size: size, render-inline(node.c, ctx: ctx)))
     } else if node.t == "ul" {
       list(spacing: gap, ..node.items.map(item => render-rich(item, ctx, compact: true)))
     } else if node.t == "ol" {

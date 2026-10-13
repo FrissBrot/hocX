@@ -46,6 +46,9 @@ class TextSpan(_Strict):
     s: bool = False
     code: bool = False
     href: str | None = None
+    # Fester Text (Schlüssel aus documentPdf), z. B. ein Status in einer Matrixzelle. Ersetzt
+    # ``v`` in der Darstellung; so bleibt der Inhalt sprachneutral.
+    key: str | None = None
 
 
 class LineBreak(_Strict):
@@ -110,7 +113,7 @@ def rich_is_empty(nodes: list[Any]) -> bool:
     """True, wenn ein Rich-Text-Baum keinen sichtbaren Text enthält."""
     for node in nodes or []:
         if isinstance(node, TextSpan):
-            if node.v.strip():
+            if node.v.strip() or node.key:
                 return False
         elif isinstance(node, (Paragraph, Heading)):
             if not rich_is_empty(node.c):
@@ -155,6 +158,8 @@ class Cell(_Strict):
     checked: bool = False
     tone: Tone = "default"
     strike: bool = False
+    # Übersetzter Zusatz (Text-Schlüssel), z. B. «nächste Sitzung» hinter einem Fälligkeitsdatum
+    note_key: str | None = None
 
 
 class TableColumn(_Strict):
@@ -208,6 +213,8 @@ class BlockBase(_Strict):
     """
 
     title: str | None = None
+    # Fester Titel (Schlüssel aus documentPdf), wenn ``title`` leer ist, z. B. «Sitzungs-Todos».
+    title_key: str | None = None
     hide_if_empty: bool = True
     level: int = Field(1, ge=1, le=4)
     empty: bool = False
@@ -595,6 +602,8 @@ class ChartBlock(BlockBase):
     kind: Literal["bar", "stacked_bar", "line", "donut"] = "bar"
     horizontal: bool = False
     categories: list[str] = Field(default_factory=list)
+    # Optional pro Kategorie ein Text-Schlüssel (übersetzt) statt des literalen Labels
+    category_keys: list[str | None] = Field(default_factory=list)
     category_tones: list[Tone] = Field(default_factory=list)
     series: list[ChartSeries] = Field(default_factory=list)
     value_format: Literal["number", "decimal", "amount"] = "number"

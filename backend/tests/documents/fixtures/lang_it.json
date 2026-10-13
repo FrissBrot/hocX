@@ -106,6 +106,7 @@
   "col.group": "Gruppo",
   "col.income": "Entrate",
   "col.joined": "Entrata",
+  "col.left": "Uscita",
   "col.location": "Luogo",
   "col.month": "Mese",
   "col.name": "Nome",
@@ -136,6 +137,8 @@
   "docType.protocol": "Verbale",
   "docType.statistics": "Rapporto annuale",
   "docType.todos": "Elenco dei compiti",
+  "due.lastSession": "ultima seduta",
+  "due.nextSession": "prossima seduta",
   "empty.attendance": "Nessuna presenza registrata.",
   "empty.attendance_matrix": "Nessuna seduta nel periodo.",
   "empty.attendance_sheet": "Nessuna persona.",
@@ -209,6 +212,8 @@
   "label.subtotal": "Subtotale",
   "label.total": "Totale",
   "label.yes": "Sì",
+  "memberStatus.active": "Attivo",
+  "memberStatus.inactive": "Inattivo",
   "month.1": "gennaio",
   "month.10": "ottobre",
   "month.11": "novembre",
@@ -227,6 +232,10 @@
   "protocolStatus.held": "Svolto",
   "protocolStatus.planned": "Pianificato",
   "protocolStatus.prepared": "Preparato",
+  "role.admin": "Amministrazione",
+  "role.kassier": "Cassa",
+  "role.reader": "Lettura",
+  "role.writer": "Modifica",
   "signature.line": "Firmato digitalmente da hocX · ID documento {id} · Versione {version}",
   "signature.lineNoVersion": "Firmato digitalmente da hocX · ID documento {id}",
   "signature.preview": "Anteprima · non firmato",
@@ -257,6 +266,7 @@
  "blocks": [
   {
    "title": "Pendenzen",
+   "title_key": null,
    "hide_if_empty": true,
    "level": 1,
    "empty": false,
@@ -307,7 +317,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -317,7 +328,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -327,7 +339,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -337,7 +350,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          }
         ],
         "muted": false,
@@ -353,7 +367,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -363,7 +378,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -373,7 +389,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -383,7 +400,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          }
         ],
         "muted": false,
@@ -399,7 +417,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -409,7 +428,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -419,7 +439,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -429,7 +450,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          }
         ],
         "muted": false,
@@ -445,7 +467,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -455,7 +478,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -465,7 +489,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -475,7 +500,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          }
         ],
         "muted": false,
@@ -491,6 +517,7 @@
   },
   {
    "title": null,
+   "title_key": null,
    "hide_if_empty": true,
    "level": 1,
    "empty": false,

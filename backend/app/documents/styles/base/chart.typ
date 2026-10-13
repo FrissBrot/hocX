@@ -11,6 +11,15 @@
   else { "" }
 }
 
+// Kategorien: Text-Schlüssel (übersetzt) vor literalem Label
+#let category-labels-of(ctx, chart) = {
+  let keys = chart.at("category_keys", default: ())
+  chart.categories.enumerate().map(((index, label)) => {
+    let key = keys.at(index, default: none)
+    if key != none { tr(ctx, key) } else { label }
+  })
+}
+
 #let nice-max(value) = {
   if value <= 0 { return 1 }
   let exponent = calc.floor(calc.log(value, base: 10))
@@ -31,7 +40,7 @@
 
 #let horizontal-bars(ctx, chart, stacked) = {
   let palette = series-colors(ctx, chart)
-  let categories = chart.categories
+  let categories = category-labels-of(ctx, chart)
   let totals = categories.enumerate().map(((index, _)) => {
     let values = chart.series.map(series => series.values.at(index, default: 0))
     if stacked { values.sum(default: 0) } else { calc.max(0, ..values) }
@@ -83,14 +92,15 @@
   )
 }
 
-#let category-labels(chart) = {
-  let count = chart.categories.len()
+#let category-labels(ctx, chart) = {
+  let labels = category-labels-of(ctx, chart)
+  let count = labels.len()
   let rotated = count > 8
   grid(
     columns: (auto, ..range(count).map(_ => 1fr)),
     column-gutter: 0.4em,
     [],
-    ..chart.categories.map(category => align(center, text(size: 0.7em, fill: colors.muted, if rotated { rotate(-40deg, reflow: true)[#category] } else [#category]))),
+    ..labels.map(category => align(center, text(size: 0.7em, fill: colors.muted, if rotated { rotate(-40deg, reflow: true)[#category] } else [#category]))),
   )
 }
 
@@ -114,7 +124,7 @@
       }
     }),
   ))
-  category-labels(chart)
+  category-labels(ctx, chart)
   if chart.series.len() > 1 {
     legend(chart.series.enumerate().map(((index, series)) => (palette.at(index), series-label(ctx, series))))
   }
@@ -141,7 +151,7 @@
       }
     }
   }))
-  category-labels(chart)
+  category-labels(ctx, chart)
   legend(chart.series.enumerate().map(((index, series)) => (palette.at(index), series-label(ctx, series))))
 }
 
@@ -181,7 +191,7 @@
     }),
     {
       set text(size: 0.9em)
-      stack(spacing: 0.5em, ..chart.categories.enumerate().map(((index, category)) => {
+      stack(spacing: 0.5em, ..category-labels-of(ctx, chart).enumerate().map(((index, category)) => {
         let value = values.at(index, default: 0)
         let share = if total > 0 { calc.round(value / total * 100) } else { 0 }
         box[#swatch(palette.at(index)) #h(0.3em) #category #h(0.4em) #text(fill: colors.muted)[#format-value(value, chart.value_format) (#share%)]]

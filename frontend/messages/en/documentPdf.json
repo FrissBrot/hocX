@@ -91,7 +91,8 @@
     "sessionsWithParticipants": "With participants",
     "avgParticipants": "Avg. participants",
     "total": "Total",
-    "joined": "Joined"
+    "joined": "Joined",
+    "left": "Left"
   },
   "group": {
     "unassigned": "Unassigned",
@@ -254,5 +255,19 @@
     "stat_table": "No data.",
     "qr_link": "No link.",
     "generic_table": "No entries."
+  },
+  "due": {
+    "nextSession": "next meeting",
+    "lastSession": "last meeting"
+  },
+  "role": {
+    "admin": "Administrator",
+    "writer": "Editor",
+    "reader": "Reader",
+    "kassier": "Treasurer"
+  },
+  "memberStatus": {
+    "active": "Active",
+    "inactive": "Inactive"
   }
 }

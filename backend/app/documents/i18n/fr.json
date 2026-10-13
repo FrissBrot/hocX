@@ -78,6 +78,7 @@
     "group": "Groupe",
     "income": "Recettes",
     "joined": "Entrée",
+    "left": "Sortie",
     "location": "Lieu",
     "month": "Mois",
     "name": "Nom",
@@ -110,6 +111,10 @@
     "protocol": "Procès-verbal",
     "statistics": "Rapport annuel",
     "todos": "Liste des tâches"
+  },
+  "due": {
+    "lastSession": "dernière séance",
+    "nextSession": "prochaine séance"
   },
   "empty": {
     "attendance": "Aucune présence saisie.",
@@ -198,6 +203,10 @@
     "total": "Total",
     "yes": "Oui"
   },
+  "memberStatus": {
+    "active": "Actif",
+    "inactive": "Inactif"
+  },
   "month": {
     "1": "janvier",
     "10": "octobre",
@@ -221,6 +230,12 @@
     "held": "Tenu",
     "planned": "Planifié",
     "prepared": "Préparé"
+  },
+  "role": {
+    "admin": "Administration",
+    "kassier": "Caisse",
+    "reader": "Lecture",
+    "writer": "Édition"
   },
   "signature": {
     "line": "Signé numériquement par hocX · ID du document {id} · Version {version}",

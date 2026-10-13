@@ -106,6 +106,7 @@
   "col.group": "Gruppe",
   "col.income": "Einnahmen",
   "col.joined": "Eintritt",
+  "col.left": "Austritt",
   "col.location": "Ort",
   "col.month": "Monat",
   "col.name": "Name",
@@ -136,6 +137,8 @@
   "docType.protocol": "Protokoll",
   "docType.statistics": "Jahresbericht",
   "docType.todos": "Pendenzenliste",
+  "due.lastSession": "letzte Sitzung",
+  "due.nextSession": "nächste Sitzung",
   "empty.attendance": "Keine Anwesenheit erfasst.",
   "empty.attendance_matrix": "Keine Sitzungen im Zeitraum.",
   "empty.attendance_sheet": "Keine Personen.",
@@ -209,6 +212,8 @@
   "label.subtotal": "Zwischensumme",
   "label.total": "Total",
   "label.yes": "Ja",
+  "memberStatus.active": "Aktiv",
+  "memberStatus.inactive": "Inaktiv",
   "month.1": "Januar",
   "month.10": "Oktober",
   "month.11": "November",
@@ -227,6 +232,10 @@
   "protocolStatus.held": "Durchgeführt",
   "protocolStatus.planned": "Geplant",
   "protocolStatus.prepared": "Vorbereitet",
+  "role.admin": "Administration",
+  "role.kassier": "Kasse",
+  "role.reader": "Lesen",
+  "role.writer": "Bearbeitung",
   "signature.line": "Digital signiert von hocX · Dokument-ID {id} · Version {version}",
   "signature.lineNoVersion": "Digital signiert von hocX · Dokument-ID {id}",
   "signature.preview": "Vorschau · nicht signiert",
@@ -257,6 +266,7 @@
  "blocks": [
   {
    "title": null,
+   "title_key": null,
    "hide_if_empty": false,
    "level": 1,
    "empty": true,
@@ -265,6 +275,7 @@
   },
   {
    "title": null,
+   "title_key": null,
    "hide_if_empty": false,
    "level": 1,
    "empty": true,
@@ -286,6 +297,7 @@
   },
   {
    "title": null,
+   "title_key": null,
    "hide_if_empty": false,
    "level": 1,
    "empty": true,
@@ -307,6 +319,7 @@
   },
   {
    "title": null,
+   "title_key": null,
    "hide_if_empty": false,
    "level": 1,
    "empty": true,
@@ -316,6 +329,7 @@
   },
   {
    "title": null,
+   "title_key": null,
    "hide_if_empty": false,
    "level": 1,
    "empty": true,
@@ -323,12 +337,14 @@
    "kind": "bar",
    "horizontal": false,
    "categories": [],
+   "category_keys": [],
    "category_tones": [],
    "series": [],
    "value_format": "number"
   },
   {
    "title": null,
+   "title_key": null,
    "hide_if_empty": false,
    "level": 1,
    "empty": true,
@@ -338,6 +354,7 @@
   },
   {
    "title": null,
+   "title_key": null,
    "hide_if_empty": false,
    "level": 1,
    "empty": true,

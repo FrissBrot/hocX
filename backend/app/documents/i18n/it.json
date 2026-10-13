@@ -78,6 +78,7 @@
     "group": "Gruppo",
     "income": "Entrate",
     "joined": "Entrata",
+    "left": "Uscita",
     "location": "Luogo",
     "month": "Mese",
     "name": "Nome",
@@ -110,6 +111,10 @@
     "protocol": "Verbale",
     "statistics": "Rapporto annuale",
     "todos": "Elenco dei compiti"
+  },
+  "due": {
+    "lastSession": "ultima seduta",
+    "nextSession": "prossima seduta"
   },
   "empty": {
     "attendance": "Nessuna presenza registrata.",
@@ -198,6 +203,10 @@
     "total": "Totale",
     "yes": "Sì"
   },
+  "memberStatus": {
+    "active": "Attivo",
+    "inactive": "Inattivo"
+  },
   "month": {
     "1": "gennaio",
     "10": "ottobre",
@@ -221,6 +230,12 @@
     "held": "Svolto",
     "planned": "Pianificato",
     "prepared": "Preparato"
+  },
+  "role": {
+    "admin": "Amministrazione",
+    "kassier": "Cassa",
+    "reader": "Lettura",
+    "writer": "Modifica"
   },
   "signature": {
     "line": "Firmato digitalmente da hocX · ID documento {id} · Versione {version}",

@@ -91,7 +91,8 @@
     "sessionsWithParticipants": "Avec participants",
     "avgParticipants": "Moy. participants",
     "total": "Total",
-    "joined": "Entrée"
+    "joined": "Entrée",
+    "left": "Sortie"
   },
   "group": {
     "unassigned": "Non attribué",
@@ -254,5 +255,19 @@
     "stat_table": "Aucune donnée.",
     "qr_link": "Aucun lien.",
     "generic_table": "Aucune entrée."
+  },
+  "due": {
+    "nextSession": "prochaine séance",
+    "lastSession": "dernière séance"
+  },
+  "role": {
+    "admin": "Administration",
+    "writer": "Édition",
+    "reader": "Lecture",
+    "kassier": "Caisse"
+  },
+  "memberStatus": {
+    "active": "Actif",
+    "inactive": "Inactif"
   }
 }

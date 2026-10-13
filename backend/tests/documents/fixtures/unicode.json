@@ -106,6 +106,7 @@
   "col.group": "Gruppe",
   "col.income": "Einnahmen",
   "col.joined": "Eintritt",
+  "col.left": "Austritt",
   "col.location": "Ort",
   "col.month": "Monat",
   "col.name": "Name",
@@ -136,6 +137,8 @@
   "docType.protocol": "Protokoll",
   "docType.statistics": "Jahresbericht",
   "docType.todos": "Pendenzenliste",
+  "due.lastSession": "letzte Sitzung",
+  "due.nextSession": "nächste Sitzung",
   "empty.attendance": "Keine Anwesenheit erfasst.",
   "empty.attendance_matrix": "Keine Sitzungen im Zeitraum.",
   "empty.attendance_sheet": "Keine Personen.",
@@ -209,6 +212,8 @@
   "label.subtotal": "Zwischensumme",
   "label.total": "Total",
   "label.yes": "Ja",
+  "memberStatus.active": "Aktiv",
+  "memberStatus.inactive": "Inaktiv",
   "month.1": "Januar",
   "month.10": "Oktober",
   "month.11": "November",
@@ -227,6 +232,10 @@
   "protocolStatus.held": "Durchgeführt",
   "protocolStatus.planned": "Geplant",
   "protocolStatus.prepared": "Vorbereitet",
+  "role.admin": "Administration",
+  "role.kassier": "Kasse",
+  "role.reader": "Lesen",
+  "role.writer": "Bearbeitung",
   "signature.line": "Digital signiert von hocX · Dokument-ID {id} · Version {version}",
   "signature.lineNoVersion": "Digital signiert von hocX · Dokument-ID {id}",
   "signature.preview": "Vorschau · nicht signiert",
@@ -257,6 +266,7 @@
  "blocks": [
   {
    "title": "Ħ ẞ Ç ø Ł Ж λ ✓ € £ 😀 👍🏽 🎉 🇨🇭 — „Zitat“ «Guillemets» #set $x$ *a* _b_ @ref <tag> `c` \\ [x] {y}",
+   "title_key": null,
    "hide_if_empty": true,
    "level": 1,
    "empty": false,
@@ -272,7 +282,8 @@
        "i": false,
        "s": false,
        "code": false,
-       "href": null
+       "href": null,
+       "key": null
       }
      ]
     }
@@ -280,6 +291,7 @@
   },
   {
    "title": null,
+   "title_key": null,
    "hide_if_empty": true,
    "level": 1,
    "empty": false,
@@ -291,6 +303,7 @@
   },
   {
    "title": "Pendenzen",
+   "title_key": null,
    "hide_if_empty": true,
    "level": 1,
    "empty": false,
@@ -341,7 +354,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -351,7 +365,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -361,7 +376,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -371,7 +387,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          }
         ],
         "muted": false,
@@ -387,7 +404,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -397,7 +415,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -407,7 +426,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -417,7 +437,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          }
         ],
         "muted": false,

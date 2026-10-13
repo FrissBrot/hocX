@@ -49,6 +49,7 @@
   let kind = cell.at("k", default: "text")
   let body = if kind == "status" and cell.at("status", default: none) != none {
     status-dot(ctx, cell.status)
+    if cell.at("v", default: "") != "" { text(fill: colors.muted)[ (#cell.v)] }
   } else if kind == "tags" {
     cell.tags.map(tag => tag-chip(ctx, tag)).join(h(0.25em))
   } else if kind == "rich" {
@@ -58,7 +59,11 @@
   } else if kind == "blank" {
     box(width: 100%, height: 1.8em)
   } else {
-    [#cell.at("v", default: "")]
+    let value = cell.at("v", default: "")
+    let note = cell.at("note_key", default: none)
+    if note == none { [#value] }
+    else if value == "" { tr(ctx, note) }
+    else { [#value (#tr(ctx, note))] }
   }
   if cell.at("strike", default: false) { body = strike(body) }
   let tone = cell.at("tone", default: "default")

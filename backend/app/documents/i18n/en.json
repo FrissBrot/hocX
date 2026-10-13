@@ -78,6 +78,7 @@
     "group": "Group",
     "income": "Income",
     "joined": "Joined",
+    "left": "Left",
     "location": "Location",
     "month": "Month",
     "name": "Name",
@@ -110,6 +111,10 @@
     "protocol": "Protocol",
     "statistics": "Annual report",
     "todos": "To-do list"
+  },
+  "due": {
+    "lastSession": "last meeting",
+    "nextSession": "next meeting"
   },
   "empty": {
     "attendance": "No attendance recorded.",
@@ -198,6 +203,10 @@
     "total": "Total",
     "yes": "Yes"
   },
+  "memberStatus": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
   "month": {
     "1": "January",
     "10": "October",
@@ -221,6 +230,12 @@
     "held": "Held",
     "planned": "Planned",
     "prepared": "Prepared"
+  },
+  "role": {
+    "admin": "Administrator",
+    "kassier": "Treasurer",
+    "reader": "Reader",
+    "writer": "Editor"
   },
   "signature": {
     "line": "Digitally signed by hocX · Document ID {id} · Version {version}",

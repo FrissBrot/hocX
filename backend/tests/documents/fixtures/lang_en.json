@@ -106,6 +106,7 @@
   "col.group": "Group",
   "col.income": "Income",
   "col.joined": "Joined",
+  "col.left": "Left",
   "col.location": "Location",
   "col.month": "Month",
   "col.name": "Name",
@@ -136,6 +137,8 @@
   "docType.protocol": "Protocol",
   "docType.statistics": "Annual report",
   "docType.todos": "To-do list",
+  "due.lastSession": "last meeting",
+  "due.nextSession": "next meeting",
   "empty.attendance": "No attendance recorded.",
   "empty.attendance_matrix": "No meetings in this period.",
   "empty.attendance_sheet": "No people.",
@@ -209,6 +212,8 @@
   "label.subtotal": "Subtotal",
   "label.total": "Total",
   "label.yes": "Yes",
+  "memberStatus.active": "Active",
+  "memberStatus.inactive": "Inactive",
   "month.1": "January",
   "month.10": "October",
   "month.11": "November",
@@ -227,6 +232,10 @@
   "protocolStatus.held": "Held",
   "protocolStatus.planned": "Planned",
   "protocolStatus.prepared": "Prepared",
+  "role.admin": "Administrator",
+  "role.kassier": "Treasurer",
+  "role.reader": "Reader",
+  "role.writer": "Editor",
   "signature.line": "Digitally signed by hocX · Document ID {id} · Version {version}",
   "signature.lineNoVersion": "Digitally signed by hocX · Document ID {id}",
   "signature.preview": "Preview · not signed",
@@ -257,6 +266,7 @@
  "blocks": [
   {
    "title": "Pendenzen",
+   "title_key": null,
    "hide_if_empty": true,
    "level": 1,
    "empty": false,
@@ -307,7 +317,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -317,7 +328,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -327,7 +339,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -337,7 +350,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          }
         ],
         "muted": false,
@@ -353,7 +367,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -363,7 +378,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -373,7 +389,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -383,7 +400,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          }
         ],
         "muted": false,
@@ -399,7 +417,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -409,7 +428,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -419,7 +439,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -429,7 +450,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          }
         ],
         "muted": false,
@@ -445,7 +467,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -455,7 +478,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -465,7 +489,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          },
          {
           "k": "text",
@@ -475,7 +500,8 @@
           "rich": [],
           "checked": false,
           "tone": "default",
-          "strike": false
+          "strike": false,
+          "note_key": null
          }
         ],
         "muted": false,
@@ -491,6 +517,7 @@
   },
   {
    "title": null,
+   "title_key": null,
    "hide_if_empty": true,
    "level": 1,
    "empty": false,
