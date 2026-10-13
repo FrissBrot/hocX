@@ -357,7 +357,12 @@ export function RowDesigner({
                             >
                               <span className="matrix-designer-cell-text">
                                 {row.row_type === "events" && !isAuto
-                                  ? columnFilterTags(column as MatrixColumn).join(", ") || t("matrix.allEvents")
+                                  ? (() => {
+                                      // Gleiche Regel wie im Protokoll: Zeilen-Tags, plus Spaltenfilter nur mit «Spalten-Tagfilter anwenden».
+                                      const rowFilter = normalizeEventFilter(row.row_config.event_filter, "future");
+                                      const tags = [...rowFilter.tags, ...(rowFilter.use_column_filter ? columnFilterTags(column as MatrixColumn) : [])];
+                                      return tags.join(", ") || t("matrix.allEvents");
+                                    })()
                                   : row.auto_source_field
                                   ? t(`autoField.${row.auto_source_field}`)
                                   : typeLabel(row.row_type)}
