@@ -11,7 +11,8 @@ flowchart LR
   P[Provider<br/>Python] --> M[Dokumentmodell<br/>Pydantic/JSON]
   M --> S[Hausstil<br/>Typst]
   S --> PDF[PDF/A-2b]
-  PDF --> SIG[PAdES-Signatur<br/>pyHanko]
+  PDF --> REG[Dokumentenregister<br/>SHA-256]
+  REG -.-> VER[Prüfseite<br/>Abgabebox /verify]
 ```
 
 **Grundidee:** Es gibt nicht mehr verschiedene Exporte, sondern eine Engine. Jedes Dokument
@@ -77,9 +78,8 @@ zeichnete daraus acht Diagramme: `attendance_over_time`, `attendance_by_particip
   `typst.Fonts(include_system_fonts, include_embedded_fonts, font_paths)` lässt sich
   wiederverwenden. Fehler kommen als `typst.TypstError` (`message`, `hints`, `trace`),
   Warnungen über `compile_with_warnings` als `TypstWarning`.
-- `pyHanko==0.37.0` mit `pyhanko-certvalidator==0.32.1`: `PdfSigner`,
-  `PdfSignatureMetadata(subfilter=PADES)`, `HTTPTimeStamper` für B-T,
-  `validate_pdf_signature` für die Tests.
+- `pypdf` (Laufzeit): ergänzt das XMP-Paket als inkrementelles Update.
+- `@preview/tiaoma:0.3.0` (Typst-Paket, vendored, MIT): QR-Codes als Vektor.
 
 ## Architektur
 
@@ -97,7 +97,7 @@ backend/app/documents/
   builder.py            Rezept/Typ/Protokoll → Dokument (ruft Provider auf)
   hashing.py            Kanonische Serialisierung, Inhalts-Hash
   renderer.py           Typst-Prozess-Pool, Compile-Root, PDF/PNG, Fehlerzuordnung
-  signing.py            PAdES-Signatur, XMP-Metadaten
+  xmp.py                hocX-Felder im XMP (inkrementell, pypdf)
   service.py            Orchestrierung: bauen → versionieren → rendern → signieren → speichern
   exports.py            CSV/XLSX/ICS/Markdown aus demselben Modell
   providers/            ein Modul pro Datenquelle (protocol, todos, events, lists,
@@ -118,7 +118,7 @@ backend/app/documents/
 - `options`: Titelseite, TOC, Nummerierung, Format (A4 hoch/quer), Wasserzeichen.
 - `style`: Stil-Schlüssel (`modern`/`classic`/`compact`) und validierte Tokens.
 - `strings`: alle festen Texte der gewählten Sprache (Typst schlägt nur nach).
-- `render`: Dokument-ID, Signaturzeile ja/nein, Erstellzeitpunkt (nicht im Inhalts-Hash).
+- `render`: Dokument-ID, Kurz-ID, Prüf-URL und -Link, Vorschau ja/nein (nicht im Inhalts-Hash).
 - `blocks`: diskriminierte Union über `type`; jeder Block hat `title`, `hide_if_empty`
   (Standard an) und `level`.
 
@@ -147,7 +147,7 @@ Neutral- und Statusfarben, Abstände und Radien stammen aus `design/tokens.css` 
   Wall-Clock-Timeout (bei Überschreitung wird der Pool beendet und neu gestartet) und
   Speicherlimit (`RLIMIT_AS`) pro Worker. Ein CPU-Limit pro Prozess entfällt bewusst: es
   summiert sich über die Lebensdauer eines Workers.
-- PDF als PDF/A-2b; Vorschau als PNG (erste N Seiten), ohne Signatur und Speicherung.
+- PDF als PDF/A-2b; Vorschau als PNG (erste N Seiten), ohne Register-Eintrag und Speicherung.
 - Fehler: Schlägt der Compile fehl, wird blockweise nachkompiliert, um den verursachenden
   Block zu finden. Der Benutzer sieht eine übersetzte Meldung mit Blockname, Details gehen
   per `record_system_error` ins Admin-Log.
@@ -161,34 +161,109 @@ Neutral- und Statusfarben, Abstände und Radien stammen aus `design/tokens.css` 
 - Weicht der Hash vom letzten Protokoll-Export ab, steigt der passende Zähler **vor** dem
   Rendern. Pro Export ein Datensatz in `document_export`.
 
-### Signatur
+### Echtheitsprüfung (Dokumentenregister)
 
-PAdES B-B (mit `DOCUMENT_SIGNING_TSA_URL` B-T) per pyHanko als inkrementelles Update nach der
-PDF/A-Erzeugung. Vorher werden in einem ersten inkrementellen Update die XMP-Metadaten um
-den Namespace `https://hocx.ch/ns/document/1.0/` (Präfix `hocx`, inkl. PDF/A-Extension-Schema)
-ergänzt: Dokument-ID, Mandant, Dokumenttyp, Version, Inhalts-Hash.
+hocX signiert keine PDFs. Stattdessen wird jedes ausgelieferte PDF registriert, und eine
+öffentliche Prüfseite in der Abgabebox vergleicht den SHA-256 einer Datei mit dem Register.
 
-### Signatur-Konfiguration
+```mermaid
+flowchart LR
+  R[Render<br/>Dokument-ID vorab] --> X[XMP ergänzen<br/>pypdf, inkrementell]
+  X --> H[SHA-256 der<br/>ausgelieferten Bytes]
+  H --> T[(document_registry<br/>+ StoredFile + document_export<br/>eine Transaktion)]
+  B[Browser /verify<br/>Hash lokal berechnet] -->|nur Hash + ID| A[abgabebox-backend<br/>POST /api/public/verify]
+  A -->|EXECUTE| F[[verify_document&#40;sha256&#41;]]
+  F --> V[View document_verification_public]
+  V --> T
+```
 
-| Variable | Bedeutung |
-|---|---|
-| `DOCUMENT_SIGNING_KEY_PATH` | Privater Schlüssel (PEM, optional verschlüsselt) |
-| `DOCUMENT_SIGNING_CERT_PATH` | Signaturzertifikat (PEM) |
-| `DOCUMENT_SIGNING_KEY_PASSWORD` (`_FILE`) | Passwort des Schlüssels; in Prod als Docker-Secret `document_signing_key_password` |
-| `DOCUMENT_SIGNING_CHAIN_PATH` | Optional: Zwischenzertifikate (PEM) |
-| `DOCUMENT_SIGNING_TSA_URL` | Optional: Zeitstempeldienst (RFC 3161) → PAdES B-T |
-| `DOCUMENT_SIGNING_DIR` | Nur Compose: Host-Verzeichnis, das nach `/run/hocx-signing` (read-only) gemountet wird |
+**Ablauf beim Export** (`documents/service.render`, nie die Vorschau):
 
-Schlüssel und Zertifikate liegen nie im Repository. In Produktion (`HOCX_ENVIRONMENT=production`)
-startet das Backend ohne lesbare Konfiguration nicht; in Dev/Test gibt es eine Warnung und die
-PDFs bleiben unsigniert (ohne Signaturzeile). `scripts/deploy.sh` erzeugt auf Test und Prod ein
-selbstsigniertes Zertifikat, falls im `DOCUMENT_SIGNING_DIR` keines liegt (`app.documents.devcert`
-im Backend-Image); Dev: `scripts/generate-dev-signing-cert.sh`, das E2E-Skript erzeugt eines
-automatisch. Einrichten, Erneuern und Rotieren: RUNBOOK
-«Dokumentsignatur».
+1. Dokument-ID (UUIDv7) vor dem Rendern erzeugen; sie steht im PDF.
+2. Typst-Compile (PDF/A-2b).
+3. `xmp.add_document_xmp`: hocX-Felder (Namespace `https://hocx.ch/ns/document/1.0/`, Präfix
+   `hocx`: Dokument-ID, Mandanten-public_id, Dokumenttyp, Version, Inhalts-Hash, Prüf-URL) samt
+   Eintrag in `pdfaExtension:schemas`. Inkrementelles Update: die Typst-Bytes bleiben unverändert
+   (geprüft), nur ein neues `/Metadata`-Objekt wird angehängt.
+4. SHA-256 über genau diese Bytes.
+5. In einer Transaktion: Datei, `StoredFile`, `document_export`, `document_registry`. Scheitert
+   ein Teil, gibt es nichts (die Datei wird beim Rollback gelöscht).
 
-Der Systemcheck `document_signing` (`/admin/system`, ntfy) meldet: fehlt (in Prod kritisch),
-nicht lesbar (kritisch), läuft in weniger als 30 Tagen ab (Warnung), abgelaufen (kritisch).
+Ein Re-Render mit gleichem Inhalt hat eine andere Dokument-ID und einen anderen Zeitstempel, also
+einen eigenen Eintrag: jede je ausgelieferte Datei bleibt prüfbar. Der Retention-Job löscht nur
+Dateien, nie Register-Einträge. Wird ein Mandant gelöscht, verschwinden seine Einträge (Cascade);
+seine PDFs gelten danach als «nicht gefunden» - ein gelöschter Verein wird nicht mehr als Urheber
+bestätigt.
+
+**Prüfvermerk im PDF** (Hausstil-Optionen `verify_show_url`, `verify_show_id`, `verify_show_qr`,
+Standard an, Abschnitt «Echtheitsprüfung im Dokument» in den Hausstil-Einstellungen):
+
+- Zeile «Echtheit prüfen: abgabe…/verify · ID 7F3A-91C2» bei Modern und Klassisch in der
+  Fusszeile jeder Seite, bei Kompakt und bei Fusszeile «Keine» im Prüfvermerk am Ende.
+- QR-Code (1.6 cm) auf `<Prüf-URL>?id=<UUID>` im Prüfvermerk am Ende des Inhalts, unten auf der
+  letzten Seite (nicht umbrechbar; in der Fusszeile hätte er bei schmalen Rändern keinen Platz).
+- Der Text setzt sich nur aus eingeschalteten Teilen zusammen, Trennzeichen stehen nur zwischen
+  vorhandenen Teilen. Sind alle drei aus, entfällt der Prüfvermerk vollständig; prüfbar ist das
+  PDF trotzdem (Datei ablegen), Dokument-ID und Prüf-URL stehen immer im XMP.
+- Kurz-ID = letzte 8 Hex-Zeichen der UUID (der zufällige Teil von UUIDv7), gruppiert.
+
+**Neuere Version:** nur Protokolle. Ein Eintrag ist überholt, wenn es beim selben Mandanten für
+dieselbe `source_public_id` (public_id des Protokolls, ohne FK - überlebt Löschen und Umzug)
+einen Eintrag mit höherem `(version_major, version_minor)` gibt. Gleiche Version, neu gerendert,
+zählt nicht. Andere Dokumenttypen sind Momentaufnahmen ohne Version. *Idee (nicht gebaut):*
+«neuerer Export desselben Rezepts» - fachlich keine neue Version desselben Dokuments, eher
+irreführend.
+
+**Datenzugriff der Abgabebox:** Die View `document_verification_public` enthält die ganze
+Freigabelogik: Name, public_id und Logo-Hinweis des Mandanten nur mit
+`tenant.verify_show_identity`; `organization_verified` nur mit Anzeige **und** Bestätigung durch
+einen Plattform-Admin; `is_superseded` / `latest_version_label` nur für Protokolle und nur mit
+`tenant.verify_show_newer_version`. Die Rolle `hocx_abgabebox` darf weder Register noch View
+lesen, nur die Funktion `verify_document(sha256)` ausführen (`SECURITY DEFINER`, fester
+`search_path`, höchstens eine Zeile, `REVOKE … FROM PUBLIC`). Eine kompromittierte Abgabebox kann
+so keine Dokumentliste auslesen, nur Hashes prüfen, die sie schon kennt. Bei der Gelegenheit
+wurde das seit 1.0.0 zu weite `SELECT` der Rolle auf die ganze Tabelle `tenant` auf die Spalten
+`id` und `storage_quota_bytes` beschränkt.
+
+**Endpoint** `POST /api/public/verify` (abgabebox-backend): Body `{sha256, document_id?}`
+(streng validiert, `extra=forbid`). Antwort `{found: false}` ohne weitere Felder - kein Hinweis,
+ob eine mitgeschickte ID existiert - oder `{found: true, …, document_id_matches?}`. Kein Cookie,
+keine Session, `Cache-Control: no-store`.
+
+**Routing:** Traefik-Router `abgabebox-verify` (`Path(/api/public/verify) && Method(POST)`,
+Priorität 300 vor `abgabebox-upload` mit 200), Rate-Limit 30/min (Burst 10), Body-Limit 4 KiB.
+Gleich für Mandanten-Abgabebox-Domains (`traefik_config_service._abgabebox_routers`). Die Seite
+`/verify` des Abgabebox-Frontends hat Vorrang vor `[linkToken]`; zusätzlich kann kein
+Abgabe-Link-Token `verify` heissen (Erzeugung, Import, DB-`CHECK`).
+
+**Logo:** Das Abgabebox-Frontend liefert es same-origin über `/verify/logo/<public_id>` aus (holt
+es serverseitig über das interne Netz vom öffentlichen Endpoint
+`/api/tenants/{public_id}/profile-image`; nur Rasterbilder, max. 2 MB). Die CSP der Abgabebox wird
+beim Build festgelegt und bleibt bei `img-src 'self'`; das Release-Image kennt die Hauptdomain nicht.
+
+**Datenschutz:** Die Datei verlässt nie den Browser (Web Crypto API). Weder Hash noch IP werden
+gespeichert; das Rate-Limit hält Traefik im Speicher, ein Access-Log ist nicht aktiviert. Ins
+Fehlerlog gelangen nur Pfad und Fehlertext, nie der Body. Grundlage: berechtigtes Interesse an
+Fälschungserkennung bei minimalen Daten.
+
+**Warum keine Signatur:** Ein zentrales hocX-Zertifikat hätte nur bestätigt, dass ein PDF aus
+hocX stammt - nicht, welcher Verein es erstellt hat - und PDF-Reader hätten es meist trotzdem als
+«unbekannte Identität» angezeigt. Die Hash-Prüfung zeigt dasselbe (unverändert aus hocX), ohne
+Schlüsselverwaltung, und kann die Organisation zeigen, wenn sie es freigibt und hocX sie
+verifiziert hat. *Später (nur Notiz):* PAdES pro Mandant über einen Cloud-Signaturdienst könnte die
+Hash-Prüfung ergänzen.
+
+**Verifizierung durch hocX:** Mandanten-Admins beantragen sie unter Vorlagen → Echtheitsprüfung
+(`identity_verification_request`, höchstens ein offener Antrag). Plattform-Admins bestätigen oder
+lehnen ab (`/admin/verifications`, Tab «Verifizierung» im Mandanten-Dialog) und können entziehen.
+Bestätigt wird der Name zum Antragszeitpunkt; eine Namensänderung hebt die Bestätigung auf und
+zieht einen offenen Antrag zurück. Logo-Änderungen werden nur protokolliert. Ein Mandanten-Archiv
+bringt die Bestätigung nie mit (`FORCED_SECURE_DEFAULTS`).
+
+**Konfiguration:** `DOCUMENT_VERIFY_BASE_URL` (Standard `ABGABEBOX_BASE_URL` + `/verify`, bewusst
+die Plattform-Domain, damit gedruckte Links stabil bleiben); `ABGABEBOX_INTERNAL_URL` (Standard
+`http://abgabebox-backend:8000`) für den Systemcheck `document_verification`, der einen Hash ohne
+Treffer prüft und `{found: false}` erwartet.
 
 ### Render-Limits
 
@@ -292,6 +367,10 @@ durch `�` ersetzt (PDF/A verbietet fehlende Glyphen).
 | `/api/document-styles` | Hausstile (CRUD) | reader / admin |
 | `/api/document-style-assets` | Logos, Fussbilder, Schriften (Upload mit Virenprüfung) | reader / admin |
 | `/api/document-recipes` | Rezepte (CRUD) | reader / writer |
+| `GET/PATCH /api/document-verification` | Prüfseite: Name/Logo anzeigen, auf neuere Versionen hinweisen | reader / admin |
+| `POST/DELETE /api/document-verification/request` | Verifizierung beantragen / Antrag zurückziehen | admin |
+| `/api/admin/identity-verification-requests`, `/api/admin/tenants/{id}/identity-verification[/approve\|reject\|revoke]` | Anträge entscheiden, Verifizierung entziehen | Plattform-Admin |
+| `POST /api/public/verify` (Abgabebox) | Öffentliche Prüfung eines Hashes | öffentlich |
 | `GET /api/documents/sources/{source}` | Auswahllisten für Parameter (Listen, Konten, …) | reader |
 
 Alle schreibenden Aufrufe und jeder Export landen im Audit-Log (`document.render`,
@@ -300,8 +379,12 @@ Alle schreibenden Aufrufe und jeder Export landen im Audit-Log (`document.render
 ## Tests und CI
 
 - `backend/tests/documents/`: Modell, Rich-Text (Escaping), Renderer, Provider inkl.
-  Mandanten-Isolation, Signatur (Validierung, Manipulation erkannt), Versionierung, API,
-  Altdaten-Übernahme.
+  Mandanten-Isolation, Register (Hash = ausgelieferte Bytes, ID im Text und XMP, Vorschau ohne
+  Eintrag, Retention), Versionierung, API, Altdaten-Übernahme; alle 8 Kombinationen des
+  Prüfvermerks mit jedem Hausstil.
+- `backend/tests/test_document_verification.py`: View/Funktion und Rechte der Abgabebox-Rolle;
+  `test_document_registry_migration.py`: Übernahme alter Hashes; `test_identity_verification.py`:
+  Antrag, Entscheid, Umbenennung; `abgabebox-backend/tests/test_verify.py`: Endpoint.
 - Matrix Hausstil × Fixture × Format ohne Typst-Warnungen; Vollständigkeit per `pdftotext`.
 - Goldens (`goldens/*.png`): bei Abweichung landen Ist- und Differenzbild im CI-Artefakt
   `document-golden-diffs`. Bewusste Änderungen: `scripts/update-document-goldens.sh`.
@@ -316,7 +399,9 @@ Alle schreibenden Aufrufe und jeder Export landen im Audit-Log (`document.render
 | `document_style` | Hausstil-Konfiguration pro Mandant: Name, Basis-Stil, Tokens (JSONB), Standard-Flag, Version |
 | `document_style_asset` | Hochgeladene Schriften und Bilder (Logo, Fussbild) eines Mandanten |
 | `document_recipe` | Gespeicherte Zusammenstellung: Name, Dokumenttyp, Blöcke mit Parametern, Stil, Optionen, Sprache |
-| `document_export` | Ein Datensatz pro erzeugtem PDF: Dokument-ID, Typ, Protokoll, Version, Inhalts-Hash, SHA-256 des signierten PDFs, Stil und Stil-Version, Sprache, Benutzer, StoredFile |
+| `document_export` | Ein Datensatz pro erzeugtem PDF: Dokument-ID, Typ, Protokoll, Version, Inhalts-Hash, Stil und Stil-Version, Sprache, Benutzer, StoredFile |
+| `document_registry` | Dauerhaftes Register: Dokument-ID, Mandant, SHA-256 (eindeutig), Typ, Titel, Status beim Export, Version, Inhalts-Hash, Quelle (public_id), Zeitpunkt, Benutzer |
+| `identity_verification_request` | Anträge auf Verifizierung der Organisation mit Entscheid |
 
 `template.document_style_id` und `protocol.document_style_id` ersetzen die alten Verweise auf
 `document_template` und die Snapshot-Pfade.
@@ -330,7 +415,7 @@ Umgesetzt in dieser Reihenfolge, jeweils mit Tests grün und einzeln committet:
 3. Renderer, Schriften, Paketverzeichnis, Token-Sync.
 4. Basis-Komponenten und Hausstil «Modern».
 5. Provider und Block-Katalog, Dokumenttypen.
-6. Versionierung und Signatur.
+6. Versionierung (die ursprüngliche Signatur ist seit dem Umbau 2026-10 durch die Hash-Prüfung ersetzt).
 7. API (`/api/documents/*`), Zusatzformate.
 8. Hausstile «Klassisch» und «Kompakt».
 9. Frontend: Export-Dialog, Rezepte, Hausstil-Einstellungen.
@@ -367,8 +452,8 @@ umkehrbar):
   mitbringen. Die vier Diagrammarten (Balken, gestapelt, Linie, Donut) sind als eigene, kleine
   Typst-Komponenten umgesetzt. Das Paketverzeichnis `typst_packages/` ist trotzdem verdrahtet;
   der Compile bekommt ein leeres Cache-Verzeichnis und kann nie nachladen.
-- **QR-Codes** werden in Python (segno) als Modulmatrix erzeugt und in Typst als Vektor
-  gezeichnet; dafür ist kein Typst-Paket nötig.
+- **QR-Codes** erzeugt das vendorte Typst-Paket `tiaoma` (MIT, ohne weitere Pakete) als Vektor;
+  der Compile lädt es aus `typst_packages/`, nie aus dem Netz.
 - **Inhalts-Hash über das ganze Dokument:** Angehängte Zusatzblöcke beim Protokoll zählen zum
   Inhalt. Wer zwischen Exporten mit und ohne Zusatzblöcke wechselt, erhöht die Version.
 - **Hinweis für Mandanten mit eigenen LaTeX-Slots:** Es gibt keinen Mechanismus für
@@ -379,5 +464,35 @@ umkehrbar):
   Schrift als eigene Schrift im Hausstil hochladen.
 - **Historische Audit-Dokumente** unter `security-audit/` erwähnen den alten TeX-Export weiterhin;
   sie dokumentieren damalige Befunde und werden nicht umgeschrieben.
-- **PDF/A-Prüfung:** Ohne veraPDF in der CI prüfen die Tests die PDF/A-Kennung im XMP, eingebettete
-  Schriften und dass die Signatur als inkrementelles Update angehängt ist.
+- **PDF/A-Prüfung:** Ohne veraPDF in der CI prüfen die Tests die PDF/A-Kennung im XMP, das
+  hocX-Extension-Schema, eingebettete Schriften und dass das XMP-Update die Typst-Bytes nur ergänzt.
+
+## Umbau 2026-10: Hash-Prüfung statt Signatur
+
+Umgesetzt wie im Abschnitt «Echtheitsprüfung» beschrieben. Entfallen sind die frühere digitale
+Signatur samt Zertifikatsverwaltung, Startup-Pflicht, Systemcheck, Dev-Zertifikat-Skript,
+Deploy-Erzeugung, Compose-Mounts und Secret sowie die Pakete für die Signatur und `segno`.
+Migrationen: `0116_document_registry` (Register, Übernahme aller gespeicherten Hashes,
+Mandanten-Spalten, Anträge, Hausstil-Optionen mit Standardwerten, Token-Sperre) und
+`0117_document_verify_public` (View, Funktion, Rechte). Alte `.env` mit den entfallenen
+Variablen laden weiter (`ENV_RETIRED_KEYS` in `scripts/lib/env.sh`).
+
+### Abweichungen vom Plan
+
+- **Funktion statt View-Grant** für `hocx_abgabebox` (freigegeben).
+- **Antrag statt Kontaktadresse:** Verifizierung wird in den Mandanten-Einstellungen beantragt und
+  im Adminportal entschieden (Tabelle `identity_verification_request`).
+- **QR-Code am Ende des Inhalts** statt in der Fusszeile der letzten Seite (Platz bei schmalen
+  Rändern); die Zeile bleibt in der Fusszeile.
+- **Logo same-origin** über eine Route des Abgabebox-Frontends statt direktem `<img>` auf die
+  Hauptdomain (CSP wird beim Build festgelegt).
+- **Grants nur in den Migrationen:** `backend/sql/baseline_schema.sql` ist der eingefrorene
+  1.0.0-Stand; spätere Rechte stehen wie bisher in Migrationen.
+- **Zusätzlich:** `SELECT` von `hocx_abgabebox` auf `tenant` auf die zwei benötigten Spalten
+  beschränkt (vorher ganze Tabelle).
+
+### Offene Punkte
+
+- Migrierte Einträge aus der Zeit vor dem Umbau haben keinen Status (nie gespeichert).
+- Exporte des früheren TeX-Exports hatten keinen Hash und sind nicht prüfbar.
+- veraPDF als CI-Schritt wäre eine sinnvolle Ergänzung.

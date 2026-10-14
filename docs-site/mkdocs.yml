@@ -93,6 +93,7 @@ nav:
       - Abgabebox: benutzer/abgabebox.md
       - Word-Import: benutzer/word-import.md
       - Dokumente & Hausstile: benutzer/dokumente.md
+      - Echtheit prüfen: benutzer/echtheit.md
   - Technik & Betrieb:
       - Übersicht: technik/index.md
       - Big Picture: technik/big-picture.md

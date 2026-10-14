@@ -65,11 +65,13 @@ Ebenfalls hier: die **Dokumentsprache** des Vereins (Standard für alle Exporte,
 Export änderbar). Datumsangaben erscheinen immer als `TT.MM.JJJJ`, Beträge mit `'` als
 Tausendertrennzeichen.
 
-## Versionen und Signatur
+## Versionen und Echtheit
 
 - Protokoll-PDFs tragen eine Version: `v0.x` vor dem Abschluss, `v1.x` danach. Die Version
   steigt nur, wenn sich der **Inhalt** geändert hat – ein anderer Hausstil oder eine andere
   Sprache erzeugt keine neue Version.
-- Jedes PDF ist ein PDF/A-Dokument (Langzeitarchiv) und **digital signiert**. In der Fusszeile
-  steht «Digital signiert von hocX · Dokument-ID · Version». Ein PDF-Reader (z. B. Adobe
-  Acrobat) zeigt an, ob das Dokument seit dem Export verändert wurde.
+- Jedes PDF ist ein PDF/A-Dokument (Langzeitarchiv) und wird bei hocX **registriert**. In der
+  Fusszeile stehen die Prüfadresse und eine kurze Dokument-ID, auf der letzten Seite ein QR-Code.
+  Wer die Datei erhält, kann damit prüfen, ob sie unverändert aus hocX stammt – siehe
+  [Echtheit prüfen](echtheit.md). Welche dieser Angaben im PDF stehen, legt der Hausstil fest
+  (Abschnitt «Echtheitsprüfung im Dokument»).

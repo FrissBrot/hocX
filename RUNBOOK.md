@@ -413,8 +413,8 @@ Im Platform-Admin unter **System**:
 
 - **Systemstatus** (`/admin/system`): Container (Status, Healthcheck, Neustarts, CPU/RAM,
   Version) und Dienste (Postgres, Redis, ClamAV inkl. Signaturalter, Speicherplatz,
-  Fehlerrate, Rückstand der Virenprüfung, Bildanalyse-Warteschlange, Signaturzertifikat
-  der Dokumente), offene Probleme und
+  Fehlerrate, Rückstand der Virenprüfung, Bildanalyse-Warteschlange, öffentliche
+  Prüfseite der Dokumente), offene Probleme und
   die letzten Ereignisse. Gesammelt alle 30 s vom Loop `system_monitor` im Backend
   (`app/services/system_health_service.py`, Schwellwerte dort oben).
 - **Jobs** (`/admin/jobs`): alle Hintergrund-Loops, der Bildanalyse-Worker und die
@@ -487,65 +487,44 @@ DNS oder ein abgelaufenes Zertifikat der Website-Domain.
   Proxys; läuft das Backend im Netz `docker-api`?
 - Virensignaturen veraltet: Logs des `clamav`-Containers (freshclam) prüfen.
 
-## 13. Dokumentsignatur
+## 13. Öffentliche Prüfseite (Echtheit von PDFs)
 
-Jedes PDF der Dokument-Engine wird als PAdES-Signatur (pyHanko) signiert. In Prod und Test
-startet das Backend ohne lesbaren Schlüssel und Zertifikat **nicht** (Log: «Dokumentsignatur
-nicht konfiguriert»). Schlüssel und Zertifikat liegen nie im Repo und nie in `.env`.
+hocX signiert keine PDFs. Jedes erzeugte PDF wird mit seinem SHA-256 im Dokumentenregister
+erfasst; die öffentliche Prüfseite `https://<TRAEFIK_ABGABEBOX_DOMAIN>/verify` (Abgabebox)
+vergleicht den im Browser berechneten Hash einer Datei mit dem Register. Es gibt keine
+Zertifikate und keine Schlüssel zu verwalten.
 
-### Automatisch beim Deploy
+### Konfiguration
 
-`deploy.sh` prüft `DOCUMENT_SIGNING_DIR` (Standard `./.signing`, git-ignoriert). Fehlen
-`signing-key.pem` und `signing-cert.pem`, erzeugt es ein **selbstsigniertes** Zertifikat
-(«hocX Dokumentsignatur <TRAEFIK_DOMAIN>», 3 Jahre) im signaturgeprüften Backend-Image und
-setzt die Rechte für den Backend-User (uid 5000, Gruppe 5001). Ist
-`DOCUMENT_SIGNING_KEY_PASSWORD` gesetzt, wird der Schlüssel damit verschlüsselt. Vorhandene
-Dateien werden nie überschrieben; fehlt nur eine der beiden, bricht der Deploy ab.
+- `DOCUMENT_VERIFY_BASE_URL` (optional): Prüf-URL, die in jedem PDF steht (Fusszeile, QR-Code,
+  XMP). Leer = `ABGABEBOX_BASE_URL` + `/verify`. Bewusst die Plattform-Domain, nicht eine
+  Mandanten-Domain - gedruckte Links müssen stabil bleiben. Nach einer Änderung tragen nur neue
+  PDFs die neue Adresse; alte Links funktionieren nur, solange die alte Domain auf die Abgabebox
+  zeigt.
+- Traefik: Router `abgabebox-verify` (30 Anfragen/min, Burst 10, Body 4 KiB) ist Teil der
+  Compose-Labels bzw. der generierten Mandanten-Domain-Router; nichts einzurichten.
+- Die Abgabebox-Rolle `hocx_abgabebox` darf nur die Funktion `verify_document` ausführen
+  (Migration 0117), nicht das Register lesen.
 
-Ein selbstsigniertes Zertifikat schützt vollständig vor unbemerkten Änderungen; PDF-Reader
-zeigen den Aussteller aber als «unbekannt». Für eine vertrauenswürdige Identität ein eigenes
-Zertifikat hinterlegen:
+### Systemcheck
 
-### Eigenes Zertifikat hinterlegen
+`/admin/system` → «Öffentliche Prüfseite»: das Backend fragt den Endpoint intern
+(`ABGABEBOX_INTERNAL_URL`, Standard `http://abgabebox-backend:8000`) mit einem Hash ohne Treffer
+ab und erwartet `{"found": false}`. Kritisch heisst: `abgabebox-backend` nicht erreichbar oder die
+Funktion/Rechte fehlen (Migration 0117 gelaufen? `docker compose logs abgabebox-backend`).
 
-1. In `DOCUMENT_SIGNING_DIR` ablegen (bestehende Dateien ersetzen):
-   - `signing-key.pem` - privater Schlüssel (PEM, gerne mit Passwort verschlüsselt)
-   - `signing-cert.pem` - Zertifikat (Key Usage `digitalSignature`, idealerweise
-     `nonRepudiation` und EKU Document Signing `1.3.6.1.5.5.7.3.36`)
-   - optional `chain.pem` mit Zwischenzertifikaten, dann in `.env`
-     `DOCUMENT_SIGNING_CHAIN_PATH=/run/hocx-signing/chain.pem`
-2. Rechte: `chmod 644` auf die neuen Dateien. Das genügt, weil das Verzeichnis selbst nur
-   für den Deploy-Nutzer und die Container-Gruppe 5001 zugänglich ist (`750`, legt
-   `deploy.sh` so an). Bestehende, erzeugte Dateien vorher löschen (sie gehören uid 5000,
-   der Deploy-Nutzer darf sie als Besitzer des Verzeichnisses entfernen).
-3. Passwort des Schlüssels in `.env` als `DOCUMENT_SIGNING_KEY_PASSWORD` - `deploy.sh`
-   schreibt es als Docker-Secret `document_signing_key_password`, es landet nicht in der
-   Container-Umgebung. Leer lassen bei unverschlüsseltem Schlüssel.
-4. Optional `DOCUMENT_SIGNING_TSA_URL` (RFC-3161-Zeitstempeldienst) für PAdES B-T.
-5. `./scripts/deploy.sh <test|prod>`, danach unter `/admin/system` den Check
-   «Dokumentsignatur» prüfen und ein PDF exportieren: der Reader muss eine gültige Signatur
-   zeigen.
+### Organisationen verifizieren (Plattform-Admin)
 
-### Erneuern (Zertifikat läuft ab)
+1. Mandanten-Admins beantragen die Verifizierung unter Vorlagen → Echtheitsprüfung.
+2. Offene Anträge: Admin-Panel → **Verifizierungen** (oder Mandant öffnen → Tab «Verifizierung»).
+3. Identität prüfen, z. B. Handelsregister/UID-Register, Statuten, Website mit Impressum, Rückruf
+   an eine unabhängig gefundene Nummer. Erst dann **Bestätigen** und in der Notiz festhalten, wie
+   geprüft wurde. Ablehnen nur mit Begründung (der Mandant sieht sie).
+4. Bei Missbrauch: **Verifizierung entziehen** (sofort wirksam auf der Prüfseite).
 
-Der Systemcheck warnt 30 Tage vor Ablauf (ntfy), nach Ablauf ist er kritisch.
-
-- **Selbstsigniert:** beide Dateien im `DOCUMENT_SIGNING_DIR` löschen und
-  `./scripts/deploy.sh <test|prod>` ausführen - er erzeugt ein neues Zertifikat und startet
-  das Backend neu.
-- **Eigenes Zertifikat:** neues besorgen, Dateien ersetzen (gleiche Namen, siehe oben),
-  dann `docker compose up -d --force-recreate backend` - der Signierer wird beim Start
-  geladen.
-
-Danach den Check «Dokumentsignatur» prüfen.
-
-Bereits signierte PDFs bleiben gültig; sie tragen ihre Signatur mit dem damaligen Zertifikat.
-
-### Rotieren (Schlüssel kompromittiert oder Wechsel des Ausstellers)
-
-Wie Erneuern, aber immer mit **neuem** Schlüssel und neuem Passwort (`.env` +
-`./scripts/deploy.sh`, damit das Secret neu geschrieben wird). Den alten Schlüssel löschen;
-bei Kompromittierung das alte Zertifikat beim Aussteller widerrufen lassen.
+Eine Namensänderung des Mandanten hebt die Verifizierung automatisch auf (auch durch einen
+Plattform-Admin). Alle Schritte stehen im Audit-Log (`identity_verification.*`,
+`admin.identity_verification_*`).
 
 ### Nach dem Update auf die Dokument-Engine
 
