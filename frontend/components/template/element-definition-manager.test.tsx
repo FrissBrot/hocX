@@ -20,7 +20,7 @@ const original: ElementDefinition = {
     default_content: "Vorgabe", copy_from_last_protocol: true,
     element_type_id: 1, render_type_id: 2, is_editable: false,
     allows_multiple_values: false, export_visible: true, is_visible: true,
-    sort_index: id * 10, render_order: null, latex_template: null,
+    sort_index: id * 10, render_order: null,
     configuration_json: { title_as_subtitle: false, nested: { values: ["unverändert"] } },
   })),
 };

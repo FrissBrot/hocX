@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, auth, calendar_feeds, collaboration_ws, cycle_configs, document_templates, documents, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
+from app.api.routes import admin, admin_auth, auth, calendar_feeds, collaboration_ws, cycle_configs, documents, events, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
@@ -23,8 +23,6 @@ from app.services.admin_error_log_service import AdminErrorLogService
 from app.services.admin_job_status_service import AdminJobStatusService
 from app.services.audit_service import AuditService
 from app.services.submission_service import SubmissionService
-from app.services.document_template_service import DocumentTemplateService
-from app.services.export_service import ExportService
 from app.services.file_service import FileService
 from app.services.isolated_parse import shutdown_pool as shutdown_word_import_parse_pool
 from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
@@ -165,16 +163,6 @@ def ensure_runtime_columns() -> None:
     # All schema changes are now managed via Alembic (alembic upgrade head runs before uvicorn).
     # This function is kept as a no-op for backwards compatibility.
     pass
-
-
-def ensure_default_document_templates() -> None:
-    service = DocumentTemplateService()
-    with engine.begin() as conn:
-        conn.execute(text("SELECT pg_advisory_xact_lock(202600002)"))
-        with SessionLocal() as db:
-            tenants = list(db.scalars(select(Tenant).order_by(Tenant.id.asc())))
-            for tenant in tenants:
-                service.ensure_default_template_for_tenant(db, tenant.id, tenant.name)
 
 
 def ensure_default_document_styles() -> None:
@@ -402,7 +390,6 @@ async def lifespan(_: FastAPI):
         ensure_runtime_columns()
         ensure_no_production_demo_data()
         ensure_startup_seed_data()
-        ensure_default_document_templates()
         ensure_default_document_styles()
         ensure_traefik_dynamic_config()
         health_check_task = asyncio.create_task(domain_health_check_loop())
@@ -508,7 +495,6 @@ app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(tenants.router, prefix="/api", tags=["tenants"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(documents.router, prefix="/api", tags=["documents"])
-app.include_router(document_templates.router, prefix="/api", tags=["document-templates"])
 app.include_router(templates.router, prefix="/api", tags=["templates"])
 app.include_router(cycle_configs.router, prefix="/api", tags=["cycle-configs"])
 app.include_router(task_packages.router, prefix="/api", tags=["task-packages"])
@@ -526,7 +512,6 @@ app.include_router(public_share.router, prefix="/api", tags=["public-share"])
 app.include_router(public_catalog.router, prefix="/api", tags=["public-catalog"])
 app.include_router(calendar_feeds.router, prefix="/api", tags=["calendar-feeds"])
 app.include_router(storage.router, prefix="/api", tags=["storage"])
-app.include_router(exports.router, prefix="/api", tags=["exports"])
 app.include_router(finance.router, prefix="/api", tags=["finance"])
 app.include_router(fines.router, prefix="/api", tags=["fines"])
 app.include_router(statistics.router, prefix="/api", tags=["statistics"])

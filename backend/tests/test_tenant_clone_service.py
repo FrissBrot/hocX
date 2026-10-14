@@ -235,3 +235,38 @@ def test_clone_full_rewrites_abgabe_element_refs_to_the_cloned_rows(db):
         select(SubmissionUploadLog.element_ref).join(SubmissionAssignment).where(SubmissionAssignment.tenant_id == cloned.id)
     ) == expected
     assert db.scalar(select(ProtocolTodo.element_ref).where(ProtocolTodo.tenant_id == cloned.id)) == expected
+
+
+def test_clone_copies_house_styles_assets_and_recipes(db, tmp_path, monkeypatch):
+    """Hausstile (mit Logo-Datei), Vorlagen-Verweis und Rezepte reisen beim Klon mit; Tokens und
+    Rezept-Parameter zeigen danach auf die Kopien, nie auf den Quellmandanten."""
+    from app.core.config import settings
+    from app.models import DocumentRecipe, DocumentStyle, DocumentStyleAsset, Template
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    source = make_tenant(db, "Stilquelle")
+    template = make_template(db, source.id)
+    logo_file = tmp_path / "document_style_assets" / "src.png"
+    logo_file.parent.mkdir(parents=True)
+    logo_file.write_bytes(b"logo")
+    logo = DocumentStyleAsset(tenant_id=source.id, kind="image", name="Logo", storage_path="document_style_assets/src.png")
+    db.add(logo)
+    db.flush()
+    style = DocumentStyle(tenant_id=source.id, name="Vereinsstil", style_key="compact", tokens_json={"logo_asset_id": str(logo.public_id)}, is_default=True)
+    db.add(style)
+    db.flush()
+    template.document_style_id = style.id
+    db.add(DocumentRecipe(tenant_id=source.id, name="Jahresbericht", style_id=style.id, blocks_json=[{"type": "kpi_tiles", "params": {}}]))
+    db.flush()
+
+    cloned = TenantCloneService().clone_structure(db, source.id, "Stilquelle (Kopie)")
+
+    new_style = db.scalar(select(DocumentStyle).where(DocumentStyle.tenant_id == cloned.id))
+    new_logo = db.scalar(select(DocumentStyleAsset).where(DocumentStyleAsset.tenant_id == cloned.id))
+    new_template = db.scalar(select(Template).where(Template.tenant_id == cloned.id))
+    new_recipe = db.scalar(select(DocumentRecipe).where(DocumentRecipe.tenant_id == cloned.id))
+    assert new_style.id != style.id and new_style.is_default and new_style.style_key == "compact"
+    assert new_style.tokens_json["logo_asset_id"] == str(new_logo.public_id) != str(logo.public_id)
+    assert (tmp_path / new_logo.storage_path).read_bytes() == b"logo"
+    assert new_template.document_style_id == new_style.id
+    assert new_recipe.style_id == new_style.id

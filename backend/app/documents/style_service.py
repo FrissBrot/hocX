@@ -295,7 +295,7 @@ def resolve(db: Session, tenant_id: int, style: DocumentStyle | None) -> tuple[R
 
     resolved = ResolvedStyle(
         key=style_key,
-        version=style.version if style is not None else 1,
+        version=(style.version or 1) if style is not None else 1,
         primary_color=tokens.primary_color,
         secondary_color=tokens.secondary_color,
         fonts=families[:4],

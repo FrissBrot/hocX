@@ -23,7 +23,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
-import type { CycleConfigSummary, DocumentTemplate, ParticipantSummary, TemplateElement, TemplateSummary } from "@/types/api";
+import type { CycleConfigSummary, DocumentStyle, ParticipantSummary, TemplateElement, TemplateSummary } from "@/types/api";
 
 type Settings = {
   name: string;
@@ -32,7 +32,7 @@ type Settings = {
   title_pattern: string;
   cycle_config_id: string;
   auto_create_next_protocol: boolean;
-  document_template_id: string;
+  document_style_id: string;
 };
 
 function settingsFrom(template: TemplateSummary | null): Settings {
@@ -43,7 +43,7 @@ function settingsFrom(template: TemplateSummary | null): Settings {
     title_pattern: template?.title_pattern ?? "",
     cycle_config_id: template?.cycle_config_id ?? "",
     auto_create_next_protocol: template?.auto_create_next_protocol ?? false,
-    document_template_id: template?.document_template_id ?? "",
+    document_style_id: template?.document_style_id ?? "",
   };
 }
 
@@ -51,13 +51,13 @@ function settingsFrom(template: TemplateSummary | null): Settings {
 function TemplateSettingsSheet({
   template,
   cycleConfigs,
-  documentTemplates,
+  documentStyles,
   onClose,
   onSaved,
 }: {
   template: TemplateSummary | null;
   cycleConfigs: CycleConfigSummary[];
-  documentTemplates?: DocumentTemplate[];
+  documentStyles?: DocumentStyle[];
   onClose: () => void;
   onSaved: (template: TemplateSummary, created: boolean) => void;
 }) {
@@ -82,7 +82,7 @@ function TemplateSettingsSheet({
       const saved = template
         ? await browserApiFetch<TemplateSummary>(`/api/templates/${template.id}`, {
             method: "PATCH",
-            body: JSON.stringify({ ...common, ...(documentTemplates ? { document_template_id: form.document_template_id || null } : {}) }),
+            body: JSON.stringify({ ...common, ...(documentStyles ? { document_style_id: form.document_style_id || null } : {}) }),
           })
         : await browserApiFetch<TemplateSummary>("/api/templates", {
             method: "POST",
@@ -146,12 +146,12 @@ function TemplateSettingsSheet({
             ))}
           </select>
         </label>
-        {documentTemplates ? (
+        {documentStyles ? (
           <label className="field-stack">
             <span className="field-label">{t("pdfLayoutLabel")}</span>
-            <select value={form.document_template_id} onChange={(event) => update({ document_template_id: event.target.value })}>
+            <select value={form.document_style_id} onChange={(event) => update({ document_style_id: event.target.value })}>
               <option value="">{t("noLayoutAssigned")}</option>
-              {documentTemplates.map((layout) => (
+              {documentStyles.map((layout) => (
                 <option key={layout.id} value={layout.id}>
                   {layout.name}
                 </option>
@@ -345,14 +345,14 @@ export function MobileTemplateDetail({
   elements,
   participants,
   initialAssigned,
-  documentTemplates,
+  documentStyles,
   cycleConfigs,
 }: {
   initialTemplate: TemplateSummary;
   elements: TemplateElement[];
   participants: ParticipantSummary[];
   initialAssigned: ParticipantSummary[];
-  documentTemplates: DocumentTemplate[];
+  documentStyles: DocumentStyle[];
   cycleConfigs: CycleConfigSummary[];
 }) {
   const t = useTranslations("templates.builder");
@@ -366,7 +366,7 @@ export function MobileTemplateDetail({
   const [assigned, setAssigned] = useState(() => new Map(initialAssigned.map((participant) => [participant.id, !!participant.exclude_from_attendance])));
   const [search, setSearch] = useState("");
   const cycle = cycleConfigs.find((config) => config.id === template.cycle_config_id) ?? null;
-  const layout = documentTemplates.find((item) => item.id === template.document_template_id) ?? null;
+  const layout = documentStyles.find((item) => item.id === template.document_style_id) ?? null;
   const sortedElements = useMemo(() => [...elements].sort((a, b) => a.sort_index - b.sort_index), [elements]);
   const activeParticipants = participants.filter((participant) => participant.is_active || assigned.has(participant.id));
   const filteredParticipants = activeParticipants.filter((participant) => !search.trim() || participant.display_name.toLowerCase().includes(search.trim().toLowerCase()));
@@ -416,7 +416,7 @@ export function MobileTemplateDetail({
         <TemplateSettingsSheet
           template={template}
           cycleConfigs={cycleConfigs}
-          documentTemplates={documentTemplates}
+          documentStyles={documentStyles}
           onClose={() => setSettingsOpen(false)}
           onSaved={(saved) => {
             setTemplate(saved);

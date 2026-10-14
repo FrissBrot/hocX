@@ -19,7 +19,7 @@ import { elementTypeLabels } from "@/lib/constants/element-types";
 import { EligibleResponsibleList, eligibleResponsibleList, listParticipantIds, listTextValue } from "@/lib/utils/responsible-lists";
 import {
   CycleConfigSummary,
-  DocumentTemplate,
+  DocumentStyle,
   ElementDefinition,
   EventSummary,
   ParticipantSummary,
@@ -44,7 +44,7 @@ type TemplateEditorProps = {
   availableParticipants: ParticipantSummary[];
   availableLists: StructuredListDefinition[];
   initialAssignedParticipants: ParticipantSummary[];
-  availableDocumentTemplates: DocumentTemplate[];
+  availableDocumentStyles: DocumentStyle[];
   availableCycleConfigs: CycleConfigSummary[];
 };
 
@@ -625,7 +625,7 @@ export function TemplateEditor({
   availableParticipants,
   availableLists,
   initialAssignedParticipants,
-  availableDocumentTemplates,
+  availableDocumentStyles,
   availableCycleConfigs,
 }: TemplateEditorProps) {
   const router = useRouter();
@@ -647,7 +647,7 @@ export function TemplateEditor({
     title_pattern: initialTemplate.title_pattern ?? "",
     auto_create_next_protocol: Boolean(initialTemplate.auto_create_next_protocol),
     cycle_config_id: initialTemplate.cycle_config_id ? String(initialTemplate.cycle_config_id) : "",
-    document_template_id: initialTemplate.document_template_id ? String(initialTemplate.document_template_id) : "",
+    document_style_id: initialTemplate.document_style_id ? String(initialTemplate.document_style_id) : "",
   });
   const [newItemForm, setNewItemForm] = useState<TemplateItemForm>({
     ...initialTemplateItemForm
@@ -1217,7 +1217,7 @@ export function TemplateEditor({
           title_pattern: templateMeta.title_pattern || null,
           auto_create_next_protocol: templateMeta.auto_create_next_protocol,
           cycle_config_id: templateMeta.cycle_config_id ? templateMeta.cycle_config_id : null,
-          document_template_id: templateMeta.document_template_id ? templateMeta.document_template_id : null,
+          document_style_id: templateMeta.document_style_id ? templateMeta.document_style_id : null,
         })
       });
       setTemplate(updated);
@@ -1594,11 +1594,11 @@ export function TemplateEditor({
           <label className="field-stack">
             <span className="field-label">{t("pdfLayoutLabel")}</span>
             <SearchableSelect
-              options={availableDocumentTemplates.filter((dt) => dt.is_active)}
+              options={availableDocumentStyles}
               getId={(dt) => dt.id}
-              getLabel={(dt) => `${dt.name}${dt.is_default ? " (Standard)" : ""}`}
-              value={templateMeta.document_template_id || null}
-              onChange={(dt) => setTemplateMeta((current) => ({ ...current, document_template_id: dt ? String(dt.id) : "" }))}
+              getLabel={(dt) => (dt.is_default ? `${dt.name} ${t("defaultStyleSuffix")}` : dt.name)}
+              value={templateMeta.document_style_id || null}
+              onChange={(dt) => setTemplateMeta((current) => ({ ...current, document_style_id: dt ? String(dt.id) : "" }))}
               nullLabel={t("noLayoutAssigned")}
             />
             <span className="field-help">{t("pdfLayoutHelp")}</span>

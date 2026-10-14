@@ -40,8 +40,10 @@ from app.models import (
     TaskPackageItem,
     AttendanceFine,
     CycleConfig,
-    DocumentTemplate,
-    DocumentTemplatePart,
+    DocumentExport,
+    DocumentRecipe,
+    DocumentStyle,
+    DocumentStyleAsset,
     ElementDefinition,
     Event,
     EventCycle,
@@ -61,7 +63,6 @@ from app.models import (
     ProtocolDisplaySnapshot,
     ProtocolElement,
     ProtocolElementBlock,
-    ProtocolExportCache,
     ProtocolImage,
     ProtocolText,
     ProtocolTodo,
@@ -107,7 +108,6 @@ from app.services import (
     tenant_trust_service,
     traefik_config_service,
 )
-from app.services.document_template_service import DocumentTemplateService
 from app.services.element_config import derive_fine_tariff, upgrade_snapshot_config, upgrade_template_element_config
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
@@ -120,7 +120,6 @@ from app.services.tenant_transfer_common import (
     coerce_value,
     new_uuid7,
     remap_block_configuration,
-    remap_document_template_config,
     remap_element_definition_config,
     remap_occurrence_key,
     remap_list_value,
@@ -133,7 +132,7 @@ from app.services.tenant_transfer_common import (
     replace_public_ids,
 )
 
-SUPPORTED_FORMAT_VERSIONS = {2, 3, 4}  # 2: separate user_tenant_role table; 3: role on app_user
+SUPPORTED_FORMAT_VERSIONS = {2, 3, 4, 5}  # 5: Dokument-Engine (Hausstile statt Dokumentvorlagen)  # 2: separate user_tenant_role table; 3: role on app_user
 
 # Zip-bomb guard, same idea as file_service.py's MAX_ZIP_ENTRIES/MAX_ZIP_TOTAL_BYTES for the
 # word-import ZIP upload, just scaled up: a full-tenant export can legitimately contain many
@@ -146,9 +145,6 @@ MAX_IMPORT_ZIP_TOTAL_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB combined uncompresse
 
 
 class TenantImportService:
-    def __init__(self) -> None:
-        self.document_template_service = DocumentTemplateService()
-
     def import_zip(self, db: Session, zip_path: Path, new_name: str) -> tuple[Tenant, list[str]]:
         with tempfile.TemporaryDirectory(prefix="hocx-import-") as extract_dir_str:
             extract_dir = Path(extract_dir_str)
@@ -347,8 +343,7 @@ class TenantImportService:
         self._import_simple(Leader, self._t("leader"), "leader", {"tenant_id": new_tenant.id})
         participant_map = self._import_participants(new_tenant.id)
         cycle_config_map = self._import_simple(CycleConfig, self._t("cycle_config"), "cycle_config", {"tenant_id": new_tenant.id})
-        part_map = self._import_document_template_parts(new_tenant.id)
-        document_template_map = self._import_document_templates(new_tenant.id, part_map)
+        document_style_map = self._import_document_styles(new_tenant.id)
         event_map = self._import_events(new_tenant.id, group_map, participant_map)
         # Fuer im Editor gewaehlte (als public UUID gespeicherte) Referenzen in Block-Snapshots,
         # siehe remap_block_configuration. Exporte vor Format 2 haben keine public_id-Spalte.
@@ -365,7 +360,7 @@ class TenantImportService:
         )
         template_map, template_element_map, template_element_block_map = self._import_templates(
             new_tenant.id,
-            document_template_map=document_template_map,
+            document_style_map=document_style_map,
             cycle_config_map=cycle_config_map,
             element_definition_map=element_definition_map,
             event_map=event_map,
@@ -393,7 +388,7 @@ class TenantImportService:
             new_tenant.id, stored_file_map, event_map,
             cycle_config_map=cycle_config_map, submission_assignment_map=submission_assignment_map,
         )
-        protocol_map = self._import_protocols(new_tenant.id, template_map, document_template_map, event_map)
+        protocol_map = self._import_protocols(new_tenant.id, template_map, document_style_map, event_map)
         self._import_word_import_documents(
             new_tenant.id, template_map, stored_file_map, protocol_map,
             WordImportIdMaps(
@@ -414,7 +409,7 @@ class TenantImportService:
         self._import_protocol_texts(protocol_element_block_map)
         self._import_protocol_display_snapshots(protocol_element_block_map)
         self._import_protocol_images(protocol_element_block_map, stored_file_map)
-        self._import_protocol_export_caches(protocol_map, stored_file_map)
+        self._import_document_exports(new_tenant.id, protocol_map, stored_file_map, document_style_map)
         finance_transaction_map = self._import_finance_transactions(finance_account_map, protocol_map)
         self._import_attendance_fines(protocol_map, participant_map, finance_account_map, finance_transaction_map)
         task_package_item_map = self._import_task_packages(
@@ -714,44 +709,123 @@ class TenantImportService:
         self.db.commit()
         return id_map
 
-    def _import_document_template_parts(self, new_tenant_id: int) -> dict[int, int]:
-        id_map: dict[int, int] = {}
-        for row in self._t("document_template_part"):
-            data = self._resolve_row("document_template_part", row)
-            new_storage_path = self._restore_file(
-                data.get("storage_path"), root=settings.storage_root, new_tenant_id=new_tenant_id,
-                subdir=f"document_template_parts/{row.get('part_type', 'part')}/{row.get('code', 'code')}",
-            )
+    def _import_document_styles(self, new_tenant_id: int) -> dict[str, int]:
+        """Hausstile und ihre Assets. Ab Format 5 direkt; ältere Archive enthalten noch
+        LaTeX-Dokumentvorlagen, die wie in Migration 0115 übersetzt werden (app.documents.legacy).
+        Rückgabe: "style:<alte id>" bzw. "template:<alte document_template-id>" → neue Stil-ID."""
+        from app.documents import style_service
+        from app.documents.legacy import has_latex_slots, legacy_part_refs, tokens_from_legacy
+
+        style_map: dict[str, int] = {}
+        for row in self._t("document_style_asset"):
+            data = self._resolve_row("document_style_asset", row)
+            new_storage_path = self._restore_file(data.get("storage_path"), root=settings.storage_root, new_tenant_id=new_tenant_id, subdir="document_style_assets")
             if new_storage_path is None:
-                self.warnings.append(f"document_template_part '{row.get('code')}' (v{row.get('version')}): Datei fehlte im Export, übersprungen.")
+                self.warnings.append(f"document_style_asset '{row.get('name')}': Datei fehlte im Export, übersprungen.")
                 continue
-            new_row = self._build(DocumentTemplatePart, data, {"tenant_id": new_tenant_id, "storage_path": new_storage_path})
+            self.db.add(self._build(DocumentStyleAsset, data, {"tenant_id": new_tenant_id, "storage_path": new_storage_path}))
+            self.db.flush()
+        for row in self._t("document_style"):
+            data = self._resolve_row("document_style", row)
+            new_row = self._build(DocumentStyle, data, {"tenant_id": new_tenant_id, "tokens_json": self._remap_public_refs(data.get("tokens_json") or {}), "is_default": False})
             self.db.add(new_row)
             self.db.flush()
-            id_map[row["id"]] = new_row.id
-        self.db.commit()
-        return id_map
+            style_map[f"style:{row['id']}"] = new_row.id
+            if row.get("is_default"):
+                style_map.setdefault("default", new_row.id)
 
-    def _import_document_templates(self, new_tenant_id: int, part_map: dict[int, int]) -> dict[int, int]:
-        id_map: dict[int, int] = {}
+        # Ältere Archive (Format ≤ 4): Dokumentvorlagen übersetzen, Bild-/Schrift-Parts übernehmen
+        parts = {row["id"]: row for row in self._t("document_template_part")}
+        restored: dict[tuple[int, str], DocumentStyleAsset] = {}
+        lost_slots = False
         for row in self._t("document_template"):
-            data = self._resolve_row("document_template", row)
-            new_row = self._build(DocumentTemplate, data, {
+            config = row.get("configuration_json") or {}
+            lost_slots = lost_slots or has_latex_slots(config)
+            role_ids: dict[str, str] = {}
+            for role, part_id in legacy_part_refs(config).items():
+                part = parts.get(part_id)
+                kind = "font" if role.startswith("font_") else "image"
+                if part is None:
+                    continue
+                key = (part_id, kind)
+                if key not in restored:
+                    path = self._restore_file(part.get("storage_path"), root=settings.storage_root, new_tenant_id=new_tenant_id, subdir="document_style_assets")
+                    if path is None:
+                        continue
+                    content = (Path(settings.storage_root) / path).read_bytes()
+                    family = None
+                    if kind == "font":
+                        try:
+                            family = style_service.font_family_of(content)
+                        except Exception:  # noqa: BLE001 - unlesbare Schrift: Stil nutzt Hausschrift
+                            family = None
+                    asset = DocumentStyleAsset(tenant_id=new_tenant_id, kind=kind, name=part.get("name") or kind, original_name=Path(path).name, storage_path=path, file_size_bytes=len(content), font_family=family)
+                    self.db.add(asset)
+                    self.db.flush()
+                    restored[key] = asset
+                role_ids[role] = str(restored[key].public_id)
+            tokens = tokens_from_legacy(config, role_ids)
+            new_style = DocumentStyle(tenant_id=new_tenant_id, name=row.get("name") or "Hausstil", style_key="modern", tokens_json=tokens.model_dump(mode="json"), is_default=False, version=1)
+            self.db.add(new_style)
+            self.db.flush()
+            style_map[f"template:{row['id']}"] = new_style.id
+            if row.get("is_default"):
+                style_map.setdefault("default", new_style.id)
+        if lost_slots:
+            self.warnings.append("Eigene LaTeX-Vorlagenteile werden nicht mehr unterstützt und wurden nicht übernommen; Farben, Schrift, Varianten, Logo und Fussbild sind als Hausstil importiert.")
+
+        default_id = style_map.get("default")
+        if default_id is not None:
+            self.db.get(DocumentStyle, default_id).is_default = True
+        self.db.flush()
+        style_service.ensure_default_style(self.db, new_tenant_id)
+        self.db.commit()
+        return style_map
+
+    @staticmethod
+    def _style_ref(style_map: dict[str, int], data: dict[str, Any]) -> int | None:
+        if data.get("document_style_id"):
+            return style_map.get(f"style:{data['document_style_id']}")
+        if data.get("document_template_id"):
+            return style_map.get(f"template:{data['document_template_id']}")
+        return None
+
+    def _import_document_exports(self, new_tenant_id: int, protocol_map: dict[int, int], stored_file_map: dict[int, int], style_map: dict[str, int]) -> None:
+        """Export-Datensätze und Rezepte. Ältere Archive: protocol_export_cache (PDF) → document_export."""
+        recipe_map: dict[int, int] = {}
+        for row in self._t("document_recipe"):
+            data = self._resolve_row("document_recipe", row)
+            new_row = self._build(DocumentRecipe, data, {
                 "tenant_id": new_tenant_id,
-                "filesystem_path": "",
-                "configuration_json": remap_document_template_config(data.get("configuration_json"), part_map),
+                "style_id": style_map.get(f"style:{data['style_id']}") if data.get("style_id") else None,
+                "blocks_json": self._remap_public_refs(data.get("blocks_json") or []),
             })
             self.db.add(new_row)
             self.db.flush()
-            id_map[row["id"]] = new_row.id
-        self.db.commit()
-        for new_id in id_map.values():
-            template = self.document_template_service.repository.get(self.db, new_id)
-            if template is None:
+            recipe_map[row["id"]] = new_row.id
+        for row in self._t("document_export"):
+            data = self._resolve_row("document_export", row)
+            if data.get("protocol_id") and protocol_map.get(data["protocol_id"]) is None:
                 continue
-            path = self.document_template_service._materialize_template(self.db, template)
-            self.document_template_service.repository.update(self.db, template, {"filesystem_path": path})
-        return id_map
+            self.db.add(self._build(DocumentExport, data, {
+                "tenant_id": new_tenant_id,
+                "protocol_id": protocol_map.get(data["protocol_id"]) if data.get("protocol_id") else None,
+                "recipe_id": recipe_map.get(data["recipe_id"]) if data.get("recipe_id") else None,
+                "style_id": style_map.get(f"style:{data['style_id']}") if data.get("style_id") else None,
+                "stored_file_id": stored_file_map.get(data["stored_file_id"]) if data.get("stored_file_id") else None,
+            }))
+        for row in self._t("protocol_export_cache"):
+            new_protocol_id = protocol_map.get(row.get("protocol_id"))
+            if new_protocol_id is None or row.get("export_format") != "pdf":
+                continue
+            old_file_id = row.get("generated_file_id")
+            self.db.add(DocumentExport(
+                tenant_id=new_tenant_id,
+                protocol_id=new_protocol_id,
+                document_type="protocol",
+                stored_file_id=stored_file_map.get(old_file_id) if old_file_id else None,
+            ))
+        self.db.commit()
 
     # ── full-scope tables ─────────────────────────────────────────────────
 
@@ -814,7 +888,7 @@ class TenantImportService:
         return id_map
 
     def _import_templates(
-        self, new_tenant_id: int, *, document_template_map, cycle_config_map, element_definition_map,
+        self, new_tenant_id: int, *, document_style_map, cycle_config_map, element_definition_map,
         event_map, participant_map, list_definition_map, list_entry_map, finance_account_map,
     ) -> tuple[dict[int, int], dict[int, int], dict[int, int]]:
         template_map: dict[int, int] = {}
@@ -822,7 +896,7 @@ class TenantImportService:
             data = self._resolve_row("template", row)
             new_row = self._build(Template, data, {
                 "tenant_id": new_tenant_id,
-                "document_template_id": document_template_map.get(data["document_template_id"]) if data.get("document_template_id") else None,
+                "document_style_id": self._style_ref(document_style_map, data),
                 "next_event_id": event_map.get(data["next_event_id"]) if data.get("next_event_id") else None,
                 "last_event_id": event_map.get(data["last_event_id"]) if data.get("last_event_id") else None,
                 "cycle_config_id": cycle_config_map.get(data["cycle_config_id"]) if data.get("cycle_config_id") else None,
@@ -1055,7 +1129,7 @@ class TenantImportService:
             }))
         self.db.commit()
 
-    def _import_protocols(self, new_tenant_id: int, template_map, document_template_map, event_map) -> dict[int, int]:
+    def _import_protocols(self, new_tenant_id: int, template_map, document_style_map, event_map) -> dict[int, int]:
         id_map: dict[int, int] = {}
         for row in self._t("protocol"):
             data = self._resolve_row("protocol", row)
@@ -1065,7 +1139,7 @@ class TenantImportService:
             new_row = self._build(Protocol, data, {
                 "tenant_id": new_tenant_id,
                 "template_id": new_template_id,
-                "document_template_id": document_template_map.get(data["document_template_id"]) if data.get("document_template_id") else None,
+                "document_style_id": self._style_ref(document_style_map, data),
                 "event_id": event_map.get(data["event_id"]) if data.get("event_id") else None,
                 # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - nach dem
                 # Import gelten die (ebenfalls importierten) Live-Todos.
@@ -1187,18 +1261,6 @@ class TenantImportService:
             if new_block_id is None or new_stored_file_id is None:
                 continue
             self.db.add(self._build(ProtocolImage, row, {"protocol_element_block_id": new_block_id, "stored_file_id": new_stored_file_id}))
-        self.db.commit()
-
-    def _import_protocol_export_caches(self, protocol_map: dict[int, int], stored_file_map: dict[int, int]) -> None:
-        for row in self._t("protocol_export_cache"):
-            new_protocol_id = protocol_map.get(row["protocol_id"])
-            if new_protocol_id is None:
-                continue
-            old_file_id = row.get("generated_file_id")
-            self.db.add(self._build(ProtocolExportCache, row, {
-                "protocol_id": new_protocol_id,
-                "generated_file_id": stored_file_map.get(old_file_id) if old_file_id else None,
-            }))
         self.db.commit()
 
     def _import_finance_transactions(self, finance_account_map: dict[int, int], protocol_map: dict[int, int]) -> dict[int, int]:

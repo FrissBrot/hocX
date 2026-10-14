@@ -24,7 +24,6 @@ from app.schemas.user import (
     TenantUpdate,
 )
 from app.services import domain_verification_service, traefik_config_service
-from app.services.document_template_service import DocumentTemplateService
 from app.services.storage_service import StorageService
 
 
@@ -48,7 +47,6 @@ async def apply_tenant_profile_image(tenant: Tenant, profile_image: UploadFile) 
 
 class TenantService:
     def __init__(self) -> None:
-        self.document_template_service = DocumentTemplateService()
         self.storage_service = StorageService()
 
     def _manageable_tenant_ids(self, actor: CurrentUser) -> set[int]:

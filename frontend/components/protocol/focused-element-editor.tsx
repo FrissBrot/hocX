@@ -41,7 +41,6 @@ import { applyEventFilter, blockEventFilter, eventFilterTagText, eventMatchesFil
 import {
   AttendanceFine,
   AttendanceFineListItem,
-  DocumentTemplate,
   EventSummary,
   FinanceAccount,
   FinanceTransaction,
@@ -151,7 +150,6 @@ export function FocusedElementEditor({
   pendingTodos,
   onPendingUpdate,
   onPendingDone,
-  documentTemplates,
   isActive = true,
   autoFocusToken = 0,
   tagConfig,
@@ -225,7 +223,6 @@ export function FocusedElementEditor({
   pendingTodos: TodoListItem[];
   onPendingUpdate: (updated: Partial<TodoListItem> & { id: string }) => void;
   onPendingDone: (todoId: string) => void;
-  documentTemplates: DocumentTemplate[];
   /** True while this section is the one currently in focus in the scrollable document (see protocol-editor.tsx's scroll-spy); defaults to true for the legacy single-section "abgeschlossen" view, which always renders exactly one instance. */
   isActive?: boolean;
   /** Bumped by the parent only on an explicit "jump to this section" action (sidebar click, keyboard nav, restored scroll position) so autofocus never fires just because several sections mount at once. */

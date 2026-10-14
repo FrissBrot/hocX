@@ -129,6 +129,9 @@ def upgrade() -> None:
     op.create_index("idx_template_document_style", "template", ["document_style_id"])
     op.create_index("idx_protocol_document_style", "protocol", ["document_style_id"])
 
+    for table in ("document_style", "document_recipe"):
+        op.execute(f"CREATE TRIGGER trg_{table}_updated_at BEFORE UPDATE ON public.{table} FOR EACH ROW EXECUTE FUNCTION public.set_updated_at()")
+
     for table in TABLES:
         op.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table} TO hocx_app")
         op.execute(f"GRANT USAGE, SELECT ON SEQUENCE {table}_id_seq TO hocx_app")

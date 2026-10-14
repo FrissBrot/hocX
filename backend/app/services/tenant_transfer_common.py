@@ -74,6 +74,9 @@ USER_ID_COLUMNS: dict[str, list[str]] = {
     "share_link": ["created_by"],
     "calendar_feed": ["user_id"],
     "photo_album_tenant_share": ["invited_by", "responded_by"],
+    "document_style_asset": ["created_by"],
+    "document_recipe": ["created_by"],
+    "document_export": ["created_by"],
 }
 # user_id is part of the primary key on user_template_access/user_protocol_access/
 # user_protocol_scroll - it can never be NULL, so TenantImportService drops those rows
@@ -252,22 +255,6 @@ class UserIdentityCache:
 # Shared between TenantCloneService (same-DB copy) and TenantImportService (restore from
 # a portable export) - both need to rewrite the participant/list/event ids embedded in
 # these JSONB blobs from an old id space into a newly assigned one.
-
-def remap_document_template_config(config: dict | None, part_map: dict[int, int]) -> dict:
-    config = copy.deepcopy(config or {})
-    slots = config.get("slots")
-    if isinstance(slots, dict):
-        config["slots"] = {k: part_map.get(v, v) for k, v in slots.items()}
-    theme = config.get("theme")
-    if isinstance(theme, dict):
-        font_parts = theme.get("font_parts")
-        if isinstance(font_parts, dict):
-            theme["font_parts"] = {k: part_map.get(v, v) for k, v in font_parts.items()}
-    title_assets = config.get("title_assets")
-    if isinstance(title_assets, dict):
-        config["title_assets"] = {k: part_map.get(v, v) for k, v in title_assets.items()}
-    return config
-
 
 def remap_template_element_config(
     config: dict | None,

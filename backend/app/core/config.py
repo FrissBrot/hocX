@@ -56,7 +56,6 @@ class Settings(BaseSettings):
     # keep working unchanged.
     app_database_url: str = ""
     storage_root: str = "/app/storage"
-    latex_template_root: str = "/app/storage/latex_templates"
     export_root: str = "/app/storage/exports"
     upload_root: str = "/app/storage/uploads"
     thumbnail_root: str = "/app/storage-local/thumbnails"

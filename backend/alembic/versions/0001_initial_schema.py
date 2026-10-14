@@ -57,8 +57,8 @@ def _read_password(env_var: str, role_name: str) -> str:
 def _execute_raw(sql: str) -> None:
     # op.execute()/exec_driver_sql() route through SQLAlchemy's DBAPI parameter handling,
     # which scans for '%'-style placeholders even when no parameters are bound - and
-    # baseline_schema.sql's create_protocol_from_template function body contains a literal
-    # '%' (PL/pgSQL's own RAISE format placeholder). Going through the raw psycopg cursor
+    # baseline_schema.sql's function bodies may contain a literal '%' (PL/pgSQL's own RAISE
+    # format placeholder). Going through the raw psycopg cursor
     # instead (no parameters argument at all) skips that scan entirely, so the DDL reaches
     # Postgres byte-for-byte unmodified - still inside the same connection/transaction alembic
     # is managing, since it's the same underlying DBAPI connection.

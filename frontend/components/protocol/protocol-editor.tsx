@@ -29,7 +29,6 @@ import { protocolStatusVariant } from "@/components/protocol/protocol-status";
 import {
   AttendanceFine,
   AttendanceFineListItem,
-  DocumentTemplate,
   EventSummary,
   FinanceAccount,
   FinanceTransaction,
@@ -74,7 +73,6 @@ type ProtocolEditorProps = {
   availableAccounts: FinanceAccount[];
   initialFinanceTransactions: Record<string, FinanceTransaction[]>;
   initialPendingTodos?: TodoListItem[];
-  documentTemplates?: DocumentTemplate[];
   forceReadOnly?: boolean;
   canViewFines?: boolean;
   accordionEnabled?: boolean;
@@ -94,7 +92,6 @@ export function ProtocolEditor({
   availableAccounts,
   initialFinanceTransactions,
   initialPendingTodos = [],
-  documentTemplates = [],
   forceReadOnly = false,
   canViewFines = true,
   accordionEnabled = true,
@@ -1841,7 +1838,6 @@ export function ProtocolEditor({
               pendingTodos={pendingTodos}
               onPendingUpdate={(updated) => setPendingTodos((prev) => prev.map((t) => t.id === updated.id ? { ...t, ...updated } : t))}
               onPendingDone={(todoId) => setPendingTodos((prev) => prev.filter((t) => t.id !== todoId))}
-              documentTemplates={documentTemplates}
             />
             </div>
           ))}

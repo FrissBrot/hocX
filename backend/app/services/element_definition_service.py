@@ -160,7 +160,6 @@ class ElementDefinitionService:
             is_editable=False,
             allows_multiple_values=False,
             export_visible=True,
-            latex_template=None,
             configuration_json={"blocks": normalized_blocks},
             is_active=payload.is_active,
         )

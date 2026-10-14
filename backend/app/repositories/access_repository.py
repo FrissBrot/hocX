@@ -4,11 +4,11 @@ from sqlalchemy import delete, distinct, exists, func, or_, select, union_all
 from sqlalchemy.orm import Session
 
 from app.models import (
+    DocumentExport,
     Participant,
     Protocol,
     ProtocolElement,
     ProtocolElementBlock,
-    ProtocolExportCache,
     ProtocolImage,
     ProtocolTodo,
     StoredFile,
@@ -156,8 +156,9 @@ class AccessRepository:
         return db.scalar(statement)
 
     def protocol_id_for_stored_file(self, db: Session, *, stored_file_id: int) -> int | None:
-        export_q = select(ProtocolExportCache.protocol_id.label("protocol_id")).where(
-            ProtocolExportCache.generated_file_id == stored_file_id
+        export_q = select(DocumentExport.protocol_id.label("protocol_id")).where(
+            DocumentExport.stored_file_id == stored_file_id,
+            DocumentExport.protocol_id.is_not(None),
         )
         image_q = (
             select(ProtocolElement.protocol_id.label("protocol_id"))

@@ -146,7 +146,7 @@
     "noCycle": "No cycle",
     "noDescription": "No description",
     "noElementsYet": "No elements in the template yet.",
-    "noLayoutAssigned": "No layout assigned",
+    "noLayoutAssigned": "Organisation’s default house style",
     "noListSelected": "No list selected",
     "noMatchingElements": "No matching elements found.",
     "noMatchingParticipants": "No participants found for the current search term.",
@@ -158,8 +158,8 @@
     "participantAssignmentsSaveFailed": "Participant assignments could not be saved",
     "participantFallback": "Participant",
     "patternTokensHelp": "Tokens: '{n}' = all protocols, '{n_year}' = this year, '{n_month}' = this month, '{n_cycle}' = within the own cycle. Date tokens: '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
-    "pdfLayoutHelp": "Used for the PDF export. Can be configured under Settings → Document layouts.",
-    "pdfLayoutLabel": "PDF layout",
+    "pdfLayoutHelp": "Used when exporting protocols of this template as PDF. Manage house styles under Settings → House styles.",
+    "pdfLayoutLabel": "House style",
     "positionAbbr": "Pos.",
     "protocolNumberPatternHelp": "Examples: Session [n], Session [mm].[n_month], Y[yy]-[n_cycle]. Square and curly brackets both work.",
     "protocolNumberPatternLabel": "Protocol number pattern",
@@ -186,7 +186,7 @@
     "searchParticipantsPlaceholder": "Search participants",
     "searchPlaceholder": "Search templates",
     "settingSaveFailed": "Setting could not be saved",
-    "settingsDescription": "General information about this template and the document layout used.",
+    "settingsDescription": "General information about this template and the house style it uses.",
     "settingsTitle": "Template settings",
     "statusChangeFailedToast": "Status could not be changed",
     "tableLinkUpdateFailed": "Table link could not be updated",
@@ -204,7 +204,8 @@
     "unknownList": "Unknown list",
     "unknownParticipant": "Unknown participant",
     "unknownRow": "Unknown row",
-    "unnamed": "Unnamed"
+    "unnamed": "Unnamed",
+    "defaultStyleSuffix": "(default)"
   },
   "editor": {
     "active": "Active",
@@ -295,7 +296,7 @@
     "noCycle": "No cycle",
     "noDescription": "No description",
     "noElementsYet": "No elements in the template yet.",
-    "noLayoutAssigned": "No layout assigned",
+    "noLayoutAssigned": "Organisation’s default house style",
     "noListSelected": "No list selected",
     "noMatchingElements": "No matching elements found.",
     "noMatchingParticipants": "No participants found for the current search term.",
@@ -307,8 +308,8 @@
     "participantAssignmentsSaveFailed": "Participant assignments could not be saved",
     "participantFallback": "Participant",
     "patternTokensHelp": "Tokens: '{n}' = all protocols, '{n_year}' = this year, '{n_month}' = this month, '{n_cycle}' = within the own cycle. Date tokens: '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
-    "pdfLayoutHelp": "Used for the PDF export. Can be configured under Settings → Document layouts.",
-    "pdfLayoutLabel": "PDF layout",
+    "pdfLayoutHelp": "Used when exporting protocols of this template as PDF. Manage house styles under Settings → House styles.",
+    "pdfLayoutLabel": "House style",
     "positionAbbr": "Pos.",
     "protocolNumberPatternHelp": "Examples: Session [n], Session [mm].[n_month], Y[yy]-[n_cycle]. Square and curly brackets both work.",
     "protocolNumberPatternLabel": "Protocol number pattern",
@@ -335,7 +336,7 @@
     "searchParticipantsPlaceholder": "Search participants",
     "searchPlaceholder": "Search templates",
     "settingSaveFailed": "Setting could not be saved",
-    "settingsDescription": "General information about this template and the document layout used.",
+    "settingsDescription": "General information about this template and the house style it uses.",
     "settingsTitle": "Template settings",
     "statusChangeFailedToast": "Status could not be changed",
     "tableLinkUpdateFailed": "Table link could not be updated",
@@ -354,326 +355,8 @@
     "unknownParticipant": "Unknown participant",
     "unknownRow": "Unknown row",
     "unnamed": "Unnamed",
-    "behaviorOverridden": "{label} – differs from the element default"
-  },
-  "documentTemplates": {
-    "advancedInfoNote": "Custom LaTeX files override the chosen presets from the Structure tab. Leave empty to use the preset.",
-    "bottomLeftFooterImageHelp": "Silhouette or similar — choose from the parts library.",
-    "bottomLeftFooterImageLabel": "Footer image bottom left",
-    "browse": "browse",
-    "cancel": "Cancel",
-    "chooseColor": "Choose color",
-    "chooseLayoutFromList": "Choose a layout from the list.",
-    "chooseOtherFile": "choose another file",
-    "close": "Close",
-    "colActions": "Actions",
-    "colorsLabel": "Colors",
-    "combinedTocHint": "The table of contents is integrated into this title page.",
-    "combinedTocLabel": "Title page + table of contents — configuration",
-    "createErrorToast": "Error while creating",
-    "createLayoutSubmit": "Create layout",
-    "createLayoutTitle": "Create new layout",
-    "customLatexFilesTitle": "Custom LaTeX files set",
-    "defaultForTenant": "Default for organization",
-    "delete": "Delete",
-    "deleteErrorToast": "Error while deleting",
-    "deleteLayoutConfirm": "Delete this layout permanently?",
-    "deleteLayoutConfirmNamed": "Delete layout \"{name}\" permanently?",
-    "deletePartConfirm": "Delete this part permanently?",
-    "deletePartConfirmNamed": "Delete part \"{name}\" permanently?",
-    "dragFileHere": "Drag a file here",
-    "emptyStateDescription": "Document templates determine the layout, logo and headers of exported protocols.",
-    "emptyStateTitle": "No document template yet",
-    "fieldActive": "Active",
-    "fieldDescription": "Description",
-    "fieldName": "Name",
-    "fieldStandard": "Default",
-    "fieldVersion": "Version",
-    "fontCustom": "Custom font",
-    "fontDescArial": "Classic, highly legible",
-    "fontDescCenturyGothic": "Geometric, modern",
-    "fontDescCustom": "Upload font files",
-    "fontDescHelvetica": "Modern, neutral",
-    "fontDescPalatino": "Elegant, serious",
-    "fontFamilyLabel": "Font",
-    "fontNoteCustom": "Upload your own font files to the parts library. Regular is required, variants are optional.",
-    "fontNoteNotPreinstalled": "This font is not preinstalled — upload font files to the parts library. Regular is required, variants are optional.",
-    "fontSizeLabel": "Font size",
-    "footerContactHelp": "Line breaks are supported.",
-    "footerContactLabel": "Footer text (contact)",
-    "footerContactPlaceholder": "e.g. Example Association | 1234 Example Town\nwww.example.com",
-    "footerHint": "Appears at the bottom of every page.",
-    "footerLabel": "Footer",
-    "footerTextColor": "Footer text color",
-    "footerTextColorHelp": "Color for the contact text.",
-    "formatLabel": "Format",
-    "headerHint": "Appears at the top of every page.",
-    "headerImageHelp": "PNG or JPG — choose from the parts library. Height in the header: approx. 0.8 cm.",
-    "headerImageLabel": "Logo / image for the header",
-    "headerLabel": "Header",
-    "inactive": "Inactive",
-    "kindFont": "Font",
-    "kindFontFile": "Font file",
-    "kindFontHint": "Font files are assigned to the four variants under \"Custom font\" in the Design tab. Regular is required.",
-    "kindImage": "Image",
-    "kindImageFile": "Image file",
-    "kindImageHint": "Images appear in the \"Logo / image\" picker of the title page and header presets in the layout editor.",
-    "kindLatex": "LaTeX part",
-    "kindLatexFile": "LaTeX file",
-    "kindLatexHint": "LaTeX parts override the corresponding slot in the Advanced tab — only needed when the presets are not enough.",
-    "layoutCreatedToast": "Layout created",
-    "layoutDeletedToast": "Layout deleted",
-    "layoutLabel": "Layout",
-    "layoutSavedToast": "Layout saved",
-    "layoutsLabel": "Layouts",
-    "libraryEntryLabel": "Library entry",
-    "locationHelp": "Appears with the date in the top left.",
-    "locationLabel": "Location",
-    "locationPlaceholder": "e.g. Example Town",
-    "moreOptionsLabel": "More options",
-    "newDocumentTemplateButton": "+ Document template",
-    "newLayoutButton": "+ New layout",
-    "newPartButton": "+ New part",
-    "noImage": "No image",
-    "noLayouts": "No layouts.",
-    "none": "None",
-    "noPartsFound": "No parts found.",
-    "numberingLabel": "Numbering",
-    "numberingNone": "Without numbers",
-    "numberingNoneDesc": "Title only, no numbers",
-    "numberingSections": "With numbers",
-    "numberingSectionsDesc": "1. Section, 1.1 Subsection",
-    "optionalSuffix": "— optional",
-    "or": "or",
-    "orientationLandscape": "Landscape",
-    "orientationLandscapeDesc": "A4 horizontal — for lists & tables",
-    "orientationPortrait": "Portrait",
-    "orientationPortraitDesc": "A4 vertical — for protocols",
-    "pageIntro": "Manage PDF layouts and reusable LaTeX parts for the protocol export.",
-    "pageIntroEmpty": "Layouts for PDF and Word exports.",
-    "pageTitle": "Document templates",
-    "partDeletedToast": "Part deleted",
-    "partDescriptionPlaceholder": "What is this part used for?",
-    "partKindLabel": "Part type",
-    "partNamePlaceholder": "e.g. Logo",
-    "partsLibraryDescription": "Images, font files and LaTeX building blocks that layouts can use.",
-    "partsLibraryLabel": "Parts library",
-    "partUploadedToast": "Part uploaded",
-    "pdfLayoutsDescription": "Layouts define the appearance of the exported protocol.",
-    "pdfLayoutsLabel": "PDF layouts",
-    "pleaseChooseFile": "Please choose a file",
-    "preview": "Preview",
-    "primaryColor": "Primary color",
-    "resetColors": "Reset colors",
-    "saveErrorToast": "Error while saving",
-    "saveLayoutButton": "Save layout",
-    "searchEllipsis": "Search…",
-    "searchLayoutsAriaLabel": "Search layouts",
-    "searchPartsPlaceholder": "Search parts…",
-    "secondaryColor": "Secondary color",
-    "showMetadataHelp": "Shows an automatic metadata block (number, title, date, status) in the exported PDF. Hidden by default.",
-    "showMetadataLabel": "Show protocol metadata",
-    "slotLabel": "Slot",
-    "standardLayoutCreatedToast": "Standard layout created",
-    "standardLayoutName": "Standard layout",
-    "statusLabel": "Status",
-    "tabAdvanced": "Advanced",
-    "tabDesign": "Design",
-    "tabStructure": "Structure",
-    "titlePageHint": "First page of the protocol with metadata.",
-    "titlePageLabel": "Title page",
-    "tocHint": "Overview of all sections.",
-    "tocLabel": "Table of contents",
-    "tocSpacingCompact": "Compact",
-    "tocSpacingHelp": "Spacing between table-of-contents entries.",
-    "tocSpacingLabel": "Table-of-contents line spacing",
-    "tocSpacingStandard": "Standard",
-    "tocSpacingVeryCompact": "Very compact",
-    "topLeftImageHelp": "PNG or JPG — choose from the parts library.",
-    "topLeftImageLabel": "Logo / image top left",
-    "typeLabel": "Type",
-    "upload": "Upload",
-    "uploadErrorToast": "Error while uploading",
-    "uploadPartDescription": "Add your own file to the parts library — layouts then embed it via its slot.",
-    "uploadPartTitle": "Upload part",
-    "usePreset": "— Use preset —",
-    "useStandardLayoutButton": "Use standard layout",
-    "preset": {
-      "footer": {
-        "datePage": {
-          "label": "Date & page",
-          "desc": "Date on the left, page number on the right"
-        },
-        "minimal": {
-          "label": "Page number",
-          "desc": "Page number centered only"
-        },
-        "none": {
-          "label": "No footer",
-          "desc": "Page without a footer"
-        },
-        "standard": {
-          "label": "Protocol & page",
-          "desc": "Protocol number on the left, page on the right"
-        },
-        "withVersion": {
-          "label": "With version",
-          "desc": "Number on the left, version centered, page on the right"
-        }
-      },
-      "header": {
-        "bar": {
-          "label": "Colored bar",
-          "desc": "Accent color with white text"
-        },
-        "logoBar": {
-          "label": "Logo + color bar",
-          "desc": "Logo and title in a colored bar"
-        },
-        "logoDate": {
-          "label": "Logo + date",
-          "desc": "Logo on the left, date centered, page on the right"
-        },
-        "logo": {
-          "label": "Logo + title",
-          "desc": "Logo on the left, title centered, date on the right"
-        },
-        "minimal": {
-          "label": "Page number",
-          "desc": "Page number top right only"
-        },
-        "none": {
-          "label": "No header",
-          "desc": "Page without a header"
-        },
-        "standard": {
-          "label": "Title & date",
-          "desc": "Title on the left, date on the right"
-        }
-      },
-      "titlePage": {
-        "bold": {
-          "label": "Bold",
-          "desc": "Full-bleed accent color"
-        },
-        "combinedToc": {
-          "label": "Title page + table of contents",
-          "desc": "Logo, color boxes, title & TOC on one page"
-        },
-        "minimal": {
-          "label": "Minimal",
-          "desc": "Centered title, clean"
-        },
-        "modern": {
-          "label": "Modern",
-          "desc": "Colored header block"
-        },
-        "none": {
-          "label": "No title page",
-          "desc": "Start directly with content"
-        }
-      },
-      "toc": {
-        "compact": {
-          "label": "Compact",
-          "desc": "Smaller, denser layout"
-        },
-        "none": {
-          "label": "No table of contents",
-          "desc": "Without an overview page"
-        },
-        "standard": {
-          "label": "Standard",
-          "desc": "With page numbers"
-        }
-      }
-    },
-    "slot": {
-      "elementAttendance": {
-        "label": "Element — Attendance",
-        "help": "How attendance lists are rendered in the PDF."
-      },
-      "elementBulletList": {
-        "label": "Element — Bullet list",
-        "help": "How bullet lists are rendered in the PDF."
-      },
-      "elementEvents": {
-        "label": "Element — Event list",
-        "help": "How event lists are rendered in the PDF."
-      },
-      "elementForm": {
-        "label": "Element — Form",
-        "help": "How form rows are rendered in the PDF."
-      },
-      "elementImage": {
-        "label": "Element — Image",
-        "help": "How images are rendered in the PDF."
-      },
-      "elementSessionDate": {
-        "label": "Element — Session date",
-        "help": "How the next session date is rendered in the PDF."
-      },
-      "elementStaticText": {
-        "label": "Element — Static text",
-        "help": "How fixed text is rendered in the PDF."
-      },
-      "elementText": {
-        "label": "Element — Text",
-        "help": "How text blocks are rendered in the PDF."
-      },
-      "elementTodo": {
-        "label": "Element — Todo list",
-        "help": "How todo lists are rendered in the PDF."
-      },
-      "fontBold": {
-        "label": "Font — Bold",
-        "short": "Bold",
-        "help": "Optional bold variant."
-      },
-      "fontBoldItalic": {
-        "label": "Font — Bold italic",
-        "short": "Bold italic",
-        "help": "Optional bold italic variant."
-      },
-      "fontItalic": {
-        "label": "Font — Italic",
-        "short": "Italic",
-        "help": "Optional italic variant."
-      },
-      "fontRegular": {
-        "label": "Font — Regular",
-        "short": "Regular",
-        "help": "Main font file, required."
-      },
-      "headerFooter": {
-        "label": "Layout — Header & footer",
-        "help": "Overrides the chosen header/footer presets."
-      },
-      "macros": {
-        "label": "LaTeX — Macros",
-        "help": "Reusable commands."
-      },
-      "preamble": {
-        "label": "LaTeX — Preamble",
-        "help": "Packages and global settings."
-      },
-      "titleFooterImage": {
-        "label": "Image — Title page footer",
-        "help": "Image bottom left on the title page."
-      },
-      "titleHeaderImage": {
-        "label": "Image — Title page logo",
-        "help": "Logo top left on the title page."
-      },
-      "titlePage": {
-        "label": "Layout — Title page",
-        "help": "Overrides the chosen title-page preset."
-      },
-      "toc": {
-        "label": "Layout — Table of contents",
-        "help": "Overrides the chosen table-of-contents preset."
-      }
-    }
+    "behaviorOverridden": "{label} – differs from the element default",
+    "defaultStyleSuffix": "(default)"
   },
   "elementEditor": {
     "advancedShow": "Advanced",

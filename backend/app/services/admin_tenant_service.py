@@ -45,7 +45,6 @@ from app.schemas.admin import (
 )
 from app.schemas.public_catalog import PublicCustomerRead, PublicPlanFeature, PublicPlanRead
 from app.schemas.user import TenantUpdate
-from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import _safe_storage_path
 from app.services import submission_link_service, traefik_config_service
 from app.services.storage_service import StorageService
@@ -62,7 +61,6 @@ class AdminTenantService:
     """Cross-tenant tenant management for the platform-admin panel - unscoped by design."""
 
     def __init__(self) -> None:
-        self.document_template_service = DocumentTemplateService()
         self.storage_service = StorageService()
 
     def _read_model(
@@ -584,7 +582,11 @@ class AdminTenantService:
         db.add(tenant)
         db.commit()
         db.refresh(tenant)
-        self.document_template_service.ensure_default_template_for_tenant(db, tenant.id, tenant.name)
+        from app.documents import style_service
+
+        # Jeder Mandant startet mit einem Standard-Hausstil (Dokument-Engine).
+        style_service.ensure_default_style(db, tenant.id)
+        db.commit()
         # Every new tenant starts with a default Abgabe link (preselected for new Abgaben).
         submission_link_service.create_default_link(db, tenant.id)
         if payload.plan_code is not None:
@@ -633,13 +635,13 @@ class AdminTenantService:
         first (each cascading its own dependents in one self-contained statement) clears every
         such RESTRICT before the final tenant delete ever touches its cascade targets:
         - protocol: takes protocol_element/_block/_image/_text/... and attendance_fine with it,
-          clearing protocol_image's restrict into stored_file and protocol's own restricts into
-          template/document_template.
+          clearing protocol_image's restrict into stored_file and protocol's own restrict into
+          template.
         - submission_assignment: takes submission_upload/_file with it, clearing
           submission_upload_file's restrict into stored_file and its own restrict into
           list_definition.
         - template: takes template_element/_block with it, clearing their restrict into
-          element_definition, and its own restrict into document_template.
+          element_definition, and its own restricts.
         - word_import_document: has its own (non-nullable) restricts straight into template
           and stored_file - it doesn't cascade from protocol/submission_assignment/template
           (its protocol_id link is SET NULL, not CASCADE), so it must be cleared explicitly
@@ -651,7 +653,7 @@ class AdminTenantService:
 
         # Captured before any DB delete below (audit finding, 2026-08-25): this method
         # only ever removed DB rows - not one unlink() for protocol images, document
-        # template parts, abgabebox uploads, or the tenant's profile image. Every full
+        # style assets, abgabebox uploads, or the tenant's profile image. Every full
         # tenant delete permanently leaked every physical file the tenant ever had,
         # exactly the failure class behind this app's two prior real disk-full outages.
         # stored_file cascades from tenant_id (ondelete="CASCADE"), so every row for this
@@ -690,9 +692,7 @@ class AdminTenantService:
         if profile_image_path:
             self._unlink_quietly(settings.storage_root, profile_image_path)
         for relative_dir in (
-            f"document_templates/tenant-{tenant_id}",
-            f"document_template_parts/tenant-{tenant_id}",
-            f"document_template_snapshots/tenant-{tenant_id}",
+            f"document_style_assets/tenant-{tenant_id}",
             f"tenant_imports/tenant-{tenant_id}",
         ):
             directory = _safe_storage_path(settings.storage_root, relative_dir)

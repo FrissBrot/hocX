@@ -47,7 +47,10 @@ from app.models.entities import (
     Protocol,
     ProtocolElement,
     ProtocolElementBlock,
-    ProtocolExportCache,
+    DocumentExport,
+    DocumentRecipe,
+    DocumentStyle,
+    DocumentStyleAsset,
     ProtocolTodo,
     Role,
     StoredFile,
@@ -149,7 +152,7 @@ def test_export_bundles_only_own_users_and_nulls_foreign_references(db):
         assert "foreign@x.example" not in json.dumps(manifest)
         assert manifest["tables"]["template"][0]["created_by"] is None
         assert "user_tenant_role" not in manifest["tables"]
-        assert manifest["format_version"] == 4
+        assert manifest["format_version"] == 5
     finally:
         zip_path.unlink(missing_ok=True)
 
@@ -279,20 +282,36 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
             tenant_id=tenant.id, template_id=template.id, signal_type="event_match",
             suggested_score=0.87, was_accepted=True,
         ),
-        ProtocolExportCache(
-            protocol_id=protocol.id, export_format="pdf", latex_source="source",
-            generated_file_id=generated_file.id, generator_version="test-v1",
+        DocumentExport(
+            tenant_id=tenant.id, protocol_id=protocol.id, document_type="protocol", version_label="v0.1",
+            content_hash="ab" * 32, pdf_sha256="cd" * 32, stored_file_id=generated_file.id, signature_level="PAdES-B-B",
         ),
         UserProtocolScroll(user_id=user.id, protocol_id=protocol.id, last_element_id=17),
     ])
+    db.flush()
+    # Hausstil mit hochgeladenem Logo, Vorlage verweist darauf, Rezept mit Protokoll-Verweis
+    logo_path = tmp_path / "document_style_assets" / "logo.png"
+    logo_path.parent.mkdir(parents=True)
+    logo_path.write_bytes(b"png-logo")
+    logo = DocumentStyleAsset(tenant_id=tenant.id, kind="image", name="Logo", storage_path="document_style_assets/logo.png", mime_type="image/png")
+    db.add(logo)
+    db.flush()
+    style = DocumentStyle(tenant_id=tenant.id, name="Verein", style_key="classic", tokens_json={"logo_asset_id": str(logo.public_id), "header": "logo"}, is_default=True)
+    db.add(style)
+    db.flush()
+    template.document_style_id = style.id
+    db.add(DocumentRecipe(tenant_id=tenant.id, name="Monatsbrief", style_id=style.id, blocks_json=[{"type": "session_notes", "params": {"protocol_id": str(protocol.public_id)}}]))
     db.flush()
 
     zip_path, _ = TenantExportService().export(db, tenant.id, "full")
     try:
         manifest = _read_manifest(zip_path)
+        assert len(manifest["tables"]["document_style"]) == 1
+        assert len(manifest["tables"]["document_style_asset"]) == 1
+        assert len(manifest["tables"]["document_recipe"]) == 1
         assert len(manifest["tables"]["word_import_profile"]) == 1
         assert len(manifest["tables"]["word_import_suggestion_outcome"]) == 1
-        assert len(manifest["tables"]["protocol_export_cache"]) == 1
+        assert len(manifest["tables"]["document_export"]) == 1
         assert manifest["tables"]["user_protocol_scroll"][0]["user_id"] == str(user.public_id)
         # Fresh target installation: the source account isn't there (see the word import test).
         db.delete(user)
@@ -305,7 +324,10 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     imported_protocol = db.scalar(select(Protocol).where(Protocol.tenant_id == imported_tenant.id))
     profile = db.scalar(select(WordImportProfile).where(WordImportProfile.tenant_id == imported_tenant.id))
     outcome = db.scalar(select(WordImportSuggestionOutcome).where(WordImportSuggestionOutcome.tenant_id == imported_tenant.id))
-    cache = db.scalar(select(ProtocolExportCache).where(ProtocolExportCache.protocol_id == imported_protocol.id))
+    cache = db.scalar(select(DocumentExport).where(DocumentExport.protocol_id == imported_protocol.id))
+    imported_style = db.scalar(select(DocumentStyle).where(DocumentStyle.tenant_id == imported_tenant.id, DocumentStyle.name == "Verein"))
+    imported_logo = db.scalar(select(DocumentStyleAsset).where(DocumentStyleAsset.tenant_id == imported_tenant.id))
+    imported_recipe = db.scalar(select(DocumentRecipe).where(DocumentRecipe.tenant_id == imported_tenant.id))
     restored_user = db.scalar(select(AppUser).where(AppUser.email == "backup@example.com"))
     scroll = db.get(UserProtocolScroll, (restored_user.id, imported_protocol.id))
 
@@ -314,9 +336,15 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     assert profile.mapping_config_json == {"learned": {"source": "target"}}
     assert outcome.template_id == imported_template.id
     assert outcome.suggested_score == pytest.approx(0.87)
-    assert cache.generated_file_id is not None
-    assert db.get(StoredFile, cache.generated_file_id).tenant_id == imported_tenant.id
-    assert (tmp_path / db.get(StoredFile, cache.generated_file_id).storage_path).read_bytes() == b"pdf-cache"
+    assert cache.stored_file_id is not None and cache.version_label == "v0.1" and cache.content_hash == "ab" * 32
+    assert db.get(StoredFile, cache.stored_file_id).tenant_id == imported_tenant.id
+    assert (tmp_path / db.get(StoredFile, cache.stored_file_id).storage_path).read_bytes() == b"pdf-cache"
+    assert imported_style.is_default and imported_style.style_key == "classic"
+    assert imported_style.tokens_json["logo_asset_id"] == str(imported_logo.public_id)
+    assert (tmp_path / imported_logo.storage_path).read_bytes() == b"png-logo"
+    assert imported_template.document_style_id == imported_style.id
+    assert imported_recipe.style_id == imported_style.id
+    assert imported_recipe.blocks_json[0]["params"]["protocol_id"] == str(imported_protocol.public_id)
     assert scroll.last_element_id == 17
 
 

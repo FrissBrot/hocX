@@ -631,52 +631,6 @@ class ListEntry(Base, TimestampMixin, UpdatedAtMixin):
     )
 
 
-class DocumentTemplate(Base, TimestampMixin, UpdatedAtMixin):
-    __tablename__ = "document_template"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "code", "version", name="uq_document_template_tenant_code_version"),
-        CheckConstraint("version >= 1", name="ck_document_template_version_positive"),
-        Index("idx_document_template_tenant_code_version", "tenant_id", "code", "version"),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    public_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
-    )
-    tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"))
-    code: Mapped[str] = mapped_column(Text, nullable=False)
-    name: Mapped[str] = mapped_column(Text, nullable=False)
-    description: Mapped[str | None] = mapped_column(Text)
-    filesystem_path: Mapped[str] = mapped_column(Text, nullable=False)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
-    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
-    configuration_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
-
-
-class DocumentTemplatePart(Base, TimestampMixin, UpdatedAtMixin):
-    __tablename__ = "document_template_part"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "code", "version", name="uq_document_template_part_tenant_code_version"),
-        CheckConstraint("version >= 1", name="ck_document_template_part_version_positive"),
-        Index("idx_document_template_part_tenant_type", "tenant_id", "part_type"),
-        Index("idx_document_template_part_active", "tenant_id", "is_active"),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    public_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
-    )
-    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
-    code: Mapped[str] = mapped_column(Text, nullable=False)
-    name: Mapped[str] = mapped_column(Text, nullable=False)
-    part_type: Mapped[str] = mapped_column(Text, nullable=False)
-    description: Mapped[str | None] = mapped_column(Text)
-    storage_path: Mapped[str] = mapped_column(Text, nullable=False)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
-
-
 class DocumentStyle(Base, TimestampMixin, UpdatedAtMixin):
     """Hausstil-Konfiguration eines Mandanten (Dokument-Engine). Anpassung nur über Daten:
     ``style_key`` wählt den Stil im Repo, ``tokens_json`` folgt
@@ -808,7 +762,6 @@ class Template(Base, TimestampMixin, UpdatedAtMixin):
         CheckConstraint("status IN ('active', 'archived')", name="ck_template_status"),
         Index("idx_template_tenant", "tenant_id"),
         Index("idx_template_status", "status"),
-        Index("idx_template_document_template", "document_template_id"),
         Index("idx_template_created_by", "created_by"),
         Index("idx_template_cycle_config", "cycle_config_id"),
     )
@@ -818,7 +771,6 @@ class Template(Base, TimestampMixin, UpdatedAtMixin):
         PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
     )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
-    document_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="RESTRICT"))
     document_style_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_style.id", ondelete="SET NULL"))
     next_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
     last_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
@@ -896,7 +848,6 @@ class ElementDefinition(Base, TimestampMixin, UpdatedAtMixin):
     is_editable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     allows_multiple_values: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
     export_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
-    latex_template: Mapped[str | None] = mapped_column(Text)
     configuration_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
 
@@ -961,7 +912,6 @@ class Protocol(Base, TimestampMixin, UpdatedAtMixin):
         Index("idx_protocol_template", "template_id"),
         Index("idx_protocol_event", "event_id"),
         Index("idx_protocol_status", "status"),
-        Index("idx_protocol_document_template", "document_template_id", "document_template_version"),
         Index("idx_protocol_created_by", "created_by"),
     )
 
@@ -972,9 +922,6 @@ class Protocol(Base, TimestampMixin, UpdatedAtMixin):
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="RESTRICT"), nullable=False)
     template_version: Mapped[int] = mapped_column(Integer, nullable=False)
-    document_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="RESTRICT"))
-    document_template_version: Mapped[int | None] = mapped_column(Integer)
-    document_template_path_snapshot: Mapped[str | None] = mapped_column(Text)
     document_style_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_style.id", ondelete="SET NULL"))
     protocol_number: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str | None] = mapped_column(Text)
@@ -1049,7 +996,6 @@ class ProtocolElementBlock(Base, TimestampMixin):
     is_required_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
     is_visible_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     export_visible_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
-    latex_template_snapshot: Mapped[str | None] = mapped_column(Text)
     configuration_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
 
 
@@ -1079,7 +1025,6 @@ class StoredFile(Base, TimestampMixin):
     original_name: Mapped[str] = mapped_column(Text, nullable=False)
     mime_type: Mapped[str | None] = mapped_column(Text)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
-    latex_path: Mapped[str | None] = mapped_column(Text)
     file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     checksum_sha256: Mapped[str | None] = mapped_column(Text)
     source_checksum_sha256: Mapped[str | None] = mapped_column(Text)
@@ -1366,25 +1311,6 @@ class GalleryImage(Base, TimestampMixin):
     submission_element_ref: Mapped[str | None] = mapped_column(Text)
     submission_element_label: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
-
-
-class ProtocolExportCache(Base, TimestampMixin):
-    __tablename__ = "protocol_export_cache"
-    __table_args__ = (
-        CheckConstraint("export_format IN ('latex', 'pdf')", name="ck_protocol_export_cache_format"),
-        Index("idx_protocol_export_cache_protocol", "protocol_id", "export_format"),
-        Index("idx_protocol_export_cache_generated_file", "generated_file_id"),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    public_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
-    )
-    protocol_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"), nullable=False)
-    export_format: Mapped[str] = mapped_column(Text, nullable=False)
-    latex_source: Mapped[str | None] = mapped_column(Text)
-    generated_file_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="SET NULL"))
-    generator_version: Mapped[str | None] = mapped_column(Text)
 
 
 # ── Finance ───────────────────────────────────────────────────────────────────

@@ -46,8 +46,10 @@ from app.models import (
     TaskPackageItem,
     AttendanceFine,
     CycleConfig,
-    DocumentTemplate,
-    DocumentTemplatePart,
+    DocumentExport,
+    DocumentRecipe,
+    DocumentStyle,
+    DocumentStyleAsset,
     ElementDefinition,
     Event,
     EventCycle,
@@ -65,7 +67,6 @@ from app.models import (
     ProtocolDisplaySnapshot,
     ProtocolElement,
     ProtocolElementBlock,
-    ProtocolExportCache,
     ProtocolImage,
     ProtocolText,
     ProtocolTodo,
@@ -119,7 +120,7 @@ from app.services.tenant_transfer_common import (
 # tenant's own users are bundled. TenantImportService still reads version 2.
 # Format 3 also gained (without a version bump - purely additive tables an older importer just
 # ignores) photo albums, table snapshots, links/feeds/shares and tenant settings.
-FORMAT_VERSION = 4
+FORMAT_VERSION = 5  # 5: Dokument-Engine (Hausstile, Stil-Assets, Rezepte, document_export)
 ExportScope = Literal["structure", "structure_lists", "full", "full_abgabebox"]
 
 
@@ -233,19 +234,19 @@ class TenantExportService:
             "element_definition",
         )
 
-        parts = db.scalars(select(DocumentTemplatePart).where(DocumentTemplatePart.tenant_id == tenant_id)).all()
-        part_rows = []
-        for part in parts:
-            row = self._row(part, "document_template_part")
-            row["storage_path"] = self._register_file(
-                settings.storage_root, part.storage_path, f"files/document_template_parts/{part.id}"
-            )
-            part_rows.append(row)
-        tables["document_template_part"] = part_rows
-
-        tables["document_template"] = self._rows(
-            db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id == tenant_id)).all(),
-            "document_template",
+        # Hausstile: hochgeladene Schriften/Bilder (mit Datei), Stile (Tokens verweisen per
+        # public_id auf die Assets) und Dokument-Rezepte.
+        asset_rows = []
+        for asset in db.scalars(select(DocumentStyleAsset).where(DocumentStyleAsset.tenant_id == tenant_id)).all():
+            row = self._row(asset, "document_style_asset")
+            row["storage_path"] = self._register_file(settings.storage_root, asset.storage_path, f"files/document_style_assets/{asset.id}")
+            asset_rows.append(row)
+        tables["document_style_asset"] = asset_rows
+        tables["document_style"] = self._rows(
+            db.scalars(select(DocumentStyle).where(DocumentStyle.tenant_id == tenant_id)).all(), "document_style"
+        )
+        tables["document_recipe"] = self._rows(
+            db.scalars(select(DocumentRecipe).where(DocumentRecipe.tenant_id == tenant_id)).all(), "document_recipe"
         )
 
         templates = db.scalars(select(Template).where(Template.tenant_id == tenant_id)).all()
@@ -528,11 +529,10 @@ class TenantExportService:
             db.scalars(select(TableSnapshot).where(TableSnapshot.tenant_id == tenant_id)).all(), "table_snapshot"
         )
         self._export_photo_albums(db, tenant_id, tables, include_abgabebox=include_abgabebox)
-        tables["protocol_export_cache"] = self._rows(
-            db.scalars(select(ProtocolExportCache).where(ProtocolExportCache.protocol_id.in_(protocol_ids))).all()
-            if protocol_ids
-            else [],
-            "protocol_export_cache",
+        # Export-Datensätze (Version, Inhalts-Hash, Signatur-Prüfsumme) - die PDFs selbst
+        # reisen als stored_file mit.
+        tables["document_export"] = self._rows(
+            db.scalars(select(DocumentExport).where(DocumentExport.tenant_id == tenant_id)).all(), "document_export"
         )
 
     def _export_photo_albums(self, db: Session, tenant_id: int, tables: dict[str, Any], *, include_abgabebox: bool) -> None:
