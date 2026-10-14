@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse, StreamingResponse
 
 from app.core.config import settings
@@ -28,7 +28,8 @@ from app.schemas.submission import (
     SubmissionUploadLogEntry,
 )
 from app.services import public_id_service
-from app.services.file_service import FileService, _safe_storage_path
+from app.core.storage import ABGABEBOX, get_object_store, object_response, write_object_to_zip
+from app.services.file_service import FileService
 from app.services.submission_link_service import SubmissionLinkService
 from app.services.submission_service import SubmissionService
 
@@ -242,6 +243,7 @@ def close_element(
 def get_submission_file_content(
     upload_id: uuid.UUID,
     file_id: uuid.UUID,
+    request: Request = None,  # type: ignore[assignment]  # None nur bei direktem Aufruf in Tests
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -262,9 +264,6 @@ def get_submission_file_content(
         raise HTTPException(status_code=423, detail="Datei wird noch auf Viren geprüft")
     if stored_file.scan_status == "infected":
         raise HTTPException(status_code=403, detail="Datei wurde als Schadware eingestuft und gesperrt")
-    file_path = _safe_storage_path(settings.abgabebox_storage_root, stored_file.storage_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Datei fehlt im Dateisystem")
     mime = stored_file.mime_type or "application/octet-stream"
     # SECURITY: only ever trust the stored mime_type, never the filename - abgabebox uploads now
     # derive mime_type server-side from verified file content (see _EXTENSION_MIME_MAP in
@@ -273,13 +272,15 @@ def get_submission_file_content(
     # regardless of what mime_type ends up being.
     is_pdf = mime.lower() == "application/pdf"
     disposition = "inline" if is_pdf else "attachment"
-    return FileResponse(
-        path=file_path,
+    return object_response(
+        request,
+        ABGABEBOX,
+        stored_file.storage_path,
         media_type=mime,
-        headers={
-            "Content-Disposition": f'{disposition}; filename="{stored_file.original_name}"',
-            "X-Content-Type-Options": "nosniff",
-        },
+        filename=stored_file.original_name,
+        attachment=disposition == "attachment",
+        headers={"X-Content-Type-Options": "nosniff"},
+        not_found_detail="Datei fehlt im Dateisystem",
     )
 
 
@@ -477,8 +478,7 @@ def download_all_files_zip(
                 )
                 if stored_file is None or stored_file.scan_status != "clean":
                     continue
-                file_path = _safe_storage_path(settings.abgabebox_storage_root, stored_file.storage_path)
-                if not file_path.exists():
+                if not get_object_store().exists(ABGABEBOX, stored_file.storage_path):
                     continue
                 arcname = stored_file.original_name
                 if arcname in used_names:
@@ -487,7 +487,7 @@ def download_all_files_zip(
                     arcname = f"{stem}_{used_names[arcname]}.{ext}" if ext else f"{arcname}_{used_names[arcname]}"
                 else:
                     used_names[arcname] = 0
-                zf.write(file_path, arcname=arcname)
+                write_object_to_zip(zf, ABGABEBOX, stored_file.storage_path, arcname)
 
     buf.seek(0)
     slug = re.sub(r"[^a-z0-9]+", "-", (assignment.title or str(assignment_id)).lower()).strip("-")

@@ -53,7 +53,7 @@ from app.models import (
 from app.models.entities import submission_assignment_link_table
 from app.services import submission_link_service
 from app.services.document_template_service import DocumentTemplateService
-from app.services.file_service import _safe_storage_path
+from app.core.storage import ABGABEBOX, MAIN, ObjectNotFound, get_object_store, new_object_key, safe_suffix, validate_key
 from app.services.tenant_transfer_common import (
     remap_block_configuration,
     remap_document_template_config,
@@ -313,7 +313,7 @@ class TenantCloneService:
         db.add(new_tenant)
         db.commit()
         db.refresh(new_tenant)
-        image_path = self._clone_tenant_profile_image(source.profile_image_path, new_tenant_id=new_tenant.id)
+        image_path = self._clone_tenant_profile_image(db, source.profile_image_path, new_tenant_id=new_tenant.id)
         if image_path is not None:
             new_tenant.profile_image_path = image_path
             db.add(new_tenant)
@@ -321,11 +321,14 @@ class TenantCloneService:
             db.refresh(new_tenant)
         return new_tenant
 
-    def _clone_tenant_profile_image(self, source_path: str | None, *, new_tenant_id: int) -> str | None:
+    def _clone_tenant_profile_image(self, db: Session, source_path: str | None, *, new_tenant_id: int) -> str | None:
         if not source_path:
             return None
-        source = _safe_storage_path(settings.storage_root, source_path)
-        if not source.exists():
+        upload_prefix = Path(settings.upload_root).resolve().relative_to(Path(settings.storage_root).resolve()).as_posix()
+        target = f"{upload_prefix}/tenant-profiles/tenant-{new_tenant_id}-{uuid4().hex}{safe_suffix(source_path, '.png')}"
+        try:
+            get_object_store().copy(db, MAIN, source_path, target)
+        except ObjectNotFound:
             # Unlike the structurally identical import path (which appends a warning the
             # admin sees), a missing source file here was silently dropped with no signal
             # at all (audit finding, 2026-08-25) - logged so it's at least discoverable in
@@ -333,39 +336,31 @@ class TenantCloneService:
             # ended up empty.
             _logger.warning("tenant clone: source profile image missing at %s (new_tenant_id=%s)", source_path, new_tenant_id)
             return None
-        suffix = Path(source_path).suffix or ".png"
-        profile_dir = Path(settings.upload_root) / "tenant-profiles"
-        profile_dir.mkdir(parents=True, exist_ok=True)
-        target = profile_dir / f"tenant-{new_tenant_id}-{uuid4().hex}{suffix}"
-        shutil.copy2(source, target)
-        return str(target.relative_to(Path(settings.storage_root).resolve()))
+        return target
 
-    def _clone_stored_file_content(self, storage_path: str, *, root: str, new_tenant_id: int) -> str:
-        root_path = Path(root).resolve()
-        source = _safe_storage_path(root, storage_path)
-        suffix = Path(storage_path).suffix or ".bin"
-        target_dir = root_path / "tenant_clones" / f"tenant-{new_tenant_id}"
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / f"{uuid4().hex}{suffix}"
-        if source.exists():
-            shutil.copy2(source, target_path)
-        else:
+    def _clone_stored_file_content(self, db: Session, storage_path: str, *, namespace: str, new_tenant_id: int) -> str:
+        """Kopie im selben Namespace (serverseitig bei S3). Fehlt die Quelle, bleibt der Key
+        ohne Objekt - wie bisher die leere Zieldatei, sichtbar im Prüfbericht als fehlend."""
+        target = new_object_key("tenant_clones", f"tenant-{new_tenant_id}", filename=storage_path)
+        try:
+            get_object_store().copy(db, namespace, storage_path, target)
+        except ObjectNotFound:
             _logger.warning("tenant clone: source stored file missing at %s (new_tenant_id=%s)", storage_path, new_tenant_id)
-        return str(target_path.relative_to(root_path))
+        return target
 
     def _clone_document_template_part_file(
-        self, source_storage_path: str, *, new_tenant_id: int, part_type: str, code: str, version: int
+        self, db: Session, source_storage_path: str, *, new_tenant_id: int, part_type: str, code: str, version: int
     ) -> str:
-        source = _safe_storage_path(settings.storage_root, source_storage_path)
-        suffix = Path(source_storage_path).suffix or ".tex"
-        target_dir = Path(settings.storage_root) / "document_template_parts" / f"tenant-{new_tenant_id}" / part_type / code
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / f"v{version}{suffix}"
-        if source.exists():
-            shutil.copy2(source, target_path)
-        else:
+        target = validate_key(
+            "/".join(
+                part for part in ("document_template_parts", f"tenant-{new_tenant_id}", part_type, code, f"v{version}{safe_suffix(source_storage_path, '.tex')}") if part
+            )
+        )
+        try:
+            get_object_store().copy(db, MAIN, source_storage_path, target)
+        except ObjectNotFound:
             _logger.warning("tenant clone: source document template part missing at %s (new_tenant_id=%s)", source_storage_path, new_tenant_id)
-        return str(target_path.relative_to(Path(settings.storage_root).resolve()))
+        return target
 
     # ── structure/config tables ─────────────────────────────────────────
 
@@ -407,6 +402,7 @@ class TenantCloneService:
         id_map: dict[int, int] = {}
         for row in rows:
             new_storage_path = self._clone_document_template_part_file(
+                db,
                 row.storage_path, new_tenant_id=new_tenant_id, part_type=row.part_type, code=row.code, version=row.version,
             )
             new_row = _copy_row(row, {"tenant_id": new_tenant_id, "storage_path": new_storage_path})
@@ -779,8 +775,8 @@ class TenantCloneService:
         )
         id_map: dict[int, int] = {}
         for row in rows:
-            root = settings.abgabebox_storage_root if row.id in abgabebox_ids else settings.storage_root
-            new_storage_path = self._clone_stored_file_content(row.storage_path, root=root, new_tenant_id=new_tenant_id)
+            namespace = ABGABEBOX if row.id in abgabebox_ids else MAIN
+            new_storage_path = self._clone_stored_file_content(db, row.storage_path, namespace=namespace, new_tenant_id=new_tenant_id)
             new_row = _copy_row(row, {"tenant_id": new_tenant_id, "storage_path": new_storage_path})
             db.add(new_row)
             db.flush()

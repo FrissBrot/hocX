@@ -359,9 +359,11 @@ def test_export_global_todo_markdown_marks_completed_items_in_all_view(db):
 # --- M17: EXPORT_ROOT/generated needs a retention sweep (no cleanup job previously) ---------
 
 
-def test_m17_cleanup_old_generated_exports_deletes_only_files_past_retention(tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "export_root", str(tmp_path))
-    generated_dir = tmp_path / "generated"
+def test_m17_cleanup_old_generated_exports_deletes_only_files_past_retention(db, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    monkeypatch.setattr(settings, "export_root", str(tmp_path / "exports"))
+    generated_dir = tmp_path / "exports" / "generated"
+    generated_dir.parent.mkdir()
     generated_dir.mkdir()
 
     old_file = generated_dir / "old-export.pdf"
@@ -373,16 +375,18 @@ def test_m17_cleanup_old_generated_exports_deletes_only_files_past_retention(tmp
     os.utime(old_file, (old_timestamp, old_timestamp))
 
     service = ExportService()
-    result = service.cleanup_old_generated_exports()
+    result = service.cleanup_old_generated_exports(db)
 
     assert result == {"deleted": 1}
     assert not old_file.exists()
     assert recent_file.exists()
 
 
-def test_m17_cleanup_old_generated_exports_respects_custom_retention(tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "export_root", str(tmp_path))
-    generated_dir = tmp_path / "generated"
+def test_m17_cleanup_old_generated_exports_respects_custom_retention(db, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    monkeypatch.setattr(settings, "export_root", str(tmp_path / "exports"))
+    generated_dir = tmp_path / "exports" / "generated"
+    generated_dir.parent.mkdir()
     generated_dir.mkdir()
 
     file_path = generated_dir / "export.pdf"
@@ -392,19 +396,20 @@ def test_m17_cleanup_old_generated_exports_respects_custom_retention(tmp_path, m
 
     service = ExportService()
 
-    assert service.cleanup_old_generated_exports(retention_days=30) == {"deleted": 0}
+    assert service.cleanup_old_generated_exports(db, retention_days=30) == {"deleted": 0}
     assert file_path.exists()
 
-    assert service.cleanup_old_generated_exports(retention_days=5) == {"deleted": 1}
+    assert service.cleanup_old_generated_exports(db, retention_days=5) == {"deleted": 1}
     assert not file_path.exists()
 
 
-def test_m17_cleanup_old_generated_exports_missing_dir_is_a_noop(tmp_path, monkeypatch):
+def test_m17_cleanup_old_generated_exports_missing_dir_is_a_noop(db, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     monkeypatch.setattr(settings, "export_root", str(tmp_path / "does-not-exist"))
 
     service = ExportService()
 
-    assert service.cleanup_old_generated_exports() == {"deleted": 0}
+    assert service.cleanup_old_generated_exports(db) == {"deleted": 0}
 
 
 # --- Sitzungsnotizen-Block (element_type session_notes) ----------------------------------

@@ -21,3 +21,5 @@ Pillow==12.3.0
 pillow-heif==1.7.0
 ImageHash==4.3.2
 
+# S3-Objektspeicher (app/core/objstore_client.py, docs/storage/ARCHITEKTUR.md)
+boto3==1.43.113

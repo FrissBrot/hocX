@@ -18,7 +18,10 @@ _INSECURE_DEFAULTS = {
 
 def _load_file_secrets() -> None:
     """Resolve Docker-style VAR_FILE inputs without exposing values in Config.Env."""
-    for variable in ("DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD"):
+    for variable in (
+        "DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD",
+        "STORAGE_CREDENTIALS_KEY", "LOCAL_S3_SECRET_KEY", "LOCAL_S3_ABGABEBOX_SECRET_KEY",
+    ):
         file_variable = f"{variable}_FILE"
         if variable not in os.environ and (path := os.environ.get(file_variable)):
             os.environ[variable] = Path(path).read_text(encoding="utf-8").rstrip("\r\n")
@@ -148,6 +151,45 @@ class Settings(BaseSettings):
     clamav_port: int = 3310
     redis_url: str = "redis://redis:6379/0"
 
+    # --- Objektspeicher (docs/storage/ARCHITEKTUR.md) ---------------------------------------
+    # Schlüssel für die Verschlüsselung der S3-Zugangsdaten in storage_profile. Gemeinsam mit
+    # abgabebox-backend, photo-analysis-worker und storage-worker; nie im Frontend/Log.
+    storage_credentials_key: str = ""
+    # Lokales Garage-S3 aus docker-compose (Profil "Lokales S3" wird beim Start angelegt bzw.
+    # aktualisiert, solange die Variablen gesetzt sind). Leer = kein lokales S3 bereitgestellt.
+    local_s3_endpoint: str = ""
+    local_s3_region: str = "garage"
+    local_s3_bucket: str = ""
+    local_s3_abgabebox_bucket: str = ""
+    local_s3_access_key: str = ""
+    local_s3_secret_key: str = ""
+    local_s3_abgabebox_access_key: str = ""
+    local_s3_abgabebox_secret_key: str = ""
+    # Wie lange eine abgelöste Speichergeneration nach einem Cutover garantiert erhalten bleibt.
+    storage_fallback_days: int = 14
+    # Lokaler Arbeitsbereich für materialisierte Vorlagen-Snapshots und temporäre Kopien.
+    storage_work_root: str = "/app/storage-local/work"
+    storage_journal_retention_days: int = 30
+
+    # --- Wartungsmodus -----------------------------------------------------------------------
+    # Wie lange ein Prozess den Wartungszustand zwischenspeichert (Middleware). Kurz halten: der
+    # Initial-Migrations-Worker wartet vor dem Fencen mindestens zweimal so lange.
+    maintenance_cache_seconds: float = 2.0
+    maintenance_supervisor_interval_seconds: int = 15
+    # MaintenanceEstimator (app/services/maintenance_estimator.py): bewusst vorsichtige
+    # Annahmen, solange keine Messwerte/Historie vorliegen. Raten in Bytes pro Sekunde.
+    estimator_default_rate_local_bps: int = 25 * 1024 * 1024
+    estimator_default_rate_external_bps: int = 6 * 1024 * 1024
+    estimator_per_object_seconds_local: float = 0.03
+    estimator_per_object_seconds_external: float = 0.15
+    estimator_rate_derating: float = 0.75
+    estimator_safety_factor: float = 0.5
+    estimator_min_reserve_seconds: int = 300
+    estimator_cutover_min_reserve_seconds: int = 60
+    estimator_init_seconds: int = 60
+    estimator_cutover_seconds: int = 60
+    estimator_healthcheck_seconds: int = 60
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property
@@ -169,6 +211,15 @@ class Settings(BaseSettings):
                 file=sys.stderr,
             )
             sys.exit(1)
+        if self.local_s3_access_key and (
+            self.storage_credentials_key in _INSECURE_DEFAULTS or len(self.storage_credentials_key) < 32
+        ):
+            print(
+                "FATAL: STORAGE_CREDENTIALS_KEY is insecure or not set although LOCAL_S3_* is configured. "
+                "Set a random value of at least 32 characters in .env.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         if self.environment.strip().lower() == "production":
             if not self.auth_secure_cookies:
                 print("FATAL: AUTH_SECURE_COOKIES must be true in production.", file=sys.stderr)
@@ -179,6 +230,10 @@ class Settings(BaseSettings):
             if self.initial_admin_password == "ChangeMe123!":
                 print("FATAL: The known development admin password is forbidden in production.", file=sys.stderr)
                 sys.exit(1)
+
+    @property
+    def storage_filesystem_roots(self) -> dict[str, Path]:
+        return {"main": Path(self.storage_root), "abgabebox": Path(self.abgabebox_storage_root)}
 
     @property
     def is_production(self) -> bool:

@@ -115,7 +115,14 @@ def test_delete_document_template_removes_directory_and_row(db):
     assert not output_dir.exists()
 
 
-def test_snapshot_template_for_protocol_raises_when_files_missing(db):
+def test_snapshot_template_for_protocol_rematerializes_missing_template_cache(db):
+    """Der materialisierte Vorlagenordner ist seit dem Objektspeicher nur noch ein lokaler,
+    regenerierbarer Cache (Konfiguration + Bauteile sind die Quelle). Fehlt er, wird er beim
+    Snapshot neu erzeugt, statt das Protokoll ohne Vorlage zu lassen - und der Snapshot selbst
+    landet persistent im Objektspeicher."""
+    from pathlib import Path
+
+    from app.core.storage import MAIN, get_object_store, key_from_legacy_path
     from tests.factories import make_protocol, make_template
 
     tenant = make_tenant(db, "Snapshot Missing Verein")
@@ -129,8 +136,11 @@ def test_snapshot_template_for_protocol_raises_when_files_missing(db):
     template = make_template(db, tenant.id)
     protocol = make_protocol(db, tenant.id, template.id)
 
-    with pytest.raises(ValueError, match="Document template files are missing"):
-        service.snapshot_template_for_protocol(db, protocol, _internal_id(db, tenant.id, created.id))
+    updated = service.snapshot_template_for_protocol(db, protocol, _internal_id(db, tenant.id, created.id))
+
+    assert (Path(created.filesystem_path) / "main.tex").exists()
+    snapshot_key = key_from_legacy_path(updated.document_template_path_snapshot)
+    assert get_object_store().exists(MAIN, f"{snapshot_key}/main.tex")
 
 
 # --- _escape_latex (protects free-text admin input from breaking the generated .tex) -----
@@ -227,7 +237,7 @@ def test_save_part_file_rejects_upload_over_the_size_limit(db):
     upload = UploadFile(oversized, size=MAX_UPLOAD_BYTES + 1, filename="preamble.tex")
 
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(service._save_part_file(payload, upload, tenant_id=tenant.id))
+        asyncio.run(service._save_part_file(db, payload, upload, tenant_id=tenant.id))
     assert exc_info.value.status_code == 413
 
 
@@ -238,7 +248,7 @@ def test_save_part_file_accepts_upload_within_the_size_limit(db):
     content = b"\\usepackage{xcolor}\n"
     upload = UploadFile(io.BytesIO(content), size=len(content), filename="preamble.tex")
 
-    storage_path = asyncio.run(service._save_part_file(payload, upload, tenant_id=tenant.id))
+    storage_path = asyncio.run(service._save_part_file(db, payload, upload, tenant_id=tenant.id))
 
     from app.core.config import settings
 

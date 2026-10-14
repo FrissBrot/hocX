@@ -14,6 +14,7 @@ from app.api.routes import admin, admin_auth, auth, calendar_feeds, collaboratio
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
+from app.core.objstore_client import StorageUnavailable, StorageWriteFenced
 from app.core.error_log import best_effort_actor_from_request, record_system_error
 from app.core.redis_client import close_redis_pool
 from app.core.security import hash_password
@@ -231,7 +232,7 @@ async def export_cleanup_loop() -> None:
     await run_advisory_locked_loop(
         name="export_cleanup",
         interval_seconds=settings.export_cleanup_interval_minutes * 60,
-        task=lambda _db: export_service.cleanup_old_generated_exports(),
+        task=lambda db: export_service.cleanup_old_generated_exports(db),
     )
 
 
@@ -455,6 +456,34 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     finally:
         db.close()
     return JSONResponse(status_code=500, content={"detail": "Ein interner Fehler ist aufgetreten."})
+
+
+@app.exception_handler(StorageWriteFenced)
+async def storage_write_fenced_handler(request: Request, exc: StorageWriteFenced) -> JSONResponse:
+    """Persistente Schreibvorgänge sind kurz gesperrt (Cutover/Wartung) - erwartet, kein Fehler
+    für system_error_log. 503 + Retry-After, damit Clients später erneut versuchen."""
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Speichern ist gerade kurz gesperrt (Wartung). Bitte in Kürze erneut versuchen.", "code": "storage_write_fenced"},
+        headers={"Retry-After": str(exc.retry_after_seconds), "Cache-Control": "no-store"},
+    )
+
+
+@app.exception_handler(StorageUnavailable)
+async def storage_unavailable_handler(request: Request, exc: StorageUnavailable) -> JSONResponse:
+    """Objektspeicher nicht erreichbar: protokollieren (unerwarteter Betriebsfehler) und 503
+    statt 500 - der Zustand ist vorübergehend, nichts wurde inkonsistent bestätigt."""
+    db = SessionLocal()
+    try:
+        tenant_id, actor_email = best_effort_actor_from_request(db, request)
+        record_system_error(db, exc=exc, request=request, tenant_id=tenant_id, actor_email=actor_email, status_code=503)
+    finally:
+        db.close()
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Der Dateispeicher ist vorübergehend nicht erreichbar.", "code": "storage_unavailable"},
+        headers={"Retry-After": "30", "Cache-Control": "no-store"},
+    )
 
 
 @app.exception_handler(HTTPException)

@@ -10,7 +10,7 @@ from app.models.entities import CycleConfig, Event, GalleryUploadJob, PhotoAlbum
 from app.schemas.files import PhotoAlbumCreate, PhotoAlbumItemBestUpdate, PhotoAlbumRead, PhotoAlbumItemsUpdate
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
@@ -47,7 +47,8 @@ from app.schemas.protocol import ProtocolImageRead
 from app.services import photo_album_service, photo_album_share_service, public_id_service
 from app.services.access_service import AccessService
 from app.services.apple_media import pair_live_clips, MAX_LIVE_CLIP_BYTES
-from app.services.file_service import MAX_UPLOAD_BYTES, FileService, _safe_storage_path
+from app.core.storage import MAIN, ObjectNotFound, get_object_store, object_response, write_object_to_zip
+from app.services.file_service import MAX_UPLOAD_BYTES, FileService
 from app.services import submission_upload_rules
 from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref
 from app.services.upload_pipeline import GALLERY_DIRECT_IMAGE_MAX_BYTES, GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk, inspect_gallery_zip, _enforce_tenant_storage_quota
@@ -714,6 +715,7 @@ def delete_image(
 @router.get("/stored-files/{stored_file_id}/content")
 def get_stored_file_content(
     stored_file_id: uuid.UUID,
+    request: Request = None,  # type: ignore[assignment]  # None nur bei direktem Aufruf in Tests
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -728,9 +730,6 @@ def get_stored_file_content(
         raise HTTPException(422, "Virenprüfung fehlgeschlagen – Datei ist gesperrt")
     if stored_file.scan_status == "pending":
         raise HTTPException(status_code=425, detail="Datei wird noch auf Schadsoftware geprüft, bitte in Kürze erneut versuchen")
-    file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File missing on filesystem")
     # SECURITY: set nosniff so a browser never MIME-sniffs the content and renders it
     # inline against our wishes, mirroring submission_assignments.get_submission_file_content.
     # inline also covers images now, not just PDF (audit finding, 2026-08-25) - protocol
@@ -741,11 +740,14 @@ def get_stored_file_content(
     # for a real image mime type.
     # video/mp4 is the Live Photo clip (see apple_media.py) the Fotos grid plays via <video src>.
     is_inline_safe = stored_file.mime_type in {"application/pdf", "video/mp4"} or (stored_file.mime_type or "").startswith("image/")
-    return FileResponse(
-        path=file_path,
+    return object_response(
+        request,
+        MAIN,
+        stored_file.storage_path,
         media_type=stored_file.mime_type,
         filename=stored_file.original_name,
-        content_disposition_type="inline" if is_inline_safe else "attachment",
+        attachment=not is_inline_safe,
+        not_found_detail="File missing on filesystem",
         # A stored file's bytes never change after upload (a re-upload creates a new id), so the
         # browser cache can keep this for a long time - saves refetching originals opened again
         # from the Fotos viewer/lightbox within the same session.
@@ -819,6 +821,7 @@ def get_stored_file_thumbnail(
 @router.get("/stored-files/{stored_file_id}/download")
 def download_stored_file(
     stored_file_id: uuid.UUID,
+    request: Request = None,  # type: ignore[assignment]  # None nur bei direktem Aufruf in Tests
     part: Literal["image", "video", "both"] = "image",
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -846,30 +849,23 @@ def download_stored_file(
     if part == "video" and live_video is None:
         raise HTTPException(status_code=404, detail="Zu diesem Foto gibt es kein Live-Photo-Video")
 
-    image_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-    if part != "video" and not image_path.exists():
+    store = get_object_store()
+    if part != "video" and not store.exists(MAIN, stored_file.storage_path):
         raise HTTPException(status_code=404, detail="File missing on filesystem")
     headers = {"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
 
     if part == "image" or (part == "both" and live_video is None):
-        return FileResponse(
-            path=image_path,
-            media_type=stored_file.mime_type,
-            filename=stored_file.original_name,
-            content_disposition_type="attachment",
-            headers=headers,
+        return object_response(
+            request, MAIN, stored_file.storage_path, media_type=stored_file.mime_type,
+            filename=stored_file.original_name, attachment=True, headers=headers,
         )
 
-    video_path = _safe_storage_path(settings.storage_root, live_video.storage_path)
-    if not video_path.exists():
+    if not store.exists(MAIN, live_video.storage_path):
         raise HTTPException(status_code=404, detail="File missing on filesystem")
     if part == "video":
-        return FileResponse(
-            path=video_path,
-            media_type="video/mp4",
-            filename=live_video.original_name,
-            content_disposition_type="attachment",
-            headers=headers,
+        return object_response(
+            request, MAIN, live_video.storage_path, media_type="video/mp4",
+            filename=live_video.original_name, attachment=True, headers=headers,
         )
 
     # Both: JPEG and MP4 are already compressed, so the ZIP just stores them. Built on disk (not
@@ -877,9 +873,13 @@ def download_stored_file(
     work_dir = Path(settings.upload_root) / "_staging" / "download"
     work_dir.mkdir(parents=True, exist_ok=True)
     zip_path = work_dir / f"{uuid.uuid4().hex}.zip"
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_STORED) as archive:
-        archive.write(image_path, arcname=Path(stored_file.original_name).name)
-        archive.write(video_path, arcname=Path(live_video.original_name).name)
+    try:
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_STORED) as archive:
+            write_object_to_zip(archive, MAIN, stored_file.storage_path, Path(stored_file.original_name).name)
+            write_object_to_zip(archive, MAIN, live_video.storage_path, Path(live_video.original_name).name)
+    except ObjectNotFound as exc:
+        zip_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=404, detail="File missing on filesystem") from exc
     return FileResponse(
         path=zip_path,
         media_type="application/zip",

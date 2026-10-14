@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import shutil
 import unicodedata
@@ -11,6 +12,7 @@ from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.storage import ABGABEBOX, MAIN, StorageError, delete_prefix, get_object_store
 from app.models import (
     AppUser,
     Feature,
@@ -50,6 +52,8 @@ from app.services.file_service import _safe_storage_path
 from app.services import submission_link_service, traefik_config_service
 from app.services.storage_service import StorageService
 from app.services.tenant_service import apply_tenant_profile_image
+
+_logger = logging.getLogger(__name__)
 
 
 def build_admin_tenant_profile_image_url(tenant_public_id: uuid.UUID, profile_image_path: str | None) -> str | None:
@@ -615,7 +619,7 @@ class AdminTenantService:
         if payload.public_slug is not None:
             tenant.public_slug = payload.public_slug
         if profile_image is not None:
-            await apply_tenant_profile_image(tenant, profile_image)
+            await apply_tenant_profile_image(db, tenant, profile_image)
         db.add(tenant)
         db.commit()
         db.refresh(tenant)
@@ -671,7 +675,7 @@ class AdminTenantService:
         )
         stored_files = db.execute(select(StoredFile.storage_path, StoredFile.id).where(StoredFile.tenant_id == tenant_id)).all()
         stored_file_paths = [
-            (row.storage_path, settings.abgabebox_storage_root if row.id in abgabebox_stored_file_ids else settings.storage_root)
+            (row.storage_path, ABGABEBOX if row.id in abgabebox_stored_file_ids else MAIN)
             for row in stored_files
         ]
         profile_image_path = tenant.profile_image_path
@@ -683,22 +687,41 @@ class AdminTenantService:
         db.delete(tenant)
         db.commit()
 
-        # Only after the DB transaction has actually committed - an unlink can't be rolled
-        # back, so it must never run ahead of the delete it depends on succeeding.
-        for storage_path, root in stored_file_paths:
-            self._unlink_quietly(root, storage_path)
+        # Only after the DB transaction has actually committed - a deletion can't be rolled
+        # back, so it must never run ahead of the delete it depends on succeeding. Die
+        # Löschungen laufen in einer eigenen Transaktion über den Objektspeicher (Journal), damit
+        # eine laufende Storage-Migration sie übernimmt.
+        for storage_path, namespace in stored_file_paths:
+            self._delete_object_quietly(db, namespace, storage_path)
         if profile_image_path:
-            self._unlink_quietly(settings.storage_root, profile_image_path)
+            self._delete_object_quietly(db, MAIN, profile_image_path)
         for relative_dir in (
             f"document_templates/tenant-{tenant_id}",
             f"document_template_parts/tenant-{tenant_id}",
             f"document_template_snapshots/tenant-{tenant_id}",
             f"tenant_imports/tenant-{tenant_id}",
         ):
+            try:
+                delete_prefix(db, MAIN, relative_dir)
+                db.commit()
+            except StorageError as exc:
+                db.rollback()
+                _logger.warning("Objekte unter %s konnten nicht gelöscht werden: %s", relative_dir, exc)
+            # Lokale Caches (materialisierte Vorlagen) ebenfalls entfernen.
             directory = _safe_storage_path(settings.storage_root, relative_dir)
             if directory.exists():
                 shutil.rmtree(directory, ignore_errors=True)
         return True
+
+    def _delete_object_quietly(self, db: Session, namespace: str, key: str) -> None:
+        """Best effort wie bisher _unlink_quietly: eine verbliebene Datei ist danach ein
+        unreferenziertes Objekt, das der Prüfbericht der nächsten Migration ausweist."""
+        try:
+            get_object_store().delete(db, namespace, key)
+            db.commit()
+        except (StorageError, ValueError) as exc:
+            db.rollback()
+            _logger.warning("Objekt %s/%s konnte nicht gelöscht werden: %s", namespace, key, exc)
 
     def _unlink_quietly(self, root: str, relative_path: str) -> None:
         try:

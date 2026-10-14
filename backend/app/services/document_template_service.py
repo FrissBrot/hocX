@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models import DocumentTemplate, DocumentTemplatePart, Protocol
 from app.services.document_template_config_ids import translate_part_ids
+from app.core.storage import MAIN, ObjectNotFound, get_object_store, key_from_legacy_path, safe_suffix, upload_directory, validate_key
 from app.services.file_service import MAX_UPLOAD_BYTES, _safe_storage_path
 from app.repositories.document_template_repository import (
     DocumentTemplatePartRepository,
@@ -235,7 +236,7 @@ class DocumentTemplateService:
             version=payload.version,
             is_active=payload.is_active,
         )
-        storage_path = await self._save_part_file(storage_payload, file, tenant_id=tenant_id)
+        storage_path = await self._save_part_file(db, storage_payload, file, tenant_id=tenant_id)
         entity = DocumentTemplatePart(
             tenant_id=tenant_id,
             code=storage_payload.code or "",
@@ -270,7 +271,7 @@ class DocumentTemplateService:
                 version=values.get("version", entity.version),
                 is_active=values.get("is_active", entity.is_active),
             )
-            values["storage_path"] = await self._save_part_file(part_payload, file, tenant_id=entity.tenant_id)
+            values["storage_path"] = await self._save_part_file(db, part_payload, file, tenant_id=entity.tenant_id)
         if not values:
             return DocumentTemplatePartRead.model_validate(entity)
         updated = self.part_repository.update(db, entity, values)
@@ -288,10 +289,10 @@ class DocumentTemplateService:
         # referencing this now-deleted part in their slots config were never
         # rematerialized, leaving the dangling reference in configuration_json untouched.
         tenant_id = entity.tenant_id
-        path = _safe_storage_path(settings.storage_root, entity.storage_path)
+        storage_key = entity.storage_path
         self.part_repository.delete(db, entity)
-        if path.exists():
-            path.unlink()
+        get_object_store().delete(db, MAIN, storage_key)
+        db.commit()
         self._refresh_templates_using_part(db, part_id, tenant_id)
         return True
 
@@ -311,7 +312,9 @@ class DocumentTemplateService:
             # this check a writer could copy another tenant's private LaTeX layout/branding
             # into their own protocol.
             raise ValueError("Document template not found")
-        source_dir = Path(document_template.filesystem_path)
+        # Der materialisierte Vorlagenordner ist nur ein lokaler Cache - fehlt er (neuer
+        # Container, anderer Host), wird er aus Konfiguration und Bauteilen neu erzeugt.
+        source_dir = self.ensure_materialized(db, document_template)
         if not source_dir.exists():
             raise ValueError("Document template files are missing")
 
@@ -326,6 +329,9 @@ class DocumentTemplateService:
             shutil.rmtree(snapshot_dir)
         snapshot_dir.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(source_dir, snapshot_dir)
+        # Persistent ist allein die Kopie im Objektspeicher; der lokale Ordner dient als Cache für
+        # den Export (siehe ExportService._local_template_snapshot).
+        upload_directory(db, MAIN, key_from_legacy_path(str(snapshot_dir)), snapshot_dir)
 
         protocol.document_template_id = document_template.id
         protocol.document_template_version = document_template.version
@@ -335,7 +341,7 @@ class DocumentTemplateService:
         db.refresh(protocol)
         return protocol
 
-    async def _save_part_file(self, payload: DocumentTemplatePartCreate, file: UploadFile, *, tenant_id: int) -> str:
+    async def _save_part_file(self, db: Session, payload: DocumentTemplatePartCreate, file: UploadFile, *, tenant_id: int) -> str:
         if payload.part_type not in self.part_type_choices():
             raise HTTPException(status_code=400, detail="Invalid part_type")
         # Unlike every other upload path in this codebase (see file_service.py), this one
@@ -344,16 +350,30 @@ class DocumentTemplateService:
         # file.size first rejects an oversized upload without buffering it into memory.
         if file.size is not None and file.size > MAX_UPLOAD_BYTES:
             raise HTTPException(status_code=413, detail=f"Datei zu gross. Maximum {MAX_UPLOAD_BYTES // 1024 // 1024} MB")
-        suffix = Path(file.filename or "part.tex").suffix or ".tex"
-        relative_dir = Path("document_template_parts") / f"tenant-{tenant_id}" / payload.part_type / (payload.code or "")
-        target_dir = _safe_storage_path(settings.storage_root, str(relative_dir))
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / f"v{payload.version}{suffix}"
+        suffix = safe_suffix(file.filename or "part.tex", ".tex")
+        parts = ["document_template_parts", f"tenant-{tenant_id}", payload.part_type, payload.code or "", f"v{payload.version}{suffix}"]
+        try:
+            key = validate_key("/".join(part for part in parts if part))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid file path") from exc
         content = await file.read()
         if len(content) > MAX_UPLOAD_BYTES:
             raise HTTPException(status_code=413, detail=f"Datei zu gross. Maximum {MAX_UPLOAD_BYTES // 1024 // 1024} MB")
-        target_path.write_bytes(content)
-        return str(target_path.relative_to(settings.storage_root))
+        get_object_store().put_bytes(db, MAIN, key, content, content_type=file.content_type)
+        return key
+
+    def _part_content(self, part: DocumentTemplatePart) -> bytes | None:
+        try:
+            return get_object_store().get_bytes(MAIN, key_from_legacy_path(part.storage_path))
+        except (ObjectNotFound, ValueError):
+            return None
+
+    def ensure_materialized(self, db: Session, template: DocumentTemplate) -> Path:
+        """Lokaler Vorlagenordner für LaTeX; regeneriert ihn, wenn der Cache fehlt."""
+        path = Path(template.filesystem_path) if template.filesystem_path else None
+        if path is not None and (path / "main.tex").exists():
+            return path
+        return Path(self._materialize_template(db, template))
 
     def _materialize_template(self, db: Session, template: DocumentTemplate) -> str:
         relative_dir = Path("document_templates") / f"tenant-{template.tenant_id}" / f"{template.code}-v{template.version}"
@@ -379,20 +399,21 @@ class DocumentTemplateService:
             part_id = int(part_id) if not isinstance(part_id, int) else part_id
             if part_id not in parts_by_id:
                 continue
-            part_file = _safe_storage_path(settings.storage_root, parts_by_id[part_id].storage_path)
-            if not part_file.exists():
+            part_content = self._part_content(parts_by_id[part_id])
+            if part_content is None:
                 continue
-            target = output_dir / f"{target_stem}{part_file.suffix}"
-            shutil.copy2(part_file, target)
-            image_paths[target_stem] = f"template/{target_stem}{part_file.suffix}"
+            part_suffix = safe_suffix(parts_by_id[part_id].storage_path, "")
+            target = output_dir / f"{target_stem}{part_suffix}"
+            target.write_bytes(part_content)
+            image_paths[target_stem] = f"template/{target_stem}{part_suffix}"
 
         for slot, relative_path in PART_SLOT_FILES.items():
             content = ""
             part_id = slots.get(slot)
             if part_id and part_id in parts_by_id:
-                part_file = _safe_storage_path(settings.storage_root, parts_by_id[part_id].storage_path)
-                if part_file.exists():
-                    content = part_file.read_text(encoding="utf-8")
+                part_content = self._part_content(parts_by_id[part_id])
+                if part_content is not None:
+                    content = part_content.decode("utf-8")
             if not content:
                 content = self._preset_slot_content(slot, presets, config, image_paths)
             target = output_dir / relative_path
@@ -406,13 +427,13 @@ class DocumentTemplateService:
             part_id = font_slots.get(slot)
             if not part_id or part_id not in parts_by_id:
                 continue
-            part_file = _safe_storage_path(settings.storage_root, parts_by_id[part_id].storage_path)
-            if not part_file.exists():
+            part_content = self._part_content(parts_by_id[part_id])
+            if part_content is None:
                 continue
-            suffix = part_file.suffix or ".ttf"
+            suffix = safe_suffix(parts_by_id[part_id].storage_path, ".ttf")
             target = output_dir / f"{target_stem}{suffix}"
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(part_file, target)
+            target.write_bytes(part_content)
             font_files[slot] = target.relative_to(output_dir).as_posix()
 
         options = config.get("options", {})

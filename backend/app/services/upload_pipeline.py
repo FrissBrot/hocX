@@ -34,6 +34,7 @@ from sqlalchemy import text, select, func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.storage import MAIN, get_object_store, new_object_key
 from app.models import StoredFile, Tenant
 from app.models.entities import GalleryUploadJob
 from app.repositories.file_repository import StoredFileRepository
@@ -555,12 +556,15 @@ def ingest_file(
 
     _enforce_tenant_storage_quota(db, tenant_id=tenant_id, repo=repo, incoming_bytes=len(content))
 
-    suffix = Path(original_filename).suffix.lower() or ".bin"
-    storage_dir = Path(settings.upload_root).joinpath(*storage_subdir_parts)
-    storage_dir.mkdir(parents=True, exist_ok=True)
-    target_path = storage_dir / f"{uuid4().hex}{suffix}"
-    target_path.write_bytes(content)
-    relative_path = target_path.relative_to(settings.storage_root)
+    # Key relativ zu STORAGE_ROOT (Namespace "main"), wie bisher storage_path - die Endung wird
+    # nur übernommen, wenn sie harmlos ist (safe_suffix), nie roh aus dem Client-Dateinamen.
+    upload_prefix = Path(settings.upload_root).resolve().relative_to(Path(settings.storage_root).resolve()).as_posix()
+    relative_path = new_object_key(
+        *[part for part in (upload_prefix, *storage_subdir_parts) if part and part != "."],
+        filename=original_filename,
+    )
+    # Schreibt über das Fence-/Journal-Protokoll in der Transaktion des Aufrufers (objstore_client).
+    get_object_store().put_bytes(db, MAIN, relative_path, content, content_type=mime)
 
     checksum = hashlib.sha256(content).hexdigest()
     perceptual_hash: str | None = None

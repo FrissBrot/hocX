@@ -23,7 +23,8 @@ from app.core.rate_limit import enforce_rate_limit
 from app.models.entities import PhotoAlbum, ShareLink, StoredFile, Tenant
 from app.schemas.files import PublicShareFile, PublicShareRead
 from app.services import share_link_service
-from app.services.file_service import FileService, _safe_storage_path
+from app.core.storage import MAIN, get_object_store, object_response, read_bytes_or_404, safe_suffix, write_object_to_zip
+from app.services.file_service import FileService
 from app.services.photo_metadata_privacy import SANITIZABLE_MIME_TYPES, sanitize_image
 
 router = APIRouter()
@@ -81,25 +82,27 @@ def _needs_sanitizing(link: ShareLink, stored_file: StoredFile) -> bool:
     return stored_file.mime_type in SANITIZABLE_MIME_TYPES and not share_link_service.metadata_policy_for(link).keeps_everything
 
 
-def _public_file_bytes(link: ShareLink, stored_file: StoredFile, file_path: Path) -> bytes:
+def _public_file_bytes(link: ShareLink, stored_file: StoredFile) -> bytes:
     """Dateiinhalt fuer den oeffentlichen Abruf - Fotos ohne die Metadaten, die der Link nicht
     teilt (Standort/Aufnahmedatum/Kamera, siehe photo_metadata_privacy.py)."""
-    return sanitize_image(file_path.read_bytes(), stored_file.mime_type, share_link_service.metadata_policy_for(link))
+    content = read_bytes_or_404(MAIN, stored_file.storage_path, detail="File missing on filesystem")
+    return sanitize_image(content, stored_file.mime_type, share_link_service.metadata_policy_for(link))
 
 
-def _public_file_response(link: ShareLink, stored_file: StoredFile, *, attachment: bool, headers: dict[str, str]) -> FileResponse:
-    file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File missing on filesystem")
-    disposition = {"filename": stored_file.original_name, "content_disposition_type": "attachment"} if attachment else {}
+def _public_file_response(request: Request, link: ShareLink, stored_file: StoredFile, *, attachment: bool, headers: dict[str, str]):
     if not _needs_sanitizing(link, stored_file):
-        return FileResponse(path=file_path, media_type=stored_file.mime_type, headers=headers, **disposition)
+        return object_response(
+            request, MAIN, stored_file.storage_path, media_type=stored_file.mime_type,
+            filename=stored_file.original_name if attachment else None, attachment=attachment, headers=headers,
+            not_found_detail="File missing on filesystem",
+        )
+    disposition = {"filename": stored_file.original_name, "content_disposition_type": "attachment"} if attachment else {}
     # Gefilterte Kopie auf der Platte statt Response(bytes), damit FileResponse weiterhin
     # Content-Disposition (inkl. Umlaut-Dateinamen) und Range-Requests uebernimmt.
     work_dir = Path(settings.upload_root) / "_staging" / "download"
     work_dir.mkdir(parents=True, exist_ok=True)
-    clean_path = work_dir / f"{uuid.uuid4().hex}{file_path.suffix}"
-    clean_path.write_bytes(_public_file_bytes(link, stored_file, file_path))
+    clean_path = work_dir / f"{uuid.uuid4().hex}{safe_suffix(stored_file.storage_path)}"
+    clean_path.write_bytes(_public_file_bytes(link, stored_file))
     return FileResponse(
         path=clean_path,
         media_type=stored_file.mime_type,
@@ -180,7 +183,7 @@ def view_public_share_file(token: str, file_id: uuid.UUID, request: Request, db:
     if stored_file.mime_type not in _INLINE_IMAGE_TYPES:
         raise HTTPException(status_code=404, detail="Keine Ansicht verfügbar")
     return _public_file_response(
-        link, stored_file, attachment=False, headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=3600"}
+        request, link, stored_file, attachment=False, headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=3600"}
     )
 
 
@@ -190,7 +193,7 @@ def download_public_share_file(token: str, file_id: uuid.UUID, request: Request,
     link = _resolve_link_or_404(db, token)
     stored_file = _resolve_file_or_404(db, link, file_id)
     return _public_file_response(
-        link, stored_file, attachment=True, headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
+        request, link, stored_file, attachment=True, headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
     )
 
 
@@ -214,7 +217,8 @@ def download_public_share_all(
         except ValueError:
             raise HTTPException(status_code=422, detail="Ungültige Auswahl") from None
         stored_files = [f for f in stored_files if f.public_id in wanted]
-    stored_files = [f for f in stored_files if _safe_storage_path(settings.storage_root, f.storage_path).exists()]
+    store = get_object_store()
+    stored_files = [f for f in stored_files if store.exists(MAIN, f.storage_path)]
     if not stored_files:
         raise HTTPException(status_code=404, detail="Keine Dateien verfügbar")
     headers = {"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
@@ -229,11 +233,10 @@ def download_public_share_all(
             if name in used_names:
                 name = f"{stored_file.public_id.hex[:8]}_{name}"
             used_names.add(name)
-            file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
             if _needs_sanitizing(link, stored_file):
-                archive.writestr(name, _public_file_bytes(link, stored_file, file_path))
+                archive.writestr(name, _public_file_bytes(link, stored_file))
             else:
-                archive.write(file_path, arcname=name)
+                write_object_to_zip(archive, MAIN, stored_file.storage_path, name)
     return FileResponse(
         path=zip_path,
         media_type="application/zip",

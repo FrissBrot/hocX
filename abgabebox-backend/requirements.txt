@@ -11,3 +11,6 @@ pyclamd==0.4.0
 scipy==1.18.0
 Pillow==12.3.0
 ImageHash==4.3.2
+# S3-Objektspeicher (app/core/objstore_client.py, docs/storage/ARCHITEKTUR.md)
+boto3==1.43.113
+cryptography==50.0.0

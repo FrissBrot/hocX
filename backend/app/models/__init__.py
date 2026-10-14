@@ -139,3 +139,29 @@ __all__ = [
     "WordImportProfile",
     "WordImportSuggestionOutcome",
 ]
+
+from app.models.storage_entities import (  # noqa: E402 - eigene Datei, siehe Migration 0113/0114
+    MaintenanceEvent,
+    MaintenanceWindow,
+    StorageChangeOutbox,
+    StorageGeneration,
+    StorageMigration,
+    StorageMigrationEvent,
+    StorageMigrationObject,
+    StorageObject,
+    StorageProfile,
+    StorageState,
+)
+
+__all__ += [
+    "MaintenanceEvent",
+    "MaintenanceWindow",
+    "StorageChangeOutbox",
+    "StorageGeneration",
+    "StorageMigration",
+    "StorageMigrationEvent",
+    "StorageMigrationObject",
+    "StorageObject",
+    "StorageProfile",
+    "StorageState",
+]

@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.storage import MAIN, get_object_store, safe_suffix, validate_key
 from app.core.security import CurrentUser, require_admin, require_feature
 from app.models import AppUser, Feature, Plan, PlanFeature, StoragePackage, Tenant, TenantDomain, TenantStoragePackage
 from app.schemas.user import (
@@ -34,16 +35,14 @@ def build_tenant_profile_image_url(tenant_public_id: uuid.UUID, profile_image_pa
     return f"/api/tenants/{tenant_public_id}/profile-image"
 
 
-async def apply_tenant_profile_image(tenant: Tenant, profile_image: UploadFile) -> None:
-    """Stores an uploaded profile image on disk and updates tenant.profile_image_path in place."""
-    profile_dir = Path(settings.upload_root) / "tenant-profiles"
-    profile_dir.mkdir(parents=True, exist_ok=True)
-    suffix = Path(profile_image.filename or "profile").suffix or ".png"
-    file_name = f"tenant-{tenant.id}-{uuid4().hex}{suffix}"
-    absolute_path = profile_dir / file_name
+async def apply_tenant_profile_image(db: Session, tenant: Tenant, profile_image: UploadFile) -> None:
+    """Stores an uploaded profile image in the object store and updates tenant.profile_image_path
+    in place (Key relativ zu STORAGE_ROOT wie bisher, Namespace "main")."""
+    upload_prefix = Path(settings.upload_root).resolve().relative_to(Path(settings.storage_root).resolve()).as_posix()
+    key = validate_key(f"{upload_prefix}/tenant-profiles/tenant-{tenant.id}-{uuid4().hex}{safe_suffix(profile_image.filename, '.png')}")
     content = await profile_image.read()
-    absolute_path.write_bytes(content)
-    tenant.profile_image_path = os.path.relpath(str(absolute_path), settings.storage_root)
+    get_object_store().put_bytes(db, MAIN, key, content, content_type=profile_image.content_type)
+    tenant.profile_image_path = key
 
 
 class TenantService:
@@ -184,7 +183,7 @@ class TenantService:
             tenant.public_slug = payload.public_slug
 
         if profile_image is not None:
-            await apply_tenant_profile_image(tenant, profile_image)
+            await apply_tenant_profile_image(db, tenant, profile_image)
 
         db.add(tenant)
         db.commit()

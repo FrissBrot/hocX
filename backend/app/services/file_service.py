@@ -18,12 +18,14 @@ from sqlalchemy.orm import Session
 from app import scanner
 from app.core.config import settings
 from app.core.cycle_utils import get_cycle_year
+from app.core.storage import ABGABEBOX, MAIN, InvalidObjectKey, ObjectNotFound, get_object_store, namespace_for_root
 from app.models import AppUser, Event, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
 from app.models.entities import CycleConfig, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAnalysisJob, SubmissionAssignment
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
 from app.schemas.files import FileAlbumRef, FileOverviewItem, FileStats, PhotoAnalysisProgress, SimilarityGroup, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
 from app.services import public_id_service
+from app.services.stored_file_location import abgabebox_stored_file_ids
 from app.services.apple_media import (
     convert_heic_to_jpeg,
     is_heic,
@@ -163,6 +165,17 @@ def _normalize_tags(tags: list[str]) -> list[str]:
     return list(seen.keys())
 
 
+def _read_object(namespace: str, key: str) -> bytes | None:
+    """Inhalt eines persistenten Objekts oder None, wenn es fehlt - für die Stellen, die eine
+    fehlende Datei bisher per Path.exists() still übergangen haben."""
+    try:
+        return get_object_store().get_bytes(namespace, key)
+    except ObjectNotFound:
+        return None
+    except InvalidObjectKey as exc:
+        raise HTTPException(status_code=400, detail="Invalid file path") from exc
+
+
 def _safe_storage_path(storage_root: str, relative_path: str) -> Path:
     root = Path(storage_root).resolve()
     full = (root / relative_path).resolve()
@@ -215,9 +228,8 @@ class FileService:
         role, which never sets thumbnail_path itself). None for non-images or files whose
         content PIL can't decode - callers fall back to the original in that case.
 
-        Thumbnails live under thumbnail_root (a local-only directory, separate from
-        storage_root) so that storage_root can be moved to network-attached storage without
-        dragging previews along - see hocx storage-offload plan. Named by stored_file.id
+        Thumbnails live under thumbnail_root (a local-only, regenerable cache) - the original
+        itself comes from the object store (app.core.storage), never from a local path. Named by stored_file.id
         rather than mirroring the original's path, since storage_root differs between callers
         (tenant files vs. abgabebox submissions) but thumbnail_root is shared."""
         thumbnail_root = thumbnail_root or settings.thumbnail_root
@@ -228,10 +240,10 @@ class FileService:
             if existing.exists():
                 return existing
 
-        original_path = _safe_storage_path(storage_root, stored_file.storage_path)
-        if not original_path.exists():
+        original = _read_object(namespace_for_root(storage_root), stored_file.storage_path)
+        if original is None:
             return None
-        generated = generate_thumbnail_bytes(original_path.read_bytes())
+        generated = generate_thumbnail_bytes(original)
         if generated is None:
             return None
         thumbnail_bytes, width, height = generated
@@ -479,8 +491,9 @@ class FileService:
                 return True
             for key, row, path in ((a, row_a, path_a), (b, row_b, path_b)):
                 if key not in signatures:
-                    root = settings.abgabebox_storage_root if row.source == "submission_upload" else settings.storage_root
-                    signatures[key] = duplicate_signature(_safe_storage_path(root, path))
+                    namespace = ABGABEBOX if row.source == "submission_upload" else MAIN
+                    content = _read_object(namespace, path)
+                    signatures[key] = duplicate_signature(BytesIO(content)) if content is not None else None
             return same_photo(signatures[a], signatures[b])
 
         if kind == "duplicate":
@@ -634,10 +647,11 @@ class FileService:
             )
         )
         updated = 0
+        # Abgabebox-Bilder liegen im eigenen Namespace (früher: falscher Stamm, Datei "fehlte").
+        abgabebox_ids = abgabebox_stored_file_ids(db, [stored_file.id for stored_file in pending])
         for stored_file in pending:
-            file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-            if file_path.exists():
-                content = file_path.read_bytes()
+            content = _read_object(ABGABEBOX if stored_file.id in abgabebox_ids else MAIN, stored_file.storage_path)
+            if content is not None:
                 stored_file.sharpness_score, stored_file.exposure_score = compute_quality_scores(content)
                 # Re-hash files that already carry a perceptual_hash (migration 0077 requeues
                 # them after the hash definition changed to EXIF-rotated + border-cropped) -
@@ -678,9 +692,9 @@ class FileService:
         exif_taken_at = None
         exif_camera = None
         if stored_file.mime_type and stored_file.mime_type.startswith("image/"):
-            file_path = _safe_storage_path(storage_root, stored_file.storage_path)
-            if file_path.exists():
-                width, height, exif_taken_at, exif_camera = _extract_image_metadata(file_path.read_bytes())
+            content = _read_object(namespace_for_root(storage_root), stored_file.storage_path)
+            if content is not None:
+                width, height, exif_taken_at, exif_camera = _extract_image_metadata(content)
         # created_by is NULL for files this backend never attributed to a logged-in user -
         # notably abgabebox submission uploads (written by an anonymous public submitter
         # through a separate restricted DB role that never sets this column) and any file
@@ -1553,9 +1567,14 @@ class FileService:
         file move needed."""
         pending = self.stored_file_repository.list_pending_internal_files(db)
         results = {"scanned": len(pending), "clean": 0, "infected": 0, "still_pending": 0}
+        store = get_object_store()
         for stored_file in pending:
-            file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-            result = scanner.scan_file(file_path, host=settings.clamav_host, port=settings.clamav_port)
+            try:
+                with store.local_copy(MAIN, stored_file.storage_path) as file_path:
+                    result = scanner.scan_file(file_path, host=settings.clamav_host, port=settings.clamav_port)
+            except ObjectNotFound:
+                # Wie bisher scan_file() auf eine fehlende Datei: kein Befund, nicht "clean".
+                result = "error"
             if result == "pending":
                 results["still_pending"] += 1
                 continue
@@ -1565,10 +1584,10 @@ class FileService:
         return results
 
     def read_stored_file_bytes(self, stored_file: StoredFile) -> bytes:
-        file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-        if not file_path.exists():
+        content = _read_object(MAIN, stored_file.storage_path)
+        if content is None:
             raise HTTPException(status_code=404, detail="Datei fehlt im Speicher")
-        return file_path.read_bytes()
+        return content
 
     def delete_stored_file(self, db: Session, stored_file: StoredFile) -> None:
         # DB delete (flushed, so a constraint violation surfaces here) before the
@@ -1578,11 +1597,12 @@ class FileService:
         # itself (the caller controls that transaction boundary), so this can't guarantee
         # against a caller-side rollback recreating the opposite inconsistency (row
         # survives, file gone) - but flush() catches the far more common failure mode.
-        file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
+        storage_key = stored_file.storage_path
         self.stored_file_repository.delete(db, stored_file)
         db.flush()
-        if file_path.exists():
-            file_path.unlink()
+        # Löschung über das Journal: eine laufende Migration übernimmt sie, die Datei taucht im
+        # Ziel nicht wieder auf (siehe objstore_client.ObjectStore.delete).
+        get_object_store().delete(db, MAIN, storage_key)
         if stored_file.thumbnail_path:
             thumbnail_path = _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
             if thumbnail_path.exists():
@@ -1667,10 +1687,10 @@ class FileService:
         stored_file = self.stored_file_repository.get(db, protocol_image.stored_file_id)
         self.protocol_image_repository.delete(db, protocol_image)
         if stored_file is not None:
-            file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-            if file_path.exists():
-                file_path.unlink()
+            storage_key = stored_file.storage_path
             self.stored_file_repository.delete(db, stored_file)
+            db.flush()
+            get_object_store().delete(db, MAIN, storage_key)
         db.commit()
         return True
 

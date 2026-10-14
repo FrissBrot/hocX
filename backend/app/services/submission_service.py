@@ -22,24 +22,29 @@ from app.schemas.submission import (
     SubmissionUploadLogEntry,
 )
 from app.services import public_id_service, submission_link_service
-from app.services.file_service import _safe_storage_path
+from app.core.storage import ABGABEBOX, ObjectNotFound, get_object_store, validate_key
 
 
-def _move_from_quarantine(quarantine_rel_path: str, storage_root: str) -> str:
-    """Move a quarantined file to regular storage. Returns the new relative path."""
-    q_full = _safe_storage_path(storage_root, quarantine_rel_path)
+def quarantine_target_key(quarantine_rel_path: str) -> str:
+    """Pfad-Vertrag Quarantäne -> regulärer Speicher (geteilt mit abgabebox-backend, siehe
+    tests/fixtures/quarantine_path_parity.json): das führende "quarantine"-Segment fällt weg."""
+    validate_key(quarantine_rel_path)
     # quarantine/tenant-1/assignment-2/abc.pdf -> tenant-1/assignment-2/abc.pdf
     parts = Path(quarantine_rel_path).parts
-    if not parts or parts[0] != "quarantine":
+    if not parts or parts[0] != "quarantine" or len(parts) < 2:
         # Blindly dropping parts[0] on the (previously unchecked) assumption that it's
         # always "quarantine" silently moved the file to the wrong path - stripping a real
         # tenant-id/assignment-id segment instead - for any path that didn't start with it
         # (audit finding, 2026-08-25). Fail loudly instead.
         raise ValueError(f"Expected a quarantine-prefixed path, got {quarantine_rel_path!r}")
-    new_rel = str(Path(*parts[1:]))
-    new_full = _safe_storage_path(storage_root, new_rel)
-    new_full.parent.mkdir(parents=True, exist_ok=True)
-    q_full.rename(new_full)
+    return validate_key(Path(*parts[1:]).as_posix())
+
+
+def _move_from_quarantine(db: Session, quarantine_rel_path: str) -> str:
+    """Move a quarantined file to regular storage (Namespace "abgabebox"). Returns the new key.
+    Kopieren + Löschen über den Objektspeicher, beides im Journal der aufrufenden Transaktion."""
+    new_rel = quarantine_target_key(quarantine_rel_path)
+    get_object_store().move(db, ABGABEBOX, quarantine_rel_path, new_rel)
     return new_rel
 
 
@@ -624,11 +629,14 @@ class SubmissionService:
         pending = self.repository.list_pending_files_for_assignment(db, assignment_id=assignment_id)
         results = {"scanned": len(pending), "clean": 0, "infected": 0, "still_pending": 0}
         for stored_file, element_ref in pending:
-            file_path = _safe_storage_path(settings.abgabebox_storage_root, stored_file.storage_path)
-            result = scanner.scan_file(file_path, host=settings.clamav_host, port=settings.clamav_port)
+            try:
+                with get_object_store().local_copy(ABGABEBOX, stored_file.storage_path) as file_path:
+                    result = scanner.scan_file(file_path, host=settings.clamav_host, port=settings.clamav_port)
+            except ObjectNotFound:
+                result = "error"
             if result == "clean":
                 try:
-                    new_path = _move_from_quarantine(stored_file.storage_path, settings.abgabebox_storage_root)
+                    new_path = _move_from_quarantine(db, stored_file.storage_path)
                 except ValueError:
                     # _move_from_quarantine now rejects a storage_path that doesn't
                     # actually start with "quarantine/" instead of silently mismoving it

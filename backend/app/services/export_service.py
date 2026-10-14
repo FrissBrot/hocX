@@ -21,7 +21,8 @@ from app.models import AttendanceFine, DocumentTemplate, ElementType, Event, Fin
 from app.repositories.export_repository import ExportRepository
 from app.services import public_id_service
 from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
-from app.services.file_service import _safe_storage_path
+from app.core.db import SessionLocal
+from app.core.storage import MAIN, ObjectNotFound, get_object_store, key_from_legacy_path, materialize_prefix, safe_suffix, validate_key
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 from app.schemas.protocol import ProtocolExportRead
 
@@ -213,7 +214,7 @@ class ExportService:
         if template is None or template.tenant_id != protocol.tenant_id:
             raise ValueError("Template not found")
 
-        template_path = Path(template.filesystem_path or "")
+        template_path = self._local_template_dir(db, template)
         if not template_path.exists():
             raise ValueError("Template not yet materialized — save the template first")
 
@@ -333,7 +334,7 @@ class ExportService:
         # missing check, same "foreign tenant's private LaTeX layout/branding" leak.
         if template is None or template.tenant_id != tenant_id:
             raise ValueError("Template not found")
-        template_path = Path(template.filesystem_path or "")
+        template_path = self._local_template_dir(db, template)
         if not template_path.exists():
             raise ValueError("Template not yet materialized — save the template first")
 
@@ -750,8 +751,8 @@ class ExportService:
         if protocol is None:
             raise ValueError("Protocol not found")
 
-        template_path = Path(protocol.document_template_path_snapshot or "")
-        if not template_path.exists():
+        template_path = self._local_template_snapshot(protocol)
+        if template_path is None or not template_path.exists():
             raise ValueError("Document template snapshot path not found")
 
         export_dir = (
@@ -946,12 +947,13 @@ Status: {protocol_status}
                 return "No images uploaded."
             parts: list[str] = []
             for index, row in enumerate(image_rows, start=1):
-                source_path = _safe_storage_path(settings.storage_root, row.StoredFile.storage_path)
-                if not source_path.exists():
+                copied_path = image_export_dir / f"block-{block.id}-{index}{safe_suffix(row.StoredFile.storage_path, '')}"
+                try:
+                    get_object_store().download_to(MAIN, row.StoredFile.storage_path, copied_path)
+                except ObjectNotFound:
+                    copied_path.unlink(missing_ok=True)
                     parts.append(f"Missing image file: {self._escape_latex(row.StoredFile.original_name)}")
                     continue
-                copied_path = image_export_dir / f"block-{block.id}-{index}{source_path.suffix}"
-                shutil.copy2(source_path, copied_path)
                 caption = row.ProtocolImage.caption or row.ProtocolImage.title or row.StoredFile.original_name
                 escaped_caption = self._escape_latex(caption)
                 parts.extend(
@@ -2391,61 +2393,96 @@ Status: {protocol_status}
         if result is not None and result.returncode != 0:
             raise RuntimeError(f"pdflatex failed: {result.stderr_text or result.stdout_text}")
 
+    def _generated_prefix(self) -> str:
+        """Key-Präfix der erzeugten Exporte (Namespace "main"), relativ zu STORAGE_ROOT."""
+        return key_from_legacy_path(str(Path(settings.export_root) / "generated"))
+
+    def _local_template_dir(self, db: Session, template: DocumentTemplate) -> Path:
+        # Lazy: document_template_service importiert seinerseits Hilfen aus file_service.
+        from app.services.document_template_service import DocumentTemplateService
+
+        return DocumentTemplateService().ensure_materialized(db, template)
+
+    def _local_template_snapshot(self, protocol) -> Path | None:
+        """Snapshot der Dokumentvorlage eines Protokolls als lokaler Ordner. Persistent ist nur die
+        Kopie im Objektspeicher; lokal wird sie bei Bedarf (neu) materialisiert."""
+        value = protocol.document_template_path_snapshot
+        if not value:
+            return None
+        try:
+            key = key_from_legacy_path(value)
+        except ValueError:
+            # Ordner ausserhalb von STORAGE_ROOT (nur in Tests/Altbeständen denkbar): kein
+            # Objekt im Speicher, also unverändert lokal verwenden.
+            legacy = Path(value)
+            return legacy if legacy.is_dir() else None
+        local_dir = Path(settings.storage_root) / key
+        if materialize_prefix(MAIN, key, local_dir) == 0 and not (local_dir / "main.tex").exists():
+            return None
+        return local_dir
+
     def _store_generated_file(self, db: Session, *, tenant_id: int, source_path: Path, original_name: str, mime_type: str):
-        target_dir = Path(settings.export_root) / "generated"
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / f"{uuid4().hex}-{source_path.name}"
-        shutil.copy2(source_path, target_path)
-        relative_path = target_path.relative_to(settings.storage_root)
+        key = validate_key(f"{self._generated_prefix()}/{uuid4().hex}{safe_suffix(source_path.name, '.bin')}")
+        info = get_object_store().put_file(db, MAIN, key, source_path, content_type=mime_type)
         stored_file = StoredFile(
             tenant_id=tenant_id,
             original_name=original_name,
             mime_type=mime_type,
-            storage_path=str(relative_path),
+            storage_path=key,
             latex_path=None,
-            file_size_bytes=target_path.stat().st_size,
+            file_size_bytes=info.size,
             # SHA-256 was never computed for a generated export file, unlike every other
             # user-facing StoredFile in this codebase (audit finding, 2026-08-25) - no
             # security impact (nothing validates against it for this path), but it left
             # this one file type with no integrity metadata at all.
-            checksum_sha256=hashlib.sha256(target_path.read_bytes()).hexdigest(),
+            checksum_sha256=info.sha256,
             created_by=None,
         )
         try:
             return self.repository.create_stored_file(db, stored_file)
         except Exception:
-            # The physical copy above happens before this DB write with no shared
-            # transaction to roll both back together - a failure caught here (constraint
-            # violation surfaced at flush) previously left the just-copied file orphaned
-            # with no DB row pointing at it at all (audit finding, 2026-08-25). A failure
-            # in some *later*, unrelated step of the caller's own transaction can still
-            # orphan it after a successful flush here - that residual case already self-
-            # heals via cleanup_old_generated_exports' age-based retention sweep.
-            target_path.unlink(missing_ok=True)
+            # Objekt und Zeile entstehen in derselben Transaktion (inkl. Journal); scheitert die
+            # Zeile, wird das Objekt wieder entfernt. Ein Rest nach einem späteren Fehler des
+            # Aufrufers fällt der Aufbewahrungsfrist von cleanup_old_generated_exports zum Opfer.
+            db.rollback()
+            try:
+                get_object_store().delete(db, MAIN, key)
+                db.commit()
+            except Exception:
+                db.rollback()
             raise
 
-    def cleanup_old_generated_exports(self, *, retention_days: int | None = None) -> dict:
-        """Periodic sweep (see main.py's export_cleanup_loop) for old files under
-        EXPORT_ROOT/generated. Every export run writes into a brand-new uuid-suffixed file
+    def cleanup_old_generated_exports(self, db: Session | None = None, *, retention_days: int | None = None) -> dict:
+        """Periodic sweep (see main.py's export_cleanup_loop) for old objects under
+        EXPORT_ROOT/generated. Every export run writes into a brand-new uuid-suffixed key
         (see _store_generated_file above, never overwrites/reuses an old one), so without a
-        retention sweep the directory grows unbounded on repeated re-exports - unlike the
-        ClamAV rescan loops nearby this isn't a stuck/pending-state repair, just age-based
-        deletion. Only removes the file on disk; the StoredFile row is left in place, same
-        convention as scripts/cleanup_storage.sh's cron sweep of this same directory - the
-        download route already returns a clean 404 if the file is gone, so an old export
-        link failing is expected, not an error to guard against.
+        retention sweep the store grows unbounded on repeated re-exports. Only removes the
+        object; the StoredFile row is left in place, same convention as
+        scripts/cleanup_storage.sh - the download route already returns a clean 404 if the
+        file is gone, so an old export link failing is expected, not an error to guard against.
         """
         retention = retention_days if retention_days is not None else settings.export_retention_days
-        target_dir = Path(settings.export_root) / "generated"
-        if not target_dir.is_dir():
+        try:
+            prefix = self._generated_prefix() + "/"
+        except ValueError:
             return {"deleted": 0}
-        cutoff = datetime.now().timestamp() - retention * 86400
-        deleted = 0
-        for file_path in target_dir.iterdir():
-            if file_path.is_file() and file_path.stat().st_mtime < cutoff:
-                file_path.unlink()
-                deleted += 1
-        return {"deleted": deleted}
+        cutoff = datetime.now(UTC).timestamp() - retention * 86400
+        store = get_object_store()
+        stale = [
+            info.key for info in store.list(MAIN, prefix)
+            if info.last_modified is not None and info.last_modified.timestamp() < cutoff
+        ]
+        if not stale:
+            return {"deleted": 0}
+        session = db if db is not None else SessionLocal()
+        try:
+            for key in stale:
+                store.delete(session, MAIN, key)
+            session.commit()
+        finally:
+            if db is None:
+                session.close()
+        return {"deleted": len(stale)}
 
     def _escape_latex(self, value: str) -> str:
         # Single-pass per-character replacement to avoid double-escaping
