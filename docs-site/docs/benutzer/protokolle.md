@@ -43,4 +43,6 @@ damit sich Bearbeitungen nicht gegenseitig überschreiben.
 ## PDF-Export
 
 Aus einem Protokoll lässt sich jederzeit ein PDF erzeugen (auch vor dem Abschluss). Der
-Export liest ausschliesslich die im Protokoll gespeicherten Snapshot-Daten.
+Export liest ausschliesslich die im Protokoll gespeicherten Snapshot-Daten. Vor dem Abschluss
+trägt das PDF das Wasserzeichen «Entwurf» und eine Version `v0.x`, danach `v1.x`. Details zu
+Export-Dialog, Hausstilen und Signatur: [Dokumente & Hausstile](dokumente.md).

@@ -23,6 +23,7 @@ flowchart LR
 | [Todos](todos.md) | Aufgaben aus Protokollen nachverfolgen |
 | [Abgabebox](abgabebox.md) | Öffentlicher, anmeldefreier Datei-Upload für Externe |
 | [Word-Import](word-import.md) | Altprotokolle (.docx/.pdf) als neue Protokolle importieren |
+| [Dokumente & Hausstile](dokumente.md) | PDFs und weitere Exporte zusammenstellen, Aussehen der Dokumente festlegen |
 
 ## Rollen
 

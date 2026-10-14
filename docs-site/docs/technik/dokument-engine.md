@@ -1,9 +1,10 @@
 # Dokument-Engine (Typst)
 
-Diese Seite beschreibt die neue Dokument-Engine, die den früheren LaTeX-Export vollständig
-ersetzt. Sie ist zugleich Plan, Architekturbeschreibung und Liste offener Punkte. Der Plan-Teil
-(Abschnitte «Bestandsaufnahme» und «Umsetzungsplan») hält fest, wovon der Umbau ausging; die
-übrigen Abschnitte beschreiben den umgesetzten Stand.
+Diese Seite beschreibt die Dokument-Engine, die seit Version 1.2 alle PDF- und Datei-Exporte
+erzeugt und den früheren TeX-basierten Export vollständig ersetzt. Die Abschnitte
+«Bestandsaufnahme» und «Umsetzungsplan» halten fest, wovon der Umbau ausging; alle übrigen
+Abschnitte beschreiben den umgesetzten Stand. Für Anwenderinnen und Anwender:
+[Dokumente & Hausstile](../benutzer/dokumente.md).
 
 ```mermaid
 flowchart LR
@@ -167,6 +168,144 @@ PDF/A-Erzeugung. Vorher werden in einem ersten inkrementellen Update die XMP-Met
 den Namespace `https://hocx.ch/ns/document/1.0/` (Präfix `hocx`, inkl. PDF/A-Extension-Schema)
 ergänzt: Dokument-ID, Mandant, Dokumenttyp, Version, Inhalts-Hash.
 
+### Signatur-Konfiguration
+
+| Variable | Bedeutung |
+|---|---|
+| `DOCUMENT_SIGNING_KEY_PATH` | Privater Schlüssel (PEM, optional verschlüsselt) |
+| `DOCUMENT_SIGNING_CERT_PATH` | Signaturzertifikat (PEM) |
+| `DOCUMENT_SIGNING_KEY_PASSWORD` (`_FILE`) | Passwort des Schlüssels; in Prod als Docker-Secret `document_signing_key_password` |
+| `DOCUMENT_SIGNING_CHAIN_PATH` | Optional: Zwischenzertifikate (PEM) |
+| `DOCUMENT_SIGNING_TSA_URL` | Optional: Zeitstempeldienst (RFC 3161) → PAdES B-T |
+| `DOCUMENT_SIGNING_DIR` | Nur Compose: Host-Verzeichnis, das nach `/run/hocx-signing` (read-only) gemountet wird |
+
+Schlüssel und Zertifikate liegen nie im Repository. In Produktion (`HOCX_ENVIRONMENT=production`)
+startet das Backend ohne lesbare Konfiguration nicht; in Dev/Test gibt es eine Warnung und die
+PDFs bleiben unsigniert (ohne Signaturzeile). Dev-Zertifikat: `scripts/generate-dev-signing-cert.sh`
+(das E2E-Skript erzeugt eines automatisch). Einrichten, Erneuern und Rotieren: RUNBOOK
+«Dokumentsignatur».
+
+Der Systemcheck `document_signing` (`/admin/system`, ntfy) meldet: fehlt (in Prod kritisch),
+nicht lesbar (kritisch), läuft in weniger als 30 Tagen ab (Warnung), abgelaufen (kritisch).
+
+### Render-Limits
+
+| Variable | Standard | Bedeutung |
+|---|---|---|
+| `DOCUMENT_RENDER_CONCURRENCY` | 4 | Worker-Prozesse (gleichzeitige Compiles) |
+| `DOCUMENT_RENDER_TIMEOUT_SECONDS` | 60 | Wall-Clock-Limit pro Compile |
+| `DOCUMENT_RENDER_MEMORY_LIMIT_MB` | 3072 | `RLIMIT_AS` pro Worker |
+| `DOCUMENT_PREVIEW_MAX_PAGES` | 4 | Seiten in der PNG-Vorschau |
+
+## Block-Katalog
+
+Jeder Block-Typ besteht aus Pydantic-Modell (`model.py`), Katalog-Eintrag mit Parameter-Modell
+(`catalog.py`), Provider (`providers/`) und Basis-Komponente (`styles/base/blocks.typ`).
+`scripts/check-document-catalog.py` prüft in der CI, dass nichts davon fehlt.
+
+| Gruppe | Blöcke |
+|---|---|
+| Struktur | `heading`, `richtext`, `static_text`, `page_break`, `toc`, `spacer`, `divider` |
+| Protokoll | `protocol_element`, `session_date`, `session_notes`, `form`, `bullet_list`, `matrix`, `entry_exit`, `image`, `image_gallery` |
+| Personen | `attendance`, `attendance_matrix`, `member_list`, `signature_fields`, `attendance_sheet` |
+| Aufgaben | `todo_table` |
+| Termine | `event_table`, `event_calendar_month`, `event_agenda` |
+| Listen | `list_table` |
+| Finanzen | `finance_balance`, `finance_transactions`, `fines` |
+| Statistik | `kpi_tiles`, `chart`, `stat_table` |
+| Weitere | `qr_link`, `generic_table` |
+
+`protocol_element` ist ein Container: der Provider löst ihn in die Blöcke eines Protokoll-Elements
+auf (Überschrift, Text, Todos, …), deshalb hat er keine eigene Typst-Komponente.
+
+Dokumenttypen (`doc_types.py`) sind Standard-Zusammenstellungen: `protocol`, `invitation`, `todos`,
+`events`, `attendance_sheet`, `members`, `finance`, `statistics`, `list`, `custom`. Rezepte
+(`document_recipe`) speichern eigene Zusammenstellungen pro Mandant.
+
+### Provider und Berechtigungen
+
+Provider bekommen einen `BuildContext` (DB, Mandant, Benutzer, Sprache, Stichtag) und liefern
+reine Daten. Jede ID aus Parametern wird über `context.entity_by_ref` mandantenbezogen
+aufgelöst; fremde oder unbekannte IDs ergeben `DocumentNotFoundError` (404), fehlende Rechte
+`DocumentPermissionError` (403). Das gilt auch für Referenzen in
+`configuration_snapshot_json` abgeschlossener Protokolle.
+
+### Neuen Block-Typ hinzufügen
+
+1. Modell in `model.py` (`class FooBlock(BlockBase)`, `type: Literal["foo"]`) und in die Union
+   `Block` aufnehmen.
+2. Parameter-Modell und Katalog-Eintrag (`BlockSpec`-Gruppe, Provider-Name) in `catalog.py`.
+   Felder mit `json_schema_extra={"x-widget": ...}` steuern das Formular im Export-Dialog.
+3. Provider-Funktion in `providers/<quelle>.py`, in `providers/__init__.py` registrieren.
+   IDs immer über `entity_by_ref` auflösen, nie direkt per `db.get`.
+4. Komponente `foo: (b, ctx) => ...` in `styles/base/blocks.typ` (`base-components`);
+   Hausstile können sie in ihrem eigenen Dictionary überschreiben.
+5. Texte: `blockType.foo` und `empty.foo` in `frontend/messages/<locale>/documentPdf.json`,
+   Parameter-Labels `params.<name>`/`enum.<wert>` in `documents.json`, für alle Locales.
+   Danach `python3 scripts/sync-document-i18n.py`.
+6. Fixture in `backend/tests/documents/fixtures/generate.py` ergänzen (Block in `all_blocks`),
+   Goldens mit `scripts/update-document-goldens.sh` aktualisieren und die Bilder prüfen.
+7. `scripts/check-document-catalog.py` muss «ok» melden.
+
+## Token-Schema (Designer-Schnittstelle)
+
+Ein Hausstil ist **nur über Daten** anpassbar: `DocumentStyleTokens` (`style_tokens.py`,
+gespeichert in `document_style.tokens_json`, unbekannte Felder werden abgewiesen). Wer einen
+neuen Grundstil gestaltet, schreibt ein Typst-Modul unter `styles/` und liest ausschliesslich
+diese Tokens sowie `_tokens.typ`.
+
+| Token | Werte | Standard |
+|---|---|---|
+| `primary_color`, `secondary_color` | `#RRGGBB` | `#174B7A`, `#4F6D7A` |
+| `font` | `style`, `inter`, `liberation_sans`, `liberation_serif`, `noto_sans`, `custom` | `style` (Hausschrift des Stils) |
+| `custom_fonts` | Asset-IDs für `regular`, `bold`, `italic`, `bold_italic` | – |
+| `base_size` | `10`, `11`, `12` (pt) | `11` |
+| `line_spacing` | `tight`, `normal`, `relaxed` | `normal` |
+| `margins` | `narrow`, `normal`, `wide` | `normal` |
+| `orientation` | `portrait`, `landscape` | `portrait` |
+| `logo_asset_id`, `footer_image_asset_id` | Asset-ID (Bild) | – |
+| `sender` (≤ 600), `place` (≤ 120) | Text | leer |
+| `header` | `none`, `minimal`, `standard`, `bar`, `logo` | `standard` |
+| `footer` | `none`, `minimal`, `standard`, `with_version`, `date_page` | `standard` |
+| `title_page` | `none`, `minimal`, `modern`, `bold`, `cover` | `none` |
+| `toc` | `off`, `on`, `compact` | `off` |
+| `numbering`, `toc_block_titles`, `watermark_draft` | bool | `false`, `true`, `true` |
+
+Neutral- und Statusfarben, Abstände und Radien kommen aus `design/tokens.css`
+(`scripts/sync-document-tokens.py`, CI prüft mit `--check`). Schriften liegen mit Lizenzen
+unter `backend/app/documents/fonts/`; Zeichen ohne Glyphe in den geladenen Schriften werden
+durch `�` ersetzt (PDF/A verbietet fehlende Glyphen).
+
+## API
+
+| Endpunkt | Zweck | Rolle |
+|---|---|---|
+| `POST /api/documents/render` | PDF erzeugen (versionieren, signieren, speichern) | reader |
+| `POST /api/documents/preview` | PNG-Vorschau der ersten Seiten, nichts wird gespeichert | reader |
+| `POST /api/documents/export` | CSV, XLSX, ICS, Markdown aus demselben Modell | reader |
+| `GET /api/documents/exports` | Export-Historie (`document_export`) | reader |
+| `GET /api/documents/catalog` | Blöcke, Parameter-Schemas, Dokumenttypen, Stile | reader |
+| `GET/PATCH /api/document-settings` | Dokumentsprache des Mandanten | reader / admin |
+| `/api/document-styles` | Hausstile (CRUD) | reader / admin |
+| `/api/document-style-assets` | Logos, Fussbilder, Schriften (Upload mit Virenprüfung) | reader / admin |
+| `/api/document-recipes` | Rezepte (CRUD) | reader / writer |
+| `GET /api/documents/sources/{source}` | Auswahllisten für Parameter (Listen, Konten, …) | reader |
+
+Alle schreibenden Aufrufe und jeder Export landen im Audit-Log (`document.render`,
+`document.export_<format>`, `document_style.*`, `document_recipe.*`, …).
+
+## Tests und CI
+
+- `backend/tests/documents/`: Modell, Rich-Text (Escaping), Renderer, Provider inkl.
+  Mandanten-Isolation, Signatur (Validierung, Manipulation erkannt), Versionierung, API,
+  Altdaten-Übernahme.
+- Matrix Hausstil × Fixture × Format ohne Typst-Warnungen; Vollständigkeit per `pdftotext`.
+- Goldens (`goldens/*.png`): bei Abweichung landen Ist- und Differenzbild im CI-Artefakt
+  `document-golden-diffs`. Bewusste Änderungen: `scripts/update-document-goldens.sh`.
+- Galerie: jeder Hausstil × jeder Dokumenttyp als ein PDF (CI-Artefakt `document-gallery`).
+- CI prüft zusätzlich `sync-document-tokens.py --check`, `sync-document-i18n.py --check` und
+  `check-document-catalog.py`.
+
 ## Datenbank
 
 | Tabelle | Zweck |
@@ -181,7 +320,7 @@ ergänzt: Dokument-ID, Mandant, Dokumenttyp, Version, Inhalts-Hash.
 
 ## Umsetzungsplan
 
-Reihenfolge, jeweils mit Tests grün und einzeln committet:
+Umgesetzt in dieser Reihenfolge, jeweils mit Tests grün und einzeln committet:
 
 1. Plan (diese Seite).
 2. Dokumentmodell und Rich-Text-Konvertierung.
@@ -198,6 +337,9 @@ Reihenfolge, jeweils mit Tests grün und einzeln committet:
 13. Dokumentation, Changelog.
 
 ### Migration
+
+Migrationen `0114_document_engine` (Tabellen) und `0115_document_engine_migrate` (Daten, nicht
+umkehrbar):
 
 1. Neue Tabellen anlegen.
 2. Jede `document_template` wird ein `document_style`: Farben, Schriftgrösse, Schriftfamilie,
@@ -228,5 +370,10 @@ Reihenfolge, jeweils mit Tests grün und einzeln committet:
 - **Hinweis für Mandanten mit eigenen LaTeX-Slots:** Es gibt keinen Mechanismus für
   Admin-Hinweise pro Mandant; der Hinweis steht in den Release-Notes und die Migration schreibt
   die betroffenen Mandanten ins Log.
+- **Schriftabdeckung:** Mitgeliefert sind lateinische, griechische und kyrillische Schriften
+  sowie Emoji. Zeichen ausserhalb (z. B. CJK) erscheinen als `�`; bei Bedarf eine passende
+  Schrift als eigene Schrift im Hausstil hochladen.
+- **Historische Audit-Dokumente** unter `security-audit/` erwähnen den alten TeX-Export weiterhin;
+  sie dokumentieren damalige Befunde und werden nicht umgeschrieben.
 - **PDF/A-Prüfung:** Ohne veraPDF in der CI prüfen die Tests die PDF/A-Kennung im XMP, eingebettete
   Schriften und dass die Signatur als inkrementelles Update angehängt ist.

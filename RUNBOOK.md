@@ -413,7 +413,8 @@ Im Platform-Admin unter **System**:
 
 - **Systemstatus** (`/admin/system`): Container (Status, Healthcheck, Neustarts, CPU/RAM,
   Version) und Dienste (Postgres, Redis, ClamAV inkl. Signaturalter, Speicherplatz,
-  Fehlerrate, Rückstand der Virenprüfung, Bildanalyse-Warteschlange), offene Probleme und
+  Fehlerrate, Rückstand der Virenprüfung, Bildanalyse-Warteschlange, Signaturzertifikat
+  der Dokumente), offene Probleme und
   die letzten Ereignisse. Gesammelt alle 30 s vom Loop `system_monitor` im Backend
   (`app/services/system_health_service.py`, Schwellwerte dort oben).
 - **Jobs** (`/admin/jobs`): alle Hintergrund-Loops, der Bildanalyse-Worker und die
@@ -485,3 +486,64 @@ DNS oder ein abgelaufenes Zertifikat der Website-Domain.
 - „Container-Status nicht verfügbar“: `docker compose ps docker-socket-proxy`, Logs des
   Proxys; läuft das Backend im Netz `docker-api`?
 - Virensignaturen veraltet: Logs des `clamav`-Containers (freshclam) prüfen.
+
+## 13. Dokumentsignatur
+
+Jedes PDF der Dokument-Engine wird als PAdES-Signatur (pyHanko) signiert. In Prod und Test
+startet das Backend ohne lesbaren Schlüssel und Zertifikat **nicht** (Log: «Dokumentsignatur
+nicht konfiguriert»). Schlüssel und Zertifikat liegen nie im Repo und nie in `.env`.
+
+### Einrichten
+
+1. Verzeichnis ausserhalb des Repos anlegen, z. B. `/srv/hocx/signing`, und in `.env`
+   `DOCUMENT_SIGNING_DIR=/srv/hocx/signing` setzen. Compose hängt es read-only nach
+   `/run/hocx-signing` ein.
+2. Dort ablegen:
+   - `signing-key.pem` - privater Schlüssel (PEM, gerne mit Passwort verschlüsselt)
+   - `signing-cert.pem` - Zertifikat (Key Usage `digitalSignature`, idealerweise
+     `nonRepudiation` und EKU Document Signing `1.3.6.1.5.5.7.3.36`)
+   - optional `chain.pem` mit Zwischenzertifikaten, dann in `.env`
+     `DOCUMENT_SIGNING_CHAIN_PATH=/run/hocx-signing/chain.pem`
+3. Rechte für den Backend-User (uid 5000, gid 5001):
+   `chown -R 5000:5001 /srv/hocx/signing && chmod 700 /srv/hocx/signing && chmod 600 /srv/hocx/signing/signing-key.pem && chmod 644 /srv/hocx/signing/signing-cert.pem` (ebenso eine `chain.pem`).
+4. Passwort des Schlüssels in `.env` als `DOCUMENT_SIGNING_KEY_PASSWORD` - `deploy.sh`
+   schreibt es als Docker-Secret `document_signing_key_password` und es landet nicht in
+   der Container-Umgebung. Leer lassen bei unverschlüsseltem Schlüssel.
+5. Optional `DOCUMENT_SIGNING_TSA_URL` (RFC-3161-Zeitstempeldienst) für PAdES B-T.
+6. `./scripts/deploy.sh <test|prod>`, danach unter `/admin/system` den Check
+   «Dokumentsignatur» prüfen und ein PDF exportieren: der Reader muss eine gültige Signatur
+   zeigen (bei einem eigenen, nicht öffentlich vertrauten Zertifikat: «Identität unbekannt»,
+   Dokument unverändert).
+
+Test-Server dürfen ein selbstsigniertes Zertifikat nutzen:
+`./scripts/generate-dev-signing-cert.sh /srv/hocx/signing` (Dev/E2E erzeugen es automatisch
+unter `storage-local/signing` bzw. `storage-e2e/signing`).
+
+### Erneuern (Zertifikat läuft ab)
+
+Der Systemcheck warnt 30 Tage vor Ablauf (ntfy), nach Ablauf ist er kritisch.
+
+1. Neues Zertifikat (gleicher oder neuer Schlüssel) besorgen.
+2. Dateien im `DOCUMENT_SIGNING_DIR` ersetzen (gleiche Dateinamen).
+3. `docker compose up -d --force-recreate backend` - der Signierer wird beim Start geladen.
+4. Check «Dokumentsignatur» prüfen.
+
+Bereits signierte PDFs bleiben gültig; sie tragen ihre Signatur mit dem damaligen Zertifikat.
+
+### Rotieren (Schlüssel kompromittiert oder Wechsel des Ausstellers)
+
+Wie Erneuern, aber immer mit **neuem** Schlüssel und neuem Passwort (`.env` +
+`./scripts/deploy.sh`, damit das Secret neu geschrieben wird). Den alten Schlüssel löschen;
+bei Kompromittierung das alte Zertifikat beim Aussteller widerrufen lassen.
+
+### Nach dem Update auf die Dokument-Engine
+
+Migration `0115` übernimmt die alten Dokumentvorlagen als Hausstile. Danach die nicht mehr
+benutzten Vorlagen-Dateien entfernen (erst mit `--dry-run` ansehen):
+
+```bash
+./scripts/cleanup-legacy-document-templates.sh --dry-run "${HOCX_STORAGE_PATH:-./storage}"
+./scripts/cleanup-legacy-document-templates.sh "${HOCX_STORAGE_PATH:-./storage}"
+```
+
+Hochgeladene Logos, Fussbilder und Schriften bleiben erhalten.

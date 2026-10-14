@@ -8,6 +8,62 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+Neue Dokument-Engine: Alle PDFs entstehen über eine einheitliche Engine (Typst statt TeX) mit
+Block-Katalog, Hausstilen, Live-Vorschau, PDF/A-2b und digitaler Signatur. **Breaking
+Changes** - vor dem Update die Schritte unten lesen.
+
+### Update auf diese Version
+
+1. **Signaturzertifikat bereitstellen (Pflicht).** Ohne lesbaren Schlüssel und Zertifikat
+   startet das Backend in Produktion nicht. Verzeichnis ausserhalb des Repos anlegen,
+   `signing-key.pem` und `signing-cert.pem` hineinlegen, in `.env` `DOCUMENT_SIGNING_DIR`
+   (und ggf. `DOCUMENT_SIGNING_KEY_PASSWORD`, `DOCUMENT_SIGNING_CHAIN_PATH`,
+   `DOCUMENT_SIGNING_TSA_URL`) setzen - Details RUNBOOK Abschnitt 13 «Dokumentsignatur».
+   Für Test-Server genügt `./scripts/generate-dev-signing-cert.sh <verzeichnis>`.
+2. `HOCX_VERSION` setzen, `./scripts/update_deploy_code.sh` und
+   `./scripts/deploy.sh <test|prod>` ausführen. Die Migrationen `0114` und `0115` laufen
+   automatisch; `0115` ist **nicht umkehrbar** (vorher ein frisches Backup ziehen, Rollback
+   nur über das Backup).
+3. Nach erfolgreichem Deploy alte Vorlagen-Dateien entfernen:
+   `./scripts/cleanup-legacy-document-templates.sh --dry-run`, dann ohne `--dry-run`.
+4. Unter `/admin/system` den Check «Dokumentsignatur» prüfen und ein Protokoll exportieren.
+
+### Breaking Changes
+
+- Der TeX-Export ist entfernt (inkl. TeX Live im Backend-Image). Dokumentvorlagen werden
+  automatisch zu **Hausstilen**: Farben, Schrift (inkl. hochgeladener Schriften), Format,
+  Kopf-/Fuss-/Titelseiten-/TOC-Variante, Nummerierung, Ort, Absender, Logo und Fussbild
+  werden übernommen. **Eigener Vorlagen-Code (Slots) entfällt ersatzlos**; betroffene
+  Mandanten schreibt die Migration ins Log.
+- Die Element-Option `latex_template` entfällt. Das Render-Format «Raw LaTeX» wird entfernt,
+  sofern es nirgends verwendet wird; die PDF-Ausgabe richtet sich nur noch nach dem
+  Element-Typ.
+- API: `/api/exports/*` und `/api/document-templates/*` sind entfernt, neu sind
+  `/api/documents/*`, `/api/document-styles`, `/api/document-style-assets`,
+  `/api/document-recipes` und `/api/document-settings`.
+- Vorlagen und Protokolle verweisen über `document_style_id` auf einen Hausstil
+  (vorher `document_template_id`).
+- Mandanten-Export: Archivformat 5 mit Hausstilen, Assets, Rezepten und Export-Historie.
+  Archive der Formate 2-4 lassen sich weiter importieren (Vorlagen werden zu Hausstilen).
+- Neue Pflicht-Konfiguration `DOCUMENT_SIGNING_*` (siehe oben).
+
+### Neu
+
+- Ein Export-Dialog für alle Dokumente (Protokolle, Todos, Termine, Listen, Statistik) mit
+  Live-Vorschau, Dokumenttypen, frei zusammenstellbaren Blöcken (Ziehen zum Sortieren) und
+  speicherbaren **Rezepten**.
+- Block-Katalog mit über 30 Blöcken, u. a. Monatskalender, Agenda, Präsenzliste zum
+  Unterschreiben, Mitgliederliste, Kennzahlen-Kacheln, Diagramme als Vektorgrafik,
+  QR-Code, Unterschriftsfelder.
+- Drei Hausstile (Modern, Klassisch, Kompakt), anpassbar unter **Vorlagen → Hausstile**.
+- Dokumentsprache pro Verein, pro Export änderbar; alle festen PDF-Texte in allen Sprachen.
+- PDFs als PDF/A-2b mit PAdES-Signatur und Signaturzeile in der Fusszeile; Metadaten
+  (Dokument-ID, Mandant, Typ, Version, Inhalts-Hash) im XMP.
+- Version steigt nur bei geändertem Inhalt (Inhalts-Hash); jeder Export wird protokolliert.
+- Weitere Formate aus demselben Modell: CSV, XLSX, ICS, Markdown.
+- Systemcheck «Dokumentsignatur» (fehlt, nicht lesbar, läuft in < 30 Tagen ab) inkl. ntfy.
+- CI: visuelle Regressionstests der Hausstile, Galerie-PDF als Artefakt, Katalogprüfung.
+
 ## [1.1.13] - 2026-10-13
 
 Feature-Release auf 1.1.12: Offene Protokolle lassen sich nach Änderungen an der Vorlage
