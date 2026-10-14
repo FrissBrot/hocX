@@ -25,8 +25,10 @@ export function useFlowDone() {
 function useCurrentStep(): number | null {
   const pathname = usePathname() ?? "/";
   const { done } = useContext(FlowContext);
-  const depth = pathname.split("/").filter(Boolean).length;
-  if (depth === 0) return null;
+  const segments = pathname.split("/").filter(Boolean);
+  const depth = segments.length;
+  // Startseite und Echtheitsprüfung gehören nicht zum Abgabe-Ablauf
+  if (depth === 0 || segments[0] === "verify") return null;
   if (depth >= 3 && done) return STEP_KEYS.length;
   return Math.min(depth, STEP_KEYS.length) - 1;
 }

@@ -109,5 +109,63 @@
   "language": {
     "label": "Langue"
   },
-  "copyright": "Copyright © {year} hocX Project · Tous droits réservés."
+  "copyright": "Copyright © {year} hocX Project · Tous droits réservés.",
+  "verify": {
+    "brand": {
+      "subtitle": "Vérification d’authenticité",
+      "headline": "Ce document provient-il vraiment de hocX ?",
+      "lead": "Déposez le fichier PDF. Nous comparons son empreinte numérique à tous les documents créés avec hocX.",
+      "privacyNote": "Le fichier ne quitte pas votre appareil - seule son empreinte est vérifiée."
+    },
+    "title": "Vérifier l’authenticité",
+    "hint": "Vérifiez qu’un fichier PDF provient de hocX sans modification.",
+    "documentHint": "Document {id} – déposez le fichier PDF ici pour le vérifier.",
+    "dropLabel": "Glissez le fichier PDF ici ou sélectionnez-le",
+    "dropLabelTouch": "Sélectionner le fichier PDF",
+    "dropRelease": "Relâchez pour vérifier",
+    "dropOverlay": "Relâchez le fichier pour le vérifier",
+    "privacy": "Le fichier n’est pas téléversé. Votre navigateur calcule son empreinte numérique (SHA-256) et n’envoie que celle-ci pour la vérification.",
+    "checking": "Vérification …",
+    "checkAnother": "Vérifier un autre fichier",
+    "fileName": "Fichier vérifié : {name}",
+    "originalTitle": "Original",
+    "originalText": "Ce fichier est une copie non modifiée d’un document créé avec hocX le {date}.",
+    "fields": {
+      "documentType": "Type de document",
+      "title": "Titre",
+      "status": "Statut",
+      "version": "Version",
+      "documentId": "ID du document"
+    },
+    "statusLabel": {
+      "geplant": "Brouillon (planifié)",
+      "durchgeführt": "Brouillon (tenu)",
+      "abgeschlossen": "Clôturé"
+    },
+    "docType": {
+      "protocol": "Procès-verbal",
+      "invitation": "Convocation",
+      "todos": "Liste des tâches",
+      "events": "Calendrier",
+      "attendance_sheet": "Liste de présence",
+      "members": "Liste des membres",
+      "finance": "Rapport financier",
+      "statistics": "Rapport annuel",
+      "list": "Liste",
+      "custom": "Document"
+    },
+    "createdBy": "Créé dans le compte hocX de {name}.",
+    "verifiedBadge": "Organisation vérifiée",
+    "verifiedExplanation": "hocX a confirmé que ce compte appartient à l’organisation « {name} ».",
+    "logoAlt": "Logo de {name}",
+    "otherDocument": "Le fichier est authentique, mais il appartient à un autre document que le code QR scanné.",
+    "newerVersion": "Il existe une version plus récente ({version}) de ce document.",
+    "notFoundTitle": "Introuvable",
+    "notFoundText": "Ce fichier ne correspond à aucun document créé avec hocX. Il a été modifié ou ne provient pas de hocX.",
+    "notFoundHint": "Le simple fait de réenregistrer, d’« imprimer en PDF » ou de compresser modifie le fichier, même si le contenu semble identique. Vérifiez toujours le fichier reçu à l’origine.",
+    "error": "La vérification est impossible pour le moment. Veuillez réessayer dans un instant.",
+    "readError": "Le fichier n’a pas pu être lu.",
+    "tooLarge": "Le fichier est trop volumineux ({size} Mo au maximum).",
+    "noCrypto": "Votre navigateur ne prend pas en charge la vérification. Veuillez utiliser un navigateur récent."
+  }
 }
