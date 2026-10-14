@@ -75,7 +75,9 @@ export type DocumentExport = {
   document_type: string;
   title: string | null;
   version_label: string | null;
-  signature_level: string | null;
+  // Kurz-ID und Prüf-Link, wie sie im PDF stehen
+  short_id: string;
+  verify_url: string;
   language: string | null;
   style_key: string | null;
   generated_file_id: string | null;
@@ -105,6 +107,9 @@ export type StyleTokens = {
   toc_block_titles: boolean;
   show_metadata: boolean;
   watermark_draft: boolean;
+  verify_show_url: boolean;
+  verify_show_id: boolean;
+  verify_show_qr: boolean;
 };
 
 export type DocumentStyle = {

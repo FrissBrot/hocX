@@ -16,11 +16,6 @@
     "version": "Version",
     "place": "Lieu"
   },
-  "signature": {
-    "line": "Signé numériquement par hocX · ID du document {id} · Version {version}",
-    "lineNoVersion": "Signé numériquement par hocX · ID du document {id}",
-    "preview": "Aperçu · non signé"
-  },
   "protocolStatus": {
     "planned": "Planifié",
     "prepared": "Préparé",
@@ -287,9 +282,22 @@
     "infected": "Le fichier a été refusé par l’antivirus.",
     "scanFailed": "Le fichier n’a pas pu être analysé. Veuillez réessayer plus tard.",
     "assetInUse": "Le fichier est encore utilisé par un style maison.",
-    "lastStyle": "Le dernier style maison ne peut pas être supprimé."
+    "lastStyle": "Le dernier style maison ne peut pas être supprimé.",
+    "verificationAlreadyVerified": "L’organisation est déjà vérifiée.",
+    "verificationAlreadyPending": "Une demande est déjà en cours.",
+    "verificationNoPending": "Aucune demande n’est en cours.",
+    "verificationNameChanged": "Le nom a changé depuis la demande.",
+    "verificationReasonRequired": "Veuillez indiquer un motif.",
+    "verificationNotVerified": "L’organisation n’est pas vérifiée."
   },
   "metadata": {
     "title": "Informations sur le document"
+  },
+  "verify": {
+    "urlAndId": "Vérifier l’authenticité : {url} · ID {id}",
+    "url": "Vérifier l’authenticité : {url}",
+    "id": "ID du document {id}",
+    "qrHint": "Scannez le code QR pour vérifier l’authenticité",
+    "previewId": "APERÇU"
   }
 }

@@ -328,6 +328,16 @@ export function HouseStyleSettings({ initialStyles, initialAssets, initialLangua
                   <span>{t(`styles.fields.${key}`)}</span>
                 </label>
               ))}
+              <fieldset className="housestyle-group">
+                <legend className="docexport-heading">{t("styles.verifyHeading")}</legend>
+                <p className="muted housestyle-group-hint">{t("styles.verifyHint")}</p>
+                {(["verify_show_url", "verify_show_id", "verify_show_qr"] as const).map((key) => (
+                  <label key={key} className="docexport-check">
+                    <input disabled={!canEdit} type="checkbox" checked={tokens[key]} onChange={(event) => setToken(key, event.target.checked)} />
+                    <span>{t(`styles.fields.${key}`)}</span>
+                  </label>
+                ))}
+              </fieldset>
               <label className="docexport-check">
                 <input disabled={!canEdit || selected?.is_default} type="checkbox" checked={draft.is_default} onChange={(event) => setDraft({ ...draft, is_default: event.target.checked })} />
                 <span>{t("styles.makeDefault")}</span>

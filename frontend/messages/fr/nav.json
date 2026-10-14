@@ -50,5 +50,6 @@
   "sessionReady": "Prêt",
   "sessionLoading": "Chargement de l'espace de travail…",
   "connections": "Connexions",
-  "taskPackages": "Paquets de tâches"
+  "taskPackages": "Paquets de tâches",
+  "documentVerification": "Vérification d’authenticité"
 }

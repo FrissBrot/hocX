@@ -50,5 +50,6 @@
   "sessionReady": "Pronto",
   "sessionLoading": "Caricamento dell'area di lavoro…",
   "connections": "Collegamenti",
-  "taskPackages": "Pacchetti di attività"
+  "taskPackages": "Pacchetti di attività",
+  "documentVerification": "Verifica di autenticità"
 }

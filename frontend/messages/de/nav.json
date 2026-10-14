@@ -50,5 +50,6 @@
   "sessionReady": "Bereit",
   "sessionLoading": "Arbeitsbereich wird geladen…",
   "connections": "Verknüpfungen",
-  "taskPackages": "Aufgabenpakete"
+  "taskPackages": "Aufgabenpakete",
+  "documentVerification": "Echtheitsprüfung"
 }

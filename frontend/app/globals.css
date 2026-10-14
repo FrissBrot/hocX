@@ -1180,6 +1180,17 @@ a.button-primary {
   transition: background var(--dur-base) ease, box-shadow var(--dur-base) ease;
 }
 
+/* Gleiches für einen Link als Sekundär-Button (z. B. «Prüfseite öffnen») */
+a.button-secondary {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color var(--dur-base) ease, background var(--dur-base) ease;
+}
+a.button-secondary:hover { border-color: var(--border-strong); }
+
 .button-toggle {
   width: auto;
   min-width: 0;
@@ -23505,6 +23516,48 @@ a.mobile-list-row { color: var(--text); }
   display: grid;
   gap: var(--space-3);
 }
+/* Plattform-Admin: Verifizierung von Organisationen */
+.admin-verification-message { max-width: 360px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.admin-verification-status { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+/* Dokumente → Echtheitsprüfung (document-verification-settings.tsx) */
+.docverify { display: grid; gap: var(--space-4); max-width: 760px; }
+.docverify-section { display: grid; gap: var(--space-3); }
+.docverify-hint { margin: calc(-1 * var(--space-2)) 0 0; font-size: var(--text-sm); }
+.docverify-status-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.docverify-request { margin: 0; }
+.docverify-preview {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1.5px solid color-mix(in srgb, var(--success) 45%, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--panel-solid);
+}
+.docverify-preview p { margin: 0; }
+.docverify-preview-title { display: flex; align-items: center; gap: var(--space-2); font-weight: 700; font-size: var(--text-lg); }
+.docverify-preview-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--success-bg); color: var(--success-fg);
+}
+.docverify-preview-identity { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius-md); background: var(--bg); }
+.docverify-preview-logo { width: 44px; height: 44px; object-fit: contain; border-radius: var(--radius-sm); background: var(--panel-solid); flex: none; }
+.docverify-preview-initial { display: inline-flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent-strong); background: var(--accent-soft); }
+.docverify-preview-sub { margin-top: var(--space-1); font-size: var(--text-sm); color: var(--muted); }
+.docverify-preview-notice { padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--info-bg); color: var(--info-fg); font-size: var(--text-sm); }
+
+/* Abschnitt «Echtheitsprüfung im Dokument» */
+.housestyle-group {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3) 0 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+.housestyle-group legend { padding: 0; margin-bottom: var(--space-1); }
+.housestyle-group-hint { margin: 0; font-size: var(--text-sm); }
 .housestyle-color {
   width: 100%;
   min-height: 40px;

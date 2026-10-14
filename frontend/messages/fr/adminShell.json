@@ -19,7 +19,8 @@
     "jobs": "Tâches",
     "admins": "Comptes administrateurs",
     "sso": "SSO",
-    "security": "Sécurité"
+    "security": "Sécurité",
+    "verifications": "Vérifications"
   },
   "logout": "Se déconnecter",
   "menuToggleClose": "Fermer",

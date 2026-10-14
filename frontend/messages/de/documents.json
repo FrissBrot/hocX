@@ -48,8 +48,8 @@
     "pageAlt": "Seite {page}",
     "exportPdf": "PDF erstellen",
     "exporting": "Wird erstellt …",
-    "exported": "PDF erstellt und signiert.",
-    "exportedVersion": "PDF erstellt und signiert ({version}).",
+    "exported": "PDF erstellt · Dokument-ID {id}.",
+    "exportedVersion": "PDF erstellt ({version}) · Dokument-ID {id}.",
     "exportFailed": "Das Dokument konnte nicht erstellt werden.",
     "pdfReady": "PDF bereit – hier klicken zum Öffnen",
     "moreFormats": "Weitere Formate",
@@ -313,7 +313,10 @@
       "watermark_draft": "Wasserzeichen «Entwurf» bei offenen Protokollen",
       "sender_color": "Farbe des Absenderblocks",
       "sender_color_custom": "Eigene Farbe für den Absenderblock",
-      "show_metadata": "Kasten mit Nummer, Datum und Status am Anfang"
+      "show_metadata": "Kasten mit Nummer, Datum und Status am Anfang",
+      "verify_show_url": "Prüf-URL in der Fusszeile",
+      "verify_show_id": "Dokument-ID",
+      "verify_show_qr": "QR-Code auf der letzten Seite"
     },
     "sample": {
       "title": "Musterdokument",
@@ -326,6 +329,44 @@
       "colTask": "Aufgabe",
       "colPerson": "Person",
       "colDue": "Fällig"
-    }
+    },
+    "verifyHeading": "Echtheitsprüfung im Dokument",
+    "verifyHint": "Jedes PDF wird registriert und ist über die Prüfseite prüfbar, auch wenn hier alles ausgeschaltet ist. Diese Angaben helfen Empfängern, die Prüfseite zu finden."
+  },
+  "verification": {
+    "title": "Echtheitsprüfung",
+    "intro": "Jedes PDF aus hocX ist registriert. Wer eine Datei erhält, kann auf der öffentlichen Prüfseite ohne Konto prüfen, ob sie unverändert aus hocX stammt.",
+    "publicTitle": "Öffentliche Prüfseite",
+    "showIdentity": "Name und Logo auf der Prüfseite anzeigen",
+    "showIdentityHint": "Ausgeschaltet zeigt die Prüfseite nur, dass das Dokument unverändert aus hocX stammt, nicht von wem.",
+    "showNewerVersion": "Auf neuere Versionen hinweisen",
+    "showNewerVersionHint": "Gilt für Protokolle: Gibt es eine neuere Version, sieht man auf der Prüfseite deren Nummer, aber keinen Inhalt.",
+    "openPage": "Prüfseite öffnen",
+    "verificationTitle": "Verifizierung durch hocX",
+    "verifiedSince": "Verifiziert seit {date}",
+    "pending": "Antrag in Prüfung",
+    "notVerified": "Nicht verifiziert",
+    "verificationExplanation": "Mit einer Verifizierung bestätigt hocX, dass dieses Konto zu eurer Organisation gehört. Auf der Prüfseite erscheint dann das Abzeichen «Verifizierte Organisation» (nur wenn Name und Logo angezeigt werden). Ändert sich der Name, wird die Verifizierung aufgehoben.",
+    "revokedNameChanged": "Die Verifizierung wurde am {date} aufgehoben, weil sich der Name geändert hat. Ihr könnt sie neu beantragen.",
+    "revokedByAdmin": "Die Verifizierung wurde am {date} von hocX aufgehoben.",
+    "verifiedButHidden": "Das Abzeichen ist erst sichtbar, wenn Name und Logo auf der Prüfseite angezeigt werden.",
+    "rejected": "Der letzte Antrag wurde abgelehnt: {reason}",
+    "pendingSince": "Antrag vom {date} für «{name}». hocX meldet sich, falls Nachweise fehlen.",
+    "requestMessage": "Nachricht an hocX (optional)",
+    "requestMessagePlaceholder": "z. B. Eintrag im Handelsregister, Website oder Statuten",
+    "request": "Verifizierung beantragen",
+    "withdraw": "Antrag zurückziehen",
+    "withdrawConfirm": "Antrag auf Verifizierung zurückziehen?",
+    "requestSent": "Antrag gesendet.",
+    "withdrawn": "Antrag zurückgezogen.",
+    "saved": "Gespeichert.",
+    "saveFailed": "Die Änderung konnte nicht gespeichert werden.",
+    "previewTitle": "Vorschau der Prüfseite",
+    "previewHint": "So sieht das Ergebnis für ein Beispieldokument aus.",
+    "previewOriginal": "Original",
+    "previewText": "Diese Datei ist eine unveränderte Kopie eines Dokuments, das am {date} mit hocX erstellt wurde.",
+    "previewBadge": "Verifizierte Organisation",
+    "previewCreatedBy": "Erstellt im hocX-Konto von {name}.",
+    "previewNewer": "Es gibt eine neuere Version (v1.3) dieses Dokuments."
   }
 }

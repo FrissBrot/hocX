@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("creates a todo and validates Markdown and signed PDF exports", async ({ request }) => {
+test("creates a todo and validates Markdown and registered PDF exports", async ({ request }) => {
   const suffix = Date.now();
   const todoResponse = await request.post("/api/todos", { data: { task: `E2E Export Todo ${suffix}` } });
   expect(todoResponse.ok(), await todoResponse.text()).toBeTruthy();
@@ -14,13 +14,15 @@ test("creates a todo and validates Markdown and signed PDF exports", async ({ re
     const pdf = await request.post("/api/documents/render", { data: { document_type: "todos", params }, timeout: 60_000 });
     expect(pdf.ok(), await pdf.text()).toBeTruthy();
     const metadata = await pdf.json();
-    // e2e.sh legt ein Dev-Signaturzertifikat an: jedes PDF ist signiert.
-    expect(metadata.signature_level).toBeTruthy();
+    // Jedes PDF ist im Dokumentenregister erfasst und trägt Kurz-ID und Prüf-Link.
+    expect(metadata.short_id).toMatch(/^[0-9A-F]{4}-[0-9A-F]{4}$/);
+    expect(metadata.verify_url).toContain(`/verify?id=${metadata.id}`);
     const download = await request.get(metadata.content_url);
     expect(download.ok()).toBeTruthy();
     const body = await download.body();
     expect(body.subarray(0, 5).toString()).toBe("%PDF-");
-    expect(body.includes("/ByteRange")).toBeTruthy();
+    // keine Signatur mehr
+    expect(body.includes("/ByteRange")).toBeFalsy();
   } finally {
     await request.delete(`/api/protocol-todos/${todo.id}`);
   }

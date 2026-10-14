@@ -17,6 +17,7 @@ import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Tabs } from "@/components/ui/tabs";
+import { AdminTenantVerificationPanel } from "@/components/admin/admin-identity-verification";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -990,6 +991,11 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                 </section>
               </div>
             )
+          },
+          {
+            id: "verifizierung",
+            label: t("tenantModal.tabs.verification"),
+            content: <AdminTenantVerificationPanel tenantId={tenant.id} tenantName={tenant.name} />
           }
         ]}
       />

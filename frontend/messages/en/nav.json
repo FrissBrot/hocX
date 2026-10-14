@@ -50,5 +50,6 @@
   "sessionReady": "Ready",
   "sessionLoading": "Loading workspace…",
   "connections": "Connections",
-  "taskPackages": "Task packages"
+  "taskPackages": "Task packages",
+  "documentVerification": "Authenticity check"
 }

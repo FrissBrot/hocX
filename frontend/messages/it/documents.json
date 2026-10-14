@@ -48,8 +48,8 @@
     "pageAlt": "Pagina {page}",
     "exportPdf": "Crea PDF",
     "exporting": "Creazione …",
-    "exported": "PDF creato e firmato.",
-    "exportedVersion": "PDF creato e firmato ({version}).",
+    "exported": "PDF creato · ID documento {id}.",
+    "exportedVersion": "PDF creato ({version}) · ID documento {id}.",
     "exportFailed": "Impossibile creare il documento.",
     "pdfReady": "PDF pronto – clicca qui per aprirlo",
     "moreFormats": "Altri formati",
@@ -313,7 +313,10 @@
       "watermark_draft": "Filigrana «Bozza» sui verbali aperti",
       "sender_color": "Colore del blocco mittente",
       "sender_color_custom": "Colore personalizzato per il blocco mittente",
-      "show_metadata": "Riquadro con numero, data e stato all’inizio"
+      "show_metadata": "Riquadro con numero, data e stato all’inizio",
+      "verify_show_url": "URL di verifica nel piè di pagina",
+      "verify_show_id": "ID documento",
+      "verify_show_qr": "Codice QR sull’ultima pagina"
     },
     "sample": {
       "title": "Documento di esempio",
@@ -326,6 +329,44 @@
       "colTask": "Compito",
       "colPerson": "Persona",
       "colDue": "Scadenza"
-    }
+    },
+    "verifyHeading": "Verifica di autenticità nel documento",
+    "verifyHint": "Ogni PDF viene registrato ed è verificabile sulla pagina di verifica, anche se qui è tutto disattivato. Queste indicazioni aiutano i destinatari a trovare la pagina di verifica."
+  },
+  "verification": {
+    "title": "Verifica di autenticità",
+    "intro": "Ogni PDF di hocX è registrato. Chi riceve un file può verificare sulla pagina pubblica di verifica, senza account, che provenga da hocX senza modifiche.",
+    "publicTitle": "Pagina pubblica di verifica",
+    "showIdentity": "Mostra nome e logo sulla pagina di verifica",
+    "showIdentityHint": "Se disattivato, la pagina di verifica mostra solo che il documento proviene da hocX senza modifiche, non da chi.",
+    "showNewerVersion": "Segnala le versioni più recenti",
+    "showNewerVersionHint": "Vale per i verbali: se esiste una versione più recente, la pagina ne mostra il numero, ma nessun contenuto.",
+    "openPage": "Apri la pagina di verifica",
+    "verificationTitle": "Verifica da parte di hocX",
+    "verifiedSince": "Verificata dal {date}",
+    "pending": "Richiesta in esame",
+    "notVerified": "Non verificata",
+    "verificationExplanation": "Con una verifica hocX conferma che questo account appartiene alla vostra organizzazione. La pagina di verifica mostra allora il badge «Organizzazione verificata» (solo se nome e logo sono mostrati). Se il nome cambia, la verifica viene revocata.",
+    "revokedNameChanged": "La verifica è stata revocata il {date} perché il nome è cambiato. Potete richiederla di nuovo.",
+    "revokedByAdmin": "La verifica è stata revocata da hocX il {date}.",
+    "verifiedButHidden": "Il badge appare solo se nome e logo sono mostrati sulla pagina di verifica.",
+    "rejected": "L’ultima richiesta è stata respinta: {reason}",
+    "pendingSince": "Richiesta del {date} per «{name}». hocX vi contatterà se mancano documenti.",
+    "requestMessage": "Messaggio a hocX (facoltativo)",
+    "requestMessagePlaceholder": "ad es. iscrizione al registro di commercio, sito web o statuti",
+    "request": "Richiedi la verifica",
+    "withdraw": "Ritira la richiesta",
+    "withdrawConfirm": "Ritirare la richiesta di verifica?",
+    "requestSent": "Richiesta inviata.",
+    "withdrawn": "Richiesta ritirata.",
+    "saved": "Salvato.",
+    "saveFailed": "Impossibile salvare la modifica.",
+    "previewTitle": "Anteprima della pagina di verifica",
+    "previewHint": "Ecco il risultato per un documento di esempio.",
+    "previewOriginal": "Originale",
+    "previewText": "Questo file è una copia non modificata di un documento creato con hocX il {date}.",
+    "previewBadge": "Organizzazione verificata",
+    "previewCreatedBy": "Creato nell’account hocX di {name}.",
+    "previewNewer": "Esiste una versione più recente (v1.3) di questo documento."
   }
 }

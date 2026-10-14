@@ -18,7 +18,7 @@ function parseVersion(label: string | null | undefined): { major: number | null;
   return match ? { major: Number(match[1]), minor: Number(match[2]) } : { major: null, minor: null };
 }
 
-/** Erzeugt das Protokoll-PDF (Dokument-Engine, signiert) aus dem aktuellen Stand und öffnet es. */
+/** Erzeugt das Protokoll-PDF (Dokument-Engine, im Dokumentenregister erfasst) aus dem aktuellen Stand und öffnet es. */
 export function usePdfExport() {
   const t = useTranslations("documents");
   const showToast = useToast();

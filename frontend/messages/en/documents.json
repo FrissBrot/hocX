@@ -48,8 +48,8 @@
     "pageAlt": "Page {page}",
     "exportPdf": "Create PDF",
     "exporting": "Creating …",
-    "exported": "PDF created and signed.",
-    "exportedVersion": "PDF created and signed ({version}).",
+    "exported": "PDF created · Document ID {id}.",
+    "exportedVersion": "PDF created ({version}) · Document ID {id}.",
     "exportFailed": "The document could not be created.",
     "pdfReady": "PDF ready – click here to open",
     "moreFormats": "More formats",
@@ -313,7 +313,10 @@
       "watermark_draft": "“Draft” watermark on open protocols",
       "sender_color": "Sender block colour",
       "sender_color_custom": "Custom colour for the sender block",
-      "show_metadata": "Box with number, date and status at the start"
+      "show_metadata": "Box with number, date and status at the start",
+      "verify_show_url": "Verification URL in the footer",
+      "verify_show_id": "Document ID",
+      "verify_show_qr": "QR code on the last page"
     },
     "sample": {
       "title": "Sample document",
@@ -326,6 +329,44 @@
       "colTask": "Task",
       "colPerson": "Person",
       "colDue": "Due"
-    }
+    },
+    "verifyHeading": "Authenticity check in the document",
+    "verifyHint": "Every PDF is registered and can be checked on the verification page, even if everything here is switched off. These details help recipients find the verification page."
+  },
+  "verification": {
+    "title": "Authenticity check",
+    "intro": "Every PDF from hocX is registered. Anyone who receives a file can check on the public verification page, without an account, whether it comes unchanged from hocX.",
+    "publicTitle": "Public verification page",
+    "showIdentity": "Show name and logo on the verification page",
+    "showIdentityHint": "When off, the verification page only shows that the document comes unchanged from hocX, not from whom.",
+    "showNewerVersion": "Point out newer versions",
+    "showNewerVersionHint": "Applies to minutes: if there is a newer version, the verification page shows its number but no content.",
+    "openPage": "Open verification page",
+    "verificationTitle": "Verification by hocX",
+    "verifiedSince": "Verified since {date}",
+    "pending": "Request under review",
+    "notVerified": "Not verified",
+    "verificationExplanation": "With a verification, hocX confirms that this account belongs to your organisation. The verification page then shows the “Verified organisation” badge (only if name and logo are shown). If the name changes, the verification is revoked.",
+    "revokedNameChanged": "The verification was revoked on {date} because the name changed. You can request it again.",
+    "revokedByAdmin": "The verification was revoked by hocX on {date}.",
+    "verifiedButHidden": "The badge only appears once name and logo are shown on the verification page.",
+    "rejected": "The last request was rejected: {reason}",
+    "pendingSince": "Request from {date} for “{name}”. hocX will get in touch if evidence is missing.",
+    "requestMessage": "Message to hocX (optional)",
+    "requestMessagePlaceholder": "e.g. commercial register entry, website or articles of association",
+    "request": "Request verification",
+    "withdraw": "Withdraw request",
+    "withdrawConfirm": "Withdraw the verification request?",
+    "requestSent": "Request sent.",
+    "withdrawn": "Request withdrawn.",
+    "saved": "Saved.",
+    "saveFailed": "The change could not be saved.",
+    "previewTitle": "Preview of the verification page",
+    "previewHint": "This is what the result looks like for a sample document.",
+    "previewOriginal": "Original",
+    "previewText": "This file is an unchanged copy of a document created with hocX on {date}.",
+    "previewBadge": "Verified organisation",
+    "previewCreatedBy": "Created in the hocX account of {name}.",
+    "previewNewer": "There is a newer version (v1.3) of this document."
   }
 }

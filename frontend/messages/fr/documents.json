@@ -48,8 +48,8 @@
     "pageAlt": "Page {page}",
     "exportPdf": "Créer le PDF",
     "exporting": "Création …",
-    "exported": "PDF créé et signé.",
-    "exportedVersion": "PDF créé et signé ({version}).",
+    "exported": "PDF créé · ID du document {id}.",
+    "exportedVersion": "PDF créé ({version}) · ID du document {id}.",
     "exportFailed": "Le document n’a pas pu être créé.",
     "pdfReady": "PDF prêt – cliquer ici pour l’ouvrir",
     "moreFormats": "Autres formats",
@@ -313,7 +313,10 @@
       "watermark_draft": "Filigrane « Brouillon » pour les procès-verbaux ouverts",
       "sender_color": "Couleur du bloc expéditeur",
       "sender_color_custom": "Couleur personnalisée pour le bloc expéditeur",
-      "show_metadata": "Encadré avec numéro, date et statut au début"
+      "show_metadata": "Encadré avec numéro, date et statut au début",
+      "verify_show_url": "URL de vérification dans le pied de page",
+      "verify_show_id": "ID du document",
+      "verify_show_qr": "Code QR sur la dernière page"
     },
     "sample": {
       "title": "Document exemple",
@@ -326,6 +329,44 @@
       "colTask": "Tâche",
       "colPerson": "Personne",
       "colDue": "Échéance"
-    }
+    },
+    "verifyHeading": "Vérification d’authenticité dans le document",
+    "verifyHint": "Chaque PDF est enregistré et vérifiable sur la page de vérification, même si tout est désactivé ici. Ces indications aident les destinataires à trouver la page de vérification."
+  },
+  "verification": {
+    "title": "Vérification d’authenticité",
+    "intro": "Chaque PDF de hocX est enregistré. Toute personne qui reçoit un fichier peut vérifier sur la page publique de vérification, sans compte, qu’il provient de hocX sans modification.",
+    "publicTitle": "Page publique de vérification",
+    "showIdentity": "Afficher le nom et le logo sur la page de vérification",
+    "showIdentityHint": "Désactivée, la page de vérification indique seulement que le document provient de hocX sans modification, pas de qui.",
+    "showNewerVersion": "Signaler les versions plus récentes",
+    "showNewerVersionHint": "Concerne les procès-verbaux : s’il existe une version plus récente, la page affiche son numéro, mais aucun contenu.",
+    "openPage": "Ouvrir la page de vérification",
+    "verificationTitle": "Vérification par hocX",
+    "verifiedSince": "Vérifiée depuis le {date}",
+    "pending": "Demande en cours d’examen",
+    "notVerified": "Non vérifiée",
+    "verificationExplanation": "Par une vérification, hocX confirme que ce compte appartient à votre organisation. La page de vérification affiche alors le badge « Organisation vérifiée » (uniquement si le nom et le logo sont affichés). Si le nom change, la vérification est révoquée.",
+    "revokedNameChanged": "La vérification a été révoquée le {date} parce que le nom a changé. Vous pouvez la redemander.",
+    "revokedByAdmin": "La vérification a été révoquée par hocX le {date}.",
+    "verifiedButHidden": "Le badge n’apparaît que si le nom et le logo sont affichés sur la page de vérification.",
+    "rejected": "La dernière demande a été refusée : {reason}",
+    "pendingSince": "Demande du {date} pour « {name} ». hocX vous contactera si des justificatifs manquent.",
+    "requestMessage": "Message à hocX (facultatif)",
+    "requestMessagePlaceholder": "p. ex. inscription au registre du commerce, site web ou statuts",
+    "request": "Demander la vérification",
+    "withdraw": "Retirer la demande",
+    "withdrawConfirm": "Retirer la demande de vérification ?",
+    "requestSent": "Demande envoyée.",
+    "withdrawn": "Demande retirée.",
+    "saved": "Enregistré.",
+    "saveFailed": "La modification n’a pas pu être enregistrée.",
+    "previewTitle": "Aperçu de la page de vérification",
+    "previewHint": "Voici le résultat pour un document d’exemple.",
+    "previewOriginal": "Original",
+    "previewText": "Ce fichier est une copie non modifiée d’un document créé avec hocX le {date}.",
+    "previewBadge": "Organisation vérifiée",
+    "previewCreatedBy": "Créé dans le compte hocX de {name}.",
+    "previewNewer": "Il existe une version plus récente (v1.3) de ce document."
   }
 }

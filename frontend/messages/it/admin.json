@@ -174,10 +174,10 @@
         "detail": "{queued, number} in coda · il più vecchio {oldestMinutes, number} min",
         "problem": "La coda di analisi immagini si accumula"
       },
-      "document_signing": {
-        "title": "Firma dei documenti",
-        "detail": "{state, select, missing {Nessun certificato configurato} unreadable {Chiave o certificato non leggibile} expired {Scaduto il {notAfter}} other {Valido fino al {notAfter} · ancora {daysLeft, number} giorni}}",
-        "problem": "Certificato di firma mancante o in scadenza"
+      "document_verification": {
+        "title": "Pagina pubblica di verifica",
+        "detail": "Risposta in {latencyMs, number} ms",
+        "problem": "Pagina pubblica di verifica lenta"
       }
     },
     "problems": {
@@ -487,7 +487,8 @@
       "plan": "Piano e abbonamento",
       "users": "Utenti ({count})",
       "cleanup": "Pulizia",
-      "storage": "Archiviazione"
+      "storage": "Archiviazione",
+      "verification": "Verifica"
     },
     "fields": {
       "tenantName": "Nome organizzazione",
@@ -973,5 +974,80 @@
     "packageQuantity": "{name} × {count}",
     "rebook": "Riassegna",
     "footnote": "Organizzazioni con un piano o un pacchetto di spazio non prenotabile (evidenziato). «Riassegna» apre le impostazioni dell'organizzazione: modifica il piano nella scheda «Piano e abbonamento» e i pacchetti nella scheda «Archiviazione»."
+  },
+  "verification": {
+    "title": "Verifica delle organizzazioni",
+    "description": "Le organizzazioni confermate ricevono il badge «Organizzazione verificata» sulla pagina pubblica di verifica (se mostrano nome e logo). Viene confermato il nome al momento della richiesta; un cambio di nome revoca la verifica.",
+    "loading": "Caricamento …",
+    "empty": "Nessuna richiesta.",
+    "requestedAs": "Richiesta come «{name}»",
+    "filter": {
+      "pending": "Aperte",
+      "approved": "Confermate",
+      "rejected": "Respinte",
+      "withdrawn": "Ritirate",
+      "all": "Tutte"
+    },
+    "columns": {
+      "organisation": "Organizzazione",
+      "message": "Messaggio",
+      "requested": "Richiesta",
+      "status": "Stato",
+      "actions": "Azioni"
+    },
+    "status": {
+      "pending": "Aperta",
+      "approved": "Confermata",
+      "rejected": "Respinta",
+      "withdrawn": "Ritirata"
+    },
+    "actions": {
+      "approve": "Conferma",
+      "reject": "Respingi",
+      "revoke": "Revoca la verifica"
+    },
+    "modal": {
+      "approveTitle": "Verifica «{name}»",
+      "rejectTitle": "Respingi la richiesta di «{name}»",
+      "revokeTitle": "Revoca la verifica di «{name}»",
+      "approveHint": "Confermare solo dopo aver verificato l’identità (ad es. registro di commercio, statuti, richiamata a un numero noto).",
+      "rejectHint": "L’amministratore del mandante vede il motivo nelle impostazioni.",
+      "revokeHint": "Il badge scompare subito dalla pagina di verifica.",
+      "note": "Nota (come è stato verificato)",
+      "reasonRequired": "Motivo (obbligatorio)",
+      "approvePlaceholder": "ad es. registro di commercio CHE-123.456.789 verificato",
+      "rejectPlaceholder": "ad es. nessuna prova del potere di rappresentanza",
+      "revokePlaceholder": "ad es. segnalazione di abuso",
+      "cancel": "Annulla"
+    },
+    "done": {
+      "approve": "«{name}» è verificata.",
+      "reject": "Richiesta di «{name}» respinta.",
+      "revoke": "Verifica di «{name}» revocata."
+    },
+    "tenant": {
+      "title": "Verifica da parte di hocX",
+      "verified": "Verificata dal {date}",
+      "notVerified": "Non verificata",
+      "by": "da {email}",
+      "note": "Nota: {note}",
+      "hidden": "Il mandante non mostra nome e logo sulla pagina di verifica - il badge quindi non è visibile.",
+      "history": "Richieste",
+      "noRequests": "Nessuna richiesta finora.",
+      "withdrawnByRename": "Ritirata per cambio di nome",
+      "revoked": {
+        "name_changed": "Revocata il {date}: nome cambiato.",
+        "admin": "Revocata il {date}."
+      }
+    },
+    "errors": {
+      "generic": "L’azione non è riuscita.",
+      "verificationAlreadyVerified": "L’organizzazione è già verificata.",
+      "verificationAlreadyPending": "Esiste già una richiesta aperta.",
+      "verificationNoPending": "Non esiste alcuna richiesta aperta.",
+      "verificationNameChanged": "Il nome è cambiato dalla richiesta.",
+      "verificationReasonRequired": "Indica un motivo.",
+      "verificationNotVerified": "L’organizzazione non è verificata."
+    }
   }
 }

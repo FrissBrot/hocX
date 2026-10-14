@@ -174,10 +174,10 @@
         "detail": "{queued, number} in der Warteschlange · älteste {oldestMinutes, number} min",
         "problem": "Bildanalyse-Warteschlange staut sich"
       },
-      "document_signing": {
-        "title": "Dokumentsignatur",
-        "detail": "{state, select, missing {Kein Zertifikat konfiguriert} unreadable {Schlüssel oder Zertifikat nicht lesbar} expired {Abgelaufen am {notAfter}} other {Gültig bis {notAfter} · noch {daysLeft, number} Tage}}",
-        "problem": "Signaturzertifikat fehlt oder läuft ab"
+      "document_verification": {
+        "title": "Öffentliche Prüfseite",
+        "detail": "Antwort in {latencyMs, number} ms",
+        "problem": "Öffentliche Prüfseite langsam"
       }
     },
     "problems": {
@@ -487,7 +487,8 @@
       "plan": "Plan & Abo",
       "users": "Benutzer ({count})",
       "cleanup": "Aufräumen",
-      "storage": "Speicher"
+      "storage": "Speicher",
+      "verification": "Verifizierung"
     },
     "fields": {
       "tenantName": "Mandantenname",
@@ -973,5 +974,80 @@
     "packageQuantity": "{name} × {count}",
     "rebook": "Umbuchen",
     "footnote": "Mandanten auf einem nicht buchbaren Plan oder mit einem nicht buchbaren Speicherpaket (markiert). «Umbuchen» öffnet die Einstellungen des Mandanten, dort Plan im Tab «Plan & Abo» und Pakete im Tab «Speicher» ändern."
+  },
+  "verification": {
+    "title": "Verifizierung von Organisationen",
+    "description": "Bestätigte Organisationen erhalten auf der öffentlichen Prüfseite das Abzeichen «Verifizierte Organisation» (sofern sie Name und Logo anzeigen). Bestätigt wird der Name zum Zeitpunkt des Antrags; eine Umbenennung hebt die Verifizierung auf.",
+    "loading": "Wird geladen …",
+    "empty": "Keine Anträge.",
+    "requestedAs": "Beantragt als «{name}»",
+    "filter": {
+      "pending": "Offen",
+      "approved": "Bestätigt",
+      "rejected": "Abgelehnt",
+      "withdrawn": "Zurückgezogen",
+      "all": "Alle"
+    },
+    "columns": {
+      "organisation": "Organisation",
+      "message": "Nachricht",
+      "requested": "Beantragt",
+      "status": "Status",
+      "actions": "Aktionen"
+    },
+    "status": {
+      "pending": "Offen",
+      "approved": "Bestätigt",
+      "rejected": "Abgelehnt",
+      "withdrawn": "Zurückgezogen"
+    },
+    "actions": {
+      "approve": "Bestätigen",
+      "reject": "Ablehnen",
+      "revoke": "Verifizierung entziehen"
+    },
+    "modal": {
+      "approveTitle": "«{name}» verifizieren",
+      "rejectTitle": "Antrag von «{name}» ablehnen",
+      "revokeTitle": "Verifizierung von «{name}» entziehen",
+      "approveHint": "Nur bestätigen, wenn die Identität geprüft ist (z. B. Handelsregister, Statuten, Rückruf an bekannte Nummer).",
+      "rejectHint": "Die Begründung sieht der Mandanten-Admin in den Einstellungen.",
+      "revokeHint": "Das Abzeichen verschwindet sofort von der Prüfseite.",
+      "note": "Notiz (wie geprüft)",
+      "reasonRequired": "Begründung (Pflicht)",
+      "approvePlaceholder": "z. B. Handelsregister CHE-123.456.789 geprüft",
+      "rejectPlaceholder": "z. B. Kein Nachweis der Vertretungsberechtigung",
+      "revokePlaceholder": "z. B. Hinweis auf Missbrauch",
+      "cancel": "Abbrechen"
+    },
+    "done": {
+      "approve": "«{name}» ist verifiziert.",
+      "reject": "Antrag von «{name}» abgelehnt.",
+      "revoke": "Verifizierung von «{name}» entzogen."
+    },
+    "tenant": {
+      "title": "Verifizierung durch hocX",
+      "verified": "Verifiziert seit {date}",
+      "notVerified": "Nicht verifiziert",
+      "by": "von {email}",
+      "note": "Notiz: {note}",
+      "hidden": "Der Mandant zeigt Name und Logo auf der Prüfseite nicht an - das Abzeichen ist deshalb nicht sichtbar.",
+      "history": "Anträge",
+      "noRequests": "Noch keine Anträge.",
+      "withdrawnByRename": "Durch Namensänderung zurückgezogen",
+      "revoked": {
+        "name_changed": "Aufgehoben am {date}: Name geändert.",
+        "admin": "Entzogen am {date}."
+      }
+    },
+    "errors": {
+      "generic": "Die Aktion ist fehlgeschlagen.",
+      "verificationAlreadyVerified": "Die Organisation ist bereits verifiziert.",
+      "verificationAlreadyPending": "Es gibt bereits einen offenen Antrag.",
+      "verificationNoPending": "Es gibt keinen offenen Antrag.",
+      "verificationNameChanged": "Der Name hat sich seit dem Antrag geändert.",
+      "verificationReasonRequired": "Bitte eine Begründung angeben.",
+      "verificationNotVerified": "Die Organisation ist nicht verifiziert."
+    }
   }
 }

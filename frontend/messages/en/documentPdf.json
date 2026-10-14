@@ -16,11 +16,6 @@
     "version": "Version",
     "place": "Place"
   },
-  "signature": {
-    "line": "Digitally signed by hocX · Document ID {id} · Version {version}",
-    "lineNoVersion": "Digitally signed by hocX · Document ID {id}",
-    "preview": "Preview · not signed"
-  },
   "protocolStatus": {
     "planned": "Planned",
     "prepared": "Prepared",
@@ -287,9 +282,22 @@
     "infected": "The file was rejected by the virus scanner.",
     "scanFailed": "The file could not be scanned for viruses. Please try again later.",
     "assetInUse": "The file is still used by a house style.",
-    "lastStyle": "The last house style cannot be deleted."
+    "lastStyle": "The last house style cannot be deleted.",
+    "verificationAlreadyVerified": "The organisation is already verified.",
+    "verificationAlreadyPending": "There is already an open request.",
+    "verificationNoPending": "There is no open request.",
+    "verificationNameChanged": "The name has changed since the request.",
+    "verificationReasonRequired": "Please give a reason.",
+    "verificationNotVerified": "The organisation is not verified."
   },
   "metadata": {
     "title": "Document details"
+  },
+  "verify": {
+    "urlAndId": "Verify authenticity: {url} · ID {id}",
+    "url": "Verify authenticity: {url}",
+    "id": "Document ID {id}",
+    "qrHint": "Scan the QR code to verify authenticity",
+    "previewId": "PREVIEW"
   }
 }

@@ -57,7 +57,8 @@ export function useTenantGeneralForm(initialTenant: TenantSummary) {
       });
       setTenantForm((current) => ({ ...current, profileImage: null, profileImageUrl: updated.profile_image_url }));
       router.refresh();
-      showToast(t("saveSuccess"), "success");
+      // Namensänderung hebt eine Verifizierung durch hocX auf (Prüfseite) - darauf hinweisen
+      showToast(updated.identity_verification_revoked ? t("saveSuccessVerificationRevoked") : t("saveSuccess"), updated.identity_verification_revoked ? "info" : "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("saveFailed"), "error");
     } finally {

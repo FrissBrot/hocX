@@ -86,6 +86,8 @@ export type TenantSummary = {
   created_at?: string | null;
   updated_at?: string | null;
   enabled_features: string[];
+  // Nur in der Antwort auf eine Änderung: die Namensänderung hat die Verifizierung durch hocX aufgehoben
+  identity_verification_revoked?: boolean;
 };
 
 export type TenantSubscriptionFeature = {

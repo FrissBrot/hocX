@@ -253,7 +253,7 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
       if (!result?.content_url) throw new Error(t("dialog.exportFailed"));
       if (pdfWindow && !pdfWindow.closed) pdfWindow.location.replace(result.content_url);
       else window.open(result.content_url, "_blank", "noopener,noreferrer");
-      toast(result.version_label ? t("dialog.exportedVersion", { version: result.version_label }) : t("dialog.exported"), "success");
+      toast(result.version_label ? t("dialog.exportedVersion", { version: result.version_label, id: result.short_id }) : t("dialog.exported", { id: result.short_id }), "success");
       onExported?.();
     } catch (error) {
       pdfWindow?.close();
