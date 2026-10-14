@@ -43,6 +43,8 @@ ERRORS_PER_HOUR_WARNING = 20
 ERRORS_PER_HOUR_CRITICAL = 100
 SCAN_BACKLOG_MIN_AGE = timedelta(hours=1)
 PHOTO_QUEUE_WARNING_AGE = timedelta(hours=6)
+# Restlaufzeit des Signaturzertifikats, ab der gewarnt wird
+SIGNING_CERT_WARNING_DAYS = 30
 CONTAINER_MEMORY_WARNING_RATIO = 0.9
 _HEALTH_OUTPUT_MAX_LENGTH = 500
 
@@ -288,6 +290,31 @@ def _check_photo_queue(db: Session, now: datetime) -> HealthCheckRead:
     return HealthCheckRead(key="photo_queue", status=status, params={"queued": queued, "oldestMinutes": oldest_minutes})
 
 
+def _check_document_signing() -> HealthCheckRead:
+    """Signaturzertifikat der Dokument-Engine: vorhanden, lesbar, nicht bald abgelaufen.
+    Fehlende Konfiguration ist nur in Produktion ein Alarm (dort startet das Backend ohnehin nicht)."""
+    from app.documents.signing import certificate_status
+
+    cert = certificate_status()
+    if not cert.configured:
+        return HealthCheckRead(
+            key="document_signing", status="critical" if settings.is_production else "unknown",
+            params={"state": "missing", "daysLeft": 0, "notAfter": "-"},
+        )
+    if not cert.readable:
+        return HealthCheckRead(key="document_signing", status="critical", params={"state": "unreadable", "daysLeft": 0, "notAfter": "-", "reason": cert.error or "-"})
+    days_left = cert.days_left or 0
+    state, status = "ok", "ok"
+    if days_left < SIGNING_CERT_WARNING_DAYS:
+        state, status = "expiring", "warning"
+    if days_left < 0:
+        state, status = "expired", "critical"
+    return HealthCheckRead(
+        key="document_signing", status=status,
+        params={"state": state, "daysLeft": max(days_left, 0), "notAfter": f"{cert.not_after:%d.%m.%Y}" if cert.not_after else "-"},
+    )
+
+
 def _run_check(key: str, fn, *, failure_status: HealthStatus = "critical", db: Session | None = None) -> list[HealthCheckRead]:
     """Ein Ausfall einer Prüfung ist selbst ein Befund (Dienst nicht erreichbar) - er darf aber
     die übrigen Prüfungen nicht verhindern."""
@@ -314,6 +341,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("error_rate", lambda: _check_error_rate(db), failure_status="unknown", db=db)
     checks += _run_check("scan_backlog", lambda: _check_scan_backlog(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
+    checks += _run_check("document_signing", _check_document_signing)
     return checks
 
 

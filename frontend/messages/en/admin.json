@@ -173,6 +173,11 @@
         "title": "Image analysis",
         "detail": "{queued, number} queued · oldest {oldestMinutes, number} min",
         "problem": "Image analysis queue is backing up"
+      },
+      "document_signing": {
+        "title": "Document signing",
+        "detail": "{state, select, missing {No certificate configured} unreadable {Key or certificate not readable} expired {Expired on {notAfter}} other {Valid until {notAfter} · {daysLeft, number} days left}}",
+        "problem": "Signing certificate missing or expiring"
       }
     },
     "problems": {

@@ -173,6 +173,11 @@
         "title": "Analisi immagini",
         "detail": "{queued, number} in coda · il più vecchio {oldestMinutes, number} min",
         "problem": "La coda di analisi immagini si accumula"
+      },
+      "document_signing": {
+        "title": "Firma dei documenti",
+        "detail": "{state, select, missing {Nessun certificato configurato} unreadable {Chiave o certificato non leggibile} expired {Scaduto il {notAfter}} other {Valido fino al {notAfter} · ancora {daysLeft, number} giorni}}",
+        "problem": "Certificato di firma mancante o in scadenza"
       }
     },
     "problems": {

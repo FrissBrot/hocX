@@ -173,6 +173,11 @@
         "title": "Analyse d'images",
         "detail": "{queued, number} en file d'attente · le plus ancien {oldestMinutes, number} min",
         "problem": "La file d'analyse d'images s'engorge"
+      },
+      "document_signing": {
+        "title": "Signature des documents",
+        "detail": "{state, select, missing {Aucun certificat configuré} unreadable {Clé ou certificat illisible} expired {Expiré le {notAfter}} other {Valable jusqu’au {notAfter} · encore {daysLeft, number} jours}}",
+        "problem": "Certificat de signature manquant ou bientôt expiré"
       }
     },
     "problems": {

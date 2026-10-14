@@ -29,6 +29,8 @@ prepare_abgabebox_storage() {
 
 start_stack() {
   prepare_abgabebox_storage
+  # Jedes PDF wird signiert; der E2E-Stack nutzt ein eigenes Dev-Zertifikat.
+  "$REPO_DIR/scripts/generate-dev-signing-cert.sh" "$REPO_DIR/storage-e2e/signing"
   "${DC[@]}" up -d --build
   wait_for_url http://127.0.0.1:18000/api/health
   wait_for_url http://127.0.0.1:13000/login

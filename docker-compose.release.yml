@@ -172,7 +172,17 @@ services:
       # ENVIRONMENT=test, and the script itself refuses to run against a
       # HOCX_ENVIRONMENT=production backend - setting this here is inert on prod either way.
       DEMO_TOTP_SEED: ${DEMO_TOTP_SEED:-}
+      # Dokumentsignatur (PAdES, app/documents/signing.py): Schlüssel und Zertifikat liegen
+      # im Host-Verzeichnis DOCUMENT_SIGNING_DIR (nie im Repo), read-only eingehängt; das
+      # Passwort kommt als Compose-Secret. Ohne lesbare Dateien startet das Backend in
+      # Produktion nicht. Optional: chain.pem (Zwischenzertifikate), TSA-URL für PAdES B-T.
+      DOCUMENT_SIGNING_KEY_PATH: /run/hocx-signing/signing-key.pem
+      DOCUMENT_SIGNING_CERT_PATH: /run/hocx-signing/signing-cert.pem
+      DOCUMENT_SIGNING_CHAIN_PATH: ${DOCUMENT_SIGNING_CHAIN_PATH:-}
+      DOCUMENT_SIGNING_KEY_PASSWORD_FILE: /run/secrets/document_signing_key_password
+      DOCUMENT_SIGNING_TSA_URL: ${DOCUMENT_SIGNING_TSA_URL:-}
     secrets:
+      - document_signing_key_password
       - database_url
       - app_database_url
       - app_db_password
@@ -201,6 +211,8 @@ services:
       - ./storage-local/thumbnails:/app/storage-local/thumbnails
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       - ./infra/traefik/dynamic:/app/traefik_dynamic
+      # Dokumentsignatur: Schlüssel/Zertifikat des Betreibers (RUNBOOK «Dokumentsignatur»)
+      - ${DOCUMENT_SIGNING_DIR:-./.signing}:/run/hocx-signing:ro
     healthcheck:
       # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
       # einen simplen Liveness-Check gegen den Health-Endpoint aus app/main.py.
@@ -637,5 +649,7 @@ secrets:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/photo_worker_database_url
   friendly_captcha_api_key:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/friendly_captcha_api_key
+  document_signing_key_password:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/document_signing_key_password
   abgabebox_captcha_session_secret:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_captcha_session_secret

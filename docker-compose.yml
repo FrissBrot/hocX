@@ -158,6 +158,8 @@ services:
         required: false
     environment:
       HOCX_ENVIRONMENT: development
+      DOCUMENT_SIGNING_KEY_PATH: /run/hocx-signing/signing-key.pem
+      DOCUMENT_SIGNING_CERT_PATH: /run/hocx-signing/signing-cert.pem
       DATABASE_URL: ${DATABASE_URL}
       APP_DATABASE_URL: ${APP_DATABASE_URL}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
@@ -207,6 +209,9 @@ services:
       # auch wenn /app/storage spaeter auf ein Netzwerk-/Cloud-Volume umgehaengt wird
       # (siehe FileService.ensure_thumbnail).
       - ./storage-local/thumbnails:/app/storage-local/thumbnails
+      # Dev-Signaturzertifikat (scripts/generate-dev-signing-cert.sh); ohne Dateien bleiben
+      # PDFs unsigniert und das Backend warnt beim Start.
+      - ./storage-local/signing:/run/hocx-signing:ro
       # Zugriff auf die von der Abgabebox geschriebenen Dateien fuer Admin-Downloads
       # und zum Loeschen beim "Wieder aufschalten" (siehe submission_service.py).
       # Read-write, da das Haupt-Backend ohnehin voll vertrauenswuerdig ist - die

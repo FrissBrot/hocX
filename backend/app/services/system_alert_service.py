@@ -60,6 +60,7 @@ _CHECK_TITLES_DE = {
     "error_rate": "Fehlerrate",
     "scan_backlog": "Virenprüfung im Rückstand",
     "photo_queue": "Bildanalyse-Warteschlange",
+    "document_signing": "Dokumentsignatur",
 }
 # Titel, wenn die Prüfung lief, aber einen Schwellwert reisst (sonst "<Name> nicht erreichbar").
 _CHECK_PROBLEM_TITLES_DE = {
@@ -70,6 +71,7 @@ _CHECK_PROBLEM_TITLES_DE = {
     "error_rate": "Viele Einträge im Fehlerprotokoll",
     "scan_backlog": "Virenprüfung im Rückstand",
     "photo_queue": "Bildanalyse-Warteschlange staut sich",
+    "document_signing": "Signaturzertifikat fehlt oder läuft ab",
 }
 _JOB_REASONS_DE = {
     "failing": "ist fehlgeschlagen",
@@ -110,6 +112,15 @@ def _check_message(check) -> str:
             return f"{params.get('count')} Dateien warten seit über einer Stunde auf die Virenprüfung."
         case "photo_queue":
             return f"{params.get('queued')} Aufträge warten, der älteste seit {params.get('oldestMinutes')} Minuten."
+        case "document_signing":
+            match params.get("state"):
+                case "missing":
+                    return "Kein Signaturzertifikat konfiguriert (DOCUMENT_SIGNING_KEY_PATH/CERT_PATH) - siehe RUNBOOK «Dokumentsignatur»."
+                case "unreadable":
+                    return f"Schlüssel oder Zertifikat nicht lesbar ({params.get('reason')}) - Pfade, Rechte und Passwort prüfen."
+                case "expired":
+                    return f"Signaturzertifikat ist am {params.get('notAfter')} abgelaufen - Zertifikat erneuern (RUNBOOK «Dokumentsignatur»)."
+            return f"Signaturzertifikat läuft in {params.get('daysLeft')} Tagen ab ({params.get('notAfter')}) - rechtzeitig erneuern."
     return "Siehe Systemstatus."
 
 

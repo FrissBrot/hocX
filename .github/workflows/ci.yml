@@ -50,6 +50,15 @@ jobs:
       - name: i18n - t()-Aufrufe loesen existierende Keys auf
         run: python3 scripts/check-i18n-key-resolution.py
 
+      # Dokument-Engine: Typst-Tokens kommen aus design/tokens.css, die festen PDF-Texte aus
+      # frontend/messages/*/documentPdf.json - beide Kopien im Backend werden nie von Hand
+      # bearbeitet.
+      - name: Dokument-Engine - Typst-Tokens aktuell generiert
+        run: python3 scripts/sync-document-tokens.py --check
+
+      - name: Dokument-Engine - PDF-Texte aktuell kopiert
+        run: python3 scripts/sync-document-i18n.py --check
+
   migration-check:
     runs-on: ubuntu-latest
     services:
@@ -176,6 +185,10 @@ jobs:
           # Same for the Traefik dynamic-config dir (default /app/traefik_dynamic) that the
           # app lifespan writes on startup (tests/test_app_lifespan_smoke.py).
           TRAEFIK_DYNAMIC_CONFIG_DIR: ${{ runner.temp }}/traefik_dynamic
+          # Dokument-Engine: Golden-Diffs und Galerie als Artefakte (siehe Upload-Schritte).
+          # Das Dev-Signaturzertifikat erzeugt die Testsuite selbst (tests/conftest.py).
+          DOCUMENT_GOLDEN_DIFF_DIR: ${{ runner.temp }}/document-golden-diffs
+          DOCUMENT_GALLERY_OUT: ${{ runner.temp }}/document-gallery.pdf
         # No coverage threshold gate: per hocX.wiki/Bekannte-offene-Punkte, meaningful
         # domain/security test cases matter more than a bare percentage. This is purely
         # for visibility into which areas have no test coverage at all.
@@ -184,6 +197,33 @@ jobs:
       - name: Audit-log coverage report (informational)
         working-directory: backend
         run: python3 scripts/check_audit_coverage.py
+
+      # Jeder Block-Typ hat Modell, Provider, Basis-Komponente und Texte; Typst-Pakete sind
+      # vendored (der Compile greift nie aufs Netz).
+      - name: Dokument-Engine - Block-Katalog vollstaendig
+        env:
+          DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
+          AUTH_SECRET: ci-backend-tests-dummy-secret-0123456789
+          ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
+        run: python3 scripts/check-document-catalog.py
+
+      # Visuelle Regression: bei Abweichungen Ist- und Differenzbilder zum Ansehen.
+      - name: Upload document golden diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: document-golden-diffs
+          path: ${{ runner.temp }}/document-golden-diffs
+          if-no-files-found: ignore
+
+      # Galerie «alle Hausstile × alle Dokumenttypen» (entsteht im pytest-Lauf oben).
+      - name: Upload document gallery
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: document-gallery
+          path: ${{ runner.temp }}/document-gallery.pdf
+          if-no-files-found: ignore
 
   abgabebox-backend-tests:
     runs-on: ubuntu-latest

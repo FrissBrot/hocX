@@ -154,6 +154,35 @@ def test_collect_checks_turns_unreachable_services_into_findings(clean_state, mo
     assert checks["clamav_signatures"].status == "unknown"
 
 
+@pytest.mark.parametrize(
+    ("cert", "production", "status", "state"),
+    [
+        ({"configured": False, "readable": False}, False, "unknown", "missing"),
+        ({"configured": False, "readable": False}, True, "critical", "missing"),
+        ({"configured": True, "readable": False, "error": "ValueError"}, False, "critical", "unreadable"),
+        ({"configured": True, "readable": True, "days_left": 200}, False, "ok", "ok"),
+        ({"configured": True, "readable": True, "days_left": 12}, False, "warning", "expiring"),
+        ({"configured": True, "readable": True, "days_left": -3}, False, "critical", "expired"),
+    ],
+)
+def test_document_signing_check(monkeypatch, cert, production, status, state):
+    from app.core.config import settings
+    from app.documents import signing
+
+    not_after = NOW + timedelta(days=cert.get("days_left") or 0)
+    monkeypatch.setattr(signing, "certificate_status", lambda: signing.CertificateStatus(not_after=not_after if cert.get("readable") else None, **cert))
+    monkeypatch.setattr(settings, "environment", "production" if production else "development")
+
+    check = system_health_service._check_document_signing()
+
+    assert (check.status, check.params["state"]) == (status, state)
+    if status in ("warning", "critical"):
+        problems = system_alert_service.derive_problems(_snapshot(checks=[check]), JobStatusOverview(items=[], generated_at=NOW), now=NOW)
+        problem = next(item for item in problems if item.key == "check:document_signing")
+        assert problem.title == "Signaturzertifikat fehlt oder läuft ab"
+        assert "Siehe Systemstatus" not in problem.message
+
+
 # ── system_alert_service.derive_problems ─────────────────────────────────────────────────
 
 

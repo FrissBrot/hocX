@@ -64,8 +64,15 @@ class SignatureInfo:
         }
 
 
-def signing_configured() -> bool:
+def signing_paths_set() -> bool:
     return bool(settings.document_signing_key_path and settings.document_signing_cert_path)
+
+
+def signing_configured() -> bool:
+    """Signiert wird, wenn Schlüssel und Zertifikat konfiguriert und vorhanden sind. In der
+    Entwicklung ohne Dev-Zertifikat bleiben PDFs unsigniert (Warnung beim Start); in
+    Produktion verhindert validate_signing_configuration den Start."""
+    return signing_paths_set() and Path(settings.document_signing_key_path).is_file() and Path(settings.document_signing_cert_path).is_file()
 
 
 def signature_level() -> str:
@@ -79,7 +86,7 @@ _signer_cache: dict[tuple, object] = {}
 def _load_signer():
     from pyhanko.sign import signers
 
-    if not signing_configured():
+    if not signing_paths_set():
         raise SigningNotConfiguredError("DOCUMENT_SIGNING_KEY_PATH/DOCUMENT_SIGNING_CERT_PATH fehlen")
     key = (
         settings.document_signing_key_path,
@@ -89,7 +96,7 @@ def _load_signer():
     )
     with _signer_lock:
         if key not in _signer_cache:
-            password = settings.document_signing_key_password
+            password = settings.document_signing_key_password or None
             signer = signers.SimpleSigner.load(
                 settings.document_signing_key_path,
                 settings.document_signing_cert_path,
@@ -188,7 +195,7 @@ class CertificateStatus:
 
 def certificate_status() -> CertificateStatus:
     """Für den Systemcheck: Zertifikat vorhanden, lesbar, Restlaufzeit."""
-    if not signing_configured():
+    if not signing_paths_set():
         return CertificateStatus(configured=False, readable=False)
     try:
         from cryptography import x509

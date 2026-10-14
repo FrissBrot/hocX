@@ -414,6 +414,7 @@ write_secret_files() {
   write_secret_file "$secrets_dir" friendly_captcha_api_key "$FRIENDLY_CAPTCHA_API_KEY"
   write_secret_file "$secrets_dir" abgabebox_captcha_session_secret "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
   write_secret_file "$secrets_dir" cf_dns_api_token "$CF_DNS_API_TOKEN"
+  write_secret_file "$secrets_dir" document_signing_key_password "${DOCUMENT_SIGNING_KEY_PASSWORD:-}"
   echo "    Secret-Dateien aktuell: $secrets_dir"
 }
 

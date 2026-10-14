@@ -173,6 +173,11 @@
         "title": "Bildanalyse",
         "detail": "{queued, number} in der Warteschlange · älteste {oldestMinutes, number} min",
         "problem": "Bildanalyse-Warteschlange staut sich"
+      },
+      "document_signing": {
+        "title": "Dokumentsignatur",
+        "detail": "{state, select, missing {Kein Zertifikat konfiguriert} unreadable {Schlüssel oder Zertifikat nicht lesbar} expired {Abgelaufen am {notAfter}} other {Gültig bis {notAfter} · noch {daysLeft, number} Tage}}",
+        "problem": "Signaturzertifikat fehlt oder läuft ab"
       }
     },
     "problems": {
