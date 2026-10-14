@@ -30,6 +30,7 @@
   let variant = style.header
   let meta = ctx.doc.meta
   if variant == "logo" and style.at("logo", default: none) == none { variant = "standard" }
+  if variant == "logo_bar" and style.at("logo", default: none) == none { variant = "bar" }
   set text(size: 0.8em, fill: colors.muted)
   if variant == "none" { return }
   if variant == "minimal" {
@@ -38,13 +39,14 @@
     grid(columns: (1fr, auto), text(weight: "bold", fill: ctx.theme.primary)[#meta.title], text(fill: ctx.theme.primary)[#meta.at("date", default: "")])
     v(-0.4em)
     line(length: 100%, stroke: 2pt + ctx.theme.primary)
-  } else if variant == "logo" {
+  } else if variant == "logo" or variant == "logo_bar" {
+    let bar = variant == "logo_bar"
     grid(columns: (auto, 1fr, auto), column-gutter: 1em, align: horizon,
       image("/" + style.logo, height: 0.9cm, fit: "contain"),
-      align(center, text(style: "italic")[#meta.title]),
-      [#meta.at("date", default: "")])
+      align(center, if bar { text(weight: "bold", fill: ctx.theme.primary)[#meta.title] } else { text(style: "italic")[#meta.title] }),
+      if bar { text(fill: ctx.theme.primary)[#meta.at("date", default: "")] } else { [#meta.at("date", default: "")] })
     v(-0.3em)
-    line(length: 100%, stroke: 0.4pt + colors.border_strong)
+    line(length: 100%, stroke: if bar { 2pt + ctx.theme.primary } else { 0.4pt + colors.border_strong })
   } else {
     grid(columns: (1fr, auto), text(style: "italic")[#meta.title], [#meta.at("date", default: "")])
     v(-0.4em)
@@ -99,6 +101,11 @@
 
 // ── Titelseiten ─────────────────────────────────────────────────────────────
 
+#let sender-color(ctx) = {
+  let value = ctx.doc.style.at("sender_color", default: none)
+  if value == none { colors.muted } else { rgb(value) }
+}
+
 #let title-facts(ctx) = {
   let meta = ctx.doc.meta
   let rows = ()
@@ -110,10 +117,14 @@
   grid(columns: (auto, 1fr), column-gutter: 1.5em, row-gutter: 0.7em, ..rows.map(((label, value)) => (text(weight: "bold")[#label], [#value])).flatten())
 }
 
-#let toc-outline(ctx, compact: false) = {
+// Abstände je TOC-Variante: on, compact, very_compact (wie früher «TOC-Abstand»)
+#let toc-spacing = (on: (size: 1em, above: 0.7em), compact: (size: 0.85em, above: 0.35em), very_compact: (size: 0.8em, above: 0.28em))
+
+#let toc-outline(ctx, variant: "on") = {
   let depth = if ctx.doc.options.toc_block_titles { 3 } else { 1 }
-  set text(size: if compact { 0.85em } else { 1em })
-  show outline.entry: it => block(above: if compact { 0.35em } else { 0.7em }, it)
+  let spacing = toc-spacing.at(variant, default: toc-spacing.on)
+  set text(size: spacing.size)
+  show outline.entry: it => block(above: spacing.above, it)
   outline(title: text(fill: ctx.theme.primary)[#tr(ctx, "toc.title")], depth: depth, indent: auto)
 }
 
@@ -145,7 +156,7 @@
   pad(left: 1.2cm, title-facts(ctx))
   v(1fr)
   if not is-blank(ctx.doc.style.at("sender", default: none)) {
-    pad(left: 1.2cm, text(size: 0.9em, fill: colors.muted)[#ctx.doc.style.sender])
+    pad(left: 1.2cm, text(size: 0.9em, fill: sender-color(ctx))[#ctx.doc.style.sender])
     v(0.8cm)
   }
   line(length: 100%, stroke: 1pt + ctx.theme.primary)
@@ -184,10 +195,10 @@
     text(size: 1.1em, fill: ctx.theme.secondary)[#((meta.at("number", default: none), meta.at("date", default: none), if not is-blank(style.at("place", default: none)) { style.place }).filter(value => not is-blank(value)).join(" · "))]
   })
   v(1cm)
-  if ctx.doc.options.toc != "off" { toc-outline(ctx, compact: ctx.doc.options.toc == "compact") }
+  if ctx.doc.options.toc != "off" { toc-outline(ctx, variant: ctx.doc.options.toc) }
   v(1fr)
   if not is-blank(style.at("sender", default: none)) {
-    align(center, text(size: 0.85em, fill: colors.muted)[#style.sender])
+    align(center, text(size: 0.85em, fill: sender-color(ctx))[#style.sender])
   }
 }
 
@@ -216,8 +227,20 @@
 #let toc-section(ctx) = {
   let variant = ctx.doc.options.toc
   if variant == "off" or ctx.doc.options.title_page == "cover" { return }
-  toc-outline(ctx, compact: variant == "compact")
+  toc-outline(ctx, variant: variant)
   pagebreak(weak: true)
+}
+
+// Kasten mit Nummer, Datum, Status, Version und Ort am Anfang des Inhalts (Token show_metadata)
+#let metadata-section(ctx) = {
+  if not ctx.doc.options.at("show_metadata", default: false) { return }
+  block(width: 100%, inset: 0.8em, radius: 3pt, stroke: 0.5pt + colors.border_strong, {
+    text(weight: "bold", fill: ctx.theme.primary)[#tr(ctx, "metadata.title")]
+    v(0.3em)
+    title-facts(ctx)
+  })
+  // Fester Abstand: das «above» der folgenden Überschrift würde ein «below» hier überstimmen.
+  v(1.2em)
 }
 
 // ── Seite ───────────────────────────────────────────────────────────────────

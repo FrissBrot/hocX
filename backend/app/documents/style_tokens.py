@@ -28,10 +28,10 @@ FONT_FAMILIES: dict[str, str] = {
     "noto_sans": "Noto Sans",
 }
 FontChoice = Literal["style", "inter", "liberation_sans", "liberation_serif", "noto_sans", "custom"]
-HeaderVariant = Literal["none", "minimal", "standard", "bar", "logo"]
+HeaderVariant = Literal["none", "minimal", "standard", "bar", "logo", "logo_bar"]
 FooterVariant = Literal["none", "minimal", "standard", "with_version", "date_page"]
 TitlePageVariant = Literal["none", "minimal", "modern", "bold", "cover"]
-TocVariant = Literal["off", "on", "compact"]
+TocVariant = Literal["off", "on", "compact", "very_compact"]
 Orientation = Literal["portrait", "landscape"]
 
 
@@ -70,6 +70,8 @@ class DocumentStyleTokens(BaseModel):
     footer_image_asset_id: uuid.UUID | None = None
     # Absender und Ort (Titelseite)
     sender: str = Field("", max_length=600)
+    # Farbe des Absenderblocks; None = gedämpfte Textfarbe des Stils
+    sender_color: HexColor | None = None
     place: str = Field("", max_length=120)
     # Varianten
     header: HeaderVariant = "standard"
@@ -78,6 +80,8 @@ class DocumentStyleTokens(BaseModel):
     toc: TocVariant = "off"
     numbering: bool = False
     toc_block_titles: bool = True
+    # Kasten mit Nummer, Datum, Status und Version am Dokumentanfang (ohne Titelseite nützlich)
+    show_metadata: bool = False
     watermark_draft: bool = True
 
     def asset_ids(self) -> list[uuid.UUID]:

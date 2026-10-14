@@ -708,8 +708,9 @@ class DocumentMeta(_Strict):
 
 class DocumentOptions(_Strict):
     title_page: Literal["none", "minimal", "modern", "bold", "cover"] = "none"
-    toc: Literal["off", "on", "compact"] = "off"
+    toc: Literal["off", "on", "compact", "very_compact"] = "off"
     toc_block_titles: bool = True
+    show_metadata: bool = False
     numbering: bool = False
     orientation: Literal["portrait", "landscape"] = "portrait"
     watermark: bool = False
@@ -728,11 +729,12 @@ class ResolvedStyle(_Strict):
     base_size: Literal[10, 11, 12] = 11
     line_spacing: Literal["tight", "normal", "relaxed"] = "normal"
     margins: Literal["narrow", "normal", "wide"] = "normal"
-    header: Literal["none", "minimal", "standard", "bar", "logo"] = "standard"
+    header: Literal["none", "minimal", "standard", "bar", "logo", "logo_bar"] = "standard"
     footer: Literal["none", "minimal", "standard", "with_version", "date_page"] = "standard"
     logo: str | None = Field(None, pattern=r"^assets/[A-Za-z0-9_.-]+$")
     footer_image: str | None = Field(None, pattern=r"^assets/[A-Za-z0-9_.-]+$")
     sender: str = ""
+    sender_color: HexColor | None = None
     place: str = ""
 
 

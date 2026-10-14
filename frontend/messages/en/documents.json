@@ -205,7 +205,8 @@
     "toc": {
       "off": "Off",
       "on": "Normal",
-      "compact": "Compact"
+      "compact": "Compact",
+      "very_compact": "Very compact"
     },
     "orientation": {
       "portrait": "A4 portrait",
@@ -216,7 +217,8 @@
       "minimal": "Page number only",
       "standard": "Title and date",
       "bar": "Colour bar",
-      "logo": "With logo"
+      "logo": "With logo",
+      "logo_bar": "Logo with colour bar"
     },
     "footer": {
       "none": "None",
@@ -308,7 +310,10 @@
       "place": "Place",
       "numbering": "Number headings",
       "toc_block_titles": "Block titles in table of contents",
-      "watermark_draft": "“Draft” watermark on open protocols"
+      "watermark_draft": "“Draft” watermark on open protocols",
+      "sender_color": "Sender block colour",
+      "sender_color_custom": "Custom colour for the sender block",
+      "show_metadata": "Box with number, date and status at the start"
     },
     "sample": {
       "title": "Sample document",

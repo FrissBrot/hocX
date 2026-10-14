@@ -307,6 +307,7 @@ def resolve(db: Session, tenant_id: int, style: DocumentStyle | None) -> tuple[R
         logo=image(tokens.logo_asset_id),
         footer_image=image(tokens.footer_image_asset_id),
         sender=tokens.sender,
+        sender_color=tokens.sender_color,
         place=tokens.place,
     )
     return resolved, tokens, fonts, assets.files

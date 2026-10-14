@@ -53,7 +53,7 @@ type EditableBlock = BlockSpec & { key: string };
 
 const PREVIEW_DEBOUNCE_MS = 450;
 const TITLE_PAGES = ["", "none", "minimal", "modern", "bold", "cover"];
-const TOCS = ["", "off", "on", "compact"];
+const TOCS = ["", "off", "on", "compact", "very_compact"];
 const ORIENTATIONS = ["", "portrait", "landscape"];
 
 let blockCounter = 0;

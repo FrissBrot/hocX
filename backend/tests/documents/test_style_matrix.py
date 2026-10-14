@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+from typing import get_args
 
 import pytest
 
-from app.documents.style_tokens import STYLE_KEYS
-from tests.documents.conftest import fixture_names, load_fixture
+from app.documents.style_tokens import STYLE_KEYS, FooterVariant, HeaderVariant, TitlePageVariant, TocVariant
+from tests.documents.conftest import fixture_names, load_fixture, pdf_text
 
 
 @pytest.mark.parametrize("style_key", STYLE_KEYS)
@@ -23,10 +24,11 @@ def test_style_fixture_orientation(renderer, assets, style_key, fixture, orienta
     assert output.warnings == []
 
 
-HEADERS = ["none", "minimal", "standard", "bar", "logo"]
-FOOTERS = ["none", "minimal", "standard", "with_version", "date_page"]
-TITLE_PAGES = ["none", "minimal", "modern", "bold", "cover"]
-TOCS = ["off", "on", "compact"]
+# Aus den Token-Typen abgeleitet: eine neue Variante ist automatisch abgedeckt.
+HEADERS = list(get_args(HeaderVariant))
+FOOTERS = list(get_args(FooterVariant))
+TITLE_PAGES = list(get_args(TitlePageVariant))
+TOCS = list(get_args(TocVariant))
 
 
 @pytest.mark.parametrize("style_key", STYLE_KEYS)
@@ -48,3 +50,22 @@ def test_every_variant_combination(renderer, assets, style_key, with_images):
             document.options.title_page, document.options.toc = first, second
         output = asyncio.run(renderer.render_pdf(document, assets))
         assert output.warnings == [], (first, second)
+
+
+@pytest.mark.parametrize("style_key", STYLE_KEYS)
+@pytest.mark.parametrize("title_page", ["none", "cover"])
+def test_metadata_box_and_sender_color(renderer, assets, style_key, title_page):
+    """Früher «Metadaten anzeigen» und «Fussfarbe»: Kasten mit Nummer/Datum/Status am Anfang,
+    eigene Farbe für den Absenderblock."""
+    document = load_fixture("short")
+    document.style.key = style_key
+    document.style.sender = "Musterverein\nPostfach 1"
+    document.style.sender_color = "#a83f2f"
+    document.options.title_page = title_page
+    document.options.show_metadata = True
+    output = asyncio.run(renderer.render_pdf(document, assets))
+    assert output.warnings == []
+    text = pdf_text(output.pdf)
+    assert document.strings["metadata.title"] in text
+    if title_page == "cover":
+        assert "Postfach 1" in text

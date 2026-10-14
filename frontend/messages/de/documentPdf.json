@@ -288,5 +288,8 @@
     "scanFailed": "Die Datei konnte nicht auf Viren geprüft werden. Bitte später erneut versuchen.",
     "assetInUse": "Die Datei wird noch von einem Hausstil verwendet.",
     "lastStyle": "Der letzte Hausstil kann nicht gelöscht werden."
+  },
+  "metadata": {
+    "title": "Angaben zum Dokument"
   }
 }

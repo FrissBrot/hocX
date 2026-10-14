@@ -288,5 +288,8 @@
     "scanFailed": "The file could not be scanned for viruses. Please try again later.",
     "assetInUse": "The file is still used by a house style.",
     "lastStyle": "The last house style cannot be deleted."
+  },
+  "metadata": {
+    "title": "Document details"
   }
 }

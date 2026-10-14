@@ -205,7 +205,8 @@
     "toc": {
       "off": "Disattivato",
       "on": "Normale",
-      "compact": "Compatto"
+      "compact": "Compatto",
+      "very_compact": "Molto compatto"
     },
     "orientation": {
       "portrait": "A4 verticale",
@@ -216,7 +217,8 @@
       "minimal": "Solo numero di pagina",
       "standard": "Titolo e data",
       "bar": "Barra colorata",
-      "logo": "Con logo"
+      "logo": "Con logo",
+      "logo_bar": "Logo con barra colorata"
     },
     "footer": {
       "none": "Nessuna",
@@ -308,7 +310,10 @@
       "place": "Luogo",
       "numbering": "Numerare i titoli",
       "toc_block_titles": "Titoli dei blocchi nell’indice",
-      "watermark_draft": "Filigrana «Bozza» sui verbali aperti"
+      "watermark_draft": "Filigrana «Bozza» sui verbali aperti",
+      "sender_color": "Colore del blocco mittente",
+      "sender_color_custom": "Colore personalizzato per il blocco mittente",
+      "show_metadata": "Riquadro con numero, data e stato all’inizio"
     },
     "sample": {
       "title": "Documento di esempio",

@@ -205,7 +205,8 @@
     "toc": {
       "off": "Désactivé",
       "on": "Normal",
-      "compact": "Compact"
+      "compact": "Compact",
+      "very_compact": "Très compact"
     },
     "orientation": {
       "portrait": "A4 portrait",
@@ -216,7 +217,8 @@
       "minimal": "Numéro de page seulement",
       "standard": "Titre et date",
       "bar": "Barre de couleur",
-      "logo": "Avec logo"
+      "logo": "Avec logo",
+      "logo_bar": "Logo avec bandeau de couleur"
     },
     "footer": {
       "none": "Aucun",
@@ -308,7 +310,10 @@
       "place": "Lieu",
       "numbering": "Numéroter les titres",
       "toc_block_titles": "Titres des blocs dans la table des matières",
-      "watermark_draft": "Filigrane « Brouillon » pour les procès-verbaux ouverts"
+      "watermark_draft": "Filigrane « Brouillon » pour les procès-verbaux ouverts",
+      "sender_color": "Couleur du bloc expéditeur",
+      "sender_color_custom": "Couleur personnalisée pour le bloc expéditeur",
+      "show_metadata": "Encadré avec numéro, date et statut au début"
     },
     "sample": {
       "title": "Document exemple",

@@ -288,5 +288,8 @@
     "scanFailed": "Le fichier n’a pas pu être analysé. Veuillez réessayer plus tard.",
     "assetInUse": "Le fichier est encore utilisé par un style maison.",
     "lastStyle": "Le dernier style maison ne peut pas être supprimé."
+  },
+  "metadata": {
+    "title": "Informations sur le document"
   }
 }

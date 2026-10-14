@@ -267,11 +267,12 @@ diese Tokens sowie `_tokens.typ`.
 | `orientation` | `portrait`, `landscape` | `portrait` |
 | `logo_asset_id`, `footer_image_asset_id` | Asset-ID (Bild) | – |
 | `sender` (≤ 600), `place` (≤ 120) | Text | leer |
-| `header` | `none`, `minimal`, `standard`, `bar`, `logo` | `standard` |
+| `sender_color` | `#RRGGBB` oder `null` (gedämpfte Textfarbe) | `null` |
+| `header` | `none`, `minimal`, `standard`, `bar`, `logo`, `logo_bar` | `standard` |
 | `footer` | `none`, `minimal`, `standard`, `with_version`, `date_page` | `standard` |
 | `title_page` | `none`, `minimal`, `modern`, `bold`, `cover` | `none` |
-| `toc` | `off`, `on`, `compact` | `off` |
-| `numbering`, `toc_block_titles`, `watermark_draft` | bool | `false`, `true`, `true` |
+| `toc` | `off`, `on`, `compact`, `very_compact` | `off` |
+| `numbering`, `toc_block_titles`, `show_metadata`, `watermark_draft` | bool | `false`, `true`, `false`, `true` |
 
 Neutral- und Statusfarben, Abstände und Radien kommen aus `design/tokens.css`
 (`scripts/sync-document-tokens.py`, CI prüft mit `--check`). Schriften liegen mit Lizenzen
@@ -345,8 +346,9 @@ umkehrbar):
 
 1. Neue Tabellen anlegen.
 2. Jede `document_template` wird ein `document_style`: Farben, Schriftgrösse, Schriftfamilie,
-   Format, Kopf-/Fuss-/Titelseiten-/TOC-Variante, Nummerierung, Ort und Absender
-   (`title_text`). Bild- und Schrift-Parts werden `document_style_asset` (Datei bleibt am
+   Format, Kopf-/Fuss-/Titelseiten-/TOC-Variante inkl. TOC-Abstand, Nummerierung, Ort,
+   Absender samt Farbe (`title_text`) und «Metadaten anzeigen» (`show_metadata`).
+   `title_text.line1/line2/org_name` hatten im alten PDF keine Wirkung und entfallen. Bild- und Schrift-Parts werden `document_style_asset` (Datei bleibt am
    selben Speicherort, keine Kopie, kein Verlust). `.tex`-Slots werden verworfen und im
    Migrationsprotokoll gezählt.
 3. `template.document_style_id`/`protocol.document_style_id` aus den alten Verweisen setzen.

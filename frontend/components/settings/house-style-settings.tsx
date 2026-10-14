@@ -24,10 +24,12 @@ type Props = {
 
 const STYLE_KEYS = ["modern", "classic", "compact"];
 const FONTS = ["style", "inter", "liberation_sans", "liberation_serif", "noto_sans", "custom"];
-const HEADERS = ["none", "minimal", "standard", "bar", "logo"];
+const HEADERS = ["none", "minimal", "standard", "bar", "logo", "logo_bar"];
 const FOOTERS = ["none", "minimal", "standard", "with_version", "date_page"];
 const TITLE_PAGES = ["none", "minimal", "modern", "bold", "cover"];
-const TOCS = ["off", "on", "compact"];
+const TOCS = ["off", "on", "compact", "very_compact"];
+// Startwert, wenn der Absenderblock eine eigene Farbe bekommt (wie die frühere Fussfarbe)
+const SENDER_COLOR_DEFAULT = "#444444"; // design-ok: PDF-Farbwert (Daten), keine UI-Farbe
 const SPACINGS = ["tight", "normal", "relaxed"];
 const MARGINS = ["narrow", "normal", "wide"];
 const ORIENTATIONS = ["portrait", "landscape"];
@@ -306,11 +308,21 @@ export function HouseStyleSettings({ initialStyles, initialAssets, initialLangua
                 <span className="field-label">{t("styles.fields.sender")}</span>
                 <textarea disabled={!canEdit} rows={3} maxLength={600} value={tokens.sender} onChange={(event) => setToken("sender", event.target.value)} />
               </label>
+              <label className="docexport-check">
+                <input disabled={!canEdit} type="checkbox" checked={tokens.sender_color !== null} onChange={(event) => setToken("sender_color", event.target.checked ? SENDER_COLOR_DEFAULT : null)} />
+                <span>{t("styles.fields.sender_color_custom")}</span>
+              </label>
+              {tokens.sender_color !== null && (
+                <label className="field-stack">
+                  <span className="field-label">{t("styles.fields.sender_color")}</span>
+                  <input disabled={!canEdit} type="color" className="housestyle-color" value={tokens.sender_color} onChange={(event) => setToken("sender_color", event.target.value)} />
+                </label>
+              )}
               <label className="field-stack">
                 <span className="field-label">{t("styles.fields.place")}</span>
                 <input disabled={!canEdit} maxLength={120} value={tokens.place} onChange={(event) => setToken("place", event.target.value)} />
               </label>
-              {(["numbering", "toc_block_titles", "watermark_draft"] as const).map((key) => (
+              {(["numbering", "toc_block_titles", "show_metadata", "watermark_draft"] as const).map((key) => (
                 <label key={key} className="docexport-check">
                   <input disabled={!canEdit} type="checkbox" checked={tokens[key]} onChange={(event) => setToken(key, event.target.checked)} />
                   <span>{t(`styles.fields.${key}`)}</span>

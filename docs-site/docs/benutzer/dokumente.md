@@ -54,8 +54,10 @@ des Vereins aussehen. Es gibt drei Grundstile:
 | Kompakt | Kleine Abstände, viel Inhalt pro Seite (Listen, Tabellen) |
 
 Pro Hausstil einstellbar: Haupt- und Akzentfarbe, Schrift (mitgelieferte oder eigene
-Schriftdateien), Schriftgrösse, Zeilenabstand, Ränder, Format, Kopf- und Fusszeile,
-Titelseite, Inhaltsverzeichnis, Nummerierung, Logo, Fussbild, Absender und Ort. Ein Hausstil
+Schriftdateien), Schriftgrösse, Zeilenabstand, Ränder, Format, Kopfzeile (auch mit Logo und
+Farbbalken), Fusszeile, Titelseite, Inhaltsverzeichnis (normal, kompakt, sehr kompakt),
+Nummerierung, Logo, Fussbild, Absender (mit eigener Farbe) und Ort sowie ein Kasten mit
+Nummer, Datum und Status am Dokumentanfang. Ein Hausstil
 ist der **Standard**; Vorlagen können einen anderen Hausstil festlegen, und im Export-Dialog
 lässt sich jeder Hausstil wählen.
 

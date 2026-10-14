@@ -33,8 +33,9 @@ Changes** - vor dem Update die Schritte unten lesen.
 - Der TeX-Export ist entfernt (inkl. TeX Live im Backend-Image). Dokumentvorlagen werden
   automatisch zu **Hausstilen**: Farben, Schrift (inkl. hochgeladener Schriften), Format,
   Kopf-/Fuss-/Titelseiten-/TOC-Variante, Nummerierung, Ort, Absender, Logo und Fussbild
-  werden übernommen. **Eigener Vorlagen-Code (Slots) entfällt ersatzlos**; betroffene
-  Mandanten schreibt die Migration ins Log.
+  werden übernommen, ebenso TOC-Abstand, Farbe des Absenders, «Metadaten anzeigen» und die
+  Kopfzeile «Logo mit Farbbalken». **Eigener Vorlagen-Code (Slots) entfällt ersatzlos**;
+  betroffene Mandanten schreibt die Migration ins Log.
 - Die Element-Option `latex_template` entfällt. Das Render-Format «Raw LaTeX» wird entfernt,
   sofern es nirgends verwendet wird; die PDF-Ausgabe richtet sich nur noch nach dem
   Element-Typ.

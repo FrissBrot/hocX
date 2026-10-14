@@ -226,6 +226,9 @@
     "active": "Active",
     "inactive": "Inactive"
   },
+  "metadata": {
+    "title": "Document details"
+  },
   "month": {
     "1": "January",
     "10": "October",

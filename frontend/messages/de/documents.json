@@ -205,7 +205,8 @@
     "toc": {
       "off": "Aus",
       "on": "Normal",
-      "compact": "Kompakt"
+      "compact": "Kompakt",
+      "very_compact": "Sehr kompakt"
     },
     "orientation": {
       "portrait": "A4 hoch",
@@ -216,7 +217,8 @@
       "minimal": "Nur Seitenzahl",
       "standard": "Titel und Datum",
       "bar": "Farbbalken",
-      "logo": "Mit Logo"
+      "logo": "Mit Logo",
+      "logo_bar": "Logo mit Farbbalken"
     },
     "footer": {
       "none": "Keine",
@@ -308,7 +310,10 @@
       "place": "Ort",
       "numbering": "Überschriften nummerieren",
       "toc_block_titles": "Blocktitel im Inhaltsverzeichnis",
-      "watermark_draft": "Wasserzeichen «Entwurf» bei offenen Protokollen"
+      "watermark_draft": "Wasserzeichen «Entwurf» bei offenen Protokollen",
+      "sender_color": "Farbe des Absenderblocks",
+      "sender_color_custom": "Eigene Farbe für den Absenderblock",
+      "show_metadata": "Kasten mit Nummer, Datum und Status am Anfang"
     },
     "sample": {
       "title": "Musterdokument",

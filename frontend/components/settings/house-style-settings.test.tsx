@@ -12,7 +12,7 @@ vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => confirm }));
 const tokens = {
   primary_color: "#174b7a", secondary_color: "#4f6d7a", font: "style", custom_fonts: { regular: null, bold: null, italic: null, bold_italic: null },
   base_size: 11 as const, line_spacing: "normal", margins: "normal", orientation: "portrait", logo_asset_id: null, footer_image_asset_id: null,
-  sender: "", place: "", header: "standard", footer: "standard", title_page: "none", toc: "off", numbering: false, toc_block_titles: true, watermark_draft: true,
+  sender: "", sender_color: null, place: "", header: "standard", footer: "standard", title_page: "none", toc: "off", numbering: false, toc_block_titles: true, show_metadata: false, watermark_draft: true,
 };
 const style = { id: "s1", name: "Standard", style_key: "modern", tokens, is_default: true, version: 1, updated_at: "" };
 

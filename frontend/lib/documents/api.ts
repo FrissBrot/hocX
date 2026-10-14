@@ -95,6 +95,7 @@ export type StyleTokens = {
   logo_asset_id: string | null;
   footer_image_asset_id: string | null;
   sender: string;
+  sender_color: string | null;
   place: string;
   header: string;
   footer: string;
@@ -102,6 +103,7 @@ export type StyleTokens = {
   toc: string;
   numbering: boolean;
   toc_block_titles: boolean;
+  show_metadata: boolean;
   watermark_draft: boolean;
 };
 

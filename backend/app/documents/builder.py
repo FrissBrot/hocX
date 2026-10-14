@@ -104,6 +104,7 @@ def build_document(
         toc=options.toc or tokens.toc,
         toc_block_titles=tokens.toc_block_titles if options.toc_block_titles is None else options.toc_block_titles,
         numbering=tokens.numbering if options.numbering is None else options.numbering,
+        show_metadata=tokens.show_metadata,
         orientation=options.orientation or tokens.orientation,
         watermark=bool(watermark),
     )

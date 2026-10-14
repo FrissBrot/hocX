@@ -2,8 +2,9 @@
 Hausstil-Tokens. Genutzt von der Migration 0115 und vom Import älterer Mandanten-Archive.
 
 Übernommen werden Farben, Schriftgrösse, Schriftfamilie (inkl. hochgeladener Schriften),
-Format, Kopf-, Fuss-, Titelseiten- und TOC-Variante, Nummerierung, Ort und Absender sowie Logo
-und Fussbild. Eigener Vorlagen-Code (``slots``) entfällt ersatzlos; ``has_custom_slots`` meldet,
+Format, Kopf-, Fuss-, Titelseiten- und TOC-Variante inkl. TOC-Abstand, Nummerierung, Ort,
+Absender und dessen Farbe, die Anzeige der Protokolldaten sowie Logo und Fussbild. Die Felder
+``title_text.line1/line2/org_name`` hatten im alten PDF keine Wirkung und entfallen. Eigener Vorlagen-Code (``slots``) entfällt ersatzlos; ``has_custom_slots`` meldet,
 ob ein Mandant welche hatte (Hinweis in den Release-Notes und im Migrationsprotokoll).
 """
 from __future__ import annotations
@@ -13,7 +14,8 @@ from typing import Any
 
 from app.documents.style_tokens import DocumentStyleTokens
 
-_HEADER = {"none": "none", "minimal": "minimal", "standard": "standard", "bar": "bar", "logo": "logo", "logo_bar": "logo", "logo_date": "logo"}
+# logo_date zeigte Logo und Datum - die neue Variante «logo» zeigt Logo, Titel und Datum.
+_HEADER = {"none": "none", "minimal": "minimal", "standard": "standard", "bar": "bar", "logo": "logo", "logo_bar": "logo_bar", "logo_date": "logo"}
 _FOOTER = {"none": "none", "minimal": "minimal", "standard": "standard", "with_version": "with_version", "date_page": "date_page"}
 _TITLE = {"none": "none", "minimal": "minimal", "modern": "modern", "bold": "bold", "combined_toc": "cover"}
 _FONT = {"arial": "liberation_sans", "helvet": "liberation_sans", "palatino": "liberation_serif"}
@@ -79,8 +81,8 @@ def tokens_from_legacy(config: dict | None, asset_ids: dict[str, str] | None = N
         toc = "on" if options.get("show_toc", True) else "off"
     if title_page == "cover" and toc == "off":
         toc = "on"
-    if options.get("toc_spacing") in ("compact", "very_compact") and toc == "on":
-        toc = "compact"
+    if toc in ("on", "compact") and options.get("toc_spacing") in ("compact", "very_compact"):
+        toc = options["toc_spacing"]
 
     return DocumentStyleTokens(
         primary_color=_color(theme.get("primary_color"), "#174b7a"),
@@ -92,10 +94,13 @@ def tokens_from_legacy(config: dict | None, asset_ids: dict[str, str] | None = N
         logo_asset_id=asset_ids.get("logo"),
         footer_image_asset_id=asset_ids.get("footer_image"),
         sender=str(title_text.get("footer_contact") or "")[:600],
+        sender_color=_color(title_text.get("footer_color"), "") or None,
         place=str(title_text.get("location") or "")[:120],
         header=_HEADER.get(str(presets.get("header") or "standard"), "standard"),
         footer=_FOOTER.get(str(presets.get("footer") or "standard"), "standard"),
         title_page=title_page,
         toc=toc,
         numbering=options.get("numbering_mode", "sections") == "sections",
+        # Alter Export: Block «Protocol Metadata» erschien, solange hide_metadata nicht gesetzt war.
+        show_metadata=not options.get("hide_metadata", False),
     )

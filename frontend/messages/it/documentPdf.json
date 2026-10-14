@@ -288,5 +288,8 @@
     "scanFailed": "Impossibile controllare il file. Riprova più tardi.",
     "assetInUse": "Il file è ancora usato da uno stile della casa.",
     "lastStyle": "L’ultimo stile della casa non può essere eliminato."
+  },
+  "metadata": {
+    "title": "Dati del documento"
   }
 }
