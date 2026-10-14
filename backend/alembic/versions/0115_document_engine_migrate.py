@@ -1,8 +1,8 @@
-"""Dokument-Engine: bisherige LaTeX-Dokumentvorlagen übernehmen und LaTeX-Strukturen entfernen.
+"""Dokument-Engine: bisherige Dokumentvorlagen übernehmen und die TeX-Strukturen entfernen.
 
 1. Jede document_template wird ein document_style (Tokens über app.documents.legacy). Bild- und
    Schrift-Bestandteile (document_template_part) werden document_style_asset; die Datei bleibt am
-   selben Speicherort (keine Kopie, kein Verlust). Eigene LaTeX-Slots entfallen; betroffene
+   selben Speicherort (keine Kopie, kein Verlust). Eigener Vorlagen-Code (Slots) entfällt; betroffene
    Mandanten werden im Migrationsprotokoll genannt (siehe auch Release-Notes).
 2. template/protocol.document_style_id aus den bisherigen Verweisen setzen.
 3. protocol_export_cache (PDF) wird document_export (ohne Inhalts-Hash), damit Historie und
@@ -59,7 +59,7 @@ def _table_exists(conn, name: str) -> bool:
 
 
 def upgrade() -> None:
-    from app.documents.legacy import has_latex_slots, legacy_part_refs, tokens_from_legacy
+    from app.documents.legacy import has_custom_slots, legacy_part_refs, tokens_from_legacy
 
     conn = op.get_bind()
     if _table_exists(conn, "document_template"):
@@ -78,7 +78,7 @@ def upgrade() -> None:
         ).all()
         for template in templates:
             config = template.configuration_json or {}
-            if has_latex_slots(config):
+            if has_custom_slots(config):
                 tenants_with_slots.add(template.tenant_id)
             role_ids: dict[str, str] = {}
             for role, part_id in legacy_part_refs(config).items():
@@ -135,7 +135,7 @@ def upgrade() -> None:
 
         if tenants_with_slots:
             names = [row.name for row in conn.execute(sa.text("SELECT name FROM tenant WHERE id = ANY(:ids) ORDER BY name"), {"ids": sorted(tenants_with_slots)})]
-            logger.warning("Dokument-Engine: eigene LaTeX-Slots entfallen für %d Mandant(en): %s", len(names), ", ".join(names))
+            logger.warning("Dokument-Engine: eigener Vorlagen-Code (TeX) entfällt für %d Mandant(en): %s", len(names), ", ".join(names))
 
     if _table_exists(conn, "protocol_export_cache"):
         conn.execute(sa.text(
@@ -152,7 +152,7 @@ def upgrade() -> None:
         if isinstance(blocks, list):
             config["blocks"] = [{k: v for k, v in block.items() if k != "latex_template"} if isinstance(block, dict) else block for block in blocks]
             conn.execute(sa.text("UPDATE element_definition SET configuration_json = CAST(:config AS jsonb) WHERE id = :id"), {"config": json.dumps(config), "id": row.id})
-    # Ungenutzter Render-Typ für LaTeX-Fragmente (nur entfernen, wenn nichts darauf zeigt)
+    # Ungenutzter Render-Typ für TeX-Fragmente (nur entfernen, wenn nichts darauf zeigt)
     conn.execute(sa.text(
         "DELETE FROM render_type WHERE code = 'raw_latex' "
         "AND NOT EXISTS (SELECT 1 FROM protocol_element_block b WHERE b.render_type_id = render_type.id) "
@@ -180,4 +180,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError("0115_document_engine_migrate ist nicht umkehrbar (LaTeX-Vorlagen wurden entfernt).")
+    raise RuntimeError("0115_document_engine_migrate ist nicht umkehrbar (TeX-Vorlagen wurden entfernt).")

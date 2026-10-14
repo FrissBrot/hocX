@@ -56,7 +56,7 @@ class TemplateService:
         template create/update, so this also serves as their ownership validation: without
         it, a writer could point a template at another tenant's Event/CycleConfig/
         DocumentStyle, which then leaks into every protocol created from it (title/date
-        snapshots, LaTeX layout, ...)."""
+        snapshots, house style, ...)."""
         resolved: dict[str, int | None] = {}
         for label, model, value in (
             ("next_event_id", Event, next_event_id),

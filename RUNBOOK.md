@@ -356,7 +356,7 @@ und werden bei Ausbleiben nicht gemeldet.
 
 ### `scripts/cleanup_storage.sh`
 
-- **Zweck**: räumt ausschließlich `storage/exports/` (generierte PDF/LaTeX-Exportdateien)
+- **Zweck**: räumt ausschließlich `storage/exports/` (generierte PDF-Exportdateien)
   nach Alter auf. Bewusst **nicht** angefasst werden `storage/tenant_imports`,
   `storage/tenant_clones` und `storage/abgabebox-uploads` - das sind laut Code- und
   Live-DB-Prüfung permanente Speicherorte für echte Mandantendaten, keine Temp-Dateien

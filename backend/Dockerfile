@@ -8,13 +8,9 @@ ENV PYTHONPATH=/app
 ENV HOME=/tmp
 ENV XDG_CACHE_HOME=/tmp/.cache
 
+# PDFs erzeugt die Dokument-Engine mit Typst (Python-Paket, Schriften im Repo) - keine
+# Systempakete dafür nötig.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    texlive-latex-base \
-    texlive-latex-recommended \
-    texlive-fonts-recommended \
-    texlive-xetex \
-    texlive-pictures \
-    fonts-lmodern \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 

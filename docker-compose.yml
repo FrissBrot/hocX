@@ -163,7 +163,6 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
-      LATEX_TEMPLATE_ROOT: /app/storage/latex_templates
       EXPORT_ROOT: /app/storage/exports
       UPLOAD_ROOT: /app/storage/uploads
       THUMBNAIL_ROOT: /app/storage-local/thumbnails

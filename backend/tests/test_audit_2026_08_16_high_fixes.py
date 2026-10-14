@@ -13,7 +13,7 @@ from tests.factories import (
 
 # --- S5: Exporte akzeptierten Layout-Vorlagen fremder Mandanten -------------------------
 #
-# Früher konnte template_id (LaTeX-Dokumentvorlage) eines fremden Mandanten das Layout liefern.
+# Früher konnte template_id (Dokumentvorlage) eines fremden Mandanten das Layout liefern.
 # Heute entspricht dem style_id (Hausstil): eine fremde ID ergibt «nicht gefunden», weder
 # Vorschau noch Export verwenden fremde Hausstile oder deren Logos/Schriften.
 

@@ -327,7 +327,7 @@ def test_import_zip_forces_pending_scan_status_despite_manifest_claiming_clean(d
 
 # --- S1: Protokoll-Export einer fremden Mandanten-ID -------------------------------------
 #
-# Ursprünglich prüfte export_latex den Mandanten des Protokolls nicht. Die Dokument-Engine
+# Ursprünglich prüfte der Protokoll-Quelltext-Export den Mandanten des Protokolls nicht. Die Dokument-Engine
 # (POST /api/documents/render) löst protocol_id mandantengebunden auf und prüft zusätzlich das
 # Protokoll-Leserecht; eine fremde ID ist von einer unbekannten nicht zu unterscheiden (404).
 

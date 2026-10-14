@@ -138,18 +138,12 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements-dev.txt
 
-      # PDF export tests exercise the real LaTeX toolchain, same packages as
-      # backend/Dockerfile(.test) - ubuntu-latest doesn't have these preinstalled.
-      - name: Install LaTeX toolchain
+      # Die Dokument-Engine rendert mit Typst (Python-Paket, Schriften im Repo); die Tests
+      # lesen erzeugte PDFs mit pdftotext/pdfinfo aus - wie backend/Dockerfile.test.
+      - name: Install PDF test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            texlive-latex-base \
-            texlive-latex-recommended \
-            texlive-fonts-recommended \
-            texlive-xetex \
-            texlive-pictures \
-            fonts-lmodern
+          sudo apt-get install -y --no-install-recommends poppler-utils
 
       - name: Run alembic upgrade head against a fresh database
         working-directory: backend
@@ -172,14 +166,8 @@ jobs:
           ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
           # These all default to /app/... (docker-compose.yml's WORKDIR), which doesn't
           # exist on a bare runner and can't be created by the unprivileged runner user
-          # either - PDF export tests need the real committed tenant-1 templates, not just
-          # a writable empty dir, so these point at the actual checked-out storage/ tree.
-          # Must be absolute: pdflatex runs with -cnf-line=openin_any=p (export_service.py) -
-          # its "paranoid" file-access mode rejects any path containing a '..' component,
-          # which a relative override (e.g. "../storage") would be once combined with the
-          # export's own subdirectory.
+          # either, so they point at the checked-out storage/ tree (absolute paths).
           STORAGE_ROOT: ${{ github.workspace }}/storage
-          LATEX_TEMPLATE_ROOT: ${{ github.workspace }}/storage/latex_templates
           EXPORT_ROOT: ${{ github.workspace }}/storage/exports
           UPLOAD_ROOT: ${{ github.workspace }}/storage/uploads
           # Defaults to /app/storage-local/thumbnails (same unwritable-on-a-runner problem
@@ -250,9 +238,8 @@ jobs:
           ABGABEBOX_CAPTCHA_SESSION_SECRET: ci-abgabebox-captcha-secret-0123456789
           # Defaults to /app/storage (docker-compose.yml overrides it for the real
           # container) - doesn't exist on a bare runner and the unprivileged runner user
-          # can't create it either. Only needs to be writable, unlike the main backend's
-          # LATEX_TEMPLATE_ROOT, so any real path works - absolute to match that job's
-          # reasoning for the same class of variable rather than for a concrete need here.
+          # can't create it either. Only needs to be writable, so any real path works -
+          # absolute to match the backend job's storage variables.
           ABGABEBOX_STORAGE_ROOT: ${{ github.workspace }}/storage/abgabebox-uploads
         run: python3 -m pytest tests/ -v --cov=app --cov-report=term-missing
 

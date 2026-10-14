@@ -13,7 +13,7 @@ Ablauf pro Compile (in einem Worker-Prozess, siehe ``_compile_job``):
    (``scripts/check-document-catalog.py`` prüft das), Benutzerinhalt wird nie zu Code - der
    Compile greift also nie aufs Netz zu.
 
-Grenzen wie beim früheren LaTeX-Compile: Parallelitätslimit (Semaphore + Poolgrösse),
+Grenzen wie beim früheren TeX-basierten Compile: Parallelitätslimit (Semaphore + Poolgrösse),
 Wall-Clock-Timeout pro Compile (danach wird der Pool beendet und neu gestartet) und ein
 Speicherlimit (``RLIMIT_AS``) pro Worker. Ein CPU-Limit pro Prozess entfällt bewusst: es würde
 sich über die Lebensdauer eines Workers aufsummieren.

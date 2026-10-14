@@ -1,9 +1,9 @@
-"""Übersetzung der früheren LaTeX-Dokumentvorlagen (document_template.configuration_json) in
+"""Übersetzung der früheren (TeX-basierten) Dokumentvorlagen (document_template.configuration_json) in
 Hausstil-Tokens. Genutzt von der Migration 0115 und vom Import älterer Mandanten-Archive.
 
 Übernommen werden Farben, Schriftgrösse, Schriftfamilie (inkl. hochgeladener Schriften),
 Format, Kopf-, Fuss-, Titelseiten- und TOC-Variante, Nummerierung, Ort und Absender sowie Logo
-und Fussbild. Eigene LaTeX-Slots (``slots``) entfallen ersatzlos; ``has_latex_slots`` meldet,
+und Fussbild. Eigener Vorlagen-Code (``slots``) entfällt ersatzlos; ``has_custom_slots`` meldet,
 ob ein Mandant welche hatte (Hinweis in den Release-Notes und im Migrationsprotokoll).
 """
 from __future__ import annotations
@@ -48,7 +48,7 @@ def legacy_part_refs(config: dict | None) -> dict[str, int]:
     return refs
 
 
-def has_latex_slots(config: dict | None) -> bool:
+def has_custom_slots(config: dict | None) -> bool:
     return any(value for value in ((config or {}).get("slots") or {}).values())
 
 

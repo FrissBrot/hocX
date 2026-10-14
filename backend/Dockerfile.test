@@ -5,19 +5,11 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# PDF integration tests exercise the same real LaTeX toolchain as production.
+# pdftotext/pdfinfo für die Vollständigkeitstests der Dokument-Engine (nur Tests);
+# Typst selbst kommt als Python-Paket, die Schriften liegen im Repo.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    texlive-latex-base \
-    texlive-latex-recommended \
-    texlive-fonts-recommended \
-    texlive-xetex \
-    texlive-pictures \
-    fonts-lmodern \
     ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
-# pdftotext/pdfinfo für die Vollständigkeitstests der Dokument-Engine (nur Tests).
-RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements-dev.txt requirements.txt ./

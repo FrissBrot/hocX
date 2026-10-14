@@ -1,7 +1,7 @@
-"""Übersetzung alter LaTeX-Dokumentvorlagen in Hausstil-Tokens (Migration 0115, Import alter Archive)."""
+"""Übersetzung alter TeX-basierter Dokumentvorlagen in Hausstil-Tokens (Migration 0115, Import alter Archive)."""
 from __future__ import annotations
 
-from app.documents.legacy import has_latex_slots, legacy_part_refs, tokens_from_legacy
+from app.documents.legacy import has_custom_slots, legacy_part_refs, tokens_from_legacy
 
 
 def test_full_legacy_configuration_is_translated():
@@ -14,7 +14,7 @@ def test_full_legacy_configuration_is_translated():
         "slots": {"preamble": 9},
     }
     assert legacy_part_refs(config) == {"logo": 3, "footer_image": 4, "font_regular": 7, "font_bold": 8}
-    assert has_latex_slots(config)
+    assert has_custom_slots(config)
     tokens = tokens_from_legacy(config, {"logo": "0192f0aa-0000-7000-8000-000000000001", "font_regular": "0192f0aa-0000-7000-8000-000000000002"})
     assert tokens.primary_color == "#a83f2f" and tokens.secondary_color == "#6f675d"
     assert tokens.base_size == 12 and tokens.orientation == "landscape" and tokens.numbering is False
@@ -31,4 +31,4 @@ def test_minimal_and_invalid_values_fall_back():
     assert tokens.toc == "off" and tokens.title_page == "modern"
     custom_without_file = tokens_from_legacy({"theme": {"font_family": "uploaded"}, "presets": {"toc": "none"}})
     assert custom_without_file.font == "style" and custom_without_file.toc == "off"
-    assert not has_latex_slots({"slots": {"preamble": None}})
+    assert not has_custom_slots({"slots": {"preamble": None}})

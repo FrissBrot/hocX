@@ -711,10 +711,10 @@ class TenantImportService:
 
     def _import_document_styles(self, new_tenant_id: int) -> dict[str, int]:
         """Hausstile und ihre Assets. Ab Format 5 direkt; ältere Archive enthalten noch
-        LaTeX-Dokumentvorlagen, die wie in Migration 0115 übersetzt werden (app.documents.legacy).
+        TeX-basierte Dokumentvorlagen, die wie in Migration 0115 übersetzt werden (app.documents.legacy).
         Rückgabe: "style:<alte id>" bzw. "template:<alte document_template-id>" → neue Stil-ID."""
         from app.documents import style_service
-        from app.documents.legacy import has_latex_slots, legacy_part_refs, tokens_from_legacy
+        from app.documents.legacy import has_custom_slots, legacy_part_refs, tokens_from_legacy
 
         style_map: dict[str, int] = {}
         for row in self._t("document_style_asset"):
@@ -740,7 +740,7 @@ class TenantImportService:
         lost_slots = False
         for row in self._t("document_template"):
             config = row.get("configuration_json") or {}
-            lost_slots = lost_slots or has_latex_slots(config)
+            lost_slots = lost_slots or has_custom_slots(config)
             role_ids: dict[str, str] = {}
             for role, part_id in legacy_part_refs(config).items():
                 part = parts.get(part_id)
@@ -772,7 +772,7 @@ class TenantImportService:
             if row.get("is_default"):
                 style_map.setdefault("default", new_style.id)
         if lost_slots:
-            self.warnings.append("Eigene LaTeX-Vorlagenteile werden nicht mehr unterstützt und wurden nicht übernommen; Farben, Schrift, Varianten, Logo und Fussbild sind als Hausstil importiert.")
+            self.warnings.append("Eigener Vorlagen-Code (TeX) wird nicht mehr unterstützt und wurden nicht übernommen; Farben, Schrift, Varianten, Logo und Fussbild sind als Hausstil importiert.")
 
         default_id = style_map.get("default")
         if default_id is not None:

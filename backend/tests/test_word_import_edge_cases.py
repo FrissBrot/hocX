@@ -231,7 +231,7 @@ def test_list_explode_grouping_round_trips_through_real_commit(db):
             "default_content": "", "copy_from_last_protocol": False,
             "element_type_id": form_type, "render_type_id": render_type,
             "is_editable": True, "allows_multiple_values": False, "export_visible": True, "is_visible": True,
-            "sort_index": 10, "render_order": 10, "latex_template": None,
+            "sort_index": 10, "render_order": 10,
             "configuration_json": {"linked_list_id": sponsoring.id, "rows": []},
         }],
     )
