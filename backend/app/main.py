@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, auth, calendar_feeds, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
+from app.api.routes import admin, admin_auth, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
@@ -29,7 +29,7 @@ from app.services.export_service import ExportService
 from app.services.file_service import FileService
 from app.services.isolated_parse import shutdown_pool as shutdown_word_import_parse_pool
 from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
-from app.services import photo_album_service, system_alert_service
+from app.services import maintenance_service, photo_album_service, storage_migration_service, storage_profile_service, system_alert_service
 from app.services.table_snapshot_service import TableSnapshotService, run_due_cycle_snapshots
 from app.services.task_package_service import run_due_task_packages
 
@@ -109,6 +109,18 @@ def ensure_no_production_demo_data() -> None:
             + "; tenants="
             + ",".join(sorted(demo_tenants))
         )
+
+
+def ensure_local_storage_profile() -> None:
+    """Legt das Profil für das lokale Garage-S3 an bzw. hält es aktuell, solange LOCAL_S3_* in
+    der Umgebung steht (docker-compose stellt den Dienst beim ersten Deployment bereit). Unter
+    einem Advisory-Lock, weil mehrere uvicorn-Worker gleichzeitig starten."""
+    if not settings.local_s3_access_key:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("SELECT pg_advisory_xact_lock(202600021)"))
+        with SessionLocal() as db:
+            storage_profile_service.ensure_local_profile(db)
 
 
 def ensure_startup_seed_data() -> None:
@@ -377,6 +389,26 @@ async def system_monitor_loop() -> None:
     )
 
 
+async def maintenance_supervisor_loop() -> None:
+    """Wartungsfenster steuern (geplante Starts, Überschreitungen, Neuschätzung) - läuft auch
+    während voller Wartung, siehe job_registry.runs_during_maintenance."""
+    await run_advisory_locked_loop(
+        name="maintenance_supervisor",
+        interval_seconds=settings.maintenance_supervisor_interval_seconds,
+        task=maintenance_service.supervise,
+    )
+
+
+async def storage_journal_cleanup_loop() -> None:
+    """Alte Einträge des Speicher-Änderungsjournals entfernen (nie solche, die eine offene
+    Migration noch nachziehen muss)."""
+    await run_advisory_locked_loop(
+        name="storage_journal_cleanup",
+        interval_seconds=24 * 60 * 60,
+        task=storage_migration_service.cleanup_journal,
+    )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
@@ -387,6 +419,7 @@ async def lifespan(_: FastAPI):
         ensure_startup_seed_data()
         ensure_default_document_templates()
         ensure_traefik_dynamic_config()
+        ensure_local_storage_profile()
         health_check_task = asyncio.create_task(domain_health_check_loop())
         rescan_task = asyncio.create_task(abgabebox_rescan_loop())
         upload_pipeline_rescan_task = asyncio.create_task(upload_pipeline_rescan_loop())
@@ -399,7 +432,11 @@ async def lifespan(_: FastAPI):
         photo_album_sync_task = asyncio.create_task(photo_album_sync_loop())
         gallery_upload_ingest_task = asyncio.create_task(gallery_upload_ingest_loop())
         system_monitor_task = asyncio.create_task(system_monitor_loop())
+        maintenance_supervisor_task = asyncio.create_task(maintenance_supervisor_loop())
+        storage_journal_cleanup_task = asyncio.create_task(storage_journal_cleanup_loop())
         yield
+        maintenance_supervisor_task.cancel()
+        storage_journal_cleanup_task.cancel()
         health_check_task.cancel()
         photo_analysis_auto_queue_task.cancel()
         photo_quality_backfill_task.cancel()
@@ -429,6 +466,12 @@ app = FastAPI(
 from app.upload_admission import UploadAdmissionMiddleware
 from app.services.upload_pipeline import GALLERY_REQUEST_MAX_BYTES
 app.add_middleware(UploadAdmissionMiddleware, path="/api/files/gallery-uploads", max_bytes=GALLERY_REQUEST_MAX_BYTES, storage_dir=settings.upload_root)
+
+from app.core.maintenance_middleware import MaintenanceMiddleware
+# Vor der Upload-Annahme (äussere Schicht): während einer Wartung wird ein grosser Upload sofort
+# abgewiesen, statt erst gepuffert zu werden. CORS liegt noch weiter aussen, damit auch die
+# 503-Antworten die CORS-Header tragen.
+app.add_middleware(MaintenanceMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -542,3 +585,6 @@ app.include_router(system_status.router, prefix="/api", tags=["system-status"])
 app.include_router(submission_assignments.router, prefix="/api", tags=["submission-assignments"])
 app.include_router(word_import.router, prefix="/api", tags=["word-import"])
 app.include_router(collaboration_ws.router, tags=["collaboration"])
+app.include_router(maintenance_public.router, prefix="/api", tags=["maintenance"])
+app.include_router(admin_storage.router, prefix="/api/admin", tags=["admin-storage"])
+app.include_router(admin_maintenance.router, prefix="/api/admin", tags=["admin-maintenance"])

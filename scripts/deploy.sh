@@ -274,10 +274,10 @@ create_env_file() {
 
 if [ ! -f "$ENV_FILE" ]; then
   create_env_file
-else
-  echo "==> [$ENVIRONMENT] Env-Datei pruefen"
-  migrate_env_file "$ENV_FILE"
 fi
+# Auch direkt nach dem Erzeugen: ergaenzt u. a. die Objektspeicher-Secrets (idempotent).
+echo "==> [$ENVIRONMENT] Env-Datei pruefen"
+migrate_env_file "$ENV_FILE"
 
 load_env_file "$ENV_FILE"
 
@@ -334,7 +334,8 @@ run_preflight() {
   esac
   for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
     "$ADMIN_AUTH_SECRET" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
-    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD"; do
+    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "$STORAGE_CREDENTIALS_KEY" \
+    "$GARAGE_RPC_SECRET" "$GARAGE_ADMIN_TOKEN" "$LOCAL_S3_SECRET_KEY" "$LOCAL_S3_ABGABEBOX_SECRET_KEY"; do
     case "$value" in
       ""|ChangeMe123\!*|change-me*|changeme*|secret|hocx|hocx_app|hocx_abgabebox|hocx_photo_worker|*keep-local-only*)
         echo "Unsicherer Entwicklungs- oder Platzhalterwert in der Release-Konfiguration." >&2
@@ -414,6 +415,11 @@ write_secret_files() {
   write_secret_file "$secrets_dir" friendly_captcha_api_key "$FRIENDLY_CAPTCHA_API_KEY"
   write_secret_file "$secrets_dir" abgabebox_captcha_session_secret "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
   write_secret_file "$secrets_dir" cf_dns_api_token "$CF_DNS_API_TOKEN"
+  write_secret_file "$secrets_dir" storage_credentials_key "$STORAGE_CREDENTIALS_KEY"
+  write_secret_file "$secrets_dir" garage_rpc_secret "$GARAGE_RPC_SECRET"
+  write_secret_file "$secrets_dir" garage_admin_token "$GARAGE_ADMIN_TOKEN"
+  write_secret_file "$secrets_dir" local_s3_secret_key "$LOCAL_S3_SECRET_KEY"
+  write_secret_file "$secrets_dir" local_s3_abgabebox_secret_key "$LOCAL_S3_ABGABEBOX_SECRET_KEY"
   echo "    Secret-Dateien aktuell: $secrets_dir"
 }
 
@@ -451,31 +457,34 @@ prepare_runtime_permissions() {
 }
 
 prepare_thumbnail_dir() {
-  # storage-local/thumbnails (ab 1.1.0) liegt bewusst ausserhalb von HOCX_STORAGE_PATH und ist
-  # nicht im Repo. Existiert es nicht, legt Docker den Bind-Mount als root:root an und der
-  # Backend-Nutzer (uid 5000, Gruppe 5001) kann keine Vorschaubilder schreiben. Der
-  # Deploy-Benutzer darf nicht selbst auf Gruppe 5001 chgrp'en; deshalb laeuft die
-  # Berechtigungs-Korrektur in einem kurzlebigen Container aus dem bereits signaturgeprueften
-  # Backend-Image (HOCX_BACKEND_IMAGE stammt aus dem Release-Manifest).
+  # storage-local/thumbnails (ab 1.1.0) und storage-local/work (ab 1.2.0, lokaler Arbeitsbereich
+  # des Objektspeichers) liegen bewusst ausserhalb von HOCX_STORAGE_PATH und sind nicht im Repo.
+  # Existieren sie nicht, legt Docker den Bind-Mount als root:root an und der Backend-Nutzer
+  # (uid 5000, Gruppe 5001) kann dort nicht schreiben. Der Deploy-Benutzer darf nicht selbst auf
+  # Gruppe 5001 chgrp'en; deshalb laeuft die Berechtigungs-Korrektur in einem kurzlebigen
+  # Container aus dem bereits signaturgeprueften Backend-Image (HOCX_BACKEND_IMAGE stammt aus dem
+  # Release-Manifest).
   local base="$PROJECT_DIR/storage-local"
-  local dir="$base/thumbnails"
+  local dir
 
-  echo "==> [$ENVIRONMENT] Thumbnail-Verzeichnis vorbereiten"
-  if [ -L "$base" ] || [ -L "$dir" ]; then
-    echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
-    return 1
-  fi
-  mkdir -p "$dir"
-  if ! find "$dir" \( ! -group 5001 -o ! -perm -g+w -o -perm /007 \) -print -quit | grep -q .; then
-    echo "    Thumbnail-Verzeichnis: ok"
-    return 0
-  fi
-  echo "    Haerte Berechtigungen: $dir"
-  docker run --rm --pull never --network none --user 0:0 \
-    --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add FSETID --cap-add DAC_OVERRIDE \
-    --security-opt no-new-privileges:true --entrypoint sh \
-    -v "$dir:/target" "$HOCX_BACKEND_IMAGE" \
-    -c 'chgrp -R 5001 /target && chmod -R g+rwX,o-rwx /target && find /target -type d -exec chmod g+s {} +'
+  echo "==> [$ENVIRONMENT] Lokale Arbeitsverzeichnisse vorbereiten"
+  for dir in "$base/thumbnails" "$base/work"; do
+    if [ -L "$base" ] || [ -L "$dir" ]; then
+      echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
+      return 1
+    fi
+    mkdir -p "$dir"
+    if ! find "$dir" \( ! -group 5001 -o ! -perm -g+w -o -perm /007 \) -print -quit | grep -q .; then
+      echo "    $(basename "$dir"): ok"
+      continue
+    fi
+    echo "    Haerte Berechtigungen: $dir"
+    docker run --rm --pull never --network none --user 0:0 \
+      --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add FSETID --cap-add DAC_OVERRIDE \
+      --security-opt no-new-privileges:true --entrypoint sh \
+      -v "$dir:/target" "$HOCX_BACKEND_IMAGE" \
+      -c 'chgrp -R 5001 /target && chmod -R g+rwX,o-rwx /target && find /target -type d -exec chmod g+s {} +'
+  done
 }
 
 verify_release_images() {
@@ -738,6 +747,15 @@ if ! run_smoke_checks; then
   rollback_apps || true
   exit 1
 fi
+
+# Lokales S3 in den Sollzustand bringen (z. B. nach einem Wechsel zu externem S3 wieder stoppen,
+# das `up -d` oben hat es gestartet). Stoppt nur, löscht nie Daten.
+controller_files=()
+for ((index = 0; index < ${#COMPOSE_ARGS[@]}; index++)); do
+  [ "${COMPOSE_ARGS[$index]}" = "-f" ] && controller_files+=("${COMPOSE_ARGS[$((index + 1))]}")
+done
+HOCX_COMPOSE_PROJECT="$PROJECT_NAME" HOCX_COMPOSE_FILES="${controller_files[*]}" HOCX_ENV_FILE="$ENV_FILE" \
+  "$PROJECT_DIR/scripts/storage_controller.sh" || echo "    WARNUNG: Storage-Controller meldete einen Fehler (siehe oben)"
 
 if [ "$ENVIRONMENT" = test ]; then
   echo "==> [$ENVIRONMENT] Demo-Mandant neu befuellen"

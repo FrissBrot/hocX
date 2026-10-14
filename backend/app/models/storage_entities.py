@@ -58,6 +58,7 @@ class StorageState(Base):
     fence_reason: Mapped[str | None] = mapped_column(Text)
     fence_token: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
     fenced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    local_s3_requested_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = _now()
 
 

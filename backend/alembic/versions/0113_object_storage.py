@@ -113,6 +113,9 @@ def upgrade() -> None:
         sa.Column("fence_reason", sa.Text(), nullable=True),
         sa.Column("fence_token", sa.BigInteger(), nullable=False, server_default=sa.text("0")),
         sa.Column("fenced_at", sa.DateTime(timezone=True), nullable=True),
+        # Admin-Anforderung "lokales S3 bereitstellen" (z. B. für Verbindungstest vor einer
+        # Rückmigration) - der Host-Controller startet den Dienst bis zu diesem Zeitpunkt.
+        sa.Column("local_s3_requested_until", sa.DateTime(timezone=True), nullable=True),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
         sa.CheckConstraint("id = 1", name="ck_storage_state_singleton"),
     )
@@ -413,6 +416,14 @@ def upgrade() -> None:
           END IF;
           IF EXISTS (SELECT 1 FROM public.storage_state WHERE active_profile_id = ANY (v_local_ids)) THEN
             RETURN QUERY SELECT true, 'active'; RETURN;
+          END IF;
+          -- Vor der Erstmigration ist das lokale S3 das vorgesehene Ziel und muss bereitstehen.
+          IF EXISTS (SELECT 1 FROM public.storage_state s JOIN public.storage_profile p ON p.id = s.active_profile_id
+                     WHERE p.provider = 'filesystem') THEN
+            RETURN QUERY SELECT true, 'initial_target'; RETURN;
+          END IF;
+          IF EXISTS (SELECT 1 FROM public.storage_state WHERE local_s3_requested_until > NOW()) THEN
+            RETURN QUERY SELECT true, 'requested'; RETURN;
           END IF;
           IF EXISTS (SELECT 1 FROM public.storage_migration
                      WHERE state NOT IN ('completed', 'failed', 'cancelled')

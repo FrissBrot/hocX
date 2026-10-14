@@ -84,6 +84,31 @@ migrate_env_file() {
     changed=true
   fi
 
+  # 1.2.0: Objektspeicher (lokales Garage-S3, verschluesselte Profil-Zugangsdaten). Fehlende
+  # Werte werden einmalig erzeugt; vorhandene bleiben unveraendert (sonst waeren gespeicherte
+  # Zugangsdaten nicht mehr entschluesselbar bzw. das lokale S3 nicht mehr erreichbar).
+  local storage_key storage_value
+  for storage_key in STORAGE_CREDENTIALS_KEY GARAGE_RPC_SECRET GARAGE_ADMIN_TOKEN \
+    LOCAL_S3_ACCESS_KEY LOCAL_S3_SECRET_KEY LOCAL_S3_ABGABEBOX_ACCESS_KEY LOCAL_S3_ABGABEBOX_SECRET_KEY; do
+    if [ -n "$(env_file_value "$tmp_file" "$storage_key")" ]; then
+      continue
+    fi
+    command -v openssl > /dev/null 2>&1 || {
+      rm -f "$tmp_file"
+      umask "$umask_before"
+      echo "openssl wird zum sicheren Erzeugen der Secrets benoetigt." >&2
+      return 1
+    }
+    case "$storage_key" in
+      # Garage erwartet Access Keys im Format GK + 24 Hex-Zeichen, Secrets mit 64 Hex-Zeichen.
+      *_ACCESS_KEY) storage_value="GK$(openssl rand -hex 12)" ;;
+      *) storage_value="$(openssl rand -hex 32)" ;;
+    esac
+    printf "%s='%s'\n" "$storage_key" "$storage_value" >> "$tmp_file"
+    notes+=("ergaenzt: $storage_key (neu erzeugt)")
+    changed=true
+  done
+
   if [ "$changed" = true ]; then
     backup_file="$env_file.bak-$(date +%Y%m%d-%H%M%S)"
     cp -p "$env_file" "$backup_file"

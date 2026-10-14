@@ -52,6 +52,8 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "gallery_upload_ingest": 202600015,
     "system_monitor": 202600017,
     "task_package_rollover": 202600018,
+    "maintenance_supervisor": 202600019,
+    "storage_journal_cleanup": 202600020,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht
@@ -62,7 +64,15 @@ EXTERNAL_LOCK_IDS: dict[str, int] = {
     "abgabebox_quarantine_cleanup": 202600016,  # abgabebox-backend: QUARANTINE_CLEANUP_LOCK_ID
 }
 
-_ALL_LOCK_IDS = [*BACKGROUND_LOCK_IDS.values(), *EXTERNAL_LOCK_IDS.values()]
+# Einmalige Advisory-Locks (Startup-Seeds, Storage-Worker), damit auch sie in die
+# Eindeutigkeitsprüfung eingehen.
+RESERVED_LOCK_IDS: dict[str, int] = {
+    "startup_seed_data": 202600004,
+    "startup_local_storage_profile": 202600021,
+    "storage_worker_claim": 202600022,
+}
+
+_ALL_LOCK_IDS = [*BACKGROUND_LOCK_IDS.values(), *EXTERNAL_LOCK_IDS.values(), *RESERVED_LOCK_IDS.values()]
 assert len(_ALL_LOCK_IDS) == len(set(_ALL_LOCK_IDS)), "duplicate advisory lock id in BACKGROUND_LOCK_IDS/EXTERNAL_LOCK_IDS"
 
 
@@ -107,8 +117,11 @@ async def run_advisory_locked_loop(
     # Lazy: job_registry importiert BACKGROUND_LOCK_IDS aus diesem Modul.
     from app.core.job_registry import JOBS_BY_NAME
 
+    from app.services.maintenance_service import current_effective_state
+
     lock_id = BACKGROUND_LOCK_IDS[name]
     keep_history = JOBS_BY_NAME[name].keep_history
+    runs_during_maintenance = JOBS_BY_NAME[name].runs_during_maintenance
     # Startversatz: beim Hochfahren tickten sonst alle Loops im selben Moment, jeder mit
     # Lock-Verbindung + Session - bei 11 Loops 22 Verbindungen für einen Pool von 15. Die
     # Nachzügler warteten bis zum 30-s-Pool-Timeout (2026-10-11 im Dev-Stack gemessen: fast
@@ -117,7 +130,10 @@ async def run_advisory_locked_loop(
     while True:
         outcome: tuple[str, datetime, datetime, str | None] | None = None
         try:
-            if should_run is None or should_run():
+            # Während voller Wartung pausieren alle nicht ausgenommenen Loops (Tick ohne Meldung,
+            # wie ein übersprungener Tick - die Job-Übersicht zeigt die Wartung separat).
+            paused = not runs_during_maintenance and current_effective_state().full_active
+            if not paused and (should_run is None or should_run()):
                 with engine.begin() as lock_conn:
                     acquired = lock_conn.execute(
                         text("SELECT pg_try_advisory_xact_lock(:lock_id)"),
