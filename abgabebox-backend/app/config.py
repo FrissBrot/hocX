@@ -11,6 +11,7 @@ def _load_file_secrets() -> None:
         "ABGABEBOX_DATABASE_URL",
         "FRIENDLY_CAPTCHA_API_KEY",
         "ABGABEBOX_CAPTCHA_SESSION_SECRET",
+        "STORAGE_CREDENTIALS_KEY",
     ):
         file_variable = f"{variable}_FILE"
         if variable not in os.environ and (path := os.environ.get(file_variable)):
@@ -34,6 +35,10 @@ class Settings(BaseSettings):
         validation_alias="ABGABEBOX_DATABASE_URL",
     )
     storage_root: str = Field(default="/app/storage", validation_alias="ABGABEBOX_STORAGE_ROOT")
+    # Entschlüsselt die (eingeschränkten) Zugangsdaten des aktiven Speicherprofils - derselbe
+    # Wert wie im Backend (STORAGE_CREDENTIALS_KEY), siehe objstore_client.py.
+    storage_credentials_key: str = Field(default="", validation_alias="STORAGE_CREDENTIALS_KEY")
+    maintenance_cache_seconds: float = Field(default=2.0, validation_alias="MAINTENANCE_CACHE_SECONDS")
     friendly_captcha_sitekey: str = Field(default="", validation_alias="FRIENDLY_CAPTCHA_SITEKEY")
     friendly_captcha_api_key: str = Field(default="", validation_alias="FRIENDLY_CAPTCHA_API_KEY")
     friendly_captcha_verify_url: str = Field(

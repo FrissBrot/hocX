@@ -526,7 +526,17 @@ class S3Backend:
 
         if not sha256 or not _HEX64.match(sha256):
             raise StorageIntegrityError("SHA-256 muss vor dem Hochladen bekannt sein")
+        # Seekbarer Puffer (bis 16 MiB im Speicher, darüber auf Platte): S3-Signaturen und
+        # Wiederholungen brauchen einen zurückspulbaren Body, und der Inhalt wird vor dem
+        # Hochladen gegen den erwarteten SHA-256 geprüft - falscher Inhalt verlässt den Host nie.
+        spool = tempfile.SpooledTemporaryFile(max_size=MULTIPART_THRESHOLD_BYTES)
         reader = _HashingReader(source)
+        while chunk := reader.read(CHUNK_BYTES):
+            spool.write(chunk)
+        if reader.digest.hexdigest() != sha256 or (size is not None and reader.size != size):
+            spool.close()
+            raise StorageIntegrityError("SHA-256 oder Grösse des Inhalts stimmen nicht mit dem Erwarteten überein")
+        spool.seek(0)
         extra: dict[str, Any] = {"Metadata": {SHA256_METADATA_KEY: sha256}}
         if content_type:
             extra["ContentType"] = content_type
@@ -542,17 +552,11 @@ class S3Backend:
             # upload_fileobj bricht einen fehlgeschlagenen Multipart-Upload selbst ab
             # (AbortMultipartUpload); Reste nach einem Prozessabsturz räumt
             # abort_stale_multipart_uploads auf.
-            self._client.upload_fileobj(reader, self.bucket_for(namespace), physical, ExtraArgs=extra, Config=transfer)
+            self._client.upload_fileobj(spool, self.bucket_for(namespace), physical, ExtraArgs=extra, Config=transfer)
         except Exception as exc:
             raise _map_client_error(exc, key) from exc
-        if reader.digest.hexdigest() != sha256 or (size is not None and reader.size != size):
-            # Der Inhalt hat sich beim Lesen verändert - das hochgeladene Objekt ist nicht das
-            # erwartete und wird sofort wieder entfernt.
-            try:
-                self._client.delete_object(Bucket=self.bucket_for(namespace), Key=physical)
-            except Exception:
-                _logger.warning("Fehlerhaftes Objekt %s konnte nicht entfernt werden", physical, exc_info=True)
-            raise StorageIntegrityError("SHA-256 oder Grösse des hochgeladenen Objekts stimmen nicht")
+        finally:
+            spool.close()
         return ObjectInfo(namespace, key, reader.size, sha256, content_type)
 
     def open_read(self, namespace, key, *, start=0, end=None) -> Iterator[bytes]:

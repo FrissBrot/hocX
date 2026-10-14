@@ -1095,21 +1095,22 @@ def run_migration(ctx: Ctx) -> float | None:
                 return None
             if migration.state == "retrying":
                 move(db, ctx, migration, migration.resume_state or "preflight", resume_state=None)
-            for _ in range(1000):
-                ctx.check()
-                if migration.state in sms.TERMINAL_STATES or migration.state in ("awaiting_confirmation", "paused", "rollback_required"):
-                    return None
-                phase = PHASES.get(migration.state)
-                if phase is None:
-                    return None
-                if migration.pause_requested and migration.state not in sms.NO_INTERRUPT_STATES:
-                    raise _PauseRequested()
-                phase(db, ctx, migration)
-                db.refresh(migration)
-                if migration.attempt:
-                    guarded(db, ctx, attempt=0, last_error=None)
-                    db.commit()
-            return POLL_SECONDS
+            # Genau eine Phase je Durchlauf: danach wird die Lease neu beansprucht - so bleibt jede
+            # Phase ein klarer, wiederaufnehmbarer Schritt (und ein Admin-Eingriff greift sofort).
+            ctx.check()
+            if migration.state in sms.TERMINAL_STATES or migration.state in ("awaiting_confirmation", "paused", "rollback_required"):
+                return None
+            phase = PHASES.get(migration.state)
+            if phase is None:
+                return None
+            if migration.pause_requested and migration.state not in sms.NO_INTERRUPT_STATES:
+                raise _PauseRequested()
+            phase(db, ctx, migration)
+            db.refresh(migration)
+            if migration.attempt:
+                guarded(db, ctx, attempt=0, last_error=None)
+                db.commit()
+            return 0.0
         except PhaseWait as wait:
             return wait.seconds
         except _CancelRequested:
@@ -1207,7 +1208,7 @@ def run_once(owner: str) -> float:
             release_lease(ctx, next_attempt_in=delay if delay and delay > POLL_SECONDS else None)
         except Exception:
             _logger.warning("Lease konnte nicht freigegeben werden (läuft von selbst ab)", exc_info=True)
-    return min(delay or 0.5, POLL_SECONDS)
+    return POLL_SECONDS if delay is None else min(delay, POLL_SECONDS)
 
 
 def main() -> None:

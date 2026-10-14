@@ -4,6 +4,7 @@ import time
 
 from app import storage, scanner
 from app.config import settings
+from app.db import SessionLocal
 
 
 def test_quarantine_cleanup_protects_referenced_files_and_fails_closed(tmp_path, monkeypatch):
@@ -16,9 +17,10 @@ def test_quarantine_cleanup_protects_referenced_files_and_fails_closed(tmp_path,
     orphan.write_bytes(b'orphan')
     for path in (pending, orphan):
         os.utime(path, (time.time() - 10000, time.time() - 10000))
-    assert storage.cleanup_stale_quarantine_files(100) == 0
-    assert pending.exists() and orphan.exists()
-    assert storage.cleanup_stale_quarantine_files(100, is_referenced=lambda path: path.endswith('pending.pdf')) == 1
+    with SessionLocal() as db:
+        assert storage.cleanup_stale_quarantine_files(db, 100) == 0
+        assert pending.exists() and orphan.exists()
+        assert storage.cleanup_stale_quarantine_files(db, 100, is_referenced=lambda path: path.endswith('pending.pdf')) == 1
     assert pending.exists() and not orphan.exists()
 
 

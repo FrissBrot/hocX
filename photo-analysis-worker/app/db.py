@@ -61,7 +61,13 @@ def fetch_files(engine: Engine, stored_file_ids: list[int]) -> list[dict]:
         return []
     with engine.connect() as conn:
         rows = conn.execute(
-            text("SELECT id, storage_path, mime_type FROM stored_file WHERE id = ANY(:ids)"),
+            # namespace: Abgabebox-Uploads liegen im eigenen Speicherbereich (siehe objstore_client.py).
+            text("""
+                SELECT f.id, f.storage_path, f.mime_type,
+                       CASE WHEN EXISTS (SELECT 1 FROM submission_upload_file s WHERE s.stored_file_id = f.id)
+                            THEN 'abgabebox' ELSE 'main' END AS namespace
+                FROM stored_file f WHERE f.id = ANY(:ids)
+            """),
             {"ids": stored_file_ids},
         ).mappings()
         return [dict(row) for row in rows]
@@ -138,3 +144,9 @@ def record_job_run(engine: Engine, *, status: str, started_at, error: str | None
             text("SELECT record_job_run(:job_name, :status, :started_at, NOW(), :error, TRUE)"),
             {"job_name": JOB_NAME, "status": status, "started_at": started_at, "error": error},
         )
+
+
+def full_maintenance_active(engine: Engine) -> bool:
+    """Während voller Wartung (z. B. Erstmigration des Speichers) keine Aufträge übernehmen."""
+    with engine.connect() as conn:
+        return bool(conn.execute(text("SELECT full_active FROM maintenance_effective_state()")).scalar())

@@ -454,9 +454,12 @@ def upgrade() -> None:
     for signature, roles in _FUNCTIONS.items():
         op.execute(f"REVOKE ALL ON FUNCTION public.{signature} FROM PUBLIC")
         op.execute(f"GRANT EXECUTE ON FUNCTION public.{signature} TO {roles}")
+    # Foto-Worker muss Abgabebox-Bilder dem Namespace "abgabebox" zuordnen können (nur diese Spalte).
+    op.execute("GRANT SELECT (stored_file_id) ON TABLE public.submission_upload_file TO hocx_photo_worker")
 
 
 def downgrade() -> None:
+    op.execute("REVOKE SELECT (stored_file_id) ON TABLE public.submission_upload_file FROM hocx_photo_worker")
     for signature in _FUNCTIONS:
         op.execute(f"DROP FUNCTION IF EXISTS public.{signature}")
     op.drop_table("storage_migration_event")
