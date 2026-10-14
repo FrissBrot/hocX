@@ -1,0 +1,148 @@
+{
+  "title": "Maintenance",
+  "description": "Plan and start maintenance windows and end them after the safety checks have passed. Running data migrations and write fences cannot be bypassed here.",
+  "duration": {
+    "minutes": "{count, plural, one {# minute} other {# minutes}}",
+    "hours": "{count, plural, one {# hour} other {# hours}}"
+  },
+  "confirm": {
+    "release": "End maintenance now? The server checks the release conditions again.",
+    "start": "Start maintenance now? hocX will be locked for users; running requests are completed first.",
+    "cancel": "Cancel the scheduled maintenance?"
+  },
+  "actions": {
+    "release": "End maintenance",
+    "start": "Start",
+    "cancel": "Cancel",
+    "plan": "Schedule maintenance",
+    "startNow": "Start now",
+    "edit": "Edit",
+    "editMessage": "Edit message",
+    "close": "Close",
+    "save": "Save"
+  },
+  "toast": {
+    "release": "Maintenance ended",
+    "start": "Maintenance started",
+    "cancel": "Maintenance cancelled",
+    "failed": "Action failed",
+    "started": "Maintenance is starting",
+    "planned": "Maintenance scheduled",
+    "saved": "Message saved"
+  },
+  "banner": {
+    "fullActive": "Full maintenance active: hocX is locked for all users. The admin portal stays reachable.",
+    "partialActive": "Partial maintenance active: some functions are locked.",
+    "overdue": "The estimated duration has been exceeded. The lock remains until the release conditions are met."
+  },
+  "current": {
+    "title": "Current maintenance",
+    "empty": "No maintenance is running."
+  },
+  "scheduled": {
+    "title": "Scheduled maintenance",
+    "empty": "No maintenance scheduled."
+  },
+  "history": {
+    "title": "History",
+    "empty": "No completed maintenance yet."
+  },
+  "columns": {
+    "start": "Start",
+    "end": "End",
+    "kind": "Type",
+    "message": "Message",
+    "actions": "Actions",
+    "reason": "Reason",
+    "state": "Status",
+    "duration": "Duration",
+    "estimate": "Estimated"
+  },
+  "kind": {
+    "full": "Full maintenance",
+    "partial": "Partial maintenance"
+  },
+  "scope": {
+    "all": "Everything locked",
+    "writes": "Writes locked",
+    "uploads": "Uploads locked"
+  },
+  "defaultMessage": "Default text",
+  "reason": {
+    "manual": "Manual maintenance",
+    "storage_initial_migration": "Initial file storage migration",
+    "storage_cutover": "Storage cutover",
+    "other": "System job"
+  },
+  "state": {
+    "scheduled": "Scheduled",
+    "preparing": "Preparing",
+    "active": "Active",
+    "verifying": "Verifying",
+    "completed": "Completed",
+    "failed": "Failed",
+    "overdue": "Overdue",
+    "cancelled": "Cancelled"
+  },
+  "facts": {
+    "job": "Triggered by",
+    "started": "Start",
+    "runtime": "Runtime",
+    "estimatedEnd": "Estimated end",
+    "originalEnd": "Originally estimated",
+    "reserve": "Safety margin",
+    "features": "Affected areas",
+    "estimating": "Being determined"
+  },
+  "job": {
+    "storage_initial_migration": "Initial storage migration",
+    "storage_cutover": "Storage cutover",
+    "other": "System job",
+    "manual": "Administrator"
+  },
+  "feature": {
+    "all": "Entire application",
+    "login": "Sign-in",
+    "app": "Application",
+    "writes": "Saving",
+    "uploads": "Uploads",
+    "downloads": "Downloads",
+    "abgabebox": "Submission box",
+    "background_jobs": "Background jobs"
+  },
+  "progress": {
+    "label": "{verified} of {total} objects verified ({copied} copied)",
+    "aria": "Verification progress"
+  },
+  "conditions": {
+    "title": "Release conditions",
+    "met": "Met",
+    "unmet": "Open",
+    "blockedHint": "Only possible once the release conditions are met",
+    "keys": {
+      "storage_migration_settled": "Data migration completed and verified, or source demonstrably still active and unchanged",
+      "storage_not_fenced": "No storage write fence active",
+      "no_open_storage_migration_cutover": "No open storage cutover"
+    }
+  },
+  "form": {
+    "message": "Public message ({locale})",
+    "messageHelp": "Leave empty for the default text. Shown on the sign-in page.",
+    "kind": "Type",
+    "scope": "Locked",
+    "startNow": "Start now in a controlled way",
+    "startDate": "Start (date)",
+    "startTime": "Start (time, HH:MM)",
+    "endDate": "Expected end (date)",
+    "endTime": "Expected end (time, HH:MM)",
+    "endHelp": "The end is only an announcement. Maintenance ends only when you end it after the checks have passed.",
+    "note": "Internal note"
+  },
+  "plan": {
+    "title": "Schedule maintenance",
+    "description": "Scheduled maintenance is announced on the sign-in page in advance and starts automatically at the chosen time."
+  },
+  "edit": {
+    "title": "Edit maintenance message"
+  }
+}

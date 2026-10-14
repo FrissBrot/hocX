@@ -89,7 +89,10 @@ export async function proxy(request: NextRequest) {
   // Öffentliche Freigabe-Links (/share/<token>) sind per Design ohne Login erreichbar - der
   // Token in der URL IST die Authentifizierung (siehe backend public_share.py). Ohne diese
   // Ausnahme landeten Empfänger ohne hocX-Konto auf /login statt bei den Fotos.
+  // /maintenance ist die Wartungsansicht - während voller Wartung antwortet das Backend auf die
+  // Sitzungsprüfung ohnehin mit 503, die Seite selbst braucht keine Session.
   const isPublicPath =
+    rewrittenPathname === "/maintenance" ||
     rewrittenPathname === "/share" ||
     rewrittenPathname.startsWith("/share/") ||
     rewrittenPathname === WEBSITE_PATH ||

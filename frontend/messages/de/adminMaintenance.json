@@ -1,0 +1,148 @@
+{
+  "title": "Wartung",
+  "description": "Wartungsfenster planen, starten und nach bestandenen Sicherheitsprüfungen beenden. Laufende Datenmigrationen und Schreibsperren lassen sich hier nicht umgehen.",
+  "duration": {
+    "minutes": "{count, plural, one {# Minute} other {# Minuten}}",
+    "hours": "{count, plural, one {# Stunde} other {# Stunden}}"
+  },
+  "confirm": {
+    "release": "Wartung jetzt beenden? Die Freigabebedingungen werden vom Server erneut geprüft.",
+    "start": "Wartung jetzt kontrolliert starten? hocX wird für Benutzer gesperrt, laufende Anfragen werden noch abgeschlossen.",
+    "cancel": "Geplante Wartung absagen?"
+  },
+  "actions": {
+    "release": "Wartung beenden",
+    "start": "Starten",
+    "cancel": "Absagen",
+    "plan": "Wartung planen",
+    "startNow": "Jetzt starten",
+    "edit": "Bearbeiten",
+    "editMessage": "Meldung bearbeiten",
+    "close": "Schliessen",
+    "save": "Speichern"
+  },
+  "toast": {
+    "release": "Wartung beendet",
+    "start": "Wartung gestartet",
+    "cancel": "Wartung abgesagt",
+    "failed": "Aktion fehlgeschlagen",
+    "started": "Wartung wird gestartet",
+    "planned": "Wartung geplant",
+    "saved": "Meldung gespeichert"
+  },
+  "banner": {
+    "fullActive": "Volle Wartung aktiv: hocX ist für alle Benutzer gesperrt. Das Adminportal bleibt erreichbar.",
+    "partialActive": "Teilweise Wartung aktiv: einzelne Funktionen sind gesperrt.",
+    "overdue": "Die geschätzte Dauer ist überschritten. Die Sperre bleibt bestehen, bis die Freigabebedingungen erfüllt sind."
+  },
+  "current": {
+    "title": "Aktuelle Wartung",
+    "empty": "Zurzeit läuft keine Wartung."
+  },
+  "scheduled": {
+    "title": "Geplante Wartungen",
+    "empty": "Keine Wartung geplant."
+  },
+  "history": {
+    "title": "Verlauf",
+    "empty": "Noch keine abgeschlossenen Wartungen."
+  },
+  "columns": {
+    "start": "Beginn",
+    "end": "Ende",
+    "kind": "Art",
+    "message": "Meldung",
+    "actions": "Aktionen",
+    "reason": "Grund",
+    "state": "Status",
+    "duration": "Dauer",
+    "estimate": "Geschätzt"
+  },
+  "kind": {
+    "full": "Volle Wartung",
+    "partial": "Teilweise Wartung"
+  },
+  "scope": {
+    "all": "Alles gesperrt",
+    "writes": "Schreibvorgänge gesperrt",
+    "uploads": "Uploads gesperrt"
+  },
+  "defaultMessage": "Standardtext",
+  "reason": {
+    "manual": "Manuelle Wartung",
+    "storage_initial_migration": "Erstmigration des Dateispeichers",
+    "storage_cutover": "Speicher-Cutover",
+    "other": "Systemjob"
+  },
+  "state": {
+    "scheduled": "Geplant",
+    "preparing": "Vorbereitung",
+    "active": "Aktiv",
+    "verifying": "Prüfung",
+    "completed": "Beendet",
+    "failed": "Fehlgeschlagen",
+    "overdue": "Überfällig",
+    "cancelled": "Abgesagt"
+  },
+  "facts": {
+    "job": "Verursacher",
+    "started": "Beginn",
+    "runtime": "Laufzeit",
+    "estimatedEnd": "Geschätztes Ende",
+    "originalEnd": "Ursprünglich geschätzt",
+    "reserve": "Sicherheitsreserve",
+    "features": "Betroffene Bereiche",
+    "estimating": "Wird ermittelt"
+  },
+  "job": {
+    "storage_initial_migration": "Storage-Erstmigration",
+    "storage_cutover": "Storage-Cutover",
+    "other": "Systemjob",
+    "manual": "Administrator"
+  },
+  "feature": {
+    "all": "Gesamte Anwendung",
+    "login": "Anmeldung",
+    "app": "Anwendung",
+    "writes": "Speichern",
+    "uploads": "Uploads",
+    "downloads": "Downloads",
+    "abgabebox": "Abgabebox",
+    "background_jobs": "Hintergrundjobs"
+  },
+  "progress": {
+    "label": "{verified} von {total} Objekten geprüft ({copied} kopiert)",
+    "aria": "Fortschritt der Prüfung"
+  },
+  "conditions": {
+    "title": "Freigabebedingungen",
+    "met": "Erfüllt",
+    "unmet": "Offen",
+    "blockedHint": "Erst nach erfüllten Freigabebedingungen möglich",
+    "keys": {
+      "storage_migration_settled": "Datenmigration abgeschlossen und geprüft bzw. Quelle nachweislich unverändert aktiv",
+      "storage_not_fenced": "Keine Schreibsperre des Speichers aktiv",
+      "no_open_storage_migration_cutover": "Kein offener Speicher-Cutover"
+    }
+  },
+  "form": {
+    "message": "Öffentliche Meldung ({locale})",
+    "messageHelp": "Leer lassen für den Standardtext. Erscheint auf der Anmeldeseite.",
+    "kind": "Art",
+    "scope": "Gesperrt",
+    "startNow": "Sofort kontrolliert starten",
+    "startDate": "Beginn (Datum)",
+    "startTime": "Beginn (Uhrzeit, HH:MM)",
+    "endDate": "Voraussichtliches Ende (Datum)",
+    "endTime": "Voraussichtliches Ende (Uhrzeit, HH:MM)",
+    "endHelp": "Das Ende ist nur eine Ankündigung. Die Wartung endet erst, wenn du sie nach bestandenen Prüfungen beendest.",
+    "note": "Interne Notiz"
+  },
+  "plan": {
+    "title": "Wartung planen",
+    "description": "Geplante Wartungen erscheinen vorab als Hinweis auf der Anmeldeseite und starten zum gewählten Zeitpunkt automatisch."
+  },
+  "edit": {
+    "title": "Wartungsmeldung bearbeiten"
+  }
+}

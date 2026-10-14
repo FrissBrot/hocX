@@ -1,0 +1,259 @@
+{
+  "title": "Archiviazione",
+  "loadFailed": "Impossibile caricare la panoramica dell'archiviazione.",
+  "description": "Gestire i profili di archiviazione S3 e migrare i file in sicurezza tra archivi. Il cambio avviene solo dopo copia completa, verifica e passaggio controllato.",
+  "actions": {
+    "newProfile": "Crea profilo",
+    "startMigration": "Prepara migrazione",
+    "requestLocal": "Rendi disponibile S3 locale",
+    "test": "Testa connessione",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "purge": "Ripulisci",
+    "report": "Rapporto di verifica",
+    "start": "Avvia migrazione",
+    "confirmCutover": "Conferma passaggio",
+    "resume": "Riprendi",
+    "pause": "Metti in pausa",
+    "retryFailed": "Riprova oggetti non riusciti",
+    "acceptMissing": "Conferma mancanti",
+    "acknowledgeRollback": "Preso atto",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "save": "Salva",
+    "prepareMigration": "Avvia verifica preliminare"
+  },
+  "toast": {
+    "failed": "Azione non riuscita",
+    "testOk": "Test di connessione riuscito",
+    "testFailed": "Test di connessione non riuscito: {error}",
+    "deleted": "Profilo eliminato",
+    "localRequested": "S3 locale richiesto - il server lo avvia entro pochi minuti",
+    "profileSaved": "Profilo salvato",
+    "migrationCreated": "Migrazione creata - verifica preliminare in corso",
+    "purgeRequested": "Pulizia richiesta",
+    "start": "Migrazione avviata",
+    "confirmCutover": "Passaggio confermato",
+    "resume": "Migrazione ripresa",
+    "pause": "Migrazione in pausa",
+    "retryFailed": "Gli oggetti verranno riprovati",
+    "acceptMissing": "Oggetti mancanti confermati",
+    "acknowledgeRollback": "Preso atto",
+    "cancel": "Annullamento richiesto"
+  },
+  "confirm": {
+    "deleteProfile": "Eliminare il profilo «{name}»? I dati nel bucket non vengono toccati.",
+    "startInitial": "Avviare la migrazione iniziale? hocX entra in manutenzione completa ed è bloccato per gli utenti finché tutti i file non sono copiati e verificati.",
+    "startLive": "Avviare la migrazione dal vivo? hocX resta utilizzabile durante la copia.",
+    "cutover": "Passare al nuovo archivio? Le scritture vengono bloccate brevemente, poi hocX lavora con il nuovo archivio.",
+    "resume": "Riprendere la migrazione?",
+    "pause": "Mettere in pausa la migrazione? Gli oggetti già copiati vengono mantenuti.",
+    "retryFailed": "Riprovare tutti gli oggetti non riusciti?",
+    "acceptMissing": "Confermare gli oggetti già mancanti nell'origine? Vengono indicati nel rapporto e non trasferiti.",
+    "acknowledgeRollback": "Confermi di aver verificato lo stato? Il nuovo archivio resta attivo; tornare indietro è possibile solo con una nuova migrazione.",
+    "cancel": "Annullare la migrazione in modo controllato? L'origine resta attiva, nulla viene eliminato."
+  },
+  "banner": {
+    "noCredentialsKey": "STORAGE_CREDENTIALS_KEY non è impostato - le credenziali S3 non possono essere salvate in modo sicuro.",
+    "fenced": "Le scritture sono attualmente bloccate (passaggio o manutenzione)."
+  },
+  "active": {
+    "title": "Archivio attivo",
+    "profile": "Profilo",
+    "generation": "Generazione",
+    "location": "Posizione",
+    "localS3": "S3 locale",
+    "filesystem": "File system locale (dati esistenti)"
+  },
+  "provider": {
+    "filesystem": "File system",
+    "garage_local": "S3 locale (Garage)",
+    "aws_s3": "AWS S3",
+    "hetzner": "Hetzner Object Storage",
+    "s3_compatible": "Compatibile S3"
+  },
+  "localS3": {
+    "needed": "Necessario",
+    "notNeeded": "Non necessario",
+    "notConfigured": "Non configurato",
+    "reason": {
+      "active": "archivio attivo",
+      "initial_target": "destinazione della migrazione iniziale",
+      "requested": "richiesto da un amministratore",
+      "migration": "usato da una migrazione",
+      "fallback_period": "periodo di ripiego in corso",
+      "pending_operation": "pulizia o preparazione in sospeso",
+      "unverified_objects": "oggetti non verificati",
+      "not_needed": "può essere fermato (i dati vengono mantenuti)",
+      "no_local_profile": "nessun profilo locale",
+      "db_unavailable": "stato sconosciuto"
+    }
+  },
+  "profiles": {
+    "title": "Profili di archiviazione",
+    "description": "Le credenziali vengono salvate cifrate e non vengono più mostrate.",
+    "empty": "Ancora nessun profilo."
+  },
+  "columns": {
+    "name": "Nome",
+    "location": "Posizione",
+    "status": "Stato",
+    "lastTest": "Ultimo test",
+    "actions": "Azioni",
+    "generation": "Generazione",
+    "profile": "Profilo",
+    "size": "Volume",
+    "retainUntil": "Conservare fino al",
+    "created": "Creata",
+    "route": "Da → A",
+    "objects": "Oggetti",
+    "time": "Ora",
+    "event": "Evento",
+    "actor": "Da parte di"
+  },
+  "status": {
+    "active": "Attivo",
+    "builtin": "Integrato",
+    "disabled": "Disattivato",
+    "inMigration": "In migrazione",
+    "pinned": "Dati nel periodo di ripiego",
+    "sharedCredentials": "Casella di consegna senza credenziali proprie"
+  },
+  "test": {
+    "ok": "OK",
+    "failed": "Errore",
+    "never": "Mai testato"
+  },
+  "generations": {
+    "title": "Generazioni di archiviazione",
+    "description": "Ogni migrazione scrive in una nuova generazione. Le generazioni sostituite vengono mantenute fino a una pulizia consapevole.",
+    "empty": "Nessuna generazione.",
+    "size": "{count, plural, one {# oggetto} other {# oggetti}}, {size}"
+  },
+  "generationStatus": {
+    "preparing": "In preparazione",
+    "active": "Attiva",
+    "retained": "Periodo di ripiego",
+    "abandoned": "Abbandonata",
+    "purge_requested": "Pulizia richiesta",
+    "purging": "Pulizia in corso",
+    "purged": "Ripulita"
+  },
+  "history": {
+    "title": "Ultime migrazioni",
+    "empty": "Ancora nessuna migrazione.",
+    "objects": "{verified} di {total} verificati"
+  },
+  "state": {
+    "pending": "Creata",
+    "preflight": "Verifica preliminare",
+    "awaiting_confirmation": "In attesa di avvio",
+    "inventory": "Inventario",
+    "copying": "Copia",
+    "catching_up": "Recupero modifiche",
+    "verifying": "Verifica",
+    "ready_for_cutover": "Pronta per il passaggio",
+    "cutting_over": "Passaggio",
+    "observing": "Osservazione",
+    "completed": "Completata",
+    "paused": "In pausa",
+    "retrying": "Nuovo tentativo",
+    "failed": "Non riuscita",
+    "cancelled": "Annullata",
+    "rollback_required": "Ripristino necessario"
+  },
+  "estimate": {
+    "unknown": "In fase di calcolo",
+    "minutes": "{low}–{high} minuti",
+    "hours": "{low}–{high} ore"
+  },
+  "migration": {
+    "title": "{source} → {target}",
+    "initialHint": "Migrazione iniziale: hocX è in manutenzione completa durante la migrazione.",
+    "liveHint": "Migrazione dal vivo: hocX resta utilizzabile, solo il passaggio blocca brevemente le scritture.",
+    "confirmInitial": "Verifica preliminare superata. Durata prevista della manutenzione: {range}.",
+    "confirmLive": "Verifica preliminare superata. Durata prevista della copia: {range}, interruzione durante il passaggio: {cutover}.",
+    "heartbeatStale": "Il worker di archiviazione non risponde più. Controlla il container storage-worker - la migrazione riprende dopo il riavvio.",
+    "copyProgress": "{copied} di {total} copiati",
+    "copyAria": "Avanzamento della copia",
+    "verifyProgress": "{verified} di {total} oggetti verificati",
+    "verifyAria": "Avanzamento della verifica",
+    "cutoverWithMissing": "{count, plural, one {# riferimento del database punta a un file mancante (vedi rapporto). Passaggio solo dopo conferma.} other {# riferimenti del database puntano a file mancanti (vedi rapporto). Passaggio solo dopo conferma.}}",
+    "cutoverReady": "Tutti gli oggetti sono copiati e verificati. Il passaggio attende la tua conferma.",
+    "rollbackRequired": "La verifica dopo il passaggio non è riuscita. Il nuovo archivio è attivo; volutamente non avviene alcun ripiego automatico. Controlla il rapporto e, se necessario, avvia una migrazione di ritorno."
+  },
+  "facts": {
+    "objects": "Oggetti",
+    "objectCounts": "{total} in totale · {copied} copiati · {verified} verificati · {failed} non riusciti",
+    "started": "Avviata",
+    "runtime": "Durata trascorsa",
+    "averageRate": "Velocità media",
+    "currentRate": "Velocità attuale",
+    "rate": "{value}/s",
+    "remaining": "Rimanente (stimato)",
+    "heartbeat": "Ultimo segnale",
+    "workerActive": "Worker attivo",
+    "checkpoint": "Ultimo checkpoint",
+    "generation": "Generazione",
+    "references": "Riferimenti",
+    "referenceCounts": "{missing} mancanti · {unreferenced} non referenziati"
+  },
+  "events": {
+    "title": "Cronologia ({count})",
+    "empty": "Nessun evento.",
+    "worker": "Worker di archiviazione"
+  },
+  "profileForm": {
+    "editTitle": "Modifica profilo di archiviazione",
+    "newTitle": "Crea profilo di archiviazione",
+    "locationLocked": "La posizione di questo profilo è bloccata perché è attivo o contiene ancora dati necessari. Per una nuova posizione crea un nuovo profilo e migra.",
+    "name": "Nome visualizzato",
+    "provider": "Fornitore",
+    "endpoint": "Endpoint",
+    "endpointHelp": "Lascia vuoto per AWS; per Hetzner viene ricavato dalla regione.",
+    "region": "Regione",
+    "bucket": "Bucket",
+    "abgabeboxBucket": "Bucket per la casella di consegna",
+    "abgabeboxBucketHelp": "Consigliato: un bucket separato con proprie credenziali limitate.",
+    "prefix": "Prefisso / namespace",
+    "prefixHelp": "Non deve sovrapporsi ad altri profili nello stesso bucket.",
+    "addressing": "Indirizzamento",
+    "accessKey": "Access key",
+    "secretKey": "Secret key",
+    "keepSecret": "Lascia vuoto per mantenere le credenziali salvate.",
+    "restrictedAccessKey": "Access key (casella di consegna, limitata)",
+    "restrictedSecretKey": "Secret key (casella di consegna, limitata)",
+    "restrictedHelp": "La casella di consegna raggiungibile pubblicamente usa queste credenziali. Senza di esse usa le credenziali principali.",
+    "tlsVerify": "Verifica certificato TLS",
+    "caBundle": "Certificato CA personalizzato (PEM, facoltativo)",
+    "caBundleStored": "È salvato un certificato CA",
+    "enabled": "Profilo attivato"
+  },
+  "addressing": {
+    "auto": "Automatico",
+    "path": "Path-style",
+    "virtual": "Virtual-host-style"
+  },
+  "startForm": {
+    "title": "Prepara migrazione",
+    "initialHint": "Migrazione iniziale dal file system: dopo la tua conferma hocX entra in manutenzione completa finché tutti i file non sono copiati e verificati.",
+    "liveHint": "Migrazione dal vivo: hocX resta utilizzabile durante la copia. Le modifiche vengono recuperate continuamente.",
+    "target": "Destinazione",
+    "needsTest": "Questo profilo richiede prima un test di connessione riuscito.",
+    "parallelism": "Trasferimenti paralleli",
+    "bandwidth": "Larghezza di banda (Mbit/s)",
+    "bandwidthHelp": "0 = illimitata",
+    "verifyMode": "Verifica",
+    "autoCutover": "Passa automaticamente dopo una verifica riuscita",
+    "nextStep": "Prima viene eseguita una verifica preliminare con stima dei tempi. La migrazione inizia solo dopo la tua conferma."
+  },
+  "verifyMode": {
+    "full": "Completa (rilettura del contenuto e verifica SHA-256)",
+    "head": "Rapida (dimensione e SHA-256 salvato)"
+  },
+  "purge": {
+    "title": "Ripulisci la generazione {generation}",
+    "warning": "Elimina definitivamente i dati di questa generazione nel profilo «{profile}». La generazione attiva non è interessata.",
+    "label": "Digita «{expected}» per confermare"
+  }
+}

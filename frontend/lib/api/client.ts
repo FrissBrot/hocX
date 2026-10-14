@@ -60,12 +60,28 @@ export async function browserApiFetch<T>(path: string, init?: RequestInit): Prom
     throw new ApiError("Backend nicht erreichbar", "backend");
   }
 
-  if (!response.ok) throw errorFromResponse(response.status, await response.text());
+  if (!response.ok) {
+    const body = await response.text();
+    // Volle Wartung (serverseitige Sperre): angemeldete Benutzer sehen die Wartungsansicht
+    // statt einer Anwendung, deren Aufrufe scheitern. Admin-Aufrufe sind davon nie betroffen.
+    if (response.status === 503 && typeof window !== "undefined" && !path.startsWith("/api/admin") && isFullMaintenance(body)) {
+      window.location.assign("/maintenance");
+    }
+    throw errorFromResponse(response.status, body);
+  }
 
   if (response.status === 204 || response.headers.get("content-length") === "0") {
     return null as T;
   }
   return (await response.json()) as T;
+}
+
+function isFullMaintenance(text: string): boolean {
+  try {
+    return JSON.parse(text)?.code === "maintenance";
+  } catch {
+    return false;
+  }
 }
 
 function errorFromResponse(status: number, text: string): ApiError {

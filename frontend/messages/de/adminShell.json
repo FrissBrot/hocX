@@ -19,7 +19,9 @@
     "jobs": "Jobs",
     "admins": "Admin-Accounts",
     "sso": "SSO",
-    "security": "Sicherheit"
+    "security": "Sicherheit",
+    "storage": "Storage",
+    "maintenance": "Wartung"
   },
   "logout": "Logout",
   "menuToggleClose": "Schliessen",

@@ -109,5 +109,13 @@
   "language": {
     "label": "Language"
   },
-  "copyright": "Copyright © {year} hocX Project · All rights reserved."
+  "copyright": "Copyright © {year} hocX Project · All rights reserved.",
+  "maintenance": {
+    "title": "The submission box is under maintenance",
+    "message": "Submissions are not possible during maintenance. Please try again later.",
+    "uploadsTitle": "Uploading is briefly locked",
+    "uploadsMessage": "Due to maintenance, files cannot be accepted right now. This usually only takes a few minutes.",
+    "availableAt": "Expected to be available again at {time}",
+    "estimating": "The expected duration is being determined."
+  }
 }

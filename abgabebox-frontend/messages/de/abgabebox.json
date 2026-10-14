@@ -109,5 +109,13 @@
   "language": {
     "label": "Sprache"
   },
-  "copyright": "Copyright © {year} hocX Project · Alle Rechte vorbehalten."
+  "copyright": "Copyright © {year} hocX Project · Alle Rechte vorbehalten.",
+  "maintenance": {
+    "title": "Die Abgabebox wird gerade gewartet",
+    "message": "Abgaben sind während der Wartung nicht möglich. Bitte versuche es später erneut.",
+    "uploadsTitle": "Hochladen ist kurz gesperrt",
+    "uploadsMessage": "Wegen Wartungsarbeiten können gerade keine Dateien angenommen werden. Das dauert in der Regel nur wenige Minuten.",
+    "availableAt": "Voraussichtlich wieder verfügbar: {time} Uhr",
+    "estimating": "Die voraussichtliche Dauer wird ermittelt."
+  }
 }

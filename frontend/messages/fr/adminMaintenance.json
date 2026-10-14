@@ -1,0 +1,148 @@
+{
+  "title": "Maintenance",
+  "description": "Planifier et démarrer des fenêtres de maintenance, puis les terminer une fois les contrôles de sécurité réussis. Les migrations de données en cours et les verrous d'écriture ne peuvent pas être contournés ici.",
+  "duration": {
+    "minutes": "{count, plural, one {# minute} other {# minutes}}",
+    "hours": "{count, plural, one {# heure} other {# heures}}"
+  },
+  "confirm": {
+    "release": "Terminer la maintenance maintenant ? Le serveur vérifie à nouveau les conditions de levée.",
+    "start": "Démarrer la maintenance maintenant ? hocX sera bloqué pour les utilisateurs ; les requêtes en cours sont d'abord terminées.",
+    "cancel": "Annuler la maintenance planifiée ?"
+  },
+  "actions": {
+    "release": "Terminer la maintenance",
+    "start": "Démarrer",
+    "cancel": "Annuler",
+    "plan": "Planifier une maintenance",
+    "startNow": "Démarrer maintenant",
+    "edit": "Modifier",
+    "editMessage": "Modifier le message",
+    "close": "Fermer",
+    "save": "Enregistrer"
+  },
+  "toast": {
+    "release": "Maintenance terminée",
+    "start": "Maintenance démarrée",
+    "cancel": "Maintenance annulée",
+    "failed": "L'action a échoué",
+    "started": "La maintenance démarre",
+    "planned": "Maintenance planifiée",
+    "saved": "Message enregistré"
+  },
+  "banner": {
+    "fullActive": "Maintenance complète active : hocX est bloqué pour tous les utilisateurs. Le portail d'administration reste accessible.",
+    "partialActive": "Maintenance partielle active : certaines fonctions sont bloquées.",
+    "overdue": "La durée estimée est dépassée. Le blocage reste actif jusqu'à ce que les conditions de levée soient remplies."
+  },
+  "current": {
+    "title": "Maintenance en cours",
+    "empty": "Aucune maintenance en cours."
+  },
+  "scheduled": {
+    "title": "Maintenances planifiées",
+    "empty": "Aucune maintenance planifiée."
+  },
+  "history": {
+    "title": "Historique",
+    "empty": "Aucune maintenance terminée pour l'instant."
+  },
+  "columns": {
+    "start": "Début",
+    "end": "Fin",
+    "kind": "Type",
+    "message": "Message",
+    "actions": "Actions",
+    "reason": "Motif",
+    "state": "Statut",
+    "duration": "Durée",
+    "estimate": "Estimation"
+  },
+  "kind": {
+    "full": "Maintenance complète",
+    "partial": "Maintenance partielle"
+  },
+  "scope": {
+    "all": "Tout bloqué",
+    "writes": "Écritures bloquées",
+    "uploads": "Téléversements bloqués"
+  },
+  "defaultMessage": "Texte par défaut",
+  "reason": {
+    "manual": "Maintenance manuelle",
+    "storage_initial_migration": "Migration initiale du stockage",
+    "storage_cutover": "Basculement du stockage",
+    "other": "Tâche système"
+  },
+  "state": {
+    "scheduled": "Planifiée",
+    "preparing": "Préparation",
+    "active": "Active",
+    "verifying": "Vérification",
+    "completed": "Terminée",
+    "failed": "Échouée",
+    "overdue": "En retard",
+    "cancelled": "Annulée"
+  },
+  "facts": {
+    "job": "Déclenchée par",
+    "started": "Début",
+    "runtime": "Durée écoulée",
+    "estimatedEnd": "Fin estimée",
+    "originalEnd": "Estimation initiale",
+    "reserve": "Marge de sécurité",
+    "features": "Domaines concernés",
+    "estimating": "En cours de calcul"
+  },
+  "job": {
+    "storage_initial_migration": "Migration initiale du stockage",
+    "storage_cutover": "Basculement du stockage",
+    "other": "Tâche système",
+    "manual": "Administrateur"
+  },
+  "feature": {
+    "all": "Application entière",
+    "login": "Connexion",
+    "app": "Application",
+    "writes": "Enregistrement",
+    "uploads": "Téléversements",
+    "downloads": "Téléchargements",
+    "abgabebox": "Boîte de dépôt",
+    "background_jobs": "Tâches d'arrière-plan"
+  },
+  "progress": {
+    "label": "{verified} objets vérifiés sur {total} ({copied} copiés)",
+    "aria": "Progression de la vérification"
+  },
+  "conditions": {
+    "title": "Conditions de levée",
+    "met": "Remplie",
+    "unmet": "Ouverte",
+    "blockedHint": "Possible uniquement une fois les conditions de levée remplies",
+    "keys": {
+      "storage_migration_settled": "Migration des données terminée et vérifiée, ou source manifestement toujours active et inchangée",
+      "storage_not_fenced": "Aucun verrou d'écriture du stockage actif",
+      "no_open_storage_migration_cutover": "Aucun basculement de stockage en cours"
+    }
+  },
+  "form": {
+    "message": "Message public ({locale})",
+    "messageHelp": "Laisser vide pour le texte par défaut. Affiché sur la page de connexion.",
+    "kind": "Type",
+    "scope": "Bloqué",
+    "startNow": "Démarrer immédiatement de manière contrôlée",
+    "startDate": "Début (date)",
+    "startTime": "Début (heure, HH:MM)",
+    "endDate": "Fin prévue (date)",
+    "endTime": "Fin prévue (heure, HH:MM)",
+    "endHelp": "La fin n'est qu'une annonce. La maintenance ne se termine que lorsque tu la termines après des contrôles réussis.",
+    "note": "Note interne"
+  },
+  "plan": {
+    "title": "Planifier une maintenance",
+    "description": "Les maintenances planifiées sont annoncées à l'avance sur la page de connexion et démarrent automatiquement à l'heure choisie."
+  },
+  "edit": {
+    "title": "Modifier le message de maintenance"
+  }
+}

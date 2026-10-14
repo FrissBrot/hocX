@@ -474,10 +474,13 @@ def phase_inventory(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
     for namespace in NAMESPACES:
         if namespace in done:
             continue
+        # Register vor der Inventur lesen - auch bei der Erstmigration: ein registriertes Objekt,
+        # das in der Quelle fehlt, muss sichtbar werden (sonst bliebe der Cutover später ohne
+        # erkennbaren Grund hängen) und lässt sich nur bewusst als fehlend bestätigen.
         registry = {
             row.key: row for row in db.execute(select(StorageObject.key, StorageObject.size_bytes, StorageObject.sha256, StorageObject.version)
                                                 .where(StorageObject.namespace == namespace, StorageObject.status == "active")).all()
-        } if migration.kind == "live" else {}
+        }
         listed: set[str] = set()
         batch: list[dict[str, Any]] = []
 
@@ -525,16 +528,17 @@ def phase_inventory(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
             if len(batch) >= BATCH_SIZE:
                 flush()
         flush()
-        if migration.kind == "live":
-            # Registriert, aber in der Quelle nicht auffindbar: als Objekt aufnehmen, der
-            # Kopierversuch meldet es dann als fehlend (vorbestehende Inkonsistenz).
-            for key in sorted(set(registry) - listed):
-                report["registered_missing_in_source"] += 1
-                reg = registry[key]
-                batch.append({"namespace": namespace, "key": key, "size": reg.size_bytes, "sha": reg.sha256, "version": reg.version})
-                if len(batch) >= BATCH_SIZE:
-                    flush()
-            flush()
+        # Registriert, aber in der Quelle nicht auffindbar: als Objekt aufnehmen, der
+        # Kopierversuch meldet es dann als fehlend (vorbestehende Inkonsistenz).
+        for key in sorted(set(registry) - listed):
+            if migration.kind == "initial" and sms.is_excluded_initial_key(namespace, key):
+                continue
+            report["registered_missing_in_source"] += 1
+            reg = registry[key]
+            batch.append({"namespace": namespace, "key": key, "size": reg.size_bytes, "sha": reg.sha256, "version": reg.version})
+            if len(batch) >= BATCH_SIZE:
+                flush()
+        flush()
         done.add(namespace)
         guarded(db, ctx, checkpoint={**(migration.checkpoint or {}), "inventory_done": sorted(done), "inventory_report": report})
         db.commit()
@@ -851,7 +855,7 @@ def _final_reconcile(db: Session, ctx: Ctx, migration: StorageMigration, target:
     }
     for key, reg in expected.items():
         ctx.check()
-        if reg.status != "active":
+        if reg.status != "active" or (migration.kind == "initial" and sms.is_excluded_initial_key(*key)):
             continue
         checks["registry_objects"] += 1
         row = migrated.get(key)

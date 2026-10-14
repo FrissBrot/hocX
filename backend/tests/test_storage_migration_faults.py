@@ -321,6 +321,36 @@ def test_objects_missing_in_the_source_block_cutover_until_acknowledged(setup):
     assert f"main/{victim.storage_path}" in done.checkpoint["accepted_missing"]
 
 
+def test_initial_migration_surfaces_registered_files_missing_on_disk(setup):
+    """Ein Registereintrag ohne Datei auf der Platte darf die Erstmigration weder still
+    überspringen noch endlos blockieren: er wird als fehlend sichtbar und muss bestätigt werden."""
+    db, _tenant, _files, local, _external = setup
+    ghost = "uploads/ghost/verschwunden.bin"
+    db.execute(text("""INSERT INTO storage_object (namespace, key, size_bytes, sha256, version, status, generation)
+                       VALUES ('main', :key, 3, :sha, 1, 'active', 0)"""), {"key": ghost, "sha": "a" * 64})
+    db.commit()
+    migration = sms.create_migration(db, target_profile_id=local.id, options={"observe_seconds": 30, "max_object_attempts": 1}, actor_email="owner@example.com")
+    db.commit()
+    for _ in range(60):
+        db.expire_all()
+        m = db.get(StorageMigration, migration.id)
+        if m.state == "awaiting_confirmation":
+            sms.start(db, migration.id, actor_email="owner@example.com")
+            db.commit()
+        dead = db.scalar(select(StorageMigrationObject.key).where(StorageMigrationObject.migration_id == migration.id, StorageMigrationObject.status == "dead"))
+        if dead == ghost:
+            break
+        db.execute(update(StorageMigration).where(StorageMigration.id == migration.id).values(next_attempt_at=None))
+        db.execute(update(StorageMigrationObject).where(StorageMigrationObject.migration_id == migration.id).values(next_attempt_at=None))
+        db.commit()
+        storage_worker.run_once("w")
+    assert dead == ghost
+    assert db.get(StorageState, 1).active_generation == 0  # Quelle weiter aktiv
+    assert sms.accept_missing(db, migration.id, actor_email="owner@example.com") == 1
+    db.commit()
+    assert drive(db, migration.id).state == "completed"
+
+
 # Bereinigung alter Generationen --------------------------------------------------------------
 
 
@@ -351,7 +381,11 @@ def test_purging_an_old_generation_requires_confirmation_and_expired_retention(s
 def test_storage_verify_detects_objects_missing_after_an_inconsistent_restore(setup):
     db, _tenant, files, local, _external = setup
     assert initial(db, local).state == "completed"
-    assert storage_verify.verify(full=True)["consistent"] is True
+    keys = {db.get(StoredFile, i).storage_path for i in files}
+    before = storage_verify.verify(full=True)
+    # Die gemeinsame Test-DB enthält Demo-Datensätze ohne Dateien - geprüft wird darum gezielt.
+    assert not keys & {item["key"] for item in before["missing_references"]}
+    assert before["counts"]["registry_missing"] == 0 and before["counts"]["registry_mismatch"] == 0
     victim = db.get(StoredFile, sorted(files)[1])
     get_object_store().active_backend(force=True).delete(MAIN, victim.storage_path)  # "älteres S3-Backup"
     report = storage_verify.verify(full=True)

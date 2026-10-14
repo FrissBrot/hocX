@@ -109,5 +109,13 @@
   "language": {
     "label": "Lingua"
   },
-  "copyright": "Copyright © {year} hocX Project · Tutti i diritti riservati."
+  "copyright": "Copyright © {year} hocX Project · Tutti i diritti riservati.",
+  "maintenance": {
+    "title": "La casella di consegna è in manutenzione",
+    "message": "Durante la manutenzione non è possibile consegnare. Riprova più tardi.",
+    "uploadsTitle": "Il caricamento è temporaneamente bloccato",
+    "uploadsMessage": "A causa della manutenzione, al momento non è possibile accettare file. Di solito ci vogliono solo pochi minuti.",
+    "availableAt": "Di nuovo disponibile verso le {time}",
+    "estimating": "La durata prevista è in fase di calcolo."
+  }
 }

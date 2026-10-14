@@ -991,3 +991,16 @@ input[type="file"] {
   /* Unter 16 px zoomt iOS Safari beim Fokussieren ins Formular. */
   .page-header-language select { font-size: var(--text-lg); }
 }
+
+/* Wartungshinweis (components/maintenance-banner.tsx) */
+.box-maintenance {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+}
+.box-maintenance p { margin: 0; }

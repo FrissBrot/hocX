@@ -78,6 +78,12 @@ def committed_storage(monkeypatch):
     state = db.get(StorageState, 1)
     original = (state.active_profile_id, state.active_generation)
     existing_profiles = set(db.scalars(select(StorageProfile.id)))
+    # Register-/Journal-Reste anderer Tests (die mit echten Commits geschrieben haben) würden
+    # sonst als "registriert, aber in der Quelle fehlend" in die Migration eingehen - die
+    # Migrationstests arbeiten auf eigenen, frischen Speicherwurzeln.
+    db.execute(text("DELETE FROM storage_object"))
+    db.execute(text("DELETE FROM storage_change_outbox"))
+    db.commit()
     max_outbox = db.scalar(text("SELECT COALESCE(MAX(seq), 0) FROM storage_change_outbox"))
     tenant_ids: list[int] = []
     db.info["test_tenant_ids"] = tenant_ids

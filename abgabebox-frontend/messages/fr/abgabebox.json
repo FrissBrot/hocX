@@ -109,5 +109,13 @@
   "language": {
     "label": "Langue"
   },
-  "copyright": "Copyright © {year} hocX Project · Tous droits réservés."
+  "copyright": "Copyright © {year} hocX Project · Tous droits réservés.",
+  "maintenance": {
+    "title": "La boîte de dépôt est en maintenance",
+    "message": "Les dépôts ne sont pas possibles pendant la maintenance. Veuillez réessayer plus tard.",
+    "uploadsTitle": "Le téléversement est brièvement bloqué",
+    "uploadsMessage": "En raison de travaux de maintenance, aucun fichier ne peut être accepté pour le moment. Cela ne dure généralement que quelques minutes.",
+    "availableAt": "Disponible à nouveau vers {time}",
+    "estimating": "La durée prévue est en cours de calcul."
+  }
 }

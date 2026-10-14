@@ -24005,3 +24005,79 @@ a.mobile-list-row { color: var(--text); }
   flex-shrink: 0;
   padding: 0;
 }
+
+/* ── Wartungshinweis (Anmeldeseite, /maintenance) ── */
+.maintenance-notice {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+}
+.maintenance-notice p { margin: 0; }
+.maintenance-notice .muted { color: var(--warning-fg); opacity: 0.85; }
+.maintenance-notice-title { margin: 0; font-size: var(--text-xl); font-weight: 700; }
+.maintenance-notice-estimate { font-weight: 600; }
+.maintenance-notice-hint { font-size: var(--text-sm); }
+.maintenance-notice-partial,
+.maintenance-notice-upcoming {
+  border-color: var(--info-fg);
+  background: var(--info-bg);
+  color: var(--info-fg);
+}
+.maintenance-notice-partial .muted,
+.maintenance-notice-upcoming .muted { color: var(--info-fg); }
+
+/* ── Adminportal: Wartung ── */
+.maintenance-admin-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+}
+.maintenance-admin-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.maintenance-admin-facts,
+.storage-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+.maintenance-admin-facts dt,
+.storage-facts dt { color: var(--muted); font-size: var(--text-sm); }
+.maintenance-admin-facts dd,
+.storage-facts dd { margin: 0; }
+.maintenance-admin-progress,
+.storage-progress-block { display: grid; gap: var(--space-1); }
+.maintenance-admin-conditions { display: grid; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.maintenance-admin-conditions li { display: flex; align-items: center; gap: var(--space-2); }
+
+/* ── Adminportal: Storage ── */
+.storage-progress {
+  display: block;
+  width: 100%;
+  height: 8px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  appearance: none;
+  background: var(--accent-soft);
+  accent-color: var(--accent);
+}
+.storage-progress::-webkit-progress-bar { background: var(--accent-soft); }
+.storage-progress::-webkit-progress-value { background: var(--accent); border-radius: var(--radius-pill); }
+.storage-progress::-moz-progress-bar { background: var(--accent); border-radius: var(--radius-pill); }
+.storage-badges { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.storage-migration { display: grid; gap: var(--space-3); }
+.storage-events summary { cursor: pointer; font-weight: 600; }
+
+@media (max-width: 640px) {
+  .maintenance-admin-facts,
+  .storage-facts { grid-template-columns: 1fr; }
+  .maintenance-admin-facts dd,
+  .storage-facts dd { margin-bottom: var(--space-2); }
+}

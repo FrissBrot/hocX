@@ -231,13 +231,15 @@
       "backup": "Backup",
       "cleanup": "Pulizia",
       "maintenance": "Manutenzione",
-      "other": "Altri"
+      "other": "Altri",
+      "storage": "Archiviazione"
     },
     "service": {
       "backend": "Backend",
       "abgabebox-backend": "Backend Abgabebox",
       "photo-analysis-worker": "Worker analisi immagini",
-      "host": "Server (cron)"
+      "host": "Server (cron)",
+      "storage-worker": "Worker di archiviazione"
     },
     "interval": {
       "onDemand": "Su richiesta",
@@ -335,6 +337,22 @@
       "task_package_rollover": {
         "title": "Aggiorna pacchetti di attività",
         "description": "Crea ogni giorno le attività del ciclo in corso da tutti i pacchetti attivi (quelle del nuovo ciclo al cambio) e aggiunge le nuove ripetizioni."
+      },
+      "maintenance_supervisor": {
+        "title": "Gestione della manutenzione",
+        "description": "Avvia le manutenzioni pianificate, segnala i ritardi e aggiorna le stime. Non termina mai da solo una manutenzione."
+      },
+      "storage_journal_cleanup": {
+        "title": "Pulizia del journal di archiviazione",
+        "description": "Rimuove le vecchie voci del journal delle modifiche non più necessarie a migrazioni aperte."
+      },
+      "storage_migration_worker": {
+        "title": "Worker di migrazione dell'archivio",
+        "description": "Copia, verifica e cambia l'archivio dei file (segnale dal ciclo di polling)."
+      },
+      "storage_controller": {
+        "title": "Gestione S3 locale",
+        "description": "Cron job dell'host: avvia o ferma il servizio S3 locale secondo necessità, senza eliminare dati."
       }
     }
   },

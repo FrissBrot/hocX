@@ -1,0 +1,29 @@
+{
+  "title": "hocX est en cours de maintenance",
+  "reasons": {
+    "manual": "Nous effectuons actuellement des travaux de maintenance nécessaires pour garantir la stabilité et la sécurité de la plateforme.",
+    "storage_initial_migration": "Nous transférons actuellement tous les fichiers vers un nouveau stockage plus sûr. hocX n'est pas disponible pendant ce temps.",
+    "storage_cutover": "Nous finalisons un changement de stockage. Cela ne prend qu'un instant."
+  },
+  "partial": {
+    "title": "L'enregistrement est brièvement limité",
+    "message": "En raison de travaux de maintenance, les modifications et les téléversements ne peuvent pas être enregistrés pour le moment. La consultation reste possible.",
+    "hint": "Veuillez réessayer dans quelques instants."
+  },
+  "estimate": {
+    "availableAt": "Disponible à nouveau vers {time}",
+    "remainingRange": "Encore environ {low} à {high} minutes",
+    "remainingAbout": "{count, plural, one {Encore environ # minute} other {Encore environ # minutes}}",
+    "remainingHours": "Encore environ {low} à {high} heures",
+    "estimating": "La durée prévue est en cours de calcul.",
+    "overdue": "La maintenance dure plus longtemps que prévu. La nouvelle heure de fin est en cours de calcul."
+  },
+  "autoRefresh": "Cette page s'actualise automatiquement et affiche à nouveau la connexion dès que la maintenance est terminée.",
+  "upcoming": {
+    "title": "Maintenance planifiée",
+    "withEnd": "hocX sera indisponible du {start} jusqu'à environ {end}.",
+    "withoutEnd": "À partir du {start}, hocX sera temporairement indisponible pour maintenance."
+  },
+  "ended": "La maintenance est terminée. Redirection …",
+  "checking": "Vérification de l'état de maintenance …"
+}

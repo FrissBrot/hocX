@@ -231,13 +231,15 @@
       "backup": "Backup",
       "cleanup": "Cleanup",
       "maintenance": "Maintenance",
-      "other": "Other"
+      "other": "Other",
+      "storage": "Storage"
     },
     "service": {
       "backend": "Backend",
       "abgabebox-backend": "Abgabebox backend",
       "photo-analysis-worker": "Image analysis worker",
-      "host": "Server (cron)"
+      "host": "Server (cron)",
+      "storage-worker": "Storage worker"
     },
     "interval": {
       "onDemand": "On demand",
@@ -335,6 +337,22 @@
       "task_package_rollover": {
         "title": "Update task packages",
         "description": "Daily creates the tasks of the current cycle from all active task packages (the new cycle’s tasks after a cycle change) and adds new recurrences."
+      },
+      "maintenance_supervisor": {
+        "title": "Maintenance supervisor",
+        "description": "Starts scheduled maintenance, marks overruns and updates estimates. Never ends maintenance by itself."
+      },
+      "storage_journal_cleanup": {
+        "title": "Storage journal cleanup",
+        "description": "Removes old change-journal entries that no open migration still needs."
+      },
+      "storage_migration_worker": {
+        "title": "Storage migration worker",
+        "description": "Copies, verifies and switches file storage (heartbeat from the poll loop)."
+      },
+      "storage_controller": {
+        "title": "Local S3 controller",
+        "description": "Host cron job: starts or stops the local S3 service as needed without deleting data."
       }
     }
   },

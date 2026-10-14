@@ -231,13 +231,15 @@
       "backup": "Sauvegarde",
       "cleanup": "Nettoyage",
       "maintenance": "Maintenance",
-      "other": "Autres"
+      "other": "Autres",
+      "storage": "Stockage"
     },
     "service": {
       "backend": "Backend",
       "abgabebox-backend": "Backend Abgabebox",
       "photo-analysis-worker": "Worker d'analyse d'images",
-      "host": "Serveur (cron)"
+      "host": "Serveur (cron)",
+      "storage-worker": "Worker de stockage"
     },
     "interval": {
       "onDemand": "À la demande",
@@ -335,6 +337,22 @@
       "task_package_rollover": {
         "title": "Mettre à jour les paquets de tâches",
         "description": "Crée chaque jour les tâches du cycle en cours à partir de tous les paquets actifs (celles du nouveau cycle lors d’un changement) et ajoute les nouvelles répétitions."
+      },
+      "maintenance_supervisor": {
+        "title": "Pilotage de la maintenance",
+        "description": "Démarre les maintenances planifiées, signale les dépassements et met à jour les estimations. Ne termine jamais une maintenance de lui-même."
+      },
+      "storage_journal_cleanup": {
+        "title": "Nettoyage du journal de stockage",
+        "description": "Supprime les anciennes entrées du journal des modifications dont aucune migration ouverte n'a plus besoin."
+      },
+      "storage_migration_worker": {
+        "title": "Worker de migration du stockage",
+        "description": "Copie, vérifie et bascule le stockage des fichiers (signe de vie de la boucle d'interrogation)."
+      },
+      "storage_controller": {
+        "title": "Pilotage du S3 local",
+        "description": "Tâche cron de l'hôte : démarre ou arrête le service S3 local selon les besoins, sans supprimer de données."
       }
     }
   },
