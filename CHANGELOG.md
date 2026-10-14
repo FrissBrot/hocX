@@ -14,12 +14,12 @@ Changes** - vor dem Update die Schritte unten lesen.
 
 ### Update auf diese Version
 
-1. **Signaturzertifikat bereitstellen (Pflicht).** Ohne lesbaren Schlüssel und Zertifikat
-   startet das Backend in Produktion nicht. Verzeichnis ausserhalb des Repos anlegen,
-   `signing-key.pem` und `signing-cert.pem` hineinlegen, in `.env` `DOCUMENT_SIGNING_DIR`
-   (und ggf. `DOCUMENT_SIGNING_KEY_PASSWORD`, `DOCUMENT_SIGNING_CHAIN_PATH`,
-   `DOCUMENT_SIGNING_TSA_URL`) setzen - Details RUNBOOK Abschnitt 13 «Dokumentsignatur».
-   Für Test-Server genügt `./scripts/generate-dev-signing-cert.sh <verzeichnis>`.
+1. **Signaturzertifikat:** Ohne lesbaren Schlüssel und Zertifikat startet das Backend in
+   Produktion nicht. `deploy.sh` erzeugt beim ersten Deploy automatisch ein selbstsigniertes
+   Zertifikat in `DOCUMENT_SIGNING_DIR` (Standard `./.signing`); optional vorher
+   `DOCUMENT_SIGNING_KEY_PASSWORD` setzen, dann wird der Schlüssel verschlüsselt. Wer eine
+   vertrauenswürdige Identität im PDF-Reader will, legt stattdessen ein eigenes Zertifikat
+   dort ab - RUNBOOK Abschnitt 13 «Dokumentsignatur».
 2. `HOCX_VERSION` setzen, `./scripts/update_deploy_code.sh` und
    `./scripts/deploy.sh <test|prod>` ausführen. Die Migrationen `0114` und `0115` laufen
    automatisch; `0115` ist **nicht umkehrbar** (vorher ein frisches Backup ziehen, Rollback
@@ -45,7 +45,8 @@ Changes** - vor dem Update die Schritte unten lesen.
   (vorher `document_template_id`).
 - Mandanten-Export: Archivformat 5 mit Hausstilen, Assets, Rezepten und Export-Historie.
   Archive der Formate 2-4 lassen sich weiter importieren (Vorlagen werden zu Hausstilen).
-- Neue Pflicht-Konfiguration `DOCUMENT_SIGNING_*` (siehe oben).
+- Signaturzertifikat ist Pflicht; `deploy.sh` erzeugt bei Bedarf ein selbstsigniertes
+  (siehe oben).
 
 ### Neu
 

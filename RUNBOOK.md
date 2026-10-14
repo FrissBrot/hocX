@@ -493,40 +493,51 @@ Jedes PDF der Dokument-Engine wird als PAdES-Signatur (pyHanko) signiert. In Pro
 startet das Backend ohne lesbaren Schlüssel und Zertifikat **nicht** (Log: «Dokumentsignatur
 nicht konfiguriert»). Schlüssel und Zertifikat liegen nie im Repo und nie in `.env`.
 
-### Einrichten
+### Automatisch beim Deploy
 
-1. Verzeichnis ausserhalb des Repos anlegen, z. B. `/srv/hocx/signing`, und in `.env`
-   `DOCUMENT_SIGNING_DIR=/srv/hocx/signing` setzen. Compose hängt es read-only nach
-   `/run/hocx-signing` ein.
-2. Dort ablegen:
+`deploy.sh` prüft `DOCUMENT_SIGNING_DIR` (Standard `./.signing`, git-ignoriert). Fehlen
+`signing-key.pem` und `signing-cert.pem`, erzeugt es ein **selbstsigniertes** Zertifikat
+(«hocX Dokumentsignatur <TRAEFIK_DOMAIN>», 3 Jahre) im signaturgeprüften Backend-Image und
+setzt die Rechte für den Backend-User (uid 5000, Gruppe 5001). Ist
+`DOCUMENT_SIGNING_KEY_PASSWORD` gesetzt, wird der Schlüssel damit verschlüsselt. Vorhandene
+Dateien werden nie überschrieben; fehlt nur eine der beiden, bricht der Deploy ab.
+
+Ein selbstsigniertes Zertifikat schützt vollständig vor unbemerkten Änderungen; PDF-Reader
+zeigen den Aussteller aber als «unbekannt». Für eine vertrauenswürdige Identität ein eigenes
+Zertifikat hinterlegen:
+
+### Eigenes Zertifikat hinterlegen
+
+1. In `DOCUMENT_SIGNING_DIR` ablegen (bestehende Dateien ersetzen):
    - `signing-key.pem` - privater Schlüssel (PEM, gerne mit Passwort verschlüsselt)
    - `signing-cert.pem` - Zertifikat (Key Usage `digitalSignature`, idealerweise
      `nonRepudiation` und EKU Document Signing `1.3.6.1.5.5.7.3.36`)
    - optional `chain.pem` mit Zwischenzertifikaten, dann in `.env`
      `DOCUMENT_SIGNING_CHAIN_PATH=/run/hocx-signing/chain.pem`
-3. Rechte für den Backend-User (uid 5000, gid 5001):
-   `chown -R 5000:5001 /srv/hocx/signing && chmod 700 /srv/hocx/signing && chmod 600 /srv/hocx/signing/signing-key.pem && chmod 644 /srv/hocx/signing/signing-cert.pem` (ebenso eine `chain.pem`).
-4. Passwort des Schlüssels in `.env` als `DOCUMENT_SIGNING_KEY_PASSWORD` - `deploy.sh`
-   schreibt es als Docker-Secret `document_signing_key_password` und es landet nicht in
-   der Container-Umgebung. Leer lassen bei unverschlüsseltem Schlüssel.
-5. Optional `DOCUMENT_SIGNING_TSA_URL` (RFC-3161-Zeitstempeldienst) für PAdES B-T.
-6. `./scripts/deploy.sh <test|prod>`, danach unter `/admin/system` den Check
+2. Rechte: `chmod 644` auf die neuen Dateien. Das genügt, weil das Verzeichnis selbst nur
+   für den Deploy-Nutzer und die Container-Gruppe 5001 zugänglich ist (`750`, legt
+   `deploy.sh` so an). Bestehende, erzeugte Dateien vorher löschen (sie gehören uid 5000,
+   der Deploy-Nutzer darf sie als Besitzer des Verzeichnisses entfernen).
+3. Passwort des Schlüssels in `.env` als `DOCUMENT_SIGNING_KEY_PASSWORD` - `deploy.sh`
+   schreibt es als Docker-Secret `document_signing_key_password`, es landet nicht in der
+   Container-Umgebung. Leer lassen bei unverschlüsseltem Schlüssel.
+4. Optional `DOCUMENT_SIGNING_TSA_URL` (RFC-3161-Zeitstempeldienst) für PAdES B-T.
+5. `./scripts/deploy.sh <test|prod>`, danach unter `/admin/system` den Check
    «Dokumentsignatur» prüfen und ein PDF exportieren: der Reader muss eine gültige Signatur
-   zeigen (bei einem eigenen, nicht öffentlich vertrauten Zertifikat: «Identität unbekannt»,
-   Dokument unverändert).
-
-Test-Server dürfen ein selbstsigniertes Zertifikat nutzen:
-`./scripts/generate-dev-signing-cert.sh /srv/hocx/signing` (Dev/E2E erzeugen es automatisch
-unter `storage-local/signing` bzw. `storage-e2e/signing`).
+   zeigen.
 
 ### Erneuern (Zertifikat läuft ab)
 
 Der Systemcheck warnt 30 Tage vor Ablauf (ntfy), nach Ablauf ist er kritisch.
 
-1. Neues Zertifikat (gleicher oder neuer Schlüssel) besorgen.
-2. Dateien im `DOCUMENT_SIGNING_DIR` ersetzen (gleiche Dateinamen).
-3. `docker compose up -d --force-recreate backend` - der Signierer wird beim Start geladen.
-4. Check «Dokumentsignatur» prüfen.
+- **Selbstsigniert:** beide Dateien im `DOCUMENT_SIGNING_DIR` löschen und
+  `./scripts/deploy.sh <test|prod>` ausführen - er erzeugt ein neues Zertifikat und startet
+  das Backend neu.
+- **Eigenes Zertifikat:** neues besorgen, Dateien ersetzen (gleiche Namen, siehe oben),
+  dann `docker compose up -d --force-recreate backend` - der Signierer wird beim Start
+  geladen.
+
+Danach den Check «Dokumentsignatur» prüfen.
 
 Bereits signierte PDFs bleiben gültig; sie tragen ihre Signatur mit dem damaligen Zertifikat.
 

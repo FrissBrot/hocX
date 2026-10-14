@@ -181,8 +181,10 @@ ergänzt: Dokument-ID, Mandant, Dokumenttyp, Version, Inhalts-Hash.
 
 Schlüssel und Zertifikate liegen nie im Repository. In Produktion (`HOCX_ENVIRONMENT=production`)
 startet das Backend ohne lesbare Konfiguration nicht; in Dev/Test gibt es eine Warnung und die
-PDFs bleiben unsigniert (ohne Signaturzeile). Dev-Zertifikat: `scripts/generate-dev-signing-cert.sh`
-(das E2E-Skript erzeugt eines automatisch). Einrichten, Erneuern und Rotieren: RUNBOOK
+PDFs bleiben unsigniert (ohne Signaturzeile). `scripts/deploy.sh` erzeugt auf Test und Prod ein
+selbstsigniertes Zertifikat, falls im `DOCUMENT_SIGNING_DIR` keines liegt (`app.documents.devcert`
+im Backend-Image); Dev: `scripts/generate-dev-signing-cert.sh`, das E2E-Skript erzeugt eines
+automatisch. Einrichten, Erneuern und Rotieren: RUNBOOK
 «Dokumentsignatur».
 
 Der Systemcheck `document_signing` (`/admin/system`, ntfy) meldet: fehlt (in Prod kritisch),

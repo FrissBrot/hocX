@@ -12,6 +12,7 @@ __pycache__/
 .tools/
 .releases/
 .secrets/
+.signing/
 .deploy.lock
 node_modules/
 .next/

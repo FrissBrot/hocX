@@ -1,10 +1,13 @@
-"""Selbstsigniertes Dev-Zertifikat für die Dokumentsignatur (nur Entwicklung, E2E und Tests).
+"""Selbstsigniertes Zertifikat für die Dokumentsignatur.
 
-    python -m app.documents.devcert <zielverzeichnis> [--password <passwort>]
+    python -m app.documents.devcert <zielverzeichnis> [--common-name ...] [--organization ...]
 
-Schreibt ``signing-key.pem`` und ``signing-cert.pem``. Produktion verwendet ein echtes
-Zertifikat aus der Konfiguration (RUNBOOK, Abschnitt «Dokumentsignatur»), nie dieses.
-Aufruf von aussen über ``scripts/generate-dev-signing-cert.sh``.
+Schreibt ``signing-key.pem`` und ``signing-cert.pem``. Ist ``DOCUMENT_SIGNING_KEY_PASSWORD``
+gesetzt, wird der Schlüssel damit verschlüsselt (bewusst keine Kommandozeilen-Option: sie wäre
+in der Prozessliste sichtbar). Genutzt von ``scripts/generate-dev-signing-cert.sh`` (Dev, E2E,
+Tests) und von ``scripts/deploy.sh``, wenn auf dem Server noch kein Zertifikat liegt. Ein
+eigenes Zertifikat einer vertrauenswürdigen Stelle ersetzt es jederzeit (RUNBOOK,
+Abschnitt «Dokumentsignatur»).
 """
 from __future__ import annotations
 
@@ -22,12 +25,19 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 DOCUMENT_SIGNING_OID = x509.ObjectIdentifier("1.3.6.1.5.5.7.3.36")
 
 
-def generate(target: Path, *, password: str | None = None, days: int = 730, common_name: str = "hocX Dev Document Signing") -> tuple[Path, Path]:
+def generate(
+    target: Path,
+    *,
+    password: str | None = None,
+    days: int = 730,
+    common_name: str = "hocX Dev Document Signing",
+    organization: str = "hocX (Entwicklung)",
+) -> tuple[Path, Path]:
     target.mkdir(parents=True, exist_ok=True)
     key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
     name = x509.Name([
         x509.NameAttribute(NameOID.COMMON_NAME, common_name),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "hocX (Entwicklung)"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, organization),
         x509.NameAttribute(NameOID.COUNTRY_NAME, "CH"),
     ])
     now = dt.datetime.now(dt.UTC)
@@ -61,12 +71,19 @@ def generate(target: Path, *, password: str | None = None, days: int = 730, comm
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Selbstsigniertes Dev-Zertifikat für die Dokumentsignatur")
+    parser = argparse.ArgumentParser(description="Selbstsigniertes Zertifikat für die Dokumentsignatur")
     parser.add_argument("target", type=Path)
-    parser.add_argument("--password", default=None)
     parser.add_argument("--days", type=int, default=730)
+    parser.add_argument("--common-name", default="hocX Dev Document Signing")
+    parser.add_argument("--organization", default="hocX (Entwicklung)")
     args = parser.parse_args()
-    key_path, cert_path = generate(args.target, password=args.password, days=args.days)
+    key_path, cert_path = generate(
+        args.target,
+        password=os.environ.get("DOCUMENT_SIGNING_KEY_PASSWORD") or None,
+        days=args.days,
+        common_name=args.common_name,
+        organization=args.organization,
+    )
     print(f"Schlüssel: {key_path}\nZertifikat: {cert_path}")
 
 
