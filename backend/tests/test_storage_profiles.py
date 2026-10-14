@@ -16,7 +16,7 @@ from app.core.admin_security import CurrentAdmin, get_current_admin
 from app.core.db import get_db
 from app.models import StorageProfile, StorageState
 from app.services import storage_profile_service as sps
-from tests.storage_support import create_test_profile, requires_s3, s3_profile_values
+from tests.storage_support import committed_storage, create_test_profile, requires_s3, s3_profile_values  # noqa: F401
 
 
 def _client(db, role: str = "owner") -> TestClient:
@@ -85,7 +85,10 @@ def test_read_only_admins_cannot_change_storage(db):
     assert client.post("/api/admin/storage/profiles", json=_values()).status_code == 403
 
 
-def test_active_and_builtin_profiles_are_protected(db):
+def test_active_and_builtin_profiles_are_protected(committed_storage):
+    # Echte Commits: die Routen rollen bei 409 selbst zurück, das verträgt die Savepoint-Session
+    # des db-Fixtures nicht. committed_storage stellt den Ausgangszustand danach wieder her.
+    db = committed_storage
     state = db.get(StorageState, 1)
     filesystem = db.get(StorageProfile, state.active_profile_id)
     client = _client(db)
@@ -93,7 +96,7 @@ def test_active_and_builtin_profiles_are_protected(db):
     assert client.patch(f"/api/admin/storage/profiles/{filesystem.public_id}", json={"name": "x"}).status_code == 409
     profile = sps.create_profile(db, _values(), actor_email="x")
     db.execute(text("UPDATE storage_state SET active_profile_id = :id WHERE id = 1"), {"id": profile.id})
-    db.commit()  # nur der Savepoint der Test-Session - die Route rollt bei 409 selbst zurück
+    db.commit()
     assert client.patch(f"/api/admin/storage/profiles/{profile.public_id}", json={"bucket": "anderer-bucket"}).status_code == 409
     assert client.patch(f"/api/admin/storage/profiles/{profile.public_id}", json={"is_enabled": False}).status_code == 409
     assert client.delete(f"/api/admin/storage/profiles/{profile.public_id}").status_code == 409
@@ -107,9 +110,11 @@ def test_credential_rotation_bumps_the_config_version_and_requires_a_new_test(db
     assert profile.config_version == version + 1 and profile.last_test_ok is None
 
 
-def test_a_migration_needs_a_successfully_tested_target(db):
+def test_a_migration_needs_a_successfully_tested_target(committed_storage):
+    db = committed_storage
     client = _client(db)
     profile = sps.create_profile(db, _values(), actor_email="x")
+    db.commit()
     response = client.post("/api/admin/storage/migrations", json={"target_profile_id": str(profile.public_id)})
     assert response.status_code == 409 and "Verbindungstest" in response.json()["detail"]
 

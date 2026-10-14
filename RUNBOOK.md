@@ -485,3 +485,36 @@ DNS oder ein abgelaufenes Zertifikat der Website-Domain.
 - „Container-Status nicht verfügbar“: `docker compose ps docker-socket-proxy`, Logs des
   Proxys; läuft das Backend im Netz `docker-api`?
 - Virensignaturen veraltet: Logs des `clamav`-Containers (freshclam) prüfen.
+
+
+## 13. Dateispeicher (S3) und Wartung
+
+Ausführlich: `docs-site/docs/technik/storage/` (Architektur, Betrieb, lokales S3, Migrationen,
+Wartungsmodus, Backup & Recovery).
+
+**Update auf 1.2**: `deploy.sh` ergänzt die neuen Secrets in `.env`, startet `local-s3`,
+`storage-init` und `storage-worker`. Danach ist weiterhin das Dateisystem aktiv - es wird nichts
+verschoben, bis die Erstmigration gestartet wird.
+
+**Cronjobs ergänzen** (nach `backup_db`):
+
+```cron
+30 3 * * * /docker/hocX/scripts/run_job.sh backup_storage env HOCX_COMPOSE_PROJECT=hocx HOCX_COMPOSE_FILES="docker-compose.release.yml docker-compose.clamav.yml docker-compose.traefik.yml" /docker/hocX/scripts/backup_storage.sh >> /docker/hocX/backups/backup_storage.log 2>&1
+*/5 * * * * /docker/hocX/scripts/run_job.sh storage_controller env HOCX_COMPOSE_PROJECT=hocx HOCX_COMPOSE_FILES="docker-compose.release.yml docker-compose.clamav.yml docker-compose.traefik.yml" /docker/hocX/scripts/storage_controller.sh >> /docker/hocX/backups/storage_controller.log 2>&1
+```
+
+**Erste produktive Migration** (Dateisystem → lokales S3):
+
+1. Frisches DB-Backup (`scripts/backup_db.sh`) und Plattenplatz prüfen: das lokale S3 braucht
+   etwa so viel Platz wie `storage/` belegt (die Originale bleiben während der Rückfallfrist liegen).
+2. Wartung ankündigen: System → Wartung → «Wartung planen» (erscheint auf der Anmeldeseite).
+3. System → Storage → Profil «Lokales S3 (Garage)» → «Verbindung testen».
+4. «Migration vorbereiten» → Preflight abwarten → Schätzung prüfen → «Migration starten».
+5. Fortschritt unter System → Storage verfolgen; die Wartung endet automatisch nach
+   bestandener Endprüfung. Verweist die Datenbank auf fehlende Dateien, wartet der Cutover auf
+   «Umschalten bestätigen» (Liste im Prüfbericht).
+6. Danach: `docker compose exec backend python -m app.workers.storage_verify --full`.
+
+**Notfall**: Bei Fehlern bleibt die Wartung bestehen und das Dateisystem aktiv. Ursache im
+Migrationsverlauf/Fehlerprotokoll prüfen, Migration fortsetzen oder abbrechen; die Wartung lässt
+sich unter System → Wartung erst beenden, wenn alle Freigabebedingungen erfüllt sind.

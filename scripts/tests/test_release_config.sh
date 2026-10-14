@@ -20,8 +20,8 @@ if grep -q 'env_file:' docker-compose.release.yml; then
   exit 1
 fi
 
-test "$(grep -c 'read_only: true' docker-compose.release.yml)" -eq 7
-test "$(grep -c 'no-new-privileges:true' docker-compose.release.yml)" -eq 7
+test "$(grep -c 'read_only: true' docker-compose.release.yml)" -eq 10  # +local-s3, storage-init, storage-worker (Objektspeicher)
+test "$(grep -c 'no-new-privileges:true' docker-compose.release.yml)" -eq 10
 
 # Audit finding, 2026-08-27: docker-compose.traefik.yml/docker-compose.clamav.yml (the
 # actual prod Traefik/ClamAV - deploy.sh/verify_release.sh never include the base

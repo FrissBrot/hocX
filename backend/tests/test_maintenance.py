@@ -1,5 +1,5 @@
 """Wartungssystem: Zustände, Freigabebedingungen, serverseitige Sperre, öffentlicher Status und
-Dauerabschätzung (docs/storage/WARTUNG.md)."""
+Dauerabschätzung (docs-site/docs/technik/storage/wartung.md)."""
 
 from __future__ import annotations
 

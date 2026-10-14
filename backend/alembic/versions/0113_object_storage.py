@@ -1,7 +1,7 @@
 """Objektspeicher (S3) für alle persistenten Dateien: Profile, aktiver Speicher mit Generation
 und Schreib-Fence, Objektregister, Änderungsjournal und Live-Migrationen.
 
-Grundidee (ausführlich in docs/storage/ARCHITEKTUR.md):
+Grundidee (ausführlich in docs-site/docs/technik/storage/architektur.md):
 
 - storage_profile: beliebig viele Speicherziele (lokales Garage-S3, AWS, Hetzner, sonstige
   S3-kompatible Anbieter). Zugangsdaten nur verschlüsselt (Fernet, STORAGE_CREDENTIALS_KEY).

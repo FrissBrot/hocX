@@ -1,4 +1,4 @@
-"""Zentrales Wartungssystem (Migration 0114, docs/storage/WARTUNG.md).
+"""Zentrales Wartungssystem (Migration 0114, docs-site/docs/technik/storage/wartung.md).
 
 Ein Wartungsfenster (maintenance_window) ist genau ein Grund, den Betrieb ganz (kind="full")
 oder teilweise (kind="partial", block_scope="writes"/"uploads") zu sperren. Mehrere Fenster

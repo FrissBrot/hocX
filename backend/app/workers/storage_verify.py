@@ -1,5 +1,5 @@
 """Integritätsprüfung des aktiven Speichers gegen die Datenbank - nach einem Restore, nach einem
-Cutover oder regelmässig (docs/storage/BACKUP.md).
+Cutover oder regelmässig (docs-site/docs/technik/storage/backup.md).
 
     python -m app.workers.storage_verify [--full] [--json bericht.json]
 

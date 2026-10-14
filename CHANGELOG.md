@@ -8,6 +8,30 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Neu: Objektspeicher (S3), Live-Migration und Wartungssystem
+
+- Alle persistenten Dateien (Uploads, Abgabebox inkl. Quarantäne, Vorlagen-Bauteile und
+  -Snapshots, Exporte, Mandantenlogos, Klon-/Import-Dateien) laufen über eine einheitliche
+  Objektspeicher-Abstraktion (Dateisystem oder S3: AWS, Hetzner, Garage, S3-kompatibel).
+- Lokales S3 (Garage v2.3.0) wird beim Deployment automatisch bereitgestellt; ein Host-Controller
+  stoppt es nur, wenn es nachweislich nicht mehr gebraucht wird, und löscht nie Daten.
+- Adminportal **System → Storage**: verschlüsselte Speicherprofile, Verbindungstest,
+  Erstmigration (in voller Wartung) und Live-Migrationen mit Änderungsjournal, Prüfung,
+  Schreib-Fence und atomarem Cutover in neue Speichergenerationen; Fortschritt, Raten, Restzeit,
+  Heartbeat, Verlauf, Prüfbericht, Bereinigung alter Generationen.
+- Adminportal **System → Wartung**: Wartungsfenster planen/starten/beenden; Freigabe nur bei
+  erfüllten Bedingungen. Serverseitige Sperre (503 + Retry-After, WebSocket 1013) für Backend
+  und Abgabebox, Wartungshinweis auf der Anmeldeseite, konservative Dauerabschätzung.
+- Neue Jobs: `storage_migration_worker`, `maintenance_supervisor`, `storage_journal_cleanup`,
+  `storage_controller`, `backup_storage`; neue Systemprüfungen `object_storage`,
+  `storage_migration`.
+
+### Update
+
+`./scripts/deploy.sh <test|prod>` ergänzt die neuen Secrets automatisch (Migrationen 0113, 0114).
+Neue Cronjobs und die Anleitung zur ersten Migration: RUNBOOK Abschnitt 13. Das Dateisystem
+bleibt aktiv, bis die Erstmigration im Adminportal gestartet wird.
+
 ## [1.1.13] - 2026-10-13
 
 Feature-Release auf 1.1.12: Offene Protokolle lassen sich nach Änderungen an der Vorlage

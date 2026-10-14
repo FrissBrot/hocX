@@ -173,6 +173,16 @@
         "title": "Analyse d'images",
         "detail": "{queued, number} en file d'attente · le plus ancien {oldestMinutes, number} min",
         "problem": "La file d'analyse d'images s'engorge"
+      },
+      "object_storage": {
+        "title": "Stockage des fichiers",
+        "detail": "Génération {generation, number} · temps de réponse {latencyMs, number} ms",
+        "problem": "Stockage des fichiers inaccessible"
+      },
+      "storage_migration": {
+        "title": "Migration du stockage",
+        "detail": "{verified, number} objets vérifiés sur {total, number} · {dead, number} en échec définitif",
+        "problem": "La migration du stockage requiert de l'attention"
       }
     },
     "problems": {
@@ -353,6 +363,10 @@
       "storage_controller": {
         "title": "Pilotage du S3 local",
         "description": "Tâche cron de l'hôte : démarre ou arrête le service S3 local selon les besoins, sans supprimer de données."
+      },
+      "backup_storage": {
+        "title": "Sauvegarde des fichiers",
+        "description": "Sauvegarde de manière incrémentielle les objets de la génération de stockage active après la sauvegarde de la base de données et vérifie le résultat."
       }
     }
   },

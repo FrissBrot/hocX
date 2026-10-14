@@ -116,6 +116,15 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         interval_seconds=24 * 60 * 60,
         max_silence_seconds=26 * 60 * 60,
     ),
+    # Objekt-Backup der aktiven Speichergeneration nach dem DB-Backup (scripts/backup_storage.sh).
+    JobDefinition(
+        name="backup_storage",
+        kind="host_cron",
+        service="host",
+        category="backup",
+        interval_seconds=24 * 60 * 60,
+        max_silence_seconds=26 * 60 * 60,
+    ),
     JobDefinition(
         name="cleanup_storage",
         kind="host_cron",

@@ -388,10 +388,19 @@ def phase_preflight(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
     move(db, ctx, migration, "awaiting_confirmation", message="Preflight bestanden - wartet auf Startbestätigung")
 
 
+# Ein Galerie-Import, der länger "running" ist, stammt von einem abgebrochenen Prozess (der
+# Ingest-Loop setzt solche Jobs beim nächsten Lauf nach der Wartung wieder auf "queued", siehe
+# FileService.process_pending_gallery_upload_jobs) - auf ihn zu warten wäre sinnlos.
+GALLERY_JOB_STALE_SECONDS = 3 * 60 * 60
+
+
 def _wait_gallery_jobs(db: Session, migration: StorageMigration, ctx: Ctx) -> None:
     """Laufende Galerie-Importe zu Ende laufen lassen (neue starten in voller Wartung nicht)."""
     deadline = time.monotonic() + GALLERY_DRAIN_TIMEOUT_SECONDS
-    while db.scalar(select(func.count()).select_from(GalleryUploadJob).where(GalleryUploadJob.status == "running")):
+    while db.scalar(select(func.count()).select_from(GalleryUploadJob).where(
+        GalleryUploadJob.status == "running",
+        GalleryUploadJob.started_at > datetime.now(UTC) - timedelta(seconds=GALLERY_JOB_STALE_SECONDS),
+    )):
         ctx.check()
         if time.monotonic() > deadline:
             raise sms.MigrationError("Laufende Galerie-Importe wurden nicht rechtzeitig fertig")

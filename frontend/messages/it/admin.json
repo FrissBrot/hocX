@@ -173,6 +173,16 @@
         "title": "Analisi immagini",
         "detail": "{queued, number} in coda · il più vecchio {oldestMinutes, number} min",
         "problem": "La coda di analisi immagini si accumula"
+      },
+      "object_storage": {
+        "title": "Archivio dei file",
+        "detail": "Generazione {generation, number} · tempo di risposta {latencyMs, number} ms",
+        "problem": "Archivio dei file non raggiungibile"
+      },
+      "storage_migration": {
+        "title": "Migrazione dell'archivio",
+        "detail": "{verified, number} di {total, number} oggetti verificati · {dead, number} non riusciti definitivamente",
+        "problem": "La migrazione dell'archivio richiede attenzione"
       }
     },
     "problems": {
@@ -353,6 +363,10 @@
       "storage_controller": {
         "title": "Gestione S3 locale",
         "description": "Cron job dell'host: avvia o ferma il servizio S3 locale secondo necessità, senza eliminare dati."
+      },
+      "backup_storage": {
+        "title": "Backup dei file",
+        "description": "Esegue il backup incrementale degli oggetti della generazione di archiviazione attiva dopo il backup del database e verifica il risultato."
       }
     }
   },

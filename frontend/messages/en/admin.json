@@ -173,6 +173,16 @@
         "title": "Image analysis",
         "detail": "{queued, number} queued · oldest {oldestMinutes, number} min",
         "problem": "Image analysis queue is backing up"
+      },
+      "object_storage": {
+        "title": "File storage",
+        "detail": "Generation {generation, number} · response time {latencyMs, number} ms",
+        "problem": "File storage unreachable"
+      },
+      "storage_migration": {
+        "title": "Storage migration",
+        "detail": "{verified, number} of {total, number} objects verified · {dead, number} permanently failed",
+        "problem": "Storage migration needs attention"
       }
     },
     "problems": {
@@ -353,6 +363,10 @@
       "storage_controller": {
         "title": "Local S3 controller",
         "description": "Host cron job: starts or stops the local S3 service as needed without deleting data."
+      },
+      "backup_storage": {
+        "title": "File backup",
+        "description": "Incrementally backs up the objects of the active storage generation after the database backup and verifies the result."
       }
     }
   },

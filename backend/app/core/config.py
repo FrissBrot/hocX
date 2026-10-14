@@ -151,7 +151,7 @@ class Settings(BaseSettings):
     clamav_port: int = 3310
     redis_url: str = "redis://redis:6379/0"
 
-    # --- Objektspeicher (docs/storage/ARCHITEKTUR.md) ---------------------------------------
+    # --- Objektspeicher (docs-site/docs/technik/storage/architektur.md) ---------------------------------------
     # Schlüssel für die Verschlüsselung der S3-Zugangsdaten in storage_profile. Gemeinsam mit
     # abgabebox-backend, photo-analysis-worker und storage-worker; nie im Frontend/Log.
     storage_credentials_key: str = ""

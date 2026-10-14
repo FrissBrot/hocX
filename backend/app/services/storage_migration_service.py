@@ -1,4 +1,4 @@
-"""Storage-Migrationen: Zustandsmaschine, Admin-Aktionen, Berichte (docs/storage/MIGRATION.md).
+"""Storage-Migrationen: Zustandsmaschine, Admin-Aktionen, Berichte (docs-site/docs/technik/storage/migration.md).
 
 Die eigentliche Arbeit macht der Storage-Worker (app/workers/storage_worker.py) in einem eigenen
 Container. Dieses Modul enthält alles, was Backend und Worker gemeinsam brauchen:
@@ -299,8 +299,12 @@ def retry_failed(db: Session, migration_id: uuid.UUID, *, actor_email: str | Non
         .values(status="pending", attempts=0, next_attempt_at=None, last_error=None, updated_at=datetime.now(UTC))
     )
     migration.failed_objects = 0
-    if migration.state in ("verifying", "ready_for_cutover", "catching_up"):
-        admin_transition(db, migration, "copying" if migration.state != "catching_up" else "copying", actor_email=actor_email)
+    # Zurück zur Kopierphase, damit die wieder offenen Objekte übertragen werden (aus
+    # ready_for_cutover über verifying - die Prüfphase leitet bei offenen Objekten weiter).
+    if migration.state in ("verifying", "catching_up"):
+        admin_transition(db, migration, "copying", actor_email=actor_email)
+    elif migration.state == "ready_for_cutover":
+        admin_transition(db, migration, "verifying", actor_email=actor_email)
     add_event(db, migration.id, "retry_failed", actor_email=actor_email, details={"objects": result.rowcount or 0})
     return int(result.rowcount or 0)
 

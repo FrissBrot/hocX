@@ -173,6 +173,16 @@
         "title": "Bildanalyse",
         "detail": "{queued, number} in der Warteschlange · älteste {oldestMinutes, number} min",
         "problem": "Bildanalyse-Warteschlange staut sich"
+      },
+      "object_storage": {
+        "title": "Dateispeicher",
+        "detail": "Generation {generation, number} · Antwortzeit {latencyMs, number} ms",
+        "problem": "Dateispeicher nicht erreichbar"
+      },
+      "storage_migration": {
+        "title": "Storage-Migration",
+        "detail": "{verified, number} von {total, number} Objekten geprüft · {dead, number} dauerhaft fehlgeschlagen",
+        "problem": "Storage-Migration braucht Aufmerksamkeit"
       }
     },
     "problems": {
@@ -353,6 +363,10 @@
       "storage_controller": {
         "title": "Lokales S3 steuern",
         "description": "Host-Cronjob: startet oder stoppt den lokalen S3-Dienst je nach Bedarf, ohne Daten zu löschen."
+      },
+      "backup_storage": {
+        "title": "Datei-Backup",
+        "description": "Sichert die Objekte der aktiven Speichergeneration inkrementell nach dem Datenbank-Backup und prüft das Ergebnis."
       }
     }
   },

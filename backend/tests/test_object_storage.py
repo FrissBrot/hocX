@@ -1,5 +1,5 @@
 """Objektspeicher-Abstraktion: Keys, Dateisystem- und S3-Backend, Schreibprotokoll mit Fence und
-Journal, Range-Downloads (docs/storage/ARCHITEKTUR.md)."""
+Journal, Range-Downloads (docs-site/docs/technik/storage/architektur.md)."""
 
 from __future__ import annotations
 

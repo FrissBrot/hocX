@@ -191,7 +191,7 @@ services:
       TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
       ROUTER_PREFIX: hocx
       TRAEFIK_MIDDLEWARE_PREFIX: ""
-      # Objektspeicher (docs/storage/): Schlüssel für Profil-Zugangsdaten und lokales Garage-S3.
+      # Objektspeicher (docs-site/docs/technik/storage/): Schlüssel für Profil-Zugangsdaten und lokales Garage-S3.
       STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
       STORAGE_WORK_ROOT: /app/storage-local/work
       LOCAL_S3_ENDPOINT: http://local-s3:3900
@@ -566,7 +566,7 @@ services:
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.burst=20"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.period=1m"
 
-  # Lokales S3 (Garage, docs/storage/LOKALES-S3.md). Beim ersten Deployment automatisch
+  # Lokales S3 (Garage, docs-site/docs/technik/storage/lokales-s3.md). Beim ersten Deployment automatisch
   # bereitgestellt; nur im internen Netz "storage" erreichbar, keine veröffentlichten Ports.
   # Ob der Container laufen muss, entscheidet scripts/storage_controller.sh auf dem Host -
   # gestoppt wird nur, nie gelöscht (Volume local_s3_data bleibt).
@@ -654,6 +654,8 @@ services:
       - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       - ./storage-local/work:/app/storage-local/work
+      # Ziel von scripts/backup_storage.sh (Objekt-Backup, siehe docs technik/storage/backup.md)
+      - ./backups/storage:/app/backups/storage
     networks:
       - default
       - storage

@@ -276,8 +276,10 @@ if [ ! -f "$ENV_FILE" ]; then
   create_env_file
 fi
 # Auch direkt nach dem Erzeugen: ergaenzt u. a. die Objektspeicher-Secrets (idempotent).
-echo "==> [$ENVIRONMENT] Env-Datei pruefen"
-migrate_env_file "$ENV_FILE"
+if [ -f "$ENV_FILE" ]; then
+  echo "==> [$ENVIRONMENT] Env-Datei pruefen"
+  migrate_env_file "$ENV_FILE"
+fi
 
 load_env_file "$ENV_FILE"
 
@@ -468,7 +470,7 @@ prepare_thumbnail_dir() {
   local dir
 
   echo "==> [$ENVIRONMENT] Lokale Arbeitsverzeichnisse vorbereiten"
-  for dir in "$base/thumbnails" "$base/work"; do
+  for dir in "$base/thumbnails" "$base/work" "$PROJECT_DIR/backups/storage"; do
     if [ -L "$base" ] || [ -L "$dir" ]; then
       echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
       return 1

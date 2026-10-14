@@ -164,4 +164,16 @@ else
   echo "    (Docker nicht verfuegbar: Compose-Aufloesung uebersprungen)"
 fi
 
+# --- Objektspeicher (1.2.0): Secrets werden einmalig erzeugt und danach nie ueberschrieben ---
+fresh_env
+migrate_env_file "$ENV_FILE" > /dev/null
+key_first="$(value_of "$ENV_FILE" STORAGE_CREDENTIALS_KEY)"
+access_first="$(value_of "$ENV_FILE" LOCAL_S3_ACCESS_KEY)"
+test "${#key_first}" -ge 32 || fail "STORAGE_CREDENTIALS_KEY nicht erzeugt"
+[[ "$access_first" =~ ^GK[0-9a-f]{24}$ ]] || fail "LOCAL_S3_ACCESS_KEY hat nicht das Garage-Format: $access_first"
+[[ "$(value_of "$ENV_FILE" LOCAL_S3_SECRET_KEY)" =~ ^[0-9a-f]{64}$ ]] || fail "LOCAL_S3_SECRET_KEY hat nicht 64 Hex-Zeichen"
+migrate_env_file "$ENV_FILE" > /dev/null
+test "$(value_of "$ENV_FILE" STORAGE_CREDENTIALS_KEY)" = "$key_first" || fail "STORAGE_CREDENTIALS_KEY wurde beim zweiten Lauf ueberschrieben"
+test "$(value_of "$ENV_FILE" LOCAL_S3_ACCESS_KEY)" = "$access_first" || fail "LOCAL_S3_ACCESS_KEY wurde beim zweiten Lauf ueberschrieben"
+
 echo "Env-Migration 1.0.x -> 1.1.0: ok"

@@ -1,4 +1,4 @@
-"""Backend-Fassade für den Objektspeicher (siehe objstore_client.py und docs/storage/ARCHITEKTUR.md).
+"""Backend-Fassade für den Objektspeicher (siehe objstore_client.py und docs-site/docs/technik/storage/architektur.md).
 
 Alle persistenten Dateien des Backends werden ausschliesslich hierüber gelesen, geschrieben,
 kopiert und gelöscht. Lokale Pfade unter STORAGE_ROOT bleiben nur noch für temporäre

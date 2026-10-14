@@ -2,6 +2,6 @@ opencv-python-headless==5.0.0.93
 numpy==2.5.3
 SQLAlchemy==2.0.40
 psycopg[binary]==3.2.6
-# S3-Objektspeicher (app/core/objstore_client.py, docs/storage/ARCHITEKTUR.md)
+# S3-Objektspeicher (app/core/objstore_client.py, docs-site/docs/technik/storage/architektur.md)
 boto3==1.43.113
 cryptography==50.0.0
