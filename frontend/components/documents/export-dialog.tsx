@@ -277,7 +277,7 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
   return (
     <Modal open={open} onClose={onClose} title={t("dialog.title")} size="fullscreen">
       <div className="docexport-layout">
-        <aside className="docexport-panel">
+        <aside className="grid docexport-panel">
           {!catalog ? (
             <p className="muted">{t("dialog.loading")}</p>
           ) : (
