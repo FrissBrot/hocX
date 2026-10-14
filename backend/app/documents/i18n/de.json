@@ -16,7 +16,13 @@
     "scanFailed": "Die Datei konnte nicht auf Viren geprüft werden. Bitte später erneut versuchen.",
     "tooLarge": "Die Datei ist zu gross.",
     "unknownStyle": "Unbekannter Hausstil.",
-    "unknownType": "Unbekannter Dokumenttyp."
+    "unknownType": "Unbekannter Dokumenttyp.",
+    "verificationAlreadyPending": "Es gibt bereits einen offenen Antrag.",
+    "verificationAlreadyVerified": "Die Organisation ist bereits verifiziert.",
+    "verificationNameChanged": "Der Name hat sich seit dem Antrag geändert.",
+    "verificationNoPending": "Es gibt keinen offenen Antrag.",
+    "verificationNotVerified": "Die Organisation ist nicht verifiziert.",
+    "verificationReasonRequired": "Bitte eine Begründung angeben."
   },
   "attendanceShort": {
     "absent": "U",
@@ -259,11 +265,6 @@
     "reader": "Lesen",
     "writer": "Bearbeitung"
   },
-  "signature": {
-    "line": "Digital signiert von hocX · Dokument-ID {id} · Version {version}",
-    "lineNoVersion": "Digital signiert von hocX · Dokument-ID {id}",
-    "preview": "Vorschau · nicht signiert"
-  },
   "titlePage": {
     "date": "Datum",
     "number": "Nummer",
@@ -279,6 +280,13 @@
     "done": "Erledigt",
     "in_progress": "In Arbeit",
     "open": "Offen"
+  },
+  "verify": {
+    "id": "Dokument-ID {id}",
+    "previewId": "VORSCHAU",
+    "qrHint": "QR-Code scannen, um die Echtheit zu prüfen",
+    "url": "Echtheit prüfen: {url}",
+    "urlAndId": "Echtheit prüfen: {url} · ID {id}"
   },
   "watermark": {
     "draft": "Entwurf"

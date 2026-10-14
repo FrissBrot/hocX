@@ -28,6 +28,8 @@ MAX_CHANGED_RATIO = 0.004
 PIXEL_THRESHOLD = 48
 
 CASES = [("short", 1), ("all_blocks", 6), ("unicode", 3), ("landscape", 2), ("lang_fr", 1)]
+# Echtheitsprüfung im Dokument: (Prüf-URL, Kurz-ID, QR-Code)
+VERIFY_VARIANTS = {"verify-all": (True, True, True), "verify-qr": (False, False, True), "verify-url-id": (True, True, False), "verify-none": (False, False, False)}
 
 
 def _changed_ratio(actual: Image.Image, expected: Image.Image) -> tuple[float, Image.Image]:
@@ -40,16 +42,12 @@ def _changed_ratio(actual: Image.Image, expected: Image.Image) -> tuple[float, I
     return changed / (actual.size[0] * actual.size[1]), mask
 
 
-@pytest.mark.parametrize("style_key", STYLE_KEYS)
-@pytest.mark.parametrize(("fixture", "pages"), CASES)
-def test_pages_match_goldens(renderer, assets, style_key, fixture, pages):
-    document = load_fixture(fixture)
-    document.style.key = style_key
+def _compare(renderer, assets, document, pages: int, prefix: str) -> None:
     output = asyncio.run(renderer.render_preview(document, assets, max_pages=pages, ppi=PPI))
     assert output.pages
     failures: list[str] = []
     for index, png in enumerate(output.pages, start=1):
-        name = f"{fixture}-{style_key}-{index}.png"
+        name = f"{prefix}-{index}.png"
         golden = GOLDEN_DIR / name
         if UPDATE or not golden.exists():
             if not UPDATE:
@@ -66,3 +64,20 @@ def test_pages_match_goldens(renderer, assets, style_key, fixture, pages):
             mask.save(DIFF_DIR / f"diff-{name}")
             failures.append(f"{name}: {ratio:.2%} der Pixel weichen ab")
     assert failures == []
+
+
+@pytest.mark.parametrize("style_key", STYLE_KEYS)
+@pytest.mark.parametrize(("fixture", "pages"), CASES)
+def test_pages_match_goldens(renderer, assets, style_key, fixture, pages):
+    document = load_fixture(fixture)
+    document.style.key = style_key
+    _compare(renderer, assets, document, pages, f"{fixture}-{style_key}")
+
+
+@pytest.mark.parametrize("style_key", STYLE_KEYS)
+@pytest.mark.parametrize("variant", VERIFY_VARIANTS)
+def test_verification_variants_match_goldens(renderer, assets, style_key, variant):
+    document = load_fixture("short")
+    document.style.key = style_key
+    document.style.verify_show_url, document.style.verify_show_id, document.style.verify_show_qr = VERIFY_VARIANTS[variant]
+    _compare(renderer, assets, document, 1, f"{variant}-{style_key}")

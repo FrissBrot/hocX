@@ -83,6 +83,11 @@ class DocumentStyleTokens(BaseModel):
     # Kasten mit Nummer, Datum, Status und Version am Dokumentanfang (ohne Titelseite nützlich)
     show_metadata: bool = False
     watermark_draft: bool = True
+    # Echtheitsprüfung im Dokument: Prüf-URL, Kurz-ID, QR-Code (alle aus = kein Prüfvermerk;
+    # registriert und über die Prüfseite prüfbar ist das PDF trotzdem)
+    verify_show_url: bool = True
+    verify_show_id: bool = True
+    verify_show_qr: bool = True
 
     def asset_ids(self) -> list[uuid.UUID]:
         ids = [value for value in (self.logo_asset_id, self.footer_image_asset_id) if value is not None]

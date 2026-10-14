@@ -186,7 +186,6 @@ jobs:
           # app lifespan writes on startup (tests/test_app_lifespan_smoke.py).
           TRAEFIK_DYNAMIC_CONFIG_DIR: ${{ runner.temp }}/traefik_dynamic
           # Dokument-Engine: Golden-Diffs und Galerie als Artefakte (siehe Upload-Schritte).
-          # Das Dev-Signaturzertifikat erzeugt die Testsuite selbst (tests/conftest.py).
           DOCUMENT_GOLDEN_DIFF_DIR: ${{ runner.temp }}/document-golden-diffs
           DOCUMENT_GALLERY_OUT: ${{ runner.temp }}/document-gallery.pdf
         # No coverage threshold gate: per hocX.wiki/Bekannte-offene-Punkte, meaningful

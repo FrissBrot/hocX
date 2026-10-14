@@ -12,7 +12,6 @@ import io
 import json
 from pathlib import Path
 
-import segno
 
 from app.core.locale_config_generated import SUPPORTED_LOCALES
 from app.documents.model import Document
@@ -66,11 +65,6 @@ def todo_table(count: int, *, prefix: str = "Aufgabe") -> dict:
             rows,
         ),
     }
-
-
-def qr_modules(url: str) -> list[str]:
-    qr = segno.make(url, error="m")
-    return ["".join("1" if bit else "0" for bit in row) for row in qr.matrix]
 
 
 def all_blocks() -> list[dict]:
@@ -132,7 +126,7 @@ def all_blocks() -> list[dict]:
         {"type": "chart", "title": "Linie", "kind": "line", "categories": ["2022", "2023", "2024", "2025", "2026"], "series": [{"label_key": "chart.present", "values": [12, 15, 14, 18, 20]}]},
         {"type": "chart", "title": "Donut", "kind": "donut", "categories": ["Erledigt", "Offen"], "category_tones": ["success", "neutral"], "series": [{"values": [12, 5]}]},
         {"type": "stat_table", "title": "Statistiktabelle", "table": _table([("group", "col.group", "left"), ("sessions", "col.sessions", "right"), ("avg", "col.avgParticipants", "right")], [[_text("Jugend"), _amount("12"), _amount("8.5")]])},
-        {"type": "qr_link", "title": "QR-Code", "url": "https://hocx.ch/protocols/123", "label": "Protokoll online", "modules": qr_modules("https://hocx.ch/protocols/123")},
+        {"type": "qr_link", "title": "QR-Code", "url": "https://hocx.ch/protocols/123", "label": "Protokoll online"},
         {"type": "generic_table", "title": "Tabelle", "table": _table([("a", "col.name", "left"), ("b", "col.value", "right")], [[_text("Eins"), _amount("1")], [{"k": "check", "checked": True}, {"k": "blank"}]])},
         {"type": "page_break"},
         {"type": "heading", "text": "Nach dem Seitenumbruch", "level": 2},
@@ -155,7 +149,12 @@ def document(name: str, blocks: list[dict], *, language: str = "de", orientation
         "options": {"title_page": title_page, "toc": toc, "toc_block_titles": True, "numbering": True, "orientation": orientation, "watermark": watermark},
         "style": {"key": "modern", "sender": "Testverein\nPostfach 1\n8000 Zürich", "place": "Zürich"},
         "strings": strings_for(language),
-        "render": {"document_id": "0192f0aa-0000-7000-8000-000000000001", "signed": True},
+        "render": {
+            "document_id": "0192f0aa-0000-7000-8000-000000000001",
+            "short_id": "0000-0001",
+            "verify_display": "abgabe.example.ch/verify",
+            "verify_link": "https://abgabe.example.ch/verify?id=0192f0aa-0000-7000-8000-000000000001",
+        },
         "blocks": blocks,
     }
     # Über das Modell normalisieren: die Fixture enthält alle Standardwerte wie im Betrieb.

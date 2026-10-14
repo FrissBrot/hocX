@@ -624,15 +624,15 @@ class StatTableBlock(BlockBase):
 
 
 class QrLinkBlock(BlockBase):
-    """QR-Code als Modulmatrix (in Python erzeugt, in Typst als Vektor gezeichnet)."""
+    """QR-Code auf eine URL (in Typst erzeugt, vendortes Paket tiaoma)."""
 
     type: Literal["qr_link"] = "qr_link"
-    url: str
+    # leer = kein Ziel (z. B. Protokoll ohne öffentliche URL) - dann gilt der Block als leer
+    url: str = Field("", max_length=2000)
     label: str | None = None
-    modules: list[str] = Field(default_factory=list)
 
     def is_empty(self) -> bool:
-        return not self.modules
+        return not self.url
 
 
 class GenericTableBlock(BlockBase):
@@ -736,13 +736,20 @@ class ResolvedStyle(_Strict):
     sender: str = ""
     sender_color: HexColor | None = None
     place: str = ""
+    verify_show_url: bool = True
+    verify_show_id: bool = True
+    verify_show_qr: bool = True
 
 
 class RenderInfo(_Strict):
     """Angaben zu genau diesem Rendering - nie Teil des Inhalts-Hashes."""
 
     document_id: str | None = None
-    signed: bool = False
+    # Kurz-ID für die Fusszeile (letzte 8 Hex-Zeichen, gruppiert), z. B. «7F3A-91C2»
+    short_id: str | None = None
+    # Prüfseite ohne Schema für die Anzeige (abgabe.example.ch/verify) und der Link im QR-Code
+    verify_display: str | None = Field(None, max_length=300)
+    verify_link: str | None = Field(None, max_length=400)
     preview: bool = False
 
 

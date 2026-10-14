@@ -49,21 +49,3 @@ def normalize(text: str) -> str:
     """Silbentrennung und Leerraum entfernen, damit Zeilenumbrüche im PDF nicht stören."""
     text = re.sub(r"-\n", "", text)
     return re.sub(r"\s+", "", text)
-
-
-@pytest.fixture
-def signing_cert(tmp_path, monkeypatch):
-    """Dev-Zertifikat (wie scripts/generate-dev-signing-cert.sh) und Konfiguration dafür."""
-    from app.core.config import settings
-    from app.documents import signing
-    from app.documents.devcert import generate
-
-    key_path, cert_path = generate(tmp_path / "signing", password="test-passwort")
-    monkeypatch.setattr(settings, "document_signing_key_path", str(key_path))
-    monkeypatch.setattr(settings, "document_signing_cert_path", str(cert_path))
-    monkeypatch.setattr(settings, "document_signing_key_password", "test-passwort")
-    monkeypatch.setattr(settings, "document_signing_chain_path", None)
-    monkeypatch.setattr(settings, "document_signing_tsa_url", None)
-    signing.reset_signer_cache()
-    yield cert_path
-    signing.reset_signer_cache()

@@ -46,7 +46,7 @@ from app.schemas.admin import (
 from app.schemas.public_catalog import PublicCustomerRead, PublicPlanFeature, PublicPlanRead
 from app.schemas.user import TenantUpdate
 from app.services.file_service import _safe_storage_path
-from app.services import submission_link_service, traefik_config_service
+from app.services import identity_verification_service, submission_link_service, traefik_config_service
 from app.services.storage_service import StorageService
 from app.services.tenant_service import apply_tenant_profile_image
 
@@ -608,12 +608,16 @@ class AdminTenantService:
         tenant_id: int,
         payload: TenantUpdate,
         profile_image: UploadFile | None = None,
+        *,
+        admin_email: str | None = None,
     ) -> AdminTenantRead | None:
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
             return None
+        old_name = tenant.name
         if payload.name is not None:
             tenant.name = payload.name
+        identity_verification_service.handle_rename(db, tenant, old_name, actor_email=admin_email)
         if payload.public_slug is not None:
             tenant.public_slug = payload.public_slug
         if profile_image is not None:

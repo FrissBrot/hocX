@@ -1,7 +1,5 @@
-"""Struktur-Blöcke und frei erfasste Inhalte (Text, Formular, Aufzählung, Tabelle, Unterschriften, QR)."""
+"""Struktur-Blöcke und frei erfasste Inhalte (Text, Formular, Aufzählung, Tabelle, Unterschriften, QR-Code)."""
 from __future__ import annotations
-
-import segno
 
 from app.documents.catalog import (
     BlockSpec,
@@ -97,11 +95,6 @@ def generic_table(ctx: BuildContext, spec: BlockSpec, params: GenericTableParams
     return [GenericTableBlock(**spec_fields(spec), table=table)]
 
 
-def qr_modules(url: str) -> list[str]:
-    qr = segno.make(url, error="m")
-    return ["".join("1" if bit else "0" for bit in row) for row in qr.matrix]
-
-
 def qr_link(ctx: BuildContext, spec: BlockSpec, params: QrLinkParams):
     from app.models import Protocol
 
@@ -116,5 +109,5 @@ def qr_link(ctx: BuildContext, spec: BlockSpec, params: QrLinkParams):
             url = f"{ctx.public_base_url.rstrip('/')}/protocols/{protocol.public_id}"
             label = label or protocol.title or protocol.protocol_number
     if not url:
-        return [QrLinkBlock(**spec_fields(spec), url="https://", label=label, modules=[])]
-    return [QrLinkBlock(**spec_fields(spec), url=url, label=label, modules=qr_modules(url))]
+        return [QrLinkBlock(**spec_fields(spec), url="", label=label)]
+    return [QrLinkBlock(**spec_fields(spec), url=url, label=label)]

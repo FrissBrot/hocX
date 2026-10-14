@@ -31,25 +31,3 @@ def db():
         session.close()
         outer_transaction.rollback()
         connection.close()
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _dev_document_signing(tmp_path_factory):
-    """Test-Stack und CI nutzen automatisch ein Dev-Signaturzertifikat (wie
-    scripts/generate-dev-signing-cert.sh), sofern keines konfiguriert ist - ohne bricht der
-    App-Start im Produktionsmodus ab (main.py lifespan)."""
-    from app.core.config import settings
-    from app.documents import signing
-    from app.documents.devcert import generate
-
-    if signing.signing_configured():
-        yield
-        return
-    key_path, cert_path = generate(tmp_path_factory.mktemp("signing"))
-    settings.document_signing_key_path = str(key_path)
-    settings.document_signing_cert_path = str(cert_path)
-    signing.reset_signer_cache()
-    yield
-    settings.document_signing_key_path = None
-    settings.document_signing_cert_path = None
-    signing.reset_signer_cache()

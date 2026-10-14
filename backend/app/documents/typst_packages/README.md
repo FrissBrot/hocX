@@ -10,5 +10,10 @@ und der Lizenz des Pakets. Import im Stil: `#import "@preview/<name>:<version>":
 `scripts/check-document-catalog.py` prüft, dass jeder `@<namespace>/…`-Import in
 `app/documents/styles/` hier vorhanden ist.
 
-Derzeit ist kein Paket nötig: Diagramme und QR-Codes sind eigene, kleine Komponenten
-(siehe `docs-site/docs/technik/dokument-engine.md`).
+Vendored:
+
+| Paket | Lizenz | Zweck | Herkunft |
+|---|---|---|---|
+| `preview/tiaoma/0.3.0` | MIT (Zint-Kern BSD-3, siehe `license.html`) | QR-Codes (Prüfvermerk, Block `qr_link`) | `https://packages.typst.org/preview/tiaoma-0.3.0.tar.gz`, SHA-256 `c646c3f41c3f1a062ff1558f070187ac970b7d350f00b31f45133e059c9981be` |
+
+Diagramme sind eigene, kleine Komponenten (siehe `docs-site/docs/technik/dokument-engine.md`).

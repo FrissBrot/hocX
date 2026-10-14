@@ -27,11 +27,11 @@ def _render(db, tenant, protocol, **kwargs):
     return asyncio.run(service.render(db, None, tenant.id, request)).export
 
 
-def test_version_rules(db, signing_cert):
+def test_version_rules(db):
     tenant, protocol, text = _setup(db)
     first = _render(db, tenant, protocol)
     assert first.version_label is None  # v0.0 wird nicht angezeigt
-    assert first.signature_level == "PAdES-B-B" and first.pdf_sha256 and first.content_hash
+    assert first.content_hash
 
     same = _render(db, tenant, protocol)
     assert same.content_hash == first.content_hash and same.version_label == first.version_label

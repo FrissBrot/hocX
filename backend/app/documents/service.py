@@ -1,4 +1,8 @@
-"""Orchestrierung: Anfrage → Dokument → Version → Typst → Signatur → StoredFile.
+"""Orchestrierung: Anfrage → Dokument → Version → Typst → XMP → Register → StoredFile.
+
+Jedes ausgelieferte PDF wird im Dokumentenregister (document_registry) mit dem SHA-256 der
+exakt ausgelieferten Bytes eingetragen. Die Dokument-ID steht vorher fest und im PDF (Fusszeile,
+QR-Code, XMP); die öffentliche Prüfseite der Abgabebox vergleicht nur den Hash.
 
 Versionierung (nur Dokumenttyp «protocol»): Schema bleibt v0.x für Entwürfe und v1.x für
 abgeschlossene Protokolle mit getrennten Zählern. Weicht der Inhalts-Hash (hashing.py) vom
@@ -23,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import CurrentUser
-from app.documents import signing, style_service
+from app.documents import style_service
 from app.documents.builder import build_document
 from app.documents.catalog import BlockSpec, validate_spec
 from app.documents.context import BuildContext, DocumentNotFoundError
@@ -33,7 +37,8 @@ from app.documents.model import Document, RenderInfo
 from app.documents.renderer import RenderAssets, get_renderer
 from app.documents.strings import normalize_language
 from app.documents.style_tokens import DocumentStyleTokens, ExportOptions
-from app.models import DocumentExport, DocumentRecipe, DocumentStyle, Protocol, StoredFile, Template, Tenant
+from app.documents.xmp import DocumentXmp, add_document_xmp
+from app.models import DocumentExport, DocumentRecipe, DocumentRegistry, DocumentStyle, Protocol, StoredFile, Template, Tenant
 
 logger = logging.getLogger(__name__)
 
@@ -237,13 +242,13 @@ def prepare(db: Session, user: CurrentUser | None, tenant_id: int, request: Docu
 
 
 async def preview(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest, *, max_pages: int | None = None) -> list[bytes]:
-    """Erste Seiten als PNG: ohne Signatur, ohne Speicherung, ohne Versionserhöhung."""
+    """Erste Seiten als PNG: ohne Register-Eintrag, ohne Speicherung, ohne Versionserhöhung."""
     # Die Vorschau darf nichts verändern (z. B. nachgeführte Mitgliedschaftsblöcke): alles in
     # einem Savepoint, der am Ende zurückgerollt wird.
     savepoint = db.begin_nested()
     try:
         prepared = prepare(db, user, tenant_id, request)
-        prepared.document.render = RenderInfo(preview=True)
+        prepared.document.render = verify_render_info(None, preview=True)
         output = await get_renderer().render_preview(prepared.document, prepared.assets, max_pages=max_pages)
         return output.pages
     finally:
@@ -256,7 +261,7 @@ def _filename(title: str, version: str | None) -> str:
     return f"{base}-{version}.pdf" if version else f"{base}.pdf"
 
 
-def _store_pdf(db: Session, tenant_id: int, pdf: bytes, filename: str, user_id: int | None) -> StoredFile:
+def _store_pdf(db: Session, tenant_id: int, pdf: bytes, filename: str, user_id: int | None) -> tuple[StoredFile, Path]:
     target_dir = Path(settings.export_root) / GENERATED_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / f"{uuid.uuid4().hex}-{filename}"
@@ -277,32 +282,50 @@ def _store_pdf(db: Session, tenant_id: int, pdf: bytes, filename: str, user_id: 
         # Datei und Datensatz teilen keine Transaktion; ohne Zeile bliebe die Datei verwaist.
         target.unlink(missing_ok=True)
         raise
-    return stored
+    return stored, target
+
+
+def short_document_id(document_id: str | uuid.UUID) -> str:
+    """Kurz-ID für die Fusszeile: letzte 8 Hex-Zeichen (zufälliger Teil der UUIDv7), gruppiert."""
+    tail = uuid.UUID(str(document_id)).hex[-8:].upper()
+    return f"{tail[:4]}-{tail[4:]}"
+
+
+def verify_render_info(document_id: uuid.UUID | None, *, preview: bool = False) -> RenderInfo:
+    base = settings.verify_base_url
+    display = re.sub(r"^https?://", "", base)
+    if preview or document_id is None:
+        return RenderInfo(preview=True, short_id="VORSCHAU", verify_display=display, verify_link=base)
+    return RenderInfo(
+        document_id=str(document_id),
+        short_id=short_document_id(document_id),
+        verify_display=display,
+        verify_link=f"{base}?id={document_id}",
+    )
 
 
 async def render(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest) -> RenderResult:
     prepared = prepare(db, user, tenant_id, request)
     document = prepared.document
     export_public_id = _uuid7()
-    signed = signing.signing_configured()
-    document.render = RenderInfo(document_id=str(export_public_id), signed=signed)
+    document.render = verify_render_info(export_public_id)
 
     output = await get_renderer().render_pdf(document, prepared.assets)
-    pdf = output.pdf or b""
     tenant = db.get(Tenant, tenant_id)
-    level = None
-    if signed:
-        info = signing.SignatureInfo(
+    pdf = add_document_xmp(
+        output.pdf or b"",
+        DocumentXmp(
             document_id=str(export_public_id),
             tenant_id=str(tenant.public_id) if tenant else "",
             document_type=prepared.document_type,
             version=document.meta.version or "",
             content_hash=prepared.content_hash,
-        )
-        pdf = await signing.sign_pdf_async(pdf, info)
-        level = signing.signature_level()
+            verify_url=document.render.verify_link or "",
+        ),
+    )
+    # Hash über genau die Bytes, die ausgeliefert werden.
+    sha256 = hashlib.sha256(pdf).hexdigest()
 
-    stored = _store_pdf(db, tenant_id, pdf, _filename(document.meta.title, document.meta.version), user.user_id if user else None)
     major = minor = None
     if prepared.version is not None and prepared.protocol is not None:
         major, new_minor, new_final = prepared.version
@@ -312,29 +335,52 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
         protocol.version_final_minor = new_final
         minor = new_final if major else new_minor
         db.add(protocol)
-    export = DocumentExport(
-        public_id=export_public_id,
-        tenant_id=tenant_id,
-        protocol_id=prepared.protocol.id if prepared.protocol is not None else None,
-        document_type=prepared.document_type,
-        recipe_id=prepared.recipe.id if prepared.recipe is not None else None,
-        title=document.meta.title,
-        version_label=document.meta.version,
-        version_major=major,
-        version_minor=minor,
-        content_hash=prepared.content_hash,
-        pdf_sha256=hashlib.sha256(pdf).hexdigest(),
-        style_id=prepared.style.id if prepared.style is not None and prepared.style.id else None,
-        style_key=document.style.key,
-        style_version=document.style.version,
-        language=prepared.language,
-        signature_level=level,
-        stored_file_id=stored.id,
-        created_by=user.user_id if user else None,
-    )
-    db.add(export)
-    db.flush()
-    db.commit()
+    protocol = prepared.protocol
+    # Datei, StoredFile, Export und Register-Eintrag gemeinsam: scheitert ein Teil, gibt es
+    # nichts (die Datei wird beim Rollback entfernt).
+    stored, target = _store_pdf(db, tenant_id, pdf, _filename(document.meta.title, document.meta.version), user.user_id if user else None)
+    try:
+        export = DocumentExport(
+            public_id=export_public_id,
+            tenant_id=tenant_id,
+            protocol_id=protocol.id if protocol is not None else None,
+            document_type=prepared.document_type,
+            recipe_id=prepared.recipe.id if prepared.recipe is not None else None,
+            title=document.meta.title,
+            version_label=document.meta.version,
+            version_major=major,
+            version_minor=minor,
+            content_hash=prepared.content_hash,
+            style_id=prepared.style.id if prepared.style is not None and prepared.style.id else None,
+            style_key=document.style.key,
+            style_version=document.style.version,
+            language=prepared.language,
+            stored_file_id=stored.id,
+            created_by=user.user_id if user else None,
+        )
+        db.add(export)
+        db.add(
+            DocumentRegistry(
+                public_id=export_public_id,
+                tenant_id=tenant_id,
+                sha256=sha256,
+                document_type=prepared.document_type,
+                title=document.meta.title,
+                status_code=protocol.status if protocol is not None and prepared.document_type == "protocol" else None,
+                version_major=major,
+                version_minor=minor,
+                version_label=document.meta.version,
+                content_hash=prepared.content_hash,
+                source_public_id=protocol.public_id if protocol is not None else None,
+                created_by=user.user_id if user else None,
+            )
+        )
+        db.flush()
+        db.commit()
+    except Exception:
+        db.rollback()
+        target.unlink(missing_ok=True)
+        raise
     db.refresh(export)
     return RenderResult(export=export, stored_file=stored)
 
@@ -352,7 +398,8 @@ def _uuid7() -> uuid.UUID:
 
 def cleanup_old_generated_exports(*, retention_days: int | None = None) -> dict:
     """Retention-Job (main.py export_cleanup_loop): löscht alte Dateien unter
-    EXPORT_ROOT/generated. Der StoredFile-Datensatz bleibt; ein alter Link liefert dann 404."""
+    EXPORT_ROOT/generated. Der StoredFile-Datensatz bleibt; ein alter Link liefert dann 404.
+    Das Dokumentenregister bleibt unangetastet: ausgelieferte PDFs sind dauerhaft prüfbar."""
     retention = retention_days if retention_days is not None else settings.export_retention_days
     target_dir = Path(settings.export_root) / GENERATED_DIR
     if not target_dir.is_dir():

@@ -2,6 +2,7 @@
 // ctx.theme.components überschreiben; fehlt dort eine, gilt die Komponente aus dieser Datei.
 // Jeder Block-Typ ist so in jedem Dokument und jedem Hausstil verwendbar und sieht gleich aus.
 
+#import "@preview/tiaoma:0.3.0": qrcode
 #import "../lib/core.typ": colors, space, radius, tr, is-blank, tone-color, status-dot, tag-chip, empty-note
 #import "rich.typ": render-rich
 #import "table.typ": data-table
@@ -262,16 +263,8 @@
 // ── Sonstiges ───────────────────────────────────────────────────────────────
 
 #let qr-link-block(ctx, b) = {
-  let size = b.modules.len()
-  let module = 2.6cm / calc.max(size, 1)
   grid(columns: (auto, 1fr), column-gutter: space.s4, align: horizon,
-    box(width: 2.6cm, height: 2.6cm, fill: white, {
-      for (y, row) in b.modules.enumerate() {
-        for (x, bit) in row.clusters().enumerate() {
-          if bit == "1" { place(top + left, dx: module * x, dy: module * y, rect(width: module + 0.05pt, height: module + 0.05pt, fill: black, stroke: none)) }
-        }
-      }
-    }),
+    qrcode(b.url, width: 2.6cm, height: 2.6cm),
     {
       if not is-blank(b.at("label", default: none)) { text(weight: "bold")[#b.label]; linebreak() }
       text(size: 0.85em, fill: colors.muted)[#tr(ctx, "label.scanToOpen")]

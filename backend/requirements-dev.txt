@@ -6,5 +6,3 @@ httpx2>=2.0.0,<3
 # Only used to synthesize PDF test fixtures for the word-import E2E tests
 # (tests/word_import_fixtures.py) - never imported by the app itself.
 reportlab==5.0.0
-# Galerie der Dokument-Engine (tests/documents/test_gallery.py): PDFs zusammenführen
-pypdf==6.20.1

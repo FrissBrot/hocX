@@ -35,7 +35,10 @@
   "footer_image": null,
   "sender": "Testverein\nPostfach 1\n8000 Zürich",
   "sender_color": null,
-  "place": "Zürich"
+  "place": "Zürich",
+  "verify_show_url": true,
+  "verify_show_id": true,
+  "verify_show_qr": true
  },
  "strings": {
   "apiError.assetInUse": "Die Datei wird noch von einem Hausstil verwendet.",
@@ -256,9 +259,6 @@
   "role.kassier": "Kasse",
   "role.reader": "Lesen",
   "role.writer": "Bearbeitung",
-  "signature.line": "Digital signiert von hocX · Dokument-ID {id} · Version {version}",
-  "signature.lineNoVersion": "Digital signiert von hocX · Dokument-ID {id}",
-  "signature.preview": "Vorschau · nicht signiert",
   "titlePage.date": "Datum",
   "titlePage.number": "Nummer",
   "titlePage.place": "Ort",
@@ -269,6 +269,11 @@
   "todoStatus.done": "Erledigt",
   "todoStatus.in_progress": "In Arbeit",
   "todoStatus.open": "Offen",
+  "verify.id": "Dokument-ID {id}",
+  "verify.previewId": "VORSCHAU",
+  "verify.qrHint": "QR-Code scannen, um die Echtheit zu prüfen",
+  "verify.url": "Echtheit prüfen: {url}",
+  "verify.urlAndId": "Echtheit prüfen: {url} · ID {id}",
   "watermark.draft": "Entwurf",
   "weekday.0": "Mo",
   "weekday.1": "Di",
@@ -280,7 +285,9 @@
  },
  "render": {
   "document_id": "0192f0aa-0000-7000-8000-000000000001",
-  "signed": true,
+  "short_id": "0000-0001",
+  "verify_display": "abgabe.example.ch/verify",
+  "verify_link": "https://abgabe.example.ch/verify?id=0192f0aa-0000-7000-8000-000000000001",
   "preview": false
  },
  "blocks": [

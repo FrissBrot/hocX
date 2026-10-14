@@ -172,17 +172,9 @@ services:
       # ENVIRONMENT=test, and the script itself refuses to run against a
       # HOCX_ENVIRONMENT=production backend - setting this here is inert on prod either way.
       DEMO_TOTP_SEED: ${DEMO_TOTP_SEED:-}
-      # Dokumentsignatur (PAdES, app/documents/signing.py): Schlüssel und Zertifikat liegen
-      # im Host-Verzeichnis DOCUMENT_SIGNING_DIR (nie im Repo), read-only eingehängt; das
-      # Passwort kommt als Compose-Secret. Ohne lesbare Dateien startet das Backend in
-      # Produktion nicht. Optional: chain.pem (Zwischenzertifikate), TSA-URL für PAdES B-T.
-      DOCUMENT_SIGNING_KEY_PATH: /run/hocx-signing/signing-key.pem
-      DOCUMENT_SIGNING_CERT_PATH: /run/hocx-signing/signing-cert.pem
-      DOCUMENT_SIGNING_CHAIN_PATH: ${DOCUMENT_SIGNING_CHAIN_PATH:-}
-      DOCUMENT_SIGNING_KEY_PASSWORD_FILE: /run/secrets/document_signing_key_password
-      DOCUMENT_SIGNING_TSA_URL: ${DOCUMENT_SIGNING_TSA_URL:-}
+      # Öffentliche Prüfseite (Abgabebox), steht in jedem PDF; leer = ABGABEBOX_BASE_URL/verify
+      DOCUMENT_VERIFY_BASE_URL: ${DOCUMENT_VERIFY_BASE_URL:-}
     secrets:
-      - document_signing_key_password
       - database_url
       - app_database_url
       - app_db_password
@@ -211,8 +203,6 @@ services:
       - ./storage-local/thumbnails:/app/storage-local/thumbnails
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       - ./infra/traefik/dynamic:/app/traefik_dynamic
-      # Dokumentsignatur: Schlüssel/Zertifikat des Betreibers (RUNBOOK «Dokumentsignatur»)
-      - ${DOCUMENT_SIGNING_DIR:-./.signing}:/run/hocx-signing:ro
     healthcheck:
       # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
       # einen simplen Liveness-Check gegen den Health-Endpoint aus app/main.py.
@@ -519,6 +509,18 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit"
+      # Echtheitsprüfung (POST /api/public/verify): eigener Router VOR dem Upload-Router, eigenes
+      # Rate-Limit und 4 KiB Body-Limit (nur Hash plus optionale Dokument-ID).
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && Path(`/api/public/verify`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.priority=300"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit,${ROUTER_PREFIX:-hocx}-abgabebox-verify-body-limit"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.average=30"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.burst=10"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-body-limit.buffering.maxRequestBodyBytes=4096"
 
   abgabebox-frontend:
     image: ${HOCX_ABGABEBOX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}}
@@ -649,7 +651,5 @@ secrets:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/photo_worker_database_url
   friendly_captcha_api_key:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/friendly_captcha_api_key
-  document_signing_key_password:
-    file: ${HOCX_SECRETS_DIR:-./.secrets}/document_signing_key_password
   abgabebox_captcha_session_secret:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_captcha_session_secret

@@ -154,33 +154,43 @@ def test_collect_checks_turns_unreachable_services_into_findings(clean_state, mo
     assert checks["clamav_signatures"].status == "unknown"
 
 
-@pytest.mark.parametrize(
-    ("cert", "production", "status", "state"),
-    [
-        ({"configured": False, "readable": False}, False, "unknown", "missing"),
-        ({"configured": False, "readable": False}, True, "critical", "missing"),
-        ({"configured": True, "readable": False, "error": "ValueError"}, False, "critical", "unreadable"),
-        ({"configured": True, "readable": True, "days_left": 200}, False, "ok", "ok"),
-        ({"configured": True, "readable": True, "days_left": 12}, False, "warning", "expiring"),
-        ({"configured": True, "readable": True, "days_left": -3}, False, "critical", "expired"),
-    ],
-)
-def test_document_signing_check(monkeypatch, cert, production, status, state):
-    from app.core.config import settings
-    from app.documents import signing
+class _FakeResponse:
+    def __init__(self, body: bytes):
+        self._body = body
 
-    not_after = NOW + timedelta(days=cert.get("days_left") or 0)
-    monkeypatch.setattr(signing, "certificate_status", lambda: signing.CertificateStatus(not_after=not_after if cert.get("readable") else None, **cert))
-    monkeypatch.setattr(settings, "environment", "production" if production else "development")
+    def read(self):
+        return self._body
 
-    check = system_health_service._check_document_signing()
+    def __enter__(self):
+        return self
 
-    assert (check.status, check.params["state"]) == (status, state)
-    if status in ("warning", "critical"):
-        problems = system_alert_service.derive_problems(_snapshot(checks=[check]), JobStatusOverview(items=[], generated_at=NOW), now=NOW)
-        problem = next(item for item in problems if item.key == "check:document_signing")
-        assert problem.title == "Signaturzertifikat fehlt oder läuft ab"
-        assert "Siehe Systemstatus" not in problem.message
+    def __exit__(self, *args):
+        return False
+
+
+def test_document_verification_check_expects_a_miss_for_the_probe_hash(monkeypatch):
+    sent = {}
+
+    def fake_urlopen(request, timeout):
+        sent.update(url=request.full_url, body=json.loads(request.data), timeout=timeout)
+        return _FakeResponse(b'{"found": false}')
+
+    monkeypatch.setattr(system_health_service.urllib.request, "urlopen", fake_urlopen)
+    check = system_health_service._check_document_verification()
+    assert check.status == "ok" and "latencyMs" in check.params
+    assert sent["url"].endswith("/api/public/verify") and sent["body"] == {"sha256": "0" * 64}
+
+
+def test_document_verification_check_fails_on_unexpected_answer_or_outage(clean_state, monkeypatch):
+    monkeypatch.setattr(system_health_service.urllib.request, "urlopen", lambda *a, **k: _FakeResponse(b'{"found": true}'))
+    checks = {check.key: check for check in system_health_service.collect_checks(clean_state, NOW)}
+    assert checks["document_verification"].status == "critical" and "Unerwartete Antwort" in checks["document_verification"].error
+
+    monkeypatch.setattr(system_health_service.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("refused")))
+    check = system_health_service._run_check("document_verification", system_health_service._check_document_verification)[0]
+    problems = system_alert_service.derive_problems(_snapshot(checks=[check]), JobStatusOverview(items=[], generated_at=NOW), now=NOW)
+    problem = next(item for item in problems if item.key == "check:document_verification")
+    assert problem.severity == "critical" and problem.title == "Öffentliche Prüfseite nicht erreichbar"
 
 
 # ── system_alert_service.derive_problems ─────────────────────────────────────────────────

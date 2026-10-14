@@ -8,6 +8,8 @@
   let secondary = rgb(doc.style.secondary_color)
   (
     key: "compact",
+    // Platz sparen: Prüfzeile nicht auf jeder Seite, sondern nur im Prüfvermerk am Ende
+    verify-in-footer: false,
     primary: primary,
     secondary: secondary,
     fonts: doc.style.fonts + ("Liberation Sans", "Noto Sans", "Noto Color Emoji"),

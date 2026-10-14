@@ -35,7 +35,10 @@
   "footer_image": null,
   "sender": "Testverein\nPostfach 1\n8000 Zürich",
   "sender_color": null,
-  "place": "Zürich"
+  "place": "Zürich",
+  "verify_show_url": true,
+  "verify_show_id": true,
+  "verify_show_qr": true
  },
  "strings": {
   "apiError.assetInUse": "Le fichier est encore utilisé par un style maison.",
@@ -256,9 +259,6 @@
   "role.kassier": "Caisse",
   "role.reader": "Lecture",
   "role.writer": "Édition",
-  "signature.line": "Signé numériquement par hocX · ID du document {id} · Version {version}",
-  "signature.lineNoVersion": "Signé numériquement par hocX · ID du document {id}",
-  "signature.preview": "Aperçu · non signé",
   "titlePage.date": "Date",
   "titlePage.number": "Numéro",
   "titlePage.place": "Lieu",
@@ -269,6 +269,11 @@
   "todoStatus.done": "Terminé",
   "todoStatus.in_progress": "En cours",
   "todoStatus.open": "Ouvert",
+  "verify.id": "ID du document {id}",
+  "verify.previewId": "APERÇU",
+  "verify.qrHint": "Scannez le code QR pour vérifier l’authenticité",
+  "verify.url": "Vérifier l’authenticité : {url}",
+  "verify.urlAndId": "Vérifier l’authenticité : {url} · ID {id}",
   "watermark.draft": "Brouillon",
   "weekday.0": "lun",
   "weekday.1": "mar",
@@ -280,7 +285,9 @@
  },
  "render": {
   "document_id": "0192f0aa-0000-7000-8000-000000000001",
-  "signed": true,
+  "short_id": "0000-0001",
+  "verify_display": "abgabe.example.ch/verify",
+  "verify_link": "https://abgabe.example.ch/verify?id=0192f0aa-0000-7000-8000-000000000001",
   "preview": false
  },
  "blocks": [

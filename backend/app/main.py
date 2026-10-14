@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, auth, calendar_feeds, collaboration_ws, cycle_configs, documents, events, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
+from app.api.routes import admin, admin_auth, admin_identity_verification, auth, calendar_feeds, collaboration_ws, cycle_configs, document_verification, documents, events, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
@@ -380,10 +380,7 @@ async def system_monitor_loop() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     from app.documents.renderer import shutdown_renderer
-    from app.documents.signing import validate_signing_configuration
 
-    # Wie AUTH_SECRET: ohne Signaturkonfiguration startet Produktion nicht (Dev: Warnung).
-    validate_signing_configuration()
     FileService().ensure_storage()
     warm_up_word_import_parse_pool()
     try:
@@ -492,9 +489,11 @@ def health() -> dict[str, str]:
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(admin_auth.router, prefix="/api/admin/auth", tags=["admin-auth"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(admin_identity_verification.router, prefix="/api/admin", tags=["admin"])
 app.include_router(tenants.router, prefix="/api", tags=["tenants"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(documents.router, prefix="/api", tags=["documents"])
+app.include_router(document_verification.router, prefix="/api", tags=["documents"])
 app.include_router(templates.router, prefix="/api", tags=["templates"])
 app.include_router(cycle_configs.router, prefix="/api", tags=["cycle-configs"])
 app.include_router(task_packages.router, prefix="/api", tags=["task-packages"])

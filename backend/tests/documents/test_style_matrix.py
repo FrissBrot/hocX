@@ -69,3 +69,32 @@ def test_metadata_box_and_sender_color(renderer, assets, style_key, title_page):
     assert document.strings["metadata.title"] in text
     if title_page == "cover":
         assert "Postfach 1" in text
+
+
+VERIFY_COMBOS = list(itertools.product([True, False], repeat=3))
+
+
+@pytest.mark.parametrize("style_key", STYLE_KEYS)
+@pytest.mark.parametrize(("show_url", "show_id", "show_qr"), VERIFY_COMBOS)
+def test_verification_options_every_combination(renderer, assets, style_key, show_url, show_id, show_qr):
+    """Echtheitsprüfung im Dokument: jede Kombination aus Prüf-URL, Kurz-ID und QR-Code rendert ohne
+    Warnungen, zeigt genau die eingeschalteten Teile und lässt keine verwaisten Trennzeichen
+    stehen; sind alle drei aus, entfällt der Prüfvermerk vollständig."""
+    document = load_fixture("short")
+    document.style.key = style_key
+    document.style.verify_show_url, document.style.verify_show_id, document.style.verify_show_qr = show_url, show_id, show_qr
+    output = asyncio.run(renderer.render_pdf(document, assets))
+    assert output.warnings == []
+    text = pdf_text(output.pdf)
+    strings = document.strings
+    render = document.render
+    url_label = strings["verify.url"].split("{")[0].strip()  # «Echtheit prüfen:»
+    assert (render.verify_display in text) is show_url
+    assert (render.short_id in text) is show_id
+    assert (strings["verify.qrHint"] in text) is (show_qr and (style_key != "compact" or not (show_url or show_id)))
+    if not (show_url or show_id or show_qr):
+        assert url_label not in text and strings["verify.id"].split("{")[0].strip() not in text
+    for line in text.splitlines():
+        stripped = line.strip()
+        assert not stripped.startswith("·") and not stripped.endswith("·"), line
+        assert not stripped.endswith(":"), line

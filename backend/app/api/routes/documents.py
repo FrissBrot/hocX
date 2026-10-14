@@ -20,6 +20,7 @@ from app.core.db import get_db
 from app.core.locale_config_generated import SUPPORTED_LOCALES
 from app.core.security import CurrentUser, get_current_user, require_admin, require_reader, require_writer
 from app.documents import exports as extra_formats
+from app.core.config import settings
 from app.documents import service as document_service
 from app.documents import style_service
 from app.documents.builder import BlockSpecError
@@ -78,7 +79,9 @@ class DocumentExportRead(BaseModel):
     document_type: str
     title: str | None
     version_label: str | None
-    signature_level: str | None
+    # Kurz-ID und Prüf-Link, wie sie im PDF stehen
+    short_id: str
+    verify_url: str
     language: str | None
     style_key: str | None
     generated_file_id: uuid.UUID | None
@@ -93,7 +96,8 @@ def _export_read(db: Session, export: DocumentExport) -> DocumentExportRead:
         document_type=export.document_type,
         title=export.title,
         version_label=export.version_label,
-        signature_level=export.signature_level,
+        short_id=document_service.short_document_id(export.public_id),
+        verify_url=f"{settings.verify_base_url}?id={export.public_id}",
         language=export.language,
         style_key=export.style_key,
         generated_file_id=stored.public_id if stored else None,

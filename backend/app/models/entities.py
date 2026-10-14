@@ -87,6 +87,17 @@ class Tenant(Base, TimestampMixin):
     # Standardsprache erzeugter Dokumente (Dokument-Engine), pro Export überschreibbar.
     # NULL = Standardsprache aus i18n/locales.json.
     document_language: Mapped[str | None] = mapped_column(Text)
+    # Öffentliche Prüfseite (Abgabebox /verify): Name und Logo zeigen, auf neuere Versionen
+    # hinweisen. Die Freigabelogik selbst steckt in der View document_verification_public.
+    verify_show_identity: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    verify_show_newer_version: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"), default=True)
+    # Identität der Organisation durch einen Plattform-Admin bestätigt (Abzeichen auf der
+    # Prüfseite). Eine Namensänderung hebt die Bestätigung auf (revoked_*).
+    identity_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    identity_verified_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
+    identity_verification_note: Mapped[str | None] = mapped_column(Text)
+    identity_verification_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    identity_verification_revoked_reason: Mapped[str | None] = mapped_column(Text)
 
 
 class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
@@ -729,14 +740,72 @@ class DocumentExport(Base, TimestampMixin):
     version_major: Mapped[int | None] = mapped_column(Integer)
     version_minor: Mapped[int | None] = mapped_column(Integer)
     content_hash: Mapped[str | None] = mapped_column(Text)
-    pdf_sha256: Mapped[str | None] = mapped_column(Text)
     style_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_style.id", ondelete="SET NULL"))
     style_key: Mapped[str | None] = mapped_column(Text)
     style_version: Mapped[int | None] = mapped_column(Integer)
     language: Mapped[str | None] = mapped_column(Text)
-    signature_level: Mapped[str | None] = mapped_column(Text)
     stored_file_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="SET NULL"))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentRegistry(Base):
+    """Register aller ausgelieferten PDFs: SHA-256 der exakt ausgelieferten Bytes. Dauerhaft -
+    der Retention-Job löscht nur Dateien, nie Einträge; nur das Löschen des Mandanten entfernt
+    sie. public_id = Dokument-ID im PDF (= document_export.public_id). Öffentlich geprüft wird
+    ausschliesslich über die Funktion verify_document (Migration 0117)."""
+
+    __tablename__ = "document_registry"
+    __table_args__ = (
+        UniqueConstraint("sha256", name="uq_document_registry_sha256"),
+        CheckConstraint("sha256 ~ '^[0-9a-f]{64}$'", name="ck_document_registry_sha256"),
+        Index("idx_document_registry_tenant", "tenant_id", "created_at"),
+        Index("idx_document_registry_source_version", "tenant_id", "source_public_id", "version_major", "version_minor"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    sha256: Mapped[str] = mapped_column(Text, nullable=False)
+    document_type: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str | None] = mapped_column(Text)
+    status_code: Mapped[str | None] = mapped_column(Text)
+    version_major: Mapped[int | None] = mapped_column(Integer)
+    version_minor: Mapped[int | None] = mapped_column(Integer)
+    version_label: Mapped[str | None] = mapped_column(Text)
+    content_hash: Mapped[str | None] = mapped_column(Text)
+    # public_id des Protokolls, bewusst ohne FK (überlebt Löschen und Mandanten-Umzug)
+    source_public_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class IdentityVerificationRequest(Base):
+    """Antrag eines Mandanten-Admins auf Bestätigung der Organisation durch hocX. Ein
+    Plattform-Admin bestätigt (setzt tenant.identity_verified_*) oder lehnt mit Begründung ab.
+    Höchstens ein offener Antrag je Mandant; der Verlauf bleibt erhalten."""
+
+    __tablename__ = "identity_verification_request"
+    __table_args__ = (
+        CheckConstraint("status IN ('pending', 'approved', 'rejected', 'withdrawn')", name="ck_identity_verification_request_status"),
+        Index("uq_identity_verification_request_pending", "tenant_id", unique=True, postgresql_where=text("status = 'pending'")),
+        Index("idx_identity_verification_request_tenant", "tenant_id", "requested_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"), default="pending")
+    tenant_name: Mapped[str] = mapped_column(Text, nullable=False)
+    message: Mapped[str | None] = mapped_column(Text)
+    requested_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    decided_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decision_note: Mapped[str | None] = mapped_column(Text)
 
 
 class ElementType(Base):
@@ -1506,6 +1575,8 @@ class SubmissionLink(Base, TimestampMixin, UpdatedAtMixin):
         UniqueConstraint("tenant_id", "name", name="uq_submission_link_tenant_name"),
         # Hoechstens ein Standard-Link je Mandant (wird beim Anlegen einer Abgabe vorausgewaehlt).
         Index("uq_submission_link_tenant_default", "tenant_id", unique=True, postgresql_where=text("is_default")),
+        # «verify» ist die Route der Prüfseite in der Abgabebox (/verify) und nie ein Token.
+        CheckConstraint("lower(token) <> 'verify'", name="ck_submission_link_token_reserved"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)

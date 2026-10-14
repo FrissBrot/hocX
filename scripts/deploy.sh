@@ -414,7 +414,6 @@ write_secret_files() {
   write_secret_file "$secrets_dir" friendly_captcha_api_key "$FRIENDLY_CAPTCHA_API_KEY"
   write_secret_file "$secrets_dir" abgabebox_captcha_session_secret "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
   write_secret_file "$secrets_dir" cf_dns_api_token "$CF_DNS_API_TOKEN"
-  write_secret_file "$secrets_dir" document_signing_key_password "${DOCUMENT_SIGNING_KEY_PASSWORD:-}"
   echo "    Secret-Dateien aktuell: $secrets_dir"
 }
 
@@ -479,49 +478,6 @@ prepare_thumbnail_dir() {
     -c 'chgrp -R 5001 /target && chmod -R g+rwX,o-rwx /target && find /target -type d -exec chmod g+s {} +'
 }
 
-ensure_signing_certificate() {
-  # Jedes PDF wird signiert; ohne lesbaren Schlüssel und Zertifikat startet das Backend in
-  # Produktion nicht (app/documents/signing.py). Liegt im DOCUMENT_SIGNING_DIR noch nichts,
-  # wird ein selbstsigniertes Zertifikat erzeugt - im bereits signaturgeprüften Backend-Image
-  # (kein openssl auf dem Host nötig) und mit Rechten für den Backend-Nutzer (uid 5000,
-  # Gruppe 5001), die der Deploy-Nutzer selbst nicht setzen darf. Vorhandene Dateien werden
-  # nie überschrieben; ein eigenes Zertifikat ersetzt das erzeugte jederzeit (RUNBOOK §13).
-  local dir="${DOCUMENT_SIGNING_DIR:-./.signing}"
-  local common_name="hocX Dokumentsignatur${TRAEFIK_DOMAIN:+ $TRAEFIK_DOMAIN}"
-
-  if [[ "$dir" != /* ]]; then
-    dir="$PROJECT_DIR/${dir#./}"
-  fi
-  echo "==> [$ENVIRONMENT] Signaturzertifikat pruefen"
-  if [ -L "$dir" ]; then
-    echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
-    return 1
-  fi
-  if [ -e "$dir/signing-key.pem" ] && [ -e "$dir/signing-cert.pem" ]; then
-    echo "    Signaturzertifikat vorhanden: $dir"
-    return 0
-  fi
-  if [ -e "$dir/signing-key.pem" ] || [ -e "$dir/signing-cert.pem" ]; then
-    echo "Im Signaturverzeichnis fehlt signing-key.pem oder signing-cert.pem: $dir" >&2
-    echo "Fehlende Datei ergaenzen oder beide entfernen, dann erzeugt der Deploy ein neues Zertifikat." >&2
-    return 1
-  fi
-  mkdir -p "$dir"
-  chmod 750 "$dir"
-  echo "    Kein Zertifikat gefunden - erzeuge selbstsigniertes Zertifikat ($common_name)"
-  docker run --rm --pull never --network none --user 0:0 \
-    --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add DAC_OVERRIDE \
-    --security-opt no-new-privileges:true --entrypoint sh \
-    -e DOCUMENT_SIGNING_KEY_PASSWORD -e HOCX_SIGNING_CN="$common_name" \
-    -v "$dir:/signing" "$HOCX_BACKEND_IMAGE" \
-    -c 'python -m app.documents.devcert /signing --common-name "$HOCX_SIGNING_CN" --organization hocX --days 1095 >/dev/null \
-        && chown 5000:5001 /signing/signing-key.pem /signing/signing-cert.pem \
-        && chmod 600 /signing/signing-key.pem && chmod 644 /signing/signing-cert.pem \
-        && chgrp 5001 /signing'
-  echo "    Erzeugt: $dir (selbstsigniert, 3 Jahre gueltig)"
-  echo "    Hinweis: PDF-Reader zeigen die Signatur als gueltig, den Aussteller aber als unbekannt."
-  echo "    Fuer eine vertrauenswuerdige Identitaet ein eigenes Zertifikat hinterlegen (RUNBOOK §13)."
-}
 
 verify_release_images() {
   local service image repository digest_ref
@@ -742,7 +698,6 @@ echo "==> [$ENVIRONMENT] Pull Images ($HOCX_VERSION)"
 verify_release_images
 create_release_manifest
 prepare_thumbnail_dir
-ensure_signing_certificate
 
 echo "==> [$ENVIRONMENT] Infrastruktur starten"
 "${DC[@]}" up -d --pull never db redis

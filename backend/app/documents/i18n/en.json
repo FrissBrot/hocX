@@ -16,7 +16,13 @@
     "scanFailed": "The file could not be scanned for viruses. Please try again later.",
     "tooLarge": "The file is too large.",
     "unknownStyle": "Unknown house style.",
-    "unknownType": "Unknown document type."
+    "unknownType": "Unknown document type.",
+    "verificationAlreadyPending": "There is already an open request.",
+    "verificationAlreadyVerified": "The organisation is already verified.",
+    "verificationNameChanged": "The name has changed since the request.",
+    "verificationNoPending": "There is no open request.",
+    "verificationNotVerified": "The organisation is not verified.",
+    "verificationReasonRequired": "Please give a reason."
   },
   "attendanceShort": {
     "absent": "A",
@@ -259,11 +265,6 @@
     "reader": "Reader",
     "writer": "Editor"
   },
-  "signature": {
-    "line": "Digitally signed by hocX · Document ID {id} · Version {version}",
-    "lineNoVersion": "Digitally signed by hocX · Document ID {id}",
-    "preview": "Preview · not signed"
-  },
   "titlePage": {
     "date": "Date",
     "number": "Number",
@@ -279,6 +280,13 @@
     "done": "Done",
     "in_progress": "In progress",
     "open": "Open"
+  },
+  "verify": {
+    "id": "Document ID {id}",
+    "previewId": "PREVIEW",
+    "qrHint": "Scan the QR code to verify authenticity",
+    "url": "Verify authenticity: {url}",
+    "urlAndId": "Verify authenticity: {url} · ID {id}"
   },
   "watermark": {
     "draft": "Draft"

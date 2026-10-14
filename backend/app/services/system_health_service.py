@@ -8,9 +8,11 @@ Problem meldet - eine Stelle, damit Seite und ntfy nie unterschiedlich urteilen.
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import time
+import urllib.request
 from datetime import datetime, timedelta, timezone
 
 import pyclamd
@@ -43,8 +45,6 @@ ERRORS_PER_HOUR_WARNING = 20
 ERRORS_PER_HOUR_CRITICAL = 100
 SCAN_BACKLOG_MIN_AGE = timedelta(hours=1)
 PHOTO_QUEUE_WARNING_AGE = timedelta(hours=6)
-# Restlaufzeit des Signaturzertifikats, ab der gewarnt wird
-SIGNING_CERT_WARNING_DAYS = 30
 CONTAINER_MEMORY_WARNING_RATIO = 0.9
 _HEALTH_OUTPUT_MAX_LENGTH = 500
 
@@ -290,29 +290,27 @@ def _check_photo_queue(db: Session, now: datetime) -> HealthCheckRead:
     return HealthCheckRead(key="photo_queue", status=status, params={"queued": queued, "oldestMinutes": oldest_minutes})
 
 
-def _check_document_signing() -> HealthCheckRead:
-    """Signaturzertifikat der Dokument-Engine: vorhanden, lesbar, nicht bald abgelaufen.
-    Fehlende Konfiguration ist nur in Produktion ein Alarm (dort startet das Backend ohnehin nicht)."""
-    from app.documents.signing import certificate_status
+# Hash ohne Treffer (64 Nullen) für den Systemcheck der Prüfseite - nie ein echtes Dokument.
+VERIFY_PROBE_SHA256 = "0" * 64
+VERIFY_LATENCY_WARNING_MS = 2000
 
-    cert = certificate_status()
-    if not cert.configured:
-        return HealthCheckRead(
-            key="document_signing", status="critical" if settings.is_production else "unknown",
-            params={"state": "missing", "daysLeft": 0, "notAfter": "-"},
-        )
-    if not cert.readable:
-        return HealthCheckRead(key="document_signing", status="critical", params={"state": "unreadable", "daysLeft": 0, "notAfter": "-", "reason": cert.error or "-"})
-    days_left = cert.days_left or 0
-    state, status = "ok", "ok"
-    if days_left < SIGNING_CERT_WARNING_DAYS:
-        state, status = "expiring", "warning"
-    if days_left < 0:
-        state, status = "expired", "critical"
-    return HealthCheckRead(
-        key="document_signing", status=status,
-        params={"state": state, "daysLeft": max(days_left, 0), "notAfter": f"{cert.not_after:%d.%m.%Y}" if cert.not_after else "-"},
+
+def _check_document_verification() -> HealthCheckRead:
+    """Öffentliche Prüfseite: Prüf-Endpoint der Abgabebox erreichbar und die Funktion
+    verify_document (Rechte der Rolle hocx_abgabebox) lesbar. Intern ohne Traefik, damit das
+    Rate-Limit nicht zählt. Erwartet 200 {"found": false}."""
+    url = f"{settings.abgabebox_internal_url.rstrip('/')}/api/public/verify"
+    request = urllib.request.Request(
+        url, data=json.dumps({"sha256": VERIFY_PROBE_SHA256}).encode(), headers={"Content-Type": "application/json"}, method="POST"
     )
+    started = time.monotonic()
+    with urllib.request.urlopen(request, timeout=5) as response:
+        body = json.loads(response.read().decode() or "{}")
+    latency_ms = round((time.monotonic() - started) * 1000)
+    if body != {"found": False}:
+        raise RuntimeError(f"Unerwartete Antwort: {str(body)[:200]}")
+    status: HealthStatus = "warning" if latency_ms > VERIFY_LATENCY_WARNING_MS else "ok"
+    return HealthCheckRead(key="document_verification", status=status, params={"latencyMs": latency_ms})
 
 
 def _run_check(key: str, fn, *, failure_status: HealthStatus = "critical", db: Session | None = None) -> list[HealthCheckRead]:
@@ -341,7 +339,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("error_rate", lambda: _check_error_rate(db), failure_status="unknown", db=db)
     checks += _run_check("scan_backlog", lambda: _check_scan_backlog(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
-    checks += _run_check("document_signing", _check_document_signing)
+    checks += _run_check("document_verification", _check_document_verification)
     return checks
 
 

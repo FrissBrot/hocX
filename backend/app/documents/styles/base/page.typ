@@ -1,7 +1,8 @@
 // Seitenaufbau: Kopf-/Fussvarianten, Titelseiten, Inhaltsverzeichnis, Wasserzeichen und die
-// Signaturzeile auf der letzten Seite. Jede Variante funktioniert mit jeder anderen; ein
+// Prüfvermerk (Echtheitsprüfung). Jede Variante funktioniert mit jeder anderen; ein
 // Logo-Kopf ohne Logo fällt sichtbar auf den Standardkopf zurück.
 
+#import "@preview/tiaoma:0.3.0": qrcode
 #import "../lib/core.typ": colors, space, radius, tr, is-blank
 
 #let meta-line(ctx) = {
@@ -58,22 +59,74 @@
 
 #let page-of(ctx) = context tr(ctx, "page.of", page: counter(page).get().first(), total: counter(page).final().first())
 
-#let signature-line(ctx) = context {
-  let render = ctx.doc.render
-  let last = counter(page).final().first()
-  if counter(page).get().first() == last {
-    let id = render.at("document_id", default: none)
-    let text-value = if render.at("preview", default: false) or id == none {
-      tr(ctx, "signature.preview")
-    } else if is-blank(version-label(ctx)) {
-      tr(ctx, "signature.lineNoVersion", id: id)
-    } else {
-      tr(ctx, "signature.line", id: id, version: version-label(ctx))
-    }
-    if render.at("signed", default: false) or render.at("preview", default: false) {
-      align(center, text(size: 0.75em, fill: colors.muted)[#text-value])
-    }
+// ── Echtheitsprüfung ────────────────────────────────────────────────────────
+// Drei Hausstil-Optionen (verify_show_url, verify_show_id, verify_show_qr). Der Text setzt sich nur
+// aus eingeschalteten Teilen zusammen; Trennzeichen stehen nur zwischen vorhandenen Teilen. Sind
+// alle drei aus, entfällt der Prüfvermerk vollständig.
+
+#let verify-flags(ctx) = {
+  let style = ctx.doc.style
+  (
+    url: style.at("verify_show_url", default: true) and not is-blank(ctx.doc.render.at("verify_display", default: none)),
+    id: style.at("verify_show_id", default: true),
+    qr: style.at("verify_show_qr", default: true),
+  )
+}
+
+#let verify-short-id(ctx) = {
+  if ctx.doc.render.at("preview", default: false) { tr(ctx, "verify.previewId") } else { ctx.doc.render.at("short_id", default: none) }
+}
+
+// Text der Prüfzeile oder none
+#let verify-text(ctx) = {
+  let flags = verify-flags(ctx)
+  let id = verify-short-id(ctx)
+  let url = ctx.doc.render.at("verify_display", default: none)
+  let show-id = flags.id and not is-blank(id)
+  if flags.url and show-id { tr(ctx, "verify.urlAndId", url: url, id: id) }
+  else if flags.url { tr(ctx, "verify.url", url: url) }
+  else if show-id { tr(ctx, "verify.id", id: id) }
+  else { none }
+}
+
+// Die Zeile steht bei Modern/Klassisch in der Fusszeile jeder Seite, sonst im Prüfvermerk am Ende
+#let verify-in-footer(ctx) = ctx.theme.at("verify-in-footer", default: true) and ctx.doc.style.footer != "none"
+
+#let verify-footer-line(ctx) = {
+  let value = verify-text(ctx)
+  if verify-in-footer(ctx) and value != none {
+    v(-0.2em)
+    align(center, text(size: 0.85em)[#value])
   }
+}
+
+#let verify-qr(ctx, size) = {
+  let render = ctx.doc.render
+  let link-target = render.at("verify_link", default: none)
+  if render.at("preview", default: false) or is-blank(link-target) {
+    box(width: size, height: size, stroke: (paint: colors.border_strong, thickness: 0.6pt, dash: "dashed"), radius: 2pt,
+      align(center + horizon, text(size: 0.6em, fill: colors.muted)[QR]))
+  } else {
+    link(link-target, qrcode(link-target, width: size, height: size))
+  }
+}
+
+// Prüfvermerk am Ende des Inhalts, unten auf der letzten Seite (nicht umbrechbar)
+#let verify-end(ctx) = {
+  let flags = verify-flags(ctx)
+  let value = if verify-in-footer(ctx) { none } else { verify-text(ctx) }
+  if not flags.qr and value == none { return }
+  v(1fr, weak: true)
+  block(breakable: false, above: 1.2em, width: 100%, {
+    set text(size: 0.8em, fill: colors.muted)
+    if flags.qr {
+      grid(columns: (auto, 1fr), column-gutter: 0.8em, align: horizon,
+        verify-qr(ctx, 1.6cm),
+        if value != none { value } else { tr(ctx, "verify.qrHint") })
+    } else {
+      align(center, value)
+    }
+  })
 }
 
 #let footer-content(ctx) = {
@@ -96,7 +149,7 @@
     v(-0.5em)
   }
   body
-  signature-line(ctx)
+  verify-footer-line(ctx)
 }
 
 // ── Titelseiten ─────────────────────────────────────────────────────────────

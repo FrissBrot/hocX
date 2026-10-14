@@ -71,11 +71,11 @@ grep -q '\./storage-local/thumbnails:/app/storage-local/thumbnails' docker-compo
 grep -q 'THUMBNAIL_ROOT: /app/storage-local/thumbnails' docker-compose.release.yml
 grep -q 'PHOTO_WORKER_DB_PASSWORD_FILE: /run/secrets/photo_worker_db_password' docker-compose.release.yml
 
-# Signaturzertifikat: deploy.sh erzeugt eines, wenn keines vorhanden ist, überschreibt aber nie
-# ein bestehendes; das Verzeichnis ist read-only eingehängt und nie im Repo.
-grep -q '^ensure_signing_certificate$' scripts/deploy.sh
-grep -q 'Signaturzertifikat vorhanden' scripts/deploy.sh
-grep -q 'DOCUMENT_SIGNING_DIR:-./.signing}:/run/hocx-signing:ro' docker-compose.release.yml
-grep -q '^\.signing/$' .gitignore
+# Keine Dokumentsignatur mehr: weder Zertifikate noch Signatur-Konfiguration im Release.
+if grep -q 'DOCUMENT_SIGNING\|hocx-signing' docker-compose.release.yml scripts/deploy.sh; then
+  echo "Signatur-Konfiguration ist entfernt (Hash-Prüfung über die Abgabebox)." >&2
+  exit 1
+fi
+grep -q 'DOCUMENT_VERIFY_BASE_URL' docker-compose.release.yml
 
 echo "release config tests: ok"

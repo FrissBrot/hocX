@@ -16,7 +16,13 @@
     "scanFailed": "Impossibile controllare il file. Riprova più tardi.",
     "tooLarge": "Il file è troppo grande.",
     "unknownStyle": "Stile della casa sconosciuto.",
-    "unknownType": "Tipo di documento sconosciuto."
+    "unknownType": "Tipo di documento sconosciuto.",
+    "verificationAlreadyPending": "Esiste già una richiesta aperta.",
+    "verificationAlreadyVerified": "L’organizzazione è già verificata.",
+    "verificationNameChanged": "Il nome è cambiato dalla richiesta.",
+    "verificationNoPending": "Non esiste alcuna richiesta aperta.",
+    "verificationNotVerified": "L’organizzazione non è verificata.",
+    "verificationReasonRequired": "Indica un motivo."
   },
   "attendanceShort": {
     "absent": "A",
@@ -259,11 +265,6 @@
     "reader": "Lettura",
     "writer": "Modifica"
   },
-  "signature": {
-    "line": "Firmato digitalmente da hocX · ID documento {id} · Versione {version}",
-    "lineNoVersion": "Firmato digitalmente da hocX · ID documento {id}",
-    "preview": "Anteprima · non firmato"
-  },
   "titlePage": {
     "date": "Data",
     "number": "Numero",
@@ -279,6 +280,13 @@
     "done": "Completato",
     "in_progress": "In corso",
     "open": "Aperto"
+  },
+  "verify": {
+    "id": "ID documento {id}",
+    "previewId": "ANTEPRIMA",
+    "qrHint": "Scansiona il codice QR per verificarne l’autenticità",
+    "url": "Verifica autenticità: {url}",
+    "urlAndId": "Verifica autenticità: {url} · ID {id}"
   },
   "watermark": {
     "draft": "Bozza"

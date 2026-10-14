@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import tempfile
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -48,6 +49,7 @@ from app.models.entities import (
     ProtocolElement,
     ProtocolElementBlock,
     DocumentExport,
+    DocumentRegistry,
     DocumentRecipe,
     DocumentStyle,
     DocumentStyleAsset,
@@ -152,7 +154,7 @@ def test_export_bundles_only_own_users_and_nulls_foreign_references(db):
         assert "foreign@x.example" not in json.dumps(manifest)
         assert manifest["tables"]["template"][0]["created_by"] is None
         assert "user_tenant_role" not in manifest["tables"]
-        assert manifest["format_version"] == 5
+        assert manifest["format_version"] == 6
     finally:
         zip_path.unlink(missing_ok=True)
 
@@ -284,7 +286,11 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
         ),
         DocumentExport(
             tenant_id=tenant.id, protocol_id=protocol.id, document_type="protocol", version_label="v0.1",
-            content_hash="ab" * 32, pdf_sha256="cd" * 32, stored_file_id=generated_file.id, signature_level="PAdES-B-B",
+            content_hash="ab" * 32, stored_file_id=generated_file.id,
+        ),
+        DocumentRegistry(
+            tenant_id=tenant.id, sha256="cd" * 32, document_type="protocol", title="Sitzung", status_code="abgeschlossen",
+            version_major=1, version_minor=0, version_label="v1.0", source_public_id=protocol.public_id,
         ),
         UserProtocolScroll(user_id=user.id, protocol_id=protocol.id, last_element_id=17),
     ])
@@ -312,8 +318,12 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
         assert len(manifest["tables"]["word_import_profile"]) == 1
         assert len(manifest["tables"]["word_import_suggestion_outcome"]) == 1
         assert len(manifest["tables"]["document_export"]) == 1
+        assert len(manifest["tables"]["document_registry"]) == 1
         assert manifest["tables"]["user_protocol_scroll"][0]["user_id"] == str(user.public_id)
-        # Fresh target installation: the source account isn't there (see the word import test).
+        # Fresh target installation: the source account isn't there (see the word import test),
+        # and neither is the source tenant's document registry.
+        registry_id = db.scalar(select(DocumentRegistry.public_id).where(DocumentRegistry.tenant_id == tenant.id))
+        db.query(DocumentRegistry).filter(DocumentRegistry.tenant_id == tenant.id).delete()
         db.delete(user)
         db.flush()
         imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Complete Backup (Import)")
@@ -345,6 +355,11 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     assert imported_template.document_style_id == imported_style.id
     assert imported_recipe.style_id == imported_style.id
     assert imported_recipe.blocks_json[0]["params"]["protocol_id"] == str(imported_protocol.public_id)
+    registry = db.scalar(select(DocumentRegistry).where(DocumentRegistry.tenant_id == imported_tenant.id))
+    # Dokument-ID bleibt (sie steht im PDF), Quelle zeigt auf das importierte Protokoll
+    assert registry.public_id == registry_id and registry.sha256 == "cd" * 32
+    assert registry.status_code == "abgeschlossen" and registry.version_label == "v1.0"
+    assert registry.source_public_id == imported_protocol.public_id
     assert scroll.last_element_id == 17
 
 
@@ -1561,3 +1576,27 @@ def test_import_skips_partner_relations_when_partner_is_missing(db):
         select(TenantTrust).where((TenantTrust.tenant_low_id == new_tenant.id) | (TenantTrust.tenant_high_id == new_tenant.id))
     ) is None
     assert any("Vertrauensbeziehung" in warning for warning in warnings)
+
+
+def test_import_keeps_registry_with_original_and_never_imports_identity_verification(db):
+    """Ein Archiv, das in dieselbe Installation zurückgespielt wird: der Hash gehört weiter dem
+    Original (Eintrag übersprungen, Warnung). Die Bestätigung der Organisation durch hocX reist nie
+    mit - auch nicht, wenn ein (manipuliertes) Archiv sie behauptet."""
+    tenant = make_tenant(db, "Registerverein")
+    tenant.identity_verified_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    tenant.identity_verification_note = "Handelsregister geprüft"
+    tenant.verify_show_identity = True
+    db.add(DocumentRegistry(tenant_id=tenant.id, sha256="ef" * 32, document_type="todos", title="Pendenzen"))
+    db.flush()
+
+    zip_path, _ = TenantExportService().export(db, tenant.id, "full")
+    try:
+        imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Registerverein (Kopie)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    assert db.scalar(select(DocumentRegistry.tenant_id).where(DocumentRegistry.sha256 == "ef" * 32)) == tenant.id
+    assert db.scalar(select(DocumentRegistry).where(DocumentRegistry.tenant_id == imported_tenant.id)) is None
+    assert any("Dokumentenregister: 1 Einträge übersprungen" in warning for warning in warnings)
+    assert imported_tenant.identity_verified_at is None and imported_tenant.identity_verification_note is None
+    assert imported_tenant.verify_show_identity is True

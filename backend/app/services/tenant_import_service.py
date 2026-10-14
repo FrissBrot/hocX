@@ -14,6 +14,7 @@ export are recoverable situations, not reasons to fail the whole import.
 from __future__ import annotations
 
 import json
+import re
 import secrets
 import shutil
 import tempfile
@@ -41,6 +42,7 @@ from app.models import (
     AttendanceFine,
     CycleConfig,
     DocumentExport,
+    DocumentRegistry,
     DocumentRecipe,
     DocumentStyle,
     DocumentStyleAsset,
@@ -132,7 +134,7 @@ from app.services.tenant_transfer_common import (
     replace_public_ids,
 )
 
-SUPPORTED_FORMAT_VERSIONS = {2, 3, 4, 5}  # 5: Dokument-Engine (Hausstile statt Dokumentvorlagen)  # 2: separate user_tenant_role table; 3: role on app_user
+SUPPORTED_FORMAT_VERSIONS = {2, 3, 4, 5, 6}  # 6: Dokumentenregister; 5: Dokument-Engine (Hausstile statt Dokumentvorlagen)  # 2: separate user_tenant_role table; 3: role on app_user
 
 # Zip-bomb guard, same idea as file_service.py's MAX_ZIP_ENTRIES/MAX_ZIP_TOTAL_BYTES for the
 # word-import ZIP upload, just scaled up: a full-tenant export can legitimately contain many
@@ -263,6 +265,9 @@ class TenantImportService:
         is kept, so every handed-out URL keeps working after a restore - unless it's already in
         use here: then the source tenant still exists on this installation, and sharing its
         credential would open the source's link for the imported tenant as well."""
+        if token and submission_link_service.is_reserved_token(token):
+            self.warnings.append(f"{label}: Token «{token}» ist reserviert - neuer Link erzeugt.")
+            return generate()
         if token and self.db.scalar(select(model.id).where(model.token == token)) is None:
             return token
         if token:
@@ -825,6 +830,35 @@ class TenantImportService:
                 document_type="protocol",
                 stored_file_id=stored_file_map.get(old_file_id) if old_file_id else None,
             ))
+        self.db.commit()
+        self._import_document_registry(new_tenant_id)
+
+    def _import_document_registry(self, new_tenant_id: int) -> None:
+        """Register-Einträge mit ihrer Dokument-ID (sie steht im PDF). Ein Hash gehört
+        installationsweit genau einem Mandanten: liegt er hier schon vor (Archiv in dieselbe
+        Installation zurückgespielt, während das Original noch existiert), behält das Original
+        die Zuordnung und der Eintrag wird übersprungen."""
+        rows = self._t("document_registry")
+        if not rows:
+            return
+        hashes = [str(row.get("sha256") or "").lower() for row in rows]
+        taken = set(self.db.scalars(select(DocumentRegistry.sha256).where(DocumentRegistry.sha256.in_(hashes))).all())
+        skipped = 0
+        for row in rows:
+            data = self._resolve_row("document_registry", row)
+            sha256 = str(data.get("sha256") or "").lower()
+            if not re.fullmatch(r"[0-9a-f]{64}", sha256) or sha256 in taken:
+                skipped += 1
+                continue
+            source = data.get("source_public_id")
+            if source:
+                source = self._public_id_map.get(str(source).lower(), str(source))
+            self.db.add(self._build(DocumentRegistry, data, {"tenant_id": new_tenant_id, "sha256": sha256, "source_public_id": source}))
+            taken.add(sha256)
+        if skipped:
+            self.warnings.append(
+                f"Dokumentenregister: {skipped} Einträge übersprungen (Datei ist auf dieser Installation bereits einem Mandanten zugeordnet)."
+            )
         self.db.commit()
 
     # ── full-scope tables ─────────────────────────────────────────────────

@@ -16,7 +16,13 @@
     "scanFailed": "Le fichier n’a pas pu être analysé. Veuillez réessayer plus tard.",
     "tooLarge": "Le fichier est trop volumineux.",
     "unknownStyle": "Style maison inconnu.",
-    "unknownType": "Type de document inconnu."
+    "unknownType": "Type de document inconnu.",
+    "verificationAlreadyPending": "Une demande est déjà en cours.",
+    "verificationAlreadyVerified": "L’organisation est déjà vérifiée.",
+    "verificationNameChanged": "Le nom a changé depuis la demande.",
+    "verificationNoPending": "Aucune demande n’est en cours.",
+    "verificationNotVerified": "L’organisation n’est pas vérifiée.",
+    "verificationReasonRequired": "Veuillez indiquer un motif."
   },
   "attendanceShort": {
     "absent": "A",
@@ -259,11 +265,6 @@
     "reader": "Lecture",
     "writer": "Édition"
   },
-  "signature": {
-    "line": "Signé numériquement par hocX · ID du document {id} · Version {version}",
-    "lineNoVersion": "Signé numériquement par hocX · ID du document {id}",
-    "preview": "Aperçu · non signé"
-  },
   "titlePage": {
     "date": "Date",
     "number": "Numéro",
@@ -279,6 +280,13 @@
     "done": "Terminé",
     "in_progress": "En cours",
     "open": "Ouvert"
+  },
+  "verify": {
+    "id": "ID du document {id}",
+    "previewId": "APERÇU",
+    "qrHint": "Scannez le code QR pour vérifier l’authenticité",
+    "url": "Vérifier l’authenticité : {url}",
+    "urlAndId": "Vérifier l’authenticité : {url} · ID {id}"
   },
   "watermark": {
     "draft": "Brouillon"

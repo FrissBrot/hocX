@@ -73,7 +73,7 @@ def sample(db):
     return {"tenant": tenant, "protocol": protocol, "list": material}
 
 
-def test_every_style_renders_every_document_type(db, sample, signing_cert):
+def test_every_style_renders_every_document_type(db, sample):
     pdfs: list[tuple[str, bytes]] = []
     for style_key in STYLE_KEYS:
         for document_type in DOCUMENT_TYPE_KEYS:

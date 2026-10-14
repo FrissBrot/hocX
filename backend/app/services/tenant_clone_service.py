@@ -105,8 +105,9 @@ class TenantCloneService:
     """Clones a tenant either as an empty structure/config copy or as a full data backup.
 
     Known, deliberate limitations (disclosed rather than silently handled):
-    - `DocumentExport` (erzeugte, signierte PDFs) wird nie geklont - jederzeit neu erzeugbar,
-      und die Signatur trägt die Dokument-ID des Quellmandanten.
+    - `DocumentExport` und `DocumentRegistry` (erzeugte PDFs und ihr Register) werden nie
+      geklont: die Dokumente gehören zum Original, ihre Dokument-ID und ihr Hash bleiben dort
+      prüfbar. Ebenso wenig die Bestätigung der Organisation durch hocX.
     - `UserProtocolScroll` (per-user scroll position) is never cloned — ephemeral UI state.
     - Users (and their per-user access rows) are never cloned: an account belongs to exactly
       one tenant. Every reference to a user on cloned rows is reset to NULL, and the new

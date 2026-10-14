@@ -52,7 +52,8 @@ def setup(db):
 def test_render_protocol_and_list_exports(db, setup):
     body = DocumentRequest(protocol_id=setup["protocol"].public_id)
     result = asyncio.run(routes.render_document(body, db=db, user=setup["admin"]))
-    assert result.document_type == "protocol" and result.content_url and result.signature_level
+    assert result.document_type == "protocol" and result.content_url
+    assert result.verify_url.endswith(f"/verify?id={result.id}") and len(result.short_id) == 9
     listed = routes.list_document_exports(protocol_id=setup["protocol"].public_id, limit=5, db=db, user=setup["admin"])
     assert [item.id for item in listed] == [result.id]
 
