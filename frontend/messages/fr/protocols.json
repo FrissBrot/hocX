@@ -235,7 +235,8 @@
     "workflowPostProcessingMode": "Mode post-traitement",
     "workflowPreparationMode": "Mode préparation",
     "workflowSessionMode": "Mode séance",
-    "templateSyncedByOther": "{name} a rechargé les éléments depuis le modèle. L’affichage est actualisé."
+    "templateSyncedByOther": "{name} a rechargé les éléments depuis le modèle. L’affichage est actualisé.",
+    "imageAlreadyExists": "Cette image existe déjà et n'a pas été envoyée une nouvelle fois."
   },
   "embeddedBlock": {
     "attendance": "Présence",

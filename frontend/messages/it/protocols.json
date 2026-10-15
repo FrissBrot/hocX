@@ -235,7 +235,8 @@
     "workflowPostProcessingMode": "Modalità post-elaborazione",
     "workflowPreparationMode": "Modalità preparazione",
     "workflowSessionMode": "Modalità sessione",
-    "templateSyncedByOther": "{name} ha ricaricato gli elementi dal modello. La vista viene aggiornata."
+    "templateSyncedByOther": "{name} ha ricaricato gli elementi dal modello. La vista viene aggiornata.",
+    "imageAlreadyExists": "Questa immagine esiste già e non è stata caricata di nuovo."
   },
   "embeddedBlock": {
     "attendance": "Presenza",

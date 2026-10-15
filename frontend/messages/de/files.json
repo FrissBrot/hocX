@@ -128,5 +128,30 @@
     "rulesMaxFiles": "max. {max} Dateien pro Element",
     "elementLabel": "Abgabe-Element",
     "elementPlaceholder": "Element wählen…"
+  },
+  "uploadResults": {
+    "title": "Upload-Ergebnis",
+    "summaryImages": "{count, plural, one {1 Bild verarbeitet} other {# Bilder verarbeitet}}: {parts}.",
+    "summaryFiles": "{count, plural, one {1 Datei verarbeitet} other {# Dateien verarbeitet}}: {parts}.",
+    "partUploaded": "{count} hochgeladen",
+    "partSkipped": "{count} übersprungen",
+    "partMetadataUpdated": "{count} übersprungen und Metadaten ergänzt",
+    "partFailed": "{count} fehlgeschlagen",
+    "detailsAction": "Details",
+    "appliedDetail": "Ergänzt: {fields}",
+    "status": {
+      "uploaded": "Hochgeladen",
+      "skipped": "Übersprungen",
+      "metadata_updated": "Übersprungen · Metadaten ergänzt",
+      "failed": "Fehlgeschlagen"
+    },
+    "fields": {
+      "taken_at": "Aufnahmedatum",
+      "gps": "Standort (GPS)",
+      "camera": "Kamera",
+      "dimensions": "Bildmasse",
+      "orientation": "Ausrichtung",
+      "estimated_taken_on": "geschätztes Aufnahmedatum"
+    }
   }
 }

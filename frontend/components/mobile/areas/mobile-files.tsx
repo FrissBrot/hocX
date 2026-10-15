@@ -10,6 +10,8 @@ import { useOpenMore } from "@/components/mobile/mobile-shell";
 import { MobileActionSheet, MobileChip, MobileChipRow, MobileEmpty, MobileFab, MobileListRow, MobileSubHeader } from "@/components/mobile/mobile-ui";
 import { dateParts } from "@/components/mobile/mobile-utils";
 import { DocumentUploadModal } from "@/components/files/document-upload-modal";
+import { uploadResultsSummary } from "@/components/files/upload-results-modal";
+import { countUploadResults } from "@/lib/utils/upload-results";
 import { FileDetailModal } from "@/components/files/file-detail-modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { ShareLinkModal } from "@/components/ui/share-link-modal";
@@ -104,7 +106,11 @@ export function MobileFiles({ initialItems }: { initialItems: FileOverviewItem[]
   }
 
   function uploaded(result: DocumentUploadResult) {
-    void reload();
+    if (result.items.length > 0) void reload();
+    if (result.file_results?.length) {
+      showToast(uploadResultsSummary(result.file_results, t), countUploadResults(result.file_results).failed > 0 ? "info" : "success");
+      return;
+    }
     showToast(t("view.uploadedToast", { count: result.items.length }), "success");
     if (result.errors.length > 0) showToast(result.errors.join(" · "), "info");
   }

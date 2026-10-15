@@ -235,7 +235,8 @@
     "workflowPostProcessingMode": "Follow-up mode",
     "workflowPreparationMode": "Preparation mode",
     "workflowSessionMode": "Session mode",
-    "templateSyncedByOther": "{name} reloaded the elements from the template. The view is being refreshed."
+    "templateSyncedByOther": "{name} reloaded the elements from the template. The view is being refreshed.",
+    "imageAlreadyExists": "This image already exists and was not uploaded again."
   },
   "embeddedBlock": {
     "attendance": "Attendance",

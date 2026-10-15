@@ -128,5 +128,30 @@
     "rulesMaxFiles": "max. {max} files per element",
     "elementLabel": "Submission item",
     "elementPlaceholder": "Choose item…"
+  },
+  "uploadResults": {
+    "title": "Upload result",
+    "summaryImages": "{count, plural, one {1 image processed} other {# images processed}}: {parts}.",
+    "summaryFiles": "{count, plural, one {1 file processed} other {# files processed}}: {parts}.",
+    "partUploaded": "{count} uploaded",
+    "partSkipped": "{count} skipped",
+    "partMetadataUpdated": "{count} skipped with metadata added",
+    "partFailed": "{count} failed",
+    "detailsAction": "Details",
+    "appliedDetail": "Added: {fields}",
+    "status": {
+      "uploaded": "Uploaded",
+      "skipped": "Skipped",
+      "metadata_updated": "Skipped · metadata added",
+      "failed": "Failed"
+    },
+    "fields": {
+      "taken_at": "capture date",
+      "gps": "location (GPS)",
+      "camera": "camera",
+      "dimensions": "dimensions",
+      "orientation": "orientation",
+      "estimated_taken_on": "estimated capture date"
+    }
   }
 }

@@ -36,7 +36,7 @@ describe("PhotoBulkBar toggleBest", () => {
     vi.restoreAllMocks();
   });
 
-  it("downloads the selected originals with their filenames", async () => {
+  it("downloads the selected photos via the export endpoint with their filenames", async () => {
     const blob = new Blob(["photo"]);
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => blob });
     const createUrl = vi.fn().mockReturnValue("blob:photo");
@@ -48,11 +48,12 @@ describe("PhotoBulkBar toggleBest", () => {
     vi.stubGlobal("fetch", fetchMock);
     const downloads: string[] = [];
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { downloads.push(this.download); });
-    render(<PhotoBulkBar selectedIds={["a", "b"]} selectedItems={[{ original_name: "a.jpg", content_url: "/a/content" }, { original_name: "b.jpg", content_url: "/b/content" }]} tagSuggestions={[]} onClearSelection={() => {}} onDone={() => {}} />);
+    render(<PhotoBulkBar selectedIds={["a", "b"]} selectedItems={[{ id: "a", original_name: "a.jpg", content_url: "/a/content" }, { id: "b", original_name: "b.jpg", content_url: "/b/content" }]} tagSuggestions={[]} onClearSelection={() => {}} onDone={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "Herunterladen" }));
     await waitFor(() => expect(downloads).toEqual(["a.jpg", "b.jpg"]));
-    expect(fetchMock).toHaveBeenCalledWith("/a/content", { credentials: "include" });
-    expect(fetchMock).toHaveBeenCalledWith("/b/content", { credentials: "include" });
+    // Export-Endpunkt (geschätztes Datum in der Kopie), nie die gespeicherte Datei selbst.
+    expect(fetchMock).toHaveBeenCalledWith("/api/stored-files/a/download?part=image", { credentials: "include" });
+    expect(fetchMock).toHaveBeenCalledWith("/api/stored-files/b/download?part=image", { credentials: "include" });
     expect(createUrl).toHaveBeenCalledWith(blob);
   });
 

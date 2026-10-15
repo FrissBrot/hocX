@@ -235,7 +235,8 @@
     "workflowPostProcessingMode": "Nachbearbeitungsmodus",
     "workflowPreparationMode": "Vorbereitungsmodus",
     "workflowSessionMode": "Sitzungsmodus",
-    "templateSyncedByOther": "{name} hat die Elemente aus der Vorlage neu geladen. Die Ansicht wird aktualisiert."
+    "templateSyncedByOther": "{name} hat die Elemente aus der Vorlage neu geladen. Die Ansicht wird aktualisiert.",
+    "imageAlreadyExists": "Dieses Bild ist bereits vorhanden und wurde nicht erneut hochgeladen."
   },
   "embeddedBlock": {
     "attendance": "Anwesenheit",

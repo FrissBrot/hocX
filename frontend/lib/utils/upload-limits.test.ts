@@ -12,8 +12,11 @@ describe("Foto-Uploadgrenzen", () => {
     expect(photoUploadProblem([file("photo.jpg", PHOTO_MAX_BYTES + 1)], new Set())).toContain("100 MiB");
     expect(photoUploadProblem([file("photo.mov", 31 * 1024 ** 2)], new Set([0]))).toContain("30 MiB");
   });
-  it("prüft Gesamtgrösse und Anzahl vor dem Senden", () => {
-    expect(photoUploadProblem([file("a.zip", 6 * 1024 ** 3), file("b.zip", 6 * 1024 ** 3)], new Set())).toContain("10 GiB");
-    expect(photoUploadProblem(Array.from({ length: 51 }, () => file("a.jpg", 1)), new Set())).toContain("50 Dateien");
+  it("prüft Gesamtgrösse und Anzahl der Auswahl vor dem Senden", () => {
+    // Mehr als ein Auftrag fasst, wird automatisch in mehrere Aufträge geteilt.
+    expect(photoUploadProblem([file("a.zip", 6 * 1024 ** 3), file("b.zip", 6 * 1024 ** 3)], new Set())).toBeNull();
+    expect(photoUploadProblem(Array.from({ length: 51 }, () => file("a.jpg", 1)), new Set())).toBeNull();
+    expect(photoUploadProblem(Array.from({ length: 2001 }, () => file("a.jpg", 1)), new Set())).toContain("2000 Dateien");
+    expect(photoUploadProblem(Array.from({ length: 6 }, (_, i) => file(`${i}.zip`, 9 * 1024 ** 3)), new Set())).toContain("50 GiB");
   });
 });

@@ -26,6 +26,7 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { ApiError, browserApiFetch } from "@/lib/api/client";
+import { isAlreadyUploaded } from "@/lib/image-analysis/precheck";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
 import type {
@@ -228,6 +229,12 @@ export function MobileProtocolEditor({
     setSheet(null);
     setSaveState("saving");
     try {
+      // Vorab-Abgleich per SHA-256 (siehe protocol-editor.tsx uploadImage).
+      if (await isAlreadyUploaded(file, "protocol_image")) {
+        setSaveState("error");
+        showToast(tProtocols("editor.imageAlreadyExists"), "error");
+        return;
+      }
       const body = new FormData();
       body.append("file", file);
       const created = await browserApiFetch<ProtocolImage>(`/api/protocol-element-blocks/${blockId}/images`, { method: "POST", body });

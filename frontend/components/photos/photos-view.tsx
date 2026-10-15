@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { AlbumReleaseNotice } from "./album-share-release";
-import { GalleryUploadModal } from "./gallery-upload-modal";
+import { GalleryUploadModal, GalleryUploadSession } from "./gallery-upload-modal";
 import { GalleryUploadProgress } from "./gallery-upload-progress";
 import { mergeNewItems } from "./merge-new-items";
 import { PhotoAlbums } from "./photo-albums";
@@ -15,6 +15,7 @@ import { PhotoDateGroups } from "./photo-date-groups";
 import { PhotoSimilarGroups } from "./photo-similar-groups";
 import { PhotoSimilarSeries } from "./photo-similar-series";
 import { PhotoViewer } from "./photo-viewer";
+import { UploadResultsModal, uploadResultsSummary } from "@/components/files/upload-results-modal";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
 import { FilterTabs } from "@/components/ui/filter-tabs";
@@ -26,11 +27,14 @@ import { MobileFab, MobileSegmented } from "@/components/mobile/mobile-ui";
 import { browserApiFetch } from "@/lib/api/client";
 import { useFileDrop } from "@/lib/hooks/use-file-drop";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
+import { countUploadResults, normalizeResult, resultsFromLegacyJob } from "@/lib/utils/upload-results";
 import {
   AlbumPendingRelease,
   FileOverviewItem,
   GalleryUploadJob,
   GalleryUploadJobDetail,
+  StoredFileMetadata,
+  UploadFileResult,
   PhotoAnalysisProgress as ProgressData,
 } from "@/types/api";
 
@@ -67,6 +71,12 @@ type Props = {
 
 export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobile = false }: Props) {
   const t = useTranslations("photos.view");
+  const tFiles = useTranslations("files");
+  // Ein Upload-Vorgang kann aus mehreren Aufträgen (Batches) plus Dateien bestehen, die der
+  // Vorab-Abgleich schon erledigt hat. Die Zusammenfassung erscheint erst, wenn alle Aufträge
+  // des Vorgangs fertig sind - jede Datei zählt dabei genau einmal.
+  const uploadSessionRef = useRef<{ pending: Set<string>; results: UploadFileResult[]; closed: boolean } | null>(null);
+  const [uploadResults, setUploadResults] = useState<UploadFileResult[] | null>(null);
   const tMobile = useTranslations("mobile");
   const embedded = Boolean(albumId);
   const router = useRouter();
@@ -329,6 +339,33 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     }
   }
 
+  // Geändertes Schätzdatum: Kachel sofort aktualisieren, neu sortiert/gruppiert wird beim
+  // Schliessen der Detailansicht (solange sie offen ist, darf sich die Reihenfolge nicht ändern).
+  const captureDateChangedRef = useRef(false);
+  function handleCaptureDateSaved(itemId: string, metadata: StoredFileMetadata) {
+    captureDateChangedRef.current = true;
+    setItems((current) =>
+      current.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              estimated_taken_on: metadata.estimated_taken_on ?? null,
+              date_source: item.date_source === "context" ? "context" : metadata.date_source,
+              group_date: item.date_source === "context" ? item.group_date : metadata.effective_date ?? item.group_date,
+            }
+          : item,
+      ),
+    );
+  }
+
+  function closeViewer() {
+    setViewerIndex(null);
+    if (captureDateChangedRef.current) {
+      captureDateChangedRef.current = false;
+      reload();
+    }
+  }
+
   function handleTagsSaved(itemId: string, tags: string[]) {
     setItems((current) => current.map((item) => (item.id === itemId ? { ...item, tags } : item)));
     setTagSuggestions((current) => Array.from(new Set([...current, ...tags])).sort((a, b) => a.localeCompare(b)));
@@ -338,12 +375,65 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     setQueuedUploadId(job.id);
     // The actual result (imported items/errors) only arrives later, once the background
     // job finishes - see handleGalleryUploadJobDone, wired to GalleryUploadProgress below.
-    showToast(t("uploadQueuedToast"), "info");
+    const session = uploadSessionRef.current;
+    if (!session || session.closed) {
+      uploadSessionRef.current = { pending: new Set([job.id]), results: [], closed: false };
+      showToast(t("uploadQueuedToast"), "info");
+    } else {
+      session.pending.add(job.id);
+    }
+  }
+
+  function showUploadSummary(results: UploadFileResult[]) {
+    const normalized = results.map(normalizeResult);
+    if (normalized.length === 0) return;
+    const counts = countUploadResults(normalized);
+    // Ergänzte Aufnahmedaten können Sortierung und Gruppierung vorhandener Bilder ändern.
+    if (counts.metadataUpdated > 0) reload();
+    const tone = counts.failed > 0 ? (counts.failed === counts.total ? "error" : "info") : "success";
+    showToast(uploadResultsSummary(normalized, tFiles, "images"), tone, {
+      action: { label: tFiles("uploadResults.detailsAction"), onClick: () => setUploadResults(normalized) },
+    });
+  }
+
+  function handleGallerySessionComplete(sessionInfo: GalleryUploadSession) {
+    let session = uploadSessionRef.current;
+    if (!session || session.closed) {
+      session = { pending: new Set(), results: [], closed: false };
+      uploadSessionRef.current = session;
+    }
+    session.results.push(...sessionInfo.precheckResults);
+    session.closed = true;
+    if (session.pending.size === 0) {
+      uploadSessionRef.current = null;
+      showUploadSummary(session.results);
+    }
+  }
+
+  function recordJobResults(job: GalleryUploadJobDetail) {
+    const results = job.file_results?.length
+      ? job.file_results
+      : resultsFromLegacyJob(job.imported_items.map((item) => item.original_name), job.errors);
+    const session = uploadSessionRef.current;
+    if (session && session.pending.has(job.id)) {
+      session.pending.delete(job.id);
+      session.results.push(...results);
+      if (session.closed && session.pending.size === 0) {
+        uploadSessionRef.current = null;
+        showUploadSummary(session.results);
+      }
+      return;
+    }
+    // Auftrag aus einem anderen Tab/vor einem Neuladen: eigene Zusammenfassung.
+    showUploadSummary(results);
   }
 
   function handleGalleryUploadJobDone(job: GalleryUploadJobDetail) {
     const uploaded = job.imported_items;
-    const errors = job.errors;
+    // Duplikate und Fehler stehen in der Zusammenfassung (recordJobResults); als Toast bleiben
+    // nur reine Hinweise (ähnliches Bild, Live-Photo-Video).
+    const errors = (job.file_results?.length ? job.errors.filter((error) => !error.includes("Exaktes Duplikat")) : []) // i18n-ok: Serverkennung
+      .filter((error) => !(job.file_results ?? []).some((result) => result.status === "failed" && error.startsWith(`${result.name}:`)));
     if (uploaded.length > 0) {
       if (albumId) {
         void browserApiFetch(`/api/files/albums/${albumId}/items`, { method: "POST", body: JSON.stringify({ file_ids: uploaded.map((item) => item.id) }) })
@@ -353,9 +443,9 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
         void syncNewItems();
       }
       setTagSuggestions((current) => Array.from(new Set([...current, ...uploaded.flatMap((item) => item.tags)])).sort((a, b) => a.localeCompare(b)));
-      showToast(t("uploadedToast", { count: uploaded.length }), "success");
     }
-    if (errors.length > 0) showToast(errors.join(" · "), uploaded.length > 0 ? "info" : "error");
+    recordJobResults(job);
+    if (errors.length > 0) showToast(errors.join(" · "), "info");
     if (job.error) showToast(job.error, "error");
     loadPendingReleases();
   }
@@ -628,9 +718,10 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
           items={items}
           index={viewerIndex}
           onIndexChange={setViewerIndex}
-          onClose={() => setViewerIndex(null)}
+          onClose={closeViewer}
           onToggleBest={albumId ? handleAlbumScopedToggleBest : handleUnscopedToggleBest}
           onTagsSaved={handleTagsSaved}
+          onCaptureDateSaved={handleCaptureDateSaved}
         />
       )}
 
@@ -640,8 +731,11 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
           initialFiles={droppedFiles}
           onClose={() => setUploadModalOpen(false)}
           onQueued={handleGalleryUploadQueued}
+          onSessionComplete={handleGallerySessionComplete}
         />
       )}
+
+      {uploadResults && <UploadResultsModal results={uploadResults} noun="images" onClose={() => setUploadResults(null)} />}
 
       <FileDropOverlay active={isFileDragging} title={t("dropOverlayTitle")} hint={t("dropOverlayHint")} />
     </div>

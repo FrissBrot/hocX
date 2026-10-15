@@ -232,8 +232,15 @@ export type FileOverviewItem = {
   // uploaded before this field existed whose thumbnail hasn't been regenerated since.
   width: number | null;
   height: number | null;
-  // The photo's logical date for the Fotos page's date-group headers.
+  // The photo's logical date for the Fotos page's date-group headers (central priority:
+  // real capture date, estimated date, upload date - see backend capture_date.py).
   group_date: string | null;
+  // Where group_date comes from: real EXIF date, user estimate, upload-date fallback or the
+  // protocol/word-import date. Drives the subtle date markers in the gallery.
+  date_source?: PhotoDateSource;
+  exif_taken_at?: string | null;
+  // Calendar date only ("YYYY-MM-DD") - never carries a time or time zone.
+  estimated_taken_on?: string | null;
   // Short context label for that date group's header (protocol/word-import/submission/
   // event) - null when there's nothing more specific than the plain date.
   context_label: string | null;
@@ -412,14 +419,52 @@ export type GalleryUploadJob = {
   error: string | null;
 };
 
+export type PhotoDateSource = "exif" | "estimated" | "upload" | "context";
+
+export type MetadataField = "taken_at" | "gps" | "camera" | "dimensions" | "orientation" | "estimated_taken_on";
+
+// Per-file outcome of an upload (see backend UploadFileResult).
+export type UploadFileStatus = "uploaded" | "skipped" | "metadata_updated" | "failed";
+
+export type UploadFileResult = {
+  name: string;
+  status: UploadFileStatus;
+  file_id?: string | null;
+  applied?: MetadataField[];
+  conflicts?: MetadataField[];
+  message?: string | null;
+};
+
 export type GalleryUploadJobDetail = GalleryUploadJob & {
   imported_items: FileOverviewItem[];
   errors: string[];
+  file_results?: UploadFileResult[];
 };
 
 export type DocumentUploadResult = {
   items: FileOverviewItem[];
   errors: string[];
+  file_results?: UploadFileResult[];
+};
+
+export type UploadPrecheckStatus = "upload_required" | "already_exists" | "metadata_updated" | "fallback_required";
+
+export type UploadPrecheckResult = {
+  client_id: string;
+  status: UploadPrecheckStatus;
+  file_id: string | null;
+  applied: MetadataField[];
+  conflicts: MetadataField[];
+};
+
+export type GpsMetadata = {
+  latitude: number;
+  longitude: number;
+  altitude_m: number | null;
+  direction_deg: number | null;
+  accuracy_m: number | null;
+  timestamp: string | null;
+  source: string | null;
 };
 
 export type StoredFileMetadata = {
@@ -439,6 +484,17 @@ export type StoredFileMetadata = {
   exif_taken_at: string | null;
   exif_camera: string | null;
   uploaded_by_name: string | null;
+  exif_taken_offset?: string | null;
+  exif_taken_source?: string | null;
+  estimated_taken_on?: string | null;
+  estimated_taken_set_at?: string | null;
+  estimated_taken_set_by_name?: string | null;
+  effective_date?: string | null;
+  date_source?: PhotoDateSource;
+  camera_make?: string | null;
+  camera_model?: string | null;
+  gps?: GpsMetadata | null;
+  can_edit_capture_date?: boolean;
 };
 
 export type SubmissionUploadLogEntry = {
