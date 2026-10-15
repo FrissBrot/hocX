@@ -32,6 +32,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.core.security import CurrentUser
@@ -292,7 +293,7 @@ async def preview(db: Session, user: CurrentUser | None, tenant_id: int, request
     # einem Savepoint, der am Ende zurückgerollt wird.
     savepoint = db.begin_nested()
     try:
-        prepared = prepare(db, user, tenant_id, request)
+        prepared = await _prepare_off_loop(db, user, tenant_id, request)
         prepared.document.render = verify_render_info(None, preview=True)
         output = await get_renderer().render_preview(prepared.document, prepared.assets, max_pages=max_pages)
         return output.pages
@@ -349,15 +350,23 @@ def verify_render_info(document_id: uuid.UUID | None, *, preview: bool = False) 
     )
 
 
+async def _prepare_off_loop(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest) -> PreparedDocument:
+    """``prepare`` (Provider-Abfragen, Bildnormalisierung mit Pillow) im Threadpool, damit die
+    Event-Loop des Workers währenddessen andere Requests und WebSockets bedient. Die Session
+    wird dabei nie gleichzeitig benutzt: die Route wartet auf das Ergebnis."""
+    return await run_in_threadpool(prepare, db, user, tenant_id, request)
+
+
 async def render(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest) -> RenderResult:
-    prepared = prepare(db, user, tenant_id, request)
+    prepared = await _prepare_off_loop(db, user, tenant_id, request)
     document = prepared.document
     export_public_id = _uuid7()
     document.render = verify_render_info(export_public_id)
 
     output = await get_renderer().render_pdf(document, prepared.assets)
     tenant = db.get(Tenant, tenant_id)
-    pdf = add_document_xmp(
+    pdf = await run_in_threadpool(
+        add_document_xmp,
         output.pdf or b"",
         DocumentXmp(
             document_id=str(export_public_id),

@@ -115,3 +115,39 @@ def test_custom_blocks_or_title_do_not_touch_versioning(db):
         DocumentRegistry.source_public_id == protocol.public_id, DocumentRegistry.version_minor > 0
     ).count()
     assert newer == 0
+
+
+def test_prepare_does_not_block_event_loop(db, monkeypatch):
+    """TYPST-004: prepare() (DB-Abfragen, Bildverarbeitung) läuft im Threadpool; die
+    Event-Loop bedient währenddessen andere Aufgaben."""
+    import time
+
+    tenant, protocol, _ = _setup(db)
+    ticks = 0
+    ticks_during_prepare = []
+
+    def slow_prepare(*_args, **_kwargs):
+        time.sleep(0.3)
+        ticks_during_prepare.append(ticks)
+        raise ValueError("unknown_document_type")
+
+    monkeypatch.setattr(service, "prepare", slow_prepare)
+
+    async def ticker():
+        nonlocal ticks
+        for _ in range(20):
+            await asyncio.sleep(0.01)
+            ticks += 1
+
+    async def scenario():
+        results = await asyncio.gather(
+            service.preview(db, None, tenant.id, DocumentRequest(protocol_id=protocol.public_id)),
+            ticker(),
+            return_exceptions=True,
+        )
+        return results[0]
+
+    outcome = asyncio.run(scenario())
+    assert isinstance(outcome, ValueError)
+    # Blockierte prepare() die Loop, stünde der Zähler hier noch bei 0.
+    assert ticks_during_prepare and ticks_during_prepare[0] >= 10
