@@ -232,6 +232,109 @@ def _insert_window(database_url: str, job_id: uuid.UUID) -> uuid.UUID:
         engine.dispose()
 
 
+# --- Journal des Datenbanktauschs ---------------------------------------------------------------
+#
+# Write-ahead: jeder Schritt wird VOR der zugehörigen Umbenennung ins Journal geschrieben. Die
+# Auswertung (reconcile_swap) richtet sich danach nicht nach dem Schritt allein, sondern nach den
+# tatsächlich vorhandenen Datenbanken - so ist jeder Absturzzeitpunkt eindeutig auflösbar.
+#   copied               Backup-Tabellen in die Restore-DB übernommen, noch nichts umbenannt
+#   renaming_live        gleich: live -> pre
+#   renaming_restored    gleich: restored -> live   (Altbestand: renamed_live)
+#   renamed_restored     Tausch vollzogen, Smoke-Test/Freigabe stehen aus
+#   rolling_back         gleich: live -> failed, pre -> live (Rücktausch nach Smoke-Fehler)
+#   rolled_back          Rücktausch vollzogen, Abschluss (Fence/Wartung/Status) steht aus
+#   inconsistent         unerwarteter Zustand: nichts wird automatisch umbenannt oder gelöscht,
+#                        der Auftrag endet mit cutover_inconsistent (manuelle Prüfung)
+FORWARD_STEPS = ("copied", "renaming_live", "renamed_live", "renaming_restored", "renamed_restored")
+ROLLBACK_STEPS = ("rolling_back", "rolled_back")
+
+
+def _rename_db(pg: PgTools, source: str, target: str) -> None:
+    pg.psql(f'ALTER DATABASE "{validate_db_name(source)}" RENAME TO "{validate_db_name(target)}";', database="postgres")
+
+
+def _allow_connections(pg: PgTools, name: str, allow: bool) -> None:
+    pg.psql(f'ALTER DATABASE "{validate_db_name(name)}" WITH ALLOW_CONNECTIONS {"true" if allow else "false"};', database="postgres")
+
+
+def reconcile_swap(pg: PgTools, journal: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
+    """Bringt einen (ggf. unterbrochenen) Tausch anhand der vorhandenen Datenbanken in einen
+    eindeutigen Zustand. Liefert (neues Journal oder None = Tausch neu beginnen, Aktionen).
+
+    Grundsatz: Fehlt die Live-DB und existiert die bisherige (pre), wird immer die bisherige
+    zurückbenannt - das ist der zuletzt bekannte gute Stand. Alles, was sich nicht eindeutig
+    zuordnen lässt, wird NICHT angefasst (Schritt inconsistent)."""
+    live, restored, pre, step = journal["live"], journal["restored"], journal["pre"], journal["step"]
+    failed = journal.get("failed")
+    actions: list[str] = []
+
+    def exists(name: str | None) -> bool:
+        return bool(name) and pg.database_exists(name)
+
+    def inconsistent(reason: str) -> tuple[dict[str, Any], list[str]]:
+        if exists(live):
+            _allow_connections(pg, live, True)
+        actions.append(f"Tausch für Auftrag {journal['job_id']} nicht eindeutig ({reason}) - keine automatische Änderung, manuelle Prüfung nötig")
+        return {**journal, "step": "inconsistent", "reason": reason}, actions
+
+    if step == "inconsistent":
+        return inconsistent(journal.get("reason") or "bereits als inkonsistent markiert")
+    if step not in FORWARD_STEPS + ROLLBACK_STEPS:
+        return inconsistent(f"unbekannter Schritt {step!r}")
+
+    if not exists(live):
+        if not exists(pre):
+            return inconsistent(f"weder {live} noch {pre} existiert")
+        # Live-DB umbenannt, Ersatz nicht an ihrem Platz: bisherigen Stand zurückbenennen.
+        _rename_db(pg, pre, live)
+        actions.append(f"{pre} -> {live} zurückbenannt")
+        _allow_connections(pg, live, True)
+        if step in ROLLBACK_STEPS:
+            if not exists(failed):
+                return inconsistent(f"Rücktausch: {failed} fehlt")
+            return {**journal, "step": "rolled_back"}, actions
+        if not exists(restored):
+            return inconsistent(f"{restored} fehlt nach dem Zurückbenennen")
+        _allow_connections(pg, restored, True)
+        actions.append(f"Tausch für Auftrag {journal['job_id']} wird neu begonnen")
+        return None, actions
+
+    # Live-DB existiert: welche ist es?
+    _allow_connections(pg, live, True)
+    if step in ROLLBACK_STEPS:
+        if exists(pre):
+            # live -> failed noch nicht passiert: live ist die (fehlerhafte) neue DB, der
+            # Auftrag läuft darin weiter und wiederholt den Rücktausch.
+            return {**journal, "step": "rolling_back"}, actions
+        if exists(failed):
+            return {**journal, "step": "rolled_back"}, actions
+        return inconsistent(f"Rücktausch: weder {pre} noch {failed} existiert")
+    if exists(restored):
+        if exists(pre):
+            return inconsistent(f"{live}, {restored} und {pre} existieren gleichzeitig")
+        # Nichts umbenannt (oder schon zurückbenannt): Tausch neu beginnen.
+        _allow_connections(pg, restored, True)
+        if step != "copied":
+            actions.append(f"Tausch für Auftrag {journal['job_id']} wird neu begonnen")
+        return None, actions
+    if exists(pre):
+        # restored -> live ist erfolgt (auch wenn das Journal das noch nicht wusste).
+        if step != "renamed_restored":
+            actions.append(f"Tausch für Auftrag {journal['job_id']} war vollzogen ({restored} -> {live})")
+        return {**journal, "step": "renamed_restored"}, actions
+    return inconsistent(f"weder {restored} noch {pre} existiert")
+
+
+def _reconcile_journal_file(pg: PgTools, journal_path: Path) -> tuple[dict[str, Any] | None, list[str]]:
+    data = json.loads(journal_path.read_text())
+    result, actions = reconcile_swap(pg, data)
+    if result is None:
+        journal_path.unlink(missing_ok=True)
+    elif result != data:
+        _write_journal(journal_path, result)
+    return result, actions
+
+
 def _cutover(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupRestoreJob, cp: dict[str, Any]) -> str:
     from app.services import maintenance_service
 
@@ -239,9 +342,27 @@ def _cutover(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupRestoreJob, 
     live, restored = cp["live_db"], cp["restore_db"]
     pre = cp.get("pre_restore_db") or f"hocx_pre_restore_{datetime.now(UTC):%Y%m%d%H%M%S}"
     journal_path = _journal_dir(env) / f"{ctx.job_id.hex}.json"
-    journal = json.loads(journal_path.read_text()) if journal_path.exists() else {}
-    if journal.get("step") == "renamed_restored":
+    journal: dict[str, Any] | None = None
+    with PgTools(target) as pg:
+        if journal_path.exists():
+            # Fortsetzung: Journal immer zuerst gegen die tatsächlich vorhandenen Datenbanken abgleichen.
+            journal, actions = _reconcile_journal_file(pg, journal_path)
+            for action in actions:
+                jobs.event(db, ctx, "cutover_recovery", action, level="warning")
+            db.commit()
+        elif not pg.database_exists(restored):
+            # Ohne Journal muss die Restore-DB noch existieren, sonst ist der Zustand unklar
+            # (z. B. Journal verloren nach vollzogenem Tausch) - nichts automatisch tun.
+            raise jobs.JobFailure("cutover_inconsistent", f"Restore-Datenbank {restored} fehlt und kein Tausch-Journal vorhanden - "
+                                  f"Datenbanken {live}/{pre} manuell prüfen, es wurde nichts verändert")
+    step = (journal or {}).get("step")
+    if step == "inconsistent":
+        raise jobs.JobFailure("cutover_inconsistent", f"Datenbanktausch nicht eindeutig ({journal.get('reason')}) - es wurde nichts "
+                              f"automatisch verändert; Datenbanken {live}, {restored}, {pre} manuell prüfen, danach {journal_path.name} entfernen")
+    if step == "renamed_restored":
         return _after_swap(env, ctx, job, cp, journal, journal_path)
+    if step in ROLLBACK_STEPS:
+        return _rollback_swap(env, ctx, job, cp, journal, journal_path, list(journal.get("problems") or ["resumed"]))
     restored_url = target.with_database(restored).sqlalchemy_url()
 
     # 1. Wartung (Live-DB) und Fence: niemand schreibt mehr.
@@ -277,28 +398,44 @@ def _cutover(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupRestoreJob, 
         pg.psql("SET session_replication_role = replica;\nTRUNCATE " + ", ".join(BACKUP_TABLES) + " CASCADE;", database=restored)
         pg._run(["pg_restore", "--data-only", "--disable-triggers", "--exit-on-error", f"--dbname={restored}", str(tables_dump)], timeout=3600)
         tables_dump.unlink(missing_ok=True)
-        _write_journal(journal_path, {"job_id": str(ctx.job_id), "live": live, "restored": restored, "pre": pre, "step": "copied"})
-        # 3. Tausch per Umbenennen - vorher alle Verbindungen sperren und beenden.
-        for name in (live, restored):
-            pg.psql(f'ALTER DATABASE "{validate_db_name(name)}" WITH ALLOW_CONNECTIONS false;', database="postgres")
-        for attempt in range(10):
-            pg.psql(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname IN ('{live}', '{restored}') AND pid <> pg_backend_pid();",
-                    database="postgres")
+        base = {"job_id": str(ctx.job_id), "live": live, "restored": restored, "pre": pre}
+        if pg.database_exists(pre):
+            raise jobs.JobFailure("cutover_inconsistent", f"Zielname {pre} für die bisherige Datenbank ist bereits belegt - nichts umbenannt")
+        _write_journal(journal_path, {**base, "step": "copied"})
+        # 3. Tausch per Umbenennen - vorher alle Verbindungen sperren und beenden. Jeder Schritt
+        # steht VOR der Umbenennung im Journal (write-ahead, siehe reconcile_swap).
+        try:
+            for name in (live, restored):
+                _allow_connections(pg, name, False)
+            _write_journal(journal_path, {**base, "step": "renaming_live"})
+            for attempt in range(10):
+                pg.psql(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname IN ('{live}', '{restored}') AND pid <> pg_backend_pid();",
+                        database="postgres")
+                try:
+                    _rename_db(pg, live, pre)
+                    break
+                except Exception:  # noqa: BLE001 - Verbindung noch nicht weg: erneut (letzter Fehler wird weitergereicht)
+                    if attempt == 9:
+                        raise
+                    time.sleep(1)
+            _write_journal(journal_path, {**base, "step": "renaming_restored"})
+            _rename_db(pg, restored, live)
+            _write_journal(journal_path, {**base, "step": "renamed_restored"})
+            _allow_connections(pg, live, True)
+        except BaseException as exc:
+            # Fehler mitten im Tausch (ohne Absturz): sofort anhand der vorhandenen Datenbanken
+            # auflösen - danach existiert wieder eine erreichbare Live-DB. Der ursprüngliche
+            # Fehler bleibt der gemeldete.
             try:
-                pg.psql(f'ALTER DATABASE "{live}" RENAME TO "{validate_db_name(pre)}";', database="postgres")
-                break
-            except Exception:  # noqa: BLE001 - Verbindung noch nicht weg: erneut
-                if attempt == 9:
-                    for name in (live, restored):
-                        pg.psql(f'ALTER DATABASE "{name}" WITH ALLOW_CONNECTIONS true;', database="postgres")
-                    raise
-                time.sleep(1)
-        _write_journal(journal_path, {"job_id": str(ctx.job_id), "live": live, "restored": restored, "pre": pre, "step": "renamed_live"})
-        pg.psql(f'ALTER DATABASE "{restored}" RENAME TO "{live}";', database="postgres")
-        _write_journal(journal_path, {"job_id": str(ctx.job_id), "live": live, "restored": restored, "pre": pre, "step": "renamed_restored"})
-        pg.psql(f'ALTER DATABASE "{live}" WITH ALLOW_CONNECTIONS true;', database="postgres")
+                _, actions = _reconcile_journal_file(pg, journal_path)
+                for action in actions:
+                    _logger.warning("Restore-Journal: %s", action)
+            except Exception as recovery_exc:  # noqa: BLE001 - Start-Recovery des Workers übernimmt
+                _logger.exception("Auflösen des unterbrochenen Tauschs fehlgeschlagen - beim nächsten Worker-Start erneut")
+                raise exc from recovery_exc
+            raise
     env.engine.dispose()
-    return _after_swap(env, ctx, job, cp, {"live": live, "restored": restored, "pre": pre}, journal_path)
+    return _after_swap(env, ctx, job, cp, {**base, "step": "renamed_restored"}, journal_path)
 
 
 def _after_swap(env: RunEnv, ctx: jobs.JobCtx, job: BackupRestoreJob, cp: dict[str, Any], journal: dict[str, Any], journal_path: Path) -> str:
@@ -350,26 +487,62 @@ def _after_swap(env: RunEnv, ctx: jobs.JobCtx, job: BackupRestoreJob, cp: dict[s
 
 def _rollback_swap(env: RunEnv, ctx: jobs.JobCtx, job: BackupRestoreJob, cp: dict[str, Any], journal: dict[str, Any], journal_path: Path,
                    problems: list[str]) -> str:
-    from app.core.db import SessionLocal
-
+    """Rücktausch nach fehlgeschlagenem Smoke-Test: live -> failed, pre -> live. Journal
+    write-ahead (rolling_back) und idempotent - nach einem Absturz setzt der Auftrag hier fort."""
     target = PgTarget.from_url(env.database_url)
     live, pre = journal["live"], journal["pre"]
-    failed = f"hocx_failed_restore_{ctx.job_id.hex[:12]}"
+    failed = journal.get("failed") or f"hocx_failed_restore_{ctx.job_id.hex[:12]}"
+    base = {key: journal[key] for key in ("job_id", "live", "restored", "pre")}
+    rollback = {**base, "failed": failed, "problems": problems}
     with PgTools(target) as pg:
-        for name in (live, pre):
-            pg.psql(f'ALTER DATABASE "{name}" WITH ALLOW_CONNECTIONS false;', database="postgres")
-        pg.psql(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname IN ('{live}', '{pre}') AND pid <> pg_backend_pid();", database="postgres")
-        pg.psql(f'ALTER DATABASE "{live}" RENAME TO "{failed}";', database="postgres")
-        pg.psql(f'ALTER DATABASE "{pre}" RENAME TO "{live}";', database="postgres")
-        pg.psql(f'ALTER DATABASE "{live}" WITH ALLOW_CONNECTIONS true;', database="postgres")
+        if journal.get("step") != "rolled_back":
+            _write_journal(journal_path, {**rollback, "step": "rolling_back"})
+            try:
+                if pg.database_exists(pre):
+                    if pg.database_exists(live):
+                        if pg.database_exists(failed):
+                            raise jobs.JobFailure("cutover_inconsistent", f"Rücktausch: Zielname {failed} ist bereits belegt - nichts umbenannt")
+                        for name in (live, pre):
+                            _allow_connections(pg, name, False)
+                        pg.psql(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname IN ('{live}', '{pre}') AND pid <> pg_backend_pid();",
+                                database="postgres")
+                        _rename_db(pg, live, failed)
+                    _rename_db(pg, pre, live)
+                    _allow_connections(pg, live, True)
+            except BaseException as exc:
+                try:
+                    _, actions = _reconcile_journal_file(pg, journal_path)
+                    for action in actions:
+                        _logger.warning("Restore-Journal: %s", action)
+                except Exception as recovery_exc:  # noqa: BLE001 - Start-Recovery des Workers übernimmt
+                    _logger.exception("Auflösen des unterbrochenen Rücktauschs fehlgeschlagen - beim nächsten Worker-Start erneut")
+                    raise exc from recovery_exc
+                raise
+            # Ergebnis am tatsächlichen Zustand festmachen (rolled_back nur, wenn live und failed
+            # existieren und pre nicht mehr).
+            result, actions = reconcile_swap(pg, {**rollback, "step": "rolling_back"})
+            for action in actions:
+                _logger.warning("Restore-Journal: %s", action)
+            if result is None or result["step"] != "rolled_back":
+                if result is not None:
+                    _write_journal(journal_path, result)
+                raise jobs.JobFailure("cutover_inconsistent", "Rücktausch nicht eindeutig abgeschlossen - Datenbanken "
+                                      f"{live}, {pre}, {failed} manuell prüfen; es wurde nichts gelöscht")
+            _write_journal(journal_path, {**rollback, "step": "rolled_back"})
     env.engine.dispose()
-    journal_path.unlink(missing_ok=True)
+    return _finish_rollback(env, ctx, job, cp, failed, problems, journal_path)
+
+
+def _finish_rollback(env: RunEnv, ctx: jobs.JobCtx, job: BackupRestoreJob, cp: dict[str, Any], failed: str, problems: list[str],
+                     journal_path: Path) -> str:
+    """Läuft gegen die wieder aktive BISHERIGE Datenbank: Fence und Wartung lösen, Status setzen."""
+    from app.core.db import SessionLocal
+    from app.services import maintenance_service
+
     with SessionLocal() as db:
         db.execute(text("UPDATE storage_state SET write_fenced = false, fence_reason = NULL, fenced_at = NULL WHERE id = 1 AND fence_reason = :r"),
                    {"r": f"restore:{job.id}"})
         db.commit()
-        from app.services import maintenance_service
-
         try:
             maintenance_service.release(db, uuid.UUID(cp["window_live"]), actor_email=None, source="job")
             db.commit()
@@ -380,12 +553,18 @@ def _rollback_swap(env: RunEnv, ctx: jobs.JobCtx, job: BackupRestoreJob, cp: dic
         db.commit()
         jobs.set_state(db, ctx, "rolled_back", message="Zurückgetauscht", level="error", error_code="smoke_test_failed",
                        error_message=", ".join(problems)[:500])
+    journal_path.unlink(missing_ok=True)
     return "rolled_back"
 
 
 def cleanup_failed_full_restore(env: RunEnv, db: Session, job: BackupRestoreJob) -> None:
     """Fehler VOR dem Tausch: Live-Zustand war nie berührt; Zwischenstände entfernen."""
     cp = job.checkpoint or {}
+    if (env.config.work_dir / "restore-journal" / f"{job.id.hex}.json").exists():
+        # Tausch begonnen und nicht eindeutig aufgelöst: nichts löschen (Restore-DB/Generation
+        # könnten die Live-Daten sein) - manuelle Prüfung, siehe restore.md.
+        _logger.error("Restore %s: Tausch-Journal vorhanden - keine automatische Bereinigung", job.id)
+        return
     if cp.get("restore_db"):
         with PgTools(PgTarget.from_url(env.database_url)) as pg:
             try:
@@ -417,29 +596,21 @@ def cleanup_failed_full_restore(env: RunEnv, db: Session, job: BackupRestoreJob)
 
 def recover_interrupted_cutover(env: RunEnv) -> list[str]:
     """Beim Start des Workers, VOR jedem Datenbankzugriff: ein abgebrochener Datenbanktausch wird
-    so aufgelöst, dass wieder eine erreichbare Live-Datenbank existiert."""
+    anhand der vorhandenen Datenbanken so aufgelöst, dass wieder eine erreichbare Live-Datenbank
+    existiert (siehe reconcile_swap). Unklare Zustände werden nur gemeldet, nie geraten."""
     journal_dir = env.config.work_dir / "restore-journal"
     if not journal_dir.is_dir():
         return []
     actions: list[str] = []
     target = PgTarget.from_url(env.database_url)
     with PgTools(target) as pg:
-        for path in journal_dir.glob("*.json"):
-            data = json.loads(path.read_text())
-            live, restored, pre, step = data["live"], data["restored"], data["pre"], data["step"]
-            if step == "renamed_live" and not pg.database_exists(live) and pg.database_exists(pre):
-                # Live-DB umbenannt, neue noch nicht an ihrem Platz: zurück auf den bekannten Stand.
-                pg.psql(f'ALTER DATABASE "{pre}" RENAME TO "{live}";', database="postgres")
-                actions.append(f"{pre} -> {live} zurückbenannt")
-                step = "copied"
-            if pg.database_exists(live):
-                pg.psql(f'ALTER DATABASE "{live}" WITH ALLOW_CONNECTIONS true;', database="postgres")
-            if step == "copied":
-                if pg.database_exists(restored):
-                    pg.psql(f'ALTER DATABASE "{restored}" WITH ALLOW_CONNECTIONS true;', database="postgres")
-                path.unlink(missing_ok=True)
-                actions.append(f"Tausch für Auftrag {data['job_id']} wird neu begonnen")
-            # step == renamed_restored: Tausch vollständig; der Auftrag setzt nach dem Tausch fort.
+        for path in sorted(journal_dir.glob("*.json")):
+            try:
+                _, found = _reconcile_journal_file(pg, path)
+            except Exception as exc:  # noqa: BLE001 - übrige Journale trotzdem auswerten
+                _logger.exception("Restore-Journal %s nicht auswertbar", path.name)
+                found = [f"Journal {path.name} nicht auswertbar ({type(exc).__name__}) - manuelle Prüfung nötig"]
+            actions += found
     return actions
 
 

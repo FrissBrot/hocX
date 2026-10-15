@@ -341,6 +341,7 @@
     "rescue_backup_failed": "Der Rettungspunkt vor dem Restore konnte nicht erstellt werden.",
     "objects_incomplete": "Nicht alle Dateien konnten aus dem Backup gelesen werden.",
     "reference_check_failed": "Die Verweisprüfung der wiederhergestellten Datenbank ist fehlgeschlagen.",
+    "cutover_inconsistent": "Der Datenbanktausch ist nicht eindeutig - es wurde nichts verändert oder gelöscht. Datenbanken manuell prüfen (siehe Restore-Doku).",
     "smoke_test_failed": "Der Anwendungstest ist fehlgeschlagen.",
     "tenant_not_in_backup": "Der Mandant ist in diesem Sicherungspunkt nicht enthalten.",
     "tenant_files_missing": "Nach dem Import fehlen Dateien des neuen Mandanten.",

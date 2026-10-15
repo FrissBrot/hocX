@@ -332,6 +332,7 @@
     "rescue_backup_failed": "Non è stato possibile creare il punto di salvataggio prima del ripristino.",
     "objects_incomplete": "Non tutti i file hanno potuto essere letti dal backup.",
     "reference_check_failed": "La verifica dei riferimenti del database ripristinato non è riuscita.",
+    "cutover_inconsistent": "Lo scambio dei database non è univoco - nulla è stato modificato o eliminato. Verificare i database manualmente (vedi documentazione di ripristino).",
     "smoke_test_failed": "Il test dell'applicazione non è riuscito.",
     "tenant_not_in_backup": "Il mandante non è contenuto in questo punto di ripristino.",
     "tenant_files_missing": "Dopo l'importazione mancano file del nuovo mandante.",

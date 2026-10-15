@@ -332,6 +332,7 @@
     "rescue_backup_failed": "Le point de secours avant la restauration n'a pas pu être créé.",
     "objects_incomplete": "Tous les fichiers n'ont pas pu être lus depuis la sauvegarde.",
     "reference_check_failed": "La vérification des références de la base restaurée a échoué.",
+    "cutover_inconsistent": "L'échange des bases de données est ambigu - rien n'a été modifié ni supprimé. Vérifier les bases manuellement (voir la documentation de restauration).",
     "smoke_test_failed": "Le test de l'application a échoué.",
     "tenant_not_in_backup": "Le mandant ne figure pas dans ce point de restauration.",
     "tenant_files_missing": "Des fichiers du nouveau mandant manquent après l'import.",

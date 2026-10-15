@@ -332,6 +332,7 @@
     "rescue_backup_failed": "The rescue point before the restore could not be created.",
     "objects_incomplete": "Not all files could be read from the backup.",
     "reference_check_failed": "The reference check of the restored database failed.",
+    "cutover_inconsistent": "The database swap is ambiguous - nothing was changed or deleted. Check the databases manually (see the restore documentation).",
     "smoke_test_failed": "The application test failed.",
     "tenant_not_in_backup": "The tenant is not contained in this restore point.",
     "tenant_files_missing": "Files of the new tenant are missing after the import.",

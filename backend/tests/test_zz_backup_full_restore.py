@@ -124,3 +124,109 @@ def test_full_restore_swaps_database_and_storage_generation(backup_env, monkeypa
             assert pg.database_exists(pre)  # bisheriger Stand bleibt für einen Rückweg erhalten
     finally:
         _drop(pre)
+
+
+def _expire_lease(restore_id) -> None:
+    with SessionLocal() as s:
+        s.execute(update(BackupRestoreJob).where(BackupRestoreJob.id == restore_id).values(lease_expires_at=None))
+        s.commit()
+
+
+def test_crash_after_rename_resumes_without_second_swap(backup_env, monkeypatch):  # noqa: F811
+    """BORG-002: Absturz direkt nach restored -> live, bevor das Journal nachgezogen ist. Die
+    Start-Recovery erkennt den vollzogenen Tausch am DB-Zustand; der fortgesetzte Auftrag tauscht
+    nicht ein zweites Mal, sondern schliesst mit Smoke-Test und Freigabe ab."""
+    import json
+
+    db, env, _ = backup_env
+    monkeypatch.setattr(settings, "maintenance_cache_seconds", 0.05)
+    tenant = make_committed_tenant(db, "Absturz-Original")
+    tenant_id = tenant.id
+    backup = run_backup_job(env)
+    archive = db.get(BackupSet, backup.backup_set_id).archive_name
+    db.close()
+    restore_id = _create_restore(archive)
+    real_write = run_restore._write_journal
+    real_rename = run_restore._rename_db
+    renames: list[tuple[str, str]] = []
+    crashed = {"done": False}
+
+    def write_journal(path, data):
+        if data.get("step") == "renamed_restored" and not crashed["done"]:
+            crashed["done"] = True
+            raise jobs.LeaseLost("simulierter Absturz")  # Worker gibt den Auftrag ohne Statusänderung ab
+        real_write(path, data)
+
+    def rename(pg, source, target):
+        renames.append((source, target))
+        real_rename(pg, source, target)
+
+    monkeypatch.setattr(run_restore, "_write_journal", write_journal)
+    monkeypatch.setattr(run_restore, "_rename_db", rename)
+    ctx = jobs.claim(engine, BackupRestoreJob, "test-worker")
+    while ctx is not None and not crashed["done"]:
+        backup_worker.run_job(env, ctx)
+        ctx = None if crashed["done"] else (jobs.claim(engine, BackupJob, "test-worker") or jobs.claim(engine, BackupRestoreJob, "test-worker"))
+    assert crashed["done"]
+    journal_path = env.config.work_dir / "restore-journal" / f"{restore_id.hex}.json"
+    journal = json.loads(journal_path.read_text())
+    live, restored, pre = journal["live"], journal["restored"], journal["pre"]
+    try:
+        # Zustand wie nach einem echten Absturz: Journal steht auf dem Schritt VOR dem Tausch,
+        # die neue Live-DB nimmt noch keine Verbindungen an.
+        real_write(journal_path, {**journal, "step": "renaming_restored"})
+        with PgTools(PgTarget.from_url(settings.database_url)) as pg:
+            pg.psql(f'ALTER DATABASE "{live}" WITH ALLOW_CONNECTIONS false;', database="postgres")
+        engine.dispose()
+        actions = run_restore.recover_interrupted_cutover(env)
+        assert any("vollzogen" in a for a in actions), actions
+        _expire_lease(restore_id)
+        job = _drive(env, restore_id)
+        assert job.state == "completed", (job.error_code, job.error_message)
+        assert renames.count((restored, live)) == 1  # kein zweiter Tausch
+        with SessionLocal() as s:
+            assert s.get(Tenant, tenant_id) is not None
+            assert not s.get(StorageState, 1).write_fenced
+        assert not journal_path.exists()
+    finally:
+        _drop(pre)
+
+
+def test_failure_between_renames_restores_the_previous_database(backup_env, monkeypatch):  # noqa: F811
+    """BORG-002 Fall 4: scheitert restored -> live, wird sofort der bisherige Stand
+    zurückbenannt. Der Auftrag endet als failed, keine Datenbank wird gelöscht."""
+    db, env, _ = backup_env
+    monkeypatch.setattr(settings, "maintenance_cache_seconds", 0.05)
+    backup = run_backup_job(env)
+    archive = db.get(BackupSet, backup.backup_set_id).archive_name
+    later = make_committed_tenant(db, "Nach dem Backup (Fehlertest)")
+    later_id = later.id
+    db.close()
+    restore_id = _create_restore(archive)
+    real_rename = run_restore._rename_db
+    names: dict[str, str] = {}
+
+    def rename(pg, source, target):
+        if source.startswith("hocx_restore_"):
+            names["restored"] = source
+            raise RuntimeError("simulierter Fehler beim Umbenennen")
+        real_rename(pg, source, target)
+
+    monkeypatch.setattr(run_restore, "_rename_db", rename)
+    job = _drive(env, restore_id)
+    try:
+        assert job.state == "failed", (job.error_code, job.error_message)
+        with SessionLocal() as s:
+            assert s.get(Tenant, later_id) is not None  # bisherige Live-DB ist wieder aktiv
+        with PgTools(PgTarget.from_url(settings.database_url)) as pg:
+            assert pg.database_exists(names["restored"])  # nichts gelöscht
+            assert not pg.database_exists((job.checkpoint or {}).get("pre_restore_db") or "hocx_nonexistent")
+        assert not (env.config.work_dir / "restore-journal" / f"{restore_id.hex}.json").exists()
+    finally:
+        _drop(names.get("restored"))
+        with SessionLocal() as s:
+            # Wartung/Fence des gescheiterten Tauschs für die folgenden Tests lösen.
+            s.execute(update(StorageState).values(write_fenced=False, fence_reason=None, fenced_at=None))
+            for window in s.scalars(select(MaintenanceWindow).where(MaintenanceWindow.state.in_(("preparing", "active")))).all():
+                maintenance_service.release(s, window.id, actor_email=None, source="job")
+            s.commit()

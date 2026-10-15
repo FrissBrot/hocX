@@ -76,9 +76,20 @@ docker compose -p hocx exec db psql -U hocx -d postgres -c 'DROP DATABASE "hocx_
 Rückweg nach einem erfolgreichen Restore (z. B. falscher Punkt gewählt): Wartung starten,
 `swap-database --live hocx --restored hocx_pre_restore_<zeit>` (siehe CLI), Wartung freigeben.
 
-Ein Absturz während des Tauschs ist abgesichert: das Journal in `backups/borg-work/restore-journal/`
-wird beim Start des Workers ausgewertet; ist die Live-Datenbank umbenannt, die neue aber noch
-nicht an ihrem Platz, wird der bisherige Stand zurückbenannt.
+Ein Absturz während des Tauschs ist abgesichert: jeder Schritt (auch der automatische
+Rücktausch) steht *vor* der Umbenennung im Journal `backups/borg-work/restore-journal/<auftrag>.json`.
+Beim Start des Workers und bei der Fortsetzung des Auftrags wird es gegen die tatsächlich
+vorhandenen Datenbanken abgeglichen:
+
+- Fehlt die Live-Datenbank, wird `hocx_pre_restore_<zeit>` (der bisherige Stand) zurückbenannt;
+  der Tausch beginnt danach neu.
+- Existieren Live- und `hocx_pre_restore_<zeit>`, die Restore-Datenbank aber nicht mehr, war der
+  Tausch vollzogen; der Auftrag setzt mit Smoke-Test und Freigabe fort, ohne erneut zu tauschen.
+- Lässt sich der Zustand nicht eindeutig zuordnen, wird nichts umbenannt oder gelöscht: das
+  Journal erhält den Schritt `inconsistent`, der Auftrag endet mit `cutover_inconsistent`. Dann
+  die Datenbanken (`\l` in psql) manuell prüfen, die richtige als `hocx` setzen
+  (`swap-database`) und erst danach die Journal-Datei entfernen. Solange sie existiert, löscht
+  auch die automatische Bereinigung keine Restore-Datenbank und keine Generation.
 
 ## Recovery-CLI (neuer Server oder ohne Backend)
 
