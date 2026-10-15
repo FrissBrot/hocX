@@ -238,3 +238,13 @@ def test_hocx_marker_does_not_discard_a_different_real_capture_date():
     without = service.ImageMetadata()
     service._apply_xmp(without, xmp)
     assert without.taken_at is None and without.estimated_taken_on == date(2001, 6, 7)
+
+
+def test_client_gps_timestamp_is_accepted_as_iso_string():
+    """IMGMETA-010: Upload-Hinweise liefern den GPS-Zeitstempel JSON-serialisiert."""
+    metadata = service.metadata_from_client({"gps": {"latitude": 47.0, "longitude": 8.0, "timestamp": "2024-05-01T10:00:00Z"}})
+    assert metadata.gps_timestamp == datetime(2024, 5, 1, 10, 0, tzinfo=UTC)
+    naive = service.metadata_from_client({"gps": {"latitude": 47.0, "longitude": 8.0, "timestamp": "2024-05-01T10:00:00"}})
+    assert naive.gps_timestamp == datetime(2024, 5, 1, 10, 0, tzinfo=UTC)
+    broken = service.metadata_from_client({"gps": {"latitude": 47.0, "longitude": 8.0, "timestamp": "gestern"}})
+    assert broken.gps_timestamp is None and broken.gps_latitude == 47.0

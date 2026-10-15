@@ -475,6 +475,13 @@ def metadata_from_client(payload: dict[str, Any] | None) -> ImageMetadata:
         metadata.gps_direction_deg = valid_direction(gps.get("direction_deg")) if gps.get("direction_deg") is not None else None
         metadata.gps_accuracy_m = _valid_float(gps.get("accuracy_m"), 0.0, MAX_ACCURACY_M) if gps.get("accuracy_m") is not None else None
         raw_gps_time = gps.get("timestamp")
+        if isinstance(raw_gps_time, str):
+            # Upload-Hinweise kommen JSON-serialisiert an (model_dump(mode="json")), der
+            # Vorab-Abgleich als datetime - beides gleich behandeln.
+            try:
+                raw_gps_time = datetime.fromisoformat(raw_gps_time)
+            except ValueError:
+                raw_gps_time = None
         if isinstance(raw_gps_time, datetime):
             stamp = valid_capture_datetime(raw_gps_time)
             metadata.gps_timestamp = stamp.replace(tzinfo=UTC) if stamp else None
