@@ -30,6 +30,9 @@ DOCUMENT_SOURCE_PROTOCOL_EXPORT = "protocol_export"
 
 FILE_ROLE_ORIGINAL = "original"
 FILE_ROLE_PDF = "pdf"
+# Bild der ersten PDF-Seite für die Vorschau im Dateien-Tab - die App erlaubt keine eingebetteten
+# Frames (CSP frame-src 'none', X-Frame-Options DENY), das PDF selbst öffnet im eigenen Tab.
+FILE_ROLE_PREVIEW = "preview"
 
 JOB_KIND_PDF = "pdf"
 JOB_KIND_EXTRACT = "extract"
@@ -95,7 +98,7 @@ class DocumentVersion(Base):
 class DocumentFile(Base):
     __tablename__ = "document_file"
     __table_args__ = (
-        CheckConstraint("role IN ('original', 'pdf')", name="ck_document_file_role"),
+        CheckConstraint("role IN ('original', 'pdf', 'preview')", name="ck_document_file_role"),
         UniqueConstraint("document_version_id", "role", name="uq_document_file_version_role"),
         Index("idx_document_file_stored_file", "stored_file_id"),
         Index("uq_document_file_original", "stored_file_id", unique=True, postgresql_where=text("role = 'original'")),

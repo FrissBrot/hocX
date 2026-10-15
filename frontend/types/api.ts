@@ -203,6 +203,7 @@ export type DocumentSummary = {
   extraction_status: string | null;
   pdf_url: string | null;
   pdf_download_url: string | null;
+  preview_url?: string | null;
   version_count: number;
   current_version_number: number | null;
   current_version_label: string | null;
@@ -240,6 +241,7 @@ export type DocumentVersionRead = {
   is_current: boolean;
   original: DocumentFileRead | null;
   pdf: DocumentFileRead | null;
+  preview?: DocumentFileRead | null;
   pdf_job: DocumentJobState;
   extract_job: DocumentJobState;
   extraction: DocumentExtractionRead | null;

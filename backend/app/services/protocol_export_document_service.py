@@ -25,6 +25,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -112,7 +113,12 @@ def record_export(
     export_kind = EXPORT_KINDS.get(export_format)
     if export_kind is None:
         return None
-    if _document(db, protocol.id, export_kind) is None:
+    # Zeile sperren (bzw. anlegen) - ein gleichzeitiger Export derselben Art wartet, bis diese
+    # Transaktion die Historie übernommen und ihre Version angehängt hat.
+    document = document_service.lock_export_document(
+        db, tenant_id=protocol.tenant_id, protocol_id=protocol.id, export_kind=export_kind, display_name=stored_file.original_name,
+    )
+    if document.current_version_id is None:
         _backfill_group(db, protocol, export_format, exclude_stored_file_id=stored_file.id)
     return document_service.record_protocol_export(
         db,
@@ -148,8 +154,12 @@ def backfill(db: Session, *, limit: int) -> int:
         protocol = db.get(Protocol, protocol_id)
         if protocol is None:
             continue
-        with db.begin_nested():
-            created = _backfill_group(db, protocol, export_format)
+        try:
+            with db.begin_nested():
+                created = _backfill_group(db, protocol, export_format)
+        except IntegrityError:
+            # Gleichzeitig vom ExportService übernommen - beim nächsten Durchlauf erledigt.
+            continue
         if created:
             groups += 1
     return groups

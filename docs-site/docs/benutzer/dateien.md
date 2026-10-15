@@ -17,7 +17,7 @@ Originaldatei ist in dieser Zeit schon verfügbar.
 
 Ein Klick auf die Zeile öffnet die Details mit:
 
-- der **PDF-Vorschau**,
+- der **Vorschau** der ersten Seite – ein Klick darauf öffnet das ganze PDF,
 - **PDF herunterladen** und **Originaldatei herunterladen** (die Datei, so wie sie hochgeladen
   wurde, bleibt immer unverändert erhalten),
 - **Extrahierten Text anzeigen** – der reine Text des Dokuments, z. B. zum Kopieren,

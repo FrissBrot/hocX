@@ -48,7 +48,7 @@ def get_document(document_id: uuid.UUID, db: Session = Depends(get_db), user: Cu
 def get_document_file(
     document_id: uuid.UUID,
     version_id: uuid.UUID,
-    role: Literal["pdf", "original"],
+    role: Literal["pdf", "original", "preview"],
     request: Request = None,  # type: ignore[assignment]  # None nur bei direktem Aufruf in Tests
     download: bool = Query(default=False),
     db: Session = Depends(get_db),
@@ -69,8 +69,10 @@ def get_document_file(
     if original is not None:
         # Eine erzeugte Darstellung ist nie freier zugänglich als ihr Original.
         _ensure_clean(original)
-    # Inline nur für verifizierte PDFs; alles andere als Download, nie MIME-Sniffing.
-    is_pdf = (stored_file.mime_type or "").lower() == "application/pdf"
+    # Inline nur für verifizierte PDFs und das selbst erzeugte PNG-Vorschaubild; alles andere als
+    # Download, nie MIME-Sniffing.
+    mime = (stored_file.mime_type or "").lower()
+    is_pdf = mime == "application/pdf" or (role == "preview" and mime == "image/png")
     return object_response(
         request,
         namespace_for_stored_file(db, stored_file),

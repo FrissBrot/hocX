@@ -89,8 +89,9 @@ erDiagram
   Zeitstempel“), für Exporte `protocol_id` + `export_kind` (eindeutig).
 - **document_version** – inhaltliche Version: `version_number`, optional `label` (z. B.
   `v0.3`), `content_fingerprint` (Body-Hash beim Export bzw. Prüfsumme des Originals).
-- **document_file** – verknüpft `stored_file` mit einer Version, Rolle `original` | `pdf`,
-  `is_generated` (von der Dokumentverarbeitung erzeugt und damit Eigentum des Dokuments).
+- **document_file** – verknüpft `stored_file` mit einer Version, Rolle `original` | `pdf` |
+  `preview` (PNG der ersten PDF-Seite, technische Rolle für die Vorschau), `is_generated` (von
+  der Dokumentverarbeitung erzeugt und damit Eigentum des Dokuments).
   Original-DOCX und erzeugtes PDF sind zwei Darstellungen **derselben** Version. Bei
   hochgeladenen PDFs zeigen beide Rollen auf dieselbe Datei (keine Neukonvertierung).
 - **document_extraction** – Ergebnis der Textextraktion je Version: Status, Parser,
@@ -115,10 +116,10 @@ Videos und sonstige Dateien bleiben unverändert normale Einträge ohne Dokument
    (gleiche Funktion wie der Backfill).
 3. **Worker** (`document-worker`, Backend-Image, eigener Container): holt Jobs per
    `FOR UPDATE SKIP LOCKED` mit Lease; abgestürzte/hängende Jobs werden nach Ablauf der Lease
-   erneut übernommen. Verarbeitung nur bei `scan_status = clean` (`pending`/`error` → später
-   erneut, `infected` → gesperrt). Wiederholungen mit exponentiellem Backoff, Fehler werden
+   erneut übernommen. Verarbeitung nur bei `scan_status = clean` (`pending` → später erneut,
+   `infected`/`error` → gesperrt, «Erneut verarbeiten» nach Klärung). Wiederholungen mit exponentiellem Backoff, Fehler werden
    ohne Dokumentinhalt protokolliert.
-4. **PDF-Konvertierung** und **Extraktion** sind getrennte Jobs; ein Fehler in einem blockiert
+4. **PDF-Konvertierung** (inkl. Vorschaubild der ersten Seite) und **Extraktion** sind getrennte Jobs; ein Fehler in einem blockiert
    den anderen nicht. Die Extraktion liest die Originaldatei mit formatspezifischen Parsern,
    nicht das erzeugte PDF.
 5. **Protokollexport**: jeder Export mit geändertem Inhalt erzeugt eine neue Version des
@@ -181,6 +182,7 @@ Zeilenende. Inhalte werden weder ergänzt noch umformuliert; es kommt keine KI z
 | GET | `/api/documents/{id}` | Details, Versionshistorie, Dateien, Auftrags- und Extraktionsstatus |
 | GET | `/api/documents/{id}/versions/{v}/files/pdf` | PDF-Darstellung (inline, `?download=1` als Download) |
 | GET | `/api/documents/{id}/versions/{v}/files/original` | Originaldatei (Download, PDFs inline) |
+| GET | `/api/documents/{id}/versions/{v}/files/preview` | Vorschaubild der ersten Seite (PNG) |
 | GET | `/api/documents/{id}/versions/{v}/text?format=plain\|markdown\|json` | Extrahierter Inhalt |
 | POST | `/api/documents/{id}/reprocess` | Fehlgeschlagene Verarbeitung neu einreihen (writer/admin) |
 
@@ -226,6 +228,11 @@ Capabilities, `no-new-privileges`. Mehrere Worker-Instanzen sind möglich.
 - **Status nicht redundant gespeichert:** der Gesamtstatus eines Dokuments ergibt sich aus den
   Aufträgen und der Extraktion der aktuellen Version.
 - **Markdown nicht gespeichert:** wird deterministisch aus den Blöcken erzeugt.
+- **Vorschau als Bild statt eingebettetem PDF:** die App verbietet Frames bewusst (CSP
+  `frame-src 'none'`, `X-Frame-Options: DENY` in Next.js und Traefik). Statt diese Sperre
+  aufzuweichen, rendert der PDF-Auftrag die erste Seite als PNG (`pdftoppm`, Sandbox); ein Klick
+  öffnet das vollständige PDF im eigenen Tab. Vorschaubilder sind von Bildanalyse und
+  Qualitäts-Backfill ausgenommen und zählen im Speicher zu den Dateien.
 - **LibreOffice im Backend-Image** statt eigenem Image: keine Änderung an CI/Release-Matrix und
   `deploy.sh`; aufgerufen wird es nur im `document-worker`.
 - **Automatischer Backfill** in kleinen Batches statt einer Datenmigration in Alembic: braucht

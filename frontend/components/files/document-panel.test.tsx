@@ -87,6 +87,7 @@ function makeDetail(overrides: Partial<DocumentDetail> = {}): DocumentDetail {
       {
         id: "v2", version_number: 2, label: "v0.1", created_at: "2026-10-02T10:00:00Z", is_current: true,
         original: file("v2", "original", "bericht.docx", docx), pdf: file("v2", "pdf", "bericht.pdf", "application/pdf"),
+        preview: file("v2", "preview", "bericht-vorschau.png", "image/png"),
         pdf_job: { status: "done", result: "converted", attempts: 1 }, extract_job: { status: "done", result: "extracted", attempts: 1 },
         extraction: {
           status: "ready", parser: "docx", parser_version: "1", schema_version: 1, page_count: null, char_count: 20,
@@ -128,7 +129,7 @@ describe("Dokumente im Dateien-Tab", () => {
     expect((screen.getByRole("link", { name: "Download" }) as HTMLAnchorElement).getAttribute("href")).toBe("/api/stored-files/file-1/content");
   });
 
-  it("zeigt im Detaildialog die PDF-Vorschau, Original-Download, Text und Versionshistorie", async () => {
+  it("zeigt im Detaildialog die Vorschau der ersten PDF-Seite, Original-Download, Text und Versionshistorie", async () => {
     browserApiFetchMock.mockImplementation(async (url: string) => {
       if (url === `/api/documents/${DOC_ID}`) return makeDetail();
       if (url.endsWith("/text?format=plain")) return { format: "plain", status: "ready", text: "Jahresbericht\n\nInhalt", content: null };
@@ -138,8 +139,10 @@ describe("Dokumente im Dateien-Tab", () => {
       <FileDetailModal item={makeItem()} tagSuggestions={[]} onClose={() => {}} onNavigate={() => {}} onTagsSaved={() => {}} />
     );
 
-    const preview = (await screen.findByTitle("PDF-Vorschau von bericht.docx")) as HTMLIFrameElement;
-    expect(preview.getAttribute("src")).toBe(`/api/documents/${DOC_ID}/versions/v2/files/pdf`);
+    const preview = (await screen.findByAltText("PDF-Vorschau von bericht.docx")) as HTMLImageElement;
+    expect(preview.getAttribute("src")).toBe(`/api/documents/${DOC_ID}/versions/v2/files/preview`);
+    // Ein Klick auf die Vorschau öffnet das vollständige PDF im eigenen Tab.
+    expect(preview.closest("a")?.getAttribute("href")).toBe(`/api/documents/${DOC_ID}/versions/v2/files/pdf`);
     expect((screen.getByRole("link", { name: "Originaldatei herunterladen" }) as HTMLAnchorElement).getAttribute("href")).toContain(
       "/versions/v2/files/original?download=1"
     );

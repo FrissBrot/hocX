@@ -17,6 +17,7 @@ from app.models.document_entities import (
     DOCUMENT_SOURCE_PROTOCOL_EXPORT,
     FILE_ROLE_ORIGINAL,
     FILE_ROLE_PDF,
+    FILE_ROLE_PREVIEW,
     JOB_KIND_EXTRACT,
     JOB_KIND_PDF,
     Document,
@@ -159,6 +160,7 @@ def build_detail(db: Session, document: Document, *, can_write: bool) -> Documen
                 is_current=version.id == document.current_version_id,
                 original=_file_read(document, version, FILE_ROLE_ORIGINAL, files[version.id].get(FILE_ROLE_ORIGINAL)),
                 pdf=_file_read(document, version, FILE_ROLE_PDF, files[version.id].get(FILE_ROLE_PDF)),
+                preview=_file_read(document, version, FILE_ROLE_PREVIEW, files[version.id].get(FILE_ROLE_PREVIEW)),
                 pdf_job=_job_state(jobs[version.id].get(JOB_KIND_PDF)),
                 extract_job=_job_state(jobs[version.id].get(JOB_KIND_EXTRACT)),
                 extraction=DocumentExtractionRead(
@@ -224,13 +226,13 @@ def summaries_for_files(db: Session, tenant_id: int, stored_file_ids: list[int])
         row.document_version_id: row
         for row in db.scalars(select(DocumentExtraction).where(DocumentExtraction.document_version_id.in_(version_ids)))
     }
-    pdf_versions = set(
-        db.scalars(
-            select(DocumentFile.document_version_id).where(
-                DocumentFile.document_version_id.in_(version_ids), DocumentFile.role == FILE_ROLE_PDF
-            )
+    roles_by_version: dict[int, set[str]] = defaultdict(set)
+    for version_id, role in db.execute(
+        select(DocumentFile.document_version_id, DocumentFile.role).where(
+            DocumentFile.document_version_id.in_(version_ids), DocumentFile.role.in_((FILE_ROLE_PDF, FILE_ROLE_PREVIEW))
         )
-    )
+    ).all():
+        roles_by_version[version_id].add(role)
     counts = dict(
         db.execute(
             select(DocumentVersion.document_id, func.count()).where(DocumentVersion.document_id.in_(document_ids)).group_by(DocumentVersion.document_id)
@@ -241,7 +243,8 @@ def summaries_for_files(db: Session, tenant_id: int, stored_file_ids: list[int])
         pdf_job = jobs[version.id].get(JOB_KIND_PDF)
         extract_job = jobs[version.id].get(JOB_KIND_EXTRACT)
         extraction = extractions.get(version.id)
-        has_pdf = version.id in pdf_versions
+        has_pdf = FILE_ROLE_PDF in roles_by_version[version.id]
+        has_preview = FILE_ROLE_PREVIEW in roles_by_version[version.id]
         result[stored_file_id] = DocumentSummary(
             id=document.public_id,
             status=overall_status(pdf_job, extract_job, extraction, has_pdf),
@@ -249,6 +252,7 @@ def summaries_for_files(db: Session, tenant_id: int, stored_file_ids: list[int])
             extraction_status=extraction.status if extraction is not None else (extract_job.status if extract_job else None),
             pdf_url=file_url(document, version, FILE_ROLE_PDF) if has_pdf else None,
             pdf_download_url=file_url(document, version, FILE_ROLE_PDF, download=True) if has_pdf else None,
+            preview_url=file_url(document, version, FILE_ROLE_PREVIEW) if has_preview else None,
             version_count=counts.get(document.id, 1),
             current_version_number=version.version_number,
             current_version_label=version.label,

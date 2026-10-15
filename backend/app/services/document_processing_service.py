@@ -4,8 +4,8 @@ Ablauf je Auftrag:
 1. claim_next_job: atomar per FOR UPDATE SKIP LOCKED, mit Lease. Ein Auftrag, dessen Lease
    abgelaufen ist (Worker abgestürzt/hängt), wird erneut übernommen. Überschreitet er dabei
    max_attempts, wird er als fehlgeschlagen markiert statt endlos neu zu starten.
-2. Freigabe prüfen: nur Originale mit scan_status 'clean' werden verarbeitet; 'pending'/'error'
-   warten (ohne Versuch zu zählen), 'infected' sperrt den Auftrag endgültig.
+2. Freigabe prüfen: nur Originale mit scan_status 'clean' werden verarbeitet; 'pending' wartet
+   (ohne Versuch zu zählen), 'infected' und 'error' sperren den Auftrag ('blocked').
 3. Verarbeitung im Sandbox-Kindprozess (app/services/documents/), Eingabe nur über den Objekt-Key
    der Originaldatei aus der Datenbank, Ausgabe in einen eigenen Arbeitsordner.
 4. Ergebnis speichern - nur wenn der Auftrag noch diesem Worker gehört (Lease-Prüfung unter
@@ -35,6 +35,7 @@ from app.models import StoredFile
 from app.models.document_entities import (
     FILE_ROLE_ORIGINAL,
     FILE_ROLE_PDF,
+    FILE_ROLE_PREVIEW,
     JOB_KIND_EXTRACT,
     JOB_KIND_PDF,
     Document,
@@ -45,7 +46,7 @@ from app.models.document_entities import (
 )
 from app.services import document_service
 from app.services.documents import convert as convert_module
-from app.services.documents import formats, ocr, sandbox
+from app.services.documents import formats, ocr, preview, sandbox
 from app.services.documents.content import ParsedContent, build_content, to_plain_text
 from app.services.stored_file_location import namespace_for_stored_file
 
@@ -203,8 +204,10 @@ def process_job(db: Session, job_id: int, owner: str) -> JobOutcome:
         return JobOutcome(status="done", result="gone")
 
     scan_status = context.original.scan_status
-    if scan_status == "infected":
-        outcome = JobOutcome(status="blocked", result="infected")
+    if scan_status in ("infected", "error"):
+        # 'error' prüft keine Rescan-Schleife erneut (nur 'pending') - die Datei bleibt gesperrt.
+        # Nach einer manuellen Klärung reiht "Erneut verarbeiten" den Auftrag wieder ein.
+        outcome = JobOutcome(status="blocked", result="infected" if scan_status == "infected" else "scan_error")
         _finish(db, job, outcome)
         db.commit()
         return outcome
@@ -283,80 +286,126 @@ def _too_large(original: StoredFile) -> bool:
     return (original.file_size_bytes or 0) > settings.document_max_input_mb * MB
 
 
+def _convert_limits() -> sandbox.Limits:
+    return sandbox.Limits(
+        timeout_seconds=settings.document_convert_timeout_seconds, memory_bytes=settings.document_convert_memory_mb * MB
+    )
+
+
 def _run_pdf(db: Session, context: _JobContext, owner: str, work_dir: Path) -> JobOutcome:
+    """PDF-Darstellung erzeugen (bzw. bei PDFs übernehmen) und daraus das Vorschaubild der ersten
+    Seite. Scheitert nur die Vorschau, bleibt das PDF gültig - sie ist reine Bequemlichkeit."""
     original = context.original
     existing_pdf = db.scalar(
         select(DocumentFile).where(DocumentFile.document_version_id == context.version.id, DocumentFile.role == FILE_ROLE_PDF)
     )
+    pdf: bytes | None = None
+    generated_pdf: bytes | None = None
     if original.mime_type == formats.PDF or (existing_pdf is not None and not existing_pdf.is_generated):
-        outcome = JobOutcome(status="done", result="already_pdf")
+        result = "already_pdf"
+        if not _too_large(original):
+            pdf = _read_original(db, original)
     elif not formats.needs_conversion(original.mime_type):
-        outcome = JobOutcome(status="done", result="unsupported")
+        result = "unsupported"
     elif _too_large(original):
-        outcome = JobOutcome(status="done", result="too_large")
+        result = "too_large"
     else:
         data = _read_original(db, original)
-        pdf = convert_module.convert(
-            data, original.mime_type, target="pdf", work_dir=work_dir,
-            limits=sandbox.Limits(
-                timeout_seconds=settings.document_convert_timeout_seconds,
-                memory_bytes=settings.document_convert_memory_mb * MB,
-            ),
+        generated_pdf = pdf = convert_module.convert(
+            data, original.mime_type, target="pdf", work_dir=work_dir, limits=_convert_limits()
         )
-        _store_generated_pdf(db, context, owner, pdf)
-        return JobOutcome(status="done", result="converted")
-    job = _lock_owned_job(db, context.job.id, owner)
-    _finish(db, job, outcome)
-    db.commit()
+        result = "converted"
+
+    preview_png: bytes | None = None
+    if pdf is not None and preview.preview_available():
+        try:
+            preview_png = preview.render_first_page(pdf, work_dir=work_dir, limits=_convert_limits())
+        except sandbox.SandboxError as exc:
+            _logger.warning("document job %s: Vorschau nicht erzeugt (%s)", context.job.id, type(exc).__name__)
+
+    outputs: dict[str, tuple[bytes, str, str]] = {}
+    stem = Path(context.original.original_name).stem or "dokument"
+    if generated_pdf is not None:
+        outputs[FILE_ROLE_PDF] = (generated_pdf, formats.PDF, f"{stem}.pdf")
+    if preview_png is not None:
+        outputs[FILE_ROLE_PREVIEW] = (preview_png, "image/png", f"{stem}-vorschau.png")
+    outcome = JobOutcome(status="done", result=result)
+    _store_generated_files(db, context, owner, outputs, outcome)
     return outcome
 
 
-def _store_generated_pdf(db: Session, context: _JobContext, owner: str, pdf: bytes) -> None:
+def _store_generated_files(
+    db: Session, context: _JobContext, owner: str, outputs: dict[str, tuple[bytes, str, str]], outcome: JobOutcome
+) -> None:
+    """Schreibt die erzeugten Dateien (Rolle -> Bytes, MIME, Name), ersetzt frühere erzeugte
+    Dateien derselben Rollen und schliesst den Auftrag ab - alles nur mit gültiger Lease."""
     job = _lock_owned_job(db, context.job.id, owner)
-    key = document_service.generated_key(context.document.tenant_id, context.document, context.version, f"{uuid.uuid4().hex}.pdf")
     store = get_object_store()
-    info = store.put_bytes(db, MAIN, key, pdf, content_type=formats.PDF)
+    written: list[str] = []
+    previous_keys: list[str] = []
     try:
-        stem = Path(context.original.original_name).stem or "dokument"
-        generated = StoredFile(
-            tenant_id=context.document.tenant_id,
-            original_name=f"{stem}.pdf",
-            mime_type=formats.PDF,
-            storage_path=key,
-            file_size_bytes=info.size,
-            checksum_sha256=info.sha256,
-            # Aus einer bereits als sauber geprüften Datei in der Sandbox erzeugt.
-            scan_status="clean",
-            created_by=None,
-        )
-        db.add(generated)
-        db.flush()
-        previous = list(
-            db.scalars(
-                select(DocumentFile).where(
-                    DocumentFile.document_version_id == context.version.id,
-                    DocumentFile.role == FILE_ROLE_PDF,
-                    DocumentFile.is_generated.is_(True),
+        for role, (data, mime_type, name) in outputs.items():
+            suffix = ".pdf" if mime_type == formats.PDF else ".png"
+            key = document_service.generated_key(
+                context.document.tenant_id, context.document, context.version, f"{uuid.uuid4().hex}{suffix}"
+            )
+            info = store.put_bytes(db, MAIN, key, data, content_type=mime_type)
+            written.append(key)
+            now = _now()
+            generated = StoredFile(
+                tenant_id=context.document.tenant_id,
+                original_name=name,
+                mime_type=mime_type,
+                storage_path=key,
+                file_size_bytes=info.size,
+                checksum_sha256=info.sha256,
+                # Aus einer bereits als sauber geprüften Datei in der Sandbox erzeugt.
+                scan_status="clean",
+                created_by=None,
+                # Vorschaubilder sind keine Fotos: von Bildanalyse und Qualitäts-Backfill ausnehmen.
+                face_analyzed_at=now if mime_type != formats.PDF else None,
+                quality_analyzed_at=now if mime_type != formats.PDF else None,
+            )
+            db.add(generated)
+            db.flush()
+            previous = list(
+                db.scalars(
+                    select(DocumentFile).where(
+                        DocumentFile.document_version_id == context.version.id,
+                        DocumentFile.role == role,
+                        DocumentFile.is_generated.is_(True),
+                    )
                 )
             )
-        )
-        previous_ids = [row.stored_file_id for row in previous]
-        for row in previous:
-            db.delete(row)
-        db.flush()
-        db.add(DocumentFile(document_version_id=context.version.id, stored_file_id=generated.id, role=FILE_ROLE_PDF, is_generated=True))
-        _finish(db, job, JobOutcome(status="done", result="converted"))
-        document_service._delete_generated_files(db, previous_ids)
+            previous_files = list(db.scalars(select(StoredFile).where(StoredFile.id.in_([row.stored_file_id for row in previous]))))
+            previous_keys.extend(stored_file.storage_path for stored_file in previous_files)
+            for row in previous:
+                db.delete(row)
+            for stored_file in previous_files:
+                db.delete(stored_file)
+            db.flush()
+            db.add(DocumentFile(document_version_id=context.version.id, stored_file_id=generated.id, role=role, is_generated=True))
+        _finish(db, job, outcome)
         db.commit()
     except Exception:
         db.rollback()
-        try:
-            store.delete(db, MAIN, key)
-            db.commit()
-        except Exception:  # noqa: BLE001 - Rest räumt remove_orphaned_generated_files nicht auf (kein Row), Objekt bleibt
-            db.rollback()
-            _logger.warning("document job %s: erzeugtes PDF konnte nach Fehler nicht entfernt werden", context.job.id)
+        for key in written:
+            try:
+                store.delete(db, MAIN, key)
+                db.commit()
+            except Exception:  # noqa: BLE001 - Objekt ohne DB-Zeile bleibt zurück, kein Verweis ins Leere
+                db.rollback()
+                _logger.warning("document job %s: erzeugte Datei konnte nach Fehler nicht entfernt werden", context.job.id)
         raise
+    # Ersetzte Dateien (erneute Verarbeitung) erst nach dem Commit aus dem Speicher nehmen -
+    # schlägt das fehl, bleibt nur ein unreferenziertes Objekt, nie ein Verweis ins Leere.
+    for old_key in previous_keys:
+        try:
+            store.delete(db, MAIN, old_key)
+            db.commit()
+        except Exception:  # noqa: BLE001 - Rest ohne DB-Zeile, Speicherbedarf vernachlässigbar
+            db.rollback()
+            _logger.warning("document job %s: ersetzte Datei konnte nicht entfernt werden", context.job.id)
 
 
 def _extraction_limits() -> sandbox.Limits:

@@ -53,12 +53,17 @@ def test_detail_shows_versions_files_jobs_and_status(db, document_storage):
     assert len(detail.versions) == 1 and detail.versions[0].is_current
     version = detail.versions[0]
     assert version.original.name == "sample.pdf" and version.pdf.url.endswith("/files/pdf")
-    assert version.extract_job.status == "queued" and version.pdf_job.status == "none"
+    assert version.extract_job.status == "queued" and version.pdf_job.status == "queued"
 
     _process_all(db, document)
     detail = routes.get_document(document.public_id, db=db, user=user)
     assert detail.status == "ready"
     assert detail.versions[0].extraction.status == "ready" and detail.versions[0].extraction.text_url
+    assert detail.versions[0].preview is not None
+    preview = routes.get_document_file(
+        document.public_id, detail.versions[0].id, "preview", request=None, download=False, db=db, user=user
+    )
+    assert preview.headers["content-disposition"].startswith("inline") and preview.media_type == "image/png"
 
 
 def test_text_endpoint_returns_plain_markdown_and_structured_content(db, document_storage):

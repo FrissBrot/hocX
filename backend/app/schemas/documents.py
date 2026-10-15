@@ -49,6 +49,8 @@ class DocumentVersionRead(BaseModel):
     is_current: bool
     original: DocumentFileRead | None
     pdf: DocumentFileRead | None
+    # Bild der ersten PDF-Seite (Vorschau im Dateien-Tab).
+    preview: DocumentFileRead | None = None
     pdf_job: DocumentJobState
     extract_job: DocumentJobState
     extraction: DocumentExtractionRead | None
@@ -63,6 +65,7 @@ class DocumentSummary(BaseModel):
     extraction_status: str | None
     pdf_url: str | None
     pdf_download_url: str | None
+    preview_url: str | None = None
     version_count: int
     current_version_number: int | None
     current_version_label: str | None

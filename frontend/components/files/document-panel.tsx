@@ -55,12 +55,27 @@ function currentVersion(detail: DocumentDetail | null): DocumentVersionRead | nu
   return detail?.versions.find((version) => version.is_current) ?? null;
 }
 
-/** Bevorzugte Ansicht: das PDF der aktuellen Version, sonst ein Hinweis zum Stand. */
+/** Bevorzugte Ansicht: das PDF der aktuellen Version - als Bild der ersten Seite, ein Klick öffnet
+ * das PDF im eigenen Tab (eingebettete Frames verbietet die CSP der App bewusst). */
 export function DocumentPreview({ detail, name }: { detail: DocumentDetail | null; name: string }) {
   const t = useTranslations("files");
   const version = currentVersion(detail);
   if (version?.pdf) {
-    return <iframe className="file-detail-preview-pdf" src={`${browserApiBaseUrl}${version.pdf.url}`} title={t("document.previewTitle", { name })} />;
+    return (
+      <a
+        href={`${browserApiBaseUrl}${version.pdf.url}`}
+        target="_blank"
+        rel="noreferrer"
+        className={version.preview ? "file-detail-preview-link" : "file-detail-preview-icon"}
+      >
+        {version.preview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={`${browserApiBaseUrl}${version.preview.url}`} alt={t("document.previewTitle", { name })} className="file-detail-preview-img" />
+        ) : (
+          <span className="file-detail-preview-cta">{t("document.openPdf")}</span>
+        )}
+      </a>
+    );
   }
   const message = !detail
     ? t("detail.loading")

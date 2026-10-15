@@ -7645,15 +7645,7 @@ input[type="radio"] {
   box-shadow: none;
 }
 
-/* Logische Dokumente (document-panel.tsx): PDF-Ansicht als Vorschau, Aktionen, Text, Versionen. */
-.file-detail-preview-pdf {
-  display: block;
-  width: 100%;
-  min-height: 60vh;
-  border: 0;
-  background: var(--panel-solid);
-}
-
+/* Logische Dokumente (document-panel.tsx): Vorschau der ersten PDF-Seite, Aktionen, Text, Versionen. */
 .file-detail-preview-note {
   align-self: center;
   margin: 0;

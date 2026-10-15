@@ -101,8 +101,10 @@ def _add_version(
     db.flush()
     db.add(DocumentFile(document_version_id=version.id, stored_file_id=original.id, role=FILE_ROLE_ORIGINAL, is_generated=False))
     if original.mime_type == formats.PDF:
-        # Bereits ein PDF: dieselbe Datei ist zugleich Darstellung, keine Neukonvertierung.
+        # Bereits ein PDF: dieselbe Datei ist zugleich Darstellung, keine Neukonvertierung. Der
+        # PDF-Auftrag erzeugt hier nur das Vorschaubild der ersten Seite.
         db.add(DocumentFile(document_version_id=version.id, stored_file_id=original.id, role=FILE_ROLE_PDF, is_generated=False))
+        enqueue_job(db, version, JOB_KIND_PDF, tenant_id=document.tenant_id)
     elif formats.needs_conversion(original.mime_type):
         enqueue_job(db, version, JOB_KIND_PDF, tenant_id=document.tenant_id)
     if formats.extraction_parser(original.mime_type) is not None:
@@ -188,18 +190,8 @@ def record_protocol_export(
     Inhaltlich neu (anderer Fingerprint als die aktuelle Version) -> neue Version, die zur
     aktuellen wird. Gleicher Inhalt -> die Darstellung der aktuellen Version wird durch die neue
     Datei ersetzt (z. B. geänderte Vorlage), es entsteht keine Version."""
-    # Sperrt die Zeile (bzw. serialisiert die Anlage über den Unique-Index), damit zwei
-    # gleichzeitige Exporte nicht dieselbe Versionsnummer vergeben.
-    db.execute(
-        pg_insert(Document)
-        .values(
-            tenant_id=tenant_id, source_kind=DOCUMENT_SOURCE_PROTOCOL_EXPORT, display_name=display_name,
-            protocol_id=protocol_id, export_kind=export_kind,
-        )
-        .on_conflict_do_nothing(index_elements=["protocol_id", "export_kind"], index_where=text("protocol_id IS NOT NULL"))
-    )
-    document = db.scalar(
-        select(Document).where(Document.protocol_id == protocol_id, Document.export_kind == export_kind).with_for_update()
+    document = lock_export_document(
+        db, tenant_id=tenant_id, protocol_id=protocol_id, export_kind=export_kind, display_name=display_name
     )
     document.display_name = display_name
     document.updated_at = _now()
@@ -217,6 +209,29 @@ def record_protocol_export(
     return ExportVersionResult(document=document, version=version, created=True)
 
 
+def lock_export_document(db: Session, *, tenant_id: int, protocol_id: int, export_kind: str, display_name: str) -> Document:
+    """Legt das Export-Dokument bei Bedarf an und sperrt seine Zeile bis zum Ende der Transaktion.
+    Serialisiert gleichzeitige Exporte (Versionsnummern, Übernahme der Exporthistorie)."""
+    db.execute(
+        pg_insert(Document)
+        .values(
+            tenant_id=tenant_id, source_kind=DOCUMENT_SOURCE_PROTOCOL_EXPORT, display_name=display_name,
+            protocol_id=protocol_id, export_kind=export_kind,
+        )
+        .on_conflict_do_nothing(index_elements=["protocol_id", "export_kind"], index_where=text("protocol_id IS NOT NULL"))
+    )
+    return db.scalar(
+        select(Document)
+        .where(Document.protocol_id == protocol_id, Document.export_kind == export_kind)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+def document_tenant_id(db: Session, version: DocumentVersion) -> int:
+    return db.scalar(select(Document.tenant_id).where(Document.id == version.document_id))
+
+
 def _replace_export_rendition(db: Session, version: DocumentVersion, stored_file: StoredFile) -> None:
     """Neue Datei mit gleichem Inhalt: Original und PDF der Version zeigen auf die neue Datei. Die
     alte Exportdatei gehört weiter protocol_export_cache und fällt unter dessen Aufbewahrung."""
@@ -227,6 +242,8 @@ def _replace_export_rendition(db: Session, version: DocumentVersion, stored_file
     db.add(DocumentFile(document_version_id=version.id, stored_file_id=stored_file.id, role=FILE_ROLE_ORIGINAL, is_generated=False))
     db.add(DocumentFile(document_version_id=version.id, stored_file_id=stored_file.id, role=FILE_ROLE_PDF, is_generated=False))
     version.updated_at = _now()
+    # Neue Darstellung -> Vorschaubild neu erzeugen.
+    enqueue_job(db, version, JOB_KIND_PDF, tenant_id=document_tenant_id(db, version), reset=True)
 
 
 # ── Löschen und Aufräumen ─────────────────────────────────────────────────────

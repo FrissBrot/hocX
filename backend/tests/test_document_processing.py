@@ -79,7 +79,24 @@ def test_pdf_upload_is_its_own_pdf_and_needs_no_conversion(db, document_storage)
     document = document_service.register_upload(db, stored_file)
     files = _files(db, document.current_version_id)
     assert files["pdf"].stored_file_id == stored_file.id and files["pdf"].is_generated is False
-    assert set(_jobs(db, document)) == {"extract"}
+    # Der PDF-Auftrag erzeugt bei PDFs nur das Vorschaubild, keine neue PDF-Datei.
+    assert set(_jobs(db, document)) == {"pdf", "extract"}
+
+
+@needs_soffice
+def test_pdf_job_for_uploaded_pdf_only_renders_preview(db, document_storage):
+    tenant = make_tenant(db)
+    stored_file = gallery_document(db, tenant.id, "sample.pdf")
+    document = document_service.register_upload(db, stored_file)
+    outcome = _run(db, _jobs(db, document)["pdf"])
+    assert (outcome.status, outcome.result) == ("done", "already_pdf")
+    files = _files(db, document.current_version_id)
+    assert files["pdf"].stored_file_id == stored_file.id
+    preview = db.get(StoredFile, files["preview"].stored_file_id)
+    assert preview.mime_type == "image/png" and files["preview"].is_generated is True
+    assert get_object_store().get_bytes(MAIN, preview.storage_path).startswith(b"\x89PNG")
+    # Vorschaubilder sind keine Fotos - von Bildanalyse und Qualitäts-Backfill ausgenommen.
+    assert preview.face_analyzed_at is not None and preview.quality_analyzed_at is not None
 
 
 def test_spreadsheet_gets_pdf_job_but_extraction_is_unsupported(db, document_storage):
@@ -117,6 +134,7 @@ def test_pdf_job_converts_docx_and_stores_generated_pdf(db, document_storage):
     assert pdf.storage_path.startswith(f"documents/tenant-{tenant.id}/{document.public_id}/")
     assert get_object_store().get_bytes(MAIN, pdf.storage_path).startswith(b"%PDF-")
     assert get_object_store().get_bytes(MAIN, stored_file.storage_path) == (FIXTURES / "sample.docx").read_bytes()
+    assert files["preview"].is_generated is True
 
 
 def test_extract_job_reads_original_and_stores_structured_content(db, document_storage):
@@ -183,13 +201,14 @@ def test_pending_virus_scan_defers_without_counting_an_attempt(db, document_stor
     assert job.status == "queued" and job.attempts == 0 and job.run_after > datetime.now(UTC)
 
 
-def test_infected_original_blocks_processing(db, document_storage):
+@pytest.mark.parametrize(("scan_status", "result"), [("infected", "infected"), ("error", "scan_error")])
+def test_infected_or_unscannable_original_blocks_processing(db, document_storage, scan_status, result):
     tenant = make_tenant(db)
-    document = document_service.register_upload(db, gallery_document(db, tenant.id, "sample.md", scan_status="infected"))
+    document = document_service.register_upload(db, gallery_document(db, tenant.id, "sample.md", scan_status=scan_status))
     job = _jobs(db, document)["extract"]
     _run(db, job)
     db.refresh(job)
-    assert (job.status, job.result) == ("blocked", "infected")
+    assert (job.status, job.result) == ("blocked", result)
     assert db.scalar(select(DocumentExtraction).where(DocumentExtraction.document_version_id == document.current_version_id)) is None
 
 
@@ -297,6 +316,22 @@ def test_requeue_failed_resets_only_failed_jobs(db, document_storage):
 
 
 # ── Löschen und Aufräumen ─────────────────────────────────────────────────────
+
+
+@needs_soffice
+def test_reconversion_replaces_previous_generated_pdf(db, document_storage):
+    tenant = make_tenant(db)
+    document = document_service.register_upload(db, gallery_document(db, tenant.id, "sample.rtf"))
+    _run(db, _jobs(db, document)["pdf"])
+    first = db.get(StoredFile, _files(db, document.current_version_id)["pdf"].stored_file_id)
+    first_id, first_key = first.id, first.storage_path
+    document_service.enqueue_job(db, db.get(DocumentVersion, document.current_version_id), "pdf", tenant_id=tenant.id, reset=True)
+    db.flush()
+    _run(db, _jobs(db, document)["pdf"])
+    second = _files(db, document.current_version_id)["pdf"]
+    assert second.stored_file_id != first_id
+    assert db.scalar(select(StoredFile.id).where(StoredFile.id == first_id)) is None
+    assert not get_object_store().exists(MAIN, first_key)
 
 
 @needs_soffice

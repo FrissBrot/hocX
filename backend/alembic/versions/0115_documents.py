@@ -7,8 +7,9 @@
                        Protokollexporte haben die stabile Identität (protocol_id, export_kind).
 - document_version:    inhaltliche Version; die aktuelle steht explizit in
                        document.current_version_id (nicht "neuester Zeitstempel").
-- document_file:       Darstellungen einer Version (original/pdf) als Verweis auf stored_file.
-                       Original und daraus erzeugtes PDF sind dieselbe Version.
+- document_file:       Darstellungen einer Version (original/pdf, technisch preview = Bild der
+                       ersten PDF-Seite) als Verweis auf stored_file. Original und daraus
+                       erzeugtes PDF sind dieselbe Version.
 - document_extraction: extrahierter, strukturierter Inhalt einer Version (Schema
                        hocx.document-content).
 - document_job:        persistente Verarbeitungsaufträge (pdf/extract), höchstens einer je
@@ -99,7 +100,7 @@ def upgrade() -> None:
         # ihm gelöscht). Originale und Exportdateien gehören weiter ihrer Herkunft.
         sa.Column("is_generated", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
-        sa.CheckConstraint("role IN ('original', 'pdf')", name="ck_document_file_role"),
+        sa.CheckConstraint("role IN ('original', 'pdf', 'preview')", name="ck_document_file_role"),
         sa.UniqueConstraint("document_version_id", "role", name="uq_document_file_version_role"),
     )
     op.create_index("idx_document_file_stored_file", "document_file", ["stored_file_id"])
