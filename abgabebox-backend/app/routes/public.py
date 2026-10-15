@@ -539,8 +539,10 @@ async def upload(
             for i, (content, original_name, mime_type) in enumerate(contents):
                 suffix = Path(original_name).suffix.lower()
                 try:
-                    q_path, checksum = save_to_quarantine(
-                        db, content, tenant_id=tenant["id"], assignment_id=assignment["id"], suffix=suffix
+                    # Objektspeicher-I/O (bei S3 ein Netzwerk-Upload mit Retries) nie im Event-Loop
+                    # (S3-004); die Session wird währenddessen von nichts anderem benutzt.
+                    q_path, checksum = await asyncio.to_thread(
+                        save_to_quarantine, db, content, tenant_id=tenant["id"], assignment_id=assignment["id"], suffix=suffix
                     )
                 except StorageWriteFenced:
                     # Cutover/Wartung: erwartet, kein Fehler - 503 mit Retry-After (Handler in main.py).
@@ -562,6 +564,9 @@ async def upload(
                     "_content": content,
                 })
 
+        # _log() committet die Session (repository.insert_upload_log) - damit endet die
+        # Schreibtransaktion samt FOR-SHARE-Lock auf storage_state vor dem Scan; ein Cutover wartet
+        # nie auf ClamAV.
         _log("quarantined", "In Quarantäne gespeichert, Scan wird gestartet")
 
         # Step 2: Scan every file via ClamAV stream.
@@ -578,7 +583,7 @@ async def upload(
         if "infected" in scan_results or "error" in scan_results:
             for f in quarantine_files:
                 try:
-                    delete_object(db, f["storage_path"])
+                    await asyncio.to_thread(delete_object, db, f["storage_path"])
                     db.commit()
                 except Exception:
                     # Rest bleibt in der Quarantäne und wird vom Cleanup-Loop entfernt.
@@ -603,7 +608,7 @@ async def upload(
             file_info["scan_status"] = status
             if status == "clean":
                 try:
-                    file_info["storage_path"] = move_from_quarantine(db, f["storage_path"])
+                    file_info["storage_path"] = await asyncio.to_thread(move_from_quarantine, db, f["storage_path"])
                 except StorageWriteFenced:
                     _log("upload_error", "Speichern kurz gesperrt (Wartung)")
                     raise
@@ -636,7 +641,7 @@ async def upload(
             db.rollback()
             for f in saved_files:
                 try:
-                    delete_object(db, f["storage_path"])
+                    await asyncio.to_thread(delete_object, db, f["storage_path"])
                     db.commit()
                 except Exception:
                     db.rollback()
