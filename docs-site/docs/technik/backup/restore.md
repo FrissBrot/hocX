@@ -64,8 +64,10 @@ ausführt:
    (Status «Zurückgerollt»), sonst Freigabe der Wartung.
 
 Danach: Anmeldung prüfen, Stichproben in Mandanten, System → Backups → «Backup jetzt starten».
-Die bisherige Datenbank bleibt als `hocx_pre_restore_<zeit>` erhalten, die bisherige
-Storage-Generation bleibt unberührt; beide erst nach einer bewussten Entscheidung entfernen:
+Die bisherige Datenbank bleibt als `hocx_pre_restore_<zeit>` erhalten (gesperrt für Verbindungen,
+damit niemand versehentlich in den alten Stand schreibt; zum Einsehen
+`ALTER DATABASE "…" WITH ALLOW_CONNECTIONS true`), die bisherige Storage-Generation bleibt
+unberührt; beide erst nach einer bewussten Entscheidung entfernen:
 
 ```bash
 docker compose -p hocx exec db psql -U hocx -d postgres -c 'DROP DATABASE "hocx_pre_restore_20261015120000"'

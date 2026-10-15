@@ -155,3 +155,65 @@ def test_cli_rejects_untrusted_archive_names(backup_env, monkeypatch, capsys):  
     assert cli_main(["show", "../../etc/passwd"]) == 1
     assert cli_main(["restore-full", "--archive", "x", "--target-db", "Robert'); DROP TABLE x;--", "--storage", "filesystem",
                      "--database-url", "postgresql://u:p@localhost/db"]) == 1
+
+
+def _scratch_db(pg: PgTools, name: str) -> None:
+    if pg.database_exists(name):
+        pg.drop_database(name)
+    pg.create_database(name)
+    pg.psql(f"CREATE TABLE marker (name text); INSERT INTO marker VALUES ('{name}');", database=name)
+
+
+def _marker(pg: PgTools, database: str) -> str:
+    return pg.psql("SELECT name FROM marker;", database=database)
+
+
+def test_cli_swap_database_keeps_the_previous_database(monkeypatch):
+    suffix = uuid.uuid4().hex[:8]
+    live, restored, keep = f"hocx_swaplive_{suffix}", f"hocx_swaprest_{suffix}", f"hocx_swapkeep_{suffix}"
+    with PgTools(PgTarget.from_url(settings.database_url)) as pg:
+        try:
+            _scratch_db(pg, live)
+            _scratch_db(pg, restored)
+            assert cli_main(["swap-database", "--live", live, "--restored", restored, "--keep-as", keep,
+                             "--database-url", settings.database_url, "--yes"]) == 0
+            assert _marker(pg, live) == restored
+            # Die abgelöste DB nimmt keine Verbindungen mehr an (kein versehentliches Schreiben in
+            # den alten Stand) - zum Prüfen bewusst öffnen.
+            pg.psql(f'ALTER DATABASE "{keep}" WITH ALLOW_CONNECTIONS true;', database="postgres")
+            assert _marker(pg, keep) == live
+            assert not pg.database_exists(restored)
+        finally:
+            for name in (live, restored, keep):
+                pg.drop_database(name)
+
+
+def test_interrupted_database_swap_is_recovered_on_worker_start(backup_env):  # noqa: F811
+    """Absturz genau zwischen den beiden Umbenennungen: Live-DB weg, neue noch nicht an ihrem
+    Platz. Beim Start stellt der Worker den bisherigen Stand wieder her."""
+    import json
+
+    from app.backup.run_restore import recover_interrupted_cutover
+
+    _db, env, _ = backup_env
+    suffix = uuid.uuid4().hex[:8]
+    live, restored, pre = f"hocx_jlive_{suffix}", f"hocx_jrest_{suffix}", f"hocx_jpre_{suffix}"
+    with PgTools(PgTarget.from_url(settings.database_url)) as pg:
+        try:
+            _scratch_db(pg, pre)  # = ehemalige Live-DB, bereits umbenannt
+            _scratch_db(pg, restored)
+            pg.psql(f'ALTER DATABASE "{pre}" WITH ALLOW_CONNECTIONS false;', database="postgres")
+            journal = env.config.work_dir / "restore-journal"
+            journal.mkdir(parents=True, exist_ok=True)
+            (journal / f"{suffix}.json").write_text(json.dumps({"job_id": suffix, "live": live, "restored": restored, "pre": pre,
+                                                                 "step": "renamed_live"}))
+            actions = recover_interrupted_cutover(env)
+            assert any("zurückbenannt" in action for action in actions)
+            assert pg.database_exists(live) and not pg.database_exists(pre)
+            assert _marker(pg, live) == pre  # Inhalt der bisherigen Live-DB
+            assert not (journal / f"{suffix}.json").exists()
+        finally:
+            for name in (live, restored, pre):
+                if pg.database_exists(name):
+                    pg.psql(f'ALTER DATABASE "{name}" WITH ALLOW_CONNECTIONS true;', database="postgres")
+                    pg.drop_database(name)
