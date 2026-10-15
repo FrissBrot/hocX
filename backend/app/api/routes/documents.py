@@ -647,6 +647,8 @@ def list_source_options(
         rows = db.scalars(select(Template).where(Template.tenant_id == tenant_id, Template.status == "active").order_by(Template.name))
         return [SourceOption(id=row.public_id, label=row.name) for row in rows if access_service.can_read_template(db, user, row.id)]
     if source == "lists":
+        # Wie die Listen-API und der Block list_table: nur Schreibende.
+        require_writer(user)
         rows = db.scalars(select(ListDefinition).where(ListDefinition.tenant_id == tenant_id, ListDefinition.is_active.is_(True)).order_by(ListDefinition.name))
         return [SourceOption(id=row.public_id, label=row.name) for row in rows]
     if source == "events":

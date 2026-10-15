@@ -344,7 +344,8 @@ CATALOG: dict[str, CatalogEntry] = {
         CatalogEntry("event_table", "events", EventTableParams),
         CatalogEntry("event_calendar_month", "events", EventCalendarParams),
         CatalogEntry("event_agenda", "events", EventAgendaParams),
-        CatalogEntry("list_table", "lists", ListTableParams),
+        # Wie die Listen-API (GET /api/lists…): nur Schreibende.
+        CatalogEntry("list_table", "lists", ListTableParams, access="writer"),
         CatalogEntry("finance_balance", "finance", FinanceBalanceParams, access="finance"),
         CatalogEntry("finance_transactions", "finance", FinanceTransactionsParams, access="finance"),
         CatalogEntry("fines", "finance", FinesParams, access="finance"),

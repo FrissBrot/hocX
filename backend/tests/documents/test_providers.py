@@ -143,6 +143,9 @@ def test_member_list_requires_writer_and_finance_requires_feature(db, world):
     ctx = _ctx(db, world, user=reader)
     with pytest.raises(DocumentPermissionError):
         build_blocks(ctx, [BlockSpec(type="member_list")])
+    # TYPST-002: Listen sind wie in der Listen-API (require_writer) Schreibenden vorbehalten.
+    with pytest.raises(DocumentPermissionError):
+        build_blocks(ctx, [BlockSpec(type="list_table")])
     no_finance = make_current_user(world["tenant"].id, role="admin", features=frozenset())
     with pytest.raises(DocumentPermissionError):
         build_blocks(_ctx(db, world, user=no_finance), [BlockSpec(type="finance_balance")])
