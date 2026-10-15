@@ -320,6 +320,15 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     template_service.publish(db, document_template, user_id=None)
     db.add(DocumentComponent(tenant_id=tenant.id, name="Kopf", schema_version=1, node_json={"type": "image", "id": "k", "source": {"kind": "asset", "asset_id": str(logo.public_id)}}))
     db.add(DocumentTemplateAssignment(tenant_id=tenant.id, document_type="protocol", protocol_template_id=template.id, brand_id=brand.id))
+    # STUDIO-010: Export mit Systemvorlage und Brand-Revision behält beide Bezüge
+    from app.documents.system_templates import sync_system_templates
+
+    sync_system_templates(db)
+    system_template = db.scalar(select(DocumentTemplate).where(DocumentTemplate.system_key == "protocol_standard"))
+    db.add(DocumentExport(
+        tenant_id=tenant.id, document_type="protocol", version_label="v0.2", content_hash="ef" * 32,
+        template_id=system_template.id, brand_revision_id=brand_service.current_revision(db, brand).id,
+    ))
     db.flush()
 
     zip_path, _ = TenantExportService().export(db, tenant.id, "full")
@@ -331,7 +340,7 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
         assert len(manifest["tables"]["document_component"]) == 1 and len(manifest["tables"]["document_template_assignment"]) == 1
         assert len(manifest["tables"]["word_import_profile"]) == 1
         assert len(manifest["tables"]["word_import_suggestion_outcome"]) == 1
-        assert len(manifest["tables"]["document_export"]) == 1
+        assert len(manifest["tables"]["document_export"]) == 2
         assert len(manifest["tables"]["document_registry"]) == 1
         assert manifest["tables"]["user_protocol_scroll"][0]["user_id"] == str(user.public_id)
         # Fresh target installation: the source account isn't there (see the word import test),
@@ -375,12 +384,49 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     assert published.content_json["body"][1]["params"]["protocol_id"] == str(imported_protocol.public_id)
     assert imported_assignment.protocol_template_id == imported_template.id and imported_assignment.brand_id == imported_brand.id
     assert imported_component.node_json["source"]["asset_id"] == str(imported_logo.public_id)
+    system_export = db.scalar(select(DocumentExport).where(DocumentExport.tenant_id == imported_tenant.id, DocumentExport.version_label == "v0.2"))
+    assert system_export.template_id == system_template.id
+    assert system_export.brand_revision_id == brand_service.current_revision(db, imported_brand).id
     registry = db.scalar(select(DocumentRegistry).where(DocumentRegistry.tenant_id == imported_tenant.id))
     # Dokument-ID bleibt (sie steht im PDF), Quelle zeigt auf das importierte Protokoll
     assert registry.public_id == registry_id and registry.sha256 == "cd" * 32
     assert registry.status_code == "abgeschlossen" and registry.version_label == "v1.0"
     assert registry.source_public_id == imported_protocol.public_id
     assert scroll.last_element_id == 17
+
+
+def test_import_skips_invalid_document_studio_content(db):
+    """STUDIO-011: Ungültige Studio-Inhalte im Archiv werden beim Import geprüft und gemeldet
+    statt erst Bibliothek und Export scheitern zu lassen."""
+    from app.documents import brand_service, template_service
+    from app.documents.layout import TemplateContent
+
+    tenant = make_tenant(db, "Studio Invalid")
+    brand = brand_service.create_brand(db, tenant.id, name="Verein", is_default=True)
+    document_template, _revision = template_service.create_template(db, tenant.id, name="Gültig", document_type="custom", content=TemplateContent())
+    broken_template, broken_revision = template_service.create_template(db, tenant.id, name="Kaputt", document_type="custom", content=TemplateContent())
+    db.add(DocumentComponent(tenant_id=tenant.id, name="Kaputt", schema_version=1, node_json={"type": "script", "id": "x"}))
+    db.flush()
+    # Direkt in der DB verfälscht (Schema verhindert das sonst beim Speichern)
+    broken_revision.content_json = {"body": [{"type": "script", "id": "x"}]}
+    brand_service.current_revision(db, brand).tokens_json = {"colors": {"primary": "rot"}}
+    db.flush()
+
+    zip_path, _ = TenantExportService().export(db, tenant.id, "full")
+    try:
+        imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Studio Invalid (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    assert any("Komponente 'Kaputt'" in item for item in warnings)
+    assert any("Dokumentvorlage 'Kaputt'" in item for item in warnings)
+    assert any("Brand-Revision" in item for item in warnings)
+    assert db.scalar(select(DocumentComponent).where(DocumentComponent.tenant_id == imported_tenant.id)) is None
+    templates = {row.name: row for row in db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id == imported_tenant.id))}
+    assert template_service.working_revision(db, templates["Gültig"]) is not None
+    assert template_service.working_revision(db, templates["Kaputt"]) is None
+    imported_brand = db.scalar(select(DocumentBrand).where(DocumentBrand.tenant_id == imported_tenant.id, DocumentBrand.name == "Verein"))
+    assert brand_service.current_revision(db, imported_brand).tokens_json["colors"]["primary"] == "#174B7A"
 
 
 def test_export_import_roundtrip_restores_all_member_mfa_factors(db):

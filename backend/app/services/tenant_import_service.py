@@ -418,7 +418,7 @@ class TenantImportService:
         self._import_protocol_display_snapshots(protocol_element_block_map)
         self._import_protocol_images(protocol_element_block_map, stored_file_map)
         document_template_maps = self._import_document_templates(new_tenant.id, template_map, document_style_map)
-        self._import_document_exports(new_tenant.id, protocol_map, stored_file_map, document_template_maps)
+        self._import_document_exports(new_tenant.id, protocol_map, stored_file_map, document_template_maps, document_style_map)
         finance_transaction_map = self._import_finance_transactions(finance_account_map, protocol_map)
         self._import_attendance_fines(protocol_map, participant_map, finance_account_map, finance_transaction_map)
         task_package_item_map = self._import_task_packages(
@@ -756,7 +756,7 @@ class TenantImportService:
             brand_id = id_map.get(f"brand:{data.get('brand_id')}")
             if brand_id is None:
                 continue
-            revision = self._build(DocumentBrandRevision, data, {"brand_id": brand_id, "tokens_json": self._remap_public_refs(data.get("tokens_json") or {})})
+            revision = self._build(DocumentBrandRevision, data, {"brand_id": brand_id, "tokens_json": self._checked_brand_tokens(new_tenant_id, data)})
             self.db.add(revision)
             self.db.flush()
             id_map[f"revision:{row['id']}"] = revision.id
@@ -818,6 +818,20 @@ class TenantImportService:
         self.db.commit()
         return id_map
 
+    def _checked_brand_tokens(self, new_tenant_id: int, data: dict[str, Any]) -> dict[str, Any]:
+        """Tokens einer importierten Brand-Revision gegen das Schema prüfen (STUDIO-011). Ungültige
+        Tokens werden durch Standardwerte ersetzt (wie beim Laden, brand_service.tokens_of) und
+        gemeldet, statt erst Bibliothek und Export scheitern zu lassen."""
+        from app.documents.brand import BrandTokens, parse_tokens
+
+        raw = self._remap_public_refs(data.get("tokens_json") or {})
+        try:
+            tokens = parse_tokens(raw)
+        except ValueError as exc:
+            self.warnings.append(f"Brand-Revision {data.get('revision')} eines Brand-Profils war ungültig und wurde durch Standardwerte ersetzt: {exc}")
+            tokens = BrandTokens()
+        return self._valid_brand_tokens(new_tenant_id, tokens).model_dump(mode="json")
+
     def _valid_brand_tokens(self, new_tenant_id: int, tokens: Any) -> Any:
         """Asset-Referenzen, deren Datei fehlte, entfernen (sonst lehnt das Brand-Profil sie ab)."""
         from app.documents import assets as asset_service
@@ -842,7 +856,7 @@ class TenantImportService:
         Archive: Rezepte (Format 5/6) werden zu Mandantenvorlagen (app.documents.legacy), die
         Hausstil-Wahl einer Protokollvorlage zu einer Brand-Zuweisung.
         Rückgabe: "template:<alte id>", "revision:<alte id>", "recipe:<alte id>" → neue ID."""
-        from app.documents.layout import TemplateContent, content_json
+        from app.documents.layout import TemplateContent, content_json, parse_content
         from app.documents.legacy import content_from_recipe
         from app.documents.hashing import json_hash
         from app.documents import template_service
@@ -851,7 +865,12 @@ class TenantImportService:
         system = {row.system_key: row.id for row in self.db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id.is_(None))).all()}
         for row in self._t("document_component"):
             data = self._resolve_row("document_component", row)
-            self.db.add(self._build(DocumentComponent, data, {"tenant_id": new_tenant_id, "node_json": self._remap_public_refs(data.get("node_json") or {})}))
+            try:
+                node = template_service.parse_component_node(self._remap_public_refs(data.get("node_json") or {})).model_dump(mode="json")
+            except ValueError as exc:
+                self.warnings.append(f"Komponente '{data.get('name')}' ist ungültig und wurde nicht übernommen: {exc}")
+                continue
+            self.db.add(self._build(DocumentComponent, data, {"tenant_id": new_tenant_id, "node_json": node}))
             self.db.flush()
         templates: dict[int, DocumentTemplate] = {}
         for row in self._t("document_template") if self.format_version >= 7 else []:
@@ -875,9 +894,17 @@ class TenantImportService:
             template = templates.get(data.get("template_id"))
             if template is None:
                 continue
+            try:
+                if data.get("status") not in ("draft", "published", "superseded"):
+                    raise ValueError(f"Status {data.get('status')!r}")
+                checked = content_json(parse_content(self._remap_public_refs(data.get("content_json") or {})))
+            except ValueError as exc:
+                # Ungültige Revision weglassen (sonst 500/422 erst in Bibliothek und Export)
+                self.warnings.append(f"Revision {data.get('revision_no')} der Dokumentvorlage '{template.name}' ist ungültig und wurde nicht übernommen: {exc}")
+                continue
             new_revision = self._build(DocumentTemplateRevision, data, {
                 "template_id": template.id,
-                "content_json": self._remap_public_refs(data.get("content_json") or {}),
+                "content_json": checked,
                 "brand_revision_id": brand_map.get(f"revision:{data['brand_revision_id']}") if data.get("brand_revision_id") else None,
             })
             self.db.add(new_revision)
@@ -926,8 +953,12 @@ class TenantImportService:
         self.db.commit()
         return id_map
 
-    def _import_document_exports(self, new_tenant_id: int, protocol_map: dict[int, int], stored_file_map: dict[int, int], template_maps: dict[str, int]) -> None:
-        """Export-Datensätze. Ältere Archive: protocol_export_cache (PDF) → document_export."""
+    def _import_document_exports(self, new_tenant_id: int, protocol_map: dict[int, int], stored_file_map: dict[int, int], template_maps: dict[str, int], brand_map: dict[str, int]) -> None:
+        """Export-Datensätze. Ältere Archive: protocol_export_cache (PDF) → document_export.
+        Vorlagenbezug: Mandantenvorlagen über ihre neue ID, Systemvorlagen über ``system_key``
+        (ab Format 7 mitexportiert; die Revision einer Systemvorlage ist installationsabhängig
+        und bleibt leer). Brand-Revisionen über die beim Brand-Import entstandene Zuordnung."""
+        system = {row.system_key: row.id for row in self.db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id.is_(None))).all()}
         for row in self._t("document_export"):
             data = self._resolve_row("document_export", row)
             if data.get("protocol_id") and protocol_map.get(data["protocol_id"]) is None:
@@ -935,13 +966,14 @@ class TenantImportService:
             template_id = template_maps.get(f"template:{data['template_id']}") if data.get("template_id") else None
             if template_id is None and data.get("recipe_id"):
                 template_id = template_maps.get(f"recipe:{data['recipe_id']}")
+            if template_id is None and row.get("system_key"):
+                template_id = system.get(row["system_key"])
             self.db.add(self._build(DocumentExport, data, {
                 "tenant_id": new_tenant_id,
                 "protocol_id": protocol_map.get(data["protocol_id"]) if data.get("protocol_id") else None,
                 "template_id": template_id,
                 "template_revision_id": template_maps.get(f"revision:{data['template_revision_id']}") if data.get("template_revision_id") else None,
-                # Brand-Revisionen gehören zum Mandanten; die Zuordnung ist hier nicht mehr eindeutig
-                "brand_revision_id": None,
+                "brand_revision_id": brand_map.get(f"revision:{data['brand_revision_id']}") if data.get("brand_revision_id") else None,
                 "stored_file_id": stored_file_map.get(data["stored_file_id"]) if data.get("stored_file_id") else None,
             }))
         for row in self._t("protocol_export_cache"):

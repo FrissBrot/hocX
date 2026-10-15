@@ -313,7 +313,10 @@ Frontend-Tests neu (`frontend/lib/documents/test/studio-catalog.generated.json`)
   weiterhin.
 - Beschlüsse sind kein eigenes Datenobjekt: Das Beschlussprotokoll zeigt die Textinhalte der
   Traktanden.
-- Beim Mandanten-Import werden `brand_revision_id` alter Exporte nicht neu zugeordnet. Der Export
-  bleibt im Register gültig, verweist aber auf keine Brand-Revision.
+- Mandanten-Import: Exporte behalten `brand_revision_id` (über die importierten Brand-Revisionen)
+  und den Bezug zu Systemvorlagen (über `system_key`, ab Format 7 mitexportiert). Die Revision
+  einer Systemvorlage ist installationsabhängig, `template_revision_id` bleibt dafür leer.
+  Studio-Inhalte werden beim Import gegen das Schema geprüft: ungültige Revisionen und
+  Komponenten werden mit Warnung weggelassen, ungültige Brand-Tokens durch Standardwerte ersetzt.
 - Drag-and-drop mit der Maus ist nur über E2E- und manuelle Prüfung abgedeckt (jsdom kann keine
   Zeigerbewegungen). Die Logik dahinter (Ablageziele, Verschieben) ist unit-getestet.

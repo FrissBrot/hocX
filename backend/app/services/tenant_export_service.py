@@ -559,9 +559,17 @@ class TenantExportService:
         )
         self._export_photo_albums(db, tenant_id, tables, include_abgabebox=include_abgabebox)
         # Export-Datensätze (Version, Inhalts-Hash) - die PDFs selbst reisen als stored_file mit.
-        tables["document_export"] = self._rows(
+        export_rows = self._rows(
             db.scalars(select(DocumentExport).where(DocumentExport.tenant_id == tenant_id)).all(), "document_export"
         )
+        # Systemvorlagen sind installationsübergreifend nur über system_key auflösbar
+        system_template_keys = {
+            row.id: row.system_key
+            for row in db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id.is_(None))).all()
+        }
+        for row in export_rows:
+            row["system_key"] = system_template_keys.get(row.get("template_id"))
+        tables["document_export"] = export_rows
         # Dokumentenregister: nach einem Umzug bleiben ausgelieferte PDFs prüfbar.
         tables["document_registry"] = self._rows(
             db.scalars(select(DocumentRegistry).where(DocumentRegistry.tenant_id == tenant_id)).all(), "document_registry"
