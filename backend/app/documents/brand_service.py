@@ -238,6 +238,12 @@ def ensure_default_brand(db: Session, tenant_id: int) -> DocumentBrand:
     brand = default_brand(db, tenant_id)
     if brand is not None:
         return brand
+    # Erster Aufruf (auch aus GET-Endpunkten): Mandantenzeile sperren und erneut prüfen, sonst
+    # legen zwei parallele Anfragen je ein Standardprofil an (uq_document_brand_default -> 500)
+    db.execute(select(Tenant.id).where(Tenant.id == tenant_id).with_for_update())
+    brand = default_brand(db, tenant_id)
+    if brand is not None:
+        return brand
     existing = db.scalar(select(DocumentBrand).where(DocumentBrand.tenant_id == tenant_id, DocumentBrand.archived_at.is_(None)).order_by(DocumentBrand.id.asc()))
     if existing is not None:
         _set_default(db, tenant_id, existing)

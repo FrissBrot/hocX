@@ -181,3 +181,18 @@ def test_parallel_restore_and_save_share_one_draft(tenant_id, monkeypatch):
 
     results = _run_parallel(work)
     assert all(isinstance(value, int) for value in results.values()), results
+
+
+def test_parallel_first_brand_lookups_create_one_default(tenant_id, monkeypatch):
+    """STUDIO-014: GET-Endpunkte legen beim ersten Aufruf das Standardprofil an."""
+    _slow(monkeypatch, brand_service, "default_brand")
+
+    def work(session: Session, name: str):
+        return brand_service.ensure_default_brand(session, tenant_id).id
+
+    results = _run_parallel(work)
+    assert all(isinstance(value, int) for value in results.values()), results
+    assert results["a"] == results["b"]
+    with engine.connect() as connection:
+        count = connection.execute(text("SELECT count(*) FROM document_brand WHERE tenant_id = :tid"), {"tid": tenant_id}).scalar_one()
+    assert count == 1
