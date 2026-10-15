@@ -131,7 +131,9 @@ gesetzt (Neuinstallation, bei der jede Datei über das Register geschrieben wurd
   jüngste Punkt für 14 Tage / 8 Wochen / 12 Monate (Borg-`prune`-Semantik: Perioden zählen nur,
   wenn sie einen Punkt enthalten). Regeln werden **vereinigt**: ein Punkt bleibt, sobald
   irgendeine Regel ihn hält. Geschützte Punkte (Rettungspunkt vor Restore, vor Deploy) und der
-  jüngste erfolgreiche Punkt werden nie entfernt.
+  jüngste vollständige sowie der jüngste verwertbare Punkt (auch „teilweise erfolgreich“) werden
+  nie entfernt – die Retention löscht also nie alle Punkte, auch wenn längere Zeit nur
+  Teil-Sicherungen gelingen.
 * Ablauf: (1) behaltene Punkte bestimmen, (2) deren Manifeste aus dem Repository lesen,
   (3) Menge aller referenzierten Inhalte bilden und gegen den Index prüfen, (4) erst dann nicht
   mehr behaltene `rp`-Archive löschen, (5) Pool-Archive ohne referenzierten Inhalt löschen,

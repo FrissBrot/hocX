@@ -112,6 +112,30 @@ def test_missing_object_makes_the_backup_partial(backup_env):
     assert warning["count"] == 1 and warning["items"][0]["key"] == "uploads/x/lost.bin"
 
 
+def test_retention_keeps_the_only_partial_restore_point(backup_env):
+    """BORG-001: gibt es nur teilweise erfolgreiche Punkte (dauerhaft fehlendes Objekt), löscht
+    die Retention trotzdem nie den jüngsten - auch ohne keep_within-Fenster."""
+    db, env, _ = backup_env
+    _put(db, "uploads/y/ok.bin", b"ok")
+    _put(db, "uploads/y/lost.bin", b"lost")
+    env.store.active_backend().delete("main", "uploads/y/lost.bin")
+    older = _run(env)
+    newer = _run(env)
+    assert older.state == newer.state == "partial"
+    db.execute(update(BackupSettings).values(keep_within_days=0, keep_daily=1, keep_weekly=0, keep_monthly=0))
+    db.execute(update(BackupSet).where(BackupSet.id == older.backup_set_id).values(snapshot_at=datetime.now(UTC) - timedelta(days=40)))
+    db.execute(update(BackupSet).where(BackupSet.id == newer.backup_set_id).values(snapshot_at=datetime.now(UTC) - timedelta(days=30)))
+    # Die nach dem Backup automatisch eingeplante Retention ersetzt der explizite Lauf unten.
+    db.execute(update(BackupJob).where(BackupJob.state == "queued").values(state="cancelled"))
+    db.commit()
+    retention = _run(env, "retention")
+    assert retention.state == "completed", retention.error_message
+    db.expire_all()
+    kept = db.get(BackupSet, newer.backup_set_id)
+    assert kept.state == "partial"
+    assert kept.archive_name in {a["name"] for a in env.borg.list_archives()}
+
+
 def test_interrupted_backup_resumes_without_reuploading(backup_env, monkeypatch):
     db, env, _ = backup_env
     for i in range(7):

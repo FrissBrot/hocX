@@ -5,10 +5,12 @@ Regeln (Default 14 Tage / 14 täglich / 8 wöchentlich / 12 monatlich, alle UTC)
 - keep_daily/weekly/monthly: wie `borg prune` - je Periode (Tag, ISO-Woche, Monat) der
   jüngste vollständige Punkt, für die jüngsten N Perioden, die überhaupt einen Punkt haben.
 - Regeln werden VEREINIGT: ein Punkt bleibt, sobald irgendeine Regel ihn hält.
-- Immer behalten: geschützte Punkte (Rettungspunkt vor Restore, vor Deploy) und der jüngste
-  vollständige Punkt - auch wenn die Uhr falsch steht oder lange kein Backup lief.
-- Teilweise erfolgreiche ("partial") Punkte zählen für keine Periodenregel; sie bleiben nur im
-  keep_within-Fenster erhalten (sie können einzelne Dateien enthalten, die sonst fehlen).
+- Immer behalten: geschützte Punkte (Rettungspunkt vor Restore, vor Deploy), der jüngste
+  vollständige Punkt und der jüngste verwertbare Punkt (vollständig oder "partial") - auch wenn
+  die Uhr falsch steht, lange kein Backup lief oder es nur noch teilweise erfolgreiche Punkte
+  gibt. Die Retention entfernt also nie alle Wiederherstellungspunkte.
+- Teilweise erfolgreiche ("partial") Punkte zählen für keine Periodenregel; sonst bleiben sie nur
+  im keep_within-Fenster erhalten (sie können einzelne Dateien enthalten, die sonst fehlen).
 """
 
 from __future__ import annotations
@@ -64,6 +66,11 @@ def select_retained(points: Iterable[RestorePoint], policy: RetentionPolicy, now
             keep(point.id, "protected")
     if complete:
         keep(complete[0].id, "latest")
+    usable = [p for p in ordered if p.state in ("completed", "partial")]
+    if usable:
+        # Auch wenn jede Sicherung nur teilweise gelang (z. B. ein dauerhaft fehlendes Objekt):
+        # der jüngste verwertbare Punkt bleibt, sonst gingen alle Punkte verloren.
+        keep(usable[0].id, "latest_usable")
     if policy.keep_within_days > 0:
         cutoff = now - timedelta(days=policy.keep_within_days)
         for point in ordered:

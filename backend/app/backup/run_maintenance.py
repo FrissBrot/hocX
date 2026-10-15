@@ -110,8 +110,12 @@ def run_retention(env: RunEnv, db: Session, ctx: jobs.JobCtx) -> str:
     kept = select_retained(candidates, policy, now)
     expired = [p.id for p in candidates if p.id not in kept]
     stale_invalid = [p.name for p in points if p.invalid and now - p.snapshot_at > INVALID_KEEP]
-    if candidates and not any(name in kept for name in (c.id for c in candidates if c.state == "completed")) and any(c.state == "completed" for c in candidates):
-        raise jobs.JobFailure("retention_inconsistent", "Retention würde keinen vollständigen Wiederherstellungspunkt behalten - abgebrochen")
+    # Schutzprüfung unabhängig von select_retained: nie den letzten vollständigen und nie den
+    # letzten verwertbaren (auch "partial") Punkt löschen.
+    for usable_states, what in ((("completed",), "vollständigen"), (("completed", "partial"), "verwertbaren")):
+        usable = [c.id for c in candidates if c.state in usable_states]
+        if usable and not any(point_id in kept for point_id in usable):
+            raise jobs.JobFailure("retention_inconsistent", f"Retention würde keinen {what} Wiederherstellungspunkt behalten - abgebrochen")
     checkpoints = view.checkpoint_archives()
     to_delete = expired + stale_invalid + checkpoints
     if to_delete:

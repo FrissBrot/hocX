@@ -157,10 +157,32 @@ def test_retention_default_policy_keeps_expected_points():
 def test_retention_always_keeps_protected_and_latest_and_ignores_partial_for_periods():
     now = datetime(2026, 10, 15, tzinfo=UTC)
     old_protected = RestorePoint("rescue", now - timedelta(days=900), "completed", protected=True)
-    old_partial = RestorePoint("partial", now - timedelta(days=40), "partial")
+    old_partial = RestorePoint("partial", now - timedelta(days=70), "partial")
     latest = RestorePoint("latest", now - timedelta(days=60), "completed")
     kept = select_retained([old_protected, old_partial, latest], RetentionPolicy(keep_within_days=14, keep_daily=0, keep_weekly=0, keep_monthly=0), now)
     assert "rescue" in kept and "latest" in kept and "partial" not in kept
+
+
+@pytest.mark.parametrize("keep_within_days", [0, 14])
+def test_retention_never_removes_the_newest_usable_point_when_all_are_partial(keep_within_days):
+    """BORG-001: gelingt jede Sicherung nur teilweise (z. B. ein dauerhaft fehlendes Objekt),
+    darf die Retention trotzdem nie alle Punkte entfernen - auch nicht mit keep_within_days=0
+    oder wenn der jüngste Punkt älter als das keep_within-Fenster ist."""
+    now = datetime(2026, 10, 15, tzinfo=UTC)
+    policy = RetentionPolicy(keep_within_days, 14, 8, 12)
+    fresh = select_retained([RestorePoint("a", now - timedelta(hours=1), "partial")], policy, now)
+    assert "a" in fresh
+    old = [RestorePoint(f"p{i}", now - timedelta(days=30 + i), "partial") for i in range(10)]
+    kept = select_retained(old, policy, now)
+    assert set(kept) == {"p0"} and kept["p0"] == ["latest_usable"]
+
+
+def test_retention_keeps_newest_partial_in_addition_to_newest_complete():
+    now = datetime(2026, 10, 15, tzinfo=UTC)
+    complete = RestorePoint("complete", now - timedelta(days=40), "completed")
+    partial = RestorePoint("partial", now - timedelta(days=20), "partial")
+    kept = select_retained([complete, partial], RetentionPolicy(0, 0, 0, 0), now)
+    assert set(kept) == {"complete", "partial"}
 
 
 def test_retention_rules_are_a_union():
