@@ -180,6 +180,18 @@ def _safe_storage_path(storage_root: str, relative_path: str) -> Path:
     return full
 
 
+def owned_thumbnail_path(stored_file: StoredFile) -> Path | None:
+    """Pfad der eigenen Vorschau ("<id>.jpg" im thumbnail_root) oder None.
+
+    Nur dieser Name gehört sicher zur Datei (Audit MAIN-BE-003): ältere Importe/Klone haben
+    thumbnail_path einer anderen StoredFile übernommen - beim Löschen darf deren Vorschau
+    nicht mit entfernt werden.
+    """
+    if stored_file.thumbnail_path != f"{stored_file.id}.jpg":
+        return None
+    return _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
+
+
 class FileService:
     def __init__(
         self,
@@ -232,7 +244,9 @@ class FileService:
         thumbnail_root = thumbnail_root or settings.thumbnail_root
         if not stored_file.mime_type or not stored_file.mime_type.startswith("image/"):
             return None
-        if stored_file.thumbnail_path:
+        # Nur der eigene Name "<id>.jpg" gilt (Audit MAIN-BE-003): ein aus Import/Klon oder
+        # Altbestand übernommener Name kann auf die Vorschau einer fremden Datei zeigen.
+        if stored_file.thumbnail_path and stored_file.thumbnail_path == f"{stored_file.id}.jpg":
             existing = _safe_storage_path(thumbnail_root, stored_file.thumbnail_path)
             if existing.exists():
                 return existing
@@ -1592,10 +1606,9 @@ class FileService:
         db.flush()
         if file_path.exists():
             file_path.unlink()
-        if stored_file.thumbnail_path:
-            thumbnail_path = _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
-            if thumbnail_path.exists():
-                thumbnail_path.unlink()
+        thumbnail_path = owned_thumbnail_path(stored_file)
+        if thumbnail_path is not None and thumbnail_path.exists():
+            thumbnail_path.unlink()
 
     def delete_gallery_images(
         self, db: Session, tenant_id: int, file_ids: list[uuid.UUID]
@@ -1684,8 +1697,9 @@ class FileService:
         paths_to_unlink: list[Path] = []
         if stored_file is not None and not self._stored_file_still_referenced(db, stored_file.id):
             paths_to_unlink.append(_safe_storage_path(settings.storage_root, stored_file.storage_path))
-            if stored_file.thumbnail_path:
-                paths_to_unlink.append(_safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path))
+            thumbnail_path = owned_thumbnail_path(stored_file)
+            if thumbnail_path is not None:
+                paths_to_unlink.append(thumbnail_path)
             self.stored_file_repository.delete(db, stored_file)
             db.flush()
         db.commit()

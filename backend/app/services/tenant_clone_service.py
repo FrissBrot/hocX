@@ -796,7 +796,9 @@ class TenantCloneService:
         for row in rows:
             root = settings.abgabebox_storage_root if row.id in abgabebox_ids else settings.storage_root
             new_storage_path = self._clone_stored_file_content(row.storage_path, root=root, new_tenant_id=new_tenant_id)
-            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "storage_path": new_storage_path})
+            # Eigene Vorschau statt der der Quelle (Audit MAIN-BE-003): sonst teilen sich Quelle und
+            # Klon "<quell_id>.jpg", und Löschen im Klon entfernt das Thumbnail der Quelle.
+            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "storage_path": new_storage_path, "thumbnail_path": None})
             db.add(new_row)
             db.flush()
             id_map[row.id] = new_row.id

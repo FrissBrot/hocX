@@ -985,7 +985,15 @@ class TenantImportService:
                 absolute_path.unlink(missing_ok=True)
                 self.warnings.append(f"Datei '{row.get('original_name')}' wurde von der Virenprüfung als infiziert erkannt und wurde nicht importiert.")
                 continue
-            new_row = self._build(StoredFile, data, {"tenant_id": new_tenant_id, "storage_path": new_storage_path, "scan_status": scan_status})
+            # thumbnail_path NULL (Audit MAIN-BE-003): Thumbnails heissen "<id>.jpg" im global
+            # geteilten thumbnail_root - der exportierte Name zeigt hier auf die Vorschau einer
+            # beliebigen anderen Datei (oft eines anderen Mandanten). ensure_thumbnail erzeugt
+            # die Vorschau beim ersten Abruf neu.
+            new_row = self._build(
+                StoredFile,
+                data,
+                {"tenant_id": new_tenant_id, "storage_path": new_storage_path, "scan_status": scan_status, "thumbnail_path": None},
+            )
             self.db.add(new_row)
             if row.get("public_id"):
                 self._imported_file_public_ids.add(str(row["public_id"]).lower())
