@@ -24,7 +24,7 @@ import io
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
-from typing import Any, Iterable, Literal
+from typing import Any, Literal
 
 from PIL import Image
 
@@ -609,19 +609,3 @@ def apply_server_analysis(stored_file: Any, metadata: ImageMetadata, *, source: 
 def mark_scan_status(stored_file: Any, status: ScanStatus) -> None:
     stored_file.metadata_scanned_at = datetime.now(UTC)
     stored_file.metadata_scan_status = status
-
-
-def wants_any(stored_file: Any, incoming: ImageMetadata) -> bool:
-    """Liefert `incoming` überhaupt etwas, das `stored_file` fehlt? Spart das Lesen der
-    Originaldatei, wenn nichts zu ergänzen ist."""
-    checks: Iterable[tuple[Any, Any]] = (
-        (stored_file.exif_taken_at, incoming.taken_at),
-        (stored_file.gps_latitude, incoming.gps_latitude),
-        (stored_file.gps_altitude_m, incoming.gps_altitude_m),
-        (stored_file.gps_direction_deg, incoming.gps_direction_deg),
-        (stored_file.camera_make, incoming.camera_make),
-        (stored_file.camera_model, incoming.camera_model),
-        (stored_file.width, incoming.width),
-        (stored_file.orientation, incoming.orientation),
-    )
-    return any(current is None and offered is not None for current, offered in checks)

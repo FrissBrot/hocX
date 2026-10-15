@@ -164,7 +164,8 @@ er fehlende Werte (`upload_precheck_service.enrich_existing`):
 **Vertrauen:** Client-Angaben sind nicht vertrauenswürdig.
 
 - Passt `checksum_sha256` (byte-identisches Original liegt auf dem Server), analysiert der
-  Server **seine eigene Datei**; die Client-Angaben dienen nur als Auslöser. Behauptet ein
+  Server **seine eigene Datei** - höchstens einmal (solange `metadata_scanned_at` leer ist);
+  Client-Angaben lösen keine erneute Analyse aus und werden nie übernommen. Behauptet ein
   Client z. B. ein Datum, das die Datei nicht enthält, wird nichts gespeichert.
 - Passt nur `source_checksum_sha256` (HEIC/HEIF wurde nach JPEG konvertiert, das Original
   existiert nicht mehr), werden validierte Client-Werte mit Herkunft `client` übernommen –

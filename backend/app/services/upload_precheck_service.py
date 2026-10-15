@@ -110,7 +110,8 @@ def enrich_existing(
     derselben Aufnahme - z. B. ältere Duplikate aus der Zeit vor der Duplikaterkennung).
 
     - Byte-identisches Original vorhanden (checksum_sha256 passt): der Server analysiert die
-      eigene Datei; Client-Angaben dienen nur als Auslöser und werden nie direkt übernommen.
+      eigene Datei (nur einmal, solange metadata_scanned_at leer ist); Client-Angaben werden
+      dabei nie übernommen.
     - Nur Quell-Hash passt (HEIC wurde nach JPEG konvertiert, Original existiert nicht mehr):
       validierte Client-Angaben werden mit Herkunft "client" übernommen, Abmessungen und
       Ausrichtung des Originals aber nicht (gelten nicht für das gedrehte JPEG).
@@ -124,9 +125,10 @@ def enrich_existing(
         before = (stored_file.exif_taken_at, stored_file.estimated_taken_on)
         file_outcome = MergeOutcome()
         byte_identical = stored_file.checksum_sha256 == checksum
-        needs_analysis = metadata_service.wants_any(stored_file, incoming) or (
-            estimated is not None and stored_file.exif_taken_at is None and stored_file.metadata_scanned_at is None
-        )
+        # Die eigene Datei wird höchstens einmal analysiert (metadata_scanned_at): eine erneute
+        # Analyse derselben Bytes liefert nichts Neues. Client-Angaben lösen sie nicht aus - sonst
+        # liesse sich mit erfundenen Werten jede grosse Datei unter Zeilensperre wiederholt einlesen.
+        needs_analysis = stored_file.metadata_scanned_at is None
         if byte_identical and needs_analysis:
             server_metadata = analyze_stored_file(db, stored_file)
             if server_metadata.status == "missing_file":

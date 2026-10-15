@@ -483,3 +483,26 @@ def test_file_hints_are_cleared_when_the_job_ends(db):
     service.process_pending_gallery_upload_jobs(db)
     db.refresh(job)
     assert job.status == "done" and job.file_hints == {}
+
+
+def test_byte_identical_file_is_analyzed_at_most_once_regardless_of_client_claims(db, monkeypatch):
+    """IMGMETA-009: Erfundene Client-Werte lösen kein wiederholtes Einlesen der Datei aus."""
+    from app.services import upload_precheck_service
+
+    tenant = make_tenant(db)
+    user = _writer(db, tenant.id)
+    content = jpeg(color=(33, 44, 55), taken_at=datetime(2012, 3, 4, 5, 6))
+    row = _gallery_file(db, tenant.id, content)
+    calls = []
+    original = upload_precheck_service.analyze_stored_file
+    monkeypatch.setattr(upload_precheck_service, "analyze_stored_file", lambda db, stored: calls.append(stored.id) or original(db, stored))
+
+    claims = {"gps": {"latitude": 10.0, "longitude": 20.0}, "camera_model": "Erfunden"}
+    first = _precheck(db, user, [_entry(content, **claims)])[0]
+    assert first.status == "metadata_updated" and "taken_at" in first.applied
+    for _ in range(3):
+        again = _precheck(db, user, [_entry(content, **claims)])[0]
+        assert again.status == "already_exists"
+    assert calls == [row.id]
+    db.refresh(row)
+    assert row.gps_latitude is None and row.camera_model is None  # Client-Werte nie übernommen
