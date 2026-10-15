@@ -137,3 +137,88 @@ def test_connection_test_reports_wrong_credentials_without_leaking_them(db):
     result = sps.run_connection_test(db, profile)
     assert result["ok"] is False and profile.last_test_ok is False
     assert "f" * 64 not in (result["error"] or "") and os.environ["TEST_S3_ACCESS_KEY"] not in (result["error"] or "")
+
+
+# S3-006: ensure_local_profile darf aktive bzw. gebundene Profile beim Start nicht umbiegen -----
+
+
+def _local_settings(monkeypatch, **overrides):
+    from app.core.config import settings
+
+    values = {
+        "local_s3_endpoint": "http://local-s3:3900", "local_s3_region": "garage", "local_s3_bucket": "hocx-lokal",
+        "local_s3_abgabebox_bucket": "", "local_s3_access_key": "GK00000000000000000000aaaa",
+        "local_s3_secret_key": "a" * 64, "local_s3_abgabebox_access_key": "", "local_s3_abgabebox_secret_key": "",
+    }
+    values.update(overrides)
+    for key, value in values.items():
+        monkeypatch.setattr(settings, key, value)
+
+
+def _builtin_local(db) -> StorageProfile:
+    from sqlalchemy import select
+
+    return db.scalars(select(StorageProfile).where(StorageProfile.provider == "garage_local", StorageProfile.is_builtin.is_(True))).first()
+
+
+def test_ensure_local_profile_never_moves_an_active_profile(committed_storage, monkeypatch):
+    db = committed_storage
+    _local_settings(monkeypatch)
+    profile = sps.ensure_local_profile(db)
+    db.execute(text("UPDATE storage_state SET active_profile_id = :p, active_generation = 7 WHERE id = 1"), {"p": profile.id})
+    db.commit()
+    version = profile.config_version
+    _local_settings(monkeypatch, local_s3_bucket="anderer-bucket", local_s3_endpoint="http://anderswo:3900")
+    sps.ensure_local_profile(db)
+    db.expire_all()
+    profile = _builtin_local(db)
+    assert profile.bucket == "hocx-lokal" and profile.endpoint_url == "http://local-s3:3900"
+    assert profile.config_version == version
+    # Zugangsdaten desselben Orts dürfen rotieren (Backends werden über die neue Version neu aufgebaut).
+    _local_settings(monkeypatch, local_s3_secret_key="b" * 64)
+    sps.ensure_local_profile(db)
+    db.expire_all()
+    profile = _builtin_local(db)
+    assert profile.bucket == "hocx-lokal" and profile.config_version == version + 1
+
+
+def test_ensure_local_profile_leaves_a_profile_of_an_open_migration_untouched(committed_storage, monkeypatch):
+    from app.services import storage_migration_service as sms
+
+    db = committed_storage
+    _local_settings(monkeypatch)
+    profile = sps.ensure_local_profile(db)
+    profile.last_test_ok = True
+    db.commit()
+    migration = sms.create_migration(db, target_profile_id=profile.id, options={}, actor_email="owner@example.com")
+    db.commit()
+    version = profile.config_version
+    _local_settings(monkeypatch, local_s3_secret_key="c" * 64, local_s3_bucket="anderer-bucket")
+    sps.ensure_local_profile(db)
+    db.expire_all()
+    profile = _builtin_local(db)
+    assert profile.config_version == version and profile.bucket == "hocx-lokal"
+    assert migration.target_config_version == profile.config_version
+
+
+# S3-009: Admin-Eingaben dürfen nicht ins interne Netz bzw. auf Metadaten-Dienste zeigen -------
+
+
+@pytest.mark.parametrize("values", [
+    {"provider": "garage_local", "endpoint_url": "http://docker-socket-proxy:2375"},
+    {"provider": "s3_compatible", "endpoint_url": "https://127.0.0.1:9000"},
+    {"provider": "s3_compatible", "endpoint_url": "https://169.254.169.254"},
+    {"provider": "s3_compatible", "endpoint_url": "https://[::1]:9000"},
+    {"provider": "s3_compatible", "endpoint_url": "https://localhost:9000"},
+    {"provider": "s3_compatible", "endpoint_url": "https://0.0.0.0"},
+])
+def test_admin_profile_input_rejects_internal_endpoints_and_the_local_provider(values):
+    with pytest.raises(sps.StorageProfileError):
+        sps.check_admin_profile_input(values)
+
+
+def test_admin_profile_input_allows_external_and_lan_endpoints_and_the_existing_builtin_profile():
+    sps.check_admin_profile_input({"provider": "s3_compatible", "endpoint_url": "https://192.168.10.5:9000"})
+    sps.check_admin_profile_input({"provider": "hetzner", "region": "fsn1"})
+    builtin = StorageProfile(provider="garage_local", name="Lokal", endpoint_url="http://local-s3:3900")
+    sps.check_admin_profile_input({"provider": "garage_local", "name": "Neuer Name"}, current=builtin)

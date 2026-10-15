@@ -39,7 +39,8 @@ const GENERATION_VARIANTS: Record<StorageGeneration["status"], BadgeVariant> = {
   preparing: "info", active: "success", retained: "warning", abandoned: "neutral", purge_requested: "warning", purging: "warning", purged: "neutral",
 };
 
-const PROVIDERS: StorageProvider[] = ["hetzner", "aws_s3", "s3_compatible", "garage_local"];
+// "garage_local" ist nicht wählbar: das lokale S3-Profil legt das Backend selbst an (LOCAL_S3_*).
+const PROVIDERS: StorageProvider[] = ["hetzner", "aws_s3", "s3_compatible"];
 
 function rangeText(t: TFunc, low: number | undefined, high: number | undefined): string {
   if (low === undefined || high === undefined) return t("estimate.unknown");
@@ -406,7 +407,7 @@ function ProfileModal({ t, profile, onClose, onSaved }: { t: TFunc; profile: Sto
             <input className="input" value={form.name} maxLength={120} required onChange={(e) => update("name", e.target.value)} /></label>
           <label className="field-stack"><span className="field-label">{t("profileForm.provider")}</span>
             <select className="input" value={form.provider} disabled={locked} onChange={(e) => update("provider", e.target.value as StorageProvider)}>
-              {PROVIDERS.map((provider) => <option key={provider} value={provider}>{t(`provider.${provider}`)}</option>)}
+              {(PROVIDERS.includes(form.provider) ? PROVIDERS : [...PROVIDERS, form.provider]).map((provider) => <option key={provider} value={provider}>{t(`provider.${provider}`)}</option>)}
             </select></label>
         </div>
         <div className="two-col">

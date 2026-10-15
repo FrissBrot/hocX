@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import hashlib
 import io
+import ipaddress
 import logging
 import re
+import socket
 import time
 import uuid
 from datetime import UTC, datetime
@@ -109,6 +111,34 @@ def _normalize_endpoint(endpoint: str | None, provider: str, region: str | None)
     if parsed.path not in ("", "/") or parsed.query or parsed.username or parsed.password:
         raise StorageProfileError("Endpoint darf keinen Pfad, keine Parameter und keine Zugangsdaten enthalten")
     return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def check_admin_profile_input(values: dict[str, Any], *, current: StorageProfile | None = None) -> None:
+    """Zusätzliche Prüfung für Eingaben über das Admin-API (S3-009): Das lokale Garage-Profil
+    (einziger Anbieter mit Klartext-HTTP ins interne Netz) legt das Backend selbst an und ist
+    nicht wählbar. Externe Endpoints dürfen nicht auf Loopback-, Link-Local- (u. a.
+    Cloud-Metadaten), unspezifizierte, Multicast- oder reservierte Adressen zeigen - geprüft für die
+    Literal-IP bzw. jede DNS-Auflösung. Private Netze (eigenes S3 im LAN) bleiben erlaubt."""
+    provider = values.get("provider") or (current.provider if current is not None else None)
+    if values.get("provider") == "garage_local" and (current is None or current.provider != "garage_local"):
+        raise StorageProfileError("Das lokale S3-Profil wird automatisch angelegt und kann nicht gewählt werden")
+    endpoint = values.get("endpoint_url")
+    if not endpoint or provider == "garage_local":
+        return
+    host = urlparse(endpoint.strip()).hostname
+    if not host:
+        return  # Formfehler meldet _normalize_endpoint
+    try:
+        addresses = {ipaddress.ip_address(host)}
+    except ValueError:
+        try:
+            addresses = {ipaddress.ip_address(info[4][0].split("%", 1)[0]) for info in socket.getaddrinfo(host, None)}
+        except (socket.gaierror, UnicodeError, ValueError):
+            return  # nicht auflösbar: der Verbindungstest scheitert ohnehin
+    for address in addresses:
+        mapped = getattr(address, "ipv4_mapped", None) or address
+        if mapped.is_loopback or mapped.is_link_local or mapped.is_unspecified or mapped.is_multicast or mapped.is_reserved:
+            raise StorageProfileError("Endpoint zeigt auf eine nicht erlaubte Adresse (Loopback, Link-Local o. ä.)")
 
 
 def _validate_bucket(bucket: str | None, *, field: str) -> str | None:
@@ -372,6 +402,25 @@ def run_connection_test(db: Session, profile: StorageProfile) -> dict[str, Any]:
 # --- Lokales Garage-Profil --------------------------------------------------------------------
 
 
+def _local_credentials() -> tuple[tuple[str, str | None], ...]:
+    return (
+        ("access_key_enc", settings.local_s3_access_key), ("secret_key_enc", settings.local_s3_secret_key),
+        ("restricted_access_key_enc", settings.local_s3_abgabebox_access_key or None),
+        ("restricted_secret_key_enc", settings.local_s3_abgabebox_secret_key or None),
+    )
+
+
+def _same_credential(enc: str | None, plain: str | None) -> bool:
+    try:
+        return (decrypt_credential(enc, _key()) or "") == (plain or "")
+    except StorageConfigError:
+        return False
+
+
+def _local_credentials_match(profile: StorageProfile) -> bool:
+    return all(_same_credential(getattr(profile, column), plain) for column, plain in _local_credentials())
+
+
 def ensure_local_profile(db: Session) -> StorageProfile | None:
     if not settings.local_s3_access_key or not settings.local_s3_bucket:
         return None
@@ -388,24 +437,31 @@ def ensure_local_profile(db: Session) -> StorageProfile | None:
             tls_verify=False, **desired,
         )
         db.add(profile)
+    else:
+        # Dieselben Regeln wie update_profile (S3-006): während einer offenen Migration gar nichts
+        # ändern (eine neue config_version bräche sie dauerhaft ab), den Speicherort eines aktiven
+        # oder noch gebundenen Profils nie still umbiegen (die aktive Generation zeigte sonst ins
+        # Leere). Abweichungen werden laut gemeldet; der Start läuft mit dem bisherigen Profil weiter.
+        info = usage(db, profile.id)
+        drift = sorted(field for field, value in desired.items() if getattr(profile, field) != value)
+        if info["open_migration_ids"]:
+            if drift or not _local_credentials_match(profile):
+                _logger.warning("LOCAL_S3_* weicht vom lokalen S3-Profil ab - wird erst nach der laufenden Migration übernommen (%s)",
+                                ", ".join(drift) or "Zugangsdaten")
+            db.commit()
+            return profile
+        if drift and (info["active"] or info["pinned_generations"]):
+            _logger.warning("LOCAL_S3_* ändert den Speicherort (%s) des aktiven bzw. noch benötigten lokalen S3-Profils - "
+                            "nicht übernommen. Für einen neuen Ort ein neues Profil anlegen und migrieren.", ", ".join(drift))
+            desired = {field: getattr(profile, field) for field in desired}
     changed = False
     for field, value in desired.items():
         if getattr(profile, field) != value:
             setattr(profile, field, value)
             changed = True
 
-    def same(enc: str | None, plain: str | None) -> bool:
-        try:
-            return (decrypt_credential(enc, _key()) or "") == (plain or "")
-        except StorageConfigError:
-            return False
-
-    for column, plain in (
-        ("access_key_enc", settings.local_s3_access_key), ("secret_key_enc", settings.local_s3_secret_key),
-        ("restricted_access_key_enc", settings.local_s3_abgabebox_access_key or None),
-        ("restricted_secret_key_enc", settings.local_s3_abgabebox_secret_key or None),
-    ):
-        if not same(getattr(profile, column), plain):
+    for column, plain in _local_credentials():
+        if not _same_credential(getattr(profile, column), plain):
             setattr(profile, column, encrypt_credential(plain, _key()) if plain else None)
             changed = True
     if changed and profile.id is not None:

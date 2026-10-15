@@ -147,6 +147,7 @@ def list_profiles(db: Session = Depends(get_db)):
 @router.post("/storage/profiles", response_model=StorageProfileRead, status_code=201)
 def create_profile(payload: StorageProfileCreate, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
     try:
+        sps.check_admin_profile_input(payload.model_dump())
         profile = sps.create_profile(db, payload.model_dump(), actor_email=admin.email)
     except sps.StorageProfileError as exc:
         db.rollback()
@@ -161,6 +162,7 @@ def update_profile(profile_id: uuid.UUID, payload: StorageProfileUpdate, db: Ses
     profile = _profile_or_404(db, profile_id)
     values = payload.model_dump(exclude_unset=True)
     try:
+        sps.check_admin_profile_input(values, current=profile)
         sps.update_profile(db, profile, values, actor_email=admin.email)
     except sps.StorageProfileError as exc:
         db.rollback()

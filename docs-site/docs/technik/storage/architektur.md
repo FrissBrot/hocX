@@ -103,7 +103,15 @@ veraltete Quelle findet nie statt.
   zeigt das Adminportal eine Warnung.
 - **Rollen**: eingeschränkte DB-Rollen bekommen nur `EXECUTE` auf SECURITY-DEFINER-Funktionen
   (`storage_begin_write`, `storage_register_write`, `storage_active_config`,
-  `storage_usage_bytes`, `maintenance_effective_state`).
+  `storage_usage_bytes`, `maintenance_effective_state`). Seit Migration 0115 entscheidet die
+  angemeldete Rolle, nicht der Parameter: `hocx_abgabebox` bekommt nur die Abgabebox-Konfiguration
+  und registriert nur im Namespace `abgabebox`, `hocx_photo_worker` nur die eigene Konfiguration.
+  Der Foto-Worker nutzt (noch) die vollen Zugangsdaten des Profils - eigene Read-only-Schlüssel
+  je Profil sind nicht umgesetzt.
+- **Endpoints über das Admin-API**: das lokale Garage-Profil (Klartext-HTTP im internen Netz) ist
+  nicht wählbar, es entsteht nur aus `LOCAL_S3_*`. Externe Endpoints müssen HTTPS nutzen und dürfen
+  nicht auf Loopback-, Link-Local- (Cloud-Metadaten), Multicast- oder reservierte Adressen zeigen
+  (auch nicht per DNS); private Netze (eigenes S3 im LAN) bleiben erlaubt.
 - **Kein Docker-Socket** im Backend: den lokalen S3-Container steuert ausschliesslich der
   Host-Controller (`scripts/storage_controller.sh`).
 - **Netz**: das lokale S3 hängt nur im internen Netz `storage`, ohne veröffentlichte Ports.
