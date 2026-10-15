@@ -25,6 +25,7 @@ from app.models import (
 # Not re-exported from app.models (the package __init__) like the others above - imported
 # straight from .entities instead, same convention photo_album_service.py already uses.
 from app.models.entities import PhotoAlbumItem
+from app.models.document_entities import Document, DocumentFile, DocumentVersion
 from app.services import public_id_service
 
 # Cap for the "list every tag/origin-tag currently in use" suggestion query - this app is
@@ -151,7 +152,7 @@ class StoredFileRepository:
             StoredFile.height.label("height"),
         ]
 
-    def _files_overview_branches(self, tenant_id: int | None):
+    def _files_overview_branches(self, tenant_id: int | None, *, include_exports: bool = True):
         """The four differently-joined SELECTs behind list_tenant_files/list_tag_sources
         (tenant_id given) and the admin cross-tenant upload-pipeline-status view (tenant_id
         None), each labelling an `origin_tag` expression - a human-readable "where did this
@@ -318,12 +319,55 @@ class StoredFileRepository:
             .where(*tenant_filter)
         )
 
-        return {
+        branches = {
             "protocol_image": protocol_branch,
             "word_import": word_import_branch,
             "submission_upload": submission_branch,
             "gallery_upload": gallery_branch,
         }
+        if include_exports:
+            branches["protocol_export"] = self._protocol_export_branch(tenant_id)
+        return branches
+
+    def _protocol_export_branch(self, tenant_id: int | None):
+        """Protokollexporte als logische Dokumente (Migration 0115): genau ein Eintrag je
+        (Protokoll, Exportart), nämlich die Datei der aktuellen Version. Ältere Versionen und die
+        übrigen Exportdateien erscheinen nicht - sie stehen in der Versionshistorie des Dokuments.
+        ref_kind trägt die Exportart (protocol/todos/todos_open/events)."""
+        tenant_filter = (StoredFile.tenant_id == tenant_id,) if tenant_id is not None else ()
+        return (
+            select(
+                *self._shared_file_overview_columns(),
+                literal("protocol_export").label("source"),
+                Protocol.id.label("ref_id"),
+                Protocol.public_id.label("ref_public_id"),
+                Protocol.protocol_number.label("ref_label"),
+                Protocol.protocol_date.label("ref_date"),
+                cast(null(), Date).label("ref_end_date"),
+                cast(null(), BigInteger).label("upload_id"),
+                cast(null(), PG_UUID(as_uuid=True)).label("upload_public_id"),
+                func.concat("Protokoll ", Protocol.protocol_number, " – Export").label("origin_tag"),
+                func.coalesce(Protocol.protocol_date, cast(StoredFile.created_at, Date)).label("group_date"),
+                func.coalesce(Protocol.title, func.concat("Protokoll ", Protocol.protocol_number)).label("context_label"),
+                cast(Document.export_kind, String).label("ref_kind"),
+                cast(null(), PG_UUID(as_uuid=True)).label("live_video_public_id"),
+            )
+            .select_from(StoredFile)
+            .join(Tenant, Tenant.id == StoredFile.tenant_id)
+            .join(DocumentFile, and_(DocumentFile.stored_file_id == StoredFile.id, DocumentFile.role == "original"))
+            .join(DocumentVersion, DocumentVersion.id == DocumentFile.document_version_id)
+            .join(
+                Document,
+                and_(
+                    Document.id == DocumentVersion.document_id,
+                    Document.current_version_id == DocumentVersion.id,
+                    Document.source_kind == "protocol_export",
+                    Document.tenant_id == StoredFile.tenant_id,
+                ),
+            )
+            .join(Protocol, Protocol.id == Document.protocol_id)
+            .where(*tenant_filter)
+        )
 
     def list_tenant_files(
         self,
@@ -350,8 +394,9 @@ class StoredFileRepository:
         joined branch per origin table) so a single paginated/sorted/filtered query can page
         across all of them. only_images/exclude_images back the "Fotos" vs. "Dateien" pages
         (mutually exclusive in practice - the UI never sets both). Deliberately excludes
-        tenant logo and generated PDF exports (protocol_export_cache): neither is something a
-        user "hochgeladen" hat, see project memory for this feature.
+        the tenant logo. Generated protocol exports appear once per logical document (its
+        current version, source "protocol_export", see _protocol_export_branch) - older
+        export files and every other version stay out of the list.
 
         album_id scopes to one album via a JOIN against photo_album_item, rather than the
         caller pre-fetching every one of that album's file ids into Python and passing them
@@ -515,7 +560,7 @@ class StoredFileRepository:
         platform-admin "Datei-Pipeline" overview. Unlike list_tenant_files, this deliberately
         does NOT exclude infected files - surfacing exactly those is the point of an admin
         problem view - and is unscoped by default rather than requiring a tenant_id."""
-        branches = self._files_overview_branches(tenant_id)
+        branches = self._files_overview_branches(tenant_id, include_exports=False)
         selected = [branch for key, branch in branches.items() if source is None or source == key]
         union_query = union_all(*selected).subquery("upload_pipeline_status")
 
@@ -535,7 +580,7 @@ class StoredFileRepository:
         """(source, scan_status, count) across every internally-tracked upload - backs the
         admin overview's badge counts. Unpaginated by design: a handful of source x
         scan_status combinations, not one row per file."""
-        branches = self._files_overview_branches(tenant_id)
+        branches = self._files_overview_branches(tenant_id, include_exports=False)
         union_query = union_all(*branches.values()).subquery("upload_pipeline_status")
         query = select(union_query.c.source, union_query.c.scan_status, func.count().label("count")).group_by(
             union_query.c.source, union_query.c.scan_status
