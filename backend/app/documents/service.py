@@ -9,10 +9,18 @@ abgeschlossene Protokolle mit getrennten Zählern. Weicht der Inhalts-Hash (hash
 letzten Protokoll-Export ab, steigt der passende Zähler **vor** dem Rendern, damit das PDF die
 neue Nummer trägt. Gleicher Inhalt ergibt dieselbe Version; ein anderer Hausstil oder eine andere
 Sprache allein ändern sie nicht.
+
+Versioniert und als «protocol» registriert wird nur der kanonische Protokoll-Export (Standardblöcke
+des Typs, ohne eigenen Titel/Untertitel). Eine frei zusammengestellte Fassung eines Protokolls
+(eigene Blöcke, eigener Titel) ist ein «protocol_excerpt»: ohne Versionsnummer, ohne Verweis auf
+das Protokoll im Register und ohne Einfluss auf die Versionszähler – sonst könnte jede lesende
+Person ein «echtes» Protokoll beliebigen Inhalts erzeugen und die verteilte Fassung öffentlich als
+überholt erscheinen lassen.
 """
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
 import uuid
@@ -43,6 +51,8 @@ from app.models import DocumentExport, DocumentRecipe, DocumentRegistry, Documen
 logger = logging.getLogger(__name__)
 
 GENERATED_DIR = "generated"
+# Registertyp für frei zusammengestellte Fassungen eines Protokolls (siehe Modul-Docstring)
+PROTOCOL_EXCERPT_TYPE = "protocol_excerpt"
 
 
 class StyleOverride(BaseModel):
@@ -82,6 +92,12 @@ class PreparedDocument:
     content_hash: str
     version: tuple[int, int, int] | None  # (major, minor, final_minor) nach diesem Export
     language: str
+    # Typ für Export, Register und XMP (weicht nur beim Protokollauszug vom Dokumenttyp ab)
+    register_type: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.register_type:
+            self.register_type = self.document_type
 
 
 @dataclass
@@ -121,17 +137,23 @@ def _param_fields(block_type: str) -> set[str]:
     return set(entry.params.model_fields) if entry else set()
 
 
-def latest_protocol_export(db: Session, protocol_id: int) -> DocumentExport | None:
-    return db.scalar(
-        select(DocumentExport)
-        .where(DocumentExport.protocol_id == protocol_id, DocumentExport.document_type == "protocol", DocumentExport.content_hash.is_not(None))
-        .order_by(DocumentExport.created_at.desc(), DocumentExport.id.desc())
+def latest_protocol_export(db: Session, protocol_id: int, *, major: int | None = None) -> DocumentExport | None:
+    """Letzter versionierter Protokoll-Export; mit ``major`` nur Entwürfe (0) bzw. Endfassungen (1)."""
+    query = select(DocumentExport).where(
+        DocumentExport.protocol_id == protocol_id,
+        DocumentExport.document_type == "protocol",
+        DocumentExport.content_hash.is_not(None),
     )
+    if major is not None:
+        query = query.where(DocumentExport.version_major == major)
+    return db.scalar(query.order_by(DocumentExport.created_at.desc(), DocumentExport.id.desc()))
 
 
 def next_version(db: Session, protocol: Protocol, new_hash: str) -> tuple[int, int, int]:
-    previous = latest_protocol_export(db, protocol.id)
     is_final = protocol.status == "abgeschlossen"
+    # Verglichen wird nur mit dem letzten Export desselben Status: die erste Endfassung ist
+    # immer v1.0, auch wenn sich der Inhalt seit dem letzten Entwurfs-Export geändert hat.
+    previous = latest_protocol_export(db, protocol.id, major=1 if is_final else 0)
     minor = protocol.version_minor
     final_minor = protocol.version_final_minor
     if previous is not None and previous.content_hash != new_hash:
@@ -140,6 +162,24 @@ def next_version(db: Session, protocol: Protocol, new_hash: str) -> tuple[int, i
         else:
             minor += 1
     return (1 if is_final else 0, minor, final_minor)
+
+
+def _spec_key(spec: BlockSpec, protocol: Protocol | None) -> tuple:
+    """Vergleichsschlüssel eines Blocks: Parameter mit Vorgabewerten, Kontext-Protokoll = leer."""
+    try:
+        params = validate_spec(spec).model_dump(mode="json")
+    except ValueError:
+        params = spec.params
+    if protocol is not None and params.get("protocol_id") == str(protocol.public_id):
+        params = {**params, "protocol_id": None}
+    return (spec.type, spec.title, spec.hide_if_empty, spec.level, json.dumps(params, sort_keys=True, default=str))
+
+
+def is_canonical_protocol_export(specs: list[BlockSpec], options: ExportOptions, protocol: Protocol | None, default_specs: list[BlockSpec]) -> bool:
+    """Nur der unveränderte Protokoll-Export (Standardblöcke, kein eigener Titel) wird versioniert."""
+    if options.title or options.subtitle:
+        return False
+    return [_spec_key(spec, protocol) for spec in specs] == [_spec_key(spec, protocol) for spec in default_specs]
 
 
 def _resolve_style(db: Session, ctx: BuildContext, request: DocumentRequest, recipe: DocumentRecipe | None, protocol: Protocol | None) -> DocumentStyle | None:
@@ -224,10 +264,14 @@ def prepare(db: Session, user: CurrentUser | None, tenant_id: int, request: Docu
     # Nur Inhaltsbilder zählen zum Inhalt; Logo/Fussbild gehören zum Hausstil.
     digest = content_hash(document, ctx.assets.files)
     version = None
+    register_type = document_type
     if protocol is not None and document_type == "protocol":
-        version = next_version(db, protocol, digest)
-        major, minor, final_minor = version
-        document.meta.version = version_label(major, final_minor if major else minor)
+        if is_canonical_protocol_export(specs, options, protocol, list(types[document_type].blocks)):
+            version = next_version(db, protocol, digest)
+            major, minor, final_minor = version
+            document.meta.version = version_label(major, final_minor if major else minor)
+        else:
+            register_type = PROTOCOL_EXCERPT_TYPE
     return PreparedDocument(
         document=document,
         assets=RenderAssets(files={**ctx.assets.files, **style_files}, fonts=fonts),
@@ -238,6 +282,7 @@ def prepare(db: Session, user: CurrentUser | None, tenant_id: int, request: Docu
         content_hash=digest,
         version=version,
         language=language,
+        register_type=register_type,
     )
 
 
@@ -317,7 +362,7 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
         DocumentXmp(
             document_id=str(export_public_id),
             tenant_id=str(tenant.public_id) if tenant else "",
-            document_type=prepared.document_type,
+            document_type=prepared.register_type,
             version=document.meta.version or "",
             content_hash=prepared.content_hash,
             verify_url=document.render.verify_link or "",
@@ -344,7 +389,7 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
             public_id=export_public_id,
             tenant_id=tenant_id,
             protocol_id=protocol.id if protocol is not None else None,
-            document_type=prepared.document_type,
+            document_type=prepared.register_type,
             recipe_id=prepared.recipe.id if prepared.recipe is not None else None,
             title=document.meta.title,
             version_label=document.meta.version,
@@ -364,14 +409,15 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
                 public_id=export_public_id,
                 tenant_id=tenant_id,
                 sha256=sha256,
-                document_type=prepared.document_type,
+                document_type=prepared.register_type,
                 title=document.meta.title,
-                status_code=protocol.status if protocol is not None and prepared.document_type == "protocol" else None,
+                status_code=protocol.status if protocol is not None and prepared.register_type == "protocol" else None,
                 version_major=major,
                 version_minor=minor,
                 version_label=document.meta.version,
                 content_hash=prepared.content_hash,
-                source_public_id=protocol.public_id if protocol is not None else None,
+                # Ein Protokollauszug verweist nicht auf seine Quelle (keine Basis für «überholt»).
+                source_public_id=protocol.public_id if protocol is not None and prepared.register_type != PROTOCOL_EXCERPT_TYPE else None,
                 created_by=user.user_id if user else None,
             )
         )

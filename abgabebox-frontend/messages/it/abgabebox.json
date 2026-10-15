@@ -152,7 +152,8 @@
       "finance": "Rapporto finanziario",
       "statistics": "Rapporto annuale",
       "list": "Lista",
-      "custom": "Documento"
+      "custom": "Documento",
+      "protocol_excerpt": "Estratto del verbale"
     },
     "createdBy": "Creato nell’account hocX di {name}.",
     "verifiedBadge": "Organizzazione verificata",

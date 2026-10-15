@@ -152,7 +152,8 @@
       "finance": "Finanzbericht",
       "statistics": "Jahresbericht",
       "list": "Liste",
-      "custom": "Dokument"
+      "custom": "Dokument",
+      "protocol_excerpt": "Protokollauszug"
     },
     "createdBy": "Erstellt im hocX-Konto von {name}.",
     "verifiedBadge": "Verifizierte Organisation",

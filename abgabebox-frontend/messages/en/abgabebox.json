@@ -152,7 +152,8 @@
       "finance": "Financial report",
       "statistics": "Annual report",
       "list": "List",
-      "custom": "Document"
+      "custom": "Document",
+      "protocol_excerpt": "Protocol excerpt"
     },
     "createdBy": "Created in the hocX account of {name}.",
     "verifiedBadge": "Verified organisation",

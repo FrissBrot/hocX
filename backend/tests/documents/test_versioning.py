@@ -6,9 +6,10 @@ import asyncio
 from datetime import date
 
 from app.documents import service, style_service
+from app.documents.catalog import BlockSpec
 from app.documents.service import DocumentRequest
-from app.documents.style_tokens import default_tokens
-from app.models import DocumentExport, ProtocolText
+from app.documents.style_tokens import ExportOptions, default_tokens
+from app.models import DocumentExport, DocumentRegistry, ProtocolText
 from tests.factories import make_protocol, make_protocol_element, make_protocol_element_block, make_protocol_text, make_template, make_tenant
 
 
@@ -61,3 +62,56 @@ def test_preview_does_not_persist(db):
     tenant, protocol, _ = _setup(db)
     pages = asyncio.run(service.preview(db, None, tenant.id, DocumentRequest(protocol_id=protocol.public_id), max_pages=1))
     assert len(pages) == 1 and pages[0].startswith(b"\x89PNG")
+
+
+def test_first_final_export_is_v1_0_even_after_content_change(db):
+    """TYPST-010: Inhalt nach dem letzten Entwurfs-Export geändert, dann abgeschlossen → v1.0."""
+    tenant, protocol, text = _setup(db)
+    _render(db, tenant, protocol)
+    db.get(ProtocolText, text.id).content = "Kurz vor Abschluss geändert"
+    protocol.status = "abgeschlossen"
+    db.flush()
+    final = _render(db, tenant, protocol)
+    assert final.version_label == "v1.0"
+    assert protocol.version_final_minor == 0
+
+
+def test_explicit_default_blocks_count_as_canonical(db):
+    """Der Export-Dialog schickt die Standardblöcke ausdrücklich mit (auch mit Vorgabewerten
+    und dem Kontext-Protokoll) – das bleibt ein versionierter Protokoll-Export."""
+    tenant, protocol, text = _setup(db)
+    first = _render(db, tenant, protocol, blocks=[BlockSpec(type="protocol_element")])
+    db.get(ProtocolText, text.id).content = "Geändert"
+    db.flush()
+    explicit = BlockSpec(type="protocol_element", params={"protocol_id": str(protocol.public_id), "include_session_todos": True, "titles_only": False})
+    changed = _render(db, tenant, protocol, blocks=[explicit])
+    assert first.document_type == changed.document_type == "protocol"
+    assert changed.version_label == "v0.1"
+
+
+def test_custom_blocks_or_title_do_not_touch_versioning(db):
+    """TYPST-001: eigene Blöcke oder ein eigener Titel ergeben einen Protokollauszug ohne
+    Version, ohne Quellverweis im Register und ohne Einfluss auf die Versionszähler."""
+    tenant, protocol, _ = _setup(db)
+    protocol.status = "abgeschlossen"
+    db.flush()
+    real = _render(db, tenant, protocol)
+    assert real.version_label == "v1.0"
+
+    forged = _render(db, tenant, protocol, blocks=[BlockSpec(type="richtext", params={"markdown": "Beschluss: alles anders"})])
+    retitled = _render(db, tenant, protocol, options=ExportOptions(title="Eigener Titel"))
+    for export in (forged, retitled):
+        assert export.document_type == service.PROTOCOL_EXCERPT_TYPE
+        assert export.version_label is None and export.version_major is None
+        entry = db.query(DocumentRegistry).filter(DocumentRegistry.public_id == export.public_id).one()
+        assert entry.document_type == service.PROTOCOL_EXCERPT_TYPE
+        assert entry.source_public_id is None and entry.status_code is None and entry.version_label is None
+    assert (protocol.version_major, protocol.version_minor, protocol.version_final_minor) == (1, 0, 0)
+
+    # Der nächste echte Export vergleicht weiter mit der echten Fassung: keine neue Version.
+    again = _render(db, tenant, protocol)
+    assert again.version_label == "v1.0" and again.content_hash == real.content_hash
+    newer = db.query(DocumentRegistry).filter(
+        DocumentRegistry.source_public_id == protocol.public_id, DocumentRegistry.version_minor > 0
+    ).count()
+    assert newer == 0
