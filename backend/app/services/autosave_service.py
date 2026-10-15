@@ -1,8 +1,13 @@
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import ProtocolElementBlock, ProtocolText
 from app.repositories.protocol_element_repository import ProtocolTextRepository
 from app.services import block_field_sync, public_id_service
+
+
+class TextConflictError(ValueError):
+    """Der gespeicherte Text weicht vom erwarteten Stand des Clients ab (Route: 409)."""
 
 
 class AutosaveService:
@@ -18,8 +23,29 @@ class AutosaveService:
         tenant_id: int,
         track_changes_active: bool = False,
         block_config: dict | None = None,
+        expected_content: str | None = None,
     ) -> dict[str, str | int | bool | None]:
-        protocol_text = self.text_repository.get_by_protocol_element_block_id(db, protocol_element_block_id)
+        # Audit MAIN-BE-011: Konfliktprüfung und Schreiben atomar. Die Blockzeile wird bis zum
+        # Commit gesperrt (sie existiert immer, auch vor der ersten ProtocolText-Zeile), danach
+        # wird der aktuelle Text frisch gelesen. Zwei gleichzeitige Saves mit gleichem
+        # expected_content (zwei Tabs, Offline-Outbox) können sich so nicht still überschreiben,
+        # und zwei Erst-Saves laufen nicht mehr in die Unique-Verletzung.
+        db.execute(
+            select(ProtocolElementBlock.id).where(ProtocolElementBlock.id == protocol_element_block_id).with_for_update()
+        )
+        protocol_text = db.scalar(
+            select(ProtocolText)
+            .where(ProtocolText.protocol_element_block_id == protocol_element_block_id)
+            .execution_options(populate_existing=True)
+        )
+        current_content = protocol_text.content if protocol_text is not None else ""
+        # Bereits identischer Inhalt ist nie ein Konflikt - z. B. die Offline-Outbox, die einen
+        # schon gespeicherten Save erneut sendet.
+        if expected_content is not None and expected_content != current_content and content != current_content:
+            db.rollback()
+            raise TextConflictError(
+                "Der Text wurde zwischenzeitlich von einer anderen Person geändert. Der lokale Entwurf bleibt erhalten."
+            )
         if protocol_text is None:
             # A block with no ProtocolText row yet has an implicit '' baseline - the first
             # ever content is "added" content just like any other tracked edit.
