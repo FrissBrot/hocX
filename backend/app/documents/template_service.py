@@ -386,6 +386,13 @@ def delete_template(db: Session, template: DocumentTemplate) -> None:
     exported = db.scalar(select(func.count(DocumentExport.id)).where(DocumentExport.template_id == template.id))
     if exported:
         raise TemplateStateError("apiError.templateInUse")
+    # Zuweisungen mit eigenem Brand-Profil behalten das Profil (wie beim Archivieren); sonst
+    # entfernte der FK (ON DELETE CASCADE) die ganze Zuweisung samt Brand
+    for assignment in db.scalars(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.document_template_id == template.id)):
+        if assignment.brand_id is None:
+            db.delete(assignment)
+        else:
+            assignment.document_template_id = None
     template.published_revision_id = None
     db.flush()
     db.delete(template)

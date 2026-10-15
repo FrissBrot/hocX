@@ -213,6 +213,39 @@ def test_assignment_priority_and_export_uses_it(db, world):
     assert template_service.resolve_template(db, tenant_id, "protocol").source == "platform_default"
 
 
+def _protocol_template_assignment(db, world):
+    created = _create(db, world)
+    studio.publish_document_template(created.id, studio.PublishBody(), db=db, user=world["admin"])
+    brand = studio.create_document_brand(studio.BrandCreate(name="Untergruppe", preset="forest"), db=db, user=world["admin"])
+    studio.set_document_template_assignment(
+        studio.AssignmentWrite(document_type="protocol", protocol_template_id=world["protocol_template"].public_id, template_id=created.id, brand_id=brand.id), db=db, user=world["admin"]
+    )
+    return created, brand
+
+
+def test_duplicating_a_protocol_template_keeps_its_pdf_assignment(db, world):
+    """STUDIO-012: Die Kopie einer Protokollvorlage übernimmt PDF-Vorlage und Brand-Profil."""
+    from app.models import DocumentTemplateAssignment
+    from app.services.template_service import TemplateService
+
+    created, brand = _protocol_template_assignment(db, world)
+    copy = TemplateService().duplicate_template(db, world["protocol_template"].id, new_name="Vorstand (Kopie)", created_by=None)
+    row = db.scalar(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.protocol_template_id == copy.id))
+    assert row is not None and row.document_type == "protocol"
+    resolved = template_service.resolve_template(db, world["tenant"].id, "protocol", protocol_template_id=copy.id)
+    assert resolved.source == "protocol_template" and resolved.template.public_id == created.id
+    assert row.brand_id == db.scalar(select(studio.DocumentBrand.id).where(studio.DocumentBrand.public_id == brand.id))
+
+
+def test_deleting_an_assigned_template_keeps_the_brand_assignment(db, world):
+    """STUDIO-019: Wie beim Archivieren bleibt das Brand-Profil einer Zuweisung erhalten."""
+    created, brand = _protocol_template_assignment(db, world)
+    studio.delete_document_template(created.id, db=db, user=world["admin"])
+    rows = studio.list_document_template_assignments(db=db, user=world["reader"])
+    kept = [row for row in rows if row.protocol_template_id == world["protocol_template"].public_id]
+    assert len(kept) == 1 and kept[0].template_id is None and kept[0].brand_id == brand.id
+
+
 def test_archive_and_delete_rules(db, world):
     created = _create(db, world)
     studio.publish_document_template(created.id, studio.PublishBody(), db=db, user=world["admin"])

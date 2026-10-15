@@ -2,9 +2,10 @@ import copy
 import uuid
 from datetime import date
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import CycleConfig, Event, Participant, Template, TemplateElement
+from app.models import CycleConfig, DocumentTemplateAssignment, Event, Participant, Template, TemplateElement
 from app.repositories.template_element_repository import TemplateElementRepository
 from app.repositories.template_repository import TemplateRepository
 from app.schemas.participant import TemplateParticipantAssignmentRead
@@ -158,6 +159,19 @@ class TemplateService:
                     is_visible=template_element.is_visible,
                     export_visible=template_element.export_visible,
                     configuration_json=copy.deepcopy(template_element.configuration_json or {}),
+                )
+            )
+        # PDF-Vorlage/Brand-Profil der Protokollvorlage (Document Studio) gelten auch für die
+        # Kopie - früher kopierte das Duplizieren den Hausstil mit
+        for assignment in db.scalars(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.protocol_template_id == source.id)):
+            db.add(
+                DocumentTemplateAssignment(
+                    tenant_id=assignment.tenant_id,
+                    document_type=assignment.document_type,
+                    protocol_template_id=created.id,
+                    document_template_id=assignment.document_template_id,
+                    brand_id=assignment.brand_id,
+                    created_by=created_by,
                 )
             )
         db.commit()
