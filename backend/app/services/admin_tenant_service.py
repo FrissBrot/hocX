@@ -582,10 +582,10 @@ class AdminTenantService:
         db.add(tenant)
         db.commit()
         db.refresh(tenant)
-        from app.documents import style_service
+        from app.documents import brand_service
 
-        # Jeder Mandant startet mit einem Standard-Hausstil (Dokument-Engine).
-        style_service.ensure_default_style(db, tenant.id)
+        # Jeder Mandant startet mit einem Standard-Brand-Profil (Document Studio).
+        brand_service.ensure_default_brand(db, tenant.id)
         db.commit()
         # Every new tenant starts with a default Abgabe link (preselected for new Abgaben).
         submission_link_service.create_default_link(db, tenant.id)
@@ -696,6 +696,8 @@ class AdminTenantService:
         if profile_image_path:
             self._unlink_quietly(settings.storage_root, profile_image_path)
         for relative_dir in (
+            # Document-Studio-Assets (ältere Uploads liegen noch unter document_style_assets)
+            f"document_assets/tenant-{tenant_id}",
             f"document_style_assets/tenant-{tenant_id}",
             f"tenant_imports/tenant-{tenant_id}",
         ):

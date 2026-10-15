@@ -1,66 +1,52 @@
-"""Dokumenttypen: Standard-Zusammenstellungen aus dem Block-Katalog.
+"""Dokumenttypen des Document Studio.
 
-Ein Dokumenttyp ist nur ein Startpunkt: der Export-Dialog übernimmt seine Blöcke, der Benutzer
-kann sie frei ändern und als Rezept speichern."""
+Ein Dokumenttyp bestimmt den Datenkontext eines Exports (braucht er ein Protokoll?), die
+Kategorie in der Vorlagenbibliothek und die Zusatzformate. Welche Vorlage ein Typ verwendet,
+entscheidet die Zuweisung (template_service.resolve_template); jede Vorlage gehört genau einem
+Typ. Die Seitenkontexte (Filter der Todo-Seite, gewählte Liste …) kommen als ``params`` und
+gelten für alle Fachkomponenten, deren Parameterschema den Schlüssel kennt.
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import date
-
-from app.documents.catalog import BlockSpec
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class DocumentType:
     key: str
-    blocks: list[BlockSpec] = field(default_factory=list)
-    # Typ braucht ein Protokoll im Kontext (Protokoll, Einladung)
+    category: str
     needs_protocol: bool = False
-    # Für Mehrseiter mit vielen Spalten sinnvoll
-    orientation: str = "portrait"
+    # Zusatzformate neben PDF (exports.py): aus den fachlichen Datenmodellen, nie aus dem Layout
+    formats: tuple[str, ...] = ()
 
 
-def document_types(today: date | None = None) -> dict[str, DocumentType]:
-    today = today or date.today()
-    year_start, year_end = date(today.year, 1, 1).isoformat(), date(today.year, 12, 31).isoformat()
-    types = [
-        DocumentType("protocol", [BlockSpec(type="protocol_element")], needs_protocol=True),
-        DocumentType(
-            "invitation",
-            [
-                BlockSpec(type="session_date"),
-                BlockSpec(type="richtext", params={"markdown": ""}),
-                BlockSpec(type="protocol_element", params={"titles_only": True}),
-                BlockSpec(type="event_table", params={"date_from": today.isoformat(), "columns": ["date", "title", "location"]}),
-            ],
-            needs_protocol=True,
-        ),
-        DocumentType("todos", [BlockSpec(type="todo_table", params={"status": "open", "group_by": "person", "columns": ["status", "due", "protocol"]})]),
-        DocumentType("events", [BlockSpec(type="event_agenda", params={"date_from": year_start, "date_to": year_end})]),
-        DocumentType("attendance_sheet", [BlockSpec(type="session_date"), BlockSpec(type="attendance_sheet")]),
-        DocumentType("members", [BlockSpec(type="member_list")]),
-        DocumentType(
-            "finance",
-            [
-                BlockSpec(type="finance_balance", params={"as_of": year_end}),
-                BlockSpec(type="stat_table", params={"table": "finance_by_month", "date_from": year_start, "date_to": year_end}),
-                BlockSpec(type="chart", params={"chart_type": "finance_by_month", "date_from": year_start, "date_to": year_end}),
-            ],
-        ),
-        DocumentType(
-            "statistics",
-            [
-                BlockSpec(type="kpi_tiles", params={"date_from": year_start, "date_to": year_end}),
-                BlockSpec(type="chart", params={"chart_type": "attendance_over_time", "date_from": year_start, "date_to": year_end}),
-                BlockSpec(type="stat_table", params={"table": "attendance_by_participant", "date_from": year_start, "date_to": year_end}),
-                BlockSpec(type="chart", params={"chart_type": "todos", "date_from": year_start, "date_to": year_end}),
-                BlockSpec(type="chart", params={"chart_type": "groups_sessions", "date_from": year_start, "date_to": year_end}),
-            ],
-        ),
-        DocumentType("list", [BlockSpec(type="list_table")]),
-        DocumentType("custom", []),
-    ]
-    return {item.key: item for item in types}
+DOCUMENT_TYPES: dict[str, DocumentType] = {
+    item.key: item
+    for item in (
+        DocumentType("protocol", "protocols", needs_protocol=True, formats=("csv", "xlsx")),
+        DocumentType("invitation", "protocols", needs_protocol=True),
+        DocumentType("agenda", "protocols", needs_protocol=True),
+        DocumentType("attendance", "people", needs_protocol=True, formats=("csv", "xlsx")),
+        DocumentType("attendance_sheet", "people", formats=("csv", "xlsx")),
+        DocumentType("members", "people", formats=("csv", "xlsx")),
+        DocumentType("todos", "tasks", formats=("csv", "xlsx", "markdown")),
+        DocumentType("events", "events", formats=("csv", "xlsx", "ics")),
+        DocumentType("calendar", "events", formats=("ics",)),
+        DocumentType("finance", "finance", formats=("csv", "xlsx")),
+        DocumentType("transactions", "finance", formats=("csv", "xlsx")),
+        DocumentType("fines", "finance", formats=("csv", "xlsx")),
+        DocumentType("statistics", "statistics", formats=("csv", "xlsx")),
+        DocumentType("list", "lists", formats=("csv", "xlsx")),
+        DocumentType("form", "forms"),
+        DocumentType("custom", "general", formats=("csv", "xlsx")),
+    )
+}
+
+DOCUMENT_TYPE_KEYS: tuple[str, ...] = tuple(DOCUMENT_TYPES)
+CATEGORIES: tuple[str, ...] = tuple(dict.fromkeys(item.category for item in DOCUMENT_TYPES.values()))
 
 
-DOCUMENT_TYPE_KEYS: tuple[str, ...] = tuple(document_types(date(2000, 1, 1)).keys())
+def get_type(key: str | None) -> DocumentType:
+    if key not in DOCUMENT_TYPES:
+        raise ValueError("unknown_document_type")
+    return DOCUMENT_TYPES[key]

@@ -1,4 +1,5 @@
-"""Galerie: jeder Hausstil × jeder Dokumenttyp rendert mit Beispieldaten.
+"""Galerie: jede Systemvorlage (alle Dokumenttypen und Varianten) exportiert mit echten Daten
+eines Beispielmandanten - der vollständige Pfad Vorlage → Daten → Typst → Register.
 
 Mit ``DOCUMENT_GALLERY_OUT=/pfad/galerie.pdf`` werden alle PDFs zu einer Galerie
 zusammengeführt (CI lädt sie als Artefakt hoch, optional für die Docs-Site).
@@ -14,10 +15,9 @@ from pathlib import Path
 import pytest
 
 from app.documents import service
-from app.documents.doc_types import DOCUMENT_TYPE_KEYS
-from app.documents.service import DocumentRequest, StyleOverride
-from app.documents.style_tokens import STYLE_KEYS, default_tokens
-from app.models import FinanceTransaction
+from app.documents.service import DocumentRequest
+from app.documents.system_templates import SYSTEM_TEMPLATES
+from app.models import DocumentTemplate, FinanceTransaction
 from tests.factories import (
     make_event,
     make_finance_account,
@@ -73,22 +73,23 @@ def sample(db):
     return {"tenant": tenant, "protocol": protocol, "list": material}
 
 
-def test_every_style_renders_every_document_type(db, sample):
-    pdfs: list[tuple[str, bytes]] = []
-    for style_key in STYLE_KEYS:
-        for document_type in DOCUMENT_TYPE_KEYS:
-            request = DocumentRequest(
-                document_type=document_type,
-                protocol_id=sample["protocol"].public_id,
-                params={"list_id": str(sample["list"].public_id)} if document_type == "list" else {},
-                style_override=StyleOverride(style_key=style_key, tokens=default_tokens(style_key)),
-            )
-            result = asyncio.run(service.render(db, None, sample["tenant"].id, request))
-            from app.core.config import settings
+def test_every_system_template_exports_with_real_data(db, sample):
+    from app.core.config import settings
 
-            pdf = (Path(settings.storage_root) / result.stored_file.storage_path).read_bytes()
-            assert pdf.startswith(b"%PDF"), (style_key, document_type)
-            pdfs.append((f"{style_key} · {document_type}", pdf))
+    pdfs: list[tuple[str, bytes]] = []
+    for definition in SYSTEM_TEMPLATES:
+        template = db.query(DocumentTemplate).filter(DocumentTemplate.system_key == definition.key).one()
+        request = DocumentRequest(
+            document_type=definition.document_type,
+            template_id=template.public_id,
+            protocol_id=sample["protocol"].public_id,
+            params={"list_id": str(sample["list"].public_id)} if definition.document_type == "list" else {},
+        )
+        result = asyncio.run(service.render(db, None, sample["tenant"].id, request))
+        pdf = (Path(settings.storage_root) / result.stored_file.storage_path).read_bytes()
+        assert pdf.startswith(b"%PDF"), definition.key
+        assert result.export.template_id == template.id and result.export.design_hash
+        pdfs.append((definition.key, pdf))
     if GALLERY_OUT:
         from pypdf import PdfReader, PdfWriter
 

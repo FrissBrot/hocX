@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.core.cycle_utils import reset_boundary
 from app.models import (
     AttendanceFine,
-    DocumentStyle,
     ElementDefinition,
     ElementType,
     Event,
@@ -1609,8 +1608,6 @@ class ProtocolService:
                 tenant_id=tenant_id,
                 template_id=template.id,
                 template_version=template.version,
-                # Hausstil der Vorlage; leer = Standard-Hausstil des Mandanten beim Export
-                document_style_id=template.document_style_id,
                 protocol_number=protocol_number,
                 title=title,
                 protocol_date=payload.protocol_date,
@@ -1621,7 +1618,7 @@ class ProtocolService:
             try:
                 # SAVEPOINT scoped to just this insert attempt (same pattern as
                 # ParticipantService.import_csv's per-row retry) - a unique-constraint collision
-                # only unwinds the failed Protocol row, not the template/document_style/
+                # only unwinds the failed Protocol row, not the template/
                 # cycle_cfg already read above, so the retry can immediately re-query fresh
                 # counts and try again without disturbing anything else in the session.
                 with db.begin_nested():
@@ -1699,9 +1696,6 @@ class ProtocolService:
         protocol.template_version = template.version
         db.add(protocol)
         db.commit()
-        if template.document_style_id != protocol.document_style_id:
-            protocol.document_style_id = template.document_style_id
-            db.commit()
         return {**summary, "applied": True}
 
     def _sync_cycle_tokens(self, db: Session, template: Template, protocol_date: date) -> dict[str, str]:
@@ -2649,18 +2643,8 @@ class ProtocolService:
         values = payload.model_dump(exclude_unset=True)
         # Concurrency precondition consumed by the route; it is not a database column.
         values.pop("expected_session_notes", None)
-        # document_style_id/event_id arrive as public UUIDs - resolve to internal ids,
-        # scoped to this protocol's tenant, before they're used as raw PK/FK values below.
-        if "document_style_id" in values:
-            raw_document_style_id = values.pop("document_style_id")
-            document_style_id = None
-            if raw_document_style_id is not None:
-                document_style_id = public_id_service.resolve_internal_id(
-                    db, DocumentStyle, raw_document_style_id, tenant_id=protocol.tenant_id
-                )
-                if document_style_id is None:
-                    raise ValueError("Document style does not belong to current tenant")
-            values["document_style_id"] = document_style_id
+        # event_id arrives as a public UUID - resolve to an internal id, scoped to this
+        # protocol's tenant, before it's used as a raw FK value below.
         if values.get("event_id") is not None:
             # event_id is client-supplied - without this check a writer could re-link an
             # existing protocol to another tenant's Event (see create_from_template above).

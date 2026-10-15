@@ -60,6 +60,29 @@ def format_date_range(start: date | None, end: date | None) -> str:
     return f"{format_date(start)} – {format_date(end)}"
 
 
+RELATIVE_PERIODS = ("", "current_year", "last_year", "last_12_months", "current_month", "last_month")
+
+
+def relative_range(today: date, key: str | None) -> tuple[date, date] | None:
+    """Relativer Zeitraum (für Vorlagen, die jedes Jahr gleich exportiert werden)."""
+    if key == "current_year":
+        return date(today.year, 1, 1), date(today.year, 12, 31)
+    if key == "last_year":
+        return date(today.year - 1, 1, 1), date(today.year - 1, 12, 31)
+    if key == "last_12_months":
+        start = date(today.year - 1, today.month, 1)
+        return start, today
+    if key in ("current_month", "last_month"):
+        year, month = today.year, today.month
+        if key == "last_month":
+            year, month = (year - 1, 12) if month == 1 else (year, month - 1)
+        next_year, next_month = (year + 1, 1) if month == 12 else (year, month + 1)
+        from datetime import timedelta
+
+        return date(year, month, 1), date(next_year, next_month, 1) - timedelta(days=1)
+    return None
+
+
 def format_amount(value: float | int | Any, *, sign: bool = False) -> str:
     """Betrag mit ' als Tausendertrenner und zwei Nachkommastellen (wie bisher)."""
     number = float(value or 0)

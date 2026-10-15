@@ -642,39 +642,19 @@ class ListEntry(Base, TimestampMixin, UpdatedAtMixin):
     )
 
 
-class DocumentStyle(Base, TimestampMixin, UpdatedAtMixin):
-    """Hausstil-Konfiguration eines Mandanten (Dokument-Engine). Anpassung nur über Daten:
-    ``style_key`` wählt den Stil im Repo, ``tokens_json`` folgt
-    app.documents.style_tokens.DocumentStyleTokens. ``version`` steigt bei jeder Änderung
-    und wird pro Export festgehalten (document_export.style_version)."""
+class DocumentAsset(Base, TimestampMixin):
+    """Hochgeladene Datei des Document Studio: Bild (Logo, Briefkopf, Hintergrund, Wasserzeichen,
+    Grafik) oder Schrift. Kein Code. Brand-Profile und Vorlagen referenzieren Assets über ihre
+    ``public_id``; aufgelöst wird immer mandantengebunden."""
 
-    __tablename__ = "document_style"
+    __tablename__ = "document_asset"
     __table_args__ = (
-        CheckConstraint("style_key IN ('modern', 'classic', 'compact')", name="ck_document_style_key"),
-        CheckConstraint("version >= 1", name="ck_document_style_version_positive"),
-        Index("idx_document_style_tenant", "tenant_id"),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    public_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
-    )
-    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
-    name: Mapped[str] = mapped_column(Text, nullable=False)
-    style_key: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'modern'"))
-    tokens_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
-    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
-
-
-class DocumentStyleAsset(Base, TimestampMixin):
-    """Hochgeladene Schrift oder hochgeladenes Bild (Logo, Fussbild) für Hausstile. Kein Code:
-    Template-Dateien gibt es seit der Dokument-Engine nicht mehr."""
-
-    __tablename__ = "document_style_asset"
-    __table_args__ = (
-        CheckConstraint("kind IN ('image', 'font')", name="ck_document_style_asset_kind"),
-        Index("idx_document_style_asset_tenant", "tenant_id", "kind"),
+        CheckConstraint("kind IN ('image', 'font')", name="ck_document_asset_kind"),
+        CheckConstraint(
+            "category IN ('logo', 'letterhead', 'background', 'watermark', 'graphic', 'image', 'font')",
+            name="ck_document_asset_category",
+        ),
+        Index("idx_document_asset_tenant", "tenant_id", "kind"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -683,23 +663,31 @@ class DocumentStyleAsset(Base, TimestampMixin):
     )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     kind: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'image'"), default="image")
     name: Mapped[str] = mapped_column(Text, nullable=False)
     original_name: Mapped[str | None] = mapped_column(Text)
     mime_type: Mapped[str | None] = mapped_column(Text)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
     file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     checksum_sha256: Mapped[str | None] = mapped_column(Text)
-    # Familienname aus der Schriftdatei (nur kind='font'), so referenziert der Stil die Schrift.
+    width_px: Mapped[int | None] = mapped_column(Integer)
+    height_px: Mapped[int | None] = mapped_column(Integer)
+    # Familienname aus der Schriftdatei (nur kind='font')
     font_family: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
-class DocumentRecipe(Base, TimestampMixin, UpdatedAtMixin):
-    """Gespeicherte Zusammenstellung: Blöcke mit Parametern (app.documents.catalog.BlockSpec),
-    Hausstil, Export-Optionen und Sprache."""
+class DocumentBrand(Base, TimestampMixin, UpdatedAtMixin):
+    """Brand-Profil (Corporate Design) eines Mandanten. Der Inhalt steht in unveränderlichen
+    Revisionen (document_brand_revision); ``current_revision`` ist die gültige. ``lock_version``
+    erkennt parallele Bearbeitung (optimistische Sperre)."""
 
-    __tablename__ = "document_recipe"
-    __table_args__ = (Index("idx_document_recipe_tenant", "tenant_id"),)
+    __tablename__ = "document_brand"
+    __table_args__ = (
+        CheckConstraint("current_revision >= 1", name="ck_document_brand_revision_positive"),
+        Index("idx_document_brand_tenant", "tenant_id"),
+        Index("uq_document_brand_default", "tenant_id", unique=True, postgresql_where=text("is_default")),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     public_id: Mapped[uuid.UUID] = mapped_column(
@@ -707,18 +695,178 @@ class DocumentRecipe(Base, TimestampMixin, UpdatedAtMixin):
     )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    document_type: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'custom'"))
-    blocks_json: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
-    options_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
-    style_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_style.id", ondelete="SET NULL"))
-    language: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    current_revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    updated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentBrandRevision(Base):
+    """Unveränderlicher Stand eines Brand-Profils (app.documents.brand.BrandTokens). Jede
+    gespeicherte Änderung erzeugt eine neue Revision; Exporte halten die verwendete fest."""
+
+    __tablename__ = "document_brand_revision"
+    __table_args__ = (UniqueConstraint("brand_id", "revision", name="uq_document_brand_revision"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    brand_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("document_brand.id", ondelete="CASCADE"), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    tokens_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    tokens_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentTemplate(Base, TimestampMixin, UpdatedAtMixin):
+    """Dokumentvorlage des Document Studio. ``tenant_id`` NULL = Systemvorlage von hocX
+    (``system_key``, nie direkt überschreibbar). ``origin``: system / tenant (eigene Vorlage) /
+    copy (angepasste Kopie einer Systemvorlage, ``source_template_id``). Der Inhalt steht in
+    Revisionen; ``published_revision_id`` ist die für Exporte gültige."""
+
+    __tablename__ = "document_template"
+    __table_args__ = (
+        CheckConstraint("origin IN ('system', 'tenant', 'copy')", name="ck_document_template_origin"),
+        CheckConstraint("status IN ('active', 'archived')", name="ck_document_template_status"),
+        CheckConstraint("(tenant_id IS NULL) = (origin = 'system')", name="ck_document_template_system_tenant"),
+        Index("idx_document_template_tenant", "tenant_id", "document_type"),
+        Index("uq_document_template_system_key", "system_key", unique=True, postgresql_where=text("system_key IS NOT NULL")),
+        Index("uq_document_template_platform_default", "document_type", unique=True, postgresql_where=text("tenant_id IS NULL AND is_platform_default")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"))
+    system_key: Mapped[str | None] = mapped_column(Text)
+    origin: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'tenant'"), default="tenant")
+    source_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="SET NULL"))
+    source_revision_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template_revision.id", ondelete="SET NULL", use_alter=True))
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    document_type: Mapped[str] = mapped_column(Text, nullable=False)
+    variant: Mapped[str | None] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'general'"), default="general")
+    # Brand-Profil der Vorlage; NULL = Standard-Brand des exportierenden Mandanten
+    brand_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_brand.id", ondelete="SET NULL"))
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'active'"), default="active")
+    published_revision_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template_revision.id", ondelete="SET NULL", use_alter=True))
+    # Plattform-Standard je Dokumenttyp (nur Systemvorlagen)
+    is_platform_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    updated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentTemplateRevision(Base):
+    """Revision einer Dokumentvorlage. ``draft`` (höchstens eine je Vorlage, per Autosave
+    bearbeitbar, ``lock_version`` gegen parallele Änderungen), ``published`` (gültig für
+    Exporte) und ``superseded`` (frühere Veröffentlichung). Veröffentlichte und abgelöste
+    Revisionen sind unveränderlich (DB-Trigger ``trg_document_template_revision_immutable``).
+    ``content_json`` folgt app.documents.layout.TemplateContent."""
+
+    __tablename__ = "document_template_revision"
+    __table_args__ = (
+        UniqueConstraint("template_id", "revision_no", name="uq_document_template_revision_no"),
+        CheckConstraint("status IN ('draft', 'published', 'superseded')", name="ck_document_template_revision_status"),
+        CheckConstraint("brand_mode IN ('follow', 'pinned')", name="ck_document_template_revision_brand_mode"),
+        Index("uq_document_template_revision_draft", "template_id", unique=True, postgresql_where=text("status = 'draft'")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="CASCADE"), nullable=False)
+    revision_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'draft'"), default="draft")
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    # follow = aktuelle Revision des Brand-Profils, pinned = beim Veröffentlichen festgehaltene
+    brand_mode: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'follow'"), default="follow")
+    brand_revision_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_brand_revision.id", ondelete="SET NULL"))
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    updated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentComponent(Base, TimestampMixin, UpdatedAtMixin):
+    """Wiederverwendbare Komponente eines Mandanten (ein Layoutknoten mit Kindern, z. B. ein
+    eigener Briefkopf). Vorlagen verweisen über ``component_ref`` darauf."""
+
+    __tablename__ = "document_component"
+    __table_args__ = (Index("idx_document_component_tenant", "tenant_id"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'general'"), default="general")
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    node_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    updated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentTemplateAssignment(Base):
+    """Standardvorlage je Dokumenttyp eines Mandanten, optional nur für eine Protokollvorlage
+    (``protocol_template_id``). Priorität beim Export: explizit gewählt > Zuweisung der
+    Protokollvorlage > Mandanten-Standard > Plattform-Standard (siehe template_service)."""
+
+    __tablename__ = "document_template_assignment"
+    __table_args__ = (
+        CheckConstraint(
+            "document_template_id IS NOT NULL OR brand_id IS NOT NULL", name="ck_document_template_assignment_target"
+        ),
+        Index(
+            "uq_document_template_assignment_tenant",
+            "tenant_id",
+            "document_type",
+            unique=True,
+            postgresql_where=text("protocol_template_id IS NULL"),
+        ),
+        Index(
+            "uq_document_template_assignment_protocol_template",
+            "tenant_id",
+            "document_type",
+            "protocol_template_id",
+            unique=True,
+            postgresql_where=text("protocol_template_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    document_type: Mapped[str] = mapped_column(Text, nullable=False)
+    protocol_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="CASCADE"))
+    # Vorlage und/oder Brand-Profil (z. B. eigenes Logo für eine Untergruppe); NULL = nächste Stufe
+    document_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="CASCADE"))
+    brand_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_brand.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
 class DocumentExport(Base, TimestampMixin):
     """Ein Datensatz pro erzeugtem PDF. ``public_id`` ist die Dokument-ID im PDF (Fusszeile,
-    XMP). Hält alles, was eine spätere Prüffunktion braucht: Inhalts-Hash, SHA-256 des
-    signierten PDFs, Version, Stil und Stil-Version, Signaturniveau."""
+    XMP). Hält fest, womit das PDF entstand: Inhalts-Hash (fachlicher Inhalt), Design-Hash
+    (Vorlagenrevision, Brand-Revision, Assets), Vorlagen- und Brand-Revision und Sprache."""
 
     __tablename__ = "document_export"
     __table_args__ = (
@@ -734,18 +882,20 @@ class DocumentExport(Base, TimestampMixin):
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"))
     document_type: Mapped[str] = mapped_column(Text, nullable=False)
-    recipe_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_recipe.id", ondelete="SET NULL"))
     title: Mapped[str | None] = mapped_column(Text)
     version_label: Mapped[str | None] = mapped_column(Text)
     version_major: Mapped[int | None] = mapped_column(Integer)
     version_minor: Mapped[int | None] = mapped_column(Integer)
     content_hash: Mapped[str | None] = mapped_column(Text)
-    style_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_style.id", ondelete="SET NULL"))
-    style_key: Mapped[str | None] = mapped_column(Text)
-    style_version: Mapped[int | None] = mapped_column(Integer)
+    design_hash: Mapped[str | None] = mapped_column(Text)
+    template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="SET NULL"))
+    template_revision_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template_revision.id", ondelete="SET NULL"))
+    brand_revision_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_brand_revision.id", ondelete="SET NULL"))
+    options_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
     language: Mapped[str | None] = mapped_column(Text)
     stored_file_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="SET NULL"))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
 
 
 class DocumentRegistry(Base):
@@ -775,6 +925,8 @@ class DocumentRegistry(Base):
     version_minor: Mapped[int | None] = mapped_column(Integer)
     version_label: Mapped[str | None] = mapped_column(Text)
     content_hash: Mapped[str | None] = mapped_column(Text)
+    # Design-Hash (Vorlage, Brand, Assets) - nur informativ, geprüft wird über sha256
+    design_hash: Mapped[str | None] = mapped_column(Text)
     # public_id des Protokolls, bewusst ohne FK (überlebt Löschen und Mandanten-Umzug)
     source_public_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
@@ -840,7 +992,6 @@ class Template(Base, TimestampMixin, UpdatedAtMixin):
         PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
     )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
-    document_style_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_style.id", ondelete="SET NULL"))
     next_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
     last_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
     todo_due_event_tag: Mapped[str | None] = mapped_column(Text)
@@ -991,7 +1142,6 @@ class Protocol(Base, TimestampMixin, UpdatedAtMixin):
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="RESTRICT"), nullable=False)
     template_version: Mapped[int] = mapped_column(Integer, nullable=False)
-    document_style_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_style.id", ondelete="SET NULL"))
     protocol_number: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str | None] = mapped_column(Text)
     protocol_date: Mapped[date] = mapped_column(Date, nullable=False)

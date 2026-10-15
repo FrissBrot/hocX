@@ -1,15 +1,15 @@
-"""Dokumentmodell der Dokument-Engine (versioniert über ``SCHEMA_VERSION``).
+"""Datenmodell der Fachkomponenten (versioniert über ``SCHEMA_VERSION``).
 
-Das Modell ist die einzige Schnittstelle zwischen Python und Typst: Provider füllen es, der
-Hausstil rendert es. Es enthält nie Typst-Code. Fliesstext ist ein strukturierter
+Provider füllen diese Blöcke mit fachlichen Daten; der Layout-Compiler (compiler.py) bettet sie
+als ``data_block`` in die kompilierte Vorlage ein, Typst rendert sie mit den Basis-Komponenten
+(typst/base/blocks.typ) im Brand-Profil. Das Modell enthält nie Typst-Code. Fliesstext ist ein strukturierter
 Rich-Text-Baum (``RichBlock``/``RichInline``), Tabellen sind ``TableData``. Status,
 Spaltenköpfe und Leertexte stehen als Codes bzw. Schlüssel im Modell; übersetzt wird erst im
-Hausstil über ``Document.strings``. Dadurch bleibt der Inhalt sprachneutral und der
+Typst über die Texte der Dokumentsprache. Dadurch bleibt der Inhalt sprachneutral und der
 Inhalts-Hash (siehe hashing.py) ändert sich bei einem reinen Sprachwechsel nicht.
 
-Neuer Block-Typ: Modell hier, Parameter und Provider in catalog.py/providers, Basis-Komponente
-in styles/base/blocks.typ, Texte in frontend/messages/<locale>/documentPdf.json. Der Check
-``scripts/check-document-catalog.py`` prüft die Vollständigkeit.
+Neuer Block-Typ: siehe catalog.py. Der Check ``scripts/check-document-catalog.py`` prüft die
+Vollständigkeit.
 """
 from __future__ import annotations
 
@@ -226,13 +226,6 @@ class BlockBase(_Strict):
 # Struktur
 
 
-class HeadingBlock(BlockBase):
-    type: Literal["heading"] = "heading"
-    text: str = ""
-
-    def is_empty(self) -> bool:
-        return not self.text.strip()
-
 
 class RichTextBlock(BlockBase):
     type: Literal["richtext"] = "richtext"
@@ -250,38 +243,8 @@ class StaticTextBlock(BlockBase):
         return rich_is_empty(self.content)
 
 
-class PageBreakBlock(BlockBase):
-    type: Literal["page_break"] = "page_break"
-    hide_if_empty: bool = False
-
-    def is_empty(self) -> bool:
-        return False
 
 
-class TocBlock(BlockBase):
-    type: Literal["toc"] = "toc"
-    depth: int = Field(2, ge=1, le=4)
-    hide_if_empty: bool = False
-
-    def is_empty(self) -> bool:
-        return False
-
-
-class SpacerBlock(BlockBase):
-    type: Literal["spacer"] = "spacer"
-    size: Literal["s", "m", "l"] = "m"
-    hide_if_empty: bool = False
-
-    def is_empty(self) -> bool:
-        return False
-
-
-class DividerBlock(BlockBase):
-    type: Literal["divider"] = "divider"
-    hide_if_empty: bool = False
-
-    def is_empty(self) -> bool:
-        return False
 
 
 # Protokoll
@@ -623,35 +586,12 @@ class StatTableBlock(BlockBase):
 # Sonstiges
 
 
-class QrLinkBlock(BlockBase):
-    """QR-Code auf eine URL (in Typst erzeugt, vendortes Paket tiaoma)."""
-
-    type: Literal["qr_link"] = "qr_link"
-    # leer = kein Ziel (z. B. Protokoll ohne öffentliche URL) - dann gilt der Block als leer
-    url: str = Field("", max_length=2000)
-    label: str | None = None
-
-    def is_empty(self) -> bool:
-        return not self.url
-
-
-class GenericTableBlock(BlockBase):
-    type: Literal["generic_table"] = "generic_table"
-    table: TableData
-
-    def is_empty(self) -> bool:
-        return self.table.row_count() == 0
 
 
 Block = Annotated[
     Union[
-        HeadingBlock,
         RichTextBlock,
         StaticTextBlock,
-        PageBreakBlock,
-        TocBlock,
-        SpacerBlock,
-        DividerBlock,
         ProtocolElementBlock,
         SessionDateBlock,
         SessionNotesBlock,
@@ -677,8 +617,6 @@ Block = Annotated[
         KpiTilesBlock,
         ChartBlock,
         StatTableBlock,
-        QrLinkBlock,
-        GenericTableBlock,
     ],
     Field(discriminator="type"),
 ]
@@ -695,6 +633,9 @@ BLOCK_MODELS: dict[str, type[BlockBase]] = {
 
 
 class DocumentMeta(_Strict):
+    """Fachliche Angaben des Dokuments. Dieselben Felder wie seit der ersten Dokument-Engine:
+    sie gehen (ohne Version, Sprache, Status) in den Inhalts-Hash ein (hashing.py)."""
+
     document_type: str
     title: str
     subtitle: str | None = None
@@ -704,41 +645,6 @@ class DocumentMeta(_Strict):
     version: str | None = None
     tenant_name: str = ""
     language: str = "de"
-
-
-class DocumentOptions(_Strict):
-    title_page: Literal["none", "minimal", "modern", "bold", "cover"] = "none"
-    toc: Literal["off", "on", "compact", "very_compact"] = "off"
-    toc_block_titles: bool = True
-    show_metadata: bool = False
-    numbering: bool = False
-    orientation: Literal["portrait", "landscape"] = "portrait"
-    watermark: bool = False
-
-
-class ResolvedStyle(_Strict):
-    """Aufgelöster Hausstil für den Compile: Tokens plus Pfade im Compile-Root."""
-
-    key: Literal["modern", "classic", "compact"] = "modern"
-    version: int = 1
-    primary_color: HexColor = "#174B7A"
-    secondary_color: HexColor = "#4F6D7A"
-    # Vorangestellte Schriftfamilien (z. B. hochgeladene Mandantenschrift); leer = Hausschrift
-    # des Stils. Fallbacks (Noto Sans, Noto Color Emoji) hängt der Stil selbst an.
-    fonts: list[Annotated[str, Field(max_length=120)]] = Field(default_factory=list, max_length=4)
-    base_size: Literal[10, 11, 12] = 11
-    line_spacing: Literal["tight", "normal", "relaxed"] = "normal"
-    margins: Literal["narrow", "normal", "wide"] = "normal"
-    header: Literal["none", "minimal", "standard", "bar", "logo", "logo_bar"] = "standard"
-    footer: Literal["none", "minimal", "standard", "with_version", "date_page"] = "standard"
-    logo: str | None = Field(None, pattern=r"^assets/[A-Za-z0-9_.-]+$")
-    footer_image: str | None = Field(None, pattern=r"^assets/[A-Za-z0-9_.-]+$")
-    sender: str = ""
-    sender_color: HexColor | None = None
-    place: str = ""
-    verify_show_url: bool = True
-    verify_show_id: bool = True
-    verify_show_qr: bool = True
 
 
 class RenderInfo(_Strict):
@@ -751,13 +657,3 @@ class RenderInfo(_Strict):
     verify_display: str | None = Field(None, max_length=300)
     verify_link: str | None = Field(None, max_length=400)
     preview: bool = False
-
-
-class Document(_Strict):
-    schema_version: int = SCHEMA_VERSION
-    meta: DocumentMeta
-    options: DocumentOptions = Field(default_factory=DocumentOptions)
-    style: ResolvedStyle = Field(default_factory=ResolvedStyle)
-    strings: dict[str, str] = Field(default_factory=dict)
-    render: RenderInfo = Field(default_factory=RenderInfo)
-    blocks: list[Block] = Field(default_factory=list)

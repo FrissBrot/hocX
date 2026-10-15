@@ -445,6 +445,11 @@ def matrix_tables(ctx: BuildContext, protocol: Protocol, config: dict) -> list[T
 # ── Katalog-Provider ────────────────────────────────────────────────────────
 
 
+# Inhaltsfilter der Elemente (Kurz-/Beschlussprotokoll): erlaubte Kind-Blöcke, None = alle
+_TEXT_BLOCKS = frozenset({"richtext", "static_text", "bullet_list", "form", "session_date", "session_notes"})
+CONTENT_FILTERS: dict[str, frozenset[str] | None] = {"all": None, "text": _TEXT_BLOCKS, "text_and_todos": _TEXT_BLOCKS | {"todo_table"}}
+
+
 def provide_protocol_element(ctx: BuildContext, spec: BlockSpec, params: ProtocolElementParams):
     protocol = resolve_protocol(ctx, params.protocol_id)
     if params.protocol_id is None or (ctx.protocol is not None and protocol.id == ctx.protocol.id):
@@ -452,6 +457,13 @@ def provide_protocol_element(ctx: BuildContext, spec: BlockSpec, params: Protoco
     blocks = element_blocks(ctx, protocol, element_ref=params.element_id, include_session_todos=params.include_session_todos)
     if params.titles_only:
         return [BulletListBlock(**spec_fields(spec), items=[block.title or "" for block in blocks if block.title])]
+    allowed = CONTENT_FILTERS.get(params.content)
+    for block in blocks:
+        block.children = [
+            child
+            for child in block.children
+            if (allowed is None or child.type in allowed) and (params.include_images or child.type not in ("image", "image_gallery"))
+        ]
     if spec.title and len(blocks) == 1:
         blocks[0].title = spec.title
     for block in blocks:

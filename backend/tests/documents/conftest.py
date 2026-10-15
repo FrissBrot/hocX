@@ -1,7 +1,6 @@
-"""Gemeinsame Fixtures der Dokument-Engine-Tests."""
+"""Gemeinsame Fixtures der Document-Studio-Tests."""
 from __future__ import annotations
 
-import json
 import re
 import subprocess
 import tempfile
@@ -9,17 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from app.documents.model import Document
 from app.documents.renderer import DocumentRenderer, RenderAssets
-from tests.documents.fixtures.generate import FIXTURE_DIR, fixture_assets
-
-
-def load_fixture(name: str) -> Document:
-    return Document.model_validate(json.loads((FIXTURE_DIR / f"{name}.json").read_text(encoding="utf-8")))
-
-
-def fixture_names() -> list[str]:
-    return sorted(path.stem for path in FIXTURE_DIR.glob("*.json"))
+from tests.documents.fixtures.scenarios import compile_scenario, scenarios
 
 
 @pytest.fixture(scope="session")
@@ -30,8 +20,16 @@ def renderer():
 
 
 @pytest.fixture(scope="session")
-def assets() -> RenderAssets:
-    return RenderAssets(files=fixture_assets())
+def scenario_map():
+    return scenarios()
+
+
+def compiled_assets(compiled) -> RenderAssets:
+    return RenderAssets(files=compiled.files, fonts=compiled.fonts)
+
+
+def compile_named(name: str):
+    return compile_scenario(scenarios()[name])
 
 
 def pdf_text(pdf: bytes) -> str:
@@ -49,3 +47,15 @@ def normalize(text: str) -> str:
     """Silbentrennung und Leerraum entfernen, damit Zeilenumbrüche im PDF nicht stören."""
     text = re.sub(r"-\n", "", text)
     return re.sub(r"\s+", "", text)
+
+
+@pytest.fixture(autouse=True)
+def _system_templates(request):
+    """DB-Tests: Systemvorlagen wie beim App-Start in der Testtransaktion synchronisieren."""
+    if "db" not in request.fixturenames:
+        return
+    from app.documents.system_templates import sync_system_templates
+
+    db = request.getfixturevalue("db")
+    sync_system_templates(db)
+    db.flush()

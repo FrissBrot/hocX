@@ -108,9 +108,9 @@ def upgrade() -> None:
                         },
                     ).scalar())
                 role_ids[role] = asset_ids[key]
+            # Seit 0118 liefert legacy.tokens_from_legacy ein dict (Hausstil-Format); «custom»
+            # setzt es nur, wenn ein Regular-Schnitt vorhanden ist.
             tokens = tokens_from_legacy(config, role_ids)
-            if tokens.font == "custom" and not role_ids.get("font_regular"):
-                tokens.font = "style"
             is_default = bool(template.is_default and template.is_active) and template.tenant_id not in default_seen
             if is_default:
                 default_seen.add(template.tenant_id)
@@ -119,7 +119,7 @@ def upgrade() -> None:
                     "INSERT INTO document_style (tenant_id, name, style_key, tokens_json, is_default, version) "
                     "VALUES (:tenant_id, :name, 'modern', CAST(:tokens AS jsonb), :is_default, 1) RETURNING id"
                 ),
-                {"tenant_id": template.tenant_id, "name": template.name, "tokens": json.dumps(tokens.model_dump(mode="json")), "is_default": is_default},
+                {"tenant_id": template.tenant_id, "name": template.name, "tokens": json.dumps(tokens), "is_default": is_default},
             ).scalar()
 
         # Mandanten ohne Standard: erster übernommener Stil wird Standard

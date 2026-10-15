@@ -380,7 +380,7 @@ def test_s2_document_list_rejects_list_definition_from_foreign_tenant(db):
     list_def_b = make_list_definition(db, tenant_b.id, name="Foreign List (S2)")
     user_a = make_current_user(tenant_a.id, role="admin")
 
-    body = DocumentRequest(document_type="list", blocks=[BlockSpec(type="list_table", params={"list_id": str(list_def_b.public_id)})])
+    body = DocumentRequest(document_type="list", params={"list_id": str(list_def_b.public_id)})
     with pytest.raises(HTTPException) as exc_info:
         _run(documents_route.render_document(body, db=db, user=user_a))
     assert exc_info.value.status_code == 404
@@ -388,8 +388,8 @@ def test_s2_document_list_rejects_list_definition_from_foreign_tenant(db):
 
 def test_s2_list_provider_rejects_list_definition_from_foreign_tenant(db):
     """Gleiches auf Provider-Ebene, unabhängig von der Route."""
-    from app.documents.builder import build_blocks
     from app.documents.catalog import BlockSpec
+    from app.documents.compiler import build_blocks
     from app.documents.context import BuildContext, DocumentNotFoundError
     from tests.factories import make_list_definition
 

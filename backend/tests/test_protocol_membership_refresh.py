@@ -112,8 +112,8 @@ def test_closing_without_opening_refreshes_before_freezing(db, monkeypatch):
 
 
 def test_export_refreshes_without_editor_read(db, tmp_path, monkeypatch):
-    from app.documents.builder import build_blocks
     from app.documents.catalog import BlockSpec
+    from app.documents.compiler import build_blocks
     from app.documents.context import BuildContext
 
     protocol, attendance, changes, leaver, joiner, remaining = _setup(db)

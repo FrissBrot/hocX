@@ -1,22 +1,14 @@
-"""Provider pro Datenquelle. ``PROVIDERS`` ordnet jedem Block-Typ des Katalogs seine Funktion
-``(ctx, spec, params) -> list[Block]`` zu. Provider enthalten kein Layout."""
+"""Provider pro Datenquelle. ``PROVIDERS`` ordnet jeder Fachkomponente des Katalogs ihre
+Funktion ``(ctx, spec, params) -> list[Block]`` zu. Provider enthalten kein Layout."""
 from __future__ import annotations
 
 from app.documents.providers import events, finance, lists, people, protocol, statistics, structure, todos
 
 PROVIDERS = {
-    "heading": structure.heading,
-    "richtext": structure.richtext,
-    "static_text": structure.static_text,
-    "page_break": structure.page_break,
-    "toc": structure.toc,
-    "spacer": structure.spacer,
-    "divider": structure.divider,
     "protocol_element": protocol.provide_protocol_element,
     "session_date": protocol.provide_session_date,
     "session_notes": protocol.provide_session_notes,
     "form": structure.form,
-    "bullet_list": structure.bullet_list,
     "matrix": protocol.provide_matrix,
     "entry_exit": people.provide_entry_exit,
     "image": protocol.provide_image,
@@ -37,6 +29,4 @@ PROVIDERS = {
     "kpi_tiles": statistics.provide_kpis,
     "chart": statistics.provide_chart,
     "stat_table": statistics.provide_table,
-    "qr_link": structure.qr_link,
-    "generic_table": structure.generic_table,
 }

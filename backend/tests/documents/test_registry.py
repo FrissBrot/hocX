@@ -72,8 +72,8 @@ def test_rerender_with_same_content_is_a_separate_entry(db):
 
 def test_preview_creates_no_entry(db):
     tenant, protocol = _setup(db)
-    pages = asyncio.run(service.preview(db, None, tenant.id, DocumentRequest(protocol_id=protocol.public_id), max_pages=1))
-    assert pages
+    result = asyncio.run(service.preview(db, None, tenant.id, DocumentRequest(protocol_id=protocol.public_id), max_pages=1))
+    assert result.pages
     assert db.scalar(select(DocumentRegistry).where(DocumentRegistry.tenant_id == tenant.id)) is None
     assert db.scalar(select(DocumentExport).where(DocumentExport.tenant_id == tenant.id)) is None
 

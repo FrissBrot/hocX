@@ -42,8 +42,12 @@ ATTENDANCE_STATUSES = ("present", "late", "excused", "absent")
 
 def resolve_period(ctx: BuildContext, params: PeriodParams) -> tuple[date, date] | None:
     """Zeitraum aus Zyklus (relativ zu heute, wie die Statistik) oder festen Daten."""
+    from app.documents.context import relative_range
     from app.services.statistics_common import chart_cycle_bounds
 
+    relative = relative_range(ctx.today, getattr(params, "relative", ""))
+    if relative is not None:
+        return relative
     if params.cycle_config_id is not None:
         try:
             bounds = chart_cycle_bounds(ctx.db, ctx.tenant_id, params.cycle_config_id, params.cycle_offset)

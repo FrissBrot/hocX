@@ -6,11 +6,9 @@ from datetime import date
 
 import pytest
 
-from app.documents.builder import BlockSpecError, build_blocks, build_document
 from app.documents.catalog import CATALOG, BlockSpec
+from app.documents.compiler import BlockSpecError, build_blocks
 from app.documents.context import BuildContext, DocumentNotFoundError, DocumentPermissionError
-from app.documents.model import ResolvedStyle
-from app.documents.style_tokens import DocumentStyleTokens
 from app.models import ProtocolTodo, TodoStatus
 from tests.factories import (
     make_current_user,
@@ -156,13 +154,13 @@ def test_invalid_params_are_curated(db, world):
     with pytest.raises(BlockSpecError):
         build_blocks(_ctx(db, world), [BlockSpec(type="gibts_nicht")])
     with pytest.raises(BlockSpecError):
-        build_blocks(_ctx(db, world), [BlockSpec(type="qr_link", params={"target": "url", "url": "javascript:alert(1)"})])
+        build_blocks(_ctx(db, world), [BlockSpec(type="finance_transactions", params={"relative": "gestern"})])
 
 
 def test_hide_if_empty_removes_block_and_marks_otherwise(db, world):
     ctx = _ctx(db, world, protocol=None)
-    assert build_blocks(ctx, [BlockSpec(type="bullet_list", params={"items": []})]) == []
-    kept = build_blocks(ctx, [BlockSpec(type="bullet_list", hide_if_empty=False)])
+    assert build_blocks(ctx, [BlockSpec(type="form", params={"rows": []})]) == []
+    kept = build_blocks(ctx, [BlockSpec(type="form", hide_if_empty=False)])
     assert kept[0].empty is True
 
 
@@ -173,14 +171,31 @@ def test_fines_from_protocol(db, world):
     assert "7.50 CHF" in _plain(blocks)
 
 
-def test_full_document_renders(db, world, renderer):
+def test_protocol_element_content_filters(db, world):
     ctx = _ctx(db, world)
-    specs = [BlockSpec(type=block_type, hide_if_empty=False) for block_type in sorted(CATALOG)]
-    document = build_document(ctx, document_type="protocol", specs=specs, style=ResolvedStyle(), tokens=DocumentStyleTokens(toc="on", title_page="modern"), tenant_name="Verein A", version="v0.1")
-    output = asyncio.run(renderer.render_pdf(document, __import__("app.documents.renderer", fromlist=["RenderAssets"]).RenderAssets(files=ctx.assets.files)))
-    assert output.pdf.startswith(b"%PDF")
-    assert output.warnings == []
-    assert document.options.watermark is True  # Entwurf
+    full = build_blocks(ctx, [BlockSpec(type="protocol_element")])
+    text_only = build_blocks(ctx, [BlockSpec(type="protocol_element", params={"content": "text", "include_session_todos": False})])
+    with_todos = build_blocks(ctx, [BlockSpec(type="protocol_element", params={"content": "text_and_todos"})])
+    kinds = lambda blocks: {child.type for block in blocks for child in block.children}  # noqa: E731
+    assert {"todo_table", "richtext", "form"} <= kinds(full)
+    assert kinds(text_only) == {"richtext", "form"}
+    assert kinds(with_todos) == {"richtext", "form", "todo_table"}
+    titles = build_blocks(ctx, [BlockSpec(type="protocol_element", params={"titles_only": True})])
+    assert titles[0].type == "bullet_list" and titles[0].items == ["Begrüssung"]
+
+
+def test_relative_periods(db, world):
+    from app.documents.context import relative_range
+
+    today = date(2026, 3, 15)
+    assert relative_range(today, "current_year") == (date(2026, 1, 1), date(2026, 12, 31))
+    assert relative_range(today, "last_year") == (date(2025, 1, 1), date(2025, 12, 31))
+    assert relative_range(today, "last_month") == (date(2026, 2, 1), date(2026, 2, 28))
+    assert relative_range(date(2026, 1, 10), "last_month") == (date(2025, 12, 1), date(2025, 12, 31))
+    assert relative_range(today, "") is None
+    account = make_finance_account(db, world["tenant"].id, name="Kasse")
+    blocks = build_blocks(_ctx(db, world, protocol=None), [BlockSpec(type="finance_transactions", hide_if_empty=False, params={"relative": "current_year"})])
+    assert [block.title for block in blocks] == [account.name]
 
 
 def test_restricted_reader_sees_only_accessible_todos(db, world):

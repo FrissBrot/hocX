@@ -1,25 +1,25 @@
-"""Typst-Renderer: Vollständigkeit, Unicode, Sicherheit, Fehlerzuordnung, Grenzen."""
+"""Typst-Renderer und Layout-Darstellung: Vollständigkeit, wiederholte Tabellenköpfe, Unicode,
+Sicherheit (kein Benutzercode), Fehlerzuordnung am Knoten, PDF/A, Grenzen."""
 from __future__ import annotations
 
 import asyncio
+import copy
 import re
 
 import pytest
 
-from app.documents.model import Document, DocumentMeta, ImageBlock, ImageRef, RichTextBlock
 from app.documents.renderer import DocumentRenderError, DocumentRenderer, RenderAssets
-from app.documents.richtext import markdown_to_rich
-from app.documents.strings import strings_for
-from tests.documents.conftest import load_fixture, normalize, pdf_pages, pdf_text
+from tests.documents.conftest import compiled_assets, normalize, pdf_pages, pdf_text
+from tests.documents.fixtures.scenarios import Scenario, all_data_blocks, compile_scenario, scenarios, system
 
 
-def _render(renderer, document, assets=None):
-    return asyncio.run(renderer.render_pdf(document, assets))
+def _render(renderer, compiled, assets=None):
+    return asyncio.run(renderer.render_pdf(compiled.data, assets if assets is not None else compiled_assets(compiled)))
 
 
 def test_long_table_keeps_all_500_rows_and_repeats_header(renderer):
-    document = load_fixture("long")
-    output = _render(renderer, document)
+    compiled = compile_scenario(scenarios()["long_table"])
+    output = _render(renderer, compiled)
     assert output.pdf.startswith(b"%PDF")
     assert output.warnings == []
     text = pdf_text(output.pdf)
@@ -27,35 +27,65 @@ def test_long_table_keeps_all_500_rows_and_repeats_header(renderer):
         assert f"Aufgabe {index:03d}" in text
     pages = [page for page in pdf_pages(output.pdf) if page.strip()]
     assert len(pages) > 3
-    header = document.strings["col.assignee"]
+    header = compiled.data["strings"]["col.assignee"]
     for page in pages:
-        assert header in page, "Kopfzeile fehlt auf einer Folgeseite"
+        assert header in page, "Tabellenkopf fehlt auf einer Folgeseite"
+
+
+def test_repeated_header_and_footer_on_every_page(renderer):
+    compiled = compile_scenario(scenarios()["protocol_multipage"])
+    pages = [page for page in pdf_pages(_render(renderer, compiled).pdf) if page.strip()]
+    content_pages = pages[1:]  # Titelseite ohne Kopf/Fuss
+    assert len(content_pages) >= 3
+    total = len(content_pages)
+    for number, page in enumerate(content_pages, start=1):
+        assert "P-2026-07" in page
+        assert compiled.data["strings"]["page.of"].replace("{page}", str(number)).replace("{total}", str(total)) in page
+
+
+def test_first_page_master_differs(renderer):
+    pages = [page for page in pdf_pages(_render(renderer, compile_scenario(scenarios()["custom_header"])).pdf) if page.strip()]
+    assert len(pages) >= 2
+    organization = "MustervereinSeeland"
+    assert organization not in normalize(pages[0].split("Fixture-Dokument")[0])  # kein Kopf auf Seite 1
+    assert organization in normalize(pages[1])
+
+
+def test_conditions_repeat_and_disabled_nodes(renderer):
+    text = pdf_text(_render(renderer, compile_scenario(scenarios()["conditions"])).pdf)
+    assert "SICHTBAR-OFFENE-AUFGABEN" in text
+    for hidden in ("VERSTECKT-KEINE-AUFGABEN", "VERSTECKT-BRAND", "VERSTECKT-DEAKTIVIERT"):
+        assert hidden not in text
+    assert text.count("PERSON:") == 5
+    assert "Einladungen zum Sommerfest versenden" in text
 
 
 def test_unicode_and_emoji_do_not_break_export(renderer):
-    output = _render(renderer, load_fixture("unicode"))
-    text = pdf_text(output.pdf)
+    text = pdf_text(_render(renderer, compile_scenario(scenarios()["unicode"])).pdf)
     assert "Ħ" in text
     assert "#set $x$" in text
 
 
 def test_user_content_is_never_evaluated(renderer):
-    payload = "#set page(fill: red) #eval(\"1+1\") $x^2$ @ref <lbl> `c` *b* _i_"
-    document = Document(
-        meta=DocumentMeta(document_type="custom", title=payload),
-        strings=strings_for("de"),
-        blocks=[RichTextBlock(title=payload, content=markdown_to_rich(payload))],
-    )
-    output = _render(renderer, document)
+    payload = "#set page(fill: red) #eval(\"1+1\") $x^2$ @ref <lbl> `c` *b* _i_ ] ) }"
+    content = {
+        "masters": [{"id": "default"}],
+        "body": [
+            {"type": "text", "id": "a", "role": "title", "content": {"default": [{"t": "text", "v": payload}]}},
+            {"type": "rich_text", "id": "b", "markdown": payload},
+            {"type": "table", "id": "c", "columns": [{"id": "c1", "header": {"default": [{"t": "text", "v": payload}]}}], "rows": [[payload]]},
+            {"type": "list", "id": "d", "items": [payload]},
+        ],
+    }
+    output = _render(renderer, compile_scenario(Scenario(content, document_type="custom")))
     flat = normalize(pdf_text(output.pdf))
-    assert normalize('#eval("1+1")') in flat
+    assert flat.count(normalize('#eval("1+1")')) >= 3
     assert normalize("#set page(fill: red)") in flat
 
 
-def test_all_blocks_fixture_completeness(renderer, assets):
-    document = load_fixture("all_blocks")
-    output = _render(renderer, document, assets)
-    flat = normalize(pdf_text(output.pdf))
+def test_all_data_blocks_are_complete(renderer):
+    compiled = compile_scenario(scenarios()["all_blocks"])
+    flat = normalize(pdf_text(_render(renderer, compiled).pdf))
     expected: list[str] = []
 
     def collect(value):
@@ -70,37 +100,40 @@ def test_all_blocks_fixture_completeness(renderer, assets):
             for item in value:
                 collect(item)
 
-    collect([block.model_dump(mode="json") for block in document.blocks])
+    collect(all_data_blocks())
     assert expected
     missing = [value for value in expected if normalize(value) not in flat]
     assert missing == []
 
 
 def test_pdf_is_pdfa_2b(renderer):
-    output = _render(renderer, load_fixture("short"))
-    assert b"pdfaid:part" in output.pdf or b"<pdfaid:part>2</pdfaid:part>" in output.pdf
+    output = _render(renderer, compile_scenario(scenarios()["protocol_simple"]))
+    assert b"pdfaid:part" in output.pdf
     assert re.search(rb"pdfaid:conformance[=>\"]+B", output.pdf)
 
 
-def test_preview_returns_limited_png_pages(renderer, assets):
-    output = asyncio.run(renderer.render_preview(load_fixture("all_blocks"), assets, max_pages=2))
+def test_preview_returns_limited_png_pages(renderer):
+    compiled = compile_scenario(scenarios()["all_blocks"])
+    output = asyncio.run(renderer.render_preview(compiled.data, compiled_assets(compiled), max_pages=2))
     assert len(output.pages) == 2
     assert all(page.startswith(b"\x89PNG") for page in output.pages)
 
 
-def test_failing_block_is_named(renderer):
-    document = Document(
-        meta=DocumentMeta(document_type="custom", title="Fehler"),
-        strings=strings_for("de"),
-        blocks=[
-            RichTextBlock(title="Gut", content=markdown_to_rich("ok")),
-            ImageBlock(title="Kaputtes Bild", image=ImageRef(path="assets/fehlt.png")),
+def test_failing_node_is_named_with_id(renderer):
+    content = {
+        "masters": [{"id": "default"}],
+        "body": [
+            {"type": "text", "id": "good", "content": {"default": [{"t": "text", "v": "ok"}]}},
+            {"type": "data_block", "id": "broken", "component": "image"},
         ],
-    )
+    }
+    blocks = {"broken": [{"type": "image", "title": "Kaputtes Bild", "image": {"path": "assets/fehlt.png"}}]}
+    compiled = compile_scenario(Scenario(content, blocks, document_type="custom"))
     with pytest.raises(DocumentRenderError) as excinfo:
-        _render(renderer, document, RenderAssets())
+        _render(renderer, compiled, RenderAssets())
     assert excinfo.value.key == "error.block"
     assert excinfo.value.block_label == "Kaputtes Bild"
+    assert excinfo.value.node_id == "broken"
     assert excinfo.value.detail
 
 
@@ -108,15 +141,17 @@ def test_timeout_is_curated():
     slow = DocumentRenderer(concurrency=1, timeout_seconds=0.001)
     try:
         with pytest.raises(DocumentRenderError) as excinfo:
-            _render(slow, load_fixture("long"))
+            compiled = compile_scenario(scenarios()["long_table"])
+            _render(slow, compiled)
         assert excinfo.value.key == "error.timeout"
     finally:
         slow.shutdown()
 
 
 def test_assets_cannot_escape_root(renderer):
+    compiled = compile_scenario(scenarios()["protocol_simple"])
     with pytest.raises(DocumentRenderError):
-        _render(renderer, load_fixture("short"), RenderAssets(files={"assets/../../etc/passwd": b"x"}))
+        _render(renderer, compiled, RenderAssets(files={"assets/../../etc/passwd": b"x"}))
 
 
 def test_uncovered_characters_are_replaced_not_fatal():
@@ -124,3 +159,22 @@ def test_uncovered_characters_are_replaced_not_fatal():
 
     coverage = font_coverage()
     assert sanitize_text("漢x😀\x07‍", coverage) == f"{REPLACEMENT_CHARACTER}x😀‍"
+
+
+@pytest.mark.parametrize("preset", ["classic_blue", "graphite", "forest", "bordeaux", "compact"])
+@pytest.mark.parametrize("orientation", ["portrait", "landscape"])
+def test_every_brand_preset_renders_without_warnings(renderer, preset, orientation):
+    from app.documents.brand import BRAND_PRESETS
+
+    content = copy.deepcopy(system("protocol_formal"))
+    content["page"] = {"orientation": orientation}
+    compiled = compile_scenario(Scenario(content, {"protocol": [all_data_blocks()[0]]}, brand=BRAND_PRESETS[preset]))
+    output = _render(renderer, compiled)
+    assert output.pdf.startswith(b"%PDF") and output.warnings == []
+
+
+@pytest.mark.parametrize("heading_style", ["plain", "underline", "bar", "boxed"])
+@pytest.mark.parametrize("table_style", ["lines", "grid", "zebra", "minimal"])
+def test_heading_and_table_styles_render(renderer, heading_style, table_style):
+    compiled = compile_scenario(Scenario(system("protocol_compact"), {"protocol": [all_data_blocks()[0], {"type": "protocol_element", "title": "T", "children": [{**all_data_blocks()[10], "level": 2}]}]}, brand={"layout": {"heading_style": heading_style, "table_style": table_style}}))
+    assert _render(renderer, compiled).warnings == []

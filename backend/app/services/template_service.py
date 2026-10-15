@@ -4,7 +4,7 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
-from app.models import CycleConfig, DocumentStyle, Event, Participant, Template, TemplateElement
+from app.models import CycleConfig, Event, Participant, Template, TemplateElement
 from app.repositories.template_element_repository import TemplateElementRepository
 from app.repositories.template_repository import TemplateRepository
 from app.schemas.participant import TemplateParticipantAssignmentRead
@@ -49,20 +49,18 @@ class TemplateService:
         next_event_id: uuid.UUID | None = None,
         last_event_id: uuid.UUID | None = None,
         cycle_config_id: uuid.UUID | None = None,
-        document_style_id: uuid.UUID | None = None,
     ) -> dict[str, int | None]:
-        """Resolves next_event_id/last_event_id/cycle_config_id/document_style_id from
-        public UUIDs to internal ids, scoped to tenant_id - all four are client-supplied on
-        template create/update, so this also serves as their ownership validation: without
-        it, a writer could point a template at another tenant's Event/CycleConfig/
-        DocumentStyle, which then leaks into every protocol created from it (title/date
-        snapshots, house style, ...)."""
+        """Resolves next_event_id/last_event_id/cycle_config_id from public UUIDs to internal
+        ids, scoped to tenant_id - all three are client-supplied on template create/update, so
+        this also serves as their ownership validation: without it, a writer could point a
+        template at another tenant's Event/CycleConfig, which then leaks into every protocol
+        created from it (title/date snapshots, ...). Dokumentvorlage und Brand-Profil einer
+        Protokollvorlage verwaltet das Document Studio (document_template_assignment)."""
         resolved: dict[str, int | None] = {}
         for label, model, value in (
             ("next_event_id", Event, next_event_id),
             ("last_event_id", Event, last_event_id),
             ("cycle_config_id", CycleConfig, cycle_config_id),
-            ("document_style_id", DocumentStyle, document_style_id),
         ):
             if value is None:
                 resolved[label] = None
@@ -80,12 +78,9 @@ class TemplateService:
             next_event_id=payload.next_event_id,
             last_event_id=payload.last_event_id,
             cycle_config_id=payload.cycle_config_id,
-            document_style_id=payload.document_style_id,
         )
-        # Ohne document_style_id gilt beim Export der Standard-Hausstil des Mandanten.
         template = Template(
             tenant_id=tenant_id,
-            document_style_id=refs["document_style_id"],
             next_event_id=refs["next_event_id"],
             last_event_id=refs["last_event_id"],
             name=payload.name,
@@ -113,9 +108,8 @@ class TemplateService:
             next_event_id=values.get("next_event_id"),
             last_event_id=values.get("last_event_id"),
             cycle_config_id=values.get("cycle_config_id"),
-            document_style_id=values.get("document_style_id"),
         )
-        for field in ("next_event_id", "last_event_id", "cycle_config_id", "document_style_id"):
+        for field in ("next_event_id", "last_event_id", "cycle_config_id"):
             if field in values:
                 values[field] = refs[field]
         return self.repository.update(db, template, values)
@@ -134,7 +128,6 @@ class TemplateService:
 
         duplicate = Template(
             tenant_id=source.tenant_id,
-            document_style_id=source.document_style_id,
             next_event_id=source.next_event_id,
             last_event_id=source.last_event_id,
             todo_due_event_tag=source.todo_due_event_tag,

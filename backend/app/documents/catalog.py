@@ -1,14 +1,16 @@
-"""Block-Katalog: jeder Block-Typ mit Gruppe, Parametern (Pydantic), Zugriffsrecht und Provider.
+"""Katalog der Fachkomponenten (``data_block``-Knoten des Document Studio): jede Komponente mit
+Gruppe, Parametern (Pydantic), Zugriffsrecht und Provider.
 
-``GET /api/documents/catalog`` liefert daraus Gruppen und JSON-Schemata, damit das Frontend die
-Parameterformulare generieren kann. Referenzfelder tragen ``x-source`` (z. B. ``participants``),
-damit das Frontend die passende Auswahl lädt.
+``GET /api/document-studio/catalog`` liefert daraus Gruppen und JSON-Schemata, damit der
+Designer die Parameterformulare generieren kann. Referenzfelder tragen ``x-source`` (z. B.
+``participants``), damit das Frontend die passende Auswahl lädt. Strukturelemente (Überschrift,
+Text, Abstand, Tabelle, QR-Code …) sind keine Katalogeinträge, sondern Layoutknoten (layout.py).
 
-Neuer Block-Typ (siehe docs-site/docs/technik/dokument-engine.md):
+Neue Fachkomponente (siehe docs-site/docs/technik/document-studio.md):
 1. Modell in model.py (Block-Union), 2. Parameter + Eintrag hier, 3. Provider in providers/,
-4. Basis-Komponente in styles/base/blocks.typ, 5. Texte ``blockType.<typ>`` und ``empty.<typ>``
-in frontend/messages/<locale>/documentPdf.json, Parameter-Labels in documents.json.
-``scripts/check-document-catalog.py`` prüft alle fünf Stellen.
+4. Basis-Komponente in typst/base/blocks.typ, 5. Beispieldaten in samples.py, 6. Texte
+``blockType.<typ>`` und ``empty.<typ>`` in frontend/messages/<locale>/documentPdf.json,
+Parameter-Labels in documentStudio.json. ``scripts/check-document-catalog.py`` prüft das.
 """
 from __future__ import annotations
 
@@ -21,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.documents.model import BLOCK_MODELS
 
-BlockGroup = Literal["structure", "protocol", "people", "tasks", "events", "lists", "finance", "statistics", "other"]
+BlockGroup = Literal["protocol", "people", "tasks", "events", "lists", "finance", "statistics", "forms"]
 Access = Literal["reader", "writer", "finance"]
 
 
@@ -52,20 +54,12 @@ class NoParams(_Params):
 # ── Struktur ────────────────────────────────────────────────────────────────
 
 
-class HeadingParams(_Params):
-    text: str = Field("", max_length=300)
 
 
-class MarkdownParams(_Params):
-    markdown: str = Field("", max_length=50_000, json_schema_extra={"x-widget": "markdown"})
 
 
-class TocParams(_Params):
-    depth: int = Field(2, ge=1, le=4)
 
 
-class SpacerParams(_Params):
-    size: Literal["s", "m", "l"] = "m"
 
 
 # ── Protokoll ───────────────────────────────────────────────────────────────
@@ -79,11 +73,15 @@ class ProtocolRefParams(_Params):
 
 class ProtocolElementParams(ProtocolRefParams):
     """Leeres ``element_id`` = alle exportsichtbaren Elemente. ``titles_only`` ergibt eine
-    Traktandenliste (nur die Abschnittstitel) statt der Inhalte."""
+    Traktandenliste (nur die Abschnittstitel) statt der Inhalte. ``content`` filtert die Blöcke
+    der Elemente: ``text`` (nur Texte, Listen, Formulare - Kurz-/Beschlussprotokoll),
+    ``text_and_todos`` (zusätzlich Aufgaben)."""
 
     element_id: uuid.UUID | None = Field(None, json_schema_extra=_source("protocol_elements"))
     include_session_todos: bool = True
     titles_only: bool = False
+    content: Literal["all", "text", "text_and_todos"] = "all"
+    include_images: bool = True
 
 
 class SessionDateParams(ProtocolRefParams):
@@ -102,8 +100,6 @@ class FormParams(_Params):
     rows: list[FormRowParam] = Field(default_factory=list, max_length=100)
 
 
-class BulletListParams(_Params):
-    items: list[str] = Field(default_factory=list, max_length=200)
 
 
 class ProtocolBlockRefParams(_Params):
@@ -130,9 +126,14 @@ class ImageGalleryParams(ProtocolRefParams):
 # ── Personen ────────────────────────────────────────────────────────────────
 
 
-class PeriodParams(_Params):
-    """Zeitraum: Zyklus relativ zu heute (wie in der Statistik) oder feste Daten."""
+RelativePeriod = Literal["", "current_year", "last_year", "last_12_months", "current_month", "last_month"]
 
+
+class PeriodParams(_Params):
+    """Zeitraum: relativ zu heute (``relative``), Zyklus relativ zu heute (wie in der
+    Statistik) oder feste Daten - in dieser Priorität."""
+
+    relative: RelativePeriod = ""
     cycle_config_id: uuid.UUID | None = Field(None, json_schema_extra=_source("cycles"))
     cycle_offset: int = Field(0, ge=-3, le=0)
     date_from: date | None = None
@@ -238,7 +239,10 @@ class FinanceBalanceParams(_Params):
 
 
 class FinanceTransactionsParams(_Params):
+    """Ohne Konto: eine Buchungsliste je Konto."""
+
     account_id: uuid.UUID | None = Field(None, json_schema_extra=_source("finance_accounts"))
+    relative: RelativePeriod = ""
     date_from: date | None = None
     date_to: date | None = None
     subtotals: Literal["none", "month", "year"] = "month"
@@ -247,6 +251,7 @@ class FinanceTransactionsParams(_Params):
 
 class FinesParams(ProtocolRefParams):
     status: Literal["all", "open"] = "all"
+    relative: RelativePeriod = ""
     date_from: date | None = None
     date_to: date | None = None
     group_by_person: bool = False
@@ -284,23 +289,8 @@ class StatTableParams(PeriodParams):
 # ── Sonstiges ───────────────────────────────────────────────────────────────
 
 
-class QrLinkParams(_Params):
-    target: Literal["protocol", "url"] = "protocol"
-    protocol_id: uuid.UUID | None = Field(None, json_schema_extra=_source("protocols"))
-    url: str | None = Field(None, max_length=1000)
-    label: str | None = Field(None, max_length=200)
-
-    @field_validator("url")
-    @classmethod
-    def _http_only(cls, value: str | None) -> str | None:
-        if value and not value.lower().startswith(("https://", "http://")):
-            raise ValueError("URL muss mit http:// oder https:// beginnen")
-        return value
 
 
-class GenericTableParams(_Params):
-    headers: list[str] = Field(default_factory=list, max_length=12)
-    rows: list[list[str]] = Field(default_factory=list, max_length=500)
 
 
 # ── Register ────────────────────────────────────────────────────────────────
@@ -319,18 +309,10 @@ class CatalogEntry:
 CATALOG: dict[str, CatalogEntry] = {
     entry.type: entry
     for entry in (
-        CatalogEntry("heading", "structure", HeadingParams),
-        CatalogEntry("richtext", "structure", MarkdownParams),
-        CatalogEntry("static_text", "structure", MarkdownParams),
-        CatalogEntry("page_break", "structure", NoParams),
-        CatalogEntry("toc", "structure", TocParams),
-        CatalogEntry("spacer", "structure", SpacerParams),
-        CatalogEntry("divider", "structure", NoParams),
         CatalogEntry("protocol_element", "protocol", ProtocolElementParams),
         CatalogEntry("session_date", "protocol", SessionDateParams),
         CatalogEntry("session_notes", "protocol", ProtocolRefParams),
-        CatalogEntry("form", "protocol", FormParams),
-        CatalogEntry("bullet_list", "protocol", BulletListParams),
+        CatalogEntry("form", "forms", FormParams),
         CatalogEntry("matrix", "protocol", ProtocolBlockRefParams),
         CatalogEntry("entry_exit", "protocol", EntryExitParams, access="writer"),
         CatalogEntry("image", "protocol", ImageParams),
@@ -338,7 +320,7 @@ CATALOG: dict[str, CatalogEntry] = {
         CatalogEntry("attendance", "people", ProtocolRefParams),
         CatalogEntry("attendance_matrix", "people", AttendanceMatrixParams),
         CatalogEntry("member_list", "people", MemberListParams, access="writer"),
-        CatalogEntry("signature_fields", "people", SignatureFieldsParams),
+        CatalogEntry("signature_fields", "forms", SignatureFieldsParams),
         CatalogEntry("attendance_sheet", "people", AttendanceSheetParams, access="writer"),
         CatalogEntry("todo_table", "tasks", TodoTableParams),
         CatalogEntry("event_table", "events", EventTableParams),
@@ -351,12 +333,12 @@ CATALOG: dict[str, CatalogEntry] = {
         CatalogEntry("kpi_tiles", "statistics", KpiTilesParams),
         CatalogEntry("chart", "statistics", ChartParams),
         CatalogEntry("stat_table", "statistics", StatTableParams),
-        CatalogEntry("qr_link", "other", QrLinkParams),
-        CatalogEntry("generic_table", "other", GenericTableParams),
     )
 }
 
-assert set(CATALOG) == set(BLOCK_MODELS), "Katalog und Dokumentmodell müssen dieselben Block-Typen haben"
+# Block-Modelle ohne eigene Katalog-Komponente: entstehen nur als Kinder eines Protokollelements
+CHILD_ONLY_BLOCKS = frozenset({"richtext", "static_text", "bullet_list"})
+assert set(CATALOG) | CHILD_ONLY_BLOCKS == set(BLOCK_MODELS), "Katalog und Dokumentmodell passen nicht zusammen"
 
 
 def validate_spec(spec: BlockSpec) -> _Params:
@@ -373,7 +355,12 @@ def catalog_payload() -> list[dict[str, Any]]:
             "type": entry.type,
             "group": entry.group,
             "access": entry.access,
+            "needs_protocol": entry.type in NEEDS_PROTOCOL,
             "params_schema": entry.params.model_json_schema(),
         }
         for entry in CATALOG.values()
     ]
+
+
+# Komponenten, die ohne Protokoll im Kontext (oder Protokollreferenz) leer bleiben
+NEEDS_PROTOCOL = frozenset({"protocol_element", "session_notes", "attendance", "matrix"})

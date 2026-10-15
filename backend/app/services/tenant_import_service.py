@@ -43,9 +43,13 @@ from app.models import (
     CycleConfig,
     DocumentExport,
     DocumentRegistry,
-    DocumentRecipe,
-    DocumentStyle,
-    DocumentStyleAsset,
+    DocumentAsset,
+    DocumentBrand,
+    DocumentBrandRevision,
+    DocumentComponent,
+    DocumentTemplate,
+    DocumentTemplateAssignment,
+    DocumentTemplateRevision,
     ElementDefinition,
     Event,
     EventCycle,
@@ -134,7 +138,7 @@ from app.services.tenant_transfer_common import (
     replace_public_ids,
 )
 
-SUPPORTED_FORMAT_VERSIONS = {2, 3, 4, 5, 6}  # 6: Dokumentenregister; 5: Dokument-Engine (Hausstile statt Dokumentvorlagen)  # 2: separate user_tenant_role table; 3: role on app_user
+SUPPORTED_FORMAT_VERSIONS = {2, 3, 4, 5, 6, 7}  # 7: Document Studio; 6: Dokumentenregister; 5: Dokument-Engine (Hausstile statt Dokumentvorlagen)  # 2: separate user_tenant_role table; 3: role on app_user
 
 # Zip-bomb guard, same idea as file_service.py's MAX_ZIP_ENTRIES/MAX_ZIP_TOTAL_BYTES for the
 # word-import ZIP upload, just scaled up: a full-tenant export can legitimately contain many
@@ -348,7 +352,7 @@ class TenantImportService:
         self._import_simple(Leader, self._t("leader"), "leader", {"tenant_id": new_tenant.id})
         participant_map = self._import_participants(new_tenant.id)
         cycle_config_map = self._import_simple(CycleConfig, self._t("cycle_config"), "cycle_config", {"tenant_id": new_tenant.id})
-        document_style_map = self._import_document_styles(new_tenant.id)
+        document_style_map = self._import_document_brands(new_tenant.id)
         event_map = self._import_events(new_tenant.id, group_map, participant_map)
         # Fuer im Editor gewaehlte (als public UUID gespeicherte) Referenzen in Block-Snapshots,
         # siehe remap_block_configuration. Exporte vor Format 2 haben keine public_id-Spalte.
@@ -365,7 +369,6 @@ class TenantImportService:
         )
         template_map, template_element_map, template_element_block_map = self._import_templates(
             new_tenant.id,
-            document_style_map=document_style_map,
             cycle_config_map=cycle_config_map,
             element_definition_map=element_definition_map,
             event_map=event_map,
@@ -393,7 +396,7 @@ class TenantImportService:
             new_tenant.id, stored_file_map, event_map,
             cycle_config_map=cycle_config_map, submission_assignment_map=submission_assignment_map,
         )
-        protocol_map = self._import_protocols(new_tenant.id, template_map, document_style_map, event_map)
+        protocol_map = self._import_protocols(new_tenant.id, template_map, event_map)
         self._import_word_import_documents(
             new_tenant.id, template_map, stored_file_map, protocol_map,
             WordImportIdMaps(
@@ -414,7 +417,8 @@ class TenantImportService:
         self._import_protocol_texts(protocol_element_block_map)
         self._import_protocol_display_snapshots(protocol_element_block_map)
         self._import_protocol_images(protocol_element_block_map, stored_file_map)
-        self._import_document_exports(new_tenant.id, protocol_map, stored_file_map, document_style_map)
+        document_template_maps = self._import_document_templates(new_tenant.id, template_map, document_style_map)
+        self._import_document_exports(new_tenant.id, protocol_map, stored_file_map, document_template_maps)
         finance_transaction_map = self._import_finance_transactions(finance_account_map, protocol_map)
         self._import_attendance_fines(protocol_map, participant_map, finance_account_map, finance_transaction_map)
         task_package_item_map = self._import_task_packages(
@@ -714,36 +718,66 @@ class TenantImportService:
         self.db.commit()
         return id_map
 
-    def _import_document_styles(self, new_tenant_id: int) -> dict[str, int]:
-        """Hausstile und ihre Assets. Ab Format 5 direkt; ältere Archive enthalten noch
-        TeX-basierte Dokumentvorlagen, die wie in Migration 0115 übersetzt werden (app.documents.legacy).
-        Rückgabe: "style:<alte id>" bzw. "template:<alte document_template-id>" → neue Stil-ID."""
-        from app.documents import style_service
-        from app.documents.legacy import has_custom_slots, legacy_part_refs, tokens_from_legacy
+    def _restore_asset(self, new_tenant_id: int, data: dict[str, Any], *, kind: str, category: str) -> DocumentAsset | None:
+        path = self._restore_file(data.get("storage_path"), root=settings.storage_root, new_tenant_id=new_tenant_id, subdir="document_assets")
+        if path is None:
+            self.warnings.append(f"Dokument-Asset '{data.get('name')}': Datei fehlte im Export, übersprungen.")
+            return None
+        asset = self._build(DocumentAsset, {**data, "kind": kind, "category": category}, {"tenant_id": new_tenant_id, "storage_path": path})
+        self.db.add(asset)
+        self.db.flush()
+        return asset
 
-        style_map: dict[str, int] = {}
+    def _import_document_brands(self, new_tenant_id: int) -> dict[str, int]:
+        """Assets und Brand-Profile (Document Studio). Ältere Archive: Hausstile (Format 5/6)
+        und TeX-basierte Dokumentvorlagen (Format ≤ 4) werden wie in Migration 0118 bzw. 0115
+        in Brand-Profile übersetzt (app.documents.legacy).
+        Rückgabe: "brand:<alte id>", "revision:<alte id>", "style:<alte id>",
+        "template:<alte document_template-id>" → neue ID."""
+        from app.documents import assets as asset_service
+        from app.documents import brand_service
+        from app.documents.legacy import brand_tokens_from_legacy, brand_tokens_from_style, has_custom_slots, legacy_part_refs
+
+        id_map: dict[str, int] = {}
+        default_brand: int | None = None
+        for row in self._t("document_asset"):
+            data = self._resolve_row("document_asset", row)
+            self._restore_asset(new_tenant_id, data, kind=data.get("kind") or "image", category=data.get("category") or ("font" if data.get("kind") == "font" else "image"))
+        for row in self._t("document_brand"):
+            data = self._resolve_row("document_brand", row)
+            brand = self._build(DocumentBrand, data, {"tenant_id": new_tenant_id, "is_default": False})
+            self.db.add(brand)
+            self.db.flush()
+            id_map[f"brand:{row['id']}"] = brand.id
+            if row.get("is_default"):
+                default_brand = brand.id
+        for row in self._t("document_brand_revision"):
+            data = self._resolve_row("document_brand_revision", row)
+            brand_id = id_map.get(f"brand:{data.get('brand_id')}")
+            if brand_id is None:
+                continue
+            revision = self._build(DocumentBrandRevision, data, {"brand_id": brand_id, "tokens_json": self._remap_public_refs(data.get("tokens_json") or {})})
+            self.db.add(revision)
+            self.db.flush()
+            id_map[f"revision:{row['id']}"] = revision.id
+
+        # Format 5/6: Hausstile und ihre Assets
         for row in self._t("document_style_asset"):
             data = self._resolve_row("document_style_asset", row)
-            new_storage_path = self._restore_file(data.get("storage_path"), root=settings.storage_root, new_tenant_id=new_tenant_id, subdir="document_style_assets")
-            if new_storage_path is None:
-                self.warnings.append(f"document_style_asset '{row.get('name')}': Datei fehlte im Export, übersprungen.")
-                continue
-            self.db.add(self._build(DocumentStyleAsset, data, {"tenant_id": new_tenant_id, "storage_path": new_storage_path}))
-            self.db.flush()
+            self._restore_asset(new_tenant_id, data, kind=data.get("kind") or "image", category="font" if data.get("kind") == "font" else "image")
         for row in self._t("document_style"):
             data = self._resolve_row("document_style", row)
-            new_row = self._build(DocumentStyle, data, {"tenant_id": new_tenant_id, "tokens_json": self._remap_public_refs(data.get("tokens_json") or {}), "is_default": False})
-            self.db.add(new_row)
-            self.db.flush()
-            style_map[f"style:{row['id']}"] = new_row.id
-            if row.get("is_default"):
-                style_map.setdefault("default", new_row.id)
+            tokens = brand_tokens_from_style(data.get("style_key"), self._remap_public_refs(data.get("tokens_json") or {}))
+            brand = brand_service.create_brand(self.db, new_tenant_id, name=data.get("name") or "Brand", tokens=self._valid_brand_tokens(new_tenant_id, tokens))
+            id_map[f"style:{row['id']}"] = brand.id
+            if row.get("is_default") and default_brand is None:
+                default_brand = brand.id
 
-        # Ältere Archive (Format ≤ 4): Dokumentvorlagen übersetzen, Bild-/Schrift-Parts übernehmen
+        # Format ≤ 4: TeX-Dokumentvorlagen übersetzen, Bild-/Schrift-Parts übernehmen
         parts = {row["id"]: row for row in self._t("document_template_part")}
-        restored: dict[tuple[int, str], DocumentStyleAsset] = {}
+        restored: dict[tuple[int, str], DocumentAsset] = {}
         lost_slots = False
-        for row in self._t("document_template"):
+        for row in self._t("document_template") if self.format_version <= 4 else []:
             config = row.get("configuration_json") or {}
             lost_slots = lost_slots or has_custom_slots(config)
             role_ids: dict[str, str] = {}
@@ -754,69 +788,160 @@ class TenantImportService:
                     continue
                 key = (part_id, kind)
                 if key not in restored:
-                    path = self._restore_file(part.get("storage_path"), root=settings.storage_root, new_tenant_id=new_tenant_id, subdir="document_style_assets")
+                    path = self._restore_file(part.get("storage_path"), root=settings.storage_root, new_tenant_id=new_tenant_id, subdir="document_assets")
                     if path is None:
                         continue
                     content = (Path(settings.storage_root) / path).read_bytes()
                     family = None
                     if kind == "font":
                         try:
-                            family = style_service.font_family_of(content)
-                        except Exception:  # noqa: BLE001 - unlesbare Schrift: Stil nutzt Hausschrift
+                            family = asset_service.font_family_of(content)
+                        except Exception:  # noqa: BLE001 - unlesbare Schrift: Brand nutzt Hausschrift
                             family = None
-                    asset = DocumentStyleAsset(tenant_id=new_tenant_id, kind=kind, name=part.get("name") or kind, original_name=Path(path).name, storage_path=path, file_size_bytes=len(content), font_family=family)
+                    asset = DocumentAsset(tenant_id=new_tenant_id, kind=kind, category="font" if kind == "font" else ("logo" if role == "logo" else "image"), name=part.get("name") or kind, original_name=Path(path).name, storage_path=path, file_size_bytes=len(content), font_family=family)
                     self.db.add(asset)
                     self.db.flush()
                     restored[key] = asset
                 role_ids[role] = str(restored[key].public_id)
-            tokens = tokens_from_legacy(config, role_ids)
-            new_style = DocumentStyle(tenant_id=new_tenant_id, name=row.get("name") or "Hausstil", style_key="modern", tokens_json=tokens.model_dump(mode="json"), is_default=False, version=1)
-            self.db.add(new_style)
-            self.db.flush()
-            style_map[f"template:{row['id']}"] = new_style.id
-            if row.get("is_default"):
-                style_map.setdefault("default", new_style.id)
+            tokens = brand_tokens_from_legacy(config, role_ids)
+            brand = brand_service.create_brand(self.db, new_tenant_id, name=row.get("name") or "Brand", tokens=self._valid_brand_tokens(new_tenant_id, tokens))
+            id_map[f"template:{row['id']}"] = brand.id
+            if row.get("is_default") and default_brand is None:
+                default_brand = brand.id
         if lost_slots:
-            self.warnings.append("Eigener Vorlagen-Code (TeX) wird nicht mehr unterstützt und wurden nicht übernommen; Farben, Schrift, Varianten, Logo und Fussbild sind als Hausstil importiert.")
+            self.warnings.append("Eigener Vorlagen-Code (TeX) wird nicht mehr unterstützt und wurde nicht übernommen; Farben, Schrift, Varianten, Logo und Fussbild sind als Brand-Profil importiert.")
 
-        default_id = style_map.get("default")
-        if default_id is not None:
-            self.db.get(DocumentStyle, default_id).is_default = True
+        if default_brand is not None:
+            brand_service._set_default(self.db, new_tenant_id, self.db.get(DocumentBrand, default_brand))
         self.db.flush()
-        style_service.ensure_default_style(self.db, new_tenant_id)
+        brand_service.ensure_default_brand(self.db, new_tenant_id)
         self.db.commit()
-        return style_map
+        return id_map
 
-    @staticmethod
-    def _style_ref(style_map: dict[str, int], data: dict[str, Any]) -> int | None:
-        if data.get("document_style_id"):
-            return style_map.get(f"style:{data['document_style_id']}")
-        if data.get("document_template_id"):
-            return style_map.get(f"template:{data['document_template_id']}")
-        return None
+    def _valid_brand_tokens(self, new_tenant_id: int, tokens: Any) -> Any:
+        """Asset-Referenzen, deren Datei fehlte, entfernen (sonst lehnt das Brand-Profil sie ab)."""
+        from app.documents import assets as asset_service
+        from app.documents.brand import BrandTokens
 
-    def _import_document_exports(self, new_tenant_id: int, protocol_map: dict[int, int], stored_file_map: dict[int, int], style_map: dict[str, int]) -> None:
-        """Export-Datensätze und Rezepte. Ältere Archive: protocol_export_cache (PDF) → document_export."""
-        recipe_map: dict[int, int] = {}
-        for row in self._t("document_recipe"):
-            data = self._resolve_row("document_recipe", row)
-            new_row = self._build(DocumentRecipe, data, {
+        found = asset_service.assets_by_ids(self.db, new_tenant_id, tokens.asset_ids())
+        data = tokens.model_dump(mode="json")
+        for key in ("logo", "logo_alt", "letterhead", "background", "watermark", "footer_image"):
+            value = data["assets"].get(key)
+            if value and uuid.UUID(value) not in found:
+                data["assets"][key] = None
+        data["assets"]["images"] = [item for item in data["assets"].get("images", []) if uuid.UUID(item["asset_id"]) in found]
+        for role in ("body", "heading"):
+            choice = data["typography"][role]
+            choice["asset_ids"] = [value for value in choice.get("asset_ids", []) if uuid.UUID(value) in found]
+            if not choice["asset_ids"] and not choice.get("builtin"):
+                choice["builtin"] = "inter"
+        return BrandTokens.model_validate(data)
+
+    def _import_document_templates(self, new_tenant_id: int, template_map: dict[int, int], brand_map: dict[str, int]) -> dict[str, int]:
+        """Komponenten, Mandantenvorlagen samt Revisionen und Zuweisungen (Format 7). Ältere
+        Archive: Rezepte (Format 5/6) werden zu Mandantenvorlagen (app.documents.legacy), die
+        Hausstil-Wahl einer Protokollvorlage zu einer Brand-Zuweisung.
+        Rückgabe: "template:<alte id>", "revision:<alte id>", "recipe:<alte id>" → neue ID."""
+        from app.documents.layout import TemplateContent, content_json
+        from app.documents.legacy import content_from_recipe
+        from app.documents.hashing import json_hash
+        from app.documents import template_service
+
+        id_map: dict[str, int] = {}
+        system = {row.system_key: row.id for row in self.db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id.is_(None))).all()}
+        for row in self._t("document_component"):
+            data = self._resolve_row("document_component", row)
+            self.db.add(self._build(DocumentComponent, data, {"tenant_id": new_tenant_id, "node_json": self._remap_public_refs(data.get("node_json") or {})}))
+            self.db.flush()
+        templates: dict[int, DocumentTemplate] = {}
+        for row in self._t("document_template") if self.format_version >= 7 else []:
+            data = self._resolve_row("document_template", row)
+            new_row = self._build(DocumentTemplate, data, {
                 "tenant_id": new_tenant_id,
-                "style_id": style_map.get(f"style:{data['style_id']}") if data.get("style_id") else None,
-                "blocks_json": self._remap_public_refs(data.get("blocks_json") or []),
+                "system_key": None,
+                "brand_id": brand_map.get(f"brand:{data['brand_id']}") if data.get("brand_id") else None,
+                "source_template_id": system.get(row.get("source_system_key")) if row.get("source_system_key") else None,
+                "source_revision_id": None,
+                "published_revision_id": None,
+                "origin": data.get("origin") if data.get("origin") in ("tenant", "copy") else "tenant",
+                "is_platform_default": False,
             })
             self.db.add(new_row)
             self.db.flush()
-            recipe_map[row["id"]] = new_row.id
+            id_map[f"template:{row['id']}"] = new_row.id
+            templates[row["id"]] = new_row
+        for row in self._t("document_template_revision") if self.format_version >= 7 else []:
+            data = self._resolve_row("document_template_revision", row)
+            template = templates.get(data.get("template_id"))
+            if template is None:
+                continue
+            new_revision = self._build(DocumentTemplateRevision, data, {
+                "template_id": template.id,
+                "content_json": self._remap_public_refs(data.get("content_json") or {}),
+                "brand_revision_id": brand_map.get(f"revision:{data['brand_revision_id']}") if data.get("brand_revision_id") else None,
+            })
+            self.db.add(new_revision)
+            self.db.flush()
+            id_map[f"revision:{row['id']}"] = new_revision.id
+        for row in self._t("document_template") if self.format_version >= 7 else []:
+            if row.get("published_revision_id") and f"revision:{row['published_revision_id']}" in id_map:
+                templates[row["id"]].published_revision_id = id_map[f"revision:{row['published_revision_id']}"]
+        for row in self._t("document_template_assignment"):
+            data = self._resolve_row("document_template_assignment", row)
+            document_template_id = id_map.get(f"template:{data.get('document_template_id')}") if data.get("document_template_id") else None
+            if document_template_id is None and row.get("system_key"):
+                document_template_id = system.get(row["system_key"])
+            brand_id = brand_map.get(f"brand:{data['brand_id']}") if data.get("brand_id") else None
+            protocol_template_id = template_map.get(data["protocol_template_id"]) if data.get("protocol_template_id") else None
+            if (data.get("protocol_template_id") and protocol_template_id is None) or (document_template_id is None and brand_id is None):
+                continue
+            self.db.add(DocumentTemplateAssignment(tenant_id=new_tenant_id, document_type=data["document_type"], protocol_template_id=protocol_template_id, document_template_id=document_template_id, brand_id=brand_id))
+        self.db.flush()
+
+        # Format 5/6: Rezepte → veröffentlichte Mandantenvorlagen
+        for row in self._t("document_recipe"):
+            data = self._resolve_row("document_recipe", row)
+            try:
+                content = TemplateContent.model_validate(content_from_recipe(self._remap_public_refs(data.get("blocks_json") or []), data.get("options_json") or {}))
+                document_type = data.get("document_type") or "custom"
+                template, revision = template_service.create_template(self.db, new_tenant_id, name=data.get("name") or document_type, document_type=document_type if document_type in _document_types() else "custom", content=content)
+            except ValueError as exc:
+                self.warnings.append(f"Dokument-Rezept '{data.get('name')}' konnte nicht übernommen werden: {exc}")
+                continue
+            if data.get("style_id") and f"style:{data['style_id']}" in brand_map:
+                template.brand_id = brand_map[f"style:{data['style_id']}"]
+            revision.status = "published"
+            template.published_revision_id = revision.id
+            self.db.flush()
+            id_map[f"recipe:{row['id']}"] = template.id
+        # Format ≤ 6: Hausstil einer Protokollvorlage → Brand-Zuweisung für Protokolle
+        for row in self._t("template") if self.format_version <= 6 else []:
+            brand_id = brand_map.get(f"style:{row.get('document_style_id')}") if row.get("document_style_id") else brand_map.get(f"template:{row.get('document_template_id')}") if row.get("document_template_id") else None
+            protocol_template_id = template_map.get(row["id"])
+            if brand_id is None or protocol_template_id is None:
+                continue
+            brand = self.db.get(DocumentBrand, brand_id)
+            if brand is not None and not brand.is_default:
+                self.db.add(DocumentTemplateAssignment(tenant_id=new_tenant_id, document_type="protocol", protocol_template_id=protocol_template_id, brand_id=brand_id))
+        self.db.commit()
+        return id_map
+
+    def _import_document_exports(self, new_tenant_id: int, protocol_map: dict[int, int], stored_file_map: dict[int, int], template_maps: dict[str, int]) -> None:
+        """Export-Datensätze. Ältere Archive: protocol_export_cache (PDF) → document_export."""
         for row in self._t("document_export"):
             data = self._resolve_row("document_export", row)
             if data.get("protocol_id") and protocol_map.get(data["protocol_id"]) is None:
                 continue
+            template_id = template_maps.get(f"template:{data['template_id']}") if data.get("template_id") else None
+            if template_id is None and data.get("recipe_id"):
+                template_id = template_maps.get(f"recipe:{data['recipe_id']}")
             self.db.add(self._build(DocumentExport, data, {
                 "tenant_id": new_tenant_id,
                 "protocol_id": protocol_map.get(data["protocol_id"]) if data.get("protocol_id") else None,
-                "recipe_id": recipe_map.get(data["recipe_id"]) if data.get("recipe_id") else None,
-                "style_id": style_map.get(f"style:{data['style_id']}") if data.get("style_id") else None,
+                "template_id": template_id,
+                "template_revision_id": template_maps.get(f"revision:{data['template_revision_id']}") if data.get("template_revision_id") else None,
+                # Brand-Revisionen gehören zum Mandanten; die Zuordnung ist hier nicht mehr eindeutig
+                "brand_revision_id": None,
                 "stored_file_id": stored_file_map.get(data["stored_file_id"]) if data.get("stored_file_id") else None,
             }))
         for row in self._t("protocol_export_cache"):
@@ -922,7 +1047,7 @@ class TenantImportService:
         return id_map
 
     def _import_templates(
-        self, new_tenant_id: int, *, document_style_map, cycle_config_map, element_definition_map,
+        self, new_tenant_id: int, *, cycle_config_map, element_definition_map,
         event_map, participant_map, list_definition_map, list_entry_map, finance_account_map,
     ) -> tuple[dict[int, int], dict[int, int], dict[int, int]]:
         template_map: dict[int, int] = {}
@@ -930,7 +1055,6 @@ class TenantImportService:
             data = self._resolve_row("template", row)
             new_row = self._build(Template, data, {
                 "tenant_id": new_tenant_id,
-                "document_style_id": self._style_ref(document_style_map, data),
                 "next_event_id": event_map.get(data["next_event_id"]) if data.get("next_event_id") else None,
                 "last_event_id": event_map.get(data["last_event_id"]) if data.get("last_event_id") else None,
                 "cycle_config_id": cycle_config_map.get(data["cycle_config_id"]) if data.get("cycle_config_id") else None,
@@ -1163,7 +1287,7 @@ class TenantImportService:
             }))
         self.db.commit()
 
-    def _import_protocols(self, new_tenant_id: int, template_map, document_style_map, event_map) -> dict[int, int]:
+    def _import_protocols(self, new_tenant_id: int, template_map, event_map) -> dict[int, int]:
         id_map: dict[int, int] = {}
         for row in self._t("protocol"):
             data = self._resolve_row("protocol", row)
@@ -1173,7 +1297,6 @@ class TenantImportService:
             new_row = self._build(Protocol, data, {
                 "tenant_id": new_tenant_id,
                 "template_id": new_template_id,
-                "document_style_id": self._style_ref(document_style_map, data),
                 "event_id": event_map.get(data["event_id"]) if data.get("event_id") else None,
                 # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - nach dem
                 # Import gelten die (ebenfalls importierten) Live-Todos.
@@ -1739,3 +1862,9 @@ def _safe_extract(zf: zipfile.ZipFile, dest_dir: Path) -> None:
     for member in infolist:
         _resolve_within_extract_dir(dest_dir, member.filename)
     zf.extractall(dest_dir)
+
+
+def _document_types() -> tuple[str, ...]:
+    from app.documents.doc_types import DOCUMENT_TYPE_KEYS
+
+    return DOCUMENT_TYPE_KEYS

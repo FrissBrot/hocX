@@ -46,9 +46,10 @@ from app.api.routes import admin as admin_routes
 from app.core.admin_security import CurrentAdmin, get_current_admin
 from app.db.base import Base
 from app.models.entities import (
-    DocumentRecipe,
-    DocumentStyle,
-    DocumentStyleAsset,
+    DocumentAsset,
+    DocumentComponent,
+    DocumentTemplate,
+    DocumentTemplateAssignment,
     FinanceTransaction,
     GroupEntity,
     Leader,
@@ -175,17 +176,20 @@ def make_leader(db, tenant_id: int, name: str) -> Leader:
     return row
 
 
-def make_document_style(db, tenant_id: int, code: str) -> DocumentStyle:
-    row = DocumentStyle(tenant_id=tenant_id, name=f"Stil {code}", style_key="modern", tokens_json={})
-    db.add(row)
+def make_document_studio_data(db, tenant_id: int, code: str, protocol_template_id: int) -> DocumentTemplate:
+    """Brand-Profil, Mandantenvorlage mit Revision, Komponente und Zuweisung (Document Studio)."""
+    from app.documents import brand_service, template_service
+
+    brand = brand_service.create_brand(db, tenant_id, name=f"Brand {code}")
+    template, _revision = template_service.create_template(db, tenant_id, name=f"Vorlage {code}", document_type="protocol")
+    db.add(DocumentComponent(tenant_id=tenant_id, name=f"Komponente {code}", schema_version=1, node_json={"type": "spacer", "id": "s"}))
+    db.add(DocumentTemplateAssignment(tenant_id=tenant_id, document_type="protocol", protocol_template_id=protocol_template_id, brand_id=brand.id))
     db.flush()
-    db.add(DocumentRecipe(tenant_id=tenant_id, name=f"Rezept {code}", style_id=row.id, blocks_json=[]))
-    db.flush()
-    return row
+    return template
 
 
-def make_document_style_asset(db, tenant_id: int, code: str) -> DocumentStyleAsset:
-    row = DocumentStyleAsset(tenant_id=tenant_id, kind="image", name=f"Logo {code}", storage_path=f"document_style_assets/tenant-{tenant_id}/{code}.png")
+def make_document_asset(db, tenant_id: int, code: str) -> DocumentAsset:
+    row = DocumentAsset(tenant_id=tenant_id, kind="image", name=f"Logo {code}", storage_path=f"document_assets/tenant-{tenant_id}/{code}.png")
     db.add(row)
     db.flush()
     return row
@@ -260,8 +264,8 @@ def _build_tenant_dataset(db, tenant: Tenant, suffix: str) -> dict:
     make_group_entity(db, tenant.id, name=f"Gruppe {suffix}")
     make_leader(db, tenant.id, name=f"Leiter {suffix}")
     domain = make_tenant_domain(db, tenant.id, domain=f"{suffix}.example.com")
-    make_document_style(db, tenant.id, code=f"doc-{suffix}")
-    make_document_style_asset(db, tenant.id, code=f"part-{suffix}")
+    make_document_studio_data(db, tenant.id, code=f"doc-{suffix}", protocol_template_id=template.id)
+    make_document_asset(db, tenant.id, code=f"part-{suffix}")
     make_user_template_access(db, user.id, tenant.id, template.id)
     make_user_protocol_access(db, user.id, tenant.id, protocol.id)
 

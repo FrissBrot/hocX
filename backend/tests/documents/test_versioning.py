@@ -1,14 +1,15 @@
-"""Versionierung: gleicher Inhalt → gleiche Version, geänderter Inhalt erhöht sie, Stilwechsel
-allein nicht, Entwurf und Abschluss zählen getrennt."""
+"""Versionierung: gleicher Inhalt → gleiche Version, geänderter Inhalt erhöht sie, eine reine
+Designänderung (andere Vorlage, anderes Brand-Profil, andere Sprache) nicht; Entwurf und
+Abschluss zählen getrennt. Der Design-Hash ändert sich dagegen bei jeder Gestaltungsänderung."""
 from __future__ import annotations
 
 import asyncio
 from datetime import date
 
-from app.documents import service, style_service
+from app.documents import brand_service, service
+from app.documents.brand import preset_tokens
 from app.documents.service import DocumentRequest
-from app.documents.style_tokens import default_tokens
-from app.models import DocumentExport, ProtocolText
+from app.models import DocumentExport, DocumentTemplate, ProtocolText
 from tests.factories import make_protocol, make_protocol_element, make_protocol_element_block, make_protocol_text, make_template, make_tenant
 
 
@@ -41,9 +42,17 @@ def test_version_rules(db):
     changed = _render(db, tenant, protocol)
     assert changed.version_label == "v0.1"
 
-    other_style = style_service.create_style(db, tenant.id, name="Kompakt", style_key="compact", tokens=default_tokens("compact"))
-    restyled = _render(db, tenant, protocol, style_id=other_style.public_id, language="fr")
-    assert restyled.version_label == "v0.1" and restyled.style_key == "compact" and restyled.content_hash == changed.content_hash
+    brand = brand_service.create_brand(db, tenant.id, name="Kompakt", tokens=preset_tokens("compact"))
+    formal = db.query(DocumentTemplate).filter(DocumentTemplate.system_key == "protocol_formal").one()
+    restyled = _render(db, tenant, protocol, brand_id=brand.public_id, template_id=formal.public_id, language="fr")
+    assert restyled.version_label == "v0.1" and restyled.content_hash == changed.content_hash
+    assert restyled.design_hash != changed.design_hash
+    assert restyled.template_id == formal.id and restyled.brand_revision_id == brand_service.current_revision(db, brand).id
+
+    # Eigene Vorlage mit nur einem Teil des Inhalts: Version und Inhalts-Hash bleiben
+    short = db.query(DocumentTemplate).filter(DocumentTemplate.system_key == "protocol_short").one()
+    partial = _render(db, tenant, protocol, template_id=short.public_id)
+    assert partial.version_label == "v0.1" and partial.content_hash == changed.content_hash
 
     protocol.status = "abgeschlossen"
     db.flush()
@@ -54,10 +63,12 @@ def test_version_rules(db):
     final_changed = _render(db, tenant, protocol)
     assert final_changed.version_label == "v1.1"
     assert protocol.version_minor == 1 and protocol.version_final_minor == 1
-    assert db.query(DocumentExport).filter(DocumentExport.protocol_id == protocol.id).count() == 6
+    assert db.query(DocumentExport).filter(DocumentExport.protocol_id == protocol.id).count() == 7
 
 
 def test_preview_does_not_persist(db):
     tenant, protocol, _ = _setup(db)
-    pages = asyncio.run(service.preview(db, None, tenant.id, DocumentRequest(protocol_id=protocol.public_id), max_pages=1))
-    assert len(pages) == 1 and pages[0].startswith(b"\x89PNG")
+    result = asyncio.run(service.preview(db, None, tenant.id, DocumentRequest(protocol_id=protocol.public_id), max_pages=1))
+    assert result.page_count == 1 and result.pages[0].startswith(b"\x89PNG")
+    assert db.query(DocumentExport).filter(DocumentExport.protocol_id == protocol.id).count() == 0
+    assert protocol.version_minor == 0
