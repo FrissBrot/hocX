@@ -250,6 +250,7 @@ class Backend(Protocol):
     config: ProfileConfig
 
     def put_stream(self, namespace: str, key: str, source: BinaryIO, *, size: int | None, sha256: str, content_type: str | None) -> ObjectInfo: ...
+    def put_stream_unbuffered(self, namespace: str, key: str, source: BinaryIO, *, size: int | None, sha256: str, content_type: str | None) -> ObjectInfo: ...
     def open_read(self, namespace: str, key: str, *, start: int = 0, end: int | None = None) -> Iterator[bytes]: ...
     def head(self, namespace: str, key: str) -> ObjectInfo | None: ...
     def delete(self, namespace: str, key: str) -> None: ...
@@ -363,6 +364,10 @@ class FilesystemBackend:
             Path(tmp_name).unlink(missing_ok=True)
             raise
         return ObjectInfo(namespace, key, reader.size, actual, content_type)
+
+    def put_stream_unbuffered(self, namespace, key, source, *, size, sha256, content_type) -> ObjectInfo:
+        # Schreibt ohnehin direkt in eine temporäre Datei im Zielordner.
+        return self.put_stream(namespace, key, source, size=size, sha256=sha256, content_type=content_type)
 
     def open_read(self, namespace, key, *, start=0, end=None) -> Iterator[bytes]:
         path = self._path(namespace, key)
@@ -580,6 +585,33 @@ class S3Backend:
             raise _map_client_error(exc, key) from exc
         finally:
             spool.close()
+        return ObjectInfo(namespace, key, reader.size, sha256, content_type)
+
+    def put_stream_unbuffered(self, namespace, key, source, *, size, sha256, content_type) -> ObjectInfo:
+        """Wie put_stream, aber ohne lokalen Puffer des ganzen Objekts: für Restores aus dem
+        Backup, deren Inhalt bereits authentifiziert (Borg) vorliegt und deren Grösse das lokale
+        Staging übersteigen kann. s3transfer hält höchstens die Multipart-Teile im Speicher. Der
+        SHA-256 wird beim Hochladen mitgerechnet; passt er nicht, wird das Objekt sofort wieder
+        gelöscht und StorageIntegrityError geworfen."""
+        from boto3.s3.transfer import TransferConfig
+
+        if not sha256 or not _HEX64.match(sha256):
+            raise StorageIntegrityError("SHA-256 muss vor dem Hochladen bekannt sein")
+        reader = _HashingReader(source)
+        extra: dict[str, Any] = {"Metadata": {SHA256_METADATA_KEY: sha256}}
+        if content_type:
+            extra["ContentType"] = content_type
+        transfer = TransferConfig(
+            multipart_threshold=MULTIPART_THRESHOLD_BYTES, multipart_chunksize=MULTIPART_CHUNK_BYTES,
+            max_concurrency=4, use_threads=True, max_bandwidth=self._max_bandwidth,
+        )
+        try:
+            self._client.upload_fileobj(reader, self.bucket_for(namespace), self.physical_key(namespace, key), ExtraArgs=extra, Config=transfer)
+        except Exception as exc:
+            raise _map_client_error(exc, key) from exc
+        if reader.digest.hexdigest() != sha256 or (size is not None and reader.size != size):
+            self.delete(namespace, key)
+            raise StorageIntegrityError("SHA-256 oder Grösse des Inhalts stimmen nicht mit dem Erwarteten überein")
         return ObjectInfo(namespace, key, reader.size, sha256, content_type)
 
     def open_read(self, namespace, key, *, start=0, end=None) -> Iterator[bytes]:
