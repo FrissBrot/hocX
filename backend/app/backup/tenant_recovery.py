@@ -11,11 +11,13 @@ werden die Inhalte gestreamt in einen temporären Bereich des aktiven Speichers 
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Container, Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.objstore_client import RESTORE_STAGING_PREFIX, Backend, ObjectNotFound
@@ -38,12 +40,67 @@ class HistoricalTenantExport(TenantExportService):
     """Export-Logik gegen die temporäre historische Datenbank; ob eine Datei existiert, sagt das
     Manifest des Sicherungspunkts - nicht der aktuelle Objektspeicher."""
 
-    def __init__(self, available: set[tuple[str, str]]) -> None:
+    def __init__(self, available: Container[tuple[str, str]]) -> None:
         super().__init__()
         self._available = available
 
     def object_exists(self, namespace: str, key: str) -> bool:
         return (namespace, key) in self._available
+
+
+MANIFEST_TABLE = "_hocx_restore.manifest"
+
+
+def load_manifest_table(engine: Any, chunks: Iterable[Iterable[Any]]) -> int:
+    """Schreibt das Manifest eines Sicherungspunkts per COPY in eine Hilfstabelle der temporären
+    Datenbank. Der Speicher hängt damit nicht von der Zahl der Objekte der Installation ab -
+    nachgeschlagen wird per Primärschlüssel (ManifestLookup, resolve_manifest_entries)."""
+    raw = engine.raw_connection()
+    count = 0
+    try:
+        connection = raw.driver_connection
+        with connection.cursor() as cursor:
+            cursor.execute("CREATE SCHEMA IF NOT EXISTS _hocx_restore")
+            cursor.execute(f"""
+                CREATE UNLOGGED TABLE IF NOT EXISTS {MANIFEST_TABLE} (
+                    namespace text NOT NULL, key text NOT NULL, sha256 text NOT NULL, size bigint NOT NULL, pool text NOT NULL,
+                    PRIMARY KEY (namespace, key))
+            """)
+            with cursor.copy(f"COPY {MANIFEST_TABLE} (namespace, key, sha256, size, pool) FROM STDIN") as copy:
+                for chunk in chunks:
+                    for entry in chunk:
+                        copy.write_row((entry.namespace, entry.key, entry.sha256, entry.size, entry.pool))
+                        count += 1
+        connection.commit()
+    finally:
+        raw.close()
+    return count
+
+
+class ManifestLookup:
+    """`(namespace, key) in lookup` gegen die Manifest-Hilfstabelle (statt eines Sets im Speicher)."""
+
+    def __init__(self, conn: Any) -> None:
+        self.conn = conn
+
+    def __contains__(self, item: object) -> bool:
+        namespace, key = item  # type: ignore[misc]
+        return self.conn.execute(text(f"SELECT 1 FROM {MANIFEST_TABLE} WHERE namespace = :ns AND key = :key"),
+                                 {"ns": namespace, "key": key}).first() is not None
+
+
+def resolve_manifest_entries(conn: Any, keys: list[tuple[str, str]], *, chunk_size: int = 5000) -> dict[tuple[str, str], tuple[str, int, str]]:
+    """(namespace, key) -> (sha256, size, pool) nur für die angefragten Keys."""
+    found: dict[tuple[str, str], tuple[str, int, str]] = {}
+    for start in range(0, len(keys), chunk_size):
+        chunk = keys[start:start + chunk_size]
+        rows = conn.execute(text(f"""
+            SELECT m.namespace, m.key, m.sha256, m.size, m.pool FROM {MANIFEST_TABLE} m
+            JOIN jsonb_to_recordset(CAST(:rows AS jsonb)) AS x(ns text, key text) ON m.namespace = x.ns AND m.key = x.key
+        """), {"rows": json.dumps([{"ns": ns, "key": key} for ns, key in chunk])}).all()
+        for row in rows:
+            found[(row.namespace, row.key)] = (row.sha256, int(row.size), row.pool)
+    return found
 
 
 def prepare_copy_manifest(manifest: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:

@@ -58,9 +58,12 @@ from app.backup.run_backup import RunEnv, preflight_repository
 from app.backup.run_maintenance import smoke_test_database
 from app.backup.tenant_recovery import (
     HistoricalTenantExport,
+    ManifestLookup,
     RecoveryFileSource,
+    load_manifest_table,
     prepare_copy_manifest,
     purge_staging,
+    resolve_manifest_entries,
     staging_key,
 )
 from app.models import BackupJob, BackupRestoreJob, StorageGeneration, StorageMigration, StorageProfile, StorageState
@@ -695,19 +698,18 @@ def run_tenant_copy(env: RunEnv, db: Session, ctx: jobs.JobCtx) -> str:
                 jobs.progress(db, ctx, phase="alembic")
                 run_alembic_upgrade(temp_url)
 
-            # Verfügbare Objekte des Sicherungspunkts (nur Keys + Inhalt) für die Export-Logik.
+            # Verfügbare Objekte des Sicherungspunkts für die Export-Logik: als Hilfstabelle in der
+            # temporären DB statt im Speicher (Installationen mit Millionen Objekten).
             jobs.progress(db, ctx, phase="collect")
-            available: dict[tuple[str, str], tuple[str, int, str]] = {}
-            for chunk in iter_manifest_slices(view, job.archive_name, metadata, work):
-                for entry in chunk:
-                    available[(entry.namespace, entry.key)] = (entry.sha256, entry.size, entry.pool)
             temp_engine = create_engine(temp_url, poolclass=NullPool)
             try:
-                with Session(temp_engine) as temp_session:
+                load_manifest_table(temp_engine, iter_manifest_slices(view, job.archive_name, metadata, work))
+                with Session(temp_engine) as temp_session, temp_engine.connect() as lookup_conn:
                     if temp_session.get(Tenant, source_tenant_id) is None:
                         raise jobs.JobFailure("tenant_not_in_backup", "Der Mandant ist in diesem Sicherungspunkt nicht enthalten")
-                    exporter = HistoricalTenantExport(set(available))
+                    exporter = HistoricalTenantExport(ManifestLookup(lookup_conn))
                     manifest, pending = exporter.collect(temp_session, source_tenant_id, "full_abgabebox")
+                    available = resolve_manifest_entries(lookup_conn, sorted({(ns, key) for ns, key, _member in pending}))
             finally:
                 temp_engine.dispose()
         finally:
