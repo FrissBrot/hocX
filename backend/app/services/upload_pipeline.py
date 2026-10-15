@@ -30,7 +30,7 @@ from uuid import uuid4
 import imagehash
 from fastapi import HTTPException, UploadFile
 from PIL import Image, ImageChops, ImageOps
-from sqlalchemy import text, select, func
+from sqlalchemy import event, text, select, func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -491,6 +491,30 @@ def _enforce_tenant_storage_quota(db: Session, *, tenant_id: int, repo: StoredFi
         )
 
 
+# Audit MAIN-BE-015: ingest_file schreibt Original und Thumbnail vor dem Commit des Aufrufers.
+# Scheitert dessen Commit (z. B. Sort-Index-Kollision bei parallelen Bild-Uploads), blieben die
+# Dateien als Waisen liegen. Die Pfade werden deshalb an der Session vermerkt: ein Commit gibt
+# sie frei, endet die Wurzel-Transaktion ohne Commit (Rollback/Close), werden sie gelöscht.
+_UNCOMMITTED_UPLOAD_PATHS_KEY = "hocx_uncommitted_upload_paths"
+
+
+def _track_uncommitted_path(db: Session, path: Path) -> None:
+    db.info.setdefault(_UNCOMMITTED_UPLOAD_PATHS_KEY, []).append(path)
+
+
+@event.listens_for(Session, "after_commit")
+def _forget_committed_upload_paths(session: Session) -> None:
+    session.info.pop(_UNCOMMITTED_UPLOAD_PATHS_KEY, None)
+
+
+@event.listens_for(Session, "after_transaction_end")
+def _remove_uncommitted_upload_paths(session: Session, transaction) -> None:
+    if transaction.parent is not None:
+        return
+    for path in session.info.pop(_UNCOMMITTED_UPLOAD_PATHS_KEY, None) or ():
+        path.unlink(missing_ok=True)
+
+
 @dataclass(frozen=True)
 class UploadPipelineResult:
     stored_file: StoredFile
@@ -560,6 +584,7 @@ def ingest_file(
     storage_dir.mkdir(parents=True, exist_ok=True)
     target_path = storage_dir / f"{uuid4().hex}{suffix}"
     target_path.write_bytes(content)
+    _track_uncommitted_path(db, target_path)
     relative_path = target_path.relative_to(settings.storage_root)
 
     checksum = hashlib.sha256(content).hexdigest()
@@ -600,6 +625,7 @@ def ingest_file(
             thumbnail_root.mkdir(parents=True, exist_ok=True)
             thumbnail_target_path = thumbnail_root.resolve() / f"{stored_file.id}.jpg"
             thumbnail_target_path.write_bytes(thumbnail_bytes)
+            _track_uncommitted_path(db, thumbnail_target_path)
             stored_file.thumbnail_path = thumbnail_target_path.name
             stored_file.width = width
             stored_file.height = height
