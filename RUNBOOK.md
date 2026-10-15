@@ -518,3 +518,30 @@ verschoben, bis die Erstmigration gestartet wird.
 **Notfall**: Bei Fehlern bleibt die Wartung bestehen und das Dateisystem aktiv. Ursache im
 Migrationsverlauf/Fehlerprotokoll prüfen, Migration fortsetzen oder abbrechen; die Wartung lässt
 sich unter System → Wartung erst beenden, wenn alle Freigabebedingungen erfüllt sind.
+
+## 14. Dokumentverarbeitung (PDF-Ansicht, Textextraktion)
+
+Ausführlich: `docs-site/docs/technik/dokumente.md`.
+
+**Update**: Migrationen `0115_documents` (neue Tabellen, keine Datenänderung) und
+`0116_protocol_export_formats` (CHECK auf `protocol_export_cache.export_format`) laufen mit dem
+normalen Deploy. Das Backend-Image enthält jetzt LibreOffice, Tesseract und Poppler (grösseres
+Image). `deploy.sh` startet den neuen Dienst `document-worker` automatisch (`up -d`). Keine neuen
+Secrets oder Umgebungsvariablen nötig; Grenzwerte sind optional (`DOCUMENT_*`, siehe Doku).
+
+**Nach dem Deploy**: Der Loop `document_sync` legt Dokumente für bestehende Dateien und Exporte
+in Batches an (alle 2 Minuten, `DOCUMENT_SYNC_BATCH_SIZE`); der Worker verarbeitet sie danach.
+Bei vielen Altdateien läuft das einige Zeit - Fortschritt:
+
+```bash
+docker compose exec backend python -m app.workers.document_admin status
+```
+
+Sofort statt schrittweise: `... document_admin backfill`. Fehlgeschlagene Aufträge nach einer
+Störung erneut einreihen: `... document_admin requeue`. Übernahme pausieren:
+`DOCUMENT_BACKFILL_ENABLED=false` (stoppt auch die Anlage für neue Abgabebox-Uploads).
+
+**Überwachung**: `/admin/jobs` → Kategorie Dokumente (`document_sync`, `document_worker`). Ein
+überfälliger `document_worker` heisst: Container läuft nicht oder hängt
+(`docker compose logs document-worker`). Aufträge mit abgelaufener Lease übernimmt ein neu
+gestarteter Worker automatisch.

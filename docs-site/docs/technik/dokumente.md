@@ -1,7 +1,7 @@
 # Dokumentverwaltung (logische Dokumente)
 
 Stand: Branch `feature/document-management` (baut auf dem S3-Umbau
-`feature/s3-storage-maintenance` auf).
+`feature/s3-storage-maintenance` auf). Betrieb und Update: RUNBOOK Abschnitt 14.
 
 Diese Seite beschreibt die logische Dokumentebene oberhalb von `stored_file`: ein
 hochgeladenes oder erzeugtes Dokument ist **ein** Eintrag im Dateien-Tab, auch wenn dahinter
@@ -174,15 +174,79 @@ Zeilenende. Inhalte werden weder ergänzt noch umformuliert; es kommt keine KI z
   Originaldatei entfernt `DocumentService` das Dokument samt erzeugter Dateien, der
   `document_sync`-Loop räumt verwaiste Reste auf.
 
-## 7. Implementierungsplan (Commits)
+## 7. API
 
-1. Bestandsaufnahme/Plan (diese Seite).
-2. Datenmodell, Migration `0115_documents`, ORM-Modelle.
-3. Inhaltsformat, Normalisierung, Parser (TXT/MD/CSV, PDF, DOCX, ODT, RTF) mit Tests.
-4. Sandbox, LibreOffice-Konvertierung, OCR-Fallback, Image-Anpassungen.
-5. Job-Queue, Worker, Loop `document_sync` (Backfill + Abgabebox + Aufräumen), Registrierung.
-6. Anbindung der Uploadwege, Löschpfade, Mandanten-Bereinigung.
-7. Versionierung der Protokollexporte, Schutz vor Export-Aufbewahrung.
-8. API für Dokumentdetails, Dateien, extrahierten Text, Versionen, erneute Verarbeitung.
-9. Dateien-Tab: Statusanzeige, PDF-Ansicht, Untermenü, i18n.
-10. Betriebsdoku, Deployment, Changelog.
+| Methode | Pfad | Zweck |
+|---|---|---|
+| GET | `/api/documents/{id}` | Details, Versionshistorie, Dateien, Auftrags- und Extraktionsstatus |
+| GET | `/api/documents/{id}/versions/{v}/files/pdf` | PDF-Darstellung (inline, `?download=1` als Download) |
+| GET | `/api/documents/{id}/versions/{v}/files/original` | Originaldatei (Download, PDFs inline) |
+| GET | `/api/documents/{id}/versions/{v}/text?format=plain\|markdown\|json` | Extrahierter Inhalt |
+| POST | `/api/documents/{id}/reprocess` | Fehlgeschlagene Verarbeitung neu einreihen (writer/admin) |
+
+`GET /api/files` liefert pro Eintrag zusätzlich `document` (Kurzstatus, PDF-URL, Versionen) und
+für Protokollexporte die Quelle `protocol_export` (nur aktuelle Version).
+
+Zugriff: wie auf die Originaldatei (`ensure_can_read_stored_file`, Abgabebox-Dokumente zusätzlich
+nur mit gebuchter Abgabebox) bzw. das Protokoll (Exporte); immer nur im eigenen Mandanten.
+Dateien und Text nur bei sauberer Virenprüfung (`pending` 425, `error` 422, `infected` 403).
+
+## 8. Betrieb
+
+| Komponente | Wo | Überwachung |
+|---|---|---|
+| `document-worker` | eigener Container, Backend-Image, `python -m app.workers.document_worker` | `/admin/jobs` → `document_worker` (Heartbeat) |
+| `document_sync` | Backend-Loop, alle `DOCUMENT_SYNC_INTERVAL_MINUTES` (2) | `/admin/jobs` → `document_sync` |
+| Werkzeug | `python -m app.workers.document_admin status\|backfill\|requeue\|reprocess` | – |
+
+Konfiguration (Umgebungsvariablen, alle optional):
+
+| Variable | Standard | Bedeutung |
+|---|---|---|
+| `DOCUMENT_MAX_INPUT_MB` | 50 | grössere Originale werden nicht verarbeitet (bleiben verfügbar) |
+| `DOCUMENT_CONVERT_TIMEOUT_SECONDS` / `_MEMORY_MB` | 120 / 3072 | Limits LibreOffice |
+| `DOCUMENT_EXTRACT_TIMEOUT_SECONDS` / `_MEMORY_MB` | 90 / 1024 | Limits Parser |
+| `DOCUMENT_OCR_TIMEOUT_SECONDS` / `DOCUMENT_OCR_MAX_PAGES` | 300 / 50 | OCR; mehr Seiten → `ocr_required` |
+| `DOCUMENT_MAX_TEXT_CHARS` | 5 000 000 | grösserer Text → Extraktion `failed` (`text_too_large`) |
+| `DOCUMENT_JOB_MAX_ATTEMPTS` | 5 | danach Auftrag `failed` |
+| `DOCUMENT_JOB_LEASE_SECONDS` | 600 | Lease; wird während der Arbeit verlängert |
+| `DOCUMENT_WORKER_POLL_SECONDS` | 5 | Abfrageintervall des Workers |
+| `DOCUMENT_SYNC_BATCH_SIZE` | 200 | Dateien bzw. Exportgruppen je Durchlauf |
+| `DOCUMENT_BACKFILL_ENABLED` | true | `false` pausiert die Anlage (auch für neue Abgabebox-Uploads) |
+
+Container-Budget (Compose): 1,5 GB RAM, 1 CPU, 256 Prozesse; Release: `read_only`, keine
+Capabilities, `no-new-privileges`. Mehrere Worker-Instanzen sind möglich.
+
+## 9. Entscheidungen
+
+- **Keine zweite Dateiverwaltung:** erzeugte PDFs sind normale `stored_file`-Zeilen unter dem
+  Präfix `documents/…` im Namespace `main`; nur die Verknüpfung ist neu.
+- **Abgabebox-Metadaten nicht dupliziert:** Abgabe, Element, Einreicher und Zeitpunkt bleiben in
+  `submission_upload(_file)`/`gallery_image`/`stored_file` und werden über die Originaldatei gelesen.
+- **Status nicht redundant gespeichert:** der Gesamtstatus eines Dokuments ergibt sich aus den
+  Aufträgen und der Extraktion der aktuellen Version.
+- **Markdown nicht gespeichert:** wird deterministisch aus den Blöcken erzeugt.
+- **LibreOffice im Backend-Image** statt eigenem Image: keine Änderung an CI/Release-Matrix und
+  `deploy.sh`; aufgerufen wird es nur im `document-worker`.
+- **Automatischer Backfill** in kleinen Batches statt einer Datenmigration in Alembic: braucht
+  Speicherzugriffe (Existenzprüfung der Exportdateien) und darf beliebig oft laufen.
+- **Gleicher Exportinhalt ersetzt die Darstellung:** eine neue Version entsteht nur bei neuem
+  Inhalt (gleicher Fingerabdruck wie die bestehende Protokollversionierung).
+
+## 10. Bekannte Einschränkungen
+
+- Tabellen ohne Rahmenlinien in PDFs werden als Textzeilen extrahiert (pdfplumber erkennt nur
+  linierte Tabellen); Kopf-/Fusszeilen und Fussnoten von DOCX werden nicht übernommen (Warnung
+  `header_footer_not_extracted`).
+- Tabellenkalkulationen und Präsentationen bekommen eine PDF-Ansicht, aber keine Extraktion.
+- Apple-iWork-Dateien (Pages/Keynote/Numbers) bleiben ohne Dokumentebene.
+- OCR-Text ist unkorrigiert (Warnung `ocr_text_unverified`).
+- LaTeX-Quelltext-Exporte und mandantenweite Listen-Exporte (`export_global_pdf`) sind keine
+  Dokumente (keine stabile Protokollidentität). Exporte, deren Datei vor der Einführung bereits
+  durch die Aufbewahrung gelöscht war, fehlen in der Versionshistorie.
+- Netzwerkisolation: LibreOffice lädt keine externen Inhalte (Links nie aktualisieren, toter
+  Proxy). Eine vollständige Netztrennung des Workers ist nur möglich, wenn kein externes
+  S3-Profil verwendet wird (dann kann `document-worker` aus dem Netz `default` in ein internes
+  Netz mit nur Datenbank und lokalem S3 verlegt werden).
+- Mandanten-Export/-Import und -Klon übernehmen die Dokumentebene nicht; `document_sync` legt
+  sie im Zielmandanten neu an (inkl. erneuter Verarbeitung).
