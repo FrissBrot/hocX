@@ -102,6 +102,7 @@ nav:
       - Import-Testbook: technik/import-testbook.md
       - Abgabe-Links-Testbook: technik/abgabe-links-testbook.md
       - Upload-Testbook: technik/upload-testbook.md
+      - Backup-Testbook: technik/backup-testbook.md
       - Sicherheit: technik/sicherheit.md
       - Dateispeicher (S3) & Wartung:
           - Übersicht: technik/storage/index.md

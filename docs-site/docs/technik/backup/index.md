@@ -8,3 +8,4 @@ Wiederherstellungspunkten, Voll-Restore, unabhängiger Recovery-CLI und Mandante
 - [Einrichtung und Betrieb](betrieb.md) – Storage Box, Schlüssel, Variablen, erstes Backup, Kapazität, Abnahme
 - [Wiederherstellung](restore.md) – Mandant als Kopie, Voll-Restore, Recovery-CLI, Notfälle
 - [Sicherheit](sicherheit.md) – Berechtigungen, Secrets, Ransomware-Resistenz und Grenzen
+- [Backup-Testbook](../backup-testbook.md) – automatisierte und manuelle Prüfungen, Hetzner-Abnahme
