@@ -302,6 +302,19 @@ def _evaluate(db: Session, condition: dict[str, Any]) -> ConditionResult:
                 and not fenced
             )
             return ConditionResult(key, ok, "ok" if ok else "integrity_not_confirmed", params)
+        if migration.state == "failed" and migration.cutover_committed_at is not None:
+            # Nach dem Cutover gescheitert (rollback_required, vom Admin bestätigt): aktiv ist das
+            # Ziel, zurück geht es nur per neuer Migration - bei der Erstmigration gibt es keine.
+            # Freigebbar, sobald ein erneuter Healthcheck des aktiven Ziels bestanden ist (S3-002).
+            health = (migration.report or {}).get("target_health") or {}
+            ok = (
+                bool(health.get("ok"))
+                and storage_state is not None
+                and storage_state.active_profile_id == migration.target_profile_id
+                and storage_state.active_generation == migration.target_generation
+                and not fenced
+            )
+            return ConditionResult(key, ok, "target_verified" if ok else "target_unverified", params)
         if migration.state in ("failed", "cancelled"):
             # Abbruch vor dem Cutover: die Quelle ist weiterhin aktiv und unverändert.
             ok = (

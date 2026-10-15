@@ -344,12 +344,71 @@ def confirm_cutover(db: Session, migration_id: uuid.UUID, *, actor_email: str | 
 
 def acknowledge_rollback(db: Session, migration_id: uuid.UUID, *, actor_email: str | None) -> StorageMigration:
     """rollback_required -> failed: der Admin bestätigt, dass er den Zustand gesehen hat. Aktiv
-    bleibt das (bereits umgeschaltete) Ziel; zurück geht es nur über eine neue Migration."""
+    bleibt das (bereits umgeschaltete) Ziel; zurück geht es nur über eine neue Migration.
+
+    Bei einem committeten Cutover wird das aktive Ziel dabei sofort erneut geprüft (S3-002). Erst
+    ein bestandener Healthcheck macht ein noch gesperrtes Wartungsfenster der Erstmigration
+    freigebbar; scheitert er, prüft der Storage-Worker regelmässig nach."""
     migration = lock_migration(db, migration_id)
     if migration.state != "rollback_required":
         raise MigrationError("Migration erfordert keinen Rollback")
     admin_transition(db, migration, "failed", actor_email=actor_email)
+    if migration.cutover_committed_at is not None:
+        record_target_health(db, migration)
     return migration
+
+
+HEALTH_SAMPLE_SIZE = 25
+
+
+def target_health(db: Session, migration: StorageMigration) -> dict[str, Any]:
+    """Healthcheck des umgeschalteten Ziels über den regulären Lesepfad: aktiver Speicher ist das
+    Ziel, eine Stichprobe verifizierter Objekte ist vollständig lesbar (SHA-256), Schreib-/Lesetest
+    am Zielprofil. Wird nach dem Cutover (observing) und nach einem bestätigten Rollback genutzt."""
+    from app.core.objstore_client import StorageError
+    from app.core.storage import get_object_store
+
+    result: dict[str, Any] = {"ok": False, "active_matches": False, "failures": 0, "sampled": 0, "probe_ok": False,
+                              "checked_at": datetime.now(UTC).isoformat()}
+    store = get_object_store()
+    store.invalidate()
+    try:
+        state = store.active_state(force=True)
+    except StorageError as exc:
+        result["error"] = f"{type(exc).__name__}"
+        return result
+    result["active_matches"] = (state.config.profile_id, state.config.generation) == (migration.target_profile_id, migration.target_generation)
+    if not result["active_matches"]:
+        return result
+    sample = db.execute(
+        select(StorageMigrationObject.namespace, StorageMigrationObject.key, StorageMigrationObject.expected_sha256, StorageMigrationObject.expected_size)
+        .where(StorageMigrationObject.migration_id == migration.id, StorageMigrationObject.status == "verified")
+        .order_by(func.random()).limit(HEALTH_SAMPLE_SIZE)
+    ).all()
+    failures = []
+    for row in sample:
+        try:
+            ok = store.verify(row.namespace, row.key, sha256=row.expected_sha256, size=row.expected_size, full=True)
+        except (StorageError, OSError):
+            ok = False
+        if not ok:
+            failures.append(f"{row.namespace}/{row.key}")
+    target_profile = db.get(StorageProfile, migration.target_profile_id)
+    probe = storage_profile_service.run_connection_test(db, target_profile) if target_profile is not None else {"ok": False}
+    result.update(failures=len(failures), failed_keys=failures[:10], sampled=len(sample), probe_ok=bool(probe["ok"]))
+    result["ok"] = not failures and bool(probe["ok"])
+    return result
+
+
+def record_target_health(db: Session, migration: StorageMigration) -> dict[str, Any]:
+    """Prüft das Ziel und hält das Ergebnis im Bericht fest (Grundlage der Wartungsfreigabe)."""
+    health = target_health(db, migration)
+    migration.report = {**(migration.report or {}), "target_health": health}
+    add_event(db, migration.id, "target_health", level="info" if health["ok"] else "warning",
+              message="Ziel nach dem Rollback-Hinweis geprüft: " + ("in Ordnung" if health["ok"] else "weiterhin fehlerhaft"),
+              details={k: health[k] for k in ("ok", "active_matches", "failures", "sampled", "probe_ok")})
+    db.flush()
+    return health
 
 
 def request_generation_purge(db: Session, generation_id: int, *, confirmation: str, actor_email: str | None) -> StorageGeneration:

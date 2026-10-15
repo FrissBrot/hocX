@@ -83,6 +83,10 @@ POLL_SECONDS = float(os.environ.get("STORAGE_WORKER_POLL_SECONDS", "5"))
 BATCH_SIZE = 200
 MAX_RUN_ATTEMPTS = 10
 CUTOVER_LOCK_TIMEOUT = "20s"
+# Höchstzahl abgebrochener Cutover-Versuche, danach endet die Migration in "failed" (Quelle aktiv).
+MAX_CUTOVER_ATTEMPTS = 5
+# Fehlgeschlagene Healthchecks in Folge, ab denen observing in rollback_required wechselt.
+OBSERVE_MAX_FAILURES = 3
 GALLERY_DRAIN_TIMEOUT_SECONDS = 15 * 60
 THROUGHPUT_SAMPLE_SECONDS = 10
 CATCHUP_LAG_READY = 50
@@ -916,6 +920,22 @@ def phase_cutting_over(db: Session, ctx: Ctx, migration: StorageMigration) -> No
             raise sms.MigrationError(f"Endabgleich unvollständig: {counts}")
         checks = _final_reconcile(db, ctx, migration, target)
         if checks["missing"]:
+            # Selbstheilung (S3-001): Ein Journaleintrag, dessen Transaktion nach einem späteren
+            # Eintrag committet hat, kann beim Nachführen übersprungen worden sein. Unter dem
+            # Fence ist das Register die Wahrheit und die Quelle eingefroren - die Abweichungen
+            # werden darum gezielt erneut kopiert und vollständig geprüft, statt abzubrechen.
+            recopied = _replan_from_registry(db, ctx, migration, checks["missing"])
+            run_copy_loop(db, ctx, migration)
+            while verify_pending(db, ctx, migration):
+                pass
+            counts = open_counts(db, migration)
+            if counts.get("pending") or counts.get("failed") or counts.get("dead") or counts.get("copied"):
+                raise sms.MigrationError(f"Endabgleich unvollständig: {counts}")
+            checks = _final_reconcile(db, ctx, migration, target)
+            checks["recopied"] = recopied
+            if recopied:
+                event(db, migration, "final_recopied", f"{recopied} Objekte im Endabgleich nachkopiert", level="warning", recopied=recopied)
+        if checks["missing"]:
             raise sms.MigrationError(f"{len(checks['missing'])} registrierte Objekte fehlen im Ziel")
         fallback_days = (migration.options or {}).get("fallback_days") or settings.storage_fallback_days
         now = datetime.now(UTC)
@@ -950,12 +970,48 @@ def phase_cutting_over(db: Session, ctx: Ctx, migration: StorageMigration) -> No
                 unfence_storage(db, reason)
             event(db, migration, "cutover_aborted", f"Cutover abgebrochen, Quelle bleibt aktiv: {exc}", level="warning")
             back = "ready_for_cutover" if migration.kind == "live" else "verifying"
-            move(db, ctx, migration, back)
+            # Cutover-Abbrüche eigens zählen: attempt wird nach jeder erfolgreichen Phase
+            # zurückgesetzt und würde einen immer wieder scheiternden Cutover nie begrenzen
+            # (jeder Versuch kostet ein Schreibsperre-Fenster).
+            aborts = int((migration.checkpoint or {}).get("cutover_aborts") or 0) + 1
+            move(db, ctx, migration, back, checkpoint={**(migration.checkpoint or {}), "cutover_aborts": aborts})
             _close_cutover_window(db, migration)
-            # Vorübergehend behandeln: erneuter Versuch mit Backoff, nach MAX_RUN_ATTEMPTS failed.
+            if aborts >= MAX_CUTOVER_ATTEMPTS:
+                raise sms.MigrationError(f"Cutover {aborts}-mal abgebrochen, zuletzt: {exc}") from exc
+            # Vorübergehend behandeln: erneuter Versuch mit Backoff.
             raise StorageUnavailable(f"Cutover abgebrochen: {exc}") from exc
         raise
     _close_cutover_window(db, migration)
+
+
+def _replan_from_registry(db: Session, ctx: Ctx, migration: StorageMigration, missing: list[str]) -> int:
+    """Plant registrierte Objekte, die im Ziel fehlen oder abweichen, mit dem Registerstand neu
+    ein (nur unter gesetztem Fence aufrufen). Rückgabe: Anzahl neu eingeplanter Objekte."""
+    newest_seq = int(db.scalar(text("SELECT COALESCE(MAX(seq), 0) FROM storage_change_outbox")) or 0)
+    planned = 0
+    for item in missing:
+        namespace, key = item.split("/", 1)
+        reg = db.execute(select(StorageObject.size_bytes, StorageObject.sha256, StorageObject.version)
+                         .where(StorageObject.namespace == namespace, StorageObject.key == key, StorageObject.status == "active")).first()
+        if reg is None:
+            continue
+        db.execute(text("""
+            INSERT INTO storage_migration_object (migration_id, namespace, key, expected_size, expected_sha256, expected_version, source_seq, status)
+            VALUES (:mid, :ns, :key, :size, :sha, :version, :seq, 'pending')
+            ON CONFLICT (migration_id, namespace, key) DO UPDATE SET
+                expected_size = EXCLUDED.expected_size, expected_sha256 = EXCLUDED.expected_sha256,
+                expected_version = EXCLUDED.expected_version,
+                source_seq = GREATEST(storage_migration_object.source_seq, EXCLUDED.source_seq), status = 'pending',
+                attempts = 0, next_attempt_at = NULL, last_error = 'final_reconcile', verified_at = NULL, updated_at = NOW()
+        """), {"mid": migration.id, "ns": namespace, "key": key, "size": reg.size_bytes, "sha": reg.sha256,
+               "version": reg.version, "seq": newest_seq})
+        planned += 1
+    total = db.execute(select(func.count(), func.coalesce(func.sum(StorageMigrationObject.expected_size), 0))
+                       .where(StorageMigrationObject.migration_id == migration.id, StorageMigrationObject.status != "deleted")).one()
+    guarded(db, ctx, total_objects=int(total[0]), total_bytes=int(total[1]))
+    db.commit()
+    db.refresh(migration)
+    return planned
 
 
 def _close_cutover_window(db: Session, migration: StorageMigration) -> None:
@@ -973,28 +1029,30 @@ def _close_cutover_window(db: Session, migration: StorageMigration) -> None:
 
 def phase_observing(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
     """Healthchecks nach dem Umschalten: Stichprobe über den regulären Lesepfad (aktive
-    Generation) und ein Schreib-/Lesetest am Ziel. Scheitert etwas -> rollback_required (kein
-    automatischer Rückfall auf möglicherweise veraltete Daten)."""
-    store = get_object_store()
-    store.invalidate()
-    state = store.active_state(force=True)
-    if (state.config.profile_id, state.config.generation) != (migration.target_profile_id, migration.target_generation):
+    Generation) und ein Schreib-/Lesetest am Ziel. Scheitert die Prüfung mehrmals in Folge ->
+    rollback_required (kein automatischer Rückfall auf möglicherweise veraltete Daten). Ein
+    einzelner Fehlschlag (kurzer Hänger des Ziels) wird mit Abstand erneut geprüft (S3-002)."""
+    health = sms.target_health(db, migration)
+    db.commit()
+    if not health["active_matches"]:
         _rollback_required(db, ctx, migration, "Aktiver Speicher entspricht nicht dem Ziel")
         return
-    sample = db.execute(
-        select(StorageMigrationObject.namespace, StorageMigrationObject.key, StorageMigrationObject.expected_sha256, StorageMigrationObject.expected_size)
-        .where(StorageMigrationObject.migration_id == migration.id, StorageMigrationObject.status == "verified")
-        .order_by(func.random()).limit(25)
-    ).all()
-    db.commit()
-    failures = [f"{row.namespace}/{row.key}" for row in sample if not _safe_store_verify(store, row)]
-    target_profile = db.get(StorageProfile, migration.target_profile_id)
-    probe = storage_profile_service.run_connection_test(db, target_profile)
-    db.commit()
-    if failures or not probe["ok"]:
-        _rollback_required(db, ctx, migration, f"Healthcheck fehlgeschlagen: {len(failures)} Objekte, Probe {'ok' if probe['ok'] else 'fehlgeschlagen'}")
-        return
     observe = int((migration.options or {}).get("observe_seconds", 300))
+    streak = int((migration.checkpoint or {}).get("observe_failures") or 0)
+    if not health["ok"]:
+        streak += 1
+        message = f"Healthcheck fehlgeschlagen: {health['failures']} Objekte, Probe {'ok' if health['probe_ok'] else 'fehlgeschlagen'}"
+        if streak < OBSERVE_MAX_FAILURES:
+            guarded(db, ctx, checkpoint={**(migration.checkpoint or {}), "observe_failures": streak}, last_error=message)
+            db.commit()
+            event(db, migration, "observe_check_failed", f"{message} - erneute Prüfung ({streak}/{OBSERVE_MAX_FAILURES})", level="warning")
+            raise PhaseWait(min(30, observe))
+        _rollback_required(db, ctx, migration, message)
+        return
+    if streak:
+        guarded(db, ctx, checkpoint={**(migration.checkpoint or {}), "observe_failures": 0})
+        db.commit()
+        db.refresh(migration)
     started = migration.phase_started_at or migration.cutover_committed_at or datetime.now(UTC)
     if (datetime.now(UTC) - started).total_seconds() < observe:
         _sync_maintenance(db, migration)
@@ -1012,13 +1070,6 @@ def phase_observing(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
         except maintenance_service.MaintenanceError:
             _logger.warning("Wartung konnte nach der Migration nicht freigegeben werden", exc_info=True)
         db.commit()
-
-
-def _safe_store_verify(store, row) -> bool:
-    try:
-        return store.verify(row.namespace, row.key, sha256=row.expected_sha256, size=row.expected_size, full=True)
-    except (StorageError, OSError):
-        return False
 
 
 def _rollback_required(db: Session, ctx: Ctx, migration: StorageMigration, message: str) -> None:
@@ -1189,6 +1240,36 @@ def purge_generations() -> int:
     return purged
 
 
+# --- Nach bestätigtem Rollback-Hinweis -------------------------------------------------------
+
+HEALTH_RECHECK_SECONDS = 60
+
+
+def recheck_failed_cutovers() -> int:
+    """Committeter Cutover, Migration nach rollback_required bestätigt (failed), Wartungsfenster
+    noch offen: das aktive Ziel regelmässig erneut prüfen. Ein bestandener Healthcheck macht das
+    Fenster über storage_migration_settled freigebbar (S3-002) - freigegeben wird nie automatisch."""
+    checked = 0
+    with SessionLocal() as db:
+        candidates = db.scalars(
+            select(StorageMigration).join(MaintenanceWindow, MaintenanceWindow.id == StorageMigration.maintenance_window_id)
+            .where(StorageMigration.state == "failed", StorageMigration.cutover_committed_at.is_not(None),
+                   MaintenanceWindow.state.notin_(maintenance_service.TERMINAL_STATES))
+        ).all()
+        for migration in candidates:
+            health = (migration.report or {}).get("target_health") or {}
+            if health.get("ok"):
+                continue
+            last = health.get("checked_at")
+            if last and (datetime.now(UTC) - datetime.fromisoformat(last)).total_seconds() < HEALTH_RECHECK_SECONDS:
+                continue
+            locked = sms.lock_migration(db, migration.id)
+            sms.record_target_health(db, locked)
+            db.commit()
+            checked += 1
+    return checked
+
+
 # --- Hauptschleife ----------------------------------------------------------------------------
 
 
@@ -1204,6 +1285,7 @@ def run_once(owner: str) -> float:
     """Ein Durchlauf: höchstens eine Migration ein Stück weitertreiben. Für Tests direkt nutzbar."""
     _heartbeat_job()
     purge_generations()
+    recheck_failed_cutovers()
     ctx = claim(owner)
     if ctx is None:
         return POLL_SECONDS

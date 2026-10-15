@@ -20,9 +20,9 @@ from sqlalchemy.exc import OperationalError
 from app.core.config import settings
 from app.core.objstore_client import FilesystemBackend, S3Backend, StorageUnavailable
 from app.core.storage import MAIN, get_object_store
-from app.models import StorageGeneration, StorageMigration, StorageMigrationObject, StorageProfile, StorageState, StoredFile
+from app.models import MaintenanceWindow, StorageGeneration, StorageMigration, StorageMigrationObject, StorageProfile, StorageState, StoredFile
 from app.services import storage_migration_service as sms
-from app.services import storage_profile_service
+from app.services import maintenance_service, storage_profile_service
 from app.workers import storage_verify, storage_worker
 from tests.storage_support import FaultyBackend, committed_storage, create_test_profile, make_committed_tenant, requires_s3, throttled, unavailable  # noqa: F401
 from tests.test_storage_migration_e2e import drive, seed_files
@@ -198,6 +198,83 @@ def test_failed_cutover_keeps_the_source_active_and_retries(setup):
     assert_files_intact(db, files)
 
 
+def test_repeatedly_aborted_cutovers_end_in_failed_instead_of_looping(setup):
+    """S3-001/S3-007: Cutover-Abbrüche werden gezählt - nach MAX_CUTOVER_ATTEMPTS endet die
+    Migration in failed (Quelle aktiv) statt endlos neue Schreibsperren anzulegen."""
+    db, _tenant, files, local, external = setup
+    assert initial(db, local).state == "completed"
+    migration = sms.create_migration(db, target_profile_id=external.id, options={"observe_seconds": 30}, actor_email="owner@example.com")
+    db.commit()
+    drive(db, migration.id, until="cutting_over")
+    inject(external.id, {"list": [unavailable() for _ in range(50)]})  # finaler Abgleich scheitert immer
+    done = drive(db, migration.id, max_steps=200)
+    assert done.state == "failed"
+    assert done.checkpoint["cutover_aborts"] == storage_worker.MAX_CUTOVER_ATTEMPTS
+    state = db.get(StorageState, 1)
+    assert state.active_profile_id == local.id and not state.write_fenced
+    assert_files_intact(db, files)
+
+
+# Healthcheck nach dem Cutover (S3-002) -------------------------------------------------------
+
+
+def _failing_probe(monkeypatch, failures: int | None):
+    real = storage_profile_service.run_connection_test
+    calls = {"n": 0}
+
+    def probe(db_, profile):
+        calls["n"] += 1
+        if failures is None or calls["n"] <= failures:
+            return {"ok": False, "error": "ConnectTimeoutError"}
+        return real(db_, profile)
+
+    monkeypatch.setattr(storage_profile_service, "run_connection_test", probe)
+    return real
+
+
+def test_a_single_failed_health_check_after_the_cutover_is_retried(setup, monkeypatch):
+    db, _tenant, files, local, _external = setup
+    migration = sms.create_migration(db, target_profile_id=local.id, options={"observe_seconds": 30}, actor_email="owner@example.com")
+    db.commit()
+    drive(db, migration.id, until="observing")
+    _failing_probe(monkeypatch, 1)
+    done = drive(db, migration.id)
+    assert done.state == "completed"
+    window = db.get(MaintenanceWindow, done.maintenance_window_id)
+    assert window.state == "completed"
+    assert_files_intact(db, files)
+
+
+def test_rollback_required_of_the_initial_migration_can_be_released_after_a_passing_health_check(setup, monkeypatch):
+    db, _tenant, files, local, _external = setup
+    migration = sms.create_migration(db, target_profile_id=local.id, options={"observe_seconds": 30}, actor_email="owner@example.com")
+    db.commit()
+    drive(db, migration.id, until="observing")
+    real = _failing_probe(monkeypatch, None)
+    assert drive(db, migration.id, until="rollback_required").state == "rollback_required"
+    window_id = db.get(StorageMigration, migration.id).maintenance_window_id
+    with pytest.raises(maintenance_service.MaintenanceError):
+        maintenance_service.release(db, window_id, actor_email="owner@example.com", source="admin")
+    db.rollback()
+    sms.acknowledge_rollback(db, migration.id, actor_email="owner@example.com")  # Ziel noch gestört
+    db.commit()
+    db.expire_all()
+    assert db.get(StorageMigration, migration.id).report["target_health"]["ok"] is False
+    with pytest.raises(maintenance_service.MaintenanceError):
+        maintenance_service.release(db, window_id, actor_email="owner@example.com", source="admin")
+    db.rollback()
+    # Ziel wieder gesund: der Worker prüft nach, danach ist die Wartung über den regulären Weg frei.
+    monkeypatch.setattr(storage_profile_service, "run_connection_test", real)
+    monkeypatch.setattr(storage_worker, "HEALTH_RECHECK_SECONDS", 0)
+    assert storage_worker.recheck_failed_cutovers() == 1
+    db.expire_all()
+    window = maintenance_service.release(db, window_id, actor_email="owner@example.com", source="admin")
+    db.commit()
+    assert window.state == "completed"
+    assert db.get(StorageState, 1).active_profile_id == local.id
+    assert_files_intact(db, files)
+
+
 # 9/10/11: Änderungen während der Migration werden nachgeführt ---------------------------------
 
 
@@ -218,6 +295,35 @@ def test_changes_after_snapshot_never_resurrect_deleted_or_stale_versions(setup)
     store.invalidate()
     assert not store.exists(MAIN, keys[0])
     assert store.get_bytes(MAIN, keys[1]) == b"\x89PNG noch neuere Version"
+
+
+def test_journal_entry_committed_after_a_later_one_is_not_lost_and_cutover_completes(setup):
+    """S3-001: Journal-Sequenzen werden mitten in der Transaktion vergeben, sichtbar werden sie erst
+    beim Commit. Committet die Transaktion mit der kleineren Nummer später, darf der Eintrag weder
+    verloren gehen noch den Cutover endlos abbrechen lassen."""
+    db, tenant, _files, local, external = setup
+    assert initial(db, local).state == "completed"
+    migration = sms.create_migration(db, target_profile_id=external.id, options={"observe_seconds": 30}, actor_email="owner@example.com")
+    db.commit()
+    drive(db, migration.id, until="ready_for_cutover")
+    store = get_object_store()
+    late_key = f"uploads/tenant-{tenant.id}/spaet-committet.bin"
+    early_key = f"uploads/tenant-{tenant.id}/frueh-committet.bin"
+    with storage_worker.SessionLocal() as session_a, storage_worker.SessionLocal() as session_b:
+        store.put_bytes(session_a, MAIN, late_key, b"spaet committeter Inhalt")  # kleinere seq, noch offen
+        store.put_bytes(session_b, MAIN, early_key, b"frueh committeter Inhalt")  # grössere seq
+        session_b.commit()
+        storage_worker.run_once("w1")  # phase_ready: sieht nur den späteren Eintrag
+        session_a.commit()
+    db.expire_all()
+    done = drive(db, migration.id, max_steps=120)
+    assert done.state == "completed", done.last_error
+    store.invalidate()
+    assert store.get_bytes(MAIN, late_key) == b"spaet committeter Inhalt"
+    assert store.get_bytes(MAIN, early_key) == b"frueh committeter Inhalt"
+    aborts = db.execute(text("SELECT count(*) FROM storage_migration_event WHERE migration_id = :id AND kind = 'cutover_aborted'"),
+                        {"id": migration.id}).scalar()
+    assert aborts == 0
 
 
 # 12: zwei Administratoren starten gleichzeitig -----------------------------------------------
