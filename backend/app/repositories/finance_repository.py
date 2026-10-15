@@ -186,7 +186,21 @@ class FinanceRepository:
             .offset(skip)
             .limit(limit)
         ).all()
-        return [self._tx_read(db, row.FinanceTransaction, running_balance=row.running_balance) for row in rows]
+        # public_ids gesammelt auflösen statt pro Zeile (Audit MAIN-BE-017).
+        account_public_ids = public_id_service.resolve_public_ids(db, FinanceAccount, [account_id])
+        protocol_public_ids = public_id_service.resolve_public_ids(
+            db, Protocol, list({row.FinanceTransaction.protocol_id for row in rows if row.FinanceTransaction.protocol_id is not None})
+        )
+        return [
+            self._tx_read(
+                db,
+                row.FinanceTransaction,
+                running_balance=row.running_balance,
+                account_public_ids=account_public_ids,
+                protocol_public_ids=protocol_public_ids,
+            )
+            for row in rows
+        ]
 
     def _get_transaction_scoped(self, db: Session, tx_id: int, tenant_id: int) -> FinanceTransaction | None:
         return db.scalar(
@@ -273,14 +287,26 @@ class FinanceRepository:
                 "Diese Buchung gehört zu einer einkassierten Busse. Bitte die Busse wiedereröffnen statt die Buchung zu ändern."
             )
 
-    def _tx_read(self, db: Session, tx: FinanceTransaction, running_balance: Decimal | None = None) -> FinanceTransactionRead:
+    def _tx_read(
+        self,
+        db: Session,
+        tx: FinanceTransaction,
+        running_balance: Decimal | None = None,
+        *,
+        account_public_ids: dict[int, uuid.UUID] | None = None,
+        protocol_public_ids: dict[int, uuid.UUID] | None = None,
+    ) -> FinanceTransactionRead:
+        account_public_id = (account_public_ids or {}).get(tx.account_id) or public_id_service.resolve_public_id(db, FinanceAccount, tx.account_id)
+        protocol_public_id = None
+        if tx.protocol_id is not None:
+            protocol_public_id = (protocol_public_ids or {}).get(tx.protocol_id) or public_id_service.resolve_public_id(db, Protocol, tx.protocol_id)
         return FinanceTransactionRead(
             id=tx.public_id,
-            account_id=public_id_service.resolve_public_id(db, FinanceAccount, tx.account_id),
+            account_id=account_public_id,
             amount=tx.amount,
             description=tx.description,
             transaction_date=tx.transaction_date,
-            protocol_id=public_id_service.resolve_public_id(db, Protocol, tx.protocol_id) if tx.protocol_id is not None else None,
+            protocol_id=protocol_public_id,
             created_at=tx.created_at,
             running_balance=running_balance,
         )

@@ -12,6 +12,8 @@ from app.services import public_id_service
 
 ClosedProtocol = aliased(Protocol)
 Collector = aliased(AppUser)
+FineParticipant = aliased(Participant)
+CollectedTransaction = aliased(FinanceTransaction)
 
 
 class DuplicateFineError(Exception):
@@ -35,11 +37,21 @@ class FinesRepository:
                 FinanceAccount.currency_label,
                 Collector.display_name.label("collected_by_display_name"),
                 func.coalesce(ClosedProtocol.status, Protocol.status).label("tracking_protocol_status"),
+                # public_ids gleich mitselektieren statt pro Zeile bis zu 6x resolve_public_id
+                # (Audit MAIN-BE-017, N+1 bei Bussenlisten).
+                Protocol.public_id.label("protocol_public_id"),
+                FineParticipant.public_id.label("participant_public_id"),
+                FinanceAccount.public_id.label("account_public_id"),
+                CollectedTransaction.public_id.label("collected_transaction_public_id"),
+                ClosedProtocol.public_id.label("closed_in_protocol_public_id"),
+                Collector.public_id.label("collected_by_user_public_id"),
             )
             .join(Protocol, Protocol.id == AttendanceFine.protocol_id)
             .join(FinanceAccount, FinanceAccount.id == AttendanceFine.account_id)
             .outerjoin(Collector, Collector.id == AttendanceFine.collected_by_user_id)
             .outerjoin(ClosedProtocol, ClosedProtocol.id == AttendanceFine.closed_in_protocol_id)
+            .outerjoin(FineParticipant, FineParticipant.id == AttendanceFine.participant_id)
+            .outerjoin(CollectedTransaction, CollectedTransaction.id == AttendanceFine.collected_transaction_id)
         )
 
     def list_fines_for_tenant(
@@ -350,39 +362,30 @@ class FinesRepository:
         return self._to_read(db, row)
 
     def _to_read(self, db: Session, row) -> AttendanceFineRead:
-        fine, _protocol_number, _protocol_date, _currency_label, collected_by_display_name, tracking_protocol_status = row
+        fine = row[0]
         return AttendanceFineRead(
             id=fine.public_id,
-            protocol_id=public_id_service.resolve_public_id(db, Protocol, fine.protocol_id),
-            participant_id=public_id_service.resolve_public_id(db, Participant, fine.participant_id)
-            if fine.participant_id is not None
-            else None,
+            protocol_id=row.protocol_public_id,
+            participant_id=row.participant_public_id,
             participant_name_snapshot=fine.participant_name_snapshot,
             fine_type=fine.fine_type,
             amount=fine.amount,
-            account_id=public_id_service.resolve_public_id(db, FinanceAccount, fine.account_id),
+            account_id=row.account_public_id,
             status=fine.status,
             collected_at=fine.collected_at,
-            collected_transaction_id=public_id_service.resolve_public_id(db, FinanceTransaction, fine.collected_transaction_id)
-            if fine.collected_transaction_id is not None
-            else None,
-            closed_in_protocol_id=public_id_service.resolve_public_id(db, Protocol, fine.closed_in_protocol_id)
-            if fine.closed_in_protocol_id is not None
-            else None,
-            collected_by_user_id=public_id_service.resolve_public_id(db, AppUser, fine.collected_by_user_id)
-            if fine.collected_by_user_id is not None
-            else None,
-            collected_by_display_name=collected_by_display_name,
-            can_reopen=fine.status == "collected" and tracking_protocol_status != "abgeschlossen",
+            collected_transaction_id=row.collected_transaction_public_id,
+            closed_in_protocol_id=row.closed_in_protocol_public_id,
+            collected_by_user_id=row.collected_by_user_public_id,
+            collected_by_display_name=row.collected_by_display_name,
+            can_reopen=fine.status == "collected" and row.tracking_protocol_status != "abgeschlossen",
             created_at=fine.created_at,
         )
 
     def _to_list_item(self, db: Session, row) -> AttendanceFineListItem:
         base = self._to_read(db, row)
-        _fine, protocol_number, protocol_date, currency_label, *_ = row
         return AttendanceFineListItem(
             **base.model_dump(),
-            protocol_number=protocol_number,
-            protocol_date=str(protocol_date) if protocol_date else None,
-            currency_label=currency_label,
+            protocol_number=row.protocol_number,
+            protocol_date=str(row.protocol_date) if row.protocol_date else None,
+            currency_label=row.currency_label,
         )
