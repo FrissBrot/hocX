@@ -184,6 +184,15 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.environment.strip().lower() == "production"
 
+    @property
+    def local_dev_origins(self) -> tuple[str, ...]:
+        """Lokaler Next-Dev-Server als CORS-/WebSocket-Origin - nur ausserhalb der Produktion
+        (Audit MAIN-SEC-009: sonst durfte jede lokal auf Port 3000 laufende Seite
+        credentialed Requests an die Produktions-API stellen)."""
+        if self.is_production:
+            return ()
+        return ("http://localhost:3000", "http://127.0.0.1:3000")
+
 
 settings = Settings()
 settings.validate_for_production()

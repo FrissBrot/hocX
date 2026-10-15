@@ -448,8 +448,7 @@ app.add_middleware(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o for o in [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
+        *settings.local_dev_origins,
         f"https://{settings.traefik_domain}" if settings.traefik_domain else None,
     ] if o] + sorted(settings.extra_cors_origin_set),
     allow_credentials=True,
