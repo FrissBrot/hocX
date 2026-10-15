@@ -1356,6 +1356,9 @@ class AttendanceFine(Base, TimestampMixin):
         Index("idx_attendance_fine_account", "account_id"),
         Index("idx_attendance_fine_collected_by", "collected_by_user_id"),
         Index("idx_attendance_fine_collected_transaction", "collected_transaction_id"),
+        # Migration 0114 (NOT VALID, Audit MAIN-BE-016)
+        CheckConstraint("status IN ('pending', 'collected')", name="ck_attendance_fine_status"),
+        CheckConstraint("fine_type IN ('late', 'absent')", name="ck_attendance_fine_type"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
