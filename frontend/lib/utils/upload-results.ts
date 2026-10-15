@@ -35,6 +35,16 @@ export function resultsFromLegacyJob(importedNames: string[], errors: string[]):
   return results;
 }
 
+/** Reine Hinweise eines Auftrags (z. B. "ähnelt einem vorhandenen Bild") für den Toast: alle
+ * Fehlertexte von Dateien, die nicht hochgeladen wurden, stehen bereits in der Ergebnisliste
+ * (übersprungen/fehlgeschlagen). Zuordnung über den Dateinamen-Präfix statt über Servertexte,
+ * damit Textänderungen im Backend die Zuordnung nicht still brechen. */
+export function jobHintMessages(errors: string[], results: UploadFileResult[]): string[] {
+  if (!results.length) return [];
+  const listed = results.filter((result) => result.status !== "uploaded").map((result) => `${result.name}: `);
+  return errors.filter((error) => !listed.some((prefix) => error.startsWith(prefix)));
+}
+
 /** Teilt eine Auswahl in Upload-Batches (Server: max. 50 Dateien je Auftrag, gezählt werden alle
  * Multipart-Dateien inkl. Live-Photo-Clips). Ein Clip bleibt im Batch seines Bildes und zählt
  * mit; ZIPs zählen als je eine Datei. */

@@ -27,7 +27,7 @@ import { MobileFab, MobileSegmented } from "@/components/mobile/mobile-ui";
 import { browserApiFetch } from "@/lib/api/client";
 import { useFileDrop } from "@/lib/hooks/use-file-drop";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { countUploadResults, normalizeResult, resultsFromLegacyJob } from "@/lib/utils/upload-results";
+import { countUploadResults, jobHintMessages, normalizeResult, resultsFromLegacyJob } from "@/lib/utils/upload-results";
 import {
   AlbumPendingRelease,
   FileOverviewItem,
@@ -432,8 +432,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     const uploaded = job.imported_items;
     // Duplikate und Fehler stehen in der Zusammenfassung (recordJobResults); als Toast bleiben
     // nur reine Hinweise (ähnliches Bild, Live-Photo-Video).
-    const errors = (job.file_results?.length ? job.errors.filter((error) => !error.includes("Exaktes Duplikat")) : []) // i18n-ok: Serverkennung
-      .filter((error) => !(job.file_results ?? []).some((result) => result.status === "failed" && error.startsWith(`${result.name}:`)));
+    const errors = jobHintMessages(job.errors, job.file_results ?? []);
     if (uploaded.length > 0) {
       if (albumId) {
         void browserApiFetch(`/api/files/albums/${albumId}/items`, { method: "POST", body: JSON.stringify({ file_ids: uploaded.map((item) => item.id) }) })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { countUploadResults, normalizeResult, resultsFromLegacyJob, splitIntoBatches } from "./upload-results";
+import { countUploadResults, jobHintMessages, normalizeResult, resultsFromLegacyJob, splitIntoBatches } from "./upload-results";
 
 describe("Upload-Ergebnisse", () => {
   it("zählt jede Datei genau einmal - Metadaten ergänzt ist nicht zusätzlich übersprungen", () => {
@@ -46,6 +46,21 @@ describe("Upload-Ergebnisse", () => {
     for (const [photo, clip] of clipOf) expect(batches.find((batch) => batch.includes(photo))).toContain(clip);
     expect(batches.map((batch) => batch.length)).toEqual([50, 50, 20]);
     expect(batches.flat().sort((a, b) => a - b)).toEqual(sizes.map((_, index) => index));
+  });
+
+  it("Toast-Hinweise: nur Texte hochgeladener Dateien, unabhängig vom Servertext (IMGMETA-012)", () => {
+    const errors = [
+      "alt.jpg: Duplicate - already stored", // Textänderung im Backend darf nichts brechen
+      "neu.jpg: Hinweis - ähnelt einem bereits hochgeladenen Bild",
+      "kaputt.jpg: kein unterstütztes Bildformat",
+    ];
+    const results = [
+      { name: "alt.jpg", status: "skipped" as const },
+      { name: "neu.jpg", status: "uploaded" as const },
+      { name: "kaputt.jpg", status: "failed" as const },
+    ];
+    expect(jobHintMessages(errors, results)).toEqual(["neu.jpg: Hinweis - ähnelt einem bereits hochgeladenen Bild"]);
+    expect(jobHintMessages(errors, [])).toEqual([]);
   });
 
   it("teilt auch nach Grösse", () => {
