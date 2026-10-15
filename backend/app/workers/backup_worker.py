@@ -29,7 +29,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.backup import jobs
 from app.backup.borg import Borg, BorgError
@@ -300,6 +300,9 @@ def run_job(env: RunEnv, ctx: jobs.JobCtx) -> None:
             db.close()
             try:
                 lock.execute(text("SELECT pg_advisory_unlock(:id)"), {"id": ADVISORY_LOCK_ID})
+            except OperationalError:
+                # Verbindung beendet (Datenbanktausch beim Voll-Restore) - der Lock endete mit ihr.
+                pass
             finally:
                 lock.close()
             try:

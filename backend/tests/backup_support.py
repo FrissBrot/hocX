@@ -110,3 +110,112 @@ class SshBorgServer:
     def stop(self) -> None:
         self.process.terminate()
         self.process.wait(timeout=10)
+
+
+# --- End-to-End-Umgebung (Test-DB, Test-S3, lokales Borg-Repository) -------------------------
+
+import uuid  # noqa: E402
+from datetime import UTC, datetime  # noqa: E402
+
+from sqlalchemy import delete, func, select, update  # noqa: E402
+
+from app.backup import jobs  # noqa: E402
+from app.backup.borg import Borg  # noqa: E402
+from app.backup.manifest import ManifestEntry  # noqa: E402
+from app.backup.repository import RepositoryView  # noqa: E402
+from app.backup.restore_core import iter_manifest_slices, load_restore_point  # noqa: E402
+from app.backup.run_backup import RunEnv  # noqa: E402
+from app.core.config import settings  # noqa: E402
+from app.core.db import SessionLocal, engine  # noqa: E402
+from app.core.storage import get_object_store  # noqa: E402
+from app.models import (  # noqa: E402
+    BackupContent,
+    BackupEvent,
+    BackupJob,
+    BackupPoolArchive,
+    BackupRestoreJob,
+    BackupSet,
+    BackupSettings,
+    StorageGeneration,
+    StorageState,
+)
+from app.services.storage_profile_service import profile_config  # noqa: E402
+from app.workers import backup_worker  # noqa: E402
+from tests.storage_support import committed_storage, create_test_profile  # noqa: E402,F401
+
+@pytest.fixture
+def backup_env(committed_storage, tmp_path, monkeypatch):  # noqa: F811
+    db = committed_storage
+    started = datetime.now(UTC)
+    # Aktiver Speicher: frisches Test-S3-Profil in einer neuen Generation (Register vertrauenswürdig).
+    profile = create_test_profile(db, f"Backup-Test {uuid.uuid4().hex[:6]}", f"bt-{uuid.uuid4().hex[:8]}")
+    generation = int(db.scalar(select(func.max(StorageGeneration.generation))) or 0) + 1
+    db.execute(update(StorageGeneration).where(StorageGeneration.status == "active").values(status="retained"))
+    db.add(StorageGeneration(profile_id=profile.id, generation=generation, status="active", activated_at=started))
+    db.execute(update(StorageState).where(StorageState.id == 1).values(active_profile_id=profile.id, active_generation=generation))
+    db.commit()
+    get_object_store().invalidate()
+    config = local_config(tmp_path, trust_filesystem_registry=False, batch_max_objects=3)
+    borg = Borg(config)
+    borg.init()
+    env = RunEnv(config=config, borg=borg, engine=engine, database_url=settings.database_url, store=get_object_store(),
+                 profile_config=profile_config, app_version="test")
+    yield db, env, generation
+    borg.close()
+    db.rollback()
+    for model in (BackupEvent, BackupRestoreJob):
+        db.execute(delete(model))
+    db.execute(update(BackupJob).values(backup_set_id=None))
+    db.execute(update(BackupSet).values(job_id=None))
+    for model in (BackupJob, BackupContent, BackupPoolArchive, BackupSet):
+        db.execute(delete(model))
+    db.execute(update(BackupSettings).values(repository_status={}, keep_within_days=14, keep_daily=14, keep_weekly=8, keep_monthly=12))
+    db.execute(update(StorageState).where(StorageState.id == 1).values(backup_hold_id=None, backup_hold_generation=None, backup_hold_since=None))
+    db.commit()
+
+
+def put_object(db, key: str, data: bytes, namespace: str = "main") -> None:
+    get_object_store().put_bytes(db, namespace, key, data)
+    db.commit()
+
+
+def run_backup_job(env: RunEnv, kind: str = "backup", **options) -> BackupJob:
+    with SessionLocal() as db:
+        job = BackupJob(kind=kind, trigger="manual", options=options)
+        db.add(job)
+        db.commit()
+        job_id = job.id
+        # Vom Worker automatisch nachgelagerte Aufträge (Retention nach Backup) hier nicht mitlaufen lassen.
+        db.execute(update(BackupJob).where(BackupJob.state == "queued", BackupJob.id != job_id).values(state="cancelled"))
+        db.commit()
+    for _ in range(5):
+        ctx = jobs.claim(engine, BackupJob, "test-worker")
+        assert ctx is not None and ctx.job_id == job_id
+        backup_worker.run_job(env, ctx)
+        with SessionLocal() as db:
+            job = db.get(BackupJob, job_id)
+            if job.state in jobs.TERMINAL_JOB_STATES:
+                return job
+            db.execute(update(BackupJob).where(BackupJob.id == job_id).values(next_attempt_at=None, lease_expires_at=None))
+            db.commit()
+    return job
+
+
+def archive_contents(env: RunEnv, archive: str) -> dict[tuple[str, str], bytes]:
+    view = RepositoryView(env.borg)
+    metadata = load_restore_point(view, archive)
+    entries: list[ManifestEntry] = []
+    for chunk in iter_manifest_slices(view, archive, metadata, env.config.staging_dir / "test"):
+        entries += chunk
+    result: dict[tuple[str, str], bytes] = {}
+
+    def sink(_sha, _size, chunks, targets):
+        data = b"".join(chunks)
+        for target in targets:
+            result[(target.namespace, target.key)] = data
+
+    report = view.fetch_contents(entries, sink)
+    assert report.ok
+    return result
+
+

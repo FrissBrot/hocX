@@ -127,6 +127,33 @@ class TenantExportService:
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
             raise ValueError("Tenant not found")
+        manifest, pending_files = self.collect(db, tenant_id, scope)
+
+        tmp = tempfile.NamedTemporaryFile(prefix="hocx-export-", suffix=".zip", delete=False)
+        tmp.close()
+        zip_path = Path(tmp.name)
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=None))
+            for namespace, key, member_name in pending_files:
+                # Gestreamt aus dem Objektspeicher; verschwindet ein Objekt zwischen Inventur und
+                # Schreiben, bricht der Export ab statt ein Manifest mit Verweis ins Leere zu liefern.
+                write_object_to_zip(zf, namespace, key, member_name)
+
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "-" for c in tenant.name).strip("-") or "tenant"
+        filename = f"{safe_name}-{scope}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.hocxexport.zip"
+        return zip_path, filename
+
+    def object_exists(self, namespace: str, key: str) -> bool:
+        """Ob eine referenzierte Datei existiert. Der Mandanten-Restore aus dem Backup
+        überschreibt das (historische Quelle: Manifest des Sicherungspunkts statt aktuellem
+        Objektspeicher)."""
+        return get_object_store().exists(namespace, key)
+
+    def collect(self, db: Session, tenant_id: int, scope: ExportScope) -> tuple[dict[str, Any], list[tuple[str, str, str]]]:
+        """Manifest (Tabellen) und Liste der Dateien (namespace, key, member_name) - ohne ZIP."""
+        tenant = db.get(Tenant, tenant_id)
+        if tenant is None:
+            raise ValueError("Tenant not found")
 
         self._lookup_cache = LookupCodeCache(db)
         self._user_cache = UserIdentityCache(db, tenant_id=tenant_id)
@@ -184,20 +211,7 @@ class TenantExportService:
             "source_tenant_name": tenant.name,
             "tables": tables,
         }
-
-        tmp = tempfile.NamedTemporaryFile(prefix="hocx-export-", suffix=".zip", delete=False)
-        tmp.close()
-        zip_path = Path(tmp.name)
-        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=None))
-            for namespace, key, member_name in self._pending_files:
-                # Gestreamt aus dem Objektspeicher; verschwindet ein Objekt zwischen Inventur und
-                # Schreiben, bricht der Export ab statt ein Manifest mit Verweis ins Leere zu liefern.
-                write_object_to_zip(zf, namespace, key, member_name)
-
-        safe_name = "".join(c if c.isalnum() or c in "-_" else "-" for c in tenant.name).strip("-") or "tenant"
-        filename = f"{safe_name}-{scope}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.hocxexport.zip"
-        return zip_path, filename
+        return manifest, list(self._pending_files)
 
     # ── generic row/file helpers ─────────────────────────────────────────
 
@@ -217,7 +231,7 @@ class TenantExportService:
     def _register_file(self, root: str, storage_path: str, member_prefix: str) -> str | None:
         namespace = namespace_for_root(root)
         try:
-            if not get_object_store().exists(namespace, storage_path):
+            if not self.object_exists(namespace, storage_path):
                 return None
         except ValueError:
             return None

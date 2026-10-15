@@ -13,6 +13,7 @@ export are recoverable situations, not reasons to fail the whole import.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import secrets
 import shutil
@@ -158,45 +159,67 @@ class TenantImportService:
             if not manifest_path.exists():
                 raise ValueError("Kein manifest.json im Archiv gefunden - kein gültiges hocX-Export-Archiv.")
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if manifest.get("format_version") not in SUPPORTED_FORMAT_VERSIONS:
-                raise ValueError(f"Nicht unterstützte Export-Version: {manifest.get('format_version')!r}")
+            return self.import_manifest(db, manifest, ExtractedDirSource(extract_dir), new_name)
 
-            self.db = db
-            self.extract_dir = extract_dir
-            self.tables: dict[str, Any] = manifest.get("tables", {})
-            self.format_version = manifest["format_version"]
-            self._user_id_map: dict[int, int] = {}
-            self.lookup_cache = LookupCodeCache(db)
-            self.user_cache = UserIdentityCache(db)
-            self.warnings: list[str] = []
-            self._created_tenant_id: int | None = None
-            # old public_id (lowercase) -> newly assigned one, only for the rare rows whose
-            # exported public_id is already taken on this installation (see _claim_uuid).
-            self._public_id_map: dict[str, str] = {}
-            self._taken_public_ids: dict[tuple[type, str], set[str]] = {}
-            # Partner tenants a relation (trust, album share) was restored to - reported once.
-            self._linked_partner_names: set[str] = set()
-            # Exported public_ids of the StoredFile/SubmissionUploadFile rows that actually
-            # made it in (a file can be skipped: missing from the archive, or infected).
-            self._imported_file_public_ids: set[str] = set()
-            # New ids of protocol blocks whose repeat_source points at a todo - remapped in a
-            # second pass once the todos exist (see _remap_todo_repeat_sources).
-            self._todo_repeat_block_ids: list[int] = []
+    def import_manifest(self, db: Session, manifest: dict[str, Any], source: "ImportFileSource", new_name: str) -> tuple[Tenant, list[str]]:
+        """Gemeinsamer Importpfad: ZIP-Upload (ExtractedDirSource) und Mandanten-Restore aus dem
+        Backup (app/backup/tenant_recovery.py, Dateien direkt aus Borg ohne ZIP)."""
+        if manifest.get("format_version") not in SUPPORTED_FORMAT_VERSIONS:
+            raise ValueError(f"Nicht unterstützte Export-Version: {manifest.get('format_version')!r}")
 
+        self.db = db
+        self.source = source
+        self.tables: dict[str, Any] = manifest.get("tables", {})
+        self.format_version = manifest["format_version"]
+        self._user_id_map: dict[int, int] = {}
+        self.lookup_cache = LookupCodeCache(db)
+        self.user_cache = UserIdentityCache(db)
+        self.warnings: list[str] = []
+        self._created_tenant_id: int | None = None
+        # old public_id (lowercase) -> newly assigned one, only for the rare rows whose
+        # exported public_id is already taken on this installation (see _claim_uuid).
+        self._public_id_map: dict[str, str] = {}
+        self._taken_public_ids: dict[tuple[type, str], set[str]] = {}
+        # Partner tenants a relation (trust, album share) was restored to - reported once.
+        self._linked_partner_names: set[str] = set()
+        # Exported public_ids of the StoredFile/SubmissionUploadFile rows that actually
+        # made it in (a file can be skipped: missing from the archive, or infected).
+        self._imported_file_public_ids: set[str] = set()
+        # New ids of protocol blocks whose repeat_source points at a todo - remapped in a
+        # second pass once the todos exist (see _remap_todo_repeat_sources).
+        self._todo_repeat_block_ids: list[int] = []
+
+        try:
+            new_tenant = self._run(new_name)
+        except Exception:
+            # The pipeline below commits progressively (one table at a time, matching
+            # TenantCloneService's style) rather than as one big transaction - a failure
+            # partway through would otherwise leave a broken, half-imported tenant sitting
+            # in the tenant list instead of a clean "import failed". Tear it down (cascade
+            # deletes every row written so far) before the error propagates.
+            db.rollback()
+            if self._created_tenant_id is not None:
+                db.query(Tenant).filter(Tenant.id == self._created_tenant_id).delete()
+                db.commit()
+                # Die Objekte des abgebrochenen Mandanten (alle unter tenant_imports/tenant-<id>/)
+                # wieder entfernen - sonst blieben registrierte, unreferenzierte Dateien zurück.
+                self._remove_imported_objects_for(db, self._created_tenant_id)
+            raise
+        return new_tenant, self.warnings
+
+    @staticmethod
+    def _remove_imported_objects_for(db: Session, tenant_id: int) -> None:
+        from app.core.storage import delete_prefix
+
+        for root in (settings.storage_root, settings.abgabebox_storage_root):
             try:
-                new_tenant = self._run(new_name)
-            except Exception:
-                # The pipeline below commits progressively (one table at a time, matching
-                # TenantCloneService's style) rather than as one big transaction - a failure
-                # partway through would otherwise leave a broken, half-imported tenant sitting
-                # in the tenant list instead of a clean "import failed". Tear it down (cascade
-                # deletes every row written so far) before the error propagates.
+                delete_prefix(db, namespace_for_root(root), f"tenant_imports/tenant-{tenant_id}/")
+                db.commit()
+            except Exception as exc:  # noqa: BLE001 - Aufräumen best effort, Fehler sichtbar machen
                 db.rollback()
-                if self._created_tenant_id is not None:
-                    db.query(Tenant).filter(Tenant.id == self._created_tenant_id).delete()
-                    db.commit()
-                raise
-            return new_tenant, self.warnings
+                from app.core.error_log import record_system_error
+
+                record_system_error(db, exc=exc)
 
     def _t(self, name: str) -> list[dict[str, Any]]:
         return self.tables.get(name, [])
@@ -308,15 +331,7 @@ class TenantImportService:
     def _restore_file(self, member_path: str | None, *, root: str, new_tenant_id: int, subdir: str) -> str | None:
         if member_path is None:
             return None
-        # SECURITY (audit S4, 2026-08-16): member_path comes straight out of the attacker-
-        # controlled manifest.json inside the uploaded import zip - joining it onto
-        # extract_dir unchecked would let a manifest with e.g. "../../../etc/passwd" or an
-        # absolute path (Path(a) / "/etc/passwd" silently discards "a" entirely, per Python's
-        # Path semantics) read arbitrary files off the server's filesystem into the new
-        # tenant's storage. _safe_extract() already guards the zip's own entries the same way
-        # for the same reason - reuse that exact containment check here.
-        source = _resolve_within_extract_dir(self.extract_dir, member_path)
-        if not source.exists():
+        if not self.source.exists(member_path):
             return None
         # subdir kann Werte aus dem Manifest enthalten (part_type/code) - validate_key schliesst
         # Traversal-Segmente aus, der Key bleibt unter tenant_imports/tenant-<id>/.
@@ -324,14 +339,9 @@ class TenantImportService:
             key = new_object_key("tenant_imports", f"tenant-{new_tenant_id}", *[p for p in subdir.split("/") if p], filename=member_path)
         except ValueError:
             return None
-        get_object_store().put_file(self.db, namespace_for_root(root), key, source)
-        return key
-
-    def _member_source(self, member_path: str | None) -> Path | None:
-        if member_path is None:
+        if not self.source.store(self.db, namespace_for_root(root), key, member_path):
             return None
-        source = _resolve_within_extract_dir(self.extract_dir, member_path)
-        return source if source.exists() else None
+        return key
 
     def _warn_missing_user(self, table_name: str, email: str | None) -> None:
         if email is not None:
@@ -342,6 +352,10 @@ class TenantImportService:
     def _run(self, new_name: str) -> Tenant:
         new_tenant = self._import_tenant_base(new_name)
         self._created_tenant_id = new_tenant.id
+        # Restore-Aufträge merken sich den neuen Mandanten, um nach einem Absturz mitten im
+        # Import aufräumen zu können (app/backup/run_restore.py).
+        if (callback := getattr(self, "on_tenant_created", None)) is not None:
+            callback(new_tenant.id)
         # From here on only the new tenant's own accounts can be referenced by email.
         self.user_cache.tenant_id = new_tenant.id
         self._import_app_users(new_tenant.id)
@@ -972,8 +986,8 @@ class TenantImportService:
             data = self._resolve_row("stored_file", row)
             is_abgabebox = row["id"] in abgabebox_ids
             root = settings.abgabebox_storage_root if is_abgabebox else settings.storage_root
-            source = self._member_source(data.get("storage_path"))
-            if source is None:
+            member = data.get("storage_path")
+            if member is None or not self.source.exists(member):
                 self.warnings.append(f"Datei '{row.get('original_name')}' fehlte im Export, übersprungen.")
                 continue
             # SECURITY (audit S4, 2026-08-16): never trust data["scan_status"] from the
@@ -985,7 +999,8 @@ class TenantImportService:
             # sweep ever reaching it (the periodic rescan sweeps are scoped to their own
             # storage-path prefixes, which tenant-import restores don't share).
             # Geprüft wird die entpackte Datei, bevor sie überhaupt im Objektspeicher landet.
-            scan_status = scanner.scan_file(source, host=settings.clamav_host, port=settings.clamav_port)
+            with self.source.local_file(member) as source:
+                scan_status = scanner.scan_file(source, host=settings.clamav_host, port=settings.clamav_port)
             if scan_status == "infected":
                 self.warnings.append(f"Datei '{row.get('original_name')}' wurde von der Virenprüfung als infiziert erkannt und wurde nicht importiert.")
                 continue
@@ -1628,3 +1643,41 @@ def _safe_extract(zf: zipfile.ZipFile, dest_dir: Path) -> None:
     for member in infolist:
         _resolve_within_extract_dir(dest_dir, member.filename)
     zf.extractall(dest_dir)
+
+
+class ImportFileSource:
+    """Woher die Dateien eines Imports kommen. Pfade (member) stammen aus dem Manifest und sind
+    damit nicht vertrauenswürdig - jede Quelle prüft sie selbst."""
+
+    def exists(self, member: str) -> bool:  # pragma: no cover - Schnittstelle
+        raise NotImplementedError
+
+    def store(self, db: Session, namespace: str, key: str, member: str) -> bool:  # pragma: no cover
+        raise NotImplementedError
+
+    def local_file(self, member: str):  # pragma: no cover - contextmanager -> Path
+        raise NotImplementedError
+
+
+class ExtractedDirSource(ImportFileSource):
+    """Entpacktes ZIP (normaler Import mit 2-GiB-/Eintragsgrenze aus _safe_extract)."""
+
+    def __init__(self, extract_dir: Path) -> None:
+        self.extract_dir = extract_dir
+
+    def _path(self, member: str) -> Path:
+        return _resolve_within_extract_dir(self.extract_dir, member)
+
+    def exists(self, member: str) -> bool:
+        return self._path(member).is_file()
+
+    def store(self, db: Session, namespace: str, key: str, member: str) -> bool:
+        source = self._path(member)
+        if not source.is_file():
+            return False
+        get_object_store().put_file(db, namespace, key, source)
+        return True
+
+    @contextlib.contextmanager
+    def local_file(self, member: str):
+        yield self._path(member)
