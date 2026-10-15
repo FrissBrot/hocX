@@ -100,7 +100,7 @@ class AdminMfaService:
     def _delete_flow(self, token: str) -> None:
         self._redis().delete(f"{_FLOW_PREFIX}{token}")
 
-    def _list_factors(self, db: Session, admin_id: int, *, factor_type: str | None = None) -> list[UserMfaFactor]:
+    def _list_factors(self, db: Session, admin_id: int, *, factor_type: str | None = None, for_update: bool = False) -> list[UserMfaFactor]:
         statement = (
             select(UserMfaFactor)
             .where(UserMfaFactor.platform_admin_id == admin_id)
@@ -108,6 +108,8 @@ class AdminMfaService:
         )
         if factor_type is not None:
             statement = statement.where(UserMfaFactor.factor_type == factor_type)
+        if for_update:
+            statement = statement.with_for_update()
         return list(db.scalars(statement))
 
     def _get_factor(self, db: Session, *, factor_id: int, admin_id: int) -> UserMfaFactor | None:
@@ -430,7 +432,9 @@ class AdminMfaService:
         account_lockout_key = f"admin-mfa-account:{admin_id}"
         check_account_lockout(account_lockout_key, limit=_ACCOUNT_TOTP_ATTEMPT_LIMIT)
         enforce_rate_limit(f"admin-mfa-step-up:{purpose}:{admin_id}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
-        factors = [factor for factor in self._list_factors(db, admin_id) if factor.secret_encrypted]
+        # FOR UPDATE: zwei parallele Anfragen mit demselben Code werden serialisiert; die zweite
+        # sieht den bereits erhöhten totp_last_counter (Replay-Schutz auch bei Nebenläufigkeit).
+        factors = [factor for factor in self._list_factors(db, admin_id, for_update=True) if factor.secret_encrypted]
         if not factors:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Für diese Aktion ist ein TOTP-Faktor erforderlich (Konto -> MFA)")
         for factor in factors:

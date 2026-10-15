@@ -423,13 +423,22 @@ def preview(db: Session, request: RestorePreviewRequest) -> RestorePreviewRead:
     )
 
 
-def create_restore(db: Session, *, request: Any, actor_email: str) -> tuple[BackupRestoreJob, bool]:
-    """request: RestoreCreate (TOTP wurde von der Route bereits geprüft)."""
-    key = f"admin:{actor_email}:{request.idempotency_key}" if request.idempotency_key else None
-    if key:
-        existing = db.scalars(select(BackupRestoreJob).where(BackupRestoreJob.idempotency_key == key)).first()
-        if existing is not None:
-            return existing, False
+def _restore_idempotency_key(request: Any, actor_email: str) -> str | None:
+    return f"admin:{actor_email}:{request.idempotency_key}" if request.idempotency_key else None
+
+
+def find_existing_restore(db: Session, *, request: Any, actor_email: str) -> BackupRestoreJob | None:
+    """Wiederholung derselben Anfrage (gleicher Idempotenzschlüssel desselben Admins): der schon
+    angelegte Auftrag - es wird nichts Neues ausgelöst."""
+    key = _restore_idempotency_key(request, actor_email)
+    if not key:
+        return None
+    return db.scalars(select(BackupRestoreJob).where(BackupRestoreJob.idempotency_key == key)).first()
+
+
+def validate_restore(db: Session, request: Any) -> RestorePreviewRead:
+    """Alle fachlichen Prüfungen VOR der TOTP-Bestätigung (ein Tippfehler in der Phrase
+    verbraucht so keinen TOTP-Code)."""
     plan = preview(db, request)
     if plan.blockers:
         raise BackupAdminError(plan.blockers[0], "Wiederherstellung derzeit nicht möglich")
@@ -437,6 +446,17 @@ def create_restore(db: Session, *, request: Any, actor_email: str) -> tuple[Back
         raise BackupAdminError("confirmation_mismatch", "Die Bestätigung stimmt nicht")
     if request.kind == "full" and request.skip_rescue_backup and not (request.skip_rescue_reason or "").strip():
         raise BackupAdminError("rescue_reason_missing", "Ohne Rettungspunkt ist eine Begründung erforderlich")
+    return plan
+
+
+def create_restore(db: Session, *, request: Any, actor_email: str, plan: RestorePreviewRead | None = None) -> tuple[BackupRestoreJob, bool]:
+    """request: RestoreCreate (TOTP wurde von der Route bereits geprüft). plan: Ergebnis von
+    validate_restore, sonst wird hier geprüft."""
+    key = _restore_idempotency_key(request, actor_email)
+    existing = find_existing_restore(db, request=request, actor_email=actor_email)
+    if existing is not None:
+        return existing, False
+    plan = plan or validate_restore(db, request)
     backup_set = _restorable_set(db, request.backup_set_id)
     options: dict[str, Any] = {}
     if request.kind == "full":

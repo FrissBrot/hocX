@@ -145,15 +145,19 @@ def test_restore_requires_fresh_totp_and_confirmation(db):
     payload["totp_code"] = current_totp_code(secret)
     wrong = client.post("/api/admin/restores", json={**payload, "confirmation": "ja"})
     assert wrong.status_code == 422
-    # Der Code von eben ist verbraucht (Replay-Schutz) - neuer Code im nächsten Zeitfenster nötig.
+    # BORG-009: die falsche Phrase hat den Code NICHT verbraucht - derselbe Code gilt noch.
     factor = db.scalars(select(UserMfaFactor).where(UserMfaFactor.platform_admin_id == admin.id)).one()
-    factor.totp_last_counter = None
-    db.flush()
+    assert factor.totp_last_counter is None
     created = client.post("/api/admin/restores", json={**payload, "idempotency_key": "r1"})
     assert created.status_code == 202, created.text
     job = db.get(BackupRestoreJob, uuid.UUID(created.json()["id"]))
     assert job.options == {"source_tenant_id": 5, "new_name": "Verein (Kopie)"} and job.mfa_verified_at is not None
     assert "totp_code" not in created.text
+    # Wiederholung derselben Anfrage (Netzwerkfehler): derselbe Auftrag, obwohl der Code verbraucht ist.
+    again = client.post("/api/admin/restores", json={**payload, "idempotency_key": "r1"})
+    assert again.status_code == 202 and again.json()["id"] == created.json()["id"]
+    # Neue Anfrage mit anderem Schlüssel: fachlich blockiert (ein Restore läuft), bevor TOTP geprüft wird.
+    assert client.post("/api/admin/restores", json={**payload, "idempotency_key": "r2"}).status_code == 409
 
 
 def test_restore_without_totp_factor_is_forbidden(db):
@@ -161,9 +165,69 @@ def test_restore_without_totp_factor_is_forbidden(db):
     admin = PlatformAdmin(email=f"nototp-{uuid.uuid4().hex[:6]}@example.com", password_hash="x", display_name="O", role="owner")
     db.add(admin)
     db.flush()
+    phrase = backup_admin_service.confirmation_phrase("tenant_copy", backup_set)
     response = _client(db, admin_id=admin.id).post("/api/admin/restores", json={
-        "backup_set_id": str(backup_set.id), "kind": "full", "confirmation": "x", "totp_code": "123456"})
+        "backup_set_id": str(backup_set.id), "kind": "tenant_copy", "source_tenant_id": 5, "new_name": "Verein (Kopie)",
+        "confirmation": phrase, "totp_code": "123456"})
     assert response.status_code == 403
+
+
+def test_step_up_totp_replay_protection_holds_under_concurrency(monkeypatch):
+    """BORG-009: zwei gleichzeitige Bestätigungen mit demselben Code - genau eine gilt."""
+    import threading
+
+    from fastapi import HTTPException
+
+    from app.core.db import SessionLocal
+    from app.services.admin_mfa_service import AdminMfaService
+
+    secret = generate_totp_secret()
+    with SessionLocal() as setup:
+        admin = PlatformAdmin(email=f"race-{uuid.uuid4().hex[:6]}@example.com", password_hash="x", display_name="O", role="owner")
+        setup.add(admin)
+        setup.flush()
+        setup.add(UserMfaFactor(platform_admin_id=admin.id, factor_type="totp", label="t", secret_encrypted=encrypt_secret(secret)))
+        setup.commit()
+        admin_id = admin.id
+    code = current_totp_code(secret)
+    import time
+
+    import app.services.admin_mfa_service as mfa
+
+    real_verify = mfa.verify_totp_code
+
+    def slow_verify(*args, **kwargs):
+        # Zeitfenster zwischen Lesen und Commit vergrössern, damit sich beide Anfragen überlappen.
+        result = real_verify(*args, **kwargs)
+        time.sleep(0.5)
+        return result
+
+    monkeypatch.setattr(mfa, "verify_totp_code", slow_verify)
+    barrier = threading.Barrier(2)
+    results: list[object] = []
+
+    def confirm() -> None:
+        with SessionLocal() as session:
+            barrier.wait()
+            try:
+                AdminMfaService().verify_step_up_totp(session, admin_id=admin_id, code=code, purpose="backup-restore")
+                results.append("ok")
+            except HTTPException as exc:
+                session.rollback()
+                results.append(exc.status_code)
+
+    threads = [threading.Thread(target=confirm) for _ in range(2)]
+    try:
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+        assert sorted(map(str, results)) == ["401", "ok"]
+    finally:
+        with SessionLocal() as cleanup:
+            cleanup.execute(UserMfaFactor.__table__.delete().where(UserMfaFactor.platform_admin_id == admin_id))
+            cleanup.execute(PlatformAdmin.__table__.delete().where(PlatformAdmin.id == admin_id))
+            cleanup.commit()
 
 
 def test_evaluate_reports_overdue_and_failed_states(db):

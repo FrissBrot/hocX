@@ -194,10 +194,17 @@ def restore_preview(payload: RestorePreviewRequest, admin: CurrentAdmin = Depend
 @router.post("/restores", response_model=RestoreJobRead, status_code=status.HTTP_202_ACCEPTED)
 def create_restore(payload: RestoreCreate, admin: CurrentAdmin = Depends(require_admin_write), db: Session = Depends(get_db)) -> RestoreJobRead:
     _limit(admin, "restore", 5)
-    # Frische MFA-Bestätigung - unabhängig davon, wie lange die Sitzung schon besteht.
-    AdminMfaService().verify_step_up_totp(db, admin_id=admin.admin_id, code=payload.totp_code, purpose="backup-restore")
+    # Wiederholung derselben Anfrage (z. B. nach Netzwerkfehler): laufenden Auftrag zurückgeben,
+    # es wird nichts Neues ausgelöst - der TOTP-Code ist dann bereits verbraucht.
+    existing = svc.find_existing_restore(db, request=payload, actor_email=admin.email)
+    if existing is not None:
+        return svc.restore_read(db, existing)
     try:
-        job, created = svc.create_restore(db, request=payload, actor_email=admin.email)
+        # Fachliche Prüfung (Blocker, Bestätigungsphrase) VOR dem TOTP: ein Tippfehler verbraucht keinen Code.
+        plan = svc.validate_restore(db, payload)
+        # Frische MFA-Bestätigung - unabhängig davon, wie lange die Sitzung schon besteht.
+        AdminMfaService().verify_step_up_totp(db, admin_id=admin.admin_id, code=payload.totp_code, purpose="backup-restore")
+        job, created = svc.create_restore(db, request=payload, actor_email=admin.email, plan=plan)
     except svc.BackupAdminError as exc:
         _audit(db, admin, "backup.restore.rejected", reason=exc.code, kind=payload.kind, backup_set_id=payload.backup_set_id)
         raise _error(exc) from None
