@@ -71,10 +71,13 @@ export function precheckToFileResult(name: string, result: UploadPrecheckResult)
   };
 }
 
-/** Hinweise für das Formularfeld file_metadata des Galerie-Uploads. */
+/** Hinweise für das Formularfeld file_metadata des Galerie-Uploads. Nur für HEIC/HEIF: allein
+ * dort übernimmt der Server Browser-Werte (Konvertierung nach JPEG). Für alle anderen Formate
+ * liest er die Datei selbst - GPS & Co. werden dann gar nicht erst mitgeschickt
+ * (Datenminimierung, der Auftrag speichert die Hinweise bis zu seinem Ende). */
 export function fileMetadataHints(analyses: FileAnalysis[]): string | null {
   const hints = analyses
-    .filter((analysis) => analysis.sha256 && clientMetadataPayload(analysis))
+    .filter((analysis) => analysis.format === "heic" && analysis.sha256 && clientMetadataPayload(analysis))
     .map((analysis) => ({ sha256: analysis.sha256, metadata: clientMetadataPayload(analysis) }));
   return hints.length ? JSON.stringify(hints) : null;
 }

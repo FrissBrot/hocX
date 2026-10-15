@@ -1486,12 +1486,14 @@ class FileService:
                     (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
                 job.status = "failed"
                 job.reserved_bytes = 0
+                job.file_hints = {}  # Browser-Hinweise (u. a. GPS) nicht über das Jobende hinaus aufbewahren
                 job.error = str(exc)
                 job.finished_at = datetime.now(UTC)
                 db.commit()
             else:
                 job.status = "done"
                 job.reserved_bytes = 0
+                job.file_hints = {}  # Browser-Hinweise (u. a. GPS) nicht über das Jobende hinaus aufbewahren
                 job.finished_at = datetime.now(UTC)
                 db.commit()
                 for relative_path in job.staged_paths:

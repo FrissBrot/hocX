@@ -464,3 +464,22 @@ def test_protocol_images_store_capture_date_and_gps(db):
     assert row.exif_taken_at == datetime(2026, 3, 3, 19, 0, tzinfo=UTC)
     assert (row.gps_latitude, row.gps_longitude) == (pytest.approx(47.0, abs=1e-4), pytest.approx(8.0, abs=1e-4))
     assert row.metadata_scan_status == "ok"
+
+
+def test_file_hints_are_cleared_when_the_job_ends(db):
+    """IMGMETA-004: Browser-Hinweise (inkl. GPS) bleiben nicht dauerhaft im Upload-Auftrag."""
+    tenant = make_tenant(db)
+    user = _writer(db, tenant.id)
+    content = jpeg(color=(71, 81, 91))
+    hints = json.dumps([{"sha256": hashlib.sha256(content).hexdigest(), "metadata": {"gps": {"latitude": 47.1, "longitude": 8.2}}}])
+    queued = asyncio.run(
+        files_routes.upload_gallery_images(
+            files=[_upload_file(content, "hint.jpg")], tags=None, event_id=None, submission_assignment_id=None,
+            submission_element_ref=None, cycle_config_id=None, db=db, user=user, file_metadata=hints,
+        )
+    )
+    job = db.get(GalleryUploadJob, queued.id)
+    assert job.file_hints  # bis zur Verarbeitung vorhanden (Wiederaufnahme nach Abbruch)
+    service.process_pending_gallery_upload_jobs(db)
+    db.refresh(job)
+    assert job.status == "done" and job.file_hints == {}

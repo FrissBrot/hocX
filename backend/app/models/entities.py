@@ -1964,9 +1964,10 @@ class GalleryUploadJob(Base, TimestampMixin):
     # Im Upload-Popup angegebenes Schaetzdatum - gilt fuer jedes Bild dieses Auftrags, fuer
     # das der Server kein echtes Aufnahmedatum findet (auch ZIP-Eintraege).
     estimated_taken_on: Mapped[date | None] = mapped_column(Date)
-    # Clientseitig extrahierte Metadaten je SHA-256 (Browser-Analyse vor dem Upload). Nur
-    # Hinweise: angewendet wird ein Eintrag ausschliesslich, wenn der serverseitig neu
-    # berechnete Hash der Datei passt (siehe image_metadata_service.hint_for).
+    # Clientseitig extrahierte Metadaten je SHA-256 (Browser-Analyse vor dem Upload, nur fuer
+    # HEIC/HEIF). Nur Hinweise: angewendet wird ein Eintrag ausschliesslich, wenn der
+    # serverseitig neu berechnete Hash der Datei passt (siehe FileService._apply_upload_metadata
+    # und _enrich_duplicates). Wird bei Jobende (done/failed) geleert - keine Zweitablage von GPS.
     file_hints: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
     # Ergebnis je Datei fuer die Upload-Ergebnisanzeige: {name, status, file_id?, applied?, message?}
     # mit status in uploaded/skipped/metadata_updated/failed.

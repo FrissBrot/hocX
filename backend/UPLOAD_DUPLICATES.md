@@ -294,6 +294,11 @@ Metadaten; Leser haben auf Galeriebilder keinen Zugriff. Öffentliche Freigabe-L
 nie über die API aus und entfernen es aus Dateien, wenn der Link den Standort nicht teilt.
 Der Mandantenexport (Backup) enthält die Spalten unverändert.
 
+Browser-Hinweise (`file_metadata` des Galerie-Uploads, ggf. mit GPS) schickt das Upload-Popup
+nur für HEIC/HEIF - nur dort übernimmt der Server Client-Werte. Der Auftrag
+(`gallery_upload_job.file_hints`) hält sie nur bis zum Jobende (`done`/`failed`) und leert
+sie dann; ein abgebrochener Auftrag behält sie bis zur Wiederaufnahme.
+
 ## 11. Export
 
 `image_export_service.export_bytes` erzeugt eine **temporäre Kopie**; gespeicherte Originale
