@@ -171,6 +171,25 @@ class Settings(BaseSettings):
     storage_work_root: str = "/app/storage-local/work"
     storage_journal_retention_days: int = 30
 
+    # --- Dokumentverarbeitung (docs-site/docs/technik/dokumente.md) -------------------------
+    # Grösste Originaldatei, die konvertiert/extrahiert wird; grössere bleiben nur als Original.
+    document_max_input_mb: int = 50
+    document_convert_timeout_seconds: int = 120
+    document_extract_timeout_seconds: int = 90
+    document_ocr_timeout_seconds: int = 300
+    # Adressraum-Limits der Kindprozesse (LibreOffice reserviert viel virtuellen Speicher).
+    document_convert_memory_mb: int = 3072
+    document_extract_memory_mb: int = 1024
+    document_ocr_max_pages: int = 50
+    document_max_text_chars: int = 5_000_000
+    document_job_max_attempts: int = 5
+    document_job_lease_seconds: int = 600
+    document_worker_poll_seconds: float = 5.0
+    # Backend-Loop document_sync: Anlage für Abgabebox-Uploads und Bestand, Aufräumen.
+    document_sync_interval_minutes: float = 2
+    document_sync_batch_size: int = 200
+    document_backfill_enabled: bool = True
+
     # --- Wartungsmodus -----------------------------------------------------------------------
     # Wie lange ein Prozess den Wartungszustand zwischenspeichert (Middleware). Kurz halten: der
     # Initial-Migrations-Worker wartet vor dem Fencen mindestens zweimal so lange.
