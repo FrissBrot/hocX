@@ -165,3 +165,19 @@ __all__ += [
     "StorageProfile",
     "StorageState",
 ]
+
+from app.models.document_entities import (  # noqa: E402 - eigene Datei, siehe Migration 0115
+    Document,
+    DocumentExtraction,
+    DocumentFile,
+    DocumentJob,
+    DocumentVersion,
+)
+
+__all__ += [
+    "Document",
+    "DocumentExtraction",
+    "DocumentFile",
+    "DocumentJob",
+    "DocumentVersion",
+]
