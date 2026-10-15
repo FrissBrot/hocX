@@ -30,18 +30,20 @@ async function readEntry(entry: Entry, out: File[], limit: number): Promise<void
   }
 }
 
-/** Dateien eines Drops - Ordner werden aufgeklappt. Ohne Entry-API die normale Dateiliste. */
-export async function filesFromDataTransfer(dataTransfer: DataTransfer, limit = 5000): Promise<File[]> {
+/** Dateien eines Drops - Ordner werden aufgeklappt. Ohne Entry-API die normale Dateiliste.
+ * `fromFolder` sagt, ob ein Ordner dabei war - der Aufrufer darf das nicht nachträglich über
+ * dataTransfer.files ermitteln: nach dem drop-Event ist der DataTransfer geschützt bzw. leer. */
+export async function filesFromDataTransfer(dataTransfer: DataTransfer, limit = 5000): Promise<{ files: File[]; fromFolder: boolean }> {
   const items = Array.from(dataTransfer.items ?? []);
   const entries: Entry[] = [];
   for (const item of items) {
     const entry = (item.webkitGetAsEntry?.() ?? null) as unknown as Entry | null;
     if (entry) entries.push(entry);
   }
-  if (!entries.length || !entries.some((entry) => entry.isDirectory)) return Array.from(dataTransfer.files);
+  if (!entries.length || !entries.some((entry) => entry.isDirectory)) return { files: Array.from(dataTransfer.files), fromFolder: false };
   const out: File[] = [];
   for (const entry of entries) await readEntry(entry, out, limit);
-  return out;
+  return { files: out, fromFolder: true };
 }
 
 /** Nur Dateien, die der Galerie-Upload annimmt (Bilder, HEIC, Live-Clips, ZIP) - Ordner

@@ -426,10 +426,9 @@ export function GalleryUploadModal({
             onDrop={(event) => {
               event.preventDefault();
               setIsDragging(false);
-              const dataTransfer = event.dataTransfer;
               // Ordner werden rekursiv aufgeklappt (nur Bilder, HEIC, Live-Clips und ZIPs).
-              void filesFromDataTransfer(dataTransfer).then((files) => {
-                if (files.length > 0) addFiles(files, files.length !== dataTransfer.files.length);
+              void filesFromDataTransfer(event.dataTransfer).then(({ files, fromFolder }) => {
+                if (files.length > 0) addFiles(files, fromFolder);
               });
             }}
             onClick={() => inputRef.current?.click()}
