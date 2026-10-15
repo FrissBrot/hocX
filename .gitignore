@@ -32,7 +32,8 @@ storage/generated/*
 storage/tenant_clones/*
 storage/tenant_imports/*
 
-# Hausstil-Uploads (Schriften, Logos) und Reste der früheren Dokumentvorlagen
+# Document-Studio-Uploads (Schriften, Logos, Bilder) und Reste früherer Dokument-Engines
+storage/document_assets/
 storage/document_style_assets/
 storage/document_template_parts/
 storage/document_templates/

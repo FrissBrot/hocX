@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from app.documents.catalog import CATALOG, NEEDS_PROTOCOL
-from app.documents.layout import CONTAINER_TYPES, MASTER_ONLY_TYPES, NODE_MODELS, TemplateContent
+from app.documents.layout import CONTAINER_TYPES, MASTER_ONLY_TYPES, NODE_MODELS
 
 Mode = Literal["simple", "advanced", "expert"]
 MODES: tuple[Mode, ...] = ("simple", "advanced", "expert")
@@ -228,7 +228,6 @@ def catalog_payload() -> dict[str, Any]:
                 "icon": meta.icon,
                 "container": name in CONTAINER_TYPES,
                 "master_only": name in MASTER_ONLY_TYPES,
-                "schema": NODE_MODELS[name].model_json_schema(),
             }
             for name, meta in NODE_TYPES.items()
         },
@@ -249,5 +248,4 @@ def catalog_payload() -> dict[str, Any]:
         "document_types": [{"key": item.key, "category": item.category, "needs_protocol": item.needs_protocol, "formats": list(item.formats)} for item in DOCUMENT_TYPES.values()],
         "categories": list(CATEGORIES),
         "modes": list(MODES),
-        "content_schema": TemplateContent.model_json_schema(),
     }

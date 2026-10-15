@@ -356,7 +356,9 @@
     "unknownRow": "Unbekannte Zeile",
     "unnamed": "Unbenannt",
     "behaviorOverridden": "{label} – weicht vom Default des Elements ab",
-    "defaultStyleSuffix": "(Standard)"
+    "defaultStyleSuffix": "(Standard)",
+    "pdfLayoutStudioHelp": "Aussehen und Aufbau des PDFs gestaltest du im Document Studio.",
+    "pdfLayoutStudioLink": "PDF-Vorlagen öffnen"
   },
   "elementEditor": {
     "advancedShow": "Erweitert",

@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import CurrentUser
 from app.documents import brand_service, template_service
-from app.documents.brand import BrandTokens
+from app.documents.brand import BrandTokens, apply_overrides
 from app.documents.catalog import BlockSpec
 from app.documents.compiler import CompiledDocument, CompileInput, Diagnostic, compile_document
 from app.documents.context import AssetCollector, BuildContext, DocumentNotFoundError, DocumentPermissionError
@@ -271,7 +271,9 @@ def prepare(
         resolved = template_service.ResolvedTemplate(template=template, revision=revision, source=template_source or "explicit", brand_id=None)
     brand_revision = template_service.resolve_brand_revision(db, tenant_id, resolved, explicit_brand=explicit_brand)
     override_tokens = BrandTokens.model_validate(request.brand_tokens) if request.brand_tokens is not None else None
-    brand = brand_service.resolve_brand(db, tenant_id, brand_revision, tokens=override_tokens)
+    base_tokens = override_tokens if override_tokens is not None else brand_service.tokens_of(brand_revision)
+    effective_tokens = apply_overrides(base_tokens, content.settings.brand_overrides)
+    brand = brand_service.resolve_brand(db, tenant_id, brand_revision, tokens=effective_tokens)
 
     # Meta (fachliche Angaben, Grundlage des Inhalts-Hashes)
     options = request.options
@@ -380,7 +382,7 @@ async def preview(db: Session, user: CurrentUser | None, tenant_id: int, request
         return PreviewResult(
             pages=output.pages,
             diagnostics=prepared.diagnostics,
-            page_count=len(output.pages),
+            page_count=output.page_count or len(output.pages),
             template_id=prepared.template.public_id if prepared.template is not None else None,
             template_source=prepared.template_source,
             design_hash=prepared.design_hash,

@@ -933,6 +933,8 @@ def validate_template(db: Session, tenant_id: int | None, content: TemplateConte
     if content.title_page.visible_if is not None:
         for path in condition_paths(content.title_page.visible_if):
             check_path("title_page", path, None)
+    if content.settings.brand_overrides.logo_asset_id is not None:
+        asset_ids.setdefault(str(content.settings.brand_overrides.logo_asset_id), []).append("settings")
 
     if asset_ids:
         found = asset_service.assets_by_ids(db, tenant_id, [uuid.UUID(value) for value in asset_ids]) if tenant_id is not None else {}

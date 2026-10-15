@@ -42,3 +42,15 @@ def test_asset_ids_cover_images_and_fonts():
     font = "0192f0aa-0000-7000-8000-000000000002"
     tokens = BrandTokens.model_validate({"assets": {"logo": logo, "images": [{"key": "signet", "asset_id": logo}]}, "typography": {"heading": {"builtin": None, "asset_ids": [font]}}})
     assert {str(value) for value in tokens.asset_ids()} == {logo, font}
+
+
+def test_template_overrides_win_over_brand():
+    from app.documents.brand import apply_overrides
+    from app.documents.layout import BrandOverrides
+
+    tokens = BrandTokens.model_validate({"colors": {"primary": "#112233"}, "typography": {"body": {"builtin": None, "asset_ids": ["0192f0aa-0000-7000-8000-000000000002"]}}})
+    assert apply_overrides(tokens, BrandOverrides()) is tokens
+    merged = apply_overrides(tokens, BrandOverrides(primary="#FF0000", body_font="liberation_serif", base_size=12, logo_asset_id="0192f0aa-0000-7000-8000-000000000001"))
+    assert merged.colors.primary == "#FF0000" and merged.colors.secondary == tokens.colors.secondary
+    assert merged.typography.body.builtin == "liberation_serif" and merged.typography.body.asset_ids == []
+    assert merged.typography.base_size == 12 and str(merged.assets.logo).endswith("0001")

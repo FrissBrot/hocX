@@ -109,7 +109,6 @@ def get_studio_catalog(db: Session = Depends(get_db), user: CurrentUser = Depend
     fonts += [row.font_family for row in asset_service.list_assets(db, user.current_tenant_id, kind="font") if row.font_family and row.font_family not in fonts]
     payload["fonts"] = fonts
     payload["brand_presets"] = list(BRAND_PRESETS)
-    payload["brand_schema"] = BrandTokens.model_json_schema()
     db.commit()
     return payload
 

@@ -1,8 +1,9 @@
 "use client";
 
-// Formular für die Parameter eines Katalog-Blocks, generiert aus dem JSON-Schema
-// (GET /api/documents/catalog, params_schema). Referenzfelder (x-source) laden ihre Optionen
-// über /api/documents/sources/{source}; Felder mit x-widget "hidden" erscheinen nicht.
+// Formular für die Parameter einer Fachkomponente (data_block), generiert aus dem JSON-Schema
+// des Katalogs (GET /api/document-studio/catalog, params_schema). Referenzfelder (x-source)
+// laden ihre Optionen mandantengebunden über /api/documents/sources/{source}; Felder mit
+// x-widget "hidden" erscheinen nicht.
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -55,7 +56,7 @@ function optionLabel(option: SourceOption) {
 }
 
 function SourceField({ source, value, onChange, protocolId, multiple }: { source: string; value: unknown; onChange: (value: unknown) => void; protocolId?: string | null; multiple: boolean }) {
-  const t = useTranslations("documents");
+  const t = useTranslations("documentStudio");
   const options = useSource(source, protocolId);
   if (multiple) {
     const values = Array.isArray(value) ? (value as string[]) : [];
@@ -87,16 +88,16 @@ function enumLabel(t: ReturnType<typeof useTranslations>, value: string | number
 }
 
 function ObjectRows({ name, itemSchema, root, value, onChange }: { name: string; itemSchema: JsonSchema; root: JsonSchema; value: unknown; onChange: (value: unknown) => void }) {
-  const t = useTranslations("documents");
+  const t = useTranslations("documentStudio");
   const rows = Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
   const properties = Object.entries(resolveSchema(itemSchema, root).properties ?? {});
   function update(index: number, key: string, next: unknown) {
     onChange(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: next } : row)));
   }
   return (
-    <div className="docexport-rows">
+    <div className="studio-param-rows">
       {rows.map((row, index) => (
-        <div key={index} className="docexport-row">
+        <div key={index} className="studio-param-row">
           {properties.map(([key]) => (
             <input
               key={key}
@@ -106,20 +107,20 @@ function ObjectRows({ name, itemSchema, root, value, onChange }: { name: string;
               onChange={(event) => update(index, key, event.target.value)}
             />
           ))}
-          <button type="button" className="button-icon-soft button-icon-soft-danger" aria-label={t("dialog.removeRow")} onClick={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))}>
+          <button type="button" className="button-icon-soft button-icon-soft-danger" aria-label={t("params.removeRow")} onClick={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))}>
             ✕
           </button>
         </div>
       ))}
       <button type="button" className="button-secondary button-ghost" onClick={() => onChange([...rows, Object.fromEntries(properties.map(([key]) => [key, ""]))])}>
-        {t("dialog.addRow", { field: t(`params.${name}`) })}
+        {t("params.addRow", { field: t(`params.${name}`) })}
       </button>
     </div>
   );
 }
 
-export function BlockParamForm({ schema, params, onChange, protocolId }: Props) {
-  const t = useTranslations("documents");
+export function ComponentParamForm({ schema, params, onChange, protocolId }: Props) {
+  const t = useTranslations("documentStudio");
   const properties = Object.entries(schema.properties ?? {});
 
   function set(name: string, value: unknown) {
@@ -129,7 +130,7 @@ export function BlockParamForm({ schema, params, onChange, protocolId }: Props) 
   const contextProtocol = typeof params.protocol_id === "string" ? params.protocol_id : protocolId;
 
   return (
-    <div className="docexport-params">
+    <div className="studio-params">
       {properties.map(([name, raw]) => {
         const property = unwrapNullable(raw, schema);
         if (property["x-widget"] === "hidden" || raw["x-widget"] === "hidden") return null;
@@ -139,7 +140,7 @@ export function BlockParamForm({ schema, params, onChange, protocolId }: Props) 
 
         if (property.type === "boolean") {
           return (
-            <label key={name} className="docexport-check">
+            <label key={name} className="studio-inline-check">
               <input type="checkbox" checked={Boolean(value)} onChange={(event) => set(name, event.target.checked)} />
               <span>{label}</span>
             </label>
@@ -154,9 +155,9 @@ export function BlockParamForm({ schema, params, onChange, protocolId }: Props) 
           } else if (items.enum) {
             const selected = Array.isArray(value) ? (value as string[]) : [];
             control = (
-              <div className="docexport-checkgroup">
+              <div className="studio-param-checks">
                 {items.enum.map((option) => (
-                  <label key={String(option)} className="docexport-check">
+                  <label key={String(option)} className="studio-inline-check">
                     <input
                       type="checkbox"
                       checked={selected.includes(String(option))}

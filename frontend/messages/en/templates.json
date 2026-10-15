@@ -356,7 +356,9 @@
     "unknownRow": "Unknown row",
     "unnamed": "Unnamed",
     "behaviorOverridden": "{label} – differs from the element default",
-    "defaultStyleSuffix": "(default)"
+    "defaultStyleSuffix": "(default)",
+    "pdfLayoutStudioHelp": "You design the look and layout of the PDF in the Document Studio.",
+    "pdfLayoutStudioLink": "Open PDF templates"
   },
   "elementEditor": {
     "advancedShow": "Advanced",

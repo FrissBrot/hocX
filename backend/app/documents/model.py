@@ -208,7 +208,7 @@ class BlockBase(_Strict):
     """Gemeinsame Felder aller Blöcke.
 
     ``hide_if_empty`` (Standard an): der Builder lässt leere Blöcke weg. Ist es aus, rendert
-    der Hausstil den übersetzten Leertext (``empty.<type>``). ``empty`` setzt der Builder.
+    die Typst-Komponente den übersetzten Leertext (``empty.<type>``). ``empty`` setzt der Builder.
     ``level`` ist die Gliederungstiefe (1 = Abschnitt) für Titel und Inhaltsverzeichnis.
     """
 

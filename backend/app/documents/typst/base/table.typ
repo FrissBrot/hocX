@@ -3,7 +3,7 @@
 // Regeln: bricht über Seiten um und wiederholt die Kopfzeile, Spaltenbreiten passen sich dem
 // Inhalt an (eine Spalte nimmt die Restbreite), Beträge rechtsbündig, Status als übersetztes
 // Label mit farbigem Punkt. Die Optik (Linien, Kopf, Zebra, Innenabstand) kommt aus
-// ctx.theme.table, damit jeder Hausstil sie anpassen kann.
+// ctx.theme.table (aus dem Brand-Profil, siehe theme.typ).
 
 #import "../lib/core.typ": colors, space, radius, tr, tone-color, status-dot, tag-chip
 #import "rich.typ": render-rich

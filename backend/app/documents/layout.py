@@ -557,6 +557,23 @@ class WatermarkSettings(_Strict):
     mode: Literal["off", "draft", "always"] = "draft"
 
 
+class BrandOverrides(_Strict):
+    """Abweichungen dieser Vorlage vom Brand-Profil (Modus «Einfach»: Logo, Farben, Schriften).
+    Leer = Wert aus dem Brand-Profil. Gilt nur für diese Vorlage."""
+
+    primary: Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")] | None = None
+    secondary: Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")] | None = None
+    accent: Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")] | None = None
+    heading: Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")] | None = None
+    logo_asset_id: uuid.UUID | None = None
+    body_font: Literal["inter", "liberation_sans", "liberation_serif", "noto_sans"] | None = None
+    heading_font: Literal["inter", "liberation_sans", "liberation_serif", "noto_sans"] | None = None
+    base_size: float | None = Field(None, ge=7, le=16)
+
+    def is_empty(self) -> bool:
+        return not any(value is not None for value in self.model_dump().values())
+
+
 class TemplateSettings(_Strict):
     # Seitenvorlage der ersten Inhaltsseite (abweichende erste Seite); None = default_master
     first_page_master: NodeId | None = None
@@ -569,6 +586,7 @@ class TemplateSettings(_Strict):
     language: str | None = Field(None, max_length=10)
     # Prüfvermerk automatisch am Dokumentende, falls die Vorlage keinen eigenen enthält
     auto_verify_note: bool = True
+    brand_overrides: BrandOverrides = Field(default_factory=BrandOverrides)
 
 
 class TemplateContent(_Strict):

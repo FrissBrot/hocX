@@ -64,7 +64,7 @@ test("verify page recognises the original and rejects a modified copy", async ({
   }
 });
 
-test("house style and authenticity settings (light/dark, 1440)", async ({ page }) => {
+test("authenticity settings (light/dark, 1440)", async ({ page }) => {
   test.setTimeout(90_000);
   for (const theme of ["light", "dark"]) {
     await page.setViewportSize({ width: 1440, height: 1000 });

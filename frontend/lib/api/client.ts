@@ -6,7 +6,13 @@ const publicApiUrl = "";
 export const browserApiBaseUrl = publicApiUrl;
 
 export class ApiError extends Error {
-  constructor(message: string, public readonly kind: "offline" | "timeout" | "backend" | "auth" | "validation" | "conflict", public readonly status?: number) {
+  constructor(
+    message: string,
+    public readonly kind: "offline" | "timeout" | "backend" | "auth" | "validation" | "conflict",
+    public readonly status?: number,
+    /** Strukturiertes `detail` des Backends (z. B. lock_version bei 409, Diagnosen bei 422). */
+    public readonly detail?: unknown
+  ) {
     super(message);
   }
 }
@@ -70,11 +76,15 @@ export async function browserApiFetch<T>(path: string, init?: RequestInit): Prom
 
 function errorFromResponse(status: number, text: string): ApiError {
   let message = text || `Request failed with status ${status}`;
+  let detail: unknown;
   try {
     const json = JSON.parse(text);
     if (json?.detail) {
+      detail = json.detail;
       if (typeof json.detail === "string") {
         message = json.detail;
+      } else if (!Array.isArray(json.detail) && typeof json.detail.message === "string") {
+        message = json.detail.message;
       } else if (Array.isArray(json.detail)) {
         message = json.detail
           .map((e: { msg?: string; loc?: string[] }) => {
@@ -90,7 +100,7 @@ function errorFromResponse(status: number, text: string): ApiError {
   const kind = status === 401 || status === 403 ? "auth"
     : status === 409 ? "conflict"
     : status >= 500 ? "backend" : "validation";
-  return new ApiError(message, kind, status);
+  return new ApiError(message, kind, status, detail);
 }
 
 // POSTs a FormData body like browserApiFetch, but over XMLHttpRequest: fetch() has no

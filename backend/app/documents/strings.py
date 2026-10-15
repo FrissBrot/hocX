@@ -2,7 +2,7 @@
 
 Quelle: frontend/messages/<locale>/documentPdf.json, ins Backend kopiert von
 scripts/sync-document-i18n.py nach app/documents/i18n/<locale>.json. Python und Typst enthalten
-keine fest codierten Texte: der Hausstil schlägt jeden Text in ``Document.strings`` nach.
+keine fest codierten Texte: Typst schlägt jeden Text in den mitgegebenen ``strings`` nach.
 """
 from __future__ import annotations
 

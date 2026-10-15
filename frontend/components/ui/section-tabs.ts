@@ -27,9 +27,20 @@ export function templateTabs(t: TFunc): RouteTab[] {
   return [
     { href: "/templates", label: t("protocolTemplates") },
     { href: "/elements", label: t("elements") },
-    { href: "/settings", label: t("documentLayouts") },
-    { href: "/settings/verification", label: t("documentVerification") },
     { href: "/task-packages", label: t("taskPackages") },
+  ];
+}
+
+// Document Studio: Vorlagen, Corporate Design, Assets, Komponenten, Exporte; die
+// Echtheitsprüfung (Einstellungen der Prüfseite) nur für Admins.
+export function documentStudioTabs(t: TFunc, isAdmin: boolean): RouteTab[] {
+  return [
+    { href: "/documents", label: t("documentTemplates") },
+    { href: "/documents/brand", label: t("documentBrand") },
+    { href: "/documents/assets", label: t("documentAssets") },
+    { href: "/documents/components", label: t("documentComponents") },
+    { href: "/documents/exports", label: t("documentExports") },
+    ...(isAdmin ? [{ href: "/settings/verification", label: t("documentVerification") }] : []),
   ];
 }
 

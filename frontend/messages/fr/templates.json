@@ -356,7 +356,9 @@
     "unknownRow": "Ligne inconnue",
     "unnamed": "Sans nom",
     "behaviorOverridden": "{label} – diffère de la valeur par défaut de l’élément",
-    "defaultStyleSuffix": "(par défaut)"
+    "defaultStyleSuffix": "(par défaut)",
+    "pdfLayoutStudioHelp": "L’apparence et la structure du PDF se conçoivent dans le Document Studio.",
+    "pdfLayoutStudioLink": "Ouvrir les modèles PDF"
   },
   "elementEditor": {
     "advancedShow": "Avancé",

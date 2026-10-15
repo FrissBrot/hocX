@@ -266,7 +266,9 @@ def test_reusable_components(db, world):
 
 def test_catalog_and_thumbnail(db, world):
     catalog = studio.get_studio_catalog(db=db, user=world["reader"])
-    assert {"node_types", "library", "data_components", "bindings", "document_types", "color_references", "fonts", "content_schema"} <= set(catalog)
+    assert {"node_types", "library", "data_components", "bindings", "document_types", "color_references", "fonts", "brand_presets"} <= set(catalog)
+    # Schemas bleiben serverseitig (Validierung beim Speichern), der Katalog bleibt klein
+    assert "content_schema" not in catalog and all("schema" not in meta for meta in catalog["node_types"].values())
     template = db.query(DocumentTemplate).filter(DocumentTemplate.system_key == "invitation_letter").one()
     response = asyncio.run(studio.get_document_template_thumbnail(template.public_id, db=db, user=world["reader"]))
     assert response.body.startswith(b"\x89PNG")

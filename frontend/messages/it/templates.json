@@ -356,7 +356,9 @@
     "unknownRow": "Riga sconosciuta",
     "unnamed": "Senza nome",
     "behaviorOverridden": "{label} – diverso dal predefinito dell’elemento",
-    "defaultStyleSuffix": "(predefinito)"
+    "defaultStyleSuffix": "(predefinito)",
+    "pdfLayoutStudioHelp": "L’aspetto e la struttura del PDF si progettano nel Document Studio.",
+    "pdfLayoutStudioLink": "Apri i modelli PDF"
   },
   "elementEditor": {
     "advancedShow": "Avanzate",

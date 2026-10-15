@@ -26,7 +26,6 @@
   "fines": "Bussen",
   "protocolTemplates": "Protokoll-Vorlagen",
   "elements": "Elemente",
-  "documentLayouts": "Hausstile",
   "general": "Allgemein",
   "domains": "Domains",
   "subscriptionAndUsage": "Abo & Nutzung",
@@ -51,5 +50,11 @@
   "sessionLoading": "Arbeitsbereich wird geladen…",
   "connections": "Verknüpfungen",
   "taskPackages": "Aufgabenpakete",
-  "documentVerification": "Echtheitsprüfung"
+  "documentVerification": "Echtheitsprüfung",
+  "documentStudio": "Dokumente",
+  "documentTemplates": "Vorlagen",
+  "documentBrand": "Corporate Design",
+  "documentAssets": "Bilder und Schriften",
+  "documentComponents": "Komponenten",
+  "documentExports": "Export-Verlauf"
 }

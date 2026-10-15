@@ -224,7 +224,7 @@ export function AdminTenantVerificationPanel({ tenantId, tenantName }: { tenantI
           <StatusBanner tone="neutral" message={t(`tenant.revoked.${state.revoked_reason === "name_changed" ? "name_changed" : "admin"}`, { date: formatDateTime(state.revoked_at, locale) })} />
         )}
         {state.verified_at && !state.show_identity && <StatusBanner tone="neutral" message={t("tenant.hidden")} />}
-        <div className="docexport-actions-row">
+        <div className="docverify-actions-row">
           {pending && <button type="button" className="button-danger" onClick={() => open("reject")}>{t("actions.reject")}</button>}
           {state.verified_at ? (
             <button type="button" className="button-danger" onClick={() => open("revoke")}>{t("actions.revoke")}</button>

@@ -78,6 +78,8 @@ class RenderOutput:
     pdf: bytes | None = None
     pages: list[bytes] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    # Seiten insgesamt (PNG-Vorschau liefert höchstens max_pages davon)
+    page_count: int = 0
 
 
 class DocumentRenderError(Exception):
@@ -323,9 +325,10 @@ class DocumentRenderer:
         if fmt == "pdf":
             return RenderOutput(pdf=result.output if isinstance(result.output, bytes) else None, warnings=result.warnings)
         pages = result.output if isinstance(result.output, list) else [result.output] if result.output else []
+        total = len(pages)
         if max_pages is not None:
             pages = pages[:max_pages]
-        return RenderOutput(pages=list(pages), warnings=result.warnings)
+        return RenderOutput(pages=list(pages), warnings=result.warnings, page_count=total)
 
     async def render_pdf(self, document: dict, assets: RenderAssets | None = None) -> RenderOutput:
         return await self.render(document, assets, fmt="pdf")

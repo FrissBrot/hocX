@@ -242,3 +242,23 @@ def color_references(tokens: BrandTokens) -> list[str]:
     """Alle gültigen Farbreferenzen (Farbauswahl im Designer)."""
     fixed = [f"$brand.{name}" for name in BrandColors.model_fields if name != "custom"]
     return fixed + [f"$brand.custom.{item.key}" for item in tokens.colors.custom]
+
+
+def apply_overrides(tokens: BrandTokens, overrides) -> BrandTokens:
+    """Vorlagen-Overrides (layout.BrandOverrides) auf ein Brand-Profil anwenden."""
+    if overrides is None or overrides.is_empty():
+        return tokens
+    data = tokens.model_dump(mode="json")
+    for key in ("primary", "secondary", "accent", "heading"):
+        value = getattr(overrides, key)
+        if value is not None:
+            data["colors"][key] = value
+    if overrides.logo_asset_id is not None:
+        data["assets"]["logo"] = str(overrides.logo_asset_id)
+    if overrides.body_font is not None:
+        data["typography"]["body"] = {"builtin": overrides.body_font, "asset_ids": []}
+    if overrides.heading_font is not None:
+        data["typography"]["heading"] = {"builtin": overrides.heading_font, "asset_ids": []}
+    if overrides.base_size is not None:
+        data["typography"]["base_size"] = overrides.base_size
+    return BrandTokens.model_validate(data)
