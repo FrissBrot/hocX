@@ -91,6 +91,29 @@ def test_template_lifecycle(db, world):
     assert discarded.draft_revision is None and second.published_revision.revision_no == 2
 
 
+def test_readers_only_see_the_published_revision(db, world):
+    """STUDIO-018: Leser sehen weder Inhalt noch Revision eines Entwurfs."""
+    created = _create(db, world)
+    published = studio.publish_document_template(created.id, studio.PublishBody(), db=db, user=world["admin"])
+    changed = {**SIMPLE, "body": [{"type": "text", "id": "t", "content": {"default": [{"t": "text", "v": "Geheimer Entwurf"}]}}]}
+    draft = studio.save_document_template_draft(created.id, studio.DraftSave(content=changed), db=db, user=world["writer"]).revision
+
+    as_reader = studio.get_document_template(created.id, db=db, user=world["reader"])
+    assert as_reader.working_revision_id == published.published_revision.id
+    assert as_reader.content["body"][0]["content"]["default"][0]["v"] == "Erster Stand"
+    assert [item.status for item in studio.list_document_template_revisions(created.id, db=db, user=world["reader"])] == ["published"]
+    with pytest.raises(HTTPException) as excinfo:
+        studio.get_document_template_revision(created.id, draft.id, db=db, user=world["reader"])
+    assert excinfo.value.status_code == 404
+    with pytest.raises(HTTPException) as excinfo:
+        studio.compare_document_template_revisions(created.id, from_revision=published.published_revision.id, to_revision=draft.id, db=db, user=world["reader"])
+    assert excinfo.value.status_code == 404
+
+    as_writer = studio.get_document_template(created.id, db=db, user=world["writer"])
+    assert as_writer.working_revision_id == draft.id and as_writer.content["body"][0]["content"]["default"][0]["v"] == "Geheimer Entwurf"
+    assert studio.get_document_template_revision(created.id, draft.id, db=db, user=world["writer"])["revision"]["status"] == "draft"
+
+
 def test_invalid_layout_is_never_saved(db, world):
     created = _create(db, world)
     with pytest.raises(HTTPException) as excinfo:

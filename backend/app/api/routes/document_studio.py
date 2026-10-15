@@ -201,9 +201,26 @@ def _template_read(db: Session, user: CurrentUser, template: DocumentTemplate, d
     )
 
 
+def _sees_drafts(user: CurrentUser) -> bool:
+    """Entwürfe (Arbeitsstand) sehen nur Personen, die Vorlagen bearbeiten dürfen; alle anderen
+    sehen die veröffentlichte Revision - wie bei der Vorschau mit ``revision_id``."""
+    return permissions.capabilities(user)["edit_templates"]
+
+
+def _visible_revision(db: Session, user: CurrentUser, template: DocumentTemplate) -> DocumentTemplateRevision | None:
+    return template_service.working_revision(db, template) if _sees_drafts(user) else template_service.published_revision(db, template)
+
+
+def _visible_revision_by_id(db: Session, user: CurrentUser, template: DocumentTemplate, revision_id: uuid.UUID) -> DocumentTemplateRevision | None:
+    revision = template_service.get_revision(db, template, revision_id)
+    if revision is not None and revision.status == "draft" and not _sees_drafts(user):
+        return None
+    return revision
+
+
 def _template_detail(db: Session, user: CurrentUser, template: DocumentTemplate, *, diagnostics: list[Any] | None = None) -> TemplateDetail:
     base = _template_read(db, user, template)
-    working = template_service.working_revision(db, template)
+    working = _visible_revision(db, user, template)
     content = template_service.revision_content(working) if working is not None else TemplateContent()
     if diagnostics is None:
         diagnostics = validate_template(db, template.tenant_id or user.current_tenant_id, content, document_type=template.document_type)
@@ -453,14 +470,15 @@ def archive_document_template(template_id: uuid.UUID, body: ArchiveBody, db: Ses
 def list_document_template_revisions(template_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     permissions.require_view(user)
     template = _template_or_404(db, user, template_id)
-    return [_revision_read(db, revision) for revision in template_service.list_revisions(db, template)]
+    drafts = _sees_drafts(user)
+    return [_revision_read(db, revision) for revision in template_service.list_revisions(db, template) if drafts or revision.status != "draft"]
 
 
 @router.get("/document-templates/{template_id}/revisions/{revision_id}")
 def get_document_template_revision(template_id: uuid.UUID, revision_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)) -> dict[str, Any]:
     permissions.require_view(user)
     template = _template_or_404(db, user, template_id)
-    revision = template_service.get_revision(db, template, revision_id)
+    revision = _visible_revision_by_id(db, user, template, revision_id)
     if revision is None:
         raise _not_found(user)
     return {"revision": _revision_read(db, revision).model_dump(mode="json"), "content": template_service.revision_content(revision).model_dump(mode="json")}
@@ -488,8 +506,8 @@ def compare_document_template_revisions(
 ) -> dict[str, Any]:
     permissions.require_view(user)
     template = _template_or_404(db, user, template_id)
-    old = template_service.get_revision(db, template, from_revision)
-    new = template_service.get_revision(db, template, to_revision)
+    old = _visible_revision_by_id(db, user, template, from_revision)
+    new = _visible_revision_by_id(db, user, template, to_revision)
     if old is None or new is None:
         raise _not_found(user)
     return template_service.compare_revisions(template_service.revision_content(old), template_service.revision_content(new))
@@ -505,7 +523,7 @@ _THUMBNAIL_LIMIT = 300
 async def get_document_template_thumbnail(template_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     permissions.require_view(user)
     template = _template_or_404(db, user, template_id)
-    revision = template_service.working_revision(db, template)
+    revision = _visible_revision(db, user, template)
     if revision is None:
         raise _not_found(user)
     brand_revision = template_service.resolve_brand_revision(db, user.current_tenant_id, template_service.ResolvedTemplate(template=template, revision=revision, source="explicit", brand_id=None))
