@@ -1,6 +1,8 @@
+import json
 import uuid
 import zipfile
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -27,6 +29,8 @@ from app.schemas.files import (
     AlbumShareRequestRead,
     AlbumShareRespond,
     AlbumTenantShareStatus,
+    CaptureDateUpdate,
+    ClientImageMetadata,
     DocumentUploadResult,
     FileBulkDelete,
     FileBulkDeleteResult,
@@ -42,9 +46,12 @@ from app.schemas.files import (
     SimilarityGroup,
     StoredFileMetadata,
     StoredFileTagsUpdate,
+    UploadFileResult,
+    UploadPrecheckRequest,
+    UploadPrecheckResponse,
 )
 from app.schemas.protocol import ProtocolImageRead
-from app.services import photo_album_service, photo_album_share_service, public_id_service
+from app.services import image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
 from app.services.access_service import AccessService
 from app.services.apple_media import pair_live_clips, MAX_LIVE_CLIP_BYTES
 from app.services.file_service import MAX_UPLOAD_BYTES, FileService, _safe_storage_path
@@ -73,6 +80,9 @@ MAX_GALLERY_UPLOAD_BATCH_BYTES = GALLERY_ZIP_MAX_BYTES
 # haelt einen Batch dafuer kurz im Speicher - deshalb deutlich kleinere Batch-Grenzen als beim
 # Galerie-Upload; eine einzelne Datei bleibt bei MAX_UPLOAD_BYTES.
 MAX_DOCUMENT_UPLOAD_BATCH_FILES = 20
+# Client-Metadaten zum Galerie-Upload (Formularfeld file_metadata, JSON): Obergrenzen gegen
+# uebergrosse Formularfelder - 50 Dateien je Batch, grosszuegig Platz je Eintrag.
+MAX_FILE_METADATA_JSON_BYTES = 512 * 1024
 MAX_DOCUMENT_UPLOAD_BATCH_BYTES = 100 * 1024 * 1024
 
 
@@ -367,6 +377,54 @@ def _resolve_upload_target(
     return target
 
 
+def _parse_file_hints(raw: str | None) -> dict[str, dict]:
+    """file_metadata-Formularfeld -> {sha256: {"metadata": {...}}}. Ungueltige Eintraege werden
+    verworfen statt den Upload abzulehnen - die Hinweise sind optional, der Server analysiert
+    jede Datei ohnehin selbst."""
+    if not raw:
+        return {}
+    if len(raw.encode("utf-8")) > MAX_FILE_METADATA_JSON_BYTES:
+        raise HTTPException(status_code=413, detail="Metadaten zum Upload sind zu gross")
+    try:
+        entries = json.loads(raw)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Ungültige Metadaten zum Upload") from None
+    if not isinstance(entries, list):
+        raise HTTPException(status_code=422, detail="Ungültige Metadaten zum Upload")
+    hints: dict[str, dict] = {}
+    for entry in entries[: MAX_GALLERY_UPLOAD_BATCH_FILES * 2]:
+        if not isinstance(entry, dict):
+            continue
+        checksum = str(entry.get("sha256") or "").lower()
+        if len(checksum) != 64 or any(c not in "0123456789abcdef" for c in checksum):
+            continue
+        try:
+            metadata = ClientImageMetadata.model_validate(entry.get("metadata") or {})
+        except ValueError:
+            continue
+        hints[checksum] = {"metadata": metadata.model_dump(mode="json", exclude_none=True)}
+    return hints
+
+
+@router.post("/files/upload-precheck", response_model=UploadPrecheckResponse)
+def precheck_uploads(
+    payload: UploadPrecheckRequest,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """SHA-256-Vorab-Abgleich vor dem eigentlichen Upload (Galerie, Dokumente,
+    Protokollbilder): meldet je Datei, ob sie hochgeladen werden muss oder im eigenen
+    Mandanten schon vorhanden ist, und ergaenzt bei Bildern fehlende Metadaten ohne erneute
+    Uebertragung - siehe upload_precheck_service. Gleiche Rolle wie die Upload-Endpunkte."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    if payload.estimated_taken_on is not None and image_metadata_service.valid_estimated_date(payload.estimated_taken_on) is None:
+        raise HTTPException(status_code=422, detail="Ungültiges geschätztes Aufnahmedatum")
+    results = service.precheck_uploads(db, tenant_id=user.current_tenant_id, request=payload, user_id=user.user_id)
+    return UploadPrecheckResponse(results=results)
+
+
 @router.post("/files/gallery-uploads", response_model=GalleryUploadJobRead, status_code=status.HTTP_201_CREATED)
 async def upload_gallery_images(
     files: list[UploadFile] = File(...),
@@ -381,6 +439,12 @@ async def upload_gallery_images(
     # Im Upload-Dialog bestaetigt: Fotos, die dabei in ein geteiltes Auto-Album fallen, sofort
     # freigeben (sonst nur vorgemerkt, siehe photo_album_service.add_items).
     release_to_shared_albums: Annotated[bool, Form()] = False,
+    # Optionales Schaetzdatum aus dem Upload-Popup - gilt nur fuer Bilder, fuer die der Server
+    # kein echtes Aufnahmedatum findet (siehe FileService.save_gallery_uploads).
+    estimated_taken_on: Annotated[date | None, Form()] = None,
+    # Optionale Browser-Analyse je Datei als JSON-Liste [{sha256, metadata}] - reine Hinweise,
+    # angewendet nur bei passendem serverseitigem Hash (siehe _parse_file_hints).
+    file_metadata: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -438,6 +502,9 @@ async def upload_gallery_images(
             raise HTTPException(status_code=400, detail=problem)
 
     tag_list = [tag.strip() for tag in (tags or "").split(",") if tag.strip()]
+    if estimated_taken_on is not None and image_metadata_service.valid_estimated_date(estimated_taken_on) is None:
+        raise HTTPException(status_code=422, detail="Ungültiges geschätztes Aufnahmedatum")
+    file_hints = _parse_file_hints(file_metadata)
 
     # Computed per-request, not as a module-level constant - settings.upload_root must be
     # read fresh each time (tests monkeypatch it; production has no reason to assume it's
@@ -494,6 +561,8 @@ async def upload_gallery_images(
         upload_cycle_config_id=upload_cycle_config_id,
         release_to_shared_albums=release_to_shared_albums,
         requested_by=user.user_id,
+        estimated_taken_on=estimated_taken_on,
+        file_hints=file_hints,
         # A ZIP's matching entries are only known once the ingest loop opens it; a batch
         # of individually-selected images (no ZIP at all) knows its count immediately.
         total_files=None if has_zip else len(staged_paths) - len(clip_positions),
@@ -588,6 +657,7 @@ async def upload_documents(
             )
         staged.append((name, content))
 
+    file_results: list[dict] = []
     items, errors = await service.save_document_uploads(
         db,
         tenant_id=user.current_tenant_id,
@@ -599,8 +669,9 @@ async def upload_documents(
         upload_element_ref=submission_element_ref if target.assignment is not None else None,
         upload_element_label=target.element_label,
         upload_cycle_config_id=target.cycle_config_id,
+        file_results=file_results,
     )
-    return DocumentUploadResult(items=items, errors=errors)
+    return DocumentUploadResult(items=items, errors=errors, file_results=[UploadFileResult(**result) for result in file_results])
 
 
 @router.get("/files/gallery-upload-jobs", response_model=list[GalleryUploadJobRead])
@@ -645,6 +716,7 @@ def get_gallery_upload_job(job_id: uuid.UUID, db: Session = Depends(get_db), use
         **_gallery_upload_job_to_read(job).model_dump(),
         imported_items=imported_items,
         errors=list(job.errors),
+        file_results=[UploadFileResult(**result) for result in job.file_results or []],
     )
 
 
@@ -779,7 +851,40 @@ def get_stored_file_metadata(
     if stored_file is None or user.current_tenant_id is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
     access_service.ensure_can_read_stored_file(db, user, stored_file.id)
-    metadata = service.get_stored_file_metadata(db, stored_file, settings.storage_root, user.current_tenant_id)
+    metadata = service.get_stored_file_metadata(
+        db, stored_file, settings.storage_root, user.current_tenant_id, can_edit=_can_edit_capture_date(user, stored_file)
+    )
+    if metadata is None:
+        raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
+    return metadata
+
+
+def _can_edit_capture_date(user: CurrentUser, stored_file: StoredFile) -> bool:
+    """Schreibrecht im eigenen Mandanten - nie fuer Fotos eines Partner-Mandanten aus einem
+    geteilten Album."""
+    return user.current_role in {"writer", "admin"} and stored_file.tenant_id == user.current_tenant_id
+
+
+@router.patch("/stored-files/{stored_file_id}/capture-date", response_model=StoredFileMetadata)
+def update_stored_file_capture_date(
+    stored_file_id: uuid.UUID,
+    payload: CaptureDateUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Geschaetztes Aufnahmedatum setzen, aendern oder (null) entfernen - der einzige Weg,
+    ein vorhandenes Schaetzdatum zu ueberschreiben. Echtes Aufnahmedatum (EXIF) und
+    Uploaddatum bleiben unveraendert."""
+    require_writer(user)
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id)
+    if stored_file is None or user.current_tenant_id is None or stored_file.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Stored file not found")
+    access_service.ensure_can_read_stored_file(db, user, stored_file.id)
+    try:
+        service.update_estimated_capture_date(db, stored_file, payload.estimated_taken_on, user_id=user.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    metadata = service.get_stored_file_metadata(db, stored_file, settings.storage_root, user.current_tenant_id, can_edit=True)
     if metadata is None:
         raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
     return metadata
@@ -851,7 +956,24 @@ def download_stored_file(
         raise HTTPException(status_code=404, detail="File missing on filesystem")
     headers = {"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
 
+    # Exportfassung: geschaetztes Aufnahmedatum (und nur in der Datenbank vorhandenes GPS) in
+    # einer temporaeren Kopie - das gespeicherte Original bleibt unveraendert.
+    export_content = image_export_service.export_bytes(stored_file, image_path.read_bytes()) if part != "video" and image_export_service.needs_export_processing(stored_file) else None
+    work_dir = Path(settings.upload_root) / "_staging" / "download"
+
     if part == "image" or (part == "both" and live_video is None):
+        if export_content is not None:
+            work_dir.mkdir(parents=True, exist_ok=True)
+            export_path = work_dir / f"{uuid.uuid4().hex}{image_path.suffix}"
+            export_path.write_bytes(export_content)
+            return FileResponse(
+                path=export_path,
+                media_type=stored_file.mime_type,
+                filename=stored_file.original_name,
+                content_disposition_type="attachment",
+                headers=headers,
+                background=BackgroundTask(export_path.unlink, missing_ok=True),
+            )
         return FileResponse(
             path=image_path,
             media_type=stored_file.mime_type,
@@ -874,11 +996,13 @@ def download_stored_file(
 
     # Both: JPEG and MP4 are already compressed, so the ZIP just stores them. Built on disk (not
     # in memory) and removed once the response has been sent.
-    work_dir = Path(settings.upload_root) / "_staging" / "download"
     work_dir.mkdir(parents=True, exist_ok=True)
     zip_path = work_dir / f"{uuid.uuid4().hex}.zip"
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_STORED) as archive:
-        archive.write(image_path, arcname=Path(stored_file.original_name).name)
+        if export_content is not None:
+            archive.writestr(Path(stored_file.original_name).name, export_content)
+        else:
+            archive.write(image_path, arcname=Path(stored_file.original_name).name)
         archive.write(video_path, arcname=Path(live_video.original_name).name)
     return FileResponse(
         path=zip_path,

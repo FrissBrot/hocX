@@ -5,6 +5,7 @@ import hashlib
 import time
 import uuid
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from io import BytesIO
 from pathlib import Path, PurePosixPath
@@ -21,7 +22,18 @@ from app.core.cycle_utils import get_cycle_year
 from app.models import AppUser, Event, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
 from app.models.entities import CycleConfig, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAnalysisJob, SubmissionAssignment
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
-from app.schemas.files import FileAlbumRef, FileOverviewItem, FileStats, PhotoAnalysisProgress, SimilarityGroup, StoredFileMetadata
+from app.schemas.files import (
+    FileAlbumRef,
+    FileOverviewItem,
+    FileStats,
+    GpsMetadataRead,
+    PhotoAnalysisProgress,
+    SimilarityGroup,
+    StoredFileMetadata,
+    UploadFileResult,
+    UploadPrecheckRequest,
+    UploadPrecheckResult,
+)
 from app.schemas.protocol import ProtocolImageRead
 from app.services import public_id_service
 from app.services.apple_media import (
@@ -31,7 +43,8 @@ from app.services.apple_media import (
     pair_live_clips,
     transcode_live_clip,
 )
-from app.services import photo_event_link_service
+from app.services import image_metadata_service, photo_event_link_service, upload_precheck_service
+from app.services.capture_date import effective_capture
 from app.services.photo_quality import compute_quality_scores
 from app.services.photo_similarity import (
     MAX_GROUPING_IMAGES,
@@ -114,30 +127,13 @@ MAX_ANALYSIS_JOB_IMAGES = 2000
 
 
 def _extract_image_metadata(content: bytes) -> tuple[int | None, int | None, datetime | None, str | None]:
-    """(width, height, exif_taken_at, exif_camera) for the file-detail metadata panel.
-    Deliberately does not read/return GPS EXIF data (present on some phone photos) - that's
-    location data about where a user was, not something this feature needs to expose.
-    Returns all-None for non-images or content PIL can't decode."""
-    try:
-        with Image.open(BytesIO(content)) as image:
-            width, height = image.size
-            taken_at: datetime | None = None
-            camera: str | None = None
-            try:
-                exif = image.getexif()
-                make = exif.get(271)
-                model = exif.get(272)
-                camera_parts = [str(p).strip() for p in (make, model) if p and str(p).strip()]
-                camera = " ".join(camera_parts) or None
-                exif_ifd = exif.get_ifd(0x8769) if hasattr(exif, "get_ifd") else {}
-                raw_taken_at = exif_ifd.get(36867) or exif_ifd.get(36868) or exif.get(306)
-                if raw_taken_at:
-                    taken_at = datetime.strptime(str(raw_taken_at).strip(), "%Y:%m:%d %H:%M:%S")
-            except Exception:
-                pass
-            return width, height, taken_at, camera
-    except Exception:
+    """(width, height, exif_taken_at, exif_camera) - schmale Kompatibilitaetsschicht ueber
+    image_metadata_service.extract_image_metadata, das zusaetzlich GPS, Zeitzonen-Offset und
+    Ausrichtung liefert. All-None for non-images or content PIL can't decode."""
+    metadata = image_metadata_service.extract_image_metadata(content)
+    if metadata.status == "unreadable":
         return None, None, None, None
+    return metadata.width, metadata.height, metadata.taken_at, metadata.camera_label
 
 
 # Overview page a document's Bezug links to, by StoredFileRepository's `ref_kind` label.
@@ -161,6 +157,16 @@ def _normalize_tags(tags: list[str]) -> list[str]:
         if len(seen) >= MAX_TAGS_PER_FILE:
             break
     return list(seen.keys())
+
+
+@dataclass
+class _CaptureView:
+    """Minimaler Traeger fuer capture_date.effective_capture, wenn exif_taken_at nur live
+    gelesen (noch nicht gespeichert) wurde."""
+
+    exif_taken_at: datetime | None
+    estimated_taken_on: date | None
+    created_at: datetime
 
 
 def _safe_storage_path(storage_root: str, relative_path: str) -> Path:
@@ -410,6 +416,9 @@ class FileService:
             width=row.width,
             height=row.height,
             group_date=row.group_date,
+            date_source=row.date_source,
+            exif_taken_at=row.exif_taken_at,
+            estimated_taken_on=row.estimated_taken_on,
             context_label=row.context_label,
             live_video_url=self.build_content_url(row.live_video_public_id) if row.live_video_public_id else None,
         )
@@ -670,17 +679,28 @@ class FileService:
         self.stored_file_repository.update_tags(db, stored_file, normalized)
         return normalized
 
-    def get_stored_file_metadata(self, db: Session, stored_file: StoredFile, storage_root: str, tenant_id: int) -> StoredFileMetadata | None:
+    def get_stored_file_metadata(
+        self, db: Session, stored_file: StoredFile, storage_root: str, tenant_id: int, *, can_edit: bool = False
+    ) -> StoredFileMetadata | None:
         row = self.stored_file_repository.get_file_overview_row(db, tenant_id, stored_file.id)
         if row is None:
             return None
-        width = height = None
-        exif_taken_at = None
-        exif_camera = None
-        if stored_file.mime_type and stored_file.mime_type.startswith("image/"):
+        is_image = bool(stored_file.mime_type and stored_file.mime_type.startswith("image/"))
+        width, height = stored_file.width, stored_file.height
+        exif_taken_at = stored_file.exif_taken_at
+        camera_make, camera_model = stored_file.camera_make, stored_file.camera_model
+        if is_image and stored_file.metadata_scanned_at is None:
+            # Noch nie analysiert (Upload vor Einfuehrung der Metadatenspalten bzw. vor dem
+            # Backfill): wie bisher live aus der Datei lesen, ohne zu speichern - ein GET
+            # schreibt nichts, das Nachtragen ist Sache des Backfills.
             file_path = _safe_storage_path(storage_root, stored_file.storage_path)
             if file_path.exists():
-                width, height, exif_taken_at, exif_camera = _extract_image_metadata(file_path.read_bytes())
+                live = image_metadata_service.extract_image_metadata(file_path.read_bytes())
+                width, height = width or live.width, height or live.height
+                if exif_taken_at is None and live.taken_at is not None:
+                    exif_taken_at = live.taken_at.replace(tzinfo=UTC)
+                camera_make, camera_model = camera_make or live.camera_make, camera_model or live.camera_model
+        camera = image_metadata_service.ImageMetadata(camera_make=camera_make, camera_model=camera_model).camera_label
         # created_by is NULL for files this backend never attributed to a logged-in user -
         # notably abgabebox submission uploads (written by an anonymous public submitter
         # through a separate restricted DB role that never sets this column) and any file
@@ -690,6 +710,24 @@ class FileService:
             uploader = db.get(AppUser, stored_file.created_by)
             if uploader is not None:
                 uploaded_by_name = uploader.display_name
+        estimated_by_name = None
+        if stored_file.estimated_taken_set_by is not None:
+            estimator = db.get(AppUser, stored_file.estimated_taken_set_by)
+            estimated_by_name = estimator.display_name if estimator is not None else None
+        effective_date, date_source = effective_capture(
+            _CaptureView(exif_taken_at=exif_taken_at, estimated_taken_on=stored_file.estimated_taken_on, created_at=stored_file.created_at)
+        )
+        gps = None
+        if stored_file.gps_latitude is not None and stored_file.gps_longitude is not None:
+            gps = GpsMetadataRead(
+                latitude=stored_file.gps_latitude,
+                longitude=stored_file.gps_longitude,
+                altitude_m=stored_file.gps_altitude_m,
+                direction_deg=stored_file.gps_direction_deg,
+                accuracy_m=stored_file.gps_accuracy_m,
+                timestamp=stored_file.gps_timestamp,
+                source=stored_file.gps_source,
+            )
         return StoredFileMetadata(
             id=stored_file.public_id,
             original_name=stored_file.original_name,
@@ -705,14 +743,48 @@ class FileService:
             width=width,
             height=height,
             exif_taken_at=exif_taken_at,
-            exif_camera=exif_camera,
+            exif_camera=camera,
             uploaded_by_name=uploaded_by_name,
+            exif_taken_offset=stored_file.exif_taken_offset,
+            exif_taken_source=stored_file.exif_taken_source,
+            estimated_taken_on=stored_file.estimated_taken_on,
+            estimated_taken_set_at=stored_file.estimated_taken_set_at,
+            estimated_taken_set_by_name=estimated_by_name,
+            effective_date=effective_date,
+            date_source=date_source,
+            camera_make=camera_make,
+            camera_model=camera_model,
+            gps=gps,
+            can_edit_capture_date=can_edit and is_image,
         )
 
+    def update_estimated_capture_date(
+        self, db: Session, stored_file: StoredFile, estimated: date | None, *, user_id: int | None
+    ) -> bool:
+        """Expliziter Bearbeitungsweg fuer das geschaetzte Aufnahmedatum (setzen, aendern,
+        loeschen). Echtes Aufnahmedatum und Uploaddatum bleiben unveraendert; automatische
+        Termin-Verknuepfungen werden neu bewertet. Committet."""
+        if not (stored_file.mime_type or "").startswith("image/"):
+            raise ValueError("Nur Bilder haben ein Aufnahmedatum")
+        changed = image_metadata_service.set_estimated_date(stored_file, estimated, user_id=user_id)
+        if changed:
+            photo_event_link_service.resync_photo_after_date_change(db, stored_file)
+            db.commit()
+        return changed
+
+    def precheck_uploads(self, db: Session, *, tenant_id: int, request: UploadPrecheckRequest, user_id: int | None) -> list[UploadPrecheckResult]:
+        return upload_precheck_service.precheck(db, tenant_id=tenant_id, request=request, user_id=user_id)
+
     def _filter_exact_duplicates(
-        self, db: Session, tenant_id: int, files: list[tuple[str, bytes]]
+        self,
+        db: Session,
+        tenant_id: int,
+        files: list[tuple[str, bytes]],
+        duplicates_out: list[tuple[str, str]] | None = None,
     ) -> tuple[list[tuple[str, bytes]], list[str]]:
-        """One indexed lookup per batch, before scanning or decoding any file."""
+        """One indexed lookup per batch, before scanning or decoding any file. duplicates_out
+        (optional) receives (filename, sha256) of every skipped file, so a caller can still
+        enrich the existing image's metadata (see upload_precheck_service.enrich_existing)."""
         checksums = [hashlib.sha256(content).hexdigest() for _, content in files]
         if not checksums:
             return [], []
@@ -729,6 +801,8 @@ class FileService:
         for file, checksum in zip(files, checksums):
             if checksum in seen:
                 warnings.append(f"{file[0] or 'Datei'}: Exaktes Duplikat – bereits vorhanden, nicht erneut gespeichert.")
+                if duplicates_out is not None:
+                    duplicates_out.append((file[0] or "Datei", checksum))
             else:
                 accepted.append(file)
                 seen.add(checksum)
@@ -813,6 +887,9 @@ class FileService:
                 stored_file_repository=self.stored_file_repository,
             )
             stored_file = result.stored_file
+            # Aufnahmedatum, GPS und Kamera wie beim Galerie-Upload festhalten - die Datei
+            # liegt bereits als Original vor, Client-Angaben braucht es hier nicht.
+            self._apply_upload_metadata(stored_file, content, converted=False, hint=None, estimated_taken_on=None, user_id=created_by)
 
             protocol_image = ProtocolImage(
                 protocol_element_block_id=protocol_element_block.id,
@@ -854,6 +931,9 @@ class FileService:
         release_to_shared_albums: bool = False,
         live_clips: dict[str, bytes] | None = None,
         before_commit: Callable[[list[FileOverviewItem], list[str]], None] | None = None,
+        estimated_taken_on: date | None = None,
+        file_hints: dict[str, dict] | None = None,
+        file_results: list[dict] | None = None,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         """Persists a batch of already-decoded (filename, bytes) images for the "Dateien"/
         "Fotos" gallery upload window - only genuine images (magic bytes, not filename)
@@ -886,12 +966,27 @@ class FileService:
         transcoded to a small H.264 MP4, stored as its own StoredFile (no gallery_image row - it
         is not a gallery item itself) and linked via gallery_image.live_video_stored_file_id, so
         the grid can play it on hover. A clip that can't be used (infected, no ffmpeg, corrupt,
-        over quota) never fails its image: it is stored as a plain photo plus a note in `errors`."""
+        over quota) never fails its image: it is stored as a plain photo plus a note in `errors`.
+
+        Metadaten (siehe image_metadata_service): jedes neue Bild wird serverseitig analysiert
+        (EXIF-Datum, Zeitzonen-Offset, GPS, Kamera; bei HEIC das Original vor der Konvertierung).
+        estimated_taken_on (Schaetzdatum aus dem Upload-Popup) gilt fuer jedes Bild, fuer das der
+        Server kein echtes Aufnahmedatum findet. file_hints sind clientseitig extrahierte
+        Metadaten je SHA-256 - nur fuer konvertierte Bilder relevant und nur angewendet, wenn der
+        hier neu berechnete Hash passt. Exakte Duplikate werden nicht gespeichert, ergaenzen aber
+        fehlende Metadaten des vorhandenen Bildes. file_results (optional) erhaelt je Datei
+        {name, status, file_id?, applied, conflicts, message?} fuer die Ergebnisanzeige."""
         await acquire_upload_lock(db, tenant_id)
         self.ensure_storage()
         normalized_tags = _normalize_tags(tags)
         upload_event = db.get(Event, upload_event_id) if upload_event_id is not None else None
-        files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files)
+        file_hints = file_hints or {}
+        results: list[dict] = file_results if file_results is not None else []
+        duplicates: list[tuple[str, str]] = []
+        files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
+        self._enrich_duplicates(
+            db, tenant_id, duplicates, file_hints=file_hints, estimated_taken_on=estimated_taken_on, user_id=created_by, results=results
+        )
         if not files:
             if before_commit:
                 before_commit([], duplicate_errors)
@@ -915,18 +1010,22 @@ class FileService:
         tenant_hashes = self.stored_file_repository.list_tenant_image_hashes(db, tenant_id)
 
         items: list[FileOverviewItem] = []
-        item_taken_at: dict[uuid.UUID, datetime | None] = {}
+        item_taken_at: dict[uuid.UUID, date | None] = {}
         errors: list[str] = list(duplicate_errors)
         for (filename, content), scan_status in zip(files, scan_statuses):
             label = filename or "Bild"
             source_checksum = hashlib.sha256(content).hexdigest()
             source_filename = filename
+            original_content = content
+            converted_from_heic = False
             if scan_status not in ("infected", "error") and is_heic(content):
                 converted = await asyncio.to_thread(convert_heic_to_jpeg, content)
                 if converted is None:
                     errors.append(f"{label}: HEIC-Datei konnte nicht gelesen werden")
+                    results.append({"name": label, "status": "failed", "message": "HEIC-Datei konnte nicht gelesen werden"})
                     continue
                 content, filename = converted, jpeg_filename(filename)
+                converted_from_heic = True
             try:
                 result = ingest_file(
                     db,
@@ -950,13 +1049,22 @@ class FileService:
                 )
             except HTTPException as exc:
                 errors.append(f"{label}: {exc.detail}")
+                results.append({"name": label, "status": "failed", "message": str(exc.detail)})
                 continue
 
             stored_file = result.stored_file
             stored_file.source_checksum_sha256 = source_checksum
-            _, _, taken_at, _ = _extract_image_metadata(content)
-            stored_file.exif_taken_at = taken_at
-            item_taken_at[stored_file.public_id] = taken_at
+            applied = self._apply_upload_metadata(
+                stored_file,
+                original_content,
+                converted=converted_from_heic,
+                hint=file_hints.get(source_checksum),
+                estimated_taken_on=estimated_taken_on,
+                user_id=created_by,
+            )
+            item_taken_at[stored_file.public_id] = (
+                stored_file.exif_taken_at.date() if stored_file.exif_taken_at is not None else stored_file.estimated_taken_on
+            )
 
             # Auto-link to a Termin by capture date only when the uploader didn't already
             # target one themselves (GalleryUploadModal's Termin/Zyklus/Abgabe-Element
@@ -1004,6 +1112,8 @@ class FileService:
 
             if result.duplicate_warning is not None:
                 errors.append(f"{label}: Hinweis - ähnelt einem bereits im Mandanten hochgeladenen Bild")
+            results.append({"name": label, "status": "uploaded", "file_id": str(stored_file.public_id), "applied": applied})
+            effective_day, date_source = effective_capture(stored_file)
 
             items.append(
                 FileOverviewItem(
@@ -1030,7 +1140,10 @@ class FileService:
                     face_analyzed_at=stored_file.face_analyzed_at,
                     width=stored_file.width,
                     height=stored_file.height,
-                    group_date=photo_event_link_service.capture_date(stored_file),
+                    group_date=effective_day,
+                    date_source=date_source,
+                    exif_taken_at=stored_file.exif_taken_at,
+                    estimated_taken_on=stored_file.estimated_taken_on,
                     context_label=linked_event.title if linked_event is not None else None,
                     live_video_url=self.build_content_url(live_video_file.public_id) if live_video_file is not None else None,
                 )
@@ -1058,8 +1171,8 @@ class FileService:
                 groups: dict[int, list[uuid.UUID]] = {}
                 representative_date_by_year: dict[int, date] = {}
                 for item in items:
-                    taken_at = item_taken_at.get(item.id)
-                    on_date = taken_at.date() if taken_at is not None else date.today()
+                    # Echtes, sonst geschaetztes Aufnahmedatum, sonst heute (= Uploaddatum).
+                    on_date = item_taken_at.get(item.id) or date.today()
                     cycle_year = get_cycle_year(on_date, upload_cycle_config.reset_month, upload_cycle_config.reset_day)
                     groups.setdefault(cycle_year, []).append(item.id)
                     representative_date_by_year.setdefault(cycle_year, on_date)
@@ -1087,6 +1200,71 @@ class FileService:
                 )
 
         return items, errors
+
+    def _apply_upload_metadata(
+        self,
+        stored_file: StoredFile,
+        original_content: bytes,
+        *,
+        converted: bool,
+        hint: dict | None,
+        estimated_taken_on: date | None,
+        user_id: int | None,
+    ) -> list[str]:
+        """Serverseitige Analyse eines neu gespeicherten Bildes (bei HEIC das Original vor der
+        Konvertierung), danach - nur fuer konvertierte Bilder - validierte Client-Hinweise und
+        zuletzt das Schaetzdatum, falls kein echtes Aufnahmedatum gefunden wurde. Gibt die
+        ergaenzten Feldgruppen zurueck, die NICHT aus der Datei selbst stammen."""
+        metadata = image_metadata_service.extract_image_metadata(original_content)
+        if converted:
+            # Ausrichtung/Abmessungen des HEIC gelten nicht fuer das bereits gedrehte JPEG.
+            metadata.orientation = None
+            metadata.width = metadata.height = None
+        image_metadata_service.apply_server_analysis(stored_file, metadata, source="server")
+        extra = image_metadata_service.MergeOutcome()
+        if converted and hint:
+            incoming = image_metadata_service.metadata_from_client(hint.get("metadata"))
+            extra.extend(image_metadata_service.merge_missing_metadata(stored_file, incoming, source="client", include_geometry=False))
+        extra.extend(image_metadata_service.apply_estimated_date(stored_file, estimated_taken_on, user_id=user_id))
+        return extra.applied
+
+    def _enrich_duplicates(
+        self,
+        db: Session,
+        tenant_id: int,
+        duplicates: list[tuple[str, str]],
+        *,
+        file_hints: dict[str, dict],
+        estimated_taken_on: date | None,
+        user_id: int | None,
+        results: list[dict],
+    ) -> None:
+        """Exakte Duplikate eines Uploads: vorhandenes Bild mit fehlenden Metadaten ergaenzen
+        (gleiche Regeln wie der Vorab-Abgleich) und das Ergebnis je Datei festhalten."""
+        if not duplicates:
+            return
+        existing = upload_precheck_service.find_existing(db, tenant_id, [checksum for _, checksum in duplicates], lock=True)
+        for name, checksum in duplicates:
+            matches = existing.get(checksum, [])
+            hint = file_hints.get(checksum) or {}
+            outcome = upload_precheck_service.enrich_existing(
+                db,
+                matches,
+                checksum,
+                incoming=image_metadata_service.metadata_from_client(hint.get("metadata")),
+                estimated=estimated_taken_on,
+                user_id=user_id,
+            ) if matches else image_metadata_service.MergeOutcome()
+            results.append(
+                {
+                    "name": name,
+                    "status": "metadata_updated" if outcome.applied else "skipped",
+                    "file_id": str(matches[0].public_id) if matches else None,
+                    "applied": outcome.applied,
+                    "conflicts": outcome.conflicts,
+                }
+            )
+        db.flush()
 
     async def _store_live_clip(
         self,
@@ -1153,6 +1331,7 @@ class FileService:
         upload_element_ref: str | None = None,
         upload_element_label: str | None = None,
         upload_cycle_config_id: int | None = None,
+        file_results: list[dict] | None = None,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         """"Dateien"-page counterpart of save_gallery_uploads for non-image documents (PDF,
         Office/OpenDocument, RTF, plain text, ZIP - see _sniff_document_mime). Same shared
@@ -1172,7 +1351,13 @@ class FileService:
         await acquire_upload_lock(db, tenant_id)
         self.ensure_storage()
         normalized_tags = _normalize_tags(tags)
-        files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files)
+        results: list[dict] = file_results if file_results is not None else []
+        duplicates: list[tuple[str, str]] = []
+        files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
+        existing = upload_precheck_service.find_existing(db, tenant_id, [checksum for _, checksum in duplicates])
+        for name, checksum in duplicates:
+            match = existing.get(checksum)
+            results.append({"name": name, "status": "skipped", "file_id": str(match[0].public_id) if match else None})
         if not files:
             return [], duplicate_errors
         scan_statuses = await scanner.scan_many(
@@ -1208,9 +1393,11 @@ class FileService:
                 )
             except HTTPException as exc:
                 errors.append(f"{label}: {exc.detail}")
+                results.append({"name": label, "status": "failed", "message": str(exc.detail)})
                 continue
 
             stored_file = result.stored_file
+            results.append({"name": label, "status": "uploaded", "file_id": str(stored_file.public_id)})
             db.add(
                 GalleryImage(
                     tenant_id=tenant_id,
@@ -1450,9 +1637,12 @@ class FileService:
             with _tenant_protocol_image_upload_lock(db, job.tenant_id):
                 rules = submission_upload_rules.load_rules(db, upload_assignment, job.upload_element_ref)
             batch, rule_errors = rules.filter_batch(batch)
+        batch_results: list[dict] = [{"name": error.split(":", 1)[0], "status": "failed", "message": error} for error in rule_errors]
+
         def checkpoint(items: list[FileOverviewItem], errors: list[str]) -> None:
             job.imported_file_ids = [*job.imported_file_ids, *(str(item.id) for item in items)]
             job.errors = [*job.errors, *rule_errors, *errors]
+            job.file_results = [*job.file_results, *batch_results]
             job.processed_files += len(batch) + len(rule_errors)
 
         if not batch:
@@ -1462,7 +1652,7 @@ class FileService:
             await self._save_gallery_batch(
                 db, job, batch, upload_assignment=upload_assignment,
                 upload_cycle_config=upload_cycle_config, live_clips=live_clips,
-                before_commit=checkpoint,
+                before_commit=checkpoint, file_results=batch_results,
             )
 
     async def _save_gallery_batch(
@@ -1475,6 +1665,7 @@ class FileService:
         upload_cycle_config: CycleConfig | None,
         live_clips: dict[str, bytes] | None = None,
         before_commit: Callable[[list[FileOverviewItem], list[str]], None] | None = None,
+        file_results: list[dict] | None = None,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         return await self.save_gallery_uploads(
             db,
@@ -1490,6 +1681,9 @@ class FileService:
             release_to_shared_albums=job.release_to_shared_albums,
             live_clips=live_clips,
             before_commit=before_commit,
+            estimated_taken_on=job.estimated_taken_on,
+            file_hints=dict(job.file_hints or {}),
+            file_results=file_results,
         )
 
     def save_word_import_document(
