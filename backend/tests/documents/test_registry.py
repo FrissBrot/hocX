@@ -59,6 +59,14 @@ def test_each_export_registers_the_delivered_bytes(db):
     assert HOCX_XMP_NAMESPACE in xmp and f"<hocx:documentId>{entry.public_id}</hocx:documentId>" in xmp
     assert f"<hocx:verifyUrl>{settings.verify_base_url}?id={entry.public_id}</hocx:verifyUrl>" in xmp
     assert "<pdfaid:part>2</pdfaid:part>" in xmp and "<pdfaSchema:prefix>hocx</pdfaSchema:prefix>" in xmp
+    # TYPST-011: ohne freigegebene Anzeige keine Mandanten-ID im PDF
+    assert not tenant.verify_show_identity and str(tenant.public_id) not in xmp
+
+    tenant.verify_show_identity = True
+    db.flush()
+    shown = _pdf_bytes(_render(db, tenant, protocol).stored_file)
+    shown_xmp = PdfReader(io.BytesIO(shown)).trailer["/Root"]["/Metadata"].get_object().get_data().decode()
+    assert f"<hocx:tenantId>{tenant.public_id}</hocx:tenantId>" in shown_xmp
 
 
 def test_rerender_with_same_content_is_a_separate_entry(db):

@@ -370,7 +370,8 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
         output.pdf or b"",
         DocumentXmp(
             document_id=str(export_public_id),
-            tenant_id=str(tenant.public_id) if tenant else "",
+            # Mandanten-ID nur, wenn der Mandant seine Anzeige auf der Prüfseite freigegeben hat.
+            tenant_id=str(tenant.public_id) if tenant is not None and tenant.verify_show_identity else "",
             document_type=prepared.register_type,
             version=document.meta.version or "",
             content_hash=prepared.content_hash,
