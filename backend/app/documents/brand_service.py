@@ -22,7 +22,7 @@ from app.documents.brand import BUILTIN_FONTS, FALLBACK_FONTS, BrandTokens, pars
 from app.documents.context import AssetCollector
 from app.documents.hashing import json_hash
 from app.documents.locking import lock_row
-from app.models import DocumentBrand, DocumentBrandRevision, DocumentExport, DocumentTemplate, DocumentTemplateAssignment, Tenant
+from app.models import DocumentBrand, DocumentBrandRevision, DocumentExport, DocumentTemplate, DocumentTemplateAssignment, DocumentTemplateRevision, Tenant
 
 
 class BrandConflictError(Exception):
@@ -215,8 +215,10 @@ def archive_brand(db: Session, brand: DocumentBrand, *, archived: bool) -> Docum
 
 
 def delete_brand(db: Session, brand: DocumentBrand) -> None:
-    """Nur unbenutzte Profile: Exporte, Vorlagen oder Zuweisungen behalten ihre Referenz -
-    dafür gibt es «Archivieren»."""
+    """Nur unbenutzte Profile: Exporte, Vorlagen, Zuweisungen oder Revisionen, die eine
+    Brand-Revision festhalten (``brand_mode=pinned``), behalten ihre Referenz - dafür gibt es
+    «Archivieren». Ohne die Prüfung der festgehaltenen Revisionen setzte der FK (ON DELETE
+    SET NULL) das Pinning still zurück."""
     if brand.is_default:
         raise BrandValidationError("apiError.defaultBrand")
     revision_ids = select(DocumentBrandRevision.id).where(DocumentBrandRevision.brand_id == brand.id)
@@ -224,6 +226,7 @@ def delete_brand(db: Session, brand: DocumentBrand) -> None:
         db.scalar(select(func.count(DocumentExport.id)).where(DocumentExport.brand_revision_id.in_(revision_ids)))
         or db.scalar(select(func.count(DocumentTemplate.id)).where(DocumentTemplate.brand_id == brand.id))
         or db.scalar(select(func.count(DocumentTemplateAssignment.id)).where(DocumentTemplateAssignment.brand_id == brand.id))
+        or db.scalar(select(func.count(DocumentTemplateRevision.id)).where(DocumentTemplateRevision.brand_revision_id.in_(revision_ids)))
     )
     if used:
         raise BrandValidationError("apiError.brandInUse")

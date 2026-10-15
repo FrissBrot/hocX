@@ -170,6 +170,23 @@ def test_brand_of_published_template_requires_publish_right(db, world):
     assert studio.update_document_template(created.id, studio.TemplateMetaUpdate(clear_brand=True), db=db, user=world["admin"]).brand_id is None
 
 
+def test_brand_pinned_by_a_revision_cannot_be_deleted(db, world):
+    """STUDIO-005: Eine mit «festhalten» veröffentlichte Revision verweist auf die
+    Brand-Revision des damaligen Standardprofils; Löschen würde das Pinning still aufheben."""
+    old_default = next(item for item in studio.list_document_brands(include_archived=False, db=db, user=world["admin"]) if item.is_default)
+    created = _create(db, world)
+    lock = created.draft_revision.lock_version
+    studio.save_document_template_draft(created.id, studio.DraftSave(content=SIMPLE, lock_version=lock, brand_mode="pinned"), db=db, user=world["writer"])
+    published = studio.publish_document_template(created.id, studio.PublishBody(), db=db, user=world["admin"])
+    assert published.published_revision.brand_mode == "pinned"
+    studio.create_document_brand(studio.BrandCreate(name="Neu", is_default=True), db=db, user=world["admin"])
+    with pytest.raises(HTTPException) as excinfo:
+        studio.delete_document_brand(old_default.id, db=db, user=world["admin"])
+    assert excinfo.value.status_code in (409, 422)
+    revision = db.scalar(select(DocumentTemplateRevision).where(DocumentTemplateRevision.public_id == published.published_revision.id))
+    assert revision.brand_revision_id is not None
+
+
 def test_assignment_priority_and_export_uses_it(db, world):
     created = _create(db, world)
     studio.publish_document_template(created.id, studio.PublishBody(), db=db, user=world["admin"])
