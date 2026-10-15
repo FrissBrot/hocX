@@ -379,34 +379,73 @@ def cmd_break_lock(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_enqueue_backup(args: argparse.Namespace) -> int:
-    """Für deploy.sh: Backup vor riskanten Migrationen. Braucht die hocX-Datenbank."""
-    from sqlalchemy import select
+def _print_partial_details(backup_set) -> None:
+    for warning in (backup_set.warnings or []) if backup_set else []:
+        if warning.get("code") != "missing_objects":
+            continue
+        print(f"WARNUNG: {warning.get('count', 0)} Objekte fehlen im Wiederherstellungspunkt (Datenbank-Dump vollständig):", file=sys.stderr)
+        for item in (warning.get("items") or [])[:20]:
+            print(f"  {item.get('namespace', 'main')}/{item.get('key')}", file=sys.stderr)
 
+
+def cmd_enqueue_backup(args: argparse.Namespace) -> int:
+    """Für deploy.sh: Backup vor riskanten Migrationen. Braucht die hocX-Datenbank.
+
+    Läuft gerade ein anderes Backup (ein offener Auftrag je Art), wird mit --wait auf dessen Ende
+    gewartet und danach der eigene (geschützte) Auftrag angelegt - kein Abbruch mit Traceback."""
+    from sqlalchemy import select
+    from sqlalchemy.exc import IntegrityError
+
+    from app.backup.jobs import OPEN_JOB_STATES
     from app.core.db import SessionLocal
     from app.models import BackupJob, BackupSet
 
     key = f"{args.trigger}:{args.key or uuid.uuid4().hex}"
-    with SessionLocal() as db:
-        job = db.scalars(select(BackupJob).where(BackupJob.idempotency_key == key)).first()
-        if job is None:
-            job = BackupJob(kind="backup", trigger=args.trigger, idempotency_key=key,
-                            options={"protected": args.protect, "protected_reason": args.reason} if args.protect else {})
-            db.add(job)
-            db.commit()
-        job_id = job.id
+    deadline = time.monotonic() + args.timeout
+    job_id = None
+    announced = None
+    while job_id is None:
+        with SessionLocal() as db:
+            job = db.scalars(select(BackupJob).where(BackupJob.idempotency_key == key)).first()
+            if job is None:
+                job = BackupJob(kind="backup", trigger=args.trigger, idempotency_key=key,
+                                options={"protected": args.protect, "protected_reason": args.reason} if args.protect else {})
+                db.add(job)
+                try:
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
+                    job = None
+            if job is not None:
+                job_id = job.id
+                break
+            blocking = db.scalars(select(BackupJob).where(BackupJob.kind == "backup", BackupJob.state.in_(OPEN_JOB_STATES))).first()
+        if blocking is not None and blocking.id != announced:
+            announced = blocking.id
+            print(f"Es läuft bereits ein Backup ({blocking.id}, {blocking.state}) - warte auf dessen Ende", file=sys.stderr)
+        if not args.wait:
+            print("Kein neuer Auftrag angelegt: ein Backup ist bereits offen (mit --wait wird gewartet)", file=sys.stderr)
+            return 1
+        if time.monotonic() >= deadline:
+            print("Zeitlimit erreicht - das laufende Backup ist noch nicht fertig, kein eigener Auftrag angelegt", file=sys.stderr)
+            return 1
+        time.sleep(args.poll_seconds)
     print(f"Backup-Auftrag {job_id}")
     if not args.wait:
         return 0
-    deadline = time.monotonic() + args.timeout
     while time.monotonic() < deadline:
         with SessionLocal() as db:
             job = db.get(BackupJob, job_id)
             if job.state in ("completed", "partial", "failed", "cancelled", "interrupted"):
                 backup_set = db.get(BackupSet, job.backup_set_id) if job.backup_set_id else None
                 print(f"Ergebnis: {job.state} {backup_set.archive_name if backup_set else ''} {job.error_message or ''}".strip())
+                if job.state == "partial":
+                    _print_partial_details(backup_set)
+                    if args.accept_partial:
+                        print("Teilweise erfolgreiches Backup wird akzeptiert (--accept-partial)", file=sys.stderr)
+                        return 0
                 return 0 if job.state == "completed" else 1
-        time.sleep(10)
+        time.sleep(args.poll_seconds)
     print("Zeitlimit erreicht - Backup läuft weiter, Ergebnis im Admin-Portal", file=sys.stderr)
     return 1
 
@@ -481,7 +520,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--protect", action="store_true", help="Punkt nie durch die Retention entfernen")
     p.add_argument("--reason")
     p.add_argument("--wait", action="store_true")
-    p.add_argument("--timeout", type=int, default=6 * 3600)
+    p.add_argument("--timeout", type=int, default=6 * 3600, help="Sekunden insgesamt (Warten auf ein laufendes Backup eingeschlossen)")
+    p.add_argument("--accept-partial", action="store_true",
+                   help="Teilweise erfolgreiches Backup (Datenbank vollständig, einzelne Objekte fehlen) als Erfolg werten; "
+                        "die fehlenden Objekte werden ausgegeben")
+    p.add_argument("--poll-seconds", type=float, default=10, help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_enqueue_backup)
     return parser
 

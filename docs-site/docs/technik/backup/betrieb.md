@@ -41,7 +41,8 @@ Alle in `.env` (Allowlist in `scripts/lib/env.sh`); `deploy.sh` übergibt sie nu
 | `BACKUP_STORAGEBOX_QUOTA_BYTES` | `0` | Kapazität der Box für die Belegungswarnung (85 %/95 %) |
 | `BACKUP_TRUST_FILESYSTEM_REGISTRY` | `false` | nur Neuinstallationen ohne Erstmigration, siehe Architektur |
 | `HOCX_PRE_DEPLOY_BACKUP` | `required` | `skip` = Deploy ohne vorheriges Offsite-Backup (bewusste Entscheidung) |
-| `HOCX_PRE_DEPLOY_BACKUP_TIMEOUT` | `7200` | Sekunden, die `deploy.sh` auf das Backup wartet |
+| `HOCX_PRE_DEPLOY_BACKUP_TIMEOUT` | `7200` | Sekunden, die `deploy.sh` auf das Backup wartet (inkl. Warten auf ein gerade laufendes Backup) |
+| `HOCX_PRE_DEPLOY_BACKUP_ALLOW_PARTIAL` | `true` | teilweise erfolgreiches Backup (DB vollständig, einzelne Objekte fehlen) akzeptieren; fehlende Objekte stehen im Deploy-Log. `false` = Deploy abbrechen |
 | `HOCX_LEGACY_BACKUP_FORCE` | `false` | alte Skripte trotz Borg-Backup ausführen |
 
 Feste Werte im Container: `BACKUP_WORK_DIR=/backup-work`, `BACKUP_SSH_KEY_FILE`,

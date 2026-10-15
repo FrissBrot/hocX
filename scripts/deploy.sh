@@ -468,10 +468,16 @@ run_pre_deploy_backup() {
     echo "Entweder backup-worker starten oder bewusst HOCX_PRE_DEPLOY_BACKUP=skip setzen." >&2
     return 1
   fi
-  echo "==> [$ENVIRONMENT] Offsite-Backup vor dem Update (geschuetzt, wartet auf Abschluss)"
+  # Teilweise erfolgreich (Datenbank-Dump vollstaendig, einzelne Objekte fehlen schon vorher)
+  # blockiert den Deploy nicht; die fehlenden Objekte stehen im Log. Streng: ..._ALLOW_PARTIAL=false.
+  local partial_args=(--accept-partial)
+  if [ "${HOCX_PRE_DEPLOY_BACKUP_ALLOW_PARTIAL:-true}" = false ]; then
+    partial_args=()
+  fi
+  echo "==> [$ENVIRONMENT] Offsite-Backup vor dem Update (geschuetzt, wartet auf Abschluss bzw. ein laufendes Backup)"
   if ! "${DC[@]}" exec -T backup-worker python -m app.backup.cli enqueue-backup --trigger pre_deploy \
       --key "$HOCX_VERSION-$(date +%Y%m%d%H%M%S)" --protect --reason "Vor Update auf $HOCX_VERSION" \
-      --wait --timeout "${HOCX_PRE_DEPLOY_BACKUP_TIMEOUT:-7200}"; then
+      --wait --timeout "${HOCX_PRE_DEPLOY_BACKUP_TIMEOUT:-7200}" "${partial_args[@]}"; then
     echo "Offsite-Backup vor dem Update fehlgeschlagen - Update abgebrochen, die laufende App ist unveraendert." >&2
     echo "Details: Admin-Portal -> System -> Backups. Bewusst ohne Backup: HOCX_PRE_DEPLOY_BACKUP=skip." >&2
     return 1
