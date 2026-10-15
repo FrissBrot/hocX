@@ -14,7 +14,7 @@ from app.backup import jobs
 from app.core.db import SessionLocal, engine
 from app.core.storage import get_object_store
 from app.models import BackupContent, BackupJob, BackupPoolArchive, BackupSet, BackupSettings, StorageGeneration, StorageState, StoredFile
-from app.models import StorageObject
+from app.models import BackupEvent, StorageObject
 from app.workers import backup_worker
 from tests.backup_support import archive_contents as _contents
 from tests.backup_support import backup_env  # noqa: F401 - Fixture
@@ -127,6 +127,32 @@ def test_changes_during_transfer_keep_the_snapshot_content_of_unhashed_objects(b
     contents = _contents(env, db.get(BackupSet, job.backup_set_id).archive_name)
     assert contents[("main", "uploads/legacy/old.bin")] == b"alt-inhalt"
     assert contents[("main", "uploads/legacy/gone.bin")] == b"wird geloescht"
+
+
+def test_crash_after_writing_the_restore_point_adopts_it_on_resume(backup_env, monkeypatch):
+    """BORG-007: Absturz nach dem Schreiben des rp-Archivs, vor dem Commit des BackupSet. Die
+    Fortsetzung übernimmt das Archiv (nachgeprüft) statt an archive_exists zu scheitern."""
+    db, env, _ = backup_env
+    _put(db, "uploads/f/a.bin", b"inhalt")
+    real_iter_items = env.borg.iter_items
+    crashed = {"done": False}
+
+    def crash_once(archive):
+        if archive.startswith("hocx-rp-") and not crashed["done"]:
+            crashed["done"] = True
+            raise jobs.LeaseLost("simulierter Absturz nach dem Schreiben")
+        return real_iter_items(archive)
+
+    monkeypatch.setattr(env.borg, "iter_items", crash_once)
+    job = _run(env)
+    assert crashed["done"]
+    assert job.state == "completed", (job.error_code, job.error_message)
+    backup_set = db.get(BackupSet, job.backup_set_id)
+    rp = [a["name"] for a in env.borg.list_archives() if a["name"].startswith("hocx-rp-")]
+    assert rp == [backup_set.archive_name]
+    assert _contents(env, backup_set.archive_name)[("main", "uploads/f/a.bin")] == b"inhalt"
+    kinds = set(db.scalars(select(BackupEvent.kind).where(BackupEvent.job_id == job.id)))
+    assert "restore_point_adopted" in kinds
 
 
 def test_missing_object_makes_the_backup_partial(backup_env):

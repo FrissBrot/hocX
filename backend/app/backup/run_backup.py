@@ -45,8 +45,10 @@ from app.backup.manifest import (
     README_PATH,
     RECOVERY_README,
     ManifestEntry,
+    ManifestError,
     ManifestWriter,
     build_metadata,
+    parse_metadata,
     pool_archive_name,
     pool_path,
     rp_archive_name,
@@ -640,6 +642,22 @@ def _verify_new_pools(env: RunEnv, transfer: _Transfer) -> None:
             raise jobs.JobFailure("pool_verification_failed", f"Pool-Archiv {pool} enthält nicht alle erwarteten Inhalte")
 
 
+def _adopt_written_restore_point(env: RunEnv, archive: str, backup_id: uuid.UUID, manifest_sha: str,
+                                 captured: dict[str, Any]) -> tuple[bytes, dict[str, Any]]:
+    """Ein bereits vorhandenes rp-Archiv gleichen Namens wird nur übernommen, wenn es genau
+    diesen Lauf enthält (Backup-ID, Manifest- und Dump-Prüfsumme). Sonst Abbruch ohne Änderung."""
+    with env.borg.extract_stream(archive, METADATA_PATH) as stream:
+        raw = stream.read(16 * 1024 * 1024 + 1)
+    try:
+        existing = parse_metadata(raw)
+    except ManifestError as exc:
+        raise jobs.JobFailure("restore_point_conflict", f"Archiv {archive} existiert bereits, Metadaten nicht lesbar ({exc}) - nichts überschrieben") from exc
+    if (existing.get("backup_id") != str(backup_id) or existing.get("manifest_sha256") != manifest_sha
+            or existing.get("db_dump_sha256") != captured["dump_sha256"]):
+        raise jobs.JobFailure("restore_point_conflict", f"Archiv {archive} existiert bereits mit anderem Inhalt - nichts überschrieben")
+    return raw, env.borg.archive_info(archive)
+
+
 def finalize(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupJob, backup_id: uuid.UUID, captured: dict[str, Any],
              transfer: _Transfer) -> BackupSet:
     staging = Path(captured["staging"])
@@ -678,25 +696,32 @@ def finalize(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupJob, backup_
         verification={"state": "unverified"},
     )
     metadata_bytes = json.dumps(metadata, ensure_ascii=False, indent=1).encode("utf-8")
-    process = env.borg.import_tar(archive, comment=f"hocX Wiederherstellungspunkt {backup_id}")
-    writer = TarStreamWriter(process.stdin)
-    try:
-        writer.add_bytes(METADATA_PATH, metadata_bytes)
-        writer.add_file(MANIFEST_PATH, manifest_path)
-        writer.add_file(DUMP_PATH, staging / "hocx.pgdump")
-        if captured.get("has_globals") and (staging / "globals.sql").exists():
-            writer.add_file(GLOBALS_PATH, staging / "globals.sql")
-        writer.add_bytes(README_PATH, RECOVERY_README.encode("utf-8"))
-        writer.close()
-    except StreamBroken as exc:
-        raise process.failure() from exc
-    except BaseException:
-        process.abort()
-        raise
-    stats = process.finish()
-    archive_stats = stats.get("archive", {})
-    jobs.event(db, ctx, "restore_point_written", f"Wiederherstellungspunkt {archive} geschrieben")
-    db.commit()
+    if any(a["name"] == archive for a in env.borg.list_archives(glob=archive)):
+        # Fortsetzung nach Absturz NACH dem Schreiben (vor dem Commit des BackupSet): das Archiv
+        # wird nachgeprüft und übernommen statt erneut geschrieben (borg: archive_exists).
+        metadata_bytes, archive_stats = _adopt_written_restore_point(env, archive, backup_id, manifest_sha, captured)
+        jobs.event(db, ctx, "restore_point_adopted", f"Wiederherstellungspunkt {archive} war bereits geschrieben - übernommen")
+        db.commit()
+    else:
+        process = env.borg.import_tar(archive, comment=f"hocX Wiederherstellungspunkt {backup_id}")
+        writer = TarStreamWriter(process.stdin)
+        try:
+            writer.add_bytes(METADATA_PATH, metadata_bytes)
+            writer.add_file(MANIFEST_PATH, manifest_path)
+            writer.add_file(DUMP_PATH, staging / "hocx.pgdump")
+            if captured.get("has_globals") and (staging / "globals.sql").exists():
+                writer.add_file(GLOBALS_PATH, staging / "globals.sql")
+            writer.add_bytes(README_PATH, RECOVERY_README.encode("utf-8"))
+            writer.close()
+        except StreamBroken as exc:
+            raise process.failure() from exc
+        except BaseException:
+            process.abort()
+            raise
+        stats = process.finish()
+        archive_stats = stats.get("archive", {})
+        jobs.event(db, ctx, "restore_point_written", f"Wiederherstellungspunkt {archive} geschrieben")
+        db.commit()
 
     # Nachprüfung: Archiv lesbar, alle Pflichtdateien mit erwarteter Grösse, Metadaten unverändert.
     items = {item["path"]: item["size"] for item in env.borg.iter_items(archive)}

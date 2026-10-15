@@ -145,7 +145,7 @@
   "events": { "title": "{count, plural, one {# Ereignis} other {# Ereignisse}}", "empty": "Keine Ereignisse.", "worker": "Worker" },
   "event": {
     "state": "Status", "requested": "Angefordert", "hold_acquired": "Hold gesetzt", "registry_hashed": "Register nachgehasht", "cutover_recovery": "Tausch-Journal ausgewertet", "captured": "Erfasst", "pool_written": "Inhalte gesichert",
-    "batch_restart": "Batch wiederholt", "restore_point_written": "Punkt geschrieben", "resumed": "Fortgesetzt", "retry": "Neuer Versuch",
+    "batch_restart": "Batch wiederholt", "restore_point_written": "Punkt geschrieben", "restore_point_adopted": "Punkt übernommen", "resumed": "Fortgesetzt", "retry": "Neuer Versuch",
     "index_reconciled": "Index abgeglichen", "retention": "Aufbewahrung", "gc": "Bereinigung", "cancel_requested": "Abbruch angefordert",
     "rescue_started": "Rettungspunkt", "rescue_done": "Rettungspunkt fertig", "rescue_skipped": "Ohne Rettungspunkt", "prepared": "Vorbereitet",
     "database_restored": "Datenbank", "objects_restored": "Dateien", "alembic_upgraded": "Schema", "verified": "Geprüft",
@@ -343,6 +343,7 @@
     "objects_incomplete": "Nicht alle Dateien konnten aus dem Backup gelesen werden.",
     "reference_check_failed": "Die Verweisprüfung der wiederhergestellten Datenbank ist fehlgeschlagen.",
     "cutover_inconsistent": "Der Datenbanktausch ist nicht eindeutig - es wurde nichts verändert oder gelöscht. Datenbanken manuell prüfen (siehe Restore-Doku).",
+    "restore_point_conflict": "Ein Archiv mit diesem Namen existiert bereits mit anderem Inhalt - nichts überschrieben.",
     "smoke_test_failed": "Der Anwendungstest ist fehlgeschlagen.",
     "tenant_not_in_backup": "Der Mandant ist in diesem Sicherungspunkt nicht enthalten.",
     "tenant_files_missing": "Nach dem Import fehlen Dateien des neuen Mandanten.",
