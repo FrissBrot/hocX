@@ -183,6 +183,21 @@
         "title": "Storage migration",
         "detail": "{verified, number} of {total, number} objects verified · {dead, number} permanently failed",
         "problem": "Storage migration needs attention"
+      },
+      "backup": {
+        "title": "Backup",
+        "detail": "{state, select, disabled {Not set up} never {No successful backup yet} other {Last successful backup {hours, number} h ago}} · {points, number} restore points",
+        "problem": "Backup overdue or not set up"
+      },
+      "backup_repository": {
+        "title": "Backup repository",
+        "detail": "{reachable, select, yes {Storage Box reachable} other {Storage Box unreachable}} · {quota, select, yes {{usedPercent, number} % used} other {capacity unknown}}",
+        "problem": "Backup repository failing or full"
+      },
+      "backup_verification": {
+        "title": "Backup checks",
+        "detail": "{verified, select, yes {Verified {verifyDays, number} days ago} other {Never verified}} · {tested, select, yes {Restore test {testDays, number} days ago} other {No restore test yet}}",
+        "problem": "Backup check or restore test overdue"
       }
     },
     "problems": {
@@ -367,6 +382,26 @@
       "backup_storage": {
         "title": "File backup",
         "description": "Incrementally backs up the objects of the active storage generation after the database backup and verifies the result."
+      },
+      "backup_worker": {
+        "title": "Backup worker",
+        "description": "Schedules and runs backups, checks, restore tests and restores (separate backup-worker container)."
+      },
+      "backup_run": {
+        "title": "Backup (Borg)",
+        "description": "Encrypted backup of the database and file storage to the Storage Box, every 6 hours by default."
+      },
+      "backup_retention": {
+        "title": "Backup retention",
+        "description": "Removes restore points and unreferenced contents that are no longer needed after checking all references."
+      },
+      "backup_verify": {
+        "title": "Backup integrity check",
+        "description": "Checks the repository, archives, database dump and a sample of file contents."
+      },
+      "backup_restore_test": {
+        "title": "Restore test",
+        "description": "Restores the latest restore point into an isolated database and checks references and the application."
       }
     }
   },

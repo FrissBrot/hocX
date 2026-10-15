@@ -21,6 +21,7 @@
     "sso": "SSO",
     "security": "Security",
     "storage": "Storage",
+    "backups": "Backups",
     "maintenance": "Maintenance"
   },
   "logout": "Log out",

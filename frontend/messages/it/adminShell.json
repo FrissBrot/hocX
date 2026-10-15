@@ -21,6 +21,7 @@
     "sso": "SSO",
     "security": "Sicurezza",
     "storage": "Archiviazione",
+    "backups": "Backup",
     "maintenance": "Manutenzione"
   },
   "logout": "Disconnetti",

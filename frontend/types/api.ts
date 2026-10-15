@@ -1776,3 +1776,186 @@ export type StorageOverview = {
   generations: StorageGeneration[];
   profiles: StorageProfile[];
 };
+
+// --- Backups (Plattform-Admin, /api/admin/backups, /api/admin/restores) ---------------------------
+
+export type BackupJobState = "queued" | "preparing" | "running" | "verifying" | "completed" | "partial" | "failed" | "cancelled" | "interrupted";
+export type BackupJobKind = "backup" | "verify" | "restore_test" | "retention";
+export type BackupTrigger = "schedule" | "manual" | "pre_restore" | "pre_deploy" | "cli";
+export type RestoreJobState = "queued" | "preparing" | "running" | "verifying" | "cutover" | "completed" | "failed" | "cancelled" | "interrupted" | "rolled_back";
+
+export type BackupProblem = { code: string; severity: "warning" | "critical"; params: Record<string, string | number | null> };
+
+export type BackupSetWarning = { code: string; count: number | null; items: Array<Record<string, string>> };
+
+export type BackupSet = {
+  id: string;
+  archive_name: string;
+  state: "completed" | "partial" | "failed" | "invalid" | "pruned";
+  trigger: BackupTrigger;
+  protected: boolean;
+  protected_reason: string | null;
+  snapshot_at: string;
+  finished_at: string | null;
+  app_version: string | null;
+  alembic_revision: string | null;
+  generation: number | null;
+  profile_name: string | null;
+  profile_provider: string | null;
+  db_dump_bytes: number | null;
+  object_count: number;
+  object_bytes: number;
+  new_object_count: number;
+  new_object_bytes: number;
+  deduplicated_bytes: number | null;
+  duration_seconds: number | null;
+  verify_state: "unverified" | "verified" | "failed";
+  verified_at: string | null;
+  restore_test_state: "untested" | "passed" | "failed";
+  restore_tested_at: string | null;
+  warnings: BackupSetWarning[];
+  tenant_count: number;
+  reconstructed: boolean;
+};
+
+export type BackupTenant = { id: number; public_id: string | null; name: string; users: number; objects: number; bytes: number };
+
+export type BackupJob = {
+  id: string;
+  kind: BackupJobKind;
+  trigger: BackupTrigger;
+  state: BackupJobState;
+  requested_by_email: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  heartbeat_at: string | null;
+  worker_active: boolean;
+  attempt: number;
+  cancel_requested: boolean;
+  progress: Record<string, string | number | null>;
+  error_code: string | null;
+  error_message: string | null;
+  warning_count: number;
+  duration_seconds: number | null;
+  backup_set: BackupSet | null;
+};
+
+export type BackupEvent = {
+  id: number;
+  created_at: string;
+  level: "info" | "warning" | "error";
+  kind: string;
+  actor_email: string | null;
+  message: string | null;
+  details: Record<string, unknown>;
+};
+
+export type BackupJobDetail = BackupJob & { result: Record<string, unknown> | null; events: BackupEvent[]; tenants: BackupTenant[] };
+
+export type BackupJobPage = { items: BackupJob[]; total: number; offset: number; limit: number };
+
+export type BackupRepositoryStatus = {
+  ok: boolean | null;
+  checked_at: string | null;
+  last_ok_at: string | null;
+  error_code: string | null;
+  error: string | null;
+  repository_id: string | null;
+  encryption: string | null;
+  borg_version: string | null;
+  stored_bytes: number | null;
+  original_bytes: number | null;
+  deduplicated_bytes: number | null;
+  quota_bytes: number | null;
+  used_percent: number | null;
+  staging_free_bytes: number | null;
+  staging_total_bytes: number | null;
+  last_gc_at: string | null;
+  last_verify_at: string | null;
+  last_verify_ok: boolean | null;
+  last_restore_test_at: string | null;
+  last_restore_test_ok: boolean | null;
+};
+
+export type RestoreJob = {
+  id: string;
+  kind: "full" | "tenant_copy";
+  state: RestoreJobState;
+  archive_name: string;
+  backup_set_id: string | null;
+  options: Record<string, unknown>;
+  plan: Record<string, unknown>;
+  requested_by_email: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  heartbeat_at: string | null;
+  worker_active: boolean;
+  progress: Record<string, string | number | null>;
+  error_code: string | null;
+  error_message: string | null;
+  result: Record<string, unknown> | null;
+  cancel_requested: boolean;
+  events: BackupEvent[];
+};
+
+export type BackupStatus = {
+  enabled: boolean;
+  overall: "ok" | "warning" | "critical" | "disabled";
+  problems: BackupProblem[];
+  last_success: BackupSet | null;
+  last_failure: BackupJob | null;
+  next_backup_at: string | null;
+  restore_point_count: number;
+  protected_count: number;
+  latest_object_bytes: number | null;
+  latest_db_bytes: number | null;
+  repository: BackupRepositoryStatus;
+  last_verified_at: string | null;
+  last_verified_archive: string | null;
+  last_restore_test_at: string | null;
+  last_restore_test_archive: string | null;
+  current_job: BackupJob | null;
+  current_restore: RestoreJob | null;
+  worker_heartbeat_at: string | null;
+  worker_alive: boolean;
+};
+
+export type BackupSettings = {
+  schedule_enabled: boolean;
+  interval_hours: number;
+  schedule_offset_minutes: number;
+  keep_within_days: number;
+  keep_daily: number;
+  keep_weekly: number;
+  keep_monthly: number;
+  verify_interval_hours: number;
+  verify_sample_objects: number;
+  restore_test_interval_days: number;
+  success_notification: "off" | "daily" | "each";
+  worker_config: Record<string, string | number | boolean | null>;
+  repository: BackupRepositoryStatus;
+  ntfy_configured: boolean;
+  updated_at: string;
+  updated_by_email: string | null;
+};
+
+export type RestorePreview = {
+  kind: "full" | "tenant_copy";
+  backup_set: BackupSet;
+  schema_state: "same" | "upgrade" | "newer" | "unknown";
+  schema_revision: string | null;
+  schema_head: string | null;
+  target_profile_name: string | null;
+  target_profile_provider: string | null;
+  tenant: BackupTenant | null;
+  new_name: string | null;
+  name_conflict: boolean;
+  steps: string[];
+  risks: string[];
+  blockers: string[];
+  confirmation_phrase: string;
+  requires_totp: boolean;
+  estimated_bytes: number;
+};
