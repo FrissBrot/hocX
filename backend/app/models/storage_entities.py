@@ -59,6 +59,10 @@ class StorageState(Base):
     fence_token: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
     fenced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     local_s3_requested_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Backup-Hold (Migration 0115): Copy-on-Write für Objekte der gehaltenen Generation.
+    backup_hold_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True))
+    backup_hold_generation: Mapped[int | None] = mapped_column(BigInteger)
+    backup_hold_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = _now()
 
 

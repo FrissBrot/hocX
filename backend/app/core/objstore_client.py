@@ -15,6 +15,11 @@ Aufbau:
 - Schreibzugriffe laufen immer über das Protokoll begin_write -> Objekt schreiben ->
   register_write, alles in der Transaktion des Aufrufers (siehe Migration 0113). Ein aktives
   Schreib-Fence führt zu StorageWriteFenced (HTTP 503 mit Retry-After beim Aufrufer).
+- Backup-Hold (Migration 0115, docs-site/docs/technik/backup/architektur.md): liegt ein Hold auf
+  der Generation, in die geschrieben wird, sichert jeder Schreiber vor dem Löschen oder
+  Überschreiben eines registrierten Objekts dessen bisherigen Inhalt nach
+  _hocx-backup-hold/<hold>/<sha256> (serverseitige Kopie). Schlägt das fehl, scheitert der
+  Schreibvorgang - Inhalte, die ein laufendes Backup noch braucht, werden nie zerstört.
 """
 
 from __future__ import annotations
@@ -52,6 +57,24 @@ ACTIVE_CONFIG_TTL_SECONDS = 2.0
 SHA256_METADATA_KEY = "sha256"
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
+
+# Interne Bereiche, die nie fachliche Objekte sind: Inventuren, Prüfungen und Migrationen
+# überspringen sie (kein Registereintrag, keine Migration, kein "unregistriert"-Befund).
+BACKUP_HOLD_PREFIX = "_hocx-backup-hold/"
+RESTORE_STAGING_PREFIX = "_hocx-restore/"
+INTERNAL_PREFIXES = (BACKUP_HOLD_PREFIX, RESTORE_STAGING_PREFIX, "_hocx-connection-test/", "_hocx-health/")
+
+
+def is_internal_key(key: str) -> bool:
+    return key.startswith(INTERNAL_PREFIXES)
+
+
+def backup_hold_key(hold_id: Any, sha256: str) -> str:
+    """Ort der Copy-on-Write-Kopie: nach Inhalt benannt, damit das Backup den Stand seines
+    Snapshots über den erwarteten SHA-256 findet - egal wie oft der Key danach noch geändert wurde."""
+    if not _HEX64.match(sha256 or ""):
+        raise InvalidObjectKey("Ungültiger SHA-256 für den Backup-Hold")
+    return f"{BACKUP_HOLD_PREFIX}{uuid.UUID(str(hold_id)).hex}/{sha256}"
 
 
 # --- Fehler -----------------------------------------------------------------------------------
@@ -877,10 +900,31 @@ class ObjectStore:
             },
         )
 
+    def _preserve_for_backup(self, db: Any, ticket: _WriteTicket, backend: Backend, namespace: str, key: str) -> None:
+        """Copy-on-Write für einen laufenden Backup-Hold (siehe Modul-Docstring). Läuft in der
+        Transaktion des Aufrufers nach storage_begin_write() - der Hold kann sich darum bis zum
+        Ende dieser Transaktion nicht ändern."""
+        row = db.execute(
+            text("SELECT hold_id, sha256 FROM storage_backup_hold(:ns, :key, :gen)"),
+            {"ns": namespace, "key": key, "gen": ticket.generation},
+        ).first()
+        if row is None:
+            return
+        target = backup_hold_key(row.hold_id, row.sha256)
+        if backend.head(namespace, target) is not None:
+            return
+        try:
+            backend.copy(namespace, key, target)
+        except ObjectNotFound:
+            # Schon vorher verschwunden (vorbestehende Inkonsistenz) - das Backup meldet das
+            # Objekt als fehlend, hier gibt es nichts mehr zu retten.
+            _logger.warning("Backup-Hold: %s/%s fehlt bereits, keine Kopie möglich", namespace, key)
+
     def put_bytes(self, db: Any, namespace: str, key: str, data: bytes, *, content_type: str | None = None) -> ObjectInfo:
         validate_namespace(namespace)
         validate_key(key)
         ticket, backend = self._begin_write(db)
+        self._preserve_for_backup(db, ticket, backend, namespace, key)
         info = backend.put_stream(namespace, key, io.BytesIO(data), size=len(data), sha256=hashlib.sha256(data).hexdigest(), content_type=content_type)
         self._register(db, ticket, namespace, key, "put", info)
         return info
@@ -895,6 +939,7 @@ class ObjectStore:
                     digest.update(chunk)
             sha256 = digest.hexdigest()
         ticket, backend = self._begin_write(db)
+        self._preserve_for_backup(db, ticket, backend, namespace, key)
         with path.open("rb") as handle:
             info = backend.put_stream(namespace, key, handle, size=path.stat().st_size, sha256=sha256, content_type=content_type)
         self._register(db, ticket, namespace, key, "put", info)
@@ -907,6 +952,8 @@ class ObjectStore:
         ticket, backend = self._begin_write(db)
         local = backend.local_path(namespace, key)
         if local is not None and local.resolve() == path.resolve():
+            # Die Datei liegt bereits am Zielort (nur Dateisystem-Generation): ein früherer Inhalt
+            # ist damit schon ersetzt. Das Backup erkennt die Abweichung am SHA-256.
             digest = hashlib.sha256()
             with path.open("rb") as handle:
                 for chunk in iter(lambda: handle.read(CHUNK_BYTES), b""):
@@ -920,6 +967,7 @@ class ObjectStore:
         validate_namespace(namespace)
         validate_key(key)
         ticket, backend = self._begin_write(db)
+        self._preserve_for_backup(db, ticket, backend, namespace, key)
         backend.delete(namespace, key)
         self._register(db, ticket, namespace, key, "delete", None)
 
@@ -927,6 +975,7 @@ class ObjectStore:
         validate_key(source_key)
         validate_key(target_key)
         ticket, backend = self._begin_write(db)
+        self._preserve_for_backup(db, ticket, backend, namespace, target_key)
         info = backend.copy(namespace, source_key, target_key)
         if info.sha256 is None:
             digest = hashlib.sha256()
