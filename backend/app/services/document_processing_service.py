@@ -67,6 +67,10 @@ class TransientJobError(Exception):
     """Vorübergehendes Problem (Speicher gesperrt/nicht erreichbar) - später erneut versuchen."""
 
 
+class InputTooLarge(Exception):
+    """Originaldatei ist grösser als document_max_input_mb - dauerhaft, kein erneuter Versuch."""
+
+
 @dataclass
 class JobOutcome:
     status: str
@@ -125,7 +129,12 @@ def renew_lease(db: Session, job_id: int, owner: str) -> bool:
 
 
 def _lock_owned_job(db: Session, job_id: int, owner: str) -> DocumentJob:
-    job = db.scalar(select(DocumentJob).where(DocumentJob.id == job_id).with_for_update())
+    # populate_existing: der Auftrag steckt meist schon in der Identity-Map dieser Session - ohne
+    # Neuladen würden Status/Owner aus dem alten Stand geprüft und eine inzwischen von einem
+    # anderen Worker übernommene Lease nie erkannt (Audit DOCMGMT-001).
+    job = db.scalar(
+        select(DocumentJob).where(DocumentJob.id == job_id).with_for_update().execution_options(populate_existing=True)
+    )
     if job is None or job.status != "running" or job.lease_owner != owner:
         raise JobLeaseLost(f"Auftrag {job_id} gehört nicht mehr diesem Worker")
     return job
@@ -271,8 +280,16 @@ def _handle_failure(db: Session, job_id: int, owner: str, exc: BaseException, *,
 def _read_original(db: Session, original: StoredFile) -> bytes:
     limit = settings.document_max_input_mb * MB
     namespace = namespace_for_stored_file(db, original)
+    store = get_object_store()
     try:
-        return get_object_store().get_bytes(namespace, original.storage_path, max_bytes=limit)
+        # file_size_bytes kann fehlen oder veraltet sein (Altbestand, Import): die echte Grösse
+        # vor dem Lesen prüfen. get_bytes(max_bytes) meldet eine Überschreitung nur als
+        # generischen StorageError, der sonst als vorübergehend endlos neu versucht würde
+        # (Audit DOCMGMT-002).
+        info = store.head(namespace, original.storage_path)
+        if info is not None and info.size is not None and info.size > limit:
+            raise InputTooLarge("input_too_large")
+        data = store.get_bytes(namespace, original.storage_path, max_bytes=limit)
     except (StorageUnavailable, StorageWriteFenced):
         raise
     except ObjectNotFound as exc:
@@ -280,6 +297,11 @@ def _read_original(db: Session, original: StoredFile) -> bytes:
         raise ValueError("Originaldatei fehlt im Speicher") from exc
     except StorageError as exc:
         raise TransientJobError(f"Originaldatei nicht lesbar: {type(exc).__name__}") from exc
+    # Die folgende Sandbox-Verarbeitung dauert bis zu Minuten: die Lesetransaktion jetzt beenden,
+    # statt sie "idle in transaction" offen zu halten (Audit DOCMGMT-007). Geändert wurde in dieser
+    # Session bis hier nichts; Ergebnisse werden später unter frischer Zeilensperre geschrieben.
+    db.commit()
+    return data
 
 
 def _too_large(original: StoredFile) -> bool:
@@ -296,35 +318,47 @@ def _run_pdf(db: Session, context: _JobContext, owner: str, work_dir: Path) -> J
     """PDF-Darstellung erzeugen (bzw. bei PDFs übernehmen) und daraus das Vorschaubild der ersten
     Seite. Scheitert nur die Vorschau, bleibt das PDF gültig - sie ist reine Bequemlichkeit."""
     original = context.original
+    # Vor _read_original lesen: der Commit dort lässt die ORM-Objekte verfallen.
+    mime_type = original.mime_type
+    stem = Path(original.original_name).stem or "dokument"
+    job_id = context.job.id
     existing_pdf = db.scalar(
         select(DocumentFile).where(DocumentFile.document_version_id == context.version.id, DocumentFile.role == FILE_ROLE_PDF)
     )
     pdf: bytes | None = None
     generated_pdf: bytes | None = None
-    if original.mime_type == formats.PDF or (existing_pdf is not None and not existing_pdf.is_generated):
+    if mime_type == formats.PDF or (existing_pdf is not None and not existing_pdf.is_generated):
         result = "already_pdf"
         if not _too_large(original):
-            pdf = _read_original(db, original)
-    elif not formats.needs_conversion(original.mime_type):
+            try:
+                pdf = _read_original(db, original)
+            except InputTooLarge:
+                pdf = None
+    elif not formats.needs_conversion(mime_type):
         result = "unsupported"
     elif _too_large(original):
         result = "too_large"
     else:
-        data = _read_original(db, original)
-        generated_pdf = pdf = convert_module.convert(
-            data, original.mime_type, target="pdf", work_dir=work_dir, limits=_convert_limits()
-        )
-        result = "converted"
+        try:
+            data = _read_original(db, original)
+        except InputTooLarge:
+            data = None
+        if data is None:
+            result = "too_large"
+        else:
+            generated_pdf = pdf = convert_module.convert(
+                data, mime_type, target="pdf", work_dir=work_dir, limits=_convert_limits()
+            )
+            result = "converted"
 
     preview_png: bytes | None = None
     if pdf is not None and preview.preview_available():
         try:
             preview_png = preview.render_first_page(pdf, work_dir=work_dir, limits=_convert_limits())
         except sandbox.SandboxError as exc:
-            _logger.warning("document job %s: Vorschau nicht erzeugt (%s)", context.job.id, type(exc).__name__)
+            _logger.warning("document job %s: Vorschau nicht erzeugt (%s)", job_id, type(exc).__name__)
 
     outputs: dict[str, tuple[bytes, str, str]] = {}
-    stem = Path(context.original.original_name).stem or "dokument"
     if generated_pdf is not None:
         outputs[FILE_ROLE_PDF] = (generated_pdf, formats.PDF, f"{stem}.pdf")
     if preview_png is not None:
@@ -428,28 +462,33 @@ def _run_parser_sandboxed(parser: str, mime_type: str, data: bytes, work_dir: Pa
 def _extract_content(db: Session, context: _JobContext, work_dir: Path) -> tuple[str, dict | None, str | None]:
     """(Status, Inhalt, Fehler) - Status wie document_extraction.status."""
     original = context.original
-    parser = formats.extraction_parser(original.mime_type)
+    # Vor _read_original lesen: der Commit dort lässt die ORM-Objekte verfallen.
+    mime_type = original.mime_type
+    parser = formats.extraction_parser(mime_type)
     if parser is None:
         return "unsupported", None, None
     if _too_large(original):
         return "failed", None, "input_too_large"
-    data = _read_original(db, original)
+    try:
+        data = _read_original(db, original)
+    except InputTooLarge:
+        return "failed", None, "input_too_large"
     if parser == "doc":
         # Kein Python-Parser für das alte Word-Binärformat: im Sandbox-LibreOffice nach DOCX
         # umwandeln (unabhängig vom PDF-Auftrag) und den DOCX-Parser verwenden.
         doc_dir = work_dir / "doc"
         doc_dir.mkdir(parents=True, exist_ok=True)
         docx = convert_module.convert(
-            data, original.mime_type, target="docx", work_dir=doc_dir,
+            data, mime_type, target="docx", work_dir=doc_dir,
             limits=sandbox.Limits(
                 timeout_seconds=settings.document_convert_timeout_seconds,
                 memory_bytes=settings.document_convert_memory_mb * MB,
             ),
         )
-        content = _run_parser_sandboxed("docx", original.mime_type, docx, work_dir)
+        content = _run_parser_sandboxed("docx", mime_type, docx, work_dir)
         content["source"]["parser"] = "doc+libreoffice"
     else:
-        content = _run_parser_sandboxed(parser, original.mime_type, data, work_dir)
+        content = _run_parser_sandboxed(parser, mime_type, data, work_dir)
     needs_ocr = bool(content.pop("needs_ocr", False))
     if needs_ocr:
         page_count = content.get("page_count") or 0
@@ -465,7 +504,7 @@ def _extract_content(db: Session, context: _JobContext, work_dir: Path) -> tuple
                 timeout_seconds=settings.document_ocr_timeout_seconds, memory_bytes=settings.document_extract_memory_mb * MB
             ),
         )
-        content = build_content(parsed, mime_type=original.mime_type)
+        content = build_content(parsed, mime_type=mime_type)
     if not any(block["type"] in ("heading", "paragraph", "list", "table") for block in content.get("blocks") or []):
         return "empty", content, None
     return "ready", content, None

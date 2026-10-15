@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 
 from app.core.storage import MAIN, get_object_store
 from app.models import StoredFile
@@ -253,6 +253,39 @@ def test_lost_lease_discards_result(db, document_storage):
     db.flush()
     assert processing.process_job(db, job.id, OWNER).status == "skipped"
     assert db.scalar(select(DocumentExtraction).where(DocumentExtraction.document_version_id == document.current_version_id)) is None
+
+
+def test_lease_taken_over_meanwhile_is_detected_despite_loaded_job(db, document_storage):
+    """Audit DOCMGMT-001: der Auftrag steckt bereits in der Identity-Map - die Sperrabfrage muss
+    trotzdem den aktuellen Owner aus der Datenbank prüfen."""
+    tenant = make_tenant(db)
+    document = document_service.register_upload(db, gallery_document(db, tenant.id, "sample.md"))
+    job = _jobs(db, document)["extract"]
+    job.status, job.lease_owner = "running", OWNER
+    db.flush()
+    assert db.get(DocumentJob, job.id).lease_owner == OWNER
+    # Übernahme durch einen anderen Worker an der Identity-Map vorbei (wie aus einer anderen Session).
+    db.connection().execute(text("UPDATE document_job SET lease_owner = 'anderer-worker' WHERE id = :id"), {"id": job.id})
+    with pytest.raises(processing.JobLeaseLost):
+        processing._lock_owned_job(db, job.id, OWNER)
+
+
+def test_oversized_original_without_recorded_size_fails_instead_of_retrying(db, document_storage, monkeypatch):
+    """Audit DOCMGMT-002: fehlt file_size_bytes, darf die Grössenüberschreitung nicht als
+    vorübergehender Speicherfehler endlos neu versucht werden."""
+    tenant = make_tenant(db)
+    stored_file = gallery_document(db, tenant.id, "sample.md")
+    document = document_service.register_upload(db, stored_file)
+    stored_file.file_size_bytes = None
+    job = _jobs(db, document)["extract"]
+    db.flush()
+    monkeypatch.setattr(processing.settings, "document_max_input_mb", 0)
+
+    outcome = _run(db, job)
+    db.refresh(job)
+    assert outcome.status == "done" and job.status == "done"
+    extraction = db.scalar(select(DocumentExtraction).where(DocumentExtraction.document_version_id == document.current_version_id))
+    assert extraction.status == "failed" and extraction.error == "input_too_large"
 
 
 def test_claim_takes_queued_jobs_and_recovers_expired_leases(db, document_storage):
