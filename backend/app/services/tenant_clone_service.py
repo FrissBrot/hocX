@@ -139,11 +139,13 @@ class TenantCloneService:
         self._partial_tenant_id: int | None = None
         try:
             return impl(db, source_tenant_id, new_name)
-        except Exception:
+        except Exception as exc:
             db.rollback()
             if self._partial_tenant_id is not None:
-                db.query(Tenant).filter(Tenant.id == self._partial_tenant_id).delete()
-                db.commit()
+                # Vollständiges Aufräumen inkl. Dateien (Audit MAIN-BE-006).
+                from app.services.admin_tenant_service import AdminTenantService
+
+                AdminTenantService().cleanup_partial_tenant(db, self._partial_tenant_id, original=exc)
             raise
 
     def _clone_structure_impl(self, db: Session, source_tenant_id: int, new_name: str) -> Tenant:

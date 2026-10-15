@@ -186,16 +186,18 @@ class TenantImportService:
 
             try:
                 new_tenant = self._run(new_name)
-            except Exception:
+            except Exception as exc:
                 # The pipeline below commits progressively (one table at a time, matching
                 # TenantCloneService's style) rather than as one big transaction - a failure
                 # partway through would otherwise leave a broken, half-imported tenant sitting
-                # in the tenant list instead of a clean "import failed". Tear it down (cascade
-                # deletes every row written so far) before the error propagates.
+                # in the tenant list instead of a clean "import failed". Tear it down before the
+                # error propagates - über delete_tenant inkl. Dateien und RESTRICT-Reihenfolge
+                # (Audit MAIN-BE-006); die Originalexception bleibt erhalten.
                 db.rollback()
                 if self._created_tenant_id is not None:
-                    db.query(Tenant).filter(Tenant.id == self._created_tenant_id).delete()
-                    db.commit()
+                    from app.services.admin_tenant_service import AdminTenantService
+
+                    AdminTenantService().cleanup_partial_tenant(db, self._created_tenant_id, original=exc)
                 raise
             return new_tenant, self.warnings
 

@@ -103,3 +103,24 @@ def test_clone_gets_own_thumbnail_and_delete_keeps_source_preview(db, storage):
     FileService().delete_stored_file(db, cloned)
 
     assert source_thumb.exists()
+
+
+def test_delete_tenant_removes_own_thumbnails_only(db, storage):
+    """Audit MAIN-BE-005: Mandant löschen entfernt auch die Vorschaubilder."""
+    from app.services.admin_tenant_service import AdminTenantService
+
+    doomed = make_tenant(db, "Weg")
+    keeper = make_tenant(db, "Bleibt")
+    doomed_file = _image_with_thumbnail(db, storage, doomed.id, "weg.png", (1, 2, 3))
+    keeper_file = _image_with_thumbnail(db, storage, keeper.id, "bleibt.png", (4, 5, 6))
+    doomed_thumb = owned_thumbnail_path(doomed_file)
+    keeper_thumb = owned_thumbnail_path(keeper_file)
+    # Fremdname aus altem Import darf die Vorschau des anderen Mandanten nicht mitnehmen.
+    extra = StoredFile(tenant_id=doomed.id, original_name="x.png", mime_type="image/png", storage_path="x.png", thumbnail_path=keeper_file.thumbnail_path)
+    db.add(extra)
+    db.flush()
+
+    assert AdminTenantService().delete_tenant(db, doomed.id) is True
+
+    assert not doomed_thumb.exists()
+    assert keeper_thumb.exists()
