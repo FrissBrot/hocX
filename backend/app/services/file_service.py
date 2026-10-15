@@ -848,6 +848,8 @@ class FileService:
         # request's event loop, and a direct scan_bytes() call would block the whole uvicorn
         # worker for every tenant until ClamAV answers (up to 30s on timeout).
         scan_status = (await scanner.scan_many([content], host=settings.clamav_host, port=settings.clamav_port))[0]
+        # Metadaten-Analyse (PIL/pillow-heif) aus demselben Grund nicht auf dem Event-Loop.
+        upload_metadata = await asyncio.to_thread(image_metadata_service.extract_image_metadata, content)
 
         # No per-tenant total quota existed at all before this fix (audit finding,
         # 2026-08-25) - only the per-file MAX_UPLOAD_BYTES check above. Quota check and
@@ -889,7 +891,9 @@ class FileService:
             stored_file = result.stored_file
             # Aufnahmedatum, GPS und Kamera wie beim Galerie-Upload festhalten - die Datei
             # liegt bereits als Original vor, Client-Angaben braucht es hier nicht.
-            self._apply_upload_metadata(stored_file, content, converted=False, hint=None, estimated_taken_on=None, user_id=created_by)
+            self._apply_upload_metadata(
+                stored_file, content, converted=False, hint=None, estimated_taken_on=None, user_id=created_by, metadata=upload_metadata
+            )
 
             protocol_image = ProtocolImage(
                 protocol_element_block_id=protocol_element_block.id,
@@ -1210,12 +1214,15 @@ class FileService:
         hint: dict | None,
         estimated_taken_on: date | None,
         user_id: int | None,
+        metadata: image_metadata_service.ImageMetadata | None = None,
     ) -> list[str]:
         """Serverseitige Analyse eines neu gespeicherten Bildes (bei HEIC das Original vor der
         Konvertierung), danach - nur fuer konvertierte Bilder - validierte Client-Hinweise und
         zuletzt das Schaetzdatum, falls kein echtes Aufnahmedatum gefunden wurde. Gibt die
-        ergaenzten Feldgruppen zurueck, die NICHT aus der Datei selbst stammen."""
-        metadata = image_metadata_service.extract_image_metadata(original_content)
+        ergaenzten Feldgruppen zurueck, die NICHT aus der Datei selbst stammen. `metadata` ist
+        eine bereits (z. B. per asyncio.to_thread) berechnete Analyse von original_content."""
+        if metadata is None:
+            metadata = image_metadata_service.extract_image_metadata(original_content)
         if converted:
             # Ausrichtung/Abmessungen des HEIC gelten nicht fuer das bereits gedrehte JPEG.
             metadata.orientation = None

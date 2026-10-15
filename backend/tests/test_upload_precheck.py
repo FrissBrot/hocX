@@ -451,8 +451,18 @@ def test_heic_upload_keeps_capture_metadata_and_is_found_again_by_its_source_has
     assert _precheck(db, user, [_entry(heic)])[0].status == "already_exists"
 
 
-def test_protocol_images_store_capture_date_and_gps(db):
+def test_protocol_images_store_capture_date_and_gps(db, monkeypatch):
+    import threading
+
+    from app.services import image_metadata_service
     from tests.factories import make_protocol, make_protocol_element, make_protocol_element_block, make_template
+
+    # IMGMETA-013: die Analyse läuft nicht auf dem Event-Loop-Thread des Requests.
+    threads = []
+    original_extract = image_metadata_service.extract_image_metadata
+    monkeypatch.setattr(
+        image_metadata_service, "extract_image_metadata", lambda content: threads.append(threading.current_thread()) or original_extract(content)
+    )
 
     tenant = make_tenant(db)
     protocol = make_protocol(db, tenant.id, make_template(db, tenant.id).id)
@@ -464,6 +474,7 @@ def test_protocol_images_store_capture_date_and_gps(db):
     assert row.exif_taken_at == datetime(2026, 3, 3, 19, 0, tzinfo=UTC)
     assert (row.gps_latitude, row.gps_longitude) == (pytest.approx(47.0, abs=1e-4), pytest.approx(8.0, abs=1e-4))
     assert row.metadata_scan_status == "ok"
+    assert threads and all(thread is not threading.main_thread() for thread in threads)
 
 
 def test_file_hints_are_cleared_when_the_job_ends(db):
