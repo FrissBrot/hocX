@@ -143,3 +143,29 @@ def test_cleanup_after_failure_never_drops_databases_while_a_swap_journal_exists
     monkeypatch.setattr(PgTools, "drop_database", lambda self, name: dropped.append(name))
     run_restore.cleanup_failed_full_restore(env, db=None, job=job)  # type: ignore[arg-type]
     assert dropped == []
+
+
+def test_cli_database_url_file_and_password_warning(tmp_path, capsys):
+    """BORG-010: die Datenbank-URL lässt sich als Datei übergeben; eine URL mit Passwort als
+    Argument funktioniert weiter, erzeugt aber eine Warnung."""
+    from app.backup.cli import main as cli_main
+
+    names = _names()
+    url_file = tmp_path / "db-url"
+    url_file.write_text(settings.database_url + "\n")
+    url_file.chmod(0o600)
+    with PgTools(PgTarget.from_url(settings.database_url)) as pg:
+        try:
+            _create(pg, names["live"], "old")
+            _create(pg, names["restored"], "new")
+            assert cli_main(["swap-database", "--live", names["live"], "--restored", names["restored"], "--keep-as", names["pre"],
+                             "--database-url-file", str(url_file), "--yes"]) == 0
+            assert "WARNUNG" not in capsys.readouterr().err
+            pg.psql(f'ALTER DATABASE "{names["live"]}" WITH ALLOW_CONNECTIONS true;', database="postgres")
+            assert pg.psql("SELECT name FROM marker;", database=names["live"]) == "new"
+            # Zurück per URL-Argument mit Passwort: funktioniert, warnt aber.
+            assert cli_main(["swap-database", "--live", names["live"], "--restored", names["pre"], "--keep-as", names["failed"],
+                             "--database-url", settings.database_url, "--yes"]) == 0
+            assert "--database-url-file" in capsys.readouterr().err
+        finally:
+            _drop_all(pg, names)

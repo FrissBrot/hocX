@@ -76,7 +76,19 @@ def _secret(value: str | None, file_value: str | None, name: str) -> str | None:
 
 
 def _database_url(args: argparse.Namespace) -> str:
-    url = args.database_url or _secret(None, None, "DATABASE_URL")
+    if getattr(args, "database_url", None) and getattr(args, "database_url_file", None):
+        raise SystemExit("Nur eine von --database-url und --database-url-file angeben")
+    if args.database_url:
+        from sqlalchemy.engine import make_url
+
+        try:
+            has_password = bool(make_url(args.database_url).password)
+        except Exception:  # noqa: BLE001 - ungültige URL meldet PgTarget mit klarer Meldung
+            has_password = False
+        if has_password:
+            print("WARNUNG: --database-url enthält ein Passwort - es steht in der Prozessliste und der Shell-History. "
+                  "Besser --database-url-file oder DATABASE_URL_FILE verwenden.", file=sys.stderr)
+    url = args.database_url or _secret(None, getattr(args, "database_url_file", None), "DATABASE_URL")
     if not url:
         raise SystemExit("Datenbankserver unbekannt: --database-url oder DATABASE_URL(_FILE) setzen")
     return url
@@ -470,7 +482,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("restore-full")
     p.add_argument("--archive", required=True)
     p.add_argument("--target-db", required=True, help="Name der NEUEN Datenbank (darf nicht existieren)")
-    p.add_argument("--database-url", help="Server/Zugang (Superuser), Default DATABASE_URL")
+    p.add_argument("--database-url", help="Server/Zugang (Superuser), Default DATABASE_URL - mit Passwort besser --database-url-file")
+    p.add_argument("--database-url-file", help="Datei mit der Datenbank-URL (Passwort nicht in der Prozessliste)")
     p.add_argument("--storage", choices=("s3", "filesystem"), required=True)
     p.add_argument("--generation", type=int, help="Ziel-Generation (Default: Generation des Backups + 1)")
     p.add_argument("--filesystem-root")
@@ -496,7 +509,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--live", required=True)
     p.add_argument("--restored", required=True)
     p.add_argument("--keep-as")
-    p.add_argument("--database-url")
+    p.add_argument("--database-url", help="mit Passwort besser --database-url-file")
+    p.add_argument("--database-url-file", help="Datei mit der Datenbank-URL (Passwort nicht in der Prozessliste)")
     p.add_argument("--yes", action="store_true")
     p.set_defaults(func=cmd_swap_database)
     p = sub.add_parser("init")

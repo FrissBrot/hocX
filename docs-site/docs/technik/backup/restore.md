@@ -142,6 +142,11 @@ Repository-Zugang und die Notfallmappe (Passphrase, Borg-Schlüssel-Export, `.en
    ```
 5. Datenbank an ihren Platz: `$CLI swap-database --live hocx --restored hocx_restored`
    (existiert `hocx` noch nicht, wird nur umbenannt).
+
+   Der Datenbankzugang kommt aus `DATABASE_URL`/`DATABASE_URL_FILE` des Containers. Für einen
+   anderen Server die URL als Datei übergeben (`--database-url-file /run/db-url`), nicht als
+   `--database-url postgresql://user:passwort@…` – ein Passwort im Argument steht in der
+   Prozessliste und der Shell-History (die CLI warnt dann).
 6. `./scripts/deploy.sh prod`, im Admin-Portal prüfen, Wartung unter System → Wartung freigeben.
 
 ### Datenbankzustand verloren, Dateispeicher intakt
