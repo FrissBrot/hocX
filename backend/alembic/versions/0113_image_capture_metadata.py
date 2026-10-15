@@ -2,7 +2,7 @@
 
 Rein additiv (nur neue, nullable Spalten bzw. Spalten mit Default) - bestehende Datensätze
 bleiben unverändert gültig. Keine Daten werden umgeschrieben; fehlende Werte älterer Bilder
-füllt der gezielt aufrufbare Backfill (app/scripts/backfill_image_metadata.py) nach.
+füllt der gezielt aufrufbare Backfill (backend/scripts/backfill_image_metadata.py) nach.
 
 stored_file:
 - estimated_taken_on: vom Benutzer geschätztes Aufnahmedatum als reines Kalenderdatum (DATE,

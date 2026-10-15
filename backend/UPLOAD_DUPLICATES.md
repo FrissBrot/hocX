@@ -288,10 +288,18 @@ Spalten `gps_latitude`, `gps_longitude` (WGS84-Dezimalgrad, `DOUBLE PRECISION`),
 vorkommen; ein Teilindex (`idx_stored_file_tenant_gps`) bereitet die spätere Kartenansicht vor
 (diese ist nicht Teil dieser Änderung).
 
-Lesbar nur über `GET /api/stored-files/{id}/metadata` (`gps`), d. h. für Benutzer mit Zugriff
-auf die Datei im eigenen Mandanten. Partner-Mandanten geteilter Alben erhalten keine
-Metadaten; Leser haben auf Galeriebilder keinen Zugriff. Öffentliche Freigabe-Links geben GPS
-nie über die API aus und entfernen es aus Dateien, wenn der Link den Standort nicht teilt.
+Als Wert lesbar nur über `GET /api/stored-files/{id}/metadata` (`gps`), d. h. für Benutzer mit
+Zugriff auf die Datei im eigenen Mandanten. Partner-Mandanten geteilter Alben erhalten über
+`/metadata` keine Metadaten; Leser haben auf Galeriebilder keinen Zugriff. Öffentliche
+Freigabe-Links geben GPS nie über die API aus und entfernen es aus Dateien, wenn der Link den
+Standort nicht teilt.
+
+**Dateikopien:** Der Export (§11) schreibt nur in der DB vorhandenes GPS (Client-GPS bzw.
+konvertierte HEIC) und das Schätzdatum in die heruntergeladene Kopie. Das gilt für den
+Einzeldownload - auch für Partner-Mandanten geteilter Alben, die das Bild herunterladen dürfen
+- und für öffentliche Freigaben, deren Link den Standort teilt. Ob Partner-Mandanten diese
+Ergänzung erhalten sollen, ist eine offene Produktentscheidung (derzeitiges Verhalten: ja,
+wie das Original selbst, das Datei-GPS ohnehin enthält).
 Der Mandantenexport (Backup) enthält die Spalten unverändert.
 
 Browser-Hinweise (`file_metadata` des Galerie-Uploads, ggf. mit GPS) schickt das Upload-Popup

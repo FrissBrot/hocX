@@ -1039,8 +1039,11 @@ class StoredFile(Base, TimestampMixin):
     estimated_taken_on: Mapped[date | None] = mapped_column(Date)
     estimated_taken_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     estimated_taken_set_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
-    # GPS (WGS84, Sued/West negativ) fuer eine spaetere Kartenansicht. Nur ueber
-    # berechtigte, mandantengebundene Endpunkte lesbar - nie in oeffentlichen Freigaben.
+    # GPS (WGS84, Sued/West negativ) fuer eine spaetere Kartenansicht. Als Wert nur ueber
+    # berechtigte, mandantengebundene Endpunkte lesbar (/metadata). Exportierte Dateikopien
+    # (Download, auch fuer Partner-Mandanten geteilter Alben, und oeffentliche Freigaben, die
+    # den Standort teilen) koennen nur in der DB vorhandenes GPS enthalten, siehe
+    # image_export_service und UPLOAD_DUPLICATES.md §10/§11.
     gps_latitude: Mapped[float | None] = mapped_column(Float)
     gps_longitude: Mapped[float | None] = mapped_column(Float)
     gps_altitude_m: Mapped[float | None] = mapped_column(Float)
