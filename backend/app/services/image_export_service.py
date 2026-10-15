@@ -265,6 +265,11 @@ def _write_jpeg(data: bytes, exif: bytes, xmp: bytes | None) -> bytes:
 # --- PNG ----------------------------------------------------------------------------------
 
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+_PNG_XMP_KEYWORD = b"XML:com.adobe.xmp"
+# Obergrenze für entpacktes PNG-XMP: Deflate erreicht ~1000:1, ein präpariertes iTXt könnte
+# sonst aus wenigen MB mehrere GB machen (Download/Freigabe-Links). Echte XMP-Pakete sind
+# selbst mit Bearbeitungshistorie deutlich kleiner.
+MAX_PNG_XMP_BYTES = 2 * 1024 * 1024
 
 
 def _png_chunks(data: bytes) -> list[tuple[bytes, bytes]]:
@@ -286,16 +291,28 @@ def _png_chunk(kind: bytes, payload: bytes) -> bytes:
     return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
 
 
+def _is_png_xmp(payload: bytes) -> bool:
+    return payload.partition(b"\x00")[0] == _PNG_XMP_KEYWORD
+
+
 def _png_xmp(payload: bytes) -> bytes | None:
     keyword, _, rest = payload.partition(b"\x00")
-    if keyword != b"XML:com.adobe.xmp" or len(rest) < 4:
+    if keyword != _PNG_XMP_KEYWORD or len(rest) < 4:
         return None
     compressed, _method = rest[0], rest[1]
     text = rest[2:].split(b"\x00", 2)
     if len(text) < 3:
         return None
     body = text[2]
-    return zlib.decompress(body) if compressed else body
+    if not compressed:
+        return body
+    # Begrenzt entpacken; zu grosses XMP bricht den Export ab (export_bytes liefert dann das
+    # unveränderte Original) statt den Worker-Speicher zu sprengen.
+    inflater = zlib.decompressobj()
+    xmp = inflater.decompress(body, MAX_PNG_XMP_BYTES + 1)
+    if len(xmp) > MAX_PNG_XMP_BYTES or inflater.unconsumed_tail:
+        raise ValueError("PNG-XMP überschreitet die Entpackgrenze")
+    return xmp
 
 
 def _png_metadata(data: bytes) -> tuple[bytes | None, bytes | None]:
@@ -314,7 +331,7 @@ def _write_png(data: bytes, exif: bytes, xmp: bytes | None) -> bytes:
     for kind, payload in _png_chunks(data):
         if kind == b"eXIf":
             continue
-        if kind == b"iTXt" and xmp is not None and _png_xmp(payload) is not None:
+        if kind == b"iTXt" and xmp is not None and _is_png_xmp(payload):
             continue
         if not inserted and kind in (b"IDAT", b"IEND"):
             out += _png_chunk(b"eXIf", exif.removeprefix(b"Exif\x00\x00"))

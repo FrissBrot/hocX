@@ -175,3 +175,42 @@ def test_public_share_never_exposes_database_gps_when_location_is_not_shared(db)
     assert read_exif(Path(response.path).read_bytes())[2] == {}
     page = public_share_routes.get_public_share(link.url.removeprefix("/share/"), _FakeRequest(), db)
     assert "gps" not in page.files[0].model_dump()
+
+
+def _png_with_compressed_xmp(xmp: bytes) -> bytes:
+    """PNG mit komprimiertem iTXt-XMP *nach* IDAT - Pillow liest es beim Upload nicht an."""
+    import struct
+    import zlib
+
+    base = png()
+    iend = base.rindex(b"IEND") - 4
+    body = zlib.compress(xmp, 9)
+    payload = b"XML:com.adobe.xmp\x00\x01\x00\x00\x00" + body
+    chunk = struct.pack(">I", len(payload)) + b"iTXt" + payload + struct.pack(">I", zlib.crc32(b"iTXt" + payload) & 0xFFFFFFFF)
+    return base[:iend] + chunk + base[iend:]
+
+
+def test_png_export_does_not_inflate_oversized_compressed_xmp():
+    """IMGMETA-002: Komprimiertes PNG-XMP wird nur bis zu einer festen Grenze entpackt -
+    eine präparierte Datei (hier 256 MiB Nullbytes in ~250 KiB) darf den Export nicht aufblähen."""
+    import tracemalloc
+
+    bomb = _png_with_compressed_xmp(b"\0" * (256 * 1024 * 1024))
+    assert len(bomb) < 2 * 1024 * 1024
+    tracemalloc.start()
+    try:
+        exported = image_export_service.export_bytes(_meta("image/png", estimated_taken_on=date(2001, 2, 3)), bomb)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 32 * 1024 * 1024
+    assert exported is None  # Original wird unverändert geliefert
+
+
+def test_png_export_still_reads_small_compressed_xmp():
+    xmp = b'<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF><rdf:Description rdf:about=""/></rdf:RDF></x:xmpmeta>'
+    original = _png_with_compressed_xmp(xmp)
+    exported = image_export_service.export_bytes(_meta("image/png", estimated_taken_on=date(2001, 2, 3)), original)
+    assert exported is not None
+    assert exported.count(b"XML:com.adobe.xmp") == 1  # altes XMP ersetzt, nicht verdoppelt
+    assert b"hocx:CaptureDateEstimated" in exported
