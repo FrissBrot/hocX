@@ -3,7 +3,8 @@
   "reasons": {
     "manual": "Stiamo eseguendo interventi di manutenzione necessari per garantire la stabilità e la sicurezza della piattaforma.",
     "storage_initial_migration": "Stiamo trasferendo tutti i file in un nuovo archivio più sicuro. Durante questo periodo hocX non è disponibile.",
-    "storage_cutover": "Stiamo completando un cambio di archivio. Ci vorrà solo un momento."
+    "storage_cutover": "Stiamo completando un cambio di archivio. Ci vorrà solo un momento.",
+    "backup_restore": "Stiamo ripristinando hocX da un backup. Durante questo tempo hocX non è disponibile."
   },
   "partial": {
     "title": "Il salvataggio è temporaneamente limitato",

@@ -72,7 +72,8 @@
     "manual": "Maintenance manuelle",
     "storage_initial_migration": "Migration initiale du stockage",
     "storage_cutover": "Basculement du stockage",
-    "other": "Tâche système"
+    "other": "Tâche système",
+    "backup_restore": "Restauration depuis la sauvegarde"
   },
   "state": {
     "scheduled": "Planifiée",
@@ -98,7 +99,9 @@
     "storage_initial_migration": "Migration initiale du stockage",
     "storage_cutover": "Basculement du stockage",
     "other": "Tâche système",
-    "manual": "Administrateur"
+    "manual": "Administrateur",
+    "backup_restore": "Restauration complète (sauvegarde)",
+    "backup_restore_cli": "Restauration via la CLI de récupération"
   },
   "feature": {
     "all": "Application entière",

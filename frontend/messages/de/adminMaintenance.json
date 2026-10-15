@@ -72,7 +72,8 @@
     "manual": "Manuelle Wartung",
     "storage_initial_migration": "Erstmigration des Dateispeichers",
     "storage_cutover": "Speicher-Cutover",
-    "other": "Systemjob"
+    "other": "Systemjob",
+    "backup_restore": "Wiederherstellung aus dem Backup"
   },
   "state": {
     "scheduled": "Geplant",
@@ -98,7 +99,9 @@
     "storage_initial_migration": "Storage-Erstmigration",
     "storage_cutover": "Storage-Cutover",
     "other": "Systemjob",
-    "manual": "Administrator"
+    "manual": "Administrator",
+    "backup_restore": "Voll-Restore (Backup)",
+    "backup_restore_cli": "Restore per Recovery-CLI"
   },
   "feature": {
     "all": "Gesamte Anwendung",

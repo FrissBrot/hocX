@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.backup import jobs
@@ -120,15 +121,24 @@ def acquire_hold(db: Session, hold_id: uuid.UUID) -> tuple[int, int] | None:
     Schreibtransaktionen - danach sichert jeder Schreiber per Copy-on-Write."""
     db.commit()
     db.execute(text(f"SET LOCAL lock_timeout = '{HOLD_LOCK_TIMEOUT}'"))
-    row = db.execute(text("""
+    try:
+        row = _update_hold(db, hold_id)
+    except OperationalError:
+        # Lange Schreibtransaktion hält storage_state - nicht warten, später erneut.
+        db.rollback()
+        return None
+    db.commit()
+    return (int(row.active_profile_id), int(row.active_generation)) if row else None
+
+
+def _update_hold(db: Session, hold_id: uuid.UUID) -> Any:
+    return db.execute(text("""
         UPDATE storage_state SET backup_hold_id = :hold, backup_hold_generation = active_generation,
                backup_hold_since = COALESCE(CASE WHEN backup_hold_id = :hold THEN backup_hold_since END, NOW()),
                updated_at = NOW()
         WHERE id = 1 AND NOT write_fenced AND (backup_hold_id IS NULL OR backup_hold_id = :hold)
         RETURNING active_profile_id, active_generation
     """), {"hold": hold_id}).first()
-    db.commit()
-    return (int(row.active_profile_id), int(row.active_generation)) if row else None
 
 
 def release_hold(db: Session, hold_id: uuid.UUID) -> bool:

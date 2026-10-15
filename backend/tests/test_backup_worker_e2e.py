@@ -199,7 +199,9 @@ def test_restore_test_verify_and_retention_with_gc(backup_env):
     assert test.state == "completed", (test.error_code, test.error_message, test.result)
     tested = db.get(BackupSet, second.backup_set_id, populate_existing=True)
     assert tested.restore_test_state == "passed"
-    assert tested.restore_test_details["references"]["consistent"]
+    # Jedes registrierte Objekt wurde wiederhergestellt (Referenzlücken aus anderen Tests in der
+    # gemeinsamen Test-DB sind vorbestehend und werden separat ausgewiesen).
+    assert tested.restore_test_details["references"]["registry_without_object_count"] == 0
 
     # Nur der jüngste Punkt bleibt -> der Inhalt von old.bin ist unreferenziert und wird entfernt.
     db.execute(update(BackupSettings).values(keep_within_days=0, keep_daily=1, keep_weekly=0, keep_monthly=0))
