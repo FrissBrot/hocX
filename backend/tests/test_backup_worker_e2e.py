@@ -14,6 +14,7 @@ from app.backup import jobs
 from app.core.db import SessionLocal, engine
 from app.core.storage import get_object_store
 from app.models import BackupContent, BackupJob, BackupPoolArchive, BackupSet, BackupSettings, StorageGeneration, StorageState, StoredFile
+from app.models import StorageObject
 from app.workers import backup_worker
 from tests.backup_support import archive_contents as _contents
 from tests.backup_support import backup_env  # noqa: F401 - Fixture
@@ -97,6 +98,35 @@ def test_changes_during_transfer_keep_the_snapshot_content(backup_env, monkeypat
     # Hold-Kopien wurden nach dem Lauf entfernt.
     backend = env.store.active_backend(force=True)
     assert not list(backend.list("main", "_hocx-backup-hold/"))
+
+
+def test_changes_during_transfer_keep_the_snapshot_content_of_unhashed_objects(backup_env, monkeypatch):
+    """BORG-005: Registereinträge ohne SHA-256 (Altbestand) werden vor dem Hold nachgehasht -
+    Copy-on-Write greift dann auch für sie."""
+    db, env, _ = backup_env
+    _put(db, "uploads/legacy/old.bin", b"alt-inhalt")
+    _put(db, "uploads/legacy/gone.bin", b"wird geloescht")
+    db.execute(update(StorageObject).where(StorageObject.key.in_(["uploads/legacy/old.bin", "uploads/legacy/gone.bin"])).values(sha256=None))
+    db.commit()
+    from app.backup import run_backup
+
+    real_capture = run_backup.capture
+
+    def capture_then_change(*args, **kwargs):
+        captured = real_capture(*args, **kwargs)
+        with SessionLocal() as writer:
+            store = get_object_store()
+            store.put_bytes(writer, "main", "uploads/legacy/old.bin", b"neuer-inhalt")
+            store.delete(writer, "main", "uploads/legacy/gone.bin")
+            writer.commit()
+        return captured
+
+    monkeypatch.setattr(run_backup, "capture", capture_then_change)
+    job = _run(env)
+    assert job.state == "completed", job.error_message
+    contents = _contents(env, db.get(BackupSet, job.backup_set_id).archive_name)
+    assert contents[("main", "uploads/legacy/old.bin")] == b"alt-inhalt"
+    assert contents[("main", "uploads/legacy/gone.bin")] == b"wird geloescht"
 
 
 def test_missing_object_makes_the_backup_partial(backup_env):

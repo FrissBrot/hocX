@@ -95,6 +95,10 @@ daher Inhalte verlieren, auf die der Dump verweist.
 
 Lösung **Backup-Hold mit Copy-on-Write** (anbieterunabhängig, braucht keine S3-Versionierung):
 
+0. Registereinträge ohne SHA-256 (Altbestand aus der Erstmigration) werden vorher einmalig
+   nachgehasht (`backfill_registry_hashes`, nur solange der Eintrag noch keinen Hash hat).
+   Copy-on-Write braucht den Hash als Namen der Kopie; ohne ihn würde ein danach überschriebenes
+   Altobjekt mit dem neuen Inhalt gesichert.
 1. Der Worker setzt `storage_state.backup_hold_id/backup_hold_generation` per `UPDATE` (mit
    `lock_timeout`). Das `UPDATE` wartet – wie das Cutover-Fence – auf alle offenen
    Schreibtransaktionen (`storage_begin_write()` hält `FOR SHARE`); neue Schreiber sehen den

@@ -218,6 +218,44 @@ def _dangling_references(session: Session, conn: Any) -> dict[str, Any]:
     return {"count": len(missing), "items": missing[:200], "references": len(refs)}
 
 
+def backfill_registry_hashes(env: RunEnv, db: Session, ctx: jobs.JobCtx, profile_id: int, generation: int) -> int:
+    """Registereinträge ohne SHA-256 (Altbestand) VOR dem Hold nachhashen. Copy-on-Write
+    (storage_backup_hold) greift nur für Objekte mit Hash; ohne Nachhashen würde ein zwischen
+    Snapshot und Übertragung überschriebenes Altobjekt mit dem NEUEN Inhalt gesichert.
+    Neue Schreibvorgänge registrieren immer einen Hash - das läuft also nur einmal je Altbestand.
+    Gesetzt wird nur, solange der Eintrag noch keinen Hash hat (ein paralleler Schreiber gewinnt)."""
+    backend = None
+    done = 0
+    last: tuple[str, str] = ("", "")
+    while True:
+        rows = db.execute(text("""
+            SELECT namespace, key FROM storage_object
+            WHERE status = 'active' AND sha256 IS NULL AND generation = :g AND (namespace, key) > (:ns, :key)
+            ORDER BY namespace, key LIMIT 500
+        """), {"g": generation, "ns": last[0], "key": last[1]}).all()
+        db.commit()
+        if not rows:
+            return done
+        backend = backend or hold_backend(env, db, profile_id, generation)
+        for row in rows:
+            ctx.check()
+            last = (row.namespace, row.key)
+            digest = hashlib.sha256()
+            size = 0
+            try:
+                for chunk in backend.open_read(row.namespace, row.key):
+                    digest.update(chunk)
+                    size += len(chunk)
+            except ObjectNotFound:
+                continue  # fehlt bereits - das Backup meldet es als fehlend
+            done += db.execute(text("""
+                UPDATE storage_object SET sha256 = :sha, size_bytes = :size, updated_at = NOW()
+                WHERE namespace = :ns AND key = :key AND status = 'active' AND sha256 IS NULL AND generation = :g
+            """), {"sha": digest.hexdigest(), "size": size, "ns": row.namespace, "key": row.key, "g": generation}).rowcount
+        db.commit()
+        jobs.progress(db, ctx, phase="registry_hash", hashed=done)
+
+
 def capture(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupJob, backup_id: uuid.UUID) -> dict[str, Any]:
     staging = _staging(env, ctx.job_id)
     state = db.get(StorageState, 1, populate_existing=True)
@@ -242,6 +280,11 @@ def capture(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupJob, backup_i
     if needed > budget:
         raise jobs.JobFailure("staging_insufficient",
                               f"Zu wenig lokaler Platz für den Datenbank-Dump: benötigt ca. {needed // 1024 ** 2} MiB, verfügbar {budget // 1024 ** 2} MiB")
+
+    hashed = backfill_registry_hashes(env, db, ctx, int(state.active_profile_id), int(state.active_generation))
+    if hashed:
+        jobs.event(db, ctx, "registry_hashed", f"{hashed} Registereinträge ohne SHA-256 nachgehasht (Altbestand)", count=hashed)
+        db.commit()
 
     held = acquire_hold(db, backup_id)
     if held is None:
