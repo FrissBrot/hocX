@@ -22,7 +22,7 @@ from app.repositories.export_repository import ExportRepository
 from app.services import public_id_service
 from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
 from app.core.db import SessionLocal
-from app.core.storage import MAIN, ObjectNotFound, get_object_store, key_from_legacy_path, materialize_prefix, safe_suffix, validate_key
+from app.core.storage import MAIN, ObjectNotFound, StorageWriteFenced, get_object_store, key_from_legacy_path, materialize_prefix, safe_suffix, validate_key
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 from app.schemas.protocol import ProtocolExportRead
 
@@ -2475,14 +2475,23 @@ Status: {protocol_status}
         if not stale:
             return {"deleted": 0}
         session = db if db is not None else SessionLocal()
+        deleted = 0
         try:
             for key in stale:
-                store.delete(session, MAIN, key)
-            session.commit()
+                # Pro Key committen (S3-008): das Objekt ist sofort physisch weg - ein späterer
+                # Rollback (z. B. StorageWriteFenced beim nächsten Key) liesse sonst Registereinträge
+                # "aktiv" für bereits gelöschte Objekte zurück, die spätere Cutover blockieren.
+                try:
+                    store.delete(session, MAIN, key)
+                    session.commit()
+                except StorageWriteFenced:
+                    session.rollback()
+                    break  # Cutover/Wartung: der nächste Lauf macht weiter
+                deleted += 1
         finally:
             if db is None:
                 session.close()
-        return {"deleted": len(stale)}
+        return {"deleted": deleted}
 
     def _escape_latex(self, value: str) -> str:
         # Single-pass per-character replacement to avoid double-escaping

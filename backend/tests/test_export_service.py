@@ -403,6 +403,46 @@ def test_m17_cleanup_old_generated_exports_respects_custom_retention(db, tmp_pat
     assert not file_path.exists()
 
 
+def test_cleanup_old_generated_exports_commits_per_key_and_stops_on_write_fence(db, tmp_path, monkeypatch):
+    """S3-008: ein Fence mitten im Lauf darf bereits physisch gelöschte Exporte nicht per Rollback
+    im Register wieder "aktiv" stehen lassen - pro Key committen, beim Fence sauber aufhören."""
+    from app.core.storage import StorageWriteFenced, get_object_store
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    monkeypatch.setattr(settings, "export_root", str(tmp_path / "exports"))
+    get_object_store.cache_clear()
+    generated_dir = tmp_path / "exports" / "generated"
+    generated_dir.mkdir(parents=True)
+    old_timestamp = (datetime.now() - timedelta(days=31)).timestamp()
+    files = []
+    for name in ("a-export.pdf", "b-export.pdf"):
+        path = generated_dir / name
+        path.write_bytes(b"%PDF")
+        os.utime(path, (old_timestamp, old_timestamp))
+        files.append(path)
+    store = get_object_store()
+    real_delete = store.delete
+    commits: list[int] = []
+    calls = {"n": 0}
+
+    def fenced_second(session, namespace, key):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise StorageWriteFenced("cutover:test")
+        return real_delete(session, namespace, key)
+
+    monkeypatch.setattr(store, "delete", fenced_second)
+    real_commit = db.commit
+    monkeypatch.setattr(db, "commit", lambda: (commits.append(calls["n"]), real_commit()))
+    try:
+        result = ExportService().cleanup_old_generated_exports(db)
+    finally:
+        get_object_store.cache_clear()
+    assert result == {"deleted": 1}
+    assert commits == [1]  # erster Key vor dem Fence committet
+    assert sum(path.exists() for path in files) == 1
+
+
 def test_m17_cleanup_old_generated_exports_missing_dir_is_a_noop(db, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     monkeypatch.setattr(settings, "export_root", str(tmp_path / "does-not-exist"))
