@@ -20,8 +20,9 @@ T = TypeVar("T")
 
 def lock_row(db: Session, obj: T) -> T:
     """Zeile von ``obj`` bis zum Ende der Transaktion sperren und mit dem aktuellen DB-Stand
-    neu laden. Vor jeder Änderung an ``obj`` aufrufen (ungespeicherte Änderungen gingen sonst
-    beim Neuladen verloren)."""
+    neu laden. Ausstehende Änderungen der Sitzung werden vorher geschrieben (die Sessions laufen
+    ohne Autoflush), sonst verwürfe das Neuladen z. B. ein vom Aufrufer gesetztes Feld."""
+    db.flush()
     model = type(obj)
     # Ergebnis abrufen: populate_existing wirkt erst beim Laden der Zeile
     return db.execute(select(model).where(model.id == obj.id).with_for_update().execution_options(populate_existing=True)).scalar_one()  # type: ignore[attr-defined]
