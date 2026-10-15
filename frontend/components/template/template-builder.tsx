@@ -4,6 +4,7 @@ import { useParticipantSelectable } from "@/contexts/participant-date-context";
 
 import { DragEvent, FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -1589,7 +1590,7 @@ export function TemplateEditor({
           <div className="field-stack">
             <span className="field-label">{t("pdfLayoutLabel")}</span>
             <span className="field-help">{t("pdfLayoutStudioHelp")}</span>
-            <a className="studio-link" href="/documents">{t("pdfLayoutStudioLink")}</a>
+            <Link className="studio-link" href="/documents">{t("pdfLayoutStudioLink")}</Link>
           </div>
           <div className="table-toolbar-actions">
             <button data-modal-save type="submit" className="button-secondary">{t("saveTemplate")}</button>
