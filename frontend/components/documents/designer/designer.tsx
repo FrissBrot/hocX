@@ -364,6 +364,11 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
         return;
       }
       if (typing) return;
+      // Offener Dialog (Revisionen, Zuweisungen, Rückfrage): Tasten gehören dem Dialog
+      if (document.querySelector('[aria-modal="true"]')) return;
+      // Löschen/Duplizieren/Verschieben nur mit Fokus auf Arbeitsfläche oder Struktur, nicht z. B.
+      // auf einem Knopf der Werkzeugleiste oder im Eigenschaftenbereich
+      const onElements = !(target instanceof HTMLElement) || target === document.body || !!target.closest('.studio-center, [role="tree"]');
       if (meta && event.key.toLowerCase() === "z") {
         event.preventDefault();
         if (event.shiftKey) history.redo();
@@ -371,7 +376,7 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
       } else if (meta && event.key.toLowerCase() === "y") {
         event.preventDefault();
         history.redo();
-      } else if (!editable) {
+      } else if (!editable || !onElements) {
         return;
       } else if ((event.key === "Delete" || event.key === "Backspace") && selectedId) {
         event.preventDefault();

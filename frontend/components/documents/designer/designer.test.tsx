@@ -217,6 +217,24 @@ describe("TemplateDesigner", () => {
     expect(await within(screen.getByRole("main", { name: "Arbeitsfläche" })).findByRole("button", { name: "Einleitung" })).toBeInTheDocument();
   });
 
+  it("ignores delete shortcuts while a dialog is open or a toolbar button has focus (STUDIO-016)", async () => {
+    await renderDesigner();
+    fireEvent.click(canvasNode("Einleitung"));
+    const dialog = document.createElement("div");
+    dialog.setAttribute("aria-modal", "true");
+    document.body.appendChild(dialog);
+    fireEvent.keyDown(window, { key: "Delete" });
+    dialog.remove();
+    expect(canvasNode("Einleitung")).toBeInTheDocument();
+
+    const back = screen.getByRole("button", { name: "Zur Bibliothek" });
+    back.focus();
+    fireEvent.keyDown(back, { key: "Backspace" });
+    expect(canvasNode("Einleitung")).toBeInTheDocument();
+    await advance(1300);
+    expect(api.studioApi.saveDraft).not.toHaveBeenCalled();
+  });
+
   it("keeps locked elements when deleting", async () => {
     await renderDesigner();
     fireEvent.click(canvasNode("Prüfvermerk"));
