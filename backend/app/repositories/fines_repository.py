@@ -254,9 +254,6 @@ class FinesRepository:
         protocol = db.get(Protocol, fine.protocol_id)
         if protocol is None or protocol.tenant_id != tenant_id:
             return None
-        # Freeze-Schutz (audit S7, 2026-08-16) - see create_fine's identical check above.
-        if protocol.status == "abgeschlossen":
-            return None
 
         # No explicit protocol context given (standalone Bussen tab, not the protocol editor) -
         # auto-attach to the next open protocol, exactly as if it had been closed there.
@@ -271,6 +268,18 @@ class FinesRepository:
             collecting_protocol = db.get(Protocol, effective_protocol_id)
             if collecting_protocol is None or collecting_protocol.tenant_id != tenant_id:
                 return None
+            # Ein abgeschlossenes Protokoll nimmt keine Inkassi mehr auf (MAIN-BE-002).
+            if collecting_protocol.status == "abgeschlossen":
+                return None
+
+        # Freeze-Schutz (audit S7, 2026-08-16; präzisiert MAIN-BE-002): Offene Bussen werden
+        # gerade dafür ins nächste Protokoll mitgeführt. Ist das Ursprungsprotokoll schon
+        # abgeschlossen, darf die Busse nur in einem anderen, offenen Protokoll einkassiert
+        # werden - closed_in_protocol_id dokumentiert das, und die Buchung hängt dann an
+        # diesem Protokoll statt am eingefrorenen Ursprung.
+        if protocol.status == "abgeschlossen":
+            if effective_protocol_id is None or effective_protocol_id == fine.protocol_id:
+                return None
 
         now = datetime.now(timezone.utc)
         tx = FinanceTransaction(
@@ -278,7 +287,9 @@ class FinesRepository:
             amount=fine.amount,
             description=f"Busse {fine.fine_type}: {fine.participant_name_snapshot}",
             transaction_date=now.date(),
-            protocol_id=fine.protocol_id,
+            # Buchung im Protokoll, in dem kassiert wurde (MAIN-BE-002) - sonst hinge sie an
+            # einem womöglich schon eingefrorenen Ursprungsprotokoll.
+            protocol_id=effective_protocol_id or fine.protocol_id,
         )
         db.add(tx)
         db.flush()
