@@ -24,7 +24,7 @@ from app.models.entities import CycleConfig, GalleryUploadJob, PhotoAlbum, Photo
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
 from app.schemas.files import FileAlbumRef, FileOverviewItem, FileStats, PhotoAnalysisProgress, SimilarityGroup, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
-from app.services import public_id_service
+from app.services import document_service, public_id_service
 from app.services.stored_file_location import abgabebox_stored_file_ids
 from app.services.apple_media import (
     convert_heic_to_jpeg,
@@ -1238,6 +1238,9 @@ class FileService:
                 )
             )
             db.flush()
+            # Logisches Dokument samt PDF-/Extraktionsauftrag in derselben Transaktion (ZIP und
+            # andere Nicht-Dokumente bekommen keins, siehe documents/formats.py).
+            document_service.register_upload(db, stored_file)
             saved_public_ids.append(stored_file.public_id)
 
         db.commit()
@@ -1554,6 +1557,9 @@ class FileService:
             infected_message=f"Datei '{filename}' wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert",
             stored_file_repository=self.stored_file_repository,
         )
+        # Allgemeine Dokumentebene (PDF-Ansicht, Textextraktion) - unabhängig vom
+        # protokollspezifischen Import, der die Datei weiter selbst liest.
+        document_service.register_upload(db, result.stored_file)
         return result.stored_file
 
     def rescan_pending_internal_files(self, db: Session) -> dict:
@@ -1598,6 +1604,9 @@ class FileService:
         # against a caller-side rollback recreating the opposite inconsistency (row
         # survives, file gone) - but flush() catches the far more common failure mode.
         storage_key = stored_file.storage_path
+        # Ist die Datei Original eines Dokuments, verschwinden Dokument und daraus erzeugte
+        # Dateien (PDF) mit ihr.
+        document_service.release_original(db, stored_file.id)
         self.stored_file_repository.delete(db, stored_file)
         db.flush()
         # Löschung über das Journal: eine laufende Migration übernimmt sie, die Datei taucht im
