@@ -88,14 +88,8 @@ class SshBorgServer:
             "PermitRootLogin prohibit-password\nStrictModes no\nUsePAM no\nLogLevel ERROR\n"
         )
         Path("/run/sshd").mkdir(exist_ok=True)
-        sshd = shutil.which("sshd") or "/usr/sbin/sshd"
-        self.process = subprocess.Popen([sshd, "-D", "-e", "-f", str(config)], stderr=subprocess.PIPE)
-        deadline = time.monotonic() + 10
-        while time.monotonic() < deadline:
-            with socket.socket() as sock:
-                if sock.connect_ex(("127.0.0.1", self.port)) == 0:
-                    break
-            time.sleep(0.1)
+        self._sshd_config = config
+        self.start()
         self.known_hosts = root / "client" / "known_hosts"
         self.known_hosts.write_text(f"[127.0.0.1]:{self.port} {self.host_key.with_suffix('.pub').read_text().strip()}\n")
         self.fingerprint = subprocess.run(["ssh-keygen", "-lf", str(self.host_key.with_suffix(".pub"))], capture_output=True, check=True).stdout.decode().split()[1]
@@ -110,9 +104,22 @@ class SshBorgServer:
         values.update(overrides)
         return local_config(tmp_path, **values)
 
+    def start(self) -> None:
+        sshd = shutil.which("sshd") or "/usr/sbin/sshd"
+        self.process = subprocess.Popen([sshd, "-D", "-e", "-f", str(self._sshd_config)], stderr=subprocess.DEVNULL)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            with socket.socket() as sock:
+                if sock.connect_ex(("127.0.0.1", self.port)) == 0:
+                    return
+            time.sleep(0.1)
+
     def stop(self) -> None:
-        self.process.terminate()
-        self.process.wait(timeout=10)
+        if self.process.poll() is None:
+            self.process.terminate()
+            self.process.wait(timeout=10)
+        # Laufende Sitzungen (borg serve) mit beenden - wie ein Verbindungsabbruch.
+        subprocess.run(["pkill", "-f", f"borg serve .*{self.repo}"], check=False)
 
 
 # --- End-to-End-Umgebung (Test-DB, Test-S3, lokales Borg-Repository) -------------------------
