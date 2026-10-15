@@ -38,6 +38,7 @@ from app.backup.pgtools import PgToolError
 from app.backup.restore_core import RestoreError
 from app.backup.run_backup import RunEnv, finish_cleanup, preflight_repository
 from app.backup.status import settings_row, update_repository_status
+from app.core.background_loops import RESERVED_LOCK_IDS
 from app.core.config import settings
 from app.core.db import SessionLocal, engine
 from app.core.error_log import record_system_error
@@ -55,7 +56,7 @@ JOB_NAME = "backup_worker"
 RUN_JOB_NAMES = {"backup": "backup_run", "verify": "backup_verify", "restore_test": "backup_restore_test", "retention": "backup_retention"}
 POLL_SECONDS = float(os.environ.get("BACKUP_WORKER_POLL_SECONDS", "10"))
 REPOSITORY_PROBE_INTERVAL = timedelta(minutes=30)
-ADVISORY_LOCK_ID = 7_301_115  # eindeutig, siehe BACKGROUND_LOCK_IDS/EXTERNAL_LOCK_IDS
+ADVISORY_LOCK_ID = RESERVED_LOCK_IDS["backup_worker_repository"]
 _SCHEDULE_BASE = datetime(2000, 1, 1, tzinfo=UTC)
 
 

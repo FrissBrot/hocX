@@ -295,6 +295,58 @@ def _check_storage_migration(db: Session, now: datetime) -> HealthCheckRead:
     return HealthCheckRead(key="storage_migration", status=status, params={"verified": migration.verified_objects, "total": migration.total_objects, "dead": dead})
 
 
+_BACKUP_CHECK_CODES = {
+    "backup": {"disabled", "configuration", "never_succeeded", "overdue", "schedule_disabled"},
+    "backup_repository": {"repository_unreachable", "repository_id_mismatch", "repository_not_encrypted", "passphrase_wrong",
+                          "host_key_mismatch", "capacity_low", "staging_low"},
+    # Fehlgeschlagene Prüfungen/Restore-Tests melden die Job-Läufe (backup_verify,
+    # backup_restore_test) - hier nur, wenn sie zu lange ausbleiben.
+    "backup_verification": {"verify_overdue", "restore_test_overdue"},
+}
+
+
+def _check_backup(db: Session, now: datetime) -> list[HealthCheckRead]:
+    """Backup-System (docs-site/docs/technik/backup/): Frische der Sicherungen, Repository auf der
+    Storage Box und regelmässige Prüfungen. Bewertung aus backup_admin_service.evaluate - dieselbe
+    wie im Admin-Portal."""
+    from app.models import BackupSet
+    from app.services import backup_admin_service
+
+    overall, problems = backup_admin_service.evaluate(db, now)
+    row = backup_admin_service.settings_row(db)
+    repo = dict(row.repository_status or {})
+    last_ok = db.scalar(select(func.max(BackupSet.snapshot_at)).where(BackupSet.state == "completed"))
+    points = db.scalar(select(func.count()).select_from(BackupSet).where(BackupSet.state.in_(("completed", "partial")))) or 0
+    verified = db.scalar(select(func.max(BackupSet.verified_at)).where(BackupSet.verify_state == "verified"))
+    tested = db.scalar(select(func.max(BackupSet.restore_tested_at)).where(BackupSet.restore_test_state == "passed"))
+    used = repo.get("used_percent")
+
+    def status_for(key: str) -> tuple[HealthStatus, str | None]:
+        relevant = [p for p in problems if p.code in _BACKUP_CHECK_CODES[key]]
+        if not relevant:
+            return ("unknown" if overall == "disabled" else "ok"), None
+        worst: HealthStatus = "critical" if any(p.severity == "critical" for p in relevant) else "warning"
+        return worst, relevant[0].code
+
+    checks: list[HealthCheckRead] = []
+    backup_status, backup_code = status_for("backup")
+    checks.append(HealthCheckRead(key="backup", status=backup_status, params={
+        "state": "disabled" if overall == "disabled" else ("never" if last_ok is None else "ok"),
+        "hours": int((now - last_ok).total_seconds() // 3600) if last_ok else 0, "points": int(points), "code": backup_code,
+    }))
+    repo_status, repo_code = status_for("backup_repository")
+    checks.append(HealthCheckRead(key="backup_repository", status=repo_status if overall != "disabled" else "unknown", params={
+        "reachable": "yes" if repo.get("ok") else "no", "quota": "yes" if isinstance(used, (int, float)) else "no",
+        "usedPercent": used if isinstance(used, (int, float)) else 0, "code": repo_code or repo.get("error_code"),
+    }))
+    verify_status, verify_code = status_for("backup_verification")
+    checks.append(HealthCheckRead(key="backup_verification", status=verify_status if overall != "disabled" else "unknown", params={
+        "verified": "yes" if verified else "no", "verifyDays": int((now - verified).days) if verified else 0,
+        "tested": "yes" if tested else "no", "testDays": int((now - tested).days) if tested else 0, "code": verify_code,
+    }))
+    return checks
+
+
 def _check_error_rate(db: Session) -> HealthCheckRead:
     last_hour = db.scalar(select(func.count()).select_from(SystemErrorLog).where(SystemErrorLog.created_at >= func.now() - timedelta(hours=1))) or 0
     last_day = db.scalar(select(func.count()).select_from(SystemErrorLog).where(SystemErrorLog.created_at >= func.now() - timedelta(days=1))) or 0
@@ -352,6 +404,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("scan_backlog", lambda: _check_scan_backlog(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("storage_migration", lambda: _check_storage_migration(db, now), failure_status="unknown", db=db)
+    checks += _run_check("backup", lambda: _check_backup(db, now), failure_status="unknown", db=db)
     return checks
 
 

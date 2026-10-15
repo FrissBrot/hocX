@@ -11,6 +11,7 @@ genauso wie die Eindeutigkeit der Lock-IDs in background_loops.py."""
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Literal
 
@@ -19,7 +20,7 @@ from app.core.config import settings
 
 JobKind = Literal["loop", "worker", "host_cron"]
 JobCategory = Literal["virus_scan", "photo_analysis", "uploads", "cleanup", "maintenance", "backup", "storage"]
-JobService = Literal["backend", "abgabebox-backend", "photo-analysis-worker", "storage-worker", "host"]
+JobService = Literal["backend", "abgabebox-backend", "photo-analysis-worker", "storage-worker", "backup-worker", "host"]
 
 # Mindestspielraum, bevor ein Job als überfällig gilt - ein langer Tick (grosser ZIP-Import,
 # viele Dateien im Rescan) verschiebt den nächsten Lauf, ohne dass etwas kaputt ist.
@@ -108,22 +109,17 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
     # Host-Cronjobs (crontab des Deploy-Users, siehe RUNBOOK Abschnitt 10), gestartet über
     # scripts/run_job.sh. Solange sie nicht eingerichtet sind, zeigt die Seite "Nie gelaufen" -
     # ohne Alarm (system_alert_service meldet never_run nur für Loops/Worker).
+    # Backup-Worker (eigener Container backup-worker, docs-site/docs/technik/backup/): Heartbeat aus
+    # der Poll-Schleife plus je Auftragsart ein Lauf. Die Frische der Sicherungen (Intervall
+    # überschritten), Repository und Prüfungen überwacht system_health_service (Checks backup*);
+    # max_silence ist hier darum bewusst grosszügig - sonst gäbe es zwei Alarme für dasselbe Problem.
     JobDefinition(
-        name="backup_db",
-        kind="host_cron",
-        service="host",
+        name="backup_worker",
+        kind="worker",
+        service="backup-worker",
         category="backup",
-        interval_seconds=24 * 60 * 60,
-        max_silence_seconds=26 * 60 * 60,
-    ),
-    # Objekt-Backup der aktiven Speichergeneration nach dem DB-Backup (scripts/backup_storage.sh).
-    JobDefinition(
-        name="backup_storage",
-        kind="host_cron",
-        service="host",
-        category="backup",
-        interval_seconds=24 * 60 * 60,
-        max_silence_seconds=26 * 60 * 60,
+        interval_seconds=None,
+        max_silence_seconds=10 * 60,
     ),
     JobDefinition(
         name="cleanup_storage",
@@ -161,6 +157,46 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         max_silence_seconds=5 * 60,
     ),
 )
+
+# Läufe des Backup-Workers - nur registriert, wenn das Borg-Backup eingerichtet ist (sonst
+# meldete die Übersicht sie als "nie gelaufen").
+_BACKUP_RUN_JOBS: tuple[JobDefinition, ...] = (
+    JobDefinition(name="backup_run", kind="worker", service="backup-worker", category="backup",
+                  interval_seconds=6 * 60 * 60, max_silence_seconds=7 * 24 * 60 * 60),
+    JobDefinition(name="backup_retention", kind="worker", service="backup-worker", category="backup",
+                  interval_seconds=24 * 60 * 60, max_silence_seconds=7 * 24 * 60 * 60),
+    JobDefinition(name="backup_verify", kind="worker", service="backup-worker", category="backup",
+                  interval_seconds=7 * 24 * 60 * 60, max_silence_seconds=21 * 24 * 60 * 60),
+    JobDefinition(name="backup_restore_test", kind="worker", service="backup-worker", category="backup",
+                  interval_seconds=30 * 24 * 60 * 60, max_silence_seconds=75 * 24 * 60 * 60),
+)
+
+# Bisherige Host-Cronjobs (scripts/backup_db.sh, scripts/backup_storage.sh): nur registriert,
+# solange das Borg-Backup nicht aktiv ist - danach verweigern die Skripte den Lauf (Umstellung
+# siehe RUNBOOK) und dürfen nicht als "überfällig" alarmieren.
+_BORG_BACKUP_ENABLED = os.environ.get("BACKUP_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
+if _BORG_BACKUP_ENABLED:
+    JOB_DEFINITIONS += _BACKUP_RUN_JOBS
+else:
+    JOB_DEFINITIONS += (
+        JobDefinition(
+            name="backup_db",
+            kind="host_cron",
+            service="host",
+            category="backup",
+            interval_seconds=24 * 60 * 60,
+            max_silence_seconds=26 * 60 * 60,
+        ),
+        # Objekt-Backup der aktiven Speichergeneration nach dem DB-Backup (scripts/backup_storage.sh).
+        JobDefinition(
+            name="backup_storage",
+            kind="host_cron",
+            service="host",
+            category="backup",
+            interval_seconds=24 * 60 * 60,
+            max_silence_seconds=26 * 60 * 60,
+        ),
+    )
 
 JOBS_BY_NAME: dict[str, JobDefinition] = {job.name: job for job in JOB_DEFINITIONS}
 assert len(JOBS_BY_NAME) == len(JOB_DEFINITIONS), "duplicate job name in JOB_DEFINITIONS"

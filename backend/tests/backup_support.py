@@ -169,7 +169,7 @@ def backup_env(committed_storage, tmp_path, monkeypatch):  # noqa: F811
     db.execute(update(BackupSet).values(job_id=None))
     for model in (BackupJob, BackupContent, BackupPoolArchive, BackupSet):
         db.execute(delete(model))
-    db.execute(update(BackupSettings).values(repository_status={}, keep_within_days=14, keep_daily=14, keep_weekly=8, keep_monthly=12))
+    db.execute(update(BackupSettings).values(repository_status={}, schedule_enabled=True, keep_within_days=14, keep_daily=14, keep_weekly=8, keep_monthly=12))
     db.execute(update(StorageState).where(StorageState.id == 1).values(backup_hold_id=None, backup_hold_generation=None, backup_hold_since=None))
     db.commit()
 

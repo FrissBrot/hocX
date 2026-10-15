@@ -70,6 +70,8 @@ RESERVED_LOCK_IDS: dict[str, int] = {
     "startup_seed_data": 202600004,
     "startup_local_storage_profile": 202600021,
     "storage_worker_claim": 202600022,
+    # Backup-Worker: genau ein Schreiber auf Repository und Inhaltsindex (app/workers/backup_worker.py).
+    "backup_worker_repository": 202600024,
 }
 
 _ALL_LOCK_IDS = [*BACKGROUND_LOCK_IDS.values(), *EXTERNAL_LOCK_IDS.values(), *RESERVED_LOCK_IDS.values()]

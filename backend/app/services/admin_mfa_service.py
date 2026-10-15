@@ -423,6 +423,28 @@ class AdminMfaService:
         self._delete_flow(flow_token)
         return factor
 
+    def verify_step_up_totp(self, db: Session, *, admin_id: int, code: str, purpose: str) -> None:
+        """Frische TOTP-Bestätigung für besonders kritische Aktionen (Restore aus dem Backup) -
+        zusätzlich zur bestehenden Sitzung. Gleiche Konto-Sperre wie beim Login; ein Code kann
+        nicht zweimal verwendet werden (totp_last_counter)."""
+        account_lockout_key = f"admin-mfa-account:{admin_id}"
+        check_account_lockout(account_lockout_key, limit=_ACCOUNT_TOTP_ATTEMPT_LIMIT)
+        enforce_rate_limit(f"admin-mfa-step-up:{purpose}:{admin_id}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
+        factors = [factor for factor in self._list_factors(db, admin_id) if factor.secret_encrypted]
+        if not factors:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Für diese Aktion ist ein TOTP-Faktor erforderlich (Konto -> MFA)")
+        for factor in factors:
+            counter = verify_totp_code(decrypt_secret(factor.secret_encrypted), (code or "").strip(), min_counter=factor.totp_last_counter)
+            if counter is None:
+                continue
+            factor.totp_last_counter = counter
+            factor.last_used_at = datetime.now(UTC)
+            db.add(factor)
+            db.commit()
+            return
+        record_failed_attempt(account_lockout_key, period_seconds=_ACCOUNT_TOTP_WINDOW_SECONDS)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Der TOTP-Code ist nicht gültig")
+
     def verify_login_totp(self, db: Session, *, ticket: str, code: str) -> AdminPendingLoginContext:
         context = self._load_login_ticket(db, ticket)
         # Account-level ceiling first (see mfa_service.py's identical 2026-08-27 fix for the
