@@ -399,6 +399,37 @@ def test_cancel_and_pause_resume_keep_the_source_active(setup):
     assert_files_intact(db, files)
 
 
+def test_cancel_during_the_inventory_of_the_initial_migration_takes_effect_after_the_next_batch(setup, monkeypatch):
+    """S3-012: die Inventur der Erstmigration hasht jede Datei unter voller Wartung - ein
+    Abbruch muss nach dem nächsten Stapel greifen, nicht erst nach dem kompletten Lesedurchlauf."""
+    db, _tenant, files, local, _external = setup
+    monkeypatch.setattr(storage_worker, "BATCH_SIZE", 1)
+    migration = sms.create_migration(db, target_profile_id=local.id, options={"observe_seconds": 30}, actor_email="owner@example.com")
+    db.commit()
+    migration_id = migration.id
+    drive(db, migration_id, until="inventory")
+    real = storage_worker.hash_object
+    calls = {"n": 0}
+
+    def hashing(backend, namespace, key):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            with storage_worker.engine.begin() as conn:
+                conn.execute(text("UPDATE storage_migration SET cancel_requested = true WHERE id = :id"), {"id": migration_id})
+        return real(backend, namespace, key)
+
+    monkeypatch.setattr(storage_worker, "hash_object", hashing)
+    storage_worker.run_once("w")
+    db.expire_all()
+    cancelled = db.get(StorageMigration, migration_id)
+    assert cancelled.state == "cancelled"
+    assert calls["n"] < len(files)
+    state = db.get(StorageState, 1)
+    assert state.active_generation == 0 and not state.write_fenced
+    assert db.get(MaintenanceWindow, cancelled.maintenance_window_id).state == "completed"
+    assert_files_intact(db, files)
+
+
 def test_objects_missing_in_the_source_block_cutover_until_acknowledged(setup):
     db, _tenant, files, local, external = setup
     assert initial(db, local).state == "completed"
@@ -455,6 +486,27 @@ def test_initial_migration_surfaces_registered_files_missing_on_disk(setup):
     assert sms.accept_missing(db, migration.id, actor_email="owner@example.com") == 1
     db.commit()
     assert drive(db, migration.id).state == "completed"
+
+
+def test_expired_exports_are_not_counted_as_missing_references(setup):
+    """S3-013: die Export-Aufbewahrung entfernt das Objekt und lässt die StoredFile-Zeile stehen.
+    Solche Referenzen sind abgelaufen - sie dürfen weder den automatischen Cutover der
+    Erstmigration blockieren noch storage_verify dauerhaft "inkonsistent" melden."""
+    db, _tenant, files, local, _external = setup
+    expired_id = sorted(files)[0]
+    export_key = f"{sms.generated_export_prefix()}tenant-x/alter-export.pdf"
+    db.execute(update(StoredFile).where(StoredFile.id == expired_id).values(storage_path=export_key))
+    db.commit()
+    migration = initial(db, local)
+    assert migration.state == "completed"
+    # Die gemeinsame Test-DB enthält Demo-Datensätze ohne Dateien - geprüft wird darum gezielt.
+    references = sms.reference_check(db, migration, limit=100000)
+    assert export_key not in {item["key"] for item in references["missing"]}
+    assert references["expired_export_count"] >= 1
+    report = storage_verify.verify(full=False)
+    assert {"namespace": "main", "key": export_key} in report["expired_exports"]
+    assert export_key not in {item["key"] for item in report["missing_references"]}
+    assert_files_intact(db, {k: v for k, v in files.items() if k != expired_id})
 
 
 # Bereinigung alter Generationen --------------------------------------------------------------

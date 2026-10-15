@@ -511,8 +511,12 @@ verschoben, bis die Erstmigration gestartet wird.
 3. System → Storage → Profil «Lokales S3 (Garage)» → «Verbindung testen».
 4. «Migration vorbereiten» → Preflight abwarten → Schätzung prüfen → «Migration starten».
 5. Fortschritt unter System → Storage verfolgen; die Wartung endet automatisch nach
-   bestandener Endprüfung. Verweist die Datenbank auf fehlende Dateien, wartet der Cutover auf
-   «Umschalten bestätigen» (Liste im Prüfbericht).
+   bestandener Endprüfung und Beobachtungsphase. Verweist die Datenbank auf fehlende Dateien
+   (abgelaufene Exporte zählen nicht dazu), wartet der Cutover in voller Wartung auf
+   «Umschalten bestätigen» (Liste im Prüfbericht) - Prüfbericht während der Wartung im Blick
+   behalten. Scheitert die Prüfung nach dem Umschalten dreimal in Folge (`rollback_required`):
+   «zur Kenntnis genommen», danach lässt sich die Wartung freigeben, sobald der automatische
+   Healthcheck des aktiven Ziels bestanden ist.
 6. Danach: `docker compose exec backend python -m app.workers.storage_verify --full`.
 
 **Notfall**: Bei Fehlern bleibt die Wartung bestehen und das Dateisystem aktiv. Ursache im

@@ -12,6 +12,7 @@ Container. Dieses Modul enthält alles, was Backend und Worker gemeinsam brauche
 from __future__ import annotations
 
 import logging
+import math
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -117,17 +118,38 @@ def merged_options(options: dict[str, Any] | None, *, kind: str) -> dict[str, An
         if key not in DEFAULT_OPTIONS:
             raise MigrationError(f"Unbekannte Option: {key}")
         merged[key] = value
-    merged["parallelism"] = int(merged["parallelism"])
+    merged["parallelism"] = _number(merged["parallelism"], int, "Parallelität")
     if not 1 <= merged["parallelism"] <= 16:
         raise MigrationError("Parallelität muss zwischen 1 und 16 liegen")
-    merged["bandwidth_limit_mbps"] = float(merged["bandwidth_limit_mbps"] or 0)
+    merged["bandwidth_limit_mbps"] = _number(merged["bandwidth_limit_mbps"] or 0, float, "Bandbreite")
     if merged["bandwidth_limit_mbps"] < 0:
         raise MigrationError("Bandbreite darf nicht negativ sein")
     if merged["verify_mode"] not in ("full", "head"):
         raise MigrationError("Ungültiger Prüfmodus")
-    merged["observe_seconds"] = max(30, min(int(merged["observe_seconds"]), 24 * 3600))
-    merged["max_object_attempts"] = max(1, min(int(merged["max_object_attempts"]), 50))
+    if not isinstance(merged["auto_cutover"], bool):
+        raise MigrationError("auto_cutover muss true oder false sein")
+    merged["observe_seconds"] = max(30, min(_number(merged["observe_seconds"], int, "Beobachtungszeit"), 24 * 3600))
+    merged["max_object_attempts"] = max(1, min(_number(merged["max_object_attempts"], int, "Versuche je Objekt"), 50))
+    if merged["fallback_days"] is not None:
+        # Schutzfrist der alten Generation: nie in der Vergangenheit (sonst sofort bereinigbar).
+        merged["fallback_days"] = _number(merged["fallback_days"], int, "Rückfallfrist")
+        if not 1 <= merged["fallback_days"] <= 3650:
+            raise MigrationError("Rückfallfrist muss zwischen 1 und 3650 Tagen liegen")
     return merged
+
+
+def _number(value: Any, kind: type, label: str) -> Any:
+    """Zahl aus einer Option lesen - Typfehler als erwartete Ablehnung (409), nie als 500 bzw. erst
+    im Cutover (S3-010)."""
+    if isinstance(value, bool):
+        raise MigrationError(f"{label}: Zahl erwartet")
+    try:
+        number = kind(value)
+    except (TypeError, ValueError) as exc:
+        raise MigrationError(f"{label}: Zahl erwartet") from exc
+    if kind is float and not math.isfinite(number):
+        raise MigrationError(f"{label}: Zahl erwartet")
+    return number
 
 
 # --- Ereignisse und Zustandswechsel -----------------------------------------------------------
@@ -459,6 +481,22 @@ def cleanup_journal(db: Session) -> dict[str, int]:
 # --- Referenzen und Bericht -------------------------------------------------------------------
 
 
+# Erzeugte Exporte: die Aufbewahrung (cleanup_old_generated_exports) entfernt das Objekt und lässt
+# die StoredFile-Zeile bewusst stehen (Download liefert dann 404). Eine solche Referenz ohne Objekt
+# ist abgelaufen, nicht fehlend - sonst meldete jede Altinstallation "fehlende Dateien", die
+# Erstmigration schaltete nie automatisch um und storage_verify bliebe dauerhaft inkonsistent (S3-013).
+EXPORT_REFERENCE_KIND = "stored_file_export"
+
+
+def generated_export_prefix() -> str | None:
+    from app.core.storage import key_from_legacy_path
+
+    try:
+        return key_from_legacy_path(str(settings.export_root).rstrip("/") + "/generated").rstrip("/") + "/"
+    except ValueError:
+        return None
+
+
 def database_references(db: Session) -> dict[tuple[str, str], str]:
     """Alle Dateireferenzen der Datenbank: (namespace, key) -> Art. Snapshot-Präfixe werden als
     "<präfix>/" mit Art "prefix:..." geliefert."""
@@ -466,8 +504,14 @@ def database_references(db: Session) -> dict[tuple[str, str], str]:
 
     refs: dict[tuple[str, str], str] = {}
     abgabebox_ids = set(db.scalars(select(SubmissionUploadFile.stored_file_id)))
+    export_prefix = generated_export_prefix()
     for stored_id, path in db.execute(select(StoredFile.id, StoredFile.storage_path)).all():
-        refs[("abgabebox" if stored_id in abgabebox_ids else "main", path)] = "stored_file"
+        if stored_id in abgabebox_ids:
+            refs[("abgabebox", path)] = "stored_file"
+        elif export_prefix and path.startswith(export_prefix):
+            refs[("main", path)] = EXPORT_REFERENCE_KIND
+        else:
+            refs[("main", path)] = "stored_file"
     for path in db.scalars(select(Tenant.profile_image_path).where(Tenant.profile_image_path.is_not(None))):
         refs[("main", path)] = "tenant_profile_image"
     for path in db.scalars(select(DocumentTemplatePart.storage_path)):
@@ -502,12 +546,17 @@ def reference_check(db: Session, migration: StorageMigration, *, limit: int = 50
             present_dirs.add((namespace, "/".join(parts[:index]) + "/"))
     prefix_refs = {(ns, key) for (ns, key), kind in refs.items() if kind.startswith("prefix:")}
     missing: list[dict[str, str]] = []
+    expired_exports = 0
     for (namespace, key), kind in refs.items():
         if kind.startswith("prefix:"):
             if (namespace, key) not in present_dirs:
                 missing.append({"namespace": namespace, "key": key, "kind": kind})
         elif (namespace, key) not in present:
-            missing.append({"namespace": namespace, "key": key, "kind": kind, "status": objects.get((namespace, key), "not_inventoried")})
+            status = objects.get((namespace, key), "not_inventoried")
+            if kind == EXPORT_REFERENCE_KIND and status == "not_inventoried":
+                expired_exports += 1  # schon in der Quelle nicht mehr vorhanden: abgelaufen
+                continue
+            missing.append({"namespace": namespace, "key": key, "kind": kind, "status": status})
 
     def under_prefix_ref(namespace: str, key: str) -> bool:
         parts = key.split("/")[:-1]
@@ -522,6 +571,7 @@ def reference_check(db: Session, migration: StorageMigration, *, limit: int = 50
         "references": len(refs),
         "missing_count": len(missing),
         "missing": missing[:limit],
+        "expired_export_count": expired_exports,
         "unreferenced_count": len(unreferenced),
         "unreferenced": unreferenced[:limit],
     }

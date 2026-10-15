@@ -519,6 +519,9 @@ def phase_inventory(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
             guarded(db, ctx, heartbeat_at=datetime.now(UTC))
             db.commit()
             batch.clear()
+            # Abbruch/Pause auch während der (bei der Erstmigration hashenden) Inventur - sonst
+            # griffe ein Notabbruch erst nach einem vollständigen Lesedurchlauf (S3-012).
+            _check_interrupts(db, ctx, migration)
 
         for info in source.list(namespace, ""):
             ctx.check()
@@ -937,7 +940,11 @@ def phase_cutting_over(db: Session, ctx: Ctx, migration: StorageMigration) -> No
                 event(db, migration, "final_recopied", f"{recopied} Objekte im Endabgleich nachkopiert", level="warning", recopied=recopied)
         if checks["missing"]:
             raise sms.MigrationError(f"{len(checks['missing'])} registrierte Objekte fehlen im Ziel")
-        fallback_days = (migration.options or {}).get("fallback_days") or settings.storage_fallback_days
+        try:
+            fallback_days = max(1, int((migration.options or {}).get("fallback_days") or settings.storage_fallback_days))
+        except (TypeError, ValueError):
+            # Vor der Validierung angelegte Migration mit ungültiger Option: Standardfrist (S3-010).
+            fallback_days = max(1, int(settings.storage_fallback_days))
         now = datetime.now(UTC)
         # Atomarer Wechsel: aktiver Speicher, Generationen und Migration in einer Transaktion,
         # abgesichert über Fence-Grund und Fencing-Token.
@@ -1306,8 +1313,23 @@ def run_once(owner: str) -> float:
     return POLL_SECONDS if delay is None else min(delay, POLL_SECONDS)
 
 
+def configure_tempdir() -> str:
+    """Zwischenspeicher (SpooledTemporaryFile ab 16 MiB, TemporaryFile beim Hashen
+    unregistrierter Objekte) auf das Platten-Volume STORAGE_WORK_ROOT legen statt nach /tmp: /tmp
+    ist im Release ein tmpfs und zählt zum mem_limit des Containers - grosse Objekte bei hoher
+    Parallelität führten sonst zum OOM-Kill und zu einer Endlosschleife (S3-005). Die Dateien
+    sind unbenannt (O_TMPFILE bzw. sofort gelöscht) und bleiben auch nach einem Absturz nicht liegen."""
+    from app.core.storage import storage_work_dir
+
+    path = str(storage_work_dir("storage-worker-tmp"))
+    tempfile.tempdir = path
+    os.environ["TMPDIR"] = path
+    return path
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    configure_tempdir()
     owner = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:6]}"
     stopping = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: stopping.set())

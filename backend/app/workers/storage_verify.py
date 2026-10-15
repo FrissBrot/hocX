@@ -29,7 +29,7 @@ from app.core.db import SessionLocal
 from app.core.objstore_client import StorageError
 from app.core.storage import get_object_store
 from app.models import StorageObject
-from app.services.storage_migration_service import database_references
+from app.services.storage_migration_service import EXPORT_REFERENCE_KIND, database_references
 
 LIMIT = 1000
 
@@ -45,6 +45,7 @@ def verify(*, full: bool = False) -> dict[str, Any]:
         "generation": state.config.generation,
         "full": full,
         "missing_references": [],
+        "expired_exports": [],
         "registry_missing": [],
         "registry_mismatch": [],
         "unregistered_objects": [],
@@ -62,6 +63,10 @@ def verify(*, full: bool = False) -> dict[str, Any]:
     for (namespace, key), kind in refs.items():
         found = (namespace, key) in present_dirs if kind.startswith("prefix:") else (namespace, key) in present
         if not found:
+            if kind == EXPORT_REFERENCE_KIND and (namespace, key) not in registry:
+                # Von der Export-Aufbewahrung bewusst entfernt (S3-013): abgelaufen, nicht fehlend.
+                report["expired_exports"].append({"namespace": namespace, "key": key})
+                continue
             report["missing_references"].append({"namespace": namespace, "key": key, "kind": kind})
     for (namespace, key), row in registry.items():
         size = present.get((namespace, key))
@@ -83,7 +88,7 @@ def verify(*, full: bool = False) -> dict[str, Any]:
         report["unregistered_objects"] = [
             {"namespace": ns, "key": key} for ns, key in sorted(present) if (ns, key) not in registry and not key.startswith("_hocx-connection-test/")
         ]
-    counts = {name: len(report[name]) for name in ("missing_references", "registry_missing", "registry_mismatch", "unregistered_objects")}
+    counts = {name: len(report[name]) for name in ("missing_references", "expired_exports", "registry_missing", "registry_mismatch", "unregistered_objects")}
     for name in counts:
         report[name] = report[name][:LIMIT]
     report["counts"] = counts
