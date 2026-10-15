@@ -488,7 +488,7 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
               {selectedId && locate(content, selectedId) ? (
                 <PropertiesPanel />
               ) : (
-                <DocumentPanel brandId={template.brand_id} brandMode={brandMode} onBrandChange={(id) => void changeBrand(id)} onBrandModeChange={setBrandMode} />
+                <DocumentPanel brandId={template.brand_id} brandMode={brandMode} onBrandChange={(id) => void changeBrand(id)} onBrandModeChange={setBrandMode} brandLocked={!!template.published_revision && !initial.capabilities.publish_templates} />
               )}
             </aside>
           </div>

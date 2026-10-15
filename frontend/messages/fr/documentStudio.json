@@ -597,6 +597,7 @@
     "brandDefault": "Profil par défaut",
     "brandFollow": "Suivre",
     "brandHelp": "Couleurs, polices et logo proviennent du profil choisi dans le Brand Studio.",
+    "brandLocked": "Pour les modèles publiés, seules les personnes autorisées à publier peuvent changer le profil.",
     "brandMode": "Modifications du profil",
     "brandModeHelp": "Suivre : le modèle publié reprend les modifications ultérieures. Figer : l’état à la publication est conservé.",
     "brandPinned": "Figer à la publication",

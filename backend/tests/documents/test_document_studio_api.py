@@ -153,6 +153,23 @@ def test_roles(db, world):
     assert excinfo.value.status_code == 403
 
 
+def test_brand_of_published_template_requires_publish_right(db, world):
+    """STUDIO-003: Das Brand-Profil einer veröffentlichten Vorlage wirkt sofort auf Exporte -
+    ändern darf es nur, wer auch veröffentlichen darf."""
+    created = _create(db, world)
+    brand = studio.create_document_brand(studio.BrandCreate(name="Anders", preset="forest"), db=db, user=world["admin"])
+    # Unveröffentlicht: Schreibrolle darf das Profil wählen
+    assert studio.update_document_template(created.id, studio.TemplateMetaUpdate(brand_id=brand.id), db=db, user=world["writer"]).brand_id == brand.id
+    studio.publish_document_template(created.id, studio.PublishBody(), db=db, user=world["admin"])
+    for body in (studio.TemplateMetaUpdate(clear_brand=True), studio.TemplateMetaUpdate(brand_id=brand.id)):
+        with pytest.raises(HTTPException) as excinfo:
+            studio.update_document_template(created.id, body, db=db, user=world["writer"])
+        assert excinfo.value.status_code == 403
+    # Name bleibt für die Schreibrolle änderbar
+    assert studio.update_document_template(created.id, studio.TemplateMetaUpdate(name="Neu"), db=db, user=world["writer"]).name == "Neu"
+    assert studio.update_document_template(created.id, studio.TemplateMetaUpdate(clear_brand=True), db=db, user=world["admin"]).brand_id is None
+
+
 def test_assignment_priority_and_export_uses_it(db, world):
     created = _create(db, world)
     studio.publish_document_template(created.id, studio.PublishBody(), db=db, user=world["admin"])

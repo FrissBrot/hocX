@@ -296,6 +296,10 @@ class TemplateMetaUpdate(BaseModel):
 def update_document_template(template_id: uuid.UUID, body: TemplateMetaUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     template = _editable_template(db, user, template_id)
     brand: uuid.UUID | None | Literal["unset"] = None if body.clear_brand else (body.brand_id if body.brand_id is not None else "unset")
+    if brand != "unset" and template.published_revision_id is not None:
+        # Das Brand-Profil wirkt sofort auf Exporte der veröffentlichten Revision
+        # (brand_mode=follow) - wie Veröffentlichen nur mit Veröffentlichungsrecht
+        permissions.require_publish(user)
     try:
         template_service.update_template_meta(db, template, name=body.name, description=body.description, category=body.category, brand_id=brand, user_id=user.user_id)
         db.commit()

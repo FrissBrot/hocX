@@ -597,6 +597,7 @@
     "brandDefault": "Standard-Profil",
     "brandFollow": "Mitgehen",
     "brandHelp": "Farben, Schriften und Logo kommen aus dem gewählten Profil des Brand Studio.",
+    "brandLocked": "Bei veröffentlichten Vorlagen können nur Personen mit Veröffentlichungsrecht das Profil wechseln.",
     "brandMode": "Änderungen am Profil",
     "brandModeHelp": "Mitgehen: veröffentlichte Vorlage übernimmt spätere Änderungen. Festhalten: Stand beim Veröffentlichen bleibt.",
     "brandPinned": "Beim Veröffentlichen festhalten",

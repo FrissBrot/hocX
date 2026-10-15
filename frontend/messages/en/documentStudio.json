@@ -597,6 +597,7 @@
     "brandDefault": "Default profile",
     "brandFollow": "Follow",
     "brandHelp": "Colours, fonts and logo come from the selected Brand Studio profile.",
+    "brandLocked": "For published templates, only people allowed to publish can change the profile.",
     "brandMode": "Profile changes",
     "brandModeHelp": "Follow: the published template adopts later changes. Pin: the state at publishing is kept.",
     "brandPinned": "Pin when publishing",

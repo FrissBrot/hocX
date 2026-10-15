@@ -200,6 +200,14 @@ describe("TemplateDesigner", () => {
     expect(await screen.findByText("Gespeichert")).toBeInTheDocument();
   });
 
+  it("locks the brand profile of published templates without the publish right (STUDIO-003)", async () => {
+    api.studioApi.capabilities.mockResolvedValue({ ...capabilities, publish_templates: false });
+    await renderDesigner();
+    const brandSelect = screen.getAllByRole("combobox").find((element) => within(element).queryByRole("option", { name: "Standard" }));
+    expect(brandSelect).toBeDisabled();
+    expect(screen.getByText("Bei veröffentlichten Vorlagen können nur Personen mit Veröffentlichungsrecht das Profil wechseln.")).toBeInTheDocument();
+  });
+
   it("deletes the selected element with the keyboard and restores it with undo", async () => {
     await renderDesigner();
     fireEvent.click(canvasNode("Einleitung"));

@@ -20,6 +20,8 @@ type Props = {
   brandMode: "follow" | "pinned";
   onBrandChange: (brandId: string | null) => void;
   onBrandModeChange: (mode: "follow" | "pinned") => void;
+  // Profilwechsel erfordert bei veröffentlichten Vorlagen das Veröffentlichungsrecht
+  brandLocked?: boolean;
 };
 
 const FONT_KEYS = ["inter", "liberation_sans", "liberation_serif", "noto_sans"];
@@ -33,7 +35,7 @@ function Section({ title, children, open = false }: { title: string; children: R
   );
 }
 
-export function DocumentPanel({ brandId, brandMode, onBrandChange, onBrandModeChange }: Props) {
+export function DocumentPanel({ brandId, brandMode, onBrandChange, onBrandModeChange, brandLocked = false }: Props) {
   const t = useTranslations("documentStudio");
   const tPdf = useTranslations("documentPdf");
   const { content, setContent, mode, brands, assets, setAssets, capabilities, editable, select } = useDesigner();
@@ -82,8 +84,8 @@ export function DocumentPanel({ brandId, brandMode, onBrandChange, onBrandModeCh
         </Section>
 
         <Section title={t("document.design")} open={mode === "simple"}>
-          <Field label={t("document.brand")} help={t("document.brandHelp")}>
-            <select value={brandId ?? ""} onChange={(event) => onBrandChange(event.target.value || null)}>
+          <Field label={t("document.brand")} help={brandLocked ? t("document.brandLocked") : t("document.brandHelp")}>
+            <select value={brandId ?? ""} disabled={brandLocked} onChange={(event) => onBrandChange(event.target.value || null)}>
               <option value="">{t("document.brandDefault")}</option>
               {brands.map((brand) => (
                 <option key={brand.id} value={brand.id}>

@@ -597,6 +597,7 @@
     "brandDefault": "Profilo predefinito",
     "brandFollow": "Segui",
     "brandHelp": "Colori, caratteri e logo provengono dal profilo scelto nel Brand Studio.",
+    "brandLocked": "Per i modelli pubblicati, solo chi può pubblicare può cambiare il profilo.",
     "brandMode": "Modifiche al profilo",
     "brandModeHelp": "Segui: il modello pubblicato riprende le modifiche successive. Blocca: resta lo stato alla pubblicazione.",
     "brandPinned": "Blocca alla pubblicazione",
