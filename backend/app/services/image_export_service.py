@@ -69,7 +69,15 @@ def _wants_date(stored_file: Any) -> date | None:
 
 
 def _wants_gps(stored_file: Any) -> bool:
-    return stored_file.gps_latitude is not None and stored_file.gps_longitude is not None
+    """GPS nur dann in die Exportfassung schreiben, wenn es (wahrscheinlich) nicht schon in der
+    Datei steht: Server-/Backfill-GPS stammt aus der gespeicherten Datei selbst - ausser bei
+    konvertierten HEIC-Dateien, deren Analyse das Original betraf. Spart bei fast jedem
+    Handyfoto das Einlesen pro Download und die Temp-Kopie pro Freigabe-Abruf."""
+    if stored_file.gps_latitude is None or stored_file.gps_longitude is None:
+        return False
+    source_checksum = getattr(stored_file, "source_checksum_sha256", None)
+    converted = bool(source_checksum) and source_checksum != getattr(stored_file, "checksum_sha256", None)
+    return getattr(stored_file, "gps_source", None) not in ("server", "backfill") or converted
 
 
 def needs_export_processing(stored_file: Any) -> bool:

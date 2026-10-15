@@ -318,7 +318,12 @@ werden nie verändert.
     Browser) die Markierung und übernimmt das Datum als **geschätztes**, nicht als echtes.
 - **Weder noch:** kein Datum, insbesondere nie das Uploaddatum.
 - GPS: vorhandenes GPS bleibt erhalten; liegt GPS nur in der Datenbank vor (z. B. vom Browser
-  nachgeliefert), wird es in die Kopie geschrieben.
+  nachgeliefert), wird es in die Kopie geschrieben. Stammt das DB-GPS aus der Datei selbst
+  (`gps_source` `server`/`backfill`, keine HEIC-Konvertierung), wird die Datei dafür gar nicht
+  erst eingelesen - Download und Freigabe liefern dann direkt das Original (sofern weder
+  Schätzdatum noch Metadatenfilter des Links greifen).
+- **Max. 2 MiB entpacktes PNG-XMP:** Komprimiertes `iTXt`-XMP wird nur bis zu dieser Grenze
+  entpackt; grösseres XMP bricht den Export ab, geliefert wird das Original.
 
 Exportwege: Einzeldownload `GET /api/stored-files/{id}/download?part=image|both` (auch der
 Live-Photo-ZIP), Mehrfachdownload der Galerie-Auswahl (nutzt denselben Endpunkt), öffentliche

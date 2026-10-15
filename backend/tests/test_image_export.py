@@ -214,3 +214,21 @@ def test_png_export_still_reads_small_compressed_xmp():
     assert exported is not None
     assert exported.count(b"XML:com.adobe.xmp") == 1  # altes XMP ersetzt, nicht verdoppelt
     assert b"hocx:CaptureDateEstimated" in exported
+
+
+def test_gps_read_from_the_file_itself_needs_no_export():
+    """IMGMETA-006: GPS aus der eigenen Datei (Server/Backfill) steht schon drin - kein Einlesen,
+    keine Temp-Kopie. Client-GPS und konvertierte HEIC-Dateien werden weiter exportiert."""
+    gps = dict(gps_latitude=47.0, gps_longitude=8.0)
+    assert not image_export_service.needs_export_processing(_meta(gps_source="server", **gps))
+    assert not image_export_service.needs_export_processing(_meta(gps_source="backfill", checksum_sha256="a", source_checksum_sha256="a", **gps))
+    assert image_export_service.needs_export_processing(_meta(gps_source="client", **gps))
+    assert image_export_service.needs_export_processing(_meta(gps_source="server", checksum_sha256="jpg", source_checksum_sha256="heic", **gps))
+
+
+def test_single_download_with_server_gps_serves_the_original(db):
+    tenant = make_tenant(db)
+    content = jpeg(latitude=47.0, longitude=8.0)
+    row = _stored(db, tenant.id, content, gps_latitude=47.0, gps_longitude=8.0, gps_source="server")
+    response = files_routes.download_stored_file(row.public_id, part="image", db=db, user=make_current_user(tenant.id))
+    assert Path(response.path).name == "bild.jpg"
