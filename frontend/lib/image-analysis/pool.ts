@@ -10,6 +10,10 @@ export type AnalysisProgress = { done: number; total: number };
 type Pending = { resolve: (result: FileAnalysis) => void; reject: (error: unknown) => void };
 
 const DEFAULT_CONCURRENCY = 2;
+// Obergrenze je Datei im Worker. Antwortet ein Worker nicht (Ladefehler ohne error-Event,
+// hängender Worker), gilt der Slot als defekt und die Datei wird im Hauptthread analysiert -
+// die Analyse darf den Upload nie dauerhaft blockieren.
+const DEFAULT_WORKER_TIMEOUT_MS = 120_000;
 
 function createWorker(): Worker | null {
   if (typeof Worker === "undefined") return null;
@@ -23,8 +27,11 @@ function createWorker(): Worker | null {
 class WorkerSlot {
   private pending = new Map<number, Pending>();
   private nextId = 0;
+  // Nach einem Fehler (z. B. Worker-Skript nicht ladbar) nie wieder an diesen Worker senden:
+  // ein nie gestarteter Worker beantwortet keine Nachricht und meldet auch keinen Fehler mehr.
+  broken = false;
 
-  constructor(private readonly worker: Worker) {
+  constructor(private readonly worker: Worker, private readonly timeoutMs: number) {
     worker.onmessage = (event: MessageEvent<{ id: number; result?: FileAnalysis; error?: string }>) => {
       const entry = this.pending.get(event.data.id);
       if (!entry) return;
@@ -32,16 +39,25 @@ class WorkerSlot {
       if (event.data.result) entry.resolve(event.data.result);
       else entry.reject(new Error(event.data.error ?? "analysis failed"));
     };
-    worker.onerror = () => {
-      for (const entry of this.pending.values()) entry.reject(new Error("worker failed"));
-      this.pending.clear();
-    };
+    worker.onerror = () => this.fail(new Error("worker failed"));
+  }
+
+  private fail(error: Error) {
+    this.broken = true;
+    this.worker.terminate();
+    for (const entry of this.pending.values()) entry.reject(error);
+    this.pending.clear();
   }
 
   analyze(file: File): Promise<FileAnalysis> {
+    if (this.broken) return Promise.reject(new Error("worker failed"));
     const id = this.nextId++;
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+    return new Promise<FileAnalysis>((resolve, reject) => {
+      const timer = setTimeout(() => this.fail(new Error("worker timeout")), this.timeoutMs);
+      this.pending.set(id, {
+        resolve: (result) => { clearTimeout(timer); resolve(result); },
+        reject: (error) => { clearTimeout(timer); reject(error); },
+      });
       this.worker.postMessage({ id, file });
     });
   }
@@ -59,7 +75,13 @@ const UNSUPPORTED: FileAnalysis = { kind: "image", sha256: null, analysis: "fail
  * Datei wird zu analysis "failed" (nie ein Abbruch des Ganzen); `signal` bricht alles ab. */
 export async function analyzeFiles(
   files: AnalyzableFile[],
-  options: { signal?: AbortSignal; concurrency?: number; onProgress?: (progress: AnalysisProgress) => void; onResult?: (index: number, result: FileAnalysis) => void } = {},
+  options: {
+    signal?: AbortSignal;
+    concurrency?: number;
+    workerTimeoutMs?: number;
+    onProgress?: (progress: AnalysisProgress) => void;
+    onResult?: (index: number, result: FileAnalysis) => void;
+  } = {},
 ): Promise<FileAnalysis[]> {
   const concurrency = Math.max(1, Math.min(options.concurrency ?? DEFAULT_CONCURRENCY, files.length || 1));
   const results: FileAnalysis[] = new Array(files.length);
@@ -67,7 +89,7 @@ export async function analyzeFiles(
   let done = 0;
   const slots: (WorkerSlot | null)[] = Array.from({ length: concurrency }, () => {
     const worker = createWorker();
-    return worker ? new WorkerSlot(worker) : null;
+    return worker ? new WorkerSlot(worker, options.workerTimeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS) : null;
   });
   const abort = () => slots.forEach((slot) => slot?.terminate());
   options.signal?.addEventListener("abort", abort, { once: true });
@@ -79,7 +101,7 @@ export async function analyzeFiles(
       const file = files[index];
       let result: FileAnalysis;
       try {
-        result = slot && file instanceof File ? await slot.analyze(file) : await analyzeFile(file);
+        result = slot && !slot.broken && file instanceof File ? await slot.analyze(file) : await analyzeFile(file);
       } catch (error) {
         if (options.signal?.aborted) throw error;
         // Worker-Fehler: einmal im Hauptthread versuchen, sonst "nicht prüfbar".
