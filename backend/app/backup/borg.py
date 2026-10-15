@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO, Any
 
-from app.backup.config import BackupConfig, BackupConfigError
+from app.backup.config import BackupConfig, BackupConfigError, secret_file_present
 
 _logger = logging.getLogger("hocx.backup.borg")
 
@@ -206,7 +206,7 @@ class Borg:
 
     def _known_hosts(self) -> Path:
         config = self.config
-        if config.known_hosts_file and config.known_hosts_file.is_file():
+        if secret_file_present(config.known_hosts_file):
             return self._private_copy(config.known_hosts_file, "known_hosts")
         if not config.host_fingerprint:
             raise BackupConfigError("SSH-Host-Key nicht gepinnt")
@@ -239,7 +239,7 @@ class Borg:
     def _borg_rsh(self) -> str:
         with self._lock:
             if self._rsh is None:
-                if self._ssh_key_source is None or not self._ssh_key_source.is_file():
+                if not secret_file_present(self._ssh_key_source):
                     raise BackupConfigError("SSH-Schlüssel fehlt")
                 key = self._private_copy(self._ssh_key_source, "id_backup")
                 known_hosts = self._known_hosts()

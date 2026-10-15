@@ -27,7 +27,10 @@ def _borg_14() -> bool:
 
 
 requires_borg = pytest.mark.skipif(not _borg_14(), reason="borg 1.4 nicht installiert (Backend-Testimage enthält es)")
-requires_sshd = pytest.mark.skipif(not (shutil.which("sshd") or Path("/usr/sbin/sshd").exists()), reason="sshd nicht installiert")
+requires_sshd = pytest.mark.skipif(
+    not (shutil.which("sshd") or Path("/usr/sbin/sshd").exists()) or os.geteuid() != 0,
+    reason="sshd nicht installiert oder Test nicht als root (Backend-Testimage)",
+)
 
 
 def local_config(tmp_path: Path, **overrides) -> BackupConfig:

@@ -8,6 +8,16 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${HOCX_ENV_FILE:-$REPO_DIR/.env}"
 cd "$REPO_DIR"
+# Abgelöst durch das Borg-Backup (kein lokaler Spiegel mehr, siehe docs-site/docs/technik/backup/).
+# shellcheck source=scripts/lib/env.sh
+source "$REPO_DIR/scripts/lib/env.sh"
+if [ -f "$ENV_FILE" ]; then
+  load_env_file "$ENV_FILE"
+fi
+if [ "${BACKUP_ENABLED:-false}" = true ] && [ "${HOCX_LEGACY_BACKUP_FORCE:-false}" != true ]; then
+  echo "Borg-Backup ist aktiv - lokaler Objekt-Spiegel uebersprungen. Cron-Eintrag entfernen (RUNBOOK Abschnitt 7); backups/storage/ bleibt bis zur bewussten Bereinigung erhalten."
+  exit 0
+fi
 DC=(docker compose --env-file "$ENV_FILE")
 if [ -n "${HOCX_COMPOSE_PROJECT:-}" ]; then DC+=(-p "$HOCX_COMPOSE_PROJECT"); fi
 if [ -n "${HOCX_COMPOSE_FILES:-}" ]; then for file in $HOCX_COMPOSE_FILES; do DC+=(-f "$file"); done; fi

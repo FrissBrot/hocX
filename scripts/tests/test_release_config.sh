@@ -20,8 +20,8 @@ if grep -q 'env_file:' docker-compose.release.yml; then
   exit 1
 fi
 
-test "$(grep -c 'read_only: true' docker-compose.release.yml)" -eq 10  # +local-s3, storage-init, storage-worker (Objektspeicher)
-test "$(grep -c 'no-new-privileges:true' docker-compose.release.yml)" -eq 10
+test "$(grep -c 'read_only: true' docker-compose.release.yml)" -eq 11  # +local-s3, storage-init, storage-worker (Objektspeicher), backup-worker
+test "$(grep -c 'no-new-privileges:true' docker-compose.release.yml)" -eq 11
 
 # Audit finding, 2026-08-27: docker-compose.traefik.yml/docker-compose.clamav.yml (the
 # actual prod Traefik/ClamAV - deploy.sh/verify_release.sh never include the base
@@ -70,5 +70,17 @@ grep -q '^      - "5001"$' docker-compose.release.yml
 grep -q '\./storage-local/thumbnails:/app/storage-local/thumbnails' docker-compose.release.yml
 grep -q 'THUMBNAIL_ROOT: /app/storage-local/thumbnails' docker-compose.release.yml
 grep -q 'PHOTO_WORKER_DB_PASSWORD_FILE: /run/secrets/photo_worker_db_password' docker-compose.release.yml
+
+# Backup (BorgBackup): eigener Worker mit den Borg-Secrets; das Backend bekommt sie nie.
+grep -q '^  backup-worker:$' docker-compose.release.yml
+grep -q 'BACKUP_SSH_KEY_FILE: /run/secrets/backup_ssh_key' docker-compose.release.yml
+if awk '/^  backend:$/,/^  photo-analysis-worker:$/' docker-compose.release.yml | grep -q 'backup_ssh_key\|backup_passphrase'; then
+  echo "Das Backend darf keine Borg-Secrets erhalten." >&2
+  exit 1
+fi
+if grep -q 'app.backup.cli init' scripts/deploy.sh; then
+  echo "deploy.sh darf ein Backup-Repository nie initialisieren." >&2
+  exit 1
+fi
 
 echo "release config tests: ok"

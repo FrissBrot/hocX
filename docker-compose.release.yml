@@ -177,6 +177,9 @@ services:
       STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
       STORAGE_WORK_ROOT: /app/storage-local/work
       STORAGE_FALLBACK_DAYS: ${STORAGE_FALLBACK_DAYS:-14}
+      # Nur zur Anzeige/Überwachung (Job-Registry, /admin/backups) - Zugang zum Repository hat
+      # ausschliesslich der backup-worker.
+      BACKUP_ENABLED: ${BACKUP_ENABLED:-false}
       LOCAL_S3_ENDPOINT: http://local-s3:3900
       LOCAL_S3_BUCKET: hocx-main
       LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
@@ -553,6 +556,100 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Offsite-Backup (BorgBackup -> Hetzner Storage Box), Restore und Restore-Tests
+  # (docs-site/docs/technik/backup/). Einziger Dienst mit Borg-Schlüssel und -Passphrase; das
+  # Backend legt nur Aufträge an. Läuft auch ohne Konfiguration (BACKUP_ENABLED=false) und meldet
+  # dann "nicht eingerichtet". Superuser-DB-Zugang (DATABASE_URL), weil pg_dump alle Tabellen
+  # lesen und ein Voll-Restore Datenbanken anlegen/umbenennen muss.
+  backup-worker:
+    image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
+    restart: unless-stopped
+    # Streams statt Puffer: der Speicher hängt nicht von der Datenmenge ab (Multipart-Teile,
+    # Manifest-Abschnitte, Index-Abfragen); pg_restore/pg_dump laufen als eigene Prozesse.
+    mem_limit: 1536m
+    cpus: 1.5
+    pids_limit: 256
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["python", "-m", "app.workers.backup_worker"]
+    command: []
+    # Private Kopien von SSH-Schlüssel, known_hosts und .pgpass liegen nur im RAM.
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777,size=256m
+    environment:
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
+      HOCX_VERSION: ${HOCX_VERSION}
+      DATABASE_URL_FILE: /run/secrets/database_url
+      AUTH_SECRET_FILE: /run/secrets/auth_secret
+      ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      STORAGE_FALLBACK_DAYS: ${STORAGE_FALLBACK_DAYS:-14}
+      REDIS_URL: redis://redis:6379/0
+      TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
+      BACKUP_ENABLED: ${BACKUP_ENABLED:-false}
+      BACKUP_STORAGEBOX_HOST: ${BACKUP_STORAGEBOX_HOST:-}
+      BACKUP_STORAGEBOX_PORT: ${BACKUP_STORAGEBOX_PORT:-23}
+      BACKUP_STORAGEBOX_USER: ${BACKUP_STORAGEBOX_USER:-}
+      BACKUP_REPOSITORY_PATH: ${BACKUP_REPOSITORY_PATH:-hocx-borg}
+      BACKUP_REMOTE_PATH: ${BACKUP_REMOTE_PATH:-borg-1.4}
+      BACKUP_REPOSITORY_ID: ${BACKUP_REPOSITORY_ID:-}
+      BACKUP_SSH_HOST_FINGERPRINT: ${BACKUP_SSH_HOST_FINGERPRINT:-}
+      BACKUP_SSH_KEY_FILE: /run/secrets/backup_ssh_key
+      BACKUP_PASSPHRASE_FILE: /run/secrets/backup_passphrase
+      BACKUP_KNOWN_HOSTS_FILE: /run/secrets/backup_known_hosts
+      BACKUP_WORK_DIR: /backup-work
+      BACKUP_STAGING_MAX_BYTES: ${BACKUP_STAGING_MAX_BYTES:-21474836480}
+      BACKUP_BATCH_MAX_BYTES: ${BACKUP_BATCH_MAX_BYTES:-2147483648}
+      BACKUP_UPLOAD_RATELIMIT_KIB: ${BACKUP_UPLOAD_RATELIMIT_KIB:-0}
+      BACKUP_COMPRESSION: ${BACKUP_COMPRESSION:-auto,zstd,3}
+      BACKUP_STORAGEBOX_QUOTA_BYTES: ${BACKUP_STORAGEBOX_QUOTA_BYTES:-0}
+      BACKUP_TRUST_FILESYSTEM_REGISTRY: ${BACKUP_TRUST_FILESYSTEM_REGISTRY:-false}
+    secrets:
+      - database_url
+      - auth_secret
+      - admin_auth_secret
+      - storage_credentials_key
+      - backup_ssh_key
+      - backup_passphrase
+      - backup_known_hosts
+    volumes:
+      # Borg-Cache, Security-Verzeichnis (Repository-Pinning, Replay-Schutz), Staging für den
+      # Datenbank-Dump und das Restore-Journal - muss Neustarts überdauern.
+      - ./backups/borg-work:/backup-work
+      # Dateisystem-Generation 0 (vor der Erstmigration) und Copy-on-Write-Kopien darin.
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # Die Schleife erneuert die Datei mindestens alle paar Sekunden (auch während langer
+      # Aufträge über den Lease-Heartbeat); 5 Minuten ohne Lebenszeichen = hängt.
+      test: ["CMD", "python3", "-c", "import os, sys, time; sys.exit(0 if time.time() - os.path.getmtime('/tmp/hocx-backup-worker.alive') < 300 else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   abgabebox-backend:
     image: ${HOCX_ABGABEBOX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}}
     restart: unless-stopped
@@ -798,3 +895,10 @@ secrets:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/local_s3_secret_key
   local_s3_abgabebox_secret_key:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/local_s3_abgabebox_secret_key
+  # Backup (deploy.sh schreibt leere Platzhalter, solange nichts konfiguriert ist).
+  backup_ssh_key:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/backup_ssh_key
+  backup_passphrase:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/backup_passphrase
+  backup_known_hosts:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/backup_known_hosts

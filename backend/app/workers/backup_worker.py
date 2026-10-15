@@ -334,7 +334,20 @@ def _after_job(env: RunEnv, ctx: jobs.JobCtx, job: Any, final: str | None) -> No
                        priority=2, tags=["floppy_disk"])
 
 
+LIVENESS_FILE = os.environ.get("BACKUP_WORKER_LIVENESS_FILE", "/tmp/hocx-backup-worker.alive")
+
+
+def _touch_liveness() -> None:
+    """Für den Container-Healthcheck: Datei im tmpfs, die jede Schleife und jeder Heartbeat erneuert."""
+    try:
+        with open(LIVENESS_FILE, "w", encoding="utf-8") as handle:
+            handle.write(datetime.now(UTC).isoformat())
+    except OSError:
+        pass
+
+
 def _heartbeat_job() -> None:
+    _touch_liveness()
     try:
         with engine.begin() as conn:
             conn.execute(text("SELECT record_job_heartbeat(:job)"), {"job": JOB_NAME})

@@ -49,6 +49,14 @@ def _optional_path(name: str) -> Path | None:
     return Path(value) if value else None
 
 
+def secret_file_present(path: Path | None) -> bool:
+    """Compose legt für nicht konfigurierte Secrets leere Platzhalterdateien an - die zählen als fehlend."""
+    try:
+        return path is not None and path.is_file() and path.stat().st_size > 0
+    except OSError:
+        return False
+
+
 @dataclass(frozen=True)
 class BackupConfig:
     enabled: bool
@@ -109,11 +117,11 @@ class BackupConfig:
             "enabled": self.enabled,
             "repository": self.redacted_repository(),
             "remote_path": self.remote_path,
-            "host_key_pinned": bool(self.known_hosts_file or self.host_fingerprint),
+            "host_key_pinned": secret_file_present(self.known_hosts_file) or bool(self.host_fingerprint),
             "repository_id_pinned": bool(self.expected_repository_id),
-            "ssh_key_configured": bool(self.ssh_key_file),
-            "passphrase_configured": bool(self.passphrase_file),
-            "maintenance_key_present": bool(self.maintenance_ssh_key_file and self.maintenance_ssh_key_file.exists()),
+            "ssh_key_configured": secret_file_present(self.ssh_key_file),
+            "passphrase_configured": secret_file_present(self.passphrase_file),
+            "maintenance_key_present": secret_file_present(self.maintenance_ssh_key_file),
             "staging_max_bytes": self.staging_max_bytes,
             "batch_max_bytes": self.batch_max_bytes,
             "upload_ratelimit_kib": self.upload_ratelimit_kib,
@@ -147,12 +155,12 @@ class BackupConfig:
         if not _COMPRESSION.match(self.compression):
             raise BackupConfigError("BACKUP_COMPRESSION ist ungültig")
         if require_secrets:
-            if not self.passphrase_file or not self.passphrase_file.is_file():
+            if not secret_file_present(self.passphrase_file):
                 raise BackupConfigError("Borg-Passphrase fehlt (BACKUP_PASSPHRASE_FILE)")
             if self.is_remote:
-                if not self.ssh_key_file or not self.ssh_key_file.is_file():
+                if not secret_file_present(self.ssh_key_file):
                     raise BackupConfigError("SSH-Schlüssel fehlt (BACKUP_SSH_KEY_FILE)")
-                if not (self.known_hosts_file and self.known_hosts_file.is_file()) and not self.host_fingerprint:
+                if not secret_file_present(self.known_hosts_file) and not self.host_fingerprint:
                     # Nie unbekannte Host-Keys akzeptieren: ohne Pinning kein Verbindungsaufbau.
                     raise BackupConfigError("SSH-Host-Key nicht gepinnt (BACKUP_KNOWN_HOSTS_FILE oder BACKUP_SSH_HOST_FINGERPRINT)")
 

@@ -668,6 +668,53 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Backup-Worker (docs-site/docs/technik/backup/). Im Dev-Stack nur mit Profil "backup":
+  #   docker compose --profile backup up -d backup-worker
+  # Repository z. B. lokal: BACKUP_REPOSITORY_URL=/backup-work/dev-repo, BACKUP_PASSPHRASE_FILE in .env.
+  backup-worker:
+    build:
+      context: ./backend
+    user: "0:0"
+    restart: unless-stopped
+    mem_limit: 1536m
+    cpus: 1.0
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOCX_ENVIRONMENT: development
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      ADMIN_AUTH_SECRET: ${ADMIN_AUTH_SECRET}
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      REDIS_URL: redis://redis:6379/0
+      BACKUP_WORK_DIR: /backup-work
+    command: ["python", "-m", "app.workers.backup_worker"]
+    volumes:
+      - ./backend:/app
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+      - ./backups/borg-work:/backup-work
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    profiles: [backup]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   clamav:
     image: clamav/clamav@sha256:9cb27d7660bdf66e9878c832cb433dd8aa152cfbe16f3c2c0084c80b04ae22b4
     restart: unless-stopped
