@@ -1258,7 +1258,11 @@ class GalleryImage(Base, TimestampMixin):
 class ProtocolExportCache(Base, TimestampMixin):
     __tablename__ = "protocol_export_cache"
     __table_args__ = (
-        CheckConstraint("export_format IN ('latex', 'pdf')", name="ck_protocol_export_cache_format"),
+        # Migration 0116: Einzelexporte (Todo-/Terminliste) haben eigene, stabile Formate.
+        CheckConstraint(
+            "export_format IN ('latex', 'pdf', 'pdf-todos', 'pdf-todos-open', 'pdf-events')",
+            name="ck_protocol_export_cache_format",
+        ),
         Index("idx_protocol_export_cache_protocol", "protocol_id", "export_format"),
         Index("idx_protocol_export_cache_generated_file", "generated_file_id"),
     )

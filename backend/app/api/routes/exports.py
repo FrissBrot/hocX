@@ -103,7 +103,7 @@ async def export_pdf(
     protocol_id = _resolve(db, Protocol, protocol_id, user, label="Protocol")
     access_service.ensure_can_read_protocol(db, user, protocol_id)
     try:
-        result = await service.export_pdf(db, protocol_id)
+        result = await service.export_pdf(db, protocol_id, created_by=user.user_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:
@@ -139,7 +139,7 @@ async def export_todo_list(
     template_id = _resolve(db, Template, body.template_id, user, label="Template")
     access_service.ensure_can_read_protocol(db, user, protocol_id)
     try:
-        result = await service.export_standalone_pdf(db, protocol_id, template_id, "todos", body.filter)
+        result = await service.export_standalone_pdf(db, protocol_id, template_id, "todos", body.filter, created_by=user.user_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:
@@ -163,7 +163,7 @@ async def export_event_list(
     template_id = _resolve(db, Template, body.template_id, user, label="Template")
     access_service.ensure_can_read_protocol(db, user, protocol_id)
     try:
-        result = await service.export_standalone_pdf(db, protocol_id, template_id, "events", body.filter)
+        result = await service.export_standalone_pdf(db, protocol_id, template_id, "events", body.filter, created_by=user.user_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (SQLAlchemyError, RuntimeError) as exc:

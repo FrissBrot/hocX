@@ -7,7 +7,8 @@ Uploadweg kamen, und räumt auf.
 2. Bestand (Backfill): dieselbe Abfrage findet auch alle vor der Einführung hochgeladenen
    Dokumente. Wiederholbar und ohne Duplikate (Unique-Index auf dem Original), in Batches.
    Zugeordnet wird ausschliesslich über die bestehenden Herkunftstabellen, nie über Dateinamen.
-3. Aufräumen: Versionen ohne Original (Löschpfade über ON DELETE CASCADE) und verwaiste,
+3. Protokollexporte aus protocol_export_cache (protocol_export_document_service.backfill).
+4. Aufräumen: Versionen ohne Original (Löschpfade über ON DELETE CASCADE) und verwaiste,
    von der Verarbeitung erzeugte Dateien.
 """
 
@@ -67,10 +68,13 @@ def register_missing_documents(db: Session, *, limit: int) -> int:
 
 
 def run_tick(db: Session) -> dict[str, int]:
+    from app.services import protocol_export_document_service
+
     batch = settings.document_sync_batch_size
-    stats = {"registered": 0, "removed_versions": 0, "removed_files": 0}
+    stats = {"registered": 0, "exports": 0, "removed_versions": 0, "removed_files": 0}
     if settings.document_backfill_enabled:
         stats["registered"] = register_missing_documents(db, limit=batch)
+        stats["exports"] = protocol_export_document_service.backfill(db, limit=batch)
     stats["removed_versions"] = document_service.remove_versions_without_original(db, limit=batch)
     stats["removed_files"] = document_service.remove_orphaned_generated_files(db, limit=batch)
     db.commit()

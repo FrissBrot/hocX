@@ -19,7 +19,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models import AttendanceFine, DocumentTemplate, ElementType, Event, FinanceAccount, FinanceTransaction, ListDefinition, ListEntry, Participant, Protocol as ProtocolModel, ProtocolElement, ProtocolExportCache, StoredFile, Tenant
 from app.repositories.export_repository import ExportRepository
-from app.services import public_id_service
+from app.models.document_entities import DocumentFile
+from app.services import protocol_export_document_service, public_id_service
 from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
 from app.core.db import SessionLocal
 from app.core.storage import MAIN, ObjectNotFound, get_object_store, key_from_legacy_path, materialize_prefix, safe_suffix, validate_key
@@ -92,12 +93,13 @@ class ExportService:
             status="generated",
         )
 
-    async def export_pdf(self, db: Session, protocol_id: int) -> ProtocolExportRead:
+    async def export_pdf(self, db: Session, protocol_id: int, *, created_by: int | None = None) -> ProtocolExportRead:
         protocol, export_dir, latex_source, body_content = self._build_export_context(db, protocol_id)
 
         # Version tracking: compare body content (not main.tex — that contains a
-        # unique UUID path that always differs between builds).
-        prev_cache = self.repository.latest_export_cache(db, protocol_id)
+        # unique UUID path that always differs between builds) - only against earlier
+        # protocol PDFs, never against a todo/event list or LaTeX export of the same protocol.
+        prev_cache = self.repository.latest_export_cache(db, protocol_id, export_format="pdf")
         content_changed = (
             prev_cache is not None
             and prev_cache.latex_source is not None
@@ -167,6 +169,12 @@ class ExportService:
             protocol.version_final_minor = new_final_minor
             db.add(protocol)
 
+        # Logisches Dokument "Protokoll": neuer Inhalt = neue Version, gleicher Inhalt ersetzt nur
+        # die PDF-Darstellung der aktuellen Version (siehe protocol_export_document_service.py).
+        protocol_export_document_service.record_export(
+            db, protocol=protocol, export_format="pdf", stored_file=stored_file, body=body_content,
+            label=new_version_str or None, created_by=created_by,
+        )
         db.commit()
         db.refresh(protocol)
 
@@ -200,7 +208,8 @@ class ExportService:
         )
 
     async def export_standalone_pdf(
-        self, db: Session, protocol_id: int, template_id: int, export_type: str, todo_filter: str = "all"
+        self, db: Session, protocol_id: int, template_id: int, export_type: str, todo_filter: str = "all",
+        *, created_by: int | None = None,
     ) -> ProtocolExportRead:
         protocol = self.repository.get_protocol(db, protocol_id)
         if protocol is None:
@@ -272,15 +281,22 @@ class ExportService:
         )
         shutil.rmtree(export_dir, ignore_errors=True)
 
+        # Eigene, stabile Exportart je Liste - die gefilterte Todo-Liste ist ein anderes Dokument
+        # als die vollständige (Migration 0116).
+        cache_format = "pdf-todos-open" if export_type == "todos" and todo_filter == "open" else f"pdf-{export_type}"
         cache = self.repository.create_export_cache(
             db,
             ProtocolExportCache(
                 protocol_id=protocol.id,
-                export_format=f"pdf-{export_type}",
+                export_format=cache_format,
                 latex_source=body_content,
                 generated_file_id=stored_file.id,
                 generator_version=self.generator_version,
             ),
+        )
+        protocol_export_document_service.record_export(
+            db, protocol=protocol, export_format=cache_format, stored_file=stored_file, body=body_content,
+            label=None, created_by=created_by,
         )
         db.commit()
 
@@ -2476,6 +2492,16 @@ Status: {protocol_status}
             return {"deleted": 0}
         session = db if db is not None else SessionLocal()
         try:
+            # Exporte, die eine Version eines logischen Dokuments sind, bleiben für die
+            # Versionshistorie erhalten (siehe protocol_export_document_service.py).
+            referenced = set(
+                session.scalars(
+                    select(StoredFile.storage_path)
+                    .join(DocumentFile, DocumentFile.stored_file_id == StoredFile.id)
+                    .where(StoredFile.storage_path.like(f"{prefix}%"))
+                )
+            )
+            stale = [key for key in stale if key not in referenced]
             for key in stale:
                 store.delete(session, MAIN, key)
             session.commit()

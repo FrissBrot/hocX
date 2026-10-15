@@ -189,12 +189,17 @@ class ExportRepository:
         db.flush()
         return cache
 
-    def latest_export_cache(self, db: Session, protocol_id: int) -> ProtocolExportCache | None:
-        return db.scalar(
-            select(ProtocolExportCache)
-            .where(ProtocolExportCache.protocol_id == protocol_id)
-            .order_by(ProtocolExportCache.created_at.desc(), ProtocolExportCache.id.desc())
-        )
+    def latest_export_cache(
+        self, db: Session, protocol_id: int, *, export_format: str | None = None
+    ) -> ProtocolExportCache | None:
+        """Neuester Export eines Protokolls; mit export_format nur dieser Art. Der Inhaltsvergleich
+        in ExportService.export_pdf braucht die Art: ohne Filter verglich er den Protokoll-Body
+        auch mit dem Body einer zwischendurch exportierten Todo-/Terminliste (bzw. dem kompletten
+        LaTeX-Quelltext eines LaTeX-Exports) und zählte die Protokollversion grundlos hoch."""
+        query = select(ProtocolExportCache).where(ProtocolExportCache.protocol_id == protocol_id)
+        if export_format is not None:
+            query = query.where(ProtocolExportCache.export_format == export_format)
+        return db.scalar(query.order_by(ProtocolExportCache.created_at.desc(), ProtocolExportCache.id.desc()))
 
     def get_stored_file(self, db: Session, stored_file_id: int | None) -> StoredFile | None:
         if stored_file_id is None:
