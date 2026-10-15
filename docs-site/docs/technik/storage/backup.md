@@ -19,6 +19,19 @@ referenziert, ist beim anschliessenden Objekt-Backup daher praktisch immer noch 
 seltene Ausnahme (dazwischen gelöscht) fällt bei der Prüfung nach dem Restore auf und ist
 unkritisch (die Datei war ohnehin gelöscht).
 
+Das Objekt-Backup hält **genau einen Stand** (ein `manifest.json`): ein Key, dessen Inhalt sich
+ändert (Vorlagen-Bauteile gleicher Version), wird überschrieben; Objekte, die seitdem gelöscht
+wurden, bleiben liegen. Passend zu einem **älteren** DB-Dump gibt es den Objektstand darum nur,
+wenn das Host-Backup das Verzeichnis `backups/storage/` mit Versionen sichert (Snapshot,
+rsnapshot/borg o. ä.). Ändert sich ein Objekt während des Laufs, übernimmt das Backup den neuen
+Registerstand (`changed_during_backup` im Manifest); nur eine echte Abweichung zwischen Register
+und Speicher wird als `mismatched` gemeldet (Exit-Code 2, Alarm über `run_job.sh`), ohne das
+übrige Backup abzubrechen.
+
+Erzeugte Exporte entfernt die Aufbewahrung (`export_retention_days`) samt Objekt, die
+`stored_file`-Zeile bleibt stehen. Solche Referenzen zählen in Prüfbericht und `storage_verify`
+als «abgelaufene Exporte» (`expired_exports`), nicht als fehlende Dateien.
+
 Zusätzlich beim externen Anbieter:
 
 - **Objektversionierung** aktivieren (Hetzner, AWS) – schützt vor Überschreiben/Löschen.

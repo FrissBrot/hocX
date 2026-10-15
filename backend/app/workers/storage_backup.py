@@ -9,8 +9,12 @@ Konsistenz mit dem Datenbank-Backup (docs-site/docs/technik/storage/backup.md):
   Version) einmalig vergeben; was der Dump referenziert, existiert darum beim anschliessenden
   Objekt-Backup noch - es sei denn, es wurde dazwischen gelöscht. Solche Fälle meldet die
   Integritätsprüfung nach einem Restore (app.workers.storage_verify).
-- Das Backup ist inkrementell (Grösse + SHA-256 aus dem Register entscheiden), schreibt atomar
-  und löscht nie etwas, was noch im Manifest einer behaltenen Sicherung steht.
+- Das Backup ist inkrementell (Grösse + SHA-256 aus dem Register entscheiden) und schreibt jede
+  Datei atomar. Es gibt genau einen Stand (ein manifest.json): ein Key, dessen Inhalt sich
+  geändert hat, wird überschrieben, gelöschte Objekte bleiben liegen. Ältere Stände (passend zu
+  älteren DB-Dumps) sichert nur ein Snapshot des Zielverzeichnisses durch das Host-Backup.
+- Ändert sich ein Objekt während des Laufs, gilt der neue Registerstand; nur eine echte
+  Abweichung zwischen Register und Speicher wird als "mismatched" gemeldet (Exit-Code 2).
 - manifest.json hält Generation, Journal-Position, Zeitpunkt und SHA-256 je Objekt. --verify liest
   jede Datei neu und vergleicht - ein Backup gilt erst nach erfolgreichem Restore-Test als
   verifiziert (Restore-Probe: siehe Doku).
@@ -55,7 +59,8 @@ def backup(target: Path) -> dict[str, Any]:
         rows = db.execute(select(StorageObject.namespace, StorageObject.key, StorageObject.size_bytes, StorageObject.sha256)
                           .where(StorageObject.status == "active")).all()
     objects: dict[str, dict[str, Any]] = {}
-    copied = skipped = missing = 0
+    copied = skipped = missing = changed = 0
+    mismatched: list[str] = []
     for namespace, key, size, sha in rows:
         validate_key(key)
         path = target / "objects" / namespace / key
@@ -72,8 +77,21 @@ def backup(target: Path) -> dict[str, Any]:
                 missing += 1
                 continue
             if sha and info.sha256 != sha:
-                Path(tmp).unlink(missing_ok=True)
-                raise RuntimeError(f"SHA-256 von {namespace}/{key} weicht vom Register ab - Backup abgebrochen")
+                # Während des Backups geändert (z. B. Vorlagen-Bauteil gleicher Version neu
+                # hochgeladen) oder gelöscht: gegen den aktuellen Registerstand prüfen statt das
+                # ganze Backup abzubrechen (S3-014).
+                current = _registry_row(namespace, key)
+                if current is None or current.status != "active":
+                    Path(tmp).unlink(missing_ok=True)
+                    changed += 1
+                    continue
+                if current.sha256 != info.sha256:
+                    # Echte Abweichung zwischen Register und Speicher: nicht übernehmen, melden.
+                    Path(tmp).unlink(missing_ok=True)
+                    mismatched.append(f"{namespace}/{key}")
+                    continue
+                size = current.size_bytes
+                changed += 1
             os.replace(tmp, path)
             sha = info.sha256
             copied += 1
@@ -84,11 +102,20 @@ def backup(target: Path) -> dict[str, Any]:
         "generation": state.config.generation,
         "journal_seq": journal_seq,
         "objects": objects,
+        "changed_during_backup": changed,
+        "mismatched": mismatched[:1000],
     }
     tmp_manifest = target / f".{MANIFEST}.part"
     tmp_manifest.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
     os.replace(tmp_manifest, target / MANIFEST)
-    return {"copied": copied, "skipped": skipped, "missing": missing, "objects": len(objects), "generation": state.config.generation}
+    return {"copied": copied, "skipped": skipped, "missing": missing, "changed": changed, "mismatched": len(mismatched),
+            "objects": len(objects), "generation": state.config.generation}
+
+
+def _registry_row(namespace: str, key: str):
+    with SessionLocal() as db:
+        return db.execute(select(StorageObject.status, StorageObject.sha256, StorageObject.size_bytes)
+                          .where(StorageObject.namespace == namespace, StorageObject.key == key)).first()
 
 
 def verify_backup(target: Path) -> dict[str, Any]:
@@ -114,7 +141,7 @@ def main() -> int:
     print(json.dumps(result, ensure_ascii=False))
     if args.verify:
         return 0 if result["ok"] else 2
-    return 0 if result["missing"] == 0 else 2
+    return 0 if result["missing"] == 0 and result["mismatched"] == 0 else 2
 
 
 if __name__ == "__main__":
