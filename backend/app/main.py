@@ -19,7 +19,7 @@ from app.core.error_log import best_effort_actor_from_request, record_system_err
 from app.core.redis_client import close_redis_pool
 from app.core.security import hash_password
 from app.models import AppUser, ElementType, PlatformAdmin, Role, Tenant
-from app.services import domain_health_check_service, traefik_config_service
+from app.services import document_sync_service, domain_health_check_service, traefik_config_service
 from app.services.admin_error_log_service import AdminErrorLogService
 from app.services.admin_job_status_service import AdminJobStatusService
 from app.services.audit_service import AuditService
@@ -409,6 +409,17 @@ async def storage_journal_cleanup_loop() -> None:
     )
 
 
+async def document_sync_loop() -> None:
+    """Dokumente für Abgabebox-Uploads und den Bestand anlegen, verwaiste Dokumentdateien
+    entfernen (app/services/document_sync_service.py). Die eigentliche Verarbeitung macht der
+    document-worker."""
+    await run_advisory_locked_loop(
+        name="document_sync",
+        interval_seconds=settings.document_sync_interval_minutes * 60,
+        task=document_sync_service.run_tick,
+    )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
@@ -434,9 +445,11 @@ async def lifespan(_: FastAPI):
         system_monitor_task = asyncio.create_task(system_monitor_loop())
         maintenance_supervisor_task = asyncio.create_task(maintenance_supervisor_loop())
         storage_journal_cleanup_task = asyncio.create_task(storage_journal_cleanup_loop())
+        document_sync_task = asyncio.create_task(document_sync_loop())
         yield
         maintenance_supervisor_task.cancel()
         storage_journal_cleanup_task.cancel()
+        document_sync_task.cancel()
         health_check_task.cancel()
         photo_analysis_auto_queue_task.cancel()
         photo_quality_backfill_task.cancel()

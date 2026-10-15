@@ -553,6 +553,62 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Dokument-Worker: PDF-Konvertierung (LibreOffice) und Textextraktion, Backend-Image. Verarbeitet
+  # nicht vertrauenswürdige Dateien - read_only, ohne Capabilities, ohne Ports, knappes Budget.
+  # Netz: default (Datenbank) und storage (lokales S3); bei einem externen S3-Profil braucht er
+  # zusätzlich ausgehenden Zugang dorthin. LibreOffice selbst lädt keine externen Inhalte
+  # (siehe app/services/documents/convert.py).
+  document-worker:
+    image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
+    restart: unless-stopped
+    mem_limit: 1536m
+    cpus: 1.0
+    pids_limit: 256
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["python", "-m", "app.workers.document_worker"]
+    command: []
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
+    environment:
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
+      DATABASE_URL_FILE: /run/secrets/database_url
+      APP_DATABASE_URL_FILE: /run/secrets/app_database_url
+      AUTH_SECRET_FILE: /run/secrets/auth_secret
+      ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
+      STORAGE_WORK_ROOT: /app/storage-local/work
+    secrets:
+      - database_url
+      - app_database_url
+      - auth_secret
+      - admin_auth_secret
+      - storage_credentials_key
+    volumes:
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   abgabebox-backend:
     image: ${HOCX_ABGABEBOX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}}
     restart: unless-stopped

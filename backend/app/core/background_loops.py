@@ -54,6 +54,7 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "task_package_rollover": 202600018,
     "maintenance_supervisor": 202600019,
     "storage_journal_cleanup": 202600020,
+    "document_sync": 202600023,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

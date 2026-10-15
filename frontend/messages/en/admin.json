@@ -242,14 +242,16 @@
       "cleanup": "Cleanup",
       "maintenance": "Maintenance",
       "other": "Other",
-      "storage": "Storage"
+      "storage": "Storage",
+      "documents": "Documents"
     },
     "service": {
       "backend": "Backend",
       "abgabebox-backend": "Abgabebox backend",
       "photo-analysis-worker": "Image analysis worker",
       "host": "Server (cron)",
-      "storage-worker": "Storage worker"
+      "storage-worker": "Storage worker",
+      "document-worker": "Document worker"
     },
     "interval": {
       "onDemand": "On demand",
@@ -367,6 +369,14 @@
       "backup_storage": {
         "title": "File backup",
         "description": "Incrementally backs up the objects of the active storage generation after the database backup and verifies the result."
+      },
+      "document_sync": {
+        "title": "Synchronise documents",
+        "description": "Creates documents for drop box uploads and existing files and removes orphaned document files."
+      },
+      "document_worker": {
+        "title": "Document worker",
+        "description": "Generates PDF views and extracts the text of uploaded documents (heartbeat from the polling loop)."
       }
     }
   },

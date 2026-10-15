@@ -797,7 +797,7 @@ export type UploadPipelineOverview = {
 };
 
 export type JobState = "ok" | "running" | "failing" | "overdue" | "never_run";
-export type JobCategory = "virus_scan" | "photo_analysis" | "uploads" | "cleanup" | "maintenance" | "backup" | "storage";
+export type JobCategory = "virus_scan" | "photo_analysis" | "uploads" | "cleanup" | "maintenance" | "backup" | "storage" | "documents";
 
 export type JobStatusEntry = {
   name: string;
