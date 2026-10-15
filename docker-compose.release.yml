@@ -576,7 +576,6 @@ services:
       - /tmp:rw,noexec,nosuid,nodev,mode=1777
     environment:
       HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
-      DATABASE_URL_FILE: /run/secrets/database_url
       APP_DATABASE_URL_FILE: /run/secrets/app_database_url
       AUTH_SECRET_FILE: /run/secrets/auth_secret
       ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
@@ -587,8 +586,9 @@ services:
       ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
       STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
       STORAGE_WORK_ROOT: /app/storage-local/work
+    # Nur die eingeschränkte App-Rolle (app/core/db.py nutzt APP_DATABASE_URL), nie die
+    # Owner-URL: der Dienst verarbeitet nicht vertrauenswürdige Dateien.
     secrets:
-      - database_url
       - app_database_url
       - auth_secret
       - admin_auth_secret

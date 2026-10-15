@@ -676,6 +676,12 @@ services:
     build:
       context: ./backend
     user: "0:0"
+    # Root nur wegen der Bind-Mount-Rechte im Dev-Checkout; ohne Capabilities und ohne
+    # Rechteausweitung, weil hier nicht vertrauenswürdige Dokumente verarbeitet werden.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     mem_limit: 1536m
     cpus: 1.0
