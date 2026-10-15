@@ -19,7 +19,16 @@ from app import scanner
 from app.core.config import settings
 from app.core.cycle_utils import get_cycle_year
 from app.models import AppUser, Event, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
-from app.models.entities import CycleConfig, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAnalysisJob, SubmissionAssignment
+from app.models.entities import (
+    CycleConfig,
+    GalleryUploadJob,
+    PhotoAlbum,
+    PhotoAlbumItem,
+    PhotoAnalysisJob,
+    SubmissionAssignment,
+    SubmissionUploadFile,
+    WordImportDocument,
+)
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
 from app.schemas.files import FileAlbumRef, FileOverviewItem, FileStats, PhotoAnalysisProgress, SimilarityGroup, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
@@ -1666,13 +1675,37 @@ class FileService:
 
         stored_file = self.stored_file_repository.get(db, protocol_image.stored_file_id)
         self.protocol_image_repository.delete(db, protocol_image)
-        if stored_file is not None:
-            file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-            if file_path.exists():
-                file_path.unlink()
+        db.flush()
+        # Audit MAIN-BE-001: "Aus letztem Protokoll übernehmen" legt ProtocolImage-Zeilen mit
+        # derselben stored_file_id an. Datei und StoredFile nur löschen, wenn nichts anderes
+        # mehr darauf verweist, und die Datei erst nach dem Commit entfernen - früher wurde
+        # sie vor dem (an der RESTRICT-FK scheiternden) Commit gelöscht und fehlte danach
+        # auch im Vorgängerprotokoll.
+        paths_to_unlink: list[Path] = []
+        if stored_file is not None and not self._stored_file_still_referenced(db, stored_file.id):
+            paths_to_unlink.append(_safe_storage_path(settings.storage_root, stored_file.storage_path))
+            if stored_file.thumbnail_path:
+                paths_to_unlink.append(_safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path))
             self.stored_file_repository.delete(db, stored_file)
+            db.flush()
         db.commit()
+        for path in paths_to_unlink:
+            path.unlink(missing_ok=True)
         return True
+
+    @staticmethod
+    def _stored_file_still_referenced(db: Session, stored_file_id: int) -> bool:
+        """True, wenn noch eine Zeile mit RESTRICT-FK auf die Datei zeigt."""
+        referencing_columns = (
+            ProtocolImage.stored_file_id,
+            GalleryImage.stored_file_id,
+            WordImportDocument.stored_file_id,
+            SubmissionUploadFile.stored_file_id,
+        )
+        for column in referencing_columns:
+            if db.scalar(select(column).where(column == stored_file_id).limit(1)) is not None:
+                return True
+        return False
 
     def _resolve_tenant_id(self, db: Session, protocol_element_block_id: int) -> int:
         protocol_element_block = db.get(ProtocolElementBlock, protocol_element_block_id)
