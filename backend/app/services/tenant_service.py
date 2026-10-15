@@ -266,6 +266,10 @@ class TenantService:
         db.refresh(tenant)
         return self._read_model(tenant, actor)
 
+    def require_manageable(self, tenant_id: int, actor: CurrentUser) -> None:
+        """Öffentliche Variante für Routen, die vor dem Service z. B. ein Rate-Limit zählen."""
+        self._require_manageable(tenant_id, actor)
+
     def _require_manageable(self, tenant_id: int, actor: CurrentUser) -> None:
         if tenant_id not in self._manageable_tenant_ids(actor):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant not accessible")
