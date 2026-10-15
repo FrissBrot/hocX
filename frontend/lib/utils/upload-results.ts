@@ -35,8 +35,9 @@ export function resultsFromLegacyJob(importedNames: string[], errors: string[]):
   return results;
 }
 
-/** Teilt eine Auswahl in Upload-Batches (Server: max. 50 Dateien je Auftrag). Ein Live-Photo-
- * Clip bleibt im Batch seines Bildes; ZIPs zählen als je eine Datei. */
+/** Teilt eine Auswahl in Upload-Batches (Server: max. 50 Dateien je Auftrag, gezählt werden alle
+ * Multipart-Dateien inkl. Live-Photo-Clips). Ein Clip bleibt im Batch seines Bildes und zählt
+ * mit; ZIPs zählen als je eine Datei. */
 export function splitIntoBatches<T>(items: T[], clipOf: Map<number, number>, maxFiles: number, maxBytes: number, size: (item: T) => number): number[][] {
   const clipIndexes = new Set(clipOf.values());
   const batches: number[][] = [];
@@ -46,8 +47,7 @@ export function splitIntoBatches<T>(items: T[], clipOf: Map<number, number>, max
     if (clipIndexes.has(index)) return;
     const group = clipOf.has(index) ? [index, clipOf.get(index)!] : [index];
     const groupBytes = group.reduce((sum, member) => sum + size(items[member]), 0);
-    const photoCount = current.filter((member) => !clipIndexes.has(member)).length;
-    if (current.length && (photoCount + 1 > maxFiles || currentBytes + groupBytes > maxBytes)) {
+    if (current.length && (current.length + group.length > maxFiles || currentBytes + groupBytes > maxBytes)) {
       batches.push(current);
       current = [];
       currentBytes = 0;
