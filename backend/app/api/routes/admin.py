@@ -83,6 +83,7 @@ from app.services.mfa_service import MfaService
 from app.services.audit_service import AuditService
 from app.services.catalog_config_service import CatalogChangedError, CatalogConfigService
 from app.services.platform_oidc_service import PlatformOidcService
+from app.services.tenant_service import tenant_profile_image_response
 from app.services.storage_service import StorageService
 from app.services.tenant_clone_service import TenantCloneService
 from app.services.tenant_cleanup_service import TenantCleanupService
@@ -924,7 +925,7 @@ def tenant_profile_image(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
     file_path = _safe_storage_path(settings.storage_root, tenant.profile_image_path)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Tenant profile image missing")
-    return FileResponse(file_path)
+    return tenant_profile_image_response(file_path)
 
 
 @router.get("/users", response_model=AdminUserPage)

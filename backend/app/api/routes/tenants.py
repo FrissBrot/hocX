@@ -1,7 +1,6 @@
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -14,7 +13,7 @@ from app.models import Participant, Tenant, TenantDomain
 from app.schemas.user import TenantDomainCreate, TenantDomainRead, TenantLookupRead, TenantRead, TenantSubscriptionRead, TenantUpdate
 from app.services import public_id_service, tenant_trust_service
 from app.services.file_service import _safe_storage_path
-from app.services.tenant_service import TenantService, build_tenant_profile_image_url
+from app.services.tenant_service import TenantService, build_tenant_profile_image_url, tenant_profile_image_response
 
 router = APIRouter()
 service = TenantService()
@@ -125,7 +124,7 @@ def tenant_profile_image(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
     file_path = _safe_storage_path(settings.storage_root, tenant.profile_image_path)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Tenant profile image missing")
-    return FileResponse(file_path)
+    return tenant_profile_image_response(file_path)
 
 
 @router.get("/tenants/{tenant_id}/domains", response_model=list[TenantDomainRead])
