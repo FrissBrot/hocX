@@ -51,6 +51,8 @@ PDF_STANDARD = "a-2b"
 PREVIEW_PPI = 96
 # Höchstens so viele Compiles, um einen fehlerhaften Block zu finden.
 _MAX_DIAGNOSE_COMPILES = 80
+# ... und höchstens so viele Compile-Timeouts an Gesamtzeit.
+_DIAGNOSE_TIME_FACTOR = 2
 
 OutputFormat = Literal["pdf", "png"]
 
@@ -252,9 +254,11 @@ class DocumentRenderer:
         concurrency: int | None = None,
         timeout_seconds: float | None = None,
         memory_limit_mb: int | None = None,
+        queue_timeout_seconds: float | None = None,
     ) -> None:
         self.concurrency = max(1, concurrency or settings.document_render_concurrency)
         self.timeout_seconds = timeout_seconds or settings.document_render_timeout_seconds
+        self.queue_timeout_seconds = queue_timeout_seconds or settings.document_render_queue_timeout_seconds
         self.memory_limit_bytes = int(memory_limit_mb if memory_limit_mb is not None else settings.document_render_memory_limit_mb) * 1024 * 1024
         self._executor: ProcessPoolExecutor | None = None
         self._lock = threading.Lock()
@@ -296,8 +300,19 @@ class DocumentRenderer:
             self._semaphores[key] = asyncio.Semaphore(self.concurrency)
         return self._semaphores[key]
 
+    async def _acquire_slot(self) -> asyncio.Semaphore:
+        """Freien Compile-Platz holen; die Warteschlange ist zeitlich begrenzt, damit sich bei
+        vielen gleichzeitigen Vorschauen keine Requests unbegrenzt stauen."""
+        semaphore = self._semaphore()
+        try:
+            await asyncio.wait_for(semaphore.acquire(), timeout=self.queue_timeout_seconds)
+        except asyncio.TimeoutError as exc:
+            raise DocumentRenderError("error.busy", detail=f"Kein freier Compile-Platz nach {self.queue_timeout_seconds}s") from exc
+        return semaphore
+
     async def _run(self, document_json: str, assets: RenderAssets, fmt: OutputFormat, ppi: float | None) -> CompileResult:
-        async with self._semaphore():
+        semaphore = await self._acquire_slot()
+        try:
             loop = asyncio.get_running_loop()
             try:
                 future = loop.run_in_executor(self._pool(), _compile_job, document_json, assets.files, assets.fonts, fmt, ppi)
@@ -310,6 +325,8 @@ class DocumentRenderer:
                 # parallelen Compiles beendet.
                 self._reset_pool()
                 raise DocumentRenderError("error.render", detail=f"Typst-Worker beendet: {exc}") from exc
+        finally:
+            semaphore.release()
 
     async def render(self, document: Document, assets: RenderAssets | None = None, *, fmt: OutputFormat = "pdf", max_pages: int | None = None, ppi: float | None = None) -> RenderOutput:
         assets = assets or RenderAssets()
@@ -336,14 +353,23 @@ class DocumentRenderer:
     async def _locate_failing_block(self, document: Document, assets: RenderAssets) -> str | None:
         """Kompiliert die Blöcke einzeln, um den Verursacher eines Fehlers zu finden."""
         budget = _MAX_DIAGNOSE_COMPILES
+        # Gesamtzeit der Diagnose begrenzen (sonst bis 80 × Timeout für einen Request).
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + _DIAGNOSE_TIME_FACTOR * self.timeout_seconds
         strings = document.strings
 
         def label(block) -> str:
             return (block.title or "").strip() or strings.get(f"blockType.{block.type}", block.type)
 
+        class _Abort(Exception):
+            """Diagnose abbrechen: Probe-Compile selbst gescheitert (Timeout, Worker weg,
+            keine freien Plätze) oder Zeitbudget aufgebraucht."""
+
         async def fails(blocks) -> bool:
             nonlocal budget
             budget -= 1
+            if loop.time() >= deadline:
+                raise _Abort
             probe = document.model_copy(
                 update={
                     "blocks": blocks,
@@ -352,22 +378,28 @@ class DocumentRenderer:
             )
             try:
                 result = await self._run(_dump(probe), assets, "pdf", None)
-            except DocumentRenderError:
-                return True
+            except DocumentRenderError as exc:
+                # Ein Timeout setzt den Pool zurück; weitere Proben würden parallele Compiles
+                # anderer Requests erneut abbrechen. Ohne eindeutigen Befund aufhören.
+                raise _Abort from exc
             return not result.ok
 
-        for block in document.blocks:
-            if budget <= 0:
-                return None
-            if not await fails([block]):
-                continue
-            if isinstance(block, ProtocolElementBlock):
-                for child in block.children:
-                    if budget <= 0:
-                        break
-                    if await fails([block.model_copy(update={"children": [child]})]):
-                        return f"{label(block)} › {label(child)}"
-            return label(block)
+        try:
+            for block in document.blocks:
+                if budget <= 0:
+                    return None
+                if not await fails([block]):
+                    continue
+                if isinstance(block, ProtocolElementBlock):
+                    for child in block.children:
+                        if budget <= 0:
+                            break
+                        if await fails([block.model_copy(update={"children": [child]})]):
+                            return f"{label(block)} › {label(child)}"
+                return label(block)
+        except _Abort:
+            logger.info("Fehlersuche im Dokument abgebrochen (Zeitbudget oder Probe-Compile gescheitert)")
+            return None
         return None
 
 

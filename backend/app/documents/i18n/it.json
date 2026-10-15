@@ -179,6 +179,7 @@
   },
   "error": {
     "block": "Il blocco «{block}» non ha potuto essere visualizzato. Controlla il contenuto o le impostazioni.",
+    "busy": "Al momento si stanno creando molti documenti. Riprova tra un momento.",
     "render": "Impossibile creare il documento. Riprova più tardi.",
     "timeout": "Il documento è troppo grande e non è stato possibile crearlo in tempo."
   },

@@ -179,6 +179,7 @@
   },
   "error": {
     "block": "The block “{block}” could not be rendered. Please check its content or settings.",
+    "busy": "Many documents are being created right now. Please try again in a moment.",
     "render": "The document could not be created. Please try again later.",
     "timeout": "The document is too large and could not be created in time."
   },

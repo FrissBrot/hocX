@@ -68,6 +68,8 @@ def _render_error(user: CurrentUser, exc: DocumentRenderError) -> HTTPException:
         return HTTPException(status_code=422, detail=text(language, "error.block", block=exc.block_label or ""))
     if exc.key == "error.timeout":
         return HTTPException(status_code=503, detail=text(language, "error.timeout"))
+    if exc.key == "error.busy":
+        return HTTPException(status_code=503, detail=text(language, "error.busy"))
     return HTTPException(status_code=500, detail=text(language, "error.render"))
 
 

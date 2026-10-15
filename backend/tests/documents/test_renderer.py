@@ -124,3 +124,68 @@ def test_uncovered_characters_are_replaced_not_fatal():
 
     coverage = font_coverage()
     assert sanitize_text("漢x😀\x07‍", coverage) == f"{REPLACEMENT_CHARACTER}x😀‍"
+
+
+def _three_blocks() -> Document:
+    return Document(
+        meta=DocumentMeta(document_type="custom", title="Diagnose"),
+        strings=strings_for("de"),
+        blocks=[RichTextBlock(title=f"Block {index}", content=markdown_to_rich("x")) for index in range(3)],
+    )
+
+
+def test_diagnosis_stops_at_first_failed_probe(monkeypatch):
+    """TYPST-009: scheitert ein Probe-Compile selbst (Timeout setzt den Pool zurück), bricht
+    die Fehlersuche ab, statt bis zu 80 weitere Compiles anzustossen."""
+    from app.documents.renderer import CompileResult
+
+    renderer = DocumentRenderer(concurrency=1)
+    calls = []
+
+    async def fake_run(document_json, assets, fmt, ppi):
+        calls.append(fmt)
+        if len(calls) == 1:
+            return CompileResult(ok=False, error="kaputt")
+        raise DocumentRenderError("error.timeout")
+
+    monkeypatch.setattr(renderer, "_run", fake_run)
+    with pytest.raises(DocumentRenderError) as excinfo:
+        _render(renderer, _three_blocks())
+    assert excinfo.value.key == "error.render" and excinfo.value.detail
+    assert len(calls) == 2
+
+
+def test_diagnosis_respects_time_budget(monkeypatch):
+    """TYPST-009: die Fehlersuche endet nach dem Zeitbudget (2 × Timeout)."""
+    from app.documents import renderer as renderer_module
+    from app.documents.renderer import CompileResult
+
+    renderer = DocumentRenderer(concurrency=1, timeout_seconds=0.05)
+    monkeypatch.setattr(renderer_module, "_MAX_DIAGNOSE_COMPILES", 10_000)
+    calls = []
+
+    async def failing_run(document_json, assets, fmt, ppi):
+        calls.append(fmt)
+        await asyncio.sleep(0.04)
+        return CompileResult(ok=False, error="kaputt")
+
+    monkeypatch.setattr(renderer, "_run", failing_run)
+    document = _three_blocks().model_copy(update={"blocks": _three_blocks().blocks * 20})
+    with pytest.raises(DocumentRenderError):
+        _render(renderer, document)
+    # 1 Haupt-Compile + höchstens ~3 Proben à 40 ms im Budget von 100 ms
+    assert len(calls) <= 5
+
+
+def test_queue_wait_is_bounded():
+    """TYPST-005: ohne freien Compile-Platz gibt es nach der Wartezeit error.busy (HTTP 503)
+    statt einer unbegrenzten Warteschlange."""
+    renderer = DocumentRenderer(concurrency=1, queue_timeout_seconds=0.05)
+
+    async def scenario():
+        await renderer._semaphore().acquire()  # einziger Platz belegt
+        with pytest.raises(DocumentRenderError) as excinfo:
+            await renderer._acquire_slot()
+        return excinfo.value.key
+
+    assert asyncio.run(scenario()) == "error.busy"

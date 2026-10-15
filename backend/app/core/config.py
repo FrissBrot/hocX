@@ -154,9 +154,12 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     # Dokument-Engine (app/documents): Grenzen für den Typst-Prozess-Pool. Der Timeout gilt
     # pro Compile (Wall-Clock); bei Überschreitung wird der Pool beendet und neu gestartet.
-    document_render_concurrency: int = 4
+    # Pro Uvicorn-Worker (Dockerfile: 2) ein eigener Pool: 2 × 2 Compiles gleichzeitig.
+    document_render_concurrency: int = 2
     document_render_timeout_seconds: int = 60
     document_render_memory_limit_mb: int = 3072
+    # Höchstens so lange auf einen freien Compile-Platz warten, sonst HTTP 503 (error.busy)
+    document_render_queue_timeout_seconds: int = 20
     document_preview_max_pages: int = 4
     # Öffentliche Prüfseite (Abgabebox /verify), steht in jedem PDF (Fusszeile, QR-Code, XMP).
     # Bewusst die Plattform-Domain, nicht eine Mandanten-Domain: gedruckte Links bleiben stabil.

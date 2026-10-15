@@ -175,6 +175,7 @@
     "custom": "Dokument"
   },
   "error": {
+    "busy": "Gerade werden viele Dokumente erstellt. Bitte in einem Moment erneut versuchen.",
     "block": "Der Block «{block}» konnte nicht dargestellt werden. Bitte Inhalt oder Einstellungen prüfen.",
     "render": "Das Dokument konnte nicht erstellt werden. Bitte später erneut versuchen.",
     "timeout": "Das Dokument ist zu umfangreich und konnte nicht rechtzeitig erstellt werden."

@@ -175,6 +175,7 @@
     "custom": "Document"
   },
   "error": {
+    "busy": "De nombreux documents sont en cours de création. Veuillez réessayer dans un instant.",
     "block": "Le bloc « {block} » n’a pas pu être affiché. Veuillez vérifier son contenu ou ses réglages.",
     "render": "Le document n’a pas pu être créé. Veuillez réessayer plus tard.",
     "timeout": "Le document est trop volumineux et n’a pas pu être créé à temps."

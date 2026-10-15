@@ -269,10 +269,18 @@ Treffer prüft und `{found: false}` erwartet.
 
 | Variable | Standard | Bedeutung |
 |---|---|---|
-| `DOCUMENT_RENDER_CONCURRENCY` | 4 | Worker-Prozesse (gleichzeitige Compiles) |
+| `DOCUMENT_RENDER_CONCURRENCY` | 2 | Worker-Prozesse (gleichzeitige Compiles) **pro Uvicorn-Worker** |
 | `DOCUMENT_RENDER_TIMEOUT_SECONDS` | 60 | Wall-Clock-Limit pro Compile |
 | `DOCUMENT_RENDER_MEMORY_LIMIT_MB` | 3072 | `RLIMIT_AS` pro Worker |
+| `DOCUMENT_RENDER_QUEUE_TIMEOUT_SECONDS` | 20 | Maximale Wartezeit auf einen freien Compile-Platz, danach HTTP 503 |
 | `DOCUMENT_PREVIEW_MAX_PAGES` | 4 | Seiten in der PNG-Vorschau |
+
+Jeder Uvicorn-Worker (Dockerfile: 2) hat einen eigenen Pool. Gleichzeitig laufen also bis zu
+2 × `DOCUMENT_RENDER_CONCURRENCY` Compiles; das Speicherbudget (`mem_limit` des Backends) muss
+das tragen. Eine Galerie mit 60 Fotos à 2400 px braucht gemessen rund 1,7 GB RSS pro Compile.
+Die Vorschau rastert derzeit alle Seiten und kürzt erst danach (typst-py 0.15 kennt keine
+Seitenauswahl). Die Fehlersuche nach einem gescheiterten Compile ist auf 80 Proben und
+2 × Timeout begrenzt und bricht beim ersten gescheiterten Probe-Compile ab.
 
 ## Block-Katalog
 
