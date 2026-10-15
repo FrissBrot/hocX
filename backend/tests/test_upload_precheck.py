@@ -517,3 +517,17 @@ def test_byte_identical_file_is_analyzed_at_most_once_regardless_of_client_claim
     assert calls == [row.id]
     db.refresh(row)
     assert row.gps_latitude is None and row.camera_model is None  # Client-Werte nie übernommen
+
+
+def test_source_checksum_match_of_another_tenant_is_not_revealed_or_enriched(db):
+    """IMGMETA-015: Quell-Hash-Treffer (konvertierte HEIC) sind mandantengebunden wie Original-Hashes."""
+    tenant = make_tenant(db)
+    other = make_tenant(db)
+    user = _writer(db, tenant.id)
+    heic_hash = "c" * 64
+    foreign = _gallery_file(db, other.id, jpeg(color=(9, 9, 9)), name="fremd.jpg", source_checksum_sha256=heic_hash)
+    entry = {"client_id": "x", "sha256": heic_hash, "name": "IMG_1.HEIC", "size": 1, "metadata": {"gps": {"latitude": 1.0, "longitude": 2.0}}}
+    result = _precheck(db, user, [entry], estimated=date(2000, 1, 1))[0]
+    assert result.status == "upload_required" and result.file_id is None
+    db.refresh(foreign)
+    assert foreign.gps_latitude is None and foreign.estimated_taken_on is None

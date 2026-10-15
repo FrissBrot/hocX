@@ -145,3 +145,22 @@ describe("analyzeFile", () => {
     expect(result.sha256).toHaveLength(64);
   });
 });
+
+describe("Parser-Robustheit (IMGMETA-015)", () => {
+  it.each(["full.jpg", "full.png", "full.webp", "full.tiff", "full.heic"])("abgeschnittene bzw. verfälschte %s endet immer mit einem Ergebnis", async (name) => {
+    const bytes = fixture(name);
+    const cuts = new Set([8, 12, 16, 32, 64, 128, Math.floor(bytes.length / 3), Math.floor(bytes.length / 2), bytes.length - 1]);
+    for (const cut of cuts) {
+      if (cut <= 0 || cut >= bytes.length) continue;
+      const result = await analyzeFile(asFile(name, bytes.slice(0, cut)));
+      expect(["ok", "failed", "unsupported"]).toContain(result.analysis);
+    }
+    // Längenfelder mit 0xFF überschreiben (riesige Offsets/Längen) - kein Hängen, kein Absturz.
+    for (let position = 4; position < Math.min(bytes.length, 400); position += 37) {
+      const corrupted = bytes.slice();
+      corrupted.fill(0xff, position, position + 4);
+      const result = await analyzeFile(asFile(name, corrupted));
+      expect(["ok", "failed", "unsupported"]).toContain(result.analysis);
+    }
+  });
+});
