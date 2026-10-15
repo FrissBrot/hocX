@@ -130,6 +130,7 @@ from app.services.tenant_transfer_common import (
     remap_template_element_config,
     remap_word_import_analysis,
     remap_word_import_profile_config,
+    remap_todos_snapshot,
     replace_public_ids,
 )
 
@@ -429,6 +430,7 @@ class TenantImportService:
         )
         self._import_protocol_todo_assignees(todo_map, participant_map)
         self._remap_todo_repeat_sources(todo_map)
+        self._restore_todo_snapshots(protocol_map, protocol_element_block_map)
         album_map = self._import_photo_albums(new_tenant.id, cycle_config_map, submission_assignment_map)
         self._import_album_shares(new_tenant.id, album_map)
         self._import_share_links(new_tenant.id, album_map)
@@ -446,6 +448,23 @@ class TenantImportService:
                 + ", ".join(sorted(self._linked_partner_names))
             )
         return new_tenant
+
+    def _restore_todo_snapshots(self, protocol_map: dict[int, int], protocol_element_block_map: dict[int, int]) -> None:
+        """Eingefrorene Todo-Liste abgeschlossener Protokolle übernehmen (Audit MAIN-BE-012) -
+        Block-Keys über die Block-Map, public_ids über _public_id_map."""
+        changed = False
+        for row in self._t("protocol"):
+            snapshot = row.get("todos_snapshot_json")
+            new_protocol_id = protocol_map.get(row["id"])
+            if not isinstance(snapshot, dict) or new_protocol_id is None:
+                continue
+            protocol = self.db.get(Protocol, new_protocol_id)
+            if protocol is None:
+                continue
+            protocol.todos_snapshot_json = remap_todos_snapshot(snapshot, protocol_element_block_map, self._public_id_map)
+            changed = True
+        if changed:
+            self.db.commit()
 
     # ── tenant base ───────────────────────────────────────────────────────
 
@@ -1077,8 +1096,8 @@ class TenantImportService:
                 "template_id": new_template_id,
                 "document_template_id": document_template_map.get(data["document_template_id"]) if data.get("document_template_id") else None,
                 "event_id": event_map.get(data["event_id"]) if data.get("event_id") else None,
-                # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - nach dem
-                # Import gelten die (ebenfalls importierten) Live-Todos.
+                # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - sie wird
+                # nach dem Import der Blöcke umgeschrieben (_restore_todo_snapshots).
                 "todos_snapshot_json": None,
             })
             self.db.add(new_row)

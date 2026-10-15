@@ -575,6 +575,29 @@ def replace_public_ids(value: Any, public_id_map: dict[str, str]) -> Any:
     return value
 
 
+def remap_todos_snapshot(snapshot: Any, block_id_map: dict[int, int], public_id_map: dict[str, str]) -> dict | None:
+    """Überträgt protocol.todos_snapshot_json (eingefrorene Todo-Liste eines abgeschlossenen
+    Protokolls) auf importierte/geklonte Zeilen (Audit MAIN-BE-012).
+
+    Die Keys von ``blocks`` sind interne Block-IDs und laufen über ``block_id_map``; Blöcke
+    ohne Gegenstück entfallen. Alle eingebetteten public_ids (Todo, Block, Protokoll,
+    Teilnehmer, ...) laufen über ``public_id_map``. ``pending`` enthält nur public_ids.
+    """
+    if not isinstance(snapshot, dict):
+        return None
+    blocks: dict[str, Any] = {}
+    for key, items in (snapshot.get("blocks") or {}).items():
+        try:
+            new_block_id = block_id_map.get(int(key))
+        except (TypeError, ValueError):
+            continue
+        if new_block_id is None:
+            continue
+        blocks[str(new_block_id)] = replace_public_ids(copy.deepcopy(items), public_id_map)
+    rest = {key: value for key, value in snapshot.items() if key != "blocks"}
+    return {**replace_public_ids(copy.deepcopy(rest), public_id_map), "blocks": blocks}
+
+
 # ── Word-Import JSON remapping ───────────────────────────────────────────────
 #
 # WordImportProfile.mapping_config_json and WordImportDocument.analysis_snapshot_json embed
