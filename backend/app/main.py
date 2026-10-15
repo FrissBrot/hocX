@@ -429,6 +429,22 @@ from app.upload_admission import UploadAdmissionMiddleware
 from app.services.upload_pipeline import GALLERY_REQUEST_MAX_BYTES
 app.add_middleware(UploadAdmissionMiddleware, path="/api/files/gallery-uploads", max_bytes=GALLERY_REQUEST_MAX_BYTES, storage_dir=settings.upload_root)
 
+# Audit MAIN-SEC-004: Multipart nur mit signierter Session und mit Grössenlimit, bevor
+# Starlette den Body auf die Platte spoolt (Galerie hat oben ihre eigene Admission).
+from app.multipart_guard import MultipartGuardMiddleware
+from app.services.upload_pipeline import MAX_UPLOAD_BYTES as _MAX_UPLOAD_BYTES
+_MULTIPART_OVERHEAD_BYTES = 5 * 1024 * 1024
+app.add_middleware(
+    MultipartGuardMiddleware,
+    default_max_bytes=_MAX_UPLOAD_BYTES + _MULTIPART_OVERHEAD_BYTES,
+    path_limits=(
+        ("/api/files/document-uploads", files.MAX_DOCUMENT_UPLOAD_BATCH_BYTES + _MULTIPART_OVERHEAD_BYTES),
+        ("/api/tools/word-import/", word_import.MAX_WORD_IMPORT_BATCH_BYTES + _MULTIPART_OVERHEAD_BYTES),
+        ("/api/admin/tenants/import", admin.MAX_TENANT_IMPORT_UPLOAD_BYTES + _MULTIPART_OVERHEAD_BYTES),
+    ),
+    skip_prefixes=("/api/files/gallery-uploads",),
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o for o in [
