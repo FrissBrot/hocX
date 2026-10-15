@@ -144,7 +144,7 @@
   },
   "events": { "title": "{count, plural, one {# Ereignis} other {# Ereignisse}}", "empty": "Keine Ereignisse.", "worker": "Worker" },
   "event": {
-    "state": "Status", "requested": "Angefordert", "hold_acquired": "Hold gesetzt", "registry_hashed": "Register nachgehasht", "cutover_recovery": "Tausch-Journal ausgewertet", "captured": "Erfasst", "pool_written": "Inhalte gesichert",
+    "state": "Status", "requested": "Angefordert", "hold_acquired": "Hold gesetzt", "hold_renewed": "Hold erneuert", "registry_hashed": "Register nachgehasht", "cutover_recovery": "Tausch-Journal ausgewertet", "captured": "Erfasst", "pool_written": "Inhalte gesichert",
     "batch_restart": "Batch wiederholt", "restore_point_written": "Punkt geschrieben", "restore_point_adopted": "Punkt übernommen", "resumed": "Fortgesetzt", "retry": "Neuer Versuch",
     "index_reconciled": "Index abgeglichen", "retention": "Aufbewahrung", "gc": "Bereinigung", "cancel_requested": "Abbruch angefordert",
     "rescue_started": "Rettungspunkt", "rescue_done": "Rettungspunkt fertig", "rescue_skipped": "Ohne Rettungspunkt", "prepared": "Vorbereitet",

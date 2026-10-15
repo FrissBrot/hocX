@@ -173,15 +173,18 @@ def clear_stale_hold(env: RunEnv, db: Session, *, own_hold: uuid.UUID | None) ->
     owner = db.scalars(select(BackupJob).where(BackupJob.checkpoint["hold_id"].astext == str(state.backup_hold_id))).first()
     if owner is not None and owner.state in jobs.OPEN_JOB_STATES:
         raise jobs.JobWait(60, "hold_owned_by_other_job")
-    generation = int(state.backup_hold_generation)
+    drop_hold(env, db, state.backup_hold_id, int(state.backup_hold_generation))
+
+
+def drop_hold(env: RunEnv, db: Session, hold_id: uuid.UUID, generation: int) -> None:
+    """Hold lösen und seinen Kopienbereich löschen (der zugehörige Snapshot wird nicht mehr gebraucht)."""
     gen_row = db.scalars(select(StorageGeneration).where(StorageGeneration.generation == generation)).first()
-    hold_id = state.backup_hold_id
     release_hold(db, hold_id)
     if gen_row is not None and gen_row.status not in ("purged", "purging"):
         try:
             purge_hold_area(hold_backend(env, db, gen_row.profile_id, generation), hold_id)
         except StorageError:
-            _logger.warning("Kopien des verwaisten Backup-Holds %s konnten nicht gelöscht werden", hold_id, exc_info=True)
+            _logger.warning("Kopien des Backup-Holds %s konnten nicht gelöscht werden", hold_id, exc_info=True)
 
 
 # --- Erfassung --------------------------------------------------------------------------------
@@ -801,6 +804,13 @@ def run(env: RunEnv, db: Session, ctx: jobs.JobCtx) -> str:
         if state.backup_hold_id != backup_id or (since is not None and datetime.now(UTC) - since > MAX_HOLD_AGE):
             resumable = False
     if not resumable:
+        state = db.get(StorageState, 1, populate_existing=True)
+        if state is not None and state.backup_hold_id == backup_id:
+            # Neuerfassung (Hold zu alt oder Erfassung verloren): eigenen Hold samt bisherigen
+            # Copy-on-Write-Kopien verwerfen, damit Alter und Kopienbereich neu beginnen.
+            drop_hold(env, db, backup_id, int(state.backup_hold_generation))
+            jobs.event(db, ctx, "hold_renewed", "Backup-Hold verworfen, Sicherungspunkt wird neu erfasst", level="warning")
+            db.commit()
         jobs.set_state(db, ctx, "running", message="Erfassung des Sicherungspunkts")
         captured = capture(env, db, ctx, job, backup_id)
     else:

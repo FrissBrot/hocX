@@ -155,6 +155,55 @@ def test_crash_after_writing_the_restore_point_adopts_it_on_resume(backup_env, m
     assert "restore_point_adopted" in kinds
 
 
+def test_expired_hold_is_renewed_with_an_empty_copy_area(backup_env, monkeypatch):
+    """BORG-008: ist der eigene Hold älter als MAX_HOLD_AGE, wird er bei der Neuerfassung
+    verworfen - neues Hold-Alter, die alten Copy-on-Write-Kopien sind gelöscht."""
+    import io
+
+    from app.backup import run_backup
+    from app.core.objstore_client import backup_hold_key
+
+    db, env, _ = backup_env
+    _put(db, "uploads/h/a.bin", b"inhalt")
+    real_run = run_backup._Transfer.run
+    real_capture = run_backup.capture
+    seen: dict[str, object] = {}
+    calls = {"transfer": 0, "capture": 0}
+
+    def transfer_crashes_with_old_hold(self):
+        calls["transfer"] += 1
+        if calls["transfer"] == 1:
+            with SessionLocal() as s:
+                state = s.get(StorageState, 1)
+                hold = state.backup_hold_id
+                s.execute(update(StorageState).values(backup_hold_since=datetime.now(UTC) - timedelta(hours=25)))
+                s.commit()
+            backend = env.store.active_backend(force=True)
+            stale = backup_hold_key(hold, "0" * 64)
+            backend.put_stream("main", stale, io.BytesIO(b"alte kopie"), size=10, sha256=hashlib.sha256(b"alte kopie").hexdigest(), content_type=None)
+            seen["stale"] = stale
+            raise jobs.LeaseLost("simulierter Absturz")
+        return real_run(self)
+
+    def capture_records_state(*args, **kwargs):
+        calls["capture"] += 1
+        if calls["capture"] == 2:
+            with SessionLocal() as s:
+                seen["hold_before_recapture"] = s.get(StorageState, 1).backup_hold_id
+            seen["stale_exists"] = env.store.active_backend(force=True).head("main", seen["stale"]) is not None
+        return real_capture(*args, **kwargs)
+
+    monkeypatch.setattr(run_backup._Transfer, "run", transfer_crashes_with_old_hold)
+    monkeypatch.setattr(run_backup, "capture", capture_records_state)
+    job = _run(env)
+    assert job.state == "completed", (job.error_code, job.error_message)
+    assert calls["capture"] == 2
+    assert seen["hold_before_recapture"] is None  # eigener Hold vor der Neuerfassung gelöst
+    assert seen["stale_exists"] is False  # alte Kopien gelöscht
+    kinds = set(db.scalars(select(BackupEvent.kind).where(BackupEvent.job_id == job.id)))
+    assert "hold_renewed" in kinds
+
+
 def test_missing_object_makes_the_backup_partial(backup_env):
     db, env, _ = backup_env
     _put(db, "uploads/x/ok.bin", b"ok")

@@ -139,7 +139,7 @@
   },
   "events": { "title": "{count, plural, one {# événement} other {# événements}}", "empty": "Aucun événement.", "worker": "Worker" },
   "event": {
-    "state": "Statut", "requested": "Demandée", "hold_acquired": "Verrou posé", "registry_hashed": "Registre haché", "cutover_recovery": "Journal d'échange évalué", "captured": "Capturée", "pool_written": "Contenus sauvegardés",
+    "state": "Statut", "requested": "Demandée", "hold_acquired": "Verrou posé", "hold_renewed": "Blocage renouvelé", "registry_hashed": "Registre haché", "cutover_recovery": "Journal d'échange évalué", "captured": "Capturée", "pool_written": "Contenus sauvegardés",
     "batch_restart": "Lot répété", "restore_point_written": "Point écrit", "restore_point_adopted": "Point repris", "resumed": "Reprise", "retry": "Nouvel essai",
     "index_reconciled": "Index réconcilié", "retention": "Conservation", "gc": "Nettoyage", "cancel_requested": "Annulation demandée",
     "rescue_started": "Point de secours", "rescue_done": "Point de secours terminé", "rescue_skipped": "Sans point de secours", "prepared": "Préparée",

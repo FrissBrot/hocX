@@ -139,7 +139,7 @@
   },
   "events": { "title": "{count, plural, one {# event} other {# events}}", "empty": "No events.", "worker": "Worker" },
   "event": {
-    "state": "Status", "requested": "Requested", "hold_acquired": "Hold set", "registry_hashed": "Registry hashed", "cutover_recovery": "Swap journal evaluated", "captured": "Captured", "pool_written": "Contents saved",
+    "state": "Status", "requested": "Requested", "hold_acquired": "Hold set", "hold_renewed": "Hold renewed", "registry_hashed": "Registry hashed", "cutover_recovery": "Swap journal evaluated", "captured": "Captured", "pool_written": "Contents saved",
     "batch_restart": "Batch repeated", "restore_point_written": "Point written", "restore_point_adopted": "Point adopted", "resumed": "Resumed", "retry": "Retry",
     "index_reconciled": "Index reconciled", "retention": "Retention", "gc": "Cleanup", "cancel_requested": "Cancellation requested",
     "rescue_started": "Rescue point", "rescue_done": "Rescue point done", "rescue_skipped": "Without rescue point", "prepared": "Prepared",

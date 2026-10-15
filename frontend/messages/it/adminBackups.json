@@ -139,7 +139,7 @@
   },
   "events": { "title": "{count, plural, one {# evento} other {# eventi}}", "empty": "Nessun evento.", "worker": "Worker" },
   "event": {
-    "state": "Stato", "requested": "Richiesto", "hold_acquired": "Blocco impostato", "registry_hashed": "Registro con hash", "cutover_recovery": "Journal dello scambio valutato", "captured": "Acquisito", "pool_written": "Contenuti salvati",
+    "state": "Stato", "requested": "Richiesto", "hold_acquired": "Blocco impostato", "hold_renewed": "Blocco rinnovato", "registry_hashed": "Registro con hash", "cutover_recovery": "Journal dello scambio valutato", "captured": "Acquisito", "pool_written": "Contenuti salvati",
     "batch_restart": "Lotto ripetuto", "restore_point_written": "Punto scritto", "restore_point_adopted": "Punto acquisito", "resumed": "Ripreso", "retry": "Nuovo tentativo",
     "index_reconciled": "Indice allineato", "retention": "Conservazione", "gc": "Pulizia", "cancel_requested": "Annullamento richiesto",
     "rescue_started": "Punto di salvataggio", "rescue_done": "Punto di salvataggio pronto", "rescue_skipped": "Senza punto di salvataggio", "prepared": "Preparato",
