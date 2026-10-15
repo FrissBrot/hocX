@@ -271,13 +271,17 @@ function xmpCoordinate(raw: string | undefined): number | undefined {
 }
 
 export function applyXmp(target: ParsedImageMetadata, xmp: string): void {
-  if (/hocx:CaptureDateEstimated\s*=\s*"True"|<hocx:CaptureDateEstimated>True</i.test(xmp)) {
+  const estimatedRaw = xmpValue(xmp, "hocx:EstimatedCaptureDate");
+  const estimated = estimatedRaw && /^\d{4}-\d{2}-\d{2}$/.test(estimatedRaw) ? estimatedRaw : undefined;
+  // Markierung nur, solange das EXIF-Datum fehlt oder exakt dem Exportwert (Schätzdatum 12:00:00)
+  // entspricht - ein abweichendes, nachträglich gesetztes Datum ist echt (wie im Server).
+  const markerApplies = !target.taken_at || (estimated !== undefined && target.taken_at === `${estimated}T12:00:00`);
+  if (/hocx:CaptureDateEstimated\s*=\s*"True"|<hocx:CaptureDateEstimated>True</i.test(xmp) && markerApplies) {
     // Von hocX exportiertes Schätzdatum: das technisch eingetragene 12:00-Datum ist kein
     // echtes Aufnahmedatum.
     target.taken_at = undefined;
     target.taken_offset = undefined;
-    const estimated = xmpValue(xmp, "hocx:EstimatedCaptureDate");
-    if (estimated && /^\d{4}-\d{2}-\d{2}$/.test(estimated)) target.estimated_taken_on = estimated;
+    if (estimated) target.estimated_taken_on = estimated;
     return;
   }
   if (!target.taken_at) {

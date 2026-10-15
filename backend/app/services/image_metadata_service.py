@@ -394,12 +394,25 @@ def extract_image_metadata(content: bytes) -> ImageMetadata:
     return metadata
 
 
+def _hocx_marker_applies(metadata: ImageMetadata, estimated: str | None) -> bool:
+    """Gilt die hocX-Markierung noch? Nur wenn kein EXIF-Datum vorliegt oder es exakt dem beim
+    Export technisch eingetragenen Wert (Schätzdatum 12:00:00) entspricht. Ein abweichendes
+    Datum wurde nachträglich gesetzt (z. B. in einer Fotoverwaltung korrigiert, XMP kopiert)
+    und ist ein echtes Aufnahmedatum - es darf nicht verworfen werden."""
+    if metadata.taken_at is None:
+        return True
+    if not estimated:
+        return False
+    return metadata.taken_at.date().isoformat() == estimated and metadata.taken_at.time().isoformat() == "12:00:00"
+
+
 def _apply_xmp(metadata: ImageMetadata, xmp: str) -> None:
-    if _HOCX_ESTIMATED_RE.search(xmp):
+    marked = _HOCX_ESTIMATED_RE.search(xmp) is not None
+    match = _HOCX_ESTIMATED_DATE_RE.search(xmp) if marked else None
+    estimated = match and (match.group(1) or match.group(2))
+    if marked and _hocx_marker_applies(metadata, estimated):
         # Von hocX exportiertes Schätzdatum: das technisch eingetragene EXIF-Datum ist kein
         # echtes Aufnahmedatum (siehe image_export_service).
-        match = _HOCX_ESTIMATED_DATE_RE.search(xmp)
-        estimated = match and (match.group(1) or match.group(2))
         metadata.taken_at = None
         metadata.taken_offset = None
         if estimated:

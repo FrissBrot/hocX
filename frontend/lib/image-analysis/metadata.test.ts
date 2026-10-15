@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { analyzeFile } from "./analyze";
-import { detectImageFormat, gpsFromIfd, parseCaptureDateTime, parseImageMetadata, parseOffset } from "./metadata";
+import { applyXmp, detectImageFormat, gpsFromIfd, parseCaptureDateTime, parseImageMetadata, parseOffset, type ParsedImageMetadata } from "./metadata";
 
 // Testbilder mit Pillow erzeugt (siehe backend/tests/image_fixtures.py) - echte Dateien statt
 // von Hand gebauter Bytes, damit der Browser-Parser gegen dieselben Formate läuft wie der Server.
@@ -63,6 +63,18 @@ describe("Metadaten aus echten Dateien", () => {
     const metadata = parseImageMetadata(fixture("exported-estimate.jpg"), "jpeg");
     expect(metadata.taken_at).toBeUndefined();
     expect(metadata.estimated_taken_on).toBe("1987-04-12");
+  });
+
+  it("die hocX-Markierung verwirft kein abweichendes, echtes Aufnahmedatum (IMGMETA-008)", () => {
+    const xmp = '<rdf:Description hocx:CaptureDateEstimated="True" hocx:EstimatedCaptureDate="2001-06-07"/>';
+    const corrected: ParsedImageMetadata = { taken_at: "2019-07-01T14:33:00" };
+    applyXmp(corrected, xmp);
+    expect(corrected.taken_at).toBe("2019-07-01T14:33:00");
+    expect(corrected.estimated_taken_on).toBeUndefined();
+    const exported: ParsedImageMetadata = { taken_at: "2001-06-07T12:00:00" };
+    applyXmp(exported, xmp);
+    expect(exported.taken_at).toBeUndefined();
+    expect(exported.estimated_taken_on).toBe("2001-06-07");
   });
 });
 

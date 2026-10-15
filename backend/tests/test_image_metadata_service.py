@@ -219,3 +219,22 @@ def test_gps_direction_is_rounded_before_modulo(raw, expected):
 def test_extracted_direction_just_below_360_stays_within_constraint():
     metadata = service.extract_image_metadata(jpeg(latitude=47.0, longitude=8.0, direction=359.9996))
     assert metadata.gps_direction_deg is not None and 0 <= metadata.gps_direction_deg < 360
+
+
+def test_hocx_marker_does_not_discard_a_different_real_capture_date():
+    """IMGMETA-008: XMP-Markierung erhalten, EXIF-Datum später korrigiert -> echtes Datum bleibt."""
+    xmp = (
+        '<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF><rdf:Description hocx:CaptureDateEstimated="True" '
+        'hocx:EstimatedCaptureDate="2001-06-07"/></rdf:RDF></x:xmpmeta>'
+    )
+    corrected = service.ImageMetadata(taken_at=datetime(2019, 7, 1, 14, 33))
+    service._apply_xmp(corrected, xmp)
+    assert corrected.taken_at == datetime(2019, 7, 1, 14, 33)
+    assert corrected.estimated_taken_on is None
+    same_day_other_time = service.ImageMetadata(taken_at=datetime(2001, 6, 7, 9, 15))
+    service._apply_xmp(same_day_other_time, xmp)
+    assert same_day_other_time.taken_at == datetime(2001, 6, 7, 9, 15)
+    # Ohne EXIF-Datum gilt die Markierung weiterhin.
+    without = service.ImageMetadata()
+    service._apply_xmp(without, xmp)
+    assert without.taken_at is None and without.estimated_taken_on == date(2001, 6, 7)
