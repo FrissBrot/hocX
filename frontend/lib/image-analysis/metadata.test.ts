@@ -91,6 +91,12 @@ describe("Werte prüfen", () => {
     expect(parseOffset("+99:00")).toBeUndefined();
   });
 
+  it("Zukunftsgrenze wie im Server: höchstens 1 Tag (IMGMETA-011)", () => {
+    const now = new Date(Date.UTC(2026, 9, 16, 10, 0, 0));
+    expect(parseCaptureDateTime("2026:10:17 09:00:00", now)).toBe("2026-10-17T09:00:00"); // +23 h
+    expect(parseCaptureDateTime("2026:10:17 22:00:00", now)).toBeUndefined(); // +36 h
+  });
+
   it("GPS: Süd/West negativ, 0/0 und Bereichsfehler verworfen", () => {
     expect(gpsFromIfd(new Map<number, number | number[] | string>([[1, "N"], [2, [47, 22, 36.84]], [3, "E"], [4, [8, 32, 30.12]]]))).toMatchObject({ latitude: 47.3769, longitude: 8.5417 });
     expect(gpsFromIfd(new Map<number, number | number[] | string>([[1, "S"], [2, [33, 52, 7.68]], [3, "W"], [4, [70, 40, 9.48]]]))?.latitude).toBeLessThan(0);

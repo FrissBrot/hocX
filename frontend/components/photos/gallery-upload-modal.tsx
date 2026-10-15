@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { AlbumReleaseNotice } from "./album-share-release";
 import { findUploadRuleProblems, UploadTargetFields, useUploadTarget } from "@/components/files/upload-target-fields";
+import { todayIso } from "@/components/mobile/mobile-utils";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { TagInput } from "@/components/ui/tag-input";
@@ -28,11 +29,6 @@ export type GalleryUploadSession = {
   // Dateien, die der Vorab-Abgleich bereits erledigt hat (nicht übertragen).
   precheckResults: UploadFileResult[];
 };
-
-function todayIso(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
 
 // HEIC/HEIF (iPhone) und .mov (Live-Photo-Clip) stehen mit Endung da, weil Browser ausser Safari dafür
 // keinen MIME-Typ melden. Der Clip wird nur zusammen mit dem gleichnamigen Bild angenommen.

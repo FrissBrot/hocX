@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
 import { LivePhotoClip } from "@/components/photos/live-photo-clip";
 import { DateInput } from "@/components/ui/date-input";
+import { todayIso } from "@/components/mobile/mobile-utils";
 import { TagInput } from "@/components/ui/tag-input";
 import { PhotoDateMarker } from "@/components/photos/photo-date-marker";
 import { ActionIcon } from "@/components/ui/action-icons";
@@ -350,7 +351,7 @@ export function PhotoViewer({
                         <DateInput
                           value={metadata.estimated_taken_on ?? ""}
                           onChange={handleEstimatedDateChange}
-                          max={new Date().toISOString().slice(0, 10)}
+                          max={todayIso()}
                           aria-label={t("estimatedLabel")}
                         />
                         {metadata.estimated_taken_on && (

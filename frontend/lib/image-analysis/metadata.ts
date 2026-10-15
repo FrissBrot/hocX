@@ -151,7 +151,9 @@ export function parseCaptureDateTime(raw: unknown, now: Date = new Date()): stri
   const asUtc = Date.UTC(year, month - 1, day, hour, minute, second);
   const check = new Date(asUtc);
   if (check.getUTCDate() !== day || check.getUTCMonth() !== month - 1) return undefined; // 31.02. usw.
-  if (asUtc > now.getTime() + 86_400_000 * 2) return undefined; // Zukunft (Zeitzonen-Toleranz)
+  // Zukunft: gleiche Toleranz wie der Server (1 Tag, image_metadata_service._MAX_FUTURE) - sonst
+  // zeigt das Popup "hat Datum", der Server verwirft es aber und das Bild landet beim Uploaddatum.
+  if (asUtc > now.getTime() + 86_400_000) return undefined;
   return `${y}-${mo}-${d}T${h}:${mi}:${s ?? "00"}`;
 }
 
