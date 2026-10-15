@@ -231,7 +231,7 @@ async def export_cleanup_loop() -> None:
     await run_advisory_locked_loop(
         name="export_cleanup",
         interval_seconds=settings.export_cleanup_interval_minutes * 60,
-        task=lambda _db: export_service.cleanup_old_generated_exports(),
+        task=export_service.cleanup_old_generated_exports,
     )
 
 

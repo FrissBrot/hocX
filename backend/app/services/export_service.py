@@ -13,7 +13,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -80,7 +80,9 @@ class ExportService:
                 generator_version=self.generator_version,
             ),
         )
+        superseded_paths = self._prune_superseded_exports(db, protocol_id=protocol.id, export_format="latex", keep_cache_id=cache.id)
         db.commit()
+        self._unlink_paths(superseded_paths)
 
         return ProtocolExportRead(
             protocol_id=protocol.public_id,
@@ -97,7 +99,10 @@ class ExportService:
 
         # Version tracking: compare body content (not main.tex — that contains a
         # unique UUID path that always differs between builds).
-        prev_cache = self.repository.latest_export_cache(db, protocol_id)
+        # Nur frühere PDF-Exporte vergleichen (Audit MAIN-BE-013): LaTeX-Exporte speichern die
+        # vollständige main.tex, Sonder-PDFs einen anderen Inhalt - beides galt sonst immer als
+        # "geändert" und erhöhte die Version ohne inhaltliche Änderung.
+        prev_cache = self.repository.latest_export_cache(db, protocol_id, export_format="pdf")
         content_changed = (
             prev_cache is not None
             and prev_cache.latex_source is not None
@@ -158,6 +163,7 @@ class ExportService:
                 generator_version=self.generator_version,
             ),
         )
+        superseded_paths = self._prune_superseded_exports(db, protocol_id=protocol.id, export_format="pdf", keep_cache_id=cache.id)
 
         if (new_major != protocol.version_major
                 or new_minor != protocol.version_minor
@@ -168,6 +174,7 @@ class ExportService:
             db.add(protocol)
 
         db.commit()
+        self._unlink_paths(superseded_paths)
         db.refresh(protocol)
 
         return ProtocolExportRead(
@@ -282,7 +289,11 @@ class ExportService:
                 generator_version=self.generator_version,
             ),
         )
+        superseded_paths = self._prune_superseded_exports(
+            db, protocol_id=protocol.id, export_format=f"pdf-{export_type}", keep_cache_id=cache.id
+        )
         db.commit()
+        self._unlink_paths(superseded_paths)
 
         return ProtocolExportRead(
             protocol_id=protocol.public_id,
@@ -2423,27 +2434,111 @@ Status: {protocol_status}
             target_path.unlink(missing_ok=True)
             raise
 
-    def cleanup_old_generated_exports(self, *, retention_days: int | None = None) -> dict:
+    def _prune_superseded_exports(self, db: Session, *, protocol_id: int, export_format: str, keep_cache_id: int) -> list[Path]:
+        """Löscht ältere Caches desselben Protokolls und Formats samt ihrer StoredFile.
+
+        Audit MAIN-BE-004: Jeder Export legte eine neue StoredFile- und Cache-Zeile an, die nie
+        gelöscht wurden - das Speicherkontingent wuchs mit jedem (auch lesenden) Export. Gibt
+        die Pfade der Dateien zurück, die der Aufrufer erst nach dem Commit entfernt.
+        """
+        superseded = db.scalars(
+            select(ProtocolExportCache).where(
+                ProtocolExportCache.protocol_id == protocol_id,
+                ProtocolExportCache.export_format == export_format,
+                ProtocolExportCache.id != keep_cache_id,
+            )
+        ).all()
+        return self._delete_export_caches(db, superseded)
+
+    def _delete_export_caches(self, db: Session, caches) -> list[Path]:
+        paths: list[Path] = []
+        file_ids = {cache.generated_file_id for cache in caches if cache.generated_file_id is not None}
+        for cache in caches:
+            db.delete(cache)
+        db.flush()
+        for file_id in file_ids:
+            still_used = db.scalar(select(ProtocolExportCache.id).where(ProtocolExportCache.generated_file_id == file_id).limit(1))
+            stored_file = db.get(StoredFile, file_id)
+            if still_used is not None or stored_file is None:
+                continue
+            paths.append(_safe_storage_path(settings.storage_root, stored_file.storage_path))
+            db.delete(stored_file)
+        db.flush()
+        return paths
+
+    @staticmethod
+    def _unlink_paths(paths: list[Path]) -> None:
+        for path in paths:
+            path.unlink(missing_ok=True)
+
+    def _protected_export_cache_ids(self, db: Session) -> set[int]:
+        """Neuester Cache je Protokoll und Format abgeschlossener Protokolle - das finale PDF
+        darf die Aufbewahrungsfrist nicht verlieren (Audit MAIN-BE-004)."""
+        ranked = (
+            select(
+                ProtocolExportCache.id,
+                func.row_number()
+                .over(
+                    partition_by=(ProtocolExportCache.protocol_id, ProtocolExportCache.export_format),
+                    order_by=(ProtocolExportCache.created_at.desc(), ProtocolExportCache.id.desc()),
+                )
+                .label("rank"),
+            )
+            .join(ProtocolModel, ProtocolModel.id == ProtocolExportCache.protocol_id)
+            .where(ProtocolModel.status == "abgeschlossen")
+            .subquery()
+        )
+        return set(db.scalars(select(ranked.c.id).where(ranked.c.rank == 1)))
+
+    def cleanup_old_generated_exports(self, db: Session | None = None, *, retention_days: int | None = None) -> dict:
         """Periodic sweep (see main.py's export_cleanup_loop) for old files under
         EXPORT_ROOT/generated. Every export run writes into a brand-new uuid-suffixed file
         (see _store_generated_file above, never overwrites/reuses an old one), so without a
-        retention sweep the directory grows unbounded on repeated re-exports - unlike the
-        ClamAV rescan loops nearby this isn't a stuck/pending-state repair, just age-based
-        deletion. Only removes the file on disk; the StoredFile row is left in place, same
-        convention as scripts/cleanup_storage.sh's cron sweep of this same directory - the
-        download route already returns a clean 404 if the file is gone, so an old export
-        link failing is expected, not an error to guard against.
+        retention sweep the directory grows unbounded on repeated re-exports.
+
+        Mit ``db`` (Hintergrund-Loop, Audit MAIN-BE-004) arbeitet der Sweep auf DB-Basis:
+        Cache-Zeilen älter als die Frist werden samt StoredFile und Datei gelöscht (sonst
+        blieben die Bytes im Speicherkontingent und latest_export_metadata zeigte auf eine
+        fehlende Datei), ausgenommen der neueste Export abgeschlossener Protokolle. Danach
+        entfernt der Datei-Sweep verwaiste Dateien ohne Zeile, ebenfalls ohne die geschützten.
         """
         retention = retention_days if retention_days is not None else settings.export_retention_days
         target_dir = Path(settings.export_root) / "generated"
+        cutoff_timestamp = datetime.now().timestamp() - retention * 86400
+        deleted_rows = 0
+        protected_paths: set[Path] = set()
+        if db is not None:
+            protected_ids = self._protected_export_cache_ids(db)
+            cutoff = datetime.fromtimestamp(cutoff_timestamp, tz=UTC)
+            expired = [
+                cache
+                for cache in db.scalars(select(ProtocolExportCache).where(ProtocolExportCache.created_at < cutoff)).all()
+                if cache.id not in protected_ids
+            ]
+            paths = self._delete_export_caches(db, expired)
+            db.commit()
+            self._unlink_paths(paths)
+            deleted_rows = len(expired)
+            if protected_ids:
+                protected_paths = {
+                    _safe_storage_path(settings.storage_root, storage_path)
+                    for storage_path in db.scalars(
+                        select(StoredFile.storage_path)
+                        .join(ProtocolExportCache, ProtocolExportCache.generated_file_id == StoredFile.id)
+                        .where(ProtocolExportCache.id.in_(protected_ids))
+                    )
+                }
         if not target_dir.is_dir():
-            return {"deleted": 0}
-        cutoff = datetime.now().timestamp() - retention * 86400
+            return {"deleted": 0, "deleted_rows": deleted_rows} if db is not None else {"deleted": 0}
         deleted = 0
         for file_path in target_dir.iterdir():
-            if file_path.is_file() and file_path.stat().st_mtime < cutoff:
+            if not file_path.is_file() or file_path.resolve() in protected_paths:
+                continue
+            if file_path.stat().st_mtime < cutoff_timestamp:
                 file_path.unlink()
                 deleted += 1
+        if db is not None:
+            return {"deleted": deleted, "deleted_rows": deleted_rows}
         return {"deleted": deleted}
 
     def _escape_latex(self, value: str) -> str:

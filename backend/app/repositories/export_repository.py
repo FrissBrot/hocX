@@ -189,12 +189,13 @@ class ExportRepository:
         db.flush()
         return cache
 
-    def latest_export_cache(self, db: Session, protocol_id: int) -> ProtocolExportCache | None:
-        return db.scalar(
-            select(ProtocolExportCache)
-            .where(ProtocolExportCache.protocol_id == protocol_id)
-            .order_by(ProtocolExportCache.created_at.desc(), ProtocolExportCache.id.desc())
-        )
+    def latest_export_cache(
+        self, db: Session, protocol_id: int, *, export_format: str | None = None
+    ) -> ProtocolExportCache | None:
+        statement = select(ProtocolExportCache).where(ProtocolExportCache.protocol_id == protocol_id)
+        if export_format is not None:
+            statement = statement.where(ProtocolExportCache.export_format == export_format)
+        return db.scalar(statement.order_by(ProtocolExportCache.created_at.desc(), ProtocolExportCache.id.desc()))
 
     def get_stored_file(self, db: Session, stored_file_id: int | None) -> StoredFile | None:
         if stored_file_id is None:
