@@ -81,10 +81,23 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
   const [saveDiagnostics, setSaveDiagnostics] = useState<Diagnostic[]>(initial.template.diagnostics);
   const [previewDiagnostics, setPreviewDiagnostics] = useState<Diagnostic[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("saved");
-  const [lockVersion, setLockVersion] = useState<number | null>(initial.template.draft_revision?.lock_version ?? null);
-  const [brandMode, setBrandMode] = useState<"follow" | "pinned">((initial.template.draft_revision ?? initial.template.published_revision)?.brand_mode ?? "follow");
+  const initialBrandMode = (initial.template.draft_revision ?? initial.template.published_revision)?.brand_mode ?? "follow";
+  const [brandMode, setBrandMode] = useState<"follow" | "pinned">(initialBrandMode);
   const [name, setName] = useState(templateDisplayName(t, initial.template));
+  // Speicherstand in Refs: Autosave-Timer und laufende Anfragen lesen immer den aktuellen
+  // Stand statt der Closure des Renders, in dem sie gestartet wurden (sonst veraltete
+  // Sperrversion -> Schein-Konflikt, bzw. «gespeichert» trotz neuerer Änderungen).
+  const lockRef = useRef<number | null>(initial.template.draft_revision?.lock_version ?? null);
   const savedContent = useRef<TemplateContent>(initial.template.content);
+  const savedBrandMode = useRef<"follow" | "pinned">(initialBrandMode);
+  const contentRef = useRef<TemplateContent>(content);
+  const brandModeRef = useRef(brandMode);
+  contentRef.current = content;
+  brandModeRef.current = brandMode;
+  // Laufender Speichervorgang; weitere Aufrufe währenddessen werden danach nachgeholt
+  const inFlight = useRef<Promise<void> | null>(null);
+  const saveAgain = useRef(false);
+  const isDirty = () => contentRef.current !== savedContent.current || brandModeRef.current !== savedBrandMode.current;
   const editable = template.editable;
 
   useEffect(() => setModeState(readMode()), []);
@@ -118,35 +131,63 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
   }, [view, pageWidthMm]);
 
   // ── Speichern ───────────────────────────────────────────────────────────
-  const save = useCallback(
-    async (force = false) => {
-      if (!editable) return;
-      const snapshot = content;
-      setSaveState("saving");
-      try {
-        const result = await studioApi.saveDraft(template.id, { content: snapshot, lock_version: force ? null : lockVersion, brand_mode: brandMode });
-        savedContent.current = snapshot;
-        setLockVersion(result.revision.lock_version);
-        setSaveDiagnostics(result.diagnostics);
-        setTemplate((current) => ({ ...current, draft_revision: result.revision }));
-        setSaveState(snapshot === history.value ? "saved" : "dirty");
-      } catch (reason) {
-        if (reason instanceof ApiError && reason.status === 409) {
-          setSaveState("conflict");
+  const runSave = useCallback(
+    async (force: boolean) => {
+      let overwrite = force;
+      do {
+        saveAgain.current = false;
+        const snapshot = contentRef.current;
+        const snapshotMode = brandModeRef.current;
+        setSaveState("saving");
+        try {
+          const result = await studioApi.saveDraft(template.id, { content: snapshot, lock_version: overwrite ? null : lockRef.current, brand_mode: snapshotMode });
+          overwrite = false;
+          savedContent.current = snapshot;
+          savedBrandMode.current = snapshotMode;
+          lockRef.current = result.revision.lock_version;
+          setSaveDiagnostics(result.diagnostics);
+          setTemplate((current) => ({ ...current, draft_revision: result.revision }));
+          setSaveState(isDirty() ? "dirty" : "saved");
+        } catch (reason) {
+          saveAgain.current = false;
+          if (reason instanceof ApiError && reason.status === 409) {
+            setSaveState("conflict");
+            return;
+          }
+          const detail = reason instanceof ApiError && reason.detail && typeof reason.detail === "object" ? (reason.detail as { node_id?: string; code?: string }) : null;
+          if (detail?.node_id) setSelectedId(detail.node_id);
+          setSaveState("error");
+          toast(apiErrorMessage(reason, t("designer.saveFailed")), "error");
           return;
         }
-        const detail = reason instanceof ApiError && reason.detail && typeof reason.detail === "object" ? (reason.detail as { node_id?: string; code?: string }) : null;
-        if (detail?.node_id) setSelectedId(detail.node_id);
-        setSaveState("error");
-        toast(apiErrorMessage(reason, t("designer.saveFailed")), "error");
-      }
+        // Während der Anfrage angeforderte Speicherung (Timer/Strg+S) jetzt nachholen
+      } while (saveAgain.current && isDirty());
     },
-    [editable, content, template.id, lockVersion, brandMode, history.value, toast, t]
+    // isDirty liest nur Refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [template.id, toast, t]
+  );
+
+  const save = useCallback(
+    (force = false): Promise<void> => {
+      if (!editable) return Promise.resolve();
+      if (inFlight.current) {
+        // Nie zwei Anfragen parallel: die zweite käme mit veralteter Sperrversion an
+        saveAgain.current = true;
+        return inFlight.current;
+      }
+      const running = runSave(force).finally(() => {
+        inFlight.current = null;
+      });
+      inFlight.current = running;
+      return running;
+    },
+    [editable, runSave]
   );
 
   useEffect(() => {
-    if (!editable || content === savedContent.current || saveState === "conflict") return;
-    setSaveState("dirty");
+    if (!editable || !isDirty() || saveState === "conflict") return;
+    if (!inFlight.current) setSaveState("dirty");
     const timer = window.setTimeout(() => void save(), AUTOSAVE_MS);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -183,6 +224,9 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
   }
 
   async function publish() {
+    // Veröffentlicht wird der serverseitige Entwurf: vorher alle Änderungen speichern
+    if (inFlight.current || isDirty()) await save();
+    if (isDirty()) return;
     const errors = [...saveDiagnostics].filter((item) => item.severity === "error");
     if (errors.length) {
       toast(t("designer.publishBlocked", { count: errors.length }), "error");
@@ -193,7 +237,7 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
     try {
       const published = await studioApi.publish(template.id);
       setTemplate(published);
-      setLockVersion(null);
+      lockRef.current = null;
       toast(t("designer.published"), "success");
     } catch (reason) {
       const detail = reason instanceof ApiError && reason.detail && typeof reason.detail === "object" ? (reason.detail as { diagnostics?: Diagnostic[] }) : null;
@@ -206,6 +250,13 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
     }
   }
 
+  function resetBrandMode(reloaded: DocumentTemplateDetail) {
+    const next = (reloaded.draft_revision ?? reloaded.published_revision)?.brand_mode ?? "follow";
+    savedBrandMode.current = next;
+    brandModeRef.current = next;
+    setBrandMode(next);
+  }
+
   async function discard() {
     if (!(await confirm({ message: t("designer.discardConfirm"), tone: "danger", confirmLabel: t("toolbar.discard") }))) return;
     try {
@@ -213,7 +264,8 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
       setTemplate(reloaded);
       history.reset(reloaded.content);
       savedContent.current = reloaded.content;
-      setLockVersion(null);
+      resetBrandMode(reloaded);
+      lockRef.current = null;
       setSaveState("saved");
     } catch (reason) {
       toast(apiErrorMessage(reason, t("common.actionFailed")), "error");
@@ -225,7 +277,8 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
     setTemplate(reloaded);
     history.reset(reloaded.content);
     savedContent.current = reloaded.content;
-    setLockVersion(reloaded.draft_revision?.lock_version ?? null);
+    resetBrandMode(reloaded);
+    lockRef.current = reloaded.draft_revision?.lock_version ?? null;
     setSaveState("saved");
   }
 

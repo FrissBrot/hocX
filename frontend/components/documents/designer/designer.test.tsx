@@ -116,6 +116,90 @@ describe("TemplateDesigner", () => {
     expect(api.studioApi.saveDraft.mock.calls[1][1].lock_version).toBe(4);
   });
 
+  // Simuliert den Server: Antwort erst auf Abruf, Sperrversion wird wie im Backend geprüft
+  function controlledServer(initialLock = 3) {
+    const state = { lock: initialLock, pending: [] as Array<() => void> };
+    api.studioApi.saveDraft.mockImplementation(
+      (_id: string, body: { lock_version: number | null }) =>
+        new Promise((resolve, reject) => {
+          state.pending.push(() => {
+            if (body.lock_version !== null && body.lock_version !== state.lock) {
+              reject(new ApiError("Konflikt", "conflict", 409, { lock_version: state.lock }));
+              return;
+            }
+            state.lock += 1;
+            resolve({ revision: revision({ lock_version: state.lock }), diagnostics: [] });
+          });
+        })
+    );
+    const respond = async () => {
+      await act(async () => {
+        state.pending.shift()!();
+        await Promise.resolve();
+      });
+    };
+    return { state, respond };
+  }
+
+  const insertText = () => fireEvent.click(screen.getAllByRole("button", { name: "«Text» einfügen" })[0]);
+  const conflictText = "Jemand anderes hat diese Vorlage inzwischen geändert.";
+
+  it("keeps changes made during a running save dirty and saves them with the new lock version (STUDIO-001)", async () => {
+    const server = controlledServer();
+    await renderDesigner();
+    insertText();
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(1));
+
+    // Änderung während der laufenden Anfrage
+    insertText();
+    await server.respond();
+    expect(screen.queryByText("Gespeichert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Veröffentlichen" })).toBeDisabled();
+
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(2));
+    const second = api.studioApi.saveDraft.mock.calls[1][1];
+    expect(second.lock_version).toBe(4);
+    expect(second.content.body).toHaveLength(5);
+    await server.respond();
+    expect(await screen.findByText("Gespeichert")).toBeInTheDocument();
+    expect(screen.queryByText(conflictText)).not.toBeInTheDocument();
+  });
+
+  it("does not send a second save while one is pending and follows up afterwards (STUDIO-001)", async () => {
+    const server = controlledServer();
+    await renderDesigner();
+    insertText();
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(1));
+
+    // Autosave-Timer der zweiten Änderung läuft ab, während die erste Anfrage noch offen ist
+    insertText();
+    await advance(1300);
+    expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(1);
+
+    await server.respond();
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(2));
+    expect(api.studioApi.saveDraft.mock.calls[1][1].lock_version).toBe(4);
+    expect(api.studioApi.saveDraft.mock.calls[1][1].content.body).toHaveLength(5);
+    await server.respond();
+    expect(await screen.findByText("Gespeichert")).toBeInTheDocument();
+    expect(screen.queryByText(conflictText)).not.toBeInTheDocument();
+  });
+
+  it("saves a change of the brand mode alone (STUDIO-004)", async () => {
+    await renderDesigner();
+    fireEvent.change(screen.getByRole("combobox", { name: "Bearbeitungsmodus" }), { target: { value: "advanced" } });
+    const brandMode = screen.getAllByRole("combobox", { hidden: true }).find((element) => within(element).queryByRole("option", { name: "Mitgehen", hidden: true }));
+    fireEvent.change(brandMode!, { target: { value: "pinned" } });
+    expect(screen.getByText("Ungespeicherte Änderungen")).toBeInTheDocument();
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(1));
+    expect(api.studioApi.saveDraft.mock.calls[0][1].brand_mode).toBe("pinned");
+    expect(await screen.findByText("Gespeichert")).toBeInTheDocument();
+  });
+
   it("deletes the selected element with the keyboard and restores it with undo", async () => {
     await renderDesigner();
     fireEvent.click(canvasNode("Einleitung"));
