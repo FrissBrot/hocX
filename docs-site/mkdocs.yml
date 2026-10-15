@@ -103,6 +103,7 @@ nav:
       - Abgabe-Links-Testbook: technik/abgabe-links-testbook.md
       - Upload-Testbook: technik/upload-testbook.md
       - Sicherheit: technik/sicherheit.md
+      - Dokumentverwaltung: technik/dokumente.md
       - Dateispeicher (S3) & Wartung:
           - Übersicht: technik/storage/index.md
           - Architektur: technik/storage/architektur.md
