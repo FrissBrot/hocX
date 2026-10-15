@@ -21,6 +21,7 @@ from app.documents import assets as asset_service
 from app.documents.brand import BUILTIN_FONTS, FALLBACK_FONTS, BrandTokens, parse_tokens, preset_tokens
 from app.documents.context import AssetCollector
 from app.documents.hashing import json_hash
+from app.documents.locking import lock_row
 from app.models import DocumentBrand, DocumentBrandRevision, DocumentExport, DocumentTemplate, DocumentTemplateAssignment, Tenant
 
 
@@ -120,6 +121,9 @@ def _add_revision(db: Session, brand: DocumentBrand, tokens: BrandTokens, *, use
 
 
 def _set_default(db: Session, tenant_id: int, brand: DocumentBrand) -> None:
+    # Alle Profile des Mandanten sperren: zwei parallele Standardwechsel verletzten sonst
+    # uq_document_brand_default (HTTP 500)
+    db.execute(select(DocumentBrand.id).where(DocumentBrand.tenant_id == tenant_id).order_by(DocumentBrand.id).with_for_update())
     db.execute(update(DocumentBrand).where(DocumentBrand.tenant_id == tenant_id, DocumentBrand.id != brand.id).values(is_default=False))
     db.flush()
     brand.is_default = True
@@ -160,6 +164,7 @@ def update_brand(
     note: str | None = None,
     user_id: int | None = None,
 ) -> DocumentBrand:
+    lock_row(db, brand)
     if expected_lock_version is not None and expected_lock_version != brand.lock_version:
         raise BrandConflictError(brand.lock_version)
     if name is not None and name.strip():
@@ -183,6 +188,7 @@ def update_brand(
 
 def restore_revision(db: Session, brand: DocumentBrand, revision: DocumentBrandRevision, *, user_id: int | None) -> DocumentBrand:
     """Älteren Stand als neue Revision übernehmen (die Historie bleibt unverändert)."""
+    lock_row(db, brand)
     tokens = tokens_of(revision)
     _check_asset_refs(db, brand.tenant_id, tokens)
     _add_revision(db, brand, tokens, user_id=user_id, note=f"restore:{revision.revision}")
@@ -199,6 +205,7 @@ def duplicate_brand(db: Session, brand: DocumentBrand, *, name: str, user_id: in
 def archive_brand(db: Session, brand: DocumentBrand, *, archived: bool) -> DocumentBrand:
     from datetime import UTC, datetime
 
+    lock_row(db, brand)
     if archived and brand.is_default:
         raise BrandValidationError("apiError.defaultBrand")
     brand.archived_at = datetime.now(UTC) if archived else None

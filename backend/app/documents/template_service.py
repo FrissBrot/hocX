@@ -32,6 +32,7 @@ from app.documents.compiler import Diagnostic, has_errors, validate_template
 from app.documents.doc_types import DOCUMENT_TYPES, get_type
 from app.documents.hashing import json_hash
 from app.documents.layout import LAYOUT_SCHEMA_VERSION, Node, TemplateContent, all_node_lists, content_json, iter_nodes, parse_content
+from app.documents.locking import lock_row
 from app.models import (
     DocumentBrand,
     DocumentBrandRevision,
@@ -105,8 +106,12 @@ def get_revision(db: Session, template: DocumentTemplate, public_id: uuid.UUID) 
     return db.scalar(select(DocumentTemplateRevision).where(DocumentTemplateRevision.template_id == template.id, DocumentTemplateRevision.public_id == public_id))
 
 
-def draft_revision(db: Session, template: DocumentTemplate) -> DocumentTemplateRevision | None:
-    return db.scalar(select(DocumentTemplateRevision).where(DocumentTemplateRevision.template_id == template.id, DocumentTemplateRevision.status == "draft"))
+def draft_revision(db: Session, template: DocumentTemplate, *, refresh: bool = False) -> DocumentTemplateRevision | None:
+    query = select(DocumentTemplateRevision).where(DocumentTemplateRevision.template_id == template.id, DocumentTemplateRevision.status == "draft")
+    if refresh:
+        # Nach lock_row: aktuellen Stand statt des Objekts aus der Identity Map lesen
+        query = query.execution_options(populate_existing=True)
+    return db.scalar(query)
 
 
 def published_revision(db: Session, template: DocumentTemplate) -> DocumentTemplateRevision | None:
@@ -270,7 +275,8 @@ def save_draft(
 ) -> DocumentTemplateRevision:
     """Autosave: Entwurf anlegen oder ersetzen. Ohne vorhandenen Entwurf entsteht einer aus dem
     gesendeten Inhalt (``expected_lock_version`` wird dann ignoriert)."""
-    draft = draft_revision(db, template)
+    lock_row(db, template)
+    draft = draft_revision(db, template, refresh=True)
     data = content_json(content)
     if draft is None:
         published = published_revision(db, template)
@@ -302,7 +308,8 @@ def save_draft(
 
 
 def discard_draft(db: Session, template: DocumentTemplate) -> None:
-    draft = draft_revision(db, template)
+    lock_row(db, template)
+    draft = draft_revision(db, template, refresh=True)
     if draft is None:
         return
     if template.published_revision_id is None:
@@ -317,7 +324,8 @@ def _brand_for_pin(db: Session, template: DocumentTemplate, tenant_id: int) -> D
 
 
 def publish(db: Session, template: DocumentTemplate, *, user_id: int | None, note: str | None = None, tenant_id: int | None = None) -> DocumentTemplateRevision:
-    draft = draft_revision(db, template)
+    lock_row(db, template)
+    draft = draft_revision(db, template, refresh=True)
     if draft is None:
         raise TemplateStateError("apiError.noDraft")
     content = revision_content(draft)
@@ -345,7 +353,8 @@ def publish(db: Session, template: DocumentTemplate, *, user_id: int | None, not
 def restore_revision(db: Session, template: DocumentTemplate, revision: DocumentTemplateRevision, *, user_id: int | None) -> DocumentTemplateRevision:
     """Älteren Stand als Entwurf übernehmen (ersetzt einen vorhandenen Entwurf)."""
     content = revision_content(revision)
-    draft = draft_revision(db, template)
+    lock_row(db, template)
+    draft = draft_revision(db, template, refresh=True)
     if draft is not None and draft.id == revision.id:
         return draft
     if draft is not None:
@@ -651,9 +660,10 @@ def save_component(
             raise TemplateStateError("apiError.invalidBlock")
         component = DocumentComponent(tenant_id=tenant_id, name=(name or "").strip()[:120] or "Komponente", schema_version=LAYOUT_SCHEMA_VERSION, node_json={}, created_by=user_id)
         db.add(component)
-    elif expected_lock_version is not None and expected_lock_version != component.lock_version:
-        raise TemplateConflictError(component.lock_version)
     else:
+        lock_row(db, component)
+        if expected_lock_version is not None and expected_lock_version != component.lock_version:
+            raise TemplateConflictError(component.lock_version)
         component.lock_version += 1
     if name is not None and name.strip():
         component.name = name.strip()[:120]
