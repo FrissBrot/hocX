@@ -44,8 +44,10 @@ class ElevationServiceError(RuntimeError):
     """Hoehendienst nicht erreichbar oder ohne verwertbare Daten (Auftrag Abschnitt 20)."""
 
 
-def _cache_key(coordinates: list[tuple[float, float]]) -> str:
-    payload = json.dumps(coordinates, separators=(",", ":"))
+def _cache_key(coordinates: list[tuple[float, float]], nb_points: int) -> str:
+    # nb_points gehoert in den Key: dieselbe Linie wird fuer die Gefahreneinschaetzung deutlich
+    # dichter abgefragt als fuers angezeigte Hoehenprofil (siehe terrain_danger_service.py).
+    payload = json.dumps([coordinates, nb_points], separators=(",", ":"))
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
     return f"{CACHE_KEY_PREFIX}{digest}"
 
@@ -59,7 +61,7 @@ def fetch_profile(coordinates: list[tuple[float, float]], *, nb_points: int = 20
     nb_points = min(nb_points, MAX_POINTS)
 
     cache = get_redis_sync()
-    key = _cache_key(coordinates)
+    key = _cache_key(coordinates, nb_points)
     cached = cache.get(key)
     if cached:
         return json.loads(cached)
@@ -112,6 +114,19 @@ def elevation_at_distance(profile: list[dict], distance_m: float) -> float:
     return profile[-1]["elevation_m"]
 
 
+def route_coordinates(tour: HikingTour) -> list[tuple[float, float]]:
+    """[(lon, lat), ...] der kompletten Route (alle Legs aneinandergehaengt, doppelte
+    Stosspunkte entfernt) - dieselbe Linie fuer Hoehenprofil und Gefahreneinschaetzung, damit
+    beide dieselbe Distanzskala haben."""
+    coordinates: list[tuple[float, float]] = []
+    for leg in tour.route_legs:
+        points = [coordinate[:2] for coordinate in to_shape(leg.geom).coords]
+        if coordinates and points and coordinates[-1] == points[0]:
+            points = points[1:]
+        coordinates.extend(points)
+    return coordinates
+
+
 class ElevationProfileService:
     """Orchestriert das Abrufen und Speichern des Hoehenprofils fuer eine Tour (DB-Zugriff,
     im Unterschied zu den reinen Funktionen oben). Braucht eine bereits berechnete Route
@@ -123,15 +138,7 @@ class ElevationProfileService:
         if not legs:
             raise ValueError("Route muss zuerst berechnet werden, bevor ein Höhenprofil abgerufen werden kann")
 
-        coordinates: list[tuple[float, float]] = []
-        for leg in legs:
-            line = to_shape(leg.geom)
-            points = list(line.coords)
-            if coordinates and points and coordinates[-1] == points[0]:
-                points = points[1:]
-            coordinates.extend(points)
-
-        profile = fetch_profile(coordinates)
+        profile = fetch_profile(route_coordinates(tour))
         tour.elevation_profile_json = profile
         tour.elevation_profile_fetched_at = datetime.now(UTC)
 

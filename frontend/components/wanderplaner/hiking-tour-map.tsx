@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { ElevationProfilePoint, HikingTourWaypointKind, TerrainDangerLevel, TerrainDangerSegment } from "@/types/api";
 
+import { buildDangerLineFeatures, DANGER_COLOR_TOKEN, DANGER_LEGEND } from "./hiking-tour-danger";
+
 // Offizieller swisstopo-Vector-Tile-Style (Auftrag Abschnitt 1/2 - dieselbe Basiskarte wie
 // map.geo.admin.ch, kostenlos, kein API-Key). Attribution ist Pflicht (siehe
 // swisstopo-Nutzungsbedingungen, Wiki-Seite "Wanderplaner") - MapLibres AttributionControl
@@ -13,26 +15,16 @@ import { ElevationProfilePoint, HikingTourWaypointKind, TerrainDangerLevel, Terr
 const SWISSTOPO_STYLE_URL = "https://vectortiles.geo.admin.ch/styles/ch.swisstopo.basemap.vt/style.json";
 const SWITZERLAND_CENTER: [number, number] = [8.2275, 46.8182];
 
-// Gefahreneinschätzung (Auftrag "Gefahreneinschätzung des Weges"): "alpine" (amtlicher Status
-// Alpinwanderweg) hat Vorrang vor "steep_exposed" (Geländeanalyse auf normalen Wanderwegen),
-// siehe app/core/route_danger.py::merge_with_official_status. Gleiches Token-Muster wie
-// KIND_COLOR_TOKEN unten - "normal" bleibt die bisherige Routenfarbe.
-const DANGER_COLOR_TOKEN: Record<TerrainDangerLevel, string> = {
-  normal: "--accent-strong",
-  steep_exposed: "--warning",
-  alpine: "--info",
-};
-
 const KIND_COLOR_TOKEN: Record<HikingTourWaypointKind, string> = {
   START: "--success",
   END: "--danger",
   USER_DEFINED: "--accent",
-  NAVIGATION: "--info",
+  NAVIGATION: "--accent",
   BREAK: "--warning",
   SUMMIT: "--accent-strong",
   PASS: "--accent-strong",
-  HUT: "--info",
-  WATER: "--info",
+  HUT: "--accent",
+  WATER: "--accent",
   DECISION: "--warning",
   EMERGENCY_EXIT: "--danger",
 };
@@ -189,31 +181,18 @@ export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, d
     const map = mapRef.current;
     if (!map) return;
 
-    // Kein "|| #hex"-Fallback (design-ok: --accent-strong/--warning/--info sind in tokens.css
-    // immer definiert, ein Fallback wuerde nur einen Tippfehler verdecken, siehe DESIGN.md
-    // Abschnitt 3).
+    // Kein "|| #hex"-Fallback (design-ok: --route-*/--on-solid sind in tokens.css immer
+    // definiert, ein Fallback wuerde nur einen Tippfehler verdecken, siehe DESIGN.md Abschnitt 3).
     const style = getComputedStyle(document.documentElement);
-    const dangerColor: Record<TerrainDangerLevel, string> = {
-      normal: style.getPropertyValue(DANGER_COLOR_TOKEN.normal).trim(),
-      steep_exposed: style.getPropertyValue(DANGER_COLOR_TOKEN.steep_exposed).trim(),
-      alpine: style.getPropertyValue(DANGER_COLOR_TOKEN.alpine).trim(),
-    };
+    const dangerColor = Object.fromEntries(
+      Object.entries(DANGER_COLOR_TOKEN).map(([danger, token]) => [danger, style.getPropertyValue(token).trim()]),
+    ) as Record<TerrainDangerLevel, string>;
+    const casingColor = style.getPropertyValue("--on-solid").trim();
 
-    // Gefahreneinschätzung (siehe DataToolbar-Beschreibung/GET .../terrain-danger): die Route
-    // wird abschnittsweise eingefaerbt, sobald sowohl Hoehenprofil als auch Gefahrensegmente
-    // vorliegen - sonst bleibt es bei der bisherigen einfarbigen Linie aus routeCoordinates.
-    const dangerFeatures: GeoJSON.Feature<GeoJSON.LineString>[] = (elevationProfile && dangerSegments
-      ? dangerSegments
-      : []
-    ).flatMap((segment) => {
-      const segmentPoints = elevationProfile!.filter((point) => point.distance_m >= segment.from_m && point.distance_m <= segment.to_m);
-      if (segmentPoints.length < 2) return [];
-      return [{
-        type: "Feature" as const,
-        properties: { danger: segment.danger },
-        geometry: { type: "LineString" as const, coordinates: segmentPoints.map((point) => [point.lon, point.lat]) },
-      }];
-    });
+    // Gefahreneinschätzung (siehe GET .../terrain-danger): die Route wird abschnittsweise
+    // eingefaerbt, sobald sowohl Hoehenprofil als auch Gefahrensegmente vorliegen - sonst bleibt
+    // es bei der einfarbigen Linie aus routeCoordinates.
+    const dangerFeatures = elevationProfile && dangerSegments ? buildDangerLineFeatures(elevationProfile, dangerSegments) : [];
     const geojson: GeoJSON.FeatureCollection<GeoJSON.LineString> = {
       type: "FeatureCollection",
       features: dangerFeatures.length > 0 ? dangerFeatures : [{
@@ -230,6 +209,14 @@ export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, d
         return;
       }
       map.addSource("wanderplaner-route", { type: "geojson", data: geojson });
+      // Heller Rand unter der Linie, damit sie sich von den Farben der Basiskarte abhebt.
+      map.addLayer({
+        id: "wanderplaner-route-casing",
+        type: "line",
+        source: "wanderplaner-route",
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": casingColor, "line-width": 7 },
+      });
       map.addLayer({
         id: "wanderplaner-route-line",
         type: "line",
@@ -254,6 +241,19 @@ export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, d
   return (
     <div className="wanderplaner-map-frame">
       <div ref={containerRef} className={`wanderplaner-map${className ? ` ${className}` : ""}`} role="application" aria-label="Karte" />
+      {elevationProfile && dangerSegments && (
+        <ul className="wanderplaner-map-legend" aria-label="Legende Gefahreneinschätzung">
+          {DANGER_LEGEND.map((entry) => (
+            <li key={entry.danger} title={entry.description}>
+              <span className={`wanderplaner-map-legend-swatch wanderplaner-map-legend-${entry.danger}`} aria-hidden="true" />
+              {entry.label}
+              {entry.danger !== "normal" && !dangerSegments.some((segment) => segment.danger === entry.danger) && (
+                <span className="wanderplaner-map-legend-none"> (keine)</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
       {selectedPoint && (
         <aside className="wanderplaner-map-info" aria-label="Wegpunkt-Information" onKeyDown={(event) => {
           if (event.key === "Escape") setSelectedId(null);

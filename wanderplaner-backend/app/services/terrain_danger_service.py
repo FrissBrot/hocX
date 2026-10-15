@@ -1,41 +1,48 @@
 """Gefahreneinschätzung: Geländeanalyse über den swisstopo-Höhendienst (Auftrag
-"Gefahreneinschätzung des Weges"). Ruft fetch_profile() aus elevation_service.py zusätzlich für
-zwei um CROSS_SECTION_OFFSET_M nach links/rechts versetzte Parallellinien auf - keine neue
-HTTP-Logik, kein neuer Cache-Mechanismus, exakt dieselbe Funktion/Redis-Cache-Strategie wie das
-Höhenprofil selbst, nur mit anderer Geometrie. Braucht ein bereits abgerufenes Höhenprofil
-(tour.elevation_profile_json), läuft deshalb in der Orchestrierung immer danach, siehe
+"Gefahreneinschätzung des Weges"). Nutzt fetch_profile() aus elevation_service.py - keine neue
+HTTP-Logik, derselbe Redis-Cache - mit drei Abfragen:
+
+1. die Route selbst, aber dicht (etwa alle route_danger.SAMPLE_SPACING_M Meter statt der 200
+   Punkte des angezeigten Höhenprofils, sonst würden kurze Steilstufen weggemittelt),
+2. und 3. je eine Linie durch die Querpunkte CROSS_SECTION_OFFSET_M links bzw. rechts jedes
+   dieser Routenpunkte (route_danger.cross_section_targets()).
+
+Die Querhöhen werden den Routenpunkten über die Lage zugeordnet, nicht über die Distanz entlang
+der Querlinie (die in Kurven von der Wegdistanz abweicht). Die Distanzen der dichten Abfrage
+liegen auf derselben Skala wie tour.elevation_profile_json (gleiche Linie, siehe
+elevation_service.route_coordinates()). Läuft in der Orchestrierung nach dem Höhenprofil, siehe
 hiking_tour_planning_service.py::recalculate.
 """
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 
-import shapely
-from geoalchemy2.shape import to_shape
 from shapely.geometry import LineString
 from sqlalchemy.orm import Session
 
-from app.core.route_danger import classify_terrain, merge_with_official_status
+from app.core.route_danger import (
+    SAMPLE_SPACING_M,
+    classify_terrain,
+    cross_section_targets,
+    downhill_cross_slopes,
+    merge_with_official_status,
+)
 from app.core.swiss_coords import lv95_to_wgs84, wgs84_to_lv95
 from app.core.waypoint_detection import RoutePoint
 from app.models import HikingTour
 from app.services import elevation_service
-from app.services.elevation_service import ElevationServiceError
+from app.services.elevation_service import MAX_POINTS, ElevationServiceError
 
-# Muss mit route_danger.CROSS_SECTION_OFFSET_M übereinstimmen (dort die Gelände-Schwelle fürs
-# Quergefälle, hier der tatsächliche Versatz der Querschnittslinie).
-CROSS_SECTION_OFFSET_M = 15.0
+# Untergrenze wie das angezeigte Höhenprofil - auch sehr kurze Touren bekommen nicht weniger
+# Punkte als bisher.
+MIN_SAMPLE_POINTS = 200
 
 
 class TerrainDangerServiceError(RuntimeError):
     """Geländeanalyse (Querschnitts-Höhendaten) nicht möglich (Auftrag Abschnitt 20) - vom
     Router immer als 422 behandelt, nie als unerwarteter Fehler (siehe hiking_tours.py)."""
-
-
-def _concatenated_lv95_line(tour: HikingTour) -> LineString:
-    coordinates = [coordinate[:2] for leg in tour.route_legs for coordinate in to_shape(leg.geom).coords]
-    return LineString([wgs84_to_lv95(lat, lon) for lon, lat in coordinates])
 
 
 def _wanderweg_segments(tour: HikingTour) -> list[dict]:
@@ -55,26 +62,24 @@ def _wanderweg_segments(tour: HikingTour) -> list[dict]:
     return segments
 
 
-def _offset_profile(line_lv95: LineString, *, side: float) -> list[dict] | None:
-    """Höhenprofil einer um `side` Meter versetzten Parallellinie (positiv = links, negativ =
-    rechts der Wegrichtung). None, wenn das Offsetting selbst keine brauchbare einfache Linie
-    liefert (z. B. sehr enge Krümmung im Wegverlauf) - ein bewusst begrenzter Fallback auf
-    "für diese Seite keine Quergefälle-Daten" (siehe route_danger._cross_slope_percent), kein
-    verschluckter Dienstausfall: ein echter ElevationServiceError aus fetch_profile() läuft
-    hier unverändert durch und wird vom Aufrufer behandelt."""
-    try:
-        offset = shapely.offset_curve(line_lv95, side)
-    except Exception:
-        return None
-    if offset.is_empty or offset.geom_type != "LineString" or len(offset.coords) < 2:
-        return None
-    coordinates = [(lon, lat) for lat, lon in (lv95_to_wgs84(easting, northing) for easting, northing in offset.coords)]
-    return elevation_service.fetch_profile(coordinates)
+def sample_count(length_m: float) -> int:
+    """Anzahl Höhenpunkte für eine Linie dieser Länge: ein Punkt etwa alle SAMPLE_SPACING_M
+    Meter, begrenzt auf [MIN_SAMPLE_POINTS, MAX_POINTS] (sehr lange Touren werden gröber)."""
+    return min(MAX_POINTS, max(MIN_SAMPLE_POINTS, math.ceil(length_m / SAMPLE_SPACING_M) + 1))
+
+
+def _side_samples(targets: list[tuple[float, float]], *, nb_points: int) -> list[tuple[float, float, float]]:
+    """Höhen entlang der Linie durch die Querpunkte als (easting, northing, elevation_m)."""
+    if len(targets) < 2:
+        return []
+    coordinates = [(lon, lat) for lat, lon in (lv95_to_wgs84(easting, northing) for easting, northing in targets)]
+    profile = elevation_service.fetch_profile(coordinates, nb_points=nb_points)
+    return [(*wgs84_to_lv95(p["lat"], p["lon"]), p["elevation_m"]) for p in profile]
 
 
 class TerrainDangerService:
     """DB-Orchestrierung (Stil wie ElevationProfileService) - die eigentliche Berechnung steckt
-    in den modulweiten Funktionen oben, analog fetch_profile()/elevation_at_distance()."""
+    in app/core/route_danger.py."""
 
     def compute_and_store(self, db: Session, tour: HikingTour, *, commit: bool = True) -> HikingTour:
         if not tour.route_legs:
@@ -82,18 +87,32 @@ class TerrainDangerService:
         if not tour.elevation_profile_json:
             raise ValueError("Höhenprofil muss zuerst abgerufen werden, bevor eine Gefahreneinschätzung möglich ist")
 
-        points = [
-            RoutePoint(distance_m=p["distance_m"], lat=p["lat"], lon=p["lon"], elevation_m=p["elevation_m"])
-            for p in tour.elevation_profile_json
-        ]
-        line = _concatenated_lv95_line(tour)
+        coordinates = elevation_service.route_coordinates(tour)
+        length_m = LineString([wgs84_to_lv95(lat, lon) for lon, lat in coordinates]).length
+        nb_points = sample_count(length_m)
         try:
-            left_profile = _offset_profile(line, side=CROSS_SECTION_OFFSET_M) or []
-            right_profile = _offset_profile(line, side=-CROSS_SECTION_OFFSET_M) or []
+            profile = elevation_service.fetch_profile(coordinates, nb_points=nb_points)
+            centerline = [(*wgs84_to_lv95(p["lat"], p["lon"]), p["elevation_m"]) for p in profile]
+            left_targets, right_targets = cross_section_targets([(e, n) for e, n, _ in centerline])
+            # Doppelte Dichte auf den Querlinien: deren Länge weicht in Kurven von der Route ab,
+            # so liegt trotzdem fast immer ein Messpunkt nahe genug am gewünschten Querpunkt.
+            side_points = min(MAX_POINTS, 2 * len(centerline))
+            left_samples = _side_samples(left_targets, nb_points=side_points)
+            right_samples = _side_samples(right_targets, nb_points=side_points)
         except ElevationServiceError as exc:
             raise TerrainDangerServiceError(str(exc)) from exc
 
-        terrain_segments = classify_terrain(points, left_profile=left_profile, right_profile=right_profile)
+        left_slopes = downhill_cross_slopes(centerline, left_targets, left_samples)
+        right_slopes = downhill_cross_slopes(centerline, right_targets, right_samples)
+        cross_slopes = [
+            max((slope for slope in pair if slope is not None), default=None) for pair in zip(left_slopes, right_slopes)
+        ]
+        points = [
+            RoutePoint(distance_m=p["distance_m"], lat=p["lat"], lon=p["lon"], elevation_m=p["elevation_m"])
+            for p in profile
+        ]
+
+        terrain_segments = classify_terrain(points, cross_slopes=cross_slopes)
         danger_segments = merge_with_official_status(terrain_segments, _wanderweg_segments(tour))
 
         tour.terrain_danger_json = [segment.as_dict() for segment in danger_segments]

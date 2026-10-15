@@ -127,7 +127,7 @@ def test_full_pipeline_with_real_routing_and_analysis(db, routing_network, monke
     from app.core.swiss_coords import wgs84_to_lv95
     from math import dist
 
-    def profile(coordinates):
+    def profile(coordinates, nb_points=200):
         line = LineString(coordinates)
         length = sum(dist(wgs84_to_lv95(a[1], a[0]), wgs84_to_lv95(b[1], b[0])) for a, b in zip(coordinates, coordinates[1:]))
         return [{"distance_m": length * index / 39, "elevation_m": 500 + index * 4,

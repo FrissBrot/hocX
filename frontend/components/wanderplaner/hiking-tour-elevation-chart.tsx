@@ -96,11 +96,11 @@ export function HikingTourElevationChart({
       >
         <defs>
           <linearGradient id="wanderplaner-elevation-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.35} />
-            <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
+            <stop offset="0%" stopColor="var(--route-normal)" stopOpacity={0.25} />
+            <stop offset="100%" stopColor="var(--route-normal)" stopOpacity={0} />
           </linearGradient>
           {/* Gefahreneinschätzung (Auftrag): faerbt die Profillinie abschnittsweise ein, siehe
-              hiking-tour-elevation-danger-gradient.ts. Ohne Segmente identisch zu "var(--chart-1)". */}
+              hiking-tour-elevation-danger-gradient.ts. Ohne Segmente durchgehend "var(--route-normal)". */}
           <linearGradient id="wanderplaner-elevation-danger-stroke" x1="0" y1="0" x2="1" y2="0">
             {dangerStops.map((stop, index) => (
               <stop key={index} offset={stop.offset} stopColor={stop.color} />

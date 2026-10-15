@@ -1,14 +1,13 @@
 import { ElevationProfilePoint, TerrainDangerLevel, TerrainDangerSegment } from "@/types/api";
 
-// Gleiche Token-Zuordnung wie DANGER_COLOR_TOKEN in hiking-tour-map.tsx, hier direkt als
-// SVG-taugliche var(...)-Strings (Recharts akzeptiert diese direkt als stopColor, siehe
-// bisheriges "var(--chart-1)" im Chart selbst - kein getComputedStyle nötig, anders als bei
-// MapLibres Canvas-Paint).
-const DANGER_COLOR: Record<TerrainDangerLevel, string> = {
-  normal: "var(--chart-1)",
-  steep_exposed: "var(--warning)",
-  alpine: "var(--info)",
-};
+import { DANGER_COLOR_TOKEN } from "./hiking-tour-danger";
+
+// Gleiche Token-Zuordnung wie Karte und Legende (hiking-tour-danger.ts), hier als SVG-taugliche
+// var(...)-Strings (Recharts akzeptiert diese direkt als stopColor - kein getComputedStyle
+// nötig, anders als bei MapLibres Canvas-Paint).
+const DANGER_COLOR = Object.fromEntries(
+  Object.entries(DANGER_COLOR_TOKEN).map(([danger, token]) => [danger, `var(${token})`]),
+) as Record<TerrainDangerLevel, string>;
 
 export type DangerGradientStop = { offset: string; color: string };
 

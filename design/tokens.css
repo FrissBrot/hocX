@@ -52,6 +52,12 @@
   /* Sekundaerer Akzent fuer "bald verfuegbar"-Hinweise */
   --violet: #a78bfa;
 
+  /* Wanderplaner: Routenlinie nach Gefahrenstufe (Karte + Hoehenprofil). Blau = Alpinwanderweg
+     wie die Signalisation (blau-weiss-blau), deshalb ist die normale Route bewusst nicht blau. */
+  --route-normal: #c026d3;
+  --route-steep: #ea580c;
+  --route-alpine: #1d4ed8;
+
   /* Primaerbutton */
   --primary: #16223d;
   --primary-strong: #0b1626;
@@ -155,6 +161,9 @@
   --danger-fg: #f87171;
   --neutral-bg: rgba(148, 158, 180, 0.14);
   --neutral-fg: #9aa4bc;
+  --route-normal: #e879f9;
+  --route-steep: #fb923c;
+  --route-alpine: #60a5fa;
 
   /* Dark-mode primary deliberately uses the accent blue rather than a dark navy:
      a near-black button on an already-dark surface would read as low-contrast. */
@@ -195,6 +204,9 @@
     --danger-fg: #f87171;
     --neutral-bg: rgba(148, 158, 180, 0.14);
     --neutral-fg: #9aa4bc;
+    --route-normal: #e879f9;
+    --route-steep: #fb923c;
+    --route-alpine: #60a5fa;
     --primary: #5b8def;
     --primary-strong: #3d6fd4;
     --primary-contrast: #0b1626;

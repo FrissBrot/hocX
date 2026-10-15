@@ -16756,6 +16756,41 @@ input[type="radio"] {
 
 .wanderplaner-map-frame { position: relative; }
 
+/* Legende der Gefahreneinschätzung unten links auf der Karte (Attribution sitzt unten rechts). */
+.wanderplaner-map-legend {
+  position: absolute;
+  left: var(--space-2);
+  bottom: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  list-style: none;
+  display: grid;
+  gap: var(--space-1);
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-soft);
+  font-size: var(--text-xs);
+  color: var(--text);
+}
+
+.wanderplaner-map-legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.wanderplaner-map-legend-swatch {
+  width: 20px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+}
+
+.wanderplaner-map-legend-normal { background: var(--route-normal); }
+.wanderplaner-map-legend-steep_exposed { background: var(--route-steep); }
+.wanderplaner-map-legend-alpine { background: var(--route-alpine); }
+.wanderplaner-map-legend-none { color: var(--muted); }
+
 .wanderplaner-map-info {
   position: absolute;
   top: var(--space-3);
