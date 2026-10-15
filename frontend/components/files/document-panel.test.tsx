@@ -166,3 +166,30 @@ describe("Dokumente im Dateien-Tab", () => {
     expect(showToastMock).toHaveBeenCalledWith("Verarbeitung wurde neu gestartet.", "success");
   });
 });
+
+describe("useDocumentDetail", () => {
+  it("verwirft eine verspätete Antwort für ein vorher gewähltes Dokument", async () => {
+    const { renderHook } = await import("@testing-library/react");
+    const { useDocumentDetail } = await import("./document-panel");
+    let resolveFirst: (value: unknown) => void = () => undefined;
+    browserApiFetchMock.mockImplementation((url: string) =>
+      url === "/api/documents/alt"
+        ? new Promise((resolve) => {
+            resolveFirst = resolve;
+          })
+        : Promise.resolve({ id: "neu", status: "ready", versions: [] }),
+    );
+    const { result, rerender } = renderHook(({ url }) => useDocumentDetail({ detail_url: url } as never), {
+      initialProps: { url: "/api/documents/alt" },
+    });
+    rerender({ url: "/api/documents/neu" });
+    await waitFor(() => expect(result.current.detail?.id).toBe("neu"));
+    const { act } = await import("@testing-library/react");
+    await act(async () => {
+      resolveFirst({ id: "alt", status: "ready", versions: [] });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(browserApiFetchMock).toHaveBeenCalledWith("/api/documents/alt");
+    expect(result.current.detail?.id).toBe("neu");
+  });
+});

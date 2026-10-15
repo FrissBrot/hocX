@@ -25,13 +25,20 @@ export function useDocumentDetail(summary: DocumentSummary | null | undefined) {
   const [detail, setDetail] = useState<DocumentDetail | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const detailUrl = summary?.detail_url ?? null;
+  // Zählt Anfragen mit: eine verspätete Antwort für ein vorher angezeigtes Dokument (oder ein
+  // überholter Polling-Lauf) darf den aktuellen Stand nicht überschreiben.
+  const requestRef = useRef(0);
 
   const reload = useCallback(async () => {
     if (!detailUrl) return;
+    const request = ++requestRef.current;
     try {
-      setDetail(await browserApiFetch<DocumentDetail>(detailUrl));
+      const next = await browserApiFetch<DocumentDetail>(detailUrl);
+      if (request !== requestRef.current) return;
+      setDetail(next);
       setLoadFailed(false);
     } catch {
+      if (request !== requestRef.current) return;
       setLoadFailed(true);
     }
   }, [detailUrl]);
