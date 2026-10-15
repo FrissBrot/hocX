@@ -14,7 +14,10 @@ Ersetzt Hausstile (document_style), Stil-Assets (document_style_asset) und Dokum
    - Hausstil einer Protokollvorlage (abweichend vom Standard) → Brand-Zuweisung für
      Protokolle dieser Vorlage; ein abweichender Hausstil eines einzelnen Protokolls lässt sich
      nicht mehr abbilden (Anzahl im Migrationsprotokoll), es gilt die Vorlage/der Standard;
-   - jedes Rezept → veröffentlichte Mandantenvorlage (legacy.content_from_recipe);
+   - jedes Rezept → veröffentlichte Mandantenvorlage (legacy.content_from_recipe); ein Rezept,
+     dessen Blöcke das neue Schema nicht erfüllt (z. B. generic_table mit mehr als 12 Spalten),
+     wird übersprungen und mit Mandant, Name und Fehler als Warnung protokolliert (Anzahl in der
+     Zusammenfassung) - vor dem Upgrade daher ein Backup ziehen (RUNBOOK);
    - document_export: Rezept → Vorlage, Hausstil → Brand-Revision; Inhalts-Hashes und
      Versionen bleiben unverändert (Protokollversionierung).
 4. document_registry bekommt design_hash (nullable); bestehende Einträge bleiben unberührt.
@@ -307,11 +310,14 @@ def _migrate_data() -> None:
 
     # 3. Rezepte → veröffentlichte Mandantenvorlagen
     recipe_map: dict[int, tuple[int, int]] = {}
+    skipped_recipes = 0
     for recipe in conn.execute(sa.text("SELECT id, tenant_id, name, document_type, blocks_json, options_json, style_id, created_at FROM document_recipe ORDER BY id")).all():
         try:
             content = TemplateContent.model_validate(content_from_recipe(recipe.blocks_json or [], recipe.options_json or {}))
-        except ValueError:
-            logger.warning("Rezept %s nicht übernommen (ungültige Blöcke)", recipe.id)
+        except ValueError as exc:
+            # Nur protokolliert, Ergebnis der Migration unverändert (STUDIO-008)
+            skipped_recipes += 1
+            logger.warning("Rezept %s (Mandant %s, «%s») nicht übernommen (ungültige Blöcke): %s", recipe.id, recipe.tenant_id, recipe.name, exc)
             continue
         document_type = recipe.document_type if recipe.document_type in DOCUMENT_TYPES else "custom"
         data = content_json(content)
@@ -363,9 +369,10 @@ def _migrate_data() -> None:
             },
         )
     logger.info(
-        "Document Studio: %s Hausstile → Brand-Profile, %s Rezepte → Vorlagen, %s Brand-Zuweisungen; %s Protokolle mit eigenem Hausstil folgen nun ihrer Vorlage",
+        "Document Studio: %s Hausstile → Brand-Profile, %s Rezepte → Vorlagen (%s übersprungen, siehe Warnungen), %s Brand-Zuweisungen; %s Protokolle mit eigenem Hausstil folgen nun ihrer Vorlage",
         len(style_map),
         len(recipe_map),
+        skipped_recipes,
         assignments,
         divergent,
     )

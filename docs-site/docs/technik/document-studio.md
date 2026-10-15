@@ -43,8 +43,13 @@ Regeln:
 - Pro Vorlage gibt es höchstens einen Entwurf (partieller Unique-Index). Veröffentlichen macht
   die bisher gültige Revision zur abgelösten (`superseded`).
 - Veröffentlichte und abgelöste Revisionen sind **unveränderlich**. Das prüft der Service, und
-  zusätzlich verhindert ein PL/pgSQL-Trigger (`document_template_revision_immutable`) jede
-  Änderung und jedes Löschen.
+  zusätzlich verhindert ein PL/pgSQL-Trigger (`document_template_revision_immutable`,
+  `BEFORE UPDATE`) jede Änderung. Löschen verhindert der Trigger **nicht**: Revisionen
+  verschwinden mit ihrer Vorlage (Cascade), und `delete_template` lässt das nur für nie
+  exportierte Vorlagen zu; exportierte Vorlagen werden archiviert.
+- Speichern (Entwurf, Brand-Profil, Komponente) sperrt die betroffene Zeile
+  (`SELECT … FOR UPDATE`, `documents/locking.py`) vor der Prüfung der `lock_version`. Parallele
+  Anfragen mit derselben Version ergeben genau einmal HTTP 409.
 - Alle JSONB-Inhalte werden vor dem Speichern mit Pydantic validiert (`layout.parse_content`,
   `BrandTokens`). Unbekannte Felder werden abgewiesen.
 - Mandantenisolation: Jede Abfrage filtert auf `tenant_id`. Systemvorlagen sind für alle lesbar,
@@ -54,6 +59,20 @@ Migration `0118_document_studio` legt die Tabellen an und übernimmt Hausstile a
 Brand-Profile, Rezepte als Vorlagen und die Hausstil-Wahl von Protokollvorlagen als
 Zuweisungen. Danach entfernt sie die alten Tabellen. Der Downgrade ist getestet
 (`tests/test_document_studio_migration.py`).
+
+!!! warning "Datenübernahme und Rückweg"
+    - Rezepte, deren Blöcke das neue Schema nicht erfüllen (z. B. `generic_table` mit mehr als
+      12 Spalten), übernimmt die Migration nicht. Sie protokolliert jedes übersprungene Rezept
+      mit Mandant, Name und Fehler als Warnung und die Anzahl in der Zusammenfassung; danach
+      wird `document_recipe` entfernt. Vor dem Upgrade muss deshalb ein Backup vorliegen
+      (`deploy.sh` zieht es automatisch, siehe RUNBOOK) und das Migrationsprotokoll auf
+      Warnungen geprüft werden.
+    - Der Downgrade auf 0117 ist **destruktiv**: Er legt `document_style`/`document_recipe` leer
+      an und entfernt Brand-Profile, Vorlagen, Revisionen, Komponenten, Zuweisungen sowie die
+      Herkunftsangaben der Exporte (`template_id`, `design_hash` …). Ein Rollback mit Erhalt der
+      Daten geht nur über das vor dem Update gezogene Backup.
+    - Das Ergebnis der Migration auf bereits migrierten Systemen bleibt unverändert; Anpassungen
+      an 0118 nach der Verteilung beschränken sich auf Protokollierung.
 
 ## Layoutbaum (`layout.py`)
 
