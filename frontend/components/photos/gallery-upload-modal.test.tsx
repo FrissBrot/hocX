@@ -109,12 +109,25 @@ describe("GalleryUploadModal – Analyse, Schätzdatum und Vorab-Abgleich", () =
     expect(uploadedNames()).toEqual([["neu.jpg"]]);
     const form = browserApiUploadMock.mock.calls[0][1] as FormData;
     expect(form.get("estimated_taken_on")).toBe("1998-08-01");
-    expect(JSON.parse(String(form.get("file_metadata")))[0].metadata.taken_at).toBe("2023-07-14T10:30:05");
+    // JPEG: der Server liest die Datei selbst - keine Browser-Hinweise (GPS) im Auftrag (IMGMETA-004).
+    expect(form.get("file_metadata")).toBeNull();
     expect(onQueued).toHaveBeenCalledTimes(1);
     expect(onSessionComplete).toHaveBeenCalledWith({
       jobIds: ["job-1"],
       precheckResults: [{ name: "schon-da.jpg", status: "metadata_updated", file_id: "existing", applied: ["estimated_taken_on"], conflicts: [] }],
     });
+  });
+
+  it("sendet Browser-Hinweise nur für HEIC-Dateien mit (IMGMETA-004)", async () => {
+    mockPrecheck(() => "upload_required");
+    const { onClose } = renderModal([fixture("full.heic", "IMG_1.HEIC"), fixture("full.jpg", "neu.jpg")]);
+    await waitFor(() => expect(screen.queryByText("Bilder werden geprüft…", { exact: false })).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "2 Bilder hochladen" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    const form = browserApiUploadMock.mock.calls[0][1] as FormData;
+    const hints = JSON.parse(String(form.get("file_metadata")));
+    expect(hints).toHaveLength(1);
+    expect(hints[0].metadata.taken_at).toBe("2024-06-01T18:45:00");
   });
 
   it("lädt nichts hoch, wenn alle Bilder schon vorhanden sind", async () => {
