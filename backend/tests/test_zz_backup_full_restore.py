@@ -230,3 +230,49 @@ def test_failure_between_renames_restores_the_previous_database(backup_env, monk
             for window in s.scalars(select(MaintenanceWindow).where(MaintenanceWindow.state.in_(("preparing", "active")))).all():
                 maintenance_service.release(s, window.id, actor_email=None, source="job")
             s.commit()
+
+
+def test_restore_resumes_in_verify_after_the_database_was_configured(backup_env, monkeypatch):  # noqa: F811
+    """BORG-003: Abbruch nach configure_restored_database (transienter Fehler in der
+    Referenzprüfung). Der Wiederholungsversuch darf nicht an generation_exists scheitern."""
+    from app.core.objstore_client import StorageUnavailable
+
+    db, env, _ = backup_env
+    monkeypatch.setattr(settings, "maintenance_cache_seconds", 0.05)
+    backup = run_backup_job(env)
+    archive = db.get(BackupSet, backup.backup_set_id).archive_name
+    db.close()
+    real_report = run_restore.reference_report
+    calls = {"n": 0}
+
+    def flaky_report(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise StorageUnavailable("simulierte Störung")
+        return real_report(*args, **kwargs)
+
+    monkeypatch.setattr(run_restore, "reference_report", flaky_report)
+    restore_id = _create_restore(archive)
+    deadline = time.monotonic() + 600
+    job = None
+    while time.monotonic() < deadline:
+        with SessionLocal() as s:
+            # Backoff des Wiederholungsversuchs im Test überspringen.
+            s.execute(update(BackupRestoreJob).where(BackupRestoreJob.id == restore_id, BackupRestoreJob.state == "queued")
+                      .values(next_attempt_at=None))
+            s.commit()
+        ctx = jobs.claim(engine, BackupJob, "test-worker") or jobs.claim(engine, BackupRestoreJob, "test-worker")
+        if ctx is not None:
+            backup_worker.run_job(env, ctx)
+        else:
+            time.sleep(1)
+        with SessionLocal() as s:
+            job = s.get(BackupRestoreJob, restore_id)
+            if job.state in jobs.TERMINAL_RESTORE_STATES:
+                break
+    pre = (job.result or {}).get("pre_restore_db") if job else None
+    try:
+        assert calls["n"] >= 2
+        assert job is not None and job.state == "completed", (job.error_code, job.error_message)
+    finally:
+        _drop(pre)

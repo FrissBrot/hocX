@@ -319,7 +319,14 @@ def configure_restored_database(database_url: str, *, profile: dict[str, Any], g
                     INSERT INTO storage_profile (public_id, name, {columns}, is_enabled, is_builtin, last_test_ok)
                     VALUES (:public_id, :name, {params}, true, false, true) RETURNING id
                 """), {**values, "public_id": profile["public_id"], "name": name}).scalar_one())
-            if conn.execute(text("SELECT 1 FROM storage_generation WHERE generation = :g"), {"g": generation}).first():
+            existing = conn.execute(text("SELECT profile_id, status FROM storage_generation WHERE generation = :g"), {"g": generation}).first()
+            if existing is not None:
+                # Fortsetzung nach Abbruch: dieselbe Generation ist schon aktiv und auf dieses Profil
+                # umgestellt -> Schritt war erledigt. Jede andere Belegung bleibt ein Fehler.
+                state = conn.execute(text("SELECT active_profile_id, active_generation FROM storage_state WHERE id = 1")).first()
+                if (existing.status == "active" and int(existing.profile_id) == profile_id and state is not None
+                        and state.active_generation == generation and state.active_profile_id == profile_id):
+                    return {"profile_id": profile_id, "generation": generation, "already_configured": True}
                 raise RestoreError("generation_exists", f"Generation {generation} ist in der wiederhergestellten Datenbank bereits vergeben")
             conn.execute(text("""
                 UPDATE storage_generation SET status = 'retained', deactivated_at = :now, retain_until = :until
