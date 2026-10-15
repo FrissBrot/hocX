@@ -17,10 +17,11 @@ die Vollständigkeit.
 """
 from __future__ import annotations
 
+import json
 import uuid
 from typing import Annotated, Any, Iterator, Literal, Union, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.documents.conditions import Condition
 
@@ -28,6 +29,13 @@ LAYOUT_SCHEMA_VERSION = 1
 
 MAX_NODES = 2000
 MAX_DEPTH = 14
+# Obergrenze für einen gesendeten Layoutbaum (serialisiertes JSON). Knotenzahl und Tiefe allein
+# begrenzen die Grösse nicht (lange Texte, Übersetzungen, Tabellenzellen, Komponentenparameter);
+# jeder Autosave schreibt den ganzen Baum, Vorschau und Thumbnail rendern ihn. Bewusst nur für
+# eingehende Anfragen (LayoutJson) und nicht als Feldgrenze im Schema: gespeicherte Revisionen
+# und die Rezept-Übernahme der Migration 0118 laufen durch dasselbe Schema und dürfen durch
+# eine nachträglich engere Grenze nicht unlesbar werden.
+MAX_CONTENT_BYTES = 2_000_000
 
 NODE_ID_PATTERN = r"^[A-Za-z0-9_-]{1,40}$"
 # Farbe: Hex-Literal oder Brand-Referenz ($brand.primary, $brand.custom.<name>, $brand.status.success)
@@ -681,6 +689,18 @@ def validate_structure(content: TemplateContent) -> None:
                 width = len(node.columns)
                 if any(len(row) > width for row in node.rows):
                     raise LayoutValidationError("tableRowTooWide", node.id)
+
+
+def check_content_size(raw: Any) -> Any:
+    """Gesendeten Layoutbaum (bzw. Komponentenknoten) vor der Schemaprüfung auf
+    ``MAX_CONTENT_BYTES`` begrenzen."""
+    if raw is not None and len(json.dumps(raw, ensure_ascii=False, separators=(",", ":")).encode()) > MAX_CONTENT_BYTES:
+        raise LayoutValidationError("contentTooLarge", detail=str(MAX_CONTENT_BYTES))
+    return raw
+
+
+# Für Request-Modelle: rohes Layout-JSON mit Grössengrenze
+LayoutJson = Annotated[dict[str, Any], AfterValidator(check_content_size)]
 
 
 def parse_content(raw: dict[str, Any] | None) -> TemplateContent:

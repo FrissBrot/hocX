@@ -95,3 +95,26 @@ def test_schema_migration_rejects_future_versions_and_upgrades_old(monkeypatch):
     with pytest.raises(layout_migrations.LayoutMigrationError):
         monkeypatch.delitem(layout_migrations.MIGRATIONS, 1)
         layout_migrations.migrate_content({"schema_version": 1})
+
+
+def test_total_content_size_is_limited():
+    """STUDIO-006: Gesendete Layoutbäume sind in allen Eingängen auf MAX_CONTENT_BYTES begrenzt."""
+    from app.api.routes import document_studio as studio
+    from app.documents.layout import MAX_CONTENT_BYTES
+    from app.documents.service import DocumentRequest
+
+    # Viele Knoten knapp unter den Einzelgrenzen ergeben zusammen mehr als MAX_CONTENT_BYTES
+    body = [{"type": "rich_text", "id": f"r{index}", "markdown": "x" * 45_000} for index in range(50)]
+    huge = _content(body)
+    for build in (
+        lambda: studio.DraftSave(content=huge),
+        lambda: studio.TemplateCreate(name="X", document_type="protocol", content=huge),
+        lambda: studio.ValidateBody(content=huge),
+        lambda: studio.ComponentWrite(node={"type": "section", "id": "s", "children": body}),
+        lambda: DocumentRequest(content=huge),
+    ):
+        with pytest.raises(ValidationError) as excinfo:
+            build()
+        error = layout_error_of(excinfo.value)
+        assert error is not None and error.code == "contentTooLarge" and error.detail == str(MAX_CONTENT_BYTES)
+    assert studio.DraftSave(content=_content(body[:10])).content["body"][0]["id"] == "r0"

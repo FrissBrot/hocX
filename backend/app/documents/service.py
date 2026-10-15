@@ -40,7 +40,7 @@ from app.documents.compiler import CompiledDocument, CompileInput, Diagnostic, c
 from app.documents.context import AssetCollector, BuildContext, DocumentNotFoundError, DocumentPermissionError
 from app.documents.doc_types import get_type
 from app.documents.hashing import content_hash, design_hash
-from app.documents.layout import TemplateContent, content_json, parse_content
+from app.documents.layout import LayoutJson, TemplateContent, content_json, parse_content
 from app.documents.model import DocumentMeta, RenderInfo
 from app.documents.providers.common import PROTOCOL_STATUS_CODES
 from app.documents.renderer import RenderAssets, get_renderer
@@ -86,7 +86,7 @@ class DocumentRequest(BaseModel):
     protocol_id: uuid.UUID | None = None
     template_id: uuid.UUID | None = None
     revision_id: uuid.UUID | None = None
-    content: dict[str, Any] | None = None
+    content: LayoutJson | None = None
     brand_id: uuid.UUID | None = None
     brand_tokens: dict[str, Any] | None = None
     # Seitenkontext (z. B. aktive Filter der Todo-Seite, gewählte Liste)

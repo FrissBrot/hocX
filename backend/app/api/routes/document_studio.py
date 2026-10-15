@@ -30,7 +30,7 @@ from app.documents.brand import BRAND_PRESETS, BrandTokens, color_references
 from app.documents.compiler import validate_template
 from app.documents.components import catalog_payload
 from app.documents.context import DocumentNotFoundError, DocumentPermissionError
-from app.documents.layout import LayoutValidationError, TemplateContent, layout_error_of, parse_content
+from app.documents.layout import LayoutJson, LayoutValidationError, TemplateContent, layout_error_of, parse_content
 from app.documents.renderer import DocumentRenderError, get_renderer
 from app.documents.strings import normalize_language, text
 from app.models import (
@@ -250,7 +250,7 @@ class TemplateCreate(BaseModel):
     description: str | None = Field(None, max_length=600)
     # Ausgangspunkt: Kopie einer bestehenden Vorlage (System oder eigene); leer = leere Vorlage
     from_template_id: uuid.UUID | None = None
-    content: dict[str, Any] | None = None
+    content: LayoutJson | None = None
 
 
 @router.post("/document-templates", response_model=TemplateDetail, status_code=201)
@@ -346,7 +346,7 @@ def duplicate_document_template(template_id: uuid.UUID, body: DuplicateBody, db:
 class DraftSave(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    content: dict[str, Any]
+    content: LayoutJson
     # lock_version des Entwurfs, den der Designer zuletzt geladen hat (None = neuer Entwurf)
     lock_version: int | None = None
     brand_mode: Literal["follow", "pinned"] | None = None
@@ -395,7 +395,7 @@ def discard_document_template_draft(template_id: uuid.UUID, db: Session = Depend
 class ValidateBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    content: dict[str, Any]
+    content: LayoutJson
     document_type: str | None = Field(None, max_length=40)
 
 
@@ -910,7 +910,7 @@ class ComponentWrite(BaseModel):
     name: str | None = Field(None, max_length=120)
     description: str | None = Field(None, max_length=600)
     category: str | None = Field(None, max_length=60)
-    node: dict[str, Any] | None = None
+    node: LayoutJson | None = None
     lock_version: int | None = None
 
 
