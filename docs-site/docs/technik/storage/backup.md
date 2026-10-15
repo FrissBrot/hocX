@@ -1,5 +1,13 @@
 # Backup, Restore, Rollback und Recovery
 
+!!! warning "Abgelöst durch das Borg-Backup"
+    Sicherung und Wiederherstellung laufen über den `backup-worker` (BorgBackup, Hetzner Storage
+    Box): siehe [Backup (BorgBackup)](../backup/index.md). Die unten beschriebenen Skripte
+    `backup_db.sh`/`backup_storage.sh` laufen nur noch, solange `BACKUP_ENABLED` nicht gesetzt
+    ist; der lokale Objekt-Spiegel und die Annahme "praktisch immer konsistent" sind durch den
+    Backup-Hold (Copy-on-Write) ersetzt. Gültig bleiben die Abschnitte zu Migrationen und zur
+    Bereinigung alter Generationen.
+
 ## Grundsatz
 
 Datenbank und Objekte gehören zusammen: die Datenbank verweist per Key auf Objekte, das

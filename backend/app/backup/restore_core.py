@@ -108,6 +108,39 @@ def restore_database(view: RepositoryView, archive: str, metadata: dict[str, Any
     return {"dump_bytes": size, "toc_entries": len(toc)}
 
 
+# Eingeschränkte Rollen der Anwendung (Migrationen 0001/0067). Rollen sind clusterweit und nicht
+# Teil von pg_dump - auf einem neuen Server müssen sie vor dem Restore existieren.
+APP_ROLE_PASSWORD_ENV = {"hocx_app": "APP_DB_PASSWORD", "hocx_abgabebox": "ABGABEBOX_DB_PASSWORD",
+                         "hocx_photo_worker": "PHOTO_WORKER_DB_PASSWORD"}
+
+
+def _env_secret(name: str) -> str | None:
+    if os.environ.get(name):
+        return os.environ[name]
+    path = os.environ.get(f"{name}_FILE")
+    if path and Path(path).is_file():
+        return Path(path).read_text(encoding="utf-8").strip() or None
+    return None
+
+
+def ensure_app_roles(pg: PgTools, *, statement_timeout: str = "30s") -> dict[str, str]:
+    """Legt fehlende hocX-Rollen an (wie Migration 0001) und setzt ihre Passwörter aus
+    APP_DB_PASSWORD/ABGABEBOX_DB_PASSWORD/PHOTO_WORKER_DB_PASSWORD(_FILE), falls vorhanden.
+    Passwörter gehen über stdin an psql, nie als Argument."""
+    result: dict[str, str] = {}
+    for role, env_name in APP_ROLE_PASSWORD_ENV.items():
+        exists = pg.psql(f"SELECT 1 FROM pg_roles WHERE rolname = '{role}';", database="postgres") == "1"
+        if not exists:
+            pg.psql(f"CREATE ROLE {role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT;", database="postgres")
+        password = _env_secret(env_name)
+        if password:
+            escaped = password.replace("'", "''")
+            pg.psql(f"ALTER ROLE {role} PASSWORD '{escaped}';", database="postgres")
+        result[role] = ("angelegt" if not exists else "vorhanden") + (", Passwort gesetzt" if password else ", Passwort unverändert")
+    pg.psql(f"ALTER ROLE hocx_app SET statement_timeout = '{statement_timeout}';", database="postgres")
+    return result
+
+
 # --- Objekte ------------------------------------------------------------------------------
 
 

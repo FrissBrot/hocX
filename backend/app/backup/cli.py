@@ -1,7 +1,9 @@
 """Recovery-CLI für hocX-Backups - unabhängig vom laufenden Backend, von Redis und von einer
 vorhandenen hocX-Datenbank. Alle Informationen kommen aus dem Borg-Repository.
 
-    docker compose run --rm backup-worker python -m app.backup.cli <befehl> [optionen]
+    docker compose exec backup-worker python -m app.backup.cli <befehl> [optionen]
+    # ohne laufendes Backend (neuer Server, Datenbank weg):
+    docker compose run --rm --no-deps --entrypoint python backup-worker -m app.backup.cli <befehl>
 
 Befehle (Details: --help je Befehl, Ablauf: docs-site/docs/technik/backup/restore.md):
   info              Repository erreichbar? Identität, Verschlüsselung, Grösse
@@ -38,6 +40,7 @@ from app.backup.repository import RepositoryView
 from app.backup.restore_core import (
     RestoreError,
     configure_restored_database,
+    ensure_app_roles,
     ensure_empty_generation,
     load_restore_point,
     reference_report,
@@ -250,6 +253,8 @@ def cmd_restore_full(args: argparse.Namespace) -> int:
         print(f"Ziel: Datenbank {db_name} auf {target.host}, Objekte nach {args.storage} (Generation {generation})")
         _confirm(args, "Fortfahren?")
         with PgTools(target) as pg:
+            if not args.no_owner:
+                report["roles"] = ensure_app_roles(pg)
             report["database"] = restore_database(view, args.archive, metadata, pg, db_name, work, max_bytes=config.staging_max_bytes,
                                                   jobs=config.pg_restore_jobs, no_owner=args.no_owner)
         print("Datenbank wiederhergestellt, Objekte werden übertragen ...")

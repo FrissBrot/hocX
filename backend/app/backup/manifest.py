@@ -217,7 +217,7 @@ Dieses Archiv enthält einen vollständigen, konsistenten Stand von hocX:
 Die Objektinhalte liegen inhaltsadressiert in den Archiven hocx-pool-*.
 
 Wiederherstellung ohne laufendes hocX (neuer Server):
-  docker compose run --rm backup-worker python -m app.backup.cli list
-  docker compose run --rm backup-worker python -m app.backup.cli restore-full --archive <NAME> ...
+  docker compose run --rm --no-deps --entrypoint python backup-worker -m app.backup.cli list
+  docker compose run --rm --no-deps --entrypoint python backup-worker -m app.backup.cli restore-full --archive <NAME> ...
 Ausführlich: docs-site/docs/technik/backup/restore.md im hocX-Repository.
 """

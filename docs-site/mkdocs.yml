@@ -110,5 +110,11 @@ nav:
           - Lokales S3: technik/storage/lokales-s3.md
           - Migrationen: technik/storage/migration.md
           - Wartungsmodus: technik/storage/wartung.md
-          - Backup & Recovery: technik/storage/backup.md
+          - Backup & Recovery (bisher): technik/storage/backup.md
+      - Backup (BorgBackup):
+          - Übersicht: technik/backup/index.md
+          - Architektur: technik/backup/architektur.md
+          - Einrichtung & Betrieb: technik/backup/betrieb.md
+          - Wiederherstellung: technik/backup/restore.md
+          - Sicherheit: technik/backup/sicherheit.md
       - Bekannte offene Punkte: technik/offene-punkte.md

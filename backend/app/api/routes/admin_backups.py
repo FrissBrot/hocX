@@ -56,7 +56,7 @@ def _audit(db: Session, admin: CurrentAdmin, action: str, **details) -> None:
 
 
 def _error(exc: svc.BackupAdminError) -> HTTPException:
-    code = status.HTTP_409_CONFLICT if exc.code not in ("confirmation_mismatch", "rescue_reason_missing", "name_missing") else status.HTTP_422_UNPROCESSABLE_ENTITY
+    code = status.HTTP_409_CONFLICT if exc.code not in ("confirmation_mismatch", "rescue_reason_missing", "name_missing") else status.HTTP_422_UNPROCESSABLE_CONTENT
     return HTTPException(status_code=code, detail=str(exc))
 
 

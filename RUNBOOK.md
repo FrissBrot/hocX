@@ -191,6 +191,11 @@ nicht - dann muss zusätzlich das vor dem Update gezogene Backup eingespielt wer
 gunzip -c backups/<timestamp>-pre-vX.Y.Z.sql.gz | docker compose -p hocx exec -T db psql -U hocx hocx
 ```
 
+Mit aktivem Borg-Backup (Abschnitt 14) gibt es zusätzlich den geschützten Wiederherstellungspunkt
+«Vor Update auf vX.Y.Z», der Datenbank **und** Dateien desselben Zeitpunkts enthält: System →
+Backups → Wiederherstellung → «Vollständige Wiederherstellung» (zuerst die alte Version deployen,
+damit das Schema passt).
+
 **Deshalb**: bei riskanten Schema-Änderungen (Spalte umbenennen/löschen, Typ ändern)
 über zwei Releases gehen statt in einem Schritt - z.B. neue Spalte hinzufügen und
 befüllen in Release A, alte Spalte erst in Release B entfernen. Das hält jeden
@@ -309,6 +314,11 @@ exklusiven Lock wie `deploy.sh`. `.env`, Storage, Backups, `.tools` und `.releas
 ignoriert und werden nicht veraendert.
 
 ## 10. Backup- und Cleanup-Cronjobs
+
+> **Ab dem Borg-Backup (Abschnitt 14) abgelöst:** Sobald `BACKUP_ENABLED=true` gesetzt ist,
+> überspringen `backup_db.sh` und `backup_storage.sh` ihren Lauf, und die Jobs `backup_db`/
+> `backup_storage` verschwinden aus der Job-Übersicht. Ihre Cron-Einträge dann entfernen;
+> `cleanup_storage.sh` bleibt. Die Beschreibung unten gilt für Installationen ohne Borg-Backup.
 
 Zwei eigenständige Skripte in `scripts/`, gedacht für periodische Ausführung per Cron
 (zusätzlich zum automatischen Pre-Deploy-Backup, das `deploy.sh` bei jedem Update ohnehin
@@ -496,7 +506,7 @@ Wartungsmodus, Backup & Recovery).
 `storage-init` und `storage-worker`. Danach ist weiterhin das Dateisystem aktiv - es wird nichts
 verschoben, bis die Erstmigration gestartet wird.
 
-**Cronjobs ergänzen** (nach `backup_db`):
+**Cronjobs ergänzen** (nach `backup_db`; `backup_storage` entfällt mit dem Borg-Backup, Abschnitt 14):
 
 ```cron
 30 3 * * * /docker/hocX/scripts/run_job.sh backup_storage env HOCX_COMPOSE_PROJECT=hocx HOCX_COMPOSE_FILES="docker-compose.release.yml docker-compose.clamav.yml docker-compose.traefik.yml" /docker/hocX/scripts/backup_storage.sh >> /docker/hocX/backups/backup_storage.log 2>&1
@@ -518,3 +528,47 @@ verschoben, bis die Erstmigration gestartet wird.
 **Notfall**: Bei Fehlern bleibt die Wartung bestehen und das Dateisystem aktiv. Ursache im
 Migrationsverlauf/Fehlerprotokoll prüfen, Migration fortsetzen oder abbrechen; die Wartung lässt
 sich unter System → Wartung erst beenden, wenn alle Freigabebedingungen erfüllt sind.
+
+## 14. Offsite-Backup (BorgBackup, Hetzner Storage Box)
+
+Ausführlich: `docs-site/docs/technik/backup/` (Architektur, Einrichtung & Betrieb,
+Wiederherstellung, Sicherheit). Kurzfassung:
+
+**Einrichten (einmalig)** – Details und Hetzner-Abnahme in `backup/betrieb.md`:
+
+1. Backup-Schlüssel auf dem Server (`~/.hocx-backup/id_backup`), Wartungsschlüssel **nur** offline.
+2. Host-Key der Box prüfen und als `~/.hocx-backup/known_hosts` ablegen (Fingerprint mit Hetzner
+   vergleichen) – nie ungeprüft akzeptieren.
+3. In `authorized_keys` der Box: Backup-Schlüssel mit `command="borg-1.4 serve --append-only
+   --restrict-to-repository …",restrict`, Wartungsschlüssel ohne `--append-only`. Automatische
+   Snapshots der Box aktivieren.
+4. `.env`: `BACKUP_STORAGEBOX_HOST/USER`, `BACKUP_SSH_KEY_PATH`, `BACKUP_KNOWN_HOSTS_PATH`,
+   `BACKUP_PASSPHRASE` (zufällig, lang), `BACKUP_STORAGEBOX_QUOTA_BYTES`; `BACKUP_ENABLED=false`;
+   `./scripts/deploy.sh prod`.
+5. `docker compose -p hocx exec backup-worker python -m app.backup.cli init --i-understand-this-creates-a-new-repository`,
+   ausgegebene ID als `BACKUP_REPOSITORY_ID` eintragen.
+6. `… python -m app.backup.cli export-key --paper` → mit Passphrase, `.env` und
+   `STORAGE_CREDENTIALS_KEY` in die Notfallmappe (offline, getrennt).
+7. `BACKUP_ENABLED=true`, `./scripts/deploy.sh prod`. Unter System → Backups: erstes Backup
+   erfolgreich, «Restore-Test starten» erfolgreich, Integritätsprüfung erfolgreich.
+8. Cron-Einträge `backup_db` und `backup_storage` entfernen (`crontab -e`). Alte lokale Backups
+   (`backups/*.sql.gz`, `backups/storage/`) erst nach bewusster Entscheidung löschen.
+
+**Betrieb**: Backups alle 6 h (System → Backups → Einstellungen), Integritätsprüfung wöchentlich,
+Restore-Test monatlich; Probleme meldet ntfy (Abschnitt 12). Vor jedem Deploy legt `deploy.sh`
+ein geschütztes Backup an und bricht bei Fehlschlag ab (bewusst überspringen:
+`HOCX_PRE_DEPLOY_BACKUP=skip`). Quartalsweise mit dem Wartungsschlüssel `compact` ausführen
+(gibt durch die Retention freigegebenen Platz frei, siehe `backup/betrieb.md`).
+
+**Notfälle** (Details `backup/restore.md`):
+
+| Situation | Vorgehen |
+|---|---|
+| Mandant versehentlich verändert/gelöscht | System → Backups → Wiederherstellung → «Mandant als Kopie» (neuer Mandant, Original bleibt) |
+| Gesamtzustand muss zurück | «Vollständige Wiederherstellung» (Rettungspunkt, isolierte DB, neue Storage-Generation, Tausch mit automatischem Rücktausch bei Fehler) |
+| Server verloren / Datenbank weg | neuer Server, `.env` aus der Notfallmappe, nur `db` starten, `run --rm --no-deps --entrypoint python backup-worker -m app.backup.cli restore-full …`, dann `swap-database`, Deploy, Wartung freigeben |
+| Storage Box nicht erreichbar | Backups laufen nach Rückkehr automatisch weiter (Retry mit Backoff, Fortsetzung ohne Neuübertragung); Hetzner-Status prüfen |
+| `repository_id_mismatch`, `host_key_mismatch`, `repository_replay` | **nicht** übergehen – möglicher Angriff oder falsches Ziel; Box und Fingerprint manuell prüfen |
+| Worker hängt/abgestürzt | Container startet neu und setzt den Auftrag fort; verwaister Backup-Hold wird automatisch gelöst |
+| Verwaister Borg-Lock nach Absturz | nur wenn sicher kein Worker läuft: `… python -m app.backup.cli break-lock --yes` |
+

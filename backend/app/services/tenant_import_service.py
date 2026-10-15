@@ -207,6 +207,21 @@ class TenantImportService:
             raise
         return new_tenant, self.warnings
 
+    @property
+    def source(self) -> "ImportFileSource":
+        """Dateiquelle des laufenden Imports. Kompatibilität: wer (wie ältere Aufrufer/Tests) nur
+        extract_dir setzt, bekommt die ZIP-Quelle mit ihrer Pfadprüfung."""
+        current = self.__dict__.get("_source")
+        if current is None and self.__dict__.get("extract_dir") is not None:
+            return ExtractedDirSource(self.__dict__["extract_dir"])
+        if current is None:
+            raise RuntimeError("Keine Dateiquelle für den Import gesetzt")
+        return current
+
+    @source.setter
+    def source(self, value: "ImportFileSource") -> None:
+        self.__dict__["_source"] = value
+
     @staticmethod
     def _remove_imported_objects_for(db: Session, tenant_id: int) -> None:
         from app.core.storage import delete_prefix
