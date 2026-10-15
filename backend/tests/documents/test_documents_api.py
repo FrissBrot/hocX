@@ -172,3 +172,44 @@ def test_sources_are_tenant_scoped(db, setup):
     assert routes.list_source_options("protocol_blocks", protocol_id=setup["protocol"].public_id, db=db, user=setup["other_admin"]) == []
     with pytest.raises(HTTPException):
         routes.list_source_options("geheim", protocol_id=None, db=db, user=setup["admin"])
+
+
+def test_list_sources_and_list_export_require_writer(db, setup):
+    """TYPST-002: Leser bekommen weder die Listenauswahl noch den Listeninhalt (wie GET /api/lists)."""
+    reader = make_current_user(setup["tenant"].id, role="reader")
+    with pytest.raises(HTTPException) as excinfo:
+        routes.list_source_options("lists", protocol_id=None, db=db, user=reader)
+    assert excinfo.value.status_code == 403
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(routes.render_document(DocumentRequest(document_type="list"), db=db, user=reader))
+    assert excinfo.value.status_code == 403
+    writer = make_current_user(setup["tenant"].id, role="writer")
+    assert routes.list_source_options("lists", protocol_id=None, db=db, user=writer) == []
+
+
+def test_reader_can_download_own_rendered_pdf(db, setup):
+    """TYPST-003: Leser dürfen ihre selbst erzeugten PDFs ohne Protokollbezug laden, andere
+    Leser und fremde Mandanten nicht; Schreibende wie bisher."""
+    from app.api.routes import files as file_routes
+    from app.models import StoredFile
+    from app.services.access_service import AccessService
+    from tests.factories import make_app_user
+
+    tenant = setup["tenant"]
+    owner = make_app_user(db, "leser-pdf@example.com", tenant_id=tenant.id, role_code="reader")
+    other = make_app_user(db, "anderer-leser@example.com", tenant_id=tenant.id, role_code="reader")
+    reader = make_current_user(tenant.id, role="reader", user_id=owner.id)
+    result = asyncio.run(routes.render_document(DocumentRequest(document_type="statistics"), db=db, user=reader))
+    assert result.content_url
+    response = file_routes.get_stored_file_content(result.generated_file_id, db=db, user=reader)
+    assert response.status_code == 200
+
+    stored = db.query(StoredFile).filter(StoredFile.public_id == result.generated_file_id).one()
+    access = AccessService()
+    with pytest.raises(HTTPException) as excinfo:
+        access.ensure_can_read_stored_file(db, make_current_user(tenant.id, role="reader", user_id=other.id), stored.id)
+    assert excinfo.value.status_code == 403
+    with pytest.raises(HTTPException) as excinfo:
+        access.ensure_can_read_stored_file(db, make_current_user(setup["other"].id, role="reader", user_id=owner.id), stored.id)
+    assert excinfo.value.status_code == 403
+    access.ensure_can_read_stored_file(db, make_current_user(tenant.id, role="writer", user_id=other.id), stored.id)
