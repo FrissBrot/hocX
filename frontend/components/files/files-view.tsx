@@ -35,6 +35,7 @@ function sourceOptions(t: TFunc): { value: SourceFilter; label: string }[] {
     { value: "word_import", label: t("sourceOptions.wordImport") },
     { value: "submission_upload", label: t("sourceOptions.submissions") },
     { value: "gallery_upload", label: t("sourceOptions.uploads") },
+    { value: "protocol_export", label: t("sourceOptions.protocolExports") },
   ];
 }
 

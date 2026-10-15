@@ -41,7 +41,8 @@
     "protocol": "Verbale",
     "wordImport": "Import Word",
     "submission": "Consegna",
-    "upload": "Caricamento"
+    "upload": "Caricamento",
+    "protocolExport": "Esportazione del verbale"
   },
   "detail": {
     "openOriginal": "Apri originale",
@@ -71,7 +72,8 @@
     "empty": "Nessun file trovato.",
     "protocolRef": "Verbale {label}",
     "download": "Scarica",
-    "share": "Condividi"
+    "share": "Condividi",
+    "openPdf": "Apri PDF"
   },
   "view": {
     "title": "File",
@@ -96,7 +98,8 @@
     "protocols": "Verbali",
     "wordImport": "Import Word",
     "submissions": "Consegne",
-    "uploads": "Caricamenti"
+    "uploads": "Caricamenti",
+    "protocolExports": "Esportazioni dei verbali"
   },
   "sortOptions": {
     "newestFirst": "Più recenti prima",
@@ -128,5 +131,53 @@
     "rulesMaxFiles": "max. {max} file per elemento",
     "elementLabel": "Elemento di consegna",
     "elementPlaceholder": "Scegli elemento…"
+  },
+  "document": {
+    "title": "Documento",
+    "status": "Stato",
+    "statusLabel": {
+      "processing": "In elaborazione",
+      "ready": "Pronto",
+      "partial": "Elaborato parzialmente",
+      "failed": "Elaborazione non riuscita"
+    },
+    "pdf": "Vista PDF",
+    "pdfReady": "Pronta",
+    "text": "Testo",
+    "jobStatus": {
+      "queued": "In attesa di elaborazione",
+      "running": "In creazione",
+      "done": "Non disponibile",
+      "failed": "Non riuscito",
+      "blocked": "Bloccato (controllo antivirus)",
+      "none": "Non disponibile"
+    },
+    "extractionStatus": {
+      "ready": "Estratto",
+      "empty": "Nessun testo trovato",
+      "ocr_required": "Riconoscimento del testo (OCR) necessario",
+      "unsupported": "Non supportato per questo formato",
+      "failed": "Non riuscito"
+    },
+    "currentVersion": "Versione attuale",
+    "versionNumber": "Versione {number}",
+    "downloadPdf": "Scarica PDF",
+    "downloadOriginal": "Scarica file originale",
+    "showText": "Mostra testo estratto",
+    "hideText": "Nascondi testo",
+    "textEmpty": "Nessun testo disponibile.",
+    "textLoadError": "Non è stato possibile caricare il testo.",
+    "reprocess": "Elabora di nuovo",
+    "reprocessStarted": "L’elaborazione è stata riavviata.",
+    "reprocessError": "Non è stato possibile riavviare l’elaborazione.",
+    "historyTitle": "Versioni ({count})",
+    "current": "Attuale",
+    "openPdf": "Apri PDF",
+    "original": "Originale",
+    "previewTitle": "Anteprima PDF di {name}",
+    "previewProcessing": "La vista PDF è in fase di creazione …",
+    "previewUnavailable": "Per questo documento non è disponibile una vista PDF. Il file originale è disponibile nei dettagli.",
+    "loadError": "Non è stato possibile caricare i dettagli del documento.",
+    "openPdfNewTab": "Apri PDF in una nuova scheda"
   }
 }

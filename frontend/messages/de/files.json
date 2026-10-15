@@ -41,7 +41,8 @@
     "protocol": "Protokoll",
     "wordImport": "Word-Import",
     "submission": "Abgabe",
-    "upload": "Upload"
+    "upload": "Upload",
+    "protocolExport": "Protokollexport"
   },
   "detail": {
     "openOriginal": "Original öffnen",
@@ -71,7 +72,8 @@
     "empty": "Keine Dateien gefunden.",
     "protocolRef": "Protokoll {label}",
     "download": "Download",
-    "share": "Teilen"
+    "share": "Teilen",
+    "openPdf": "PDF öffnen"
   },
   "view": {
     "title": "Dateien",
@@ -96,7 +98,8 @@
     "protocols": "Protokolle",
     "wordImport": "Word-Import",
     "submissions": "Abgaben",
-    "uploads": "Uploads"
+    "uploads": "Uploads",
+    "protocolExports": "Protokollexporte"
   },
   "sortOptions": {
     "newestFirst": "Neueste zuerst",
@@ -128,5 +131,53 @@
     "rulesMaxFiles": "max. {max} Dateien pro Element",
     "elementLabel": "Abgabe-Element",
     "elementPlaceholder": "Element wählen…"
+  },
+  "document": {
+    "title": "Dokument",
+    "status": "Status",
+    "statusLabel": {
+      "processing": "In Verarbeitung",
+      "ready": "Bereit",
+      "partial": "Teilweise verarbeitet",
+      "failed": "Verarbeitung fehlgeschlagen"
+    },
+    "pdf": "PDF-Ansicht",
+    "pdfReady": "Bereit",
+    "text": "Text",
+    "jobStatus": {
+      "queued": "Wartet auf Verarbeitung",
+      "running": "Wird erstellt",
+      "done": "Nicht verfügbar",
+      "failed": "Fehlgeschlagen",
+      "blocked": "Gesperrt (Virenprüfung)",
+      "none": "Nicht verfügbar"
+    },
+    "extractionStatus": {
+      "ready": "Extrahiert",
+      "empty": "Kein Text gefunden",
+      "ocr_required": "Texterkennung (OCR) erforderlich",
+      "unsupported": "Für dieses Format nicht unterstützt",
+      "failed": "Fehlgeschlagen"
+    },
+    "currentVersion": "Aktuelle Version",
+    "versionNumber": "Version {number}",
+    "downloadPdf": "PDF herunterladen",
+    "downloadOriginal": "Originaldatei herunterladen",
+    "showText": "Extrahierten Text anzeigen",
+    "hideText": "Text ausblenden",
+    "textEmpty": "Kein Text vorhanden.",
+    "textLoadError": "Der Text konnte nicht geladen werden.",
+    "reprocess": "Erneut verarbeiten",
+    "reprocessStarted": "Verarbeitung wurde neu gestartet.",
+    "reprocessError": "Verarbeitung konnte nicht neu gestartet werden.",
+    "historyTitle": "Versionen ({count})",
+    "current": "Aktuell",
+    "openPdf": "PDF öffnen",
+    "original": "Original",
+    "previewTitle": "PDF-Vorschau von {name}",
+    "previewProcessing": "Die PDF-Ansicht wird gerade erstellt …",
+    "previewUnavailable": "Für dieses Dokument gibt es keine PDF-Ansicht. Die Originaldatei ist in den Details verfügbar.",
+    "loadError": "Dokumentdetails konnten nicht geladen werden.",
+    "openPdfNewTab": "PDF in neuem Tab öffnen"
   }
 }

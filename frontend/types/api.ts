@@ -189,7 +189,80 @@ export type SubmissionFile = {
   scan_status: string;
 };
 
-export type FileOverviewSource = "protocol_image" | "word_import" | "submission_upload" | "gallery_upload";
+export type FileOverviewSource = "protocol_image" | "word_import" | "submission_upload" | "gallery_upload" | "protocol_export";
+
+// Logische Dokumente (backend/app/schemas/documents.py): ein Eintrag im Dateien-Tab, dahinter
+// Originaldatei, PDF-Darstellung, extrahierter Inhalt und ggf. mehrere Versionen.
+export type DocumentStatus = "processing" | "ready" | "partial" | "failed";
+export type DocumentJobStatus = "queued" | "running" | "done" | "failed" | "blocked" | "none";
+
+export type DocumentSummary = {
+  id: string;
+  status: DocumentStatus;
+  pdf_status: DocumentJobStatus;
+  extraction_status: string | null;
+  pdf_url: string | null;
+  pdf_download_url: string | null;
+  version_count: number;
+  current_version_number: number | null;
+  current_version_label: string | null;
+  detail_url: string;
+};
+
+export type DocumentFileRead = {
+  name: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  url: string;
+  download_url: string;
+};
+
+export type DocumentJobState = { status: DocumentJobStatus; result: string | null; attempts: number };
+
+export type DocumentExtractionRead = {
+  status: string;
+  parser: string | null;
+  parser_version: string | null;
+  schema_version: number;
+  page_count: number | null;
+  char_count: number | null;
+  ocr_applied: boolean;
+  warnings: string[];
+  error: string | null;
+  text_url: string | null;
+};
+
+export type DocumentVersionRead = {
+  id: string;
+  version_number: number;
+  label: string | null;
+  created_at: string;
+  is_current: boolean;
+  original: DocumentFileRead | null;
+  pdf: DocumentFileRead | null;
+  pdf_job: DocumentJobState;
+  extract_job: DocumentJobState;
+  extraction: DocumentExtractionRead | null;
+};
+
+export type DocumentDetail = {
+  id: string;
+  display_name: string;
+  source_kind: "upload" | "protocol_export";
+  status: DocumentStatus;
+  created_at: string;
+  updated_at: string;
+  current_version_id: string | null;
+  versions: DocumentVersionRead[];
+  can_reprocess: boolean;
+};
+
+export type DocumentText = {
+  format: "plain" | "markdown" | "json";
+  status: string;
+  text: string | null;
+  content: Record<string, unknown> | null;
+};
 
 export type PhotoAlbumKind = "manual" | "cycle" | "submission" | "submission_element";
 
@@ -239,6 +312,8 @@ export type FileOverviewItem = {
   context_label: string | null;
   // Live Photo: content URL of the short MP4 played on hover (null for ordinary photos).
   live_video_url: string | null;
+  // Logisches Dokument (PDF-Ansicht, Status, Versionen) - fehlt/null bei Bildern, ZIPs usw.
+  document?: DocumentSummary | null;
   // Every album this file belongs to (only populated on the unscoped GET /files listing).
   albums: FileAlbumRef[];
   // Best-of ("Stern") state: within the album this item was fetched for when scoped by
@@ -755,7 +830,8 @@ export type SystemErrorLogFilterOptions = {
 // with its own member order (audit fix, 2026-09-17: a fifth source added to one but not
 // the other used to compile fine on both sides, and the un-updated view would silently
 // fall through its `?? entry.source` fallback and show the raw enum string instead).
-export type UploadPipelineSource = FileOverviewSource;
+// Ausnahme: Protokollexporte sind keine Uploads und erscheinen in der Pipeline-Ansicht nicht.
+export type UploadPipelineSource = Exclude<FileOverviewSource, "protocol_export">;
 
 export type UploadPipelineFileEntry = {
   id: string;
