@@ -145,6 +145,24 @@ jobs:
             texlive-pictures \
             fonts-lmodern
 
+      # Dokumentverarbeitung (tests/test_document_*.py): LibreOffice, Tesseract und Poppler wie
+      # in backend/Dockerfile(.test) - ohne sie würden Konvertierung, OCR und Vorschau übersprungen.
+      - name: Install document toolchain
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            libreoffice-writer-nogui \
+            libreoffice-calc-nogui \
+            libreoffice-impress-nogui \
+            tesseract-ocr \
+            tesseract-ocr-deu \
+            tesseract-ocr-fra \
+            tesseract-ocr-ita \
+            poppler-utils \
+            fonts-liberation \
+            fonts-dejavu-core \
+            fonts-crosextra-carlito \
+            fonts-crosextra-caladea
+
       - name: Run alembic upgrade head against a fresh database
         working-directory: backend
         env:
