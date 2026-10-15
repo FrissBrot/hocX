@@ -81,3 +81,30 @@ def test_process_job_handles_a_mix_of_readable_and_missing_files(monkeypatch, tm
     worker._process_job(engine=None, detector=None, store=_FsStore(tmp_path), job={"id": "job-3", "tenant_id": 1, "stored_file_ids": [1, 2]})
 
     assert written == [[(1, 5.0), (2, None)]]
+
+
+class _UnavailableStore:
+    def get_bytes(self, namespace, key):
+        from app.objstore_client import StorageUnavailable
+
+        raise StorageUnavailable("ConnectTimeoutError")
+
+
+def test_process_job_fails_on_transient_storage_errors_instead_of_marking_files_analyzed(monkeypatch):
+    """S3-011: S3 kurz nicht erreichbar darf Dateien nicht dauerhaft als "analysiert ohne Score"
+    markieren - der Job scheitert und die Dateien werden später erneut eingeplant."""
+    import pytest
+
+    from app.objstore_client import StorageUnavailable
+
+    monkeypatch.setattr(worker, "fetch_files", lambda engine, ids: [{"id": 1, "storage_path": "a.png", "mime_type": "image/png"}])
+    written: list = []
+    monkeypatch.setattr(worker, "write_face_quality_scores_batch", lambda engine, results: written.append(results))
+    finished: list = []
+    monkeypatch.setattr(worker, "finish_job", lambda engine, job_id, *, status, error=None: finished.append((job_id, status)))
+
+    with pytest.raises(StorageUnavailable):
+        worker._process_job(engine=None, detector=None, store=_UnavailableStore(), job={"id": "job-1", "tenant_id": 1, "stored_file_ids": [1]})
+
+    assert written == []
+    assert finished == []

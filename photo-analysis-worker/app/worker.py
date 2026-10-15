@@ -23,7 +23,7 @@ from app.db import (
     record_job_run,
     write_face_quality_scores_batch,
 )
-from app.objstore_client import ObjectNotFound, ObjectStore, StorageError
+from app.objstore_client import InvalidObjectKey, ObjectNotFound, ObjectStore
 from app.face_quality import load_detector, score_face_quality
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -67,12 +67,15 @@ def _process_job(engine, detector, job: dict, store: ObjectStore | None = None) 
         namespace = file_row.get("namespace") or "main"
         try:
             image_bytes = store.get_bytes(namespace, file_row["storage_path"])
-        except (ObjectNotFound, StorageError, OSError, ValueError) as exc:
+        except (ObjectNotFound, InvalidObjectKey, ValueError) as exc:
             logger.warning("job %s: could not read %s/%s: %s", job["id"], namespace, file_row["storage_path"], exc)
             # Mark it analyzed anyway (no score) - otherwise a file missing from disk gets
             # re-queued and re-attempted by every future off-peak run, forever.
             results.append((file_row["id"], None))
             continue
+        # Alle anderen Speicherfehler (S3 nicht erreichbar, Drosselung, Konfiguration) sind
+        # vorübergehend (S3-011): der Job scheitert ohne Score-Updates, die Dateien bleiben
+        # unanalysiert und werden beim nächsten Lauf erneut eingeplant.
         score = score_face_quality(detector, image_bytes)
         results.append((file_row["id"], score))
         scored += 1
