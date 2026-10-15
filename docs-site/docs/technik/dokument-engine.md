@@ -98,7 +98,7 @@ backend/app/documents/
   hashing.py            Kanonische Serialisierung, Inhalts-Hash
   renderer.py           Typst-Prozess-Pool, Compile-Root, PDF/PNG, Fehlerzuordnung
   xmp.py                hocX-Felder im XMP (inkrementell, pypdf)
-  service.py            Orchestrierung: bauen → versionieren → rendern → signieren → speichern
+  service.py            Orchestrierung: bauen → versionieren → rendern → registrieren → speichern
   exports.py            CSV/XLSX/ICS/Markdown aus demselben Modell
   providers/            ein Modul pro Datenquelle (protocol, todos, events, lists,
                         participants, finance, statistics, structure)
@@ -158,8 +158,15 @@ Neutral- und Statusfarben, Abstände und Radien stammen aus `design/tokens.css` 
   (`protocol.version_minor`, `protocol.version_final_minor`).
 - Inhalts-Hash: SHA-256 über die kanonische JSON-Serialisierung von `meta` (ohne Version,
   Sprache), `blocks` und `schema_version`; ohne `style`, `options`, `strings`, `render`.
-- Weicht der Hash vom letzten Protokoll-Export ab, steigt der passende Zähler **vor** dem
-  Rendern. Pro Export ein Datensatz in `document_export`.
+- Weicht der Hash vom letzten Protokoll-Export **desselben Status** (Entwurf bzw. Endfassung)
+  ab, steigt der passende Zähler **vor** dem Rendern. Die erste Endfassung ist damit immer
+  `v1.0`. Pro Export ein Datensatz in `document_export`.
+- Versioniert wird nur der kanonische Protokoll-Export: die Standardblöcke des Typs `protocol`
+  (auch ausdrücklich mitgeschickt, wie im Export-Dialog) ohne eigenen Titel/Untertitel. Eigene
+  Blöcke oder ein eigener Titel ergeben den Typ `protocol_excerpt` («Protokollauszug»): ohne
+  Versionsnummer, ohne `source_public_id` im Register und ohne Einfluss auf die Zähler. Sonst
+  könnte jede lesende Person ein «echtes» Protokoll beliebigen Inhalts registrieren und die
+  verteilte Fassung auf der Prüfseite als überholt erscheinen lassen.
 
 ### Echtheitsprüfung (Dokumentenregister)
 
@@ -182,7 +189,8 @@ flowchart LR
 1. Dokument-ID (UUIDv7) vor dem Rendern erzeugen; sie steht im PDF.
 2. Typst-Compile (PDF/A-2b).
 3. `xmp.add_document_xmp`: hocX-Felder (Namespace `https://hocx.ch/ns/document/1.0/`, Präfix
-   `hocx`: Dokument-ID, Mandanten-public_id, Dokumenttyp, Version, Inhalts-Hash, Prüf-URL) samt
+   `hocx`: Dokument-ID, Mandanten-public_id – nur wenn der Mandant die Anzeige auf der
+   Prüfseite freigegeben hat –, Dokumenttyp, Version, Inhalts-Hash, Prüf-URL) samt
    Eintrag in `pdfaExtension:schemas`. Inkrementelles Update: die Typst-Bytes bleiben unverändert
    (geprüft), nur ein neues `/Metadata`-Objekt wird angehängt.
 4. SHA-256 über genau diese Bytes.
@@ -295,7 +303,7 @@ Jeder Block-Typ besteht aus Pydantic-Modell (`model.py`), Katalog-Eintrag mit Pa
 | Personen | `attendance`, `attendance_matrix`, `member_list`, `signature_fields`, `attendance_sheet` |
 | Aufgaben | `todo_table` |
 | Termine | `event_table`, `event_calendar_month`, `event_agenda` |
-| Listen | `list_table` |
+| Listen | `list_table` (nur `writer`/`admin`, wie die Listen-API) |
 | Finanzen | `finance_balance`, `finance_transactions`, `fines` |
 | Statistik | `kpi_tiles`, `chart`, `stat_table` |
 | Weitere | `qr_link`, `generic_table` |
@@ -366,7 +374,7 @@ durch `�` ersetzt (PDF/A verbietet fehlende Glyphen).
 
 | Endpunkt | Zweck | Rolle |
 |---|---|---|
-| `POST /api/documents/render` | PDF erzeugen (versionieren, signieren, speichern) | reader |
+| `POST /api/documents/render` | PDF erzeugen (versionieren, registrieren, speichern); `content_url` lädt bei Protokollbezug jede Person mit Leserecht auf das Protokoll, sonst admin/writer/kassier und die Person, die das PDF erzeugt hat | reader |
 | `POST /api/documents/preview` | PNG-Vorschau der ersten Seiten, nichts wird gespeichert | reader |
 | `POST /api/documents/export` | CSV, XLSX, ICS, Markdown aus demselben Modell | reader |
 | `GET /api/documents/exports` | Export-Historie (`document_export`) | reader |
@@ -462,8 +470,8 @@ umkehrbar):
   der Compile bekommt ein leeres Cache-Verzeichnis und kann nie nachladen.
 - **QR-Codes** erzeugt das vendorte Typst-Paket `tiaoma` (MIT, ohne weitere Pakete) als Vektor;
   der Compile lädt es aus `typst_packages/`, nie aus dem Netz.
-- **Inhalts-Hash über das ganze Dokument:** Angehängte Zusatzblöcke beim Protokoll zählen zum
-  Inhalt. Wer zwischen Exporten mit und ohne Zusatzblöcke wechselt, erhöht die Version.
+- **Inhalts-Hash über das ganze Dokument:** Er wird nur für kanonische Protokoll-Exporte mit
+  der Vorversion verglichen; Exporte mit Zusatzblöcken sind Protokollauszüge ohne Version.
 - **Hinweis für Mandanten mit eigenen LaTeX-Slots:** Es gibt keinen Mechanismus für
   Admin-Hinweise pro Mandant; der Hinweis steht in den Release-Notes und die Migration schreibt
   die betroffenen Mandanten ins Log.
