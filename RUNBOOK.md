@@ -515,7 +515,7 @@ Funktion/Rechte fehlen (Migration 0117 gelaufen? `docker compose logs abgabebox-
 
 ### Organisationen verifizieren (Plattform-Admin)
 
-1. Mandanten-Admins beantragen die Verifizierung unter Vorlagen → Echtheitsprüfung.
+1. Mandanten-Admins beantragen die Verifizierung unter Dokumente → Echtheitsprüfung.
 2. Offene Anträge: Admin-Panel → **Verifizierungen** (oder Mandant öffnen → Tab «Verifizierung»).
 3. Identität prüfen, z. B. Handelsregister/UID-Register, Statuten, Website mit Impressum, Rückruf
    an eine unabhängig gefundene Nummer. Erst dann **Bestätigen** und in der Notiz festhalten, wie
@@ -526,14 +526,32 @@ Eine Namensänderung des Mandanten hebt die Verifizierung automatisch auf (auch 
 Plattform-Admin). Alle Schritte stehen im Audit-Log (`identity_verification.*`,
 `admin.identity_verification_*`).
 
-### Nach dem Update auf die Dokument-Engine
+### Nach dem Update auf die Dokument-Engine / das Document Studio
 
-Migration `0115` übernimmt die alten Dokumentvorlagen als Hausstile. Danach die nicht mehr
-benutzten Vorlagen-Dateien entfernen (erst mit `--dry-run` ansehen):
+Migration `0115` übernimmt die alten Dokumentvorlagen, `0118_document_studio` macht daraus
+Brand-Profile (Hausstile → Profile, Rezepte → Vorlagen, Hausstil-Wahl der Protokollvorlagen →
+Zuweisungen) und entfernt die alten Tabellen. Beides läuft beim Deploy automatisch. Vorher ein
+frisches Backup ziehen: `0115` ist nicht umkehrbar, der Downgrade von `0118` stellt nur die
+Struktur wieder her.
+
+Danach die nicht mehr benutzten Vorlagen-Dateien entfernen (erst mit `--dry-run` ansehen):
 
 ```bash
 ./scripts/cleanup-legacy-document-templates.sh --dry-run "${HOCX_STORAGE_PATH:-./storage}"
 ./scripts/cleanup-legacy-document-templates.sh "${HOCX_STORAGE_PATH:-./storage}"
 ```
 
-Hochgeladene Logos, Fussbilder und Schriften bleiben erhalten.
+Hochgeladene Logos, Fussbilder und Schriften bleiben erhalten. Bestehende Dateien bleiben unter
+`document_style_assets/` liegen (der Pfad steht in der Datenbank), neue Uploads landen unter
+`document_assets/`. Beide Verzeichnisse gehören ins Backup.
+
+Kontrolle nach dem Deploy:
+
+1. Backend-Log: `ensure_document_studio` gleicht beim Start die mitgelieferten Vorlagen ab
+   (keine Fehler im Admin-Fehlerlog).
+2. Als Mandanten-Admin **Dokumente → Vorlagen** öffnen: alle Dokumenttypen haben Vorlagen mit
+   Vorschaubild. **Corporate Design** zeigt mindestens ein Standardprofil.
+3. Ein Protokoll exportieren (Export-Dialog, PDF erstellen) und auf `/verify` prüfen: «Original».
+
+Ändert sich nach einem Update die Gestaltung einer mitgelieferten Vorlage, entsteht beim Start
+eine neue Revision. Bestehende Exporte behalten ihre Revision (`document_export.template_revision_id`).

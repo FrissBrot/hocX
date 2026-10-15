@@ -23877,6 +23877,11 @@ a.mobile-list-row { color: var(--text); }
   position: sticky;
   top: 0;
 }
+.studio-brand-language {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
 .studio-brand-item {
   display: flex;
   align-items: center;

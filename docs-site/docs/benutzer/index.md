@@ -23,7 +23,7 @@ flowchart LR
 | [Todos](todos.md) | Aufgaben aus Protokollen nachverfolgen |
 | [Abgabebox](abgabebox.md) | Öffentlicher, anmeldefreier Datei-Upload für Externe |
 | [Word-Import](word-import.md) | Altprotokolle (.docx/.pdf) als neue Protokolle importieren |
-| [Dokumente & Hausstile](dokumente.md) | PDFs und weitere Exporte zusammenstellen, Aussehen der Dokumente festlegen |
+| [Dokumente & Document Studio](dokumente.md) | PDFs exportieren, Vorlagen gestalten, Corporate Design festlegen |
 | [Echtheit prüfen](echtheit.md) | Prüfen, ob ein PDF unverändert aus hocX stammt; Name, Logo und Verifizierung auf der Prüfseite |
 
 ## Rollen

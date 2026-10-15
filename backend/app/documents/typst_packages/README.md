@@ -5,10 +5,10 @@ Der Typst-Compile der Dokument-Engine lädt Pakete ausschliesslich aus diesem Ve
 leeres Temp-Verzeichnis. Ein Paket wird nur verwendet, wenn es hier liegt.
 
 Aufbau wie der lokale Typst-Paketspeicher: `<namespace>/<name>/<version>/` mit `typst.toml`
-und der Lizenz des Pakets. Import im Stil: `#import "@preview/<name>:<version>": ...`.
+und der Lizenz des Pakets. Import in den Typst-Dateien: `#import "@preview/<name>:<version>": ...`.
 
 `scripts/check-document-catalog.py` prüft, dass jeder `@<namespace>/…`-Import in
-`app/documents/styles/` hier vorhanden ist.
+`app/documents/typst/` hier vorhanden ist.
 
 Vendored:
 

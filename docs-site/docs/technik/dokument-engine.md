@@ -1,23 +1,27 @@
 # Dokument-Engine (Typst)
 
-Diese Seite beschreibt die Dokument-Engine, die seit Version 1.2 alle PDF- und Datei-Exporte
-erzeugt und den früheren TeX-basierten Export vollständig ersetzt. Die Abschnitte
-«Bestandsaufnahme» und «Umsetzungsplan» halten fest, wovon der Umbau ausging; alle übrigen
-Abschnitte beschreiben den umgesetzten Stand. Für Anwenderinnen und Anwender:
-[Dokumente & Hausstile](../benutzer/dokumente.md).
+Diese Seite beschreibt die Dokument-Engine, die alle PDF- und Datei-Exporte erzeugt: Provider,
+Fachkomponenten, Typst-Renderer, Versionierung, Dokumentenregister und Echtheitsprüfung.
+Gestaltet werden die Dokumente seit Oktober 2026 im **Document Studio** (Brand-Profile,
+Vorlagen, Visual Designer), siehe [Document Studio](document-studio.md). Hausstile und Rezepte
+der ersten Engine-Fassung sind damit ersetzt. Die Abschnitte «Bestandsaufnahme»,
+«Umsetzungsplan» und «Migration» halten fest, wovon die Engine ausging. Für Anwenderinnen und
+Anwender: [Dokumente & Document Studio](../benutzer/dokumente.md).
 
 ```mermaid
 flowchart LR
-  P[Provider<br/>Python] --> M[Dokumentmodell<br/>Pydantic/JSON]
-  M --> S[Hausstil<br/>Typst]
-  S --> PDF[PDF/A-2b]
+  V[Vorlage + Brand-Profil<br/>Document Studio] --> C[Compiler]
+  P[Provider + Bindungen<br/>Python] --> C
+  C --> M[Dokument-JSON]
+  M --> T[Typst]
+  T --> PDF[PDF/A-2b]
   PDF --> REG[Dokumentenregister<br/>SHA-256]
   REG -.-> VER[Prüfseite<br/>Abgabebox /verify]
 ```
 
-**Grundidee:** Es gibt nicht mehr verschiedene Exporte, sondern eine Engine. Jedes Dokument
-ist eine Zusammenstellung von Blöcken aus einem gemeinsamen Block-Katalog. Provider füllen die
-Blöcke mit Daten (ohne Layout), ein Hausstil rendert sie (ohne Datenzugriff).
+**Grundidee:** Es gibt eine Engine für alle Exporte. Provider liefern Daten ohne Layout. Die
+Vorlage (Layoutbaum) bestimmt Aufbau und Gestaltung, das Brand-Profil Farben, Schriften und
+Logos. Der Compiler setzt beides zusammen, Typst rendert ohne Datenzugriff.
 
 ## Bestandsaufnahme (Ausgangslage)
 
@@ -87,70 +91,71 @@ zeichnete daraus acht Diagramme: `attendance_over_time`, `attendance_by_particip
 
 ```
 backend/app/documents/
-  model.py              Dokumentmodell (Pydantic, schema_version), Rich-Text-Baum, Blöcke
+  layout.py             Layoutbaum der Vorlagen (Schema, Validierung), layout_migrations.py
+  conditions.py         Sichere Bedingungen (deklarativ, kein eval)
+  bindings.py           Typisierte Datenbindungen mit Zugriffsstufen, Beispieldaten (samples.py)
+  brand.py              Brand-Tokens, Vorlagen, Farb-/Schriftauflösung; brand_service.py (Revisionen)
+  components.py         Editor-Metadaten der Knotentypen, Bibliothek, Katalog für das Frontend
+  compiler.py           Vorlage + Brand + Daten → Dokument-JSON (strikt/Vorschau, Diagnosen)
+  template_service.py   Vorlagen, Revisionen, Veröffentlichen, Zuweisungen, Komponenten
+  system_templates.py   Mitgelieferte Vorlagen für alle Dokumenttypen
+  permissions.py        Fähigkeiten je Rolle (Export, Bearbeiten, Veröffentlichen, Brand)
+  assets.py             Bilder und Schriften (Upload, Virenprüfung, Verwendungen)
+  model.py              Fachblöcke der Komponenten (Pydantic), Rich-Text-Baum, Dokument-Metadaten
   richtext.py           Tiptap-Markdown/Klartext → Rich-Text-Baum (nie Typst-Code)
-  catalog.py            Block-Katalog: Parameter-Modelle, Gruppen, Provider-Zuordnung
-  doc_types.py          Dokumenttypen (Standard-Zusammenstellungen)
-  style_tokens.py       Hausstil-Tokens (Pydantic, Schnittstelle für den Designer)
+  catalog.py            Katalog der Fachkomponenten: Parameter-Modelle, Gruppen, Provider
+  doc_types.py          Dokumenttypen (Kategorie, Protokollpflicht, Zusatzformate)
   strings.py            Feste PDF-Texte je Sprache (generiert aus frontend/messages/*/documentPdf.json)
   context.py            Render-Kontext (db, Mandant, Benutzer, Sprache, Stichtag)
-  builder.py            Rezept/Typ/Protokoll → Dokument (ruft Provider auf)
-  hashing.py            Kanonische Serialisierung, Inhalts-Hash
+  hashing.py            Kanonische Serialisierung, Inhalts- und Design-Hash
   renderer.py           Typst-Prozess-Pool, Compile-Root, PDF/PNG, Fehlerzuordnung
   xmp.py                hocX-Felder im XMP (inkrementell, pypdf)
-  service.py            Orchestrierung: bauen → versionieren → rendern → signieren → speichern
-  exports.py            CSV/XLSX/ICS/Markdown aus demselben Modell
+  service.py            Orchestrierung: Vorlage wählen → kompilieren → versionieren → rendern → registrieren
+  exports.py            CSV/XLSX/ICS/Markdown aus denselben Daten
+  legacy.py             Umwandlung alter Hausstile/Rezepte (Migration, Archiv-Import)
   providers/            ein Modul pro Datenquelle (protocol, todos, events, lists,
                         participants, finance, statistics, structure)
-  styles/               Typst: _tokens.typ (generiert), base/ (gemeinsame Komponenten),
-                        modern.typ, classic.typ, compact.typ, main.typ
+  typst/                main.typ, layout.typ, theme.typ, _tokens.typ (generiert), base/ (Komponenten), lib/
   fonts/                mitgelieferte Schriften inkl. Lizenzen
-  typst_packages/       vendorte Typst-Pakete (derzeit keine nötig, siehe unten)
+  typst_packages/       vendorte Typst-Pakete (tiaoma für QR-Codes)
   i18n/                 generierte Kopie der Dokumenttexte (sync-document-i18n.py)
 ```
 
 ### Dokumentmodell
 
-`Document` (`schema_version = 1`):
+Der Compiler erzeugt pro Export ein Dokument-JSON für Typst: `meta` (Titel, Untertitel,
+Nummer, Datum, Status-Code, Version, Mandant, Sprache, Dokumenttyp), Seiten und Seitenvorlagen,
+die aufgelösten Knoten der Vorlage, `strings` (alle festen Texte der Sprache), `render`
+(Dokument-ID, Kurz-ID, Prüf-URL, Vorschau ja/nein) und das aufgelöste Brand-Profil.
 
-- `meta`: Titel, Untertitel, Nummer, Datum (ISO), Status-Code, Version (Label), Mandant,
-  Sprache, Dokumenttyp.
-- `options`: Titelseite, TOC, Nummerierung, Format (A4 hoch/quer), Wasserzeichen.
-- `style`: Stil-Schlüssel (`modern`/`classic`/`compact`) und validierte Tokens.
-- `strings`: alle festen Texte der gewählten Sprache (Typst schlägt nur nach).
-- `render`: Dokument-ID, Kurz-ID, Prüf-URL und -Link, Vorschau ja/nein (nicht im Inhalts-Hash).
-- `blocks`: diskriminierte Union über `type`; jeder Block hat `title`, `hide_if_empty`
-  (Standard an) und `level`.
-
-Status, Spaltenköpfe und Leertexte stehen im Modell als **Codes**, nicht als übersetzte
-Texte. Der Hausstil übersetzt sie über `strings`. Dadurch ist der Inhalt sprachneutral: ein
-Sprachwechsel allein ändert den Inhalts-Hash nicht.
+Fachkomponenten liefern Blöcke aus `model.py` (diskriminierte Union über `type`). Status,
+Spaltenköpfe und Leertexte stehen dort als **Codes**, nicht als übersetzte Texte. Typst übersetzt
+sie über `strings`. Ein Sprachwechsel allein ändert den Inhalts-Hash deshalb nicht.
 
 Fliesstext ist ein Rich-Text-Baum (`p`, `h`, `ul`, `ol`, `li`, `quote`, `code`, `br`, Text mit
 `bold`/`italic`/`strike`/`code`, `link`). Typst rendert Strings aus dem JSON ausschliesslich
-als Text; es gibt kein `eval` von Benutzerinhalt. Links sind auf `http(s)`/`mailto` beschränkt.
-Bilder liegen unter generierten Namen im Compile-Root; Pfade kommen nie vom Benutzer.
+als Text, es gibt kein `eval` von Benutzerinhalt. Links sind auf `http(s)`/`mailto` beschränkt.
+Bilder liegen unter generierten Namen im Compile-Root, Pfade kommen nie vom Benutzer.
 
-### Hausstile und Tokens
+### Gestaltung
 
-Ein Hausstil ist ein Typst-Modul mit Seitenaufbau, Titelseiten-, Kopf- und Fussvarianten,
-TOC und einer Komponente pro Block-Typ. Fehlt eine Komponente, gilt die Basis-Komponente.
-Angepasst wird **nur über Daten** (`DocumentStyleTokens`, siehe Abschnitt «Token-Schema»).
-Neutral- und Statusfarben, Abstände und Radien stammen aus `design/tokens.css` und werden per
-`scripts/sync-document-tokens.py` nach `styles/_tokens.typ` generiert.
+Aufbau und Optik kommen aus der Vorlage (Layoutbaum) und dem Brand-Profil, siehe
+[Document Studio](document-studio.md). Neutral- und Statusfarben, Abstände und Radien stammen
+aus `design/tokens.css` und werden per `scripts/sync-document-tokens.py` nach
+`typst/_tokens.typ` generiert.
 
 ### Rendering
 
-- Compile-Root: frisches Temp-Verzeichnis mit Stil-Dateien, `document.json` und Bildern;
+- Compile-Root: frisches Temp-Verzeichnis mit den Typst-Dateien, `document.json` und Bildern;
   Schriften über einen pro Worker einmal geladenen `typst.Fonts` (keine Systemschriften).
 - Prozess-Pool (`concurrent.futures.ProcessPoolExecutor`) mit Parallelitätslimit,
   Wall-Clock-Timeout (bei Überschreitung wird der Pool beendet und neu gestartet) und
   Speicherlimit (`RLIMIT_AS`) pro Worker. Ein CPU-Limit pro Prozess entfällt bewusst: es
   summiert sich über die Lebensdauer eines Workers.
 - PDF als PDF/A-2b; Vorschau als PNG (erste N Seiten), ohne Register-Eintrag und Speicherung.
-- Fehler: Schlägt der Compile fehl, wird blockweise nachkompiliert, um den verursachenden
-  Block zu finden. Der Benutzer sieht eine übersetzte Meldung mit Blockname, Details gehen
-  per `record_system_error` ins Admin-Log.
+- Fehler: Schlägt der Compile fehl, wird knotenweise nachkompiliert, um den verursachenden
+  Knoten der Vorlage zu finden. Der Benutzer sieht eine übersetzte Meldung mit Elementname,
+  der Designer markiert das Element. Details gehen per `record_system_error` ins Admin-Log.
 
 ### Versionierung
 
@@ -195,11 +200,12 @@ Dateien, nie Register-Einträge. Wird ein Mandant gelöscht, verschwinden seine 
 seine PDFs gelten danach als «nicht gefunden» - ein gelöschter Verein wird nicht mehr als Urheber
 bestätigt.
 
-**Prüfvermerk im PDF** (Hausstil-Optionen `verify_show_url`, `verify_show_id`, `verify_show_qr`,
-Standard an, Abschnitt «Echtheitsprüfung im Dokument» in den Hausstil-Einstellungen):
+**Prüfvermerk im PDF** (Brand-Profil, Abschnitt «Echtheitsprüfung»: `verify.show_url`,
+`verify.show_id`, `verify.show_qr`, Standard an; in der Vorlage der Knoten `verify_note`):
 
-- Zeile «Echtheit prüfen: abgabe…/verify · ID 7F3A-91C2» bei Modern und Klassisch in der
-  Fusszeile jeder Seite, bei Kompakt und bei Fusszeile «Keine» im Prüfvermerk am Ende.
+- Enthält die Vorlage keinen Prüfvermerk, setzt der Compiler ihn ans Ende des Inhalts
+  (`settings.auto_verify_note`, Standard an). Die Zeile «Echtheit prüfen: abgabe…/verify · ID
+  7F3A-91C2» kann zusätzlich in einer Fusszeile stehen (Systemvorlagen tun das).
 - QR-Code (1.6 cm) auf `<Prüf-URL>?id=<UUID>` im Prüfvermerk am Ende des Inhalts, unten auf der
   letzten Seite (nicht umbrechbar; in der Fusszeile hätte er bei schmalen Rändern keinen Platz).
 - Der Text setzt sich nur aus eingeschalteten Teilen zusammen, Trennzeichen stehen nur zwischen
@@ -211,7 +217,7 @@ Standard an, Abschnitt «Echtheitsprüfung im Dokument» in den Hausstil-Einstel
 dieselbe `source_public_id` (public_id des Protokolls, ohne FK - überlebt Löschen und Umzug)
 einen Eintrag mit höherem `(version_major, version_minor)` gibt. Gleiche Version, neu gerendert,
 zählt nicht. Andere Dokumenttypen sind Momentaufnahmen ohne Version. *Idee (nicht gebaut):*
-«neuerer Export desselben Rezepts» - fachlich keine neue Version desselben Dokuments, eher
+«neuerer Export derselben Vorlage» - fachlich keine neue Version desselben Dokuments, eher
 irreführend.
 
 **Datenzugriff der Abgabebox:** Die View `document_verification_public` enthält die ganze
@@ -274,30 +280,34 @@ Treffer prüft und `{found: false}` erwartet.
 | `DOCUMENT_RENDER_MEMORY_LIMIT_MB` | 3072 | `RLIMIT_AS` pro Worker |
 | `DOCUMENT_PREVIEW_MAX_PAGES` | 4 | Seiten in der PNG-Vorschau |
 
-## Block-Katalog
+## Fachkomponenten (Block-Katalog)
 
-Jeder Block-Typ besteht aus Pydantic-Modell (`model.py`), Katalog-Eintrag mit Parameter-Modell
-(`catalog.py`), Provider (`providers/`) und Basis-Komponente (`styles/base/blocks.typ`).
-`scripts/check-document-catalog.py` prüft in der CI, dass nichts davon fehlt.
+Jede Fachkomponente besteht aus Pydantic-Modell (`model.py`), Katalog-Eintrag mit
+Parameter-Modell (`catalog.py`), Provider (`providers/`) und Basis-Komponente
+(`typst/base/blocks.typ`). Im Designer erscheint sie als Knoten `data_block`.
+`scripts/check-document-catalog.py` prüft in der CI, dass nichts davon fehlt. Ausserdem prüft
+es, dass alle Labels des Document Studio existieren.
 
-| Gruppe | Blöcke |
+| Gruppe | Komponenten |
 |---|---|
-| Struktur | `heading`, `richtext`, `static_text`, `page_break`, `toc`, `spacer`, `divider` |
-| Protokoll | `protocol_element`, `session_date`, `session_notes`, `form`, `bullet_list`, `matrix`, `entry_exit`, `image`, `image_gallery` |
-| Personen | `attendance`, `attendance_matrix`, `member_list`, `signature_fields`, `attendance_sheet` |
+| Protokoll | `protocol_element`, `session_date`, `session_notes`, `matrix`, `entry_exit`, `image`, `image_gallery` |
+| Personen | `attendance`, `attendance_matrix`, `attendance_sheet`, `member_list` |
 | Aufgaben | `todo_table` |
 | Termine | `event_table`, `event_calendar_month`, `event_agenda` |
 | Listen | `list_table` |
 | Finanzen | `finance_balance`, `finance_transactions`, `fines` |
 | Statistik | `kpi_tiles`, `chart`, `stat_table` |
-| Weitere | `qr_link`, `generic_table` |
+| Formulare | `form`, `signature_fields` |
 
-`protocol_element` ist ein Container: der Provider löst ihn in die Blöcke eines Protokoll-Elements
-auf (Überschrift, Text, Todos, …), deshalb hat er keine eigene Typst-Komponente.
+`protocol_element` ist ein Container. Der Provider löst ihn in die Blöcke eines
+Protokoll-Elements auf (Überschrift, Text, Todos, …). Die inneren Blöcke `richtext`,
+`static_text` und `bullet_list` (`CHILD_ONLY_BLOCKS`) haben keinen eigenen Katalog-Eintrag.
+Überschriften, Texte, Tabellen, Abstände, Inhaltsverzeichnis und Seitenumbrüche sind Knoten der
+Vorlage, keine Fachkomponenten.
 
-Dokumenttypen (`doc_types.py`) sind Standard-Zusammenstellungen: `protocol`, `invitation`, `todos`,
-`events`, `attendance_sheet`, `members`, `finance`, `statistics`, `list`, `custom`. Rezepte
-(`document_recipe`) speichern eigene Zusammenstellungen pro Mandant.
+Dokumenttypen (`doc_types.py`, 16 Stück): `protocol`, `invitation`, `agenda`, `attendance`,
+`attendance_sheet`, `members`, `todos`, `events`, `calendar`, `finance`, `transactions`, `fines`,
+`statistics`, `list`, `form`, `custom`. Jeder Typ hat mindestens eine Systemvorlage.
 
 ### Provider und Berechtigungen
 
@@ -312,83 +322,61 @@ aufgelöst; fremde oder unbekannte IDs ergeben `DocumentNotFoundError` (404), fe
 1. Modell in `model.py` (`class FooBlock(BlockBase)`, `type: Literal["foo"]`) und in die Union
    `Block` aufnehmen.
 2. Parameter-Modell und Katalog-Eintrag (`BlockSpec`-Gruppe, Provider-Name) in `catalog.py`.
-   Felder mit `json_schema_extra={"x-widget": ...}` steuern das Formular im Export-Dialog.
+   Felder mit `json_schema_extra={"x-widget": ...}` steuern das Formular im Designer.
 3. Provider-Funktion in `providers/<quelle>.py`, in `providers/__init__.py` registrieren.
    IDs immer über `entity_by_ref` auflösen, nie direkt per `db.get`.
-4. Komponente `foo: (b, ctx) => ...` in `styles/base/blocks.typ` (`base-components`);
-   Hausstile können sie in ihrem eigenen Dictionary überschreiben.
+4. Komponente `foo: (ctx, b) => ...` in `typst/base/blocks.typ` (`base-components`).
 5. Texte: `blockType.foo` und `empty.foo` in `frontend/messages/<locale>/documentPdf.json`,
-   Parameter-Labels `params.<name>`/`enum.<wert>` in `documents.json`, für alle Locales.
-   Danach `python3 scripts/sync-document-i18n.py`.
-6. Fixture in `backend/tests/documents/fixtures/generate.py` ergänzen (Block in `all_blocks`),
-   Goldens mit `scripts/update-document-goldens.sh` aktualisieren und die Bilder prüfen.
-7. `scripts/check-document-catalog.py` muss «ok» melden.
+   dazu `component.foo`, `componentHelp.foo`, Parameter-Labels `params.<name>` und
+   `enum.<wert>` in `documentStudio.json`, für alle Locales. Danach
+   `python3 scripts/sync-document-i18n.py`.
+6. Bibliothekseintrag in `components.py` (erscheint im Designer), gegebenenfalls in
+   Systemvorlagen verwenden.
+7. Golden-Szenario in `backend/tests/documents/fixtures/scenarios.py` ergänzen, Goldens mit
+   `scripts/update-document-goldens.sh` aktualisieren und die Bilder prüfen.
+8. `scripts/check-document-catalog.py` muss «ok» melden, danach
+   `scripts/update-document-studio-fixtures.sh` für die Frontend-Testdaten.
 
-## Token-Schema (Designer-Schnittstelle)
+## Brand-Tokens
 
-Ein Hausstil ist **nur über Daten** anpassbar: `DocumentStyleTokens` (`style_tokens.py`,
-gespeichert in `document_style.tokens_json`, unbekannte Felder werden abgewiesen). Wer einen
-neuen Grundstil gestaltet, schreibt ein Typst-Modul unter `styles/` und liest ausschliesslich
-diese Tokens sowie `_tokens.typ`.
-
-| Token | Werte | Standard |
-|---|---|---|
-| `primary_color`, `secondary_color` | `#RRGGBB` | `#174B7A`, `#4F6D7A` |
-| `font` | `style`, `inter`, `liberation_sans`, `liberation_serif`, `noto_sans`, `custom` | `style` (Hausschrift des Stils) |
-| `custom_fonts` | Asset-IDs für `regular`, `bold`, `italic`, `bold_italic` | – |
-| `base_size` | `10`, `11`, `12` (pt) | `11` |
-| `line_spacing` | `tight`, `normal`, `relaxed` | `normal` |
-| `margins` | `narrow`, `normal`, `wide` | `normal` |
-| `orientation` | `portrait`, `landscape` | `portrait` |
-| `logo_asset_id`, `footer_image_asset_id` | Asset-ID (Bild) | – |
-| `sender` (≤ 600), `place` (≤ 120) | Text | leer |
-| `sender_color` | `#RRGGBB` oder `null` (gedämpfte Textfarbe) | `null` |
-| `header` | `none`, `minimal`, `standard`, `bar`, `logo`, `logo_bar` | `standard` |
-| `footer` | `none`, `minimal`, `standard`, `with_version`, `date_page` | `standard` |
-| `title_page` | `none`, `minimal`, `modern`, `bold`, `cover` | `none` |
-| `toc` | `off`, `on`, `compact`, `very_compact` | `off` |
-| `numbering`, `toc_block_titles`, `show_metadata`, `watermark_draft` | bool | `false`, `true`, `false`, `true` |
-
-Neutral- und Statusfarben, Abstände und Radien kommen aus `design/tokens.css`
-(`scripts/sync-document-tokens.py`, CI prüft mit `--check`). Schriften liegen mit Lizenzen
-unter `backend/app/documents/fonts/`; Zeichen ohne Glyphe in den geladenen Schriften werden
-durch `�` ersetzt (PDF/A verbietet fehlende Glyphen).
+Die frühere Token-Liste der Hausstile ist durch die Brand-Tokens des Document Studio ersetzt
+(`BrandTokens` in `brand.py`, siehe [Document Studio](document-studio.md)).
+Schriften liegen mit Lizenzen unter `backend/app/documents/fonts/`. Zeichen ohne Glyphe in den
+geladenen Schriften werden durch `�` ersetzt, weil PDF/A fehlende Glyphen verbietet.
 
 ## API
 
 | Endpunkt | Zweck | Rolle |
 |---|---|---|
-| `POST /api/documents/render` | PDF erzeugen (versionieren, signieren, speichern) | reader |
-| `POST /api/documents/preview` | PNG-Vorschau der ersten Seiten, nichts wird gespeichert | reader |
-| `POST /api/documents/export` | CSV, XLSX, ICS, Markdown aus demselben Modell | reader |
-| `GET /api/documents/exports` | Export-Historie (`document_export`) | reader |
-| `GET /api/documents/catalog` | Blöcke, Parameter-Schemas, Dokumenttypen, Stile | reader |
+| `POST /api/documents/render` | PDF erzeugen (Vorlage wählen, versionieren, registrieren, speichern) | reader |
+| `POST /api/documents/preview` | PNG-Vorschau der ersten Seiten (auch ungespeicherte Vorlagen, Beispieldaten), nichts wird gespeichert | reader |
+| `POST /api/documents/export` | CSV, XLSX, ICS, Markdown aus denselben Daten | reader |
+| `GET /api/documents/exports` | Export-Historie (`document_export`, mit Vorlage und Design-Hash) | reader |
 | `GET/PATCH /api/document-settings` | Dokumentsprache des Mandanten | reader / admin |
-| `/api/document-styles` | Hausstile (CRUD) | reader / admin |
-| `/api/document-style-assets` | Logos, Fussbilder, Schriften (Upload mit Virenprüfung) | reader / admin |
-| `/api/document-recipes` | Rezepte (CRUD) | reader / writer |
+| `GET /api/documents/sources/{source}` | Auswahllisten für Parameter (Listen, Konten, …) | reader |
+| `/api/document-templates`, `/api/document-brands`, `/api/document-assets`, `/api/document-components`, `/api/document-template-assignments`, `/api/document-studio/*` | Document Studio, siehe [Document Studio](document-studio.md#api) | reader / writer / admin |
 | `GET/PATCH /api/document-verification` | Prüfseite: Name/Logo anzeigen, auf neuere Versionen hinweisen | reader / admin |
 | `POST/DELETE /api/document-verification/request` | Verifizierung beantragen / Antrag zurückziehen | admin |
 | `/api/admin/identity-verification-requests`, `/api/admin/tenants/{id}/identity-verification[/approve\|reject\|revoke]` | Anträge entscheiden, Verifizierung entziehen | Plattform-Admin |
 | `POST /api/public/verify` (Abgabebox) | Öffentliche Prüfung eines Hashes | öffentlich |
-| `GET /api/documents/sources/{source}` | Auswahllisten für Parameter (Listen, Konten, …) | reader |
 
 Alle schreibenden Aufrufe und jeder Export landen im Audit-Log (`document.render`,
-`document.export_<format>`, `document_style.*`, `document_recipe.*`, …).
+`document.export_<format>`, `document_template.*`, `document_brand.*`, `document_asset.*`, …).
 
 ## Tests und CI
 
-- `backend/tests/documents/`: Modell, Rich-Text (Escaping), Renderer, Provider inkl.
-  Mandanten-Isolation, Register (Hash = ausgelieferte Bytes, ID im Text und XMP, Vorschau ohne
-  Eintrag, Retention), Versionierung, API, Altdaten-Übernahme; alle 8 Kombinationen des
-  Prüfvermerks mit jedem Hausstil.
+- `backend/tests/documents/`: Layout-Schema, Bedingungen, Bindungen, Compiler, Brand,
+  Systemvorlagen, Studio- und Export-API, Renderer, Provider inkl. Mandanten-Isolation, Register
+  (Hash = ausgelieferte Bytes, ID im Text und XMP, Vorschau ohne Eintrag, Retention),
+  Versionierung, Altdaten-Übernahme.
 - `backend/tests/test_document_verification.py`: View/Funktion und Rechte der Abgabebox-Rolle;
   `test_document_registry_migration.py`: Übernahme alter Hashes; `test_identity_verification.py`:
-  Antrag, Entscheid, Umbenennung; `abgabebox-backend/tests/test_verify.py`: Endpoint.
-- Matrix Hausstil × Fixture × Format ohne Typst-Warnungen; Vollständigkeit per `pdftotext`.
-- Goldens (`goldens/*.png`): bei Abweichung landen Ist- und Differenzbild im CI-Artefakt
-  `document-golden-diffs`. Bewusste Änderungen: `scripts/update-document-goldens.sh`.
-- Galerie: jeder Hausstil × jeder Dokumenttyp als ein PDF (CI-Artefakt `document-gallery`).
+  Antrag, Entscheid, Umbenennung; `abgabebox-backend/tests/test_verify.py`: Endpoint;
+  `test_document_studio_migration.py`: Migration 0118 hin und zurück.
+- Goldens (`goldens/*.png`, 23 Szenarien aus `fixtures/scenarios.py`): Bei Abweichung landen Ist-
+  und Differenzbild im CI-Artefakt `document-golden-diffs`. Bewusste Änderungen:
+  `scripts/update-document-goldens.sh`.
+- Galerie: jede Systemvorlage mit Beispieldaten als ein PDF (CI-Artefakt `document-gallery`).
 - CI prüft zusätzlich `sync-document-tokens.py --check`, `sync-document-i18n.py --check` und
   `check-document-catalog.py`.
 
@@ -396,15 +384,16 @@ Alle schreibenden Aufrufe und jeder Export landen im Audit-Log (`document.render
 
 | Tabelle | Zweck |
 |---|---|
-| `document_style` | Hausstil-Konfiguration pro Mandant: Name, Basis-Stil, Tokens (JSONB), Standard-Flag, Version |
-| `document_style_asset` | Hochgeladene Schriften und Bilder (Logo, Fussbild) eines Mandanten |
-| `document_recipe` | Gespeicherte Zusammenstellung: Name, Dokumenttyp, Blöcke mit Parametern, Stil, Optionen, Sprache |
-| `document_export` | Ein Datensatz pro erzeugtem PDF: Dokument-ID, Typ, Protokoll, Version, Inhalts-Hash, Stil und Stil-Version, Sprache, Benutzer, StoredFile |
-| `document_registry` | Dauerhaftes Register: Dokument-ID, Mandant, SHA-256 (eindeutig), Typ, Titel, Status beim Export, Version, Inhalts-Hash, Quelle (public_id), Zeitpunkt, Benutzer |
+| `document_brand`, `document_brand_revision` | Brand-Profile und ihre unveränderlichen Fassungen |
+| `document_template`, `document_template_revision` | Vorlagen (System/Mandant/Kopie) und ihre Revisionen (Entwurf, veröffentlicht, abgelöst) |
+| `document_component` | Wiederverwendbare Komponenten |
+| `document_template_assignment` | Standardvorlage und Brand je Dokumenttyp bzw. Protokollvorlage |
+| `document_asset` | Hochgeladene Schriften und Bilder eines Mandanten |
+| `document_export` | Ein Datensatz pro erzeugtem PDF: Dokument-ID, Typ, Protokoll, Version, Inhalts- und Design-Hash, Vorlage und Revision, Brand-Revision, Optionen, Sprache, Benutzer, StoredFile |
+| `document_registry` | Dauerhaftes Register: Dokument-ID, Mandant, SHA-256 (eindeutig), Typ, Titel, Status beim Export, Version, Inhalts- und Design-Hash, Quelle (public_id), Zeitpunkt, Benutzer |
 | `identity_verification_request` | Anträge auf Verifizierung der Organisation mit Entscheid |
 
-`template.document_style_id` und `protocol.document_style_id` ersetzen die alten Verweise auf
-`document_template` und die Snapshot-Pfade.
+Details zu den Studio-Tabellen: [Document Studio](document-studio.md#datenmodell).
 
 ## Umsetzungsplan
 
@@ -461,7 +450,7 @@ umkehrbar):
   die betroffenen Mandanten ins Log.
 - **Schriftabdeckung:** Mitgeliefert sind lateinische, griechische und kyrillische Schriften
   sowie Emoji. Zeichen ausserhalb (z. B. CJK) erscheinen als `�`; bei Bedarf eine passende
-  Schrift als eigene Schrift im Hausstil hochladen.
+  Schrift im Brand Studio als eigene Schrift hochladen.
 - **Historische Audit-Dokumente** unter `security-audit/` erwähnen den alten TeX-Export weiterhin;
   sie dokumentieren damalige Befunde und werden nicht umgeschrieben.
 - **PDF/A-Prüfung:** Ohne veraPDF in der CI prüfen die Tests die PDF/A-Kennung im XMP, das
@@ -496,3 +485,12 @@ Variablen laden weiter (`ENV_RETIRED_KEYS` in `scripts/lib/env.sh`).
 - Migrierte Einträge aus der Zeit vor dem Umbau haben keinen Status (nie gespeichert).
 - Exporte des früheren TeX-Exports hatten keinen Hash und sind nicht prüfbar.
 - veraPDF als CI-Schritt wäre eine sinnvolle Ergänzung.
+
+## Umbau 2026-10: Document Studio
+
+Hausstile (`document_style`), Stil-Assets und Rezepte (`document_recipe`) sind durch das Document
+Studio ersetzt. Migration `0118_document_studio` übernimmt sie (Hausstile → Brand-Profile,
+Rezepte → Vorlagen, Hausstil-Wahl der Protokollvorlagen → Zuweisungen, Exporte → Vorlagenbezug)
+und entfernt danach die alten Tabellen und Spalten. Die Typst-Dateien liegen jetzt unter
+`typst/` statt `styles/`. Archive älterer Formate (5/6) importiert `tenant_import_service.py`
+weiterhin und wandelt sie dabei um.

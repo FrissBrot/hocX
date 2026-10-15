@@ -16,6 +16,7 @@ import { Modal } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
+import { locales } from "@/i18n/locale-config.generated";
 import { ApiError } from "@/lib/api/client";
 import { apiErrorMessage, Brand, BrandRevision, Capabilities, DocumentAsset, DocumentTemplateInfo, previewDocument, studioApi } from "@/lib/documents/api";
 import { BrandTokens } from "@/lib/documents/layout";
@@ -62,6 +63,7 @@ export function BrandStudio({ capabilities }: Props) {
   const [createPreset, setCreatePreset] = useState("classic_blue");
   const [presets, setPresets] = useState<string[]>([]);
   const [showArchived, setShowArchived] = useState(false);
+  const [documentLanguage, setDocumentLanguage] = useState<string | null>(null);
   const canEdit = capabilities.manage_brand;
   const selected = brands?.find((item) => item.id === selectedId) ?? null;
 
@@ -81,6 +83,7 @@ export function BrandStudio({ capabilities }: Props) {
   useEffect(() => load(false), [showArchived]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     void studioApi.assets().then(setAssets);
+    void studioApi.documentSettings().then((settings) => setDocumentLanguage(settings?.language ?? null));
     void studioApi.catalog().then((catalog) => setPresets(catalog.brand_presets));
     void studioApi.listTemplates().then((templates) => {
       const usable = (templates ?? []).filter((item) => item.published_revision && item.status === "active");
@@ -148,6 +151,18 @@ export function BrandStudio({ capabilities }: Props) {
       load(reselect);
     } catch (reason) {
       toast(apiErrorMessage(reason, t("common.actionFailed")), "error");
+    }
+  }
+
+  async function saveDocumentLanguage(language: string) {
+    const previous = documentLanguage;
+    setDocumentLanguage(language);
+    try {
+      await studioApi.updateDocumentSettings(language);
+      toast(t("brand.documentLanguageSaved"), "success");
+    } catch (reason) {
+      setDocumentLanguage(previous);
+      toast(apiErrorMessage(reason, t("brand.saveFailed")), "error");
     }
   }
 
@@ -233,6 +248,17 @@ export function BrandStudio({ capabilities }: Props) {
           <label className="studio-inline-check">
             <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
             <span>{t("brand.showArchived")}</span>
+          </label>
+          <label className="field-stack studio-brand-language">
+            <span className="field-label">{t("brand.documentLanguage")}</span>
+            <select value={documentLanguage ?? ""} disabled={!canEdit || documentLanguage === null} onChange={(event) => void saveDocumentLanguage(event.target.value)}>
+              {locales.map((code) => (
+                <option key={code} value={code}>
+                  {t(`language.${code}`)}
+                </option>
+              ))}
+            </select>
+            <span className="field-help">{t("brand.documentLanguageHelp")}</span>
           </label>
         </aside>
 

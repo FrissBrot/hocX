@@ -15,6 +15,8 @@ const api = vi.hoisted(() => ({
     listTemplates: vi.fn(),
     updateBrand: vi.fn(),
     createBrand: vi.fn(),
+    documentSettings: vi.fn(),
+    updateDocumentSettings: vi.fn(),
   },
 }));
 const { toast, confirm } = vi.hoisted(() => ({ toast: vi.fn(), confirm: vi.fn() }));
@@ -47,6 +49,7 @@ describe("BrandStudio", () => {
       { id: "tpl-formal", system_key: "protocol_formal", document_type: "protocol", status: "active", published_revision: published, origin: "system", name: "x" },
     ]);
     api.previewDocument.mockResolvedValue({ pages: ["data:image/png;base64,AAA"], page_count: 1, diagnostics: [] });
+    api.studioApi.documentSettings.mockResolvedValue({ language: "de" });
   });
 
   it("previews unsaved changes and saves them with the lock version", async () => {
@@ -107,5 +110,14 @@ describe("BrandStudio", () => {
     await advance(800);
     await waitFor(() => expect(api.previewDocument).toHaveBeenCalled());
     expect(api.previewDocument.mock.calls.at(-1)![0]).toMatchObject({ brand_tokens: null, brand_id: "b1" });
+  });
+  it("saves the document language of the organisation", async () => {
+    api.studioApi.updateDocumentSettings.mockResolvedValue({ language: "fr" });
+    render(<BrandStudio capabilities={capabilities} />);
+    const select = await screen.findByLabelText(/^Dokumentsprache des Vereins/);
+    await waitFor(() => expect(select).toHaveValue("de"));
+    fireEvent.change(select, { target: { value: "fr" } });
+    await waitFor(() => expect(api.studioApi.updateDocumentSettings).toHaveBeenCalledWith("fr"));
+    expect(toast).toHaveBeenCalledWith("Dokumentsprache gespeichert.", "success");
   });
 });

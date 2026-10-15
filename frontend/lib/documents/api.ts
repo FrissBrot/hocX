@@ -294,6 +294,9 @@ export const studioApi = {
   deleteAsset: (id: string) => browserApiFetch<null>(`/api/document-assets/${id}`, { method: "DELETE" }),
   assetReferences: (id: string) => browserApiFetch<AssetReference[]>(`/api/document-assets/${id}/references`),
 
+  documentSettings: () => browserApiFetch<{ language: string | null }>("/api/document-settings"),
+  updateDocumentSettings: (language: string | null) => browserApiFetch<{ language: string | null }>("/api/document-settings", json({ language }, "PATCH")),
+
   components: () => browserApiFetch<ReusableComponent[]>("/api/document-components"),
   createComponent: (body: { name: string; description?: string | null; category?: string | null; node: TemplateNode }) => browserApiFetch<ReusableComponent>("/api/document-components", json(body)),
   updateComponent: (id: string, body: { name?: string; description?: string | null; category?: string; node?: TemplateNode; lock_version?: number }) =>

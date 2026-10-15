@@ -92,7 +92,7 @@ nav:
       - Verknüpfungen (Kalender): benutzer/verknuepfungen.md
       - Abgabebox: benutzer/abgabebox.md
       - Word-Import: benutzer/word-import.md
-      - Dokumente & Hausstile: benutzer/dokumente.md
+      - Dokumente & Document Studio: benutzer/dokumente.md
       - Echtheit prüfen: benutzer/echtheit.md
   - Technik & Betrieb:
       - Übersicht: technik/index.md
@@ -102,6 +102,7 @@ nav:
       - Platform-Admin-Panel: technik/admin-panel.md
       - Mandanten Export/Import: technik/export-import.md
       - Dokument-Engine: technik/dokument-engine.md
+      - Document Studio: technik/document-studio.md
       - Import-Testbook: technik/import-testbook.md
       - Abgabe-Links-Testbook: technik/abgabe-links-testbook.md
       - Upload-Testbook: technik/upload-testbook.md
