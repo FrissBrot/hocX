@@ -199,7 +199,7 @@ export function gpsFromIfd(gps: Ifd): ParsedGps | undefined {
     if (altitude >= -12_000 && altitude <= 60_000) result.altitude_m = round(altitude, 2);
   }
   const direction = num(gps.get(17));
-  if (direction !== undefined && direction >= 0 && direction <= 360) result.direction_deg = round(direction % 360, 3);
+  if (direction !== undefined && direction >= 0 && direction <= 360) result.direction_deg = round(direction, 3) % 360; // erst runden: nie 360 (Server-CHECK < 360)
   const accuracy = num(gps.get(31));
   if (accuracy !== undefined && accuracy >= 0 && accuracy <= 100_000) result.accuracy_m = round(accuracy, 2);
   const dateStamp = gps.get(29);

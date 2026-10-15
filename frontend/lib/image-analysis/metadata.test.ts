@@ -85,6 +85,13 @@ describe("Werte prüfen", () => {
     expect(gpsFromIfd(new Map<number, number | number[] | string>([[1, "N"], [2, [0, 0, 0]], [3, "E"], [4, [0, 0, 0]]]))).toBeUndefined();
     expect(gpsFromIfd(new Map<number, number | number[] | string>([[1, "N"], [2, [95, 0, 0]], [3, "E"], [4, [1, 0, 0]]]))).toBeUndefined();
   });
+
+  it("GPS-Blickrichtung knapp unter 360° wird 0, nie 360 (IMGMETA-003)", () => {
+    const base: [number, number | number[] | string][] = [[1, "N"], [2, [47, 22, 36.84]], [3, "E"], [4, [8, 32, 30.12]]];
+    expect(gpsFromIfd(new Map([...base, [17, 359.9996]]))?.direction_deg).toBe(0);
+    expect(gpsFromIfd(new Map([...base, [17, 360]]))?.direction_deg).toBe(0);
+    expect(gpsFromIfd(new Map([...base, [17, 359.9994]]))?.direction_deg).toBe(359.999);
+  });
 });
 
 describe("analyzeFile", () => {

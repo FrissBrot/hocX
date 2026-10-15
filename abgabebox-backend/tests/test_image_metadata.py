@@ -44,3 +44,14 @@ def test_null_island_is_not_stored():
     zero = (IFDRational(0, 1), IFDRational(0, 1), IFDRational(0, 1))
     exif[0x8825] = {1: "N", 2: zero, 3: "E", 4: zero}
     assert "gps_latitude" not in image_metadata.extract(_jpeg(exif))
+
+
+def test_gps_direction_just_below_360_is_stored_as_zero():
+    """IMGMETA-003: Runden vor Modulo - 359.9996° darf nie als 360.0 (CHECK < 360) landen."""
+    exif = Image.Exif()
+    exif[0x8825] = {
+        1: "N", 2: (IFDRational(47, 1), IFDRational(22, 1), IFDRational(0, 1)),
+        3: "E", 4: (IFDRational(8, 1), IFDRational(32, 1), IFDRational(0, 1)),
+        17: IFDRational(3599996, 10000),
+    }
+    assert image_metadata.extract(_jpeg(exif))["gps_direction_deg"] == 0.0

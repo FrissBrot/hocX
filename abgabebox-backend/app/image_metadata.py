@@ -114,7 +114,7 @@ def extract(content: bytes) -> dict[str, Any]:
                             values["gps_altitude_m"] = -abs(altitude) if below else altitude
                         direction = _number(gps.get(17))
                         if direction is not None and 0 <= direction <= 360:
-                            values["gps_direction_deg"] = round(direction % 360, 3)
+                            values["gps_direction_deg"] = round(direction, 3) % 360  # erst runden: nie 360.0 (CHECK < 360)
             values = {key: value for key, value in values.items() if value is not None}
             found = any(key in values for key in ("exif_taken_at", "gps_latitude", "camera_make", "camera_model"))
             values["metadata_scan_status"] = "ok" if found else "no_metadata"

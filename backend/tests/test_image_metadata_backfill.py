@@ -88,3 +88,31 @@ def test_dry_run_changes_nothing(db):
     assert report.taken_at_added == 1
     db.refresh(row)
     assert row.exif_taken_at is None and row.metadata_scanned_at is None
+
+
+def test_failing_write_of_one_file_does_not_block_the_run(db, monkeypatch):
+    """IMGMETA-003: Verletzt eine Datei beim Speichern einen CHECK (früher: Blickrichtung 360.0),
+    wird nur sie zurückgerollt und markiert; die übrigen werden gespeichert, ein erneuter Lauf
+    hängt nicht an derselben Datei."""
+    from app.services import image_metadata_service
+
+    tenant = make_tenant(db)
+    bad = _stored(db, tenant.id, jpeg(color=(1, 1, 1), taken_at=datetime(2015, 5, 5, 5, 5)), "bad.jpg")
+    good = _stored(db, tenant.id, jpeg(color=(2, 2, 2), taken_at=datetime(2016, 6, 6, 6, 6)), "good.jpg")
+    original_apply = image_metadata_service.apply_server_analysis
+
+    def apply_with_invalid_direction(target, metadata, **kwargs):
+        outcome = original_apply(target, metadata, **kwargs)
+        if target.original_name == "bad.jpg":
+            target.gps_latitude, target.gps_longitude, target.gps_direction_deg = 1.0, 1.0, 360.0
+        return outcome
+
+    monkeypatch.setattr(image_metadata_service, "apply_server_analysis", apply_with_invalid_direction)
+    report = run_backfill(db, tenant_id=tenant.id)
+    assert report.checked == 2 and report.failed == 1 and report.taken_at_added == 1
+    assert report.errors and report.errors[0].startswith(f"{bad.id}:")
+    db.refresh(bad)
+    db.refresh(good)
+    assert good.exif_taken_at == datetime(2016, 6, 6, 6, 6, tzinfo=UTC)
+    assert bad.metadata_scan_status == "unreadable" and bad.gps_direction_deg is None and bad.exif_taken_at is None
+    assert run_backfill(db, tenant_id=tenant.id).checked == 0

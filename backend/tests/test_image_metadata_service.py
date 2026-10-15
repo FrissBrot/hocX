@@ -208,3 +208,14 @@ def test_estimated_date_alone_is_no_basis_for_automatic_termin_links():
     assert auto_link_date(_row(estimated_taken_on=date(1985, 6, 1))) is None
     assert auto_link_date(_row()) == date(2026, 5, 1)
     assert auto_link_date(_row(exif_taken_at=datetime(2001, 2, 3, tzinfo=UTC))) == date(2001, 2, 3)
+
+
+@pytest.mark.parametrize("raw, expected", [(359.9996, 0.0), (360, 0.0), (359.9994, 359.999), (0, 0.0), (123.4567, 123.457)])
+def test_gps_direction_is_rounded_before_modulo(raw, expected):
+    """IMGMETA-003: nie 360.0 (ck_stored_file_gps_direction verlangt < 360)."""
+    assert service.valid_direction(raw) == expected
+
+
+def test_extracted_direction_just_below_360_stays_within_constraint():
+    metadata = service.extract_image_metadata(jpeg(latitude=47.0, longitude=8.0, direction=359.9996))
+    assert metadata.gps_direction_deg is not None and 0 <= metadata.gps_direction_deg < 360

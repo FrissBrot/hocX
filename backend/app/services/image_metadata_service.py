@@ -203,7 +203,8 @@ def valid_direction(value: Any) -> float | None:
     number = _valid_float(value, 0.0, 360.0)
     if number is None:
         return None
-    return round(number % 360.0, 3)
+    # Erst runden, dann Modulo: 359.9996 ergäbe sonst 360.0 und verletzte ck_stored_file_gps_direction.
+    return round(number, 3) % 360.0
 
 
 def valid_text(value: Any) -> str | None:

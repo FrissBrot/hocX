@@ -111,8 +111,11 @@ def run_backfill(
         for stored_file in batch:
             after_id = stored_file.id
             report.checked += 1
-            # Dry-Run arbeitet auf einer losgelösten Kopie der Werte - es wird nichts geschrieben.
-            _process(db, stored_file, report, target=_detached_copy(stored_file) if dry_run else stored_file)
+            if dry_run:
+                # Dry-Run arbeitet auf einer losgelösten Kopie der Werte - es wird nichts geschrieben.
+                _process(db, stored_file, report, target=_detached_copy(stored_file))
+            else:
+                _process_isolated(db, stored_file, report)
         db.commit()  # beendet auch im Dry-Run nur die (unveränderte) Transaktion samt Sperren
     return report
 
@@ -127,6 +130,25 @@ _COPIED_ATTRIBUTES = (
 
 def _detached_copy(stored_file: StoredFile) -> SimpleNamespace:
     return SimpleNamespace(**{name: getattr(stored_file, name) for name in _COPIED_ATTRIBUTES})
+
+
+def _process_isolated(db: Session, stored_file: StoredFile, report: BackfillReport) -> None:
+    """_process in einem SAVEPOINT: scheitert das Schreiben einer Datei (z. B. CHECK-Verletzung),
+    wird nur diese Datei zurückgerollt und als nicht analysierbar markiert - die Charge wird
+    trotzdem committet und ein erneuter Lauf bleibt nicht an derselben Datei hängen."""
+    counters = dict(report.__dict__, errors=list(report.errors))
+    savepoint = db.begin_nested()
+    try:
+        _process(db, stored_file, report, target=stored_file)
+        db.flush()
+        savepoint.commit()
+    except Exception as exc:  # Einzelfehler protokollieren, Lauf fortsetzen
+        savepoint.rollback()
+        report.__dict__.update(counters)
+        logger.warning("Backfill: Speichern von stored_file %s fehlgeschlagen: %s", stored_file.id, exc)
+        report.failed += 1
+        report.errors.append(f"{stored_file.id}: {exc}")
+        image_metadata_service.mark_scan_status(stored_file, "unreadable")
 
 
 def _process(db: Session, stored_file: StoredFile, report: BackfillReport, *, target: Any) -> None:
