@@ -194,3 +194,32 @@ def test_restricted_reader_sees_only_accessible_todos(db, world):
     blocks = build_blocks(ctx, [BlockSpec(type="todo_table", hide_if_empty=False, params={"status": "all"})])
     assert blocks
     assert db.query(ProtocolTodo).count() >= 1
+
+
+@pytest.mark.parametrize("scan_status", ["pending", "infected", "error"])
+def test_unscanned_images_are_not_embedded(db, world, tmp_path, monkeypatch, scan_status):
+    """TYPST-008: Bilder ohne Freigabe des Virenscans werden nicht dekodiert/eingebettet."""
+    import io
+
+    from PIL import Image
+
+    from app.core.config import settings
+    from app.models import StoredFile
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    buffer = io.BytesIO()
+    Image.new("RGB", (8, 8), (1, 2, 3)).save(buffer, format="PNG")
+    (tmp_path / "bild.png").write_bytes(buffer.getvalue())
+
+    def stored(status):
+        row = StoredFile(tenant_id=world["tenant"].id, original_name="bild.png", mime_type="image/png", storage_path="bild.png", file_size_bytes=len(buffer.getvalue()), scan_status=status)
+        db.add(row)
+        db.flush()
+        return row
+
+    blocked, clean = stored(scan_status), stored("clean")
+    ctx = _ctx(db, world)
+    image = build_blocks(ctx, [BlockSpec(type="image", params={"file_id": str(blocked.public_id)})])[0].image
+    assert image.missing is True and not ctx.assets.files
+    gallery = build_blocks(ctx, [BlockSpec(type="image_gallery", params={"file_ids": [str(blocked.public_id), str(clean.public_id)]})])[0]
+    assert [item.missing for item in gallery.images] == [True, False]

@@ -115,10 +115,14 @@ def _todo_block(rows: list[Any], fields: dict) -> TodoTableBlock:
 
 
 def _image_ref(ctx: BuildContext, stored_file: StoredFile, caption: str | None):
-    try:
-        path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-    except Exception:  # noqa: BLE001 - ungültiger Pfad: Bild gilt als fehlend
-        path = None
+    path = None
+    # Wie der Datei-Endpunkt: nur vom Virenscan freigegebene Dateien (nicht pending/infected/
+    # error) werden dekodiert und eingebettet, sonst gilt das Bild als fehlend.
+    if stored_file.scan_status == "clean":
+        try:
+            path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
+        except Exception:  # noqa: BLE001 - ungültiger Pfad: Bild gilt als fehlend
+            path = None
     if path is None or not path.exists():
         from app.documents.model import ImageRef
 
