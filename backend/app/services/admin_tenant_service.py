@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models import (
     AppUser,
+    DocumentStyleAsset,
     Feature,
     Participant,
     Plan,
@@ -681,6 +682,9 @@ class AdminTenantService:
             for row in stored_files
         ]
         profile_image_path = tenant.profile_image_path
+        # Hausstil-Assets einzeln merken: aus alten Dokumentvorlagen übernommene (Migration
+        # 0115) liegen weiter unter document_template_parts/, nicht unter document_style_assets/.
+        style_asset_paths = list(db.scalars(select(DocumentStyleAsset.storage_path).where(DocumentStyleAsset.tenant_id == tenant_id)))
 
         db.execute(delete(WordImportDocument).where(WordImportDocument.tenant_id == tenant_id))
         db.execute(delete(Protocol).where(Protocol.tenant_id == tenant_id))
@@ -695,8 +699,11 @@ class AdminTenantService:
             self._unlink_quietly(root, storage_path)
         if profile_image_path:
             self._unlink_quietly(settings.storage_root, profile_image_path)
+        for storage_path in style_asset_paths:
+            self._unlink_quietly(settings.storage_root, storage_path)
         for relative_dir in (
             f"document_style_assets/tenant-{tenant_id}",
+            f"document_template_parts/tenant-{tenant_id}",
             f"tenant_imports/tenant-{tenant_id}",
         ):
             directory = _safe_storage_path(settings.storage_root, relative_dir)
