@@ -164,6 +164,56 @@ def test_tenant_isolation(db, world):
     assert excinfo.value.status_code == 422
 
 
+def test_tenant_isolation_of_assets_components_assignments_and_revisions(db, world):
+    """STUDIO-020: Fremde IDs für Assets, Komponenten, Zuweisungen und Revisionen ergeben 404/422,
+    nie Zugriff auf Daten eines anderen Mandanten."""
+    from app.models import DocumentAsset
+
+    asset = DocumentAsset(tenant_id=world["tenant"].id, kind="image", category="image", name="Bild", storage_path="document_assets/x.png", mime_type="image/png")
+    db.add(asset)
+    db.flush()
+    foreign = world["foreign"]
+    for call in (
+        lambda: studio.get_document_asset_content(asset.public_id, db=db, user=foreign),
+        lambda: studio.get_document_asset_references(asset.public_id, db=db, user=foreign),
+        lambda: studio.delete_document_asset(asset.public_id, db=db, user=foreign),
+    ):
+        with pytest.raises(HTTPException) as excinfo:
+            call()
+        assert excinfo.value.status_code == 404
+    assert db.get(DocumentAsset, asset.id) is not None
+
+    component = studio.create_document_component(studio.ComponentWrite(name="Kopf", node={"type": "spacer", "id": "s"}), db=db, user=world["writer"])
+    for call in (
+        lambda: studio.update_document_component(component.id, studio.ComponentWrite(name="Fremd"), db=db, user=foreign),
+        lambda: studio.delete_document_component(component.id, db=db, user=foreign),
+    ):
+        with pytest.raises(HTTPException) as excinfo:
+            call()
+        assert excinfo.value.status_code == 404
+    assert all(item.id != component.id for item in studio.list_document_components(db=db, user=foreign))
+
+    # Zuweisung mit Protokollvorlage eines anderen Mandanten
+    with pytest.raises(HTTPException) as excinfo:
+        studio.set_document_template_assignment(studio.AssignmentWrite(document_type="protocol", protocol_template_id=world["protocol_template"].public_id), db=db, user=foreign)
+    assert excinfo.value.status_code in (404, 422)
+
+    created = _create(db, world)
+    revisions = studio.list_document_template_revisions(created.id, db=db, user=world["writer"])
+    with pytest.raises(HTTPException) as excinfo:
+        studio.restore_document_template_revision(created.id, revisions[0].id, db=db, user=foreign)
+    assert excinfo.value.status_code == 404
+    with pytest.raises(HTTPException) as excinfo:
+        studio.get_document_template_revision(created.id, revisions[0].id, db=db, user=foreign)
+    assert excinfo.value.status_code == 404
+
+    # Verweis auf die Komponente eines anderen Mandanten wird nicht aufgelöst
+    alien = studio.create_document_component(studio.ComponentWrite(name="Fremd", node={"type": "spacer", "id": "f"}), db=db, user=foreign)
+    referencing = {**SIMPLE, "body": [{"type": "component_ref", "id": "r", "component_id": str(alien.id)}]}
+    saved = studio.save_document_template_draft(created.id, studio.DraftSave(content=referencing), db=db, user=world["writer"])
+    assert [(item["node_id"], item["severity"]) for item in saved.diagnostics] == [("r", "error")]
+
+
 def test_roles(db, world):
     with pytest.raises(HTTPException) as excinfo:
         _create(db, {**world, "writer": world["reader"]})
