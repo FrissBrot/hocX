@@ -236,6 +236,7 @@ load_env_file() {
     fi
 
     printf -v "$key" '%s' "$value"
+    # shellcheck disable=SC2163  # exportiert bewusst die Variable, deren Name in $key steht
     export "$key"
   done < "$env_file"
 }

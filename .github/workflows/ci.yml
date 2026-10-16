@@ -18,6 +18,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Shellcheck
+        # shellcheck ist auf ubuntu-latest vorinstalliert (MAIN-OPS-011).
+        run: shellcheck $(git ls-files '*.sh') .githooks/pre-commit
+
       - name: Test secure env loader and shell syntax
         run: |
           bash -n scripts/*.sh scripts/lib/*.sh scripts/tests/*.sh .githooks/pre-commit

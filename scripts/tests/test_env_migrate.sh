@@ -81,7 +81,7 @@ backups=("$TEST_DIR"/.env.bak-*)
 test "${#backups[@]}" -eq 1 || fail "Erwartet genau eine Sicherung, gefunden: ${#backups[@]}"
 test "$(stat -c '%a' "${backups[0]}")" = 600 || fail "Sicherung hat nicht Modus 600"
 cmp -s "${backups[0]}" "$FIXTURE" || fail "Sicherung entspricht nicht der urspruenglichen .env"
-test -z "$(ls "$TEST_DIR" | grep -F '.tmp.' || true)" || fail "Temporaere Datei uebrig geblieben"
+test -z "$(find "$TEST_DIR" -maxdepth 1 -name '*.tmp.*' -print -quit)" || fail "Temporaere Datei uebrig geblieben"
 
 # --- 3. Idempotenz: zweiter Lauf aendert nichts, legt keine weitere Sicherung an ---------
 cp "$ENV_FILE" "$TEST_DIR/after-first-run"
@@ -121,10 +121,13 @@ test "$(value_of "$ENV_FILE" HOCX_SINGLE_TENANT_RESOLUTION)" = auto
 
 # --- 7. deploy.sh: Verdrahtung des Update-Pfads --------------------------------------------
 DEPLOY="$REPO_DIR/scripts/deploy.sh"
+# shellcheck disable=SC2016  # Literale Suchmuster in deploy.sh
 migrate_line="$(grep -n '^  migrate_env_file "\$ENV_FILE"' "$DEPLOY" | head -n 1 | cut -d: -f1)"
+# shellcheck disable=SC2016
 load_line="$(grep -n '^load_env_file "\$ENV_FILE"' "$DEPLOY" | head -n 1 | cut -d: -f1)"
 test -n "$migrate_line" && test -n "$load_line" && test "$migrate_line" -lt "$load_line" \
   || fail "deploy.sh muss die .env vor dem Laden migrieren"
+# shellcheck disable=SC2016
 grep -q 'source "\$REPO_DIR/scripts/lib/env_migrate.sh"' "$DEPLOY" || fail "deploy.sh laedt env_migrate.sh nicht"
 grep -q 'HOCX_PHOTO_ANALYSIS_WORKER_IMAGE' "$DEPLOY" || fail "Worker-Image wird nicht aus der Shell entfernt"
 test "$(grep -c 'docs photo-analysis-worker' "$DEPLOY")" -ge 4 \
