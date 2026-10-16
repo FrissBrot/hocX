@@ -1356,9 +1356,14 @@ class AttendanceFine(Base, TimestampMixin):
         Index("idx_attendance_fine_account", "account_id"),
         Index("idx_attendance_fine_collected_by", "collected_by_user_id"),
         Index("idx_attendance_fine_collected_transaction", "collected_transaction_id"),
-        # Migration 0114 (NOT VALID, Audit MAIN-BE-016)
-        CheckConstraint("status IN ('pending', 'collected')", name="ck_attendance_fine_status"),
-        CheckConstraint("fine_type IN ('late', 'absent')", name="ck_attendance_fine_type"),
+        Index("idx_attendance_fine_deleted_by", "deleted_by_user_id"),
+        # Baseline bzw. Migration 0115 (MAIN-BE-002/-016)
+        CheckConstraint("status IN ('pending', 'collected', 'deleted')", name="attendance_fine_status_check"),
+        CheckConstraint("fine_type IN ('late', 'absent')", name="attendance_fine_fine_type_check"),
+        CheckConstraint(
+            "status <> 'deleted' OR (delete_comment IS NOT NULL AND btrim(delete_comment) <> '')",
+            name="ck_attendance_fine_deleted_reason",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -1376,6 +1381,12 @@ class AttendanceFine(Base, TimestampMixin):
     collected_transaction_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("finance_transaction.id", ondelete="SET NULL"))
     closed_in_protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
     collected_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    # Soft-Delete mit Begründung (MAIN-BE-002, Migration 0115): nur für Bussen, deren
+    # Ursprungsprotokoll abgeschlossen ist; closed_in_protocol_id zeigt dann auf das
+    # Protokoll, in dem die Löschung aufgeführt wird.
+    delete_comment: Mapped[str | None] = mapped_column(Text)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
 class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):

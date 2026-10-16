@@ -23,6 +23,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
+import { restoreFine, useFineDelete } from "@/components/finances/fine-delete";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
@@ -417,7 +418,7 @@ function AccountSheet({
 
 // ── Bussen ──────────────────────────────────────────────────────────────
 
-type FineFilter = "pending" | "collected" | "all";
+type FineFilter = "pending" | "collected" | "deleted" | "all";
 
 export function MobileFines({
   initialFines,
@@ -435,8 +436,8 @@ export function MobileFines({
   const fineTypeLabel = useMemo(() => fineTypeLabels(t), [t]);
   const locale = useLocale();
   const openMore = useOpenMore();
-  const confirm = useConfirm();
   const showToast = useToast();
+  const { requestDelete, dialog: deleteDialog } = useFineDelete();
   const [fines, setFines] = useAllPages<AttendanceFineListItem>("/api/fines", initialFines);
   const [filter, setFilter] = useState<FineFilter>("pending");
   const [search, setSearch] = useState("");
@@ -482,13 +483,17 @@ export function MobileFines({
   }
 
   async function remove(fine: AttendanceFineListItem) {
-    if (!(await confirm({ message: t("deleteFineConfirm", { name: fine.participant_name_snapshot }), tone: "danger", confirmLabel: tMobile("common.delete") }))) return;
+    setOpenId(null);
+    const outcome = await requestDelete(fine);
+    if (outcome === "hard") setFines((list) => list.filter((item) => item.id !== fine.id));
+    else if (outcome === "soft") await reload();
+  }
+
+  async function restore(fine: AttendanceFineListItem) {
     try {
-      await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
-      setFines((list) => list.filter((item) => item.id !== fine.id));
-      setOpenId(null);
+      replace({ ...fine, ...(await restoreFine(fine.id)) });
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteFineFailed"), "error");
+      showToast(error instanceof Error ? error.message : t("restoreFineFailed"), "error");
     }
   }
 
@@ -507,6 +512,7 @@ export function MobileFines({
           options={[
             { value: "pending", label: t("filterPending") },
             { value: "collected", label: t("filterCollected") },
+            ...(fines.some((fine) => fine.status === "deleted") ? [{ value: "deleted" as const, label: t("filterDeleted") }] : []),
             { value: "all", label: t("filterAll") },
           ]}
         />
@@ -533,8 +539,8 @@ export function MobileFines({
                     </span>
                     {filter === "all" ? (
                       <span className="mobile-row-pills">
-                        <span className={fine.status === "collected" ? "mobile-cycle-pill" : "mobile-overdue-pill"}>
-                          {fine.status === "collected" ? t("statusCollected") : t("statusPending")}
+                        <span className={fine.status === "pending" ? "mobile-overdue-pill" : "mobile-cycle-pill"}>
+                          {fine.status === "collected" ? t("statusCollected") : fine.status === "deleted" ? t("statusDeleted") : t("statusPending")}
                         </span>
                       </span>
                     ) : null}
@@ -562,9 +568,16 @@ export function MobileFines({
           footer={
             canWrite ? (
               <div className="modal-actions mobile-sheet-footer">
-                <button type="button" className="button-danger" onClick={() => void remove(openFine)}>
-                  {tMobile("common.delete")}
-                </button>
+                {openFine.status === "pending" ? (
+                  <button type="button" className="button-danger" onClick={() => void remove(openFine)}>
+                    {tMobile("common.delete")}
+                  </button>
+                ) : null}
+                {openFine.status === "deleted" && openFine.can_restore ? (
+                  <button type="button" className="button-secondary" onClick={() => void restore(openFine)}>
+                    {t("restoreFine")}
+                  </button>
+                ) : null}
                 {openFine.status === "pending" ? (
                   <button type="button" className="button-primary" onClick={() => void collect(openFine)}>
                     {t("markCollected")}
@@ -588,12 +601,18 @@ export function MobileFines({
               value={
                 openFine.status === "collected"
                   ? `${t("statusCollected")}${openFine.collected_at ? ` · ${dateParts.dayMonth(openFine.collected_at.slice(0, 10), locale)}` : ""}`
-                  : t("statusPending")
+                  : openFine.status === "deleted"
+                    ? `${t("statusDeleted")}${openFine.deleted_at ? ` · ${dateParts.dayMonth(openFine.deleted_at.slice(0, 10), locale)}` : ""}`
+                    : t("statusPending")
               }
             />
+            {openFine.status === "deleted" && openFine.delete_comment ? (
+              <MobileListRow label={t("deleteReasonLabel")} value={openFine.delete_comment} />
+            ) : null}
           </div>
         </Modal>
       ) : null}
+      {deleteDialog}
       <FineCreateModal open={creating} accounts={accounts} onClose={() => setCreating(false)} onCreated={() => void reload()} />
     </div>
   );

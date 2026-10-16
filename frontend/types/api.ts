@@ -1451,13 +1451,19 @@ export type AttendanceFine = {
   fine_type: "late" | "absent";
   amount: number;
   account_id: string;
-  status: "pending" | "collected";
+  status: "pending" | "collected" | "deleted";
   collected_at: string | null;
   collected_transaction_id: string | null;
   closed_in_protocol_id: string | null;
   collected_by_user_id: string | null;
   collected_by_display_name: string | null;
   can_reopen: boolean;
+  /** Löschen mit Begründung (Busse aus abgeschlossenem Protokoll). */
+  delete_comment?: string | null;
+  deleted_at?: string | null;
+  deleted_by_display_name?: string | null;
+  delete_requires_reason?: boolean;
+  can_restore?: boolean;
   created_at: string;
 };
 

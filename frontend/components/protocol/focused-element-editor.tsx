@@ -7,6 +7,7 @@ import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "
 import { useTranslations } from "next-intl";
 
 import { useConfirm } from "@/contexts/confirm-context";
+import { restoreFine, useFineDelete } from "@/components/finances/fine-delete";
 import { useToast } from "@/contexts/toast-context";
 import { Badge } from "@/components/ui/badge";
 import { ActionIcon } from "@/components/ui/action-icons";
@@ -288,6 +289,12 @@ export function FocusedElementEditor({
   const balancesAtProtocolDate = useBalancesAsOf(balanceAccountIds, protocol.protocol_date ?? null);
   // Ungefilterte Bussen; die Bussenliste wendet ihre Block-Optionen darauf an.
   const allPendingFines = pendingFines;
+  // Löschen mit Begründung wird in diesem Protokoll aufgeführt (MAIN-BE-002).
+  const { requestDelete: requestFineDelete, dialog: fineDeleteDialog } = useFineDelete(protocol.id);
+  const reloadPendingFines = async () => {
+    const latest = await browserApiFetch<AttendanceFineListItem[]>(`/api/protocols/${protocol.id}/pending-fines`);
+    setPendingFines(latest ?? []);
+  };
   const allProtocolFines = protocolFines;
 
   const currentCycleYear: number | null = protocol.protocol_date && focusedTemplate?.cycle_config
@@ -1307,6 +1314,7 @@ export function FocusedElementEditor({
 
   return (
     <>
+    {fineDeleteDialog}
     <section
       id={`protocol-element-${element.id}`}
       ref={sectionRef}
@@ -3223,8 +3231,9 @@ export function FocusedElementEditor({
                           const account = fineAccount(fine.account_id);
                           const cur = account?.currency_label ?? fine.currency_label ?? "";
                           const isCollected = fine.status === "collected";
+                          const isDeleted = fine.status === "deleted";
                           return (
-                            <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isCollected ? " fine-collected" : ""}`}>
+                            <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isCollected || isDeleted ? " fine-collected" : ""}`}>
                               <div>
                                 <span className="fine-participant">{fine.participant_name_snapshot}</span>
                                 <span className="fine-pending-origin" style={{ display: "block" }}>
@@ -3246,8 +3255,36 @@ export function FocusedElementEditor({
                                     )}
                                   </>
                                 )}
+                                {isDeleted && (
+                                  <>
+                                    <span className="todo-pending-resolved">{t("fineDeletedLabel")}</span>
+                                    <span className="fine-collected-note" style={{ display: "block" }}>
+                                      {fine.deleted_at ? formatDateTime(fine.deleted_at) : ""}
+                                      {fine.deleted_by_display_name ? ` ${t("byName", { name: fine.deleted_by_display_name })}` : ""}
+                                    </span>
+                                    <span className="fine-collected-note" style={{ display: "block" }}>
+                                      {t("fineDeletedReason", { reason: fine.delete_comment ?? "" })}
+                                    </span>
+                                  </>
+                                )}
                               </span>
-                              {!isCollected && !isReadOnly ? (
+                              {isDeleted && fine.can_restore && !isReadOnly ? (
+                                <button
+                                  type="button"
+                                  className="fine-action-btn"
+                                  title={t("restoreFine")}
+                                  aria-label={t("restoreFine")}
+                                  onClick={async () => {
+                                    try {
+                                      await restoreFine(fine.id);
+                                      await reloadPendingFines();
+                                    } catch (error) {
+                                      showToast(error instanceof Error ? error.message : t("fineRestoreFailed"), "error");
+                                    }
+                                  }}
+                                >↺</button>
+                              ) : null}
+                              {!isCollected && !isDeleted && !isReadOnly ? (
                                 <button
                                   type="button"
                                   className="fine-action-btn fine-collect-btn"
@@ -3266,28 +3303,25 @@ export function FocusedElementEditor({
                                   }}
                                 >✓</button>
                               ) : <span />}
-                              {!isCollected && !isReadOnly ? (
+                              {!isCollected && !isDeleted && !isReadOnly ? (
                                 <button
                                   type="button"
                                   className="fine-action-btn fine-delete-btn"
                                   title={t("deleteFine")}
                                   aria-label={t("deleteFine")}
                                   onClick={async () => {
-                                    const ok = await confirm({
-                                      message: t("deleteFineConfirm"),
-                                      tone: "danger",
-                                      confirmLabel: t("delete")
-                                    });
-                                    if (!ok) return;
-                                    try {
-                                      await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
-                                      setPendingFines((prev) => prev.filter((f) => f.id !== fine.id));
-                                    } catch (error) {
-                                      showToast(error instanceof Error ? error.message : t("fineDeleteFailed"), "error");
+                                    const outcome = await requestFineDelete(fine);
+                                    if (outcome === "hard") setPendingFines((prev) => prev.filter((f) => f.id !== fine.id));
+                                    else if (outcome === "soft") {
+                                      try {
+                                        await reloadPendingFines();
+                                      } catch (error) {
+                                        showToast(error instanceof Error ? error.message : t("fineDeleteFailed"), "error");
+                                      }
                                     }
                                   }}
                                 ><ActionIcon name="delete" /></button>
-                              ) : <span />}
+                              ) : isDeleted ? null : <span />}
                             </div>
                           );
                         })}
@@ -3303,16 +3337,24 @@ export function FocusedElementEditor({
                       const account = fineAccount(fine.account_id);
                       const cur = account?.currency_label ?? "";
                       const isCollected = fine.status === "collected";
+                      const isDeleted = fine.status === "deleted";
                       const isCollectedElsewhere = isCollected && !!fine.closed_in_protocol_id;
                       return (
-                        <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isCollected ? " fine-collected" : ""}`}>
+                        <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isCollected || isDeleted ? " fine-collected" : ""}`}>
                           <span className="fine-participant">{fine.participant_name_snapshot}</span>
                           <span className="fine-type-label">{fine.fine_type === "late" ? t("fineTypeLate") : t("fineTypeAbsent")}</span>
                           <span className="fine-amount">{fine.amount.toFixed(2)} {cur}</span>
                           <span className="fine-status">
-                            {isCollectedElsewhere ? (
+                            {isDeleted ? (
+                              <span className="todo-closed-elsewhere-badge">{t("fineDeletedLater")}</span>
+                            ) : isCollectedElsewhere ? (
                               <span className="todo-closed-elsewhere-badge">{t("settledLater")}</span>
                             ) : isCollected ? t("collectedCheckmark") : t("pendingLabel")}
+                            {isDeleted && (
+                              <span className="fine-collected-note" style={{ display: "block" }}>
+                                {t("fineDeletedReason", { reason: fine.delete_comment ?? "" })}
+                              </span>
+                            )}
                             {isCollected && fine.collected_at && (
                               <span className="fine-collected-note" style={{ display: "block" }}>
                                 {formatDateTime(fine.collected_at)}
@@ -3320,7 +3362,7 @@ export function FocusedElementEditor({
                               </span>
                             )}
                           </span>
-                          {!isCollected && !isReadOnly ? (
+                          {!isCollected && !isDeleted && !isReadOnly ? (
                             <button
                               type="button"
                               className="fine-action-btn fine-collect-btn"
@@ -3339,25 +3381,16 @@ export function FocusedElementEditor({
                               }}
                             >✓</button>
                           ) : <span />}
-                          {!isCollected ? (
+                          {!isCollected && !isDeleted && !isReadOnly ? (
                             <button
                               type="button"
                               className="fine-action-btn fine-delete-btn"
                               title={t("deleteFine")}
                               aria-label={t("deleteFine")}
                               onClick={async () => {
-                                const ok = await confirm({
-                                  message: t("deleteFineConfirm"),
-                                  tone: "danger",
-                                  confirmLabel: t("delete")
-                                });
-                                if (!ok) return;
-                                try {
-                                  await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
-                                  setProtocolFines((prev) => prev.filter((f) => f.id !== fine.id));
-                                } catch (error) {
-                                  showToast(error instanceof Error ? error.message : t("fineDeleteFailed"), "error");
-                                }
+                                // Eigene Busse im offenen Protokoll: immer hart (delete_requires_reason ist false).
+                                const outcome = await requestFineDelete(fine);
+                                if (outcome) setProtocolFines((prev) => prev.filter((f) => f.id !== fine.id));
                               }}
                             ><ActionIcon name="delete" /></button>
                           ) : <span />}

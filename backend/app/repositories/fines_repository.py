@@ -12,6 +12,7 @@ from app.services import public_id_service
 
 ClosedProtocol = aliased(Protocol)
 Collector = aliased(AppUser)
+Deleter = aliased(AppUser)
 FineParticipant = aliased(Participant)
 CollectedTransaction = aliased(FinanceTransaction)
 
@@ -19,6 +20,15 @@ CollectedTransaction = aliased(FinanceTransaction)
 class DuplicateFineError(Exception):
     """Raised by create_fine when an identical fine (same protocol, participant, fine_type)
     already exists - see find_existing_fine below."""
+
+
+class FineDeleteError(ValueError):
+    """Erwartete Ablehnung beim Löschen mit Begründung (MAIN-BE-002). `code` ist
+    maschinenlesbar: reason_required, no_open_protocol, protocol_closed."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class FinesRepository:
@@ -45,10 +55,13 @@ class FinesRepository:
                 CollectedTransaction.public_id.label("collected_transaction_public_id"),
                 ClosedProtocol.public_id.label("closed_in_protocol_public_id"),
                 Collector.public_id.label("collected_by_user_public_id"),
+                Protocol.status.label("origin_protocol_status"),
+                Deleter.display_name.label("deleted_by_display_name"),
             )
             .join(Protocol, Protocol.id == AttendanceFine.protocol_id)
             .join(FinanceAccount, FinanceAccount.id == AttendanceFine.account_id)
             .outerjoin(Collector, Collector.id == AttendanceFine.collected_by_user_id)
+            .outerjoin(Deleter, Deleter.id == AttendanceFine.deleted_by_user_id)
             .outerjoin(ClosedProtocol, ClosedProtocol.id == AttendanceFine.closed_in_protocol_id)
             .outerjoin(FineParticipant, FineParticipant.id == AttendanceFine.participant_id)
             .outerjoin(CollectedTransaction, CollectedTransaction.id == AttendanceFine.collected_transaction_id)
@@ -214,8 +227,24 @@ class FinesRepository:
         db.commit()
         return self._get_read(db, fine.id)
 
-    def delete_fine(self, db: Session, fine_id: int, tenant_id: int) -> bool:
-        """Hard-delete the fine."""
+    def delete_fine(
+        self,
+        db: Session,
+        fine_id: int,
+        tenant_id: int,
+        *,
+        actor_user_id: int | None = None,
+        reason: str | None = None,
+        protocol_context_id: int | None = None,
+    ) -> str | None:
+        """Löscht eine offene Busse. Liefert "hard", "soft" oder None (nicht gefunden bzw.
+        nicht offen).
+
+        Im noch offenen Ursprungsprotokoll ist eine Busse meist ein Erfassungsfehler und wird
+        hart gelöscht. Ist das Ursprungsprotokoll abgeschlossen (die Busse wird ins nächste
+        Protokoll mitgeführt), bleibt sie als `deleted` mit Begründung erhalten und wird im
+        Protokoll aufgeführt, in dem gelöscht wurde - wie beim Einkassieren (MAIN-BE-002).
+        """
         # Row-locked, same as collect_fine (audit E4, 2026-08-16): a plain db.get() here let
         # a near-simultaneous collect_fine slip a FinanceTransaction in between this read and
         # the DELETE below, leaving that transaction behind with no matching AttendanceFine
@@ -225,17 +254,60 @@ class FinesRepository:
         fine = db.execute(
             select(AttendanceFine).where(AttendanceFine.id == fine_id).with_for_update()
         ).scalar_one_or_none()
-        if fine is None or fine.status == "collected":
-            return False
+        if fine is None or fine.status != "pending":
+            return None
         protocol = db.get(Protocol, fine.protocol_id)
         if protocol is None or protocol.tenant_id != tenant_id:
-            return False
-        # Freeze-Schutz (audit S7, 2026-08-16) - see create_fine's identical check above.
-        if protocol.status == "abgeschlossen":
-            return False
-        db.delete(fine)
+            return None
+        if protocol.status != "abgeschlossen":
+            db.delete(fine)
+            db.commit()
+            return "hard"
+
+        reason = (reason or "").strip()
+        if not reason:
+            raise FineDeleteError("reason_required", "Für das Löschen einer mitgeführten Busse ist eine Begründung nötig")
+        listing_protocol_id = protocol_context_id
+        if listing_protocol_id is not None:
+            listing_protocol = db.get(Protocol, listing_protocol_id)
+            if listing_protocol is None or listing_protocol.tenant_id != tenant_id:
+                return None
+            if listing_protocol.status == "abgeschlossen":
+                raise FineDeleteError("protocol_closed", "Das Protokoll ist abgeschlossen")
+        else:
+            listing_protocol_id = self._next_open_protocol_id(db, tenant_id)
+            if listing_protocol_id is None:
+                raise FineDeleteError("no_open_protocol", "Es gibt kein offenes Protokoll, in dem die Löschung aufgeführt werden kann")
+        fine.status = "deleted"
+        fine.delete_comment = reason
+        fine.deleted_at = datetime.now(timezone.utc)
+        fine.deleted_by_user_id = actor_user_id
+        fine.closed_in_protocol_id = listing_protocol_id
         db.commit()
-        return True
+        return "soft"
+
+    def restore_fine(self, db: Session, fine_id: int, tenant_id: int) -> AttendanceFineRead | None:
+        """Macht ein Löschen mit Begründung rückgängig, solange das Protokoll, in dem es
+        aufgeführt ist, noch offen ist."""
+        fine = db.execute(
+            select(AttendanceFine).where(AttendanceFine.id == fine_id).with_for_update()
+        ).scalar_one_or_none()
+        if fine is None or fine.status != "deleted":
+            return None
+        origin_protocol = db.get(Protocol, fine.protocol_id)
+        if origin_protocol is None or origin_protocol.tenant_id != tenant_id:
+            return None
+        if fine.closed_in_protocol_id is not None:
+            listing_protocol = db.get(Protocol, fine.closed_in_protocol_id)
+            if listing_protocol is not None and listing_protocol.status == "abgeschlossen":
+                return None
+        fine.status = "pending"
+        fine.delete_comment = None
+        fine.deleted_at = None
+        fine.deleted_by_user_id = None
+        fine.closed_in_protocol_id = None
+        db.commit()
+        return self._get_read(db, fine_id)
 
     def _next_open_protocol_id(self, db: Session, tenant_id: int) -> int | None:
         """Used to auto-attach fines collected outside any protocol context (the standalone
@@ -377,7 +449,17 @@ class FinesRepository:
             closed_in_protocol_id=row.closed_in_protocol_public_id,
             collected_by_user_id=row.collected_by_user_public_id,
             collected_by_display_name=row.collected_by_display_name,
-            can_reopen=fine.status == "collected" and row.tracking_protocol_status != "abgeschlossen",
+            # reopen_fine verlangt zusätzlich ein offenes Ursprungsprotokoll.
+            can_reopen=(
+                fine.status == "collected"
+                and row.tracking_protocol_status != "abgeschlossen"
+                and row.origin_protocol_status != "abgeschlossen"
+            ),
+            delete_comment=fine.delete_comment if fine.status == "deleted" else None,
+            deleted_at=fine.deleted_at,
+            deleted_by_display_name=row.deleted_by_display_name,
+            delete_requires_reason=fine.status == "pending" and row.origin_protocol_status == "abgeschlossen",
+            can_restore=fine.status == "deleted" and row.tracking_protocol_status != "abgeschlossen",
             created_at=fine.created_at,
         )
 

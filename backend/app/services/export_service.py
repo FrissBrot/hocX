@@ -1430,15 +1430,15 @@ Status: {protocol_status}
         own_fines = db.scalars(
             select(AttendanceFine)
             .where(AttendanceFine.protocol_id == protocol_id)
-            .where(AttendanceFine.status.in_(["pending", "collected"]))
+            .where(AttendanceFine.status.in_(["pending", "collected", "deleted"]))
             .order_by(AttendanceFine.created_at.asc())
         ).all()
 
-        # Pending fines from earlier protocols that were collected HERE
+        # Fines from earlier protocols that were collected or deleted (with reason) HERE
         collected_here = db.scalars(
             select(AttendanceFine)
             .where(AttendanceFine.closed_in_protocol_id == protocol_id)
-            .order_by(AttendanceFine.collected_at.asc())
+            .order_by(func.coalesce(AttendanceFine.collected_at, AttendanceFine.deleted_at).asc())
         ).all()
 
         # Optionen der Bussenliste wie im Editor (lib/element-types/period.ts::filterFines).
@@ -1479,6 +1479,8 @@ Status: {protocol_status}
                 status_label = "Kassiert"
             elif fine.status == "collected":
                 status_label = "Sp\\\"ater beglichen"
+            elif fine.status == "deleted":
+                status_label = "Sp\\\"ater gel\\\"oscht"
             else:
                 status_label = "Offen"
             lines.append(
@@ -1494,11 +1496,16 @@ Status: {protocol_status}
             amount_str = f"{float(fine.amount):,.2f}".replace(",", "'")
             origin = db.get(ProtocolModel, fine.protocol_id)
             origin_label = f"aus {self._escape_latex(origin.protocol_number)}" if origin else "aus früherem Protokoll"
+            if fine.status == "deleted":
+                # MAIN-BE-002: Löschung mit Begründung im Protokoll, in dem gelöscht wurde.
+                status_text = f"Gel\\\"oscht ({origin_label}): {self._escape_latex(fine.delete_comment or '')}"
+            else:
+                status_text = f"Kassiert ({origin_label})"
             lines.append(
                 f"{self._escape_latex(fine.participant_name_snapshot)} & "
                 f"{self._escape_latex(fine_type_labels.get(fine.fine_type, fine.fine_type))} & "
                 f"{self._escape_latex(amount_str + ' ' + cur)} & "
-                f"Kassiert ({origin_label}) \\\\"
+                f"{status_text} \\\\"
             )
 
         lines += ["\\end{tabular}", "\\end{flushleft}"]
