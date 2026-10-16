@@ -58,10 +58,15 @@ export function FileDetailModal({
     setMetadata(null);
     setPreviewFailed(false);
     setLoadingMetadata(true);
+    // Verspaetete Antworten einer vorher angezeigten Datei verwerfen (Audit MAIN-FE-007).
+    let cancelled = false;
     browserApiFetch<StoredFileMetadata>(item.metadata_url)
-      .then((data) => setMetadata(data))
-      .catch(() => setMetadata(null))
-      .finally(() => setLoadingMetadata(false));
+      .then((data) => { if (!cancelled) setMetadata(data); })
+      .catch(() => { if (!cancelled) setMetadata(null); })
+      .finally(() => { if (!cancelled) setLoadingMetadata(false); });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 

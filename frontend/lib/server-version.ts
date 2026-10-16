@@ -11,8 +11,11 @@ function gitValue(args: string[]): string | null {
 // Laufzeitwerte: dasselbe getestete Image wird ohne Neubau nach Prod promoviert.
 export function getServerVersion() {
   const version = process.env.HOCX_VERSION || "dev";
-  const environment = process.env.HOCX_ENVIRONMENT ||
+  const rawEnvironment = (process.env.HOCX_ENVIRONMENT || "").trim().toLowerCase() ||
     (version.startsWith("dev") ? "development" : version.startsWith("test-") ? "test" : "production");
+  // 'prod' ist ein Alias fuer 'production': deploy.sh schrieb bis zum Audit MAIN-OPS-001 den
+  // Host-Namen in die .env (siehe backend/app/core/config.py::is_production).
+  const environment = rawEnvironment === "prod" ? "production" : rawEnvironment;
   if (environment === "development" || environment === "dev") {
     const commit = process.env.HOCX_GIT_COMMIT || gitValue(["rev-parse", "--short", "HEAD"]);
     const branch = process.env.HOCX_GIT_BRANCH || gitValue(["branch", "--show-current"]);

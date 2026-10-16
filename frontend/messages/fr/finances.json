@@ -73,6 +73,16 @@
   "deleteFineFailed": "L'amende n'a pas pu être supprimée",
   "reopen": "Annuler",
   "reopenFailed": "L'amende n'a pas pu être réinitialisée",
+  "filterDeleted": "Supprimées",
+  "statusDeleted": "Supprimée",
+  "deletedNote": "{date} : {reason}",
+  "deletedNoteWithUser": "{date} par {user} : {reason}",
+  "deleteReasonTitle": "Supprimer l'amende avec justification",
+  "deleteReasonDescription": "L'amende de {name} provient d'un procès-verbal clôturé. Elle n'est pas supprimée définitivement, mais mentionnée avec la justification dans le procès-verbal où elle est supprimée.",
+  "deleteReasonLabel": "Justification",
+  "deleteReasonHelp": "Apparaît dans le procès-verbal et dans l'export.",
+  "restoreFine": "Restaurer",
+  "restoreFineFailed": "L'amende n'a pas pu être restaurée",
   "reloadFailed": "Les amendes n'ont pas pu être chargées",
   "loadingMoreFines": "Chargement d'autres amendes…",
   "loadMoreFines": "Charger plus ({count} chargées)",
@@ -107,5 +117,7 @@
   "tariffSaved": "Barème enregistré",
   "tariffSaveFailed": "Impossible d’enregistrer le barème",
   "tariffSummary": "Barème : retard {late} · non excusé {absent} · compte {account}",
-  "tariffNotSet": "Aucun barème défini – les blocs de présence ne créent pas d’amendes."
+  "tariffNotSet": "Aucun barème défini – les blocs de présence ne créent pas d’amendes.",
+  "accountDeleteConflict": "Le compte contient encore des écritures ou des amendes et ne peut pas être supprimé.",
+  "txLockedByFineConflict": "Cette écriture appartient à une amende encaissée. Veuillez rouvrir l'amende au lieu de modifier l'écriture."
 }

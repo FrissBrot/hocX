@@ -20,7 +20,7 @@ import { computePopoverPosition, Popover, usePopoverDismiss } from "@/components
 import { SearchInput } from "@/components/ui/search-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
-import { browserApiFetch } from "@/lib/api/client";
+import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
@@ -598,6 +598,7 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
       const imported = await browserApiFetch<EventSummary[]>("/api/events/import-csv", {
         method: "POST",
         body,
+        timeoutMs: LONG_RUNNING_TIMEOUT_MS,
       });
       setEvents((current) => [...imported, ...current]);
       showToast(t("toasts.importedCount", { count: imported.length }), "success");

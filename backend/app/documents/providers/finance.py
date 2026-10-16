@@ -158,19 +158,31 @@ def fines_table(ctx: BuildContext, own: list[AttendanceFine], collected_here: li
             status = status_cell("fineStatus.collected")
         elif fine.status == "collected":
             status = status_cell("fineStatus.collectedLater")
+        elif fine.status == "deleted":
+            # Später mit Begründung gelöscht (MAIN-BE-002, aus main übernommen).
+            status = Cell(k="status", status="fineStatus.deletedLater", v=fine.delete_comment or "")
         else:
             status = status_cell("fineStatus.open")
         items.append((fine.participant_name_snapshot, row(fine, status), fine))
     for fine in collected_here:
-        # Offene Busse aus einem früheren Protokoll, hier kassiert: Herkunft als Zusatz.
+        # Busse aus einem früheren Protokoll, hier kassiert oder mit Begründung gelöscht:
+        # Herkunft (und Begründung) als Zusatz.
         origin = ctx.db.get(Protocol, fine.protocol_id)
-        status = Cell(k="status", status="fineStatus.collected", v=origin.protocol_number if origin is not None else "")
+        origin_number = origin.protocol_number if origin is not None else ""
+        if fine.status == "deleted":
+            status = Cell(k="status", status="fineStatus.deleted", v=f"{origin_number}: {fine.delete_comment or ''}" if origin_number else fine.delete_comment or "")
+        else:
+            status = Cell(k="status", status="fineStatus.collected", v=origin_number)
         items.append((fine.participant_name_snapshot, row(fine, status), fine))
     if group_by_person:
         items.sort(key=lambda item: sort_key(item[0]))
     rows = [item[1] for item in items]
     totals_by_currency: dict[str, float] = {}
-    for _, _, fine in items:
+    for _, table_row, fine in items:
+        if fine.status == "deleted":
+            # Gelöschte Bussen zählen nicht zur Summe, der Betrag wird durchgestrichen.
+            table_row.cells[2].strike = True
+            continue
         totals_by_currency[currency(fine)] = totals_by_currency.get(currency(fine), 0.0) + float(fine.amount)
     totals = None
     if items:
@@ -184,9 +196,13 @@ def protocol_fines(ctx: BuildContext, protocol: Protocol, config: dict | None = 
 
     config = config or {}
     own = list(ctx.db.scalars(
-        select(AttendanceFine).where(AttendanceFine.protocol_id == protocol.id, AttendanceFine.status.in_(["pending", "collected"])).order_by(AttendanceFine.created_at.asc())
+        select(AttendanceFine).where(AttendanceFine.protocol_id == protocol.id, AttendanceFine.status.in_(["pending", "collected", "deleted"])).order_by(AttendanceFine.created_at.asc())
     ))
-    collected_here = list(ctx.db.scalars(select(AttendanceFine).where(AttendanceFine.closed_in_protocol_id == protocol.id).order_by(AttendanceFine.collected_at.asc())))
+    collected_here = list(ctx.db.scalars(
+        select(AttendanceFine)
+        .where(AttendanceFine.closed_in_protocol_id == protocol.id)
+        .order_by(func.coalesce(AttendanceFine.collected_at, AttendanceFine.deleted_at).asc())
+    ))
     account_filter = ctx.ref_to_internal_id(FinanceAccount, config.get("fine_list_account_id"))
     if account_filter:
         own = [fine for fine in own if fine.account_id == account_filter]

@@ -52,6 +52,12 @@ class AttendanceFineRead(BaseModel):
     collected_by_user_id: uuid.UUID | None = None
     collected_by_display_name: str | None = None
     can_reopen: bool = False
+    # Löschen mit Begründung (MAIN-BE-002)
+    delete_comment: str | None = None
+    deleted_at: datetime | None = None
+    deleted_by_display_name: str | None = None
+    delete_requires_reason: bool = False
+    can_restore: bool = False
     created_at: datetime
 
 
@@ -77,3 +83,12 @@ class FineTariffUpdate(BaseModel):
     account_id: uuid.UUID | None = None
     amount_late: Decimal = Field(default=Decimal("0"), ge=0, le=100000)
     amount_absent: Decimal = Field(default=Decimal("0"), ge=0, le=100000)
+
+
+class DeleteFinePayload(BaseModel):
+    """Optionaler Body für DELETE /fines/{id}. Begründung ist nur für Bussen aus einem
+    abgeschlossenen Protokoll nötig; protocol_id ist das Protokoll, in dem gelöscht wird
+    (sonst das nächste offene)."""
+
+    reason: str | None = Field(default=None, max_length=1000)
+    protocol_id: uuid.UUID | None = None

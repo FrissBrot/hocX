@@ -178,6 +178,11 @@
   "deleteEventConfirmNamed": "Delete event \"{title}\" permanently? This removes it from all protocols.",
   "deleteFine": "Delete fine",
   "deleteFineConfirm": "Delete this fine permanently? This cannot be undone.",
+  "fineDeletedLabel": "Deleted",
+  "fineDeletedLater": "Deleted later",
+  "fineDeletedReason": "Reason: {reason}",
+  "restoreFine": "Restore",
+  "fineRestoreFailed": "Fine could not be restored",
   "deleteImageAction": "Delete image",
   "descriptionLabel": "Description",
   "discardNewEventRow": "Discard new event row",
@@ -235,7 +240,10 @@
     "workflowPostProcessingMode": "Follow-up mode",
     "workflowPreparationMode": "Preparation mode",
     "workflowSessionMode": "Session mode",
-    "templateSyncedByOther": "{name} reloaded the elements from the template. The view is being refreshed."
+    "templateSyncedByOther": "{name} reloaded the elements from the template. The view is being refreshed.",
+    "statusChangedByOtherToast": "{name} changed the status to “{status}”.",
+    "draftsRestoredToast": "{count, plural, one {# local text draft was} other {# local text drafts were}} restored.",
+    "conflictToast": "Conflict: someone else saved this section in the meantime. The current version has been loaded – your last change was not applied, but it is kept as a local draft."
   },
   "embeddedBlock": {
     "attendance": "Attendance",

@@ -243,6 +243,8 @@
     "collected": "Kassiert",
     "collectedHere": "Kassiert (aus {origin})",
     "collectedLater": "Später beglichen",
+    "deleted": "Gelöscht",
+    "deletedLater": "Später gelöscht",
     "earlierProtocol": "früherem Protokoll",
     "open": "Offen"
   },

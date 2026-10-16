@@ -22,7 +22,7 @@ from app.schemas.protocol import (
 )
 from app.services import list_snapshot_service, public_id_service
 from app.services.snapshot_reference_ids import normalize_attendance_entries, snapshot_reference_ids, translate_attendance_entries, translate_participant_refs
-from app.services.autosave_service import AutosaveService
+from app.services.autosave_service import AutosaveService, TextConflictError
 from app.services.access_service import AccessService
 from app.services.collaboration_service import conflicting_lock_holder_sync, protocol_channel
 from app.services.protocol_element_service import ProtocolElementService
@@ -392,19 +392,6 @@ def put_protocol_text(
     require_writer(user)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     _ensure_block_not_locked_by_other(protocol.id, block.id, user)
-    current_text = autosave_service.text_repository.get_by_protocol_element_block_id(db, block.id)
-    current_content = current_text.content if current_text is not None else ""
-    # Content already identical to the stored text is never a conflict - e.g. the offline
-    # outbox resending the same save the direct autosave request had already stored.
-    if (
-        payload.expected_content is not None
-        and payload.expected_content != current_content
-        and payload.content != current_content
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail="Der Text wurde zwischenzeitlich von einer anderen Person geändert. Der lokale Entwurf bleibt erhalten.",
-        )
     track_changes_active = bool(protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
         result = autosave_service.save_text_block(
@@ -414,7 +401,11 @@ def put_protocol_text(
             tenant_id=protocol.tenant_id,
             track_changes_active=track_changes_active,
             block_config=block.configuration_snapshot_json,
+            expected_content=payload.expected_content,
         )
+    except TextConflictError as exc:
+        # Konfliktprüfung läuft unter Zeilensperre im Service (Audit MAIN-BE-011).
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Text block could not be saved") from exc

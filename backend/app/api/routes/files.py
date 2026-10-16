@@ -17,7 +17,7 @@ from starlette.background import BackgroundTask
 from app.core.db import get_db
 from app.core.config import settings
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
-from app.models import GalleryImage, ProtocolElementBlock, ProtocolImage, StoredFile, Tenant
+from app.models import GalleryImage, Protocol, ProtocolElementBlock, ProtocolImage, StoredFile, Tenant
 from app.schemas.files import (
     AlbumPendingReleaseRead,
     AlbumReleaseRequest,
@@ -662,6 +662,17 @@ def list_images(
     return service.list_protocol_images(db, block.id)
 
 
+def _ensure_block_protocol_not_frozen(db: Session, protocol_element_block_id: int) -> None:
+    """Audit MAIN-BE-007: Bilder abgeschlossener Protokolle sind wie alle anderen Inhalte
+    eingefroren (gleiche 409 wie ProtocolService.get_protocol_or_404_not_frozen)."""
+    protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=protocol_element_block_id)
+    protocol = db.get(Protocol, protocol_id) if protocol_id else None
+    if protocol is None:
+        raise HTTPException(status_code=404, detail="Protocol not found")
+    if protocol.status == "abgeschlossen":
+        raise HTTPException(status_code=409, detail="Protocol is already abgeschlossen")
+
+
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/images", response_model=ProtocolImageRead)
 async def upload_image(
     protocol_element_block_id: uuid.UUID,
@@ -676,6 +687,7 @@ async def upload_image(
     if protocol_element_block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
     access_service.ensure_can_read_protocol_block(db, user, protocol_element_block.id)
+    _ensure_block_protocol_not_frozen(db, protocol_element_block.id)
     try:
         return await service.save_protocol_image(
             db,
@@ -701,6 +713,7 @@ def delete_image(
     if protocol_image is None:
         raise HTTPException(status_code=404, detail="Image not found")
     access_service.ensure_can_read_protocol_block(db, user, protocol_image.protocol_element_block_id)
+    _ensure_block_protocol_not_frozen(db, protocol_image.protocol_element_block_id)
     try:
         deleted = service.delete_protocol_image(db, protocol_image.id)
     except SQLAlchemyError as exc:

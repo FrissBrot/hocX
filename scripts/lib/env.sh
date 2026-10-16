@@ -49,6 +49,29 @@ require_host_environment() {
   fi
 }
 
+# Host-Marker und deploy.sh-Argument heissen prod/test, die Anwendung (HOCX_ENVIRONMENT, siehe
+# backend/app/core/config.py::is_production) kennt production/test. Bis zum Audit MAIN-OPS-001
+# schrieb deploy.sh den Host-Namen 'prod' in die .env, wodurch das Backend sich auf Prod nicht als
+# Produktion sah (/docs offen, Demo-Daten-Sperre aus). Gibt den kanonischen Anwendungswert aus;
+# 'prod' wird als Alias fuer bestehende Hosts weiter akzeptiert.
+app_environment_for() {
+  case "${1,,}" in
+    prod|production) printf 'production\n' ;;
+    test) printf 'test\n' ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
+# Prod nimmt nur Release-Tags (Format wie in release.yml), nie einen test-*-Candidate-Tag.
+require_release_version_for() {
+  local environment="$1" version="$2"
+  if [ "$environment" = prod ] && [[ ! "$version" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Auf Prod sind nur Release-Tags erlaubt (z. B. v1.2.3), nicht: $version" >&2
+    echo "Kandidaten zuerst auf Test verifizieren und per release.yml promoten (RUNBOOK Abschnitt 3)." >&2
+    return 1
+  fi
+}
+
 require_unprovisioned_dev_host() {
   local marker="${1:-/etc/hocx/environment}"
   local actual
@@ -91,7 +114,7 @@ is_allowed_env_key() {
     EXPORT_RETENTION_DAYS|\
     FRIENDLY_CAPTCHA_API_KEY|FRIENDLY_CAPTCHA_SITEKEY|FRIENDLY_CAPTCHA_VERIFY_URL|\
     GHCR_NAMESPACE|HOCX_ABGABEBOX_BACKEND_IMAGE|HOCX_ABGABEBOX_FRONTEND_IMAGE|\
-    HOCX_APP_URL|HOCX_BACKEND_IMAGE|HOCX_DOCS_IMAGE|HOCX_ENVIRONMENT|HOCX_FRONTEND_IMAGE|\
+    HOCX_APP_URL|HOCX_BACKEND_IMAGE|HOCX_COMPOSE_PROJECT|HOCX_DOCS_IMAGE|HOCX_ENVIRONMENT|HOCX_FRONTEND_IMAGE|\
     HOCX_MIN_FREE_KB|HOCX_PHOTO_ANALYSIS_WORKER_IMAGE|HOCX_SIGNING_IDENTITY_REGEXP|\
     HOCX_SINGLE_TENANT_RESOLUTION|HOCX_STORAGE_PATH|\
     HOCX_VERSION|\
@@ -101,7 +124,7 @@ is_allowed_env_key() {
     PHOTO_ANALYSIS_AUTO_QUEUE_START_HOUR|PHOTO_WORKER_DATABASE_URL|PHOTO_WORKER_DB_PASSWORD|\
     POSTGRES_DB|\
     POSTGRES_PASSWORD|POSTGRES_PORT|POSTGRES_USER|\
-    PROTOCOL_IMAGE_STORAGE_QUOTA_MB|ROUTER_PREFIX|TRAEFIK_ABGABEBOX_DOMAIN|\
+    PROTOCOL_IMAGE_STORAGE_QUOTA_MB|REDIS_PASSWORD|ROUTER_PREFIX|TRAEFIK_ABGABEBOX_DOMAIN|\
     TRAEFIK_ADMIN_DOMAIN|TRAEFIK_ADMIN_PORT|TRAEFIK_CERTRESOLVER|TRAEFIK_DOCS_DOMAIN|\
     TRAEFIK_DOMAIN|TRAEFIK_WEBSECURE_BIND|TRAEFIK_WEB_BIND|TRAEFIK_WEBSITE_DOMAIN|\
     WEBSITE_CONTACT_EMAIL|WORD_IMPORT_RESCAN_INTERVAL_MINUTES)
@@ -111,6 +134,54 @@ is_allowed_env_key() {
       return 1
       ;;
   esac
+}
+
+# Ersetzt \n, \r, \t, \" und \\ in einem Durchgang. Die fruehere Kette einzelner Ersetzungen
+# machte aus einem literalen Backslash vor n (in der Datei \\n) einen Zeilenumbruch.
+# Ergebnis in REPLY (keine Command-Substitution, die abschliessende Zeilenumbrueche verschluckt).
+unescape_double_quoted() {
+  local input="$1" output="" char next i=0
+  while [ "$i" -lt "${#input}" ]; do
+    char="${input:i:1}"
+    if [ "$char" = "\\" ] && [ $((i + 1)) -lt "${#input}" ]; then
+      next="${input:i+1:1}"
+      case "$next" in
+        n) output+=$'\n' ;;
+        r) output+=$'\r' ;;
+        t) output+=$'\t' ;;
+        '"') output+='"' ;;
+        "\\") output+="\\" ;;
+        *) output+="$char$next" ;;
+      esac
+      i=$((i + 2))
+      continue
+    fi
+    output+="$char"
+    i=$((i + 1))
+  done
+  REPLY="$output"
+}
+
+# Ergebnis in REPLY: Wert ohne Inline-Kommentar (Leerraum + '#') und ohne Leerraum an den Raendern.
+strip_unquoted_comment() {
+  local value="$1" i seen_text=false
+  # Erstes '#' mit Leerraum davor und Text davor beginnt den Kommentar (wie Compose).
+  for ((i = 0; i < ${#value}; i++)); do
+    case "${value:i:1}" in
+      [[:space:]]) ;;
+      "#")
+        if [ "$seen_text" = true ] && [ "$i" -gt 0 ] && [[ "${value:i-1:1}" == [[:space:]] ]]; then
+          value="${value:0:i}"
+          break
+        fi
+        seen_text=true
+        ;;
+      *) seen_text=true ;;
+    esac
+  done
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  REPLY="$value"
 }
 
 load_env_file() {
@@ -157,15 +228,18 @@ load_env_file() {
     if [[ "$value" == "'"*"'" && ${#value} -ge 2 ]]; then
       value="${value:1:${#value}-2}"
     elif [[ "$value" == '"'*'"' && ${#value} -ge 2 ]]; then
-      value="${value:1:${#value}-2}"
-      value="${value//\\n/$'\n'}"
-      value="${value//\\r/$'\r'}"
-      value="${value//\\t/$'\t'}"
-      value="${value//\\\"/\"}"
-      value="${value//\\\\/\\}"
+      unescape_double_quoted "${value:1:${#value}-2}"
+      value="$REPLY"
+    else
+      # Wie der dotenv-Parser von Compose (Audit MAIN-OPS-015): bei unquotierten Werten beginnt
+      # mit Leerraum + '#' ein Kommentar, abschliessender Leerraum zaehlt nicht. Sonst sahen
+      # deploy.sh (Secret-Dateien) und Compose (Interpolation) unterschiedliche Werte.
+      strip_unquoted_comment "$value"
+      value="$REPLY"
     fi
 
     printf -v "$key" '%s' "$value"
+    # shellcheck disable=SC2163  # exportiert bewusst die Variable, deren Name in $key steht
     export "$key"
   done < "$env_file"
 }

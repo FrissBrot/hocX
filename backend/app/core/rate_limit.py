@@ -43,3 +43,28 @@ def record_failed_attempt(key: str, *, period_seconds: int) -> None:
     count = redis.incr(redis_key)
     if count == 1:
         redis.expire(redis_key, period_seconds)
+
+
+# Login-Sperre (MAIN-SEC-007): pro Konto und Quell-IP eng, damit ein Angreifer ein fremdes
+# Konto nur für sich selbst sperrt; pro Konto global deutlich höher als Bremse gegen
+# verteiltes Raten über viele IPs.
+LOGIN_LOCKOUT_PER_IP = 10
+LOGIN_LOCKOUT_PER_ACCOUNT = 100
+LOGIN_LOCKOUT_WINDOW_SECONDS = 15 * 60
+
+
+def login_lockout_keys(scope: str, email: str, client_address: str | None) -> tuple[str, str]:
+    account = f"{scope}:{email.strip().lower()}"
+    return f"{account}:ip:{client_address or 'unknown'}", account
+
+
+def check_login_lockout(scope: str, email: str, client_address: str | None) -> None:
+    ip_key, account_key = login_lockout_keys(scope, email, client_address)
+    check_account_lockout(ip_key, limit=LOGIN_LOCKOUT_PER_IP)
+    check_account_lockout(account_key, limit=LOGIN_LOCKOUT_PER_ACCOUNT)
+
+
+def record_failed_login(scope: str, email: str, client_address: str | None) -> None:
+    for key in login_lockout_keys(scope, email, client_address):
+        record_failed_attempt(key, period_seconds=LOGIN_LOCKOUT_WINDOW_SECONDS)
+

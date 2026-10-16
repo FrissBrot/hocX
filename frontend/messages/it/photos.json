@@ -145,7 +145,8 @@
     "uploadFailed": "Caricamento non riuscito",
     "uploadPlain": "Carica",
     "uploadingPercent": "Caricamento… {percent}%",
-    "uploadingPlain": "Caricamento…"
+    "uploadingPlain": "Caricamento…",
+    "largeZipHint": "File ZIP di grandi dimensioni: con una connessione lenta il caricamento può interrompersi dopo un'ora. Meglio dividere l'archivio in più ZIP più piccoli o caricare direttamente le foto."
   },
   "shareModal": {
     "actionAriaLabelActive": "Rimuovi l’accesso per {name}",

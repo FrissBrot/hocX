@@ -67,6 +67,7 @@ from app.services.tenant_transfer_common import (
     remap_repeat_source_todo,
     remap_responsible_assignments,
     remap_template_element_config,
+    remap_todos_snapshot,
     replace_public_ids,
 )
 
@@ -142,11 +143,13 @@ class TenantCloneService:
         self._partial_tenant_id: int | None = None
         try:
             return impl(db, source_tenant_id, new_name)
-        except Exception:
+        except Exception as exc:
             db.rollback()
             if self._partial_tenant_id is not None:
-                db.query(Tenant).filter(Tenant.id == self._partial_tenant_id).delete()
-                db.commit()
+                # Vollständiges Aufräumen inkl. Dateien (Audit MAIN-BE-006).
+                from app.services.admin_tenant_service import AdminTenantService
+
+                AdminTenantService().cleanup_partial_tenant(db, self._partial_tenant_id, original=exc)
             raise
 
     def _clone_structure_impl(self, db: Session, source_tenant_id: int, new_name: str) -> Tenant:
@@ -325,7 +328,37 @@ class TenantCloneService:
                 **self._public_id_map(db, StoredFile, stored_file_map),
             },
         )
+        self._clone_todo_snapshots(
+            db,
+            protocol_map=protocol_map,
+            protocol_element_block_map=protocol_element_block_map,
+            public_id_map={
+                **self._public_id_map(db, Protocol, protocol_map),
+                **self._public_id_map(db, ProtocolElementBlock, protocol_element_block_map),
+                **self._public_id_map(db, ProtocolTodo, todo_map),
+                **self._public_id_map(db, Participant, participant_map),
+                **self._element_ref_public_ids,
+            },
+        )
         return new_tenant
+
+    def _clone_todo_snapshots(
+        self, db: Session, *, protocol_map: dict[int, int], protocol_element_block_map: dict[int, int], public_id_map: dict[str, str]
+    ) -> None:
+        """Eingefrorene Todo-Liste abgeschlossener Protokolle mitnehmen (Audit MAIN-BE-012)."""
+        if not protocol_map:
+            return
+        sources = db.execute(
+            select(Protocol.id, Protocol.todos_snapshot_json).where(
+                Protocol.id.in_(list(protocol_map.keys())), Protocol.todos_snapshot_json.is_not(None)
+            )
+        ).all()
+        for source_id, snapshot in sources:
+            target = db.get(Protocol, protocol_map[source_id])
+            if target is not None:
+                target.todos_snapshot_json = remap_todos_snapshot(snapshot, protocol_element_block_map, public_id_map)
+        if sources:
+            db.commit()
 
     # ── tenant base + physical files ───────────────────────────────────────
 
@@ -870,7 +903,9 @@ class TenantCloneService:
         for row in rows:
             root = settings.abgabebox_storage_root if row.id in abgabebox_ids else settings.storage_root
             new_storage_path = self._clone_stored_file_content(row.storage_path, root=root, new_tenant_id=new_tenant_id)
-            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "storage_path": new_storage_path})
+            # Eigene Vorschau statt der der Quelle (Audit MAIN-BE-003): sonst teilen sich Quelle und
+            # Klon "<quell_id>.jpg", und Löschen im Klon entfernt das Thumbnail der Quelle.
+            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "storage_path": new_storage_path, "thumbnail_path": None})
             db.add(new_row)
             db.flush()
             id_map[row.id] = new_row.id
@@ -910,8 +945,8 @@ class TenantCloneService:
                 "tenant_id": new_tenant_id,
                 "template_id": new_template_id,
                 "event_id": event_map.get(row.event_id) if row.event_id else None,
-                # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - die
-                # Kopie zeigt deshalb die (ebenfalls geklonten) Live-Todos.
+                # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - sie wird
+                # nach dem Klonen der Blöcke und Todos umgeschrieben (_clone_todo_snapshots).
                 "todos_snapshot_json": None,
             })
             db.add(new_row)

@@ -66,7 +66,7 @@ USER_ID_COLUMNS: dict[str, list[str]] = {
     "gallery_image": ["created_by"],
     "word_import_document": ["created_by", "imported_by"],
     "protocol_todo": ["assigned_user_id", "created_by"],
-    "attendance_fine": ["collected_by_user_id"],
+    "attendance_fine": ["collected_by_user_id", "deleted_by_user_id"],
     "user_template_access": ["user_id"],
     "user_protocol_access": ["user_id"],
     "user_protocol_scroll": ["user_id"],
@@ -579,6 +579,29 @@ def replace_public_ids(value: Any, public_id_map: dict[str, str]) -> Any:
     if isinstance(value, dict):
         return {replace_public_ids(k, public_id_map): replace_public_ids(v, public_id_map) for k, v in value.items()}
     return value
+
+
+def remap_todos_snapshot(snapshot: Any, block_id_map: dict[int, int], public_id_map: dict[str, str]) -> dict | None:
+    """Überträgt protocol.todos_snapshot_json (eingefrorene Todo-Liste eines abgeschlossenen
+    Protokolls) auf importierte/geklonte Zeilen (Audit MAIN-BE-012).
+
+    Die Keys von ``blocks`` sind interne Block-IDs und laufen über ``block_id_map``; Blöcke
+    ohne Gegenstück entfallen. Alle eingebetteten public_ids (Todo, Block, Protokoll,
+    Teilnehmer, ...) laufen über ``public_id_map``. ``pending`` enthält nur public_ids.
+    """
+    if not isinstance(snapshot, dict):
+        return None
+    blocks: dict[str, Any] = {}
+    for key, items in (snapshot.get("blocks") or {}).items():
+        try:
+            new_block_id = block_id_map.get(int(key))
+        except (TypeError, ValueError):
+            continue
+        if new_block_id is None:
+            continue
+        blocks[str(new_block_id)] = replace_public_ids(copy.deepcopy(items), public_id_map)
+    rest = {key: value for key, value in snapshot.items() if key != "blocks"}
+    return {**replace_public_ids(copy.deepcopy(rest), public_id_map), "blocks": blocks}
 
 
 # ── Word-Import JSON remapping ───────────────────────────────────────────────

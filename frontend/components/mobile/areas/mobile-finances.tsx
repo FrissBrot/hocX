@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { useAllPages } from "@/components/mobile/mobile-data";
@@ -23,10 +23,17 @@ import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
+import { restoreFine, useFineDelete } from "@/components/finances/fine-delete";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
 import type { AttendanceFineListItem, FinanceAccount, FinanceTransaction } from "@/types/api";
+
+// Konflikte (409) aus dem Backend uebersetzt anzeigen: Konto mit Buchungen/Bussen loeschen bzw.
+// Buchung einer einkassierten Busse aendern (siehe backend finance_repository.FinanceConflictError).
+function isConflict(error: unknown): boolean {
+  return error instanceof Error && (error as { status?: number }).status === 409;
+}
 
 function money(amount: number, currency?: string | null) {
   const value = new Intl.NumberFormat("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
@@ -52,17 +59,24 @@ export function MobileFinances({ initialAccounts, canWrite }: { initialAccounts:
   const [accountSheet, setAccountSheet] = useState<FinanceAccount | "new" | null>(null);
   const selected = accounts.find((account) => account.id === selectedId) ?? null;
 
+  // Nur die zuletzt gestartete Ladung darf die Liste setzen: beim schnellen Kontowechsel kam die
+  // (laengere, mehrseitige) Antwort des vorigen Kontos sonst nach der des neuen an und zeigte
+  // dessen Buchungen unter dem gewaehlten Konto (Audit MAIN-FE-005).
+  const loadRequestRef = useRef(0);
   const loadTransactions = useCallback(async (accountId: string) => {
+    const requestId = ++loadRequestRef.current;
+    const isCurrent = () => requestId === loadRequestRef.current;
     try {
       const list: FinanceTransaction[] = [];
       for (let page = 0; page < 20; page += 1) {
         const batch = (await browserApiFetch<FinanceTransaction[]>(`/api/finance/accounts/${accountId}/transactions?skip=${list.length}&limit=200`)) ?? [];
+        if (!isCurrent()) return;
         list.push(...batch);
         if (batch.length < 200) break;
       }
       setTransactions(list);
     } catch {
-      setTransactions([]);
+      if (isCurrent()) setTransactions([]);
     }
   }, []);
 
@@ -73,8 +87,12 @@ export function MobileFinances({ initialAccounts, canWrite }: { initialAccounts:
   }, []);
 
   useEffect(() => {
-    if (selectedId) void loadTransactions(selectedId);
-    else setTransactions([]);
+    if (selectedId) {
+      void loadTransactions(selectedId);
+    } else {
+      loadRequestRef.current += 1;
+      setTransactions([]);
+    }
   }, [selectedId, loadTransactions]);
 
   const groups = useMemo(() => {
@@ -107,7 +125,7 @@ export function MobileFinances({ initialAccounts, canWrite }: { initialAccounts:
       setSelectedId(list[0]?.id ?? null);
       setAccountSheet(null);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteAccountFailed"), "error");
+      showToast(isConflict(error) ? t("accountDeleteConflict") : error instanceof Error ? error.message : t("deleteAccountFailed"), "error");
     }
   }
 
@@ -250,7 +268,7 @@ function TransactionSheet({
       else await browserApiFetch(`/api/finance/accounts/${account.id}/transactions`, { method: "POST", body });
       await onSaved();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("saveTxFailed"), "error");
+      showToast(isConflict(error) ? t("txLockedByFineConflict") : error instanceof Error ? error.message : t("saveTxFailed"), "error");
     } finally {
       setSaving(false);
     }
@@ -262,7 +280,7 @@ function TransactionSheet({
       await browserApiFetch(`/api/finance/transactions/${transaction.id}`, { method: "DELETE" });
       await onSaved();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteTxFailed"), "error");
+      showToast(isConflict(error) ? t("txLockedByFineConflict") : error instanceof Error ? error.message : t("deleteTxFailed"), "error");
     }
   }
 
@@ -400,7 +418,7 @@ function AccountSheet({
 
 // ── Bussen ──────────────────────────────────────────────────────────────
 
-type FineFilter = "pending" | "collected" | "all";
+type FineFilter = "pending" | "collected" | "deleted" | "all";
 
 export function MobileFines({
   initialFines,
@@ -418,8 +436,8 @@ export function MobileFines({
   const fineTypeLabel = useMemo(() => fineTypeLabels(t), [t]);
   const locale = useLocale();
   const openMore = useOpenMore();
-  const confirm = useConfirm();
   const showToast = useToast();
+  const { requestDelete, dialog: deleteDialog } = useFineDelete();
   const [fines, setFines] = useAllPages<AttendanceFineListItem>("/api/fines", initialFines);
   const [filter, setFilter] = useState<FineFilter>("pending");
   const [search, setSearch] = useState("");
@@ -465,13 +483,17 @@ export function MobileFines({
   }
 
   async function remove(fine: AttendanceFineListItem) {
-    if (!(await confirm({ message: t("deleteFineConfirm", { name: fine.participant_name_snapshot }), tone: "danger", confirmLabel: tMobile("common.delete") }))) return;
+    setOpenId(null);
+    const outcome = await requestDelete(fine);
+    if (outcome === "hard") setFines((list) => list.filter((item) => item.id !== fine.id));
+    else if (outcome === "soft") await reload();
+  }
+
+  async function restore(fine: AttendanceFineListItem) {
     try {
-      await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
-      setFines((list) => list.filter((item) => item.id !== fine.id));
-      setOpenId(null);
+      replace({ ...fine, ...(await restoreFine(fine.id)) });
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteFineFailed"), "error");
+      showToast(error instanceof Error ? error.message : t("restoreFineFailed"), "error");
     }
   }
 
@@ -490,6 +512,7 @@ export function MobileFines({
           options={[
             { value: "pending", label: t("filterPending") },
             { value: "collected", label: t("filterCollected") },
+            ...(fines.some((fine) => fine.status === "deleted") ? [{ value: "deleted" as const, label: t("filterDeleted") }] : []),
             { value: "all", label: t("filterAll") },
           ]}
         />
@@ -516,8 +539,8 @@ export function MobileFines({
                     </span>
                     {filter === "all" ? (
                       <span className="mobile-row-pills">
-                        <span className={fine.status === "collected" ? "mobile-cycle-pill" : "mobile-overdue-pill"}>
-                          {fine.status === "collected" ? t("statusCollected") : t("statusPending")}
+                        <span className={fine.status === "pending" ? "mobile-overdue-pill" : "mobile-cycle-pill"}>
+                          {fine.status === "collected" ? t("statusCollected") : fine.status === "deleted" ? t("statusDeleted") : t("statusPending")}
                         </span>
                       </span>
                     ) : null}
@@ -545,9 +568,16 @@ export function MobileFines({
           footer={
             canWrite ? (
               <div className="modal-actions mobile-sheet-footer">
-                <button type="button" className="button-danger" onClick={() => void remove(openFine)}>
-                  {tMobile("common.delete")}
-                </button>
+                {openFine.status === "pending" ? (
+                  <button type="button" className="button-danger" onClick={() => void remove(openFine)}>
+                    {tMobile("common.delete")}
+                  </button>
+                ) : null}
+                {openFine.status === "deleted" && openFine.can_restore ? (
+                  <button type="button" className="button-secondary" onClick={() => void restore(openFine)}>
+                    {t("restoreFine")}
+                  </button>
+                ) : null}
                 {openFine.status === "pending" ? (
                   <button type="button" className="button-primary" onClick={() => void collect(openFine)}>
                     {t("markCollected")}
@@ -571,12 +601,18 @@ export function MobileFines({
               value={
                 openFine.status === "collected"
                   ? `${t("statusCollected")}${openFine.collected_at ? ` · ${dateParts.dayMonth(openFine.collected_at.slice(0, 10), locale)}` : ""}`
-                  : t("statusPending")
+                  : openFine.status === "deleted"
+                    ? `${t("statusDeleted")}${openFine.deleted_at ? ` · ${dateParts.dayMonth(openFine.deleted_at.slice(0, 10), locale)}` : ""}`
+                    : t("statusPending")
               }
             />
+            {openFine.status === "deleted" && openFine.delete_comment ? (
+              <MobileListRow label={t("deleteReasonLabel")} value={openFine.delete_comment} />
+            ) : null}
           </div>
         </Modal>
       ) : null}
+      {deleteDialog}
       <FineCreateModal open={creating} accounts={accounts} onClose={() => setCreating(false)} onCreated={() => void reload()} />
     </div>
   );

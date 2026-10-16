@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_finance_read, require_finance_write
 from app.models.entities import FinanceAccount
-from app.repositories.finance_repository import FinanceRepository
+from app.repositories.finance_repository import FinanceConflictError, FinanceRepository
 from app.schemas.finance import (
     FinanceAccountCreate,
     FinanceAccountRead,
@@ -76,7 +76,13 @@ def delete_account(
 ):
     require_finance_write(user)
     internal_id = public_id_service.resolve_internal_id(db, FinanceAccount, account_id, tenant_id=user.current_tenant_id)
-    if internal_id is None or not repo.delete_account(db, internal_id, user.current_tenant_id):
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    try:
+        deleted = repo.delete_account(db, internal_id, user.current_tenant_id)
+    except FinanceConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if not deleted:
         raise HTTPException(status_code=404, detail="Account not found")
     audit.log(db, action="finance_account.deleted", actor=user, entity_type="finance_account", entity_id=internal_id)
     return {"message": "Account deleted"}
@@ -153,7 +159,10 @@ def update_transaction(
     existing = repo._get_transaction_scoped_by_public_id(db, tx_id, user.current_tenant_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    result = repo.update_transaction(db, existing.id, user.current_tenant_id, payload)
+    try:
+        result = repo.update_transaction(db, existing.id, user.current_tenant_id, payload)
+    except FinanceConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
     audit.log(
@@ -171,7 +180,13 @@ def delete_transaction(
 ):
     require_finance_write(user)
     existing = repo._get_transaction_scoped_by_public_id(db, tx_id, user.current_tenant_id)
-    if existing is None or not repo.delete_transaction(db, existing.id, user.current_tenant_id):
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    try:
+        deleted = repo.delete_transaction(db, existing.id, user.current_tenant_id)
+    except FinanceConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if not deleted:
         raise HTTPException(status_code=404, detail="Transaction not found")
     audit.log(db, action="finance_transaction.deleted", actor=user, entity_type="finance_transaction", entity_id=existing.id)
     return {"message": "Transaction deleted"}

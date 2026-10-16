@@ -233,3 +233,21 @@ def test_custom_domains_use_release_upload_middlewares_and_prefix(monkeypatch):
     assert gallery['middlewares'] == ['release-test-gallery-upload-inflight@docker']
     assert box['service'] == 'release-test-abgabebox-backend@docker'
     assert 'release-test-abgabebox-upload-body-limit@docker' in box['middlewares']
+
+
+def test_public_routers_limit_concurrent_requests_per_ip(db, monkeypatch, tmp_path):
+    """MAIN-OPS-013: Custom-Domains bekommen dieselben Inflight-Grenzen pro IP wie die
+    Hauptdomain (Middlewares aus den Compose-Labels)."""
+    tenant = make_tenant(db, "Inflight Verein")
+    grant_tenant_feature(db, tenant.id)
+    app_row = _make_domain(db, tenant.id, "inflight.example.com", purpose="app")
+    box_row = _make_domain(db, tenant.id, "abgabe.inflight.example.com", purpose="abgabebox")
+
+    routers = _regenerate_into_tmp(monkeypatch, tmp_path, db)["http"]["routers"]
+    prefix = traefik_config_service.settings.traefik_middleware_prefix
+
+    assert f"{prefix}web-inflight@docker" in routers[f"tenant-app-{app_row.id}-frontend"]["middlewares"]
+    assert f"{prefix}api-inflight@docker" in routers[f"tenant-app-{app_row.id}-backend"]["middlewares"]
+    assert f"{prefix}api-inflight@docker" in routers[f"tenant-abgabebox-{box_row.id}-backend"]["middlewares"]
+    assert f"{prefix}api-inflight@docker" in routers[f"tenant-abgabebox-{box_row.id}-public-get"]["middlewares"]
+

@@ -152,8 +152,7 @@ def _list_content_versions(list_ids: set[int]) -> dict[int, int]:
 
 def _static_allowed_origins() -> set[str]:
     return {o for o in (
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
+        *settings.local_dev_origins,
         f"https://{settings.traefik_domain}" if settings.traefik_domain else None,
     ) if o} | settings.extra_cors_origin_set
 

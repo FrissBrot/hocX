@@ -308,6 +308,12 @@ def patch_protocol(
     require_writer(user)
     existing = _get_protocol_or_404(db, protocol_id, user)
     protocol_id = existing.id
+    if payload.session_notes is not None and payload.expected_session_notes is not None:
+        # Audit MAIN-BE-011: Protokollzeile bis zum Commit sperren und frisch lesen, damit
+        # zwei gleichzeitige Saves mit gleichem erwarteten Stand nicht beide durchgehen.
+        existing = db.scalar(
+            select(Protocol).where(Protocol.id == protocol_id).with_for_update().execution_options(populate_existing=True)
+        )
     if (
         payload.session_notes is not None
         and payload.expected_session_notes is not None

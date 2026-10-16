@@ -195,40 +195,50 @@ def fetch_fines_by_participant(db: Session, tenant_id: int, bounds: tuple[date, 
     a name (e.g. parent/child) aren't merged into one row, and a renamed participant's fines
     aren't split across two rows. Mirrors aggregate_attendance's `id:{pid}`/`name:{name}` key
     convention above. Rows without a participant_id (participant deleted, FK SET NULL) fall
-    back to grouping by the frozen name snapshot, same as before this fix."""
+    back to grouping by the frozen name snapshot, same as before this fix.
+
+    Beträge werden je Währung des Kontos getrennt (MAIN-BE-019) - eine Person mit Bussen in
+    zwei Währungen ergibt zwei Zeilen. Mit Begründung gelöschte Bussen zählen nicht."""
     return db.execute(
         text("""
             SELECT
                 MAX(COALESCE(p2.display_name, af.participant_name_snapshot)) AS name,
+                COALESCE('id:' || af.participant_id::text, 'name:' || af.participant_name_snapshot) AS participant_key,
+                fa.currency_label AS currency,
                 COUNT(*) AS count,
                 SUM(af.amount) AS amount
             FROM attendance_fine af
             JOIN protocol p ON p.id = af.protocol_id
+            JOIN finance_account fa ON fa.id = af.account_id
             LEFT JOIN app_user p2 ON p2.id = af.participant_id
             WHERE p.tenant_id = :tenant_id
+              AND af.status <> 'deleted'
               AND (CAST(:date_start AS date) IS NULL OR p.protocol_date >= :date_start)
               AND (CAST(:date_end AS date) IS NULL OR p.protocol_date <= :date_end)
-            GROUP BY COALESCE(af.participant_id::text, af.participant_name_snapshot)
+            GROUP BY COALESCE('id:' || af.participant_id::text, 'name:' || af.participant_name_snapshot), fa.currency_label
         """),
         {"tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
     ).all()
 
 
 def fetch_fines_by_type(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
-    """SUM() on the DB side, see fetch_fines_by_participant. Returns (fine_type, count,
-    amount) rows with amount as Decimal."""
+    """SUM() on the DB side, see fetch_fines_by_participant. Returns (fine_type, currency,
+    count, amount) rows with amount as Decimal, one row per type and currency."""
     return db.execute(
         text("""
             SELECT
                 af.fine_type AS fine_type,
+                fa.currency_label AS currency,
                 COUNT(*) AS count,
                 SUM(af.amount) AS amount
             FROM attendance_fine af
             JOIN protocol p ON p.id = af.protocol_id
+            JOIN finance_account fa ON fa.id = af.account_id
             WHERE p.tenant_id = :tenant_id
+              AND af.status <> 'deleted'
               AND (CAST(:date_start AS date) IS NULL OR p.protocol_date >= :date_start)
               AND (CAST(:date_end AS date) IS NULL OR p.protocol_date <= :date_end)
-            GROUP BY af.fine_type
+            GROUP BY af.fine_type, fa.currency_label
         """),
         {"tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
     ).all()

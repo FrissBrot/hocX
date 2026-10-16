@@ -179,7 +179,7 @@ export function ProtocolEditor({
     () =>
       collab.onStatusChanged(({ status, display_name }) => {
         setProtocolStatus(status);
-        showToast(`Status wurde von ${display_name} zu "${protocolStatusLabel(status, tRoot)}" geändert.`);
+        showToast(t("statusChangedByOtherToast", { name: display_name, status: protocolStatusLabel(status, tRoot) }));
         // The backend already cleared every tracked-change mark server-side on this same
         // transition - refetch so a viewer who stays on this page (not the one who
         // triggered the transition, which navigates away right after) doesn't keep
@@ -469,7 +469,7 @@ export function ProtocolEditor({
       for (const [blockId, draft] of restoredDrafts) next[blockId] = draft;
       return next;
     });
-    showToast(`${restoredDrafts.length} lokaler Textentwurf wurde wiederhergestellt.`, "info");
+    showToast(t("draftsRestoredToast", { count: restoredDrafts.length }), "info");
   // Initial server values are deliberately compared exactly once per mounted protocol.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [protocol.id]);
@@ -1121,7 +1121,7 @@ export function ProtocolEditor({
         discardMutation(mutationKey);
         void refreshBlockTextFromServer(protocolElementBlockId);
         showToast(
-          "Konflikt: Diese Stelle wurde inzwischen von jemand anderem gespeichert. Die aktuelle Version wurde geladen – Ihre letzte Änderung wurde nicht übernommen, ist aber als lokaler Entwurf gesichert.",
+          t("conflictToast"),
           "error",
           { onMessageClick: () => void refreshBlockTextFromServer(protocolElementBlockId) }
         );

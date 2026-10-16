@@ -175,7 +175,16 @@ class ProtocolTodoService:
             values["due_marker"] = None
         return values
 
-    def create_standalone_todo(self, db: Session, tenant_id: int, payload: ProtocolTodoCreate) -> ProtocolTodo:
+    def _creator_for_tenant(self, db: Session, tenant_id: int | None, actor_user_id: int | None) -> int | None:
+        """created_by kommt serverseitig vom angemeldeten Benutzer, nie aus dem Request (Audit
+        MAIN-SEC-010) - und nur, wenn er Mitglied dieses Mandanten ist."""
+        if tenant_id is None or actor_user_id is None:
+            return None
+        return actor_user_id if self.repository.user_allowed_for_tenant(db, tenant_id, actor_user_id) else None
+
+    def create_standalone_todo(
+        self, db: Session, tenant_id: int, payload: ProtocolTodoCreate, *, actor_user_id: int | None = None
+    ) -> ProtocolTodo:
         # assigned_participant_id/due_event_id/assigned_user_id arrive as public UUIDs -
         # resolve to internal ids first (unscoped; the *_allowed_for_tenant checks right
         # below are the actual authorization boundary, unchanged from before this migration
@@ -183,7 +192,8 @@ class ProtocolTodoService:
         assigned_participant_id = public_id_service.resolve_internal_id(db, Participant, payload.assigned_participant_id) if payload.assigned_participant_id else None
         due_event_id = public_id_service.resolve_internal_id(db, Event, payload.due_event_id) if payload.due_event_id else None
         assigned_user_id = public_id_service.resolve_internal_id(db, AppUser, payload.assigned_user_id) if payload.assigned_user_id else None
-        created_by = public_id_service.resolve_internal_id(db, AppUser, payload.created_by) if payload.created_by else None
+        # payload.created_by wird bewusst ignoriert (MAIN-SEC-010).
+        created_by = self._creator_for_tenant(db, tenant_id, actor_user_id)
         if payload.assigned_participant_id is not None and (
             assigned_participant_id is None or not self.repository.participant_allowed_for_tenant(db, tenant_id, assigned_participant_id)
         ):
@@ -215,12 +225,19 @@ class ProtocolTodoService:
         return self.repository.create(db, todo)
 
     def create_todo(
-        self, db: Session, protocol_element_block_id: int, payload: ProtocolTodoCreate, *, track_changes_active: bool = False
+        self,
+        db: Session,
+        protocol_element_block_id: int,
+        payload: ProtocolTodoCreate,
+        *,
+        track_changes_active: bool = False,
+        actor_user_id: int | None = None,
     ) -> ProtocolTodo:
         assigned_participant_id = public_id_service.resolve_internal_id(db, Participant, payload.assigned_participant_id) if payload.assigned_participant_id else None
         due_event_id = public_id_service.resolve_internal_id(db, Event, payload.due_event_id) if payload.due_event_id else None
         assigned_user_id = public_id_service.resolve_internal_id(db, AppUser, payload.assigned_user_id) if payload.assigned_user_id else None
-        created_by = public_id_service.resolve_internal_id(db, AppUser, payload.created_by) if payload.created_by else None
+        # payload.created_by wird bewusst ignoriert (MAIN-SEC-010).
+        created_by = self._creator_for_tenant(db, self.repository.tenant_id_for_block(db, protocol_element_block_id), actor_user_id)
         if payload.assigned_participant_id is not None and (
             assigned_participant_id is None
             or not self.repository.participant_allowed_for_block(db, protocol_element_block_id, assigned_participant_id)

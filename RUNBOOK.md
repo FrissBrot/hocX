@@ -14,8 +14,12 @@ Drei Umgebungen:
 
 ```bash
 cp .env.example .env
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+docker compose -p hocx-dev -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
+
+Der Overlay setzt das Projekt fest auf `hocx-dev` (auch ohne `-p`). **Nie** auf einem Server mit
+Echtdaten starten: er seedet Demo-Konten (`@hocx.local`/`ChangeMe123!`) und schaltet
+Secure-Cookies ab.
 
 Optional dazu: `--profile scan` (ClamAV), `--profile docs` (Docs auf localhost:3002),
 `--profile edge` (lokaler Traefik).
@@ -185,11 +189,32 @@ vim .env   # HOCX_VERSION auf die vorherige, bekannt gute Version zuruecksetzen
 
 Das rollt den Code zurück. Falls die Migration der neuen Version das Schema
 **destruktiv** verändert hat (Spalte gelöscht, Typ geändert), reicht ein Code-Rollback
-nicht - dann muss zusätzlich das vor dem Update gezogene Backup eingespielt werden:
+nicht - dann muss zusätzlich das vor dem Update gezogene Backup eingespielt werden, und
+zwar **vor** dem Deploy der alten Version:
 
 ```bash
-gunzip -c backups/<timestamp>-pre-vX.Y.Z.sql.gz | docker compose -p hocx exec -T db psql -U hocx hocx
+./scripts/restore_db.sh backups/<timestamp>-pre-vX.Y.Z.sql.gz
+vim .env   # HOCX_VERSION auf die vorherige Version (…-pre-vX.Y.Z = Stand vor dem Update auf vX.Y.Z)
+./scripts/deploy.sh prod
+./scripts/verify_release.sh prod
 ```
+
+`restore_db.sh` fragt zur Bestätigung den Datenbanknamen ab, stoppt `backend`,
+`abgabebox-backend` und `photo-analysis-worker`, sichert den aktuellen Stand als
+`backups/<zeit>-pre-restore.sql.gz`, legt die Datenbank leer neu an und spielt den Dump mit
+`ON_ERROR_STOP=1` in einer einzigen Transaktion ein. Schlägt das fehl, bleibt die Datenbank leer
+und das Skript nennt den Befehl, mit dem sich die eben gezogene Sicherung zurückspielen lässt.
+Die Dienste bleiben gestoppt, bis `deploy.sh` (bzw. auf der Quellcode-Instanz `docker compose up -d`)
+die passende Code-Version startet.
+
+**Nie** einen Dump direkt per `gunzip -c … | psql` in die laufende Datenbank pipen: Die Dumps
+sind Plain-SQL ohne `--clean`; in einer bereits migrierten, gefüllten Datenbank scheitern
+`CREATE`/`COPY` an vorhandenen Objekten, `psql` läuft ohne `ON_ERROR_STOP` weiter und meldet
+Erfolg, obwohl ein Mischzustand entsteht.
+
+Die Dateiablage (`storage/`) ist **nicht** Teil des Dumps (siehe Abschnitt 10). Ein Restore
+setzt nur die Datenbank zurück; Dateien, die nach dem Dump hochgeladen wurden, bleiben als
+verwaiste Dateien liegen, nach dem Dump gelöschte Dateien fehlen.
 
 **Deshalb**: bei riskanten Schema-Änderungen (Spalte umbenennen/löschen, Typ ändern)
 über zwei Releases gehen statt in einem Schritt - z.B. neue Spalte hinzufügen und
@@ -249,8 +274,9 @@ sudo -iu hocx-deploy
 gh auth status
 ```
 
-Der Token wird von `gh` im geschuetzten Benutzer-Credential-Speicher verwaltet und
-gehoert nicht in `.env`. Die Deployment-Schreibberechtigung kann ohne einen kuenstlichen
+Der Fine-grained-Token liegt mit Dateirechten 600 in `.tools/github-api-token` im
+Repo-Checkout des Benutzers `hocx-deploy` (siehe `scripts/lib/github.sh`) und gehoert nicht in
+`.env`. Die Deployment-Schreibberechtigung kann ohne einen kuenstlichen
 Testeintrag nicht vorab geprueft werden; sie wird spaetestens beim ersten erfolgreichen
 `verify_release.sh test` real validiert. Scheitert dieser Eintrag, bleibt die
 Prod-Promotion gesperrt.
@@ -328,19 +354,37 @@ und werden bei Ausbleiben nicht gemeldet.
 
 - **Zweck**: nächtlicher Postgres-Dump, unabhängig vom Deploy-Zyklus. Nutzt denselben
   `pg_dump`-Mechanismus wie der Pre-Deploy-Backup in `deploy.sh` (`docker compose exec db
-  pg_dump ... | gzip`) - ein Cron-Backup lässt sich also genauso zurückspielen wie ein
-  Pre-Deploy-Backup (siehe Abschnitt 4, Rollback).
-- **Braucht**: keine Argumente, läuft immer gegen den Checkout, in dem es liegt (`.env`
-  im Repo-Root muss `POSTGRES_USER`/`POSTGRES_DB` enthalten; der `db`-Container muss
-  laufen, sonst bricht das Skript kontrolliert ab).
-- **Env-Var**: `RETENTION_DAYS` (Default 14) - Dumps, die älter sind, werden nach jedem
-  Lauf automatisch gelöscht.
+  pg_dump ... | gzip`) - ein Cron-Backup lässt sich also genauso mit
+  `scripts/restore_db.sh` zurückspielen wie ein Pre-Deploy-Backup (siehe Abschnitt 5, Rollback).
+- **Welche Instanz**: bestimmt `scripts/lib/stack.sh` mit explizitem Compose-Projekt und
+  -Dateien (wie `deploy.sh`): Host-Markierung `prod` → Release-Stack, Projekt `hocx`;
+  **keine** Markierung → Quellcode-Instanz aus `docker-compose.yml`, Projekt aus
+  `HOCX_COMPOSE_PROJECT` (Default `hocx`; läuft die Instanz über `scripts/dev.sh`,
+  `HOCX_COMPOSE_PROJECT=hocx-dev` in `.env` oder in der Cron-Zeile setzen, dann wird auch
+  `docker-compose.dev.yml` geladen). Auf einem `test`-Host lehnt das Skript ab (nur Demo-Daten).
+  `run_job.sh` und `restore_db.sh` verwenden dieselbe Zuordnung.
+- **Braucht**: keine Argumente (`.env` im Repo-Root muss `POSTGRES_USER`/`POSTGRES_DB`
+  enthalten; der `db`-Container muss laufen, sonst bricht das Skript kontrolliert ab).
+- **Env-Var**: `RETENTION_DAYS` (Default 14) - Cron-Dumps, die älter sind, werden nach jedem
+  Lauf automatisch gelöscht. Pre-Deploy-Dumps rotiert `deploy.sh` selbst: die neuesten
+  `PRE_DEPLOY_BACKUP_KEEP` (Default 10, als Shell-Variable beim Aufruf von `deploy.sh`) bleiben.
 - **Schreibt nach**: `backups/<timestamp>-cron.sql.gz` (derselbe Ordner wie die
   Pre-Deploy-Backups, gut unterscheidbar am `-cron`-Suffix).
-- **Empfohlener Cron-Zeitplan**: täglich 03:15 Uhr, mit Logdatei im selben `backups/`-Ordner:
+- **Offsite**: Ist `OFFSITE_BACKUP_REMOTE` gesetzt, endet der Lauf mit Exit ≠ 0, wenn die
+  rclone-Kopie fehlschlägt oder `rclone` fehlt (das lokale Backup ist dann trotzdem
+  geschrieben). `run_job.sh` meldet den Lauf damit als Fehler statt als Erfolg.
+- **Empfohlener Cron-Zeitplan**: täglich 03:15 Uhr, mit Logdatei im selben `backups/`-Ordner
+  (Pfade an den Checkout anpassen; auf einer über `dev.sh` betriebenen Instanz
+  `HOCX_COMPOSE_PROJECT=hocx-dev` voranstellen):
   ```
   15 3 * * * /docker/hocX/scripts/run_job.sh backup_db /docker/hocX/scripts/backup_db.sh >> /docker/hocX/backups/backup_db.log 2>&1
   ```
+- **⚠️ Offenes Risiko: Dateiablage wird nicht gesichert (Audit MAIN-OPS-006).** Der Dump
+  enthält nur die Datenbank. Originaldateien unter `HOCX_STORAGE_PATH` (Uploads,
+  Abgabebox-Dateien, Vorlagen, Mandanten-Importe/-Klone) sichert kein Skript; nach einem
+  Plattenausfall zeigen wiederhergestellte `stored_file`-Zeilen auf fehlende Dateien. Ein
+  Storage-Backup (z. B. restic oder `rclone sync` mit Versionierung) muss der Betreiber
+  zusammen mit dem Offsite-Ziel einrichten.
 - **Manuell testen**: `./scripts/backup_db.sh` direkt im Repo-Root ausführen und danach
   `ls -lh backups/` prüfen.
 - **⚠️ Offenes Risiko: kein Offsite-Backup aktiv (Audit I5, 2026-08-16).** `backups/`
@@ -395,7 +439,10 @@ keine Pipeline-Umstellung auf GHCR-Images ist im Rahmen dieses Punkts vorgesehen
 
 1. **Vor jedem Update**: Backup ziehen, unabhängig vom nächtlichen Cron-Lauf aus
    Abschnitt 10 - `./scripts/backup_db.sh` im Repo-Root ausführen und den Erfolg
-   (neue Datei unter `backups/`) prüfen, bevor der Code aktualisiert wird.
+   (neue Datei unter `backups/`) prüfen, bevor der Code aktualisiert wird. Der Host hat
+   keine Markierung in `/etc/hocx/environment`; das Skript sichert deshalb das Compose-Projekt
+   aus `HOCX_COMPOSE_PROJECT` (Default `hocx`). Läuft die Instanz über `scripts/dev.sh`
+   (Projekt `hocx-dev`), `HOCX_COMPOSE_PROJECT=hocx-dev ./scripts/backup_db.sh` verwenden.
 2. **Update durchführen**: `git pull` + `docker compose up -d --build` (Alembic migriert
    die DB dabei automatisch, wie bei den anderen Umgebungen auch).
 3. **Nach dem Update verifizieren** (analog zur Test-Verifikation in Abschnitt 2, mit
@@ -404,8 +451,8 @@ keine Pipeline-Umstellung auf GHCR-Images ist im Rahmen dieses Punkts vorgesehen
    - Login funktioniert, mindestens eine Tabellen-Seite lädt Daten
    - `docker compose logs backend --tail=50` zeigt keine Fehler, insbesondere keine
      Alembic-Fehler beim Start
-4. **Bei Problemen**: Rollback wie in Abschnitt 4 beschrieben, mit dem in Schritt 1
-   frisch gezogenen Backup statt eines älteren Cron-Backups.
+4. **Bei Problemen**: Rollback wie in Abschnitt 5 beschrieben (`scripts/restore_db.sh`), mit
+   dem in Schritt 1 frisch gezogenen Backup statt eines älteren Cron-Backups.
 
 ## 12. Monitoring und Benachrichtigungen
 

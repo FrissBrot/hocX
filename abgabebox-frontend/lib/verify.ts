@@ -72,7 +72,7 @@ export async function verifyHash(sha256: string, documentId: string | null): Pro
     body: JSON.stringify(documentId ? { sha256, document_id: documentId } : { sha256 }),
   });
   if (!response.ok) {
-    throw new Error(`verify ${response.status}`);
+    throw new Error(`verify ${response.status}`); // i18n-ok: technischer Fehler, verify-check.tsx zeigt eine übersetzte Meldung
   }
   return (await response.json()) as VerifyResponse;
 }

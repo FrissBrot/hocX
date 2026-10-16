@@ -39,7 +39,7 @@ export function DesignerProvider({ value, children }: { value: DesignerState; ch
 
 export function useDesigner(): DesignerState {
   const value = useContext(DesignerContext);
-  if (!value) throw new Error("useDesigner ausserhalb des Designers");
+  if (!value) throw new Error("useDesigner ausserhalb des Designers"); // i18n-ok: Programmierfehler (Hook ohne Provider), kein UI-Text
   return value;
 }
 

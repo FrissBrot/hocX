@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import secrets
+from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
@@ -9,33 +10,52 @@ from app.core.redis_client import get_redis_sync
 from app.models import Tenant, TenantDomain
 from app.services import traefik_config_service
 
-# v2: the token carries only "user_id:mfa" now that a user belongs to exactly one tenant. The
-# prefix changed with the format so a still-live (60s TTL) pre-switch token, whose value is
-# "user_id:tenant_id[:mfa]", can never be misread as a v2 one.
-_KEY_PREFIX = "domain_bridge_v2:"
-_TTL_SECONDS = 60
+# v3 (MAIN-SEC-006): the token carries "user_id:mfa:target_host" and is only redeemable on that
+# host, after the user confirmed the handoff on a page there. The prefix changed with the
+# format, so a still-live v2 token can never be misread. 120 s leave time for the confirmation.
+_KEY_PREFIX = "domain_bridge_v3:"
+_TTL_SECONDS = 120
 
 
-def create_bridge_token(user_id: int, *, mfa_verified: bool = False) -> str:
+@dataclass(frozen=True)
+class BridgeToken:
+    user_id: int
+    mfa_verified: bool
+    target_host: str
+
+
+def create_bridge_token(user_id: int, target_host: str, *, mfa_verified: bool = False) -> str:
     """Single-use, short-lived token used to hand a session off from the main domain to a
     tenant's custom domain (cookies aren't shared across unrelated domains)."""
     token = secrets.token_urlsafe(32)
     redis = get_redis_sync()
-    redis.set(f"{_KEY_PREFIX}{token}", f"{user_id}:{int(bool(mfa_verified))}", nx=True, ex=_TTL_SECONDS)
+    redis.set(f"{_KEY_PREFIX}{token}", f"{user_id}:{int(bool(mfa_verified))}:{target_host}", nx=True, ex=_TTL_SECONDS)
     return token
 
 
-def consume_bridge_token(token: str) -> tuple[int, bool] | None:
-    """Atomically reads and deletes the token so it can never be replayed."""
-    redis = get_redis_sync()
-    value = redis.getdel(f"{_KEY_PREFIX}{token}")
+def _parse(value: str | None, request_host: str | None) -> BridgeToken | None:
     if value is None:
         return None
     try:
-        user_id_str, mfa_str = value.split(":", 1)
-        return int(user_id_str), mfa_str == "1"
+        user_id_str, mfa_str, target_host = value.split(":", 2)
+        parsed = BridgeToken(int(user_id_str), mfa_str == "1", target_host)
     except (TypeError, ValueError):
         return None
+    # Nur auf der Domain einlösbar, für die das Token ausgestellt wurde.
+    if request_host is None or request_host.lower() != parsed.target_host.lower():
+        return None
+    return parsed
+
+
+def peek_bridge_token(token: str, request_host: str | None) -> BridgeToken | None:
+    """Reads the token without consuming it (for the confirmation page)."""
+    return _parse(get_redis_sync().get(f"{_KEY_PREFIX}{token}"), request_host)
+
+
+def consume_bridge_token(token: str, request_host: str | None) -> BridgeToken | None:
+    """Atomically reads and deletes the token so it can never be replayed. A token presented
+    on the wrong host is consumed too (and rejected), so a leaked link is dead afterwards."""
+    return _parse(get_redis_sync().getdel(f"{_KEY_PREFIX}{token}"), request_host)
 
 
 def resolve_bridge_redirect(
@@ -74,7 +94,7 @@ def resolve_bridge_redirect(
     if request_host == target_host:
         return None
 
-    token = create_bridge_token(user_id, mfa_verified=mfa_verified)
+    token = create_bridge_token(user_id, target_host, mfa_verified=mfa_verified)
     return f"https://{target_host}/api/auth/bridge?token={token}"
 
 

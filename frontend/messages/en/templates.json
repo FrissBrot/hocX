@@ -352,7 +352,18 @@
     "unnamed": "Unnamed",
     "behaviorOverridden": "{label} – differs from the element default",
     "pdfLayoutStudioHelp": "You design the look and layout of the PDF in the Document Studio.",
-    "pdfLayoutStudioLink": "Open PDF templates"
+    "pdfLayoutStudioLink": "Open PDF templates",
+    "nameFormatSetToast": "Name format for responsible persons set",
+    "nameFormatSavedToast": "Name format for responsible persons saved",
+    "autoAssignedToast": "{count, plural, one {# element was} other {# elements were}} assigned automatically",
+    "tableLinkUpdatedToast": "Table link updated",
+    "tableRowNotFoundToast": "The selected table row was not found",
+    "tableRowNoParticipantsToast": "The selected table row contains no participants",
+    "elementLinkedToRowToast": "Element linked to table row",
+    "templateSavedToast": "Template saved",
+    "participantAssignmentsSavedToast": "Participant assignments saved",
+    "elementsAddedToast": "{count, plural, one {# element added} other {# elements added}}",
+    "elementRemovedToast": "Element removed from template"
   },
   "elementEditor": {
     "advancedShow": "Advanced",

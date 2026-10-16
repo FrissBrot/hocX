@@ -1418,13 +1418,19 @@ export type AttendanceFine = {
   fine_type: "late" | "absent";
   amount: number;
   account_id: string;
-  status: "pending" | "collected";
+  status: "pending" | "collected" | "deleted";
   collected_at: string | null;
   collected_transaction_id: string | null;
   closed_in_protocol_id: string | null;
   collected_by_user_id: string | null;
   collected_by_display_name: string | null;
   can_reopen: boolean;
+  /** Löschen mit Begründung (Busse aus abgeschlossenem Protokoll). */
+  delete_comment?: string | null;
+  deleted_at?: string | null;
+  deleted_by_display_name?: string | null;
+  delete_requires_reason?: boolean;
+  can_restore?: boolean;
   created_at: string;
 };
 
@@ -1449,8 +1455,9 @@ export type StatisticsOverview = {
   attendance_by_participant: { name: string; present: number; absent: number; excused: number; total: number }[];
   attendance_over_time: { month: string; present: number; absent: number; excused: number; total: number }[];
   todos: { open: number; done: number; total: number };
-  fines_by_participant: { name: string; count: number; amount: number }[];
-  fines_by_type: { fine_type: string; label: string; count: number; amount: number }[];
+  /** Pro Person und Währung eine Zeile (MAIN-BE-019); participant_key fasst eine Person zusammen. */
+  fines_by_participant: { name: string; count: number; amount: number; currency?: string; participant_key?: string }[];
+  fines_by_type: { fine_type: string; label: string; count: number; amount: number; currency?: string }[];
   finance_by_month: { month: string; account_id: string; account_name: string; income: number; expenses: number; net: number }[];
   participants_total: number;
   participants_active: number;

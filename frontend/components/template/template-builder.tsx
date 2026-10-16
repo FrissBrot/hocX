@@ -932,7 +932,7 @@ export function TemplateEditor({
       return currentResponsibility.assignments.length > 0 || "responsibility" in item.configuration_json;
     });
     if (!itemsToUpdate.length) {
-      showToast("Namensformat für Verantwortliche gesetzt", "success");
+      showToast(t("nameFormatSetToast"), "success");
       return;
     }
     setBulkAssignBusy(true);
@@ -943,7 +943,7 @@ export function TemplateEditor({
           name_display_mode: nextMode,
         }));
       }
-      showToast("Namensformat für Verantwortliche gespeichert", "success");
+      showToast(t("nameFormatSavedToast"), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("nameFormatSaveFailed"), "error");
     } finally {
@@ -1011,7 +1011,7 @@ export function TemplateEditor({
         });
       }
       if (matchedElementCount) {
-        showToast(`${matchedElementCount} Element${matchedElementCount === 1 ? "" : "e"} wurden automatisch zugeordnet`, "success");
+        showToast(t("autoAssignedToast", { count: matchedElementCount }), "success");
       }
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("autoAssignmentSaveFailed"), "error");
@@ -1053,7 +1053,7 @@ export function TemplateEditor({
             : assignment
         ),
       }));
-      showToast("Tabellen-Verknüpfung aktualisiert", "success");
+      showToast(t("tableLinkUpdatedToast"), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("tableLinkUpdateFailed"), "error");
     }
@@ -1078,7 +1078,7 @@ export function TemplateEditor({
           ),
         };
       });
-      showToast("Tabellen-Verknüpfung aktualisiert", "success");
+      showToast(t("tableLinkUpdatedToast"), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("tableLinkUpdateFailed"), "error");
     }
@@ -1094,12 +1094,12 @@ export function TemplateEditor({
       const entries = await ensureResponsibleListEntries(listDefinitionId);
       const selectedEntry = entries.find((entry) => entry.id === entryId);
       if (!selectedEntry) {
-        showToast("Die gewählte Tabellenzeile wurde nicht gefunden", "error");
+        showToast(t("tableRowNotFoundToast"), "error");
         return;
       }
       const participantIds = listParticipantIds(selectedEntry, manualLinkListMeta.participantColumn, manualLinkListMeta.participantValueType);
       if (!participantIds.length) {
-        showToast("Die gewählte Tabellenzeile enthält keine Teilnehmenden", "error");
+        showToast(t("tableRowNoParticipantsToast"), "error");
         return;
       }
       await saveElementResponsibility(responsibilityModalElement.id, (current) => {
@@ -1123,7 +1123,7 @@ export function TemplateEditor({
           assignments: [...nextAssignmentsByParticipant.values()],
         };
       });
-      showToast("Element mit Tabellenzeile verknüpft", "success");
+      showToast(t("elementLinkedToRowToast"), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("tableRowLinkSaveFailed"), "error");
     }
@@ -1217,7 +1217,7 @@ export function TemplateEditor({
         })
       });
       setTemplate(updated);
-      showToast("Vorlage gespeichert", "success");
+      showToast(t("templateSavedToast"), "success");
       setShowSettingsModal(false);
       router.refresh();
     } catch (error) {
@@ -1236,7 +1236,7 @@ export function TemplateEditor({
           })),
         }),
       });
-      showToast("Teilnehmerzuordnungen gespeichert", "success");
+      showToast(t("participantAssignmentsSavedToast"), "success");
       router.refresh();
       if (closeAfter) {
         setShowParticipantModal(false);
@@ -1264,7 +1264,7 @@ export function TemplateEditor({
       setNewItemForm(initialTemplateItemForm);
       setElementPickerSearch("");
       setShowCreateItem(false);
-      showToast(`${createdItems.length} Element${createdItems.length === 1 ? "" : "e"} hinzugefuegt`, "success");
+      showToast(t("elementsAddedToast", { count: createdItems.length }), "success");
       router.refresh();
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("elementAddFailed"), "error");
@@ -1498,7 +1498,7 @@ export function TemplateEditor({
     try {
       await browserApiFetch(`/api/template-elements/${templateElementId}`, { method: "DELETE" });
       setElements((current) => current.filter((item) => item.id !== templateElementId));
-      showToast("Element aus Vorlage entfernt", "success");
+      showToast(t("elementRemovedToast"), "success");
       router.refresh();
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("elementRemoveFailed"), "error");

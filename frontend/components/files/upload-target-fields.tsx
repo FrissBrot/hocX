@@ -85,9 +85,16 @@ export function useUploadTarget() {
       setElements([]);
       return;
     }
+    // Elemente einer zuvor gewaehlten Abgabe duerfen nach einem Wechsel nicht mehr erscheinen
+    // (Audit MAIN-FE-007).
+    let cancelled = false;
+    setElements([]);
     browserApiFetch<SubmissionElementStatusEntry[]>(`/api/submission-assignments/${selectedAssignmentId}/elements`)
-      .then((data) => setElements(data ?? []))
-      .catch(() => setElements([]));
+      .then((data) => { if (!cancelled) setElements(data ?? []); })
+      .catch(() => { if (!cancelled) setElements([]); });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedAssignmentId]);
 
   // Only an Abgabe-Element Bezug brings file rules along.

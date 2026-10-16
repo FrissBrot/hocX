@@ -243,6 +243,8 @@
     "collected": "Incassata",
     "collectedHere": "Incassata (da {origin})",
     "collectedLater": "Saldata in seguito",
+    "deleted": "Eliminata",
+    "deletedLater": "Eliminata in seguito",
     "earlierProtocol": "un verbale precedente",
     "open": "Aperta"
   },

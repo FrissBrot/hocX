@@ -10,7 +10,8 @@ import { TagInput } from "@/components/ui/tag-input";
 import { browserApiFetch, browserApiUpload } from "@/lib/api/client";
 import { formatFileSize } from "@/lib/utils/format";
 import { isHeicName, isLiveClipName, pairLiveClips } from "@/lib/utils/live-photo";
-import { photoUploadProblem, PHOTO_UPLOAD_TIMEOUT_MS } from "@/lib/utils/upload-limits";
+import { hasLargeZip, photoUploadProblem, PHOTO_UPLOAD_TIMEOUT_MS } from "@/lib/utils/upload-limits";
+import { StatusBanner } from "@/components/ui/status-banner";
 import { GalleryUploadJob, SharedTargetAlbum } from "@/types/api";
 
 // HEIC/HEIF (iPhone) und .mov (Live-Photo-Clip) stehen mit Endung da, weil Browser ausser Safari dafür
@@ -341,6 +342,7 @@ export function GalleryUploadModal({
             <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder={t("tagsPlaceholder")} />
           </div>
 
+          {hasLargeZip(selectedFiles) && <StatusBanner tone="neutral" message={t("largeZipHint")} />}
           {ruleProblems.length > 0 && <p className="form-error-banner">{ruleProblems.join(" · ")}</p>}
           {error && <p className="form-error-banner">{error}</p>}
         </div>

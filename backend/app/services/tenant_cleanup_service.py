@@ -20,7 +20,7 @@ from app.models import (
     WordImportDocument,
 )
 from app.schemas.admin import TenantCleanupCategory, TenantCleanupCounts
-from app.services.file_service import _safe_storage_path
+from app.services.file_service import _safe_storage_path, owned_thumbnail_path
 
 
 class TenantCleanupService:
@@ -193,10 +193,9 @@ class TenantCleanupService:
             file_path = _safe_storage_path(root, stored_file.storage_path)
             if file_path.exists():
                 file_path.unlink()
-            if stored_file.thumbnail_path:
-                thumbnail_path = _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
-                if thumbnail_path.exists():
-                    thumbnail_path.unlink()
+            thumbnail_path = owned_thumbnail_path(stored_file)
+            if thumbnail_path is not None and thumbnail_path.exists():
+                thumbnail_path.unlink()
             db.delete(stored_file)
             deleted += 1
         return deleted

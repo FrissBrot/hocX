@@ -352,7 +352,18 @@
     "unnamed": "Unbenannt",
     "behaviorOverridden": "{label} – weicht vom Default des Elements ab",
     "pdfLayoutStudioHelp": "Aussehen und Aufbau des PDFs gestaltest du im Document Studio.",
-    "pdfLayoutStudioLink": "PDF-Vorlagen öffnen"
+    "pdfLayoutStudioLink": "PDF-Vorlagen öffnen",
+    "nameFormatSetToast": "Namensformat für Verantwortliche gesetzt",
+    "nameFormatSavedToast": "Namensformat für Verantwortliche gespeichert",
+    "autoAssignedToast": "{count, plural, one {# Element wurde} other {# Elemente wurden}} automatisch zugeordnet",
+    "tableLinkUpdatedToast": "Tabellen-Verknüpfung aktualisiert",
+    "tableRowNotFoundToast": "Die gewählte Tabellenzeile wurde nicht gefunden",
+    "tableRowNoParticipantsToast": "Die gewählte Tabellenzeile enthält keine Teilnehmenden",
+    "elementLinkedToRowToast": "Element mit Tabellenzeile verknüpft",
+    "templateSavedToast": "Vorlage gespeichert",
+    "participantAssignmentsSavedToast": "Teilnehmerzuordnungen gespeichert",
+    "elementsAddedToast": "{count, plural, one {# Element hinzugefügt} other {# Elemente hinzugefügt}}",
+    "elementRemovedToast": "Element aus Vorlage entfernt"
   },
   "elementEditor": {
     "advancedShow": "Erweitert",
