@@ -17,12 +17,12 @@ status=0
 for target in "${TARGETS[@]}"; do
   if [ "${1:-}" = "--check" ]; then
     if [ ! -f "$target" ] || [ "$(cat "$target")" != "$expected" ]; then
-      echo "Nicht synchron: ${target#$REPO_DIR/} (scripts/sync-objstore-client.sh ausführen)" >&2
+      echo "Nicht synchron: ${target#"$REPO_DIR"/} (scripts/sync-objstore-client.sh ausführen)" >&2
       status=1
     fi
   else
     printf '%s\n' "$expected" > "$target"
-    echo "aktualisiert: ${target#$REPO_DIR/}"
+    echo "aktualisiert: ${target#"$REPO_DIR"/}"
   fi
 done
 [ "${1:-}" = "--check" ] && [ "$status" -eq 0 ] && echo "objstore_client: synchron"

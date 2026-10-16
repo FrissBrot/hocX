@@ -563,6 +563,20 @@ prepare_thumbnail_dir() {
 }
 
 
+# Worker ohne eigenes Image: sie laufen mit dem Backend-Image (HOCX_BACKEND_IMAGE). Das
+# Release-Manifest merkt sich, welche davon das Release hatte - ein Rollback auf ein älteres
+# Release (z. B. 1.1.x ohne Objektspeicher/Backup/Dokumentverarbeitung) stoppt die übrigen,
+# statt sie mit dem neuen Image neben dem alten Backend weiterlaufen zu lassen.
+BACKEND_IMAGE_WORKERS=(storage-worker backup-worker document-worker)
+
+backend_workers_in_compose() {
+  local worker found=()
+  for worker in "${BACKEND_IMAGE_WORKERS[@]}"; do
+    service_exists "$worker" && found+=("$worker")
+  done
+  echo "${found[*]:-}"
+}
+
 verify_release_images() {
   local service image repository digest_ref
 
@@ -601,6 +615,7 @@ create_release_manifest() {
     variable="${variable//-/_}"
     printf "%s='%s'\n" "$variable" "$digest_ref" >> "$temp_file"
   done
+  printf "HOCX_BACKEND_WORKERS='%s'\n" "$(backend_workers_in_compose)" >> "$temp_file"
   mv "$temp_file" "$manifest_file"
   chmod 600 "$manifest_file"
   trap - RETURN
@@ -637,6 +652,11 @@ capture_current_release() {
     variable="${variable//-/_}"
     printf "%s='%s'\n" "$variable" "$digest_ref" >> "$temp_file"
   done
+  local worker running_workers=()
+  for worker in "${BACKEND_IMAGE_WORKERS[@]}"; do
+    [ -n "$("${DC[@]}" ps -q "$worker" 2> /dev/null || true)" ] && running_workers+=("$worker")
+  done
+  printf "HOCX_BACKEND_WORKERS='%s'\n" "${running_workers[*]:-}" >> "$temp_file"
   mv "$temp_file" "$current_manifest"
   chmod 600 "$current_manifest"
   trap - RETURN
@@ -649,13 +669,24 @@ rollback_apps() {
   echo "==> [$ENVIRONMENT] Automatischer App-Rollback"
   if [ ! -f "$current_manifest" ]; then
     echo "    Kein vorheriges Release vorhanden; stoppe neu gestartete App-Services." >&2
-    "${DC[@]}" stop backend frontend abgabebox-backend abgabebox-frontend docs photo-analysis-worker || true
+    "${DC[@]}" stop backend frontend abgabebox-backend abgabebox-frontend docs photo-analysis-worker "${BACKEND_IMAGE_WORKERS[@]}" || true
     return 1
   fi
   # Die Image-Variablen des fehlgeschlagenen Releases duerfen das alte Manifest nicht ueberlagern.
   unset HOCX_BACKEND_IMAGE HOCX_FRONTEND_IMAGE HOCX_ABGABEBOX_BACKEND_IMAGE \
-    HOCX_ABGABEBOX_FRONTEND_IMAGE HOCX_DOCS_IMAGE HOCX_PHOTO_ANALYSIS_WORKER_IMAGE
+    HOCX_ABGABEBOX_FRONTEND_IMAGE HOCX_DOCS_IMAGE HOCX_PHOTO_ANALYSIS_WORKER_IMAGE HOCX_BACKEND_WORKERS
   load_env_file "$current_manifest"
+  # Worker mit dem Backend-Image: mit dem alten Image neu starten, wenn das vorherige Release
+  # sie hatte, sonst stoppen (Manifeste vor 1.2.0 kennen HOCX_BACKEND_WORKERS nicht).
+  local worker
+  for worker in "${BACKEND_IMAGE_WORKERS[@]}"; do
+    service_exists "$worker" || continue
+    if [[ " ${HOCX_BACKEND_WORKERS:-} " == *" $worker "* ]]; then
+      services+=("$worker")
+    else
+      "${DC[@]}" stop "$worker" || true
+    fi
+  done
   if [ -n "${HOCX_PHOTO_ANALYSIS_WORKER_IMAGE:-}" ]; then
     services+=(photo-analysis-worker)
   else
@@ -757,6 +788,17 @@ run_smoke_checks() {
     wait_for_exec photo-analysis-worker "Photo-Analysis-Worker" \
       "python3 -c \"from app.face_quality import load_detector; load_detector('/app/models/face_detection_yunet.onnx')\"" \
       || return 1
+  fi
+
+  # Worker ohne HTTP-Endpunkt mit dem Backend-Image: Code lädt, Werkzeuge sind im Image. Nach
+  # einem Rollback auf ein Release ohne den Worker ist er gestoppt und wird übersprungen.
+  if service_exists document-worker && [ -n "$("${DC[@]}" ps -q --status running document-worker 2> /dev/null || true)" ]; then
+    wait_for_exec document-worker "Document-Worker" \
+      "python3 -c \"import sys, app.workers.document_worker; from app.services.documents.convert import soffice_binary; from app.services.documents.ocr import ocr_available; sys.exit(0 if soffice_binary() and ocr_available() else 1)\"" \
+      || return 1
+  fi
+  if service_exists storage-worker && [ -n "$("${DC[@]}" ps -q --status running storage-worker 2> /dev/null || true)" ]; then
+    wait_for_exec storage-worker "Storage-Worker" "python3 -c \"import app.workers.storage_worker\"" || return 1
   fi
 }
 

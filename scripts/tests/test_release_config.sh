@@ -199,4 +199,14 @@ if grep -q 'app.backup.cli init' scripts/deploy.sh; then
   exit 1
 fi
 
+# Worker mit dem Backend-Image (Release 1.2.0): im Release-Manifest vermerkt, beim Rollback auf
+# ein Release ohne sie gestoppt statt mit dem neuen Image weiterlaufend.
+grep -q '^BACKEND_IMAGE_WORKERS=(storage-worker backup-worker document-worker)$' scripts/deploy.sh
+grep -q 'HOCX_BACKEND_WORKERS=' scripts/deploy.sh
+for worker in storage-worker backup-worker document-worker; do
+  grep -q "^  ${worker}:$" docker-compose.release.yml || { echo "$worker fehlt in docker-compose.release.yml" >&2; exit 1; }
+  awk "/^  ${worker}:\$/{f=1;next} f&&/^  [a-z][a-z0-9-]*:\$/{f=0} f" docker-compose.release.yml | grep -q 'HOCX_BACKEND_IMAGE' \
+    || { echo "$worker muss das Backend-Image nutzen (sonst stimmt der Rollback nicht)" >&2; exit 1; }
+done
+
 echo "release config tests: ok"
