@@ -67,3 +67,25 @@ describe("Elemente duplizieren", () => {
     await waitFor(() => expect(screen.getByDisplayValue(copy.title)).toBeInTheDocument());
   });
 });
+
+describe("Block bearbeiten", () => {
+  it("zeigt die Verhalten-Schalter wie beim Anlegen und speichert sie (B2)", async () => {
+    api.mockImplementation((path: string, options?: { method?: string; body?: string }) => {
+      if (path === "/api/cycle-configs") return Promise.resolve([]);
+      if (options?.method === "PATCH") return Promise.resolve({ ...original, blocks: JSON.parse(options.body ?? "{}").blocks });
+      return Promise.resolve(null);
+    });
+    setup();
+    fireEvent.click(screen.getByText(original.title, { selector: "strong" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Bearbeiten" })[0]);
+    const exportSwitch = await screen.findByRole("checkbox", { name: /Im PDF ausgeben/ });
+    expect(screen.getByRole("checkbox", { name: /Im Protokoll bearbeitbar/ })).not.toBeChecked();
+    fireEvent.click(exportSwitch);
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+    await waitFor(() => expect(api.mock.calls.some(([, options]) => options?.method === "PATCH")).toBe(true));
+    const patch = api.mock.calls.find(([, options]) => options?.method === "PATCH")!;
+    const saved = JSON.parse(patch[1].body).blocks.find((entry: { id: number }) => entry.id === 1);
+    expect(saved.export_visible).toBe(false);
+    expect(saved.copy_from_last_protocol).toBe(true);
+  });
+});

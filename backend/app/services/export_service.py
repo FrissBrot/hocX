@@ -13,14 +13,15 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import AttendanceFine, DocumentTemplate, ElementType, Event, FinanceAccount, FinanceTransaction, ListDefinition, ListEntry, Participant, Protocol as ProtocolModel, ProtocolElement, ProtocolExportCache, StoredFile, Tenant
 from app.repositories.export_repository import ExportRepository
 from app.services import public_id_service
-from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
+from app.services.event_filter import default_event_filter, filter_events, normalize_event_filter, split_tags
+from app.services.protocol_period_service import protocol_period, transaction_matches
 from app.services.file_service import _safe_storage_path
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 from app.schemas.protocol import ProtocolExportRead
@@ -79,7 +80,9 @@ class ExportService:
                 generator_version=self.generator_version,
             ),
         )
+        superseded_paths = self._prune_superseded_exports(db, protocol_id=protocol.id, export_format="latex", keep_cache_id=cache.id)
         db.commit()
+        self._unlink_paths(superseded_paths)
 
         return ProtocolExportRead(
             protocol_id=protocol.public_id,
@@ -96,7 +99,10 @@ class ExportService:
 
         # Version tracking: compare body content (not main.tex — that contains a
         # unique UUID path that always differs between builds).
-        prev_cache = self.repository.latest_export_cache(db, protocol_id)
+        # Nur frühere PDF-Exporte vergleichen (Audit MAIN-BE-013): LaTeX-Exporte speichern die
+        # vollständige main.tex, Sonder-PDFs einen anderen Inhalt - beides galt sonst immer als
+        # "geändert" und erhöhte die Version ohne inhaltliche Änderung.
+        prev_cache = self.repository.latest_export_cache(db, protocol_id, export_format="pdf")
         content_changed = (
             prev_cache is not None
             and prev_cache.latex_source is not None
@@ -157,6 +163,7 @@ class ExportService:
                 generator_version=self.generator_version,
             ),
         )
+        superseded_paths = self._prune_superseded_exports(db, protocol_id=protocol.id, export_format="pdf", keep_cache_id=cache.id)
 
         if (new_major != protocol.version_major
                 or new_minor != protocol.version_minor
@@ -167,6 +174,7 @@ class ExportService:
             db.add(protocol)
 
         db.commit()
+        self._unlink_paths(superseded_paths)
         db.refresh(protocol)
 
         return ProtocolExportRead(
@@ -281,7 +289,11 @@ class ExportService:
                 generator_version=self.generator_version,
             ),
         )
+        superseded_paths = self._prune_superseded_exports(
+            db, protocol_id=protocol.id, export_format=f"pdf-{export_type}", keep_cache_id=cache.id
+        )
         db.commit()
+        self._unlink_paths(superseded_paths)
 
         return ProtocolExportRead(
             protocol_id=protocol.public_id,
@@ -308,7 +320,7 @@ class ExportService:
 
     def _render_standalone_event_body(self, db: Session, protocol, export_dir: Path) -> str:
         config: dict = {
-            "event_only_from_protocol_date": False,
+            "event_filter": default_event_filter(range_mode="all"),
             "event_show_date": True,
             "event_show_tag": True,
             "event_show_title": True,
@@ -657,8 +669,9 @@ class ExportService:
         self, db: Session, fake_protocol, tag_filters: list[str] | None = None, until_date: str | None = None
     ) -> str:
         from datetime import date, timedelta
+        event_filter = default_event_filter(range_mode="all")
         config: dict = {
-            "event_only_from_protocol_date": False,
+            "event_filter": event_filter,
             "event_show_date": True,
             "event_show_tag": True,
             "event_show_title": True,
@@ -667,11 +680,11 @@ class ExportService:
             "event_gray_past": True,
         }
         if tag_filters:
-            config["event_tag_filter"] = ",".join(tag_filters)
+            event_filter["tags"] = split_tags(tag_filters)
         if until_date:
             until = date.fromisoformat(until_date)
             fake_protocol.protocol_date = until + timedelta(days=1)
-            config["event_only_before_protocol_date"] = True
+            event_filter["range"] = {**event_filter["range"], "mode": "past"}
         return self._event_list_content(db, protocol=fake_protocol, config=config)
 
     def _render_global_list_body(
@@ -1062,15 +1075,17 @@ Status: {protocol_status}
             if protocol is None:
                 return ""
             return self._matrix_block_content(db, block.configuration_snapshot_json or {}, protocol)
-        if block.element_type_id == 12:
-            return self._finance_balance_content(db, block.configuration_snapshot_json or {}, tenant_id)
-        if block.element_type_id == 13:
-            return self._finance_transactions_content(db, block.configuration_snapshot_json or {}, block, tenant_id)
-        if block.element_type_id == 14:
+        if block.element_type_id in (12, 13, 14):
             protocol_element = db.get(ProtocolElement, block.protocol_element_id)
-            if protocol_element is None:
+            protocol = self.repository.get_protocol(db, protocol_element.protocol_id) if protocol_element else None
+            config = block.configuration_snapshot_json or {}
+            if block.element_type_id == 12:
+                return self._finance_balance_content(db, config, tenant_id, protocol=protocol)
+            if block.element_type_id == 13:
+                return self._finance_transactions_content(db, config, block, tenant_id, protocol=protocol)
+            if protocol is None:
                 return "Keine Bussen."
-            return self._fine_list_content(db, protocol_element.protocol_id)
+            return self._fine_list_content(db, protocol.id, config=config)
         # Chart block (element_type code="chart", id determined at runtime)
         chart_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "chart"))
         if chart_type_id and block.element_type_id == chart_type_id:
@@ -1269,7 +1284,23 @@ Status: {protocol_status}
         }
         if not any(columns.values()):
             columns["title"] = True
+        # Ort/Organisatoren/«Abgesagt» sind Zusatzspalten wie im Editor und zählen nicht als
+        # Inhaltsspalte (ohne Inhaltsspalte bleibt der Titel sichtbar).
+        columns["location"] = config.get("event_show_location", False) is True
+        columns["organizers"] = config.get("event_show_organizers", False) is True
+        columns["cancelled"] = config.get("event_show_cancelled", False) is True
         return columns
+
+    def _event_organizer_names(self, db: Session, events: list[Event]) -> dict[int, str]:
+        """Organisatoren pro Termin (Event.organizer_ids) als kommagetrennte Namen."""
+        participant_ids = {int(pid) for event in events for pid in (event.organizer_ids or []) if str(pid).isdigit()}
+        if not participant_ids:
+            return {}
+        names = dict(db.execute(select(Participant.id, Participant.display_name).where(Participant.id.in_(participant_ids))).all())
+        return {
+            event.id: ", ".join(names[int(pid)] for pid in (event.organizer_ids or []) if str(pid).isdigit() and int(pid) in names)
+            for event in events
+        }
 
     def _tenant_events(self, db: Session, tenant_id: int) -> list[Event]:
         """Alle Termine, die der Protokolleditor kennt (gleiche Sichtbarkeit wie GET /api/events).
@@ -1290,50 +1321,13 @@ Status: {protocol_status}
             )
         )
 
-    @staticmethod
-    def _event_list_cycle_offset(config: dict) -> int | None:
-        """Zyklus-Filter relativ zum Protokollzyklus (0 = aktueller, -1 = vorheriger, …), None = kein Filter.
+    def _filter_event_list_events(self, db: Session, *, protocol, event_filter: dict | None, column: dict | None = None) -> list[Event]:
+        """Terminliste (7, auch eingebettet in der Matrix) - gemeinsamer Filter wie im Editor
+        (frontend/lib/element-types/event-filter.ts, backend event_filter.py)."""
+        normalized = normalize_event_filter(event_filter, default_range_mode="future")
+        return filter_events(db, self._tenant_events(db, protocol.tenant_id), normalized, protocol=protocol, column=column)
 
-        Ältere Konfigurationen mit `event_only_current_cycle: true` entsprechen Offset 0
-        (identisch zu embeddedEventCycleOffset in frontend/lib/utils/cycle.ts).
-        """
-        offset = config.get("event_cycle_offset")
-        if isinstance(offset, (int, float)) and not isinstance(offset, bool):
-            return int(offset)
-        return 0 if bool(config.get("event_only_current_cycle", False)) else None
-
-    def _filter_event_list_events(self, db: Session, *, protocol, config: dict, extra_tag_filter: str | None = None) -> list[Event]:
-        """Filter einer Terminliste (Elementtyp 7), identisch zu eventRowsForBlock/matrix-embedded-block-editor im Frontend."""
-        tag_filters = [t.strip() for t in str(config.get("event_tag_filter") or "").lower().split(",") if t.strip()]
-        combined_extra_tag_filters = [t.strip() for t in str(extra_tag_filter or "").lower().split(",") if t.strip()]
-        only_from_protocol_date = bool(config.get("event_only_from_protocol_date", True))
-        only_before_protocol_date = bool(config.get("event_only_before_protocol_date", False))
-        cycle_offset = self._event_list_cycle_offset(config)
-        cycle_event_ids: set[int] | None = None
-        if cycle_offset is not None:
-            resolved_cycle = resolve_protocol_cycle(db, protocol)
-            if resolved_cycle:
-                cycle_cfg, cycle_year = resolved_cycle
-                cycle_event_ids = list_cycle_event_ids(db, cycle_cfg.id, cycle_year + cycle_offset)
-
-        filtered: list[Event] = []
-        for event in self._tenant_events(db, protocol.tenant_id):
-            event_end_date = event.event_end_date or event.event_date
-            event_tag_lower = (event.tag or "").lower()
-            if tag_filters and not any(t in event_tag_lower for t in tag_filters):
-                continue
-            if combined_extra_tag_filters and not any(t in event_tag_lower for t in combined_extra_tag_filters):
-                continue
-            if only_before_protocol_date and protocol.protocol_date and event_end_date >= protocol.protocol_date:
-                continue
-            elif not only_before_protocol_date and only_from_protocol_date and protocol.protocol_date and event_end_date < protocol.protocol_date:
-                continue
-            if cycle_event_ids is not None and event.id not in cycle_event_ids:
-                continue
-            filtered.append(event)
-        return filtered
-
-    def _event_list_content(self, db: Session, *, protocol, config: dict, extra_tag_filter: str | None = None) -> str:
+    def _event_list_content(self, db: Session, *, protocol, config: dict, column: dict | None = None) -> str:
         gray_past = bool(config.get("event_gray_past", True))
         show_tag_colors = bool(config.get("event_show_tag_colors", False))
         tag_config: dict = {}
@@ -1342,7 +1336,8 @@ Status: {protocol_status}
             if tenant is not None:
                 tag_config = tenant.tag_config_json or {}
         columns = self._event_list_columns(config)
-        events = self._filter_event_list_events(db, protocol=protocol, config=config, extra_tag_filter=extra_tag_filter)
+        events = self._filter_event_list_events(db, protocol=protocol, event_filter=config.get("event_filter"), column=column)
+        organizer_names = self._event_organizer_names(db, events) if columns["organizers"] else {}
 
         column_specs: list[str] = []
         headers: list[str] = []
@@ -1361,6 +1356,15 @@ Status: {protocol_status}
         if columns["participant_count"]:
             column_specs.append("p{0.10\\textwidth}")
             headers.append("Teilnehmer")
+        if columns["location"]:
+            column_specs.append("p{0.14\\textwidth}")
+            headers.append("Ort")
+        if columns["organizers"]:
+            column_specs.append("p{0.18\\textwidth}")
+            headers.append("Organisatoren")
+        if columns["cancelled"]:
+            column_specs.append("p{0.10\\textwidth}")
+            headers.append("Abgesagt")
 
         rows: list[str] = []
         for event in events:
@@ -1394,6 +1398,12 @@ Status: {protocol_status}
                 cells.append(self._escape_latex(event.description or "-"))
             if columns["participant_count"]:
                 cells.append(self._escape_latex(str(max(0, int(event.participant_count or 0)))))
+            if columns["location"]:
+                cells.append(self._escape_latex(event.location or "-"))
+            if columns["organizers"]:
+                cells.append(self._escape_latex(organizer_names.get(event.id) or "-"))
+            if columns["cancelled"]:
+                cells.append("abgesagt" if event.is_cancelled else "-")
 
             if gray_past and protocol.protocol_date and event_end_date < protocol.protocol_date:
                 cells = [f"\\textcolor{{gray}}{{{cell}}}" for cell in cells]
@@ -1412,23 +1422,46 @@ Status: {protocol_status}
             ]
         )
 
-    def _fine_list_content(self, db: Session, protocol_id: int) -> str:
+    def _fine_list_content(self, db: Session, protocol_id: int, config: dict | None = None) -> str:
         current_protocol = db.get(ProtocolModel, protocol_id)
+        config = config or {}
 
         # Own fines (created in this protocol)
         own_fines = db.scalars(
             select(AttendanceFine)
             .where(AttendanceFine.protocol_id == protocol_id)
-            .where(AttendanceFine.status.in_(["pending", "collected"]))
+            .where(AttendanceFine.status.in_(["pending", "collected", "deleted"]))
             .order_by(AttendanceFine.created_at.asc())
         ).all()
 
-        # Pending fines from earlier protocols that were collected HERE
+        # Fines from earlier protocols that were collected or deleted (with reason) HERE
         collected_here = db.scalars(
             select(AttendanceFine)
             .where(AttendanceFine.closed_in_protocol_id == protocol_id)
-            .order_by(AttendanceFine.collected_at.asc())
+            .order_by(func.coalesce(AttendanceFine.collected_at, AttendanceFine.deleted_at).asc())
         ).all()
+
+        # Optionen der Bussenliste wie im Editor (lib/element-types/period.ts::filterFines).
+        account_filter = config.get("fine_list_account_id")
+        if account_filter:
+            own_fines = [fine for fine in own_fines if fine.account_id == account_filter]
+            collected_here = [fine for fine in collected_here if fine.account_id == account_filter]
+        if config.get("fine_list_status") == "open":
+            own_fines = [fine for fine in own_fines if fine.status == "pending"]
+            collected_here = []
+        fine_range = config.get("fine_list_range") or "all"
+        if fine_range == "this_protocol":
+            collected_here = []
+        elif fine_range == "this_cycle" and current_protocol is not None:
+            bounds = protocol_period(db, current_protocol)
+            if bounds.get("cycle_start"):
+                def _in_cycle(fine) -> bool:
+                    origin = db.get(ProtocolModel, fine.protocol_id)
+                    return origin is not None and bounds["cycle_start"] <= origin.protocol_date.isoformat() <= bounds["cycle_end"]
+                collected_here = [fine for fine in collected_here if _in_cycle(fine)]
+        if config.get("fine_list_group_by") == "participant":
+            own_fines = sorted(own_fines, key=lambda fine: fine.participant_name_snapshot.lower())
+            collected_here = sorted(collected_here, key=lambda fine: fine.participant_name_snapshot.lower())
 
         if not own_fines and not collected_here:
             return "Keine Bussen."
@@ -1446,6 +1479,8 @@ Status: {protocol_status}
                 status_label = "Kassiert"
             elif fine.status == "collected":
                 status_label = "Sp\\\"ater beglichen"
+            elif fine.status == "deleted":
+                status_label = "Sp\\\"ater gel\\\"oscht"
             else:
                 status_label = "Offen"
             lines.append(
@@ -1461,17 +1496,22 @@ Status: {protocol_status}
             amount_str = f"{float(fine.amount):,.2f}".replace(",", "'")
             origin = db.get(ProtocolModel, fine.protocol_id)
             origin_label = f"aus {self._escape_latex(origin.protocol_number)}" if origin else "aus früherem Protokoll"
+            if fine.status == "deleted":
+                # MAIN-BE-002: Löschung mit Begründung im Protokoll, in dem gelöscht wurde.
+                status_text = f"Gel\\\"oscht ({origin_label}): {self._escape_latex(fine.delete_comment or '')}"
+            else:
+                status_text = f"Kassiert ({origin_label})"
             lines.append(
                 f"{self._escape_latex(fine.participant_name_snapshot)} & "
                 f"{self._escape_latex(fine_type_labels.get(fine.fine_type, fine.fine_type))} & "
                 f"{self._escape_latex(amount_str + ' ' + cur)} & "
-                f"Kassiert ({origin_label}) \\\\"
+                f"{status_text} \\\\"
             )
 
         lines += ["\\end{tabular}", "\\end{flushleft}"]
         return "\n".join(lines)
 
-    def _finance_balance_content(self, db: Session, config: dict, tenant_id: int) -> str:
+    def _finance_balance_content(self, db: Session, config: dict, tenant_id: int, protocol=None) -> str:
         account_id = self._ref_to_internal_id(db, FinanceAccount, config.get("finance_account_id"), tenant_id)
         if not account_id:
             return "Kein Konto konfiguriert."
@@ -1482,16 +1522,16 @@ Status: {protocol_status}
         if account is None or account.tenant_id != tenant_id:
             return "Konto nicht gefunden."
         from sqlalchemy import func
-        result = db.execute(
-            select(func.coalesce(func.sum(FinanceTransaction.amount), 0).label("balance"))
-            .where(FinanceTransaction.account_id == account_id)
-        ).one()
-        balance = float(result.balance)
+        statement = select(func.coalesce(func.sum(FinanceTransaction.amount), 0).label("balance")).where(FinanceTransaction.account_id == account_id)
+        # Stichtag Protokolldatum: historisch korrekter Saldo statt des heutigen Stands.
+        if config.get("finance_balance_date") == "protocol_date" and protocol is not None and protocol.protocol_date:
+            statement = statement.where(FinanceTransaction.transaction_date <= protocol.protocol_date)
+        balance = float(db.execute(statement).one().balance)
         sign = "" if balance >= 0 else "-"
         amount_str = f"{sign}{abs(balance):,.2f}".replace(",", "'")
         return self._escape_latex(f"{account.name}: {amount_str} {account.currency_label}") + "\n\n"
 
-    def _finance_transactions_content(self, db: Session, config: dict, block, tenant_id: int) -> str:
+    def _finance_transactions_content(self, db: Session, config: dict, block, tenant_id: int, protocol=None) -> str:
         account_id = self._ref_to_internal_id(db, FinanceAccount, config.get("finance_account_id"), tenant_id)
         if not account_id:
             return "Kein Konto konfiguriert."
@@ -1501,23 +1541,14 @@ Status: {protocol_status}
             return "Konto nicht gefunden."
         filter_type = str(config.get("finance_filter_type") or "all")
         last_n = int(config.get("finance_last_n") or 10)
-        since_date = str(config.get("finance_since_date") or "")
 
         txs_query = select(FinanceTransaction).where(FinanceTransaction.account_id == account_id).order_by(FinanceTransaction.transaction_date.asc(), FinanceTransaction.id.asc())
         all_txs = list(db.scalars(txs_query))
 
-        from datetime import date as date_type
-        import datetime as dt_module
-        this_year = dt_module.date.today().year
-        filtered = []
-        for tx in all_txs:
-            if filter_type == "since_last_session":
-                if since_date and str(tx.transaction_date) < since_date:
-                    continue
-            elif filter_type == "this_year":
-                if tx.transaction_date.year != this_year:
-                    continue
-            filtered.append(tx)
+        # Gleiche Regeln wie im Editor (protocol_period_service / lib/element-types/period.ts).
+        period = protocol_period(db, protocol) if protocol is not None else {}
+        protocol_date = protocol.protocol_date if protocol is not None else None
+        filtered = [tx for tx in all_txs if transaction_matches(tx.transaction_date, config, protocol_date=protocol_date, period=period)]
         if filter_type == "last_n":
             filtered = filtered[-last_n:] if len(filtered) > last_n else filtered
 
@@ -1767,7 +1798,17 @@ Status: {protocol_status}
                     return True
                 return filter_text in str(value.get("text_value") or "").lower()
 
-            entries = [e for e in entries if _entry_matches(e)]
+            def _entry_text_matches(entry: ListEntry) -> bool:
+                # Textfilter der Vorlage (linked_list_filter_text) auf den angezeigten Wert, auch
+                # bei Personen-/Terminspalten - wie StructuredListTable rowFilter im Editor.
+                if not filter_text:
+                    return True
+                rendered = self._linked_list_value(
+                    db, value_type=filter_value_type, value=self._linked_list_entry_value(entry, filter_column), tenant_id=tenant_id
+                )
+                return filter_text in str(rendered or "").lower()
+
+            entries = [e for e in entries if _entry_matches(e) and _entry_text_matches(e)]
 
         if not entries:
             return ""
@@ -1872,10 +1913,18 @@ Status: {protocol_status}
                 parts.append(f"{self._escape_latex(left_cell)} & {self._escape_latex(right_cell)} \\\\")
                 rendered_row_count += 1
         else:
+            # «Leere Werte hervorheben» (linked_list_highlight_empty) wie im Editor
+            # (structured-list-table.tsx): leere Zellen als hervorgehobener Strich.
+            highlight_empty = bool(config.get("linked_list_highlight_empty", False))
+
+            def _cell(value: object) -> str:
+                text = str(value or "")
+                if not text.strip() and highlight_empty:
+                    return "\\textbf{\\textcolor{orange}{---}}"
+                return self._escape_latex(text)
+
             for item in rendered_entries:
-                parts.append(
-                    f"{self._escape_latex(str(item['left_value']))} & {self._escape_latex(str(item['right_value']))} \\\\"
-                )
+                parts.append(f"{_cell(item['left_value'])} & {_cell(item['right_value'])} \\\\")
                 rendered_row_count += 1
         if rendered_row_count == 0:
             return ""
@@ -1948,20 +1997,12 @@ Status: {protocol_status}
         raw_cell = values.get(row_id)
         return raw_cell if isinstance(raw_cell, dict) else {}
 
-    def _matrix_row_type(self, row: dict) -> str:
-        """Resolve row_type from new or old schema."""
-        if row.get("row_type"):
-            return str(row["row_type"])
-        if row.get("embedded_element_type_id"):
-            return str(row["embedded_element_type_id"])
-        return str(row.get("value_type") or "text")
-
     def _matrix_row_value(self, db: Session, *, row: dict, cell: dict, protocol, column: dict) -> str:
         embedded_block = cell.get("embedded_block")
         if isinstance(embedded_block, dict) and embedded_block.get("element_type_id"):
             return self._matrix_embedded_block_content(db, embedded_block=embedded_block, protocol=protocol, column=column)
 
-        row_type = self._matrix_row_type(row)
+        row_type = str(row.get("row_type") or "text")
         # If row_type is a numeric string it refers to an embedded block element type
         _named_types = {"text", "participant", "participants", "event", "events"}
         if row_type not in _named_types:
@@ -1990,13 +2031,8 @@ Status: {protocol_status}
         # Der Editor rendert diese Zeile als eingebetteten Terminlisten-Block
         # (matrixEmbeddedBlockForRow -> matrix-embedded-block-editor), also gelten dieselben
         # Filter wie bei Elementtyp 7 und nicht die der "events"-Zeilen (_matrix_events).
-        row_config = row.get("row_config")
-        if not isinstance(row_config, dict):
-            row_config = row.get("embedded_configuration_json") if isinstance(row.get("embedded_configuration_json"), dict) else {}
-        column_tag_filter = None
-        if bool(row_config.get("event_use_column_tag_filter", False)) and isinstance(column, dict):
-            column_tag_filter = str(column.get("event_tag_filter") or column.get("title") or "").strip() or None
-        events = self._filter_event_list_events(db, protocol=protocol, config=row_config, extra_tag_filter=column_tag_filter)
+        row_config = row.get("row_config") if isinstance(row.get("row_config"), dict) else {}
+        events = self._filter_event_list_events(db, protocol=protocol, event_filter=row_config.get("event_filter"), column=column)
         if not events:
             return ""
         show_date = bool(row_config.get("event_show_date", True))
@@ -2098,10 +2134,7 @@ Status: {protocol_status}
             return "\n".join(parts)
 
         if element_type_id == 7:
-            column_tag_filter = None
-            if bool(config.get("event_use_column_tag_filter", False)) and isinstance(column, dict):
-                column_tag_filter = str(column.get("event_tag_filter") or column.get("title") or "").strip() or None
-            return self._event_list_content(db, protocol=protocol, config=config, extra_tag_filter=column_tag_filter)
+            return self._event_list_content(db, protocol=protocol, config=config, column=column)
 
         if element_type_id == 8:
             bullet_items = config.get("bullet_items") if isinstance(config.get("bullet_items"), list) else []
@@ -2191,50 +2224,34 @@ Status: {protocol_status}
             events = self._matrix_events(db, row=row, protocol=protocol, column=column)
             if not events:
                 return ""
-            return "\\newline ".join(self._escape_latex(self._event_inline_label(event)) for event in events)
+            row_config = row.get("row_config") if isinstance(row.get("row_config"), dict) else {}
+            return "\\newline ".join(self._escape_latex(self._event_inline_label(event, row_config)) for event in events)
         return self._latex_multiline(str(cell.get(f"{prefix}text_value") or row.get("template_value") or "").strip())
 
     def _matrix_events(self, db: Session, *, row: dict, protocol, column: dict) -> list[Event]:
         """Termine einer "events"-Matrixzeile, identisch zu matrixEventsForRow im Frontend."""
-        # New schema: event filters live in row_config; old schema: directly on row
-        _row_config = row.get("row_config") if isinstance(row.get("row_config"), dict) else {}
+        row_config = row.get("row_config") if isinstance(row.get("row_config"), dict) else {}
+        event_filter = normalize_event_filter(row_config.get("event_filter"), default_range_mode="future")
+        return filter_events(db, self._tenant_events(db, protocol.tenant_id), event_filter, protocol=protocol, column=column)
 
-        def _setting(key: str):
-            value = row.get(key)
-            return value if value is not None else _row_config.get(key)
-
-        tag_filters_matrix = [t.strip() for t in str(_setting("event_tag_filter") or "").lower().split(",") if t.strip()]
-        column_tag_filters = [t.strip() for t in str(column.get("event_tag_filter") or "").lower().split(",") if t.strip()]
-        title_filter = str(_setting("event_title_filter") or "").strip().lower()
-        use_column_title_as_tag = _setting("use_column_title_as_tag") is not False
-        hide_past_events = _setting("hide_past_events") is not False
-        column_title = str(column.get("title") or "").strip().lower()
-
-        filtered: list[Event] = []
-        for event in self._tenant_events(db, protocol.tenant_id):
-            effective_end_date = event.event_end_date or event.event_date
-            if hide_past_events and protocol.protocol_date and effective_end_date < protocol.protocol_date:
-                continue
-            event_tag_lower_m = (event.tag or "").lower()
-            if tag_filters_matrix and not any(t in event_tag_lower_m for t in tag_filters_matrix):
-                continue
-            if column_tag_filters and not any(t in event_tag_lower_m for t in column_tag_filters):
-                continue
-            if use_column_title_as_tag and column_title and column_title not in event_tag_lower_m:
-                continue
-            if title_filter and title_filter not in event.title.lower():
-                continue
-            filtered.append(event)
-        return filtered
-
-    def _event_inline_label(self, event: Event) -> str:
-        if event.event_end_date and event.event_end_date != event.event_date:
-            label = f"{event.event_date.strftime('%d.%m.%Y')} - {event.event_end_date.strftime('%d.%m.%Y')}"
-        else:
-            label = event.event_date.strftime("%d.%m.%Y")
-        if event.description:
+    def _event_inline_label(self, event: Event, row_config: dict | None = None) -> str:
+        """Ein Termin in einer Matrixzelle «Mehrere Termine» - Felder wie im Editor
+        (row_config.event_show_*, Vorgabe Datum + Beschreibung)."""
+        config = row_config or {}
+        parts: list[str] = []
+        if config.get("event_show_date", True) is not False:
+            if event.event_end_date and event.event_end_date != event.event_date:
+                parts.append(f"{event.event_date.strftime('%d.%m.%Y')} - {event.event_end_date.strftime('%d.%m.%Y')}")
+            else:
+                parts.append(event.event_date.strftime("%d.%m.%Y"))
+        if config.get("event_show_title", False) is True:
+            parts.append(event.title)
+        if config.get("event_show_location", False) is True and event.location:
+            parts.append(event.location)
+        label = " ".join(parts)
+        if config.get("event_show_description", True) is not False and event.description:
             label += f" ({event.description})"
-        return label
+        return label.strip()
 
     def _latex_multiline(self, value: str) -> str:
         text = str(value or "").strip()
@@ -2424,27 +2441,111 @@ Status: {protocol_status}
             target_path.unlink(missing_ok=True)
             raise
 
-    def cleanup_old_generated_exports(self, *, retention_days: int | None = None) -> dict:
+    def _prune_superseded_exports(self, db: Session, *, protocol_id: int, export_format: str, keep_cache_id: int) -> list[Path]:
+        """Löscht ältere Caches desselben Protokolls und Formats samt ihrer StoredFile.
+
+        Audit MAIN-BE-004: Jeder Export legte eine neue StoredFile- und Cache-Zeile an, die nie
+        gelöscht wurden - das Speicherkontingent wuchs mit jedem (auch lesenden) Export. Gibt
+        die Pfade der Dateien zurück, die der Aufrufer erst nach dem Commit entfernt.
+        """
+        superseded = db.scalars(
+            select(ProtocolExportCache).where(
+                ProtocolExportCache.protocol_id == protocol_id,
+                ProtocolExportCache.export_format == export_format,
+                ProtocolExportCache.id != keep_cache_id,
+            )
+        ).all()
+        return self._delete_export_caches(db, superseded)
+
+    def _delete_export_caches(self, db: Session, caches) -> list[Path]:
+        paths: list[Path] = []
+        file_ids = {cache.generated_file_id for cache in caches if cache.generated_file_id is not None}
+        for cache in caches:
+            db.delete(cache)
+        db.flush()
+        for file_id in file_ids:
+            still_used = db.scalar(select(ProtocolExportCache.id).where(ProtocolExportCache.generated_file_id == file_id).limit(1))
+            stored_file = db.get(StoredFile, file_id)
+            if still_used is not None or stored_file is None:
+                continue
+            paths.append(_safe_storage_path(settings.storage_root, stored_file.storage_path))
+            db.delete(stored_file)
+        db.flush()
+        return paths
+
+    @staticmethod
+    def _unlink_paths(paths: list[Path]) -> None:
+        for path in paths:
+            path.unlink(missing_ok=True)
+
+    def _protected_export_cache_ids(self, db: Session) -> set[int]:
+        """Neuester Cache je Protokoll und Format abgeschlossener Protokolle - das finale PDF
+        darf die Aufbewahrungsfrist nicht verlieren (Audit MAIN-BE-004)."""
+        ranked = (
+            select(
+                ProtocolExportCache.id,
+                func.row_number()
+                .over(
+                    partition_by=(ProtocolExportCache.protocol_id, ProtocolExportCache.export_format),
+                    order_by=(ProtocolExportCache.created_at.desc(), ProtocolExportCache.id.desc()),
+                )
+                .label("rank"),
+            )
+            .join(ProtocolModel, ProtocolModel.id == ProtocolExportCache.protocol_id)
+            .where(ProtocolModel.status == "abgeschlossen")
+            .subquery()
+        )
+        return set(db.scalars(select(ranked.c.id).where(ranked.c.rank == 1)))
+
+    def cleanup_old_generated_exports(self, db: Session | None = None, *, retention_days: int | None = None) -> dict:
         """Periodic sweep (see main.py's export_cleanup_loop) for old files under
         EXPORT_ROOT/generated. Every export run writes into a brand-new uuid-suffixed file
         (see _store_generated_file above, never overwrites/reuses an old one), so without a
-        retention sweep the directory grows unbounded on repeated re-exports - unlike the
-        ClamAV rescan loops nearby this isn't a stuck/pending-state repair, just age-based
-        deletion. Only removes the file on disk; the StoredFile row is left in place, same
-        convention as scripts/cleanup_storage.sh's cron sweep of this same directory - the
-        download route already returns a clean 404 if the file is gone, so an old export
-        link failing is expected, not an error to guard against.
+        retention sweep the directory grows unbounded on repeated re-exports.
+
+        Mit ``db`` (Hintergrund-Loop, Audit MAIN-BE-004) arbeitet der Sweep auf DB-Basis:
+        Cache-Zeilen älter als die Frist werden samt StoredFile und Datei gelöscht (sonst
+        blieben die Bytes im Speicherkontingent und latest_export_metadata zeigte auf eine
+        fehlende Datei), ausgenommen der neueste Export abgeschlossener Protokolle. Danach
+        entfernt der Datei-Sweep verwaiste Dateien ohne Zeile, ebenfalls ohne die geschützten.
         """
         retention = retention_days if retention_days is not None else settings.export_retention_days
         target_dir = Path(settings.export_root) / "generated"
+        cutoff_timestamp = datetime.now().timestamp() - retention * 86400
+        deleted_rows = 0
+        protected_paths: set[Path] = set()
+        if db is not None:
+            protected_ids = self._protected_export_cache_ids(db)
+            cutoff = datetime.fromtimestamp(cutoff_timestamp, tz=UTC)
+            expired = [
+                cache
+                for cache in db.scalars(select(ProtocolExportCache).where(ProtocolExportCache.created_at < cutoff)).all()
+                if cache.id not in protected_ids
+            ]
+            paths = self._delete_export_caches(db, expired)
+            db.commit()
+            self._unlink_paths(paths)
+            deleted_rows = len(expired)
+            if protected_ids:
+                protected_paths = {
+                    _safe_storage_path(settings.storage_root, storage_path)
+                    for storage_path in db.scalars(
+                        select(StoredFile.storage_path)
+                        .join(ProtocolExportCache, ProtocolExportCache.generated_file_id == StoredFile.id)
+                        .where(ProtocolExportCache.id.in_(protected_ids))
+                    )
+                }
         if not target_dir.is_dir():
-            return {"deleted": 0}
-        cutoff = datetime.now().timestamp() - retention * 86400
+            return {"deleted": 0, "deleted_rows": deleted_rows} if db is not None else {"deleted": 0}
         deleted = 0
         for file_path in target_dir.iterdir():
-            if file_path.is_file() and file_path.stat().st_mtime < cutoff:
+            if not file_path.is_file() or file_path.resolve() in protected_paths:
+                continue
+            if file_path.stat().st_mtime < cutoff_timestamp:
                 file_path.unlink()
                 deleted += 1
+        if db is not None:
+            return {"deleted": deleted, "deleted_rows": deleted_rows}
         return {"deleted": deleted}
 
     def _escape_latex(self, value: str) -> str:

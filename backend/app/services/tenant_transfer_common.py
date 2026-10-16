@@ -40,6 +40,7 @@ from sqlalchemy import Date, DateTime, Numeric
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
+from app.services.element_config import upgrade_definition_block
 from app.models import AppUser, ElementType, EventCategory, RenderType, Role, TodoStatus
 
 LOOKUP_COLUMNS: dict[str, dict[str, type]] = {
@@ -65,7 +66,7 @@ USER_ID_COLUMNS: dict[str, list[str]] = {
     "gallery_image": ["created_by"],
     "word_import_document": ["created_by", "imported_by"],
     "protocol_todo": ["assigned_user_id", "created_by"],
-    "attendance_fine": ["collected_by_user_id"],
+    "attendance_fine": ["collected_by_user_id", "deleted_by_user_id"],
     "user_template_access": ["user_id"],
     "user_protocol_access": ["user_id"],
     "user_protocol_scroll": ["user_id"],
@@ -428,8 +429,14 @@ def remap_block_configuration(
 
     if config.get("linked_list_id") is not None:
         config["linked_list_id"] = list_definition_map.get(config["linked_list_id"])
-    if config.get("fine_account_id") is not None:
-        config["fine_account_id"] = finance_account_map.get(config["fine_account_id"])
+    # fine_account_id: nur noch in Exporten vor 0113 (danach zentral in fine_tariff).
+    for account_key in ("fine_account_id", "fine_list_account_id"):
+        if config.get(account_key) is not None:
+            config[account_key] = finance_account_map.get(config[account_key])
+    if config.get("todo_assignee_participant_id") is not None:
+        config["todo_assignee_participant_id"] = map_participant(config["todo_assignee_participant_id"])
+    if isinstance(config.get("attendance_excluded_participant_ids"), list):
+        config["attendance_excluded_participant_ids"] = map_participants(config["attendance_excluded_participant_ids"])
     if config.get("finance_account_id") is not None:
         config["finance_account_id"] = finance_account_map.get(config["finance_account_id"])
 
@@ -515,7 +522,9 @@ def remap_element_definition_config(
             list_definition_map=list_definition_map, list_entry_map=list_entry_map,
             finance_account_map=finance_account_map,
         )
-        new_blocks.append(new_block)
+        # Exporte älterer Versionen können Altformate enthalten - auf das aktuelle Schema
+        # heben (für bereits aktuelle Daten, z. B. beim Klonen, ein No-op).
+        new_blocks.append(upgrade_definition_block(new_block))
     config["blocks"] = new_blocks
     return config
 
@@ -564,6 +573,29 @@ def replace_public_ids(value: Any, public_id_map: dict[str, str]) -> Any:
     if isinstance(value, dict):
         return {replace_public_ids(k, public_id_map): replace_public_ids(v, public_id_map) for k, v in value.items()}
     return value
+
+
+def remap_todos_snapshot(snapshot: Any, block_id_map: dict[int, int], public_id_map: dict[str, str]) -> dict | None:
+    """Überträgt protocol.todos_snapshot_json (eingefrorene Todo-Liste eines abgeschlossenen
+    Protokolls) auf importierte/geklonte Zeilen (Audit MAIN-BE-012).
+
+    Die Keys von ``blocks`` sind interne Block-IDs und laufen über ``block_id_map``; Blöcke
+    ohne Gegenstück entfallen. Alle eingebetteten public_ids (Todo, Block, Protokoll,
+    Teilnehmer, ...) laufen über ``public_id_map``. ``pending`` enthält nur public_ids.
+    """
+    if not isinstance(snapshot, dict):
+        return None
+    blocks: dict[str, Any] = {}
+    for key, items in (snapshot.get("blocks") or {}).items():
+        try:
+            new_block_id = block_id_map.get(int(key))
+        except (TypeError, ValueError):
+            continue
+        if new_block_id is None:
+            continue
+        blocks[str(new_block_id)] = replace_public_ids(copy.deepcopy(items), public_id_map)
+    rest = {key: value for key, value in snapshot.items() if key != "blocks"}
+    return {**replace_public_ids(copy.deepcopy(rest), public_id_map), "blocks": blocks}
 
 
 # ── Word-Import JSON remapping ───────────────────────────────────────────────

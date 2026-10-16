@@ -1,5 +1,7 @@
 {
-  "meta": { "description": "Protocol and template management workspace" },
+  "meta": {
+    "description": "Protocol and template management workspace"
+  },
   "save": "Save",
   "cancel": "Cancel",
   "delete": "Delete",
@@ -82,5 +84,27 @@
     "retryButton": "Try again now",
     "discardBlocked": "{count, plural, one {Discard failed change} other {Discard # failed changes}}",
     "leaveConfirm": "There are unsaved changes. Leave the page anyway?"
+  },
+  "clientErrors": {
+    "offline": "No internet connection",
+    "timeout": "The server took too long to respond",
+    "unreachable": "Server not reachable",
+    "unreachableStatus": "Server not reachable ({status})",
+    "invalidResponse": "Invalid response from the server",
+    "saveFailed": "Changes could not be saved.",
+    "saveFailedStatus": "Saving failed ({status})",
+    "connectionError": "Connection error",
+    "passkeyCreateCancelled": "Passkey creation was cancelled",
+    "passkeyLoginCancelled": "Passkey sign-in was cancelled",
+    "pdfNotProvided": "The PDF could not be provided.",
+    "pdfReadyClick": "PDF ready – click here to open",
+    "pdfExportFailed": "PDF export failed",
+    "tagColorTransferFailed": "Tag renamed, but its colour could not be transferred",
+    "noHistoricalCycleSelected": "No historical cycle selected",
+    "noDraftToConfirm": "No draft to confirm"
+  },
+  "profileImage": {
+    "invalidType": "Please choose a PNG, JPG, GIF or WebP image (SVG is not supported).",
+    "tooLarge": "The image is too large (max. 5 MB)."
   }
 }

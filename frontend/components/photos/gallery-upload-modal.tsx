@@ -16,7 +16,8 @@ import { fileMetadataHints, needsUpload, precheckToFileResult, precheckUploads }
 import { filesFromDataTransfer, isGalleryCandidate } from "@/lib/utils/folder-files";
 import { formatDateInputValue, formatFileSize } from "@/lib/utils/format";
 import { isHeicName, isLiveClipName, pairLiveClips } from "@/lib/utils/live-photo";
-import { photoUploadProblem, PHOTO_MAX_FILES, PHOTO_UPLOAD_TIMEOUT_MS, PHOTO_ZIP_MAX_BYTES } from "@/lib/utils/upload-limits";
+import { hasLargeZip, photoUploadProblem, PHOTO_MAX_FILES, PHOTO_UPLOAD_TIMEOUT_MS, PHOTO_ZIP_MAX_BYTES } from "@/lib/utils/upload-limits";
+import { StatusBanner } from "@/components/ui/status-banner";
 import { splitIntoBatches } from "@/lib/utils/upload-results";
 import { GalleryUploadJob, SharedTargetAlbum, UploadFileResult } from "@/types/api";
 
@@ -558,6 +559,7 @@ export function GalleryUploadModal({
             <TagInput value={tagsValue} onChange={setTagsValue} suggestions={tagSuggestions} placeholder={t("tagsPlaceholder")} />
           </div>
 
+          {hasLargeZip(selectedFiles) && <StatusBanner tone="neutral" message={t("largeZipHint")} />}
           {ruleProblems.length > 0 && <p className="form-error-banner">{ruleProblems.join(" · ")}</p>}
           {error && <p className="form-error-banner">{error}</p>}
         </div>

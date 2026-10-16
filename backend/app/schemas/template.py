@@ -81,6 +81,7 @@ class ElementDefinitionBlockBase(BaseModel):
     block_title: str | None = None
     default_content: str | None = None
     copy_from_last_protocol: bool = False
+    title_as_subtitle: bool = True
     element_type_id: int
     render_type_id: int
     is_editable: bool = True
@@ -154,6 +155,9 @@ class TemplateElementBlockRead(BaseModel):
     is_visible: bool
     title_as_subtitle: bool = True
     copy_from_last_protocol: bool = False
+    # Werte aus der Elementdefinition vor jedem Vorlagen-Override - der Vorlagen-Editor
+    # markiert damit Schalter, die vom Default des Elements abweichen.
+    behavior_defaults: dict[str, bool] = Field(default_factory=dict)
     sort_index: int
     render_order: int | None = None
     latex_template: str | None = None

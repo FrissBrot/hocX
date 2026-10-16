@@ -155,7 +155,7 @@ def snapshot_reference_ids(db, config: dict, tenant_id: int) -> dict:
     for row in config.get("rows") or []:
         if isinstance(row, dict):
             list_ids.extend([row.get("linked_list_id"), (row.get("row_config") or {}).get("linked_list_id")])
-    account_ids = [config.get("finance_account_id")]
+    account_ids = [config.get("finance_account_id"), config.get("fine_list_account_id")]
     event_ids = [config.get("repeat_source_id")] if config.get("repeat_source_type") == "event" else []
     result = {}
     for name, model, values in (

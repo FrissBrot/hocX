@@ -1,5 +1,6 @@
 "use client";
 
+import { filterTransactions, useBalancesAsOf, useProtocolPeriod } from "@/lib/element-types/period";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -572,6 +573,15 @@ function MobileBlock({
   const tProtocols = useTranslations("protocols");
   const locale = useLocale();
   const type = block.element_type_code ?? "unknown";
+  // Finanzblöcke: gleiche Zeitraum-/Stichtagsregeln wie Desktop und PDF (lib/element-types/period.ts).
+  const financeConfig = blockConfig(block);
+  const financeStoredId = financeConfig.finance_account_id ? String(financeConfig.finance_account_id) : null;
+  const financeAccountId = financeStoredId ? block.public_reference_ids?.finance_accounts?.[financeStoredId] ?? financeStoredId : null;
+  const financePeriod = useProtocolPeriod(protocol.id, type === "finance_transactions");
+  const balancesAsOf = useBalancesAsOf(
+    type === "finance_balance" && financeConfig.finance_balance_date === "protocol_date" && financeAccountId ? [financeAccountId] : [],
+    protocol.protocol_date ?? null
+  );
   const typeLabels: Record<string, string> = {
     text: tProtocols("blockTypeText"), static_text: tProtocols("blockTypeText"), todo: tProtocols("blockTypeTodo"), image: tProtocols("blockTypeImage"),
     attendance: tProtocols("blockTypeAttendance"), finance_balance: tProtocols("blockTypeFinanceBalance"),
@@ -715,12 +725,15 @@ function MobileBlock({
           {label}
           <div className="mobile-finance-balance">
             <div className="mobile-eyebrow">{account.name}</div>
-            <div className={`mobile-finance-amount${account.balance < 0 ? " mobile-text-danger" : ""}`}>{formatFinanceAmount(account.balance, account.currency_label)}</div>
+            {(() => {
+              const balance = balancesAsOf[account.id] ?? account.balance;
+              return <div className={`mobile-finance-amount${balance < 0 ? " mobile-text-danger" : ""}`}>{formatFinanceAmount(balance, account.currency_label)}</div>;
+            })()}
           </div>
         </div>
       );
     }
-    const list = (transactions[accountId!] ?? []).slice(0, Number(config.finance_last_n ?? 10) || 10);
+    const list = filterTransactions(transactions[accountId!] ?? [], config, protocol.protocol_date ?? null, financePeriod);
     return (
       <div className="mobile-block">
         {label}

@@ -121,7 +121,10 @@ export function PhotoViewer({
       const target = event.target as HTMLElement | null;
       const typing =
         !!target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
-      const plainLetter = !typing && !event.ctrlKey && !event.metaKey && !event.altKey;
+      // Beim Tippen (z. B. im Tag-Feld) bewegen die Pfeiltasten den Cursor, nicht das Foto
+      // (Audit MAIN-FE-006).
+      if (typing) return;
+      const plainLetter = !event.ctrlKey && !event.metaKey && !event.altKey;
       const key = event.key.toLowerCase();
       const prev = event.key === "ArrowLeft" || (plainLetter && key === "j");
       const next = event.key === "ArrowRight" || (plainLetter && key === "l");
@@ -143,9 +146,15 @@ export function PhotoViewer({
   useEffect(() => {
     setTagsValue(item.tags.join(","));
     setMetadata(null);
+    // Beim schnellen Blaettern darf eine verspaetete Antwort des vorigen Fotos dessen Metadaten
+    // nicht beim aktuellen anzeigen (Audit MAIN-FE-007).
+    let cancelled = false;
     browserApiFetch<StoredFileMetadata>(item.metadata_url)
-      .then((data) => setMetadata(data))
-      .catch(() => setMetadata(null));
+      .then((data) => { if (!cancelled) setMetadata(data); })
+      .catch(() => { if (!cancelled) setMetadata(null); });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 

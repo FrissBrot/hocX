@@ -236,7 +236,10 @@
     "workflowPreparationMode": "Preparation mode",
     "workflowSessionMode": "Session mode",
     "templateSyncedByOther": "{name} reloaded the elements from the template. The view is being refreshed.",
-    "imageAlreadyExists": "This image already exists and was not uploaded again."
+    "imageAlreadyExists": "This image already exists and was not uploaded again.",
+    "statusChangedByOtherToast": "{name} changed the status to “{status}”.",
+    "draftsRestoredToast": "{count, plural, one {# local text draft was} other {# local text drafts were}} restored.",
+    "conflictToast": "Conflict: someone else saved this section in the meantime. The current version has been loaded – your last change was not applied, but it is kept as a local draft."
   },
   "embeddedBlock": {
     "attendance": "Attendance",
@@ -472,5 +475,13 @@
   "undoAction": "Undo",
   "unknownEvent": "Unknown event",
   "uploadImageAction": "Upload image",
-  "valueFallback": "Value"
+  "valueFallback": "Value",
+  "fineDeletedLabel": "Deleted",
+  "fineDeletedLater": "Deleted later",
+  "fineDeletedReason": "Reason: {reason}",
+  "restoreFine": "Restore",
+  "fineRestoreFailed": "Fine could not be restored",
+  "locationLabel": "Location",
+  "organizersLabel": "Organisers",
+  "balanceAsOf": "As of {date}"
 }

@@ -2995,6 +2995,22 @@ input[type="radio"] {
   border-color: color-mix(in srgb, var(--accent) 24%, transparent 76%);
 }
 
+/* Vorlagen-Override weicht vom Default der Elementdefinition ab */
+.behavior-icon-button-overridden {
+  position: relative;
+}
+
+.behavior-icon-button-overridden::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
 .behavior-expand-toggle {
   width: auto;
   min-width: 0;
@@ -5805,6 +5821,36 @@ input[type="radio"] {
   color: var(--info-fg);
   background: var(--info-bg);
   border-bottom: 1px solid var(--border);
+}
+
+/* Gemeinsamer Terminfilter-Baustein (element-editor/event-filter-editor.tsx) */
+.event-filter-editor {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.event-filter-advanced {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.event-filter-advanced-toggle {
+  justify-self: start;
+}
+
+.matrix-designer-source-filter {
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Tabellen-Designer: gleiche Zeilenliste wie die Matrix, aber ohne Spaltenraster */
+.table-designer-grid-row {
+  display: grid;
+  max-width: 640px;
+}
+
+.matrix-designer-row-head-dragging {
+  opacity: 0.5;
 }
 
 .matrix-designer-switch-row {

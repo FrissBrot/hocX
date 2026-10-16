@@ -1,3 +1,5 @@
+import { clientMessage } from "@/lib/i18n/client-messages";
+
 const internalApiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 // Browser-seitige Aufrufe laufen immer same-origin (relative Pfade), damit sie auf jeder
 // Domain (Hauptdomain oder Mandanten-Custom-Domain) automatisch gegen die richtige Origin
@@ -10,6 +12,17 @@ export class ApiError extends Error {
     super(message);
   }
 }
+
+// Obergrenze fuer serverseitige Backend-Aufrufe aus Server-Components (Audit MAIN-FE-002).
+export const SERVER_FETCH_TIMEOUT_MS = 30_000;
+// Standard-Timeout fuer Browser-Aufrufe und die laengere Variante fuer Endpunkte, die serverseitig
+// lange arbeiten (LaTeX-PDF-Export, Word-/CSV-/Katalog-Import, Mandanten-Klon). Mit dem Standard
+// brach der Client nach 15 s ab, waehrend der Server die Aktion erfolgreich zu Ende fuehrte -
+// Fehlermeldung trotz Erfolg und doppelte Importe bei Wiederholung (Audit MAIN-FE-004).
+export const DEFAULT_BROWSER_TIMEOUT_MS = 15_000;
+export const LONG_RUNNING_TIMEOUT_MS = 5 * 60_000;
+
+export type BrowserApiFetchInit = RequestInit & { timeoutMs?: number };
 
 export async function backendFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
   // Not shared with abgabebox-frontend/lib/api.ts's fetchJson (see that file's comment,
@@ -26,6 +39,9 @@ export async function backendFetch<T>(path: string, init?: RequestInit): Promise
     try {
       const response = await fetch(`${internalApiUrl}${path}`, {
         ...init,
+        // Ohne Timeout blockierte ein haengendes (nicht ablehnendes) Backend jeden Seiten-Render
+        // bis zum undici-Default von ~300 s (Audit MAIN-FE-002).
+        signal: init?.signal ?? AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
         cache: "no-store"
       });
 
@@ -36,7 +52,9 @@ export async function backendFetch<T>(path: string, init?: RequestInit): Promise
 
       return (await response.json()) as T;
     } catch (err) {
-      if (attempt === 0) continue;
+      // Retry nur fuer echte Verbindungsfehler; ein Timeout wuerde die Wartezeit nur verdoppeln.
+      const timedOut = err instanceof DOMException && err.name === "TimeoutError";
+      if (attempt === 0 && !timedOut) continue;
       console.error(`[backendFetch] ${init?.method ?? "GET"} ${path} → network error:`, err);
       return null;
     }
@@ -44,20 +62,21 @@ export async function backendFetch<T>(path: string, init?: RequestInit): Promise
   return null;
 }
 
-export async function browserApiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
-  if (typeof navigator !== "undefined" && !navigator.onLine) throw new ApiError("Keine Internetverbindung", "offline");
+export async function browserApiFetch<T>(path: string, options?: BrowserApiFetchInit): Promise<T> {
+  const { timeoutMs, ...init } = options ?? {};
+  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
+  if (typeof navigator !== "undefined" && !navigator.onLine) throw new ApiError(clientMessage("offline"), "offline");
   let response: Response;
   try {
     response = await fetch(`${publicApiUrl}${path}`, {
       ...init,
-      signal: init?.signal ?? AbortSignal.timeout(15_000),
+      signal: init.signal ?? AbortSignal.timeout(timeoutMs ?? DEFAULT_BROWSER_TIMEOUT_MS),
       credentials: "include",
-      headers: isFormData ? init?.headers : { "Content-Type": "application/json", ...(init?.headers ?? {}) }
+      headers: isFormData ? init.headers : { "Content-Type": "application/json", ...(init.headers ?? {}) }
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === "TimeoutError") throw new ApiError("Zeitüberschreitung beim Server", "timeout");
-    throw new ApiError("Backend nicht erreichbar", "backend");
+    if (error instanceof DOMException && error.name === "TimeoutError") throw new ApiError(clientMessage("timeout"), "timeout");
+    throw new ApiError(clientMessage("unreachable"), "backend");
   }
 
   if (!response.ok) throw errorFromResponse(response.status, await response.text());
@@ -101,7 +120,7 @@ export function browserApiUpload<T>(
   body: FormData,
   options: { timeoutMs: number; onProgress?: (loaded: number, total: number) => void; signal?: AbortSignal },
 ): Promise<T> {
-  if (typeof navigator !== "undefined" && !navigator.onLine) return Promise.reject(new ApiError("Keine Internetverbindung", "offline"));
+  if (typeof navigator !== "undefined" && !navigator.onLine) return Promise.reject(new ApiError(clientMessage("offline"), "offline"));
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${publicApiUrl}${path}`);
@@ -125,11 +144,11 @@ export function browserApiUpload<T>(
       try {
         resolve(JSON.parse(xhr.responseText) as T);
       } catch {
-        reject(new ApiError("Ungültige Antwort vom Server", "backend", xhr.status));
+        reject(new ApiError(clientMessage("invalidResponse"), "backend", xhr.status));
       }
     };
-    xhr.ontimeout = () => reject(new ApiError("Zeitüberschreitung beim Server", "timeout"));
-    xhr.onerror = () => reject(new ApiError("Backend nicht erreichbar", "backend"));
+    xhr.ontimeout = () => reject(new ApiError(clientMessage("timeout"), "timeout"));
+    xhr.onerror = () => reject(new ApiError(clientMessage("unreachable"), "backend"));
     xhr.onabort = () => reject(new DOMException("Upload abgebrochen", "AbortError"));
     if (options.signal) {
       if (options.signal.aborted) {

@@ -206,21 +206,23 @@ def test_event_filter_change_adds_and_drops_empty_repeat_blocks(db):
     hock.tag = "hock"
     lager.tag = "lager"
     db.flush()
-    repeat = {"repeat_source": "event", "event_tag_filter": "hock", "event_window_start_days": 0, "event_window_end_days": 14}
+    def repeat(tag: str) -> dict:
+        return {"repeat_source": "event", "repeat_event_filter": {"tags": [tag], "range": {"mode": "window", "start_days": 0, "end_days": 14}}}
+
     definition = make_element_definition(db, tenant.id, "Termine", blocks=[
-        _block(db, code="text", title="{title}", configuration_json=repeat),
+        _block(db, code="text", title="{title}", configuration_json=repeat("hock")),
     ])
     make_template_element(db, template.id, definition.id, sort_index=10, section_name="Termine")
     protocol = _create(db, template)
     element = _elements(db, protocol.id)[0]
     assert [b.title_snapshot for b in _blocks(db, element.id)] == ["Hock"]
 
-    _set_blocks(db, definition, [_block(db, code="text", title="{title}", configuration_json={**repeat, "event_tag_filter": "lager"})])
+    _set_blocks(db, definition, [_block(db, code="text", title="{title}", configuration_json=repeat("lager"))])
     summary = ProtocolService().sync_with_template(db, protocol.id)
     db.expire_all()
 
     assert [b.title_snapshot for b in _blocks(db, element.id)] == ["Lager"]
-    assert _blocks(db, element.id)[0].configuration_snapshot_json["event_tag_filter"] == "lager"
+    assert _blocks(db, element.id)[0].configuration_snapshot_json["repeat_event_filter"]["tags"] == ["lager"]
     assert (summary["added_blocks"], summary["removed_blocks"]) == (1, 1)
 
 

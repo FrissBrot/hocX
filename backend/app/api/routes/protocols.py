@@ -16,7 +16,7 @@ from app.core.db import get_db, SessionLocal
 from app.core.error_log import record_system_error
 from app.core.redis_client import get_redis_sync
 from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolListCycle, ProtocolRead, ProtocolTemplateSyncRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
-from app.services import public_id_service
+from app.services import protocol_period_service, public_id_service
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.collaboration_service import protocol_channel
@@ -302,6 +302,12 @@ def patch_protocol(
     require_writer(user)
     existing = _get_protocol_or_404(db, protocol_id, user)
     protocol_id = existing.id
+    if payload.session_notes is not None and payload.expected_session_notes is not None:
+        # Audit MAIN-BE-011: Protokollzeile bis zum Commit sperren und frisch lesen, damit
+        # zwei gleichzeitige Saves mit gleichem erwarteten Stand nicht beide durchgehen.
+        existing = db.scalar(
+            select(Protocol).where(Protocol.id == protocol_id).with_for_update().execution_options(populate_existing=True)
+        )
     if (
         payload.session_notes is not None
         and payload.expected_session_notes is not None
@@ -404,6 +410,18 @@ def get_pending_todos(
         template_id=protocol.template_id,
         protocol_date=protocol.protocol_date,
     )
+
+
+@router.get("/protocols/{protocol_id}/period", response_model=dict[str, str | None])
+def get_protocol_period(
+    protocol_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Datum des vorherigen Protokolls und Zyklusgrenzen (Finanz- und Bussenblöcke)."""
+    require_reader(user)
+    protocol = _get_protocol_or_404(db, protocol_id, user)
+    return protocol_period_service.protocol_period(db, protocol)
 
 
 @router.get("/protocols/{protocol_id}/cycle-events", response_model=ProtocolCycleEventsRead)

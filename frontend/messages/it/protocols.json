@@ -236,7 +236,10 @@
     "workflowPreparationMode": "Modalità preparazione",
     "workflowSessionMode": "Modalità sessione",
     "templateSyncedByOther": "{name} ha ricaricato gli elementi dal modello. La vista viene aggiornata.",
-    "imageAlreadyExists": "Questa immagine esiste già e non è stata caricata di nuovo."
+    "imageAlreadyExists": "Questa immagine esiste già e non è stata caricata di nuovo.",
+    "statusChangedByOtherToast": "{name} ha cambiato lo stato in «{status}».",
+    "draftsRestoredToast": "{count, plural, one {# bozza locale è stata ripristinata} other {# bozze locali sono state ripristinate}}.",
+    "conflictToast": "Conflitto: qualcun altro ha salvato questa sezione nel frattempo. È stata caricata la versione attuale – la tua ultima modifica non è stata applicata, ma è conservata come bozza locale."
   },
   "embeddedBlock": {
     "attendance": "Presenza",
@@ -472,5 +475,13 @@
   "undoAction": "Annulla",
   "unknownEvent": "Evento sconosciuto",
   "uploadImageAction": "Carica immagine",
-  "valueFallback": "Valore"
+  "valueFallback": "Valore",
+  "fineDeletedLabel": "Eliminata",
+  "fineDeletedLater": "Eliminata in seguito",
+  "fineDeletedReason": "Motivazione: {reason}",
+  "restoreFine": "Ripristina",
+  "fineRestoreFailed": "Impossibile ripristinare la multa",
+  "locationLabel": "Luogo",
+  "organizersLabel": "Organizzatori",
+  "balanceAsOf": "Al {date}"
 }

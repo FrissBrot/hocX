@@ -163,7 +163,8 @@
       "label": "Estimated capture date for images without a capture date",
       "help": "Optional. Real capture dates are never overwritten.",
       "helpSet": "Only applies to images without a capture date ({date}). Real capture dates are never overwritten."
-    }
+    },
+    "largeZipHint": "Large ZIP file: on a slow connection the upload may stop after one hour. Better split the archive into several smaller ZIPs or upload the photos directly."
   },
   "shareModal": {
     "actionAriaLabelActive": "Remove access for {name}",

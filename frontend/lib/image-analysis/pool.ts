@@ -39,7 +39,7 @@ class WorkerSlot {
       if (event.data.result) entry.resolve(event.data.result);
       else entry.reject(new Error(event.data.error ?? "analysis failed"));
     };
-    worker.onerror = () => this.fail(new Error("worker failed"));
+    worker.onerror = () => this.fail(new Error("worker failed")); // i18n-ok: interner Fehler, analyzeFiles fällt auf den Hauptthread zurück
   }
 
   private fail(error: Error) {
@@ -50,10 +50,10 @@ class WorkerSlot {
   }
 
   analyze(file: File): Promise<FileAnalysis> {
-    if (this.broken) return Promise.reject(new Error("worker failed"));
+    if (this.broken) return Promise.reject(new Error("worker failed")); // i18n-ok: interner Fehler, nie angezeigt
     const id = this.nextId++;
     return new Promise<FileAnalysis>((resolve, reject) => {
-      const timer = setTimeout(() => this.fail(new Error("worker timeout")), this.timeoutMs);
+      const timer = setTimeout(() => this.fail(new Error("worker timeout")), this.timeoutMs); // i18n-ok: interner Fehler, nie angezeigt
       this.pending.set(id, {
         resolve: (result) => { clearTimeout(timer); resolve(result); },
         reject: (error) => { clearTimeout(timer); reject(error); },

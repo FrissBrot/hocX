@@ -1,79 +1,62 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useLocale } from "next-intl";
 
-declare global {
-  interface Window {
-    [key: string]: unknown;
-  }
-}
-
-const SCRIPT_SRC = "/friendly-challenge.module.min.js";
-const SCRIPT_ID = "friendly-captcha-script";
+import { loadFriendlyChallenge, mountFriendlyCaptcha } from "@/lib/friendly-captcha";
 
 type Props = {
   sitekey: string;
   onSolved: (solution: string) => void;
   onExpired?: () => void;
-  widgetRef?: React.RefObject<HTMLDivElement | null>;
 };
 
-export function CaptchaWidget({ sitekey, onSolved, onExpired, widgetRef }: Props) {
+// Jede Montage erzeugt ein eigenes FriendlyCaptcha-Widget (siehe lib/friendly-captcha.ts): das
+// Vendor-Skript initialisiert nur beim Laden, ein spaeter (Client-Navigation, Neustart ueber `key`)
+// gemountetes Element bekaeme sonst nie eine Challenge.
+export function CaptchaWidget({ sitekey, onSolved, onExpired }: Props) {
   const locale = useLocale();
-  const id = useId().replace(/[^a-zA-Z0-9]/g, "");
-  const callbackName = `frcCallback_${id}`;
-  const expiredCallbackName = `frcExpired_${id}`;
-  const internalRef = useRef<HTMLDivElement>(null);
-  const ref = widgetRef ?? internalRef;
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Callbacks per Ref, damit ein neuer Callback (andere Render-Identitaet) das laufende Widget
+  // nicht zerstoert und eine bereits begonnene Challenge neu startet.
+  const onSolvedRef = useRef(onSolved);
+  const onExpiredRef = useRef(onExpired);
+  useEffect(() => {
+    onSolvedRef.current = onSolved;
+    onExpiredRef.current = onExpired;
+  }, [onSolved, onExpired]);
 
   useEffect(() => {
-    window[callbackName] = onSolved;
-    window[expiredCallbackName] = () => onExpired?.();
+    const container = containerRef.current;
+    if (!sitekey || !container) return;
+    let disposed = false;
+    let unmount: (() => void) | null = null;
 
-    if (!document.getElementById(SCRIPT_ID)) {
-      const script = document.createElement("script");
-      script.id = SCRIPT_ID;
-      script.src = SCRIPT_SRC;
-      script.type = "module";
-      script.async = true;
-      document.body.appendChild(script);
-    }
-
-    // Zweiter Signalweg neben data-callback: das Widget schreibt die geloeste Antwort immer in
-    // data-response, unabhaengig davon ob der Callback zuverlaessig feuert (z.B. wenn das Skript
-    // erst nach der Widget-Initialisierung nachlaedt) - onSolved dedupliziert mehrfache Aufrufe
-    // mit derselben Loesung selbst.
-    const node = ref.current;
-    let observer: MutationObserver | null = null;
-    if (node) {
-      observer = new MutationObserver(() => {
-        const response = node.getAttribute("data-response");
-        if (response && response !== ".") onSolved(response);
+    loadFriendlyChallenge()
+      .then((api) => {
+        if (disposed) return;
+        unmount = mountFriendlyCaptcha(container, api, {
+          sitekey,
+          language: locale,
+          onSolved: (solution) => onSolvedRef.current(solution),
+          // Puzzle konnte nicht geholt werden o. ae. - das Widget zeigt selbst einen
+          // Neustart-Button; eine eventuell gemerkte Loesung gilt nicht mehr.
+          onError: () => onExpiredRef.current?.(),
+        });
+      })
+      .catch((error: unknown) => {
+        // Skript nicht ladbar (Netzwerk/Blocker): Status bleibt auf "Sicherheitscheck laeuft",
+        // ein Neustart der Seite bzw. ein Remount laedt erneut.
+        console.error("[abgabebox] FriendlyCaptcha konnte nicht geladen werden", error);
       });
-      observer.observe(node, { attributes: true, attributeFilter: ["data-response"] });
-    }
 
     return () => {
-      delete window[callbackName];
-      delete window[expiredCallbackName];
-      observer?.disconnect();
+      disposed = true;
+      unmount?.();
     };
-  }, [callbackName, expiredCallbackName, onSolved, onExpired, ref]);
+  }, [sitekey, locale]);
 
   if (!sitekey) return null;
 
-  return (
-    <div
-      ref={ref}
-      className="frc-captcha"
-      data-sitekey={sitekey}
-      data-callback={callbackName}
-      data-expired-callback={expiredCallbackName}
-      data-lang={locale}
-      data-start="auto"
-      data-puzzle-endpoint="https://api.friendlycaptcha.com/api/v1/puzzle"
-      data-worker-src="/friendly-challenge.worker.min.js"
-    />
-  );
+  return <div ref={containerRef} />;
 }

@@ -508,8 +508,8 @@ def test_create_element_definition_rejects_linked_list_from_foreign_tenant(db):
         blocks=[
             ElementDefinitionBlockCreate(
                 id=1,
-                title="Matrix",
-                element_type_id=11,
+                title="Tabelle",
+                element_type_id=6,
                 render_type_id=5,
                 sort_index=1,
                 configuration_json={"linked_list_id": foreign_list.public_id},
@@ -535,8 +535,8 @@ def test_create_element_definition_accepts_linked_list_from_own_tenant(db):
         blocks=[
             ElementDefinitionBlockCreate(
                 id=1,
-                title="Matrix",
-                element_type_id=11,
+                title="Tabelle",
+                element_type_id=6,
                 render_type_id=5,
                 sort_index=1,
                 configuration_json={"linked_list_id": own_list.public_id},
@@ -571,7 +571,7 @@ def test_update_element_definition_rejects_linked_list_from_foreign_tenant(db):
             title="Matrix",
             blocks=[
                 ElementDefinitionBlockCreate(
-                    id=1, title="Matrix", element_type_id=11, render_type_id=5, sort_index=1,
+                    id=1, title="Tabelle", element_type_id=6, render_type_id=5, sort_index=1,
                 )
             ],
         ),
@@ -581,7 +581,7 @@ def test_update_element_definition_rejects_linked_list_from_foreign_tenant(db):
     update_payload = ElementDefinitionUpdate(
         blocks=[
             ElementDefinitionBlockCreate(
-                id=1, title="Matrix", element_type_id=11, render_type_id=5, sort_index=1,
+                id=1, title="Tabelle", element_type_id=6, render_type_id=5, sort_index=1,
                 configuration_json={"linked_list_id": foreign_list.public_id},
             )
         ]

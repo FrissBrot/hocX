@@ -241,6 +241,13 @@ def revoke(db: Session, *, album_id: uuid.UUID, tenant_id: int, acting_tenant_id
     if share is None:
         raise AlbumShareError("Keine Freigabe für diesen Mandanten gefunden.")
     db.delete(share)
+    # Audit MAIN-SEC-003: öffentliche Links, die der Partner auf dieses Album angelegt hat,
+    # enden mit der Freigabe (resolve_active prüft den Zugriff zusätzlich beim Abruf).
+    db.execute(
+        update(ShareLink)
+        .where(ShareLink.album_id == album_id, ShareLink.tenant_id == tenant_id, ShareLink.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(UTC))
+    )
     db.commit()
 
 

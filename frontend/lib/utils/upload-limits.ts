@@ -6,7 +6,15 @@ export const PHOTO_ZIP_MAX_BYTES = 10 * 1024 ** 3;
 export const PHOTO_MAX_FILES = 50;
 export const PHOTO_SELECTION_MAX_FILES = 2000;
 export const PHOTO_SELECTION_MAX_BYTES = 50 * 1024 ** 3;
-export const PHOTO_UPLOAD_TIMEOUT_MS = 3 * 60 * 60 * 1000;
+// Je Upload-Auftrag (Request): Traefik bricht Requests nach 1 h ab (readTimeout, MAIN-OPS-013) -
+// länger zu warten bringt nichts.
+export const PHOTO_UPLOAD_TIMEOUT_MS = 60 * 60 * 1000;
+// Ab dieser Grösse kann ein ZIP bei langsamer Leitung (unter ~5 Mbit/s) die Stunde überschreiten.
+export const PHOTO_ZIP_SLOW_LINE_WARNING_BYTES = 2 * 1024 ** 3;
+
+export function hasLargeZip(files: File[]): boolean {
+  return files.some((file) => file.name.toLowerCase().endsWith(".zip") && file.size > PHOTO_ZIP_SLOW_LINE_WARNING_BYTES);
+}
 
 export function photoUploadProblem(files: File[], clipIndexes: Set<number>): string | null {
   if (files.length > PHOTO_SELECTION_MAX_FILES) return "Maximal 2000 Dateien pro Auswahl. Für grössere Sammlungen bitte ein ZIP verwenden.";

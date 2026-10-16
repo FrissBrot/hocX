@@ -9,6 +9,7 @@ const { apiFetch, showToast } = vi.hoisted(() => ({
 vi.mock("@/lib/api/client", () => ({
   browserApiBaseUrl: "https://hocx.test",
   browserApiFetch: apiFetch,
+  LONG_RUNNING_TIMEOUT_MS: 300_000,
 }));
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => showToast }));
 
@@ -38,7 +39,8 @@ describe("usePdfExport", () => {
     const { result } = renderHook(() => usePdfExport());
 
     await act(async () => { await result.current.openOrGeneratePdf(protocol, onExported); });
-    expect(apiFetch).toHaveBeenCalledWith("/api/protocols/protocol-1/exports/pdf", { method: "POST" });
+    // LaTeX-Kompilierung dauert laenger als der 15-s-Standard (Audit MAIN-FE-004).
+    expect(apiFetch).toHaveBeenCalledWith("/api/protocols/protocol-1/exports/pdf", { method: "POST", timeoutMs: 300_000 });
     expect(pdfWindow.location.replace).toHaveBeenLastCalledWith("https://hocx.test/current.pdf");
     expect(onExported).toHaveBeenCalledWith(exported);
 

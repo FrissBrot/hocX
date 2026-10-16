@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16
+    image: postgres:16@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
     restart: unless-stopped
     # Audit I1, 2026-08-16: this file had NO resource limits at all, unlike
     # docker-compose.yml (dev) after M28 - a runaway container here could take down the
@@ -51,7 +51,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     restart: unless-stopped
     mem_limit: 256m
     cpus: 0.5
@@ -60,8 +60,27 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    # Eigenes internes Netz nur zwischen Backend und Redis (Audit MAIN-OPS-005): Redis haelt
+    # Domain-Bridge- und MFA-Flow-Tokens sowie Lockout-Zaehler ohne eigene Authentifizierung. Im
+    # Default-Netz haette jeder kompromittierte oeffentliche Dienst (abgabebox, Frontends) daraus
+    # eine Sitzung als beliebiger Nutzer erzeugen koennen.
+    networks:
+      - cache
+    # Passwort aus dem Secret (MAIN-OPS-005), nicht als Argument (sonst in der Prozessliste
+    # sichtbar): Konfigurationsdatei schreiben, dann wie gewohnt über das Entrypoint-Skript
+    # starten, das auf den Benutzer redis wechselt.
+    secrets:
+      - redis_password
+    command:
+      - sh
+      - -c
+      - >-
+        umask 027 &&
+        printf 'requirepass %s\n' "$$(cat /run/secrets/redis_password)" > /tmp/redis.conf &&
+        chown root:redis /tmp/redis.conf &&
+        exec docker-entrypoint.sh redis-server /tmp/redis.conf
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/redis_password)\" redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -127,7 +146,8 @@ services:
       INITIAL_ADMIN_PASSWORD_FILE: /run/secrets/initial_admin_password
       ABGABEBOX_DB_PASSWORD_FILE: /run/secrets/abgabebox_db_password
       # Migration 0067 creates the hocx_photo_worker role (see photo-analysis-worker/) -
-      # needed here too since this service's image entrypoint runs `alembic upgrade head`.
+      # needed here too since deploy.sh runs `alembic upgrade head` through this service
+      # (`run --rm backend alembic …`); the image's own CMD only starts uvicorn.
       PHOTO_WORKER_DB_PASSWORD_FILE: /run/secrets/photo_worker_db_password
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
@@ -143,6 +163,7 @@ services:
       ABGABEBOX_BASE_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       CLAMAV_HOST: clamav
       REDIS_URL: redis://redis:6379/0
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
       DOCKER_API_URL: http://docker-socket-proxy:2375
       TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
       ROUTER_PREFIX: ${ROUTER_PREFIX:-hocx}
@@ -182,9 +203,11 @@ services:
       - initial_admin_password
       - abgabebox_db_password
       - photo_worker_db_password
+      - redis_password
     networks:
       - default
       - docker-api
+      - cache
     depends_on:
       db:
         condition: service_healthy
@@ -216,11 +239,14 @@ services:
       # je nach Reihenfolge die dort unerreichbare IP.
       - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_default"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && ((PathPrefix(`/api`) && !PathPrefix(`/api/admin`)) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.middlewares=${ROUTER_PREFIX:-hocx}-api-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.priority=100"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.service=${ROUTER_PREFIX:-hocx}-backend"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-backend.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-api-inflight.inflightreq.amount=100"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-api-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && PathPrefix(`/api/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.entrypoints=adminsecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.tls.certresolver=letsencryptdns"
@@ -394,6 +420,9 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`)"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-web-inflight.inflightreq.amount=200"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-web-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.middlewares=${ROUTER_PREFIX:-hocx}-web-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.priority=10"
@@ -408,6 +437,7 @@ services:
       # Cert-Resolver bleibt leer - sonst versucht Traefik ein ACME-Zertifikat fuer
       # website.invalid zu holen und loggt bei jedem Start einen Fehler.
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.rule=Host(`${TRAEFIK_WEBSITE_DOMAIN:-website.invalid}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.middlewares=${ROUTER_PREFIX:-hocx}-web-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.tls.certresolver=${TRAEFIK_WEBSITE_DOMAIN:+${TRAEFIK_CERTRESOLVER:-letsencrypt}}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.priority=10"
@@ -474,6 +504,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.middlewares=${ROUTER_PREFIX:-hocx}-api-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.priority=100"
@@ -495,7 +526,7 @@ services:
       # endpoint before the app-level size check ever runs. Lowered from 2000 MB (audit
       # finding, 2026-08-25) - routes/public.py's upload() holds every file's full content
       # in memory at once, and 2000 MB reliably OOM-kills the abgabebox-backend container
-      # (384m mem_limit, 2 workers) for every tenant at once. Keep in sync with
+      # (mem_limit damals 384m, heute 1024m, 2 workers) for every tenant at once. Keep in sync with
       # MAX_UPLOAD_REQUEST_BYTES in abgabebox-backend/app/routes/public.py.
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=158334976"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-inflight.inflightreq.amount=2"
@@ -507,7 +538,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit,${ROUTER_PREFIX:-hocx}-api-inflight"
 
   abgabebox-frontend:
     image: ${HOCX_ABGABEBOX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}}
@@ -545,6 +576,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.middlewares=${ROUTER_PREFIX:-hocx}-web-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.priority=10"
@@ -602,6 +634,9 @@ networks:
   # Siehe docker-socket-proxy: internes Netz nur zwischen Backend und Proxy.
   docker-api:
     internal: true
+  # Siehe redis: internes Netz nur zwischen Backend und Redis.
+  cache:
+    internal: true
 
 volumes:
   backend_upload_tmp:
@@ -640,3 +675,5 @@ secrets:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/friendly_captcha_api_key
   abgabebox_captcha_session_secret:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_captcha_session_secret
+  redis_password:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/redis_password

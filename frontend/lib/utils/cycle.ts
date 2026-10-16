@@ -40,14 +40,3 @@ export function eventMatchesCycleFilter(
   const targetYear = getCycleYear(referenceDate, config.reset_month, config.reset_day) + offset;
   return (assignments ?? []).some((a) => a.cycle_config_id === config.id && a.cycle_year === targetYear);
 }
-
-/**
- * Zyklus-Filter einer Terminliste (Elementtyp 7), relativ zum Zyklus des Protokolls:
- * `event_cycle_offset` (0 = aktueller, -1 = vorheriger Zyklus, …) oder null = kein Filter.
- * Ältere Konfigurationen mit `event_only_current_cycle: true` entsprechen Offset 0.
- */
-export function embeddedEventCycleOffset(config: Record<string, unknown> | null | undefined): number | null {
-  const offset = config?.event_cycle_offset;
-  if (typeof offset === "number" && Number.isFinite(offset)) return offset;
-  return config?.event_only_current_cycle === true ? 0 : null;
-}

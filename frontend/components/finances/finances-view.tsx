@@ -14,6 +14,12 @@ import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate } from "@/lib/utils/format";
 
+// Konflikte (409) aus dem Backend uebersetzt anzeigen: Konto mit Buchungen/Bussen loeschen bzw.
+// Buchung einer einkassierten Busse aendern (siehe backend finance_repository.FinanceConflictError).
+function isConflict(error: unknown): boolean {
+  return error instanceof Error && (error as { status?: number }).status === 409;
+}
+
 const PAGE_SIZE = 50;
 
 type Props = { initialAccounts: FinanceAccount[]; canWrite: boolean };
@@ -148,7 +154,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
       setAccounts((prev) => prev.filter((a) => a.id !== account.id));
       if (selected?.id === account.id) { setSelected(null); setTransactions([]); }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteAccountFailed"), "error");
+      showToast(isConflict(error) ? t("accountDeleteConflict") : error instanceof Error ? error.message : t("deleteAccountFailed"), "error");
     }
   }
 
@@ -190,7 +196,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
       setShowTxForm(false);
       setEditingTx(null);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("saveTxFailed"), "error");
+      showToast(isConflict(error) ? t("txLockedByFineConflict") : error instanceof Error ? error.message : t("saveTxFailed"), "error");
     } finally {
       setSavingTx(false);
     }
@@ -203,7 +209,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
       await browserApiFetch(`/api/finance/transactions/${tx.id}`, { method: "DELETE" });
       await Promise.all([reloadFirstPage(selected.id), refreshAccounts(selected.id)]);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteTxFailed"), "error");
+      showToast(isConflict(error) ? t("txLockedByFineConflict") : error instanceof Error ? error.message : t("deleteTxFailed"), "error");
     }
   }
 

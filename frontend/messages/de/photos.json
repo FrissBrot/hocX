@@ -163,7 +163,8 @@
       "label": "Geschätztes Aufnahmedatum für Bilder ohne Aufnahmedatum",
       "help": "Optional. Echte Aufnahmedaten werden nie überschrieben.",
       "helpSet": "Gilt nur für Bilder ohne Aufnahmedatum ({date}). Echte Aufnahmedaten werden nie überschrieben."
-    }
+    },
+    "largeZipHint": "Grosse ZIP-Datei: Bei langsamer Verbindung kann der Upload nach einer Stunde abbrechen. Teile das Archiv besser in mehrere kleinere ZIPs auf oder lade die Fotos direkt hoch."
   },
   "shareModal": {
     "actionAriaLabelActive": "Freigabe für {name} entfernen",

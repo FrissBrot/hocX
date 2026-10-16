@@ -46,6 +46,7 @@ from app.models import (
     Event,
     EventCycle,
     FinanceAccount,
+    FineTariff,
     FinanceTransaction,
     GalleryImage,
     GroupEntity,
@@ -107,6 +108,7 @@ from app.services import (
     traefik_config_service,
 )
 from app.services.document_template_service import DocumentTemplateService
+from app.services.element_config import derive_fine_tariff, upgrade_snapshot_config, upgrade_template_element_config
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
     REDACTED_PASSWORD_HASH_MARKER,
@@ -128,6 +130,7 @@ from app.services.tenant_transfer_common import (
     remap_template_element_config,
     remap_word_import_analysis,
     remap_word_import_profile_config,
+    remap_todos_snapshot,
     replace_public_ids,
 )
 
@@ -184,16 +187,18 @@ class TenantImportService:
 
             try:
                 new_tenant = self._run(new_name)
-            except Exception:
+            except Exception as exc:
                 # The pipeline below commits progressively (one table at a time, matching
                 # TenantCloneService's style) rather than as one big transaction - a failure
                 # partway through would otherwise leave a broken, half-imported tenant sitting
-                # in the tenant list instead of a clean "import failed". Tear it down (cascade
-                # deletes every row written so far) before the error propagates.
+                # in the tenant list instead of a clean "import failed". Tear it down before the
+                # error propagates - über delete_tenant inkl. Dateien und RESTRICT-Reihenfolge
+                # (Audit MAIN-BE-006); die Originalexception bleibt erhalten.
                 db.rollback()
                 if self._created_tenant_id is not None:
-                    db.query(Tenant).filter(Tenant.id == self._created_tenant_id).delete()
-                    db.commit()
+                    from app.services.admin_tenant_service import AdminTenantService
+
+                    AdminTenantService().cleanup_partial_tenant(db, self._created_tenant_id, original=exc)
                 raise
             return new_tenant, self.warnings
 
@@ -356,6 +361,7 @@ class TenantImportService:
         list_definition_map = self._import_simple(ListDefinition, self._t("list_definition"), "list_definition", {"tenant_id": new_tenant.id})
         list_entry_map = self._import_list_entries(list_definition_map, participant_map, event_map)
         finance_account_map = self._import_simple(FinanceAccount, self._t("finance_account"), "finance_account", {"tenant_id": new_tenant.id})
+        self._import_fine_tariff(new_tenant.id, finance_account_map)
         element_definition_map = self._import_element_definitions(
             new_tenant.id, participant_map=participant_map, event_map=event_map,
             list_definition_map=list_definition_map, list_entry_map=list_entry_map, finance_account_map=finance_account_map,
@@ -424,6 +430,7 @@ class TenantImportService:
         )
         self._import_protocol_todo_assignees(todo_map, participant_map)
         self._remap_todo_repeat_sources(todo_map)
+        self._restore_todo_snapshots(protocol_map, protocol_element_block_map)
         album_map = self._import_photo_albums(new_tenant.id, cycle_config_map, submission_assignment_map)
         self._import_album_shares(new_tenant.id, album_map)
         self._import_share_links(new_tenant.id, album_map)
@@ -441,6 +448,23 @@ class TenantImportService:
                 + ", ".join(sorted(self._linked_partner_names))
             )
         return new_tenant
+
+    def _restore_todo_snapshots(self, protocol_map: dict[int, int], protocol_element_block_map: dict[int, int]) -> None:
+        """Eingefrorene Todo-Liste abgeschlossener Protokolle übernehmen (Audit MAIN-BE-012) -
+        Block-Keys über die Block-Map, public_ids über _public_id_map."""
+        changed = False
+        for row in self._t("protocol"):
+            snapshot = row.get("todos_snapshot_json")
+            new_protocol_id = protocol_map.get(row["id"])
+            if not isinstance(snapshot, dict) or new_protocol_id is None:
+                continue
+            protocol = self.db.get(Protocol, new_protocol_id)
+            if protocol is None:
+                continue
+            protocol.todos_snapshot_json = remap_todos_snapshot(snapshot, protocol_element_block_map, self._public_id_map)
+            changed = True
+        if changed:
+            self.db.commit()
 
     # ── tenant base ───────────────────────────────────────────────────────
 
@@ -844,10 +868,11 @@ class TenantImportService:
             new_row = self._build(TemplateElement, row, {
                 "template_id": new_template_id,
                 "element_definition_id": new_element_definition_id,
-                "configuration_json": remap_template_element_config(
+                # Exporte älterer Versionen können Altformate enthalten (element_config.py).
+                "configuration_json": upgrade_template_element_config(remap_template_element_config(
                     row.get("configuration_json"), participant_map=participant_map,
                     list_definition_map=list_definition_map, list_entry_map=list_entry_map,
-                ),
+                )),
             })
             self.db.add(new_row)
             self.db.flush()
@@ -981,7 +1006,15 @@ class TenantImportService:
                 absolute_path.unlink(missing_ok=True)
                 self.warnings.append(f"Datei '{row.get('original_name')}' wurde von der Virenprüfung als infiziert erkannt und wurde nicht importiert.")
                 continue
-            new_row = self._build(StoredFile, data, {"tenant_id": new_tenant_id, "storage_path": new_storage_path, "scan_status": scan_status})
+            # thumbnail_path NULL (Audit MAIN-BE-003): Thumbnails heissen "<id>.jpg" im global
+            # geteilten thumbnail_root - der exportierte Name zeigt hier auf die Vorschau einer
+            # beliebigen anderen Datei (oft eines anderen Mandanten). ensure_thumbnail erzeugt
+            # die Vorschau beim ersten Abruf neu.
+            new_row = self._build(
+                StoredFile,
+                data,
+                {"tenant_id": new_tenant_id, "storage_path": new_storage_path, "scan_status": scan_status, "thumbnail_path": None},
+            )
             self.db.add(new_row)
             if row.get("public_id"):
                 self._imported_file_public_ids.add(str(row["public_id"]).lower())
@@ -1063,8 +1096,8 @@ class TenantImportService:
                 "template_id": new_template_id,
                 "document_template_id": document_template_map.get(data["document_template_id"]) if data.get("document_template_id") else None,
                 "event_id": event_map.get(data["event_id"]) if data.get("event_id") else None,
-                # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - nach dem
-                # Import gelten die (ebenfalls importierten) Live-Todos.
+                # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - sie wird
+                # nach dem Import der Blöcke umgeschrieben (_restore_todo_snapshots).
                 "todos_snapshot_json": None,
             })
             self.db.add(new_row)
@@ -1145,12 +1178,12 @@ class TenantImportService:
                 "protocol_element_id": new_protocol_element_id,
                 "template_element_block_id": template_element_block_map.get(data["template_element_block_id"]) if data.get("template_element_block_id") else None,
                 "element_definition_id": element_definition_map.get(data["element_definition_id"]) if data.get("element_definition_id") else None,
-                "configuration_snapshot_json": remap_block_configuration(
+                "configuration_snapshot_json": upgrade_snapshot_config(data.get("element_type_id"), remap_block_configuration(
                     data.get("configuration_snapshot_json"), participant_map=participant_map,
                     event_map=event_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
                     finance_account_map=finance_account_map,
                     participant_public_ids=self._participant_public_ids, event_public_ids=self._event_public_ids,
-                ),
+                )),
             })
             self.db.add(new_row)
             self.db.flush()
@@ -1214,8 +1247,24 @@ class TenantImportService:
         return id_map
 
     def _import_attendance_fines(self, protocol_map, participant_map, finance_account_map, finance_transaction_map) -> None:
+        # Ältere Archive können doppelte Bussen enthalten (vor Migration 0116). Pro Protokoll,
+        # Teilnehmer und Typ bleibt wie in 0116 die Busse mit dem stärksten Status bzw. die
+        # älteste - sonst bräche der Unique-Index den ganzen Import ab.
+        status_rank = {"collected": 0, "pending": 1}
+        keepers: dict[tuple, dict] = {}
         for row in self._t("attendance_fine"):
             data = self._resolve_row("attendance_fine", row)
+            participant_key = f"id:{data['participant_id']}" if data.get("participant_id") else f"name:{data.get('participant_name_snapshot')}"
+            key = (data["protocol_id"], participant_key, data.get("fine_type"))
+            rank = (status_rank.get(data.get("status"), 2), str(data.get("created_at") or ""), data.get("id") or 0)
+            current = keepers.get(key)
+            if current is None or rank < current["rank"]:
+                keepers[key] = {"rank": rank, "data": data}
+        skipped = len(self._t("attendance_fine")) - len(keepers)
+        if skipped:
+            self.warnings.append(f"attendance_fine: {skipped} doppelte Busse(n) zusammengeführt.")
+        for keeper in keepers.values():
+            data = keeper["data"]
             new_protocol_id = protocol_map.get(data["protocol_id"])
             new_account_id = finance_account_map.get(data["account_id"])
             if new_protocol_id is None or new_account_id is None:
@@ -1435,6 +1484,29 @@ class TenantImportService:
                 "token_hash": calendar_feed_service.hash_token(token),
                 "token_encrypted": encrypt_secret(token),
             }))
+        self.db.commit()
+
+    def _import_fine_tariff(self, new_tenant_id: int, finance_account_map: dict[int, int]) -> None:
+        """Zentraler Bussentarif. Exporte vor 0113 kennen fine_tariff nicht - dann wird der
+        Tarif wie in der Migration aus den Anwesenheitsblöcken der Elementdefinitionen
+        abgeleitet (häufigster Wert), bevor element_config die Blockwerte entfernt."""
+        rows = self._t("fine_tariff")
+        if rows:
+            source = rows[0]
+            account_id = finance_account_map.get(source.get("account_id")) if source.get("account_id") is not None else None
+            amount_late = source.get("amount_late") or 0
+            amount_absent = source.get("amount_absent") or 0
+        else:
+            derived = derive_fine_tariff([row.get("configuration_json") for row in self._t("element_definition")])
+            if derived is None:
+                return
+            try:
+                account_id = finance_account_map.get(int(derived["account_id"]))
+            except (TypeError, ValueError):
+                account_id = None
+            amount_late = derived["amount_late"]
+            amount_absent = derived["amount_absent"]
+        self.db.add(FineTariff(tenant_id=new_tenant_id, account_id=account_id, amount_late=amount_late, amount_absent=amount_absent))
         self.db.commit()
 
     def _import_tenant_settings(self, new_tenant_id: int) -> None:

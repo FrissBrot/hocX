@@ -64,4 +64,47 @@ if require_unprovisioned_dev_host "$ENVIRONMENT_MARKER" 2> /dev/null; then
   exit 1
 fi
 
+# MAIN-OPS-001: Host-Umgebung prod -> Anwendungswert production; 'prod' bleibt als Alias gueltig.
+test "$(app_environment_for prod)" = production
+test "$(app_environment_for production)" = production
+test "$(app_environment_for test)" = test
+# deploy.sh schreibt den kanonischen Wert und vergleicht im Preflight ueber dieselbe Abbildung.
+# shellcheck disable=SC2016  # Literale Suchmuster, $(...) soll hier nicht expandieren
+grep -q 'write_env_value HOCX_ENVIRONMENT "$(app_environment_for "$ENVIRONMENT")"' "$REPO_DIR/scripts/deploy.sh"
+# shellcheck disable=SC2016
+grep -q 'app_environment_for "${HOCX_ENVIRONMENT:-}"' "$REPO_DIR/scripts/deploy.sh"
+grep -q '^HOCX_ENVIRONMENT=production$' "$REPO_DIR/.env.prod.example"
+
+
+# MAIN-OPS-015: Werte wie der dotenv-Parser von Compose lesen.
+printf '%s\n' \
+  'POSTGRES_DB=hocx # Kommentar # noch einer' \
+  'POSTGRES_USER=  hocx_user   ' \
+  'POSTGRES_PASSWORD=abc#def' \
+  'AUTH_SECRET="a\\nb"' \
+  'ADMIN_AUTH_SECRET="zeile1\nzeile2"' \
+  "INITIAL_ADMIN_PASSWORD='bleibt # wie es ist'" \
+  'TRAEFIK_DOMAIN= # nur Kommentar' > "$ENV_FILE"
+chmod 600 "$ENV_FILE"
+load_env_file "$ENV_FILE"
+test "$POSTGRES_DB" = "hocx" || { echo "Inline-Kommentar wurde nicht entfernt: '$POSTGRES_DB'" >&2; exit 1; }
+test "$POSTGRES_USER" = "hocx_user"
+test "$POSTGRES_PASSWORD" = "abc#def"
+test "$AUTH_SECRET" = 'a\nb' || { printf '%s\n' "Literales \\n wurde falsch entschluesselt: '$AUTH_SECRET'" >&2; exit 1; }
+test "$ADMIN_AUTH_SECRET" = $'zeile1\nzeile2'
+test "$INITIAL_ADMIN_PASSWORD" = "bleibt # wie es ist"
+# Wie Compose: ohne Wert davor ist '#' kein Kommentar.
+test "$TRAEFIK_DOMAIN" = "# nur Kommentar"
+
+# MAIN-OPS-016: Prod akzeptiert nur Release-Tags, Test auch Candidate-Tags.
+require_release_version_for prod v1.2.3
+require_release_version_for prod 1.2.3
+require_release_version_for test test-20260825-abc1234-r42
+if require_release_version_for prod test-20260825-abc1234-r42 2> /dev/null; then
+  echo "Candidate-Tag wurde auf Prod akzeptiert." >&2
+  exit 1
+fi
+# shellcheck disable=SC2016
+grep -q 'require_release_version_for "$ENVIRONMENT" "$HOCX_VERSION"' "$REPO_DIR/scripts/deploy.sh"
+
 echo "env loader tests: ok"

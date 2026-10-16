@@ -11,7 +11,7 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
-import { browserApiFetch } from "@/lib/api/client";
+import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatFileSize } from "@/lib/utils/format";
@@ -197,6 +197,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
       await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${cloneTenant.id}/clone`, {
         method: "POST",
         body: JSON.stringify({ new_name: cloneName, mode: cloneMode }),
+        timeoutMs: LONG_RUNNING_TIMEOUT_MS,
       });
       await Promise.all([fetchPage(offset, search), reloadPlans()]);
       setCloneModalOpen(false);

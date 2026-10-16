@@ -136,6 +136,7 @@ def test_clone_full_remaps_matrix_block_list_links(db):
         db, source.id, "Matrix",
         blocks=[{
             "id": 1,
+            "element_type_id": 11,
             "configuration_json": {
                 "mode": "auto",
                 "auto_source": {"type": "list", "list_id": source_list.id, "event_tag_filter": None},
