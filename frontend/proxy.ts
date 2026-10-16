@@ -45,11 +45,16 @@ const adminDomain = process.env.TRAEFIK_ADMIN_DOMAIN;
 const websiteDomain = process.env.TRAEFIK_WEBSITE_DOMAIN;
 const WEBSITE_PATH = "/website";
 
+// Ohne Timeout hielt ein haengendes (nicht ablehnendes) Backend jeden Seiten-Request bis zum
+// undici-Default (~300 s) fest, statt in den vorgesehenen null-Pfad zu laufen (Audit MAIN-FE-002).
+export const SESSION_CHECK_TIMEOUT_MS = 5_000;
+
 async function isAuthenticated(cookie: string, sessionPath: string): Promise<boolean | null> {
   try {
     const res = await fetch(`${internalApiUrl}${sessionPath}`, {
       headers: cookie ? { Cookie: cookie } : undefined,
-      cache: "no-store"
+      cache: "no-store",
+      signal: AbortSignal.timeout(SESSION_CHECK_TIMEOUT_MS)
     });
     if (!res.ok) {
       return null;
@@ -72,7 +77,7 @@ export async function proxy(request: NextRequest) {
     ? pathname.startsWith(WEBSITE_PATH)
       ? pathname
       : `${WEBSITE_PATH}${pathname === "/" ? "" : pathname}`
-    : adminDomain && hostname === adminDomain && !pathname.startsWith("/admin")
+    : adminDomain && requestHost === adminDomain && !pathname.startsWith("/admin")
       ? `/admin${pathname === "/" ? "" : pathname}`
       : pathname;
 
