@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { useAllPages } from "@/components/mobile/mobile-data";
@@ -52,17 +52,24 @@ export function MobileFinances({ initialAccounts, canWrite }: { initialAccounts:
   const [accountSheet, setAccountSheet] = useState<FinanceAccount | "new" | null>(null);
   const selected = accounts.find((account) => account.id === selectedId) ?? null;
 
+  // Nur die zuletzt gestartete Ladung darf die Liste setzen: beim schnellen Kontowechsel kam die
+  // (laengere, mehrseitige) Antwort des vorigen Kontos sonst nach der des neuen an und zeigte
+  // dessen Buchungen unter dem gewaehlten Konto (Audit MAIN-FE-005).
+  const loadRequestRef = useRef(0);
   const loadTransactions = useCallback(async (accountId: string) => {
+    const requestId = ++loadRequestRef.current;
+    const isCurrent = () => requestId === loadRequestRef.current;
     try {
       const list: FinanceTransaction[] = [];
       for (let page = 0; page < 20; page += 1) {
         const batch = (await browserApiFetch<FinanceTransaction[]>(`/api/finance/accounts/${accountId}/transactions?skip=${list.length}&limit=200`)) ?? [];
+        if (!isCurrent()) return;
         list.push(...batch);
         if (batch.length < 200) break;
       }
       setTransactions(list);
     } catch {
-      setTransactions([]);
+      if (isCurrent()) setTransactions([]);
     }
   }, []);
 
@@ -73,8 +80,12 @@ export function MobileFinances({ initialAccounts, canWrite }: { initialAccounts:
   }, []);
 
   useEffect(() => {
-    if (selectedId) void loadTransactions(selectedId);
-    else setTransactions([]);
+    if (selectedId) {
+      void loadTransactions(selectedId);
+    } else {
+      loadRequestRef.current += 1;
+      setTransactions([]);
+    }
   }, [selectedId, loadTransactions]);
 
   const groups = useMemo(() => {
