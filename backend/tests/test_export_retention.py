@@ -12,6 +12,7 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.core.config import settings
+from app.core.storage import get_object_store
 from app.documents import service
 from app.documents.service import DocumentRequest
 from app.models import DocumentExport, DocumentRegistry, StoredFile
@@ -42,6 +43,8 @@ def test_repeated_protocol_export_keeps_only_the_newest_file(db):
     first_path, first_file_id = _path(first.stored_file), first.stored_file.id
 
     second = _render(db, tenant, protocol)
+    # S3-008: physisch entfernt erst der Purge-Job nach dem Commit.
+    get_object_store().purge_deleted(db)
 
     assert not first_path.exists() and db.get(StoredFile, first_file_id) is None
     assert _path(second.stored_file).exists()
@@ -62,6 +65,7 @@ def test_sweep_frees_old_files_but_keeps_the_final_pdf_of_closed_protocols(db):
     old_path, final_path = _path(old_open.stored_file), _path(final.stored_file)
 
     result = service.cleanup_old_generated_exports(db, retention_days=30)
+    get_object_store().purge_deleted(db)
 
     assert result["released"] == 1
     assert not old_path.exists() and db.get(DocumentExport, old_open.export.id).stored_file_id is None

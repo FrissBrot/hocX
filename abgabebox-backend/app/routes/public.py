@@ -17,7 +17,8 @@ from app.captcha import mint_captcha_session_token, verify_captcha, verify_captc
 from app.config import settings
 from app.db import get_db, serialized_upload, tenant_upload_lock
 from app.schemas import AssignmentDetailPublic, AssignmentPublic, CaptchaVerifyResult, ElementPublic, UploadResult
-from app.storage import move_from_quarantine, save_to_quarantine, tenant_storage_bytes
+from app.objstore_client import StorageWriteFenced
+from app.storage import delete_object, move_from_quarantine, save_to_quarantine, tenant_storage_bytes
 
 
 def _client_ip(request: Request) -> str | None:
@@ -501,7 +502,7 @@ async def upload(
             total_usage = repository.get_tenant_storage_usage_bytes(db, tenant_id=tenant["id"])
             if tenant_quota_bytes is not None and total_usage + incoming_bytes > tenant_quota_bytes:
                 raise HTTPException(400, "Speicherkontingent des Vereins erreicht")
-            if await asyncio.to_thread(tenant_storage_bytes, tenant["id"]) + incoming_bytes > quota_bytes:
+            if await asyncio.to_thread(tenant_storage_bytes, db, tenant["id"]) + incoming_bytes > quota_bytes:
                 _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {quota_bytes // 1024 // 1024} MB)")
                 raise HTTPException(status_code=400, detail="Speicherlimit erreicht - bitte den Verein kontaktieren")
 
@@ -538,9 +539,15 @@ async def upload(
             for i, (content, original_name, mime_type) in enumerate(contents):
                 suffix = Path(original_name).suffix.lower()
                 try:
-                    q_path, checksum = save_to_quarantine(
-                        content, tenant_id=tenant["id"], assignment_id=assignment["id"], suffix=suffix
+                    # Objektspeicher-I/O (bei S3 ein Netzwerk-Upload mit Retries) nie im Event-Loop
+                    # (S3-004); die Session wird währenddessen von nichts anderem benutzt.
+                    q_path, checksum = await asyncio.to_thread(
+                        save_to_quarantine, db, content, tenant_id=tenant["id"], assignment_id=assignment["id"], suffix=suffix
                     )
+                except StorageWriteFenced:
+                    # Cutover/Wartung: erwartet, kein Fehler - 503 mit Retry-After (Handler in main.py).
+                    _log("upload_error", "Speichern kurz gesperrt (Wartung)")
+                    raise
                 except Exception as exc:
                     _log("upload_error", f"Quarantäne-Speicherung fehlgeschlagen: {exc}")
                     raise HTTPException(status_code=500, detail="Datei konnte nicht gespeichert werden") from exc
@@ -557,6 +564,9 @@ async def upload(
                     "_content": content,
                 })
 
+        # _log() committet die Session (repository.insert_upload_log) - damit endet die
+        # Schreibtransaktion samt FOR-SHARE-Lock auf storage_state vor dem Scan; ein Cutover wartet
+        # nie auf ClamAV.
         _log("quarantined", "In Quarantäne gespeichert, Scan wird gestartet")
 
         # Step 2: Scan every file via ClamAV stream.
@@ -573,9 +583,11 @@ async def upload(
         if "infected" in scan_results or "error" in scan_results:
             for f in quarantine_files:
                 try:
-                    (Path(settings.storage_root) / f["storage_path"]).unlink(missing_ok=True)
+                    await asyncio.to_thread(delete_object, db, f["storage_path"])
+                    db.commit()
                 except Exception:
-                    pass
+                    # Rest bleibt in der Quarantäne und wird vom Cleanup-Loop entfernt.
+                    db.rollback()
             if "error" in scan_results and "infected" not in scan_results:
                 _log("scan_error", "Virenprüfung konnte nicht abgeschlossen werden")
                 raise HTTPException(422, "Datei konnte nicht auf Schadsoftware geprüft werden (maximal 100 MiB)")
@@ -596,7 +608,10 @@ async def upload(
             file_info["scan_status"] = status
             if status == "clean":
                 try:
-                    file_info["storage_path"] = move_from_quarantine(f["storage_path"])
+                    file_info["storage_path"] = await asyncio.to_thread(move_from_quarantine, db, f["storage_path"])
+                except StorageWriteFenced:
+                    _log("upload_error", "Speichern kurz gesperrt (Wartung)")
+                    raise
                 except Exception as exc:
                     _log("upload_error", f"Dateiverschiebung fehlgeschlagen: {exc}")
                     raise HTTPException(status_code=500, detail="Datei konnte nicht verschoben werden") from exc
@@ -623,11 +638,13 @@ async def upload(
             # them. Delete them back out rather than reordering Step 4/5 (which would need the
             # DB row to exist before the file is confirmed moved, trading one orphan class for
             # another - a DB row pointing at a file that never made it out of quarantine).
+            db.rollback()
             for f in saved_files:
                 try:
-                    (Path(settings.storage_root) / f["storage_path"]).unlink(missing_ok=True)
+                    await asyncio.to_thread(delete_object, db, f["storage_path"])
+                    db.commit()
                 except Exception:
-                    pass
+                    db.rollback()
             _log("upload_error", f"Datenbankfehler: {exc}")
             raise
 

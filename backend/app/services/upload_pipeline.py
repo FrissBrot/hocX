@@ -18,6 +18,7 @@ a plain synchronous function usable from both contexts, instead of forcing a syn
 
 from __future__ import annotations
 
+import logging
 import hashlib
 import io
 import zipfile
@@ -34,11 +35,14 @@ from sqlalchemy import event, text, select, func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.storage import MAIN, get_object_store, new_object_key
 from app.models import StoredFile, Tenant
 from app.models.entities import GalleryUploadJob
 from app.repositories.file_repository import StoredFileRepository
 from app.services.apple_media import MAX_LIVE_CLIP_BYTES, is_heic, is_live_clip, pair_live_clips
 from app.services.photo_quality import compute_quality_scores
+
+_logger = logging.getLogger(__name__)
 
 ALLOWED_IMAGE_MIME_TYPES = {
     "image/jpeg",
@@ -513,9 +517,20 @@ def _track_uncommitted_path(db: Session, path: Path) -> None:
     db.info.setdefault(_UNCOMMITTED_UPLOAD_PATHS_KEY, []).append(path)
 
 
+# Objekte im Objektspeicher (Original) werden sofort geschrieben, ihre Registrierung läuft in der
+# Transaktion des Aufrufers. Ohne Commit bliebe ein unregistriertes Objekt zurück - es wird nach
+# dem Rollback physisch wieder gelöscht (ohne Registereintrag, siehe discard_unregistered).
+_UNCOMMITTED_UPLOAD_OBJECTS_KEY = "hocx_uncommitted_upload_objects"
+
+
+def _track_uncommitted_object(db: Session, namespace: str, key: str) -> None:
+    db.info.setdefault(_UNCOMMITTED_UPLOAD_OBJECTS_KEY, []).append((namespace, key))
+
+
 @event.listens_for(Session, "after_commit")
 def _forget_committed_upload_paths(session: Session) -> None:
     session.info.pop(_UNCOMMITTED_UPLOAD_PATHS_KEY, None)
+    session.info.pop(_UNCOMMITTED_UPLOAD_OBJECTS_KEY, None)
 
 
 @event.listens_for(Session, "after_transaction_end")
@@ -524,6 +539,11 @@ def _remove_uncommitted_upload_paths(session: Session, transaction) -> None:
         return
     for path in session.info.pop(_UNCOMMITTED_UPLOAD_PATHS_KEY, None) or ():
         path.unlink(missing_ok=True)
+    for namespace, key in session.info.pop(_UNCOMMITTED_UPLOAD_OBJECTS_KEY, None) or ():
+        try:
+            get_object_store().discard_unregistered(namespace, key)
+        except Exception:  # noqa: BLE001 - best effort; ein Rest erscheint im Prüfbericht der Migration
+            _logger.warning("Unregistriertes Upload-Objekt %s/%s konnte nicht entfernt werden", namespace, key, exc_info=True)
 
 
 @dataclass(frozen=True)
@@ -590,13 +610,16 @@ def ingest_file(
 
     _enforce_tenant_storage_quota(db, tenant_id=tenant_id, repo=repo, incoming_bytes=len(content))
 
-    suffix = Path(original_filename).suffix.lower() or ".bin"
-    storage_dir = Path(settings.upload_root).joinpath(*storage_subdir_parts)
-    storage_dir.mkdir(parents=True, exist_ok=True)
-    target_path = storage_dir / f"{uuid4().hex}{suffix}"
-    target_path.write_bytes(content)
-    _track_uncommitted_path(db, target_path)
-    relative_path = target_path.relative_to(settings.storage_root)
+    # Key relativ zu STORAGE_ROOT (Namespace "main"), wie bisher storage_path - die Endung wird
+    # nur übernommen, wenn sie harmlos ist (safe_suffix), nie roh aus dem Client-Dateinamen.
+    upload_prefix = Path(settings.upload_root).resolve().relative_to(Path(settings.storage_root).resolve()).as_posix()
+    relative_path = new_object_key(
+        *[part for part in (upload_prefix, *storage_subdir_parts) if part and part != "."],
+        filename=original_filename,
+    )
+    # Schreibt über das Fence-/Journal-Protokoll in der Transaktion des Aufrufers (objstore_client).
+    get_object_store().put_bytes(db, MAIN, relative_path, content, content_type=mime)
+    _track_uncommitted_object(db, MAIN, relative_path)
 
     checksum = hashlib.sha256(content).hexdigest()
     perceptual_hash: str | None = None

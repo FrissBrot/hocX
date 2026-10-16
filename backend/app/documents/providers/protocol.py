@@ -65,7 +65,7 @@ from app.documents.providers.common import PROTOCOL_STATUS_CODES, spec_fields, t
 from app.documents.richtext import markdown_to_rich, plain_to_rich
 from app.models import FinanceAccount, FinanceTransaction, ListDefinition, Protocol, ProtocolElementBlock, StoredFile
 from app.services.event_filter import filter_events, normalize_event_filter
-from app.services.file_service import _safe_storage_path
+from app.core.storage import MAIN, InvalidObjectKey, ObjectNotFound, get_object_store
 
 logger = logging.getLogger(__name__)
 
@@ -115,19 +115,21 @@ def _todo_block(rows: list[Any], fields: dict) -> TodoTableBlock:
 
 
 def _image_ref(ctx: BuildContext, stored_file: StoredFile, caption: str | None):
-    path = None
     # Wie der Datei-Endpunkt: nur vom Virenscan freigegebene Dateien (nicht pending/infected/
     # error) werden dekodiert und eingebettet, sonst gilt das Bild als fehlend.
     if stored_file.scan_status == "clean":
         try:
-            path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-        except Exception:  # noqa: BLE001 - ungültiger Pfad: Bild gilt als fehlend
-            path = None
-    if path is None or not path.exists():
-        from app.documents.model import ImageRef
+            # Liest aus dem Objektspeicher (Namespace «main»); erst beim ersten Bedarf.
+            return ctx.assets.add_image(
+                lambda: get_object_store().get_bytes(MAIN, stored_file.storage_path),
+                key=f"file:{stored_file.id}",
+                caption=caption,
+            )
+        except (ObjectNotFound, InvalidObjectKey):
+            pass
+    from app.documents.model import ImageRef
 
-        return ImageRef(path="assets/missing.png", caption=caption or stored_file.original_name, missing=True)
-    return ctx.assets.add_image(path, key=f"file:{stored_file.id}", caption=caption)
+    return ImageRef(path="assets/missing.png", caption=caption or stored_file.original_name, missing=True)
 
 
 def _form_block(ctx: BuildContext, config: dict, fields: dict):

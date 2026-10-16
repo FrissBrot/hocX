@@ -1,0 +1,148 @@
+{
+  "title": "Manutenzione",
+  "description": "Pianificare e avviare finestre di manutenzione e terminarle dopo il superamento dei controlli di sicurezza. Le migrazioni di dati in corso e i blocchi di scrittura non possono essere aggirati qui.",
+  "duration": {
+    "minutes": "{count, plural, one {# minuto} other {# minuti}}",
+    "hours": "{count, plural, one {# ora} other {# ore}}"
+  },
+  "confirm": {
+    "release": "Terminare ora la manutenzione? Il server verifica di nuovo le condizioni di sblocco.",
+    "start": "Avviare ora la manutenzione? hocX verrà bloccato per gli utenti; le richieste in corso vengono prima completate.",
+    "cancel": "Annullare la manutenzione pianificata?"
+  },
+  "actions": {
+    "release": "Termina manutenzione",
+    "start": "Avvia",
+    "cancel": "Annulla",
+    "plan": "Pianifica manutenzione",
+    "startNow": "Avvia ora",
+    "edit": "Modifica",
+    "editMessage": "Modifica messaggio",
+    "close": "Chiudi",
+    "save": "Salva"
+  },
+  "toast": {
+    "release": "Manutenzione terminata",
+    "start": "Manutenzione avviata",
+    "cancel": "Manutenzione annullata",
+    "failed": "Azione non riuscita",
+    "started": "Avvio della manutenzione",
+    "planned": "Manutenzione pianificata",
+    "saved": "Messaggio salvato"
+  },
+  "banner": {
+    "fullActive": "Manutenzione completa attiva: hocX è bloccato per tutti gli utenti. Il portale di amministrazione resta raggiungibile.",
+    "partialActive": "Manutenzione parziale attiva: alcune funzioni sono bloccate.",
+    "overdue": "La durata stimata è stata superata. Il blocco resta attivo finché le condizioni di sblocco non sono soddisfatte."
+  },
+  "current": {
+    "title": "Manutenzione in corso",
+    "empty": "Nessuna manutenzione in corso."
+  },
+  "scheduled": {
+    "title": "Manutenzioni pianificate",
+    "empty": "Nessuna manutenzione pianificata."
+  },
+  "history": {
+    "title": "Cronologia",
+    "empty": "Ancora nessuna manutenzione conclusa."
+  },
+  "columns": {
+    "start": "Inizio",
+    "end": "Fine",
+    "kind": "Tipo",
+    "message": "Messaggio",
+    "actions": "Azioni",
+    "reason": "Motivo",
+    "state": "Stato",
+    "duration": "Durata",
+    "estimate": "Stima"
+  },
+  "kind": {
+    "full": "Manutenzione completa",
+    "partial": "Manutenzione parziale"
+  },
+  "scope": {
+    "all": "Tutto bloccato",
+    "writes": "Scritture bloccate",
+    "uploads": "Caricamenti bloccati"
+  },
+  "defaultMessage": "Testo predefinito",
+  "reason": {
+    "manual": "Manutenzione manuale",
+    "storage_initial_migration": "Migrazione iniziale dell'archivio",
+    "storage_cutover": "Passaggio dell'archivio",
+    "other": "Processo di sistema"
+  },
+  "state": {
+    "scheduled": "Pianificata",
+    "preparing": "Preparazione",
+    "active": "Attiva",
+    "verifying": "Verifica",
+    "completed": "Terminata",
+    "failed": "Non riuscita",
+    "overdue": "In ritardo",
+    "cancelled": "Annullata"
+  },
+  "facts": {
+    "job": "Causata da",
+    "started": "Inizio",
+    "runtime": "Durata trascorsa",
+    "estimatedEnd": "Fine stimata",
+    "originalEnd": "Stima iniziale",
+    "reserve": "Margine di sicurezza",
+    "features": "Aree interessate",
+    "estimating": "In fase di calcolo"
+  },
+  "job": {
+    "storage_initial_migration": "Migrazione iniziale dell'archivio",
+    "storage_cutover": "Passaggio dell'archivio",
+    "other": "Processo di sistema",
+    "manual": "Amministratore"
+  },
+  "feature": {
+    "all": "Intera applicazione",
+    "login": "Accesso",
+    "app": "Applicazione",
+    "writes": "Salvataggio",
+    "uploads": "Caricamenti",
+    "downloads": "Download",
+    "abgabebox": "Casella di consegna",
+    "background_jobs": "Processi in background"
+  },
+  "progress": {
+    "label": "{verified} di {total} oggetti verificati ({copied} copiati)",
+    "aria": "Avanzamento della verifica"
+  },
+  "conditions": {
+    "title": "Condizioni di sblocco",
+    "met": "Soddisfatta",
+    "unmet": "Aperta",
+    "blockedHint": "Possibile solo quando le condizioni di sblocco sono soddisfatte",
+    "keys": {
+      "storage_migration_settled": "Migrazione dei dati completata e verificata, oppure origine dimostrabilmente ancora attiva e invariata",
+      "storage_not_fenced": "Nessun blocco di scrittura dell'archivio attivo",
+      "no_open_storage_migration_cutover": "Nessun passaggio di archivio in corso"
+    }
+  },
+  "form": {
+    "message": "Messaggio pubblico ({locale})",
+    "messageHelp": "Lascia vuoto per il testo predefinito. Mostrato nella pagina di accesso.",
+    "kind": "Tipo",
+    "scope": "Bloccato",
+    "startNow": "Avvia subito in modo controllato",
+    "startDate": "Inizio (data)",
+    "startTime": "Inizio (ora, HH:MM)",
+    "endDate": "Fine prevista (data)",
+    "endTime": "Fine prevista (ora, HH:MM)",
+    "endHelp": "La fine è solo un annuncio. La manutenzione termina solo quando la termini tu dopo controlli superati.",
+    "note": "Nota interna"
+  },
+  "plan": {
+    "title": "Pianifica manutenzione",
+    "description": "Le manutenzioni pianificate vengono annunciate in anticipo nella pagina di accesso e iniziano automaticamente all'orario scelto."
+  },
+  "edit": {
+    "title": "Modifica messaggio di manutenzione"
+  }
+}

@@ -261,6 +261,42 @@ def _check_storage() -> HealthCheckRead:
     )
 
 
+def _check_object_storage() -> HealthCheckRead:
+    """Aktiver Objektspeicher erreichbar? HEAD auf einen nie existierenden Key: "nicht gefunden"
+    heisst erreichbar, ein Verbindungs-/Rechtefehler ist kritisch (Uploads und Downloads stehen)."""
+    from app.core.storage import get_object_store
+
+    store = get_object_store()
+    state = store.active_state(force=True)
+    started = time.monotonic()
+    store.active_backend().head("main", "_hocx-health/probe")
+    return HealthCheckRead(
+        key="object_storage",
+        status="ok",
+        params={"generation": state.config.generation, "latencyMs": round((time.monotonic() - started) * 1000), "fenced": int(state.fenced)},
+    )
+
+
+def _check_storage_migration(db: Session, now: datetime) -> HealthCheckRead:
+    """Offene Storage-Migration: hängt der Worker, braucht sie einen Eingriff oder ist ein
+    Rollback nötig?"""
+    from app.models import StorageMigration, StorageMigrationObject
+
+    migration = db.scalars(select(StorageMigration).where(StorageMigration.state.notin_(("completed", "failed", "cancelled"))).limit(1)).first()
+    if migration is None:
+        return HealthCheckRead(key="storage_migration", status="ok", params={"verified": 0, "total": 0, "dead": 0})
+    dead = db.scalar(select(func.count()).select_from(StorageMigrationObject).where(
+        StorageMigrationObject.migration_id == migration.id, StorageMigrationObject.status == "dead")) or 0
+    status: HealthStatus = "ok"
+    waiting = migration.state in ("awaiting_confirmation", "paused")
+    heartbeat_age = (now - migration.heartbeat_at).total_seconds() if migration.heartbeat_at else None
+    if dead or migration.state == "retrying" or (not waiting and heartbeat_age is not None and heartbeat_age > 600):
+        status = "warning"
+    if migration.state == "rollback_required":
+        status = "critical"
+    return HealthCheckRead(key="storage_migration", status=status, params={"verified": migration.verified_objects, "total": migration.total_objects, "dead": dead})
+
+
 def _check_error_rate(db: Session) -> HealthCheckRead:
     last_hour = db.scalar(select(func.count()).select_from(SystemErrorLog).where(SystemErrorLog.created_at >= func.now() - timedelta(hours=1))) or 0
     last_day = db.scalar(select(func.count()).select_from(SystemErrorLog).where(SystemErrorLog.created_at >= func.now() - timedelta(days=1))) or 0
@@ -335,11 +371,13 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
         clamav.append(HealthCheckRead(key="clamav_signatures", status="unknown"))
     checks += clamav
     checks += _run_check("storage", _check_storage)
+    checks += _run_check("object_storage", _check_object_storage)
     # Reine DB-Auswertungen: ein Fehler hier ist ein Bug, kein Ausfall - "unknown" statt Alarm.
     checks += _run_check("error_rate", lambda: _check_error_rate(db), failure_status="unknown", db=db)
     checks += _run_check("scan_backlog", lambda: _check_scan_backlog(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_verification", _check_document_verification)
+    checks += _run_check("storage_migration", lambda: _check_storage_migration(db, now), failure_status="unknown", db=db)
     return checks
 
 

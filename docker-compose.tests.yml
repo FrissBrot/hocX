@@ -25,6 +25,45 @@ services:
       retries: 20
     profiles: [tests]
 
+  # Isoliertes S3 (Garage) nur für Tests - Daten im tmpfs, nichts Persistentes, keine Ports.
+  test-s3:
+    image: dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690
+    environment:
+      GARAGE_RPC_SECRET: 5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e
+      GARAGE_ADMIN_TOKEN: test-garage-admin-token
+    volumes:
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+    tmpfs:
+      - /var/lib/garage
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    profiles: [tests]
+
+  test-s3-init:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    environment:
+      GARAGE_ADMIN_URL: http://test-s3:3903
+      GARAGE_ADMIN_TOKEN: test-garage-admin-token
+      GARAGE_CAPACITY: 1G
+      LOCAL_S3_BUCKET: hocx-main
+      LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
+      LOCAL_S3_ACCESS_KEY: GK0000000000000000000000a1
+      LOCAL_S3_SECRET_KEY: "1111111111111111111111111111111111111111111111111111111111111111"
+      LOCAL_S3_ABGABEBOX_ACCESS_KEY: GK0000000000000000000000b2
+      LOCAL_S3_ABGABEBOX_SECRET_KEY: "2222222222222222222222222222222222222222222222222222222222222222"
+    volumes:
+      - ./infra/garage/bootstrap.py:/bootstrap/bootstrap.py:ro
+    command: ["python3", "/bootstrap/bootstrap.py"]
+    depends_on:
+      test-s3:
+        condition: service_healthy
+    profiles: [tests]
+
   test-migrations:
     build:
       context: ./backend
@@ -64,11 +103,23 @@ services:
       # `tests` profile could only ever pass by pointing at an ad-hoc container
       # started by hand outside the compose file.
       REDIS_URL: redis://test-redis:6379/0
+      # Objektspeicher-Tests (tests/test_object_storage*.py, test_storage_migration_e2e.py) gegen
+      # das isolierte test-s3 - nie gegen produktive Buckets.
+      STORAGE_CREDENTIALS_KEY: test-storage-credentials-key-0123456789abcdef
+      TEST_S3_ENDPOINT: http://test-s3:3900
+      TEST_S3_ACCESS_KEY: GK0000000000000000000000a1
+      TEST_S3_SECRET_KEY: "1111111111111111111111111111111111111111111111111111111111111111"
+      TEST_S3_ABGABEBOX_ACCESS_KEY: GK0000000000000000000000b2
+      TEST_S3_ABGABEBOX_SECRET_KEY: "2222222222222222222222222222222222222222222222222222222222222222"
+      ABGABEBOX_STORAGE_ROOT: /tmp/hocx-test-abgabebox-storage
+      STORAGE_WORK_ROOT: /tmp/hocx-test-work
     depends_on:
       test-migrations:
         condition: service_completed_successfully
       test-redis:
         condition: service_healthy
+      test-s3-init:
+        condition: service_completed_successfully
     volumes:
       - ./backend:/app
     profiles: [tests]

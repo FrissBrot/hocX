@@ -108,9 +108,12 @@ async function route(request: NextRequest, requestHeaders: Headers) {
   // Öffentliche Freigabe-Links (/share/<token>) sind per Design ohne Login erreichbar - der
   // Token in der URL IST die Authentifizierung (siehe backend public_share.py). Ohne diese
   // Ausnahme landeten Empfänger ohne hocX-Konto auf /login statt bei den Fotos.
+  // /maintenance ist die Wartungsansicht - während voller Wartung antwortet das Backend auf die
+  // Sitzungsprüfung ohnehin mit 503, die Seite selbst braucht keine Session.
   // /auth/bridge: Bestätigung des Domain-Wechsels, der Besucher ist hier per Definition noch
   // nicht angemeldet (MAIN-SEC-006).
   const isPublicPath =
+    rewrittenPathname === "/maintenance" ||
     rewrittenPathname === "/auth/bridge" ||
     rewrittenPathname === "/share" ||
     rewrittenPathname.startsWith("/share/") ||

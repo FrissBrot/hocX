@@ -16,11 +16,12 @@ from app.config import is_dev_or_test_environment, settings
 from app.db import SessionLocal, engine
 from app.repository import insert_error_log, upload_path_referenced
 from app.routes import public, verify
+from app.objstore_client import StorageWriteFenced
 from app.storage import cleanup_stale_quarantine_files
 
 _logger = logging.getLogger(__name__)
 
-Path(settings.storage_root).mkdir(parents=True, exist_ok=True)
+Path(settings.storage_root).mkdir(parents=True, exist_ok=True)  # nur beim Dateisystem-Backend genutzt
 
 # Loud, once-at-startup version of captcha.captcha_enabled()'s per-request warning (audit
 # finding, 2026-08-25) - a partial FriendlyCaptcha config (exactly one of sitekey/api_key
@@ -109,7 +110,7 @@ async def quarantine_cleanup_loop() -> None:
                 started_at = datetime.now(timezone.utc)
                 try:
                     with SessionLocal() as db:
-                        await asyncio.to_thread(cleanup_stale_quarantine_files, max_age_seconds, is_referenced=lambda path: upload_path_referenced(db, path))
+                        await asyncio.to_thread(cleanup_stale_quarantine_files, db, max_age_seconds, is_referenced=lambda path: upload_path_referenced(db, path))
                 except Exception as exc:
                     _logger.exception("Quarantäne-Cleanup fehlgeschlagen; beim nächsten Durchlauf erneut versuchen")
                     _record_background_error(exc)
@@ -130,6 +131,10 @@ app = FastAPI(title=settings.app_name, version="1.1.13", lifespan=lifespan)
 
 from app.upload_admission import UploadAdmissionMiddleware
 app.add_middleware(UploadAdmissionMiddleware, path="/api/public/", max_bytes=public.MAX_UPLOAD_BODY_BYTES)
+
+from app.maintenance import MaintenanceMiddleware, current_state, retry_after
+# Aussen vor der Upload-Annahme: während einer Wartung wird ein Upload sofort abgewiesen.
+app.add_middleware(MaintenanceMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -189,4 +194,23 @@ def health() -> dict[str, str]:
 
 
 app.include_router(verify.router, prefix="/api", tags=["verify"])
+
+
+@app.get("/api/public/maintenance-status")
+def maintenance_status() -> JSONResponse:
+    """Minimaler Status für die Abgabebox-Seite: gesperrt ja/nein und voraussichtliches Ende."""
+    state = current_state()
+    return JSONResponse(
+        {"active": state.full_active, "uploads_blocked": state.full_active or state.writes_blocked or state.uploads_blocked,
+         "estimated_end_at": state.estimated_end_at.isoformat() if state.estimated_end_at else None},
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
+
+
+@app.exception_handler(StorageWriteFenced)
+async def storage_write_fenced_handler(request: Request, exc: StorageWriteFenced) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": "Hochladen ist gerade kurz gesperrt. Bitte in Kürze erneut versuchen.", "code": "storage_write_fenced"},
+                        headers={"Retry-After": str(exc.retry_after_seconds), "Cache-Control": "no-store"})
+
+
 app.include_router(public.router, prefix="/api", tags=["public"])

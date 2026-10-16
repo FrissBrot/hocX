@@ -61,6 +61,8 @@ _CHECK_TITLES_DE = {
     "scan_backlog": "Virenprüfung im Rückstand",
     "photo_queue": "Bildanalyse-Warteschlange",
     "document_verification": "Öffentliche Prüfseite",
+    "object_storage": "Dateispeicher",
+    "storage_migration": "Storage-Migration",
 }
 # Titel, wenn die Prüfung lief, aber einen Schwellwert reisst (sonst "<Name> nicht erreichbar").
 _CHECK_PROBLEM_TITLES_DE = {
@@ -72,6 +74,8 @@ _CHECK_PROBLEM_TITLES_DE = {
     "scan_backlog": "Virenprüfung im Rückstand",
     "photo_queue": "Bildanalyse-Warteschlange staut sich",
     "document_verification": "Öffentliche Prüfseite langsam",
+    "object_storage": "Dateispeicher nicht erreichbar",
+    "storage_migration": "Storage-Migration braucht Aufmerksamkeit",
 }
 _JOB_REASONS_DE = {
     "failing": "ist fehlgeschlagen",
@@ -114,6 +118,10 @@ def _check_message(check) -> str:
             return f"{params.get('queued')} Aufträge warten, der älteste seit {params.get('oldestMinutes')} Minuten."
         case "document_verification":
             return f"Prüf-Endpoint der Abgabebox antwortet nach {params.get('latencyMs')} ms - abgabebox-backend und Datenbank prüfen."
+        case "object_storage":
+            return "Der aktive Dateispeicher (S3) antwortet nicht - Uploads und Downloads schlagen fehl."
+        case "storage_migration":
+            return f"{params.get('verified')} von {params.get('total')} Objekten geprüft, {params.get('dead')} dauerhaft fehlgeschlagen - siehe Adminportal, Storage."
     return "Siehe Systemstatus."
 
 

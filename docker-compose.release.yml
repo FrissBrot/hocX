@@ -195,6 +195,17 @@ services:
       DEMO_TOTP_SEED: ${DEMO_TOTP_SEED:-}
       # Öffentliche Prüfseite (Abgabebox), steht in jedem PDF; leer = ABGABEBOX_BASE_URL/verify
       DOCUMENT_VERIFY_BASE_URL: ${DOCUMENT_VERIFY_BASE_URL:-}
+      # Objektspeicher (docs-site/docs/technik/storage/): Profil-Zugangsdaten-Schlüssel und lokales Garage-S3.
+      STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      STORAGE_FALLBACK_DAYS: ${STORAGE_FALLBACK_DAYS:-14}
+      LOCAL_S3_ENDPOINT: http://local-s3:3900
+      LOCAL_S3_BUCKET: hocx-main
+      LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
+      LOCAL_S3_ACCESS_KEY: ${LOCAL_S3_ACCESS_KEY}
+      LOCAL_S3_SECRET_KEY_FILE: /run/secrets/local_s3_secret_key
+      LOCAL_S3_ABGABEBOX_ACCESS_KEY: ${LOCAL_S3_ABGABEBOX_ACCESS_KEY}
+      LOCAL_S3_ABGABEBOX_SECRET_KEY_FILE: /run/secrets/local_s3_abgabebox_secret_key
     secrets:
       - database_url
       - app_database_url
@@ -204,10 +215,14 @@ services:
       - initial_admin_password
       - abgabebox_db_password
       - photo_worker_db_password
+      - storage_credentials_key
+      - local_s3_secret_key
+      - local_s3_abgabebox_secret_key
       - redis_password
     networks:
       - default
       - docker-api
+      - storage
       - cache
     depends_on:
       db:
@@ -224,6 +239,7 @@ services:
       # auch wenn /app/storage spaeter auf ein Netzwerk-/Cloud-Volume umgehaengt wird
       # (siehe FileService.ensure_thumbnail).
       - ./storage-local/thumbnails:/app/storage-local/thumbnails
+      - ./storage-local/work:/app/storage-local/work
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       - ./infra/traefik/dynamic:/app/traefik_dynamic
     healthcheck:
@@ -363,8 +379,14 @@ services:
     environment:
       PHOTO_WORKER_DATABASE_URL_FILE: /run/secrets/photo_worker_database_url
       STORAGE_ROOT: /app/storage
+      ABGABEBOX_STORAGE_ROOT: /app/storage/abgabebox-uploads
+      STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
     secrets:
       - photo_worker_database_url
+      - storage_credentials_key
+    networks:
+      - default
+      - storage
     depends_on:
       backend:
         condition: service_healthy
@@ -444,6 +466,124 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.priority=10"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
 
+  # Lokales S3 (Garage) - siehe docker-compose.yml und docs-site/docs/technik/storage/lokales-s3.md.
+  local-s3:
+    image: dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      GARAGE_RPC_SECRET_FILE: /run/secrets/garage_rpc_secret
+      GARAGE_ADMIN_TOKEN_FILE: /run/secrets/garage_admin_token
+    secrets:
+      - garage_rpc_secret
+      - garage_admin_token
+    volumes:
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+      - local_s3_data:/var/lib/garage
+    networks:
+      - storage
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  storage-init:
+    image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
+    restart: "no"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["python3", "/bootstrap/bootstrap.py"]
+    command: []
+    environment:
+      GARAGE_ADMIN_URL: http://local-s3:3903
+      GARAGE_ADMIN_TOKEN_FILE: /run/secrets/garage_admin_token
+      LOCAL_S3_BUCKET: hocx-main
+      LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
+      LOCAL_S3_ACCESS_KEY: ${LOCAL_S3_ACCESS_KEY}
+      LOCAL_S3_SECRET_KEY_FILE: /run/secrets/local_s3_secret_key
+      LOCAL_S3_ABGABEBOX_ACCESS_KEY: ${LOCAL_S3_ABGABEBOX_ACCESS_KEY}
+      LOCAL_S3_ABGABEBOX_SECRET_KEY_FILE: /run/secrets/local_s3_abgabebox_secret_key
+    secrets:
+      - garage_admin_token
+      - local_s3_secret_key
+      - local_s3_abgabebox_secret_key
+    volumes:
+      - ./infra/garage/bootstrap.py:/bootstrap/bootstrap.py:ro
+    networks:
+      - storage
+    depends_on:
+      local-s3:
+        condition: service_healthy
+
+  storage-worker:
+    image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
+    restart: unless-stopped
+    mem_limit: 1024m
+    cpus: 1.0
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["python", "-m", "app.workers.storage_worker"]
+    command: []
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
+    environment:
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
+      DATABASE_URL_FILE: /run/secrets/database_url
+      APP_DATABASE_URL_FILE: /run/secrets/app_database_url
+      AUTH_SECRET_FILE: /run/secrets/auth_secret
+      ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      STORAGE_FALLBACK_DAYS: ${STORAGE_FALLBACK_DAYS:-14}
+    secrets:
+      - database_url
+      - app_database_url
+      - auth_secret
+      - admin_auth_secret
+      - storage_credentials_key
+    volumes:
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+      # Ziel von scripts/backup_storage.sh (Objekt-Backup, siehe docs technik/storage/backup.md)
+      - ./backups/storage:/app/backups/storage
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   abgabebox-backend:
     image: ${HOCX_ABGABEBOX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}}
     restart: unless-stopped
@@ -481,10 +621,15 @@ services:
       ABGABEBOX_MAX_FILES_PER_UPLOAD_REQUEST: ${ABGABEBOX_MAX_FILES_PER_UPLOAD_REQUEST:-50}
       ABGABEBOX_QUARANTINE_MAX_AGE_MINUTES: ${ABGABEBOX_QUARANTINE_MAX_AGE_MINUTES:-60}
       ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES: ${ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES:-5}
+      STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
     secrets:
       - abgabebox_database_url
       - friendly_captcha_api_key
       - abgabebox_captcha_session_secret
+      - storage_credentials_key
+    networks:
+      - default
+      - storage
     depends_on:
       db:
         condition: service_healthy
@@ -650,11 +795,14 @@ networks:
   # Siehe redis: internes Netz nur zwischen Backend und Redis.
   cache:
     internal: true
+  storage:
+    internal: true
 
 volumes:
   backend_upload_tmp:
   abgabebox_upload_tmp:
   postgres_data:
+  local_s3_data:
 
 secrets:
   # file: statt environment: - Compose kann environment-Secrets seit Docker Compose
@@ -688,5 +836,15 @@ secrets:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/friendly_captcha_api_key
   abgabebox_captcha_session_secret:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_captcha_session_secret
+  storage_credentials_key:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/storage_credentials_key
+  garage_rpc_secret:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/garage_rpc_secret
+  garage_admin_token:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/garage_admin_token
+  local_s3_secret_key:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/local_s3_secret_key
+  local_s3_abgabebox_secret_key:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/local_s3_abgabebox_secret_key
   redis_password:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/redis_password

@@ -19,8 +19,9 @@ from sqlalchemy.orm import Session
 
 from app import scanner
 from app.core.config import settings
+from app.core.storage import MAIN, InvalidObjectKey, ObjectNotFound, get_object_store, validate_key
 from app.models import DocumentAsset
-from app.services.file_service import MAX_UPLOAD_BYTES, _safe_storage_path
+from app.services.file_service import MAX_UPLOAD_BYTES
 
 ASSET_DIR = "document_assets"
 IMAGE_TYPES = {"PNG": ("image/png", ".png"), "JPEG": ("image/jpeg", ".jpg"), "WEBP": ("image/webp", ".webp")}
@@ -59,11 +60,12 @@ def assets_by_ids(db: Session, tenant_id: int, ids: Iterable[uuid.UUID]) -> dict
 
 
 def read_asset(asset: DocumentAsset) -> bytes | None:
+    """Inhalt aus dem Objektspeicher (Namespace «main», Key = storage_path); fehlt das Objekt
+    oder ist der Key ungültig, gilt das Asset als fehlend."""
     try:
-        path = _safe_storage_path(settings.storage_root, asset.storage_path)
-    except Exception:  # noqa: BLE001 - ungültiger Pfad: Asset gilt als fehlend
+        return get_object_store().get_bytes(MAIN, asset.storage_path)
+    except (ObjectNotFound, InvalidObjectKey):
         return None
-    return path.read_bytes() if path.exists() else None
 
 
 def font_family_of(content: bytes) -> str:
@@ -134,10 +136,9 @@ async def create_asset(
         raise AssetValidationError("apiError.infected")
     if status == "error":
         raise AssetValidationError("apiError.scanFailed")
-    relative = Path(ASSET_DIR) / f"tenant-{tenant_id}" / f"{uuid.uuid4().hex}{suffix}"
-    target = _safe_storage_path(settings.storage_root, str(relative))
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(content)
+    key = validate_key(f"{ASSET_DIR}/tenant-{tenant_id}/{uuid.uuid4().hex}{suffix}")
+    store = get_object_store()
+    store.put_bytes(db, MAIN, key, content, content_type=mime_type)
     asset = DocumentAsset(
         tenant_id=tenant_id,
         kind=kind,
@@ -145,7 +146,7 @@ async def create_asset(
         name=(name or "").strip()[:120] or Path(filename or "").stem or kind,
         original_name=filename,
         mime_type=mime_type,
-        storage_path=str(relative),
+        storage_path=key,
         file_size_bytes=len(content),
         checksum_sha256=hashlib.sha256(content).hexdigest(),
         width_px=width,
@@ -157,7 +158,8 @@ async def create_asset(
     try:
         db.flush()
     except Exception:
-        target.unlink(missing_ok=True)
+        # Registrierung rollt mit der Transaktion zurück; das Objekt selbst entfernen.
+        store.discard_unregistered(MAIN, key)
         raise
     return asset
 
@@ -202,10 +204,14 @@ def _text_type():
 def delete_asset(db: Session, asset: DocumentAsset) -> None:
     if asset_references(db, asset):
         raise AssetValidationError("apiError.assetInUse")
-    path = _safe_storage_path(settings.storage_root, asset.storage_path)
+    storage_path = asset.storage_path
     db.delete(asset)
     db.flush()
-    path.unlink(missing_ok=True)
+    # Tombstone in derselben Transaktion; physisch löscht der Job storage_purge nach dem Commit.
+    try:
+        get_object_store().delete(db, MAIN, storage_path)
+    except InvalidObjectKey:
+        pass
 
 
 def rename_asset(asset: DocumentAsset, *, name: str | None = None, category: str | None = None) -> DocumentAsset:

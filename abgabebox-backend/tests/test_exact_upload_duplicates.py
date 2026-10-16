@@ -55,7 +55,7 @@ def test_all_duplicates_succeed_without_scan_or_quota(monkeypatch):
 def test_mixed_batch_only_scans_and_stores_new_file(monkeypatch):
     setup_upload(monkeypatch)
     monkeypatch.setattr(public.repository, 'count_files_by_element', lambda *a, **k: {})
-    monkeypatch.setattr(public, 'save_to_quarantine', lambda content, **k: ('quarantine/test.pdf', hashlib.sha256(content).hexdigest()))
+    monkeypatch.setattr(public, 'save_to_quarantine', lambda db, content, **k: ('quarantine/test.pdf', hashlib.sha256(content).hexdigest()))
     monkeypatch.setattr(public, 'move_from_quarantine', lambda *a: 'test.pdf')
     saved = []
     monkeypatch.setattr(public.repository, 'insert_full_upload', lambda *a, **k: saved.extend(k['files']))
@@ -74,7 +74,7 @@ def test_concurrent_duplicates_are_silently_accepted_but_scanned_once(monkeypatc
     scans = []
     monkeypatch.setattr(public.repository, 'list_checksums_for_element', lambda *a, **k: set(committed))
     monkeypatch.setattr(public.repository, 'count_files_by_element', lambda *a, **k: {(1, None): len(committed)})
-    monkeypatch.setattr(public, 'save_to_quarantine', lambda content, **k: ('quarantine/test.pdf', hashlib.sha256(content).hexdigest()))
+    monkeypatch.setattr(public, 'save_to_quarantine', lambda db, content, **k: ('quarantine/test.pdf', hashlib.sha256(content).hexdigest()))
     monkeypatch.setattr(public, 'move_from_quarantine', lambda *a: 'test.pdf')
     monkeypatch.setattr(public.repository, 'insert_full_upload', lambda *a, **k: committed.update(f['checksum_sha256'] for f in k['files']))
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import functools
 import logging
-import shutil
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -58,7 +57,7 @@ from app.models import (
 )
 from app.models.entities import submission_assignment_link_table
 from app.services import submission_link_service
-from app.services.file_service import _safe_storage_path
+from app.core.storage import ABGABEBOX, MAIN, ObjectNotFound, get_object_store, new_object_key, safe_suffix, validate_key
 from app.services.tenant_transfer_common import (
     remap_block_configuration,
     remap_element_definition_config,
@@ -372,7 +371,7 @@ class TenantCloneService:
         db.add(new_tenant)
         db.commit()
         db.refresh(new_tenant)
-        image_path = self._clone_tenant_profile_image(source.profile_image_path, new_tenant_id=new_tenant.id)
+        image_path = self._clone_tenant_profile_image(db, source.profile_image_path, new_tenant_id=new_tenant.id)
         if image_path is not None:
             new_tenant.profile_image_path = image_path
             db.add(new_tenant)
@@ -380,11 +379,14 @@ class TenantCloneService:
             db.refresh(new_tenant)
         return new_tenant
 
-    def _clone_tenant_profile_image(self, source_path: str | None, *, new_tenant_id: int) -> str | None:
+    def _clone_tenant_profile_image(self, db: Session, source_path: str | None, *, new_tenant_id: int) -> str | None:
         if not source_path:
             return None
-        source = _safe_storage_path(settings.storage_root, source_path)
-        if not source.exists():
+        upload_prefix = Path(settings.upload_root).resolve().relative_to(Path(settings.storage_root).resolve()).as_posix()
+        target = f"{upload_prefix}/tenant-profiles/tenant-{new_tenant_id}-{uuid4().hex}{safe_suffix(source_path, '.png')}"
+        try:
+            get_object_store().copy(db, MAIN, source_path, target)
+        except ObjectNotFound:
             # Unlike the structurally identical import path (which appends a warning the
             # admin sees), a missing source file here was silently dropped with no signal
             # at all (audit finding, 2026-08-25) - logged so it's at least discoverable in
@@ -392,25 +394,17 @@ class TenantCloneService:
             # ended up empty.
             _logger.warning("tenant clone: source profile image missing at %s (new_tenant_id=%s)", source_path, new_tenant_id)
             return None
-        suffix = Path(source_path).suffix or ".png"
-        profile_dir = Path(settings.upload_root) / "tenant-profiles"
-        profile_dir.mkdir(parents=True, exist_ok=True)
-        target = profile_dir / f"tenant-{new_tenant_id}-{uuid4().hex}{suffix}"
-        shutil.copy2(source, target)
-        return str(target.relative_to(Path(settings.storage_root).resolve()))
+        return target
 
-    def _clone_stored_file_content(self, storage_path: str, *, root: str, new_tenant_id: int) -> str:
-        root_path = Path(root).resolve()
-        source = _safe_storage_path(root, storage_path)
-        suffix = Path(storage_path).suffix or ".bin"
-        target_dir = root_path / "tenant_clones" / f"tenant-{new_tenant_id}"
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / f"{uuid4().hex}{suffix}"
-        if source.exists():
-            shutil.copy2(source, target_path)
-        else:
+    def _clone_stored_file_content(self, db: Session, storage_path: str, *, namespace: str, new_tenant_id: int) -> str:
+        """Kopie im selben Namespace (serverseitig bei S3). Fehlt die Quelle, bleibt der Key
+        ohne Objekt - wie bisher die leere Zieldatei, sichtbar im Prüfbericht als fehlend."""
+        target = new_object_key("tenant_clones", f"tenant-{new_tenant_id}", filename=storage_path)
+        try:
+            get_object_store().copy(db, namespace, storage_path, target)
+        except ObjectNotFound:
             _logger.warning("tenant clone: source stored file missing at %s (new_tenant_id=%s)", storage_path, new_tenant_id)
-        return str(target_path.relative_to(root_path))
+        return target
 
     # ── structure/config tables ─────────────────────────────────────────
 
@@ -453,16 +447,13 @@ class TenantCloneService:
         die Zuordnungen merkt sich der Klon für Vorlagen und Komponenten."""
         asset_public_map: dict[str, str] = {}
         for asset in db.scalars(select(DocumentAsset).where(DocumentAsset.tenant_id == source_tenant_id)).all():
-            source = _safe_storage_path(settings.storage_root, asset.storage_path)
-            relative = Path("document_assets") / f"tenant-{new_tenant_id}" / f"{uuid4().hex}{Path(asset.storage_path).suffix}"
-            target = _safe_storage_path(settings.storage_root, str(relative))
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if source.exists():
-                shutil.copy2(source, target)
-            else:
+            target = validate_key(f"document_assets/tenant-{new_tenant_id}/{uuid4().hex}{safe_suffix(asset.storage_path, '')}")
+            try:
+                get_object_store().copy(db, MAIN, asset.storage_path, target)
+            except ObjectNotFound:
                 _logger.warning("tenant clone: source document asset missing at %s (new_tenant_id=%s)", asset.storage_path, new_tenant_id)
                 continue
-            new_asset = _copy_row(asset, {"tenant_id": new_tenant_id, "storage_path": str(relative), "created_by": None})
+            new_asset = _copy_row(asset, {"tenant_id": new_tenant_id, "storage_path": target, "created_by": None})
             db.add(new_asset)
             db.flush()
             asset_public_map[str(asset.public_id).lower()] = str(new_asset.public_id)
@@ -901,8 +892,8 @@ class TenantCloneService:
         )
         id_map: dict[int, int] = {}
         for row in rows:
-            root = settings.abgabebox_storage_root if row.id in abgabebox_ids else settings.storage_root
-            new_storage_path = self._clone_stored_file_content(row.storage_path, root=root, new_tenant_id=new_tenant_id)
+            namespace = ABGABEBOX if row.id in abgabebox_ids else MAIN
+            new_storage_path = self._clone_stored_file_content(db, row.storage_path, namespace=namespace, new_tenant_id=new_tenant_id)
             # Eigene Vorschau statt der der Quelle (Audit MAIN-BE-003): sonst teilen sich Quelle und
             # Klon "<quell_id>.jpg", und Löschen im Klon entfernt das Thumbnail der Quelle.
             new_row = _copy_row(row, {"tenant_id": new_tenant_id, "storage_path": new_storage_path, "thumbnail_path": None})

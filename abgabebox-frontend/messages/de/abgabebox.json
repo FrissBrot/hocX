@@ -170,5 +170,13 @@
     "readError": "Die Datei konnte nicht gelesen werden.",
     "tooLarge": "Die Datei ist zu gross (höchstens {size} MB).",
     "noCrypto": "Dein Browser unterstützt die Prüfung nicht. Bitte verwende einen aktuellen Browser."
+  },
+  "maintenance": {
+    "title": "Die Abgabebox wird gerade gewartet",
+    "message": "Abgaben sind während der Wartung nicht möglich. Bitte versuche es später erneut.",
+    "uploadsTitle": "Hochladen ist kurz gesperrt",
+    "uploadsMessage": "Wegen Wartungsarbeiten können gerade keine Dateien angenommen werden. Das dauert in der Regel nur wenige Minuten.",
+    "availableAt": "Voraussichtlich wieder verfügbar: {time} Uhr",
+    "estimating": "Die voraussichtliche Dauer wird ermittelt."
   }
 }

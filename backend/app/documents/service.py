@@ -34,7 +34,9 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
+from app.core.db import SessionLocal
 from app.core.security import CurrentUser
+from app.core.storage import MAIN, InvalidObjectKey, StorageError, StorageWriteFenced, get_object_store, key_from_legacy_path, validate_key
 from app.documents import brand_service, template_service
 from app.documents.brand import BrandTokens, apply_overrides
 from app.documents.catalog import BlockSpec
@@ -55,6 +57,7 @@ from app.models import (
     DocumentTemplate,
     DocumentTemplateRevision,
     Protocol,
+    StorageObject,
     StoredFile,
     Tenant,
 )
@@ -424,16 +427,22 @@ def _filename(title: str, version: str | None) -> str:
     return f"{base}-{version}.pdf" if version else f"{base}.pdf"
 
 
-def _store_pdf(db: Session, tenant_id: int, pdf: bytes, filename: str, user_id: int | None) -> tuple[StoredFile, Path]:
-    target_dir = Path(settings.export_root) / GENERATED_DIR
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / f"{uuid.uuid4().hex}-{filename}"
-    target.write_bytes(pdf)
+def _generated_prefix() -> str:
+    """Key-Präfix der erzeugten PDFs im Objektspeicher (Namespace «main», relativ zu STORAGE_ROOT)."""
+    return key_from_legacy_path(str(Path(settings.export_root) / GENERATED_DIR))
+
+
+def _store_pdf(db: Session, tenant_id: int, pdf: bytes, filename: str, user_id: int | None) -> StoredFile:
+    """Legt das PDF im Objektspeicher ab und registriert es in der Transaktion des Aufrufers.
+    Rollt der Aufrufer zurück, entfernt er das Objekt mit ``_discard_pdf``."""
+    key = validate_key(f"{_generated_prefix()}/{uuid.uuid4().hex}-{filename}")
+    store = get_object_store()
+    store.put_bytes(db, MAIN, key, pdf, content_type="application/pdf")
     stored = StoredFile(
         tenant_id=tenant_id,
         original_name=filename,
         mime_type="application/pdf",
-        storage_path=str(target.relative_to(settings.storage_root)),
+        storage_path=key,
         file_size_bytes=len(pdf),
         checksum_sha256=hashlib.sha256(pdf).hexdigest(),
         created_by=user_id,
@@ -442,10 +451,17 @@ def _store_pdf(db: Session, tenant_id: int, pdf: bytes, filename: str, user_id: 
     try:
         db.flush()
     except Exception:
-        # Datei und Datensatz teilen keine Transaktion; ohne Zeile bliebe die Datei verwaist.
-        target.unlink(missing_ok=True)
+        _discard_pdf(key)
         raise
-    return stored, target
+    return stored
+
+
+def _discard_pdf(key: str) -> None:
+    """Objekt eines zurückgerollten Exports entfernen (die Registrierung ist mit zurückgerollt)."""
+    try:
+        get_object_store().discard_unregistered(MAIN, key)
+    except StorageError as exc:
+        logger.warning("Objekt %s eines abgebrochenen Exports nicht entfernt: %s", key, exc)
 
 
 async def render(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest) -> RenderResult:
@@ -486,7 +502,7 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
         db.add(protocol)
     # Datei, StoredFile, Export und Register-Eintrag gemeinsam: scheitert ein Teil, gibt es
     # nichts (die Datei wird beim Rollback entfernt).
-    stored, target = _store_pdf(db, tenant_id, pdf, _filename(meta.title, meta.version), user.user_id if user else None)
+    stored = _store_pdf(db, tenant_id, pdf, _filename(meta.title, meta.version), user.user_id if user else None)
     try:
         export = DocumentExport(
             public_id=export_public_id,
@@ -527,51 +543,46 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
             )
         )
         db.flush()
-        superseded_paths = _prune_superseded_files(db, export)
+        # Ältere Dateien als Tombstones in derselben Transaktion (S3-008); physisch löscht der
+        # Job storage_purge nach dem Commit.
+        _prune_superseded_files(db, export)
         db.commit()
     except Exception:
         db.rollback()
-        target.unlink(missing_ok=True)
+        _discard_pdf(stored.storage_path)
         raise
-    _unlink(superseded_paths)
     db.refresh(export)
     return RenderResult(export=export, stored_file=stored)
 
 
-def _storage_file(storage_path: str) -> Path:
-    root = Path(settings.storage_root).resolve()
-    path = (root / storage_path).resolve()
-    if not path.is_relative_to(root):
-        raise ValueError(f"Pfad ausserhalb des Speichers: {storage_path}")
-    return path
-
-
-def _unlink(paths: list[Path]) -> None:
-    for path in paths:
-        path.unlink(missing_ok=True)
-
-
-def _release_files(db: Session, exports: list[DocumentExport]) -> list[Path]:
+def _release_files(db: Session, exports: list[DocumentExport]) -> list[str]:
     """Löst die PDF-Datei (StoredFile) von Exporten; Export-Zeile und Register-Eintrag bleiben
-    (Verlauf und Echtheitsprüfung über den Hash). Gibt die erst nach dem Commit zu löschenden
-    Pfade zurück."""
+    (Verlauf und Echtheitsprüfung über den Hash). Die Objekte werden in der Transaktion des
+    Aufrufers als gelöscht registriert (Tombstone, S3-008) - ein Rollback nimmt beides zurück,
+    physisch entfernt sie der Job storage_purge nach dem Commit. Gibt die Keys zurück."""
     file_ids = {export.stored_file_id for export in exports if export.stored_file_id is not None}
     for export in exports:
         export.stored_file_id = None
     db.flush()
-    paths: list[Path] = []
+    keys: list[str] = []
+    store = get_object_store()
     for file_id in file_ids:
         still_used = db.scalar(select(DocumentExport.id).where(DocumentExport.stored_file_id == file_id).limit(1))
         stored = db.get(StoredFile, file_id)
         if still_used is not None or stored is None:
             continue
-        paths.append(_storage_file(stored.storage_path))
+        keys.append(stored.storage_path)
         db.delete(stored)
     db.flush()
-    return paths
+    for key in keys:
+        try:
+            store.delete(db, MAIN, key)
+        except InvalidObjectKey:
+            logger.warning("Ungültiger Speicher-Key eines Exports übersprungen: %s", key)
+    return keys
 
 
-def _prune_superseded_files(db: Session, export: DocumentExport) -> list[Path]:
+def _prune_superseded_files(db: Session, export: DocumentExport) -> list[str]:
     """Audit MAIN-BE-004 (aus main übernommen): Jeder Export legte eine neue Datei samt StoredFile
     an, die nie gelöscht wurde - das Speicherkontingent wuchs mit jedem Export. Bei Protokollen
     bleibt nur die Datei des neuesten Exports; Auszüge und andere Dokumente sind jeweils eigene
@@ -618,51 +629,80 @@ def _uuid7() -> uuid.UUID:
 
 
 def cleanup_old_generated_exports(db: Session | None = None, *, retention_days: int | None = None) -> dict:
-    """Retention-Job (main.py export_cleanup_loop): löscht alte Dateien unter
-    EXPORT_ROOT/generated. Das Dokumentenregister bleibt unangetastet: ausgelieferte PDFs sind
-    über ihren Hash dauerhaft prüfbar.
+    """Retention-Job (main.py export_cleanup_loop): löscht alte Objekte unter
+    EXPORT_ROOT/generated im Objektspeicher. Das Dokumentenregister bleibt unangetastet:
+    ausgelieferte PDFs sind über ihren Hash dauerhaft prüfbar.
 
     Mit ``db`` (Hintergrund-Loop, MAIN-BE-004 aus main) zuerst auf DB-Basis: Exporte älter als
     die Frist verlieren ihre Datei samt StoredFile (sonst blieben die Bytes im
     Speicherkontingent und ein Link zeigte auf eine fehlende Datei), ausgenommen der neueste
-    Export abgeschlossener Protokolle. Danach entfernt der Datei-Sweep verwaiste Dateien ohne
-    Zeile, ebenfalls ohne die geschützten."""
+    Export abgeschlossener Protokolle. Danach entfernt der Objekt-Sweep verwaiste Objekte ohne
+    Zeile, ebenfalls ohne die geschützten. Löschungen sind Tombstones, die der Job
+    storage_purge nach dem Commit physisch entfernt; bei einem Write-Fence (Cutover/Wartung)
+    ist für diesen Lauf Schluss (S3-008)."""
     retention = retention_days if retention_days is not None else settings.export_retention_days
-    target_dir = Path(settings.export_root) / GENERATED_DIR
     cutoff_timestamp = datetime.now(UTC).timestamp() - retention * 86400
     released = 0
-    protected_paths: set[Path] = set()
-    if db is not None:
-        protected = _protected_export_ids(db)
-        cutoff = datetime.fromtimestamp(cutoff_timestamp, tz=UTC)
-        expired = [
-            export
-            for export in db.scalars(
-                select(DocumentExport).where(DocumentExport.created_at < cutoff, DocumentExport.stored_file_id.is_not(None))
-            )
-            if export.id not in protected
-        ]
-        paths = _release_files(db, expired)
-        db.commit()
-        _unlink(paths)
-        released = len(expired)
-        if protected:
-            protected_paths = {
-                _storage_file(storage_path)
-                for storage_path in db.scalars(
-                    select(StoredFile.storage_path)
-                    .join(DocumentExport, DocumentExport.stored_file_id == StoredFile.id)
-                    .where(DocumentExport.id.in_(protected))
+    protected_keys: set[str] = set()
+    session = db if db is not None else SessionLocal()
+    store = get_object_store()
+    try:
+        if db is not None:
+            protected = _protected_export_ids(db)
+            cutoff = datetime.fromtimestamp(cutoff_timestamp, tz=UTC)
+            expired = [
+                export
+                for export in db.scalars(
+                    select(DocumentExport).where(DocumentExport.created_at < cutoff, DocumentExport.stored_file_id.is_not(None))
                 )
-            }
-    deleted = 0
-    if target_dir.is_dir():
-        for path in target_dir.iterdir():
-            if not path.is_file() or path.resolve() in protected_paths:
-                continue
-            if path.stat().st_mtime < cutoff_timestamp:
-                path.unlink()
-                deleted += 1
+                if export.id not in protected
+            ]
+            try:
+                _release_files(db, expired)
+                db.commit()
+            except StorageWriteFenced:
+                db.rollback()
+                return {"deleted": 0, "released": 0}
+            released = len(expired)
+            if protected:
+                protected_keys = set(
+                    db.scalars(
+                        select(StoredFile.storage_path)
+                        .join(DocumentExport, DocumentExport.stored_file_id == StoredFile.id)
+                        .where(DocumentExport.id.in_(protected))
+                    )
+                )
+        deleted = 0
+        try:
+            prefix = _generated_prefix() + "/"
+        except ValueError:
+            prefix = None
+        if prefix is not None:
+            referenced = set(session.scalars(select(StoredFile.storage_path).where(StoredFile.storage_path.startswith(prefix))))
+            stale = [
+                info.key
+                for info in store.list(MAIN, prefix)
+                if info.last_modified is not None
+                and info.last_modified.timestamp() < cutoff_timestamp
+                and info.key not in protected_keys
+                and info.key not in referenced
+            ]
+            if stale:
+                # Schon gelöscht, nur physisch noch nicht entfernt: nicht erneut registrieren.
+                pending = set(session.scalars(select(StorageObject.key).where(
+                    StorageObject.namespace == MAIN, StorageObject.status == "deleted",
+                    StorageObject.purge_pending.is_(True), StorageObject.key.in_(stale))))
+                stale = [key for key in stale if key not in pending]
+            try:
+                for key in stale:
+                    store.delete(session, MAIN, key)
+                session.commit()
+                deleted = len(stale)
+            except StorageWriteFenced:
+                session.rollback()
+    finally:
+        if db is None:
+            session.close()
     if db is not None:
         return {"deleted": deleted, "released": released}
     return {"deleted": deleted}

@@ -20,7 +20,9 @@
     "admins": "Admin-Accounts",
     "sso": "SSO",
     "security": "Sicherheit",
-    "verifications": "Verifizierungen"
+    "verifications": "Verifizierungen",
+    "storage": "Storage",
+    "maintenance": "Wartung"
   },
   "logout": "Logout",
   "menuToggleClose": "Schliessen",

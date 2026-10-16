@@ -799,7 +799,7 @@ export type UploadPipelineOverview = {
 };
 
 export type JobState = "ok" | "running" | "failing" | "overdue" | "never_run";
-export type JobCategory = "virus_scan" | "photo_analysis" | "uploads" | "cleanup" | "maintenance" | "backup";
+export type JobCategory = "virus_scan" | "photo_analysis" | "uploads" | "cleanup" | "maintenance" | "backup" | "storage";
 
 export type JobStatusEntry = {
   name: string;
@@ -1544,3 +1544,219 @@ export type TaskPackagePreview = {
 };
 
 export type TaskPackageTodoDeleteMode = "all" | "future" | "none";
+
+
+// --- Wartung (backend/app/schemas/maintenance.py) ---------------------------------------------
+
+export type PublicMaintenanceStatus = {
+  active: boolean;
+  partial: boolean;
+  block_scope: "all" | "writes" | "uploads" | null;
+  reason_code: string | null;
+  messages: Record<string, string>;
+  affected_features: string[];
+  started_at: string | null;
+  estimate_state: "estimating" | "estimated" | "overdue" | null;
+  estimated_end_at: string | null;
+  remaining_low_seconds: number | null;
+  remaining_high_seconds: number | null;
+  upcoming: { starts_at: string | null; ends_at: string | null; kind: string; reason_code: string; messages: Record<string, string> }[];
+  updated_at: string;
+};
+
+export type MaintenanceState = "scheduled" | "preparing" | "active" | "verifying" | "completed" | "failed" | "overdue" | "cancelled";
+
+export type MaintenanceCondition = { key: string; satisfied: boolean; reason: string; params: Record<string, unknown> };
+
+export type MaintenanceEvent = {
+  id: number;
+  created_at: string;
+  kind: string;
+  actor_email: string | null;
+  from_state: string | null;
+  to_state: string | null;
+  details: Record<string, unknown>;
+};
+
+export type MaintenanceEstimate = {
+  scope?: string;
+  remaining_low_seconds: number;
+  remaining_high_seconds: number;
+  safety_margin_seconds: number;
+  components?: Record<string, number>;
+  rate_bytes_per_second?: number;
+  rate_basis?: string;
+  reserve_basis?: string;
+  confidence?: string;
+};
+
+export type MaintenanceWindow = {
+  id: string;
+  kind: "full" | "partial";
+  block_scope: "all" | "writes" | "uploads";
+  state: MaintenanceState;
+  reason_code: string;
+  affected_features: string[];
+  public_message: Record<string, string>;
+  internal_note: string | null;
+  source_job_type: string | null;
+  source_job_id: string | null;
+  scheduled_start_at: string | null;
+  scheduled_end_at: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  estimate: MaintenanceEstimate | null;
+  estimated_end_at: string | null;
+  original_estimated_end_at: string | null;
+  safety_margin_seconds: number | null;
+  estimate_updated_at: string | null;
+  progress: Record<string, number | string>;
+  release_conditions: { key: string; params?: Record<string, unknown> }[];
+  warnings: unknown[];
+  last_error: string | null;
+  created_by_email: string | null;
+  created_at: string;
+  updated_at: string;
+  conditions: MaintenanceCondition[];
+  events: MaintenanceEvent[];
+};
+
+export type MaintenanceOverview = {
+  blocking: boolean;
+  full_active: boolean;
+  current: MaintenanceWindow[];
+  scheduled: MaintenanceWindow[];
+  history: MaintenanceWindow[];
+  history_total: number;
+};
+
+// --- Storage (backend/app/schemas/storage_admin.py) -------------------------------------------
+
+export type StorageProvider = "filesystem" | "garage_local" | "aws_s3" | "hetzner" | "s3_compatible";
+
+export type StorageProfile = {
+  id: string;
+  name: string;
+  provider: StorageProvider;
+  endpoint_url: string | null;
+  region: string | null;
+  bucket: string | null;
+  abgabebox_bucket: string | null;
+  prefix: string;
+  addressing_style: "auto" | "path" | "virtual";
+  access_key_masked: string | null;
+  has_secret_key: boolean;
+  has_restricted_credentials: boolean;
+  tls_verify: boolean;
+  has_ca_bundle: boolean;
+  is_enabled: boolean;
+  is_builtin: boolean;
+  is_active: boolean;
+  in_use_by_migration: boolean;
+  pinned_generations: number[];
+  config_version: number;
+  last_test_at: string | null;
+  last_test_ok: boolean | null;
+  last_test_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StorageConnectionTest = {
+  ok: boolean;
+  main: Record<string, boolean | number> | null;
+  abgabebox: Record<string, boolean | number> | null;
+  error: string | null;
+  restricted_credentials: boolean;
+};
+
+export type StorageMigrationState =
+  | "pending" | "preflight" | "awaiting_confirmation" | "inventory" | "copying" | "catching_up" | "verifying"
+  | "ready_for_cutover" | "cutting_over" | "observing" | "completed" | "paused" | "retrying" | "failed" | "cancelled"
+  | "rollback_required";
+
+export type StorageMigrationEvent = {
+  id: number;
+  created_at: string;
+  level: "info" | "warning" | "error";
+  kind: string;
+  actor_email: string | null;
+  from_state: string | null;
+  to_state: string | null;
+  message: string | null;
+  details: Record<string, unknown>;
+};
+
+export type StorageMigration = {
+  id: string;
+  kind: "initial" | "live";
+  state: StorageMigrationState;
+  resume_state: string | null;
+  source_profile_name: string;
+  source_provider: StorageProvider;
+  source_generation: number;
+  target_profile_name: string;
+  target_provider: StorageProvider;
+  target_generation: number;
+  requested_by_email: string | null;
+  options: Record<string, unknown>;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  phase_started_at: string | null;
+  heartbeat_at: string | null;
+  checkpoint_at: string | null;
+  worker_active: boolean;
+  total_objects: number;
+  total_bytes: number;
+  copied_objects: number;
+  copied_bytes: number;
+  verified_objects: number;
+  failed_objects: number;
+  status_counts: Record<string, { objects: number; bytes: number }>;
+  current_bps: number | null;
+  average_bps: number | null;
+  eta_seconds: number | null;
+  estimate: { full?: MaintenanceEstimate | null; cutover?: MaintenanceEstimate | null } | null;
+  live_estimate: MaintenanceEstimate | null;
+  last_error: string | null;
+  attempt: number;
+  pause_requested: boolean;
+  cancel_requested: boolean;
+  cutover_confirmed_at: string | null;
+  cutover_committed_at: string | null;
+  needs_cutover_confirmation: boolean;
+  reference_check: { references: number; missing_count: number; unreferenced_count: number } | null;
+  maintenance_window_id: string | null;
+  final_integrity_ok: boolean;
+  events: StorageMigrationEvent[];
+};
+
+export type StorageGeneration = {
+  id: number;
+  profile_id: string;
+  profile_name: string;
+  generation: number;
+  status: "preparing" | "active" | "retained" | "abandoned" | "purge_requested" | "purging" | "purged";
+  object_count: number | null;
+  total_bytes: number | null;
+  created_at: string;
+  activated_at: string | null;
+  deactivated_at: string | null;
+  retain_until: string | null;
+  purge_requested_by: string | null;
+  purged_at: string | null;
+  purge_error: string | null;
+};
+
+export type StorageOverview = {
+  active_profile: StorageProfile;
+  active_generation: number;
+  write_fenced: boolean;
+  fence_reason: string | null;
+  credentials_key_configured: boolean;
+  local_s3: { needed: boolean; reason: string; configured: boolean; requested_until: string | null };
+  open_migration: StorageMigration | null;
+  generations: StorageGeneration[];
+  profiles: StorageProfile[];
+};

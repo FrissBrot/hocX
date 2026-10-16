@@ -37,6 +37,11 @@ export async function backendFetchAllPagesWithSession<T>(path: string, pageSize 
 export async function requireSession(): Promise<SessionInfo> {
   const session = await backendFetchWithSession<SessionInfo>("/api/auth/session");
   if (session === null) {
+    // Volle Wartung: das Backend antwortet mit 503 - Wartungsansicht statt Fehlerseite.
+    const maintenance = await backendFetch<{ active: boolean }>("/api/public/maintenance-status");
+    if (maintenance?.active) {
+      redirect("/maintenance");
+    }
     // backendFetch() konnte das Backend gar nicht erreichen (Netzwerkfehler/Timeout, auch nach
     // eigenem Retry) - das ist NICHT dasselbe wie "nicht eingeloggt" und darf niemals zu /login
     // umleiten: der Browser hat die Session oft schon selbst als gültig geprüft und würde auf

@@ -6,6 +6,7 @@ import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { FlowProvider, FlowStepBar, FlowStepList } from "@/components/flow-steps";
 import { BrandIntro, BrandNote, BrandSubtitle } from "@/components/brand-intro";
 import { LanguageSelect } from "@/components/language-select";
+import { MaintenanceBanner } from "@/components/maintenance-banner";
 import "./tokens.css";
 import "./globals.css";
 
@@ -77,7 +78,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               </div>
             </aside>
             <div className="box-main">
-              <main className="box-content">{children}</main>
+              <main className="box-content">
+                <MaintenanceBanner />
+                {children}
+              </main>
               <footer className="page-footer">
                 {t("copyright", { year: new Date().getFullYear() })}
               </footer>

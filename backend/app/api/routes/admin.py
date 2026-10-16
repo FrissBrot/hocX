@@ -78,7 +78,6 @@ from app.services.admin_tenant_service import AdminTenantService
 from app.services.admin_tenant_user_service import AdminTenantUserService
 from app.services.admin_mfa_service import AdminMfaService
 from app.services.admin_user_service import AdminUserService, PlatformAdminService
-from app.services.file_service import _safe_storage_path
 from app.services.mfa_service import MfaService
 from app.services.audit_service import AuditService
 from app.services.catalog_config_service import CatalogChangedError, CatalogConfigService
@@ -921,15 +920,12 @@ def update_platform_oidc_config(
 
 
 @router.get("/tenants/{tenant_id}/profile-image")
-def tenant_profile_image(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
+def tenant_profile_image(tenant_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     tenant = tenant_service.get_tenant(db, internal_tenant_id)
     if tenant is None or tenant.profile_image_path is None:
         raise HTTPException(status_code=404, detail="Tenant profile image not found")
-    file_path = _safe_storage_path(settings.storage_root, tenant.profile_image_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Tenant profile image missing")
-    return tenant_profile_image_response(file_path)
+    return tenant_profile_image_response(request, tenant.profile_image_path)
 
 
 @router.get("/users", response_model=AdminUserPage)

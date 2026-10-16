@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 
 from app.config import settings
-from app.db import tenant_upload_lock
+from app.db import SessionLocal, tenant_upload_lock
 from app.storage import save_to_quarantine, tenant_storage_bytes
 
 # Arbitrary, high enough to not collide with any real or other-test tenant id.
@@ -41,13 +41,16 @@ def _check_then_write(quota_bytes: int, content: bytes, results: dict, key: str)
     happening to - without this, manually removing tenant_upload_lock() around this call made the
     test below fail about 4 times out of 5, not consistently, which is not a trustworthy
     regression guard."""
-    current = tenant_storage_bytes(_TENANT_ID)
-    time.sleep(0.05)
-    if current + len(content) > quota_bytes:
-        results[key] = "rejected"
-        return
-    save_to_quarantine(content, tenant_id=_TENANT_ID, assignment_id=1, suffix=".pdf")
-    results[key] = "accepted"
+    with SessionLocal() as db:
+        current = tenant_storage_bytes(db, _TENANT_ID)
+        time.sleep(0.05)
+        if current + len(content) > quota_bytes:
+            results[key] = "rejected"
+            return
+        # Schreibt über den Objektspeicher (Dateisystem-Backend im Test) inkl. Journal.
+        save_to_quarantine(db, content, tenant_id=_TENANT_ID, assignment_id=1, suffix=".pdf")
+        db.commit()
+        results[key] = "accepted"
 
 
 def test_locked_concurrent_uploads_that_would_together_exceed_quota_are_serialized():
@@ -75,7 +78,7 @@ def test_locked_concurrent_uploads_that_would_together_exceed_quota_are_serializ
 
         accepted = [v for v in results.values() if v == "accepted"]
         assert len(accepted) == 1, f"expected exactly one upload accepted under quota, got: {results}"
-        assert tenant_storage_bytes(_TENANT_ID) <= quota_bytes
+        assert tenant_storage_bytes(None, _TENANT_ID) <= quota_bytes
     finally:
         _reset()
 

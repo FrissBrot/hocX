@@ -170,5 +170,13 @@
     "readError": "The file could not be read.",
     "tooLarge": "The file is too large (at most {size} MB).",
     "noCrypto": "Your browser does not support the check. Please use an up-to-date browser."
+  },
+  "maintenance": {
+    "title": "The submission box is under maintenance",
+    "message": "Submissions are not possible during maintenance. Please try again later.",
+    "uploadsTitle": "Uploading is briefly locked",
+    "uploadsMessage": "Due to maintenance, files cannot be accepted right now. This usually only takes a few minutes.",
+    "availableAt": "Expected to be available again at {time}",
+    "estimating": "The expected duration is being determined."
   }
 }

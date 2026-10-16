@@ -108,7 +108,7 @@ from app.models.entities import (
     ShareLinkFile,
     submission_assignment_link_table,
 )
-from app.services.file_service import _safe_storage_path
+from app.core.storage import get_object_store, namespace_for_root, write_object_to_zip
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
     USER_ID_COLUMNS,
@@ -137,7 +137,7 @@ class TenantExportService:
 
         self._lookup_cache = LookupCodeCache(db)
         self._user_cache = UserIdentityCache(db, tenant_id=tenant_id)
-        self._pending_files: list[tuple[Path, str]] = []
+        self._pending_files: list[tuple[str, str, str]] = []
 
         tables: dict[str, Any] = {}
         tables["tenant"] = self._row(tenant, "tenant")
@@ -197,8 +197,10 @@ class TenantExportService:
         zip_path = Path(tmp.name)
         with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=None))
-            for disk_path, member_name in self._pending_files:
-                zf.write(disk_path, member_name)
+            for namespace, key, member_name in self._pending_files:
+                # Gestreamt aus dem Objektspeicher; verschwindet ein Objekt zwischen Inventur und
+                # Schreiben, bricht der Export ab statt ein Manifest mit Verweis ins Leere zu liefern.
+                write_object_to_zip(zf, namespace, key, member_name)
 
         safe_name = "".join(c if c.isalnum() or c in "-_" else "-" for c in tenant.name).strip("-") or "tenant"
         filename = f"{safe_name}-{scope}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.hocxexport.zip"
@@ -220,12 +222,15 @@ class TenantExportService:
         return [self._row(obj, table_name) for obj in objs]
 
     def _register_file(self, root: str, storage_path: str, member_prefix: str) -> str | None:
-        source = _safe_storage_path(root, storage_path)
-        if not source.exists():
+        namespace = namespace_for_root(root)
+        try:
+            if not get_object_store().exists(namespace, storage_path):
+                return None
+        except ValueError:
             return None
         suffix = Path(storage_path).suffix
         member_name = f"{member_prefix}{suffix}"
-        self._pending_files.append((source, member_name))
+        self._pending_files.append((namespace, storage_path, member_name))
         return member_name
 
     # ── structure scope ──────────────────────────────────────────────────

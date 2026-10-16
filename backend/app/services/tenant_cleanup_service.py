@@ -20,7 +20,8 @@ from app.models import (
     WordImportDocument,
 )
 from app.schemas.admin import TenantCleanupCategory, TenantCleanupCounts
-from app.services.file_service import _safe_storage_path, owned_thumbnail_path
+from app.core.storage import ABGABEBOX, MAIN, get_object_store
+from app.services.file_service import owned_thumbnail_path
 
 
 class TenantCleanupService:
@@ -189,10 +190,9 @@ class TenantCleanupService:
             )
         ).all()
         for stored_file in orphaned:
-            root = settings.abgabebox_storage_root if stored_file.id in abgabebox_stored_file_ids else settings.storage_root
-            file_path = _safe_storage_path(root, stored_file.storage_path)
-            if file_path.exists():
-                file_path.unlink()
+            namespace = ABGABEBOX if stored_file.id in abgabebox_stored_file_ids else MAIN
+            # Im selben Transaktionskontext wie der DB-Delete (Journal/Fence, siehe objstore_client).
+            get_object_store().delete(db, namespace, stored_file.storage_path)
             thumbnail_path = owned_thumbnail_path(stored_file)
             if thumbnail_path is not None and thumbnail_path.exists():
                 thumbnail_path.unlink()

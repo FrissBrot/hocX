@@ -13,6 +13,9 @@
 #   - Vorlagen-Code unter <storage>/document_template_parts/ (Dateiendungen .tex, .sty,
 #     .cls); Bilder und Schriften in diesem Verzeichnis bleiben unangetastet.
 # Erst nach erfolgreicher Migration ausführen (alembic current zeigt 0115 oder neuer).
+# Wirkt nur auf das lokale Speicherverzeichnis (Speichergeneration 0 / Dateisystem). Darum vor
+# einer Umstellung auf S3 (Adminportal → Storage) ausführen; danach liegen die Altdateien als
+# unreferenzierte Objekte im Ziel und erscheinen nur im Prüfbericht.
 set -euo pipefail
 
 DRY_RUN=0

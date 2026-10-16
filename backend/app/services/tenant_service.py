@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -8,14 +7,14 @@ from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi import HTTPException, Request, Response, UploadFile, status
 from PIL import Image
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.storage import MAIN, get_object_store, object_response, validate_key
 from app.core.security import CurrentUser, require_admin, require_feature
 from app.models import AppUser, Feature, Plan, PlanFeature, StoragePackage, Tenant, TenantDomain, TenantStoragePackage
 from app.schemas.user import (
@@ -57,23 +56,21 @@ TENANT_PROFILE_IMAGE_SECURITY_HEADERS = {
 }
 
 
-def tenant_profile_image_response(file_path: Path) -> FileResponse:
-    """Liefert ein Mandanten-Profilbild mit festem Typ und CSP aus (Audit MAIN-SEC-002).
+def tenant_profile_image_response(request: Request | None, key: str) -> Response:
+    """Liefert ein Mandanten-Profilbild mit festem Typ und CSP aus (Audit MAIN-SEC-002), aus dem
+    Objektspeicher (Namespace «main»).
 
     Die Route ist öffentlich und läuft im Origin der Hauptanwendung bzw. des Admin-Panels;
     ein als Profilbild abgelegtes HTML/SVG darf dort nie als Dokument ausgeführt werden.
     """
-    media_type = TENANT_PROFILE_IMAGE_MEDIA_TYPES.get(file_path.suffix.lower())
+    media_type = TENANT_PROFILE_IMAGE_MEDIA_TYPES.get(Path(key).suffix.lower())
     headers = dict(TENANT_PROFILE_IMAGE_SECURITY_HEADERS)
     if media_type is None:
-        return FileResponse(
-            file_path,
-            media_type="application/octet-stream",
-            headers=headers,
-            content_disposition_type="attachment",
-            filename=file_path.name,
+        return object_response(
+            request, MAIN, key, media_type="application/octet-stream", filename=Path(key).name, attachment=True,
+            headers=headers, not_found_detail="Tenant profile image missing",
         )
-    return FileResponse(file_path, media_type=media_type, headers=headers)
+    return object_response(request, MAIN, key, media_type=media_type, headers=headers, not_found_detail="Tenant profile image missing")
 
 
 def _normalize_tenant_profile_image(content: bytes) -> bytes:
@@ -105,8 +102,10 @@ def _normalize_tenant_profile_image(content: bytes) -> bytes:
     return output.getvalue()
 
 
-async def apply_tenant_profile_image(tenant: Tenant, profile_image: UploadFile) -> None:
-    """Prüft und normalisiert ein hochgeladenes Profilbild und setzt tenant.profile_image_path."""
+async def apply_tenant_profile_image(db: Session, tenant: Tenant, profile_image: UploadFile) -> None:
+    """Prüft und normalisiert ein hochgeladenes Profilbild (MAIN-SEC-002), legt es im
+    Objektspeicher ab (Key relativ zu STORAGE_ROOT, Namespace «main») und setzt
+    tenant.profile_image_path."""
     content = await profile_image.read(TENANT_PROFILE_IMAGE_MAX_BYTES + 1)
     if len(content) > TENANT_PROFILE_IMAGE_MAX_BYTES:
         raise HTTPException(
@@ -114,11 +113,10 @@ async def apply_tenant_profile_image(tenant: Tenant, profile_image: UploadFile) 
             detail="Das Profilbild ist zu gross (maximal 5 MB)",
         )
     normalized = _normalize_tenant_profile_image(content)
-    profile_dir = Path(settings.upload_root) / "tenant-profiles"
-    profile_dir.mkdir(parents=True, exist_ok=True)
-    absolute_path = profile_dir / f"tenant-{tenant.id}-{uuid4().hex}.png"
-    absolute_path.write_bytes(normalized)
-    tenant.profile_image_path = os.path.relpath(str(absolute_path), settings.storage_root)
+    upload_prefix = Path(settings.upload_root).resolve().relative_to(Path(settings.storage_root).resolve()).as_posix()
+    key = validate_key(f"{upload_prefix}/tenant-profiles/tenant-{tenant.id}-{uuid4().hex}.png")
+    get_object_store().put_bytes(db, MAIN, key, normalized, content_type="image/png")
+    tenant.profile_image_path = key
 
 
 class TenantService:
@@ -259,7 +257,7 @@ class TenantService:
             tenant.public_slug = payload.public_slug
 
         if profile_image is not None:
-            await apply_tenant_profile_image(tenant, profile_image)
+            await apply_tenant_profile_image(db, tenant, profile_image)
             # Logo: nur protokollieren - bestätigt wird die Organisation, nicht ihr Bild
             AuditService().log(db, action="tenant.profile_image_changed", actor=actor, tenant_id=tenant.id)
         revoked = identity_verification_service.handle_rename(db, tenant, old_name, actor_email=actor.email)

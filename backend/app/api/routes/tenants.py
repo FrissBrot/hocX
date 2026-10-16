@@ -1,6 +1,7 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -12,7 +13,6 @@ from app.core.security import CurrentUser, get_current_user, require_writer
 from app.models import Participant, Tenant, TenantDomain
 from app.schemas.user import TenantDomainCreate, TenantDomainRead, TenantLookupRead, TenantRead, TenantSubscriptionRead, TenantUpdate
 from app.services import public_id_service, tenant_trust_service
-from app.services.file_service import _safe_storage_path
 from app.services.tenant_service import TenantService, build_tenant_profile_image_url, tenant_profile_image_response
 
 router = APIRouter()
@@ -115,16 +115,13 @@ def get_tenant_subscription(
 
 
 @router.get("/tenants/{tenant_id}/profile-image")
-def tenant_profile_image(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
+def tenant_profile_image(tenant_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
     # Deliberately public (no auth) - this is an organisation logo, not sensitive data, and
     # needs to be renderable on the login page before the visitor has authenticated at all.
     tenant = public_id_service.get_by_public_id(db, Tenant, tenant_id)
     if tenant is None or tenant.profile_image_path is None:
         raise HTTPException(status_code=404, detail="Tenant profile image not found")
-    file_path = _safe_storage_path(settings.storage_root, tenant.profile_image_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Tenant profile image missing")
-    return tenant_profile_image_response(file_path)
+    return tenant_profile_image_response(request, tenant.profile_image_path)
 
 
 @router.get("/tenants/{tenant_id}/domains", response_model=list[TenantDomainRead])

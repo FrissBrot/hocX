@@ -1,0 +1,22 @@
+# Lokales S3 (Garage) für hocX - siehe docs-site/docs/technik/storage/lokales-s3.md.
+# Geheimnisse (rpc_secret, admin_token) kommen ausschliesslich aus der Umgebung
+# (GARAGE_RPC_SECRET, GARAGE_ADMIN_TOKEN), nie aus dieser Datei.
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+# Einzelknoten: keine Replikation. Ausfallsicherheit kommt über Backups (docs-site/docs/technik/storage/backup.md)
+# bzw. eine Migration zu einem externen Anbieter.
+replication_factor = 1
+# Nach jedem Schreibvorgang auf Platte synchronisieren - ein bestätigter Upload überlebt so
+# auch einen Stromausfall.
+data_fsync = true
+metadata_fsync = true
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+
+[admin]
+api_bind_addr = "[::]:3903"

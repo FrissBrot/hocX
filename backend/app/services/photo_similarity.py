@@ -125,7 +125,7 @@ def group_similar_images(
     return [sorted(group, key=_quality_rank, reverse=True) for group in groups.values()]
 
 
-def duplicate_signature(path: Path) -> tuple[float, np.ndarray] | None:
+def duplicate_signature(path: "Path | BinaryIO") -> tuple[float, np.ndarray] | None:
     """Bildinhalt normalisieren; Auflösung, JPEG-Qualität, EXIF-Rotation und - wie der
     pHash-Kandidatenfilter selbst (siehe group_similar_images) - auch Schärfe/Blur
     tolerieren: ein unscharfes Serienbild derselben Aufnahme ist kein anderes Foto. Der

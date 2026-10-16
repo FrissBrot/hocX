@@ -10,10 +10,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, admin_document_templates, admin_identity_verification, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
+from app.api.routes import admin, admin_auth, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
+from app.core.objstore_client import StorageUnavailable, StorageWriteFenced
 from app.core.error_log import best_effort_actor_from_request, record_system_error
 from app.core.redis_client import close_redis_pool
 from app.core.security import hash_password
@@ -26,7 +27,7 @@ from app.services.submission_service import SubmissionService
 from app.services.file_service import FileService
 from app.services.isolated_parse import shutdown_pool as shutdown_word_import_parse_pool
 from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
-from app.services import photo_album_service, system_alert_service
+from app.services import maintenance_service, photo_album_service, storage_migration_service, storage_profile_service, system_alert_service
 from app.services.table_snapshot_service import TableSnapshotService, run_due_cycle_snapshots
 from app.services.task_package_service import run_due_task_packages
 
@@ -106,6 +107,18 @@ def ensure_no_production_demo_data() -> None:
             + "; tenants="
             + ",".join(sorted(demo_tenants))
         )
+
+
+def ensure_local_storage_profile() -> None:
+    """Legt das Profil für das lokale Garage-S3 an bzw. hält es aktuell, solange LOCAL_S3_* in
+    der Umgebung steht (docker-compose stellt den Dienst beim ersten Deployment bereit). Unter
+    einem Advisory-Lock, weil mehrere uvicorn-Worker gleichzeitig starten."""
+    if not settings.local_s3_access_key:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("SELECT pg_advisory_xact_lock(202600021)"))
+        with SessionLocal() as db:
+            storage_profile_service.ensure_local_profile(db)
 
 
 def ensure_startup_seed_data() -> None:
@@ -382,6 +395,35 @@ async def system_monitor_loop() -> None:
     )
 
 
+async def maintenance_supervisor_loop() -> None:
+    """Wartungsfenster steuern (geplante Starts, Überschreitungen, Neuschätzung) - läuft auch
+    während voller Wartung, siehe job_registry.runs_during_maintenance."""
+    await run_advisory_locked_loop(
+        name="maintenance_supervisor",
+        interval_seconds=settings.maintenance_supervisor_interval_seconds,
+        task=maintenance_service.supervise,
+    )
+
+
+async def storage_journal_cleanup_loop() -> None:
+    """Alte Einträge des Speicher-Änderungsjournals entfernen (nie solche, die eine offene
+    Migration noch nachziehen muss)."""
+    await run_advisory_locked_loop(
+        name="storage_journal_cleanup",
+        interval_seconds=24 * 60 * 60,
+        task=storage_migration_service.cleanup_journal,
+    )
+
+
+async def storage_purge_loop() -> None:
+    """Gelöschte Objekte nach dem Commit physisch entfernen (Tombstones, S3-008)."""
+    await run_advisory_locked_loop(
+        name="storage_purge",
+        interval_seconds=60,
+        task=storage_migration_service.purge_deleted_objects,
+    )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     from app.documents.renderer import shutdown_renderer
@@ -394,6 +436,7 @@ async def lifespan(_: FastAPI):
         ensure_startup_seed_data()
         ensure_document_studio()
         ensure_traefik_dynamic_config()
+        ensure_local_storage_profile()
         health_check_task = asyncio.create_task(domain_health_check_loop())
         rescan_task = asyncio.create_task(abgabebox_rescan_loop())
         upload_pipeline_rescan_task = asyncio.create_task(upload_pipeline_rescan_loop())
@@ -406,7 +449,13 @@ async def lifespan(_: FastAPI):
         photo_album_sync_task = asyncio.create_task(photo_album_sync_loop())
         gallery_upload_ingest_task = asyncio.create_task(gallery_upload_ingest_loop())
         system_monitor_task = asyncio.create_task(system_monitor_loop())
+        maintenance_supervisor_task = asyncio.create_task(maintenance_supervisor_loop())
+        storage_journal_cleanup_task = asyncio.create_task(storage_journal_cleanup_loop())
+        storage_purge_task = asyncio.create_task(storage_purge_loop())
         yield
+        maintenance_supervisor_task.cancel()
+        storage_journal_cleanup_task.cancel()
+        storage_purge_task.cancel()
         health_check_task.cancel()
         photo_analysis_auto_queue_task.cancel()
         photo_quality_backfill_task.cancel()
@@ -462,6 +511,12 @@ app.add_middleware(
     skip_prefixes=("/api/files/gallery-uploads",),
 )
 
+from app.core.maintenance_middleware import MaintenanceMiddleware
+# Vor der Upload-Annahme (äussere Schicht): während einer Wartung wird ein grosser Upload sofort
+# abgewiesen, statt erst gepuffert zu werden. CORS liegt noch weiter aussen, damit auch die
+# 503-Antworten die CORS-Header tragen.
+app.add_middleware(MaintenanceMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o for o in [
@@ -487,6 +542,34 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     finally:
         db.close()
     return JSONResponse(status_code=500, content={"detail": "Ein interner Fehler ist aufgetreten."})
+
+
+@app.exception_handler(StorageWriteFenced)
+async def storage_write_fenced_handler(request: Request, exc: StorageWriteFenced) -> JSONResponse:
+    """Persistente Schreibvorgänge sind kurz gesperrt (Cutover/Wartung) - erwartet, kein Fehler
+    für system_error_log. 503 + Retry-After, damit Clients später erneut versuchen."""
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Speichern ist gerade kurz gesperrt (Wartung). Bitte in Kürze erneut versuchen.", "code": "storage_write_fenced"},
+        headers={"Retry-After": str(exc.retry_after_seconds), "Cache-Control": "no-store"},
+    )
+
+
+@app.exception_handler(StorageUnavailable)
+async def storage_unavailable_handler(request: Request, exc: StorageUnavailable) -> JSONResponse:
+    """Objektspeicher nicht erreichbar: protokollieren (unerwarteter Betriebsfehler) und 503
+    statt 500 - der Zustand ist vorübergehend, nichts wurde inkonsistent bestätigt."""
+    db = SessionLocal()
+    try:
+        tenant_id, actor_email = best_effort_actor_from_request(db, request)
+        record_system_error(db, exc=exc, request=request, tenant_id=tenant_id, actor_email=actor_email, status_code=503)
+    finally:
+        db.close()
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Der Dateispeicher ist vorübergehend nicht erreichbar.", "code": "storage_unavailable"},
+        headers={"Retry-After": "30", "Cache-Control": "no-store"},
+    )
 
 
 @app.exception_handler(HTTPException)
@@ -548,3 +631,6 @@ app.include_router(system_status.router, prefix="/api", tags=["system-status"])
 app.include_router(submission_assignments.router, prefix="/api", tags=["submission-assignments"])
 app.include_router(word_import.router, prefix="/api", tags=["word-import"])
 app.include_router(collaboration_ws.router, tags=["collaboration"])
+app.include_router(maintenance_public.router, prefix="/api", tags=["maintenance"])
+app.include_router(admin_storage.router, prefix="/api/admin", tags=["admin-storage"])
+app.include_router(admin_maintenance.router, prefix="/api/admin", tags=["admin-maintenance"])

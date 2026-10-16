@@ -13,6 +13,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -111,12 +112,14 @@ class AssetCollector:
     prefix: str = "img"
     _by_key: dict[str, str] = field(default_factory=dict)
 
-    def add_image(self, source: Path | bytes, *, key: str | None = None, caption: str | None = None) -> ImageRef:
+    def add_image(self, source: Path | bytes | Callable[[], bytes], *, key: str | None = None, caption: str | None = None) -> ImageRef:
+        """``source`` darf ein Lader sein (z. B. Objektspeicher): er läuft nur, wenn das Bild mit
+        diesem ``key`` noch nicht gesammelt ist."""
         if key and key in self._by_key:
             path = self._by_key[key]
             return ImageRef(path=path, caption=caption, width_pt=self._width_pt(self.files[path]))
         try:
-            data = source.read_bytes() if isinstance(source, Path) else source
+            data = source.read_bytes() if isinstance(source, Path) else source() if callable(source) else source
             normalized, extension = _normalize_image(data)
         except Exception:  # noqa: BLE001 - kaputtes/unbekanntes Bild wird als «fehlt» gezeigt
             logger.info("Bild für Dokument nicht lesbar: %s", key or "bytes")

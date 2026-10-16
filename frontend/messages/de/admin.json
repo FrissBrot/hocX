@@ -178,6 +178,16 @@
         "title": "Öffentliche Prüfseite",
         "detail": "Antwort in {latencyMs, number} ms",
         "problem": "Öffentliche Prüfseite langsam"
+      },
+      "object_storage": {
+        "title": "Dateispeicher",
+        "detail": "Generation {generation, number} · Antwortzeit {latencyMs, number} ms",
+        "problem": "Dateispeicher nicht erreichbar"
+      },
+      "storage_migration": {
+        "title": "Storage-Migration",
+        "detail": "{verified, number} von {total, number} Objekten geprüft · {dead, number} dauerhaft fehlgeschlagen",
+        "problem": "Storage-Migration braucht Aufmerksamkeit"
       }
     },
     "problems": {
@@ -236,13 +246,15 @@
       "backup": "Backup",
       "cleanup": "Aufräumen",
       "maintenance": "Wartung",
-      "other": "Weitere"
+      "other": "Weitere",
+      "storage": "Speicher"
     },
     "service": {
       "backend": "Backend",
       "abgabebox-backend": "Abgabebox-Backend",
       "photo-analysis-worker": "Bildanalyse-Worker",
-      "host": "Server (Cron)"
+      "host": "Server (Cron)",
+      "storage-worker": "Storage-Worker"
     },
     "interval": {
       "onDemand": "Bei Bedarf",
@@ -340,6 +352,30 @@
       "task_package_rollover": {
         "title": "Aufgabenpakete nachführen",
         "description": "Legt täglich die Aufgaben des laufenden Zyklus aus allen aktiven Aufgabenpaketen an (beim Zykluswechsel die des neuen Zyklus) und ergänzt neue Wiederholungen."
+      },
+      "maintenance_supervisor": {
+        "title": "Wartungssteuerung",
+        "description": "Startet geplante Wartungen, markiert Überschreitungen und aktualisiert Schätzungen. Beendet nie selbst eine Wartung."
+      },
+      "storage_journal_cleanup": {
+        "title": "Speicher-Journal aufräumen",
+        "description": "Entfernt alte Einträge des Änderungsjournals, die keine offene Migration mehr braucht."
+      },
+      "storage_purge": {
+        "title": "Gelöschte Speicherobjekte entfernen",
+        "description": "Entfernt gelöschte Dateien physisch aus dem Speicher, sobald die Löschung gespeichert ist."
+      },
+      "storage_migration_worker": {
+        "title": "Storage-Migrations-Worker",
+        "description": "Kopiert, prüft und schaltet Dateispeicher um (Lebenszeichen aus der Poll-Schleife)."
+      },
+      "storage_controller": {
+        "title": "Lokales S3 steuern",
+        "description": "Host-Cronjob: startet oder stoppt den lokalen S3-Dienst je nach Bedarf, ohne Daten zu löschen."
+      },
+      "backup_storage": {
+        "title": "Datei-Backup",
+        "description": "Sichert die Objekte der aktiven Speichergeneration inkrementell nach dem Datenbank-Backup und prüft das Ergebnis."
       }
     }
   },

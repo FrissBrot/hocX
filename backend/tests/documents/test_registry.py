@@ -7,13 +7,14 @@ import asyncio
 import hashlib
 import io
 import os
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from pypdf import PdfReader
 from sqlalchemy import select
 
 from app.core.config import settings
+from app.core.storage import get_object_store
 from app.documents import service
 from app.documents.service import DocumentRequest, short_document_id
 from app.documents.xmp import HOCX_XMP_NAMESPACE
@@ -92,7 +93,11 @@ def test_retention_deletes_files_but_never_registry_entries(db):
     path = Path(settings.storage_root) / result.stored_file.storage_path
     old = path.stat().st_mtime - 400 * 86400
     os.utime(path, (old, old))
-    service.cleanup_old_generated_exports(retention_days=30)
+    result.export.created_at = datetime.now(UTC) - timedelta(days=400)
+    db.flush()
+    service.cleanup_old_generated_exports(db, retention_days=30)
+    # S3-008: physisch entfernt erst der Purge-Job nach dem Commit.
+    get_object_store().purge_deleted(db)
     assert not path.exists()
     assert db.scalar(select(DocumentRegistry).where(DocumentRegistry.public_id == result.export.public_id)) is not None
 

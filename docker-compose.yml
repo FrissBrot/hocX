@@ -237,9 +237,20 @@ services:
       TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
       ROUTER_PREFIX: hocx
       TRAEFIK_MIDDLEWARE_PREFIX: ""
+      # Objektspeicher (docs-site/docs/technik/storage/): Schlüssel für Profil-Zugangsdaten und lokales Garage-S3.
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      LOCAL_S3_ENDPOINT: http://local-s3:3900
+      LOCAL_S3_BUCKET: hocx-main
+      LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
+      LOCAL_S3_ACCESS_KEY: ${LOCAL_S3_ACCESS_KEY:-}
+      LOCAL_S3_SECRET_KEY: ${LOCAL_S3_SECRET_KEY:-}
+      LOCAL_S3_ABGABEBOX_ACCESS_KEY: ${LOCAL_S3_ABGABEBOX_ACCESS_KEY:-}
+      LOCAL_S3_ABGABEBOX_SECRET_KEY: ${LOCAL_S3_ABGABEBOX_SECRET_KEY:-}
     networks:
       - default
       - docker-api
+      - storage
       - cache
     depends_on:
       db:
@@ -255,6 +266,7 @@ services:
       # auch wenn /app/storage spaeter auf ein Netzwerk-/Cloud-Volume umgehaengt wird
       # (siehe FileService.ensure_thumbnail).
       - ./storage-local/thumbnails:/app/storage-local/thumbnails
+      - ./storage-local/work:/app/storage-local/work
       # Zugriff auf die von der Abgabebox geschriebenen Dateien fuer Admin-Downloads
       # und zum Loeschen beim "Wieder aufschalten" (siehe submission_service.py).
       # Read-write, da das Haupt-Backend ohnehin voll vertrauenswuerdig ist - die
@@ -414,6 +426,11 @@ services:
     environment:
       PHOTO_WORKER_DATABASE_URL: ${PHOTO_WORKER_DATABASE_URL}
       STORAGE_ROOT: /app/storage
+      ABGABEBOX_STORAGE_ROOT: /app/storage/abgabebox-uploads
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+    networks:
+      - default
+      - storage
     depends_on:
       # Waits for the real healthcheck, not just "container started" - backend's `command`
       # runs `alembic upgrade head` before uvicorn, so healthy here means the
@@ -533,6 +550,10 @@ services:
       FRIENDLY_CAPTCHA_API_KEY: ${FRIENDLY_CAPTCHA_API_KEY}
       ABGABEBOX_CAPTCHA_SESSION_SECRET: ${ABGABEBOX_CAPTCHA_SESSION_SECRET}
       CLAMAV_HOST: clamav
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+    networks:
+      - default
+      - storage
     depends_on:
       db:
         condition: service_healthy
@@ -616,6 +637,108 @@ services:
       - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.burst=10"
       - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.period=1m"
       - "traefik.http.middlewares.abgabebox-verify-body-limit.buffering.maxRequestBodyBytes=4096"
+
+  # Lokales S3 (Garage, docs-site/docs/technik/storage/lokales-s3.md). Beim ersten Deployment automatisch
+  # bereitgestellt; nur im internen Netz "storage" erreichbar, keine veröffentlichten Ports.
+  # Ob der Container laufen muss, entscheidet scripts/storage_controller.sh auf dem Host -
+  # gestoppt wird nur, nie gelöscht (Volume local_s3_data bleibt).
+  local-s3:
+    image: dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:-}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-}
+    volumes:
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+      - local_s3_data:/var/lib/garage
+    networks:
+      - storage
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Richtet Layout, Schlüssel und Buckets idempotent ein (infra/garage/bootstrap.py) und beendet sich.
+  storage-init:
+    build:
+      context: ./backend
+    restart: "no"
+    environment:
+      GARAGE_ADMIN_URL: http://local-s3:3903
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-}
+      LOCAL_S3_BUCKET: hocx-main
+      LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
+      LOCAL_S3_ACCESS_KEY: ${LOCAL_S3_ACCESS_KEY:-}
+      LOCAL_S3_SECRET_KEY: ${LOCAL_S3_SECRET_KEY:-}
+      LOCAL_S3_ABGABEBOX_ACCESS_KEY: ${LOCAL_S3_ABGABEBOX_ACCESS_KEY:-}
+      LOCAL_S3_ABGABEBOX_SECRET_KEY: ${LOCAL_S3_ABGABEBOX_SECRET_KEY:-}
+    volumes:
+      - ./infra/garage/bootstrap.py:/bootstrap/bootstrap.py:ro
+    command: ["python3", "/bootstrap/bootstrap.py"]
+    networks:
+      - storage
+    depends_on:
+      local-s3:
+        condition: service_healthy
+
+  # Storage-Migrations-Worker (app/workers/storage_worker.py): gleicher Code wie das Backend,
+  # eigener Prozess mit eigenem Ressourcenbudget. Mehrere Instanzen sind sicher (Lease/Fencing).
+  storage-worker:
+    build:
+      context: ./backend
+    user: "0:0"
+    restart: unless-stopped
+    mem_limit: 1024m
+    cpus: 1.0
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOCX_ENVIRONMENT: development
+      DATABASE_URL: ${DATABASE_URL}
+      APP_DATABASE_URL: ${APP_DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      ADMIN_AUTH_SECRET: ${ADMIN_AUTH_SECRET}
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+    command: ["python", "-m", "app.workers.storage_worker"]
+    volumes:
+      - ./backend:/app
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+      # Ziel von scripts/backup_storage.sh (Objekt-Backup, siehe docs technik/storage/backup.md)
+      - ./backups/storage:/app/backups/storage
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   clamav:
     image: clamav/clamav@sha256:9cb27d7660bdf66e9878c832cb433dd8aa152cfbe16f3c2c0084c80b04ae22b4
@@ -738,7 +861,11 @@ networks:
   # Siehe traefik-socket-proxy: nur Traefik und sein Proxy.
   traefik-docker-api:
     internal: true
+  # Objektspeicher: nur Backend, Worker, Abgabebox und Foto-Worker erreichen das lokale S3.
+  storage:
+    internal: true
 
 volumes:
   postgres_data:
   clamav_db:
+  local_s3_data:

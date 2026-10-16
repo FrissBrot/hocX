@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from app import scanner
 from app.core.config import settings
+from app.core.storage import MAIN, get_object_store, namespace_for_root, new_object_key
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
 from app.core.security import hash_password
 from app.models import (
@@ -331,12 +332,20 @@ class TenantImportService:
         source = _resolve_within_extract_dir(self.extract_dir, member_path)
         if not source.exists():
             return None
-        suffix = Path(member_path).suffix
-        target_dir = Path(root) / "tenant_imports" / f"tenant-{new_tenant_id}" / subdir
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / f"{uuid4().hex}{suffix}"
-        shutil.copy2(source, target_path)
-        return str(target_path.relative_to(Path(root).resolve()))
+        # subdir kann Werte aus dem Manifest enthalten (part_type/code) - validate_key schliesst
+        # Traversal-Segmente aus, der Key bleibt unter tenant_imports/tenant-<id>/.
+        try:
+            key = new_object_key("tenant_imports", f"tenant-{new_tenant_id}", *[p for p in subdir.split("/") if p], filename=member_path)
+        except ValueError:
+            return None
+        get_object_store().put_file(self.db, namespace_for_root(root), key, source)
+        return key
+
+    def _member_source(self, member_path: str | None) -> Path | None:
+        if member_path is None:
+            return None
+        source = _resolve_within_extract_dir(self.extract_dir, member_path)
+        return source if source.exists() else None
 
     def _warn_missing_user(self, table_name: str, email: str | None) -> None:
         if email is not None:
@@ -816,7 +825,7 @@ class TenantImportService:
                     path = self._restore_file(part.get("storage_path"), root=settings.storage_root, new_tenant_id=new_tenant_id, subdir="document_assets")
                     if path is None:
                         continue
-                    content = (Path(settings.storage_root) / path).read_bytes()
+                    content = get_object_store().get_bytes(MAIN, path)
                     family = None
                     if kind == "font":
                         try:
@@ -1268,8 +1277,8 @@ class TenantImportService:
             data = self._resolve_row("stored_file", row)
             is_abgabebox = row["id"] in abgabebox_ids
             root = settings.abgabebox_storage_root if is_abgabebox else settings.storage_root
-            new_storage_path = self._restore_file(data.get("storage_path"), root=root, new_tenant_id=new_tenant_id, subdir="files")
-            if new_storage_path is None:
+            source = self._member_source(data.get("storage_path"))
+            if source is None:
                 self.warnings.append(f"Datei '{row.get('original_name')}' fehlte im Export, übersprungen.")
                 continue
             # SECURITY (audit S4, 2026-08-16): never trust data["scan_status"] from the
@@ -1280,19 +1289,23 @@ class TenantImportService:
             # trusting an attacker-supplied verdict or sitting at "pending" forever with no
             # sweep ever reaching it (the periodic rescan sweeps are scoped to their own
             # storage-path prefixes, which tenant-import restores don't share).
-            absolute_path = Path(root).resolve() / new_storage_path
-            scan_status = scanner.scan_file(absolute_path, host=settings.clamav_host, port=settings.clamav_port)
+            # Geprüft wird die entpackte Datei, bevor sie überhaupt im Objektspeicher landet.
+            scan_status = scanner.scan_file(source, host=settings.clamav_host, port=settings.clamav_port)
             if scan_status == "infected":
-                absolute_path.unlink(missing_ok=True)
                 self.warnings.append(f"Datei '{row.get('original_name')}' wurde von der Virenprüfung als infiziert erkannt und wurde nicht importiert.")
+                continue
+            new_storage_path = self._restore_file(data.get("storage_path"), root=root, new_tenant_id=new_tenant_id, subdir="files")
+            if new_storage_path is None:
+                self.warnings.append(f"Datei '{row.get('original_name')}' fehlte im Export, übersprungen.")
                 continue
             # thumbnail_path NULL (Audit MAIN-BE-003): Thumbnails heissen "<id>.jpg" im global
             # geteilten thumbnail_root - der exportierte Name zeigt hier auf die Vorschau einer
             # beliebigen anderen Datei (oft eines anderen Mandanten). ensure_thumbnail erzeugt
             # die Vorschau beim ersten Abruf neu.
-            if absolute_path.suffix.lower() == ".pdf" or data.get("mime_type") == "application/pdf":
+            # TYPST-007: Hash der mitgelieferten PDF (entpackte Datei = genau die importierten Bytes)
+            if source.suffix.lower() == ".pdf" or data.get("mime_type") == "application/pdf":
                 digest = hashlib.sha256()
-                with absolute_path.open("rb") as handle:
+                with source.open("rb") as handle:
                     for chunk in iter(lambda: handle.read(1024 * 1024), b""):
                         digest.update(chunk)
                 self._imported_pdf_hashes.add(digest.hexdigest())
