@@ -112,10 +112,13 @@ def image_tag(image: str | None) -> str | None:
     return name.rsplit(":", 1)[1] if ":" in name else None
 
 
-def evaluate_container(container: ContainerStatusRead) -> ContainerStatusRead:
+def evaluate_container(container: ContainerStatusRead, *, one_shot: bool = False) -> ContainerStatusRead:
     reasons: list[str] = []
     status: HealthStatus = "ok"
-    if container.state != "running":
+    # Einmal-Dienste (restart: "no", z. B. storage-init) laufen beim Start durch und beenden sich;
+    # sauber mit Exit 0 beendet ist ihr Sollzustand, nur ein Fehler-Exit ist ein Problem.
+    finished_cleanly = one_shot and container.state == "exited" and container.exit_code == 0
+    if container.state != "running" and not finished_cleanly:
         reasons.append("not_running")
         status = "critical"
     if container.health == "unhealthy":
@@ -141,6 +144,7 @@ def _container_from_docker(summary: dict, details: dict, stats: dict | None) -> 
     image = details.get("Config", {}).get("Image") or summary.get("Image")
     memory_bytes, memory_limit = _memory(stats)
     name = (summary.get("Names") or [details.get("Name", "")])[0].lstrip("/")
+    restart_policy = ((details.get("HostConfig") or {}).get("RestartPolicy") or {}).get("Name")
     return evaluate_container(
         ContainerStatusRead(
             name=name,
@@ -159,7 +163,8 @@ def _container_from_docker(summary: dict, details: dict, stats: dict | None) -> 
             memory_bytes=memory_bytes,
             memory_limit_bytes=memory_limit,
             status="ok",
-        )
+        ),
+        one_shot=restart_policy in ("", "no"),
     )
 
 

@@ -32,13 +32,13 @@ def _admin() -> CurrentAdmin:
     return CurrentAdmin(admin_id=1, admin_public_id=uuid.uuid4(), email="admin@example.com", display_name="Test Admin", role="owner")
 
 
-def _container(service: str = "backend", **overrides) -> ContainerStatusRead:
+def _container(service: str = "backend", *, one_shot: bool = False, **overrides) -> ContainerStatusRead:
     values = dict(
         name=f"hocx-{service}-1", service=service, container_id="abc123def456", state="running", health="healthy",
         started_at=NOW - timedelta(hours=1), status="ok",
     )
     values.update(overrides)
-    return system_health_service.evaluate_container(ContainerStatusRead(**values))
+    return system_health_service.evaluate_container(ContainerStatusRead(**values), one_shot=one_shot)
 
 
 def _snapshot(*, containers=None, checks=None, collected_at=NOW) -> SystemHealthSnapshot:
@@ -95,6 +95,15 @@ def test_evaluate_container_flags_unhealthy_stopped_oom_and_memory():
     assert stopped.status == "critical" and stopped.reasons == ["not_running", "oom_killed"]
     memory = _container(memory_bytes=950, memory_limit_bytes=1000)
     assert (memory.status, memory.reasons) == ("warning", ["memory_high"])
+
+
+def test_evaluate_container_accepts_cleanly_finished_one_shot_service():
+    done = _container("storage-init", one_shot=True, state="exited", health=None, exit_code=0)
+    assert (done.status, done.reasons) == ("ok", [])
+    failed = _container("storage-init", one_shot=True, state="exited", health=None, exit_code=1)
+    assert (failed.status, failed.reasons) == ("critical", ["not_running"])
+    # Dauerdienste bleiben kritisch, auch wenn sie mit Exit 0 enden.
+    assert _container(state="exited", health=None, exit_code=0).reasons == ["not_running"]
 
 
 @pytest.mark.parametrize(
