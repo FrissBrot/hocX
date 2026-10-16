@@ -1,6 +1,6 @@
 """Dokument-Engine: bisherige Dokumentvorlagen übernehmen und die TeX-Strukturen entfernen.
 
-1. Jede document_template wird ein document_style (Tokens über app.documents.legacy). Bild- und
+1. Jede document_template wird ein document_style (Tokens über die hier eingefrorene Übersetzung, Stand app.documents.legacy 2026-10-16). Bild- und
    Schrift-Bestandteile (document_template_part) werden document_style_asset; die Datei bleibt am
    selben Speicherort (keine Kopie, kein Verlust). Eigener Vorlagen-Code (Slots) entfällt; betroffene
    Mandanten werden im Migrationsprotokoll genannt (siehe auch Release-Notes).
@@ -20,6 +20,7 @@ Nicht umkehrbar: downgrade() bricht ab.
 from __future__ import annotations
 
 import json
+import re
 import logging
 import os
 from pathlib import Path
@@ -58,9 +59,124 @@ def _table_exists(conn, name: str) -> bool:
     return bool(conn.execute(sa.text("SELECT to_regclass(:name)"), {"name": f"public.{name}"}).scalar())
 
 
-def upgrade() -> None:
-    from app.documents.legacy import has_custom_slots, legacy_part_refs, tokens_from_legacy
+# ── Eingefrorene Übersetzung (Audit TYPST-014) ─────────────────────────────────────────────
+# Stand von app/documents/legacy.py und DocumentStyleTokens am 2026-10-16, bewusst kopiert statt
+# importiert: spätere Änderungen am App-Code dürfen das Ergebnis dieser historischen Migration
+# nicht verändern. Nicht anpassen; neue Token-Felder kommen über ihre Standardwerte dazu.
+_FROZEN_TOKEN_DEFAULTS: dict = {
+    "primary_color": "#174b7a",
+    "secondary_color": "#4f6d7a",
+    "font": "style",
+    "custom_fonts": {"regular": None, "bold": None, "italic": None, "bold_italic": None},
+    "base_size": 11,
+    "line_spacing": "normal",
+    "margins": "normal",
+    "orientation": "portrait",
+    "logo_asset_id": None,
+    "footer_image_asset_id": None,
+    "sender": "",
+    "sender_color": None,
+    "place": "",
+    "header": "standard",
+    "footer": "standard",
+    "title_page": "modern",
+    "toc": "on",
+    "numbering": True,
+    "toc_block_titles": True,
+    "show_metadata": True,
+    "watermark_draft": True,
+    "verify_show_url": True,
+    "verify_show_id": True,
+    "verify_show_qr": True,
+}
+_HEADER = {"none": "none", "minimal": "minimal", "standard": "standard", "bar": "bar", "logo": "logo", "logo_bar": "logo_bar", "logo_date": "logo"}
+_FOOTER = {"none": "none", "minimal": "minimal", "standard": "standard", "with_version": "with_version", "date_page": "date_page"}
+_TITLE = {"none": "none", "minimal": "minimal", "modern": "modern", "bold": "bold", "combined_toc": "cover"}
+_FONT = {"arial": "liberation_sans", "helvet": "liberation_sans", "palatino": "liberation_serif"}
+_FONT_SLOTS = {"font_regular": "regular", "font_bold": "bold", "font_italic": "italic", "font_bold_italic": "bold_italic"}
 
+
+def _color(value, fallback: str) -> str:
+    text = str(value or "").strip().lstrip("#")
+    return f"#{text.lower()}" if re.fullmatch(r"[0-9a-fA-F]{6}", text) else fallback
+
+
+def _int(value) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def legacy_part_refs(config: dict | None) -> dict[str, int]:
+    config = config or {}
+    refs: dict[str, int] = {}
+    assets = config.get("title_assets") or {}
+    for role, key in (("logo", "header_image_part_id"), ("footer_image", "footer_image_part_id")):
+        part_id = _int(assets.get(key))
+        if part_id:
+            refs[role] = part_id
+    for slot in _FONT_SLOTS:
+        part_id = _int(((config.get("theme") or {}).get("font_parts") or {}).get(slot))
+        if part_id:
+            refs[slot] = part_id
+    return refs
+
+
+def has_custom_slots(config: dict | None) -> bool:
+    return any(value for value in ((config or {}).get("slots") or {}).values())
+
+
+def tokens_from_legacy(config: dict | None, asset_ids: dict[str, str] | None = None) -> dict:
+    config = config or {}
+    asset_ids = asset_ids or {}
+    theme = config.get("theme") or {}
+    options = config.get("options") or {}
+    presets = config.get("presets") or {}
+    title_text = config.get("title_text") or {}
+
+    size = _int(str(theme.get("font_size", "11")).replace("pt", "")) or 11
+    font = _FONT.get(str(theme.get("font_family") or ""), "style")
+    custom_fonts = {cut: asset_ids.get(slot) for slot, cut in _FONT_SLOTS.items()}
+    if theme.get("font_family") in ("century_gothic", "uploaded") and custom_fonts.get("regular"):
+        font = "custom"
+
+    title_page = _TITLE.get(str(presets.get("title_page") or ""), "none" if presets else "modern")
+    if presets:
+        toc_preset = str(presets.get("toc") or "standard")
+        toc = "off" if toc_preset == "none" else ("compact" if toc_preset == "compact" else "on")
+    else:
+        toc = "on" if options.get("show_toc", True) else "off"
+    if title_page == "cover" and toc == "off":
+        toc = "on"
+    if toc in ("on", "compact") and options.get("toc_spacing") in ("compact", "very_compact"):
+        toc = options["toc_spacing"]
+
+    tokens = json.loads(json.dumps(_FROZEN_TOKEN_DEFAULTS))
+    tokens.update(
+        primary_color=_color(theme.get("primary_color"), "#174b7a"),
+        secondary_color=_color(theme.get("secondary_color"), "#4f6d7a"),
+        font=font,
+        base_size=min(max(size, 10), 12),
+        orientation="landscape" if options.get("orientation") == "landscape" else "portrait",
+        logo_asset_id=asset_ids.get("logo"),
+        footer_image_asset_id=asset_ids.get("footer_image"),
+        sender=str(title_text.get("footer_contact") or "")[:600],
+        sender_color=_color(title_text.get("footer_color"), "") or None,
+        place=str(title_text.get("location") or "")[:120],
+        header=_HEADER.get(str(presets.get("header") or "standard"), "standard"),
+        footer=_FOOTER.get(str(presets.get("footer") or "standard"), "standard"),
+        title_page=title_page,
+        toc=toc,
+        numbering=options.get("numbering_mode", "sections") == "sections",
+        show_metadata=not options.get("hide_metadata", False),
+    )
+    if font == "custom":
+        tokens["custom_fonts"] = custom_fonts
+    return tokens
+
+
+def upgrade() -> None:
     conn = op.get_bind()
     if _table_exists(conn, "document_template"):
         parts = {
@@ -109,8 +225,8 @@ def upgrade() -> None:
                     ).scalar())
                 role_ids[role] = asset_ids[key]
             tokens = tokens_from_legacy(config, role_ids)
-            if tokens.font == "custom" and not role_ids.get("font_regular"):
-                tokens.font = "style"
+            if tokens["font"] == "custom" and not role_ids.get("font_regular"):
+                tokens["font"] = "style"
             is_default = bool(template.is_default and template.is_active) and template.tenant_id not in default_seen
             if is_default:
                 default_seen.add(template.tenant_id)
@@ -119,7 +235,7 @@ def upgrade() -> None:
                     "INSERT INTO document_style (tenant_id, name, style_key, tokens_json, is_default, version) "
                     "VALUES (:tenant_id, :name, 'modern', CAST(:tokens AS jsonb), :is_default, 1) RETURNING id"
                 ),
-                {"tenant_id": template.tenant_id, "name": template.name, "tokens": json.dumps(tokens.model_dump(mode="json")), "is_default": is_default},
+                {"tenant_id": template.tenant_id, "name": template.name, "tokens": json.dumps(tokens), "is_default": is_default},
             ).scalar()
 
         # Mandanten ohne Standard: erster übernommener Stil wird Standard
