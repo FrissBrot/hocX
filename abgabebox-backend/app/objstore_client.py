@@ -924,6 +924,16 @@ class ObjectStore:
         backend.delete(namespace, key)
         self._register(db, ticket, namespace, key, "delete", None)
 
+    def discard_unregistered(self, namespace: str, key: str) -> None:
+        """Entfernt ein Objekt physisch, ohne das Register anzufassen - nur für Objekte, deren
+        Registrierung mit der Transaktion des Aufrufers zurückgerollt wurde (Upload ohne Commit).
+        Ein Registereintrag würde hier ein nie sichtbar gewordenes Objekt protokollieren und auf
+        Zeilensperren einer noch offenen Transaktion warten. Wechselt die Generation genau
+        dazwischen, bleibt das Objekt im alten Backend liegen und erscheint im Prüfbericht."""
+        validate_namespace(namespace)
+        validate_key(key)
+        self.active_backend().delete(namespace, key)
+
     def copy(self, db: Any, namespace: str, source_key: str, target_key: str) -> ObjectInfo:
         validate_key(source_key)
         validate_key(target_key)

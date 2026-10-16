@@ -9,6 +9,8 @@
 // Functions, not constants: this module has no React component to call useTranslations() in,
 // so each caller passes its own `t` (usually `useTranslations("templates")`) - see
 // components/ui/section-tabs.ts for the same pattern.
+import { pickableElementTypes } from "@/lib/element-types/registry";
+
 type TFunc = (key: string) => string;
 
 export type ElementTypeOption = {
@@ -17,7 +19,8 @@ export type ElementTypeOption = {
   description: string;
 };
 
-const ELEMENT_TYPE_IDS = ["1", "2", "3", "6", "7", "9", "10", "11", "12", "13", "14", "15", "16", "17"] as const;
+// Auswählbare Typen aus der Elementtyp-Registry (element-types/registry.json).
+const ELEMENT_TYPE_IDS = pickableElementTypes().map((type) => String(type.id));
 
 export function elementTypeOptions(t: TFunc): ElementTypeOption[] {
   return ELEMENT_TYPE_IDS.map((value) => ({

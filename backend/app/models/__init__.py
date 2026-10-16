@@ -1,6 +1,7 @@
 from app.models.entities import (
     AppUser,
     AttendanceFine,
+    FineTariff,
     CycleConfig,
     DocumentTemplate,
     FinanceAccount,
@@ -72,6 +73,7 @@ from app.models.entities import (
 __all__ = [
     "AppUser",
     "AttendanceFine",
+    "FineTariff",
     "CycleConfig",
     "DocumentTemplate",
     "FinanceAccount",

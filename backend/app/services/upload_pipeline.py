@@ -18,6 +18,7 @@ a plain synchronous function usable from both contexts, instead of forcing a syn
 
 from __future__ import annotations
 
+import logging
 import hashlib
 import io
 import zipfile
@@ -30,7 +31,7 @@ from uuid import uuid4
 import imagehash
 from fastapi import HTTPException, UploadFile
 from PIL import Image, ImageChops, ImageOps
-from sqlalchemy import text, select, func
+from sqlalchemy import event, text, select, func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -40,6 +41,8 @@ from app.models.entities import GalleryUploadJob
 from app.repositories.file_repository import StoredFileRepository
 from app.services.apple_media import MAX_LIVE_CLIP_BYTES, is_heic, is_live_clip, pair_live_clips
 from app.services.photo_quality import compute_quality_scores
+
+_logger = logging.getLogger(__name__)
 
 ALLOWED_IMAGE_MIME_TYPES = {
     "image/jpeg",
@@ -310,11 +313,21 @@ def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | Gallery
 
 
 STAGE_CHUNK_BYTES = 4 * 1024 * 1024  # 4 MB
+# Mindestens so viel Platz bleibt beim Zwischenspeichern frei (gleiche Reserve wie
+# upload_admission). Unbekannte Grössen werden während des Schreibens geprüft statt vorab
+# den Platz für max_bytes (bis 10 GiB) zu verlangen.
+STAGE_DISK_RESERVE_BYTES = 256 * 1024**2
+
+
+def _ensure_free_space(target_dir: Path, needed: int) -> None:
+    import shutil
+
+    if shutil.disk_usage(target_dir).free < needed + STAGE_DISK_RESERVE_BYTES:
+        raise HTTPException(507, "Zu wenig freier Speicher für den Upload")
 
 
 async def stage_upload_to_disk(file: UploadFile, *, target_dir: Path, max_bytes: int, suffix: str) -> Path:
     """Kopiert begrenzt auf Platte und räumt auch bei Abbruch/Plattenfehlern auf."""
-    import shutil
     from starlette.concurrency import run_in_threadpool
 
     if file.size is not None and file.size > max_bytes:
@@ -324,8 +337,7 @@ async def stage_upload_to_disk(file: UploadFile, *, target_dir: Path, max_bytes:
     if isinstance(file.file, GalleryTemporaryFile):
         target_path = target_dir / f"{uuid4().hex}{suffix}"
         return await run_in_threadpool(file.file.adopt, target_path)
-    if shutil.disk_usage(target_dir).free < (file.size or max_bytes) + 256 * 1024**2:
-        raise HTTPException(507, "Zu wenig freier Speicher für den Upload")
+    _ensure_free_space(target_dir, file.size or 0)
     target_path = target_dir / f"{uuid4().hex}{suffix}"
     written = 0
     try:
@@ -334,6 +346,8 @@ async def stage_upload_to_disk(file: UploadFile, *, target_dir: Path, max_bytes:
                 written += len(chunk)
                 if written > max_bytes:
                     raise HTTPException(413, f"{file.filename or 'Datei'}: zu gross (maximal {max_bytes // 1024**2} MiB)")
+                if file.size is None:
+                    _ensure_free_space(target_dir, len(chunk))
                 await run_in_threadpool(handle.write, chunk)
         return target_path
     except BaseException:
@@ -492,6 +506,46 @@ def _enforce_tenant_storage_quota(db: Session, *, tenant_id: int, repo: StoredFi
         )
 
 
+# Audit MAIN-BE-015: ingest_file schreibt Original und Thumbnail vor dem Commit des Aufrufers.
+# Scheitert dessen Commit (z. B. Sort-Index-Kollision bei parallelen Bild-Uploads), blieben die
+# Dateien als Waisen liegen. Die Pfade werden deshalb an der Session vermerkt: ein Commit gibt
+# sie frei, endet die Wurzel-Transaktion ohne Commit (Rollback/Close), werden sie gelöscht.
+_UNCOMMITTED_UPLOAD_PATHS_KEY = "hocx_uncommitted_upload_paths"
+
+
+def _track_uncommitted_path(db: Session, path: Path) -> None:
+    db.info.setdefault(_UNCOMMITTED_UPLOAD_PATHS_KEY, []).append(path)
+
+
+# Objekte im Objektspeicher (Original) werden sofort geschrieben, ihre Registrierung läuft in der
+# Transaktion des Aufrufers. Ohne Commit bliebe ein unregistriertes Objekt zurück - es wird nach
+# dem Rollback physisch wieder gelöscht (ohne Registereintrag, siehe discard_unregistered).
+_UNCOMMITTED_UPLOAD_OBJECTS_KEY = "hocx_uncommitted_upload_objects"
+
+
+def _track_uncommitted_object(db: Session, namespace: str, key: str) -> None:
+    db.info.setdefault(_UNCOMMITTED_UPLOAD_OBJECTS_KEY, []).append((namespace, key))
+
+
+@event.listens_for(Session, "after_commit")
+def _forget_committed_upload_paths(session: Session) -> None:
+    session.info.pop(_UNCOMMITTED_UPLOAD_PATHS_KEY, None)
+    session.info.pop(_UNCOMMITTED_UPLOAD_OBJECTS_KEY, None)
+
+
+@event.listens_for(Session, "after_transaction_end")
+def _remove_uncommitted_upload_paths(session: Session, transaction) -> None:
+    if transaction.parent is not None:
+        return
+    for path in session.info.pop(_UNCOMMITTED_UPLOAD_PATHS_KEY, None) or ():
+        path.unlink(missing_ok=True)
+    for namespace, key in session.info.pop(_UNCOMMITTED_UPLOAD_OBJECTS_KEY, None) or ():
+        try:
+            get_object_store().discard_unregistered(namespace, key)
+        except Exception:  # noqa: BLE001 - best effort; ein Rest erscheint im Prüfbericht der Migration
+            _logger.warning("Unregistriertes Upload-Objekt %s/%s konnte nicht entfernt werden", namespace, key, exc_info=True)
+
+
 @dataclass(frozen=True)
 class UploadPipelineResult:
     stored_file: StoredFile
@@ -565,6 +619,7 @@ def ingest_file(
     )
     # Schreibt über das Fence-/Journal-Protokoll in der Transaktion des Aufrufers (objstore_client).
     get_object_store().put_bytes(db, MAIN, relative_path, content, content_type=mime)
+    _track_uncommitted_object(db, MAIN, relative_path)
 
     checksum = hashlib.sha256(content).hexdigest()
     perceptual_hash: str | None = None
@@ -604,6 +659,7 @@ def ingest_file(
             thumbnail_root.mkdir(parents=True, exist_ok=True)
             thumbnail_target_path = thumbnail_root.resolve() / f"{stored_file.id}.jpg"
             thumbnail_target_path.write_bytes(thumbnail_bytes)
+            _track_uncommitted_path(db, thumbnail_target_path)
             stored_file.thumbnail_path = thumbnail_target_path.name
             stored_file.width = width
             stored_file.height = height

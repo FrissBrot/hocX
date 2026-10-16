@@ -33,6 +33,8 @@ def _app_routers(domain: str, domain_id: int) -> dict:
             "entryPoints": ["websecure"],
             "service": f"{settings.router_prefix}-frontend@docker",
             "priority": 10,
+            # Gleichzeitige Requests pro IP begrenzen wie auf der Hauptdomain (MAIN-OPS-013).
+            "middlewares": [f"{settings.traefik_middleware_prefix}web-inflight@docker"],
             "tls": {"certResolver": "letsencrypt"},
         },
         f"{base}-backend": {
@@ -40,6 +42,7 @@ def _app_routers(domain: str, domain_id: int) -> dict:
             "entryPoints": ["websecure"],
             "service": f"{settings.router_prefix}-backend@docker",
             "priority": 100,
+            "middlewares": [f"{settings.traefik_middleware_prefix}api-inflight@docker"],
             "tls": {"certResolver": "letsencrypt"},
         },
         f"{base}-auth": {
@@ -82,6 +85,7 @@ def _abgabebox_routers(domain: str, domain_id: int) -> dict:
             "entryPoints": ["websecure"],
             "service": f"{settings.router_prefix}-abgabebox-frontend@docker",
             "priority": 10,
+            "middlewares": [f"{settings.traefik_middleware_prefix}web-inflight@docker"],
             "tls": {"certResolver": "letsencrypt"},
         },
         f"{base}-backend": {
@@ -89,6 +93,7 @@ def _abgabebox_routers(domain: str, domain_id: int) -> dict:
             "entryPoints": ["websecure"],
             "service": f"{settings.router_prefix}-abgabebox-backend@docker",
             "priority": 100,
+            "middlewares": [f"{settings.traefik_middleware_prefix}api-inflight@docker"],
             "tls": {"certResolver": "letsencrypt"},
         },
         f"{base}-upload": {
@@ -107,7 +112,10 @@ def _abgabebox_routers(domain: str, domain_id: int) -> dict:
             "entryPoints": ["websecure"],
             "service": f"{settings.router_prefix}-abgabebox-backend@docker",
             "priority": 200,
-            "middlewares": [f"{settings.traefik_middleware_prefix}abgabebox-public-ratelimit@docker"],
+            "middlewares": [
+                f"{settings.traefik_middleware_prefix}abgabebox-public-ratelimit@docker",
+                f"{settings.traefik_middleware_prefix}api-inflight@docker",
+            ],
             "tls": {"certResolver": "letsencrypt"},
         },
     }

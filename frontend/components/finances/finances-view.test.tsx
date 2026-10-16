@@ -6,7 +6,8 @@ import type { FinanceAccount, FinanceTransaction } from "@/types/api";
 const fetchMock = vi.fn();
 vi.mock("@/lib/api/client", () => ({ browserApiFetch: (...args: unknown[]) => fetchMock(...args) }));
 vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn() }));
-vi.mock("@/contexts/toast-context", () => ({ useToast: () => vi.fn() }));
+const toastMock = vi.fn();
+vi.mock("@/contexts/toast-context", () => ({ useToast: () => toastMock }));
 
 const account: FinanceAccount = { id: "account-1", name: "Vereinskasse", currency_label: "CHF", description: null, balance: 8240.5, provisional_balance: 1850, transaction_count: 1, created_at: "2026-10-04" };
 const expense: FinanceTransaction = { id: "tx-1", account_id: account.id, amount: -30, description: "Raummiete", transaction_date: "2026-09-30", protocol_id: null, created_at: "2026-09-30", running_balance: 8240.5 };
@@ -19,7 +20,7 @@ async function openForm(transactions: FinanceTransaction[] = []) {
   fireEvent.click(screen.getByRole("button", { name: "+ Transaktion" }));
 }
 
-beforeEach(() => fetchMock.mockReset());
+beforeEach(() => { fetchMock.mockReset(); toastMock.mockReset(); });
 
 describe("Transaktionsformular", () => {
   it.each([["Einnahme", 50.5], ["Ausgabe", -50.5]])("bucht %s mit dem passenden Vorzeichen", async (direction, expected) => {
@@ -59,5 +60,21 @@ describe("Transaktionsformular", () => {
     fireEvent.change(date, { target: { value: "30.09.2026" } });
     fireEvent.click(screen.getByRole("button", { name: "Heute" }));
     expect(date).toHaveValue(original);
+  });
+});
+
+describe("Konflikte aus dem Backend", () => {
+  it("zeigt fuer eine gesperrte Buchung (409) eine uebersetzte Meldung statt des Rohtexts", async () => {
+    await openForm([expense]);
+    fireEvent.click(screen.getByRole("button", { name: "Abbrechen" }));
+    await screen.findByText("Raummiete");
+    fetchMock.mockImplementation((url: string, options?: { method?: string }) => {
+      if (options?.method === "PATCH") return Promise.reject(Object.assign(new Error("raw backend detail"), { status: 409 }));
+      return Promise.resolve(url === "/api/finance/accounts" ? [account] : [expense]);
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "Bearbeiten" }).at(-1)!);
+    fireEvent.click(screen.getByRole("button", { name: "Aktualisieren" }));
+    await waitFor(() => expect(toastMock).toHaveBeenCalledWith(expect.stringContaining("einkassierten Busse"), "error"));
+    expect(toastMock).not.toHaveBeenCalledWith("raw backend detail", "error");
   });
 });

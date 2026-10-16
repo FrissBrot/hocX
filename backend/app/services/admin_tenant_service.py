@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.storage import ABGABEBOX, MAIN, StorageError, delete_prefix, get_object_store
+from app.core.error_log import record_system_error
 from app.models import (
     AppUser,
     Feature,
@@ -55,6 +56,8 @@ from app.services.tenant_service import apply_tenant_profile_image
 
 _logger = logging.getLogger(__name__)
 
+
+_logger = logging.getLogger(__name__)
 
 def build_admin_tenant_profile_image_url(tenant_public_id: uuid.UUID, profile_image_path: str | None) -> str | None:
     if not profile_image_path:
@@ -673,11 +676,16 @@ class AdminTenantService:
             if upload_ids
             else set()
         )
-        stored_files = db.execute(select(StoredFile.storage_path, StoredFile.id).where(StoredFile.tenant_id == tenant_id)).all()
+        stored_files = db.execute(
+            select(StoredFile.storage_path, StoredFile.id, StoredFile.thumbnail_path).where(StoredFile.tenant_id == tenant_id)
+        ).all()
         stored_file_paths = [
             (row.storage_path, ABGABEBOX if row.id in abgabebox_stored_file_ids else MAIN)
             for row in stored_files
         ]
+        # Vorschaubilder liegen getrennt im thumbnail_root (Audit MAIN-BE-005); nur die eigene
+        # "<id>.jpg" löschen - ein übernommener Fremdname gehört einer anderen Datei.
+        thumbnail_paths = [row.thumbnail_path for row in stored_files if row.thumbnail_path == f"{row.id}.jpg"]
         profile_image_path = tenant.profile_image_path
 
         db.execute(delete(WordImportDocument).where(WordImportDocument.tenant_id == tenant_id))
@@ -695,11 +703,18 @@ class AdminTenantService:
             self._delete_object_quietly(db, namespace, storage_path)
         if profile_image_path:
             self._delete_object_quietly(db, MAIN, profile_image_path)
+        for thumbnail_path in thumbnail_paths:
+            self._unlink_quietly(settings.thumbnail_root, thumbnail_path)
+        self._remove_tenant_directories(db, tenant_id)
+        return True
+
+    def _remove_tenant_directories(self, db: Session, tenant_id: int) -> None:
         for relative_dir in (
             f"document_templates/tenant-{tenant_id}",
             f"document_template_parts/tenant-{tenant_id}",
             f"document_template_snapshots/tenant-{tenant_id}",
             f"tenant_imports/tenant-{tenant_id}",
+            f"tenant_clones/tenant-{tenant_id}",
         ):
             try:
                 delete_prefix(db, MAIN, relative_dir)
@@ -711,7 +726,33 @@ class AdminTenantService:
             directory = _safe_storage_path(settings.storage_root, relative_dir)
             if directory.exists():
                 shutil.rmtree(directory, ignore_errors=True)
-        return True
+        # Import und Klon legen Abgabebox-Dateien unter dem Abgabebox-Root ab (MAIN-BE-006).
+        for relative_dir in (f"tenant_imports/tenant-{tenant_id}", f"tenant_clones/tenant-{tenant_id}"):
+            directory = _safe_storage_path(settings.abgabebox_storage_root, relative_dir)
+            if directory.exists():
+                shutil.rmtree(directory, ignore_errors=True)
+
+    def cleanup_partial_tenant(self, db: Session, tenant_id: int, *, original: BaseException) -> None:
+        """Räumt einen halb importierten/geklonten Mandanten ab (Audit MAIN-BE-006).
+
+        Nutzt delete_tenant (RESTRICT-Reihenfolge, Dateien, Thumbnails, Verzeichnisse) statt
+        eines nackten DELETE FROM tenant. Scheitert das Aufräumen selbst, wird dieser Fehler
+        protokolliert (system_error_log), die ursprüngliche Exception bleibt aber die, die der
+        Aufrufer weiterwirft.
+        """
+        try:
+            db.rollback()
+            if not self.delete_tenant(db, tenant_id):
+                # Mandantenzeile schon weg (z. B. nichts committet) - kopierte Dateien liegen
+                # trotzdem in den Mandantenverzeichnissen.
+                self._remove_tenant_directories(db, tenant_id)
+        except Exception as cleanup_exc:
+            db.rollback()
+            _logger.exception(
+                "Aufräumen des unvollständigen Mandanten %s ist fehlgeschlagen (Ursache: %r)", tenant_id, original
+            )
+            # tenant_id bewusst None: die Zeile kann halb gelöscht sein (FK auf tenant).
+            record_system_error(db, exc=cleanup_exc)
 
     def _delete_object_quietly(self, db: Session, namespace: str, key: str) -> None:
         """Best effort wie bisher _unlink_quietly: eine verbliebene Datei ist danach ein

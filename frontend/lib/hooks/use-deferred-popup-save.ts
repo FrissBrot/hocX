@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 /** Verzögertes Autosave; Schliessen wartet auf alle noch ausstehenden Änderungen. */
 export function useDeferredPopupSave() {
+  const tCommon = useTranslations("common");
   const pending = useRef<(() => Promise<void>) | null>(null);
   const running = useRef<Promise<boolean> | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -28,7 +30,7 @@ export function useDeferredPopupSave() {
         }
         return true;
       } catch (error) {
-        setSaveError(error instanceof Error ? error.message : "Änderungen konnten nicht gespeichert werden.");
+        setSaveError(error instanceof Error ? error.message : tCommon("clientErrors.saveFailed"));
         return false;
       } finally { setSaving(false); }
     };

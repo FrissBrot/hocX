@@ -49,7 +49,7 @@ export async function requireSession(): Promise<SessionInfo> {
     // eigentlichen Login-Loops - hier geht es nur um den verbleibenden Ambiguitäts-Fall). Ein
     // regulärer Error lässt stattdessen die error.tsx-Boundary greifen, die KEINE automatische
     // Weiterleitung auslöst.
-    throw new Error("Sitzungsprüfung fehlgeschlagen (Backend nicht erreichbar)");
+    throw new Error("Sitzungsprüfung fehlgeschlagen (Backend nicht erreichbar)"); // i18n-ok: Server-Log, error.tsx zeigt eigenen Text
   }
   if (!session.authenticated) {
     // Login rendert nie auf einer Mandanten-Custom-Domain — von dort muss serverseitig zur

@@ -1,11 +1,44 @@
 services:
+  # Traefik liest die Docker-API nur über diesen Proxy (Audit MAIN-OPS-004): der rohe Socket ist
+  # root-äquivalent, Traefik hängt am Internet. Erlaubt sind nur GET auf Container, Events,
+  # Ping und Version - genau das, was der Docker-Provider braucht (live geprüft 2026-10-16:
+  # Router, später gestartete Container über Events; POST, /info, /secrets, exec -> 403).
+  traefik-socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:3.4.6-r0-ls101@sha256:362cadf55b3c7920189347d0f4d60b389e2f80e929581bf10793f2371aab41e5
+    restart: unless-stopped
+    mem_limit: 64m
+    cpus: 0.25
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /run
+    environment:
+      CONTAINERS: 1
+      EVENTS: 1
+      PING: 1
+      VERSION: 1
+      POST: 0
+      LOG_LEVEL: warning
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik-docker-api
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   traefik:
     # v3.1 hardcoded Docker API version 1.24 when talking to the docker socket - broke
     # entirely against Docker Engine >= 29 (minimum supported API raised to 1.40+):
     # "client version 1.24 is too old", provider never loads any router config, Traefik
     # falls back to its self-signed default cert for every host. v3.6.1 replaced the
     # hardcoded version with real negotiation against the daemon (traefik/traefik#12256).
-    image: traefik:v3.6.1
+    image: traefik:v3.6.1@sha256:fd5932c796f7e2db9fd6bff485ef693d53797f0ee8ad03dc68aa424ea6f21958
     restart: unless-stopped
     # Audit finding, 2026-08-27: this file had NONE of the hardening docker-compose.yml
     # (dev) already applies to its own (profile-gated, non-internet-facing) traefik service -
@@ -24,9 +57,8 @@ services:
       - ALL
     # Needed to bind entrypoints 80/443/8443 (<1024) - the image runs as root by default
     # (no USER in its Dockerfile) but with all capabilities dropped even root cannot bind
-    # privileged ports without this. Reading /var/run/docker.sock still works: the socket
-    # is root-owned and this container's effective UID is 0, so the owner permission bits
-    # apply without needing CAP_DAC_OVERRIDE.
+    # privileged ports without this. Die Docker-API erreicht Traefik nur über
+    # traefik-socket-proxy (MAIN-OPS-004), nicht mehr über den gemounteten Socket.
     cap_add:
       - NET_BIND_SERVICE
     security_opt:
@@ -48,11 +80,13 @@ services:
     # this uses a real (disk-backed) named volume instead - the ACME storage files under
     # /letsencrypt are already writable via the existing bind mount below and need no change.
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./infra/traefik/letsencrypt:/letsencrypt
       - ./infra/traefik/dynamic:/etc/traefik/dynamic:ro
       - traefik_tmp:/tmp
+    networks:
+      - default
+      - traefik-docker-api
     logging:
       driver: json-file
       options:
@@ -61,6 +95,7 @@ services:
     depends_on:
       - frontend
       - backend
+      - traefik-socket-proxy
     environment:
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL}
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPTDNS_ACME_EMAIL: ${ACME_EMAIL}
@@ -83,6 +118,11 @@ services:
 
 volumes:
   traefik_tmp:
+
+networks:
+  # Nur Traefik und sein Socket-Proxy (MAIN-OPS-004).
+  traefik-docker-api:
+    internal: true
 
 secrets:
   # file: statt environment: - siehe docker-compose.release.yml fuer die Begruendung

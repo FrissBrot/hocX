@@ -190,6 +190,18 @@ class SessionRead(BaseModel):
     bridge_redirect_url: str | None = None
 
 
+class BridgePreviewRead(BaseModel):
+    """Bestätigungsseite des Domain-Wechsels (MAIN-SEC-006): wer würde angemeldet."""
+
+    display_name: str
+    email: str
+    tenant_name: str
+
+
+class BridgeRedeemRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=200)
+
+
 class TenantUpdate(BaseModel):
     name: str | None = None
     public_slug: str | None = Field(default=None, pattern=r"^[a-z0-9-]+$")

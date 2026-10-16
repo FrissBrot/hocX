@@ -196,3 +196,88 @@ def test_delete_self_factor_blocks_last_factor_for_required_user(db):
         assert False, "expected delete_self_factor to block removing the last required factor"
     except HTTPException as exc:
         assert exc.status_code == 409
+
+
+# ---- MAIN-SEC-001: Faktor-Einrichtung im Login nur ohne bestehenden Faktor ----
+
+
+def _user_with_totp(db, email: str):
+    tenant = make_tenant(db)
+    user = make_app_user(db, email=email, tenant_id=tenant.id, role_code="writer")
+    db.add(
+        UserMfaFactor(
+            user_id=user.id,
+            factor_type="totp",
+            label="Auth App",
+            secret_encrypted=encrypt_secret(generate_totp_secret()),
+        )
+    )
+    db.flush()
+    return user
+
+
+def test_login_enrollment_rejected_when_factor_exists(db):
+    user = _user_with_totp(db, "sec001-totp@example.com")
+    service = MfaService()
+    pending = service.prepare_login(db, user=user, current_user=build_current_user(db, user), request_host="app.example.com")
+    assert pending is not None
+    assert pending.status == "verification_required"
+    assert pending.can_add_totp is False
+    assert pending.can_add_passkey is False
+
+    for start in (
+        lambda: service.start_login_totp_enrollment(db, pending.ticket),
+        lambda: service.start_login_passkey_registration(
+            db, pending.ticket, request_host="app.example.com", request_origin="https://app.example.com"
+        ),
+    ):
+        try:
+            start()
+        except HTTPException as exc:
+            assert exc.status_code == 403
+        else:
+            raise AssertionError("Einrichtung trotz bestehendem Faktor erlaubt")
+    assert len(service._list_factors(db, user.id)) == 1
+
+
+def test_login_enrollment_complete_rejected_when_factor_added_meanwhile(db):
+    tenant = make_tenant(db)
+    user = make_app_user(db, email="sec001-race@example.com", tenant_id=tenant.id, role_code="admin")
+    service = MfaService()
+    pending = service.prepare_login(db, user=user, current_user=build_current_user(db, user), request_host="app.example.com")
+    assert pending is not None and pending.status == "setup_required"
+    enrollment = service.start_login_totp_enrollment(db, pending.ticket)
+    db.add(
+        UserMfaFactor(
+            user_id=user.id,
+            factor_type="totp",
+            label="Bestehend",
+            secret_encrypted=encrypt_secret(generate_totp_secret()),
+        )
+    )
+    db.flush()
+
+    try:
+        service.complete_login_totp_enrollment(
+            db, flow_token=enrollment.flow_token, code=current_totp_code(enrollment.secret), label=None
+        )
+    except HTTPException as exc:
+        assert exc.status_code == 403
+    else:
+        raise AssertionError("Abschluss trotz inzwischen vorhandenem Faktor erlaubt")
+
+
+def test_login_enrollment_still_works_for_first_setup(db):
+    tenant = make_tenant(db)
+    user = make_app_user(db, email="sec001-setup@example.com", tenant_id=tenant.id, role_code="admin")
+    service = MfaService()
+    pending = service.prepare_login(db, user=user, current_user=build_current_user(db, user), request_host="app.example.com")
+    assert pending is not None and pending.status == "setup_required"
+    assert pending.can_add_totp is True
+
+    enrollment = service.start_login_totp_enrollment(db, pending.ticket)
+    context = service.complete_login_totp_enrollment(
+        db, flow_token=enrollment.flow_token, code=current_totp_code(enrollment.secret), label=None
+    )
+    assert context.user.id == user.id
+    assert len(service._list_factors(db, user.id)) == 1

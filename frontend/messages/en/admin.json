@@ -659,7 +659,6 @@
       "cleanupDone": "Organization cleaned up",
       "cleanupFailed": "Cleanup failed",
       "usersLoadFailed": "Users could not be loaded",
-      "imagePickInvalid": "Please choose an image (PNG or JPG)",
       "tenantSaved": "Organization saved",
       "tenantSaveFailed": "Organization could not be saved",
       "roleChanged": "Role changed",

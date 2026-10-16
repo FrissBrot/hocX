@@ -232,7 +232,7 @@ def test_matrix_event_list_row_uses_event_list_filters(db):
 
     row = {
         "row_type": "7",
-        "row_config": {"event_only_before_protocol_date": True, "event_only_from_protocol_date": False, "event_show_date": False},
+        "row_config": {"event_filter": {"range": {"mode": "past"}}, "event_show_date": False},
     }
     content = ExportService()._matrix_event_row_value(db, row=row, protocol=protocol, column={"title": "Spalte A"})
 
@@ -241,16 +241,64 @@ def test_matrix_event_list_row_uses_event_list_filters(db):
 
 
 def test_matrix_events_row_applies_column_tag_filter_like_the_editor(db):
-    """matrixEventsForRow wendet column.event_tag_filter immer an (kommagetrennt), auch wenn
-    use_column_title_as_tag aus ist - der Export hat den Filter dann ignoriert."""
+    """Mit use_column_filter gilt der Spalten-Tag-Filter (kommagetrennt, «enthält»), ohne
+    eigenen Spalten-Tag-Filter der Spaltentitel - identisch zu matrixEventsForRow."""
     tenant, _template, protocol = _protocol_with_template_dir(db)
+    protocol.protocol_date = date(2026, 1, 1)
+    db.flush()
     _tagged_event(db, tenant.id, "Lager", date(2026, 2, 1), "lager")
     _tagged_event(db, tenant.id, "Hock", date(2026, 2, 2), "hock")
 
-    row = {"row_type": "events", "row_config": {"use_column_title_as_tag": False, "hide_past_events": True}}
-    events = ExportService()._matrix_events(db, row=row, protocol=protocol, column={"title": "X", "event_tag_filter": "lager, zelt"})
+    row = {"row_type": "events", "row_config": {"event_filter": {"range": {"mode": "future"}, "use_column_filter": True}}}
+    by_filter = ExportService()._matrix_events(db, row=row, protocol=protocol, column={"title": "X", "event_tag_filter": "lager, zelt"})
+    by_title = ExportService()._matrix_events(db, row=row, protocol=protocol, column={"title": "Hock"})
+    without_column_filter = ExportService()._matrix_events(
+        db, row={"row_type": "events", "row_config": {"event_filter": {"range": {"mode": "future"}}}}, protocol=protocol,
+        column={"title": "X", "event_tag_filter": "lager"},
+    )
 
-    assert [event.title for event in events] == ["Lager"]
+    assert [event.title for event in by_filter] == ["Lager"]
+    assert [event.title for event in by_title] == ["Hock"]
+    assert [event.title for event in without_column_filter] == ["Lager", "Hock"]
+
+
+def test_event_list_export_shows_cancelled_column_when_configured(db):
+    """event_show_cancelled wirkte nur im Editor (Spalte «Abgesagt»), der Export ignorierte es."""
+    tenant, _template, protocol = _protocol_with_template_dir(db)
+    event = _tagged_event(db, tenant.id, "Hock im Februar", date(2026, 2, 1), "hock")
+    event.is_cancelled = True
+    db.flush()
+
+    all_events = {"range": {"mode": "all"}}
+    without = ExportService()._event_list_content(db, protocol=protocol, config={"event_filter": all_events})
+    with_column = ExportService()._event_list_content(
+        db, protocol=protocol, config={"event_filter": all_events, "event_show_cancelled": True}
+    )
+
+    assert "Abgesagt" not in without
+    assert "Abgesagt" in with_column
+    assert "abgesagt" in with_column
+
+
+def test_linked_list_export_highlights_empty_cells_when_configured(db):
+    """linked_list_highlight_empty wurde laut Hilfetext auch im PDF berücksichtigt, der Export
+    las den Schlüssel aber nie."""
+    tenant, _template, _protocol = _protocol_with_template_dir(db)
+    snapshot = {
+        "column_one_title": "Amt",
+        "column_one_value_type": "text",
+        "column_two_title": "Person",
+        "column_two_value_type": "text",
+        "entries": [{"id": 1, "sort_index": 1, "column_one_value": {"text_value": "Kassier"}, "column_two_value": {}}],
+    }
+
+    plain = ExportService()._linked_list_content(db, 0, {"list_snapshot": snapshot}, tenant.id)
+    highlighted = ExportService()._linked_list_content(
+        db, 0, {"list_snapshot": snapshot, "linked_list_highlight_empty": True}, tenant.id
+    )
+
+    assert "textcolor{orange}" not in plain
+    assert "Kassier & \\textbf{\\textcolor{orange}{---}}" in highlighted
 
 
 # --- edge case: empty protocol (no elements at all) --------------------------------------
@@ -377,7 +425,7 @@ def test_m17_cleanup_old_generated_exports_deletes_only_files_past_retention(db,
     service = ExportService()
     result = service.cleanup_old_generated_exports(db)
 
-    assert result == {"deleted": 1}
+    assert result == {"deleted": 1, "deleted_rows": 0}
     assert not old_file.exists()
     assert recent_file.exists()
 
@@ -396,10 +444,10 @@ def test_m17_cleanup_old_generated_exports_respects_custom_retention(db, tmp_pat
 
     service = ExportService()
 
-    assert service.cleanup_old_generated_exports(db, retention_days=30) == {"deleted": 0}
+    assert service.cleanup_old_generated_exports(db, retention_days=30) == {"deleted": 0, "deleted_rows": 0}
     assert file_path.exists()
 
-    assert service.cleanup_old_generated_exports(db, retention_days=5) == {"deleted": 1}
+    assert service.cleanup_old_generated_exports(db, retention_days=5) == {"deleted": 1, "deleted_rows": 0}
     assert not file_path.exists()
 
 
@@ -438,8 +486,9 @@ def test_cleanup_old_generated_exports_commits_per_key_and_stops_on_write_fence(
         result = ExportService().cleanup_old_generated_exports(db)
     finally:
         get_object_store.cache_clear()
-    assert result == {"deleted": 1}
-    assert commits == [1]  # erster Key vor dem Fence committet
+    assert result == {"deleted": 1, "deleted_rows": 0}
+    # 0: Commit der (hier leeren) DB-Aufbewahrung aus main, 1: erster Key vor dem Fence
+    assert commits == [0, 1]
     assert sum(path.exists() for path in files) == 1
 
 
@@ -449,7 +498,7 @@ def test_m17_cleanup_old_generated_exports_missing_dir_is_a_noop(db, tmp_path, m
 
     service = ExportService()
 
-    assert service.cleanup_old_generated_exports(db) == {"deleted": 0}
+    assert service.cleanup_old_generated_exports(db) == {"deleted": 0, "deleted_rows": 0}
 
 
 # --- Sitzungsnotizen-Block (element_type session_notes) ----------------------------------
@@ -484,10 +533,17 @@ def test_export_latex_session_notes_block_without_notes_shows_placeholder(db):
     assert "Keine Sitzungsnotizen." in body_content
 
 
-def test_event_list_cycle_offset_relative_to_protocol_cycle():
-    """Terminlisten filtern relativ zum Protokollzyklus; die alte Einstellung «nur aktueller Zyklus» ist Offset 0."""
-    assert ExportService._event_list_cycle_offset({"event_cycle_offset": -2}) == -2
-    assert ExportService._event_list_cycle_offset({"event_cycle_offset": 0}) == 0
-    assert ExportService._event_list_cycle_offset({"event_only_current_cycle": True}) == 0
-    assert ExportService._event_list_cycle_offset({"event_cycle_offset": None, "event_only_current_cycle": False}) is None
-    assert ExportService._event_list_cycle_offset({}) is None
+def test_event_list_export_shows_location_and_organizers_when_configured(db):
+    tenant, _template, protocol = _protocol_with_template_dir(db)
+    organizer = make_participant(db, tenant.id, display_name="Anna Muster")
+    event = _tagged_event(db, tenant.id, "Hock", date(2026, 2, 1), "hock")
+    event.location = "Pfarreiheim"
+    event.organizer_ids = [organizer.id]
+    db.flush()
+
+    content = ExportService()._event_list_content(
+        db, protocol=protocol, config={"event_filter": {"range": {"mode": "all"}}, "event_show_location": True, "event_show_organizers": True}
+    )
+
+    assert "Ort" in content and "Pfarreiheim" in content
+    assert "Organisatoren" in content and "Anna Muster" in content

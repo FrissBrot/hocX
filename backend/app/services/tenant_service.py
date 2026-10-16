@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-import os
 import secrets
 import uuid
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import HTTPException, UploadFile, status
+from fastapi import HTTPException, Request, Response, UploadFile, status
+from PIL import Image
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.storage import MAIN, get_object_store, safe_suffix, validate_key
+from app.core.storage import MAIN, get_object_store, object_response, validate_key
 from app.core.security import CurrentUser, require_admin, require_feature
 from app.models import AppUser, Feature, Plan, PlanFeature, StoragePackage, Tenant, TenantDomain, TenantStoragePackage
 from app.schemas.user import (
@@ -35,13 +36,86 @@ def build_tenant_profile_image_url(tenant_public_id: uuid.UUID, profile_image_pa
     return f"/api/tenants/{tenant_public_id}/profile-image"
 
 
+TENANT_PROFILE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+_TENANT_PROFILE_IMAGE_MAX_PIXELS = 40_000_000
+_TENANT_PROFILE_IMAGE_MAX_DIMENSION = 1024
+_TENANT_PROFILE_IMAGE_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
+
+# Auslieferung: Content-Type nur aus dieser Whitelist, alles andere als Download
+# (Altbestände/Importe können noch beliebige Endungen haben).
+TENANT_PROFILE_IMAGE_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+}
+TENANT_PROFILE_IMAGE_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'none'; sandbox",
+}
+
+
+def tenant_profile_image_response(request: Request | None, key: str) -> Response:
+    """Liefert ein Mandanten-Profilbild mit festem Typ und CSP aus (Audit MAIN-SEC-002), aus dem
+    Objektspeicher (Namespace «main»).
+
+    Die Route ist öffentlich und läuft im Origin der Hauptanwendung bzw. des Admin-Panels;
+    ein als Profilbild abgelegtes HTML/SVG darf dort nie als Dokument ausgeführt werden.
+    """
+    media_type = TENANT_PROFILE_IMAGE_MEDIA_TYPES.get(Path(key).suffix.lower())
+    headers = dict(TENANT_PROFILE_IMAGE_SECURITY_HEADERS)
+    if media_type is None:
+        return object_response(
+            request, MAIN, key, media_type="application/octet-stream", filename=Path(key).name, attachment=True,
+            headers=headers, not_found_detail="Tenant profile image missing",
+        )
+    return object_response(request, MAIN, key, media_type=media_type, headers=headers, not_found_detail="Tenant profile image missing")
+
+
+def _normalize_tenant_profile_image(content: bytes) -> bytes:
+    """Prüft das Bild per Pillow (nur JPEG/PNG/GIF/WebP) und kodiert es neu als PNG.
+
+    Das Neukodieren entfernt eingebettete Fremdinhalte (Polyglot-Dateien, Metadaten);
+    die Dateiendung kommt damit nie mehr aus dem Client-Dateinamen (Audit MAIN-SEC-002).
+    """
+    invalid = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Das Profilbild muss ein JPEG-, PNG-, GIF- oder WebP-Bild sein",
+    )
+    try:
+        with Image.open(BytesIO(content)) as image:
+            if image.format not in _TENANT_PROFILE_IMAGE_FORMATS:
+                raise invalid
+            if image.width * image.height > _TENANT_PROFILE_IMAGE_MAX_PIXELS:
+                raise invalid
+            image.seek(0)
+            image.load()
+            converted = image.convert("RGBA")
+    except HTTPException:
+        raise
+    except (OSError, ValueError, SyntaxError, Image.DecompressionBombError) as exc:
+        raise invalid from exc
+    converted.thumbnail((_TENANT_PROFILE_IMAGE_MAX_DIMENSION, _TENANT_PROFILE_IMAGE_MAX_DIMENSION))
+    output = BytesIO()
+    converted.save(output, format="PNG", optimize=True)
+    return output.getvalue()
+
+
 async def apply_tenant_profile_image(db: Session, tenant: Tenant, profile_image: UploadFile) -> None:
-    """Stores an uploaded profile image in the object store and updates tenant.profile_image_path
-    in place (Key relativ zu STORAGE_ROOT wie bisher, Namespace "main")."""
+    """Prüft und normalisiert ein hochgeladenes Profilbild (MAIN-SEC-002), legt es im
+    Objektspeicher ab (Key relativ zu STORAGE_ROOT, Namespace «main») und setzt
+    tenant.profile_image_path."""
+    content = await profile_image.read(TENANT_PROFILE_IMAGE_MAX_BYTES + 1)
+    if len(content) > TENANT_PROFILE_IMAGE_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Das Profilbild ist zu gross (maximal 5 MB)",
+        )
+    normalized = _normalize_tenant_profile_image(content)
     upload_prefix = Path(settings.upload_root).resolve().relative_to(Path(settings.storage_root).resolve()).as_posix()
-    key = validate_key(f"{upload_prefix}/tenant-profiles/tenant-{tenant.id}-{uuid4().hex}{safe_suffix(profile_image.filename, '.png')}")
-    content = await profile_image.read()
-    get_object_store().put_bytes(db, MAIN, key, content, content_type=profile_image.content_type)
+    key = validate_key(f"{upload_prefix}/tenant-profiles/tenant-{tenant.id}-{uuid4().hex}.png")
+    get_object_store().put_bytes(db, MAIN, key, normalized, content_type="image/png")
     tenant.profile_image_path = key
 
 
@@ -189,6 +263,10 @@ class TenantService:
         db.commit()
         db.refresh(tenant)
         return self._read_model(tenant, actor)
+
+    def require_manageable(self, tenant_id: int, actor: CurrentUser) -> None:
+        """Öffentliche Variante für Routen, die vor dem Service z. B. ein Rate-Limit zählen."""
+        self._require_manageable(tenant_id, actor)
 
     def _require_manageable(self, tenant_id: int, actor: CurrentUser) -> None:
         if tenant_id not in self._manageable_tenant_ids(actor):

@@ -239,8 +239,10 @@ def test_fetch_fines_by_participant_merges_renamed_participant_into_one_row(db):
 
     # Two fines with different frozen name snapshots (participant was renamed between them),
     # but the same participant_id.
+    # but the same participant_id (in two protocols, one fine per protocol/person/type).
+    later_protocol = make_protocol(db, tenant.id, template.id, protocol_number="P-2")
     _make_fine(db, protocol_id=protocol.id, account_id=account.id, participant_id=participant.id, name_snapshot="Old Name", amount=Decimal("2.00"))
-    _make_fine(db, protocol_id=protocol.id, account_id=account.id, participant_id=participant.id, name_snapshot="Current Name", amount=Decimal("4.00"))
+    _make_fine(db, protocol_id=later_protocol.id, account_id=account.id, participant_id=participant.id, name_snapshot="Current Name", amount=Decimal("4.00"))
 
     rows = fetch_fines_by_participant(db, tenant.id)
     matching = [r for r in rows if r.name == "Current Name"]

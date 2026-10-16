@@ -10,7 +10,8 @@ import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-but
 import { usePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 import { formatDate } from "@/lib/utils/format";
-import { getCycleYear } from "@/lib/utils/cycle";
+import { applyEventFilter, blockEventFilter, defaultEventFilter } from "@/lib/element-types/event-filter";
+import { elementTypeCode } from "@/lib/element-types/registry";
 import {
   EventSummary,
   ParticipantSummary,
@@ -239,22 +240,8 @@ export function canCreateProtocolEventDraft(draft: ProtocolEventDraft) {
 }
 
 export function embeddedBlockKindForElementType(elementTypeId: number | string) {
-  const mapping: Record<string, string> = {
-    "1": "text",
-    "2": "todo",
-    "3": "image",
-    "5": "static_text",
-    "6": "form",
-    "7": "event_list",
-    "8": "bullet_list",
-    "9": "attendance",
-    "10": "session_date",
-    "11": "matrix",
-    "12": "finance_balance",
-    "13": "finance_transactions",
-    "14": "fine_list",
-  };
-  return mapping[String(elementTypeId)] ?? "text";
+  // Code aus der Elementtyp-Registry (element-types/registry.json) statt eigener Tabelle.
+  return elementTypeCode(elementTypeId);
 }
 
 export function embeddedBlockTypeLabel(elementTypeId: number | string, t: TFunc) {
@@ -339,11 +326,9 @@ export function createMatrixEmbeddedBlock(
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
-        event_tag_filter: "",
-        event_only_from_protocol_date: true,
+        event_filter: defaultEventFilter("future"),
         event_gray_past: true,
         event_allow_end_date: false,
-        event_use_column_tag_filter: false,
         event_show_date: true,
         event_show_tag: true,
         event_show_title: true,
@@ -470,25 +455,14 @@ export function embeddedBlockSummary(
   }
 
   if (elementTypeId === 7) {
-    const tagFilters = String(config.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
-    const columnTagFilters = config.event_use_column_tag_filter === true
-      ? String(matrixColumn?.event_tag_filter || matrixColumn?.title || "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean) : [];
     const summaryTemplate = availableTemplates?.find((t) => t.id === protocol.template_id);
-    const summaryCycleYear = protocol.protocol_date && summaryTemplate?.cycle_config
-      ? getCycleYear(protocol.protocol_date, summaryTemplate.cycle_config.reset_month, summaryTemplate.cycle_config.reset_day)
+    const templateCycle = summaryTemplate?.cycle_config && summaryTemplate.cycle_config_id
+      ? { id: summaryTemplate.cycle_config_id, reset_month: summaryTemplate.cycle_config.reset_month, reset_day: summaryTemplate.cycle_config.reset_day }
       : null;
-    const matchingEvents = availableEvents.filter((event) => {
-      const effectiveEndDate = event.event_end_date || event.event_date;
-      const matchesDate = !protocol.protocol_date ? true : config.event_only_before_protocol_date === true ? effectiveEndDate < protocol.protocol_date : config.event_only_from_protocol_date === false ? true : effectiveEndDate >= protocol.protocol_date;
-      const eventTag = (event.tag ?? "").toLowerCase();
-      const matchesTag = (!tagFilters.length || tagFilters.some((t) => eventTag.includes(t))) &&
-        (!columnTagFilters.length || columnTagFilters.some((t) => eventTag.includes(t)));
-      const matchesCycle = config.event_only_current_cycle !== true || summaryCycleYear === null
-        ? true
-        : (event.cycle_assignments ?? []).some(
-            (a) => a.cycle_config_id === summaryTemplate?.cycle_config_id && a.cycle_year === summaryCycleYear
-          );
-      return matchesDate && matchesTag && matchesCycle;
+    const matchingEvents = applyEventFilter(availableEvents, blockEventFilter(config), {
+      protocolDate: protocol.protocol_date,
+      column: matrixColumn,
+      resolveCycle: (configId) => (configId === null ? templateCycle : null),
     });
     return matchingEvents.length ? t("summary.eventCount", { count: matchingEvents.length }) : t("summary.noEvents");
   }

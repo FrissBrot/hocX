@@ -17,14 +17,17 @@ from app.core.security import (
     require_reader,
 )
 from app.models.entities import AttendanceFine, Protocol
-from app.repositories.fines_repository import DuplicateFineError, FinesRepository
+from app.repositories.fines_repository import DuplicateFineError, FineDeleteError, FinesRepository
 from app.schemas.fines import (
     AttendanceFineCreate,
     AttendanceFineListItem,
     AttendanceFineRead,
     CollectFinePayload,
+    DeleteFinePayload,
+    FineTariffRead,
+    FineTariffUpdate,
 )
-from app.services import public_id_service
+from app.services import fine_tariff_service, public_id_service
 from app.services.audit_service import AuditService
 
 router = APIRouter()
@@ -66,6 +69,37 @@ def _resolve_fine_id(db: Session, fine_id: uuid.UUID) -> int:
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Fine not found")
     return internal_id
+
+
+@router.get("/fines/tariff", response_model=FineTariffRead)
+def get_fine_tariff(
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Zentraler Bussentarif des Mandanten (Konto + Beträge für «zu spät»/«abwesend»)."""
+    require_reader(user)
+    require_feature(user, "finance")
+    return fine_tariff_service.read_tariff(db, user.current_tenant_id)
+
+
+@router.put("/fines/tariff", response_model=FineTariffRead)
+def update_fine_tariff(
+    payload: FineTariffUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_finance_write(user)
+    require_feature(user, "finance")
+    try:
+        result = fine_tariff_service.update_tariff(db, user.current_tenant_id, payload)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    audit.log(
+        db, action="fine_tariff.updated", actor=user, entity_type="fine_tariff", entity_id=user.current_tenant_id,
+        details={"amount_late": float(result.amount_late), "amount_absent": float(result.amount_absent)},
+    )
+    return result
 
 
 @router.get("/protocols/{protocol_id}/pending-fines", response_model=list[AttendanceFineListItem])
@@ -120,19 +154,58 @@ def create_fine(
 @router.delete("/fines/{fine_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_fine(
     fine_id: uuid.UUID,
+    payload: DeleteFinePayload | None = None,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Offene Busse löschen. Im offenen Ursprungsprotokoll hart, sonst mit Begründung
+    (Status `deleted`, aufgeführt im Protokoll `protocol_id` bzw. im nächsten offenen)."""
+    require_finance_write(user)
+    internal_id = _resolve_fine_id(db, fine_id)
+    payload = payload or DeleteFinePayload()
+    protocol_context_id = None
+    if payload.protocol_id is not None:
+        protocol_context_id = _resolve_protocol_id(db, payload.protocol_id, user)
+    try:
+        outcome = repo.delete_fine(
+            db, internal_id, user.current_tenant_id,
+            actor_user_id=user.user_id, reason=payload.reason, protocol_context_id=protocol_context_id,
+        )
+    except FineDeleteError as exc:
+        db.rollback()
+        status_code = 422 if exc.code == "reason_required" else 409
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Fine could not be deleted") from exc
+    if outcome is None:
+        raise HTTPException(status_code=404, detail="Fine not found or already collected")
+    if outcome == "soft":
+        audit.log(
+            db, action="fine.deleted_with_reason", actor=user, entity_type="attendance_fine", entity_id=internal_id,
+            details={"reason": (payload.reason or "").strip()},
+        )
+    else:
+        audit.log(db, action="fine.deleted", actor=user, entity_type="attendance_fine", entity_id=internal_id)
+
+
+@router.post("/fines/{fine_id}/restore", response_model=AttendanceFineRead)
+def restore_fine(
+    fine_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_finance_write(user)
     internal_id = _resolve_fine_id(db, fine_id)
     try:
-        deleted = repo.delete_fine(db, internal_id, user.current_tenant_id)
+        result = repo.restore_fine(db, internal_id, user.current_tenant_id)
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Fine could not be deleted") from exc
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Fine not found or already collected")
-    audit.log(db, action="fine.deleted", actor=user, entity_type="attendance_fine", entity_id=internal_id)
+        raise HTTPException(status_code=400, detail="Fine could not be restored") from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Fine not found, not deleted or already finalized")
+    audit.log(db, action="fine.restored", actor=user, entity_type="attendance_fine", entity_id=internal_id)
+    return result
 
 
 @router.post("/fines/{fine_id}/collect", response_model=AttendanceFineRead)

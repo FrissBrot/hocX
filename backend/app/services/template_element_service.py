@@ -4,7 +4,7 @@ from app.models import ElementDefinition, ListDefinition, Template, TemplateElem
 from app.repositories.template_element_repository import TemplateElementRepository
 from app.schemas.template import TemplateElementBehaviorUpdate, TemplateElementCreate, TemplateElementRead, TemplateElementUpdate
 from app.services import public_id_service
-from app.services.block_behavior import BEHAVIOR_FIELDS, resolve_block_behavior, resolve_element_wide_behavior
+from app.services.block_behavior import block_defaults, BEHAVIOR_FIELDS, resolve_block_behavior, resolve_element_wide_behavior
 from app.services.block_config_ids import decode_block_config, encode_block_config
 
 
@@ -40,6 +40,7 @@ class TemplateElementService:
                 "configuration_json": encode_block_config(db, block.get("configuration_json")),
                 "created_at": template_element.created_at,
                 **resolve_block_behavior(template_element_config, block),
+                "behavior_defaults": block_defaults(block),
             }
             for block in raw_blocks
         ]

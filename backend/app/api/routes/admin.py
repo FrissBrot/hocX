@@ -1,5 +1,3 @@
-import mimetypes
-import os
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -14,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.config import settings
@@ -79,11 +78,12 @@ from app.services.admin_tenant_service import AdminTenantService
 from app.services.admin_tenant_user_service import AdminTenantUserService
 from app.services.admin_mfa_service import AdminMfaService
 from app.services.admin_user_service import AdminUserService, PlatformAdminService
-from app.core.storage import MAIN, object_response
 from app.services.mfa_service import MfaService
 from app.services.audit_service import AuditService
 from app.services.catalog_config_service import CatalogChangedError, CatalogConfigService
 from app.services.platform_oidc_service import PlatformOidcService
+from app.services.tenant_service import tenant_profile_image_response
+from app.services.upload_pipeline import stage_upload_to_disk
 from app.services.storage_service import StorageService
 from app.services.tenant_clone_service import TenantCloneService
 from app.services.tenant_cleanup_service import TenantCleanupService
@@ -816,15 +816,17 @@ async def import_tenant(
 ):
     if file.size is not None and file.size > MAX_TENANT_IMPORT_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail=f"Datei zu gross. Maximum {MAX_TENANT_IMPORT_UPLOAD_BYTES // 1024 // 1024} MB")
-    with tempfile.NamedTemporaryFile(prefix="hocx-import-upload-", suffix=".zip", delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-        content = await file.read()
-        if len(content) > MAX_TENANT_IMPORT_UPLOAD_BYTES:
-            os.unlink(tmp_path)
-            raise HTTPException(status_code=413, detail=f"Datei zu gross. Maximum {MAX_TENANT_IMPORT_UPLOAD_BYTES // 1024 // 1024} MB")
-        tmp.write(content)
+    # Audit MAIN-BE-010: Upload in Blöcken auf die Platte statt komplett in den RAM, und der
+    # minutenlange, synchrone Import (Entpacken, ClamAV, viele Commits) läuft im Threadpool -
+    # vorher blockierte er den Event-Loop des Workers für alle anderen Requests.
+    tmp_path = await stage_upload_to_disk(
+        file,
+        target_dir=Path(tempfile.gettempdir()) / "hocx-import-uploads",
+        max_bytes=MAX_TENANT_IMPORT_UPLOAD_BYTES,
+        suffix=".zip",
+    )
     try:
-        new_tenant, warnings = import_service.import_zip(db, tmp_path, new_name)
+        new_tenant, warnings = await run_in_threadpool(import_service.import_zip, db, tmp_path, new_name)
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -832,7 +834,7 @@ async def import_tenant(
         db.rollback()
         raise HTTPException(status_code=400, detail="Tenant could not be imported") from exc
     finally:
-        os.unlink(tmp_path)
+        tmp_path.unlink(missing_ok=True)
     result = tenant_service.get_tenant(db, new_tenant.id)
     if result is None:
         raise HTTPException(status_code=500, detail="Imported tenant could not be reloaded")
@@ -922,11 +924,7 @@ def tenant_profile_image(tenant_id: uuid.UUID, request: Request, db: Session = D
     tenant = tenant_service.get_tenant(db, internal_tenant_id)
     if tenant is None or tenant.profile_image_path is None:
         raise HTTPException(status_code=404, detail="Tenant profile image not found")
-    content_type = mimetypes.guess_type(tenant.profile_image_path)[0] or "application/octet-stream"
-    return object_response(
-        request, MAIN, tenant.profile_image_path, media_type=content_type,
-        headers={"X-Content-Type-Options": "nosniff"}, not_found_detail="Tenant profile image missing",
-    )
+    return tenant_profile_image_response(request, tenant.profile_image_path)
 
 
 @router.get("/users", response_model=AdminUserPage)

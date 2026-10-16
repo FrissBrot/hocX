@@ -8,29 +8,14 @@ from app.schemas.template import (
     ElementDefinitionUpdate,
 )
 from app.services import public_id_service
+from app.core.element_types import allows_multiple_values, is_known_element_type, render_type_id
 from app.services.block_config_ids import decode_block_config, encode_block_config
+from app.services.element_config import upgrade_definition_block, validate_block_config
 
 
 class ElementDefinitionService:
     def __init__(self, repository: ElementDefinitionRepository | None = None) -> None:
         self.repository = repository or ElementDefinitionRepository()
-
-    def _render_type_for_element_type(self, element_type_id: int) -> int:
-        mapping = {
-            1: 2,  # text -> paragraph
-            2: 3,  # todo -> todo_list
-            3: 4,  # image -> image
-            4: 6,  # display -> plain_text (ProtocolDisplaySnapshot.compiled_text is plain rendered text, same as static_text)
-            5: 6,  # static_text -> plain_text
-            6: 5,  # form -> key_value
-            7: 5,  # event_list -> key_value
-            8: 2,  # bullet_list -> paragraph
-            9: 5,  # attendance -> key_value
-            10: 6,  # session_date -> plain_text
-            11: 5,  # matrix -> key_value
-            17: 6,  # session_notes -> plain_text
-        }
-        return mapping.get(element_type_id, 2)
 
     def _referenced_list_definition_ids(self, config: dict | None) -> set[int]:
         """Collects both whole-list `linked_list_id` and any row-link `rows[].linked_list_id`
@@ -50,18 +35,13 @@ class ElementDefinitionService:
         return ids
 
     def _referenced_auto_source_list_ids(self, config: dict | None) -> set[int]:
-        """Matrix-Automodus: a block's configuration_json can carry auto_source.list_id (or
-        the legacy matrix_column_source_list_id) instead of linked_list_id - the id that
-        drives the "auto" column generation in ProtocolService.create_from_template."""
+        """Matrix-Automodus: a block's configuration_json can carry auto_source.list_id
+        instead of linked_list_id - the id that drives the "auto" column generation in
+        ProtocolService.create_from_template."""
         config = config or {}
-        ids: set[int] = set()
         auto_source = config.get("auto_source")
-        old_list_id = config.get("matrix_column_source_list_id")
         list_id = (auto_source or {}).get("list_id") if isinstance(auto_source, dict) else None
-        for candidate in (list_id, old_list_id):
-            if candidate:
-                ids.add(int(candidate))
-        return ids
+        return {int(list_id)} if list_id else set()
 
     def _referenced_participant_and_event_ids(self, config: dict | None) -> tuple[set[int], set[int]]:
         """template_participant_id/template_participant_ids/template_event_id are embedded
@@ -122,17 +102,20 @@ class ElementDefinitionService:
     def _normalize_blocks(self, db: Session, blocks: list[dict], *, tenant_id: int) -> list[dict]:
         normalized: list[dict] = []
         for block in blocks:
-            next_block = dict(block)
-            element_type_id = int(next_block.get("element_type_id", 1))
-            next_block["element_type_id"] = element_type_id
-            next_block["render_type_id"] = self._render_type_for_element_type(element_type_id)
-            next_block["allows_multiple_values"] = element_type_id in {2, 3}
-            config = dict(next_block.get("configuration_json") or {})
-            config.setdefault("title_as_subtitle", True)
+            element_type_id = int(block.get("element_type_id", 1))
+            if not is_known_element_type(element_type_id):
+                raise ValueError(f"Unbekannter Elementtyp {element_type_id}")
+            # Altformate (z. B. von einem älteren Client oder einer Kopie) auf das aktuelle
+            # Schema heben und Schlüssel entfernen, die der Typ nicht kennt.
+            next_block = upgrade_definition_block({**block, "element_type_id": element_type_id})
+            # Render-Typ und Mehrfachwerte kommen aus der Registry, nicht vom Client.
+            next_block["render_type_id"] = render_type_id(element_type_id)
+            next_block["allows_multiple_values"] = allows_multiple_values(element_type_id)
             # The client sends this JSON with public ids embedded (linked_list_id,
             # template_participant_id(s), template_event_id, ...) - decode back to
             # internal ints before _validate_linked_lists/storage, see block_config_ids.py.
-            config = decode_block_config(db, config, tenant_id=tenant_id)
+            config = decode_block_config(db, next_block["configuration_json"], tenant_id=tenant_id)
+            validate_block_config(element_type_id, config)
             next_block["configuration_json"] = config
             normalized.append(next_block)
         return normalized
