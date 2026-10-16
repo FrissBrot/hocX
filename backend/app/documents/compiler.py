@@ -48,6 +48,7 @@ from app.documents.layout import (
     TextStyle,
     all_node_lists,
     iter_nodes,
+    WatermarkNode,
 )
 from app.documents.model import DocumentMeta, ProtocolElementBlock, RenderInfo, rich_is_empty
 from app.documents.providers import PROVIDERS
@@ -704,6 +705,10 @@ class LayoutCompiler:
             "footer": footer if footer and footer.get("children") else None,
             "background": self.nodes(master.background, None, "master"),
         }
+        # Entwürfe immer kennzeichnen (STUDIO-007): auch wenn die Vorlage keinen
+        # Wasserzeichen-Knoten hat, sonst exportierte sie Entwürfe ohne Markierung.
+        if self.input.is_draft and not any(node.get("t") == "watermark" for node in result["background"]):
+            result["background"].append(self._node_watermark(WatermarkNode(id="hocx-draft-watermark"), None, "master", None))
         if master.orientation is not None:
             result["orientation"] = master.orientation
         if master.margins is not None:

@@ -171,3 +171,12 @@ def test_static_validation_of_components():
     assert ("b", "invalidParams", "error") in result
     assert ("c", "needsProtocol", "warning") in result
     assert _validate([{"type": "data_block", "id": "c", "component": "protocol_element"}], document_type="protocol") == []
+
+
+def test_draft_watermark_is_enforced_without_template_node():
+    """STUDIO-007: Eine Vorlage ohne Wasserzeichen-Knoten kennzeichnet Entwürfe trotzdem."""
+    content = {"masters": [{"id": "default"}], "body": [{"type": "text", "id": "t", "content": {"default": [{"t": "text", "v": "x"}]}}]}
+    final = compile_scenario(Scenario(content, document_type="custom"))
+    draft = compile_scenario(Scenario(content, document_type="custom", is_draft=True))
+    assert final.data["masters"]["default"]["background"] == []
+    assert [node["t"] for node in draft.data["masters"]["default"]["background"]] == ["watermark"]

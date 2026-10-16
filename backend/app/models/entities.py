@@ -931,6 +931,8 @@ class DocumentRegistry(Base):
     source_public_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    # STUDIO-007: Titel beim Export abweichend vom Protokoll gesetzt (Migration 0120)
+    title_overridden: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
 
 class IdentityVerificationRequest(Base):

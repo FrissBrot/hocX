@@ -49,4 +49,6 @@ def capabilities(user: CurrentUser) -> dict[str, bool]:
         "manage_brand": role == "admin",
         "finance_data": "finance" in user.current_tenant_features and reader,
         "personal_data": role in {"writer", "admin"},
+        # Protokollentwürfe ohne Wasserzeichen exportieren (STUDIO-007)
+        "unmark_drafts": role in {"writer", "admin"},
     }

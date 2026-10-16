@@ -66,3 +66,5 @@ class VerifyResult(BaseModel):
     tenant_public_id: uuid.UUID | None = None
     tenant_has_logo: bool | None = None
     organization_verified: bool | None = None
+    # STUDIO-007: Titel beim Export abweichend vom Protokoll gesetzt
+    title_overridden: bool | None = None

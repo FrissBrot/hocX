@@ -117,6 +117,8 @@ class PreparedDocument:
     content: TemplateContent
     params: dict[str, Any] = field(default_factory=dict)
     diagnostics: list[Diagnostic] = field(default_factory=list)
+    # Protokolltitel beim Export überschrieben (STUDIO-007): im Register vermerkt
+    title_overridden: bool = False
 
 
 @dataclass
@@ -277,9 +279,11 @@ def prepare(
 
     # Meta (fachliche Angaben, Grundlage des Inhalts-Hashes)
     options = request.options
+    title_overridden = False
     if protocol is not None and document_type in PROTOCOL_CONTEXT_TYPES:
         meta = _protocol_meta(protocol, document_type, strings, tenant_name, language)
         if options.title:
+            title_overridden = options.title != meta.title
             meta.title = options.title
         meta.subtitle = options.subtitle
         if document_type != "protocol":
@@ -304,9 +308,16 @@ def prepare(
         major, minor, final_minor = version
         meta.version = version_label(major, final_minor if major else minor)
 
-    is_draft = protocol is not None and document_type == "protocol" and protocol.status != "abgeschlossen"
-    if options.watermark != "auto":
-        is_draft = options.watermark == "on"
+    protocol_draft = protocol is not None and document_type == "protocol" and protocol.status != "abgeschlossen"
+    is_draft = protocol_draft
+    if options.watermark == "on":
+        is_draft = True
+    elif options.watermark == "off":
+        # Entwürfe ohne Kennzeichnung nur mit Schreibrecht (STUDIO-007); Leser behalten das
+        # Wasserzeichen. user None = Systemaufruf ohne Benutzer.
+        can_write = user is None or user.current_role in {"writer", "admin"}
+        if not protocol_draft or can_write:
+            is_draft = False
 
     render = render_info or verify_render_info(None, preview=True)
     document_env = {
@@ -357,6 +368,7 @@ def prepare(
         content=content,
         params=dict(request.params),
         diagnostics=compiled.diagnostics,
+        title_overridden=title_overridden,
     )
 
 
@@ -493,6 +505,7 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
                 content_hash=prepared.content_hash,
                 design_hash=prepared.design_hash,
                 source_public_id=protocol.public_id if protocol is not None else None,
+                title_overridden=prepared.title_overridden,
                 created_by=user.user_id if user else None,
             )
         )

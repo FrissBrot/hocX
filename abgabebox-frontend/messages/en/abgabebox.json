@@ -159,6 +159,7 @@
     "verifiedExplanation": "hocX has confirmed that this account belongs to the organisation “{name}”.",
     "logoAlt": "Logo of {name}",
     "otherDocument": "The file is authentic but belongs to a different document than the scanned QR code.",
+    "titleOverridden": "The title was set differently from the protocol when exporting.",
     "newerVersion": "There is a newer version ({version}) of this document.",
     "notFoundTitle": "Not found",
     "notFoundText": "This file does not match any document created with hocX. It has been modified or does not come from hocX.",

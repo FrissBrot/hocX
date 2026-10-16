@@ -132,3 +132,29 @@ def test_sources_are_tenant_scoped(db, setup):
     assert routes.list_source_options("protocols", protocol_id=None, db=db, user=setup["other_admin"]) == []
     with pytest.raises(HTTPException):
         routes.list_source_options("gibts_nicht", protocol_id=None, db=db, user=setup["admin"])
+
+
+def test_readers_cannot_export_protocol_drafts_without_watermark(db, setup):
+    """STUDIO-007: «Wasserzeichen aus» bei Protokollentwürfen nur mit Schreibrecht."""
+    from app.documents import service
+    from app.documents.service import ExportOptions
+
+    request = DocumentRequest(protocol_id=setup["protocol"].public_id, options=ExportOptions(watermark="off"))
+    as_reader = service.prepare(db, setup["reader"], setup["tenant"].id, request)
+    as_writer = service.prepare(db, setup["writer"], setup["tenant"].id, request)
+    assert as_reader.compiled.data["flags"]["draft"] is True
+    assert as_writer.compiled.data["flags"]["draft"] is False
+
+
+def test_overridden_protocol_title_is_noted_in_the_registry(db, setup):
+    from sqlalchemy import select
+
+    from app.documents.service import ExportOptions
+    from app.models import DocumentRegistry
+
+    plain = asyncio.run(routes.render_document(DocumentRequest(protocol_id=setup["protocol"].public_id), db=db, user=setup["writer"]))
+    renamed = asyncio.run(routes.render_document(
+        DocumentRequest(protocol_id=setup["protocol"].public_id, options=ExportOptions(title="Genehmigtes Protokoll")), db=db, user=setup["writer"],
+    ))
+    flags = dict(db.execute(select(DocumentRegistry.public_id, DocumentRegistry.title_overridden)).all())
+    assert flags[plain.id] is False and flags[renamed.id] is True

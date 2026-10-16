@@ -212,6 +212,7 @@ export function VerifyResultCard({ outcome, fileName }: { outcome: VerifyOutcome
       )}
 
       {outcome.otherDocument && <p className="verify-notice verify-notice-warning">{t("otherDocument")}</p>}
+      {outcome.titleOverridden && <p className="verify-notice verify-notice-info">{t("titleOverridden")}</p>}
       {outcome.newerVersion && <p className="verify-notice verify-notice-info">{t("newerVersion", { version: outcome.newerVersion })}</p>}
 
       <dl className="verify-facts">

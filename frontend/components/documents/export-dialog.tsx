@@ -278,7 +278,8 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
               <select value={options.watermark ?? "auto"} onChange={(event) => setOptions({ ...options, watermark: event.target.value as ExportOptions["watermark"] })}>
                 <option value="auto">{t("export.watermarkAuto")}</option>
                 <option value="on">{t("export.watermarkOn")}</option>
-                <option value="off">{t("export.watermarkOff")}</option>
+                {/* Entwürfe ohne Kennzeichnung nur mit Schreibrecht (STUDIO-007, serverseitig erzwungen) */}
+                {capabilities?.unmark_drafts && <option value="off">{t("export.watermarkOff")}</option>}
               </select>
             </label>
           </section>

@@ -56,6 +56,11 @@ describe("classifyResult", () => {
     expect(classifyResult({ ...base, is_superseded: false, latest_version_label: "v1.3" })).toMatchObject({ newerVersion: null });
     expect(classifyResult({ ...base, document_id_matches: false })).toMatchObject({ otherDocument: true });
   });
+
+  it("überschriebener Titel (STUDIO-007)", () => {
+    expect(classifyResult(base)).toMatchObject({ titleOverridden: false });
+    expect(classifyResult({ ...base, title_overridden: true })).toMatchObject({ titleOverridden: true });
+  });
 });
 
 describe("verifyHash", () => {

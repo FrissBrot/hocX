@@ -89,6 +89,7 @@ export type Capabilities = {
   manage_brand: boolean;
   finance_data: boolean;
   personal_data: boolean;
+  unmark_drafts?: boolean;
 };
 
 // ── Vorlagen ────────────────────────────────────────────────────────────────
