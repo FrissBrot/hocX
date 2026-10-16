@@ -27,7 +27,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
-from app.models.entities import PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, ShareLink, Tenant
+from app.models.entities import PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, ShareLink, StoredFile, Tenant
 from app.services import tenant_trust_service
 from app.services.tenant_service import build_tenant_profile_image_url
 
@@ -164,6 +164,7 @@ class AlbumShareRow:
     # im Teilen-Dialog.
     invited_at: datetime
     responded_at: datetime | None
+    share_location: bool
 
 
 def list_shares_for_album(db: Session, album_id: uuid.UUID) -> list[AlbumShareRow]:
@@ -174,6 +175,7 @@ def list_shares_for_album(db: Session, album_id: uuid.UUID) -> list[AlbumShareRo
             PhotoAlbumTenantShare.status,
             PhotoAlbumTenantShare.created_at,
             PhotoAlbumTenantShare.responded_at,
+            PhotoAlbumTenantShare.share_location,
             Tenant.id,
             Tenant.public_id,
             Tenant.name,
@@ -191,12 +193,15 @@ def list_shares_for_album(db: Session, album_id: uuid.UUID) -> list[AlbumShareRo
             status=row.status,
             invited_at=row.created_at,
             responded_at=row.responded_at,
+            share_location=row.share_location,
         )
         for row in rows
     ]
 
 
-def invite(db: Session, album: PhotoAlbum, *, target_tenant_id: int, invited_by: int | None) -> PhotoAlbumTenantShare:
+def invite(
+    db: Session, album: PhotoAlbum, *, target_tenant_id: int, invited_by: int | None, share_location: bool = True
+) -> PhotoAlbumTenantShare:
     """Jedes Album ist teilbar, auch automatisch gefuehrte (kind='cycle'/'submission'/
     'submission_element'): die Freigabe wirkt auf das Album als Ganzes, nicht auf eine
     Foto-Momentaufnahme. Alles, was beim Teilen im Album liegt, ist freigegeben; Fotos, die
@@ -208,7 +213,9 @@ def invite(db: Session, album: PhotoAlbum, *, target_tenant_id: int, invited_by:
     if existing is not None:
         raise AlbumShareError("Für diesen Mandanten besteht bereits eine Freigabe oder Anfrage.")
     release_stale_pending(db, album.id)
-    share = PhotoAlbumTenantShare(album_id=album.id, tenant_id=target_tenant_id, status="pending", invited_by=invited_by)
+    share = PhotoAlbumTenantShare(
+        album_id=album.id, tenant_id=target_tenant_id, status="pending", invited_by=invited_by, share_location=share_location
+    )
     db.add(share)
     db.commit()
     db.refresh(share)
@@ -249,6 +256,50 @@ def revoke(db: Session, *, album_id: uuid.UUID, tenant_id: int, acting_tenant_id
         .values(revoked_at=datetime.now(UTC))
     )
     db.commit()
+
+
+def set_share_location(db: Session, *, album: PhotoAlbum, tenant_id: int, share_location: bool) -> PhotoAlbumTenantShare:
+    """Nur der Besitzer schaltet den Standort einer Freigabe um (die Route prüft das)."""
+    share = db.get(PhotoAlbumTenantShare, {"album_id": album.id, "tenant_id": tenant_id})
+    if share is None:
+        raise AlbumShareError("Keine Freigabe für diesen Mandanten gefunden.")
+    share.share_location = share_location
+    db.commit()
+    db.refresh(share)
+    return share
+
+
+def location_shared_with(db: Session, viewer_tenant_id: int, stored_file_id: int, file_tenant_id: int) -> bool:
+    """Darf ein Mandant den Standort (GPS) eines Fotos sehen, das ihm über ein geteiltes Album
+    zugänglich ist (IMGMETA-007)? Im eigenen Mandanten immer. Sonst nur, wenn es ein Album mit
+    diesem Foto gibt, in dem beide Seiten den Standort teilen: der Betrachter ist Besitzer oder
+    Partner mit share_location, und der Mandant des Fotos ebenso (ein Partner, der eigene Fotos
+    in ein fremdes Album legt, unterliegt dem Schalter seiner Freigabe)."""
+    if viewer_tenant_id == file_tenant_id:
+        return True
+    album_ids = db.scalars(
+        select(PhotoAlbumItem.album_id)
+        .join(StoredFile, StoredFile.public_id == PhotoAlbumItem.file_id)
+        .where(StoredFile.id == stored_file_id, PhotoAlbumItem.share_pending.is_(False))
+    ).all()
+    for album_id in album_ids:
+        owner_tenant_id = db.scalar(select(PhotoAlbum.tenant_id).where(PhotoAlbum.id == album_id))
+        if owner_tenant_id is None:
+            continue
+        location_by_tenant = dict(
+            db.execute(
+                select(PhotoAlbumTenantShare.tenant_id, PhotoAlbumTenantShare.share_location).where(
+                    PhotoAlbumTenantShare.album_id == album_id, PhotoAlbumTenantShare.status == "accepted"
+                )
+            ).all()
+        )
+
+        def shares_location(tenant_id: int) -> bool:
+            return tenant_id == owner_tenant_id or location_by_tenant.get(tenant_id) is True
+
+        if shares_location(viewer_tenant_id) and shares_location(file_tenant_id):
+            return True
+    return False
 
 
 @dataclass

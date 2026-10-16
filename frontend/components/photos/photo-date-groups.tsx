@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { groupPhotosByDate } from "./grouping";
+import { dateMarkersFor, PhotoDateMarker } from "./photo-date-marker";
 import { PhotoTile } from "./photo-tile";
 import { formatWeekdayDate } from "@/lib/utils/format";
 import { FileOverviewItem } from "@/types/api";
@@ -51,7 +52,12 @@ export function PhotoDateGroups({
         <div key={group.key} className="photo-date-group">
           <div className="photo-date-heading">
             <div className="photo-date-heading-labels">
-              <h2 className="photo-date-weekday">{formatWeekdayDate(group.date, locale)}</h2>
+              <h2 className="photo-date-weekday">
+                {formatWeekdayDate(group.date, locale)}
+                {dateMarkersFor(group.items.map((item) => item.date_source)).map((marker) => (
+                  <PhotoDateMarker key={marker.kind} {...marker} />
+                ))}
+              </h2>
               <span className="photo-date-context">
                 {group.contextLabel}{group.contextLabel ? " " : null}{t("groupCount", { count: group.items.length })}
               </span>

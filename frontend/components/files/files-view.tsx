@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { DocumentUploadModal } from "./document-upload-modal";
+import { UploadResultsModal, uploadResultsSummary } from "./upload-results-modal";
+import { countUploadResults } from "@/lib/utils/upload-results";
 import { FileDetailModal } from "./file-detail-modal";
 import { FilesTable } from "./files-table";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -19,7 +21,7 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { useFileDrop } from "@/lib/hooks/use-file-drop";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { DocumentUploadResult, FileOverviewItem, FileOverviewSource } from "@/types/api";
+import { DocumentUploadResult, FileOverviewItem, FileOverviewSource, UploadFileResult } from "@/types/api";
 
 const PAGE_SIZE = 60;
 
@@ -64,6 +66,7 @@ export function FilesView({ initialItems }: Props) {
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  const [uploadResults, setUploadResults] = useState<UploadFileResult[] | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [items, setItems] = useState<FileOverviewItem[]>(initialItems);
@@ -142,8 +145,17 @@ export function FilesView({ initialItems }: Props) {
 
   function handleDocumentsUploaded(result: DocumentUploadResult) {
     const uploaded = result.items;
-    void reloadFromStart();
+    if (uploaded.length > 0) void reloadFromStart();
     setTagSuggestions((current) => Array.from(new Set([...current, ...uploaded.flatMap((item) => item.tags)])).sort((a, b) => a.localeCompare(b)));
+    const results = result.file_results ?? [];
+    if (results.length > 0) {
+      // Je Datei: hochgeladen / übersprungen (schon vorhanden) / fehlgeschlagen.
+      const failed = countUploadResults(results).failed;
+      showToast(uploadResultsSummary(results, t), failed > 0 ? "info" : "success", {
+        action: { label: t("uploadResults.detailsAction"), onClick: () => setUploadResults(results) },
+      });
+      return;
+    }
     showToast(t("view.uploadedToast", { count: uploaded.length }), "success");
     if (result.errors.length > 0) showToast(result.errors.join(" · "), "info");
   }
@@ -269,6 +281,8 @@ export function FilesView({ initialItems }: Props) {
           onUploaded={handleDocumentsUploaded}
         />
       )}
+
+      {uploadResults && <UploadResultsModal results={uploadResults} onClose={() => setUploadResults(null)} />}
 
       <FileDropOverlay active={isFileDragging} title={t("view.dropOverlayTitle")} hint={t("view.dropOverlayHint")} />
 

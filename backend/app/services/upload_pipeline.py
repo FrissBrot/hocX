@@ -469,6 +469,29 @@ def generate_thumbnail_bytes(content: bytes) -> tuple[bytes, int, int] | None:
 _TENANT_STORAGE_QUOTA_LOCK_NAMESPACE = 909100001
 
 
+class UploadRejected(HTTPException):
+    """Abgelehnte Datei mit maschinenlesbarem Grund (IMGMETA-012) - die Upload-Ergebnisse
+    tragen `code`/`params`, das Frontend übersetzt sie; `detail` bleibt der bisherige deutsche
+    Text für Aufrufer, die die Ausnahme weiterwerfen. Codes: too_large (max_mb), unsupported_format,
+    scan_failed, infected, quota_exceeded."""
+
+    def __init__(self, status_code: int, detail: str, *, code: str, params: dict[str, int | str] | None = None) -> None:
+        super().__init__(status_code=status_code, detail=detail)
+        self.code = code
+        self.params = params or {}
+
+
+def upload_failure(name: str, exc: HTTPException) -> dict:
+    """Ein fehlgeschlagenes Datei-Ergebnis (UploadFileResult) aus einer Ablehnung."""
+    return {
+        "name": name,
+        "status": "failed",
+        "message": str(exc.detail),
+        "code": getattr(exc, "code", None),
+        "params": getattr(exc, "params", None) or {},
+    }
+
+
 def _enforce_tenant_storage_quota(db: Session, *, tenant_id: int, repo: StoredFileRepository, incoming_bytes: int) -> None:
     """Rejects an upload that would push the tenant over its admin-configured
     Tenant.storage_quota_bytes limit. Audit fix, 2026-09-17: this quota is computed and
@@ -500,9 +523,10 @@ def _enforce_tenant_storage_quota(db: Session, *, tenant_id: int, repo: StoredFi
     )
     current_bytes = repo.total_bytes_for_tenant(db, tenant_id) + int(db.scalar(reservations) or 0)
     if current_bytes + incoming_bytes > tenant.storage_quota_bytes:
-        raise HTTPException(
-            status_code=400,
-            detail="Speicherkontingent des Mandanten erreicht - Datei wurde nicht gespeichert.",
+        raise UploadRejected(
+            400,
+            "Speicherkontingent des Mandanten erreicht - Datei wurde nicht gespeichert.",
+            code="quota_exceeded",
         )
 
 
@@ -596,17 +620,19 @@ def ingest_file(
     repo = stored_file_repository or StoredFileRepository()
 
     if len(content) > max_bytes:
-        raise HTTPException(
-            status_code=413,
-            detail=too_large_message or f"Datei zu gross. Maximum {max_bytes // 1024 // 1024} MB",
+        raise UploadRejected(
+            413,
+            too_large_message or f"Datei zu gross. Maximum {max_bytes // 1024 // 1024} MB",
+            code="too_large",
+            params={"max_mb": max_bytes // 1024 // 1024},
         )
     mime = sniff(content)
     if mime is None:
-        raise HTTPException(status_code=400, detail=unsupported_format_message)
+        raise UploadRejected(400, unsupported_format_message, code="unsupported_format")
     if scan_status == "error":
-        raise HTTPException(422, "Datei konnte nicht auf Schadsoftware geprüft werden (maximal 100 MiB)")
+        raise UploadRejected(422, "Datei konnte nicht auf Schadsoftware geprüft werden (maximal 100 MiB)", code="scan_failed")
     if scan_status == "infected":
-        raise HTTPException(status_code=400, detail=infected_message)
+        raise UploadRejected(400, infected_message, code="infected")
 
     _enforce_tenant_storage_quota(db, tenant_id=tenant_id, repo=repo, incoming_bytes=len(content))
 

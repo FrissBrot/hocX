@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from PIL import Image
 from sqlalchemy.orm import Session
 
-from app import element_resolver, repository, scanner
+from app import element_resolver, image_metadata, repository, scanner
 from app.captcha import mint_captcha_session_token, verify_captcha, verify_captcha_session_token
 from app.config import settings
 from app.db import get_db, serialized_upload, tenant_upload_lock
@@ -561,6 +561,7 @@ async def upload(
                     "file_size_bytes": len(content),
                     "checksum_sha256": checksum,
                     "perceptual_hash": perceptual_hashes[i],
+                    "image_metadata": image_metadata.extract(content) if mime_type in _IMAGE_MIME_TYPES else {},
                     "_content": content,
                 })
 

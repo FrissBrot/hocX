@@ -23,6 +23,7 @@ import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
 import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { ApiError, browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { isAlreadyUploaded } from "@/lib/image-analysis/precheck";
 import { clearDraft, discardMutation, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { getCycleYear } from "@/lib/utils/cycle";
 import { protocolStatusVariant } from "@/components/protocol/protocol-status";
@@ -1248,6 +1249,13 @@ export function ProtocolEditor({
     if (!file) return;
     setStatus(protocolElementBlockId, "saving");
     try {
+      // Vorab-Abgleich per SHA-256: ein im Mandanten schon vorhandenes Bild würde der Server
+      // ohnehin als Duplikat ablehnen - dann gar nicht erst übertragen.
+      if (await isAlreadyUploaded(file, "protocol_image")) {
+        setStatus(protocolElementBlockId, "error");
+        showToast(t("imageAlreadyExists"), "error");
+        return;
+      }
       const body = new FormData();
       body.append("file", file);
       const created = await browserApiFetch<ProtocolImage>(`/api/protocol-element-blocks/${protocolElementBlockId}/images`, {

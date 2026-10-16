@@ -26,6 +26,7 @@ from app.schemas.files import PublicShareFile, PublicShareRead
 from app.services import share_link_service
 from app.core.storage import MAIN, get_object_store, object_response, read_bytes_or_404, safe_suffix, write_object_to_zip
 from app.services.file_service import FileService
+from app.services import image_export_service
 from app.services.photo_metadata_privacy import SANITIZABLE_MIME_TYPES, sanitize_image
 
 router = APIRouter()
@@ -73,13 +74,19 @@ def _resolve_file_or_404(db: Session, link: ShareLink, file_id: uuid.UUID) -> St
 
 
 def _needs_sanitizing(link: ShareLink, stored_file: StoredFile) -> bool:
-    return stored_file.mime_type in SANITIZABLE_MIME_TYPES and not share_link_service.metadata_policy_for(link).keeps_everything
+    """Muss die Datei fuer den Abruf umgeschrieben werden - Metadaten entfernen, die der Link
+    nicht teilt, oder ein geschaetztes Aufnahmedatum eintragen (image_export_service)?"""
+    sanitize = stored_file.mime_type in SANITIZABLE_MIME_TYPES and not share_link_service.metadata_policy_for(link).keeps_everything
+    return sanitize or image_export_service.needs_export_processing(stored_file)
 
 
 def _public_file_bytes(link: ShareLink, stored_file: StoredFile) -> bytes:
-    """Dateiinhalt fuer den oeffentlichen Abruf - Fotos ohne die Metadaten, die der Link nicht
-    teilt (Standort/Aufnahmedatum/Kamera, siehe photo_metadata_privacy.py)."""
-    content = read_bytes_or_404(MAIN, stored_file.storage_path, detail="File missing on filesystem")
+    """Dateiinhalt fuer den oeffentlichen Abruf - erst die Exportfassung (geschaetztes Datum,
+    GPS aus der Datenbank), dann ohne die Metadaten, die der Link nicht teilt
+    (Standort/Aufnahmedatum/Kamera, siehe photo_metadata_privacy.py). Die Reihenfolge stellt
+    sicher, dass nichts eingetragen wird, was der Link anschliessend nicht teilen darf."""
+    original = read_bytes_or_404(MAIN, stored_file.storage_path, detail="File missing on filesystem")
+    content = image_export_service.export_bytes(stored_file, original) or original
     return sanitize_image(content, stored_file.mime_type, share_link_service.metadata_policy_for(link))
 
 
