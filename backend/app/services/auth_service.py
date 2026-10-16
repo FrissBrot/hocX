@@ -6,9 +6,9 @@ from fastapi import HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.rate_limit import check_account_lockout, record_failed_attempt
+from app.core.rate_limit import check_login_lockout, record_failed_login
 from app.core.security import CurrentUser, DUMMY_PASSWORD_HASH, build_current_user, issue_locale_cookie, issue_session_cookie, verify_password
-from app.models import AppUser
+from app.models import AppUser, Tenant
 from app.schemas.mfa import (
     LoginResponse,
     MfaTicketRequest,
@@ -20,7 +20,7 @@ from app.schemas.mfa import (
     TotpEnrollmentStartRead,
     TotpLoginVerifyRequest,
 )
-from app.schemas.user import LoginRequest, SessionRead, SessionUserRead, TenantRead
+from app.schemas.user import BridgePreviewRead, LoginRequest, SessionRead, SessionUserRead, TenantRead
 from app.services import domain_bridge_service
 from app.services.audit_service import AuditService
 from app.services.mfa_service import MfaService
@@ -28,19 +28,22 @@ from app.services.tenant_service import build_tenant_profile_image_url
 
 _audit = AuditService()
 
-# Account-scoped lockout, independent of source IP - complements Traefik's per-IP rate limit
-# (10/min), which a distributed or shared-IP bruteforce attempt can bypass entirely.
-_ACCOUNT_LOGIN_ATTEMPT_LIMIT = 20
-_ACCOUNT_LOGIN_WINDOW_SECONDS = 15 * 60
 
 
 class AuthService:
     def __init__(self) -> None:
         self.mfa_service = MfaService()
 
-    def login(self, db: Session, response: Response, payload: LoginRequest, request_host: str | None = None) -> LoginResponse:
-        lockout_key = f"login-account:{payload.email.strip().lower()}"
-        check_account_lockout(lockout_key, limit=_ACCOUNT_LOGIN_ATTEMPT_LIMIT)
+    def login(
+        self,
+        db: Session,
+        response: Response,
+        payload: LoginRequest,
+        request_host: str | None = None,
+        client_address: str | None = None,
+    ) -> LoginResponse:
+        # Sperre pro Konto und Quell-IP plus höhere Grenze pro Konto (MAIN-SEC-007).
+        check_login_lockout("login-account", payload.email, client_address)
 
         user = db.query(AppUser).filter(AppUser.email == payload.email.strip().lower(), AppUser.login_enabled.is_(True)).one_or_none()
         # Always run verify_password's full PBKDF2 work, even for a nonexistent account
@@ -48,7 +51,7 @@ class AuthService:
         # channel that let an attacker enumerate valid emails (audit finding, 2026-08-25).
         password_ok = verify_password(payload.password, user.password_hash if user is not None and user.password_hash else DUMMY_PASSWORD_HASH)
         if user is None or not user.is_active or not password_ok:
-            record_failed_attempt(lockout_key, period_seconds=_ACCOUNT_LOGIN_WINDOW_SECONDS)
+            record_failed_login("login-account", payload.email, client_address)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-Mail oder Passwort ist ungültig.")
         if not user.login_enabled:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login ist für dieses Konto deaktiviert.")
@@ -82,20 +85,36 @@ class AuthService:
                 db.commit()
         return {"message": "Logged out"}
 
-    def redeem_bridge_token(self, db: Session, response: Response, token: str) -> bool:
-        """Consumes a single-use domain-bridge token and, if valid, issues a session cookie
-        scoped to whichever domain this request came in on. Returns False on an invalid/expired
-        token - the caller sends the browser back to the main-domain login in that case."""
-        pair = domain_bridge_service.consume_bridge_token(token)
-        if pair is None:
-            return False
-        user_id, mfa_verified = pair
+    def preview_bridge_token(self, db: Session, token: str, request_host: str | None) -> BridgePreviewRead | None:
+        """Für die Bestätigungsseite auf der Ziel-Domain (MAIN-SEC-006): zeigt, als wer man
+        angemeldet würde, ohne das Token zu verbrauchen. None bei ungültigem, abgelaufenem
+        oder auf einer fremden Domain vorgelegtem Token."""
+        bridge = domain_bridge_service.peek_bridge_token(token, request_host)
+        if bridge is None:
+            return None
+        user = db.get(AppUser, bridge.user_id)
+        if user is None or not user.is_active:
+            return None
+        tenant = db.get(Tenant, user.tenant_id)
+        return BridgePreviewRead(
+            display_name=user.display_name,
+            email=user.email,
+            tenant_name=tenant.name if tenant is not None else "",
+        )
 
-        user = db.get(AppUser, user_id)
+    def redeem_bridge_token(self, db: Session, response: Response, token: str, request_host: str | None) -> bool:
+        """Consumes a single-use domain-bridge token and, if valid for this host, issues a
+        session cookie scoped to it. Only called after the user confirmed the handoff on the
+        confirmation page (MAIN-SEC-006) - a link alone no longer logs anybody in."""
+        bridge = domain_bridge_service.consume_bridge_token(token, request_host)
+        if bridge is None:
+            return False
+
+        user = db.get(AppUser, bridge.user_id)
         if user is None or not user.is_active:
             return False
 
-        issue_session_cookie(response, user_id, mfa_verified=mfa_verified)
+        issue_session_cookie(response, bridge.user_id, mfa_verified=bridge.mfa_verified)
         issue_locale_cookie(response, user.preferred_language)
         return True
 

@@ -24,6 +24,7 @@ def _load_file_secrets() -> None:
         "AUTH_SECRET",
         "ADMIN_AUTH_SECRET",
         "INITIAL_ADMIN_PASSWORD",
+        "REDIS_PASSWORD",
     ):
         file_variable = f"{variable}_FILE"
         if variable not in os.environ and (path := os.environ.get(file_variable)):
@@ -31,6 +32,10 @@ def _load_file_secrets() -> None:
 
 
 _load_file_secrets()
+
+
+# Werte von HOCX_ENVIRONMENT, die als Produktion gelten (kanonisch: 'production').
+PRODUCTION_ENVIRONMENT_NAMES = frozenset({"production", "prod"})
 
 
 class Settings(BaseSettings):
@@ -167,6 +172,13 @@ class Settings(BaseSettings):
     document_verify_base_url: str | None = None
     # Interner Prüf-Endpoint der Abgabebox für den Systemcheck document_verification.
     abgabebox_internal_url: str = "http://abgabebox-backend:8000"
+    # Obergrenze für Request-Bodies ausser Multipart (JSON etc.), MAIN-OPS-013.
+    max_request_body_bytes: int = 10 * 1024 * 1024
+    # requirepass im Release-Stack (REDIS_PASSWORD_FILE, MAIN-OPS-005); leer = ohne Passwort.
+    redis_password: str | None = None
+    # Proxys, deren X-Forwarded-For ausgewertet wird (Traefik im Compose-Netz), siehe
+    # app/core/client_ip.py.
+    trusted_proxy_cidrs: str = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,::1/128,fc00::/7"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -189,7 +201,7 @@ class Settings(BaseSettings):
                 file=sys.stderr,
             )
             sys.exit(1)
-        if self.environment.strip().lower() == "production":
+        if self.is_production:
             if not self.auth_secure_cookies:
                 print("FATAL: AUTH_SECURE_COOKIES must be true in production.", file=sys.stderr)
                 sys.exit(1)
@@ -206,7 +218,18 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.environment.strip().lower() == "production"
+        # 'prod' ist ein Alias: scripts/deploy.sh schrieb bis zum Audit MAIN-OPS-001 den
+        # Host-Namen 'prod' in die .env, solche Hosts muessen weiter als Produktion gelten.
+        return self.environment.strip().lower() in PRODUCTION_ENVIRONMENT_NAMES
+
+    @property
+    def local_dev_origins(self) -> tuple[str, ...]:
+        """Lokaler Next-Dev-Server als CORS-/WebSocket-Origin - nur ausserhalb der Produktion
+        (Audit MAIN-SEC-009: sonst durfte jede lokal auf Port 3000 laufende Seite
+        credentialed Requests an die Produktions-API stellen)."""
+        if self.is_production:
+            return ()
+        return ("http://localhost:3000", "http://127.0.0.1:3000")
 
 
 settings = Settings()

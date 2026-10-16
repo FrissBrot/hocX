@@ -1600,3 +1600,36 @@ def test_import_keeps_registry_with_original_and_never_imports_identity_verifica
     assert any("Dokumentenregister: 1 Einträge übersprungen" in warning for warning in warnings)
     assert imported_tenant.identity_verified_at is None and imported_tenant.identity_verification_note is None
     assert imported_tenant.verify_show_identity is True
+
+
+def test_import_merges_duplicate_fines_from_old_archives(db):
+    """MAIN-BE-016: Archive von vor Migration 0116 können doppelte Bussen enthalten - der
+    Import führt sie zusammen (kassiert vor offen) statt am Unique-Index abzubrechen."""
+    from decimal import Decimal
+
+    from app.models.entities import AttendanceFine
+    from tests.factories import make_finance_account, make_fine
+
+    tenant = make_tenant(db, "Bussen-Duplikat")
+    template = make_template(db, tenant.id)
+    protocol = make_protocol(db, tenant.id, template.id)
+    account = make_finance_account(db, tenant.id)
+    make_fine(db, protocol_id=protocol.id, account_id=account.id, amount=Decimal("5.00"))
+    db.commit()
+
+    def duplicate_fine(zip_path):
+        def mutate(manifest):
+            original = manifest["tables"]["attendance_fine"][0]
+            copy = {**original, "id": original["id"] + 100000, "status": "collected"}
+            copy.pop("public_id", None)
+            manifest["tables"]["attendance_fine"].append(copy)
+        _rewrite_manifest(zip_path, mutate)
+
+    new_tenant, warnings = _export_import(db, tenant.id, before_import=duplicate_fine)
+
+    fines = db.scalars(
+        select(AttendanceFine).join(Protocol, Protocol.id == AttendanceFine.protocol_id).where(Protocol.tenant_id == new_tenant.id)
+    ).all()
+    assert [fine.status for fine in fines] == ["collected"]
+    assert any("doppelte Busse" in warning for warning in warnings)
+

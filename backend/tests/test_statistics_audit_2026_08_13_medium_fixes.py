@@ -176,8 +176,10 @@ def test_m12_fine_amounts_summed_as_exact_decimal(db):
 
     # Classic float trap: 1.1 + 2.2 as repeated Python float addition != the correctly
     # rounded float for the exact decimal sum 3.30.
+    # Zwei Protokolle: pro Protokoll, Person und Typ ist nur eine Busse erlaubt (MAIN-BE-016).
+    second_protocol = make_protocol(db, tenant.id, protocol.template_id, protocol_number="P-2")
     make_fine(db, protocol.id, account.id, amount=1.1, fine_type="late", participant_name_snapshot="Bob")
-    make_fine(db, protocol.id, account.id, amount=2.2, fine_type="late", participant_name_snapshot="Bob")
+    make_fine(db, second_protocol.id, account.id, amount=2.2, fine_type="late", participant_name_snapshot="Bob")
 
     naive_float_sum = 0.0
     for v in (1.1, 2.2):

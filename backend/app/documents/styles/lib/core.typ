@@ -46,6 +46,8 @@
   "fineStatus.collected": "success",
   "fineStatus.collectedLater": "success",
   "fineStatus.collectedHere": "success",
+  "fineStatus.deleted": "neutral",
+  "fineStatus.deletedLater": "neutral",
   "protocolStatus.planned": "neutral",
   "protocolStatus.prepared": "info",
   "protocolStatus.held": "warning",

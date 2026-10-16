@@ -178,6 +178,11 @@
   "deleteEventConfirmNamed": "Supprimer définitivement l'événement « {title} » ? Cela le retire de tous les procès-verbaux.",
   "deleteFine": "Supprimer l'amende",
   "deleteFineConfirm": "Supprimer définitivement cette amende ? Cette action est irréversible.",
+  "fineDeletedLabel": "Supprimée",
+  "fineDeletedLater": "Supprimée plus tard",
+  "fineDeletedReason": "Justification : {reason}",
+  "restoreFine": "Restaurer",
+  "fineRestoreFailed": "L'amende n'a pas pu être restaurée",
   "deleteImageAction": "Supprimer l'image",
   "descriptionLabel": "Description",
   "discardNewEventRow": "Annuler la nouvelle ligne d'événement",
@@ -235,7 +240,10 @@
     "workflowPostProcessingMode": "Mode post-traitement",
     "workflowPreparationMode": "Mode préparation",
     "workflowSessionMode": "Mode séance",
-    "templateSyncedByOther": "{name} a rechargé les éléments depuis le modèle. L’affichage est actualisé."
+    "templateSyncedByOther": "{name} a rechargé les éléments depuis le modèle. L’affichage est actualisé.",
+    "statusChangedByOtherToast": "{name} a changé le statut en « {status} ».",
+    "draftsRestoredToast": "{count, plural, one {# brouillon local a été restauré} other {# brouillons locaux ont été restaurés}}.",
+    "conflictToast": "Conflit : quelqu'un d'autre a enregistré cette section entre-temps. La version actuelle a été chargée – votre dernière modification n'a pas été appliquée, mais elle est conservée comme brouillon local."
   },
   "embeddedBlock": {
     "attendance": "Présence",

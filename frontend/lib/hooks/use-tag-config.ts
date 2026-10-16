@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { browserApiFetch } from "@/lib/api/client";
+import { useTranslations } from "next-intl";
 import { useToast } from "@/contexts/toast-context";
 
 export type TagConfigEntry = { color?: string; important?: boolean };
@@ -21,6 +22,7 @@ export function useTagConfig() {
   const configRef = useRef<TagConfig>({});
   configRef.current = tagConfig;
   const showToast = useToast();
+  const tCommon = useTranslations("common");
 
   useEffect(() => {
     browserApiFetch<TagConfig>("/api/tag-config")
@@ -87,9 +89,9 @@ export function useTagConfig() {
       // The rename itself already succeeded (above) - only the color carry-over failed, so
       // this must not throw and undo it. Still tell the user, otherwise the tag silently
       // loses its color with no indication anything went wrong.
-      showToast("Tag umbenannt, Farbe konnte aber nicht übertragen werden", "error");
+      showToast(tCommon("clientErrors.tagColorTransferFailed"), "error");
     }
-  }, [showToast]);
+  }, [showToast, tCommon]);
 
   return { tagConfig, updateTagColor, toggleTagImportant, renameTag };
 }

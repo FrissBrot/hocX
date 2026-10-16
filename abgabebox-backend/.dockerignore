@@ -1,0 +1,8 @@
+# Lokale Artefakte nicht in Image/Build-Cache (Audit MAIN-OPS-017). tests/ bleibt drin:
+# Dockerfile.test nutzt denselben Kontext.
+__pycache__
+*.pyc
+.pytest_cache
+.coverage
+.env
+.env.*

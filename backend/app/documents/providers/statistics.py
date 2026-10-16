@@ -75,18 +75,23 @@ def provide_chart(ctx: BuildContext, spec: BlockSpec, params: ChartParams):
             ChartSeries(label_key="chart.expenses", values=[float(row.expenses or 0) for row in rows], tone="danger"),
         ]
     elif chart == "fines_by_participant":
-        rows = sorted(stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds), key=lambda row: float(row.amount or 0), reverse=True)[:10]
+        # Beträge verschiedener Währungen nicht addieren (MAIN-BE-019 aus main): Hauptwährung.
+        rows = _main_currency_rows(stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds))
+        rows = sorted(rows, key=lambda row: float(row.amount or 0), reverse=True)[:10]
         categories = [row.name for row in rows]
         horizontal = True
         value_format = "amount"
         series = [ChartSeries(label_key="chart.amount", values=[float(row.amount or 0) for row in rows], tone="primary")]
     elif chart == "fines_by_type":
-        rows = stats.fetch_fines_by_type(ctx.db, ctx.tenant_id, bounds)
+        # Anzahl je Typ über alle Währungen (die Abfrage liefert je Typ und Währung eine Zeile).
+        counts: dict[str, int] = {}
+        for row in stats.fetch_fines_by_type(ctx.db, ctx.tenant_id, bounds):
+            counts[row.fine_type] = counts.get(row.fine_type, 0) + int(row.count)
         kind = "donut"
-        categories = [row.fine_type for row in rows]
-        category_keys = [f"fineType.{row.fine_type}" if row.fine_type in ("late", "absent") else None for row in rows]
-        category_tones = ["warning" if row.fine_type == "late" else "danger" for row in rows]
-        series = [ChartSeries(label_key="chart.count", values=[int(row.count) for row in rows])]
+        categories = list(counts)
+        category_keys = [f"fineType.{fine_type}" if fine_type in ("late", "absent") else None for fine_type in counts]
+        category_tones = ["warning" if fine_type == "late" else "danger" for fine_type in counts]
+        series = [ChartSeries(label_key="chart.count", values=list(counts.values()))]
     elif chart == "todos":
         open_count, done_count = stats.aggregate_todo_counts(stats.fetch_todo_rows(ctx.db, ctx.tenant_id, bounds))
         kind = "donut"
@@ -160,8 +165,11 @@ def provide_kpis(ctx: BuildContext, spec: BlockSpec, params: KpiTilesParams):
             count = ctx.db.scalar(select(func.count(Participant.id)).where(Participant.tenant_id == ctx.tenant_id, Participant.is_active.is_(True))) or 0
             tiles.append(KpiTile(label_key="kpi.members", value=format_number(count)))
         elif key == "finesTotal":
-            total = sum(float(row.amount or 0) for row in stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds))
-            tiles.append(KpiTile(label_key="kpi.finesTotal", value=format_amount(total)))
+            totals: dict[str, float] = {}
+            for row in stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds):
+                totals[row.currency or ""] = totals.get(row.currency or "", 0.0) + float(row.amount or 0)
+            value = " · ".join(f"{format_amount(total)} {code}".strip() for code, total in totals.items()) or format_amount(0)
+            tiles.append(KpiTile(label_key="kpi.finesTotal", value=value))
     return [KpiTilesBlock(**spec_fields(spec), tiles=tiles)]
 
 
@@ -179,7 +187,7 @@ def provide_table(ctx: BuildContext, spec: BlockSpec, params: StatTableParams):
     elif params.table == "fines_by_participant":
         columns = [col("name", "col.person", width="fill"), col("count", "col.count", align="right"), col("amount", "col.amount", align="right")]
         for row in sorted(stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds), key=lambda item: float(item.amount or 0), reverse=True):
-            rows.append(TableRow(cells=[text_cell(row.name), amount_cell(str(int(row.count))), amount_cell(format_amount(row.amount))]))
+            rows.append(TableRow(cells=[text_cell(row.name), amount_cell(str(int(row.count))), amount_cell(f"{format_amount(row.amount)} {row.currency or ''}".strip())]))
     elif params.table == "groups":
         columns = [col("group", "col.group", width="fill"), col("sessions", "col.sessions", align="right"), col("with", "col.sessionsWithParticipants", align="right"), col("avg", "col.avgParticipants", align="right")]
         for group in stats.aggregate_group_rows(stats.fetch_group_session_rows(ctx.db, ctx.tenant_id, bounds)):
@@ -195,3 +203,15 @@ def provide_table(ctx: BuildContext, spec: BlockSpec, params: StatTableParams):
 
 def default_period(today: date) -> tuple[date, date]:
     return date(today.year, 1, 1), date(today.year, 12, 31)
+
+
+def _main_currency_rows(rows):
+    """Zeilen der Währung mit den meisten Bussen (Diagramme zeigen nur eine Währung)."""
+    counts: dict[str, int] = {}
+    for row in rows:
+        counts[row.currency or ""] = counts.get(row.currency or "", 0) + int(row.count)
+    if not counts:
+        return []
+    main = max(counts, key=lambda code: (counts[code], code))
+    return [row for row in rows if (row.currency or "") == main]
+

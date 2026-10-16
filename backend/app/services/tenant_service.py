@@ -4,10 +4,13 @@ import os
 import secrets
 import uuid
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
+from PIL import Image
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -34,15 +37,87 @@ def build_tenant_profile_image_url(tenant_public_id: uuid.UUID, profile_image_pa
     return f"/api/tenants/{tenant_public_id}/profile-image"
 
 
+TENANT_PROFILE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+_TENANT_PROFILE_IMAGE_MAX_PIXELS = 40_000_000
+_TENANT_PROFILE_IMAGE_MAX_DIMENSION = 1024
+_TENANT_PROFILE_IMAGE_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
+
+# Auslieferung: Content-Type nur aus dieser Whitelist, alles andere als Download
+# (Altbestände/Importe können noch beliebige Endungen haben).
+TENANT_PROFILE_IMAGE_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+}
+TENANT_PROFILE_IMAGE_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'none'; sandbox",
+}
+
+
+def tenant_profile_image_response(file_path: Path) -> FileResponse:
+    """Liefert ein Mandanten-Profilbild mit festem Typ und CSP aus (Audit MAIN-SEC-002).
+
+    Die Route ist öffentlich und läuft im Origin der Hauptanwendung bzw. des Admin-Panels;
+    ein als Profilbild abgelegtes HTML/SVG darf dort nie als Dokument ausgeführt werden.
+    """
+    media_type = TENANT_PROFILE_IMAGE_MEDIA_TYPES.get(file_path.suffix.lower())
+    headers = dict(TENANT_PROFILE_IMAGE_SECURITY_HEADERS)
+    if media_type is None:
+        return FileResponse(
+            file_path,
+            media_type="application/octet-stream",
+            headers=headers,
+            content_disposition_type="attachment",
+            filename=file_path.name,
+        )
+    return FileResponse(file_path, media_type=media_type, headers=headers)
+
+
+def _normalize_tenant_profile_image(content: bytes) -> bytes:
+    """Prüft das Bild per Pillow (nur JPEG/PNG/GIF/WebP) und kodiert es neu als PNG.
+
+    Das Neukodieren entfernt eingebettete Fremdinhalte (Polyglot-Dateien, Metadaten);
+    die Dateiendung kommt damit nie mehr aus dem Client-Dateinamen (Audit MAIN-SEC-002).
+    """
+    invalid = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Das Profilbild muss ein JPEG-, PNG-, GIF- oder WebP-Bild sein",
+    )
+    try:
+        with Image.open(BytesIO(content)) as image:
+            if image.format not in _TENANT_PROFILE_IMAGE_FORMATS:
+                raise invalid
+            if image.width * image.height > _TENANT_PROFILE_IMAGE_MAX_PIXELS:
+                raise invalid
+            image.seek(0)
+            image.load()
+            converted = image.convert("RGBA")
+    except HTTPException:
+        raise
+    except (OSError, ValueError, SyntaxError, Image.DecompressionBombError) as exc:
+        raise invalid from exc
+    converted.thumbnail((_TENANT_PROFILE_IMAGE_MAX_DIMENSION, _TENANT_PROFILE_IMAGE_MAX_DIMENSION))
+    output = BytesIO()
+    converted.save(output, format="PNG", optimize=True)
+    return output.getvalue()
+
+
 async def apply_tenant_profile_image(tenant: Tenant, profile_image: UploadFile) -> None:
-    """Stores an uploaded profile image on disk and updates tenant.profile_image_path in place."""
+    """Prüft und normalisiert ein hochgeladenes Profilbild und setzt tenant.profile_image_path."""
+    content = await profile_image.read(TENANT_PROFILE_IMAGE_MAX_BYTES + 1)
+    if len(content) > TENANT_PROFILE_IMAGE_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Das Profilbild ist zu gross (maximal 5 MB)",
+        )
+    normalized = _normalize_tenant_profile_image(content)
     profile_dir = Path(settings.upload_root) / "tenant-profiles"
     profile_dir.mkdir(parents=True, exist_ok=True)
-    suffix = Path(profile_image.filename or "profile").suffix or ".png"
-    file_name = f"tenant-{tenant.id}-{uuid4().hex}{suffix}"
-    absolute_path = profile_dir / file_name
-    content = await profile_image.read()
-    absolute_path.write_bytes(content)
+    absolute_path = profile_dir / f"tenant-{tenant.id}-{uuid4().hex}.png"
+    absolute_path.write_bytes(normalized)
     tenant.profile_image_path = os.path.relpath(str(absolute_path), settings.storage_root)
 
 
@@ -193,6 +268,10 @@ class TenantService:
         db.commit()
         db.refresh(tenant)
         return self._read_model(tenant, actor).model_copy(update={"identity_verification_revoked": revoked})
+
+    def require_manageable(self, tenant_id: int, actor: CurrentUser) -> None:
+        """Öffentliche Variante für Routen, die vor dem Service z. B. ein Rate-Limit zählen."""
+        self._require_manageable(tenant_id, actor)
 
     def _require_manageable(self, tenant_id: int, actor: CurrentUser) -> None:
         if tenant_id not in self._manageable_tenant_ids(actor):

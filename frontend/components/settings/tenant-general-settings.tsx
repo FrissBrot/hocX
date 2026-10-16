@@ -10,6 +10,7 @@ import { useTenantDomains } from "@/components/settings/tenant-domains-manager";
 import { CopyField } from "@/components/ui/copy-field";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
+import { PROFILE_IMAGE_ACCEPT, profileImageProblem } from "@/lib/utils/profile-image";
 import { TenantSummary } from "@/types/api";
 
 type Props = {
@@ -74,6 +75,7 @@ export function useTenantGeneralForm(initialTenant: TenantSummary) {
 export function TenantGeneralSettings({ initialTenant }: Props) {
   const t = useTranslations("tenantSettings");
   const tCommon = useTranslations("common");
+  const showToast = useToast();
   const { tenantForm, setTenantForm, submitTenant, primaryDomain } = useTenantGeneralForm(initialTenant);
   const profileImageInputRef = useRef<HTMLInputElement>(null);
 
@@ -97,11 +99,18 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
             <input
               ref={profileImageInputRef}
               type="file"
-              accept="image/*"
+              accept={PROFILE_IMAGE_ACCEPT}
               hidden
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                setTenantForm((current) => ({ ...current, profileImage: event.target.files?.[0] ?? null }))
-              }
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const file = event.target.files?.[0] ?? null;
+                const problem = file ? profileImageProblem(file) : null;
+                if (problem) {
+                  showToast(tCommon(`profileImage.${problem}`), "error");
+                  event.target.value = "";
+                  return;
+                }
+                setTenantForm((current) => ({ ...current, profileImage: file }));
+              }}
             />
           </div>
           <div className="two-col">

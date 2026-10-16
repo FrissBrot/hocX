@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.entities import AppUser, PhotoAlbum, PhotoAlbumItem, ShareLink, ShareLinkFile
@@ -104,7 +104,22 @@ def resolve_active(db: Session, token: str) -> ShareLink | None:
         return None
     if link.expires_at is not None and link.expires_at <= datetime.now(UTC):
         return None
+    # Audit MAIN-SEC-003: Ein Album-Link gilt nur, solange der anlegende Mandant das Album
+    # noch sehen darf (Besitzer oder angenommene Freigabe). Sonst überlebte der Link eines
+    # Partners den Widerruf der Album-Freigabe.
+    if link.album_id is not None and link.tenant_id not in photo_album_share_service.accessible_tenant_ids_for_album(db, link.album_id):
+        return None
     return link
+
+
+def can_manage(db: Session, link: ShareLink, tenant_id: int) -> bool:
+    """Anlegender Mandant oder Besitzer des verlinkten Albums (MAIN-SEC-003: der Besitzer
+    muss Links von Partnern auf sein Album sehen und widerrufen können)."""
+    if link.tenant_id == tenant_id:
+        return True
+    if link.album_id is None:
+        return False
+    return db.scalar(select(PhotoAlbum.tenant_id).where(PhotoAlbum.id == link.album_id)) == tenant_id
 
 
 def file_ids_for_link(db: Session, link: ShareLink) -> list[uuid.UUID]:
@@ -127,7 +142,15 @@ class ShareLinkOverviewRow:
 
 
 def list_for_tenant(db: Session, tenant_id: int) -> list[ShareLinkOverviewRow]:
-    links = list(db.scalars(select(ShareLink).where(ShareLink.tenant_id == tenant_id).order_by(ShareLink.created_at.desc())))
+    # Eigene Links plus Links von Partnern auf eigene Alben (MAIN-SEC-003).
+    owned_album_ids = select(PhotoAlbum.id).where(PhotoAlbum.tenant_id == tenant_id)
+    links = list(
+        db.scalars(
+            select(ShareLink)
+            .where(or_(ShareLink.tenant_id == tenant_id, ShareLink.album_id.in_(owned_album_ids)))
+            .order_by(ShareLink.created_at.desc())
+        )
+    )
     if not links:
         return []
 

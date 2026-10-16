@@ -1,0 +1,31 @@
+# MAIN-OPS-012: Images sind per Digest, Actions per Commit-SHA gepinnt. Dependabot schlägt
+# Updates als PR vor (mit Versionskommentar), damit das Pinning nicht veraltet.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      compose-images:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directories:
+      - /backend
+      - /frontend
+      - /abgabebox-backend
+      - /abgabebox-frontend
+      - /docs-site
+      - /photo-analysis-worker
+    schedule:
+      interval: weekly
+    groups:
+      base-images:
+        patterns: ["*"]

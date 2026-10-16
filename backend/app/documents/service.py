@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -432,13 +432,83 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
             )
         )
         db.flush()
+        superseded_paths = _prune_superseded_files(db, export)
         db.commit()
     except Exception:
         db.rollback()
         target.unlink(missing_ok=True)
         raise
+    _unlink(superseded_paths)
     db.refresh(export)
     return RenderResult(export=export, stored_file=stored)
+
+
+def _storage_file(storage_path: str) -> Path:
+    root = Path(settings.storage_root).resolve()
+    path = (root / storage_path).resolve()
+    if not path.is_relative_to(root):
+        raise ValueError(f"Pfad ausserhalb des Speichers: {storage_path}")
+    return path
+
+
+def _unlink(paths: list[Path]) -> None:
+    for path in paths:
+        path.unlink(missing_ok=True)
+
+
+def _release_files(db: Session, exports: list[DocumentExport]) -> list[Path]:
+    """Löst die PDF-Datei (StoredFile) von Exporten; Export-Zeile und Register-Eintrag bleiben
+    (Verlauf und Echtheitsprüfung über den Hash). Gibt die erst nach dem Commit zu löschenden
+    Pfade zurück."""
+    file_ids = {export.stored_file_id for export in exports if export.stored_file_id is not None}
+    for export in exports:
+        export.stored_file_id = None
+    db.flush()
+    paths: list[Path] = []
+    for file_id in file_ids:
+        still_used = db.scalar(select(DocumentExport.id).where(DocumentExport.stored_file_id == file_id).limit(1))
+        stored = db.get(StoredFile, file_id)
+        if still_used is not None or stored is None:
+            continue
+        paths.append(_storage_file(stored.storage_path))
+        db.delete(stored)
+    db.flush()
+    return paths
+
+
+def _prune_superseded_files(db: Session, export: DocumentExport) -> list[Path]:
+    """Audit MAIN-BE-004 (aus main übernommen): Jeder Export legte eine neue Datei samt StoredFile
+    an, die nie gelöscht wurde - das Speicherkontingent wuchs mit jedem Export. Bei Protokollen
+    bleibt nur die Datei des neuesten Exports; Auszüge und andere Dokumente sind jeweils eigene
+    Dokumente und laufen über die Altersfrist (cleanup_old_generated_exports)."""
+    if export.protocol_id is None or export.document_type != "protocol":
+        return []
+    older = list(db.scalars(
+        select(DocumentExport).where(
+            DocumentExport.protocol_id == export.protocol_id,
+            DocumentExport.document_type == "protocol",
+            DocumentExport.id != export.id,
+            DocumentExport.stored_file_id.is_not(None),
+        )
+    ))
+    return _release_files(db, older)
+
+
+def _protected_export_ids(db: Session) -> set[int]:
+    """Neuester Protokoll-Export abgeschlossener Protokolle: das finale PDF bleibt über die
+    Aufbewahrungsfrist hinaus abrufbar (MAIN-BE-004)."""
+    ranked = (
+        select(
+            DocumentExport.id,
+            func.row_number()
+            .over(partition_by=DocumentExport.protocol_id, order_by=(DocumentExport.created_at.desc(), DocumentExport.id.desc()))
+            .label("rank"),
+        )
+        .join(Protocol, Protocol.id == DocumentExport.protocol_id)
+        .where(Protocol.status == "abgeschlossen", DocumentExport.document_type == "protocol")
+        .subquery()
+    )
+    return set(db.scalars(select(ranked.c.id).where(ranked.c.rank == 1)))
 
 
 def _uuid7() -> uuid.UUID:
@@ -452,18 +522,52 @@ def _uuid7() -> uuid.UUID:
     return uuid.UUID(int=(timestamp_ms << 80) | (0x7 << 76) | (rand_a << 64) | (0b10 << 62) | rand_b)
 
 
-def cleanup_old_generated_exports(*, retention_days: int | None = None) -> dict:
+def cleanup_old_generated_exports(db: Session | None = None, *, retention_days: int | None = None) -> dict:
     """Retention-Job (main.py export_cleanup_loop): löscht alte Dateien unter
-    EXPORT_ROOT/generated. Der StoredFile-Datensatz bleibt; ein alter Link liefert dann 404.
-    Das Dokumentenregister bleibt unangetastet: ausgelieferte PDFs sind dauerhaft prüfbar."""
+    EXPORT_ROOT/generated. Das Dokumentenregister bleibt unangetastet: ausgelieferte PDFs sind
+    über ihren Hash dauerhaft prüfbar.
+
+    Mit ``db`` (Hintergrund-Loop, MAIN-BE-004 aus main) zuerst auf DB-Basis: Exporte älter als
+    die Frist verlieren ihre Datei samt StoredFile (sonst blieben die Bytes im
+    Speicherkontingent und ein Link zeigte auf eine fehlende Datei), ausgenommen der neueste
+    Export abgeschlossener Protokolle. Danach entfernt der Datei-Sweep verwaiste Dateien ohne
+    Zeile, ebenfalls ohne die geschützten."""
     retention = retention_days if retention_days is not None else settings.export_retention_days
     target_dir = Path(settings.export_root) / GENERATED_DIR
-    if not target_dir.is_dir():
-        return {"deleted": 0}
-    cutoff = datetime.now(UTC).timestamp() - retention * 86400
+    cutoff_timestamp = datetime.now(UTC).timestamp() - retention * 86400
+    released = 0
+    protected_paths: set[Path] = set()
+    if db is not None:
+        protected = _protected_export_ids(db)
+        cutoff = datetime.fromtimestamp(cutoff_timestamp, tz=UTC)
+        expired = [
+            export
+            for export in db.scalars(
+                select(DocumentExport).where(DocumentExport.created_at < cutoff, DocumentExport.stored_file_id.is_not(None))
+            )
+            if export.id not in protected
+        ]
+        paths = _release_files(db, expired)
+        db.commit()
+        _unlink(paths)
+        released = len(expired)
+        if protected:
+            protected_paths = {
+                _storage_file(storage_path)
+                for storage_path in db.scalars(
+                    select(StoredFile.storage_path)
+                    .join(DocumentExport, DocumentExport.stored_file_id == StoredFile.id)
+                    .where(DocumentExport.id.in_(protected))
+                )
+            }
     deleted = 0
-    for path in target_dir.iterdir():
-        if path.is_file() and path.stat().st_mtime < cutoff:
-            path.unlink()
-            deleted += 1
+    if target_dir.is_dir():
+        for path in target_dir.iterdir():
+            if not path.is_file() or path.resolve() in protected_paths:
+                continue
+            if path.stat().st_mtime < cutoff_timestamp:
+                path.unlink()
+                deleted += 1
+    if db is not None:
+        return {"deleted": deleted, "released": released}
     return {"deleted": deleted}

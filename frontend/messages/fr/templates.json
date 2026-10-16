@@ -356,7 +356,18 @@
     "unknownRow": "Ligne inconnue",
     "unnamed": "Sans nom",
     "behaviorOverridden": "{label} – diffère de la valeur par défaut de l’élément",
-    "defaultStyleSuffix": "(par défaut)"
+    "defaultStyleSuffix": "(par défaut)",
+    "nameFormatSetToast": "Format du nom des responsables défini",
+    "nameFormatSavedToast": "Format du nom des responsables enregistré",
+    "autoAssignedToast": "{count, plural, one {# élément a été attribué} other {# éléments ont été attribués}} automatiquement",
+    "tableLinkUpdatedToast": "Lien vers le tableau mis à jour",
+    "tableRowNotFoundToast": "La ligne de tableau sélectionnée est introuvable",
+    "tableRowNoParticipantsToast": "La ligne de tableau sélectionnée ne contient aucun participant",
+    "elementLinkedToRowToast": "Élément lié à la ligne du tableau",
+    "templateSavedToast": "Modèle enregistré",
+    "participantAssignmentsSavedToast": "Attributions des participants enregistrées",
+    "elementsAddedToast": "{count, plural, one {# élément ajouté} other {# éléments ajoutés}}",
+    "elementRemovedToast": "Élément retiré du modèle"
   },
   "elementEditor": {
     "advancedShow": "Avancé",

@@ -24,6 +24,7 @@ import {
 import { StatisticsOverview } from "@/types/api";
 import { CHART_COLORS, CHART_PIE_PALETTE } from "@/lib/constants/chart-colors";
 import { toIntlLocale } from "@/lib/utils/format";
+import { fineCountsByParticipant, fineCountsByType, fineTotalsByCurrency, formatFineTotals } from "@/lib/utils/fine-stats";
 
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
 
@@ -461,13 +462,14 @@ export function StatisticsView({ data }: Props) {
     { name: t("todoOpen"), value: data.todos.open, color: COLORS.open },
   ];
 
-  const fineTypeData: PieEntry[] = data.fines_by_type.map((f, i) => ({
+  const fineTypeData: PieEntry[] = fineCountsByType(data.fines_by_type).map((f, i) => ({
     name: f.label,
     value: f.count,
     color: PIE_PALETTE[i % PIE_PALETTE.length],
   }));
 
-  const top10Fines = data.fines_by_participant.slice(0, 10);
+  const top10Fines = fineCountsByParticipant(data.fines_by_participant).slice(0, 10);
+  const fineTotals = fineTotalsByCurrency(data.fines_by_participant);
   const top15Attendance = data.attendance_by_participant.slice(0, 15);
 
   const hasCycles = data.cycles.length > 0;
@@ -489,8 +491,8 @@ export function StatisticsView({ data }: Props) {
         <StatCard label={t("kpiProtocols")} value={data.protocols_total} />
         <StatCard label={t("kpiMembers")} value={data.participants_active} sub={t("totalCountSub", { count: data.participants_total })} />
         <StatCard label={t("kpiTodos")} value={data.todos.total} sub={t("openCountSub", { count: data.todos.open })} />
-        <StatCard label={t("kpiFinesTotal")} value={data.fines_by_participant.reduce((s, f) => s + f.count, 0)} />
-        <StatCard label={t("kpiFinesAmount")} value={`${fmtAmount(data.fines_by_participant.reduce((s, f) => s + f.amount, 0), locale)} CHF`} />
+        <StatCard label={t("kpiFinesTotal")} value={fineTotals.reduce((s, f) => s + f.count, 0)} />
+        <StatCard label={t("kpiFinesAmount")} value={formatFineTotals(fineTotals, (amount) => fmtAmount(amount, locale))} />
       </div>
 
       {/* ── Section: Gruppen ── */}

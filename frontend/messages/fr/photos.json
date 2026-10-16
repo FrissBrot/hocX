@@ -145,7 +145,8 @@
     "uploadFailed": "Échec de l’import",
     "uploadPlain": "Importer",
     "uploadingPercent": "Importation… {percent} %",
-    "uploadingPlain": "Importation…"
+    "uploadingPlain": "Importation…",
+    "largeZipHint": "Fichier ZIP volumineux : avec une connexion lente, le téléversement peut s'interrompre après une heure. Divisez plutôt l'archive en plusieurs ZIP plus petits ou téléversez directement les photos."
   },
   "shareModal": {
     "actionAriaLabelActive": "Retirer l’accès de {name}",

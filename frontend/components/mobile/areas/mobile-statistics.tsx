@@ -9,6 +9,7 @@ import { MobileCard, MobileCardHeader, MobileEmpty, MobileListRow, MobileSegment
 import { Modal } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
 import { toIntlLocale } from "@/lib/utils/format";
+import { fineTotalsByCurrency, formatFineTotals } from "@/lib/utils/fine-stats";
 import type { StatisticsOverview } from "@/types/api";
 
 type Period = "3m" | "6m" | "12m" | "all";
@@ -89,8 +90,8 @@ export function MobileStatistics({ data }: { data: StatisticsOverview | null }) 
     );
   }
 
-  const finesTotal = data.fines_by_type.reduce((sum, row) => sum + row.amount, 0);
-  const finesCount = data.fines_by_type.reduce((sum, row) => sum + row.count, 0);
+  const fineTotals = fineTotalsByCurrency(data.fines_by_type);
+  const finesCount = fineTotals.reduce((sum, row) => sum + row.count, 0);
   const members = [...data.attendance_by_participant].sort((a, b) => attendanceRate(b) - attendanceRate(a));
   const finesMax = Math.max(1, ...data.fines_by_type.map((row) => row.amount));
   const groupsMax = Math.max(1, ...data.groups_stats.map((row) => row.session_count));
@@ -115,7 +116,7 @@ export function MobileStatistics({ data }: { data: StatisticsOverview | null }) 
           <MobileStat label={t("kpiProtocols")} value={data.protocols_total} />
           <MobileStat label={t("kpiMembers")} value={data.participants_active} sub={t("totalCountSub", { count: data.participants_total })} />
           <MobileStat label={t("kpiTodos")} value={data.todos.open} sub={tMobile("stats.todosDone", { count: data.todos.done })} />
-          <MobileStat label={t("kpiFinesAmount")} value={money(finesTotal, locale)} sub={tMobile("stats.finesCount", { count: finesCount })} />
+          <MobileStat label={t("kpiFinesAmount")} value={formatFineTotals(fineTotals, (amount) => money(amount, locale))} sub={tMobile("stats.finesCount", { count: finesCount })} />
         </div>
         <MobileCard className="mobile-chart-card">
           <MobileCardHeader label={t("chartAttendance")} />
@@ -156,7 +157,7 @@ export function MobileStatistics({ data }: { data: StatisticsOverview | null }) 
                   </div>
                 ))
               : null}
-            {detail === "fines" ? data.fines_by_type.map((row) => <HBar key={row.fine_type} label={`${row.label} (${row.count})`} value={row.amount} max={finesMax} display={money(row.amount, locale)} tone="danger" />) : null}
+            {detail === "fines" ? data.fines_by_type.map((row) => <HBar key={`${row.fine_type}-${row.currency ?? ""}`} label={`${row.label} (${row.count})`} value={row.amount} max={finesMax} display={[money(row.amount, locale), row.currency].filter(Boolean).join(" ")} tone="danger" />) : null}
             {detail === "groups" ? data.groups_stats.map((row, index) => <HBar key={`${row.group_name}-${index}`} label={row.group_name} value={row.session_count} max={groupsMax} display={String(row.session_count)} />) : null}
             {(detail === "finance" && finance.length === 0) || (detail === "members" && members.length === 0) ? <p className="mobile-card-empty">{t("noDataAvailable")}</p> : null}
           </div>
@@ -189,7 +190,7 @@ export function MobileStatsCard() {
   if (!data || data.protocols_total === 0) return null;
   const recent = data.attendance_over_time.slice(-6);
   const totals = recent.reduce((sum, row) => ({ present: sum.present + row.present, total: sum.total + row.total }), { present: 0, total: 0 });
-  const finesTotal = data.fines_by_type.reduce((sum, row) => sum + row.amount, 0);
+  const finesTotal = formatFineTotals(fineTotalsByCurrency(data.fines_by_type), (amount) => money(amount, locale));
 
   return (
     <MobileCard className="mobile-chart-card">
@@ -212,7 +213,7 @@ export function MobileStatsCard() {
           <div className="mobile-muted-sm">{tMobile("stats.todosOpen")}</div>
         </div>
         <div>
-          <div className="mobile-stat-value">{money(finesTotal, locale)}</div>
+          <div className="mobile-stat-value">{finesTotal}</div>
           <div className="mobile-muted-sm">{t("kpiFinesAmount")}</div>
         </div>
       </div>

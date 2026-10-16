@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import { toIntlLocale } from "@/lib/utils/format";
+import { fineTotalsByCurrency, formatFineTotals } from "@/lib/utils/fine-stats";
 import { browserApiFetch } from "@/lib/api/client";
 import type { StatisticsOverview } from "@/types/api";
 
@@ -30,8 +31,11 @@ export function DashboardStatsTile({ showFines }: { showFines: boolean }) {
   if (!data?.protocols_total) return null;
   const recent = (data.attendance_over_time ?? []).slice(-6);
   const totals = recent.reduce((sum, row) => ({ present: sum.present + row.present, total: sum.total + row.total }), { present: 0, total: 0 });
-  const finesTotal = (data.fines_by_type ?? []).reduce((sum, row) => sum + row.amount, 0);
-  const money = finesTotal.toLocaleString(toIntlLocale(locale), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Beträge je Währung, nie über Währungen addiert (MAIN-BE-019).
+  const money = formatFineTotals(
+    fineTotalsByCurrency(data.fines_by_type ?? []),
+    (amount) => amount.toLocaleString(toIntlLocale(locale), { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+  );
 
   return (
     <section className="card dashboard-tile">

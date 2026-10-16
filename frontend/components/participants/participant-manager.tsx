@@ -12,7 +12,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
-import { browserApiFetch } from "@/lib/api/client";
+import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
@@ -363,6 +363,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
       const result = await browserApiFetch<ImportResult>("/api/participants/import-csv", {
         method: "POST",
         body,
+        timeoutMs: LONG_RUNNING_TIMEOUT_MS,
       });
       setParticipants((current) => [...result.imported, ...current]);
       setCsvPreview(null);

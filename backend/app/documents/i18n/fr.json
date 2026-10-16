@@ -187,6 +187,8 @@
     "collected": "Encaissé",
     "collectedHere": "Encaissé (de {origin})",
     "collectedLater": "Réglé plus tard",
+    "deleted": "Supprimée",
+    "deletedLater": "Supprimée plus tard",
     "earlierProtocol": "un procès-verbal précédent",
     "open": "Ouvert"
   },

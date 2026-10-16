@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import shutil
 import unicodedata
@@ -11,6 +12,7 @@ from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.error_log import record_system_error
 from app.models import (
     AppUser,
     DocumentStyleAsset,
@@ -51,6 +53,8 @@ from app.services import identity_verification_service, submission_link_service,
 from app.services.storage_service import StorageService
 from app.services.tenant_service import apply_tenant_profile_image
 
+
+_logger = logging.getLogger(__name__)
 
 def build_admin_tenant_profile_image_url(tenant_public_id: uuid.UUID, profile_image_path: str | None) -> str | None:
     if not profile_image_path:
@@ -676,11 +680,16 @@ class AdminTenantService:
             if upload_ids
             else set()
         )
-        stored_files = db.execute(select(StoredFile.storage_path, StoredFile.id).where(StoredFile.tenant_id == tenant_id)).all()
+        stored_files = db.execute(
+            select(StoredFile.storage_path, StoredFile.id, StoredFile.thumbnail_path).where(StoredFile.tenant_id == tenant_id)
+        ).all()
         stored_file_paths = [
             (row.storage_path, settings.abgabebox_storage_root if row.id in abgabebox_stored_file_ids else settings.storage_root)
             for row in stored_files
         ]
+        # Vorschaubilder liegen getrennt im thumbnail_root (Audit MAIN-BE-005); nur die eigene
+        # "<id>.jpg" löschen - ein übernommener Fremdname gehört einer anderen Datei.
+        thumbnail_paths = [row.thumbnail_path for row in stored_files if row.thumbnail_path == f"{row.id}.jpg"]
         profile_image_path = tenant.profile_image_path
         # Hausstil-Assets einzeln merken: aus alten Dokumentvorlagen übernommene (Migration
         # 0115) liegen weiter unter document_template_parts/, nicht unter document_style_assets/.
@@ -697,19 +706,52 @@ class AdminTenantService:
         # back, so it must never run ahead of the delete it depends on succeeding.
         for storage_path, root in stored_file_paths:
             self._unlink_quietly(root, storage_path)
+        for thumbnail_path in thumbnail_paths:
+            self._unlink_quietly(settings.thumbnail_root, thumbnail_path)
         if profile_image_path:
             self._unlink_quietly(settings.storage_root, profile_image_path)
         for storage_path in style_asset_paths:
             self._unlink_quietly(settings.storage_root, storage_path)
+        self._remove_tenant_directories(tenant_id)
+        return True
+
+    def _remove_tenant_directories(self, tenant_id: int) -> None:
         for relative_dir in (
             f"document_style_assets/tenant-{tenant_id}",
             f"document_template_parts/tenant-{tenant_id}",
             f"tenant_imports/tenant-{tenant_id}",
+            f"tenant_clones/tenant-{tenant_id}",
         ):
             directory = _safe_storage_path(settings.storage_root, relative_dir)
             if directory.exists():
                 shutil.rmtree(directory, ignore_errors=True)
-        return True
+        # Import und Klon legen Abgabebox-Dateien unter dem Abgabebox-Root ab (MAIN-BE-006).
+        for relative_dir in (f"tenant_imports/tenant-{tenant_id}", f"tenant_clones/tenant-{tenant_id}"):
+            directory = _safe_storage_path(settings.abgabebox_storage_root, relative_dir)
+            if directory.exists():
+                shutil.rmtree(directory, ignore_errors=True)
+
+    def cleanup_partial_tenant(self, db: Session, tenant_id: int, *, original: BaseException) -> None:
+        """Räumt einen halb importierten/geklonten Mandanten ab (Audit MAIN-BE-006).
+
+        Nutzt delete_tenant (RESTRICT-Reihenfolge, Dateien, Thumbnails, Verzeichnisse) statt
+        eines nackten DELETE FROM tenant. Scheitert das Aufräumen selbst, wird dieser Fehler
+        protokolliert (system_error_log), die ursprüngliche Exception bleibt aber die, die der
+        Aufrufer weiterwirft.
+        """
+        try:
+            db.rollback()
+            if not self.delete_tenant(db, tenant_id):
+                # Mandantenzeile schon weg (z. B. nichts committet) - kopierte Dateien liegen
+                # trotzdem in den Mandantenverzeichnissen.
+                self._remove_tenant_directories(tenant_id)
+        except Exception as cleanup_exc:
+            db.rollback()
+            _logger.exception(
+                "Aufräumen des unvollständigen Mandanten %s ist fehlgeschlagen (Ursache: %r)", tenant_id, original
+            )
+            # tenant_id bewusst None: die Zeile kann halb gelöscht sein (FK auf tenant).
+            record_system_error(db, exc=cleanup_exc)
 
     def _unlink_quietly(self, root: str, relative_path: str) -> None:
         try:

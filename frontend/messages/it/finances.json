@@ -73,6 +73,16 @@
   "deleteFineFailed": "Impossibile eliminare la multa",
   "reopen": "Annulla",
   "reopenFailed": "Impossibile ripristinare la multa",
+  "filterDeleted": "Eliminate",
+  "statusDeleted": "Eliminata",
+  "deletedNote": "{date}: {reason}",
+  "deletedNoteWithUser": "{date} da {user}: {reason}",
+  "deleteReasonTitle": "Eliminare la multa con motivazione",
+  "deleteReasonDescription": "La multa di {name} proviene da un verbale concluso. Non viene rimossa definitivamente, ma riportata con la motivazione nel verbale in cui viene eliminata.",
+  "deleteReasonLabel": "Motivazione",
+  "deleteReasonHelp": "Compare nel verbale e nell'esportazione.",
+  "restoreFine": "Ripristina",
+  "restoreFineFailed": "Impossibile ripristinare la multa",
   "reloadFailed": "Impossibile caricare le multe",
   "loadingMoreFines": "Caricamento di altre multe…",
   "loadMoreFines": "Carica altri ({count} caricati)",
@@ -107,5 +117,7 @@
   "tariffSaved": "Tariffa salvata",
   "tariffSaveFailed": "Impossibile salvare la tariffa",
   "tariffSummary": "Tariffa: ritardo {late} · non giustificato {absent} · conto {account}",
-  "tariffNotSet": "Nessuna tariffa impostata – i blocchi presenze non creano multe."
+  "tariffNotSet": "Nessuna tariffa impostata – i blocchi presenze non creano multe.",
+  "accountDeleteConflict": "Il conto contiene ancora movimenti o multe e non può essere eliminato.",
+  "txLockedByFineConflict": "Questo movimento appartiene a una multa incassata. Riapri la multa invece di modificare il movimento."
 }

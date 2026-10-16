@@ -250,6 +250,8 @@ class ProtocolTodoCreate(BaseModel):
     due_marker: str | None = None
     reference_link: str | None = None
     tags: list[str] = []
+    # Veraltet und ignoriert (Audit MAIN-SEC-010): der Ersteller kommt serverseitig vom
+    # angemeldeten Benutzer. Feld bleibt, damit ältere Clients ({"created_by": null}) gültig bleiben.
     created_by: uuid.UUID | None = None
 
     _validate_reference_link = field_validator("reference_link")(_validate_reference_link)

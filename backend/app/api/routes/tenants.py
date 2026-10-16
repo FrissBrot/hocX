@@ -1,7 +1,6 @@
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -14,7 +13,7 @@ from app.models import Participant, Tenant, TenantDomain
 from app.schemas.user import TenantDomainCreate, TenantDomainRead, TenantLookupRead, TenantRead, TenantSubscriptionRead, TenantUpdate
 from app.services import public_id_service, tenant_trust_service
 from app.services.file_service import _safe_storage_path
-from app.services.tenant_service import TenantService, build_tenant_profile_image_url
+from app.services.tenant_service import TenantService, build_tenant_profile_image_url, tenant_profile_image_response
 
 router = APIRouter()
 service = TenantService()
@@ -125,7 +124,7 @@ def tenant_profile_image(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
     file_path = _safe_storage_path(settings.storage_root, tenant.profile_image_path)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Tenant profile image missing")
-    return FileResponse(file_path)
+    return tenant_profile_image_response(file_path)
 
 
 @router.get("/tenants/{tenant_id}/domains", response_model=list[TenantDomainRead])
@@ -153,6 +152,9 @@ def create_tenant_domain(
     # Each create/verify/delete triggers a full Traefik dynamic-config rewrite + reload (and
     # verify can trigger a Let's-Encrypt certificate request) - cap how often a tenant can do
     # that instead of leaving it fully unbounded.
+    # Erst Rechte, dann Kontingent (Audit MAIN-SEC-008): sonst verbrauchen Fremde mit
+    # 403-Requests das Stundenkontingent des Mandanten.
+    service.require_manageable(internal_id, user)
     enforce_rate_limit(f"tenant-domain-mutation:{internal_id}", limit=5, period_seconds=3600)
     return service.create_domain(db, internal_id, user, payload)
 
@@ -168,6 +170,9 @@ def verify_tenant_domain(
     domain_internal_id = public_id_service.resolve_internal_id(db, TenantDomain, domain_id)
     if tenant_internal_id is None or domain_internal_id is None:
         raise HTTPException(status_code=404, detail="Tenant or domain not found")
+    # Erst Rechte, dann Kontingent (Audit MAIN-SEC-008): sonst verbrauchen Fremde mit
+    # 403-Requests das Stundenkontingent des Mandanten.
+    service.require_manageable(tenant_internal_id, user)
     enforce_rate_limit(f"tenant-domain-mutation:{tenant_internal_id}", limit=5, period_seconds=3600)
     return service.verify_domain(db, tenant_internal_id, user, domain_internal_id)
 
@@ -183,6 +188,9 @@ def delete_tenant_domain(
     domain_internal_id = public_id_service.resolve_internal_id(db, TenantDomain, domain_id)
     if tenant_internal_id is None or domain_internal_id is None:
         raise HTTPException(status_code=404, detail="Tenant or domain not found")
+    # Erst Rechte, dann Kontingent (Audit MAIN-SEC-008): sonst verbrauchen Fremde mit
+    # 403-Requests das Stundenkontingent des Mandanten.
+    service.require_manageable(tenant_internal_id, user)
     enforce_rate_limit(f"tenant-domain-mutation:{tenant_internal_id}", limit=5, period_seconds=3600)
     service.delete_domain(db, tenant_internal_id, user, domain_internal_id)
     return {"message": "Domain removed"}

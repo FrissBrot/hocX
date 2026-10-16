@@ -187,6 +187,8 @@
     "collected": "Collected",
     "collectedHere": "Collected (from {origin})",
     "collectedLater": "Settled later",
+    "deleted": "Deleted",
+    "deletedLater": "Deleted later",
     "earlierProtocol": "an earlier protocol",
     "open": "Open"
   },

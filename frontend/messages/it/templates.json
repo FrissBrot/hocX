@@ -356,7 +356,18 @@
     "unknownRow": "Riga sconosciuta",
     "unnamed": "Senza nome",
     "behaviorOverridden": "{label} – diverso dal predefinito dell’elemento",
-    "defaultStyleSuffix": "(predefinito)"
+    "defaultStyleSuffix": "(predefinito)",
+    "nameFormatSetToast": "Formato del nome dei responsabili impostato",
+    "nameFormatSavedToast": "Formato del nome dei responsabili salvato",
+    "autoAssignedToast": "{count, plural, one {# elemento è stato assegnato} other {# elementi sono stati assegnati}} automaticamente",
+    "tableLinkUpdatedToast": "Collegamento alla tabella aggiornato",
+    "tableRowNotFoundToast": "La riga di tabella selezionata non è stata trovata",
+    "tableRowNoParticipantsToast": "La riga di tabella selezionata non contiene partecipanti",
+    "elementLinkedToRowToast": "Elemento collegato alla riga della tabella",
+    "templateSavedToast": "Modello salvato",
+    "participantAssignmentsSavedToast": "Assegnazioni dei partecipanti salvate",
+    "elementsAddedToast": "{count, plural, one {# elemento aggiunto} other {# elementi aggiunti}}",
+    "elementRemovedToast": "Elemento rimosso dal modello"
   },
   "elementEditor": {
     "advancedShow": "Avanzate",

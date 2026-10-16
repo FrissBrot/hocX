@@ -57,6 +57,10 @@ class FineByStat(BaseModel):
     name: str
     count: int
     amount: float
+    # Währung des Kontos (MAIN-BE-019): pro Person und Währung eine Zeile; participant_key
+    # fasst die Zeilen einer Person wieder zusammen (Namen sind nicht eindeutig).
+    currency: str = ""
+    participant_key: str = ""
 
 
 class FineTypeStat(BaseModel):
@@ -64,6 +68,7 @@ class FineTypeStat(BaseModel):
     label: str
     count: int
     amount: float
+    currency: str = ""
 
 
 class TodoSummary(BaseModel):
@@ -213,7 +218,10 @@ def get_statistics_overview(
     fine_type_labels = {"absent": "Unentschuldigt", "late": "Verspätet"}
     fines_by_participant = sorted(
         [
-            FineByStat(name=r.name, count=int(r.count), amount=float(r.amount or 0))
+            FineByStat(
+                name=r.name, count=int(r.count), amount=float(r.amount or 0),
+                currency=r.currency or "", participant_key=r.participant_key,
+            )
             for r in fetch_fines_by_participant(db, tenant_id, bounds)
         ],
         key=lambda x: x.count,
@@ -225,6 +233,7 @@ def get_statistics_overview(
             label=fine_type_labels.get(r.fine_type, r.fine_type),
             count=int(r.count),
             amount=float(r.amount or 0),
+            currency=r.currency or "",
         )
         for r in fetch_fines_by_type(db, tenant_id, bounds)
     ]
