@@ -108,6 +108,10 @@ nav:
       - Abgabe-Links-Testbook: technik/abgabe-links-testbook.md
       - Upload-Testbook: technik/upload-testbook.md
       - Backup-Testbook: technik/backup-testbook.md
+      - Dokument-Engine-Testbook: technik/dokument-engine-testbook.md
+      - Objektspeicher-Testbook: technik/storage-testbook.md
+      - Dokumentverwaltung-Testbook: technik/dokumentverwaltung-testbook.md
+      - Release-1.2.0-Testbook: technik/release-1.2.0-testbook.md
       - Sicherheit: technik/sicherheit.md
       - Dokumentverwaltung: technik/dokumente.md
       - Dateispeicher (S3) & Wartung:
