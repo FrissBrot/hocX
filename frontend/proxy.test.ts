@@ -27,6 +27,15 @@ describe("proxy", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("lässt die Bestätigung des Domain-Wechsels ohne Login durch", async () => {
+    const fetchSpy = unauthenticatedBackend();
+
+    const response = await proxy(new NextRequest("https://kunde.example.org/auth/bridge?token=abc"));
+
+    expect(response.headers.get("location")).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("schreibt die Website-Domain ohne Login auf /website um", async () => {
     vi.stubEnv("TRAEFIK_WEBSITE_DOMAIN", "www.example.ch");
     vi.resetModules();

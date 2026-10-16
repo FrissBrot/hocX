@@ -94,7 +94,10 @@ export async function proxy(request: NextRequest) {
   // Öffentliche Freigabe-Links (/share/<token>) sind per Design ohne Login erreichbar - der
   // Token in der URL IST die Authentifizierung (siehe backend public_share.py). Ohne diese
   // Ausnahme landeten Empfänger ohne hocX-Konto auf /login statt bei den Fotos.
+  // /auth/bridge: Bestätigung des Domain-Wechsels, der Besucher ist hier per Definition noch
+  // nicht angemeldet (MAIN-SEC-006).
   const isPublicPath =
+    rewrittenPathname === "/auth/bridge" ||
     rewrittenPathname === "/share" ||
     rewrittenPathname.startsWith("/share/") ||
     rewrittenPathname === WEBSITE_PATH ||
