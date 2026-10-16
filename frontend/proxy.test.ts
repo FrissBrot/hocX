@@ -27,6 +27,32 @@ describe("proxy", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("setzt pro Request eine Nonce-CSP ohne unsafe-inline für Skripte (MAIN-FE-013)", async () => {
+    unauthenticatedBackend();
+
+    const first = await proxy(new NextRequest("https://app.example.ch/share/abc"));
+    const second = await proxy(new NextRequest("https://app.example.ch/share/abc"));
+
+    const csp = first.headers.get("content-security-policy") ?? "";
+    const scriptSrc = csp.split("; ").find((directive) => directive.startsWith("script-src")) ?? "";
+    expect(scriptSrc).toMatch(/'nonce-[A-Za-z0-9+/=]{20,}'/);
+    expect(scriptSrc).toContain("'strict-dynamic'");
+    expect(scriptSrc).not.toContain("'unsafe-inline'");
+    expect(second.headers.get("content-security-policy")).not.toBe(csp);
+    // Next und layout.tsx bekommen dieselbe Nonce über die Request-Header.
+    const nonce = scriptSrc.match(/'nonce-([^']+)'/)?.[1];
+    expect(first.headers.get("x-middleware-request-x-nonce")).toBe(nonce);
+  });
+
+  it("setzt die CSP auch auf Weiterleitungen", async () => {
+    unauthenticatedBackend();
+
+    const response = await proxy(new NextRequest("https://app.example.ch/photos"));
+
+    expect(response.headers.get("location")).toBe("https://app.example.ch/login");
+    expect(response.headers.get("content-security-policy")).toContain("'strict-dynamic'");
+  });
+
   it("lässt die Bestätigung des Domain-Wechsels ohne Login durch", async () => {
     const fetchSpy = unauthenticatedBackend();
 

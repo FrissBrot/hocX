@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { contentSecurityPolicy, createNonce, NONCE_HEADER } from "@/lib/csp";
+
 // Auth-Gating lief bisher ausschliesslich in den Server-Components selbst (requireSession()/
 // requireAdminSession(), siehe lib/api/server.ts + admin-server.ts) über redirect(). Next.js
 // cached das Ergebnis eines Server-Component-Renders (inkl. eines darin ausgelösten redirect())
@@ -67,6 +69,18 @@ async function isAuthenticated(cookie: string, sessionPath: string): Promise<boo
 }
 
 export async function proxy(request: NextRequest) {
+  // Nonce-CSP (MAIN-FE-013): auf Request (für Next und layout.tsx) und Antwort.
+  const nonce = createNonce();
+  const csp = contentSecurityPolicy(nonce);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(NONCE_HEADER, nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
+  const response = await route(request, requestHeaders);
+  response.headers.set("Content-Security-Policy", csp);
+  return response;
+}
+
+async function route(request: NextRequest, requestHeaders: Headers) {
   const { pathname, hostname } = request.nextUrl;
 
   // Host-Header statt nextUrl.hostname: hinter `HOSTNAME=0.0.0.0` (Dev-Server/standalone) liefert
@@ -116,9 +130,9 @@ export async function proxy(request: NextRequest) {
     // so any query string on the original request survives the rewrite.
     const rewriteUrl = request.nextUrl.clone();
     rewriteUrl.pathname = rewrittenPathname;
-    return NextResponse.rewrite(rewriteUrl);
+    return NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } });
   }
-  return NextResponse.next();
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {
