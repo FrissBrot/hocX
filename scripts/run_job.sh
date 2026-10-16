@@ -23,6 +23,8 @@ ERROR_TAIL_BYTES=1500
 
 # shellcheck source=scripts/lib/env.sh
 source "$REPO_DIR/scripts/lib/env.sh"
+# shellcheck source=scripts/lib/stack.sh
+source "$REPO_DIR/scripts/lib/stack.sh"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] run_job: $*" >&2; }
 
@@ -44,6 +46,15 @@ if [ -f "$ENV_FILE" ]; then
   load_env_file "$ENV_FILE"
 fi
 
+# Projekt und Compose-Dateien explizit (Audit MAIN-OPS-010), sonst fand der Wrapper auf dem
+# Test-Host (hocx-test) oder in einem anders benannten Checkout die DB nicht.
+STACK_READY=false
+if resolve_hocx_stack "$REPO_DIR"; then
+  STACK_READY=true
+else
+  log "WARNUNG: Compose-Projekt nicht bestimmbar - Lauf wird nicht gemeldet."
+fi
+
 report() {
   # SQL über stdin statt -c: nur so ersetzt psql die :'variablen' (sicheres Quoting der
   # Fehlermeldung, die beliebigen Text enthalten kann).
@@ -51,7 +62,8 @@ report() {
     log "WARNUNG: POSTGRES_USER/POSTGRES_DB fehlen - Lauf wird nicht gemeldet."
     return 0
   fi
-  if ! (cd "$REPO_DIR" && docker compose --env-file "$ENV_FILE" exec -T db \
+  [ "$STACK_READY" = true ] || return 0
+  if ! (cd "$REPO_DIR" && docker compose -p "$STACK_PROJECT" --env-file "$ENV_FILE" "${STACK_COMPOSE_ARGS[@]}" exec -T db \
       psql -X -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" "$@" >/dev/null); then
     log "WARNUNG: Meldung an die Job-Übersicht fehlgeschlagen (Job selbst unberührt)."
   fi

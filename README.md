@@ -238,7 +238,8 @@ mit eingeschränkter Datenbankrolle.
 ## Deployment und Betrieb
 
 Test und Produktion verwenden gepinnte Images aus GHCR, getrennte Compose-Overlays,
-Cosign-Signaturprüfung, automatische Datenbank-Backups, Smoke-Checks und einen
+Cosign-Signaturprüfung, ein Datenbank-Backup vor jedem Update (nächtliche Backups per
+Cron nach RUNBOOK Abschnitt 10; die Dateiablage sichert kein Skript), Smoke-Checks und einen
 Digest-basierten Rollback. Die vollständigen Abläufe für Provisionierung, Candidate-Build,
 Test, Promotion, Produktion, Rollback und Restore stehen im [RUNBOOK](RUNBOOK.md).
 
@@ -250,6 +251,7 @@ Wichtige Skripte:
 | `scripts/deploy.sh` | Test- oder Produktionsrelease ausrollen |
 | `scripts/verify_release.sh` | Deployment und Migrationen verifizieren |
 | `scripts/backup_db.sh` | PostgreSQL-Backup erstellen |
+| `scripts/restore_db.sh` | PostgreSQL-Backup zurückspielen (RUNBOOK Abschnitt 5) |
 | `scripts/cleanup_storage.sh` | nicht mehr benötigte Dateien bereinigen |
 
 Für ein öffentliches Deployment müssen die DNS-Einträge vor dem ersten Start auf den

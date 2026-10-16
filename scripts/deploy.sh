@@ -682,6 +682,21 @@ run_smoke_checks() {
   fi
 }
 
+# Behaelt die neuesten <keep> Pre-Deploy-Dumps (*-pre-*.sql.gz) und loescht aeltere. Der
+# Zeitstempel am Dateianfang sortiert lexikografisch chronologisch.
+prune_pre_deploy_backups() {
+  local dir="$1" keep="$2" file
+  [[ "$keep" =~ ^[1-9][0-9]*$ ]] || {
+    echo "    PRE_DEPLOY_BACKUP_KEEP muss eine positive Zahl sein - keine Rotation." >&2
+    return 0
+  }
+  find "$dir" -maxdepth 1 -type f -name '*-pre-*.sql.gz' -printf '%f\n' | sort -r | tail -n "+$((keep + 1))" |
+    while IFS= read -r file; do
+      rm -f -- "$dir/$file"
+      echo "    Altes Pre-Deploy-Backup entfernt: $file"
+    done
+}
+
 run_preflight
 write_secret_files
 prepare_runtime_permissions
@@ -694,6 +709,9 @@ BACKUP_FILE="$BACKUP_DIR/$(date +%Y%m%d-%H%M%S)-pre-$HOCX_VERSION.sql.gz"
 if "${DC[@]}" ps db --status running -q > /dev/null 2>&1 && [ -n "$("${DC[@]}" ps db --status running -q)" ]; then
   "${DC[@]}" exec -T db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" | gzip > "$BACKUP_FILE"
   echo "    Backup: $BACKUP_FILE"
+  # Pre-Deploy-Dumps wuchsen bisher unbegrenzt auf derselben Partition (Audit MAIN-OPS-010).
+  # Die neuesten PRE_DEPLOY_BACKUP_KEEP (Default 10) bleiben fuer Rollbacks erhalten.
+  prune_pre_deploy_backups "$BACKUP_DIR" "${PRE_DEPLOY_BACKUP_KEEP:-10}"
 else
   echo "    db-Container laeuft noch nicht (erster Deploy) - kein Backup noetig."
 fi
