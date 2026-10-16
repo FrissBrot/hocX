@@ -212,7 +212,8 @@ sind Plain-SQL ohne `--clean`; in einer bereits migrierten, gefüllten Datenbank
 `CREATE`/`COPY` an vorhandenen Objekten, `psql` läuft ohne `ON_ERROR_STOP` weiter und meldet
 Erfolg, obwohl ein Mischzustand entsteht.
 
-Die Dateiablage (`storage/`) ist **nicht** Teil des Dumps (siehe Abschnitt 10). Ein Restore
+Die Dateiablage (`storage/`) ist **nicht** Teil des Dumps (siehe Abschnitt 10; mit Borg-Backup
+siehe unten). Ein Restore
 setzt nur die Datenbank zurück; Dateien, die nach dem Dump hochgeladen wurden, bleiben als
 verwaiste Dateien liegen, nach dem Dump gelöschte Dateien fehlen.
 
@@ -389,12 +390,11 @@ und werden bei Ausbleiben nicht gemeldet.
   ```
   15 3 * * * /docker/hocX/scripts/run_job.sh backup_db /docker/hocX/scripts/backup_db.sh >> /docker/hocX/backups/backup_db.log 2>&1
   ```
-- **⚠️ Offenes Risiko: Dateiablage wird nicht gesichert (Audit MAIN-OPS-006).** Der Dump
-  enthält nur die Datenbank. Originaldateien unter `HOCX_STORAGE_PATH` (Uploads,
-  Abgabebox-Dateien, Vorlagen, Mandanten-Importe/-Klone) sichert kein Skript; nach einem
-  Plattenausfall zeigen wiederhergestellte `stored_file`-Zeilen auf fehlende Dateien. Ein
-  Storage-Backup (z. B. restic oder `rclone sync` mit Versionierung) muss der Betreiber
-  zusammen mit dem Offsite-Ziel einrichten.
+- **Dateiablage (Audit MAIN-OPS-006):** Der Dump enthält nur die Datenbank. Uploads,
+  Abgabebox-Dateien, Vorlagen und Mandanten-Importe/-Klone sichert das Borg-Backup
+  (Abschnitt 14) zusammen mit der Datenbank; ohne Borg das Objekt-Backup `backup_storage`
+  (Abschnitt 13). Umfang und Ausnahmen: `docs-site/docs/technik/backup/architektur.md`,
+  Abschnitt «Umfang der Sicherung».
 - **Manuell testen**: `./scripts/backup_db.sh` direkt im Repo-Root ausführen und danach
   `ls -lh backups/` prüfen.
 - **⚠️ Offenes Risiko: kein Offsite-Backup aktiv (Audit I5, 2026-08-16).** `backups/`

@@ -45,6 +45,34 @@ Recovery-CLI (python -m app.backup.cli) ── braucht weder Backend, Redis noch
 Das Backend bekommt weder Borg-Schlüssel noch SSH-Zugang, keinen Docker-Socket und startet keine
 Prozesse. Nur der `backup-worker` hält die Borg-Secrets.
 
+## Umfang der Sicherung (Audit MAIN-OPS-006)
+
+Gesichert wird die Datenbank (`pg_dump -Fc`) und **jedes** aktive Objekt im Objektregister
+(`storage_object`, Namespaces `main` und `abgabebox`), ohne Präfix-Ausnahmen. Damit ist jeder
+persistente Ort aus der Speichermatrix ([Dateispeicher](../storage/architektur.md)) abgedeckt:
+
+| Ort | Gesichert | Bemerkung |
+|---|---|---|
+| Uploads (Galerie, Dokumente, Protokollbilder, Live-Photo-Clips, Word-Importe), Mandantenlogos | ja | Objekte `main` |
+| Erzeugte PDF-Exporte | ja | Objekte `main`, im Rahmen von `EXPORT_RETENTION_DAYS` |
+| Dokumentvorlagen-Bauteile und Vorlagen-Snapshots | ja | Objekte `main` |
+| Mandanten-Klon/-Import-Dateien | ja | Objekte im jeweiligen Namespace |
+| Abgabebox-Uploads inkl. Quarantäne | ja | Objekte `abgabebox` |
+| Datenbank inkl. Konfiguration (Custom-Domains, Speicherprofile verschlüsselt) | ja | Dump |
+| Thumbnails, materialisierte Vorlagen, `latex_templates/` | nein | Caches, werden neu erzeugt |
+| Upload-Zwischenablage (`uploads/_staging`, `_multipart`), Export-Arbeitsordner | nein | temporär, siehe unten |
+| Traefik-Konfiguration für Custom-Domains | nein | wird beim Start aus der Datenbank erzeugt |
+| `.env`, `STORAGE_CREDENTIALS_KEY`, Borg-Passphrase/-Schlüssel | nein | gehören in die Notfallmappe ([Betrieb](betrieb.md)) |
+
+Auf dem Dateisystem-Speicher ohne abgeschlossene Erstmigration ist das Register nicht
+vollständig; das Backup bricht dann mit `storage_registry_incomplete` ab, statt still Dateien
+auszulassen (bewusst übersteuerbar mit `BACKUP_TRUST_FILESYSTEM_REGISTRY`).
+
+Einzige fachliche Lücke: ZIP- bzw. Sammel-Uploads, die zum Backup-Zeitpunkt noch in der
+Warteschlange standen (`gallery_upload_job` mit Status `queued`/`running`). Ihre Zeile ist im
+Dump, die zwischengespeicherte Datei nicht. Nach einer Wiederherstellung schlagen diese Aufträge
+sichtbar fehl und müssen neu hochgeladen werden.
+
 ## Repository-Layout im Borg-Repository
 
 Borg ist dateisystemorientiert und dedupliziert auf Chunk-Ebene – aber nur für Daten, die man

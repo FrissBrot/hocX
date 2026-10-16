@@ -168,6 +168,13 @@ Zielprofil-Auswahl, Standard = aktives Profil; CLI: `--storage s3 …`). Der alt
 erreichbar sein. Nach einer normalen Storage-Migration arbeitet der Backup-Worker automatisch
 mit der neuen Generation weiter.
 
+## Nach der Wiederherstellung
+
+- Sammel-/ZIP-Uploads, die zum Backup-Zeitpunkt noch verarbeitet wurden, sind nicht enthalten
+  (nur ihr Auftrag). Sie schlagen beim nächsten Lauf von `gallery_upload_ingest` mit fehlender
+  Datei fehl und müssen neu hochgeladen werden.
+- Thumbnails und materialisierte Vorlagen entstehen beim ersten Zugriff neu.
+
 ## Beschädigte Backups
 
 | Befund | Vorgehen |
