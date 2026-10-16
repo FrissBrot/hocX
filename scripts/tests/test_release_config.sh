@@ -45,6 +45,11 @@ if grep -qE '^ABGABEBOX_ENVIRONMENT=' .env.example; then
   exit 1
 fi
 
+# MAIN-OPS-017: Jeder Build-Kontext hat eine .dockerignore.
+for context in backend frontend abgabebox-backend abgabebox-frontend docs-site photo-analysis-worker; do
+  test -f "$context/.dockerignore" || { echo "$context/.dockerignore fehlt" >&2; exit 1; }
+done
+
 # MAIN-OPS-007: Basis- und Release-Stack verwenden dieselbe Traefik-Version.
 base_traefik="$(grep -m1 -E '^    image: traefik:' docker-compose.yml)"
 release_traefik="$(grep -m1 -E '^    image: traefik:' docker-compose.traefik.yml)"
