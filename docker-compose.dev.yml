@@ -7,6 +7,9 @@ name: hocx-dev
 services:
   backend:
     environment:
+      # Dev bleibt immer development, auch wenn die .env (Server-Instanz) production setzt -
+      # sonst brichen validate_for_production (AUTH_SECURE_COOKIES=false unten) den Start ab.
+      HOCX_ENVIRONMENT: development
       # Local development does not run through the HTTPS/Traefik domain. An empty
       # main domain disables the cross-domain auth bridge; otherwise `.env`'s
       # placeholder `localhost` redirects sessions to https://localhost/api/...
@@ -26,6 +29,7 @@ services:
 
   frontend:
     environment:
+      HOCX_ENVIRONMENT: development
       NEXT_PUBLIC_API_URL: http://localhost:3000
       INTERNAL_API_URL: http://backend:8000
       FRONTEND_API_PROXY_TARGET: http://backend:8000

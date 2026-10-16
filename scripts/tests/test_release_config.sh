@@ -33,6 +33,18 @@ docker compose -p hocx-e2e --env-file .env.e2e.example -f docker-compose.yml -f 
 dev_project="$(docker compose --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')"
 test "$dev_project" = hocx-dev || { echo "Dev-Overlay ergibt Projekt '$dev_project' statt hocx-dev" >&2; exit 1; }
 
+# MAIN-OPS-009: Die Quellcode-Instanz kann als Produktion laufen, der Dev-Overlay bleibt development,
+# und die .env-Vorlage schaltet den Captcha-Bot-Schutz der Abgabebox nicht ab.
+env_of() {
+  python3 -c 'import json,sys; s=json.load(sys.stdin)["services"]; print(s[sys.argv[1]]["environment"].get(sys.argv[2], ""))' "$@"
+}
+test "$(HOCX_ENVIRONMENT=production docker compose -p ops009 --env-file .env.e2e.example -f docker-compose.yml config --format json | env_of backend HOCX_ENVIRONMENT)" = production
+test "$(HOCX_ENVIRONMENT=production docker compose -p ops009 --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml config --format json | env_of backend HOCX_ENVIRONMENT)" = development
+if grep -qE '^ABGABEBOX_ENVIRONMENT=' .env.example; then
+  echo ".env.example darf ABGABEBOX_ENVIRONMENT nicht setzen (Captcha fail-open)." >&2
+  exit 1
+fi
+
 # MAIN-OPS-007: Basis- und Release-Stack verwenden dieselbe Traefik-Version.
 base_traefik="$(grep -m1 -E '^    image: traefik:' docker-compose.yml)"
 release_traefik="$(grep -m1 -E '^    image: traefik:' docker-compose.traefik.yml)"

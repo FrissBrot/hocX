@@ -165,7 +165,10 @@ services:
       - path: .env
         required: false
     environment:
-      HOCX_ENVIRONMENT: development
+      # Steuerbar fuer eine Instanz mit Echtdaten aus diesem Stack (Audit MAIN-OPS-009): dort
+      # HOCX_ENVIRONMENT=production in .env setzen, sonst sind /docs und /openapi.json offen und
+      # die Produktionssperren aus. docker-compose.dev.yml pinnt development.
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-development}
       DATABASE_URL: ${DATABASE_URL}
       APP_DATABASE_URL: ${APP_DATABASE_URL}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
@@ -407,7 +410,10 @@ services:
       - path: .env
         required: false
     environment:
-      HOCX_ENVIRONMENT: development
+      # Steuerbar fuer eine Instanz mit Echtdaten aus diesem Stack (Audit MAIN-OPS-009): dort
+      # HOCX_ENVIRONMENT=production in .env setzen, sonst sind /docs und /openapi.json offen und
+      # die Produktionssperren aus. docker-compose.dev.yml pinnt development.
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-development}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       INTERNAL_API_URL: ${INTERNAL_API_URL}
       # See the backend service's comment above on why this needs to be explicit: without
