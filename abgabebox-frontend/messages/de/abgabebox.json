@@ -160,6 +160,7 @@
     "verifiedExplanation": "hocX hat bestätigt, dass dieses Konto zur Organisation «{name}» gehört.",
     "logoAlt": "Logo von {name}",
     "otherDocument": "Die Datei ist echt, gehört aber zu einem anderen Dokument als der gescannte QR-Code.",
+    "importUnverified": "Importiert, nicht verifiziert: Dieser Eintrag stammt aus einem Datenimport und konnte dabei nicht mit der Originaldatei abgeglichen werden.",
     "newerVersion": "Es gibt eine neuere Version ({version}) dieses Dokuments.",
     "notFoundTitle": "Nicht gefunden",
     "notFoundText": "Diese Datei stimmt mit keinem bei hocX erstellten Dokument überein. Sie wurde verändert oder stammt nicht aus hocX.",

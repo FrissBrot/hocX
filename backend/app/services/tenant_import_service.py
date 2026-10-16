@@ -13,6 +13,7 @@ export are recoverable situations, not reasons to fail the whole import.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import secrets
@@ -169,6 +170,9 @@ class TenantImportService:
             self.lookup_cache = LookupCodeCache(db)
             self.user_cache = UserIdentityCache(db)
             self.warnings: list[str] = []
+            # SHA-256 der tatsächlich importierten PDF-Bytes (TYPST-007): nur dafür gilt ein
+            # Register-Eintrag aus dem Archiv als belegt.
+            self._imported_pdf_hashes: set[str] = set()
             self._created_tenant_id: int | None = None
             # old public_id (lowercase) -> newly assigned one, only for the rare rows whose
             # exported public_id is already taken on this installation (see _claim_uuid).
@@ -865,6 +869,7 @@ class TenantImportService:
         hashes = [str(row.get("sha256") or "").lower() for row in rows]
         taken = set(self.db.scalars(select(DocumentRegistry.sha256).where(DocumentRegistry.sha256.in_(hashes))).all())
         skipped = 0
+        unverified = 0
         for row in rows:
             data = self._resolve_row("document_registry", row)
             sha256 = str(data.get("sha256") or "").lower()
@@ -874,11 +879,22 @@ class TenantImportService:
             source = data.get("source_public_id")
             if source:
                 source = self._public_id_map.get(str(source).lower(), str(source))
-            self.db.add(self._build(DocumentRegistry, data, {"tenant_id": new_tenant_id, "sha256": sha256, "source_public_id": source}))
+            # TYPST-007: Das Archiv ist nicht vertrauenswürdig. Ohne die PDF mit genau diesem Hash
+            # im Archiv bleibt der Eintrag erhalten (Exporte werden nach Fristablauf gelöscht),
+            # die Prüfseite kennzeichnet ihn aber als «importiert, nicht verifiziert».
+            import_unverified = sha256 not in self._imported_pdf_hashes
+            unverified += import_unverified
+            self.db.add(self._build(DocumentRegistry, data, {
+                "tenant_id": new_tenant_id, "sha256": sha256, "source_public_id": source, "import_unverified": import_unverified,
+            }))
             taken.add(sha256)
         if skipped:
             self.warnings.append(
                 f"Dokumentenregister: {skipped} Einträge übersprungen (Datei ist auf dieser Installation bereits einem Mandanten zugeordnet)."
+            )
+        if unverified:
+            self.warnings.append(
+                f"Dokumentenregister: {unverified} Einträge ohne zugehörige PDF im Archiv - auf der Prüfseite als «importiert, nicht verifiziert» gekennzeichnet."
             )
         self.db.commit()
 
@@ -1118,6 +1134,12 @@ class TenantImportService:
             # geteilten thumbnail_root - der exportierte Name zeigt hier auf die Vorschau einer
             # beliebigen anderen Datei (oft eines anderen Mandanten). ensure_thumbnail erzeugt
             # die Vorschau beim ersten Abruf neu.
+            if absolute_path.suffix.lower() == ".pdf" or data.get("mime_type") == "application/pdf":
+                digest = hashlib.sha256()
+                with absolute_path.open("rb") as handle:
+                    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                self._imported_pdf_hashes.add(digest.hexdigest())
             new_row = self._build(
                 StoredFile,
                 data,

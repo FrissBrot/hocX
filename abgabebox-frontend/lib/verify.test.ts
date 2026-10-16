@@ -56,6 +56,11 @@ describe("classifyResult", () => {
     expect(classifyResult({ ...base, is_superseded: false, latest_version_label: "v1.3" })).toMatchObject({ newerVersion: null });
     expect(classifyResult({ ...base, document_id_matches: false })).toMatchObject({ otherDocument: true });
   });
+
+  it("importierter, nicht verifizierter Eintrag (TYPST-007)", () => {
+    expect(classifyResult(base)).toMatchObject({ importUnverified: false });
+    expect(classifyResult({ ...base, import_unverified: true })).toMatchObject({ importUnverified: true });
+  });
 });
 
 describe("verifyHash", () => {

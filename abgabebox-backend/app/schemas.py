@@ -66,3 +66,5 @@ class VerifyResult(BaseModel):
     tenant_public_id: uuid.UUID | None = None
     tenant_has_logo: bool | None = None
     organization_verified: bool | None = None
+    # TYPST-007: Eintrag stammt aus einem Archiv-Import ohne belegende PDF
+    import_unverified: bool | None = None

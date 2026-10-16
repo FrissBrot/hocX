@@ -160,6 +160,7 @@
     "verifiedExplanation": "hocX a confirmé que ce compte appartient à l’organisation « {name} ».",
     "logoAlt": "Logo de {name}",
     "otherDocument": "Le fichier est authentique, mais il appartient à un autre document que le code QR scanné.",
+    "importUnverified": "Importé, non vérifié : cette entrée provient d'une importation de données et n'a pas pu être comparée au fichier original à ce moment-là.",
     "newerVersion": "Il existe une version plus récente ({version}) de ce document.",
     "notFoundTitle": "Introuvable",
     "notFoundText": "Ce fichier ne correspond à aucun document créé avec hocX. Il a été modifié ou ne provient pas de hocX.",

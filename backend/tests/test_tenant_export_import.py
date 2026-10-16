@@ -24,6 +24,7 @@ Covers:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import zipfile
@@ -289,7 +290,8 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
             content_hash="ab" * 32, stored_file_id=generated_file.id,
         ),
         DocumentRegistry(
-            tenant_id=tenant.id, sha256="cd" * 32, document_type="protocol", title="Sitzung", status_code="abgeschlossen",
+            # Hash der mitgesicherten PDF (TYPST-007: sonst «importiert, nicht verifiziert»)
+            tenant_id=tenant.id, sha256=hashlib.sha256(b"pdf-cache").hexdigest(), document_type="protocol", title="Sitzung", status_code="abgeschlossen",
             version_major=1, version_minor=0, version_label="v1.0", source_public_id=protocol.public_id,
         ),
         UserProtocolScroll(user_id=user.id, protocol_id=protocol.id, last_element_id=17),
@@ -357,7 +359,7 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     assert imported_recipe.blocks_json[0]["params"]["protocol_id"] == str(imported_protocol.public_id)
     registry = db.scalar(select(DocumentRegistry).where(DocumentRegistry.tenant_id == imported_tenant.id))
     # Dokument-ID bleibt (sie steht im PDF), Quelle zeigt auf das importierte Protokoll
-    assert registry.public_id == registry_id and registry.sha256 == "cd" * 32
+    assert registry.public_id == registry_id and registry.sha256 == hashlib.sha256(b"pdf-cache").hexdigest() and registry.import_unverified is False
     assert registry.status_code == "abgeschlossen" and registry.version_label == "v1.0"
     assert registry.source_public_id == imported_protocol.public_id
     assert scroll.last_element_id == 17
@@ -1633,3 +1635,33 @@ def test_import_merges_duplicate_fines_from_old_archives(db):
     assert [fine.status for fine in fines] == ["collected"]
     assert any("doppelte Busse" in warning for warning in warnings)
 
+
+
+def test_import_marks_registry_entries_without_matching_pdf_as_unverified(db, monkeypatch, tmp_path):
+    """TYPST-007: Ein Register-Eintrag gilt nach dem Import nur als belegt, wenn das Archiv eine
+    PDF mit genau diesem Hash enthält; sonst «importiert, nicht verifiziert". Der Wert aus dem
+    Archiv selbst zählt nicht."""
+    import hashlib
+
+    from sqlalchemy import delete
+
+    _storage(monkeypatch, tmp_path)
+    tenant = make_tenant(db, "Registerprüfung")
+    pdf = b"%PDF-1.7 hocx test"
+    (tmp_path / "export.pdf").write_bytes(pdf)
+    db.add(StoredFile(tenant_id=tenant.id, original_name="export.pdf", mime_type="application/pdf", storage_path="export.pdf", file_size_bytes=len(pdf)))
+    backed = hashlib.sha256(pdf).hexdigest()
+    db.add(DocumentRegistry(tenant_id=tenant.id, sha256=backed, document_type="protocol", title="Mit Datei"))
+    db.add(DocumentRegistry(tenant_id=tenant.id, sha256="ab" * 32, document_type="protocol", title="Ohne Datei"))
+    db.flush()
+
+    def fresh_installation(zip_path):
+        # Auf einer frischen Installation sind die Hashes noch frei (sonst würden sie übersprungen).
+        db.execute(delete(DocumentRegistry).where(DocumentRegistry.tenant_id == tenant.id))
+        _rewrite_manifest(zip_path, lambda manifest: [row.update(import_unverified=False) for row in manifest["tables"]["document_registry"]])
+
+    imported, warnings = _export_import(db, tenant.id, before_import=fresh_installation)
+
+    flags = dict(db.execute(select(DocumentRegistry.sha256, DocumentRegistry.import_unverified).where(DocumentRegistry.tenant_id == imported.id)).all())
+    assert flags == {backed: False, "ab" * 32: True}
+    assert any("nicht verifiziert" in warning for warning in warnings)

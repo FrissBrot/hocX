@@ -17,6 +17,7 @@ export type VerifyResponse = {
   tenant_public_id?: string;
   tenant_has_logo?: boolean;
   organization_verified?: boolean;
+  import_unverified?: boolean;
 };
 
 export type VerifyOutcome =
@@ -27,6 +28,8 @@ export type VerifyOutcome =
       // Datei echt, gehört aber zu einem anderen Dokument als der gescannte QR-Code
       otherDocument: boolean;
       newerVersion: string | null;
+      // Eintrag aus einem Datenimport, beim Import nicht mit der Originaldatei abgeglichen
+      importUnverified: boolean;
       identity: "verified" | "named" | "anonymous";
     };
 
@@ -58,6 +61,7 @@ export function classifyResult(result: VerifyResponse): VerifyOutcome {
     result,
     otherDocument: result.document_id_matches === false,
     newerVersion: result.is_superseded ? result.latest_version_label ?? null : null,
+    importUnverified: result.import_unverified === true,
     identity,
   };
 }
