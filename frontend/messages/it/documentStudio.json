@@ -521,7 +521,9 @@
     "readOnly": "Questo modello può essere solo visualizzato.",
     "saveFailed": "Salvataggio non riuscito.",
     "systemReadOnly": "I modelli di sistema sono di sola lettura. Crea una copia per personalizzarlo.",
-    "workspace": "Area di lavoro"
+    "workspace": "Area di lavoro",
+    "leaveUnsaved": "Non è stato possibile salvare le modifiche. Uscire comunque? Le modifiche non salvate andranno perse.",
+    "leaveAnyway": "Esci comunque"
   },
   "diagnosticCode": {
     "assetNotFound": "Immagine o carattere non trovato",

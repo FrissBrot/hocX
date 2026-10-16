@@ -521,7 +521,9 @@
     "readOnly": "This template can only be viewed.",
     "saveFailed": "Saving failed.",
     "systemReadOnly": "System templates are read-only. Create a copy to customise it.",
-    "workspace": "Workspace"
+    "workspace": "Workspace",
+    "leaveUnsaved": "Your changes could not be saved. Leave anyway? Unsaved changes will be lost.",
+    "leaveAnyway": "Leave anyway"
   },
   "diagnosticCode": {
     "assetNotFound": "Image or font not found",

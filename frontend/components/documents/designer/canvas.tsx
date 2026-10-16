@@ -94,7 +94,28 @@ function Spans({ content }: { content?: TextContent | null }) {
   );
 }
 
-export function NodeView({ node, area, zoom }: { node: TemplateNode; area: Area; zoom: number }) {
+// Tastatur in der Arbeitsfläche wie in einer Baumansicht (STUDIO-016): Pfeil hoch/runter = vorheriger/
+// nächster Knoten, rechts = erstes Kind, links = übergeordneter Knoten, Pos1/Ende; Enter/Leertaste wählt.
+function moveFocus(event: KeyboardEvent<HTMLElement>): boolean {
+  const current = event.currentTarget;
+  const tree = current.closest('[role="tree"]');
+  if (!tree) return false;
+  const items = Array.from(tree.querySelectorAll<HTMLElement>('[role="treeitem"]'));
+  const index = items.indexOf(current);
+  let target: HTMLElement | null | undefined = null;
+  if (event.key === "ArrowDown") target = items[index + 1];
+  else if (event.key === "ArrowUp") target = items[index - 1];
+  else if (event.key === "Home") target = items[0];
+  else if (event.key === "End") target = items[items.length - 1];
+  else if (event.key === "ArrowRight") target = items.slice(index + 1).find((item) => item.parentElement?.closest('[role="treeitem"]') === current);
+  else if (event.key === "ArrowLeft") target = current.parentElement?.closest<HTMLElement>('[role="treeitem"]');
+  else return false;
+  event.preventDefault();
+  target?.focus();
+  return true;
+}
+
+export function NodeView({ node, area, zoom, level = 1 }: { node: TemplateNode; area: Area; zoom: number; level?: number }) {
   const t = useTranslations("documentStudio");
   const tPdf = useTranslations("documentPdf");
   const designer = useDesigner();
@@ -116,7 +137,7 @@ export function NodeView({ node, area, zoom }: { node: TemplateNode; area: Area;
           className="studio-layer-item"
           style={{ left: mm(child.frame?.x, zoom), top: mm(child.frame?.y, zoom), width: child.frame?.width ? mm(child.frame.width, zoom) : undefined, transform: child.frame?.rotate ? `rotate(${child.frame.rotate}deg)` : undefined }}
         >
-          <NodeView node={child} area={area} zoom={zoom} />
+          <NodeView node={child} area={area} zoom={zoom} level={level + 1} />
         </div>
       ));
     }
@@ -124,7 +145,7 @@ export function NodeView({ node, area, zoom }: { node: TemplateNode; area: Area;
     const result: ReactNode[] = [];
     items.forEach((child, index) => {
       if (layout === "stack") result.push(<DropZone key={`gap-${index}`} target={{ area, parentId: container.id, index }} />);
-      result.push(<NodeView key={child.id} node={child} area={area} zoom={zoom} />);
+      result.push(<NodeView key={child.id} node={child} area={area} zoom={zoom} level={level + 1} />);
     });
     if (layout === "stack") result.push(<DropZone key="gap-end" target={{ area, parentId: container.id, index: items.length }} />);
     else result.push(<DropZone key="gap-end" target={{ area, parentId: container.id, index: items.length }} />);
@@ -138,14 +159,14 @@ export function NodeView({ node, area, zoom }: { node: TemplateNode; area: Area;
     case "column":
     case "header":
     case "footer":
-      body = <div className="studio-node-stack" style={{ gap: mm((node.gap as number) ?? 3, zoom) }}>{children(node)}</div>;
+      body = <div className="studio-node-stack" role="group" style={{ gap: mm((node.gap as number) ?? 3, zoom) }}>{children(node)}</div>;
       break;
     case "container":
-      body = <div className="studio-node-stack" style={{ gap: mm((node.gap as number) ?? 3, zoom) }}>{children(node)}</div>;
+      body = <div className="studio-node-stack" role="group" style={{ gap: mm((node.gap as number) ?? 3, zoom) }}>{children(node)}</div>;
       break;
     case "section":
       body = (
-        <div className="studio-node-stack" style={{ gap: mm((node.gap as number) ?? 3, zoom) }}>
+        <div className="studio-node-stack" role="group" style={{ gap: mm((node.gap as number) ?? 3, zoom) }}>
           {node.title ? (
             <div className="studio-heading" style={{ fontFamily: brand.headingFont, color: brand.colors.heading, fontSize: typography[`size_h${Math.min((node.level as number) ?? 1, 3)}` as "size_h1"] * PT_TO_PX * zoom }}>
               <Spans content={node.title as TextContent} />
@@ -157,7 +178,7 @@ export function NodeView({ node, area, zoom }: { node: TemplateNode; area: Area;
       break;
     case "row":
       body = (
-        <div className="studio-node-row" style={{ gridTemplateColumns: (node.children ?? []).map((child) => gridTrack(child.style?.width, zoom)).join(" ") || "1fr", columnGap: mm((node.gap as number) ?? 5, zoom), alignItems: node.valign === "middle" ? "center" : node.valign === "bottom" ? "end" : "start" }}>
+        <div className="studio-node-row" role="group" style={{ gridTemplateColumns: (node.children ?? []).map((child) => gridTrack(child.style?.width, zoom)).join(" ") || "1fr", columnGap: mm((node.gap as number) ?? 5, zoom), alignItems: node.valign === "middle" ? "center" : node.valign === "bottom" ? "end" : "start" }}>
           {children(node, "row")}
         </div>
       );
@@ -166,14 +187,14 @@ export function NodeView({ node, area, zoom }: { node: TemplateNode; area: Area;
       const widths = (node.column_widths as string[] | undefined) ?? [];
       const columns = (node.columns as number) ?? 2;
       body = (
-        <div className="studio-node-row" style={{ gridTemplateColumns: widths.length === columns ? widths.map((value) => gridTrack(value, zoom)).join(" ") : `repeat(${columns}, 1fr)`, columnGap: mm((node.gap_x as number) ?? 5, zoom), rowGap: mm((node.gap_y as number) ?? 4, zoom) }}>
+        <div className="studio-node-row" role="group" style={{ gridTemplateColumns: widths.length === columns ? widths.map((value) => gridTrack(value, zoom)).join(" ") : `repeat(${columns}, 1fr)`, columnGap: mm((node.gap_x as number) ?? 5, zoom), rowGap: mm((node.gap_y as number) ?? 4, zoom) }}>
           {children(node, "grid")}
         </div>
       );
       break;
     }
     case "absolute_layer":
-      body = <div className="studio-node-layer" style={{ height: node.anchor === "page" ? undefined : mm((node.height as number) ?? 60, zoom) }}>{children(node, "layer")}</div>;
+      body = <div className="studio-node-layer" role="group" style={{ height: node.anchor === "page" ? undefined : mm((node.height as number) ?? 60, zoom) }}>{children(node, "layer")}</div>;
       break;
     case "text": {
       const role = (node.role as string) ?? "paragraph";
@@ -320,14 +341,20 @@ export function NodeView({ node, area, zoom }: { node: TemplateNode; area: Area;
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       select(node.id);
+      return;
     }
+    moveFocus(event);
   };
   return (
     <div
       ref={drag.setNodeRef}
-      role="button"
-      tabIndex={0}
-      aria-pressed={selected}
+      role="treeitem"
+      // Roving tabindex: nur der gewählte Knoten liegt in der Tab-Reihenfolge, den Einstieg ohne
+      // Auswahl übernimmt der Baum (AreaNodes).
+      tabIndex={selected ? 0 : -1}
+      aria-selected={selected}
+      aria-level={level}
+      aria-expanded={node.children !== undefined ? true : undefined}
       aria-label={label}
       onKeyDown={onKeyDown}
       onClick={(event) => {
@@ -356,7 +383,13 @@ export function NodeView({ node, area, zoom }: { node: TemplateNode; area: Area;
   );
 }
 
-function AreaNodes({ area, nodes, zoom, emptyLabel }: { area: Area; nodes: TemplateNode[]; zoom: number; emptyLabel: string }) {
+function containsNode(nodes: TemplateNode[], id: string | null): boolean {
+  if (!id) return false;
+  return nodes.some((node) => node.id === id || containsNode(node.children ?? [], id));
+}
+
+function AreaNodes({ area, nodes, zoom, emptyLabel, label }: { area: Area; nodes: TemplateNode[]; zoom: number; emptyLabel: string; label: string }) {
+  const { selectedId } = useDesigner();
   if (nodes.length === 0) return <DropZone target={{ area, parentId: null, index: 0 }} empty label={emptyLabel} />;
   const result: ReactNode[] = [];
   nodes.forEach((node, index) => {
@@ -364,7 +397,22 @@ function AreaNodes({ area, nodes, zoom, emptyLabel }: { area: Area; nodes: Templ
     result.push(<NodeView key={node.id} node={node} area={area} zoom={zoom} />);
   });
   result.push(<DropZone key="gap-end" target={{ area, parentId: null, index: nodes.length }} />);
-  return <>{result}</>;
+  // Ein Baum je Bereich (STUDIO-016): ohne Auswahl ist der Baum selbst das Tab-Ziel und gibt den
+  // Fokus an den ersten Knoten weiter.
+  const hasSelection = containsNode(nodes, selectedId);
+  return (
+    <div
+      role="tree"
+      aria-label={label}
+      tabIndex={hasSelection ? -1 : 0}
+      className="studio-node-tree"
+      onFocus={(event) => {
+        if (event.target === event.currentTarget) event.currentTarget.querySelector<HTMLElement>('[role="treeitem"]')?.focus();
+      }}
+    >
+      {result}
+    </div>
+  );
 }
 
 export function Canvas({ zoom }: { zoom: number }) {
@@ -396,7 +444,7 @@ export function Canvas({ zoom }: { zoom: number }) {
         <div className="studio-page studio-page-title" style={{ ...pageStyle, height: mm(heightMm, zoom), background: resolveColor(titlePage.background, brand) ?? pageStyle.background }}>
           {areaButton("title_page", titlePage.visible_if ? t("canvas.titlePageConditional") : t("canvas.titlePage"))}
           <div className="studio-page-content" style={{ padding: `${mm(margins.top, zoom)}px ${mm(margins.right, zoom)}px ${mm(margins.bottom, zoom)}px ${mm(margins.left, zoom)}px` }}>
-            <AreaNodes area="title_page" nodes={titlePage.children} zoom={zoom} emptyLabel={t("canvas.dropTitlePage")} />
+            <AreaNodes area="title_page" nodes={titlePage.children} zoom={zoom} emptyLabel={t("canvas.dropTitlePage")} label={t("canvas.titlePage")} />
           </div>
         </div>
       )}
@@ -406,19 +454,19 @@ export function Canvas({ zoom }: { zoom: number }) {
           <div className="studio-page-header" style={{ height: mm(margins.top, zoom), paddingLeft: mm(margins.left, zoom), paddingRight: mm(margins.right, zoom) }}>
             {areaButton(`master:${master.id}:header`, t("canvas.header"))}
             <div className="studio-page-slot">
-              <AreaNodes area={`master:${master.id}:header`} nodes={master.header?.children ?? []} zoom={zoom} emptyLabel={t("canvas.dropHeader")} />
+              <AreaNodes area={`master:${master.id}:header`} nodes={master.header?.children ?? []} zoom={zoom} emptyLabel={t("canvas.dropHeader")} label={t("canvas.header")} />
             </div>
           </div>
         )}
         <div className="studio-page-content" style={{ padding: `${mm(margins.top, zoom)}px ${mm(margins.right, zoom)}px ${mm(margins.bottom, zoom)}px ${mm(margins.left, zoom)}px`, columnCount: content.page.columns > 1 ? content.page.columns : undefined, columnGap: mm(content.page.column_gap, zoom) }}>
           {areaButton("body", t("canvas.body"), { top: mm(margins.top, zoom) })}
-          <AreaNodes area="body" nodes={content.body} zoom={zoom} emptyLabel={t("canvas.dropBody")} />
+          <AreaNodes area="body" nodes={content.body} zoom={zoom} emptyLabel={t("canvas.dropBody")} label={t("canvas.body")} />
         </div>
         {master && (
           <div className="studio-page-footer" style={{ height: mm(margins.bottom, zoom), paddingLeft: mm(margins.left, zoom), paddingRight: mm(margins.right, zoom) }}>
             {areaButton(`master:${master.id}:footer`, t("canvas.footer"))}
             <div className="studio-page-slot">
-              <AreaNodes area={`master:${master.id}:footer`} nodes={master.footer?.children ?? []} zoom={zoom} emptyLabel={t("canvas.dropFooter")} />
+              <AreaNodes area={`master:${master.id}:footer`} nodes={master.footer?.children ?? []} zoom={zoom} emptyLabel={t("canvas.dropFooter")} label={t("canvas.footer")} />
             </div>
           </div>
         )}

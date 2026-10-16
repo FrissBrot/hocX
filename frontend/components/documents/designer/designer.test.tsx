@@ -74,7 +74,7 @@ async function advance(ms: number) {
 }
 
 function canvasNode(name: string) {
-  return within(screen.getByRole("main", { name: "Arbeitsfläche" })).getByRole("button", { name });
+  return within(screen.getByRole("main", { name: "Arbeitsfläche" })).getByRole("treeitem", { name });
 }
 
 describe("TemplateDesigner", () => {
@@ -212,9 +212,9 @@ describe("TemplateDesigner", () => {
     await renderDesigner();
     fireEvent.click(canvasNode("Einleitung"));
     fireEvent.keyDown(window, { key: "Delete" });
-    await waitFor(() => expect(within(screen.getByRole("main", { name: "Arbeitsfläche" })).queryByRole("button", { name: "Einleitung" })).not.toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByRole("main", { name: "Arbeitsfläche" })).queryByRole("treeitem", { name: "Einleitung" })).not.toBeInTheDocument());
     fireEvent.keyDown(window, { key: "z", ctrlKey: true });
-    expect(await within(screen.getByRole("main", { name: "Arbeitsfläche" })).findByRole("button", { name: "Einleitung" })).toBeInTheDocument();
+    expect(await within(screen.getByRole("main", { name: "Arbeitsfläche" })).findByRole("treeitem", { name: "Einleitung" })).toBeInTheDocument();
   });
 
   it("ignores delete shortcuts while a dialog is open or a toolbar button has focus (STUDIO-016)", async () => {
@@ -337,5 +337,44 @@ describe("TemplateDesigner", () => {
     await advance(1300);
     await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalled());
     expect(api.studioApi.saveDraft.mock.calls.at(-1)![1].content.body[0].content.default[0]).toEqual({ t: "text", v: "Willkommen" });
+  });
+
+  it("saves before following an internal link with unsaved changes (STUDIO-016)", async () => {
+    await renderDesigner();
+    insertText();
+    const link = document.createElement("a");
+    link.href = "/protocols";
+    link.textContent = "Protokolle";
+    document.body.appendChild(link);
+    fireEvent.click(link);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/protocols"));
+    expect(confirm).not.toHaveBeenCalled();
+    link.remove();
+  });
+
+  it("asks before leaving when saving fails (STUDIO-016)", async () => {
+    api.studioApi.saveDraft.mockRejectedValue(new ApiError("kaputt", "error", 500, null));
+    confirm.mockResolvedValue(false);
+    await renderDesigner();
+    insertText();
+    fireEvent.click(screen.getByRole("button", { name: "Zur Bibliothek" }));
+    await waitFor(() => expect(confirm).toHaveBeenCalled());
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("models the workspace as a tree with one focusable element per node (STUDIO-016)", async () => {
+    await renderDesigner();
+    const workspace = screen.getByRole("main", { name: "Arbeitsfläche" });
+    const trees = within(workspace).getAllByRole("tree");
+    expect(trees.length).toBeGreaterThan(0);
+    expect(within(workspace).queryAllByRole("button", { pressed: false })).toHaveLength(0);
+    const items = within(trees.find((tree) => within(tree).queryAllByRole("treeitem").length > 1)!).getAllByRole("treeitem");
+    expect(items.every((item) => item.tabIndex === -1)).toBe(true);
+    items[0].focus();
+    fireEvent.keyDown(items[0], { key: "ArrowDown" });
+    expect(document.activeElement).toBe(items[1]);
+    fireEvent.keyDown(items[1], { key: "Home" });
+    expect(document.activeElement).toBe(items[0]);
   });
 });

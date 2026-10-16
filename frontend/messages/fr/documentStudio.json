@@ -521,7 +521,9 @@
     "readOnly": "Ce modèle peut seulement être consulté.",
     "saveFailed": "L’enregistrement a échoué.",
     "systemReadOnly": "Les modèles système sont en lecture seule. Créez une copie pour l’adapter.",
-    "workspace": "Espace de travail"
+    "workspace": "Espace de travail",
+    "leaveUnsaved": "Les modifications n'ont pas pu être enregistrées. Quitter quand même ? Les modifications non enregistrées seront perdues.",
+    "leaveAnyway": "Quitter quand même"
   },
   "diagnosticCode": {
     "assetNotFound": "Image ou police introuvable",

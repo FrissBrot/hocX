@@ -24437,6 +24437,18 @@ a.mobile-list-row { color: var(--text); }
 .studio-node:focus-visible {
   outline: 2px solid var(--focus-ring-color);
 }
+/* Baum je Bereich der Arbeitsfläche (STUDIO-016): verhält sich wie der bisherige Inhalt */
+.studio-node-tree {
+  min-width: 0;
+  border-radius: var(--radius-xs);
+}
+.studio-page-slot > .studio-node-tree {
+  display: grid;
+}
+.studio-node-tree:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
 .studio-node-selected,
 .studio-node-selected:hover {
   outline: 2px solid var(--accent);

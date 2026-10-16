@@ -521,7 +521,9 @@
     "readOnly": "Diese Vorlage kann nur angesehen werden.",
     "saveFailed": "Speichern fehlgeschlagen.",
     "systemReadOnly": "Systemvorlagen sind schreibgeschützt. Erstelle eine Kopie, um sie anzupassen.",
-    "workspace": "Arbeitsfläche"
+    "workspace": "Arbeitsfläche",
+    "leaveUnsaved": "Die Änderungen konnten nicht gespeichert werden. Trotzdem verlassen? Ungespeicherte Änderungen gehen verloren.",
+    "leaveAnyway": "Trotzdem verlassen"
   },
   "diagnosticCode": {
     "assetNotFound": "Bild oder Schrift nicht gefunden",

@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { DndContext, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { useTranslations } from "next-intl";
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 
 import { brandView, mm } from "@/components/documents/designer/brand-preview";
@@ -203,6 +204,40 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [saveState]);
+
+  // Verlassen mit ungespeicherten Änderungen (STUDIO-016): beforeunload deckt nur Neuladen und
+  // Schliessen ab, nicht die client-seitige Navigation der App. Interne Links und «Zurück» speichern
+  // zuerst; gelingt das nicht, fragt der Designer nach.
+  const leave = useCallback(
+    async (href: string) => {
+      if (editable && (inFlight.current || isDirty())) {
+        await save();
+        if (isDirty() && !(await confirm({ message: t("designer.leaveUnsaved"), tone: "danger", confirmLabel: t("designer.leaveAnyway") }))) return;
+      }
+      router.push(href as Route);
+    },
+    // isDirty liest nur Refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editable, save, confirm, router, t]
+  );
+
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const anchor = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download")) return;
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin || (url.pathname === window.location.pathname && url.search === window.location.search)) return;
+      if (!editable || (!inFlight.current && !isDirty())) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void leave(url.pathname + url.search + url.hash);
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+    // isDirty liest nur Refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editable, leave]);
 
   async function rename(next: string) {
     setName(next);
@@ -459,7 +494,7 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
             canPublish={initial.capabilities.publish_templates && editable}
             onPublish={() => void publish()}
             onDiscard={editable && template.draft_revision && template.published_revision ? () => void discard() : null}
-            onBack={() => router.push("/documents")}
+            onBack={() => void leave("/documents")}
             errorCount={errorCount}
           />
           {!editable && (
