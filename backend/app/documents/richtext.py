@@ -2,7 +2,7 @@
 
 Das ist die zentrale Sicherheitsgrenze der Dokument-Engine: Benutzerinhalt wird **nie** als
 Typst-Code weitergegeben. Markdown (aus dem Tiptap-Editor) wird mit markdown-it geparst und in
-den kleinen Baum aus model.py übersetzt; der Hausstil rendert dessen Strings ausschliesslich
+den kleinen Baum aus model.py übersetzt; Typst rendert dessen Strings ausschliesslich
 als Text. Typst-Sonderzeichen (``#``, ``$``, ``*``, ``_``, ``@``, ``<``, `` ` ``) bleiben
 dadurch wirkungslos. Rohes HTML im Markdown wird als Text übernommen, nicht interpretiert.
 """

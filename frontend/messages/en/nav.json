@@ -26,7 +26,6 @@
   "fines": "Fines",
   "protocolTemplates": "Protocol templates",
   "elements": "Elements",
-  "documentLayouts": "House styles",
   "general": "General",
   "domains": "Domains",
   "subscriptionAndUsage": "Plan & usage",
@@ -51,5 +50,11 @@
   "sessionLoading": "Loading workspace…",
   "connections": "Connections",
   "taskPackages": "Task packages",
-  "documentVerification": "Authenticity check"
+  "documentVerification": "Authenticity check",
+  "documentStudio": "Documents",
+  "documentTemplates": "Templates",
+  "documentBrand": "Corporate design",
+  "documentAssets": "Images and fonts",
+  "documentComponents": "Components",
+  "documentExports": "Export history"
 }

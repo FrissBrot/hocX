@@ -161,6 +161,7 @@
     "logoAlt": "Logo of {name}",
     "otherDocument": "The file is authentic but belongs to a different document than the scanned QR code.",
     "importUnverified": "Imported, not verified: this entry comes from a data import and could not be checked against the original file at that time.",
+    "titleOverridden": "The title was set differently from the protocol when exporting.",
     "newerVersion": "There is a newer version ({version}) of this document.",
     "notFoundTitle": "Not found",
     "notFoundText": "This file does not match any document created with hocX. It has been modified or does not come from hocX.",

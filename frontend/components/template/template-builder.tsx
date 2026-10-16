@@ -4,6 +4,7 @@ import { useParticipantSelectable } from "@/contexts/participant-date-context";
 
 import { DragEvent, FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -19,7 +20,6 @@ import { elementTypeLabels } from "@/lib/constants/element-types";
 import { EligibleResponsibleList, eligibleResponsibleList, listParticipantIds, listTextValue } from "@/lib/utils/responsible-lists";
 import {
   CycleConfigSummary,
-  DocumentStyle,
   ElementDefinition,
   EventSummary,
   ParticipantSummary,
@@ -44,7 +44,6 @@ type TemplateEditorProps = {
   availableParticipants: ParticipantSummary[];
   availableLists: StructuredListDefinition[];
   initialAssignedParticipants: ParticipantSummary[];
-  availableDocumentStyles: DocumentStyle[];
   availableCycleConfigs: CycleConfigSummary[];
 };
 
@@ -625,7 +624,6 @@ export function TemplateEditor({
   availableParticipants,
   availableLists,
   initialAssignedParticipants,
-  availableDocumentStyles,
   availableCycleConfigs,
 }: TemplateEditorProps) {
   const router = useRouter();
@@ -647,7 +645,6 @@ export function TemplateEditor({
     title_pattern: initialTemplate.title_pattern ?? "",
     auto_create_next_protocol: Boolean(initialTemplate.auto_create_next_protocol),
     cycle_config_id: initialTemplate.cycle_config_id ? String(initialTemplate.cycle_config_id) : "",
-    document_style_id: initialTemplate.document_style_id ? String(initialTemplate.document_style_id) : "",
   });
   const [newItemForm, setNewItemForm] = useState<TemplateItemForm>({
     ...initialTemplateItemForm
@@ -1217,7 +1214,6 @@ export function TemplateEditor({
           title_pattern: templateMeta.title_pattern || null,
           auto_create_next_protocol: templateMeta.auto_create_next_protocol,
           cycle_config_id: templateMeta.cycle_config_id ? templateMeta.cycle_config_id : null,
-          document_style_id: templateMeta.document_style_id ? templateMeta.document_style_id : null,
         })
       });
       setTemplate(updated);
@@ -1591,18 +1587,11 @@ export function TemplateEditor({
           <div className="info-note">
             {t("patternTokensInfo")}
           </div>
-          <label className="field-stack">
+          <div className="field-stack">
             <span className="field-label">{t("pdfLayoutLabel")}</span>
-            <SearchableSelect
-              options={availableDocumentStyles}
-              getId={(dt) => dt.id}
-              getLabel={(dt) => (dt.is_default ? `${dt.name} ${t("defaultStyleSuffix")}` : dt.name)}
-              value={templateMeta.document_style_id || null}
-              onChange={(dt) => setTemplateMeta((current) => ({ ...current, document_style_id: dt ? String(dt.id) : "" }))}
-              nullLabel={t("noLayoutAssigned")}
-            />
-            <span className="field-help">{t("pdfLayoutHelp")}</span>
-          </label>
+            <span className="field-help">{t("pdfLayoutStudioHelp")}</span>
+            <Link className="studio-link" href="/documents">{t("pdfLayoutStudioLink")}</Link>
+          </div>
           <div className="table-toolbar-actions">
             <button data-modal-save type="submit" className="button-secondary">{t("saveTemplate")}</button>
           </div>

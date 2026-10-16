@@ -1,4 +1,10 @@
-"""Visuelle Regression: gerenderte Seiten gegen eingecheckte Golden-Bilder.
+"""Visuelle Regression: gerenderte Seiten der Test-Szenarien gegen eingecheckte Golden-Bilder.
+
+Abgedeckt (Masterprompt §20): einfaches und mehrseitiges Protokoll, Tabellen und Bilder,
+Anwesenheitsliste, Finanz- und Statistikbericht, mehrspaltiges Layout, Titelseite mit freier
+Ebene, eigene Kopf-/Fusszeile mit abweichender erster Seite, Bedingungen und Wiederholungen,
+lange Tabelle (Seitenumbruch, wiederholter Kopf), Schriften, Seitengrössen A5/Letter quer,
+alle Fachkomponenten, Unicode, Sprachen und die Varianten des Prüfvermerks.
 
 Vergleich mit Toleranz (Anteil abweichender Pixel), damit minimale Kantenglättungsunterschiede
 nicht stören. Bei Abweichung landen Ist-Bild und Differenzbild in ``DOCUMENT_GOLDEN_DIFF_DIR``
@@ -16,8 +22,8 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageChops
 
-from app.documents.style_tokens import STYLE_KEYS
-from tests.documents.conftest import load_fixture
+from tests.documents.conftest import compiled_assets
+from tests.documents.fixtures.scenarios import compile_scenario, scenarios
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "goldens"
 DIFF_DIR = Path(os.environ.get("DOCUMENT_GOLDEN_DIFF_DIR", "/tmp/document-golden-diffs"))
@@ -27,9 +33,7 @@ PPI = 40
 MAX_CHANGED_RATIO = 0.004
 PIXEL_THRESHOLD = 48
 
-CASES = [("short", 1), ("all_blocks", 6), ("unicode", 3), ("landscape", 2), ("lang_fr", 1)]
-# Echtheitsprüfung im Dokument: (Prüf-URL, Kurz-ID, QR-Code)
-VERIFY_VARIANTS = {"verify-all": (True, True, True), "verify-qr": (False, False, True), "verify-url-id": (True, True, False), "verify-none": (False, False, False)}
+SCENARIOS = scenarios()
 
 
 def _changed_ratio(actual: Image.Image, expected: Image.Image) -> tuple[float, Image.Image]:
@@ -37,24 +41,27 @@ def _changed_ratio(actual: Image.Image, expected: Image.Image) -> tuple[float, I
         return 1.0, actual
     diff = ImageChops.difference(actual.convert("RGB"), expected.convert("RGB")).convert("L")
     mask = diff.point(lambda value: 255 if value > PIXEL_THRESHOLD else 0)
-    histogram = mask.histogram()
-    changed = histogram[255]
+    changed = mask.histogram()[255]
     return changed / (actual.size[0] * actual.size[1]), mask
 
 
-def _compare(renderer, assets, document, pages: int, prefix: str) -> None:
+@pytest.mark.parametrize("name", sorted(SCENARIOS))
+def test_scenario_pages_match_goldens(renderer, name):
+    scenario = SCENARIOS[name]
+    compiled = compile_scenario(scenario)
+    assert not [item for item in compiled.diagnostics if item.severity == "error"], compiled.diagnostics
     # Native Typst-Rasterung (alle Seiten, dann gekürzt): die Goldens prüfen das Layout, nicht
-    # den Rasterizer der Vorschau (die rastert seit TYPST-005 nur die nötigen Seiten über pdfium).
-    output = asyncio.run(renderer.render(document, assets, fmt="png", ppi=PPI))
-    output.pages = output.pages[:pages]
+    # den Rasterizer der Vorschau (der rastert seit STUDIO-015 nur die nötigen Seiten über pdfium).
+    output = asyncio.run(renderer.render(compiled.data, compiled_assets(compiled), fmt="png", ppi=PPI))
+    output.pages = output.pages[: scenario.pages]
     assert output.pages
     failures: list[str] = []
     for index, png in enumerate(output.pages, start=1):
-        name = f"{prefix}-{index}.png"
-        golden = GOLDEN_DIR / name
+        file_name = f"{name}-{index}.png"
+        golden = GOLDEN_DIR / file_name
         if UPDATE or not golden.exists():
             if not UPDATE:
-                failures.append(f"{name}: kein Golden vorhanden (scripts/update-document-goldens.sh)")
+                failures.append(f"{file_name}: kein Golden vorhanden (scripts/update-document-goldens.sh)")
                 continue
             GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
             golden.write_bytes(png)
@@ -63,24 +70,7 @@ def _compare(renderer, assets, document, pages: int, prefix: str) -> None:
         ratio, mask = _changed_ratio(actual, Image.open(golden))
         if ratio > MAX_CHANGED_RATIO:
             DIFF_DIR.mkdir(parents=True, exist_ok=True)
-            (DIFF_DIR / f"actual-{name}").write_bytes(png)
-            mask.save(DIFF_DIR / f"diff-{name}")
-            failures.append(f"{name}: {ratio:.2%} der Pixel weichen ab")
+            (DIFF_DIR / f"actual-{file_name}").write_bytes(png)
+            mask.save(DIFF_DIR / f"diff-{file_name}")
+            failures.append(f"{file_name}: {ratio:.2%} der Pixel weichen ab")
     assert failures == []
-
-
-@pytest.mark.parametrize("style_key", STYLE_KEYS)
-@pytest.mark.parametrize(("fixture", "pages"), CASES)
-def test_pages_match_goldens(renderer, assets, style_key, fixture, pages):
-    document = load_fixture(fixture)
-    document.style.key = style_key
-    _compare(renderer, assets, document, pages, f"{fixture}-{style_key}")
-
-
-@pytest.mark.parametrize("style_key", STYLE_KEYS)
-@pytest.mark.parametrize("variant", VERIFY_VARIANTS)
-def test_verification_variants_match_goldens(renderer, assets, style_key, variant):
-    document = load_fixture("short")
-    document.style.key = style_key
-    document.style.verify_show_url, document.style.verify_show_id, document.style.verify_show_qr = VERIFY_VARIANTS[variant]
-    _compare(renderer, assets, document, 1, f"{variant}-{style_key}")

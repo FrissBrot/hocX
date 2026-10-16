@@ -965,7 +965,6 @@ export type TemplateSummary = {
   cycle_config?: CycleConfigSummary | null;
   version: number;
   status: string;
-  document_style_id?: string | null;
   created_by?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -1172,7 +1171,6 @@ export type ProtocolSummary = {
   tenant_id?: string;
   template_id?: string;
   template_version?: number;
-  document_style_id?: string | null;
   protocol_number: string;
   title: string | null;
   protocol_date?: string;
@@ -1203,8 +1201,6 @@ export type NextSessionInfo = {
   attendance_block_id: string | null;
   entries: NextSessionAttendanceEntry[];
 };
-
-export type { DocumentStyle } from "@/lib/documents/api";
 
 export type ElementDefinitionBlock = {
   // Client-owned opaque id living inside ElementDefinition.configuration_json["blocks"][].id -

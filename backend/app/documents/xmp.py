@@ -1,5 +1,5 @@
 """hocX-Metadaten im XMP des PDFs (Namespace ``hocx``): Dokument-ID, Mandant, Dokumenttyp, Version,
-Inhalts-Hash und Prüf-URL.
+Inhalts-Hash, Design-Hash, Vorlagenrevision und Prüf-URL.
 
 Typst erzeugt das PDF/A-2b samt XMP-Paket. Dieses Modul hängt ein **inkrementelles Update** an
 (``pypdf``): die Typst-Bytes bleiben unverändert, nur ein neues ``/Metadata``-Objekt kommt dazu.
@@ -22,6 +22,8 @@ XMP_FIELDS = {
     "documentType": "Dokumenttyp",
     "version": "Version des Dokuments",
     "contentHash": "SHA-256 über den kanonischen Inhalt",
+    "designHash": "SHA-256 über Vorlagenrevision, Brand-Revision und Assets",
+    "templateRevision": "public_id der verwendeten Vorlagenrevision",
     "verifyUrl": "Öffentliche Prüfseite für dieses Dokument",
 }
 
@@ -37,6 +39,8 @@ class DocumentXmp:
     version: str
     content_hash: str
     verify_url: str
+    design_hash: str = ""
+    template_revision: str = ""
 
     def values(self) -> dict[str, str]:
         return {
@@ -45,6 +49,8 @@ class DocumentXmp:
             "documentType": self.document_type,
             "version": self.version,
             "contentHash": self.content_hash,
+            "designHash": self.design_hash,
+            "templateRevision": self.template_revision,
             "verifyUrl": self.verify_url,
         }
 

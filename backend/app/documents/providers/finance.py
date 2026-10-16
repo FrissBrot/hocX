@@ -96,13 +96,24 @@ def provide_transactions(ctx: BuildContext, spec: BlockSpec, params: FinanceTran
     from app.documents.strings import strings_for
 
     if params.account_id is None:
-        return [FinanceTransactionsBlock(**spec_fields(spec), table=TableData(columns=[col("date", "col.date")]))]
-    account = ctx.require_entity(FinanceAccount, params.account_id)
+        accounts = list(ctx.db.scalars(select(FinanceAccount).where(FinanceAccount.tenant_id == ctx.tenant_id).order_by(FinanceAccount.name.asc())))
+        if not accounts:
+            # Ohne Konto: ein leerer Block (Leertext statt nichts, falls nicht ausgeblendet)
+            return [FinanceTransactionsBlock(**spec_fields(spec), table=TableData(columns=[col("date", "col.date")]))]
+        return [_transactions_block(ctx, spec, params, account) for account in accounts]
+    return [_transactions_block(ctx, spec, params, ctx.require_entity(FinanceAccount, params.account_id))]
+
+
+def _transactions_block(ctx: BuildContext, spec: BlockSpec, params: FinanceTransactionsParams, account: FinanceAccount):
+    from app.documents.context import relative_range
+    from app.documents.strings import strings_for
+
+    date_from, date_to = relative_range(ctx.today, params.relative) or (params.date_from, params.date_to)
     statement = select(FinanceTransaction).where(FinanceTransaction.account_id == account.id)
-    if params.date_from is not None:
-        statement = statement.where(FinanceTransaction.transaction_date >= params.date_from)
-    if params.date_to is not None:
-        statement = statement.where(FinanceTransaction.transaction_date <= params.date_to)
+    if date_from is not None:
+        statement = statement.where(FinanceTransaction.transaction_date >= date_from)
+    if date_to is not None:
+        statement = statement.where(FinanceTransaction.transaction_date <= date_to)
     transactions = list(ctx.db.scalars(statement.order_by(FinanceTransaction.transaction_date.asc(), FinanceTransaction.id.asc())))
     if params.last_n:
         transactions = transactions[-params.last_n:]
@@ -117,7 +128,7 @@ def provide_transactions(ctx: BuildContext, spec: BlockSpec, params: FinanceTran
             )
         ) or 0)
     table = transactions_table(account, transactions, subtotals=params.subtotals, strings=strings_for(ctx.language), opening_balance=opening)
-    return [FinanceTransactionsBlock(**spec_fields(spec, title=spec.title if spec.title is not None else account.name), table=table)]
+    return FinanceTransactionsBlock(**spec_fields(spec, title=spec.title if spec.title is not None else account.name), table=table)
 
 
 FINE_STATUS = {"pending": "open", "collected": "collected"}
@@ -219,7 +230,7 @@ def provide_fines(ctx: BuildContext, spec: BlockSpec, params: FinesParams):
         from app.documents.context import DocumentNotFoundError
 
         raise DocumentNotFoundError("Protocol")
-    if protocol is None and ctx.protocol is not None and params.date_from is None and params.date_to is None:
+    if protocol is None and ctx.protocol is not None and params.date_from is None and params.date_to is None and not params.relative:
         protocol = ctx.protocol
     if protocol is not None:
         ctx.ensure_can_read_protocol(protocol.id)
@@ -232,10 +243,13 @@ def provide_fines(ctx: BuildContext, spec: BlockSpec, params: FinesParams):
     )
     if params.status == "open":
         statement = statement.where(AttendanceFine.status == "pending")
-    if params.date_from is not None:
-        statement = statement.where(Protocol.protocol_date >= params.date_from)
-    if params.date_to is not None:
-        statement = statement.where(Protocol.protocol_date <= params.date_to)
+    from app.documents.context import relative_range
+
+    date_from, date_to = relative_range(ctx.today, params.relative) or (params.date_from, params.date_to)
+    if date_from is not None:
+        statement = statement.where(Protocol.protocol_date >= date_from)
+    if date_to is not None:
+        statement = statement.where(Protocol.protocol_date <= date_to)
     fines = list(ctx.db.scalars(statement.order_by(Protocol.protocol_date.asc(), AttendanceFine.created_at.asc())))
     return [FinesBlock(**spec_fields(spec), table=fines_table(ctx, fines, [], group_by_person=params.group_by_person))]
 

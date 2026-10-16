@@ -84,13 +84,13 @@ export function DocumentVerificationSettings({ initialState }: { initialState: D
       </div>
 
       <section className="panel docverify-section">
-        <h3 className="docexport-heading">{t("publicTitle")}</h3>
-        <label className="docexport-check">
+        <h3 className="docverify-heading">{t("publicTitle")}</h3>
+        <label className="docverify-check">
           <input type="checkbox" disabled={busy} checked={state.show_identity} onChange={(event) => void toggle("show_identity", event.target.checked)} />
           <span>{t("showIdentity")}</span>
         </label>
         <p className="muted docverify-hint">{t("showIdentityHint")}</p>
-        <label className="docexport-check">
+        <label className="docverify-check">
           <input type="checkbox" disabled={busy} checked={state.show_newer_version} onChange={(event) => void toggle("show_newer_version", event.target.checked)} />
           <span>{t("showNewerVersion")}</span>
         </label>
@@ -102,7 +102,7 @@ export function DocumentVerificationSettings({ initialState }: { initialState: D
 
       <section className="panel docverify-section">
         <div className="docverify-status-row">
-          <h3 className="docexport-heading">{t("verificationTitle")}</h3>
+          <h3 className="docverify-heading">{t("verificationTitle")}</h3>
           {state.verified_at ? (
             <Badge variant="success" dot>{t("verifiedSince", { date: formatDate(state.verified_at) })}</Badge>
           ) : pending ? (
@@ -131,7 +131,7 @@ export function DocumentVerificationSettings({ initialState }: { initialState: D
             <textarea rows={3} maxLength={2000} value={message} placeholder={t("requestMessagePlaceholder")} onChange={(event) => setMessage(event.target.value)} />
           </label>
         )}
-        <div className="docexport-actions-row">
+        <div className="docverify-actions-row">
           {pending ? (
             <button type="button" className="button-secondary" disabled={busy} onClick={() => void withdraw()}>{t("withdraw")}</button>
           ) : !state.verified_at ? (
@@ -141,7 +141,7 @@ export function DocumentVerificationSettings({ initialState }: { initialState: D
       </section>
 
       <section className="panel docverify-section">
-        <h3 className="docexport-heading">{t("previewTitle")}</h3>
+        <h3 className="docverify-heading">{t("previewTitle")}</h3>
         <p className="muted docverify-hint">{t("previewHint")}</p>
         <div className="docverify-preview" aria-label={t("previewTitle")}>
           <div className="docverify-preview-title">

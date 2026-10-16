@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, text
 
 from app.api.routes import protocol_elements, protocols as protocols_route
-from app.models import DocumentStyle, Event, Participant, ProtocolTodo
+from app.models import Event, Participant, ProtocolTodo
 from app.schemas.event import CycleAssignment, EventCreate, EventUpdate
 from app.schemas.participant import ParticipantCreate
 from app.schemas.protocol import (
@@ -46,11 +46,10 @@ from tests.factories import (
 RENDER_TYPE_PARAGRAPH = 2
 
 
-def _make_document_style(db, tenant_id: int) -> DocumentStyle:
-    style = DocumentStyle(tenant_id=tenant_id, name="Test Layout", style_key="modern", tokens_json={})
-    db.add(style)
-    db.flush()
-    return style
+def _make_brand(db, tenant_id: int):
+    from app.documents import brand_service
+
+    return brand_service.create_brand(db, tenant_id, name="Test Layout")
 
 
 # --- K1: Freeze-Schutz fehlt an drei Protocol-Element-Endpunkten ----------------------------
@@ -161,32 +160,32 @@ def test_k2_update_protocol_rejects_foreign_tenant_event_id(db):
         ProtocolService().update_protocol(db, protocol.id, ProtocolUpdate(event_id=foreign_event.public_id))
 
 
-# --- K3: Cross-Tenant-FK-Injection: fremden Hausstil per PATCH einschleusen -----------
+# --- K3: Cross-Tenant-FK-Injection: fremdes Brand-Profil / fremde Protokollvorlage zuweisen ------
+# (Der Hausstil einer Protokollvorlage ist seit dem Document Studio eine Zuweisung.)
 
 
-def test_k3_update_template_rejects_foreign_tenant_document_style(db):
+def test_k3_assignment_rejects_foreign_tenant_brand(db):
+    from app.documents import template_service
+
     tenant_a = make_tenant(db, "Tenant A")
     tenant_b = make_tenant(db, "Tenant B")
     template = make_template(db, tenant_a.id)
-    foreign_doc_template = _make_document_style(db, tenant_b.id)
+    foreign_brand = _make_brand(db, tenant_b.id)
 
-    with pytest.raises(ValueError, match="document_style_id does not belong to current tenant"):
-        TemplateService().update_template(
-            db, template.id, TemplateUpdate(document_style_id=foreign_doc_template.public_id)
-        )
+    with pytest.raises(template_service.TemplateStateError):
+        template_service.set_assignment(db, tenant_a.id, document_type="protocol", template=None, brand=foreign_brand, protocol_template=template)
 
 
-def test_k3_update_protocol_rejects_foreign_tenant_document_style(db):
+def test_k3_assignment_rejects_foreign_tenant_protocol_template(db):
+    from app.documents import template_service
+
     tenant_a = make_tenant(db, "Tenant A")
     tenant_b = make_tenant(db, "Tenant B")
-    template = make_template(db, tenant_a.id)
-    protocol = make_protocol(db, tenant_a.id, template.id)
-    foreign_doc_template = _make_document_style(db, tenant_b.id)
+    foreign_template = make_template(db, tenant_b.id)
+    own_brand = _make_brand(db, tenant_a.id)
 
-    with pytest.raises(ValueError, match="Document style does not belong to current tenant"):
-        ProtocolService().update_protocol(
-            db, protocol.id, ProtocolUpdate(document_style_id=foreign_doc_template.public_id)
-        )
+    with pytest.raises(template_service.TemplateStateError):
+        template_service.set_assignment(db, tenant_a.id, document_type="protocol", template=None, brand=own_brand, protocol_template=foreign_template)
 
 
 # --- K4: Kein Freeze-Schutz beim Löschen ganzer Protokolle + kein Audit-Log -----------------

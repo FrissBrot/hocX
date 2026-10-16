@@ -1,21 +1,29 @@
 #!/usr/bin/env python3
-"""Prüft, dass jeder Block-Typ der Dokument-Engine vollständig ist.
+"""Prüft, dass Dokument-Engine und Document Studio vollständig verdrahtet sind.
 
     PYTHONPATH=backend python3 scripts/check-document-catalog.py
 
-Für jeden Block-Typ im Dokumentmodell (backend/app/documents/model.py) muss es geben:
-  1. einen Katalog-Eintrag mit Parameter-Modell (catalog.py)
-  2. einen Provider (providers/__init__.py)
-  3. eine Basis-Komponente (styles/base/blocks.typ, base-components)
-  4. die Texte blockType.<typ> und empty.<typ> im Namespace documentPdf (alle Locales prüft
-     check-i18n-completeness.py) sowie Labels für alle Parameter und Auswahlwerte im
-     Namespace documents (params.<name>, enum.<wert>)
+Fachkomponenten (Daten-Blöcke, backend/app/documents/model.py + catalog.py):
+  1. Modell, Katalog-Eintrag mit Parameter-Modell und Provider (providers/__init__.py);
+     innere Blöcke (catalog.CHILD_ONLY_BLOCKS) brauchen nur eine Basis-Komponente
+  2. eine Basis-Komponente (typst/base/blocks.typ, base-components)
+  3. die Texte blockType.<typ> und empty.<typ> im Namespace documentPdf
+  4. im Namespace documentStudio: component.<typ>, componentHelp.<typ> sowie Labels für alle
+     Parameter (params.<name>) und Auswahlwerte (enum.<wert>)
 
-Zusätzlich: jeder Paket-Import (@namespace/name:version) in den Stilen muss im vendorten
+Document Studio (Labels, die das Frontend dynamisch zusammensetzt und die deshalb
+check-i18n-key-resolution.py nicht statisch sieht), alle im Namespace documentStudio:
+  nodeType.<typ>, library.entry/help.<key>, libraryGroup.<gruppe>, binding.<pfad>,
+  bindingField.<feld>, bindingGroup.<gruppe>, bindingType.<typ>, docType/docTypeHelp.<typ>,
+  category.<kategorie>, system.<key>.name/description, colorRef.<farbe>,
+  brand.presetName/presetHelp.<preset>, font.<schrift>
+
+Zusätzlich: jeder Paket-Import (@namespace/name:version) in den Typst-Dateien muss im vendorten
 Paketverzeichnis liegen - der Compile darf nie ins Netz.
 
-Braucht die Backend-Abhängigkeiten (Pydantic) und läuft deshalb im Backend-Container bzw. im
-Backend-Job der CI.
+Die Vollständigkeit über alle Sprachen prüft check-i18n-completeness.py; hier genügt die
+Standardsprache. Braucht die Backend-Abhängigkeiten (Pydantic) und läuft deshalb im
+Backend-Container bzw. im Backend-Job der CI.
 """
 from __future__ import annotations
 
@@ -27,14 +35,21 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app.documents.catalog import CATALOG  # noqa: E402
+from app.documents.bindings import REGISTRY  # noqa: E402
+from app.documents.brand import BRAND_PRESETS, BUILTIN_FONTS, BrandColors  # noqa: E402
+from app.documents.catalog import CATALOG, CHILD_ONLY_BLOCKS  # noqa: E402
+from app.documents.components import LIBRARY, NODE_TYPES  # noqa: E402
+from app.documents.doc_types import CATEGORIES, DOCUMENT_TYPES  # noqa: E402
 from app.documents.model import BLOCK_MODELS  # noqa: E402
 from app.documents.providers import PROVIDERS  # noqa: E402
+from app.documents.system_templates import SYSTEM_TEMPLATES  # noqa: E402
 
-STYLES = ROOT / "backend/app/documents/styles"
+TYPST = ROOT / "backend/app/documents/typst"
 PACKAGES = ROOT / "backend/app/documents/typst_packages"
 DEFAULT_LOCALE = json.loads((ROOT / "i18n/locales.json").read_text(encoding="utf-8"))["defaultLocale"]
 MESSAGES = ROOT / "frontend/messages" / DEFAULT_LOCALE
+# Strukturblöcke ohne eigene Komponente (werden vom Layout bzw. der Protokoll-Komponente gesetzt)
+WITHOUT_COMPONENT = {"protocol_element"}
 
 
 def flatten(data: dict, prefix: str = "") -> set[str]:
@@ -77,36 +92,80 @@ def schema_names(schema: dict) -> tuple[set[str], set[str]]:
 def main() -> int:
     problems: list[str] = []
     model_types = set(BLOCK_MODELS)
-    blocks_typ = (STYLES / "base/blocks.typ").read_text(encoding="utf-8")
+    blocks_typ = (TYPST / "base/blocks.typ").read_text(encoding="utf-8")
     component_section = blocks_typ[blocks_typ.index("#let base-components = (") :]
     components = set(re.findall(r"^\s+([a-z_]+):", component_section, re.M))
     pdf_keys = flatten(json.loads((MESSAGES / "documentPdf.json").read_text(encoding="utf-8")))
-    ui_keys = flatten(json.loads((MESSAGES / "documents.json").read_text(encoding="utf-8")))
+    ui_keys = flatten(json.loads((MESSAGES / "documentStudio.json").read_text(encoding="utf-8")))
 
+    def need(key: str, owner: str) -> None:
+        if key not in ui_keys:
+            problems.append(f"{owner}: Label {key} fehlt in documentStudio.json")
+
+    # Fachkomponenten
     for block_type in sorted(model_types | set(CATALOG) | set(PROVIDERS)):
         if block_type not in model_types:
             problems.append(f"{block_type}: fehlt im Dokumentmodell (model.py, Block-Union)")
+        if block_type in CHILD_ONLY_BLOCKS:
+            # Innere Blöcke (z. B. Protokolltexte): kein eigener Katalog-Eintrag, kein Provider
+            if block_type not in components:
+                problems.append(f"{block_type}: keine Basis-Komponente (typst/base/blocks.typ)")
+            continue
         if block_type not in CATALOG:
             problems.append(f"{block_type}: fehlt im Katalog (catalog.py)")
         if block_type not in PROVIDERS:
             problems.append(f"{block_type}: kein Provider (providers/__init__.py)")
-        if block_type not in components and block_type != "protocol_element":
-            problems.append(f"{block_type}: keine Basis-Komponente (styles/base/blocks.typ)")
+        if block_type not in components and block_type not in WITHOUT_COMPONENT:
+            problems.append(f"{block_type}: keine Basis-Komponente (typst/base/blocks.typ)")
         for key in (f"blockType.{block_type}", f"empty.{block_type}"):
             if key not in pdf_keys:
                 problems.append(f"{block_type}: Text {key} fehlt in documentPdf.json")
         if block_type in CATALOG:
+            need(f"component.{block_type}", block_type)
+            need(f"componentHelp.{block_type}", block_type)
             names, values = schema_names(CATALOG[block_type].params.model_json_schema())
             for name in sorted(names):
-                if f"params.{name}" not in ui_keys:
-                    problems.append(f"{block_type}: Parameter-Label params.{name} fehlt in documents.json")
+                need(f"params.{name}", block_type)
             for value in sorted(values):
-                if f"enum.{value}" not in ui_keys:
-                    problems.append(f"{block_type}: Auswahl-Label enum.{value} fehlt in documents.json")
-            if f"groups.{CATALOG[block_type].group}" not in ui_keys:
-                problems.append(f"{block_type}: Gruppen-Label groups.{CATALOG[block_type].group} fehlt")
+                need(f"enum.{value}", block_type)
 
-    for typ_file in STYLES.rglob("*.typ"):
+    # Document Studio
+    for node_type in NODE_TYPES:
+        need(f"nodeType.{node_type}", "Knotentyp")
+    for entry in LIBRARY:
+        need(f"library.entry.{entry.key}", "Bibliothek")
+        need(f"library.help.{entry.key}", "Bibliothek")
+        need(f"libraryGroup.{entry.group}", "Bibliothek")
+    for path, definition in REGISTRY.items():
+        need(f"binding.{path.replace('.', '_')}", "Bindung")
+        need(f"bindingGroup.{definition.group}", "Bindung")
+        need(f"bindingType.{definition.type}", "Bindung")
+        for item_field in definition.item_fields:
+            need(f"bindingField.{item_field.key}", f"Bindung {path}")
+    for key, doc_type in DOCUMENT_TYPES.items():
+        need(f"docType.{key}", "Dokumenttyp")
+        need(f"docTypeHelp.{key}", "Dokumenttyp")
+    for category in CATEGORIES:
+        need(f"category.{category}", "Kategorie")
+    for template in SYSTEM_TEMPLATES:
+        need(f"system.{template.key}.name", "Systemvorlage")
+        need(f"system.{template.key}.description", "Systemvorlage")
+        if template.document_type not in DOCUMENT_TYPES:
+            problems.append(f"Systemvorlage {template.key}: unbekannter Dokumenttyp {template.document_type}")
+    for color in BrandColors.model_fields:
+        if color != "custom":
+            need(f"colorRef.{color}", "Brand-Farbe")
+    for preset in BRAND_PRESETS:
+        need(f"brand.presetName.{preset}", "Brand-Vorlage")
+        need(f"brand.presetHelp.{preset}", "Brand-Vorlage")
+    for font in BUILTIN_FONTS:
+        need(f"font.{font}", "Schrift")
+    covered = {template.document_type for template in SYSTEM_TEMPLATES}
+    for key in DOCUMENT_TYPES:
+        if key not in covered:
+            problems.append(f"Dokumenttyp {key}: keine Systemvorlage (system_templates.py)")
+
+    for typ_file in TYPST.rglob("*.typ"):
         for namespace, name, version in re.findall(r'#import\s+"@([a-z0-9-]+)/([a-z0-9-]+):([0-9.]+)"', typ_file.read_text(encoding="utf-8")):
             if not (PACKAGES / namespace / name / version / "typst.toml").exists():
                 problems.append(f"{typ_file.relative_to(ROOT)}: Paket @{namespace}/{name}:{version} ist nicht vendored ({PACKAGES.relative_to(ROOT)})")
@@ -116,7 +175,7 @@ def main() -> int:
         for problem in sorted(set(problems)):
             print(f"  - {problem}", file=sys.stderr)
         return 1
-    print(f"Dokument-Katalog: ok ({len(model_types)} Block-Typen)")
+    print(f"Dokument-Katalog: ok ({len(CATALOG)} Fachkomponenten, {len(NODE_TYPES)} Knotentypen, {len(LIBRARY)} Bibliothekseinträge, {len(SYSTEM_TEMPLATES)} Systemvorlagen)")
     return 0
 
 

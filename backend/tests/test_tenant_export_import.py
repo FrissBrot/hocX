@@ -51,9 +51,12 @@ from app.models.entities import (
     ProtocolElementBlock,
     DocumentExport,
     DocumentRegistry,
-    DocumentRecipe,
-    DocumentStyle,
-    DocumentStyleAsset,
+    DocumentAsset,
+    DocumentBrand,
+    DocumentComponent,
+    DocumentTemplate,
+    DocumentTemplateAssignment,
+    DocumentTemplateRevision,
     ProtocolTodo,
     Role,
     StoredFile,
@@ -155,7 +158,7 @@ def test_export_bundles_only_own_users_and_nulls_foreign_references(db):
         assert "foreign@x.example" not in json.dumps(manifest)
         assert manifest["tables"]["template"][0]["created_by"] is None
         assert "user_tenant_role" not in manifest["tables"]
-        assert manifest["format_version"] == 6
+        assert manifest["format_version"] == 7
     finally:
         zip_path.unlink(missing_ok=True)
 
@@ -297,29 +300,49 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
         UserProtocolScroll(user_id=user.id, protocol_id=protocol.id, last_element_id=17),
     ])
     db.flush()
-    # Hausstil mit hochgeladenem Logo, Vorlage verweist darauf, Rezept mit Protokoll-Verweis
-    logo_path = tmp_path / "document_style_assets" / "logo.png"
+    # Document Studio: Brand-Profil mit hochgeladenem Logo, Mandantenvorlage (Revision verweist
+    # auf Logo und Protokoll), Komponente, Zuweisung für die Protokollvorlage
+    from app.documents import brand_service, template_service
+    from app.documents.brand import BrandTokens
+    from app.documents.layout import TemplateContent
+
+    logo_path = tmp_path / "document_assets" / "logo.png"
     logo_path.parent.mkdir(parents=True)
     logo_path.write_bytes(b"png-logo")
-    logo = DocumentStyleAsset(tenant_id=tenant.id, kind="image", name="Logo", storage_path="document_style_assets/logo.png", mime_type="image/png")
+    logo = DocumentAsset(tenant_id=tenant.id, kind="image", category="logo", name="Logo", storage_path="document_assets/logo.png", mime_type="image/png")
     db.add(logo)
     db.flush()
-    style = DocumentStyle(tenant_id=tenant.id, name="Verein", style_key="classic", tokens_json={"logo_asset_id": str(logo.public_id), "header": "logo"}, is_default=True)
-    db.add(style)
-    db.flush()
-    template.document_style_id = style.id
-    db.add(DocumentRecipe(tenant_id=tenant.id, name="Monatsbrief", style_id=style.id, blocks_json=[{"type": "session_notes", "params": {"protocol_id": str(protocol.public_id)}}]))
+    brand = brand_service.create_brand(db, tenant.id, name="Verein", tokens=BrandTokens.model_validate({"assets": {"logo": str(logo.public_id)}}), is_default=True)
+    content = TemplateContent.model_validate({"masters": [{"id": "default"}], "body": [
+        {"type": "image", "id": "i", "source": {"kind": "asset", "asset_id": str(logo.public_id)}},
+        {"type": "data_block", "id": "d", "component": "session_notes", "params": {"protocol_id": str(protocol.public_id)}},
+    ]})
+    document_template, revision = template_service.create_template(db, tenant.id, name="Monatsbrief", document_type="custom", content=content)
+    document_template.brand_id = brand.id
+    template_service.publish(db, document_template, user_id=None)
+    db.add(DocumentComponent(tenant_id=tenant.id, name="Kopf", schema_version=1, node_json={"type": "image", "id": "k", "source": {"kind": "asset", "asset_id": str(logo.public_id)}}))
+    db.add(DocumentTemplateAssignment(tenant_id=tenant.id, document_type="protocol", protocol_template_id=template.id, brand_id=brand.id))
+    # STUDIO-010: Export mit Systemvorlage und Brand-Revision behält beide Bezüge
+    from app.documents.system_templates import sync_system_templates
+
+    sync_system_templates(db)
+    system_template = db.scalar(select(DocumentTemplate).where(DocumentTemplate.system_key == "protocol_standard"))
+    db.add(DocumentExport(
+        tenant_id=tenant.id, document_type="protocol", version_label="v0.2", content_hash="ef" * 32,
+        template_id=system_template.id, brand_revision_id=brand_service.current_revision(db, brand).id,
+    ))
     db.flush()
 
     zip_path, _ = TenantExportService().export(db, tenant.id, "full")
     try:
         manifest = _read_manifest(zip_path)
-        assert len(manifest["tables"]["document_style"]) == 1
-        assert len(manifest["tables"]["document_style_asset"]) == 1
-        assert len(manifest["tables"]["document_recipe"]) == 1
+        assert len(manifest["tables"]["document_asset"]) == 1
+        assert len(manifest["tables"]["document_brand"]) == 1 and len(manifest["tables"]["document_brand_revision"]) == 1
+        assert len(manifest["tables"]["document_template"]) == 1 and len(manifest["tables"]["document_template_revision"]) == 1
+        assert len(manifest["tables"]["document_component"]) == 1 and len(manifest["tables"]["document_template_assignment"]) == 1
         assert len(manifest["tables"]["word_import_profile"]) == 1
         assert len(manifest["tables"]["word_import_suggestion_outcome"]) == 1
-        assert len(manifest["tables"]["document_export"]) == 1
+        assert len(manifest["tables"]["document_export"]) == 2
         assert len(manifest["tables"]["document_registry"]) == 1
         assert manifest["tables"]["user_protocol_scroll"][0]["user_id"] == str(user.public_id)
         # Fresh target installation: the source account isn't there (see the word import test),
@@ -337,9 +360,11 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     profile = db.scalar(select(WordImportProfile).where(WordImportProfile.tenant_id == imported_tenant.id))
     outcome = db.scalar(select(WordImportSuggestionOutcome).where(WordImportSuggestionOutcome.tenant_id == imported_tenant.id))
     cache = db.scalar(select(DocumentExport).where(DocumentExport.protocol_id == imported_protocol.id))
-    imported_style = db.scalar(select(DocumentStyle).where(DocumentStyle.tenant_id == imported_tenant.id, DocumentStyle.name == "Verein"))
-    imported_logo = db.scalar(select(DocumentStyleAsset).where(DocumentStyleAsset.tenant_id == imported_tenant.id))
-    imported_recipe = db.scalar(select(DocumentRecipe).where(DocumentRecipe.tenant_id == imported_tenant.id))
+    imported_brand = db.scalar(select(DocumentBrand).where(DocumentBrand.tenant_id == imported_tenant.id, DocumentBrand.name == "Verein"))
+    imported_logo = db.scalar(select(DocumentAsset).where(DocumentAsset.tenant_id == imported_tenant.id))
+    imported_document_template = db.scalar(select(DocumentTemplate).where(DocumentTemplate.tenant_id == imported_tenant.id))
+    imported_assignment = db.scalar(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.tenant_id == imported_tenant.id))
+    imported_component = db.scalar(select(DocumentComponent).where(DocumentComponent.tenant_id == imported_tenant.id))
     restored_user = db.scalar(select(AppUser).where(AppUser.email == "backup@example.com"))
     scroll = db.get(UserProtocolScroll, (restored_user.id, imported_protocol.id))
 
@@ -351,18 +376,59 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     assert cache.stored_file_id is not None and cache.version_label == "v0.1" and cache.content_hash == "ab" * 32
     assert db.get(StoredFile, cache.stored_file_id).tenant_id == imported_tenant.id
     assert (tmp_path / db.get(StoredFile, cache.stored_file_id).storage_path).read_bytes() == b"pdf-cache"
-    assert imported_style.is_default and imported_style.style_key == "classic"
-    assert imported_style.tokens_json["logo_asset_id"] == str(imported_logo.public_id)
+    assert imported_brand.is_default and imported_logo.category == "logo"
+    assert brand_service.tokens_of(brand_service.current_revision(db, imported_brand)).assets.logo == imported_logo.public_id
     assert (tmp_path / imported_logo.storage_path).read_bytes() == b"png-logo"
-    assert imported_template.document_style_id == imported_style.id
-    assert imported_recipe.style_id == imported_style.id
-    assert imported_recipe.blocks_json[0]["params"]["protocol_id"] == str(imported_protocol.public_id)
+    assert imported_document_template.brand_id == imported_brand.id
+    published = db.get(DocumentTemplateRevision, imported_document_template.published_revision_id)
+    assert published.status == "published"
+    assert published.content_json["body"][0]["source"]["asset_id"] == str(imported_logo.public_id)
+    assert published.content_json["body"][1]["params"]["protocol_id"] == str(imported_protocol.public_id)
+    assert imported_assignment.protocol_template_id == imported_template.id and imported_assignment.brand_id == imported_brand.id
+    assert imported_component.node_json["source"]["asset_id"] == str(imported_logo.public_id)
+    system_export = db.scalar(select(DocumentExport).where(DocumentExport.tenant_id == imported_tenant.id, DocumentExport.version_label == "v0.2"))
+    assert system_export.template_id == system_template.id
+    assert system_export.brand_revision_id == brand_service.current_revision(db, imported_brand).id
     registry = db.scalar(select(DocumentRegistry).where(DocumentRegistry.tenant_id == imported_tenant.id))
     # Dokument-ID bleibt (sie steht im PDF), Quelle zeigt auf das importierte Protokoll
     assert registry.public_id == registry_id and registry.sha256 == hashlib.sha256(b"pdf-cache").hexdigest() and registry.import_unverified is False
     assert registry.status_code == "abgeschlossen" and registry.version_label == "v1.0"
     assert registry.source_public_id == imported_protocol.public_id
     assert scroll.last_element_id == 17
+
+
+def test_import_skips_invalid_document_studio_content(db):
+    """STUDIO-011: Ungültige Studio-Inhalte im Archiv werden beim Import geprüft und gemeldet
+    statt erst Bibliothek und Export scheitern zu lassen."""
+    from app.documents import brand_service, template_service
+    from app.documents.layout import TemplateContent
+
+    tenant = make_tenant(db, "Studio Invalid")
+    brand = brand_service.create_brand(db, tenant.id, name="Verein", is_default=True)
+    document_template, _revision = template_service.create_template(db, tenant.id, name="Gültig", document_type="custom", content=TemplateContent())
+    broken_template, broken_revision = template_service.create_template(db, tenant.id, name="Kaputt", document_type="custom", content=TemplateContent())
+    db.add(DocumentComponent(tenant_id=tenant.id, name="Kaputt", schema_version=1, node_json={"type": "script", "id": "x"}))
+    db.flush()
+    # Direkt in der DB verfälscht (Schema verhindert das sonst beim Speichern)
+    broken_revision.content_json = {"body": [{"type": "script", "id": "x"}]}
+    brand_service.current_revision(db, brand).tokens_json = {"colors": {"primary": "rot"}}
+    db.flush()
+
+    zip_path, _ = TenantExportService().export(db, tenant.id, "full")
+    try:
+        imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Studio Invalid (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    assert any("Komponente 'Kaputt'" in item for item in warnings)
+    assert any("Dokumentvorlage 'Kaputt'" in item for item in warnings)
+    assert any("Brand-Revision" in item for item in warnings)
+    assert db.scalar(select(DocumentComponent).where(DocumentComponent.tenant_id == imported_tenant.id)) is None
+    templates = {row.name: row for row in db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id == imported_tenant.id))}
+    assert template_service.working_revision(db, templates["Gültig"]) is not None
+    assert template_service.working_revision(db, templates["Kaputt"]) is None
+    imported_brand = db.scalar(select(DocumentBrand).where(DocumentBrand.tenant_id == imported_tenant.id, DocumentBrand.name == "Verein"))
+    assert brand_service.current_revision(db, imported_brand).tokens_json["colors"]["primary"] == "#174B7A"
 
 
 def test_export_import_roundtrip_restores_all_member_mfa_factors(db):
@@ -1602,6 +1668,42 @@ def test_import_keeps_registry_with_original_and_never_imports_identity_verifica
     assert any("Dokumentenregister: 1 Einträge übersprungen" in warning for warning in warnings)
     assert imported_tenant.identity_verified_at is None and imported_tenant.identity_verification_note is None
     assert imported_tenant.verify_show_identity is True
+
+
+def test_import_converts_house_styles_and_recipes_of_format_6_archives(db, tmp_path):
+    """Archive der Dokument-Engine vor dem Document Studio: Hausstil → Brand-Profil (Standard
+    bleibt Standard), Rezept → veröffentlichte Mandantenvorlage, Hausstil der Protokollvorlage →
+    Brand-Zuweisung."""
+    import zipfile
+
+    from app.documents import brand_service
+
+    manifest = {
+        "format_version": 6,
+        "scope": "structure",
+        "tables": {
+            "tenant": {"id": 1, "name": "Altarchiv"},
+            "document_style": [
+                {"id": 10, "tenant_id": 1, "name": "Standard", "style_key": "classic", "tokens_json": {"primary_color": "#a83f2f", "title_page": "modern"}, "is_default": True, "version": 1},
+                {"id": 11, "tenant_id": 1, "name": "Jugend", "style_key": "compact", "tokens_json": {}, "is_default": False, "version": 1},
+            ],
+            "document_recipe": [{"id": 5, "tenant_id": 1, "name": "Monatsbrief", "document_type": "custom", "blocks_json": [{"type": "heading", "params": {"text": "Hallo"}}], "options_json": {}, "style_id": 11}],
+            "template": [{"id": 3, "tenant_id": 1, "name": "Jugendvorstand", "status": "active", "version": 1, "document_style_id": 11}],
+        },
+    }
+    zip_path = tmp_path / "alt.zip"
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr("manifest.json", json.dumps(manifest))
+    imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Altarchiv (Import)")
+
+    brands = {brand.name: brand for brand in db.scalars(select(DocumentBrand).where(DocumentBrand.tenant_id == imported_tenant.id))}
+    assert set(brands) == {"Standard", "Jugend"} and brands["Standard"].is_default
+    tokens = brand_service.tokens_of(brand_service.current_revision(db, brands["Standard"]))
+    assert tokens.colors.primary == "#A83F2F" and tokens.layout.title_page
+    recipe_template = db.scalar(select(DocumentTemplate).where(DocumentTemplate.tenant_id == imported_tenant.id))
+    assert recipe_template.name == "Monatsbrief" and recipe_template.published_revision_id and recipe_template.brand_id == brands["Jugend"].id
+    assignment = db.scalar(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.tenant_id == imported_tenant.id))
+    assert assignment.brand_id == brands["Jugend"].id and assignment.document_type == "protocol"
 
 
 def test_import_merges_duplicate_fines_from_old_archives(db):

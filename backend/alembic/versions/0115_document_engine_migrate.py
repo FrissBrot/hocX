@@ -1,6 +1,6 @@
 """Dokument-Engine: bisherige Dokumentvorlagen übernehmen und die TeX-Strukturen entfernen.
 
-1. Jede document_template wird ein document_style (Tokens über die hier eingefrorene Übersetzung, Stand app.documents.legacy 2026-10-16). Bild- und
+1. Jede document_template wird ein document_style (Tokens über die hier eingefrorene Übersetzung). Bild- und
    Schrift-Bestandteile (document_template_part) werden document_style_asset; die Datei bleibt am
    selben Speicherort (keine Kopie, kein Verlust). Eigener Vorlagen-Code (Slots) entfällt; betroffene
    Mandanten werden im Migrationsprotokoll genannt (siehe auch Release-Notes).
@@ -59,10 +59,10 @@ def _table_exists(conn, name: str) -> bool:
     return bool(conn.execute(sa.text("SELECT to_regclass(:name)"), {"name": f"public.{name}"}).scalar())
 
 
-# ── Eingefrorene Übersetzung (Audit TYPST-014) ─────────────────────────────────────────────
-# Stand von app/documents/legacy.py und DocumentStyleTokens am 2026-10-16, bewusst kopiert statt
-# importiert: spätere Änderungen am App-Code dürfen das Ergebnis dieser historischen Migration
-# nicht verändern. Nicht anpassen; neue Token-Felder kommen über ihre Standardwerte dazu.
+# ── Eingefrorene Übersetzung (Audits TYPST-014/STUDIO-017) ──────────────────────────────────
+# Stand von app/documents/legacy.py und DocumentStyleTokens vor dem Document Studio, bewusst
+# kopiert statt importiert: spätere Änderungen am App-Code dürfen das Ergebnis dieser
+# historischen Migration nicht verändern (0118 übersetzt die Hausstile danach weiter). Nicht anpassen.
 _FROZEN_TOKEN_DEFAULTS: dict = {
     "primary_color": "#174b7a",
     "secondary_color": "#4f6d7a",

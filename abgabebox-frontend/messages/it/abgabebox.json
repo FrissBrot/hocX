@@ -161,6 +161,7 @@
     "logoAlt": "Logo di {name}",
     "otherDocument": "Il file è autentico, ma appartiene a un documento diverso da quello del codice QR scansionato.",
     "importUnverified": "Importato, non verificato: questa voce proviene da un'importazione di dati e non è stato possibile confrontarla con il file originale in quel momento.",
+    "titleOverridden": "Il titolo è stato impostato diversamente dal verbale durante l'esportazione.",
     "newerVersion": "Esiste una versione più recente ({version}) di questo documento.",
     "notFoundTitle": "Non trovato",
     "notFoundText": "Questo file non corrisponde a nessun documento creato con hocX. È stato modificato o non proviene da hocX.",

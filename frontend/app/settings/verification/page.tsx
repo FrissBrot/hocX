@@ -5,7 +5,7 @@ import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { DocumentVerificationSettings, type DocumentVerificationState } from "@/components/settings/document-verification-settings";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
-import { templateTabs } from "@/components/ui/section-tabs";
+import { documentStudioTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 
 export default async function DocumentVerificationPage() {
@@ -23,7 +23,7 @@ export default async function DocumentVerificationPage() {
         mobile={content}
         desktop={
           <>
-            <RouteTabs tabs={templateTabs(t)} activeHref="/settings/verification" />
+            <RouteTabs tabs={documentStudioTabs(t, true)} activeHref="/settings/verification" />
             {content}
           </>
         }

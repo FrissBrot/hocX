@@ -7,7 +7,7 @@
 Uebernommen werden die Light-Werte aus dem ersten `:root`-Block: Neutral-, Akzent-, Status- und
 Diagrammfarben, Abstaende und Radien. PDFs haben kein Dark-Theme. Pixelwerte werden in Punkt
 umgerechnet (1px = 0.75pt). Die erzeugte Datei
-backend/app/documents/styles/_tokens.typ wird nie von Hand bearbeitet - gleiche Regel wie fuer
+backend/app/documents/typst/_tokens.typ wird nie von Hand bearbeitet - gleiche Regel wie fuer
 die Kopien von sync-design-tokens.sh.
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "design/tokens.css"
-TARGET = ROOT / "backend/app/documents/styles/_tokens.typ"
+TARGET = ROOT / "backend/app/documents/typst/_tokens.typ"
 
 COLOR_TOKENS = [
     "text", "muted", "border", "border-strong", "bg", "panel",

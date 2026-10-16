@@ -1,0 +1,4143 @@
+{
+ "brand_tokens": {
+  "assets": {
+   "background": null,
+   "footer_image": null,
+   "images": [],
+   "letterhead": null,
+   "logo": null,
+   "logo_alt": null,
+   "watermark": null
+  },
+  "colors": {
+   "accent": "#2F6DF6",
+   "accent_2": "#12805C",
+   "background": "#FFFFFF",
+   "border": "#D0D5DD",
+   "custom": [],
+   "danger": "#DC2626",
+   "heading": "#174B7A",
+   "info": "#2F6DF6",
+   "muted": "#667085",
+   "primary": "#174B7A",
+   "secondary": "#4F6D7A",
+   "success": "#12805C",
+   "surface": "#F6F7F9",
+   "table_header_background": "#E8EEF5",
+   "table_header_text": "#0F3354",
+   "table_zebra": "#F8FAFC",
+   "text": "#101828",
+   "warning": "#B45309",
+   "watermark": "#F1F2F4"
+  },
+  "layout": {
+   "border_width": 0.5,
+   "header_footer": {
+    "footer_line": true,
+    "footer_show_number": true,
+    "footer_show_pages": true,
+    "footer_text": "",
+    "header_line": true,
+    "header_show_date": true,
+    "header_show_logo": true,
+    "header_show_title": true
+   },
+   "heading_numbering": false,
+   "heading_style": "underline",
+   "margins": {
+    "bottom": 22.0,
+    "left": 20.0,
+    "right": 20.0,
+    "top": 22.0
+   },
+   "orientation": "portrait",
+   "page_size": "A4",
+   "paragraph_gap": 2.5,
+   "radius": 1.5,
+   "section_gap": 6.0,
+   "show_metadata": false,
+   "table_style": "lines",
+   "title_page": false,
+   "toc": false,
+   "watermark_draft": true
+  },
+  "organization": {
+   "address": "",
+   "contact": "",
+   "name": "",
+   "place": "",
+   "website": ""
+  },
+  "typography": {
+   "base_size": 10.5,
+   "body": {
+    "asset_ids": [],
+    "builtin": "inter"
+   },
+   "fallbacks": [],
+   "heading": {
+    "asset_ids": [],
+    "builtin": "inter"
+   },
+   "heading_transform": "none",
+   "letter_spacing_heading": 0.0,
+   "line_height": 1.35,
+   "size_h1": 16.0,
+   "size_h2": 13.0,
+   "size_h3": 11.5,
+   "size_small": 8.5,
+   "size_subtitle": 14.0,
+   "size_title": 26.0,
+   "weight_body": "regular",
+   "weight_heading": "bold"
+  },
+  "verify": {
+   "show_id": true,
+   "show_qr": true,
+   "show_url": true
+  }
+ },
+ "catalog": {
+  "bindings": [
+   {
+    "access": "reader",
+    "group": "organization",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "organization.name",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "organization",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "organization.address",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "organization",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "organization.contact",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "organization",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "organization.website",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "organization",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "organization.place",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.logo",
+    "type": "image"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.logo_alt",
+    "type": "image"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.letterhead",
+    "type": "image"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.background",
+    "type": "image"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.watermark",
+    "type": "image"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.footer_image",
+    "type": "image"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.footer_text",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.header_show_logo",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.header_show_title",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.header_show_date",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.header_line",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.footer_show_number",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.footer_show_pages",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.footer_line",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.title_page",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.toc",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.show_metadata",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.watermark_draft",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.verify_show_url",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.verify_show_id",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "brand",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "brand.verify_show_qr",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "document.title",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "document.subtitle",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "document.type",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "document.date",
+    "type": "date"
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "document.number",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "document.version",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "document.status",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "document.language",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "document.is_draft",
+    "type": "bool"
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "document.short_id",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "document.created_by",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [],
+    "needs_protocol": true,
+    "path": "protocol.title",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [],
+    "needs_protocol": true,
+    "path": "protocol.number",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [],
+    "needs_protocol": true,
+    "path": "protocol.date",
+    "type": "date"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [],
+    "needs_protocol": true,
+    "path": "protocol.status",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [],
+    "needs_protocol": true,
+    "path": "protocol.status_code",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [],
+    "needs_protocol": true,
+    "path": "protocol.version",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [],
+    "needs_protocol": true,
+    "path": "protocol.template_name",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [],
+    "needs_protocol": true,
+    "path": "protocol.event_title",
+    "type": "text"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [],
+    "needs_protocol": true,
+    "path": "protocol.next_session",
+    "type": "date"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [],
+    "needs_protocol": true,
+    "path": "protocol.participant_count",
+    "type": "number"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [],
+    "needs_protocol": true,
+    "path": "protocol.present_count",
+    "type": "number"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [],
+    "needs_protocol": true,
+    "path": "protocol.excused_count",
+    "type": "number"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [],
+    "needs_protocol": true,
+    "path": "protocol.absent_count",
+    "type": "number"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [
+     {
+      "key": "title",
+      "type": "text"
+     },
+     {
+      "key": "responsible",
+      "type": "text"
+     },
+     {
+      "key": "index",
+      "type": "number"
+     }
+    ],
+    "needs_protocol": true,
+    "path": "protocol.elements",
+    "type": "list"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [
+     {
+      "key": "name",
+      "type": "text"
+     },
+     {
+      "key": "status",
+      "type": "text"
+     },
+     {
+      "key": "status_code",
+      "type": "text"
+     }
+    ],
+    "needs_protocol": true,
+    "path": "protocol.participants",
+    "type": "list"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [
+     {
+      "key": "task",
+      "type": "text"
+     },
+     {
+      "key": "assignee",
+      "type": "text"
+     },
+     {
+      "key": "due",
+      "type": "date"
+     },
+     {
+      "key": "status",
+      "type": "text"
+     },
+     {
+      "key": "protocol",
+      "type": "text"
+     }
+    ],
+    "needs_protocol": true,
+    "path": "protocol.open_todos",
+    "type": "list"
+   },
+   {
+    "access": "reader",
+    "group": "todos",
+    "item_fields": [
+     {
+      "key": "task",
+      "type": "text"
+     },
+     {
+      "key": "assignee",
+      "type": "text"
+     },
+     {
+      "key": "due",
+      "type": "date"
+     },
+     {
+      "key": "status",
+      "type": "text"
+     },
+     {
+      "key": "protocol",
+      "type": "text"
+     }
+    ],
+    "needs_protocol": false,
+    "path": "todos.open",
+    "type": "list"
+   },
+   {
+    "access": "reader",
+    "group": "todos",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "todos.open_count",
+    "type": "number"
+   },
+   {
+    "access": "reader",
+    "group": "todos",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "todos.done_count",
+    "type": "number"
+   },
+   {
+    "access": "reader",
+    "group": "events",
+    "item_fields": [
+     {
+      "key": "date",
+      "type": "date"
+     },
+     {
+      "key": "title",
+      "type": "text"
+     },
+     {
+      "key": "location",
+      "type": "text"
+     },
+     {
+      "key": "tag",
+      "type": "text"
+     },
+     {
+      "key": "description",
+      "type": "text"
+     }
+    ],
+    "needs_protocol": false,
+    "path": "events.upcoming",
+    "type": "list"
+   },
+   {
+    "access": "reader",
+    "group": "events",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "events.upcoming_count",
+    "type": "number"
+   },
+   {
+    "access": "writer",
+    "group": "members",
+    "item_fields": [
+     {
+      "key": "name",
+      "type": "text"
+     },
+     {
+      "key": "email",
+      "type": "text"
+     },
+     {
+      "key": "joined_at",
+      "type": "date"
+     },
+     {
+      "key": "role",
+      "type": "text"
+     }
+    ],
+    "needs_protocol": false,
+    "path": "members.active",
+    "type": "list"
+   },
+   {
+    "access": "reader",
+    "group": "members",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "members.active_count",
+    "type": "number"
+   },
+   {
+    "access": "finance",
+    "group": "finance",
+    "item_fields": [
+     {
+      "key": "name",
+      "type": "text"
+     },
+     {
+      "key": "balance",
+      "type": "amount"
+     },
+     {
+      "key": "currency",
+      "type": "text"
+     }
+    ],
+    "needs_protocol": false,
+    "path": "finance.accounts",
+    "type": "list"
+   },
+   {
+    "access": "finance",
+    "group": "finance",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "finance.total_balance",
+    "type": "amount"
+   },
+   {
+    "access": "reader",
+    "group": "statistics",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "statistics.sessions_count",
+    "type": "number"
+   },
+   {
+    "access": "reader",
+    "group": "statistics",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "statistics.attendance_rate",
+    "type": "percent"
+   },
+   {
+    "access": "reader",
+    "group": "statistics",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "statistics.events_count",
+    "type": "number"
+   }
+  ],
+  "brand_presets": [
+   "classic_blue",
+   "graphite",
+   "forest",
+   "bordeaux",
+   "compact"
+  ],
+  "categories": [
+   "protocols",
+   "people",
+   "tasks",
+   "events",
+   "finance",
+   "statistics",
+   "lists",
+   "forms",
+   "general"
+  ],
+  "color_references": [
+   "$brand.primary",
+   "$brand.secondary",
+   "$brand.accent",
+   "$brand.accent_2",
+   "$brand.text",
+   "$brand.muted",
+   "$brand.heading",
+   "$brand.background",
+   "$brand.surface",
+   "$brand.border",
+   "$brand.success",
+   "$brand.warning",
+   "$brand.danger",
+   "$brand.info",
+   "$brand.watermark",
+   "$brand.table_header_background",
+   "$brand.table_header_text",
+   "$brand.table_zebra"
+  ],
+  "data_components": [
+   {
+    "access": "reader",
+    "group": "protocol",
+    "needs_protocol": true,
+    "params_schema": {
+     "additionalProperties": false,
+     "description": "Leeres ``element_id`` = alle exportsichtbaren Elemente. ``titles_only`` ergibt eine\nTraktandenliste (nur die Abschnittstitel) statt der Inhalte. ``content`` filtert die Blöcke\nder Elemente: ``text`` (nur Texte, Listen, Formulare - Kurz-/Beschlussprotokoll),\n``text_and_todos`` (zusätzlich Aufgaben).",
+     "properties": {
+      "content": {
+       "default": "all",
+       "enum": [
+        "all",
+        "text",
+        "text_and_todos"
+       ],
+       "title": "Content",
+       "type": "string"
+      },
+      "element_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Element Id",
+       "x-source": "protocol_elements"
+      },
+      "include_images": {
+       "default": true,
+       "title": "Include Images",
+       "type": "boolean"
+      },
+      "include_session_todos": {
+       "default": true,
+       "title": "Include Session Todos",
+       "type": "boolean"
+      },
+      "protocol_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Protocol Id",
+       "x-source": "protocols"
+      },
+      "titles_only": {
+       "default": false,
+       "title": "Titles Only",
+       "type": "boolean"
+      }
+     },
+     "title": "ProtocolElementParams",
+     "type": "object"
+    },
+    "type": "protocol_element"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "label": {
+       "anyOf": [
+        {
+         "maxLength": 120,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Label"
+      },
+      "protocol_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Protocol Id",
+       "x-source": "protocols"
+      },
+      "session_date": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Session Date"
+      }
+     },
+     "title": "SessionDateParams",
+     "type": "object"
+    },
+    "type": "session_date"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "needs_protocol": true,
+    "params_schema": {
+     "additionalProperties": false,
+     "description": "Leer = Protokoll des Kontexts (beim Protokoll-Export).",
+     "properties": {
+      "protocol_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Protocol Id",
+       "x-source": "protocols"
+      }
+     },
+     "title": "ProtocolRefParams",
+     "type": "object"
+    },
+    "type": "session_notes"
+   },
+   {
+    "access": "reader",
+    "group": "forms",
+    "needs_protocol": false,
+    "params_schema": {
+     "$defs": {
+      "FormRowParam": {
+       "additionalProperties": false,
+       "properties": {
+        "label": {
+         "default": "",
+         "maxLength": 200,
+         "title": "Label",
+         "type": "string"
+        },
+        "value": {
+         "default": "",
+         "maxLength": 2000,
+         "title": "Value",
+         "type": "string"
+        }
+       },
+       "title": "FormRowParam",
+       "type": "object"
+      }
+     },
+     "additionalProperties": false,
+     "properties": {
+      "label_heading": {
+       "anyOf": [
+        {
+         "maxLength": 120,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Label Heading"
+      },
+      "rows": {
+       "items": {
+        "$ref": "#/$defs/FormRowParam"
+       },
+       "maxItems": 100,
+       "title": "Rows",
+       "type": "array"
+      },
+      "value_heading": {
+       "anyOf": [
+        {
+         "maxLength": 120,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Value Heading"
+      }
+     },
+     "title": "FormParams",
+     "type": "object"
+    },
+    "type": "form"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "needs_protocol": true,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "protocol_block_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Protocol Block Id",
+       "x-source": "protocol_blocks"
+      }
+     },
+     "title": "ProtocolBlockRefParams",
+     "type": "object"
+    },
+    "type": "matrix"
+   },
+   {
+    "access": "writer",
+    "group": "protocol",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "description": "Ein-/Austritte aus den Mitgliederdaten (Eintritts-/Austrittsdatum) im Zeitraum.",
+     "properties": {
+      "date_from": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date From"
+      },
+      "date_to": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date To"
+      }
+     },
+     "title": "EntryExitParams",
+     "type": "object"
+    },
+    "type": "entry_exit"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "caption": {
+       "anyOf": [
+        {
+         "maxLength": 300,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Caption"
+      },
+      "file_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "File Id",
+       "x-source": "images"
+      }
+     },
+     "title": "ImageParams",
+     "type": "object"
+    },
+    "type": "image"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "columns": {
+       "default": 2,
+       "maximum": 3,
+       "minimum": 1,
+       "title": "Columns",
+       "type": "integer"
+      },
+      "file_ids": {
+       "items": {
+        "format": "uuid",
+        "type": "string"
+       },
+       "maxItems": 60,
+       "title": "File Ids",
+       "type": "array",
+       "x-source": "images"
+      },
+      "protocol_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Protocol Id",
+       "x-source": "protocols"
+      }
+     },
+     "title": "ImageGalleryParams",
+     "type": "object"
+    },
+    "type": "image_gallery"
+   },
+   {
+    "access": "reader",
+    "group": "people",
+    "needs_protocol": true,
+    "params_schema": {
+     "additionalProperties": false,
+     "description": "Leer = Protokoll des Kontexts (beim Protokoll-Export).",
+     "properties": {
+      "protocol_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Protocol Id",
+       "x-source": "protocols"
+      }
+     },
+     "title": "ProtocolRefParams",
+     "type": "object"
+    },
+    "type": "attendance"
+   },
+   {
+    "access": "reader",
+    "group": "people",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "cycle_config_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Cycle Config Id",
+       "x-source": "cycles"
+      },
+      "cycle_offset": {
+       "default": 0,
+       "maximum": 0,
+       "minimum": -3,
+       "title": "Cycle Offset",
+       "type": "integer"
+      },
+      "date_from": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date From"
+      },
+      "date_to": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date To"
+      },
+      "relative": {
+       "default": "",
+       "enum": [
+        "",
+        "current_year",
+        "last_year",
+        "last_12_months",
+        "current_month",
+        "last_month"
+       ],
+       "title": "Relative",
+       "type": "string"
+      },
+      "show_rates": {
+       "default": true,
+       "title": "Show Rates",
+       "type": "boolean"
+      },
+      "template_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Template Id",
+       "x-source": "templates"
+      }
+     },
+     "title": "AttendanceMatrixParams",
+     "type": "object"
+    },
+    "type": "attendance_matrix"
+   },
+   {
+    "access": "writer",
+    "group": "people",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "active_only": {
+       "default": true,
+       "title": "Active Only",
+       "type": "boolean"
+      },
+      "columns": {
+       "items": {
+        "enum": [
+         "email",
+         "role",
+         "joined_at",
+         "left_at",
+         "status"
+        ],
+        "type": "string"
+       },
+       "title": "Columns",
+       "type": "array"
+      },
+      "template_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Template Id",
+       "x-source": "templates"
+      }
+     },
+     "title": "MemberListParams",
+     "type": "object"
+    },
+    "type": "member_list"
+   },
+   {
+    "access": "reader",
+    "group": "forms",
+    "needs_protocol": false,
+    "params_schema": {
+     "$defs": {
+      "SignatureFieldParam": {
+       "additionalProperties": false,
+       "properties": {
+        "label": {
+         "anyOf": [
+          {
+           "maxLength": 120,
+           "type": "string"
+          },
+          {
+           "type": "null"
+          }
+         ],
+         "default": null,
+         "title": "Label"
+        },
+        "name": {
+         "anyOf": [
+          {
+           "maxLength": 120,
+           "type": "string"
+          },
+          {
+           "type": "null"
+          }
+         ],
+         "default": null,
+         "title": "Name"
+        }
+       },
+       "title": "SignatureFieldParam",
+       "type": "object"
+      }
+     },
+     "additionalProperties": false,
+     "properties": {
+      "fields": {
+       "items": {
+        "$ref": "#/$defs/SignatureFieldParam"
+       },
+       "maxItems": 12,
+       "title": "Fields",
+       "type": "array"
+      },
+      "with_place_date": {
+       "default": true,
+       "title": "With Place Date",
+       "type": "boolean"
+      }
+     },
+     "title": "SignatureFieldsParams",
+     "type": "object"
+    },
+    "type": "signature_fields"
+   },
+   {
+    "access": "writer",
+    "group": "people",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "blank_rows": {
+       "default": 3,
+       "maximum": 50,
+       "minimum": 0,
+       "title": "Blank Rows",
+       "type": "integer"
+      },
+      "columns": {
+       "items": {
+        "type": "string"
+       },
+       "maxItems": 6,
+       "title": "Columns",
+       "type": "array"
+      },
+      "protocol_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Protocol Id",
+       "x-source": "protocols"
+      },
+      "source": {
+       "default": "active_members",
+       "enum": [
+        "active_members",
+        "template",
+        "protocol"
+       ],
+       "title": "Source",
+       "type": "string"
+      },
+      "template_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Template Id",
+       "x-source": "templates"
+      }
+     },
+     "title": "AttendanceSheetParams",
+     "type": "object"
+    },
+    "type": "attendance_sheet"
+   },
+   {
+    "access": "reader",
+    "group": "tasks",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "columns": {
+       "items": {
+        "enum": [
+         "status",
+         "assignee",
+         "due",
+         "protocol",
+         "tags"
+        ],
+        "type": "string"
+       },
+       "title": "Columns",
+       "type": "array"
+      },
+      "due_until": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Due Until"
+      },
+      "group_by": {
+       "default": "none",
+       "enum": [
+        "none",
+        "person",
+        "status",
+        "tag"
+       ],
+       "title": "Group By",
+       "type": "string"
+      },
+      "participant_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Participant Id",
+       "x-source": "participants"
+      },
+      "protocol_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Protocol Id",
+       "x-source": "protocols"
+      },
+      "status": {
+       "default": "open",
+       "enum": [
+        "all",
+        "open",
+        "done"
+       ],
+       "title": "Status",
+       "type": "string"
+      },
+      "tag": {
+       "anyOf": [
+        {
+         "maxLength": 120,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Tag"
+      }
+     },
+     "title": "TodoTableParams",
+     "type": "object"
+    },
+    "type": "todo_table"
+   },
+   {
+    "access": "reader",
+    "group": "events",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "columns": {
+       "items": {
+        "enum": [
+         "date",
+         "tag",
+         "title",
+         "description",
+         "participant_count",
+         "location",
+         "organizers",
+         "cancelled"
+        ],
+        "type": "string"
+       },
+       "title": "Columns",
+       "type": "array"
+      },
+      "date_from": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date From"
+      },
+      "date_to": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date To"
+      },
+      "event_filter": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Event Filter",
+       "x-widget": "hidden"
+      },
+      "gray_past": {
+       "default": true,
+       "title": "Gray Past",
+       "type": "boolean"
+      },
+      "include_cancelled": {
+       "default": true,
+       "title": "Include Cancelled",
+       "type": "boolean"
+      },
+      "show_tag_colors": {
+       "default": false,
+       "title": "Show Tag Colors",
+       "type": "boolean"
+      },
+      "tags": {
+       "items": {
+        "type": "string"
+       },
+       "maxItems": 30,
+       "title": "Tags",
+       "type": "array"
+      }
+     },
+     "title": "EventTableParams",
+     "type": "object"
+    },
+    "type": "event_table"
+   },
+   {
+    "access": "reader",
+    "group": "events",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "date_from": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date From"
+      },
+      "date_to": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date To"
+      },
+      "event_filter": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Event Filter",
+       "x-widget": "hidden"
+      },
+      "include_cancelled": {
+       "default": true,
+       "title": "Include Cancelled",
+       "type": "boolean"
+      },
+      "tags": {
+       "items": {
+        "type": "string"
+       },
+       "maxItems": 30,
+       "title": "Tags",
+       "type": "array"
+      }
+     },
+     "title": "EventCalendarParams",
+     "type": "object"
+    },
+    "type": "event_calendar_month"
+   },
+   {
+    "access": "reader",
+    "group": "events",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "date_from": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date From"
+      },
+      "date_to": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date To"
+      },
+      "event_filter": {
+       "anyOf": [
+        {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Event Filter",
+       "x-widget": "hidden"
+      },
+      "include_cancelled": {
+       "default": true,
+       "title": "Include Cancelled",
+       "type": "boolean"
+      },
+      "show_location": {
+       "default": true,
+       "title": "Show Location",
+       "type": "boolean"
+      },
+      "tags": {
+       "items": {
+        "type": "string"
+       },
+       "maxItems": 30,
+       "title": "Tags",
+       "type": "array"
+      }
+     },
+     "title": "EventAgendaParams",
+     "type": "object"
+    },
+    "type": "event_agenda"
+   },
+   {
+    "access": "reader",
+    "group": "lists",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "filter_column": {
+       "default": "",
+       "enum": [
+        "",
+        "column_one",
+        "column_two"
+       ],
+       "title": "Filter Column",
+       "type": "string"
+      },
+      "filter_event_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Filter Event Id",
+       "x-source": "events"
+      },
+      "filter_participant_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Filter Participant Id",
+       "x-source": "participants"
+      },
+      "filter_text": {
+       "anyOf": [
+        {
+         "maxLength": 200,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Filter Text"
+      },
+      "group_by": {
+       "default": "",
+       "enum": [
+        "",
+        "column_one",
+        "column_two"
+       ],
+       "title": "Group By",
+       "type": "string"
+      },
+      "highlight_empty": {
+       "default": false,
+       "title": "Highlight Empty",
+       "type": "boolean"
+      },
+      "list_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "List Id",
+       "x-source": "lists"
+      },
+      "sort_by": {
+       "default": "",
+       "enum": [
+        "",
+        "column_one",
+        "column_two"
+       ],
+       "title": "Sort By",
+       "type": "string"
+      },
+      "sort_direction": {
+       "default": "asc",
+       "enum": [
+        "asc",
+        "desc"
+       ],
+       "title": "Sort Direction",
+       "type": "string"
+      }
+     },
+     "title": "ListTableParams",
+     "type": "object"
+    },
+    "type": "list_table"
+   },
+   {
+    "access": "finance",
+    "group": "finance",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "account_ids": {
+       "items": {
+        "format": "uuid",
+        "type": "string"
+       },
+       "maxItems": 30,
+       "title": "Account Ids",
+       "type": "array",
+       "x-source": "finance_accounts"
+      },
+      "as_of": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "As Of"
+      }
+     },
+     "title": "FinanceBalanceParams",
+     "type": "object"
+    },
+    "type": "finance_balance"
+   },
+   {
+    "access": "finance",
+    "group": "finance",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "description": "Ohne Konto: eine Buchungsliste je Konto.",
+     "properties": {
+      "account_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Account Id",
+       "x-source": "finance_accounts"
+      },
+      "date_from": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date From"
+      },
+      "date_to": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date To"
+      },
+      "last_n": {
+       "anyOf": [
+        {
+         "maximum": 1000,
+         "minimum": 1,
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Last N"
+      },
+      "relative": {
+       "default": "",
+       "enum": [
+        "",
+        "current_year",
+        "last_year",
+        "last_12_months",
+        "current_month",
+        "last_month"
+       ],
+       "title": "Relative",
+       "type": "string"
+      },
+      "subtotals": {
+       "default": "month",
+       "enum": [
+        "none",
+        "month",
+        "year"
+       ],
+       "title": "Subtotals",
+       "type": "string"
+      }
+     },
+     "title": "FinanceTransactionsParams",
+     "type": "object"
+    },
+    "type": "finance_transactions"
+   },
+   {
+    "access": "finance",
+    "group": "finance",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "date_from": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date From"
+      },
+      "date_to": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date To"
+      },
+      "group_by_person": {
+       "default": false,
+       "title": "Group By Person",
+       "type": "boolean"
+      },
+      "protocol_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Protocol Id",
+       "x-source": "protocols"
+      },
+      "relative": {
+       "default": "",
+       "enum": [
+        "",
+        "current_year",
+        "last_year",
+        "last_12_months",
+        "current_month",
+        "last_month"
+       ],
+       "title": "Relative",
+       "type": "string"
+      },
+      "status": {
+       "default": "all",
+       "enum": [
+        "all",
+        "open"
+       ],
+       "title": "Status",
+       "type": "string"
+      }
+     },
+     "title": "FinesParams",
+     "type": "object"
+    },
+    "type": "fines"
+   },
+   {
+    "access": "reader",
+    "group": "statistics",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "cycle_config_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Cycle Config Id",
+       "x-source": "cycles"
+      },
+      "cycle_offset": {
+       "default": 0,
+       "maximum": 0,
+       "minimum": -3,
+       "title": "Cycle Offset",
+       "type": "integer"
+      },
+      "date_from": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date From"
+      },
+      "date_to": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date To"
+      },
+      "relative": {
+       "default": "",
+       "enum": [
+        "",
+        "current_year",
+        "last_year",
+        "last_12_months",
+        "current_month",
+        "last_month"
+       ],
+       "title": "Relative",
+       "type": "string"
+      },
+      "tiles": {
+       "items": {
+        "enum": [
+         "sessions",
+         "attendanceRate",
+         "openTodos",
+         "doneTodos",
+         "events",
+         "members",
+         "finesTotal"
+        ],
+        "type": "string"
+       },
+       "maxItems": 8,
+       "title": "Tiles",
+       "type": "array"
+      }
+     },
+     "title": "KpiTilesParams",
+     "type": "object"
+    },
+    "type": "kpi_tiles"
+   },
+   {
+    "access": "reader",
+    "group": "statistics",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "chart_type": {
+       "default": "attendance_over_time",
+       "enum": [
+        "attendance_over_time",
+        "attendance_by_participant",
+        "finance_by_month",
+        "fines_by_participant",
+        "fines_by_type",
+        "todos",
+        "groups_sessions",
+        "groups_avg"
+       ],
+       "title": "Chart Type",
+       "type": "string"
+      },
+      "cycle_config_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Cycle Config Id",
+       "x-source": "cycles"
+      },
+      "cycle_key": {
+       "anyOf": [
+        {
+         "maxLength": 200,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Cycle Key",
+       "x-widget": "hidden"
+      },
+      "cycle_offset": {
+       "default": 0,
+       "maximum": 0,
+       "minimum": -3,
+       "title": "Cycle Offset",
+       "type": "integer"
+      },
+      "date_from": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date From"
+      },
+      "date_to": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date To"
+      },
+      "relative": {
+       "default": "",
+       "enum": [
+        "",
+        "current_year",
+        "last_year",
+        "last_12_months",
+        "current_month",
+        "last_month"
+       ],
+       "title": "Relative",
+       "type": "string"
+      }
+     },
+     "title": "ChartParams",
+     "type": "object"
+    },
+    "type": "chart"
+   },
+   {
+    "access": "reader",
+    "group": "statistics",
+    "needs_protocol": false,
+    "params_schema": {
+     "additionalProperties": false,
+     "properties": {
+      "cycle_config_id": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Cycle Config Id",
+       "x-source": "cycles"
+      },
+      "cycle_offset": {
+       "default": 0,
+       "maximum": 0,
+       "minimum": -3,
+       "title": "Cycle Offset",
+       "type": "integer"
+      },
+      "date_from": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date From"
+      },
+      "date_to": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "default": null,
+       "title": "Date To"
+      },
+      "relative": {
+       "default": "",
+       "enum": [
+        "",
+        "current_year",
+        "last_year",
+        "last_12_months",
+        "current_month",
+        "last_month"
+       ],
+       "title": "Relative",
+       "type": "string"
+      },
+      "table": {
+       "default": "attendance_by_participant",
+       "enum": [
+        "attendance_by_participant",
+        "fines_by_participant",
+        "groups",
+        "finance_by_month"
+       ],
+       "title": "Table",
+       "type": "string"
+      }
+     },
+     "title": "StatTableParams",
+     "type": "object"
+    },
+    "type": "stat_table"
+   }
+  ],
+  "document_types": [
+   {
+    "category": "protocols",
+    "formats": [
+     "csv",
+     "xlsx"
+    ],
+    "key": "protocol",
+    "needs_protocol": true
+   },
+   {
+    "category": "protocols",
+    "formats": [],
+    "key": "invitation",
+    "needs_protocol": true
+   },
+   {
+    "category": "protocols",
+    "formats": [],
+    "key": "agenda",
+    "needs_protocol": true
+   },
+   {
+    "category": "people",
+    "formats": [
+     "csv",
+     "xlsx"
+    ],
+    "key": "attendance",
+    "needs_protocol": true
+   },
+   {
+    "category": "people",
+    "formats": [
+     "csv",
+     "xlsx"
+    ],
+    "key": "attendance_sheet",
+    "needs_protocol": false
+   },
+   {
+    "category": "people",
+    "formats": [
+     "csv",
+     "xlsx"
+    ],
+    "key": "members",
+    "needs_protocol": false
+   },
+   {
+    "category": "tasks",
+    "formats": [
+     "csv",
+     "xlsx",
+     "markdown"
+    ],
+    "key": "todos",
+    "needs_protocol": false
+   },
+   {
+    "category": "events",
+    "formats": [
+     "csv",
+     "xlsx",
+     "ics"
+    ],
+    "key": "events",
+    "needs_protocol": false
+   },
+   {
+    "category": "events",
+    "formats": [
+     "ics"
+    ],
+    "key": "calendar",
+    "needs_protocol": false
+   },
+   {
+    "category": "finance",
+    "formats": [
+     "csv",
+     "xlsx"
+    ],
+    "key": "finance",
+    "needs_protocol": false
+   },
+   {
+    "category": "finance",
+    "formats": [
+     "csv",
+     "xlsx"
+    ],
+    "key": "transactions",
+    "needs_protocol": false
+   },
+   {
+    "category": "finance",
+    "formats": [
+     "csv",
+     "xlsx"
+    ],
+    "key": "fines",
+    "needs_protocol": false
+   },
+   {
+    "category": "statistics",
+    "formats": [
+     "csv",
+     "xlsx"
+    ],
+    "key": "statistics",
+    "needs_protocol": false
+   },
+   {
+    "category": "lists",
+    "formats": [
+     "csv",
+     "xlsx"
+    ],
+    "key": "list",
+    "needs_protocol": false
+   },
+   {
+    "category": "forms",
+    "formats": [],
+    "key": "form",
+    "needs_protocol": false
+   },
+   {
+    "category": "general",
+    "formats": [
+     "csv",
+     "xlsx"
+    ],
+    "key": "custom",
+    "needs_protocol": false
+   }
+  ],
+  "fonts": [
+   "Inter",
+   "Liberation Sans",
+   "Liberation Serif",
+   "Noto Sans"
+  ],
+  "library": [
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "heading",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "content": {
+      "default": [
+       {
+        "t": "text",
+        "v": ""
+       }
+      ]
+     },
+     "level": 1,
+     "role": "heading",
+     "type": "text"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "text",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "content": {
+      "default": [
+       {
+        "t": "text",
+        "v": ""
+       }
+      ]
+     },
+     "role": "paragraph",
+     "type": "text"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "rich_text",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "markdown": "",
+     "type": "rich_text"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "image",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "source": {
+      "asset_id": null,
+      "kind": "asset"
+     },
+     "style": {
+      "width": "60mm"
+     },
+     "type": "image"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "image_gallery",
+    "master_only": false,
+    "mode": "advanced",
+    "needs_protocol": false,
+    "node": {
+     "component": "image_gallery",
+     "params": {
+      "columns": 2
+     },
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "table",
+    "master_only": false,
+    "mode": "advanced",
+    "needs_protocol": false,
+    "node": {
+     "columns": [
+      {
+       "header": {
+        "default": [
+         {
+          "t": "text",
+          "v": ""
+         }
+        ]
+       }
+      },
+      {
+       "header": {
+        "default": [
+         {
+          "t": "text",
+          "v": ""
+         }
+        ]
+       }
+      }
+     ],
+     "rows": [
+      [
+       "",
+       ""
+      ],
+      [
+       "",
+       ""
+      ]
+     ],
+     "type": "table"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "list",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "items": [
+      ""
+     ],
+     "type": "list"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "divider",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "type": "divider"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "spacer",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "size": 6,
+     "type": "spacer"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "qr_code",
+    "master_only": false,
+    "mode": "advanced",
+    "needs_protocol": false,
+    "node": {
+     "target": "url",
+     "type": "qr_code",
+     "url": "https://"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "page_break",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "type": "page_break"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "container",
+    "master_only": false,
+    "mode": "advanced",
+    "needs_protocol": false,
+    "node": {
+     "children": [],
+     "style": {
+      "background": "$brand.surface",
+      "border": {
+       "radius": 2,
+       "width": 0.5
+      },
+      "padding": {
+       "bottom": 4,
+       "left": 4,
+       "right": 4,
+       "top": 4
+      }
+     },
+     "type": "container"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "section",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "children": [],
+     "title": {
+      "default": [
+       {
+        "t": "text",
+        "v": ""
+       }
+      ]
+     },
+     "type": "section"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "columns_2",
+    "master_only": false,
+    "mode": "advanced",
+    "needs_protocol": false,
+    "node": {
+     "children": [
+      {
+       "children": [],
+       "style": {
+        "width": "1fr"
+       },
+       "type": "column"
+      },
+      {
+       "children": [],
+       "style": {
+        "width": "1fr"
+       },
+       "type": "column"
+      }
+     ],
+     "type": "row"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "columns_3",
+    "master_only": false,
+    "mode": "advanced",
+    "needs_protocol": false,
+    "node": {
+     "children": [
+      {
+       "children": [],
+       "style": {
+        "width": "1fr"
+       },
+       "type": "column"
+      },
+      {
+       "children": [],
+       "style": {
+        "width": "1fr"
+       },
+       "type": "column"
+      },
+      {
+       "children": [],
+       "style": {
+        "width": "1fr"
+       },
+       "type": "column"
+      }
+     ],
+     "type": "row"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "grid",
+    "master_only": false,
+    "mode": "expert",
+    "needs_protocol": false,
+    "node": {
+     "children": [],
+     "columns": 2,
+     "type": "grid"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "general",
+    "key": "absolute_layer",
+    "master_only": false,
+    "mode": "expert",
+    "needs_protocol": false,
+    "node": {
+     "anchor": "flow",
+     "children": [],
+     "height": 60,
+     "type": "absolute_layer"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "key": "document_title",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "content": {
+      "default": [
+       {
+        "path": "document.title",
+        "t": "bind"
+       }
+      ]
+     },
+     "role": "title",
+     "type": "text"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "key": "subtitle",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "content": {
+      "default": [
+       {
+        "path": "document.subtitle",
+        "t": "bind"
+       }
+      ]
+     },
+     "role": "subtitle",
+     "type": "text"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "key": "metadata",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "type": "metadata"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "key": "document_number",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "content": {
+      "default": [
+       {
+        "key": "titlePage.number",
+        "t": "key"
+       },
+       {
+        "t": "text",
+        "v": ": "
+       },
+       {
+        "path": "document.number",
+        "t": "bind"
+       }
+      ]
+     },
+     "role": "small",
+     "type": "text"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "key": "date",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "content": {
+      "default": [
+       {
+        "format": {
+         "date": "long"
+        },
+        "path": "document.date",
+        "t": "bind"
+       }
+      ]
+     },
+     "role": "paragraph",
+     "type": "text"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "key": "version",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "content": {
+      "default": [
+       {
+        "key": "titlePage.version",
+        "t": "key"
+       },
+       {
+        "t": "text",
+        "v": ": "
+       },
+       {
+        "path": "document.version",
+        "t": "bind"
+       }
+      ]
+     },
+     "role": "small",
+     "type": "text"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "key": "toc",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "type": "toc"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "key": "page_number",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "type": "page_number"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "key": "verify_note",
+    "master_only": false,
+    "mode": "advanced",
+    "needs_protocol": false,
+    "node": {
+     "show_qr": true,
+     "type": "verify_note"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "key": "logo",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "source": {
+      "kind": "binding",
+      "path": "brand.logo"
+     },
+     "style": {
+      "width": "40mm"
+     },
+     "type": "image"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "key": "organization",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "children": [
+      {
+       "content": {
+        "default": [
+         {
+          "path": "organization.name",
+          "t": "bind"
+         }
+        ]
+       },
+       "role": "label",
+       "type": "text"
+      },
+      {
+       "content": {
+        "default": [
+         {
+          "path": "organization.address",
+          "t": "bind"
+         }
+        ]
+       },
+       "role": "small",
+       "type": "text"
+      }
+     ],
+     "gap": 0.5,
+     "type": "stack"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "key": "header",
+    "master_only": true,
+    "mode": "advanced",
+    "needs_protocol": false,
+    "node": {
+     "children": [
+      {
+       "children": [
+        {
+         "content": {
+          "default": [
+           {
+            "path": "document.title",
+            "t": "bind"
+           }
+          ]
+         },
+         "role": "small",
+         "style": {
+          "width": "fill"
+         },
+         "type": "text"
+        },
+        {
+         "content": {
+          "default": [
+           {
+            "path": "document.date",
+            "t": "bind"
+           }
+          ]
+         },
+         "role": "small",
+         "type": "text"
+        }
+       ],
+       "type": "row"
+      },
+      {
+       "thickness": 0.4,
+       "type": "divider"
+      }
+     ],
+     "type": "header"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "key": "footer",
+    "master_only": true,
+    "mode": "advanced",
+    "needs_protocol": false,
+    "node": {
+     "children": [
+      {
+       "children": [
+        {
+         "content": {
+          "default": [
+           {
+            "path": "document.number",
+            "t": "bind"
+           }
+          ]
+         },
+         "role": "small",
+         "style": {
+          "width": "fill"
+         },
+         "type": "text"
+        },
+        {
+         "type": "page_number"
+        }
+       ],
+       "type": "row"
+      }
+     ],
+     "type": "footer"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "document",
+    "key": "watermark",
+    "master_only": true,
+    "mode": "advanced",
+    "needs_protocol": false,
+    "node": {
+     "type": "watermark"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_protocol",
+    "key": "session_info",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "session_date",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_protocol",
+    "key": "protocol_sections",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": true,
+    "node": {
+     "component": "protocol_element",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_protocol",
+    "key": "agenda_items",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": true,
+    "node": {
+     "component": "protocol_element",
+     "params": {
+      "titles_only": true
+     },
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_protocol",
+    "key": "decisions",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": true,
+    "node": {
+     "component": "protocol_element",
+     "params": {
+      "content": "text",
+      "include_images": false,
+      "include_session_todos": false
+     },
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_protocol",
+    "key": "session_notes",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": true,
+    "node": {
+     "component": "session_notes",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_protocol",
+    "key": "matrix",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": true,
+    "node": {
+     "component": "matrix",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_tasks",
+    "key": "tasks",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "todo_table",
+     "title_mode": "auto",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_people",
+    "key": "attendance",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": true,
+    "node": {
+     "component": "attendance",
+     "title_mode": "auto",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_people",
+    "key": "attendance_matrix",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "attendance_matrix",
+     "title_mode": "auto",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "writer",
+    "group": "data_people",
+    "key": "attendance_sheet",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "attendance_sheet",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "writer",
+    "group": "data_people",
+    "key": "members",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "member_list",
+     "title_mode": "auto",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "writer",
+    "group": "data_protocol",
+    "key": "entry_exit",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "entry_exit",
+     "title_mode": "auto",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_events",
+    "key": "events_agenda",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "event_agenda",
+     "params": {
+      "event_filter": {
+       "range": {
+        "mode": "future"
+       }
+      }
+     },
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_events",
+    "key": "events_table",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "event_table",
+     "params": {
+      "event_filter": {
+       "range": {
+        "mode": "future"
+       }
+      }
+     },
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_events",
+    "key": "calendar",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "event_calendar_month",
+     "params": {
+      "event_filter": {
+       "range": {
+        "end_days": 31,
+        "mode": "window",
+        "start_days": 0
+       }
+      }
+     },
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_lists",
+    "key": "list_table",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "list_table",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "finance",
+    "group": "data_finance",
+    "key": "finance_balance",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "finance_balance",
+     "title_mode": "auto",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "finance",
+    "group": "data_finance",
+    "key": "finance_transactions",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "finance_transactions",
+     "params": {
+      "relative": "current_year"
+     },
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "finance",
+    "group": "data_finance",
+    "key": "fines",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "fines",
+     "title_mode": "auto",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_statistics",
+    "key": "statistics_kpis",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "kpi_tiles",
+     "params": {
+      "relative": "current_year"
+     },
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_statistics",
+    "key": "statistics_table",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "stat_table",
+     "params": {
+      "relative": "current_year"
+     },
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_statistics",
+    "key": "chart",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "chart",
+     "keep_together": true,
+     "params": {
+      "relative": "current_year"
+     },
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_forms",
+    "key": "form",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "form",
+     "params": {
+      "rows": [
+       {
+        "label": "",
+        "value": ""
+       }
+      ]
+     },
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_forms",
+    "key": "signatures",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "signature_fields",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_protocol",
+    "key": "protocol_image",
+    "master_only": false,
+    "mode": "simple",
+    "needs_protocol": false,
+    "node": {
+     "component": "image",
+     "type": "data_block"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_protocol",
+    "key": "agenda_numbered",
+    "master_only": false,
+    "mode": "advanced",
+    "needs_protocol": true,
+    "node": {
+     "item": {
+      "default": [
+       {
+        "path": "item.title",
+        "t": "bind"
+       }
+      ]
+     },
+     "marker": "number",
+     "source": "protocol.elements",
+     "type": "list"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_tasks",
+    "key": "open_tasks_table",
+    "master_only": false,
+    "mode": "advanced",
+    "needs_protocol": false,
+    "node": {
+     "columns": [
+      {
+       "cell": {
+        "default": [
+         {
+          "path": "item.task",
+          "t": "bind"
+         }
+        ]
+       },
+       "header": {
+        "default": [
+         {
+          "key": "col.task",
+          "t": "key"
+         }
+        ]
+       },
+       "width": "fill"
+      },
+      {
+       "cell": {
+        "default": [
+         {
+          "path": "item.assignee",
+          "t": "bind"
+         }
+        ]
+       },
+       "header": {
+        "default": [
+         {
+          "key": "col.assignee",
+          "t": "key"
+         }
+        ]
+       }
+      },
+      {
+       "cell": {
+        "default": [
+         {
+          "path": "item.due",
+          "t": "bind"
+         }
+        ]
+       },
+       "header": {
+        "default": [
+         {
+          "key": "col.due",
+          "t": "key"
+         }
+        ]
+       }
+      }
+     ],
+     "source": "todos.open",
+     "type": "table"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_people",
+    "key": "participants_table",
+    "master_only": false,
+    "mode": "advanced",
+    "needs_protocol": true,
+    "node": {
+     "columns": [
+      {
+       "cell": {
+        "default": [
+         {
+          "path": "item.name",
+          "t": "bind"
+         }
+        ]
+       },
+       "header": {
+        "default": [
+         {
+          "key": "col.name",
+          "t": "key"
+         }
+        ]
+       },
+       "width": "fill"
+      },
+      {
+       "cell": {
+        "default": [
+         {
+          "path": "item.status",
+          "t": "bind"
+         }
+        ]
+       },
+       "header": {
+        "default": [
+         {
+          "key": "col.status",
+          "t": "key"
+         }
+        ]
+       }
+      }
+     ],
+     "source": "protocol.participants",
+     "type": "table"
+    }
+   },
+   {
+    "access": "reader",
+    "group": "data_events",
+    "key": "upcoming_events_table",
+    "master_only": false,
+    "mode": "advanced",
+    "needs_protocol": false,
+    "node": {
+     "columns": [
+      {
+       "cell": {
+        "default": [
+         {
+          "path": "item.date",
+          "t": "bind"
+         }
+        ]
+       },
+       "header": {
+        "default": [
+         {
+          "key": "col.date",
+          "t": "key"
+         }
+        ]
+       }
+      },
+      {
+       "cell": {
+        "default": [
+         {
+          "path": "item.title",
+          "t": "bind"
+         }
+        ]
+       },
+       "header": {
+        "default": [
+         {
+          "key": "col.title",
+          "t": "key"
+         }
+        ]
+       },
+       "width": "fill"
+      },
+      {
+       "cell": {
+        "default": [
+         {
+          "path": "item.location",
+          "t": "bind"
+         }
+        ]
+       },
+       "header": {
+        "default": [
+         {
+          "key": "col.location",
+          "t": "key"
+         }
+        ]
+       }
+      }
+     ],
+     "limit": 10,
+     "source": "events.upcoming",
+     "type": "table"
+    }
+   }
+  ],
+  "modes": [
+   "simple",
+   "advanced",
+   "expert"
+  ],
+  "node_types": {
+   "absolute_layer": {
+    "category": "layout",
+    "container": true,
+    "groups": [
+     "spacing",
+     "visibility",
+     "repeat",
+     "pagination",
+     "layer"
+    ],
+    "icon": "layers",
+    "master_only": false,
+    "mode": "expert"
+   },
+   "column": {
+    "category": "layout",
+    "container": true,
+    "groups": [
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography",
+     "visibility",
+     "repeat",
+     "pagination",
+     "stack"
+    ],
+    "icon": "column",
+    "master_only": false,
+    "mode": "advanced"
+   },
+   "component_ref": {
+    "category": "layout",
+    "container": false,
+    "groups": [
+     "component",
+     "spacing",
+     "visibility",
+     "pagination"
+    ],
+    "icon": "component",
+    "master_only": false,
+    "mode": "advanced"
+   },
+   "container": {
+    "category": "layout",
+    "container": true,
+    "groups": [
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography",
+     "visibility",
+     "repeat",
+     "pagination",
+     "container"
+    ],
+    "icon": "box",
+    "master_only": false,
+    "mode": "advanced"
+   },
+   "data_block": {
+    "category": "data",
+    "container": false,
+    "groups": [
+     "data",
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography",
+     "visibility",
+     "repeat",
+     "pagination"
+    ],
+    "icon": "data",
+    "master_only": false,
+    "mode": "simple"
+   },
+   "divider": {
+    "category": "content",
+    "container": false,
+    "groups": [
+     "divider",
+     "spacing",
+     "visibility"
+    ],
+    "icon": "divider",
+    "master_only": false,
+    "mode": "simple"
+   },
+   "footer": {
+    "category": "document",
+    "container": true,
+    "groups": [
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography"
+    ],
+    "icon": "footer",
+    "master_only": true,
+    "mode": "advanced"
+   },
+   "grid": {
+    "category": "layout",
+    "container": true,
+    "groups": [
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "visibility",
+     "repeat",
+     "pagination",
+     "grid"
+    ],
+    "icon": "grid",
+    "master_only": false,
+    "mode": "advanced"
+   },
+   "header": {
+    "category": "document",
+    "container": true,
+    "groups": [
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography"
+    ],
+    "icon": "header",
+    "master_only": true,
+    "mode": "advanced"
+   },
+   "image": {
+    "category": "content",
+    "container": false,
+    "groups": [
+     "image",
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "visibility",
+     "repeat",
+     "pagination"
+    ],
+    "icon": "image",
+    "master_only": false,
+    "mode": "simple"
+   },
+   "list": {
+    "category": "content",
+    "container": false,
+    "groups": [
+     "list",
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography",
+     "visibility",
+     "repeat",
+     "pagination"
+    ],
+    "icon": "list",
+    "master_only": false,
+    "mode": "simple"
+   },
+   "metadata": {
+    "category": "document",
+    "container": false,
+    "groups": [
+     "metadata",
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography",
+     "visibility"
+    ],
+    "icon": "metadata",
+    "master_only": false,
+    "mode": "simple"
+   },
+   "page_break": {
+    "category": "document",
+    "container": false,
+    "groups": [
+     "pagebreak",
+     "visibility"
+    ],
+    "icon": "pagebreak",
+    "master_only": false,
+    "mode": "simple"
+   },
+   "page_number": {
+    "category": "document",
+    "container": false,
+    "groups": [
+     "pagenumber",
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography",
+     "visibility"
+    ],
+    "icon": "pagenumber",
+    "master_only": false,
+    "mode": "simple"
+   },
+   "qr_code": {
+    "category": "content",
+    "container": false,
+    "groups": [
+     "qr",
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "visibility"
+    ],
+    "icon": "qr",
+    "master_only": false,
+    "mode": "advanced"
+   },
+   "rich_text": {
+    "category": "content",
+    "container": false,
+    "groups": [
+     "content",
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography",
+     "visibility",
+     "repeat",
+     "pagination"
+    ],
+    "icon": "richtext",
+    "master_only": false,
+    "mode": "simple"
+   },
+   "row": {
+    "category": "layout",
+    "container": true,
+    "groups": [
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "visibility",
+     "repeat",
+     "pagination",
+     "row"
+    ],
+    "icon": "columns",
+    "master_only": false,
+    "mode": "advanced"
+   },
+   "section": {
+    "category": "layout",
+    "container": true,
+    "groups": [
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography",
+     "visibility",
+     "repeat",
+     "pagination",
+     "section"
+    ],
+    "icon": "section",
+    "master_only": false,
+    "mode": "simple"
+   },
+   "spacer": {
+    "category": "content",
+    "container": false,
+    "groups": [
+     "spacer",
+     "visibility"
+    ],
+    "icon": "spacer",
+    "master_only": false,
+    "mode": "simple"
+   },
+   "stack": {
+    "category": "layout",
+    "container": true,
+    "groups": [
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography",
+     "visibility",
+     "repeat",
+     "pagination",
+     "stack"
+    ],
+    "icon": "stack",
+    "master_only": false,
+    "mode": "advanced"
+   },
+   "table": {
+    "category": "content",
+    "container": false,
+    "groups": [
+     "table",
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography",
+     "visibility",
+     "repeat",
+     "pagination"
+    ],
+    "icon": "table",
+    "master_only": false,
+    "mode": "advanced"
+   },
+   "text": {
+    "category": "content",
+    "container": false,
+    "groups": [
+     "content",
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography",
+     "visibility",
+     "repeat",
+     "pagination"
+    ],
+    "icon": "text",
+    "master_only": false,
+    "mode": "simple"
+   },
+   "toc": {
+    "category": "document",
+    "container": false,
+    "groups": [
+     "toc",
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography",
+     "visibility"
+    ],
+    "icon": "toc",
+    "master_only": false,
+    "mode": "simple"
+   },
+   "verify_note": {
+    "category": "document",
+    "container": false,
+    "groups": [
+     "verify",
+     "size",
+     "spacing",
+     "background",
+     "border",
+     "align",
+     "typography",
+     "visibility"
+    ],
+    "icon": "verify",
+    "master_only": false,
+    "mode": "advanced"
+   },
+   "watermark": {
+    "category": "document",
+    "container": false,
+    "groups": [
+     "watermark",
+     "visibility"
+    ],
+    "icon": "watermark",
+    "master_only": true,
+    "mode": "advanced"
+   }
+  }
+ }
+}

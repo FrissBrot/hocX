@@ -1,15 +1,15 @@
-"""Versionierung: gleicher Inhalt → gleiche Version, geänderter Inhalt erhöht sie, Stilwechsel
-allein nicht, Entwurf und Abschluss zählen getrennt."""
+"""Versionierung: gleicher Inhalt → gleiche Version, geänderter Inhalt erhöht sie, eine reine
+Designänderung (andere Vorlage, anderes Brand-Profil, andere Sprache) nicht; Entwurf und
+Abschluss zählen getrennt. Der Design-Hash ändert sich dagegen bei jeder Gestaltungsänderung."""
 from __future__ import annotations
 
 import asyncio
 from datetime import date
 
-from app.documents import service, style_service
-from app.documents.catalog import BlockSpec
+from app.documents import brand_service, service
+from app.documents.brand import preset_tokens
 from app.documents.service import DocumentRequest
-from app.documents.style_tokens import ExportOptions, default_tokens
-from app.models import DocumentExport, DocumentRegistry, ProtocolText
+from app.models import DocumentExport, DocumentTemplate, ProtocolText
 from tests.factories import make_protocol, make_protocol_element, make_protocol_element_block, make_protocol_text, make_template, make_tenant
 
 
@@ -42,9 +42,17 @@ def test_version_rules(db):
     changed = _render(db, tenant, protocol)
     assert changed.version_label == "v0.1"
 
-    other_style = style_service.create_style(db, tenant.id, name="Kompakt", style_key="compact", tokens=default_tokens("compact"))
-    restyled = _render(db, tenant, protocol, style_id=other_style.public_id, language="fr")
-    assert restyled.version_label == "v0.1" and restyled.style_key == "compact" and restyled.content_hash == changed.content_hash
+    brand = brand_service.create_brand(db, tenant.id, name="Kompakt", tokens=preset_tokens("compact"))
+    formal = db.query(DocumentTemplate).filter(DocumentTemplate.system_key == "protocol_formal").one()
+    restyled = _render(db, tenant, protocol, brand_id=brand.public_id, template_id=formal.public_id, language="fr")
+    assert restyled.version_label == "v0.1" and restyled.content_hash == changed.content_hash
+    assert restyled.design_hash != changed.design_hash
+    assert restyled.template_id == formal.id and restyled.brand_revision_id == brand_service.current_revision(db, brand).id
+
+    # Eigene Vorlage mit nur einem Teil des Inhalts: Version und Inhalts-Hash bleiben
+    short = db.query(DocumentTemplate).filter(DocumentTemplate.system_key == "protocol_short").one()
+    partial = _render(db, tenant, protocol, template_id=short.public_id)
+    assert partial.version_label == "v0.1" and partial.content_hash == changed.content_hash
 
     protocol.status = "abgeschlossen"
     db.flush()
@@ -55,13 +63,15 @@ def test_version_rules(db):
     final_changed = _render(db, tenant, protocol)
     assert final_changed.version_label == "v1.1"
     assert protocol.version_minor == 1 and protocol.version_final_minor == 1
-    assert db.query(DocumentExport).filter(DocumentExport.protocol_id == protocol.id).count() == 6
+    assert db.query(DocumentExport).filter(DocumentExport.protocol_id == protocol.id).count() == 7
 
 
 def test_preview_does_not_persist(db):
     tenant, protocol, _ = _setup(db)
-    pages = asyncio.run(service.preview(db, None, tenant.id, DocumentRequest(protocol_id=protocol.public_id), max_pages=1))
-    assert len(pages) == 1 and pages[0].startswith(b"\x89PNG")
+    result = asyncio.run(service.preview(db, None, tenant.id, DocumentRequest(protocol_id=protocol.public_id), max_pages=1))
+    assert result.page_count == 1 and result.pages[0].startswith(b"\x89PNG")
+    assert db.query(DocumentExport).filter(DocumentExport.protocol_id == protocol.id).count() == 0
+    assert protocol.version_minor == 0
 
 
 def test_first_final_export_is_v1_0_even_after_content_change(db):
@@ -74,47 +84,6 @@ def test_first_final_export_is_v1_0_even_after_content_change(db):
     final = _render(db, tenant, protocol)
     assert final.version_label == "v1.0"
     assert protocol.version_final_minor == 0
-
-
-def test_explicit_default_blocks_count_as_canonical(db):
-    """Der Export-Dialog schickt die Standardblöcke ausdrücklich mit (auch mit Vorgabewerten
-    und dem Kontext-Protokoll) – das bleibt ein versionierter Protokoll-Export."""
-    tenant, protocol, text = _setup(db)
-    first = _render(db, tenant, protocol, blocks=[BlockSpec(type="protocol_element")])
-    db.get(ProtocolText, text.id).content = "Geändert"
-    db.flush()
-    explicit = BlockSpec(type="protocol_element", params={"protocol_id": str(protocol.public_id), "include_session_todos": True, "titles_only": False})
-    changed = _render(db, tenant, protocol, blocks=[explicit])
-    assert first.document_type == changed.document_type == "protocol"
-    assert changed.version_label == "v0.1"
-
-
-def test_custom_blocks_or_title_do_not_touch_versioning(db):
-    """TYPST-001: eigene Blöcke oder ein eigener Titel ergeben einen Protokollauszug ohne
-    Version, ohne Quellverweis im Register und ohne Einfluss auf die Versionszähler."""
-    tenant, protocol, _ = _setup(db)
-    protocol.status = "abgeschlossen"
-    db.flush()
-    real = _render(db, tenant, protocol)
-    assert real.version_label == "v1.0"
-
-    forged = _render(db, tenant, protocol, blocks=[BlockSpec(type="richtext", params={"markdown": "Beschluss: alles anders"})])
-    retitled = _render(db, tenant, protocol, options=ExportOptions(title="Eigener Titel"))
-    for export in (forged, retitled):
-        assert export.document_type == service.PROTOCOL_EXCERPT_TYPE
-        assert export.version_label is None and export.version_major is None
-        entry = db.query(DocumentRegistry).filter(DocumentRegistry.public_id == export.public_id).one()
-        assert entry.document_type == service.PROTOCOL_EXCERPT_TYPE
-        assert entry.source_public_id is None and entry.status_code is None and entry.version_label is None
-    assert (protocol.version_major, protocol.version_minor, protocol.version_final_minor) == (1, 0, 0)
-
-    # Der nächste echte Export vergleicht weiter mit der echten Fassung: keine neue Version.
-    again = _render(db, tenant, protocol)
-    assert again.version_label == "v1.0" and again.content_hash == real.content_hash
-    newer = db.query(DocumentRegistry).filter(
-        DocumentRegistry.source_public_id == protocol.public_id, DocumentRegistry.version_minor > 0
-    ).count()
-    assert newer == 0
 
 
 def test_prepare_does_not_block_event_loop(db, monkeypatch):

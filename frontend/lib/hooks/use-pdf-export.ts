@@ -20,7 +20,7 @@ function parseVersion(label: string | null | undefined): { major: number | null;
 
 /** Erzeugt das Protokoll-PDF (Dokument-Engine, im Dokumentenregister erfasst) aus dem aktuellen Stand und öffnet es. */
 export function usePdfExport() {
-  const t = useTranslations("documents");
+  const t = useTranslations("documentStudio");
   const showToast = useToast();
   const [busyByProtocol, setBusyByProtocol] = useState<Record<string, boolean>>({});
   const pendingProtocols = useRef(new Set<string>());
@@ -47,7 +47,7 @@ export function usePdfExport() {
         signal: AbortSignal.timeout(DOCUMENT_TIMEOUT_MS),
       });
       if (!result?.content_url) {
-        throw new Error(t("dialog.exportFailed"));
+        throw new Error(t("export.failed"));
       }
       const version = parseVersion(result.version_label);
       onExported?.({ content_url: result.content_url, version_label: result.version_label, version_major: version.major, version_minor: version.minor });
@@ -55,13 +55,13 @@ export function usePdfExport() {
       if (pdfWindow && !pdfWindow.closed) {
         pdfWindow.location.replace(pdfUrl);
       } else {
-        showToast(t("dialog.pdfReady"), "success", {
+        showToast(t("export.pdfReady"), "success", {
           onMessageClick: () => window.open(pdfUrl, "_blank", "noopener,noreferrer"),
         });
       }
     } catch (error) {
       pdfWindow?.close();
-      showToast(error instanceof Error && error.message ? error.message : t("dialog.exportFailed"), "error");
+      showToast(error instanceof Error && error.message ? error.message : t("export.failed"), "error");
     } finally {
       pendingProtocols.current.delete(protocolId);
       setBusyByProtocol((current) => ({ ...current, [protocolId]: false }));

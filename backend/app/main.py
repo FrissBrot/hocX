@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, admin_identity_verification, auth, calendar_feeds, collaboration_ws, cycle_configs, document_verification, documents, events, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
+from app.api.routes import admin, admin_auth, admin_document_templates, admin_identity_verification, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
@@ -165,16 +165,21 @@ def ensure_runtime_columns() -> None:
     pass
 
 
-def ensure_default_document_styles() -> None:
-    """Jeder Mandant hat mindestens einen Hausstil (Dokument-Engine)."""
-    from app.documents import style_service
+def ensure_document_studio() -> None:
+    """Systemvorlagen synchronisieren und jedem Mandanten ein Standard-Brand-Profil geben
+    (Document Studio). Advisory-Lock: mehrere Worker starten gleichzeitig."""
+    from app.documents import brand_service
+    from app.documents.system_templates import sync_system_templates
 
     with engine.begin() as conn:
         conn.execute(text("SELECT pg_advisory_xact_lock(202600002)"))
         with SessionLocal() as db:
+            result = sync_system_templates(db)
             for tenant in db.scalars(select(Tenant).order_by(Tenant.id.asc())):
-                style_service.ensure_default_style(db, tenant.id)
+                brand_service.ensure_default_brand(db, tenant.id)
             db.commit()
+            if result["created"] or result["updated"]:
+                logging.getLogger(__name__).info("Systemvorlagen synchronisiert: %s", result)
 
 
 def ensure_traefik_dynamic_config() -> None:
@@ -387,7 +392,7 @@ async def lifespan(_: FastAPI):
         ensure_runtime_columns()
         ensure_no_production_demo_data()
         ensure_startup_seed_data()
-        ensure_default_document_styles()
+        ensure_document_studio()
         ensure_traefik_dynamic_config()
         health_check_task = asyncio.create_task(domain_health_check_loop())
         rescan_task = asyncio.create_task(abgabebox_rescan_loop())
@@ -513,9 +518,11 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(admin_auth.router, prefix="/api/admin/auth", tags=["admin-auth"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(admin_identity_verification.router, prefix="/api/admin", tags=["admin"])
+app.include_router(admin_document_templates.router, prefix="/api/admin", tags=["admin"])
 app.include_router(tenants.router, prefix="/api", tags=["tenants"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(documents.router, prefix="/api", tags=["documents"])
+app.include_router(document_studio.router, prefix="/api", tags=["document-studio"])
 app.include_router(document_verification.router, prefix="/api", tags=["documents"])
 app.include_router(templates.router, prefix="/api", tags=["templates"])
 app.include_router(cycle_configs.router, prefix="/api", tags=["cycle-configs"])

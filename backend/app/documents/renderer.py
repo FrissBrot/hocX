@@ -2,14 +2,14 @@
 
 Ablauf pro Compile (in einem Worker-Prozess, siehe ``_compile_job``):
 
-1. Frisches Temp-Verzeichnis. Compile-Root ist ``<tmp>/root`` und enthält nur die Stil-Dateien
-   (``styles/``), ``document.json`` und die Bilder unter ``assets/``. Typst kann ausserhalb
-   des Roots nichts lesen.
+1. Frisches Temp-Verzeichnis. Compile-Root ist ``<tmp>/root`` und enthält nur die Typst-Module
+   (``typst/``), ``document.json`` (Ausgabe des Layout-Compilers) und die Bilder unter
+   ``assets/``. Typst kann ausserhalb des Roots nichts lesen.
 2. Schriften: die mitgelieferten aus ``fonts/`` (pro Worker einmal geladen) plus hochgeladene
    Mandantenschriften in ``<tmp>/fonts`` (ausserhalb des Roots). Keine Systemschriften, damit
    Dev, CI und Produktion identisch rendern.
 3. Pakete: ``package_path`` zeigt auf die vendorten Pakete im Repo, der Download-Cache auf ein
-   leeres Temp-Verzeichnis. Die Stile importieren nur vendorte Pakete
+   leeres Temp-Verzeichnis. Die Module importieren nur vendorte Pakete
    (``scripts/check-document-catalog.py`` prüft das), Benutzerinhalt wird nie zu Code - der
    Compile greift also nie aufs Netz zu.
 
@@ -39,18 +39,17 @@ from pathlib import Path
 from typing import Literal
 
 from app.core.config import settings
-from app.documents.model import Document, ProtocolElementBlock
 
 logger = logging.getLogger(__name__)
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
-STYLES_DIR = PACKAGE_ROOT / "styles"
+TYPST_DIR = PACKAGE_ROOT / "typst"
 FONTS_DIR = PACKAGE_ROOT / "fonts"
 PACKAGES_DIR = PACKAGE_ROOT / "typst_packages"
 
 PDF_STANDARD = "a-2b"
 PREVIEW_PPI = 96
-# Höchstens so viele Compiles, um einen fehlerhaften Block zu finden.
+# Höchstens so viele Compiles, um einen fehlerhaften Knoten zu finden.
 _MAX_DIAGNOSE_COMPILES = 80
 # ... und höchstens so viele Compile-Timeouts an Gesamtzeit.
 _DIAGNOSE_TIME_FACTOR = 2
@@ -75,6 +74,8 @@ class CompileResult:
     error: str | None = None
     hints: list[str] = field(default_factory=list)
     trace: list[str] = field(default_factory=list)
+    # Gesamtzahl der Seiten, wenn nur ein Teil gerastert wurde
+    page_count: int | None = None
 
 
 @dataclass
@@ -82,17 +83,20 @@ class RenderOutput:
     pdf: bytes | None = None
     pages: list[bytes] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    # Seiten insgesamt (PNG-Vorschau liefert höchstens max_pages davon)
+    page_count: int = 0
 
 
 class DocumentRenderError(Exception):
     """Kuratierter Renderfehler. ``key`` ist ein Text-Schlüssel aus documentPdf (error.*),
-    ``block_label`` der Name des verursachenden Blocks, ``detail`` die Typst-Diagnose fürs
-    Admin-Log (nie für Benutzer)."""
+    ``block_label`` der Name des verursachenden Knotens, ``node_id`` seine ID (Fehlerhinweis am
+    Element im Designer), ``detail`` die Typst-Diagnose fürs Admin-Log (nie für Benutzer)."""
 
-    def __init__(self, key: str, *, block_label: str | None = None, detail: str | None = None) -> None:
+    def __init__(self, key: str, *, block_label: str | None = None, node_id: str | None = None, detail: str | None = None) -> None:
         super().__init__(detail or key)
         self.key = key
         self.block_label = block_label
+        self.node_id = node_id
         self.detail = detail
 
 
@@ -179,9 +183,9 @@ def _safe_name(name: str) -> str:
     return candidate.name
 
 
-def _rasterize(pdf: bytes, *, ppi: float, max_pages: int) -> list[bytes]:
-    """Nur die ersten ``max_pages`` Seiten des PDFs als PNG (TYPST-005): typst-py rastert sonst
-    immer alle Seiten, ein langes Dokument kostete pro Vorschau Hunderte Seitenbilder."""
+def _rasterize(pdf: bytes, *, ppi: float, max_pages: int) -> tuple[list[bytes], int]:
+    """Nur die ersten ``max_pages`` Seiten als PNG und die Gesamtzahl der Seiten (STUDIO-015):
+    typst-py rastert sonst immer alle Seiten - ein Thumbnail kostete den ganzen Satz."""
     import pypdfium2
 
     document = pypdfium2.PdfDocument(pdf)
@@ -196,7 +200,7 @@ def _rasterize(pdf: bytes, *, ppi: float, max_pages: int) -> list[bytes]:
             buffer = io.BytesIO()
             image.save(buffer, format="PNG")
             pages.append(buffer.getvalue())
-        return pages
+        return pages, len(document)
     finally:
         document.close()
 
@@ -218,7 +222,7 @@ def _compile_job(
             custom_dir.mkdir()
             for name, content in fonts.items():
                 (custom_dir / _safe_name(name)).write_bytes(content)
-        shutil.copytree(STYLES_DIR, root / "styles", ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(TYPST_DIR, root / "typst", ignore=shutil.ignore_patterns("__pycache__"))
         custom_fonts = tuple(str(tmp_path / "fonts" / _safe_name(name)) for name in fonts)
         coverage_key = tuple(sorted(hashlib.sha256(content).hexdigest() for content in fonts.values()))
         document_json = sanitize_document_json(document_json, font_coverage(custom_fonts, coverage_key))
@@ -243,7 +247,7 @@ def _compile_job(
         cache_dir = tmp_path / "package-cache"
         cache_dir.mkdir()
         compiler = typst.Compiler(
-            str(root / "styles" / "main.typ"),
+            str(root / "typst" / "main.typ"),
             root=str(root),
             font_paths=font_source,
             ignore_system_fonts=True,
@@ -253,14 +257,16 @@ def _compile_job(
         # Vorschau mit Seitenlimit: einmal als PDF kompilieren und nur die nötigen Seiten rastern.
         rasterize_pages = fmt == "png" and max_pages is not None
         try:
+            rasterize_pages = fmt == "png" and max_pages is not None
             output, warnings = compiler.compile_with_warnings(
                 format="pdf" if rasterize_pages else fmt,
                 ppi=None if rasterize_pages else ppi,
                 pdf_standards=[PDF_STANDARD] if fmt == "pdf" else [],
                 timestamp=datetime.now(UTC).replace(microsecond=0),
             )
+            page_count = None
             if rasterize_pages:
-                output = _rasterize(output, ppi=ppi or PREVIEW_PPI, max_pages=max_pages)
+                output, page_count = _rasterize(output, ppi=ppi or PREVIEW_PPI, max_pages=max_pages)
         except typst.TypstError as exc:
             return CompileResult(
                 ok=False,
@@ -270,7 +276,7 @@ def _compile_job(
             )
         except Exception as exc:  # noqa: BLE001 - Diagnose wird als Daten zurückgegeben
             return CompileResult(ok=False, error=f"{type(exc).__name__}: {exc}")
-        return CompileResult(ok=True, output=output, warnings=[getattr(w, "message", str(w)) for w in warnings])
+        return CompileResult(ok=True, output=output, warnings=[getattr(w, "message", str(w)) for w in warnings], page_count=page_count)
 
 
 # ── Pool ─────────────────────────────────────────────────────────────────────
@@ -367,54 +373,55 @@ class DocumentRenderer:
             if not release_on_done:
                 semaphore.release()
 
-    async def render(self, document: Document, assets: RenderAssets | None = None, *, fmt: OutputFormat = "pdf", max_pages: int | None = None, ppi: float | None = None) -> RenderOutput:
+    async def render(self, document: dict, assets: RenderAssets | None = None, *, fmt: OutputFormat = "pdf", max_pages: int | None = None, ppi: float | None = None) -> RenderOutput:
         assets = assets or RenderAssets()
         result = await self._run(_dump(document), assets, fmt, ppi if fmt == "png" else None, max_pages if fmt == "png" else None)
         if not result.ok:
-            label = await self._locate_failing_block(document, assets)
+            located = await self._locate_failing_node(document, assets)
             detail = _format_diagnostic(result)
-            if label:
-                raise DocumentRenderError("error.block", block_label=label, detail=detail)
+            if located is not None:
+                raise DocumentRenderError("error.block", block_label=located[1], node_id=located[0], detail=detail)
             raise DocumentRenderError("error.render", detail=detail)
         if fmt == "pdf":
             return RenderOutput(pdf=result.output if isinstance(result.output, bytes) else None, warnings=result.warnings)
         pages = result.output if isinstance(result.output, list) else [result.output] if result.output else []
+        total = result.page_count if result.page_count is not None else len(pages)
         if max_pages is not None:
             pages = pages[:max_pages]
-        return RenderOutput(pages=list(pages), warnings=result.warnings)
+        return RenderOutput(pages=list(pages), warnings=result.warnings, page_count=total)
 
-    async def render_pdf(self, document: Document, assets: RenderAssets | None = None) -> RenderOutput:
+    async def render_pdf(self, document: dict, assets: RenderAssets | None = None) -> RenderOutput:
         return await self.render(document, assets, fmt="pdf")
 
-    async def render_preview(self, document: Document, assets: RenderAssets | None = None, *, max_pages: int | None = None, ppi: float = PREVIEW_PPI) -> RenderOutput:
+    async def render_preview(self, document: dict, assets: RenderAssets | None = None, *, max_pages: int | None = None, ppi: float = PREVIEW_PPI) -> RenderOutput:
         return await self.render(document, assets, fmt="png", max_pages=max_pages or settings.document_preview_max_pages, ppi=ppi)
 
-    async def _locate_failing_block(self, document: Document, assets: RenderAssets) -> str | None:
-        """Kompiliert die Blöcke einzeln, um den Verursacher eines Fehlers zu finden."""
+    async def _locate_failing_node(self, document: dict, assets: RenderAssets) -> tuple[str, str] | None:
+        """Kompiliert die Knoten der obersten Ebene (und bei Fachkomponenten deren Blöcke)
+        einzeln, um den Verursacher eines Fehlers zu finden: (Knoten-ID, Bezeichnung)."""
         budget = _MAX_DIAGNOSE_COMPILES
         # Gesamtzeit der Diagnose begrenzen (sonst bis 80 × Timeout für einen Request).
         loop = asyncio.get_running_loop()
         deadline = loop.time() + _DIAGNOSE_TIME_FACTOR * self.timeout_seconds
-        strings = document.strings
+        strings = document.get("strings", {})
 
-        def label(block) -> str:
-            return (block.title or "").strip() or strings.get(f"blockType.{block.type}", block.type)
+        def label(node: dict) -> str:
+            if node.get("t") == "data":
+                blocks = node.get("blocks") or [{}]
+                first = blocks[0]
+                return (first.get("title") or "").strip() or strings.get(f"blockType.{first.get('type')}", str(first.get("type")))
+            return strings.get(f"nodeType.{node.get('t')}", str(node.get("t")))
 
         class _Abort(Exception):
             """Diagnose abbrechen: Probe-Compile selbst gescheitert (Timeout, Worker weg,
             keine freien Plätze) oder Zeitbudget aufgebraucht."""
 
-        async def fails(blocks) -> bool:
+        async def fails(nodes: list[dict]) -> bool:
             nonlocal budget
             budget -= 1
             if loop.time() >= deadline:
                 raise _Abort
-            probe = document.model_copy(
-                update={
-                    "blocks": blocks,
-                    "options": document.options.model_copy(update={"title_page": "none", "toc": "off"}),
-                }
-            )
+            probe = {**document, "title_page": None, "segments": [{"master": None, "nodes": nodes}], "masters": {key: {"header": None, "footer": None, "background": []} for key in document.get("masters", {})}}
             try:
                 result = await self._run(_dump(probe), assets, "pdf", None)
             except DocumentRenderError as exc:
@@ -423,27 +430,32 @@ class DocumentRenderer:
                 raise _Abort from exc
             return not result.ok
 
+        candidates: list[dict] = []
+        for segment in document.get("segments", []):
+            candidates.extend(segment.get("nodes", []))
+        if document.get("title_page"):
+            candidates.extend(document["title_page"].get("children", []))
         try:
-            for block in document.blocks:
+            for node in candidates:
                 if budget <= 0:
                     return None
-                if not await fails([block]):
+                if not await fails([node]):
                     continue
-                if isinstance(block, ProtocolElementBlock):
-                    for child in block.children:
+                if node.get("t") == "data":
+                    for block in node.get("blocks", []):
                         if budget <= 0:
                             break
-                        if await fails([block.model_copy(update={"children": [child]})]):
-                            return f"{label(block)} › {label(child)}"
-                return label(block)
+                        if await fails([{**node, "blocks": [block]}]):
+                            return node.get("id", ""), (block.get("title") or "").strip() or label(node)
+                return node.get("id", ""), label(node)
         except _Abort:
             logger.info("Fehlersuche im Dokument abgebrochen (Zeitbudget oder Probe-Compile gescheitert)")
             return None
         return None
 
 
-def _dump(document: Document) -> str:
-    return json.dumps(document.model_dump(mode="json"), ensure_ascii=False)
+def _dump(document: dict) -> str:
+    return json.dumps(document, ensure_ascii=False)
 
 
 def _format_diagnostic(result: CompileResult) -> str:

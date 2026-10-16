@@ -14,17 +14,15 @@ from tests.factories import (
 # --- S5: Exporte akzeptierten Layout-Vorlagen fremder Mandanten -------------------------
 #
 # Früher konnte template_id (Dokumentvorlage) eines fremden Mandanten das Layout liefern.
-# Heute entspricht dem style_id (Hausstil): eine fremde ID ergibt «nicht gefunden», weder
-# Vorschau noch Export verwenden fremde Hausstile oder deren Logos/Schriften.
+# Im Document Studio gilt das für Vorlagen und Brand-Profile: eine fremde ID ergibt «nicht
+# gefunden», weder Vorschau noch Export verwenden fremde Vorlagen, Brand-Profile oder deren
+# Logos/Schriften.
 
 
-def _foreign_style(db, tenant_id: int):
-    from app.models import DocumentStyle
+def _foreign_brand(db, tenant_id: int):
+    from app.documents import brand_service
 
-    style = DocumentStyle(tenant_id=tenant_id, name="Fremd", style_key="classic", tokens_json={})
-    db.add(style)
-    db.flush()
-    return style
+    return brand_service.create_brand(db, tenant_id, name="Fremd")
 
 
 def test_document_preview_rejects_style_from_foreign_tenant(db):
@@ -36,26 +34,30 @@ def test_document_preview_rejects_style_from_foreign_tenant(db):
     tenant_a = make_tenant(db, "Tenant A (S5)")
     tenant_b = make_tenant(db, "Tenant B (S5)")
     protocol_a = make_protocol(db, tenant_a.id, make_template(db, tenant_a.id).id)
-    style_b = _foreign_style(db, tenant_b.id)
+    brand_b = _foreign_brand(db, tenant_b.id)
 
     with pytest.raises(DocumentNotFoundError):
-        asyncio.run(preview(db, None, tenant_a.id, DocumentRequest(protocol_id=protocol_a.public_id, style_id=style_b.public_id)))
+        asyncio.run(preview(db, None, tenant_a.id, DocumentRequest(protocol_id=protocol_a.public_id, brand_id=brand_b.public_id)))
 
 
 def test_style_override_cannot_load_foreign_assets(db):
-    """Ein ungespeicherter Stil (Live-Vorschau) mit Asset-IDs eines fremden Mandanten zeigt
-    die fremden Bilder nicht: Assets werden immer mandantengebunden aufgelöst."""
-    from app.documents import style_service
-    from app.models import DocumentStyle, DocumentStyleAsset
+    """Ungespeicherte Brand-Tokens (Live-Vorschau im Brand Studio) mit Asset-IDs eines fremden
+    Mandanten zeigen die fremden Bilder/Schriften nicht: Assets werden immer mandantengebunden
+    aufgelöst."""
+    from app.documents.brand import BrandTokens
+    from app.documents.brand_service import resolve_brand
+    from app.models import DocumentAsset
 
     tenant_a = make_tenant(db, "Tenant A (S5b)")
     tenant_b = make_tenant(db, "Tenant B (S5b)")
-    asset_b = DocumentStyleAsset(tenant_id=tenant_b.id, kind="image", name="Fremdes Logo", storage_path="document_style_assets/x.png")
-    db.add(asset_b)
+    asset_b = DocumentAsset(tenant_id=tenant_b.id, kind="image", name="Fremdes Logo", storage_path="document_assets/x.png")
+    font_b = DocumentAsset(tenant_id=tenant_b.id, kind="font", category="font", name="Fremde Schrift", storage_path="document_assets/x.ttf", font_family="Geheim")
+    db.add_all([asset_b, font_b])
     db.flush()
-    transient = DocumentStyle(tenant_id=tenant_a.id, name="preview", style_key="modern", tokens_json={"logo_asset_id": str(asset_b.public_id), "header": "logo"})
-    resolved, _tokens, _fonts, files = style_service.resolve(db, tenant_a.id, transient)
-    assert resolved.logo is None and files == {}
+    tokens = BrandTokens.model_validate({"assets": {"logo": str(asset_b.public_id)}, "typography": {"body": {"builtin": None, "asset_ids": [str(font_b.public_id)]}}})
+    resolved = resolve_brand(db, tenant_a.id, None, tokens=tokens)
+    assert resolved.env["logo"] is None and resolved.files == {} and resolved.fonts == {}
+    assert "Geheim" not in resolved.families
 
 
 # --- D2: renumbering cascade ignored cross-template n_cycle_all siblings ------------------

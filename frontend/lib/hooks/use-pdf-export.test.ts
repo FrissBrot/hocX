@@ -93,6 +93,6 @@ describe("usePdfExport", () => {
     await act(async () => { await result.current.openOrGeneratePdf(protocol); });
     expect(pdfWindow.close).toHaveBeenCalledOnce();
     expect(pdfWindow.location.replace).not.toHaveBeenCalled();
-    expect(showToast).toHaveBeenCalledWith("Das Dokument konnte nicht erstellt werden.", "error");
+    expect(showToast).toHaveBeenCalledWith("Der Export ist fehlgeschlagen.", "error");
   });
 });

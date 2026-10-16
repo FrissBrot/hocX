@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.core.error_log import record_system_error
 from app.models import (
     AppUser,
-    DocumentStyleAsset,
+    DocumentAsset,
     Feature,
     Participant,
     Plan,
@@ -587,10 +587,10 @@ class AdminTenantService:
         db.add(tenant)
         db.commit()
         db.refresh(tenant)
-        from app.documents import style_service
+        from app.documents import brand_service
 
-        # Jeder Mandant startet mit einem Standard-Hausstil (Dokument-Engine).
-        style_service.ensure_default_style(db, tenant.id)
+        # Jeder Mandant startet mit einem Standard-Brand-Profil (Document Studio).
+        brand_service.ensure_default_brand(db, tenant.id)
         db.commit()
         # Every new tenant starts with a default Abgabe link (preselected for new Abgaben).
         submission_link_service.create_default_link(db, tenant.id)
@@ -691,9 +691,9 @@ class AdminTenantService:
         # "<id>.jpg" löschen - ein übernommener Fremdname gehört einer anderen Datei.
         thumbnail_paths = [row.thumbnail_path for row in stored_files if row.thumbnail_path == f"{row.id}.jpg"]
         profile_image_path = tenant.profile_image_path
-        # Hausstil-Assets einzeln merken: aus alten Dokumentvorlagen übernommene (Migration
-        # 0115) liegen weiter unter document_template_parts/, nicht unter document_style_assets/.
-        style_asset_paths = list(db.scalars(select(DocumentStyleAsset.storage_path).where(DocumentStyleAsset.tenant_id == tenant_id)))
+        # Studio-Assets einzeln merken: aus alten Dokumentvorlagen übernommene (Migration 0115,
+        # von 0118 als document_asset weitergeführt) liegen weiter unter document_template_parts/.
+        style_asset_paths = list(db.scalars(select(DocumentAsset.storage_path).where(DocumentAsset.tenant_id == tenant_id)))
 
         db.execute(delete(WordImportDocument).where(WordImportDocument.tenant_id == tenant_id))
         db.execute(delete(Protocol).where(Protocol.tenant_id == tenant_id))
@@ -717,8 +717,11 @@ class AdminTenantService:
 
     def _remove_tenant_directories(self, tenant_id: int) -> None:
         for relative_dir in (
+            # Document-Studio-Assets (ältere Uploads liegen noch unter document_style_assets)
+            f"document_assets/tenant-{tenant_id}",
             f"document_style_assets/tenant-{tenant_id}",
             f"document_template_parts/tenant-{tenant_id}",
+            f"document_thumbnails/tenant-{tenant_id}",
             f"tenant_imports/tenant-{tenant_id}",
             f"tenant_clones/tenant-{tenant_id}",
         ):

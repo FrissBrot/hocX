@@ -34,7 +34,6 @@ from app.core.security import hash_password
 from app.models.entities import (
     AppUser,
     CycleConfig,
-    DocumentStyle,
     ElementDefinition,
     Event,
     ListDefinition,
@@ -161,23 +160,22 @@ def create_template_structure(db, tenant: Tenant, created_by: AppUser) -> Templa
     db.add(cycle_config)
     db.flush()
 
-    # Hausstil wie ein Verein ihn einrichten würde (Dokument-Engine)
-    document_style = DocumentStyle(
-        tenant_id=tenant.id,
-        name="Standardprotokoll",
-        style_key="modern",
-        tokens_json={"primary_color": "#a83f2f", "secondary_color": "#6f675d", "title_page": "modern", "toc": "on", "numbering": True},
-    )
-    db.add(document_style)
-    db.flush()
-    # Der Mandant hat beim Anlegen bereits einen Standard-Hausstil; dieser hier übernimmt.
-    from app.documents import style_service
+    # Brand-Profil wie ein Verein es einrichten würde (Document Studio)
+    from app.documents import brand_service
+    from app.documents.brand import BrandTokens
 
-    style_service.update_style(db, document_style, is_default=True)
+    brand_service.create_brand(
+        db,
+        tenant.id,
+        name="Vereins-CI",
+        tokens=BrandTokens.model_validate(
+            {"colors": {"primary": "#A83F2F", "secondary": "#6F675D", "heading": "#A83F2F"}, "layout": {"title_page": True, "toc": True, "heading_numbering": True}}
+        ),
+        is_default=True,
+    )
 
     template = Template(
         tenant_id=tenant.id,
-        document_style_id=document_style.id,
         name="Sitzungsprotokoll",
         description="Vorlage fuer die woechentliche Vorstandssitzung",
         protocol_number_pattern="Sitzung {n}",

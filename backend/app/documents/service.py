@@ -1,21 +1,20 @@
-"""Orchestrierung: Anfrage → Dokument → Version → Typst → XMP → Register → StoredFile.
+"""Orchestrierung: Anfrage → Vorlage + Brand + Daten → Layout-Compiler → Typst → XMP → Register.
+
+Ablauf (``prepare``): Mandant, Protokoll (Leserecht) und Sprache bestimmen, Vorlage nach der
+Prioritätsregel auflösen (template_service.resolve_template), Brand-Revision auflösen, Inhalts-
+Hash und Version berechnen, Layout kompilieren (compiler.py). ``preview`` rendert PNG-Seiten
+ohne Seiteneffekte, ``render`` erzeugt das PDF/A-2b, ergänzt das XMP und trägt es im
+Dokumentenregister ein.
 
 Jedes ausgelieferte PDF wird im Dokumentenregister (document_registry) mit dem SHA-256 der
-exakt ausgelieferten Bytes eingetragen. Die Dokument-ID steht vorher fest und im PDF (Fusszeile,
+exakt ausgelieferten Bytes eingetragen. Die Dokument-ID steht vorher fest und im PDF (Prüfvermerk,
 QR-Code, XMP); die öffentliche Prüfseite der Abgabebox vergleicht nur den Hash.
 
-Versionierung (nur Dokumenttyp «protocol»): Schema bleibt v0.x für Entwürfe und v1.x für
-abgeschlossene Protokolle mit getrennten Zählern. Weicht der Inhalts-Hash (hashing.py) vom
-letzten Protokoll-Export ab, steigt der passende Zähler **vor** dem Rendern, damit das PDF die
-neue Nummer trägt. Gleicher Inhalt ergibt dieselbe Version; ein anderer Hausstil oder eine andere
-Sprache allein ändern sie nicht.
-
-Versioniert und als «protocol» registriert wird nur der kanonische Protokoll-Export (Standardblöcke
-des Typs, ohne eigenen Titel/Untertitel). Eine frei zusammengestellte Fassung eines Protokolls
-(eigene Blöcke, eigener Titel) ist ein «protocol_excerpt»: ohne Versionsnummer, ohne Verweis auf
-das Protokoll im Register und ohne Einfluss auf die Versionszähler – sonst könnte jede lesende
-Person ein «echtes» Protokoll beliebigen Inhalts erzeugen und die verteilte Fassung öffentlich als
-überholt erscheinen lassen.
+Versionierung (nur Dokumenttyp «protocol»): v0.x für Entwürfe, v1.x für abgeschlossene
+Protokolle mit getrennten Zählern. Weicht der Inhalts-Hash (hashing.py, kanonischer Inhalt
+unabhängig von der Vorlage) vom letzten Protokoll-Export ab, steigt der passende Zähler **vor**
+dem Rendern. Gleicher Inhalt ergibt dieselbe Version; eine andere Vorlage, ein anderes
+Brand-Profil oder eine andere Sprache allein ändern sie nie.
 """
 from __future__ import annotations
 
@@ -24,7 +23,7 @@ import json
 import logging
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -36,69 +35,92 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.core.security import CurrentUser
-from app.documents import style_service
-from app.documents.builder import build_document
-from app.documents.catalog import BlockSpec, validate_spec
-from app.documents.context import BuildContext, DocumentNotFoundError
-from app.documents.doc_types import document_types
-from app.documents.hashing import content_hash
-from app.documents.model import Document, RenderInfo
+from app.documents import brand_service, template_service
+from app.documents.brand import BrandTokens, apply_overrides
+from app.documents.catalog import BlockSpec
+from app.documents.compiler import CompiledDocument, CompileInput, Diagnostic, compile_document
+from app.documents.context import AssetCollector, BuildContext, DocumentNotFoundError, DocumentPermissionError
+from app.documents.doc_types import get_type
+from app.documents.hashing import content_hash, design_hash
+from app.documents.layout import LayoutJson, TemplateContent, content_json, parse_content
+from app.documents.model import DocumentMeta, RenderInfo
+from app.documents.providers.common import PROTOCOL_STATUS_CODES
 from app.documents.renderer import RenderAssets, get_renderer
-from app.documents.strings import normalize_language
-from app.documents.style_tokens import DocumentStyleTokens, ExportOptions
+from app.documents.strings import normalize_language, strings_for
 from app.documents.xmp import DocumentXmp, add_document_xmp
-from app.models import DocumentExport, DocumentRecipe, DocumentRegistry, DocumentStyle, Protocol, StoredFile, Template, Tenant
+from app.models import (
+    DocumentBrandRevision,
+    DocumentExport,
+    DocumentRegistry,
+    DocumentTemplate,
+    DocumentTemplateRevision,
+    Protocol,
+    StoredFile,
+    Tenant,
+)
 
 logger = logging.getLogger(__name__)
 
 GENERATED_DIR = "generated"
-# Registertyp für frei zusammengestellte Fassungen eines Protokolls (siehe Modul-Docstring)
-PROTOCOL_EXCERPT_TYPE = "protocol_excerpt"
+PROTOCOL_CONTEXT_TYPES = ("protocol", "invitation", "agenda", "attendance")
 
 
-class StyleOverride(BaseModel):
+class ExportOptions(BaseModel):
+    """Optionen pro Export (Export Center). Leer = aus Vorlage bzw. automatisch."""
+
     model_config = ConfigDict(extra="forbid")
 
-    style_key: Literal["modern", "classic", "compact"] = "modern"
-    tokens: DocumentStyleTokens = Field(default_factory=DocumentStyleTokens)
+    title: str | None = Field(None, max_length=300)
+    subtitle: str | None = Field(None, max_length=300)
+    # auto = Wasserzeichen «Entwurf» bei nicht abgeschlossenen Protokollen
+    watermark: Literal["auto", "on", "off"] = "auto"
 
 
 class DocumentRequest(BaseModel):
-    """Body von ``POST /api/documents/render`` und ``/preview``."""
+    """Body von ``POST /api/documents/render`` und ``/preview``.
+
+    ``content``, ``revision_id``, ``brand_tokens`` und ``data_mode="sample"`` sind nur für die
+    Vorschau im Document Studio (Designer, Brand Studio) und nie beim Export erlaubt."""
 
     model_config = ConfigDict(extra="forbid")
 
     document_type: str | None = Field(None, max_length=40)
-    recipe_id: uuid.UUID | None = None
     protocol_id: uuid.UUID | None = None
-    blocks: list[BlockSpec] | None = Field(None, max_length=200)
-    # Parameter für die Standardblöcke eines Dokumenttyps (z. B. aktive Filter der Todo-Seite).
+    template_id: uuid.UUID | None = None
+    revision_id: uuid.UUID | None = None
+    content: LayoutJson | None = None
+    brand_id: uuid.UUID | None = None
+    brand_tokens: dict[str, Any] | None = None
+    # Seitenkontext (z. B. aktive Filter der Todo-Seite, gewählte Liste)
     params: dict[str, Any] = Field(default_factory=dict)
-    style_id: uuid.UUID | None = None
-    # Ungespeicherte Hausstil-Tokens (Live-Vorschau in den Hausstil-Einstellungen). Assets werden
-    # wie bei gespeicherten Stilen mandantengebunden aufgelöst.
-    style_override: StyleOverride | None = None
     options: ExportOptions = Field(default_factory=ExportOptions)
     language: str | None = Field(None, max_length=10)
+    data_mode: Literal["data", "sample"] = "data"
+
+    def is_studio_preview(self) -> bool:
+        return self.content is not None or self.revision_id is not None or self.brand_tokens is not None or self.data_mode == "sample"
 
 
 @dataclass
 class PreparedDocument:
-    document: Document
-    assets: RenderAssets
+    compiled: CompiledDocument
+    meta: DocumentMeta
     document_type: str
     protocol: Protocol | None
-    recipe: DocumentRecipe | None
-    style: DocumentStyle | None
+    template: DocumentTemplate | None
+    revision: DocumentTemplateRevision | None
+    template_source: str | None
+    brand_revision: DocumentBrandRevision | None
     content_hash: str
+    design_hash: str
     version: tuple[int, int, int] | None  # (major, minor, final_minor) nach diesem Export
     language: str
-    # Typ für Export, Register und XMP (weicht nur beim Protokollauszug vom Dokumenttyp ab)
-    register_type: str = ""
-
-    def __post_init__(self) -> None:
-        if not self.register_type:
-            self.register_type = self.document_type
+    ctx: BuildContext
+    content: TemplateContent
+    params: dict[str, Any] = field(default_factory=dict)
+    diagnostics: list[Diagnostic] = field(default_factory=list)
+    # Protokolltitel beim Export überschrieben (STUDIO-007): im Register vermerkt
+    title_overridden: bool = False
 
 
 @dataclass
@@ -113,29 +135,6 @@ def version_label(major: int, minor: int) -> str | None:
 
 def _public_base_url() -> str | None:
     return f"https://{settings.traefik_domain}" if settings.traefik_domain else None
-
-
-def _merge_params(specs: list[BlockSpec], params: dict[str, Any]) -> list[BlockSpec]:
-    """Seitenkontext (z. B. Filter der Todo-Seite) auf passende Standardblöcke anwenden."""
-    if not params:
-        return specs
-    merged: list[BlockSpec] = []
-    for spec in specs:
-        candidate = spec.model_copy(update={"params": {**spec.params, **params}})
-        try:
-            validate_spec(candidate)
-        except ValueError:
-            allowed = {key: value for key, value in params.items() if key in _param_fields(spec.type)}
-            candidate = spec.model_copy(update={"params": {**spec.params, **allowed}})
-        merged.append(candidate)
-    return merged
-
-
-def _param_fields(block_type: str) -> set[str]:
-    from app.documents.catalog import CATALOG
-
-    entry = CATALOG.get(block_type)
-    return set(entry.params.model_fields) if entry else set()
 
 
 def latest_protocol_export(db: Session, protocol_id: int, *, major: int | None = None) -> DocumentExport | None:
@@ -165,138 +164,256 @@ def next_version(db: Session, protocol: Protocol, new_hash: str) -> tuple[int, i
     return (1 if is_final else 0, minor, final_minor)
 
 
-def _spec_key(spec: BlockSpec, protocol: Protocol | None) -> tuple:
-    """Vergleichsschlüssel eines Blocks: Parameter mit Vorgabewerten, Kontext-Protokoll = leer."""
-    try:
-        params = validate_spec(spec).model_dump(mode="json")
-    except ValueError:
-        params = spec.params
-    if protocol is not None and params.get("protocol_id") == str(protocol.public_id):
-        params = {**params, "protocol_id": None}
-    return (spec.type, spec.title, spec.hide_if_empty, spec.level, json.dumps(params, sort_keys=True, default=str))
+def short_document_id(document_id: str | uuid.UUID) -> str:
+    """Kurz-ID im Prüfvermerk: letzte 8 Hex-Zeichen (zufälliger Teil der UUIDv7), gruppiert."""
+    tail = uuid.UUID(str(document_id)).hex[-8:].upper()
+    return f"{tail[:4]}-{tail[4:]}"
 
 
-def is_canonical_protocol_export(specs: list[BlockSpec], options: ExportOptions, protocol: Protocol | None, default_specs: list[BlockSpec]) -> bool:
-    """Nur der unveränderte Protokoll-Export (Standardblöcke, kein eigener Titel) wird versioniert."""
-    if options.title or options.subtitle:
-        return False
-    return [_spec_key(spec, protocol) for spec in specs] == [_spec_key(spec, protocol) for spec in default_specs]
+def verify_render_info(document_id: uuid.UUID | None, *, preview: bool = False) -> RenderInfo:
+    base = settings.verify_base_url
+    display = re.sub(r"^https?://", "", base)
+    if preview or document_id is None:
+        return RenderInfo(preview=True, short_id="VORSCHAU", verify_display=display, verify_link=base)
+    return RenderInfo(
+        document_id=str(document_id),
+        short_id=short_document_id(document_id),
+        verify_display=display,
+        verify_link=f"{base}?id={document_id}",
+    )
 
 
-def _resolve_style(db: Session, ctx: BuildContext, request: DocumentRequest, recipe: DocumentRecipe | None, protocol: Protocol | None) -> DocumentStyle | None:
-    if request.style_id is not None:
-        style = style_service.get_style(db, ctx.tenant_id, request.style_id)
-        if style is None:
-            raise DocumentNotFoundError("DocumentStyle")
-        return style
-    for style_id in (
-        recipe.style_id if recipe is not None else None,
-        protocol.document_style_id if protocol is not None else None,
-    ):
-        if style_id:
-            style = db.get(DocumentStyle, style_id)
-            if style is not None and style.tenant_id == ctx.tenant_id:
-                return style
-    if protocol is not None:
-        template = db.get(Template, protocol.template_id)
-        if template is not None and template.document_style_id:
-            style = db.get(DocumentStyle, template.document_style_id)
-            if style is not None and style.tenant_id == ctx.tenant_id:
-                return style
-    return style_service.default_style(db, ctx.tenant_id)
+def _protocol_meta(protocol: Protocol, document_type: str, strings: dict[str, str], tenant_name: str, language: str) -> DocumentMeta:
+    from app.documents.context import format_date
+
+    return DocumentMeta(
+        document_type=document_type,
+        title=protocol.title or protocol.protocol_number or strings.get(f"docType.{document_type}", ""),
+        number=protocol.protocol_number,
+        date=format_date(protocol.protocol_date),
+        status=PROTOCOL_STATUS_CODES.get(protocol.status),
+        tenant_name=tenant_name,
+        language=language,
+    )
 
 
-def prepare(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest, *, today: date | None = None) -> PreparedDocument:
+def canonical_protocol_hash(ctx: BuildContext, protocol: Protocol, strings: dict[str, str], tenant_name: str) -> str:
+    """Inhalts-Hash eines Protokolls über alle exportsichtbaren Elemente - unabhängig von der
+    Vorlage (siehe hashing.py). Eigene Bildsammlung, damit nur Inhaltsbilder zählen."""
+    from app.documents.compiler import run_component
+
+    probe = BuildContext(db=ctx.db, tenant_id=ctx.tenant_id, language=ctx.language, user=ctx.user, today=ctx.today, protocol=protocol, public_base_url=ctx.public_base_url, assets=AssetCollector())
+    blocks = run_component(probe, BlockSpec(type="protocol_element"))
+    meta = _protocol_meta(protocol, "protocol", strings, tenant_name, ctx.language)
+    return content_hash(meta, blocks, probe.assets.files)
+
+
+def _resolve_explicit_template(db: Session, tenant_id: int, request: DocumentRequest) -> DocumentTemplate | None:
+    if request.template_id is None:
+        return None
+    template = template_service.get_template(db, tenant_id, request.template_id)
+    if template is None:
+        raise DocumentNotFoundError("DocumentTemplate")
+    return template
+
+
+def prepare(
+    db: Session,
+    user: CurrentUser | None,
+    tenant_id: int,
+    request: DocumentRequest,
+    *,
+    today: date | None = None,
+    preview: bool = False,
+    render_info: RenderInfo | None = None,
+) -> PreparedDocument:
+    if not preview and request.is_studio_preview():
+        raise ValueError("previewOnly")
     tenant = db.get(Tenant, tenant_id)
+    tenant_name = tenant.name if tenant else ""
     protocol = None
     if request.protocol_id is not None:
         protocol = db.scalar(select(Protocol).where(Protocol.public_id == request.protocol_id, Protocol.tenant_id == tenant_id))
         if protocol is None:
             raise DocumentNotFoundError("Protocol")
-    recipe = None
-    if request.recipe_id is not None:
-        recipe = db.scalar(select(DocumentRecipe).where(DocumentRecipe.public_id == request.recipe_id, DocumentRecipe.tenant_id == tenant_id))
-        if recipe is None:
-            raise DocumentNotFoundError("DocumentRecipe")
 
-    language = normalize_language(request.language or (recipe.language if recipe else None) or (tenant.document_language if tenant else None))
+    explicit = _resolve_explicit_template(db, tenant_id, request)
+    document_type = request.document_type or (explicit.document_type if explicit is not None else None) or ("protocol" if protocol else "custom")
+    doc_type = get_type(document_type)
+    sample = request.data_mode == "sample"
+    if doc_type.needs_protocol and protocol is None and not sample:
+        raise ValueError("protocol_required")
+
+    # Vorlage: ungespeicherter Inhalt (Designer) > bestimmte Revision > Prioritätsregel
+    resolved = None
+    revision: DocumentTemplateRevision | None = None
+    template: DocumentTemplate | None = explicit
+    template_source = None
+    if request.revision_id is not None:
+        if explicit is None:
+            raise ValueError("unknown_document_type")
+        revision = template_service.get_revision(db, explicit, request.revision_id)
+        if revision is None:
+            raise DocumentNotFoundError("DocumentTemplateRevision")
+        template_source = "revision"
+    if request.content is None and revision is None:
+        resolved = template_service.resolve_template(
+            db, tenant_id, document_type, explicit=explicit, protocol_template_id=protocol.template_id if protocol is not None else None
+        )
+        template, revision, template_source = resolved.template, resolved.revision, resolved.source
+    if request.content is not None:
+        content = TemplateContent.model_validate(request.content)
+        template_source = "unsaved"
+    else:
+        content = template_service.revision_content(revision)
+
+    language = normalize_language(content.settings.language or request.language or (tenant.document_language if tenant else None))
+    strings = strings_for(language)
     ctx = BuildContext(db=db, tenant_id=tenant_id, language=language, user=user, today=today or date.today(), protocol=protocol, public_base_url=_public_base_url())
     if protocol is not None:
         ctx.ensure_can_read_protocol(protocol.id)
 
-    types = document_types(ctx.today)
-    document_type = request.document_type or (recipe.document_type if recipe else None) or ("protocol" if protocol else "custom")
-    if document_type not in types:
-        raise ValueError("unknown_document_type")
-    if types[document_type].needs_protocol and protocol is None:
-        raise ValueError("protocol_required")
+    # Brand: ungespeicherte Tokens (Brand Studio) > explizit > Zuweisung > Vorlage > Standard
+    explicit_brand = brand_service.get_brand(db, tenant_id, request.brand_id) if request.brand_id else None
+    if request.brand_id and explicit_brand is None:
+        raise DocumentNotFoundError("DocumentBrand")
+    if resolved is None and template is not None and revision is not None:
+        resolved = template_service.ResolvedTemplate(template=template, revision=revision, source=template_source or "explicit", brand_id=None)
+    brand_revision = template_service.resolve_brand_revision(db, tenant_id, resolved, explicit_brand=explicit_brand)
+    override_tokens = BrandTokens.model_validate(request.brand_tokens) if request.brand_tokens is not None else None
+    base_tokens = override_tokens if override_tokens is not None else brand_service.tokens_of(brand_revision)
+    effective_tokens = apply_overrides(base_tokens, content.settings.brand_overrides)
+    brand = brand_service.resolve_brand(db, tenant_id, brand_revision, tokens=effective_tokens)
 
-    if request.blocks is not None:
-        specs = list(request.blocks)
-    elif recipe is not None:
-        specs = [BlockSpec.model_validate(item) for item in (recipe.blocks_json or [])]
-    else:
-        specs = _merge_params(list(types[document_type].blocks), request.params)
-
+    # Meta (fachliche Angaben, Grundlage des Inhalts-Hashes)
     options = request.options
-    if recipe is not None and not request.options.model_fields_set:
-        options = ExportOptions.model_validate(recipe.options_json or {})
+    title_overridden = False
+    if protocol is not None and document_type in PROTOCOL_CONTEXT_TYPES:
+        meta = _protocol_meta(protocol, document_type, strings, tenant_name, language)
+        if options.title:
+            title_overridden = options.title != meta.title
+            meta.title = options.title
+        meta.subtitle = options.subtitle
+        if document_type != "protocol":
+            meta.status = None
+    else:
+        from app.documents.context import format_date
 
-    style = _resolve_style(db, ctx, request, recipe, protocol)
-    if request.style_override is not None:
-        # Transienter Stil (nie gespeichert): gleiche Auflösung wie ein gespeicherter.
-        style = DocumentStyle(
-            tenant_id=tenant_id,
-            name="preview",
-            style_key=request.style_override.style_key,
-            tokens_json=request.style_override.tokens.model_dump(mode="json"),
-            version=(style.version if style is not None else 1),
+        meta = DocumentMeta(
+            document_type=document_type,
+            title=options.title or strings.get(f"docType.{document_type}", strings.get("docType.custom", "")),
+            subtitle=options.subtitle,
+            date=format_date(ctx.today),
+            tenant_name=tenant_name,
+            language=language,
         )
-    resolved_style, tokens, fonts, style_files = style_service.resolve(db, tenant_id, style)
-    document = build_document(
-        ctx,
-        document_type=document_type,
-        specs=specs,
-        style=resolved_style,
-        tokens=tokens,
-        options=options,
-        tenant_name=tenant.name if tenant else "",
-    )
-    # Nur Inhaltsbilder zählen zum Inhalt; Logo/Fussbild gehören zum Hausstil.
-    digest = content_hash(document, ctx.assets.files)
+
     version = None
-    register_type = document_type
-    if protocol is not None and document_type == "protocol":
-        if is_canonical_protocol_export(specs, options, protocol, list(types[document_type].blocks)):
-            version = next_version(db, protocol, digest)
-            major, minor, final_minor = version
-            document.meta.version = version_label(major, final_minor if major else minor)
-        else:
-            register_type = PROTOCOL_EXCERPT_TYPE
+    protocol_hash = None
+    if protocol is not None and document_type == "protocol" and not sample:
+        protocol_hash = canonical_protocol_hash(ctx, protocol, strings, tenant_name)
+        version = next_version(db, protocol, protocol_hash)
+        major, minor, final_minor = version
+        meta.version = version_label(major, final_minor if major else minor)
+
+    protocol_draft = protocol is not None and document_type == "protocol" and protocol.status != "abgeschlossen"
+    is_draft = protocol_draft
+    if options.watermark == "on":
+        is_draft = True
+    elif options.watermark == "off":
+        # Entwürfe ohne Kennzeichnung nur mit Schreibrecht (STUDIO-007); Leser behalten das
+        # Wasserzeichen. user None = Systemaufruf ohne Benutzer.
+        can_write = user is None or user.current_role in {"writer", "admin"}
+        if not protocol_draft or can_write:
+            is_draft = False
+
+    render = render_info or verify_render_info(None, preview=True)
+    document_env = {
+        "title": meta.title,
+        "subtitle": meta.subtitle,
+        "type": strings.get(f"docType.{document_type}", ""),
+        "date": protocol.protocol_date if protocol is not None and document_type in PROTOCOL_CONTEXT_TYPES else ctx.today,
+        "number": meta.number,
+        "version": meta.version,
+        "status": strings.get(f"protocolStatus.{meta.status}", "") if meta.status else "",
+        "language": language,
+        "is_draft": is_draft,
+        "short_id": render.short_id,
+        "created_by": user.display_name if user is not None else "",
+    }
+    compiled = compile_document(
+        db,
+        CompileInput(
+            content=content,
+            brand=brand,
+            ctx=ctx,
+            meta=meta,
+            strings=strings,
+            render=render,
+            mode=request.data_mode,
+            strict=not preview,
+            params=request.params,
+            is_draft=is_draft,
+            document_env=document_env,
+        ),
+    )
+    digest = protocol_hash or content_hash(meta, compiled.blocks, ctx.assets.files)
+    design = design_hash(content_json(content), brand.tokens.model_dump(mode="json"), {**brand.asset_checksums, **compiled.template_asset_checksums})
     return PreparedDocument(
-        document=document,
-        assets=RenderAssets(files={**ctx.assets.files, **style_files}, fonts=fonts),
+        compiled=compiled,
+        meta=meta,
         document_type=document_type,
         protocol=protocol,
-        recipe=recipe,
-        style=style,
+        template=template,
+        revision=revision if request.content is None else None,
+        template_source=template_source,
+        brand_revision=brand_revision if override_tokens is None else None,
         content_hash=digest,
+        design_hash=design,
         version=version,
         language=language,
-        register_type=register_type,
+        ctx=ctx,
+        content=content,
+        params=dict(request.params),
+        diagnostics=compiled.diagnostics,
+        title_overridden=title_overridden,
     )
 
 
-async def preview(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest, *, max_pages: int | None = None) -> list[bytes]:
-    """Erste Seiten als PNG: ohne Register-Eintrag, ohne Speicherung, ohne Versionserhöhung."""
+@dataclass
+class PreviewResult:
+    pages: list[bytes]
+    diagnostics: list[Diagnostic]
+    page_count: int
+    template_id: uuid.UUID | None
+    template_source: str | None
+    design_hash: str
+
+
+async def _prepare_off_loop(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest, **kwargs: Any) -> PreparedDocument:
+    """``prepare`` (Provider-Abfragen, Bildnormalisierung mit Pillow) im Threadpool, damit die
+    Event-Loop des Workers währenddessen andere Requests und WebSockets bedient (TYPST-004). Die
+    Session wird dabei nie gleichzeitig benutzt: die Route wartet auf das Ergebnis."""
+    return await run_in_threadpool(prepare, db, user, tenant_id, request, **kwargs)
+
+
+async def preview(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest, *, max_pages: int | None = None) -> PreviewResult:
+    """Seiten als PNG: ohne Register-Eintrag, ohne Speicherung, ohne Versionserhöhung."""
     # Die Vorschau darf nichts verändern (z. B. nachgeführte Mitgliedschaftsblöcke): alles in
     # einem Savepoint, der am Ende zurückgerollt wird.
     savepoint = db.begin_nested()
     try:
-        prepared = await _prepare_off_loop(db, user, tenant_id, request)
-        prepared.document.render = verify_render_info(None, preview=True)
-        output = await get_renderer().render_preview(prepared.document, prepared.assets, max_pages=max_pages)
-        return output.pages
+        prepared = await _prepare_off_loop(db, user, tenant_id, request, preview=True)
+        compiled = prepared.compiled
+        output = await get_renderer().render_preview(compiled.data, RenderAssets(files=compiled.files, fonts=compiled.fonts), max_pages=max_pages)
+        return PreviewResult(
+            pages=output.pages,
+            diagnostics=prepared.diagnostics,
+            page_count=output.page_count or len(output.pages),
+            template_id=prepared.template.public_id if prepared.template is not None else None,
+            template_source=prepared.template_source,
+            design_hash=prepared.design_hash,
+        )
     finally:
         if savepoint.is_active:
             savepoint.rollback()
@@ -331,40 +448,15 @@ def _store_pdf(db: Session, tenant_id: int, pdf: bytes, filename: str, user_id: 
     return stored, target
 
 
-def short_document_id(document_id: str | uuid.UUID) -> str:
-    """Kurz-ID für die Fusszeile: letzte 8 Hex-Zeichen (zufälliger Teil der UUIDv7), gruppiert."""
-    tail = uuid.UUID(str(document_id)).hex[-8:].upper()
-    return f"{tail[:4]}-{tail[4:]}"
-
-
-def verify_render_info(document_id: uuid.UUID | None, *, preview: bool = False) -> RenderInfo:
-    base = settings.verify_base_url
-    display = re.sub(r"^https?://", "", base)
-    if preview or document_id is None:
-        return RenderInfo(preview=True, short_id="VORSCHAU", verify_display=display, verify_link=base)
-    return RenderInfo(
-        document_id=str(document_id),
-        short_id=short_document_id(document_id),
-        verify_display=display,
-        verify_link=f"{base}?id={document_id}",
-    )
-
-
-async def _prepare_off_loop(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest) -> PreparedDocument:
-    """``prepare`` (Provider-Abfragen, Bildnormalisierung mit Pillow) im Threadpool, damit die
-    Event-Loop des Workers währenddessen andere Requests und WebSockets bedient. Die Session
-    wird dabei nie gleichzeitig benutzt: die Route wartet auf das Ergebnis."""
-    return await run_in_threadpool(prepare, db, user, tenant_id, request)
-
-
 async def render(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest) -> RenderResult:
-    prepared = await _prepare_off_loop(db, user, tenant_id, request)
-    document = prepared.document
     export_public_id = _uuid7()
-    document.render = verify_render_info(export_public_id)
+    prepared = await _prepare_off_loop(db, user, tenant_id, request, render_info=verify_render_info(export_public_id))
+    compiled = prepared.compiled
+    meta = prepared.meta
 
-    output = await get_renderer().render_pdf(document, prepared.assets)
+    output = await get_renderer().render_pdf(compiled.data, RenderAssets(files=compiled.files, fonts=compiled.fonts))
     tenant = db.get(Tenant, tenant_id)
+    render_info = verify_render_info(export_public_id)
     pdf = await run_in_threadpool(
         add_document_xmp,
         output.pdf or b"",
@@ -372,43 +464,45 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
             document_id=str(export_public_id),
             # Mandanten-ID nur, wenn der Mandant seine Anzeige auf der Prüfseite freigegeben hat.
             tenant_id=str(tenant.public_id) if tenant is not None and tenant.verify_show_identity else "",
-            document_type=prepared.register_type,
-            version=document.meta.version or "",
+            document_type=prepared.document_type,
+            version=meta.version or "",
             content_hash=prepared.content_hash,
-            verify_url=document.render.verify_link or "",
+            design_hash=prepared.design_hash,
+            template_revision=str(prepared.revision.public_id) if prepared.revision is not None else "",
+            verify_url=render_info.verify_link or "",
         ),
     )
     # Hash über genau die Bytes, die ausgeliefert werden.
     sha256 = hashlib.sha256(pdf).hexdigest()
 
     major = minor = None
-    if prepared.version is not None and prepared.protocol is not None:
+    protocol = prepared.protocol
+    if prepared.version is not None and protocol is not None:
         major, new_minor, new_final = prepared.version
-        protocol = prepared.protocol
         protocol.version_major = major
         protocol.version_minor = new_minor
         protocol.version_final_minor = new_final
         minor = new_final if major else new_minor
         db.add(protocol)
-    protocol = prepared.protocol
     # Datei, StoredFile, Export und Register-Eintrag gemeinsam: scheitert ein Teil, gibt es
     # nichts (die Datei wird beim Rollback entfernt).
-    stored, target = _store_pdf(db, tenant_id, pdf, _filename(document.meta.title, document.meta.version), user.user_id if user else None)
+    stored, target = _store_pdf(db, tenant_id, pdf, _filename(meta.title, meta.version), user.user_id if user else None)
     try:
         export = DocumentExport(
             public_id=export_public_id,
             tenant_id=tenant_id,
             protocol_id=protocol.id if protocol is not None else None,
-            document_type=prepared.register_type,
-            recipe_id=prepared.recipe.id if prepared.recipe is not None else None,
-            title=document.meta.title,
-            version_label=document.meta.version,
+            document_type=prepared.document_type,
+            title=meta.title,
+            version_label=meta.version,
             version_major=major,
             version_minor=minor,
             content_hash=prepared.content_hash,
-            style_id=prepared.style.id if prepared.style is not None and prepared.style.id else None,
-            style_key=document.style.key,
-            style_version=document.style.version,
+            design_hash=prepared.design_hash,
+            template_id=prepared.template.id if prepared.template is not None else None,
+            template_revision_id=prepared.revision.id if prepared.revision is not None else None,
+            brand_revision_id=prepared.brand_revision.id if prepared.brand_revision is not None else None,
+            options_json={"options": request.options.model_dump(mode="json"), "params": request.params, "template_source": prepared.template_source},
             language=prepared.language,
             stored_file_id=stored.id,
             created_by=user.user_id if user else None,
@@ -419,15 +513,16 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
                 public_id=export_public_id,
                 tenant_id=tenant_id,
                 sha256=sha256,
-                document_type=prepared.register_type,
-                title=document.meta.title,
-                status_code=protocol.status if protocol is not None and prepared.register_type == "protocol" else None,
+                document_type=prepared.document_type,
+                title=meta.title,
+                status_code=protocol.status if protocol is not None and prepared.document_type == "protocol" else None,
                 version_major=major,
                 version_minor=minor,
-                version_label=document.meta.version,
+                version_label=meta.version,
                 content_hash=prepared.content_hash,
-                # Ein Protokollauszug verweist nicht auf seine Quelle (keine Basis für «überholt»).
-                source_public_id=protocol.public_id if protocol is not None and prepared.register_type != PROTOCOL_EXCERPT_TYPE else None,
+                design_hash=prepared.design_hash,
+                source_public_id=protocol.public_id if protocol is not None else None,
+                title_overridden=prepared.title_overridden,
                 created_by=user.user_id if user else None,
             )
         )
@@ -571,3 +666,22 @@ def cleanup_old_generated_exports(db: Session | None = None, *, retention_days: 
     if db is not None:
         return {"deleted": deleted, "released": released}
     return {"deleted": deleted}
+
+
+__all__ = [
+    "DocumentPermissionError",
+    "DocumentRequest",
+    "ExportOptions",
+    "PreparedDocument",
+    "PreviewResult",
+    "RenderResult",
+    "canonical_protocol_hash",
+    "cleanup_old_generated_exports",
+    "content_json",
+    "parse_content",
+    "prepare",
+    "preview",
+    "render",
+    "short_document_id",
+    "verify_render_info",
+]

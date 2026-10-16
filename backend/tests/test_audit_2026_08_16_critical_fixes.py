@@ -349,6 +349,7 @@ def test_s1_document_render_rejects_protocol_from_foreign_tenant(db):
 
 
 def test_s1_document_preview_passes_for_own_tenant_protocol(db):
+    _sync_system_templates(db)
     """Gegenprobe: das eigene Protokoll passiert die Mandantenprüfung."""
     from app.api.routes import documents as documents_route
     from app.documents.service import DocumentRequest
@@ -370,6 +371,7 @@ def test_s1_document_preview_passes_for_own_tenant_protocol(db):
 
 
 def test_s2_document_list_rejects_list_definition_from_foreign_tenant(db):
+    _sync_system_templates(db)
     from app.api.routes import documents as documents_route
     from app.documents.catalog import BlockSpec
     from app.documents.service import DocumentRequest
@@ -380,7 +382,7 @@ def test_s2_document_list_rejects_list_definition_from_foreign_tenant(db):
     list_def_b = make_list_definition(db, tenant_b.id, name="Foreign List (S2)")
     user_a = make_current_user(tenant_a.id, role="admin")
 
-    body = DocumentRequest(document_type="list", blocks=[BlockSpec(type="list_table", params={"list_id": str(list_def_b.public_id)})])
+    body = DocumentRequest(document_type="list", params={"list_id": str(list_def_b.public_id)})
     with pytest.raises(HTTPException) as exc_info:
         _run(documents_route.render_document(body, db=db, user=user_a))
     assert exc_info.value.status_code == 404
@@ -388,8 +390,8 @@ def test_s2_document_list_rejects_list_definition_from_foreign_tenant(db):
 
 def test_s2_list_provider_rejects_list_definition_from_foreign_tenant(db):
     """Gleiches auf Provider-Ebene, unabhängig von der Route."""
-    from app.documents.builder import build_blocks
     from app.documents.catalog import BlockSpec
+    from app.documents.compiler import build_blocks
     from app.documents.context import BuildContext, DocumentNotFoundError
     from tests.factories import make_list_definition
 
@@ -554,4 +556,13 @@ class _ConnectedRequest:
 
     async def is_disconnected(self) -> bool:
         return False
+
+
+def _sync_system_templates(db):
+    """Systemvorlagen wie beim App-Start in der Testtransaktion anlegen; ohne sie hing der Test
+    davon ab, ob ein früherer Test den App-Start (und damit den Abgleich) ausgelöst hatte."""
+    from app.documents.system_templates import sync_system_templates
+
+    sync_system_templates(db)
+    db.flush()
 

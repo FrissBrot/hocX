@@ -37,8 +37,8 @@ Unter **Vorlagen → Echtheitsprüfung** (nur Administratorinnen und Administrat
 - **Auf neuere Versionen hinweisen** (Standard: an). Gilt für Protokolle.
 - Eine **Vorschau** zeigt, wie das Ergebnis aussieht, und **Prüfseite öffnen** führt direkt hin.
 
-Welche Angaben im PDF selbst stehen (Prüfadresse, Dokument-ID, QR-Code), legt der Hausstil fest:
-**Vorlagen → Hausstile**, Abschnitt «Echtheitsprüfung im Dokument».
+Welche Angaben im PDF selbst stehen (Prüfadresse, Dokument-ID, QR-Code), legt das Corporate Design fest:
+**Dokumente → Corporate Design**, Abschnitt «Echtheitsprüfung».
 
 ## Verifizierte Organisation
 

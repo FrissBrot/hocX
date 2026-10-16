@@ -48,9 +48,13 @@ from app.models import (
     CycleConfig,
     DocumentExport,
     DocumentRegistry,
-    DocumentRecipe,
-    DocumentStyle,
-    DocumentStyleAsset,
+    DocumentAsset,
+    DocumentBrand,
+    DocumentBrandRevision,
+    DocumentComponent,
+    DocumentTemplate,
+    DocumentTemplateAssignment,
+    DocumentTemplateRevision,
     ElementDefinition,
     Event,
     EventCycle,
@@ -121,7 +125,7 @@ from app.services.tenant_transfer_common import (
 # tenant's own users are bundled. TenantImportService still reads version 2.
 # Format 3 also gained (without a version bump - purely additive tables an older importer just
 # ignores) photo albums, table snapshots, links/feeds/shares and tenant settings.
-FORMAT_VERSION = 6  # 6: Dokumentenregister (Hash-Prüfung); 5: Dokument-Engine (Hausstile, Stil-Assets, Rezepte, document_export)
+FORMAT_VERSION = 7  # 7: Document Studio (Brand-Profile, Assets, Vorlagen, Komponenten, Zuweisungen); 6: Dokumentenregister; 5: Dokument-Engine (Hausstile, Stil-Assets, Rezepte, document_export)
 ExportScope = Literal["structure", "structure_lists", "full", "full_abgabebox"]
 
 
@@ -235,20 +239,44 @@ class TenantExportService:
             "element_definition",
         )
 
-        # Hausstile: hochgeladene Schriften/Bilder (mit Datei), Stile (Tokens verweisen per
-        # public_id auf die Assets) und Dokument-Rezepte.
+        # Document Studio: Assets (mit Datei), Brand-Profile samt Revisionen, wiederverwendbare
+        # Komponenten, Mandantenvorlagen samt Revisionen und Zuweisungen. Systemvorlagen gehören
+        # der Installation und werden nicht exportiert (Verweise darauf per system_key).
         asset_rows = []
-        for asset in db.scalars(select(DocumentStyleAsset).where(DocumentStyleAsset.tenant_id == tenant_id)).all():
-            row = self._row(asset, "document_style_asset")
-            row["storage_path"] = self._register_file(settings.storage_root, asset.storage_path, f"files/document_style_assets/{asset.id}")
+        for asset in db.scalars(select(DocumentAsset).where(DocumentAsset.tenant_id == tenant_id)).all():
+            row = self._row(asset, "document_asset")
+            row["storage_path"] = self._register_file(settings.storage_root, asset.storage_path, f"files/document_assets/{asset.id}")
             asset_rows.append(row)
-        tables["document_style_asset"] = asset_rows
-        tables["document_style"] = self._rows(
-            db.scalars(select(DocumentStyle).where(DocumentStyle.tenant_id == tenant_id)).all(), "document_style"
+        tables["document_asset"] = asset_rows
+        brands = db.scalars(select(DocumentBrand).where(DocumentBrand.tenant_id == tenant_id)).all()
+        tables["document_brand"] = self._rows(brands, "document_brand")
+        brand_ids = [brand.id for brand in brands]
+        tables["document_brand_revision"] = self._rows(
+            db.scalars(select(DocumentBrandRevision).where(DocumentBrandRevision.brand_id.in_(brand_ids))).all() if brand_ids else [], "document_brand_revision"
         )
-        tables["document_recipe"] = self._rows(
-            db.scalars(select(DocumentRecipe).where(DocumentRecipe.tenant_id == tenant_id)).all(), "document_recipe"
+        tables["document_component"] = self._rows(
+            db.scalars(select(DocumentComponent).where(DocumentComponent.tenant_id == tenant_id)).all(), "document_component"
         )
+        document_templates = db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id == tenant_id)).all()
+        template_rows = self._rows(document_templates, "document_template")
+        system_keys = {
+            row.id: row.system_key
+            for row in db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id.is_(None))).all()
+        }
+        for row in template_rows:
+            row["source_system_key"] = system_keys.get(row.get("source_template_id"))
+        tables["document_template"] = template_rows
+        document_template_ids = [template.id for template in document_templates]
+        tables["document_template_revision"] = self._rows(
+            db.scalars(select(DocumentTemplateRevision).where(DocumentTemplateRevision.template_id.in_(document_template_ids))).all() if document_template_ids else [],
+            "document_template_revision",
+        )
+        assignment_rows = self._rows(
+            db.scalars(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.tenant_id == tenant_id)).all(), "document_template_assignment"
+        )
+        for row in assignment_rows:
+            row["system_key"] = system_keys.get(row.get("document_template_id"))
+        tables["document_template_assignment"] = assignment_rows
 
         templates = db.scalars(select(Template).where(Template.tenant_id == tenant_id)).all()
         tables["template"] = self._rows(templates, "template")
@@ -531,9 +559,17 @@ class TenantExportService:
         )
         self._export_photo_albums(db, tenant_id, tables, include_abgabebox=include_abgabebox)
         # Export-Datensätze (Version, Inhalts-Hash) - die PDFs selbst reisen als stored_file mit.
-        tables["document_export"] = self._rows(
+        export_rows = self._rows(
             db.scalars(select(DocumentExport).where(DocumentExport.tenant_id == tenant_id)).all(), "document_export"
         )
+        # Systemvorlagen sind installationsübergreifend nur über system_key auflösbar
+        system_template_keys = {
+            row.id: row.system_key
+            for row in db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id.is_(None))).all()
+        }
+        for row in export_rows:
+            row["system_key"] = system_template_keys.get(row.get("template_id"))
+        tables["document_export"] = export_rows
         # Dokumentenregister: nach einem Umzug bleiben ausgelieferte PDFs prüfbar.
         tables["document_registry"] = self._rows(
             db.scalars(select(DocumentRegistry).where(DocumentRegistry.tenant_id == tenant_id)).all(), "document_registry"

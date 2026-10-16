@@ -6,7 +6,7 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
-from app.models.entities import AppUser, CycleConfig, DocumentStyle, Event, Tenant
+from app.models.entities import AppUser, CycleConfig, Event, Tenant
 from app.schemas.base import PublicIdModel
 from app.schemas.cycle_config import CycleConfigRead
 
@@ -16,7 +16,6 @@ class TemplateBase(BaseModel):
     description: str | None = None
     version: int = Field(default=1, ge=1)
     status: str = "active"
-    document_style_id: uuid.UUID | None = None
     next_event_id: uuid.UUID | None = None
     last_event_id: uuid.UUID | None = None
     todo_due_event_tag: str | None = None
@@ -35,7 +34,6 @@ class TemplateUpdate(BaseModel):
     description: str | None = None
     version: int | None = Field(default=None, ge=1)
     status: str | None = None
-    document_style_id: uuid.UUID | None = None
     next_event_id: uuid.UUID | None = None
     last_event_id: uuid.UUID | None = None
     todo_due_event_tag: str | None = None
@@ -52,7 +50,6 @@ class TemplateDuplicateRequest(BaseModel):
 class TemplateRead(PublicIdModel, TemplateBase):
     _fk_models: ClassVar[dict[str, type]] = {
         "tenant_id": Tenant,
-        "document_style_id": DocumentStyle,
         "next_event_id": Event,
         "last_event_id": Event,
         "cycle_config_id": CycleConfig,

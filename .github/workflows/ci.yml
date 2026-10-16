@@ -200,9 +200,10 @@ jobs:
         working-directory: backend
         run: python3 scripts/check_audit_coverage.py
 
-      # Jeder Block-Typ hat Modell, Provider, Basis-Komponente und Texte; Typst-Pakete sind
-      # vendored (der Compile greift nie aufs Netz).
-      - name: Dokument-Engine - Block-Katalog vollstaendig
+      # Jede Fachkomponente hat Modell, Provider, Basis-Komponente und Texte, jeder Eintrag des
+      # Document Studio (Knotentypen, Bibliothek, Bindungen, Systemvorlagen) seine Labels;
+      # Typst-Pakete sind vendored (der Compile greift nie aufs Netz).
+      - name: Dokument-Engine - Katalog vollstaendig
         env:
           DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
           AUTH_SECRET: ci-backend-tests-dummy-secret-0123456789
@@ -218,7 +219,7 @@ jobs:
           path: ${{ runner.temp }}/document-golden-diffs
           if-no-files-found: ignore
 
-      # Galerie «alle Hausstile × alle Dokumenttypen» (entsteht im pytest-Lauf oben).
+      # Galerie «alle Systemvorlagen mit Beispieldaten» (entsteht im pytest-Lauf oben).
       - name: Upload document gallery
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

@@ -72,7 +72,9 @@ def test_migration_turns_templates_into_styles_and_is_idempotent():
         transaction = conn.begin()
         try:
             conn.execute(text(f'CREATE SCHEMA "{schema}"'))
-            conn.execute(text(f'SET LOCAL search_path TO "{schema}", public'))
+            # Nur das Test-Schema: seit dem Document Studio gibt es in public wieder eine (neue)
+            # Tabelle document_template, die das DROP TABLE IF EXISTS des zweiten Laufs sonst träfe.
+            conn.execute(text(f'SET LOCAL search_path TO "{schema}"'))
             conn.execute(text(LEGACY_SCHEMA))
             conn.execute(text("""
                 INSERT INTO tenant (id, name) VALUES (1, 'Verein A'), (2, 'Verein B');
@@ -147,28 +149,7 @@ def test_migration_turns_templates_into_styles_and_is_idempotent():
             transaction.rollback()
 
 
-# --- TYPST-014: eingefrorene Übersetzung ----------------------------------------------------
-_LEGACY_CONFIGS = [
-    {},
-    {"theme": {"primary_color": "AABBCC", "font_size": "12pt", "font_family": "palatino"}, "options": {"orientation": "landscape", "hide_metadata": True}},
-    {"presets": {"header": "logo_date", "footer": "with_version", "title_page": "combined_toc", "toc": "none"}, "options": {"toc_spacing": "very_compact", "numbering_mode": "plain"}},
-    {"theme": {"font_family": "uploaded", "font_size": "9"}, "title_text": {"footer_contact": "Verein\nOrt", "footer_color": "#123456", "location": "Bern"}},
-    {"presets": {"toc": "compact"}, "options": {"show_toc": False}},
-]
-_ASSETS = {"logo": "0198a6b2-0000-7000-8000-000000000001", "font_regular": "0198a6b2-0000-7000-8000-000000000002", "font_bold": "0198a6b2-0000-7000-8000-000000000003"}
-
-
-def test_frozen_translation_matches_the_app_code_of_its_time():
-    """Die in 0115 eingefrorene Übersetzung liefert heute dasselbe wie app.documents.legacy.
-    Ändert sich später das Token-Modell, darf dieser Test angepasst werden - die Migration nicht."""
-    from app.documents.legacy import tokens_from_legacy
-
-    frozen = migration("public")
-    for config in _LEGACY_CONFIGS:
-        for assets in ({}, _ASSETS):
-            assert frozen.tokens_from_legacy(config, assets) == tokens_from_legacy(config, assets).model_dump(mode="json"), config
-
-
-def test_migration_no_longer_imports_app_code():
-    source = Path(__file__).resolve().parents[1].joinpath("alembic/versions/0115_document_engine_migrate.py").read_text()
-    assert "from app." not in source and "import app" not in source
+# Die Prüfungen «eingefrorene Übersetzung == App-Code ihrer Zeit» und «kein App-Import» für 0115
+# stehen seit dem Document Studio in test_document_studio_migration.py
+# (test_migration_0115_is_frozen_and_keeps_its_original_result): app.documents.legacy liefert
+# inzwischen das Studio-Format, der Vergleich mit dem Stand vor dem Studio gilt nicht mehr.

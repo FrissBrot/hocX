@@ -44,6 +44,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
         { href: "/protocols", labelKey: "protocols", icon: "protocols" },
         ...(isWriter ? [{ href: "/events", labelKey: "events", icon: "events" as const }] : []),
         { href: "/todos", labelKey: "todos", icon: "todos" },
+        { href: "/documents", labelKey: "documentStudio", icon: "documents", match: ["/settings/verification"] },
         ...(isWriter && hasAbgabebox ? [{ href: "/submission-assignments", labelKey: "submissions", icon: "submissions" as const }] : []),
         ...(hasFinance ? [{ href: "/finances", labelKey: "finances", icon: "finances" as const, match: ["/fines"] }] : []),
       ],
@@ -68,7 +69,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
       {
         titleKey: "groups.configuration",
         links: [
-          { href: "/templates", labelKey: "templates", icon: "templates", match: ["/elements", "/settings", "/task-packages"] },
+          { href: "/templates", labelKey: "templates", icon: "templates", match: ["/elements", "/task-packages"] },
           { href: "/cycles", labelKey: "cycles", icon: "cycles" },
         ],
       },

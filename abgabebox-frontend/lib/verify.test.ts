@@ -61,6 +61,11 @@ describe("classifyResult", () => {
     expect(classifyResult(base)).toMatchObject({ importUnverified: false });
     expect(classifyResult({ ...base, import_unverified: true })).toMatchObject({ importUnverified: true });
   });
+
+  it("überschriebener Titel (STUDIO-007)", () => {
+    expect(classifyResult(base)).toMatchObject({ titleOverridden: false });
+    expect(classifyResult({ ...base, title_overridden: true })).toMatchObject({ titleOverridden: true });
+  });
 });
 
 describe("verifyHash", () => {

@@ -6,7 +6,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.entities import AppUser, DocumentStyle, Event, Template, Tenant
+from app.models.entities import AppUser, Event, Template, Tenant
 from app.schemas.base import PublicIdModel
 from app.schemas.event import EventRead
 
@@ -32,7 +32,6 @@ class ProtocolCreateFromTemplate(BaseModel):
     # UUIDs as received from the client - the router resolves these to internal ids
     # (see app.services.public_id_service) before calling into ProtocolService.
     template_id: uuid.UUID
-    document_style_id: uuid.UUID | None = None
     protocol_number: str | None = None
     protocol_date: date
     title: str | None = None
@@ -44,7 +43,6 @@ class ProtocolUpdate(BaseModel):
     protocol_date: date | None = None
     event_id: uuid.UUID | None = None
     status: ProtocolStatus | None = None
-    document_style_id: uuid.UUID | None = None
     session_notes: str | None = None
     expected_session_notes: str | None = None
     track_changes_enabled: bool | None = None
@@ -67,7 +65,6 @@ class ProtocolRead(PublicIdModel):
     _fk_models: ClassVar[dict[str, type]] = {
         "tenant_id": Tenant,
         "template_id": Template,
-        "document_style_id": DocumentStyle,
         "event_id": Event,
         "created_by": AppUser,
     }
@@ -76,7 +73,6 @@ class ProtocolRead(PublicIdModel):
     tenant_id: uuid.UUID
     template_id: uuid.UUID
     template_version: int
-    document_style_id: uuid.UUID | None = None
     protocol_number: str
     title: str | None = None
     protocol_date: date

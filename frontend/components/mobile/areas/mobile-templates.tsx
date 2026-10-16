@@ -23,7 +23,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
-import type { CycleConfigSummary, DocumentStyle, ParticipantSummary, TemplateElement, TemplateSummary } from "@/types/api";
+import type { CycleConfigSummary, ParticipantSummary, TemplateElement, TemplateSummary } from "@/types/api";
 
 type Settings = {
   name: string;
@@ -32,7 +32,6 @@ type Settings = {
   title_pattern: string;
   cycle_config_id: string;
   auto_create_next_protocol: boolean;
-  document_style_id: string;
 };
 
 function settingsFrom(template: TemplateSummary | null): Settings {
@@ -43,7 +42,6 @@ function settingsFrom(template: TemplateSummary | null): Settings {
     title_pattern: template?.title_pattern ?? "",
     cycle_config_id: template?.cycle_config_id ?? "",
     auto_create_next_protocol: template?.auto_create_next_protocol ?? false,
-    document_style_id: template?.document_style_id ?? "",
   };
 }
 
@@ -51,13 +49,11 @@ function settingsFrom(template: TemplateSummary | null): Settings {
 function TemplateSettingsSheet({
   template,
   cycleConfigs,
-  documentStyles,
   onClose,
   onSaved,
 }: {
   template: TemplateSummary | null;
   cycleConfigs: CycleConfigSummary[];
-  documentStyles?: DocumentStyle[];
   onClose: () => void;
   onSaved: (template: TemplateSummary, created: boolean) => void;
 }) {
@@ -82,7 +78,7 @@ function TemplateSettingsSheet({
       const saved = template
         ? await browserApiFetch<TemplateSummary>(`/api/templates/${template.id}`, {
             method: "PATCH",
-            body: JSON.stringify({ ...common, ...(documentStyles ? { document_style_id: form.document_style_id || null } : {}) }),
+            body: JSON.stringify(common),
           })
         : await browserApiFetch<TemplateSummary>("/api/templates", {
             method: "POST",
@@ -146,19 +142,6 @@ function TemplateSettingsSheet({
             ))}
           </select>
         </label>
-        {documentStyles ? (
-          <label className="field-stack">
-            <span className="field-label">{t("pdfLayoutLabel")}</span>
-            <select value={form.document_style_id} onChange={(event) => update({ document_style_id: event.target.value })}>
-              <option value="">{t("noLayoutAssigned")}</option>
-              {documentStyles.map((layout) => (
-                <option key={layout.id} value={layout.id}>
-                  {layout.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
         <div className="mobile-card mobile-group-card">
           <button type="button" className="mobile-list-row" aria-pressed={form.auto_create_next_protocol} onClick={() => update({ auto_create_next_protocol: !form.auto_create_next_protocol })}>
             <span className="mobile-list-row-label">{t("autoCreateNextProtocolLabel")}</span>
@@ -345,14 +328,12 @@ export function MobileTemplateDetail({
   elements,
   participants,
   initialAssigned,
-  documentStyles,
   cycleConfigs,
 }: {
   initialTemplate: TemplateSummary;
   elements: TemplateElement[];
   participants: ParticipantSummary[];
   initialAssigned: ParticipantSummary[];
-  documentStyles: DocumentStyle[];
   cycleConfigs: CycleConfigSummary[];
 }) {
   const t = useTranslations("templates.builder");
@@ -366,7 +347,6 @@ export function MobileTemplateDetail({
   const [assigned, setAssigned] = useState(() => new Map(initialAssigned.map((participant) => [participant.id, !!participant.exclude_from_attendance])));
   const [search, setSearch] = useState("");
   const cycle = cycleConfigs.find((config) => config.id === template.cycle_config_id) ?? null;
-  const layout = documentStyles.find((item) => item.id === template.document_style_id) ?? null;
   const sortedElements = useMemo(() => [...elements].sort((a, b) => a.sort_index - b.sort_index), [elements]);
   const activeParticipants = participants.filter((participant) => participant.is_active || assigned.has(participant.id));
   const filteredParticipants = activeParticipants.filter((participant) => !search.trim() || participant.display_name.toLowerCase().includes(search.trim().toLowerCase()));
@@ -393,7 +373,6 @@ export function MobileTemplateDetail({
           <MobileListRow label={t("protocolNumberPatternLabel")} value={template.protocol_number_pattern || "—"} onClick={() => setSettingsOpen(true)} />
           <MobileListRow label={t("titlePatternLabel")} value={template.title_pattern || "—"} onClick={() => setSettingsOpen(true)} />
           <MobileListRow label={t("cycleLabel")} value={cycle?.name ?? t("noCycle")} onClick={() => setSettingsOpen(true)} />
-          <MobileListRow label={t("pdfLayoutLabel")} value={layout?.name ?? t("noLayoutAssigned")} onClick={() => setSettingsOpen(true)} />
           <MobileListRow label={t("autoCreateNextProtocolLabel")} trailing={<MobileSwitch checked={!!template.auto_create_next_protocol} />} onClick={() => setSettingsOpen(true)} chevron={false} />
         </MobileGroupCard>
         <MobileGroupCard label={t("chooseParticipantsTitle")}>
@@ -416,7 +395,6 @@ export function MobileTemplateDetail({
         <TemplateSettingsSheet
           template={template}
           cycleConfigs={cycleConfigs}
-          documentStyles={documentStyles}
           onClose={() => setSettingsOpen(false)}
           onSaved={(saved) => {
             setTemplate(saved);

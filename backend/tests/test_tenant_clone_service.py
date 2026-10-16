@@ -237,36 +237,48 @@ def test_clone_full_rewrites_abgabe_element_refs_to_the_cloned_rows(db):
     assert db.scalar(select(ProtocolTodo.element_ref).where(ProtocolTodo.tenant_id == cloned.id)) == expected
 
 
-def test_clone_copies_house_styles_assets_and_recipes(db, tmp_path, monkeypatch):
-    """Hausstile (mit Logo-Datei), Vorlagen-Verweis und Rezepte reisen beim Klon mit; Tokens und
-    Rezept-Parameter zeigen danach auf die Kopien, nie auf den Quellmandanten."""
+def test_clone_copies_document_studio_data(db, tmp_path, monkeypatch):
+    """Assets (mit Datei), Brand-Profile samt Revisionen, Mandantenvorlagen samt Revisionen,
+    Komponenten und Zuweisungen reisen beim Klon mit; alle Verweise zeigen danach auf die
+    Kopien, nie auf den Quellmandanten. Systemvorlagen bleiben geteilt."""
     from app.core.config import settings
-    from app.models import DocumentRecipe, DocumentStyle, DocumentStyleAsset, Template
+    from app.documents import brand_service, template_service
+    from app.documents.brand import BrandTokens
+    from app.documents.layout import TemplateContent
+    from app.models import DocumentAsset, DocumentBrand, DocumentComponent, DocumentTemplate, DocumentTemplateAssignment, DocumentTemplateRevision, Template
 
     monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     source = make_tenant(db, "Stilquelle")
     template = make_template(db, source.id)
-    logo_file = tmp_path / "document_style_assets" / "src.png"
+    logo_file = tmp_path / "document_assets" / "src.png"
     logo_file.parent.mkdir(parents=True)
     logo_file.write_bytes(b"logo")
-    logo = DocumentStyleAsset(tenant_id=source.id, kind="image", name="Logo", storage_path="document_style_assets/src.png")
+    logo = DocumentAsset(tenant_id=source.id, kind="image", category="logo", name="Logo", storage_path="document_assets/src.png")
     db.add(logo)
     db.flush()
-    style = DocumentStyle(tenant_id=source.id, name="Vereinsstil", style_key="compact", tokens_json={"logo_asset_id": str(logo.public_id)}, is_default=True)
-    db.add(style)
+    brand = brand_service.create_brand(db, source.id, name="Vereinsstil", tokens=BrandTokens.model_validate({"assets": {"logo": str(logo.public_id)}}), is_default=True)
+    component = DocumentComponent(tenant_id=source.id, name="Kopf", schema_version=1, node_json={"type": "image", "id": "k", "source": {"kind": "asset", "asset_id": str(logo.public_id)}})
+    db.add(component)
     db.flush()
-    template.document_style_id = style.id
-    db.add(DocumentRecipe(tenant_id=source.id, name="Jahresbericht", style_id=style.id, blocks_json=[{"type": "kpi_tiles", "params": {}}]))
+    content = TemplateContent.model_validate({"masters": [{"id": "default"}], "body": [{"type": "component_ref", "id": "ref", "component_id": str(component.public_id)}]})
+    document_template, _revision = template_service.create_template(db, source.id, name="Jahresbericht", document_type="custom", content=content)
+    template_service.publish(db, document_template, user_id=None)
+    db.add(DocumentTemplateAssignment(tenant_id=source.id, document_type="protocol", protocol_template_id=template.id, brand_id=brand.id))
     db.flush()
 
     cloned = TenantCloneService().clone_structure(db, source.id, "Stilquelle (Kopie)")
 
-    new_style = db.scalar(select(DocumentStyle).where(DocumentStyle.tenant_id == cloned.id))
-    new_logo = db.scalar(select(DocumentStyleAsset).where(DocumentStyleAsset.tenant_id == cloned.id))
+    new_brand = db.scalar(select(DocumentBrand).where(DocumentBrand.tenant_id == cloned.id))
+    new_logo = db.scalar(select(DocumentAsset).where(DocumentAsset.tenant_id == cloned.id))
     new_template = db.scalar(select(Template).where(Template.tenant_id == cloned.id))
-    new_recipe = db.scalar(select(DocumentRecipe).where(DocumentRecipe.tenant_id == cloned.id))
-    assert new_style.id != style.id and new_style.is_default and new_style.style_key == "compact"
-    assert new_style.tokens_json["logo_asset_id"] == str(new_logo.public_id) != str(logo.public_id)
+    new_component = db.scalar(select(DocumentComponent).where(DocumentComponent.tenant_id == cloned.id))
+    new_document_template = db.scalar(select(DocumentTemplate).where(DocumentTemplate.tenant_id == cloned.id))
+    new_assignment = db.scalar(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.tenant_id == cloned.id))
+    assert new_brand.id != brand.id and new_brand.is_default
+    assert brand_service.tokens_of(brand_service.current_revision(db, new_brand)).assets.logo == new_logo.public_id != logo.public_id
     assert (tmp_path / new_logo.storage_path).read_bytes() == b"logo"
-    assert new_template.document_style_id == new_style.id
-    assert new_recipe.style_id == new_style.id
+    assert new_component.node_json["source"]["asset_id"] == str(new_logo.public_id)
+    published = db.get(DocumentTemplateRevision, new_document_template.published_revision_id)
+    assert published.template_id == new_document_template.id
+    assert published.content_json["body"][0]["component_id"] == str(new_component.public_id)
+    assert new_assignment.protocol_template_id == new_template.id and new_assignment.brand_id == new_brand.id

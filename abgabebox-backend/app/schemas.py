@@ -68,3 +68,5 @@ class VerifyResult(BaseModel):
     organization_verified: bool | None = None
     # TYPST-007: Eintrag stammt aus einem Archiv-Import ohne belegende PDF
     import_unverified: bool | None = None
+    # STUDIO-007: Titel beim Export abweichend vom Protokoll gesetzt
+    title_overridden: bool | None = None

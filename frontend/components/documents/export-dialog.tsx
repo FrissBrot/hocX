@@ -1,44 +1,40 @@
 "use client";
 
-// Ein Export-Dialog für alle Dokumente: links Dokumenttyp bzw. Rezept, Blockliste
-// (hinzufügen, entfernen, per Drag-and-drop sortieren, Parameter), Hausstil, Sprache und
-// Optionen; rechts die entprellte Live-Vorschau. Öffnet sich überall mit Kontext vorbelegt
-// (Protokoll, Todos mit aktiven Filtern, Termine, Statistik, Listen).
+// Export Center: ein einheitlicher Exportablauf für alle Dokumente. Vorlage wählen (vorbelegt
+// nach Prioritätsregel: Zuweisung > Mandanten-Standard > Plattform-Standard), Vorschau mit den
+// echten Daten prüfen, Optionen setzen, PDF erzeugen oder ein Zusatzformat laden. Gestaltet wird
+// ausschliesslich im Document Studio - hier gibt es bewusst keinen Designer.
 
-import { DragEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { BlockParamForm } from "@/components/documents/block-param-form";
-import { ActionMenu } from "@/components/ui/action-menu";
+import { templateDisplayName } from "@/components/documents/studio-labels";
+import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 import { StatusBanner } from "@/components/ui/status-banner";
-import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
-import { browserApiFetch } from "@/lib/api/client";
+import { locales } from "@/i18n/locale-config.generated";
+import { browserApiBaseUrl } from "@/lib/api/client";
 import {
-  BlockSpec,
-  CatalogBlock,
-  defaultParams,
-  DocumentCatalog,
-  DocumentRecipe,
+  apiErrorMessage,
+  Brand,
+  Capabilities,
   DocumentRequest,
-  DocumentStyle,
-  ExportOptions,
+  DocumentTemplateInfo,
+  DocumentTypeInfo,
   exportDocumentFile,
-  fetchCatalog,
-  listRecipes,
-  listStyles,
+  ExportOptions,
   previewDocument,
   renderDocument,
   saveBlob,
+  studioApi,
 } from "@/lib/documents/api";
 
 export type DocumentExportContext = {
-  /** Vorbelegter Dokumenttyp (protocol, todos, events, statistics, list, …). */
+  /** Dokumenttyp (protocol, invitation, todos, events, statistics, list, …). */
   documentType: string;
   protocolId?: string | null;
-  /** Parameter für die Standardblöcke, z. B. aktive Filter der Seite. */
+  /** Seitenkontext, z. B. aktive Filter der Seite (gilt für passende Komponenten). */
   params?: Record<string, unknown>;
 };
 
@@ -49,443 +45,287 @@ type Props = {
   onExported?: () => void;
 };
 
-type EditableBlock = BlockSpec & { key: string };
-
-const PREVIEW_DEBOUNCE_MS = 450;
-const TITLE_PAGES = ["", "none", "minimal", "modern", "bold", "cover"];
-const TOCS = ["", "off", "on", "compact", "very_compact"];
-const ORIENTATIONS = ["", "portrait", "landscape"];
-
-let blockCounter = 0;
-function withKey(block: BlockSpec): EditableBlock {
-  blockCounter += 1;
-  return { ...block, params: { ...(block.params ?? {}) }, key: `b${blockCounter}` };
-}
-
-function applyContextParams(blocks: BlockSpec[], catalog: DocumentCatalog, params?: Record<string, unknown>): BlockSpec[] {
-  if (!params) return blocks;
-  return blocks.map((block) => {
-    const schema = catalog.blocks.find((entry) => entry.type === block.type)?.params_schema;
-    const allowed = Object.keys(schema?.properties ?? {});
-    const extra = Object.fromEntries(Object.entries(params).filter(([key]) => allowed.includes(key)));
-    return { ...block, params: { ...block.params, ...extra } };
-  });
-}
-
-function stripKeys(blocks: EditableBlock[]): BlockSpec[] {
-  return blocks.map(({ key: _key, ...block }) => block);
-}
+const PREVIEW_DEBOUNCE_MS = 400;
+const PROTOCOL_TYPES = ["protocol", "invitation", "agenda", "attendance"];
 
 export function DocumentExportDialog({ open, onClose, context, onExported }: Props) {
-  const t = useTranslations("documents");
-  const tPdf = useTranslations("documentPdf");
-  const tCommon = useTranslations("common");
+  const t = useTranslations("documentStudio");
   const toast = useToast();
-  const confirm = useConfirm();
-
-  const [catalog, setCatalog] = useState<DocumentCatalog | null>(null);
-  const [styles, setStyles] = useState<DocumentStyle[]>([]);
-  const [recipes, setRecipes] = useState<DocumentRecipe[]>([]);
   const [documentType, setDocumentType] = useState(context.documentType);
-  const [recipeId, setRecipeId] = useState<string | null>(null);
-  const [blocks, setBlocks] = useState<EditableBlock[]>([]);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [styleId, setStyleId] = useState<string | null>(null);
+  const [types, setTypes] = useState<DocumentTypeInfo[]>([]);
+  const [templates, setTemplates] = useState<DocumentTemplateInfo[] | null>(null);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
+  const [templateId, setTemplateId] = useState<string | null>(null);
+  const [brandId, setBrandId] = useState<string>("");
   const [language, setLanguage] = useState<string>("");
-  const [options, setOptions] = useState<ExportOptions>({});
-  const [recipeName, setRecipeName] = useState("");
+  const [options, setOptions] = useState<ExportOptions>({ watermark: "auto" });
   const [pages, setPages] = useState<string[]>([]);
   const [previewState, setPreviewState] = useState<"idle" | "loading" | "error">("idle");
   const [previewError, setPreviewError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const dragIndex = useRef<number | null>(null);
-
-  // Katalog, Stile und Rezepte beim ersten Öffnen laden
-  useEffect(() => {
-    if (!open || catalog) return;
-    void Promise.all([fetchCatalog(), listStyles(), listRecipes()])
-      .then(([loadedCatalog, loadedStyles, loadedRecipes]) => {
-        setCatalog(loadedCatalog);
-        setStyles(loadedStyles ?? []);
-        setRecipes(loadedRecipes ?? []);
-      })
-      .catch((error) => toast(error instanceof Error ? error.message : t("dialog.loadFailed"), "error"));
-  }, [open, catalog, toast, t]);
-
-  // Beim Öffnen und bei Wechsel des Dokumenttyps die Standardblöcke übernehmen. Die
-  // Kontext-Parameter werden über ihren Inhalt verglichen (Aufrufer übergeben oft neue Objekte).
-  const contextParamsKey = JSON.stringify(context.params ?? {});
-  useEffect(() => {
-    if (!catalog || recipeId) return;
-    const type = catalog.document_types.find((entry) => entry.key === documentType) ?? catalog.document_types.find((entry) => entry.key === "custom");
-    setBlocks(applyContextParams(type?.blocks ?? [], catalog, JSON.parse(contextParamsKey)).map(withKey));
-  }, [catalog, documentType, recipeId, contextParamsKey]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const cache = useRef(new Map<string, string[]>());
 
   useEffect(() => {
-    if (open) {
-      setDocumentType(context.documentType);
-      setRecipeId(null);
-    }
+    if (open) setDocumentType(context.documentType);
   }, [open, context.documentType]);
 
+  // Katalog (Dokumenttypen, Formate), Rechte und Brand-Profile einmal laden
+  useEffect(() => {
+    if (!open || capabilities) return;
+    void Promise.all([studioApi.capabilities(), studioApi.catalog(), studioApi.brands()])
+      .then(([loadedCapabilities, catalog, loadedBrands]) => {
+        setCapabilities(loadedCapabilities);
+        setTypes(catalog.document_types);
+        setBrands(loadedBrands ?? []);
+      })
+      .catch((error) => toast(apiErrorMessage(error, t("export.loadFailed")), "error"));
+    // t/toast sind während der Lebensdauer der Komponente unveränderlich
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, capabilities]);
+
+  // Veröffentlichte Vorlagen des Dokumenttyps; vorgewählt ist die geltende Standardvorlage
+  useEffect(() => {
+    if (!open) return;
+    setTemplates(null);
+    void studioApi
+      .listTemplates({ documentType })
+      .then((loaded) => {
+        const usable = (loaded ?? []).filter((item) => item.published_revision && item.status === "active");
+        setTemplates(usable);
+        setTemplateId(usable.find((item) => item.is_default)?.id ?? usable[0]?.id ?? null);
+      })
+      .catch((error) => {
+        setTemplates([]);
+        toast(apiErrorMessage(error, t("export.loadFailed")), "error");
+      });
+    // t/toast sind während der Lebensdauer der Komponente unveränderlich
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, documentType]);
+
+  const typeInfo = types.find((item) => item.key === documentType);
+  const paramsKey = JSON.stringify(context.params ?? {});
   const request = useMemo<DocumentRequest>(
     () => ({
       document_type: documentType,
       protocol_id: context.protocolId ?? null,
-      blocks: stripKeys(blocks),
-      style_id: styleId,
+      template_id: templateId,
+      brand_id: brandId || null,
+      params: JSON.parse(paramsKey),
       options,
       language: language || null,
     }),
-    [documentType, context.protocolId, blocks, styleId, options, language]
+    [documentType, context.protocolId, templateId, brandId, paramsKey, options, language]
   );
-  const requestKey = JSON.stringify(request);
 
-  // Live-Vorschau, entprellt; ältere Anfragen werden abgebrochen
+  // Vorschau: entprellt, veraltete Anfragen werden abgebrochen, Ergebnisse gecacht
+  const requestKey = JSON.stringify(request);
   useEffect(() => {
-    if (!open || !catalog) return;
+    if (!open || !templateId) return;
+    const cached = cache.current.get(requestKey);
+    if (cached) {
+      setPages(cached);
+      setPreviewState("idle");
+      return;
+    }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setPreviewState("loading");
-      previewDocument(request, 3, controller.signal)
+      previewDocument(request, 4, controller.signal)
         .then((result) => {
-          setPages(result?.pages ?? []);
+          cache.current.set(requestKey, result.pages);
+          setPages(result.pages);
           setPreviewState("idle");
         })
         .catch((error) => {
           if (controller.signal.aborted) return;
           setPreviewState("error");
-          setPreviewError(error instanceof Error ? error.message : t("dialog.previewFailed"));
+          setPreviewError(apiErrorMessage(error, t("export.previewFailed")));
         });
     }, PREVIEW_DEBOUNCE_MS);
     return () => {
       window.clearTimeout(timer);
       controller.abort();
     };
-    // requestKey bildet den Inhalt von request ab
+    // t/toast sind während der Lebensdauer der Komponente unveränderlich
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, catalog, requestKey]);
+  }, [open, templateId, requestKey, request]);
 
-  const catalogByType = useMemo(() => new Map((catalog?.blocks ?? []).map((entry) => [entry.type, entry])), [catalog]);
-  const documentTypes = (catalog?.document_types ?? []).filter((entry) => !entry.needs_protocol || context.protocolId);
-
-  function blockName(type: string) {
-    return tPdf(`blockType.${type}`);
-  }
-
-  function updateBlock(key: string, patch: Partial<EditableBlock>) {
-    setBlocks((current) => current.map((block) => (block.key === key ? { ...block, ...patch } : block)));
-  }
-
-  function move(index: number, target: number) {
-    setBlocks((current) => {
-      if (target < 0 || target >= current.length) return current;
-      const next = [...current];
-      const [item] = next.splice(index, 1);
-      next.splice(target, 0, item);
-      return next;
-    });
-  }
-
-  function addBlock(entry: CatalogBlock | null) {
-    if (!entry) return;
-    const block = withKey({ type: entry.type, params: defaultParams(entry.params_schema), hide_if_empty: true, level: 1 });
-    setBlocks((current) => [...current, block]);
-    setExpanded(block.key);
-  }
-
-  function onDrop(event: DragEvent, index: number) {
-    event.preventDefault();
-    if (dragIndex.current !== null) move(dragIndex.current, index);
-    dragIndex.current = null;
-  }
-
-  function selectRecipe(recipe: DocumentRecipe | null) {
-    if (!recipe) {
-      setRecipeId(null);
-      setRecipeName("");
-      return;
-    }
-    setRecipeId(recipe.id);
-    setRecipeName(recipe.name);
-    setDocumentType(recipe.document_type);
-    setBlocks(recipe.blocks.map(withKey));
-    setOptions(recipe.options ?? {});
-    setStyleId(recipe.style_id);
-    setLanguage(recipe.language ?? "");
-  }
-
-  async function saveRecipe(asNew: boolean) {
-    const body = { name: recipeName.trim(), document_type: documentType, blocks: stripKeys(blocks), options, style_id: styleId, language: language || null };
-    try {
-      const saved = asNew || !recipeId
-        ? await browserApiFetch<DocumentRecipe>("/api/document-recipes", { method: "POST", body: JSON.stringify(body) })
-        : await browserApiFetch<DocumentRecipe>(`/api/document-recipes/${recipeId}`, { method: "PATCH", body: JSON.stringify(body) });
-      setRecipes((current) => [...current.filter((recipe) => recipe.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name)));
-      setRecipeId(saved.id);
-      toast(t("dialog.recipeSaved"), "success");
-    } catch (error) {
-      toast(error instanceof Error ? error.message : t("dialog.recipeSaveFailed"), "error");
-    }
-  }
-
-  async function deleteRecipe() {
-    if (!recipeId) return;
-    const ok = await confirm({ tone: "danger", message: t("dialog.recipeDeleteConfirm", { name: recipeName }), confirmLabel: tCommon("delete") });
-    if (!ok) return;
-    try {
-      await browserApiFetch(`/api/document-recipes/${recipeId}`, { method: "DELETE" });
-      setRecipes((current) => current.filter((recipe) => recipe.id !== recipeId));
-      selectRecipe(null);
-    } catch (error) {
-      toast(error instanceof Error ? error.message : t("dialog.recipeSaveFailed"), "error");
-    }
-  }
-
-  async function exportPdf() {
-    if (busy) return;
-    setBusy(true);
-    // Noch innerhalb des Klicks öffnen, damit der Browser den Tab nicht blockiert.
+  async function createPdf() {
+    setBusy("pdf");
+    // Noch im Klick öffnen, damit der Browser das neue Fenster nicht blockiert
     const pdfWindow = window.open("about:blank", "_blank");
     if (pdfWindow) pdfWindow.opener = null;
     try {
       const result = await renderDocument(request);
-      if (!result?.content_url) throw new Error(t("dialog.exportFailed"));
-      if (pdfWindow && !pdfWindow.closed) pdfWindow.location.replace(result.content_url);
-      else window.open(result.content_url, "_blank", "noopener,noreferrer");
-      toast(result.version_label ? t("dialog.exportedVersion", { version: result.version_label, id: result.short_id }) : t("dialog.exported", { id: result.short_id }), "success");
+      const url = `${browserApiBaseUrl}${result.content_url}`;
+      if (pdfWindow && !pdfWindow.closed) pdfWindow.location.replace(url);
+      else window.open(url, "_blank", "noopener,noreferrer");
+      toast(result.version_label ? t("export.createdVersion", { version: result.version_label }) : t("export.created"), "success");
       onExported?.();
     } catch (error) {
       pdfWindow?.close();
-      toast(error instanceof Error && error.message ? error.message : t("dialog.exportFailed"), "error");
+      toast(apiErrorMessage(error, t("export.failed")), "error");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
-  async function exportFormat(format: "csv" | "xlsx" | "ics" | "markdown") {
+  async function downloadFormat(format: "csv" | "xlsx" | "ics" | "markdown") {
+    setBusy(format);
     try {
       const { blob, filename } = await exportDocumentFile(request, format);
       saveBlob(blob, filename);
     } catch (error) {
-      toast(error instanceof Error && error.message ? error.message : t("dialog.exportFailed"), "error");
+      toast(apiErrorMessage(error, t("export.failed")), "error");
+    } finally {
+      setBusy(null);
     }
   }
 
-  const addOptions = (catalog?.blocks ?? []).slice().sort((a, b) => a.group.localeCompare(b.group));
+  const selectableTypes = types.filter((item) => (context.protocolId ? PROTOCOL_TYPES.includes(item.key) || item.key === context.documentType : item.key === context.documentType));
+  const selected = templates?.find((item) => item.id === templateId) ?? null;
 
   return (
-    <Modal open={open} onClose={onClose} title={t("dialog.title")} size="fullscreen">
-      <div className="docexport-layout">
-        <aside className="grid docexport-panel">
-          {!catalog ? (
-            <p className="muted">{t("dialog.loading")}</p>
-          ) : (
-            <>
-              <section className="docexport-section">
-                <div className="two-col">
-                  <label className="field-stack">
-                    <span className="field-label">{t("dialog.documentType")}</span>
-                    <select value={documentType} disabled={Boolean(recipeId)} onChange={(event) => setDocumentType(event.target.value)}>
-                      {documentTypes.map((entry) => (
-                        <option key={entry.key} value={entry.key}>{tPdf(`docType.${entry.key}`)}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="field-stack">
-                    <span className="field-label">{t("dialog.recipe")}</span>
-                    <SearchableSelect
-                      options={recipes}
-                      getId={(recipe) => recipe.id}
-                      getLabel={(recipe) => recipe.name}
-                      value={recipeId}
-                      onChange={selectRecipe}
-                      nullLabel={t("dialog.recipeNone")}
-                    />
-                  </div>
-                </div>
-              </section>
-
-              <section className="docexport-section">
-                <h3 className="docexport-heading">{t("dialog.blocks")}</h3>
-                {blocks.length === 0 && <p className="muted">{t("dialog.noBlocks")}</p>}
-                <ol className="docexport-blocks">
-                  {blocks.map((block, index) => {
-                    const entry = catalogByType.get(block.type);
-                    const isOpen = expanded === block.key;
-                    return (
-                      <li
-                        key={block.key}
-                        className="docexport-block"
-                        draggable
-                        onDragStart={() => {
-                          dragIndex.current = index;
-                        }}
-                        onDragOver={(event) => event.preventDefault()}
-                        onDrop={(event) => onDrop(event, index)}
-                      >
-                        <div className="docexport-block-head">
-                          <span className="docexport-drag" aria-hidden="true">⋮⋮</span>
-                          <button type="button" className="docexport-block-name" aria-expanded={isOpen} onClick={() => setExpanded(isOpen ? null : block.key)}>
-                            {block.title || blockName(block.type)}
-                          </button>
-                          <button type="button" className="button-icon-soft button-icon-soft-sm" aria-label={t("dialog.moveUp")} disabled={index === 0} onClick={() => move(index, index - 1)}>↑</button>
-                          <button type="button" className="button-icon-soft button-icon-soft-sm" aria-label={t("dialog.moveDown")} disabled={index === blocks.length - 1} onClick={() => move(index, index + 1)}>↓</button>
-                          <button type="button" className="button-icon-soft button-icon-soft-sm button-icon-soft-danger" aria-label={t("dialog.removeBlock")} onClick={() => setBlocks((current) => current.filter((item) => item.key !== block.key))}>✕</button>
-                        </div>
-                        {isOpen && entry && (
-                          <div className="docexport-block-body">
-                            <div className="two-col">
-                              <label className="field-stack">
-                                <span className="field-label">{t("dialog.blockTitle")}</span>
-                                <input value={block.title ?? ""} placeholder={blockName(block.type)} onChange={(event) => updateBlock(block.key, { title: event.target.value || null })} />
-                              </label>
-                              <label className="field-stack">
-                                <span className="field-label">{t("dialog.level")}</span>
-                                <select value={block.level ?? 1} onChange={(event) => updateBlock(block.key, { level: Number(event.target.value) })}>
-                                  {[1, 2, 3].map((level) => <option key={level} value={level}>{level}</option>)}
-                                </select>
-                              </label>
-                            </div>
-                            <label className="docexport-check">
-                              <input type="checkbox" checked={block.hide_if_empty !== false} onChange={(event) => updateBlock(block.key, { hide_if_empty: event.target.checked })} />
-                              <span>{t("dialog.hideIfEmpty")}</span>
-                            </label>
-                            <BlockParamForm schema={entry.params_schema} params={block.params} protocolId={context.protocolId} onChange={(params) => updateBlock(block.key, { params })} />
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ol>
-                <div className="field-stack">
-                  <span className="field-label">{t("dialog.addBlock")}</span>
-                  <SearchableSelect
-                    options={addOptions}
-                    getId={(entry) => entry.type}
-                    getLabel={(entry) => `${t(`groups.${entry.group}`)} · ${blockName(entry.type)}`}
-                    value={null}
-                    onChange={addBlock}
-                    placeholder={t("dialog.addBlockPlaceholder")}
-                  />
-                </div>
-              </section>
-
-              <section className="docexport-section">
-                <h3 className="docexport-heading">{t("dialog.layout")}</h3>
-                <div className="two-col">
-                  <label className="field-stack">
-                    <span className="field-label">{t("dialog.style")}</span>
-                    <select value={styleId ?? ""} onChange={(event) => setStyleId(event.target.value || null)}>
-                      <option value="">{t("dialog.styleDefault")}</option>
-                      {styles.map((style) => <option key={style.id} value={style.id}>{style.name}</option>)}
-                    </select>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("dialog.language")}</span>
-                    <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-                      <option value="">{t("dialog.languageDefault")}</option>
-                      {catalog.languages.map((code) => <option key={code} value={code}>{t(`languages.${code}`)}</option>)}
-                    </select>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("dialog.titlePage")}</span>
-                    <select value={options.title_page ?? ""} onChange={(event) => setOptions((current) => ({ ...current, title_page: event.target.value || null }))}>
-                      {TITLE_PAGES.map((value) => <option key={value} value={value}>{value ? t(`variants.titlePage.${value}`) : t("dialog.fromStyle")}</option>)}
-                    </select>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("dialog.toc")}</span>
-                    <select value={options.toc ?? ""} onChange={(event) => setOptions((current) => ({ ...current, toc: event.target.value || null }))}>
-                      {TOCS.map((value) => <option key={value} value={value}>{value ? t(`variants.toc.${value}`) : t("dialog.fromStyle")}</option>)}
-                    </select>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("dialog.orientation")}</span>
-                    <select value={options.orientation ?? ""} onChange={(event) => setOptions((current) => ({ ...current, orientation: event.target.value || null }))}>
-                      {ORIENTATIONS.map((value) => <option key={value} value={value}>{value ? t(`variants.orientation.${value}`) : t("dialog.fromStyle")}</option>)}
-                    </select>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("dialog.watermark")}</span>
-                    <select
-                      value={options.watermark === undefined || options.watermark === null ? "" : String(options.watermark)}
-                      onChange={(event) => setOptions((current) => ({ ...current, watermark: event.target.value === "" ? null : event.target.value === "true" }))}
-                    >
-                      <option value="">{t("dialog.watermarkAuto")}</option>
-                      <option value="true">{t("dialog.watermarkOn")}</option>
-                      <option value="false">{t("dialog.watermarkOff")}</option>
-                    </select>
-                  </label>
-                </div>
-                <label className="field-stack">
-                  <span className="field-label">{t("dialog.documentTitle")}</span>
-                  <input value={options.title ?? ""} onChange={(event) => setOptions((current) => ({ ...current, title: event.target.value || null }))} />
-                </label>
-              </section>
-
-              <section className="docexport-section">
-                <h3 className="docexport-heading">{t("dialog.recipeSection")}</h3>
-                <label className="field-stack">
-                  <span className="field-label">{t("dialog.recipeName")}</span>
-                  <input value={recipeName} maxLength={160} onChange={(event) => setRecipeName(event.target.value)} />
-                </label>
-                <div className="docexport-actions-row">
-                  {recipeId && <button type="button" className="button-danger" onClick={() => void deleteRecipe()}>{t("dialog.recipeDelete")}</button>}
-                  <button type="button" className="button-secondary" disabled={!recipeName.trim()} onClick={() => void saveRecipe(true)}>{t("dialog.recipeSaveNew")}</button>
-                  {recipeId && <button type="button" className="button-secondary" disabled={!recipeName.trim()} onClick={() => void saveRecipe(false)}>{t("dialog.recipeUpdate")}</button>}
-                </div>
-              </section>
-            </>
+    <Modal className="studio-modal" open={open} onClose={onClose} title={t("export.title")} description={t("export.description")} size="fullscreen">
+      <div className="studio-export">
+        <aside className="studio-export-panel">
+          {selectableTypes.length > 1 && (
+            <label className="field-stack">
+              <span className="field-label">{t("export.documentType")}</span>
+              <select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
+                {selectableTypes.map((item) => (
+                  <option key={item.key} value={item.key}>
+                    {t(`docType.${item.key}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
+
+          <section className="studio-export-section" aria-labelledby="studio-export-templates">
+            <h3 id="studio-export-templates" className="studio-section-title">
+              {t("export.template")}
+            </h3>
+            {templates === null ? (
+              <p className="muted">{t("common.loading")}</p>
+            ) : templates.length === 0 ? (
+              <StatusBanner tone="neutral" message={t("export.noTemplates")} />
+            ) : (
+              <div className="studio-variant-list" role="radiogroup" aria-label={t("export.template")}>
+                {templates.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={item.id === templateId}
+                    className={item.id === templateId ? "studio-variant studio-variant-active" : "studio-variant"}
+                    onClick={() => setTemplateId(item.id)}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img className="studio-variant-thumb" src={studioApi.thumbnailUrl(item.id, item.published_revision?.id ?? "")} alt="" loading="lazy" />
+                    <span className="studio-variant-name">{templateDisplayName(t, item)}</span>
+                    {item.is_default && (
+                      <Badge variant="info" className="studio-variant-badge">
+                        {t("library.default")}
+                      </Badge>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+            {capabilities?.edit_templates && selected && (
+              <a className="studio-link" href={selected.editable ? `/documents/templates/${selected.id}` : "/documents"}>
+                {t("export.openInStudio")}
+              </a>
+            )}
+          </section>
+
+          <section className="studio-export-section" aria-labelledby="studio-export-options">
+            <h3 id="studio-export-options" className="studio-section-title">
+              {t("export.options")}
+            </h3>
+            <label className="field-stack">
+              <span className="field-label">{t("export.language")}</span>
+              <select value={language} onChange={(event) => setLanguage(event.target.value)}>
+                <option value="">{t("export.languageDefault")}</option>
+                {locales.map((code) => (
+                  <option key={code} value={code}>
+                    {t(`language.${code}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {brands.length > 1 && (
+              <label className="field-stack">
+                <span className="field-label">{t("export.brand")}</span>
+                <select value={brandId} onChange={(event) => setBrandId(event.target.value)}>
+                  <option value="">{t("export.brandDefault")}</option>
+                  {brands.map((brand) => (
+                    <option key={brand.id} value={brand.id}>
+                      {brand.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className="field-stack">
+              <span className="field-label">{t("export.documentTitle")}</span>
+              <input value={options.title ?? ""} maxLength={300} placeholder={t("export.documentTitleAuto")} onChange={(event) => setOptions({ ...options, title: event.target.value || null })} />
+            </label>
+            <label className="field-stack">
+              <span className="field-label">{t("export.watermark")}</span>
+              <select value={options.watermark ?? "auto"} onChange={(event) => setOptions({ ...options, watermark: event.target.value as ExportOptions["watermark"] })}>
+                <option value="auto">{t("export.watermarkAuto")}</option>
+                <option value="on">{t("export.watermarkOn")}</option>
+                {/* Entwürfe ohne Kennzeichnung nur mit Schreibrecht (STUDIO-007, serverseitig erzwungen) */}
+                {capabilities?.unmark_drafts && <option value="off">{t("export.watermarkOff")}</option>}
+              </select>
+            </label>
+          </section>
+
+          <div className="modal-actions studio-export-actions">
+            {(typeInfo?.formats ?? []).map((format) => (
+              <button key={format} type="button" className="button-secondary" disabled={!!busy || !templateId} onClick={() => void downloadFormat(format)}>
+                {busy === format ? t("export.working") : t(`export.format.${format}`)}
+              </button>
+            ))}
+            <button type="button" className="button-primary" disabled={!!busy || !templateId} onClick={() => void createPdf()}>
+              {busy === "pdf" ? t("export.working") : t("export.createPdf")}
+            </button>
+          </div>
         </aside>
 
-        <section className="docexport-preview" aria-live="polite" aria-label={t("dialog.preview")}>
-          <div className="docexport-preview-bar">
-            <span className="field-label">{t("dialog.preview")}</span>
-            {previewState === "loading" && <span className="muted">{t("dialog.previewLoading")}</span>}
+        <section className="studio-export-preview" aria-live="polite" aria-label={t("export.preview")}>
+          <div className="studio-preview-bar">
+            <span className="field-label">{t("export.preview")}</span>
+            {previewState === "loading" && <span className="muted">{t("preview.loading")}</span>}
           </div>
-          {previewState === "error" ? (
-            <StatusBanner tone="error" message={previewError} />
-          ) : pages.length === 0 ? (
-            <p className="muted">{t("dialog.previewEmpty")}</p>
+          {previewState === "error" && <StatusBanner tone="error" message={previewError} />}
+          {!templateId ? (
+            <p className="muted">{t("export.chooseTemplate")}</p>
           ) : (
-            <div className="docexport-pages">
+            <div className="studio-preview-pages">
               {pages.map((page, index) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={index} className="docexport-page" src={page} alt={t("dialog.pageAlt", { page: index + 1 })} />
+                <img key={index} className="studio-preview-page" src={page} alt={t("preview.pageAlt", { page: index + 1 })} />
               ))}
             </div>
           )}
+          <p className="field-help">{t("export.previewHint")}</p>
         </section>
-      </div>
-      <div className="modal-actions">
-        <button type="button" className="button-ghost" onClick={onClose}>{tCommon("cancel")}</button>
-        <ActionMenu
-          ariaLabel={t("dialog.moreFormats")}
-          items={[
-            { label: t("dialog.formatCsv"), onClick: () => void exportFormat("csv") },
-            { label: t("dialog.formatXlsx"), onClick: () => void exportFormat("xlsx") },
-            { label: t("dialog.formatIcs"), onClick: () => void exportFormat("ics") },
-            { label: t("dialog.formatMarkdown"), onClick: () => void exportFormat("markdown") },
-          ]}
-        />
-        <button type="button" className="button-primary" disabled={busy || !catalog} onClick={() => void exportPdf()}>
-          {busy ? t("dialog.exporting") : t("dialog.exportPdf")}
-        </button>
       </div>
     </Modal>
   );
 }
 
-/** Schaltfläche, die den Export-Dialog mit Kontext öffnet. */
 export function DocumentExportButton({ context, className = "button-secondary", label }: { context: DocumentExportContext; className?: string; label?: string }) {
-  const t = useTranslations("documents");
+  const t = useTranslations("documentStudio");
   const [open, setOpen] = useState(false);
   return (
     <>
       <button type="button" className={className} onClick={() => setOpen(true)}>
-        {label ?? t("dialog.open")}
+        {label ?? t("export.button")}
       </button>
       {open && <DocumentExportDialog open={open} onClose={() => setOpen(false)} context={context} />}
     </>

@@ -18,6 +18,7 @@ export type VerifyResponse = {
   tenant_has_logo?: boolean;
   organization_verified?: boolean;
   import_unverified?: boolean;
+  title_overridden?: boolean;
 };
 
 export type VerifyOutcome =
@@ -30,6 +31,8 @@ export type VerifyOutcome =
       newerVersion: string | null;
       // Eintrag aus einem Datenimport, beim Import nicht mit der Originaldatei abgeglichen
       importUnverified: boolean;
+      // Titel beim Export abweichend vom Protokoll gesetzt (STUDIO-007)
+      titleOverridden: boolean;
       identity: "verified" | "named" | "anonymous";
     };
 
@@ -62,6 +65,7 @@ export function classifyResult(result: VerifyResponse): VerifyOutcome {
     otherDocument: result.document_id_matches === false,
     newerVersion: result.is_superseded ? result.latest_version_label ?? null : null,
     importUnverified: result.import_unverified === true,
+    titleOverridden: result.title_overridden === true,
     identity,
   };
 }
