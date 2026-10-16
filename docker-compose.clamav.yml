@@ -1,6 +1,6 @@
 services:
   clamav:
-    image: clamav/clamav@sha256:9cb27d7660bdf66e9878c832cb433dd8aa152cfbe16f3c2c0084c80b04ae22b4
+    image: clamav/clamav@sha256:638d90201ee7ee6a82d249a2fc23b132e578673b5f1f2766852b127676ca1ef6
     restart: unless-stopped
     # Das Image prueft per Default nur 1x taeglich auf neue Signaturen. Verpasst clamd beim
     # Containerstart die Reload-Benachrichtigung (Socket noch nicht bereit), bliebe es sonst
