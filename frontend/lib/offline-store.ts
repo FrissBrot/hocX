@@ -13,7 +13,7 @@ export type PendingMutation = {
   lastError?: string;
   // Set when the backend rejected this mutation with a non-retryable (4xx, non-408/429)
   // response - most notably a 409 conflict. Retrying it unchanged would just keep losing
-  // in the exact same way, so it is skipped on every future flush (see flushOutbox) until
+  // in the exact same way, so flushOutbox skips it on every future flush until
   // either a fresh edit re-queues the same key (queueMutation always starts a new item
   // without this flag) or the user explicitly discards it (discardMutation/
   // discardBlockedMutations) via the "verwerfen" action surfaced in ConnectivityStatus.
@@ -86,9 +86,12 @@ export function getOfflineServerSnapshot(): OfflineSnapshot {
 export function queueMutation(input: Omit<PendingMutation, "id" | "createdAt" | "attempts">) {
   const items = readOutbox();
   const previous = items.find((item) => item.key === input.key);
+  // Jeder neue Body bekommt eine eigene id: flushOutbox entfernt nach Erfolg nur den Eintrag
+  // mit genau der gesendeten id. Mit der alten id loeschte ein waehrend des Sendens
+  // eingereihter, neuerer Body sich selbst mit (Audit MAIN-FE-011).
   const next: PendingMutation = {
     ...input,
-    id: previous?.id ?? crypto.randomUUID(),
+    id: crypto.randomUUID(),
     createdAt: previous?.createdAt ?? Date.now(),
     attempts: previous?.attempts ?? 0,
   };
@@ -103,6 +106,16 @@ export function queueMutation(input: Omit<PendingMutation, "id" | "createdAt" | 
 
 export function removeMutation(key: string) {
   writeOutbox(readOutbox().filter((item) => item.key !== key));
+}
+
+// Entfernt den Eintrag nur, wenn er noch genau die gesendete Fassung ist. Gibt false zurueck,
+// wenn inzwischen ein neuerer Body fuer denselben Key eingereiht wurde.
+function removeSentMutation(item: PendingMutation): boolean {
+  const items = readOutbox();
+  const current = items.find((entry) => entry.key === item.key);
+  if (current && current.id !== item.id) return false;
+  writeOutbox(items.filter((entry) => entry.key !== item.key));
+  return true;
 }
 
 // Explicit user-facing "verwerfen" action for a mutation that keeps failing with a
@@ -134,8 +147,12 @@ export function discardBlockedMutations() {
 export async function flushOutbox(): Promise<void> {
   if (typeof window === "undefined" || !navigator.onLine || snapshot.flushing) return;
   emit({ flushing: true, lastError: null });
+  let replacedDuringFlush = false;
   try {
     for (const item of readOutbox()) {
+      // Blockierte Eintraege (nicht wiederholbare 4xx) erst nach neuer Eingabe oder Verwerfen
+      // wieder senden - unveraendert wuerden sie bei jedem Flush erneut abgelehnt.
+      if (item.blocked) continue;
       try {
         const response = await fetch(item.path, {
           method: item.method,
@@ -164,7 +181,7 @@ export async function flushOutbox(): Promise<void> {
           if (response.status < 500 && response.status !== 408 && response.status !== 429) {
             const message = detail || clientMessage("saveFailedStatus", { status: response.status });
             const current = readOutbox();
-            writeOutbox(current.map((entry) => entry.key === item.key ? {
+            writeOutbox(current.map((entry) => entry.id === item.id ? {
               ...entry,
               attempts: entry.attempts + 1,
               lastError: message,
@@ -175,12 +192,15 @@ export async function flushOutbox(): Promise<void> {
           }
           throw new Error(detail || clientMessage("unreachableStatus", { status: response.status }));
         }
-        removeMutation(item.key);
         retryDelayMs = 1_000;
-        window.dispatchEvent(new CustomEvent("hocx:mutation-flushed", { detail: { key: item.key } }));
+        if (removeSentMutation(item)) {
+          window.dispatchEvent(new CustomEvent("hocx:mutation-flushed", { detail: { key: item.key } }));
+        } else {
+          replacedDuringFlush = true;
+        }
       } catch (error) {
         const current = readOutbox();
-        writeOutbox(current.map((entry) => entry.key === item.key ? {
+        writeOutbox(current.map((entry) => entry.id === item.id ? {
           ...entry,
           attempts: entry.attempts + 1,
           lastError: error instanceof Error ? error.message : clientMessage("connectionError"),
@@ -196,6 +216,12 @@ export async function flushOutbox(): Promise<void> {
     }
   } finally {
     emit({ flushing: false });
+  }
+  // Ein waehrend dieses Laufs neu eingereihter Body: queueMutations eigener Flush-Timer lief
+  // ins Leere, solange dieser Lauf noch aktiv war - also direkt nachsenden.
+  if (replacedDuringFlush && navigator.onLine) {
+    if (flushTimer !== null) window.clearTimeout(flushTimer);
+    flushTimer = window.setTimeout(() => void flushOutbox(), 0);
   }
 }
 
