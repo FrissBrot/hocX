@@ -36,7 +36,6 @@ class TemplateElementService:
                 "allows_multiple_values": block.get("allows_multiple_values", False),
                 "sort_index": block["sort_index"],
                 "render_order": block.get("render_order"),
-                "latex_template": block.get("latex_template"),
                 "configuration_json": encode_block_config(db, block.get("configuration_json")),
                 "created_at": template_element.created_at,
                 **resolve_block_behavior(template_element_config, block),

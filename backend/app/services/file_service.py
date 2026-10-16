@@ -206,7 +206,6 @@ class FileService:
             settings.storage_root,
             settings.export_root,
             settings.upload_root,
-            settings.latex_template_root,
             settings.thumbnail_root,
             # Gallery-upload staging area (see upload_pipeline.stage_upload_to_disk) - must
             # stay under upload_root (the bind-mounted storage volume), never the process's

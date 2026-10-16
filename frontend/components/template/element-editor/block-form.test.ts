@@ -5,7 +5,7 @@ import { blockFormFromBlock, blockPayload, changeElementType, newBlockForm, rowT
 const block = (element_type_id: number, configuration_json: Record<string, unknown>, extra: Partial<ElementDefinitionBlock> = {}): ElementDefinitionBlock => ({
   id: 1, title: "Block", description: null, block_title: null, default_content: null, copy_from_last_protocol: false,
   element_type_id, render_type_id: 2, is_editable: false, allows_multiple_values: false, export_visible: true,
-  is_visible: true, sort_index: 10, render_order: 10, latex_template: null, configuration_json, ...extra,
+  is_visible: true, sort_index: 10, render_order: 10, configuration_json, ...extra,
 });
 
 describe("block-form", () => {

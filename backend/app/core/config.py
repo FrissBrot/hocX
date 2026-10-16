@@ -18,7 +18,14 @@ _INSECURE_DEFAULTS = {
 
 def _load_file_secrets() -> None:
     """Resolve Docker-style VAR_FILE inputs without exposing values in Config.Env."""
-    for variable in ("DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD", "REDIS_PASSWORD"):
+    for variable in (
+        "DATABASE_URL",
+        "APP_DATABASE_URL",
+        "AUTH_SECRET",
+        "ADMIN_AUTH_SECRET",
+        "INITIAL_ADMIN_PASSWORD",
+        "REDIS_PASSWORD",
+    ):
         file_variable = f"{variable}_FILE"
         if variable not in os.environ and (path := os.environ.get(file_variable)):
             os.environ[variable] = Path(path).read_text(encoding="utf-8").rstrip("\r\n")
@@ -53,7 +60,6 @@ class Settings(BaseSettings):
     # keep working unchanged.
     app_database_url: str = ""
     storage_root: str = "/app/storage"
-    latex_template_root: str = "/app/storage/latex_templates"
     export_root: str = "/app/storage/exports"
     upload_root: str = "/app/storage/uploads"
     thumbnail_root: str = "/app/storage-local/thumbnails"
@@ -151,6 +157,21 @@ class Settings(BaseSettings):
     clamav_host: str = "clamav"
     clamav_port: int = 3310
     redis_url: str = "redis://redis:6379/0"
+    # Dokument-Engine (app/documents): Grenzen für den Typst-Prozess-Pool. Der Timeout gilt
+    # pro Compile (Wall-Clock); bei Überschreitung wird der Pool beendet und neu gestartet.
+    # Pro Uvicorn-Worker (Dockerfile: 2) ein eigener Pool: 2 × 2 Compiles gleichzeitig.
+    document_render_concurrency: int = 2
+    document_render_timeout_seconds: int = 60
+    document_render_memory_limit_mb: int = 3072
+    # Höchstens so lange auf einen freien Compile-Platz warten, sonst HTTP 503 (error.busy)
+    document_render_queue_timeout_seconds: int = 20
+    document_preview_max_pages: int = 4
+    # Öffentliche Prüfseite (Abgabebox /verify), steht in jedem PDF (Fusszeile, QR-Code, XMP).
+    # Bewusst die Plattform-Domain, nicht eine Mandanten-Domain: gedruckte Links bleiben stabil.
+    # Leer = ABGABEBOX_BASE_URL + "/verify".
+    document_verify_base_url: str | None = None
+    # Interner Prüf-Endpoint der Abgabebox für den Systemcheck document_verification.
+    abgabebox_internal_url: str = "http://abgabebox-backend:8000"
     # Obergrenze für Request-Bodies ausser Multipart (JSON etc.), MAIN-OPS-013.
     max_request_body_bytes: int = 10 * 1024 * 1024
     # requirepass im Release-Stack (REDIS_PASSWORD_FILE, MAIN-OPS-005); leer = ohne Passwort.
@@ -190,6 +211,10 @@ class Settings(BaseSettings):
             if self.initial_admin_password == "ChangeMe123!":
                 print("FATAL: The known development admin password is forbidden in production.", file=sys.stderr)
                 sys.exit(1)
+
+    @property
+    def verify_base_url(self) -> str:
+        return (self.document_verify_base_url or f"{self.abgabebox_base_url.rstrip('/')}/verify").rstrip("/")
 
     @property
     def is_production(self) -> bool:

@@ -15,8 +15,9 @@ from app.core.config import settings
 from app.models import (
     AttendanceFine,
     CycleConfig,
-    DocumentTemplate,
-    DocumentTemplatePart,
+    DocumentRecipe,
+    DocumentStyle,
+    DocumentStyleAsset,
     ElementDefinition,
     Event,
     EventCycle,
@@ -53,11 +54,9 @@ from app.models import (
 )
 from app.models.entities import submission_assignment_link_table
 from app.services import submission_link_service
-from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import _safe_storage_path
 from app.services.tenant_transfer_common import (
     remap_block_configuration,
-    remap_document_template_config,
     remap_element_definition_config,
     remap_list_value,
     remap_occurrence_key,
@@ -107,21 +106,21 @@ class TenantCloneService:
     """Clones a tenant either as an empty structure/config copy or as a full data backup.
 
     Known, deliberate limitations (disclosed rather than silently handled):
-    - `ProtocolExportCache` (cached PDF/LaTeX exports) is never cloned — it is regeneratable.
+    - `DocumentExport` und `DocumentRegistry` (erzeugte PDFs und ihr Register) werden nie
+      geklont: die Dokumente gehören zum Original, ihre Dokument-ID und ihr Hash bleiben dort
+      prüfbar. Ebenso wenig die Bestätigung der Organisation durch hocX.
     - `UserProtocolScroll` (per-user scroll position) is never cloned — ephemeral UI state.
     - Users (and their per-user access rows) are never cloned: an account belongs to exactly
       one tenant. Every reference to a user on cloned rows is reset to NULL, and the new
       tenant starts without accounts - the platform admin creates them afterwards.
-    - Cloned protocols keep pointing at the ORIGINAL tenant's `document_template_path_snapshot`
-      directory (an immutable historical export artifact), it is not physically duplicated.
+    - Dokument-Rezepte: Verweise in Blockparametern (public_ids) werden nur für Termine,
+      Personen, Listen, Konten, Zyklen, Vorlagen und Protokolle umgeschrieben; andere bleiben
+      und ergeben beim Export «nicht gefunden».
     - Only participant-ID references we know the shape of are remapped: `Event.*_ids`,
       `ListEntry` values, and `attendance_entries[].participant_id` inside protocol block
       snapshots. Any other participant/event IDs embedded in free-form block configuration_json
       (e.g. matrix-element cell data) are left untouched.
     """
-
-    def __init__(self) -> None:
-        self.document_template_service = DocumentTemplateService()
 
     # ── public entry points ──────────────────────────────────────────────
 
@@ -157,8 +156,7 @@ class TenantCloneService:
         new_tenant = self._clone_tenant_base(db, source, new_name)
         self._partial_tenant_id = new_tenant.id
         cycle_config_map = self._clone_cycle_configs(db, source.id, new_tenant.id)
-        part_map = self._clone_document_template_parts(db, source.id, new_tenant.id)
-        document_template_map = self._clone_document_templates(db, source.id, new_tenant.id, part_map)
+        document_style_map = self._clone_document_styles(db, source.id, new_tenant.id)
         finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
         self._clone_fine_tariff(db, source.id, new_tenant.id, finance_account_map)
         # Cloned before element_definitions/templates (mirrors _clone_full_impl's ordering)
@@ -177,7 +175,7 @@ class TenantCloneService:
         )
         self._clone_templates(
             db, source.id, new_tenant.id,
-            document_template_map=document_template_map,
+            document_style_map=document_style_map,
             cycle_config_map=cycle_config_map,
             element_definition_map=element_definition_map,
             event_map={},
@@ -190,6 +188,14 @@ class TenantCloneService:
         self._clone_task_packages(
             db, source.id, new_tenant.id,
             cycle_config_map=cycle_config_map, participant_map={}, list_definition_map=list_definition_map, list_entry_map={},
+        )
+        self._clone_document_recipes(
+            db, source.id, new_tenant.id,
+            public_id_map={
+                **self._public_id_map(db, CycleConfig, cycle_config_map),
+                **self._public_id_map(db, ListDefinition, list_definition_map),
+                **self._public_id_map(db, FinanceAccount, finance_account_map),
+            },
         )
         return new_tenant
 
@@ -204,8 +210,7 @@ class TenantCloneService:
         self._clone_leaders(db, source.id, new_tenant.id)
         participant_map = self._clone_participants(db, source.id, new_tenant.id)
         cycle_config_map = self._clone_cycle_configs(db, source.id, new_tenant.id)
-        part_map = self._clone_document_template_parts(db, source.id, new_tenant.id)
-        document_template_map = self._clone_document_templates(db, source.id, new_tenant.id, part_map)
+        document_style_map = self._clone_document_styles(db, source.id, new_tenant.id)
         event_map = self._clone_events(db, source.id, new_tenant.id, group_map=group_map, participant_map=participant_map)
         # Fuer im Editor gewaehlte (als public UUID gespeicherte) Referenzen in Block-Snapshots,
         # siehe remap_block_configuration.
@@ -239,7 +244,7 @@ class TenantCloneService:
         )
         template_map, template_element_map, template_element_block_map = self._clone_templates(
             db, source.id, new_tenant.id,
-            document_template_map=document_template_map,
+            document_style_map=document_style_map,
             cycle_config_map=cycle_config_map,
             element_definition_map=element_definition_map,
             event_map=event_map,
@@ -260,7 +265,7 @@ class TenantCloneService:
         stored_file_map = self._clone_stored_files(db, source.id, new_tenant.id)
         self._clone_submission_upload_files(db, submission_upload_map=submission_upload_map, stored_file_map=stored_file_map)
         protocol_map = self._clone_protocols(
-            db, source.id, new_tenant.id, template_map=template_map, document_template_map=document_template_map, event_map=event_map
+            db, source.id, new_tenant.id, template_map=template_map, document_style_map=document_style_map, event_map=event_map
         )
         protocol_element_map = self._clone_protocol_elements(
             db, protocol_map=protocol_map, template_element_map=template_element_map,
@@ -305,6 +310,19 @@ class TenantCloneService:
         )
         self._clone_protocol_todo_assignees(db, todo_map=todo_map, participant_map=participant_map)
         self._remap_todo_repeat_sources(db, protocol_element_block_map=protocol_element_block_map, todo_map=todo_map)
+        self._clone_document_recipes(
+            db, source.id, new_tenant.id,
+            public_id_map={
+                **self._public_id_map(db, CycleConfig, cycle_config_map),
+                **self._public_id_map(db, ListDefinition, list_definition_map),
+                **self._public_id_map(db, FinanceAccount, finance_account_map),
+                **self._public_id_map(db, Participant, participant_map),
+                **self._public_id_map(db, Event, event_map),
+                **self._public_id_map(db, Template, template_map),
+                **self._public_id_map(db, Protocol, protocol_map),
+                **self._public_id_map(db, StoredFile, stored_file_map),
+            },
+        )
         self._clone_todo_snapshots(
             db,
             protocol_map=protocol_map,
@@ -389,20 +407,6 @@ class TenantCloneService:
             _logger.warning("tenant clone: source stored file missing at %s (new_tenant_id=%s)", storage_path, new_tenant_id)
         return str(target_path.relative_to(root_path))
 
-    def _clone_document_template_part_file(
-        self, source_storage_path: str, *, new_tenant_id: int, part_type: str, code: str, version: int
-    ) -> str:
-        source = _safe_storage_path(settings.storage_root, source_storage_path)
-        suffix = Path(source_storage_path).suffix or ".tex"
-        target_dir = Path(settings.storage_root) / "document_template_parts" / f"tenant-{new_tenant_id}" / part_type / code
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / f"v{version}{suffix}"
-        if source.exists():
-            shutil.copy2(source, target_path)
-        else:
-            _logger.warning("tenant clone: source document template part missing at %s (new_tenant_id=%s)", source_storage_path, new_tenant_id)
-        return str(target_path.relative_to(Path(settings.storage_root).resolve()))
-
     # ── structure/config tables ─────────────────────────────────────────
 
     def _clone_cycle_configs(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> dict[int, int]:
@@ -438,42 +442,44 @@ class TenantCloneService:
         db.commit()
         return id_map
 
-    def _clone_document_template_parts(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> dict[int, int]:
-        rows = db.scalars(select(DocumentTemplatePart).where(DocumentTemplatePart.tenant_id == source_tenant_id)).all()
-        id_map: dict[int, int] = {}
-        for row in rows:
-            new_storage_path = self._clone_document_template_part_file(
-                row.storage_path, new_tenant_id=new_tenant_id, part_type=row.part_type, code=row.code, version=row.version,
-            )
-            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "storage_path": new_storage_path})
-            db.add(new_row)
+    def _clone_document_styles(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> dict[int, int]:
+        """Hausstile samt hochgeladenen Schriften/Bildern (Dateien werden kopiert). Tokens
+        verweisen per public_id auf Assets und werden auf die neuen Assets umgeschrieben."""
+        asset_public_map: dict[str, str] = {}
+        for asset in db.scalars(select(DocumentStyleAsset).where(DocumentStyleAsset.tenant_id == source_tenant_id)).all():
+            source = _safe_storage_path(settings.storage_root, asset.storage_path)
+            relative = Path("document_style_assets") / f"tenant-{new_tenant_id}" / f"{uuid4().hex}{Path(asset.storage_path).suffix}"
+            target = _safe_storage_path(settings.storage_root, str(relative))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if source.exists():
+                shutil.copy2(source, target)
+            else:
+                _logger.warning("tenant clone: source document style asset missing at %s (new_tenant_id=%s)", asset.storage_path, new_tenant_id)
+                continue
+            new_asset = _copy_row(asset, {"tenant_id": new_tenant_id, "storage_path": str(relative), "created_by": None})
+            db.add(new_asset)
             db.flush()
-            id_map[row.id] = new_row.id
+            asset_public_map[str(asset.public_id).lower()] = str(new_asset.public_id)
+        id_map: dict[int, int] = {}
+        for style in db.scalars(select(DocumentStyle).where(DocumentStyle.tenant_id == source_tenant_id)).all():
+            new_style = _copy_row(style, {"tenant_id": new_tenant_id, "tokens_json": replace_public_ids(style.tokens_json, asset_public_map)})
+            db.add(new_style)
+            db.flush()
+            id_map[style.id] = new_style.id
         db.commit()
+        self._document_style_map = id_map
         return id_map
 
-    def _clone_document_templates(
-        self, db: Session, source_tenant_id: int, new_tenant_id: int, part_map: dict[int, int]
-    ) -> dict[int, int]:
-        rows = db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id == source_tenant_id)).all()
-        id_map: dict[int, int] = {}
-        for row in rows:
-            new_row = _copy_row(row, {
+    def _clone_document_recipes(self, db: Session, source_tenant_id: int, new_tenant_id: int, *, public_id_map: dict[str, str]) -> None:
+        style_map = getattr(self, "_document_style_map", {})
+        for recipe in db.scalars(select(DocumentRecipe).where(DocumentRecipe.tenant_id == source_tenant_id)).all():
+            db.add(_copy_row(recipe, {
                 "tenant_id": new_tenant_id,
-                "filesystem_path": "",
-                "configuration_json": remap_document_template_config(row.configuration_json, part_map),
-            })
-            db.add(new_row)
-            db.flush()
-            id_map[row.id] = new_row.id
+                "style_id": style_map.get(recipe.style_id) if recipe.style_id else None,
+                "blocks_json": replace_public_ids(recipe.blocks_json, public_id_map),
+                "created_by": None,
+            }))
         db.commit()
-        for new_id in id_map.values():
-            template = self.document_template_service.repository.get(db, new_id)
-            if template is None:
-                continue
-            path = self.document_template_service._materialize_template(db, template)
-            self.document_template_service.repository.update(db, template, {"filesystem_path": path})
-        return id_map
 
     def _clone_list_definitions(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> dict[int, int]:
         rows = db.scalars(select(ListDefinition).where(ListDefinition.tenant_id == source_tenant_id)).all()
@@ -515,7 +521,7 @@ class TenantCloneService:
         source_tenant_id: int,
         new_tenant_id: int,
         *,
-        document_template_map: dict[int, int],
+        document_style_map: dict[int, int],
         cycle_config_map: dict[int, int],
         element_definition_map: dict[int, int],
         event_map: dict[int, int],
@@ -529,7 +535,7 @@ class TenantCloneService:
         for row in templates:
             new_row = _copy_row(row, {
                 "tenant_id": new_tenant_id,
-                "document_template_id": document_template_map.get(row.document_template_id) if row.document_template_id else None,
+                "document_style_id": document_style_map.get(row.document_style_id) if row.document_style_id else None,
                 "next_event_id": event_map.get(row.next_event_id) if row.next_event_id else None,
                 "last_event_id": event_map.get(row.last_event_id) if row.last_event_id else None,
                 "cycle_config_id": cycle_config_map.get(row.cycle_config_id) if row.cycle_config_id else None,
@@ -859,7 +865,7 @@ class TenantCloneService:
         new_tenant_id: int,
         *,
         template_map: dict[int, int],
-        document_template_map: dict[int, int],
+        document_style_map: dict[int, int],
         event_map: dict[int, int],
     ) -> dict[int, int]:
         rows = db.scalars(select(Protocol).where(Protocol.tenant_id == source_tenant_id)).all()
@@ -871,10 +877,8 @@ class TenantCloneService:
             new_row = _copy_row(row, {
                 "tenant_id": new_tenant_id,
                 "template_id": new_template_id,
-                "document_template_id": document_template_map.get(row.document_template_id) if row.document_template_id else None,
+                "document_style_id": document_style_map.get(row.document_style_id) if row.document_style_id else None,
                 "event_id": event_map.get(row.event_id) if row.event_id else None,
-                # document_template_path_snapshot intentionally left pointing at the ORIGINAL
-                # tenant's immutable snapshot directory - see class docstring.
                 # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - sie wird
                 # nach dem Klonen der Blöcke und Todos umgeschrieben (_clone_todo_snapshots).
                 "todos_snapshot_json": None,

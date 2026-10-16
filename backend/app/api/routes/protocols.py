@@ -21,10 +21,9 @@ from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.collaboration_service import protocol_channel
 from app.services.event_service import EventService
-from app.services.export_service import ExportService
 from app.services.protocol_service import ProtocolService
 from app.services.protocol_todo_service import ProtocolTodoService
-from app.models.entities import CycleConfig, Participant, Protocol, ProtocolElement, ProtocolExportCache, StoredFile, Template, UserProtocolScroll, UserProtocolTemplatePreference, WordImportDocument
+from app.models.entities import CycleConfig, DocumentExport, Participant, Protocol, ProtocolElement, StoredFile, Template, UserProtocolScroll, UserProtocolTemplatePreference, WordImportDocument
 
 router = APIRouter()
 service = ProtocolService()
@@ -57,10 +56,17 @@ def _get_protocol_or_404(db: Session, protocol_id: uuid.UUID, user: CurrentUser)
 
 
 async def _generate_pdf_background(protocol_id: int) -> None:
-    """Generate a PDF in the background after a protocol is closed."""
+    """Erzeugt nach dem Abschliessen das (signierte) Protokoll-PDF über die Dokument-Engine."""
+    from app.documents import service as document_service
+
     db = SessionLocal()
     try:
-        await ExportService().export_pdf(db, protocol_id)
+        protocol = db.get(Protocol, protocol_id)
+        if protocol is None:
+            return
+        await document_service.render(
+            db, None, protocol.tenant_id, document_service.DocumentRequest(protocol_id=protocol.public_id, document_type="protocol")
+        )
     except Exception as exc:
         # Runs via BackgroundTasks, outside the request/response cycle the global exception
         # handlers in main.py watch - without this, a failure here was invisible everywhere.
@@ -117,13 +123,13 @@ def _build_protocol_reads(db: Session, protocols: list) -> list[ProtocolRead]:
         return []
 
     pdf_rows = db.execute(
-        select(ProtocolExportCache.protocol_id, StoredFile.public_id.label("file_public_id"))
-        .join(StoredFile, StoredFile.id == ProtocolExportCache.generated_file_id)
+        select(DocumentExport.protocol_id, StoredFile.public_id.label("file_public_id"))
+        .join(StoredFile, StoredFile.id == DocumentExport.stored_file_id)
         .where(
-            ProtocolExportCache.protocol_id.in_(internal_ids),
-            ProtocolExportCache.export_format == "pdf",
+            DocumentExport.protocol_id.in_(internal_ids),
+            DocumentExport.document_type == "protocol",
         )
-        .order_by(ProtocolExportCache.id.desc())
+        .order_by(DocumentExport.created_at.desc(), DocumentExport.id.desc())
     ).all()
     pdf_by_protocol: dict[int, uuid.UUID] = {}
     for row in pdf_rows:

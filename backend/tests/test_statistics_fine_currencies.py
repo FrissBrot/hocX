@@ -2,7 +2,7 @@
 Begründung gelöschte Bussen zählen nicht mit."""
 from decimal import Decimal
 
-from app.services.chart_service import _fetch_fines_data
+from app.documents.providers.statistics import _main_currency_rows
 from app.services.statistics_common import fetch_fines_by_participant, fetch_fines_by_type
 from tests.factories import make_finance_account, make_fine, make_protocol, make_template, make_tenant
 
@@ -38,10 +38,9 @@ def test_amounts_are_grouped_by_currency(db):
     assert by_type == {("late", chf.currency_label): Decimal("5.00"), ("absent", chf.currency_label): Decimal("5.00"), ("absent", "EUR"): Decimal("7.00")}
 
 
-def test_chart_uses_the_main_currency_for_amounts_and_all_currencies_for_counts(db):
-    tenant, _ = _setup(db)
+def test_charts_use_the_main_currency_for_amounts(db):
+    tenant, chf = _setup(db)
 
-    by_participant, by_type = _fetch_fines_data(db, tenant.id)
+    rows = _main_currency_rows(fetch_fines_by_participant(db, tenant.id))
 
-    assert sorted((row["name"], row["amount"]) for row in by_participant) == [("Anna", 5.0), ("Ben", 5.0)]
-    assert {row["label"]: row["count"] for row in by_type} == {"Verspätet": 1, "Unentschuldigt": 2}
+    assert sorted((row.name, row.currency) for row in rows) == [("Anna", chf.currency_label), ("Ben", chf.currency_label)]

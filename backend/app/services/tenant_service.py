@@ -26,8 +26,8 @@ from app.schemas.user import (
     TenantSubscriptionRead,
     TenantUpdate,
 )
-from app.services import domain_verification_service, traefik_config_service
-from app.services.document_template_service import DocumentTemplateService
+from app.services import domain_verification_service, identity_verification_service, traefik_config_service
+from app.services.audit_service import AuditService
 from app.services.storage_service import StorageService
 
 
@@ -123,7 +123,6 @@ async def apply_tenant_profile_image(tenant: Tenant, profile_image: UploadFile) 
 
 class TenantService:
     def __init__(self) -> None:
-        self.document_template_service = DocumentTemplateService()
         self.storage_service = StorageService()
 
     def _manageable_tenant_ids(self, actor: CurrentUser) -> set[int]:
@@ -253,6 +252,7 @@ class TenantService:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant cannot be edited by current user")
         require_admin(actor)
 
+        old_name = tenant.name
         if payload.name is not None:
             tenant.name = payload.name
         if payload.public_slug is not None:
@@ -260,11 +260,14 @@ class TenantService:
 
         if profile_image is not None:
             await apply_tenant_profile_image(tenant, profile_image)
+            # Logo: nur protokollieren - bestätigt wird die Organisation, nicht ihr Bild
+            AuditService().log(db, action="tenant.profile_image_changed", actor=actor, tenant_id=tenant.id)
+        revoked = identity_verification_service.handle_rename(db, tenant, old_name, actor_email=actor.email)
 
         db.add(tenant)
         db.commit()
         db.refresh(tenant)
-        return self._read_model(tenant, actor)
+        return self._read_model(tenant, actor).model_copy(update={"identity_verification_revoked": revoked})
 
     def require_manageable(self, tenant_id: int, actor: CurrentUser) -> None:
         """Öffentliche Variante für Routen, die vor dem Service z. B. ein Rate-Limit zählen."""

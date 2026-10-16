@@ -19,7 +19,8 @@
     "jobs": "Jobs",
     "admins": "Admin accounts",
     "sso": "SSO",
-    "security": "Security"
+    "security": "Security",
+    "verifications": "Verifications"
   },
   "logout": "Log out",
   "menuToggleClose": "Close",

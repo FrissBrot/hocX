@@ -146,7 +146,7 @@
     "noCycle": "Aucun cycle",
     "noDescription": "Aucune description",
     "noElementsYet": "Aucun élément dans le modèle pour le moment.",
-    "noLayoutAssigned": "Aucune mise en page attribuée",
+    "noLayoutAssigned": "Style maison par défaut de l’association",
     "noListSelected": "Aucune liste sélectionnée",
     "noMatchingElements": "Aucun élément correspondant trouvé.",
     "noMatchingParticipants": "Aucun participant trouvé pour le terme de recherche actuel.",
@@ -158,8 +158,8 @@
     "participantAssignmentsSaveFailed": "Les attributions de participants n'ont pas pu être enregistrées",
     "participantFallback": "Participant",
     "patternTokensHelp": "Jetons : '{n}' = tous les procès-verbaux, '{n_year}' = cette année, '{n_month}' = ce mois, '{n_cycle}' = dans le cycle propre. Jetons de date : '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
-    "pdfLayoutHelp": "Utilisé pour l'export PDF. Peut être configuré sous Paramètres → Mises en page de document.",
-    "pdfLayoutLabel": "Mise en page PDF",
+    "pdfLayoutHelp": "Utilisé pour l’export PDF des procès-verbaux de ce modèle. Gérez les styles maison sous Paramètres → Styles maison.",
+    "pdfLayoutLabel": "Style maison",
     "positionAbbr": "Pos.",
     "protocolNumberPatternHelp": "Exemples : Séance [n], Séance [mm].[n_month], A[yy]-[n_cycle]. Les crochets et les accolades fonctionnent tous les deux.",
     "protocolNumberPatternLabel": "Motif du numéro de procès-verbal",
@@ -186,7 +186,7 @@
     "searchParticipantsPlaceholder": "Rechercher des participants",
     "searchPlaceholder": "Rechercher des modèles",
     "settingSaveFailed": "Le paramètre n'a pas pu être enregistré",
-    "settingsDescription": "Informations générales sur ce modèle et la mise en page de document utilisée.",
+    "settingsDescription": "Informations générales sur ce modèle et le style maison utilisé.",
     "settingsTitle": "Paramètres du modèle",
     "statusChangeFailedToast": "Le statut n'a pas pu être modifié",
     "tableLinkUpdateFailed": "Le lien avec le tableau n'a pas pu être mis à jour",
@@ -204,7 +204,8 @@
     "unknownList": "Liste inconnue",
     "unknownParticipant": "Participant inconnu",
     "unknownRow": "Ligne inconnue",
-    "unnamed": "Sans nom"
+    "unnamed": "Sans nom",
+    "defaultStyleSuffix": "(par défaut)"
   },
   "editor": {
     "active": "Actif",
@@ -295,7 +296,7 @@
     "noCycle": "Aucun cycle",
     "noDescription": "Aucune description",
     "noElementsYet": "Aucun élément dans le modèle pour le moment.",
-    "noLayoutAssigned": "Aucune mise en page attribuée",
+    "noLayoutAssigned": "Style maison par défaut de l’association",
     "noListSelected": "Aucune liste sélectionnée",
     "noMatchingElements": "Aucun élément correspondant trouvé.",
     "noMatchingParticipants": "Aucun participant trouvé pour le terme de recherche actuel.",
@@ -307,8 +308,8 @@
     "participantAssignmentsSaveFailed": "Les attributions de participants n'ont pas pu être enregistrées",
     "participantFallback": "Participant",
     "patternTokensHelp": "Jetons : '{n}' = tous les procès-verbaux, '{n_year}' = cette année, '{n_month}' = ce mois, '{n_cycle}' = dans le cycle propre. Jetons de date : '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
-    "pdfLayoutHelp": "Utilisé pour l'export PDF. Peut être configuré sous Paramètres → Mises en page de document.",
-    "pdfLayoutLabel": "Mise en page PDF",
+    "pdfLayoutHelp": "Utilisé pour l’export PDF des procès-verbaux de ce modèle. Gérez les styles maison sous Paramètres → Styles maison.",
+    "pdfLayoutLabel": "Style maison",
     "positionAbbr": "Pos.",
     "protocolNumberPatternHelp": "Exemples : Séance [n], Séance [mm].[n_month], A[yy]-[n_cycle]. Les crochets et les accolades fonctionnent tous les deux.",
     "protocolNumberPatternLabel": "Motif du numéro de procès-verbal",
@@ -335,7 +336,7 @@
     "searchParticipantsPlaceholder": "Rechercher des participants",
     "searchPlaceholder": "Rechercher des modèles",
     "settingSaveFailed": "Le paramètre n'a pas pu être enregistré",
-    "settingsDescription": "Informations générales sur ce modèle et la mise en page de document utilisée.",
+    "settingsDescription": "Informations générales sur ce modèle et le style maison utilisé.",
     "settingsTitle": "Paramètres du modèle",
     "statusChangeFailedToast": "Le statut n'a pas pu être modifié",
     "tableLinkUpdateFailed": "Le lien avec le tableau n'a pas pu être mis à jour",
@@ -355,6 +356,7 @@
     "unknownRow": "Ligne inconnue",
     "unnamed": "Sans nom",
     "behaviorOverridden": "{label} – diffère de la valeur par défaut de l’élément",
+    "defaultStyleSuffix": "(par défaut)",
     "nameFormatSetToast": "Format du nom des responsables défini",
     "nameFormatSavedToast": "Format du nom des responsables enregistré",
     "autoAssignedToast": "{count, plural, one {# élément a été attribué} other {# éléments ont été attribués}} automatiquement",
@@ -366,325 +368,6 @@
     "participantAssignmentsSavedToast": "Attributions des participants enregistrées",
     "elementsAddedToast": "{count, plural, one {# élément ajouté} other {# éléments ajoutés}}",
     "elementRemovedToast": "Élément retiré du modèle"
-  },
-  "documentTemplates": {
-    "advancedInfoNote": "Vos propres fichiers LaTeX remplacent les préréglages choisis dans l'onglet Structure. Laissez vide pour utiliser le préréglage.",
-    "bottomLeftFooterImageHelp": "Silhouette ou similaire — choisir depuis la bibliothèque de parts.",
-    "bottomLeftFooterImageLabel": "Image de pied de page en bas à gauche",
-    "browse": "parcourir",
-    "cancel": "Annuler",
-    "chooseColor": "Choisir une couleur",
-    "chooseLayoutFromList": "Choisir une mise en page dans la liste.",
-    "chooseOtherFile": "choisir un autre fichier",
-    "close": "Fermer",
-    "colActions": "Actions",
-    "colorsLabel": "Couleurs",
-    "combinedTocHint": "La table des matières est intégrée à cette page de titre.",
-    "combinedTocLabel": "Page de titre + table des matières — configuration",
-    "createErrorToast": "Erreur lors de la création",
-    "createLayoutSubmit": "Créer la mise en page",
-    "createLayoutTitle": "Créer une nouvelle mise en page",
-    "customLatexFilesTitle": "Fichiers LaTeX personnalisés définis",
-    "defaultForTenant": "Par défaut pour l'organisation",
-    "delete": "Supprimer",
-    "deleteErrorToast": "Erreur lors de la suppression",
-    "deleteLayoutConfirm": "Supprimer définitivement cette mise en page ?",
-    "deleteLayoutConfirmNamed": "Supprimer définitivement la mise en page « {name} » ?",
-    "deletePartConfirm": "Supprimer définitivement ce part ?",
-    "deletePartConfirmNamed": "Supprimer définitivement le part « {name} » ?",
-    "dragFileHere": "Glissez un fichier ici",
-    "emptyStateDescription": "Les modèles de document déterminent la mise en page, le logo et les en-têtes des procès-verbaux exportés.",
-    "emptyStateTitle": "Aucun modèle de document pour le moment",
-    "fieldActive": "Actif",
-    "fieldDescription": "Description",
-    "fieldName": "Nom",
-    "fieldStandard": "Par défaut",
-    "fieldVersion": "Version",
-    "fontCustom": "Police personnalisée",
-    "fontDescArial": "Classique, bien lisible",
-    "fontDescCenturyGothic": "Géométrique, moderne",
-    "fontDescCustom": "Téléverser des fichiers de police",
-    "fontDescHelvetica": "Moderne, neutre",
-    "fontDescPalatino": "Élégante, sérieuse",
-    "fontFamilyLabel": "Police",
-    "fontNoteCustom": "Téléversez vos propres fichiers de police dans la bibliothèque de parts. Regular est requis, les variantes sont facultatives.",
-    "fontNoteNotPreinstalled": "Cette police n'est pas préinstallée — téléversez des fichiers de police dans la bibliothèque de parts. Regular est requis, les variantes sont facultatives.",
-    "fontSizeLabel": "Taille de police",
-    "footerContactHelp": "Les retours à la ligne sont pris en charge.",
-    "footerContactLabel": "Texte du pied de page (contact)",
-    "footerContactPlaceholder": "p. ex. Association Exemple | 1234 Exemple-Ville\nwww.exemple.ch",
-    "footerHint": "Apparaît en bas de chaque page.",
-    "footerLabel": "Pied de page",
-    "footerTextColor": "Couleur du texte du pied de page",
-    "footerTextColorHelp": "Couleur pour le texte de contact.",
-    "formatLabel": "Format",
-    "headerHint": "Apparaît en haut de chaque page.",
-    "headerImageHelp": "PNG ou JPG — choisir depuis la bibliothèque de parts. Hauteur dans l'en-tête : env. 0,8 cm.",
-    "headerImageLabel": "Logo / image pour l'en-tête",
-    "headerLabel": "En-tête",
-    "inactive": "Inactif",
-    "kindFont": "Police",
-    "kindFontFile": "Fichier de police",
-    "kindFontHint": "Les fichiers de police sont attribués aux quatre variantes sous « Police personnalisée » dans l'onglet Mise en forme. Regular est requis.",
-    "kindImage": "Image",
-    "kindImageFile": "Fichier image",
-    "kindImageHint": "Les images apparaissent dans le sélecteur « Logo / image » des préréglages de page de titre et d'en-tête dans l'éditeur de mise en page.",
-    "kindLatex": "Composant LaTeX",
-    "kindLatexFile": "Fichier LaTeX",
-    "kindLatexHint": "Les composants LaTeX remplacent le slot correspondant dans l'onglet Avancé — nécessaire seulement si les préréglages ne suffisent pas.",
-    "layoutCreatedToast": "Mise en page créée",
-    "layoutDeletedToast": "Mise en page supprimée",
-    "layoutLabel": "Mise en page",
-    "layoutSavedToast": "Mise en page enregistrée",
-    "layoutsLabel": "Mises en page",
-    "libraryEntryLabel": "Entrée dans la bibliothèque",
-    "locationHelp": "Apparaît avec la date en haut à gauche.",
-    "locationLabel": "Lieu",
-    "locationPlaceholder": "p. ex. Exemple-Ville",
-    "moreOptionsLabel": "Autres options",
-    "newDocumentTemplateButton": "+ Modèle de document",
-    "newLayoutButton": "+ Nouvelle mise en page",
-    "newPartButton": "+ Nouveau part",
-    "noImage": "Aucune image",
-    "noLayouts": "Aucune mise en page.",
-    "none": "Aucune",
-    "noPartsFound": "Aucun part trouvé.",
-    "numberingLabel": "Numérotation",
-    "numberingNone": "Sans numéros",
-    "numberingNoneDesc": "Titre uniquement, pas de numéros",
-    "numberingSections": "Avec numéros",
-    "numberingSectionsDesc": "1. Section, 1.1 Sous-section",
-    "optionalSuffix": "— facultatif",
-    "or": "ou",
-    "orientationLandscape": "Paysage",
-    "orientationLandscapeDesc": "A4 horizontal — pour listes et tableaux",
-    "orientationPortrait": "Portrait",
-    "orientationPortraitDesc": "A4 vertical — pour les procès-verbaux",
-    "pageIntro": "Gérer les mises en page PDF et les composants LaTeX réutilisables pour l'export des procès-verbaux.",
-    "pageIntroEmpty": "Mises en page pour les exports PDF et Word.",
-    "pageTitle": "Modèles de document",
-    "partDeletedToast": "Part supprimé",
-    "partDescriptionPlaceholder": "À quoi sert ce part ?",
-    "partKindLabel": "Type de part",
-    "partNamePlaceholder": "p. ex. Logo",
-    "partsLibraryDescription": "Images, fichiers de police et composants LaTeX que les mises en page peuvent intégrer.",
-    "partsLibraryLabel": "Bibliothèque de parts",
-    "partUploadedToast": "Part téléversé",
-    "pdfLayoutsDescription": "Les mises en page définissent l'apparence du procès-verbal exporté.",
-    "pdfLayoutsLabel": "Mises en page PDF",
-    "pleaseChooseFile": "Veuillez choisir un fichier",
-    "preview": "Aperçu",
-    "primaryColor": "Couleur primaire",
-    "resetColors": "Réinitialiser les couleurs",
-    "saveErrorToast": "Erreur lors de l'enregistrement",
-    "saveLayoutButton": "Enregistrer la mise en page",
-    "searchEllipsis": "Rechercher…",
-    "searchLayoutsAriaLabel": "Rechercher des mises en page",
-    "searchPartsPlaceholder": "Rechercher des parts…",
-    "secondaryColor": "Couleur secondaire",
-    "showMetadataHelp": "Affiche un bloc de métadonnées automatique (numéro, titre, date, statut) dans le PDF exporté. Masqué par défaut.",
-    "showMetadataLabel": "Afficher les métadonnées du procès-verbal",
-    "slotLabel": "Slot",
-    "standardLayoutCreatedToast": "Mise en page standard créée",
-    "standardLayoutName": "Mise en page standard",
-    "statusLabel": "Statut",
-    "tabAdvanced": "Avancé",
-    "tabDesign": "Mise en forme",
-    "tabStructure": "Structure",
-    "titlePageHint": "Première page du procès-verbal avec métadonnées.",
-    "titlePageLabel": "Page de titre",
-    "tocHint": "Aperçu de toutes les sections.",
-    "tocLabel": "Table des matières",
-    "tocSpacingCompact": "Compact",
-    "tocSpacingHelp": "Espacement entre les entrées de la table des matières.",
-    "tocSpacingLabel": "Interligne de la table des matières",
-    "tocSpacingStandard": "Standard",
-    "tocSpacingVeryCompact": "Très compact",
-    "topLeftImageHelp": "PNG ou JPG — choisir depuis la bibliothèque de parts.",
-    "topLeftImageLabel": "Logo / image en haut à gauche",
-    "typeLabel": "Type",
-    "upload": "Téléverser",
-    "uploadErrorToast": "Erreur lors du téléversement",
-    "uploadPartDescription": "Ajoutez votre propre fichier à la bibliothèque de parts — les mises en page l'intègrent ensuite via son slot.",
-    "uploadPartTitle": "Téléverser un part",
-    "usePreset": "— Utiliser le préréglage —",
-    "useStandardLayoutButton": "Utiliser la mise en page standard",
-    "preset": {
-      "footer": {
-        "datePage": {
-          "label": "Date et page",
-          "desc": "Date à gauche, numéro de page à droite"
-        },
-        "minimal": {
-          "label": "Numéro de page",
-          "desc": "Numéro de page centré uniquement"
-        },
-        "none": {
-          "label": "Aucun pied de page",
-          "desc": "Page sans pied de page"
-        },
-        "standard": {
-          "label": "Procès-verbal et page",
-          "desc": "Numéro de procès-verbal à gauche, page à droite"
-        },
-        "withVersion": {
-          "label": "Avec version",
-          "desc": "Numéro à gauche, version centrée, page à droite"
-        }
-      },
-      "header": {
-        "bar": {
-          "label": "Barre colorée",
-          "desc": "Couleur d'accent avec texte blanc"
-        },
-        "logoBar": {
-          "label": "Logo + barre colorée",
-          "desc": "Logo et titre dans une barre colorée"
-        },
-        "logoDate": {
-          "label": "Logo + date",
-          "desc": "Logo à gauche, date centrée, page à droite"
-        },
-        "logo": {
-          "label": "Logo + titre",
-          "desc": "Logo à gauche, titre centré, date à droite"
-        },
-        "minimal": {
-          "label": "Numéro de page",
-          "desc": "Numéro de page en haut à droite uniquement"
-        },
-        "none": {
-          "label": "Aucun en-tête",
-          "desc": "Page sans en-tête"
-        },
-        "standard": {
-          "label": "Titre et date",
-          "desc": "Titre à gauche, date à droite"
-        }
-      },
-      "titlePage": {
-        "bold": {
-          "label": "Audacieux",
-          "desc": "Couleur d'accent pleine page"
-        },
-        "combinedToc": {
-          "label": "Page de titre + table des matières",
-          "desc": "Logo, boîtes de couleur, titre et TOC sur une page"
-        },
-        "minimal": {
-          "label": "Minimaliste",
-          "desc": "Titre centré, épuré"
-        },
-        "modern": {
-          "label": "Moderne",
-          "desc": "Bloc d'en-tête coloré"
-        },
-        "none": {
-          "label": "Aucune page de titre",
-          "desc": "Commencer directement par le contenu"
-        }
-      },
-      "toc": {
-        "compact": {
-          "label": "Compact",
-          "desc": "Plus petit, plus dense"
-        },
-        "none": {
-          "label": "Aucune table des matières",
-          "desc": "Sans page de synthèse"
-        },
-        "standard": {
-          "label": "Standard",
-          "desc": "Avec numéros de page"
-        }
-      }
-    },
-    "slot": {
-      "elementAttendance": {
-        "label": "Élément — Présence",
-        "help": "Comment les listes de présence sont rendues dans le PDF."
-      },
-      "elementBulletList": {
-        "label": "Élément — Liste à puces",
-        "help": "Comment les listes à puces sont rendues dans le PDF."
-      },
-      "elementEvents": {
-        "label": "Élément — Liste d'événements",
-        "help": "Comment les listes d'événements sont rendues dans le PDF."
-      },
-      "elementForm": {
-        "label": "Élément — Formulaire",
-        "help": "Comment les lignes de formulaire sont rendues dans le PDF."
-      },
-      "elementImage": {
-        "label": "Élément — Image",
-        "help": "Comment les images sont rendues dans le PDF."
-      },
-      "elementSessionDate": {
-        "label": "Élément — Date de séance",
-        "help": "Comment la prochaine date de séance est rendue dans le PDF."
-      },
-      "elementStaticText": {
-        "label": "Élément — Texte statique",
-        "help": "Comment le texte fixe est rendu dans le PDF."
-      },
-      "elementText": {
-        "label": "Élément — Texte",
-        "help": "Comment les blocs de texte sont rendus dans le PDF."
-      },
-      "elementTodo": {
-        "label": "Élément — Liste de tâches",
-        "help": "Comment les listes de tâches sont rendues dans le PDF."
-      },
-      "fontBold": {
-        "label": "Police — Gras",
-        "short": "Gras",
-        "help": "Variante grasse facultative."
-      },
-      "fontBoldItalic": {
-        "label": "Police — Gras italique",
-        "short": "Gras italique",
-        "help": "Variante grasse italique facultative."
-      },
-      "fontItalic": {
-        "label": "Police — Italique",
-        "short": "Italique",
-        "help": "Variante italique facultative."
-      },
-      "fontRegular": {
-        "label": "Police — Regular",
-        "short": "Regular",
-        "help": "Fichier de police principal, requis."
-      },
-      "headerFooter": {
-        "label": "Mise en page — En-tête et pied de page",
-        "help": "Remplace les préréglages d'en-tête/pied de page choisis."
-      },
-      "macros": {
-        "label": "LaTeX — Macros",
-        "help": "Commandes réutilisables."
-      },
-      "preamble": {
-        "label": "LaTeX — Préambule",
-        "help": "Paquets et paramètres globaux."
-      },
-      "titleFooterImage": {
-        "label": "Image — Pied de page de la page de titre",
-        "help": "Image en bas à gauche sur la page de titre."
-      },
-      "titleHeaderImage": {
-        "label": "Image — Logo de la page de titre",
-        "help": "Logo en haut à gauche sur la page de titre."
-      },
-      "titlePage": {
-        "label": "Mise en page — Page de titre",
-        "help": "Remplace le préréglage de page de titre choisi."
-      },
-      "toc": {
-        "label": "Mise en page — Table des matières",
-        "help": "Remplace le préréglage de table des matières choisi."
-      }
-    }
   },
   "elementEditor": {
     "advancedShow": "Avancé",

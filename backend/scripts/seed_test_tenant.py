@@ -34,7 +34,7 @@ from app.core.security import hash_password
 from app.models.entities import (
     AppUser,
     CycleConfig,
-    DocumentTemplate,
+    DocumentStyle,
     ElementDefinition,
     Event,
     ListDefinition,
@@ -161,27 +161,23 @@ def create_template_structure(db, tenant: Tenant, created_by: AppUser) -> Templa
     db.add(cycle_config)
     db.flush()
 
-    document_template = DocumentTemplate(
+    # Hausstil wie ein Verein ihn einrichten würde (Dokument-Engine)
+    document_style = DocumentStyle(
         tenant_id=tenant.id,
-        code="default_protocol",
         name="Standardprotokoll",
-        description="Dateisystembasierte Starter-LaTeX-Vorlage",
-        filesystem_path="/app/storage/latex_templates/default_protocol/v1",
-        version=1,
-        is_active=True,
-        is_default=True,
-        configuration_json={
-            "slots": {},
-            "theme": {"font_size": "11pt", "font_family": "default", "primary_color": "A83F2F", "secondary_color": "6F675D"},
-            "options": {"show_toc": True, "numbering_mode": "sections"},
-        },
+        style_key="modern",
+        tokens_json={"primary_color": "#a83f2f", "secondary_color": "#6f675d", "title_page": "modern", "toc": "on", "numbering": True},
     )
-    db.add(document_template)
+    db.add(document_style)
     db.flush()
+    # Der Mandant hat beim Anlegen bereits einen Standard-Hausstil; dieser hier übernimmt.
+    from app.documents import style_service
+
+    style_service.update_style(db, document_style, is_default=True)
 
     template = Template(
         tenant_id=tenant.id,
-        document_template_id=document_template.id,
+        document_style_id=document_style.id,
         name="Sitzungsprotokoll",
         description="Vorlage fuer die woechentliche Vorstandssitzung",
         protocol_number_pattern="Sitzung {n}",
@@ -196,7 +192,7 @@ def create_template_structure(db, tenant: Tenant, created_by: AppUser) -> Templa
     text_def = ElementDefinition(
         tenant_id=tenant.id, element_type_id=ELEMENT_TYPE_TEXT, render_type_id=RENDER_TYPE_PARAGRAPH,
         title="Besprechung", display_title="Besprechung", description="Freitext fuer die Sitzungsnotizen",
-        is_editable=True, allows_multiple_values=False, export_visible=True, latex_template="elements/paragraph.tex",
+        is_editable=True, allows_multiple_values=False, export_visible=True,
         configuration_json={"blocks": [{"id": 1, "title": "Besprechungstext", "block_title": "Besprechungstext",
                                          "render_type_id": RENDER_TYPE_PARAGRAPH, "element_type_id": ELEMENT_TYPE_TEXT,
                                          "is_visible": True, "is_editable": True, "export_visible": True,
@@ -206,7 +202,7 @@ def create_template_structure(db, tenant: Tenant, created_by: AppUser) -> Templa
     todo_def = ElementDefinition(
         tenant_id=tenant.id, element_type_id=ELEMENT_TYPE_TODO, render_type_id=RENDER_TYPE_TODO_LIST,
         title="Offene Punkte", display_title="Offene Punkte", description="Pendenzenliste",
-        is_editable=True, allows_multiple_values=True, export_visible=True, latex_template="elements/todo_list.tex",
+        is_editable=True, allows_multiple_values=True, export_visible=True,
         configuration_json={"blocks": [{"id": 1, "title": "Offene Punkte", "block_title": "Offene Punkte",
                                          "render_type_id": RENDER_TYPE_TODO_LIST, "element_type_id": ELEMENT_TYPE_TODO,
                                          "is_visible": True, "is_editable": True, "export_visible": True,
@@ -216,7 +212,7 @@ def create_template_structure(db, tenant: Tenant, created_by: AppUser) -> Templa
     image_def = ElementDefinition(
         tenant_id=tenant.id, element_type_id=ELEMENT_TYPE_IMAGE, render_type_id=RENDER_TYPE_IMAGE,
         title="Bilder", display_title="Bilder", description="Fotos zu dieser Sitzung",
-        is_editable=True, allows_multiple_values=True, export_visible=True, latex_template="elements/image.tex",
+        is_editable=True, allows_multiple_values=True, export_visible=True,
         configuration_json={"blocks": [{"id": 1, "title": "Bilder", "block_title": "Bilder",
                                          "render_type_id": RENDER_TYPE_IMAGE, "element_type_id": ELEMENT_TYPE_IMAGE,
                                          "is_visible": True, "is_editable": True, "export_visible": True,

@@ -24,10 +24,20 @@ from app.services import public_id_service
 DEFAULT_LINK_NAME = "Standard"
 # 24 Bytes = 192 Bit Entropie, als URL-safe Base64 (32 Zeichen) - nicht erratbar.
 _TOKEN_BYTES = 24
+# Pfade der Abgabebox, die nie ein Link-Token sein dürfen (Route /verify der Prüfseite). Die DB
+# sichert «verify» zusätzlich per CHECK ab (ck_submission_link_token_reserved).
+RESERVED_TOKENS = frozenset({"verify"})
+
+
+def is_reserved_token(token: str | None) -> bool:
+    return bool(token) and token.strip().lower() in RESERVED_TOKENS
 
 
 def generate_token() -> str:
-    return secrets.token_urlsafe(_TOKEN_BYTES)
+    while True:
+        token = secrets.token_urlsafe(_TOKEN_BYTES)
+        if not is_reserved_token(token):
+            return token
 
 
 def abgabebox_base_url(db: Session, tenant_id: int) -> str:

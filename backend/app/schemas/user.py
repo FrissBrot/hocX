@@ -29,6 +29,9 @@ class TenantRead(BaseModel):
     updated_at: datetime | None = None
     tag_config_json: dict[str, Any] = {}
     enabled_features: list[str] = []
+    # Nur in der Antwort auf eine Änderung: die Namensänderung hat die Bestätigung der
+    # Organisation durch hocX aufgehoben (Hinweis im UI).
+    identity_verification_revoked: bool = False
 
 
 class TenantLookupRead(BaseModel):

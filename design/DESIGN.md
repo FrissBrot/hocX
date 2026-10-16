@@ -38,7 +38,7 @@ Quelle ist `design/tokens.css`. Nach jeder Änderung: `./scripts/sync-design-tok
 
 **Neues Token** nur, wenn keine Stufe passt und der Wert an mehreren Stellen gebraucht wird: in `design/tokens.css` (Light **und** Dark), Sync ausführen, hier dokumentieren.
 
-Bewusst feste Ausnahmen (mit `design-ok`-Kommentar in derselben Zeile): QR-Code-Weiß, Foto-Viewer-Palette `--pv-*`, Dokumentvorlagen-Mockups (`--dt-accent`), Tag-Farbauswahl, Avatar-Farben, Zeilen, deren Padding an `calc(100vh …)` oder ein Icon gekoppelt ist.
+Bewusst feste Ausnahmen (mit `design-ok`-Kommentar in derselben Zeile): QR-Code-Weiß, Foto-Viewer-Palette `--pv-*`, Tag-Farbauswahl, Avatar-Farben, Zeilen, deren Padding an `calc(100vh …)` oder ein Icon gekoppelt ist.
 
 ## 3. Verboten
 

@@ -3,21 +3,19 @@ import { TodoListView } from "@/components/todos/todo-list-view";
 import { MobileTodos } from "@/components/mobile/mobile-todos";
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
-import { DocumentTemplate, EventSummary, ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
+import { ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
 
 export default async function TodosPage() {
   const session = await requireSession();
   const canEdit = ["admin", "writer"].includes(session.current_role ?? "");
 
   // Every role sees all tenant todos now (backend scopes restricted readers server-side);
-  // participant/event lookups are only needed for the writer/admin edit & assignment UI.
-  const [allTodos, myTodos, todoBlocks, participants, documentTemplates, events] = await Promise.all([
+  // participant lookups are only needed for the writer/admin edit & assignment UI.
+  const [allTodos, myTodos, todoBlocks, participants] = await Promise.all([
     backendFetchWithSession<TodoListItem[]>("/api/todos"),
     backendFetchWithSession<TodoListItem[]>("/api/todos/my"),
     backendFetchWithSession<TodoBlock[]>("/api/todos/blocks"),
     canEdit ? backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=500") : Promise.resolve([]),
-    backendFetchWithSession<DocumentTemplate[]>("/api/document-templates"),
-    canEdit ? backendFetchWithSession<EventSummary[]>("/api/events") : Promise.resolve([]),
   ]);
 
   return (
@@ -32,8 +30,6 @@ export default async function TodosPage() {
               canEdit={canEdit}
               todoBlocks={todoBlocks ?? []}
               participants={participants ?? []}
-              documentTemplates={documentTemplates ?? []}
-              events={events ?? []}
             />
           </section>
         }

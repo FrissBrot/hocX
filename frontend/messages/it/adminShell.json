@@ -19,7 +19,8 @@
     "jobs": "Job",
     "admins": "Account amministratore",
     "sso": "SSO",
-    "security": "Sicurezza"
+    "security": "Sicurezza",
+    "verifications": "Verifiche"
   },
   "logout": "Disconnetti",
   "menuToggleClose": "Chiudi",

@@ -350,7 +350,7 @@ class StoredFileRepository:
         joined branch per origin table) so a single paginated/sorted/filtered query can page
         across all of them. only_images/exclude_images back the "Fotos" vs. "Dateien" pages
         (mutually exclusive in practice - the UI never sets both). Deliberately excludes
-        tenant logo and generated PDF exports (protocol_export_cache): neither is something a
+        tenant logo and generated PDF exports (document_export): neither is something a
         user "hochgeladen" hat, see project memory for this feature.
 
         album_id scopes to one album via a JOIN against photo_album_item, rather than the

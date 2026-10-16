@@ -4,11 +4,11 @@ from sqlalchemy import delete, distinct, exists, func, or_, select, union_all
 from sqlalchemy.orm import Session
 
 from app.models import (
+    DocumentExport,
     Participant,
     Protocol,
     ProtocolElement,
     ProtocolElementBlock,
-    ProtocolExportCache,
     ProtocolImage,
     ProtocolTodo,
     StoredFile,
@@ -156,8 +156,9 @@ class AccessRepository:
         return db.scalar(statement)
 
     def protocol_id_for_stored_file(self, db: Session, *, stored_file_id: int) -> int | None:
-        export_q = select(ProtocolExportCache.protocol_id.label("protocol_id")).where(
-            ProtocolExportCache.generated_file_id == stored_file_id
+        export_q = select(DocumentExport.protocol_id.label("protocol_id")).where(
+            DocumentExport.stored_file_id == stored_file_id,
+            DocumentExport.protocol_id.is_not(None),
         )
         image_q = (
             select(ProtocolElement.protocol_id.label("protocol_id"))
@@ -174,6 +175,23 @@ class AccessRepository:
         )
         combined = union_all(export_q, image_q, import_q).subquery()
         return db.scalar(select(combined.c.protocol_id).limit(1))
+
+    def is_own_document_export_file(self, db: Session, *, stored_file_id: int, user_id: int, tenant_id: int) -> bool:
+        """PDF der Dokument-Engine ohne Protokollbezug, das diese Person in diesem Mandanten
+        selbst erzeugt hat (Export-Datensatz und Datei mandantengleich)."""
+        statement = (
+            select(DocumentExport.id)
+            .join(StoredFile, StoredFile.id == DocumentExport.stored_file_id)
+            .where(
+                DocumentExport.stored_file_id == stored_file_id,
+                DocumentExport.protocol_id.is_(None),
+                DocumentExport.created_by == user_id,
+                DocumentExport.tenant_id == tenant_id,
+                StoredFile.tenant_id == tenant_id,
+            )
+            .limit(1)
+        )
+        return db.scalar(statement) is not None
 
     def tenant_id_for_stored_file(self, db: Session, *, stored_file_id: int) -> int | None:
         return db.scalar(select(StoredFile.tenant_id).where(StoredFile.id == stored_file_id))

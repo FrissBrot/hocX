@@ -109,5 +109,65 @@
   "language": {
     "label": "Lingua"
   },
-  "copyright": "Copyright © {year} hocX Project · Tutti i diritti riservati."
+  "copyright": "Copyright © {year} hocX Project · Tutti i diritti riservati.",
+  "verify": {
+    "brand": {
+      "subtitle": "Verifica di autenticità",
+      "headline": "Questo documento proviene davvero da hocX?",
+      "lead": "Trascina il file PDF. Confrontiamo la sua impronta digitale con tutti i documenti creati con hocX.",
+      "privacyNote": "Il file non lascia il tuo dispositivo - viene verificata solo la sua impronta."
+    },
+    "title": "Verifica autenticità",
+    "hint": "Verifica se un file PDF proviene da hocX senza modifiche.",
+    "documentHint": "Documento {id} – trascina qui il file PDF per verificarlo.",
+    "dropLabel": "Trascina qui il file PDF o selezionalo",
+    "dropLabelTouch": "Seleziona il file PDF",
+    "dropRelease": "Rilascia per verificare",
+    "dropOverlay": "Rilascia il file per verificarlo",
+    "privacy": "Il file non viene caricato. Il tuo browser calcola la sua impronta digitale (SHA-256) e invia solo quella per la verifica.",
+    "checking": "Verifica in corso …",
+    "checkAnother": "Verifica un altro file",
+    "fileName": "File verificato: {name}",
+    "originalTitle": "Originale",
+    "originalText": "Questo file è una copia non modificata di un documento creato con hocX il {date}.",
+    "fields": {
+      "documentType": "Tipo di documento",
+      "title": "Titolo",
+      "status": "Stato",
+      "version": "Versione",
+      "documentId": "ID documento"
+    },
+    "statusLabel": {
+      "geplant": "Bozza (pianificato)",
+      "durchgeführt": "Bozza (svolto)",
+      "abgeschlossen": "Concluso"
+    },
+    "docType": {
+      "protocol": "Verbale",
+      "invitation": "Convocazione",
+      "todos": "Elenco attività",
+      "events": "Calendario",
+      "attendance_sheet": "Foglio presenze",
+      "members": "Elenco membri",
+      "finance": "Rapporto finanziario",
+      "statistics": "Rapporto annuale",
+      "list": "Lista",
+      "custom": "Documento",
+      "protocol_excerpt": "Estratto del verbale"
+    },
+    "createdBy": "Creato nell’account hocX di {name}.",
+    "verifiedBadge": "Organizzazione verificata",
+    "verifiedExplanation": "hocX ha confermato che questo account appartiene all’organizzazione «{name}».",
+    "logoAlt": "Logo di {name}",
+    "otherDocument": "Il file è autentico, ma appartiene a un documento diverso da quello del codice QR scansionato.",
+    "importUnverified": "Importato, non verificato: questa voce proviene da un'importazione di dati e non è stato possibile confrontarla con il file originale in quel momento.",
+    "newerVersion": "Esiste una versione più recente ({version}) di questo documento.",
+    "notFoundTitle": "Non trovato",
+    "notFoundText": "Questo file non corrisponde a nessun documento creato con hocX. È stato modificato o non proviene da hocX.",
+    "notFoundHint": "Anche salvare di nuovo, «Stampa in PDF» o comprimere modifica il file, anche se il contenuto sembra uguale. Verifica sempre il file ricevuto originariamente.",
+    "error": "Al momento la verifica non è possibile. Riprova tra poco.",
+    "readError": "Impossibile leggere il file.",
+    "tooLarge": "Il file è troppo grande (al massimo {size} MB).",
+    "noCrypto": "Il tuo browser non supporta la verifica. Usa un browser aggiornato."
+  }
 }

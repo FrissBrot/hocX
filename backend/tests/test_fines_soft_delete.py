@@ -11,7 +11,8 @@ from app.api.routes import fines as fine_routes
 from app.models import AttendanceFine
 from app.repositories.fines_repository import FineDeleteError, FinesRepository
 from app.schemas.fines import DeleteFinePayload
-from app.services.export_service import ExportService
+from app.documents.context import BuildContext
+from app.documents.providers.finance import protocol_fines
 from tests.factories import (
     make_app_user,
     make_current_user,
@@ -151,7 +152,10 @@ def test_export_lists_the_deletion_with_reason_in_the_deleting_protocol(db):
     tenant, _, following, fine = _setup(db)
     FinesRepository().delete_fine(db, fine.id, tenant.id, reason="Doppelt erfasst", protocol_context_id=following.id)
 
-    content = ExportService()._fine_list_content(db, following.id)
+    table = protocol_fines(BuildContext(db=db, tenant_id=tenant.id, language="de"), following)
 
-    assert "Doppelt erfasst" in content
-    assert "Kassiert" not in content
+    status = table.groups[0].rows[0].cells[3]
+    assert (status.status, status.v) == ("fineStatus.deleted", "P-A: Doppelt erfasst")
+    assert table.groups[0].rows[0].cells[2].strike is True
+    # Gelöschte Bussen zählen nicht zur Summe.
+    assert table.totals[2].v == ""

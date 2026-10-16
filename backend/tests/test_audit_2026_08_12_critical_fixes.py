@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, text
 
 from app.api.routes import protocol_elements, protocols as protocols_route
-from app.models import DocumentTemplate, Event, Participant, ProtocolTodo
+from app.models import DocumentStyle, Event, Participant, ProtocolTodo
 from app.schemas.event import CycleAssignment, EventCreate, EventUpdate
 from app.schemas.participant import ParticipantCreate
 from app.schemas.protocol import (
@@ -22,7 +22,7 @@ from app.schemas.protocol import (
 )
 from app.schemas.template import TemplateUpdate
 from app.schemas.word_import import WordImportCommit, WordImportTextCommit
-from app.services.chart_service import _fetch_todo_data
+from app.services.statistics_common import aggregate_todo_counts, fetch_todo_rows
 from app.services.event_service import EventService
 from app.services.participant_service import ParticipantService
 from app.services.protocol_service import ProtocolService
@@ -46,13 +46,11 @@ from tests.factories import (
 RENDER_TYPE_PARAGRAPH = 2
 
 
-def _make_document_template(db, tenant_id: int, code: str = "default") -> DocumentTemplate:
-    doc_template = DocumentTemplate(
-        tenant_id=tenant_id, code=code, name="Test Layout", filesystem_path="/nonexistent/does-not-matter",
-    )
-    db.add(doc_template)
+def _make_document_style(db, tenant_id: int) -> DocumentStyle:
+    style = DocumentStyle(tenant_id=tenant_id, name="Test Layout", style_key="modern", tokens_json={})
+    db.add(style)
     db.flush()
-    return doc_template
+    return style
 
 
 # --- K1: Freeze-Schutz fehlt an drei Protocol-Element-Endpunkten ----------------------------
@@ -163,31 +161,31 @@ def test_k2_update_protocol_rejects_foreign_tenant_event_id(db):
         ProtocolService().update_protocol(db, protocol.id, ProtocolUpdate(event_id=foreign_event.public_id))
 
 
-# --- K3: Cross-Tenant-FK-Injection: fremde Dokumentvorlage per PATCH einschleusen -----------
+# --- K3: Cross-Tenant-FK-Injection: fremden Hausstil per PATCH einschleusen -----------
 
 
-def test_k3_update_template_rejects_foreign_tenant_document_template(db):
+def test_k3_update_template_rejects_foreign_tenant_document_style(db):
     tenant_a = make_tenant(db, "Tenant A")
     tenant_b = make_tenant(db, "Tenant B")
     template = make_template(db, tenant_a.id)
-    foreign_doc_template = _make_document_template(db, tenant_b.id)
+    foreign_doc_template = _make_document_style(db, tenant_b.id)
 
-    with pytest.raises(ValueError, match="document_template_id does not belong to current tenant"):
+    with pytest.raises(ValueError, match="document_style_id does not belong to current tenant"):
         TemplateService().update_template(
-            db, template.id, TemplateUpdate(document_template_id=foreign_doc_template.public_id)
+            db, template.id, TemplateUpdate(document_style_id=foreign_doc_template.public_id)
         )
 
 
-def test_k3_update_protocol_rejects_foreign_tenant_document_template(db):
+def test_k3_update_protocol_rejects_foreign_tenant_document_style(db):
     tenant_a = make_tenant(db, "Tenant A")
     tenant_b = make_tenant(db, "Tenant B")
     template = make_template(db, tenant_a.id)
     protocol = make_protocol(db, tenant_a.id, template.id)
-    foreign_doc_template = _make_document_template(db, tenant_b.id)
+    foreign_doc_template = _make_document_style(db, tenant_b.id)
 
-    with pytest.raises(ValueError, match="Document template does not belong to current tenant"):
+    with pytest.raises(ValueError, match="Document style does not belong to current tenant"):
         ProtocolService().update_protocol(
-            db, protocol.id, ProtocolUpdate(document_template_id=foreign_doc_template.public_id)
+            db, protocol.id, ProtocolUpdate(document_style_id=foreign_doc_template.public_id)
         )
 
 
@@ -235,7 +233,7 @@ def _build_event_repeat_template(db, tenant_id: int, *, sync_target_field: str =
             "default_content": "", "copy_from_last_protocol": False,
             "element_type_id": text_type, "render_type_id": RENDER_TYPE_PARAGRAPH,
             "is_editable": True, "allows_multiple_values": False, "export_visible": True, "is_visible": True,
-            "sort_index": 10, "render_order": 10, "latex_template": None,
+            "sort_index": 10, "render_order": 10,
             "configuration_json": {"repeat_source": "event", "sync_target_field": sync_target_field},
         }],
     )
@@ -326,8 +324,8 @@ def test_k6_chart_todo_data_counts_standalone_todos(db):
     # be silently dropped by the INNER JOIN through ProtocolElementBlock/ProtocolElement/Protocol.
     make_protocol_todo(db, None, task="Eigenständiges Todo", tenant_id=tenant.id)
 
-    result = _fetch_todo_data(db, tenant.id)
-    assert result["open"] + result["done"] == 1
+    open_count, done_count = aggregate_todo_counts(fetch_todo_rows(db, tenant.id))
+    assert open_count + done_count == 1
 
 
 def test_k6_statistics_todo_query_counts_standalone_todos(db):

@@ -284,7 +284,7 @@ def _extract_dates_with_counts(text: str) -> list[tuple[date, date | None, int |
     with both dates instead of two separate single-day entries - mirrors
     _extract_event_row's own range handling for an ordinary "events"-role table.
     Also captures a trailing "(N)" right after a date (e.g. "18.10.2025 (7)") as that
-    date's participant count - the exact format export_service._matrix_event_row_value
+    date's participant count - the exact format app/documents/providers/protocol.py (_matrix_event_lines)
     itself writes when event_show_participant_count is on, so an old exported/re-
     imported protocol round-trips its attendance counts. Deduplicates by date (first
     occurrence wins) while preserving first-seen order."""
@@ -3100,7 +3100,7 @@ class WordImportService:
                 # row_type "7" is an embedded Terminliste block (element_type_id 7) - the
                 # far more common way this is actually authored in practice (confirmed
                 # against Timo's real template) than the plain named "events" row_type.
-                # Both render through the exact same export_service._matrix_event_row_value
+                # Both render through the exact same app/documents/providers/protocol.py (_matrix_event_lines)
                 # (an embedded cell only ever overrides that with its own stored
                 # `embedded_block` content if one was manually edited in a specific live
                 # protocol - never the case for a freshly imported one) and share the same
@@ -3109,7 +3109,7 @@ class WordImportService:
                 if row_type in ("events", "7"):
                     # A Matrix "events" row never stores its dates per cell - they're
                     # resolved live at render time by matching an Event's own `tag`
-                    # against the column (see export_service._matrix_events). So there is
+                    # against the column (see app/documents/providers/protocol.py, _matrix_events). So there is
                     # nothing to write into row_values here; instead each date found in a
                     # cell is folded into the SAME event_mappings/Termine review used for
                     # ordinary "events"-role tables (continuing the same row_index

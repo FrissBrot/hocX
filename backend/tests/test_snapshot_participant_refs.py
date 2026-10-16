@@ -5,7 +5,9 @@ from __future__ import annotations
 
 from datetime import date
 
-from app.services.export_service import ExportService
+from app.documents.context import BuildContext
+from app.documents.providers.lists import form_row_value
+from app.documents.providers.protocol import _single_value
 from app.services.snapshot_reference_ids import normalize_attendance_entries, translate_participant_refs
 from app.services.tenant_transfer_common import remap_block_configuration
 from tests.factories import (
@@ -51,8 +53,9 @@ def test_export_resolves_mixed_int_and_public_participant_refs(db):
     anna = make_participant(db, tenant.id, display_name="Anna")
     ben = make_participant(db, tenant.id, display_name="Ben")
 
-    value = ExportService()._form_row_value(
-        db, {"value_type": "participants", "participant_ids": [anna.id, str(ben.public_id), "kaputt"]}, tenant.id
+    value = form_row_value(
+        BuildContext(db=db, tenant_id=tenant.id, language="de"),
+        {"value_type": "participants", "participant_ids": [anna.id, str(ben.public_id), "kaputt"]},
     )
 
     assert value == "Anna, Ben"
@@ -67,12 +70,11 @@ def test_export_matrix_cells_resolve_public_participant_and_event_refs(db):
     anna = make_participant(db, tenant.id, display_name="Anna")
     event = make_event(db, tenant.id, title="Sommerlager", event_date=date(2026, 7, 4))
     foreign_event = make_event(db, make_tenant(db, name="Fremd").id, title="Fremdlager", event_date=date(2026, 7, 4))
-    service = ExportService()
+    ctx = BuildContext(db=db, tenant_id=tenant.id, language="de", protocol=protocol)
 
     def cell_value(value_type, cell):
-        return service._matrix_single_value(
-            db, value_type=value_type, cell=cell, protocol=protocol, row={}, column={}, prefix=""
-        )
+        nodes = _single_value(ctx, protocol, value_type, cell, {}, {})
+        return "".join(span.v for node in nodes for span in node.c if hasattr(span, "v"))
 
     assert cell_value("participant", {"participant_id": str(anna.public_id)}) == "Anna"
     assert cell_value("participants", {"participant_ids": [str(anna.public_id)]}) == "Anna"
@@ -86,7 +88,7 @@ def test_export_form_row_resolves_public_event_ref(db):
     tenant = make_tenant(db)
     event = make_event(db, tenant.id, title="Sommerlager")
 
-    value = ExportService()._form_row_value(db, {"value_type": "event", "event_id": str(event.public_id)}, tenant.id)
+    value = form_row_value(BuildContext(db=db, tenant_id=tenant.id, language="de"), {"value_type": "event", "event_id": str(event.public_id)})
 
     assert value.endswith("Sommerlager")
 
@@ -96,14 +98,17 @@ def test_ref_to_internal_id_accepts_int_digit_string_and_tenant_scoped_uuid(db):
     other = make_tenant(db, name="Fremd")
     definition = make_list_definition(db, tenant.id)
     foreign_account = make_finance_account(db, other.id)
-    resolve = ExportService._ref_to_internal_id
+    ctx = BuildContext(db=db, tenant_id=tenant.id, language="de")
+    resolve = ctx.ref_to_internal_id
 
-    assert resolve(db, type(definition), definition.id, tenant.id) == definition.id
-    assert resolve(db, type(definition), str(definition.id), tenant.id) == definition.id
-    assert resolve(db, type(definition), str(definition.public_id), tenant.id) == definition.id
-    assert resolve(db, type(foreign_account), str(foreign_account.public_id), tenant.id) is None
-    assert resolve(db, type(definition), None, tenant.id) is None
-    assert resolve(db, type(definition), "kaputt", tenant.id) is None
+    assert resolve(type(definition), definition.id) == definition.id
+    assert resolve(type(definition), str(definition.id)) == definition.id
+    assert resolve(type(definition), str(definition.public_id)) == definition.id
+    assert resolve(type(foreign_account), str(foreign_account.public_id)) is None
+    assert resolve(type(definition), None) is None
+    assert resolve(type(definition), "kaputt") is None
+    # Interne ints fremder Mandanten liefert erst entity_by_ref nicht aus
+    assert ctx.entity_by_ref(type(foreign_account), foreign_account.id) is None
 
 
 def test_normalize_attendance_entries_maps_public_ids_back_to_internal(db):

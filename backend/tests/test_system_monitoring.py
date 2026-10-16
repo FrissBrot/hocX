@@ -154,6 +154,45 @@ def test_collect_checks_turns_unreachable_services_into_findings(clean_state, mo
     assert checks["clamav_signatures"].status == "unknown"
 
 
+class _FakeResponse:
+    def __init__(self, body: bytes):
+        self._body = body
+
+    def read(self):
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+def test_document_verification_check_expects_a_miss_for_the_probe_hash(monkeypatch):
+    sent = {}
+
+    def fake_urlopen(request, timeout):
+        sent.update(url=request.full_url, body=json.loads(request.data), timeout=timeout)
+        return _FakeResponse(b'{"found": false}')
+
+    monkeypatch.setattr(system_health_service.urllib.request, "urlopen", fake_urlopen)
+    check = system_health_service._check_document_verification()
+    assert check.status == "ok" and "latencyMs" in check.params
+    assert sent["url"].endswith("/api/public/verify") and sent["body"] == {"sha256": "0" * 64}
+
+
+def test_document_verification_check_fails_on_unexpected_answer_or_outage(clean_state, monkeypatch):
+    monkeypatch.setattr(system_health_service.urllib.request, "urlopen", lambda *a, **k: _FakeResponse(b'{"found": true}'))
+    checks = {check.key: check for check in system_health_service.collect_checks(clean_state, NOW)}
+    assert checks["document_verification"].status == "critical" and "Unerwartete Antwort" in checks["document_verification"].error
+
+    monkeypatch.setattr(system_health_service.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("refused")))
+    check = system_health_service._run_check("document_verification", system_health_service._check_document_verification)[0]
+    problems = system_alert_service.derive_problems(_snapshot(checks=[check]), JobStatusOverview(items=[], generated_at=NOW), now=NOW)
+    problem = next(item for item in problems if item.key == "check:document_verification")
+    assert problem.severity == "critical" and problem.title == "Öffentliche Prüfseite nicht erreichbar"
+
+
 # ── system_alert_service.derive_problems ─────────────────────────────────────────────────
 
 

@@ -6,7 +6,6 @@ import { ListManager } from "@/components/lists/list-manager";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import {
-  DocumentTemplate,
   EventSummary,
   ParticipantSummary,
   StructuredListDefinition,
@@ -21,11 +20,10 @@ export default async function ListsPage() {
     redirect("/");
   }
 
-  const [lists, participants, events, documentTemplates] = await Promise.all([
+  const [lists, participants, events] = await Promise.all([
     backendFetchWithSession<StructuredListDefinition[]>("/api/lists"),
     backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=2000"),
     backendFetchWithSession<EventSummary[]>("/api/events"),
-    backendFetchWithSession<DocumentTemplate[]>("/api/document-templates"),
   ]);
 
   const listEntryPairs = await Promise.all(
@@ -48,7 +46,6 @@ export default async function ListsPage() {
               initialEntriesByList={initialEntriesByList}
               availableParticipants={participants ?? []}
               availableEvents={events ?? []}
-              documentTemplates={documentTemplates ?? []}
             />
           </section>
           </>

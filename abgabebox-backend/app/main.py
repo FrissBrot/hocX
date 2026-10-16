@@ -15,7 +15,7 @@ from app.captcha import captcha_configured, captcha_partially_configured
 from app.config import is_dev_or_test_environment, settings
 from app.db import SessionLocal, engine
 from app.repository import insert_error_log, upload_path_referenced
-from app.routes import public
+from app.routes import public, verify
 from app.storage import cleanup_stale_quarantine_files
 
 _logger = logging.getLogger(__name__)
@@ -188,4 +188,5 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": settings.app_name}
 
 
+app.include_router(verify.router, prefix="/api", tags=["verify"])
 app.include_router(public.router, prefix="/api", tags=["public"])

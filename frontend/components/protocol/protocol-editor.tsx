@@ -21,6 +21,7 @@ import { computePopoverPosition, usePopoverDismiss } from "@/components/ui/popov
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
+import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { ApiError, browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { clearDraft, discardMutation, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { getCycleYear } from "@/lib/utils/cycle";
@@ -28,7 +29,6 @@ import { protocolStatusVariant } from "@/components/protocol/protocol-status";
 import {
   AttendanceFine,
   AttendanceFineListItem,
-  DocumentTemplate,
   EventSummary,
   FinanceAccount,
   FinanceTransaction,
@@ -73,7 +73,6 @@ type ProtocolEditorProps = {
   availableAccounts: FinanceAccount[];
   initialFinanceTransactions: Record<string, FinanceTransaction[]>;
   initialPendingTodos?: TodoListItem[];
-  documentTemplates?: DocumentTemplate[];
   forceReadOnly?: boolean;
   canViewFines?: boolean;
   accordionEnabled?: boolean;
@@ -93,7 +92,6 @@ export function ProtocolEditor({
   availableAccounts,
   initialFinanceTransactions,
   initialPendingTodos = [],
-  documentTemplates = [],
   forceReadOnly = false,
   canViewFines = true,
   accordionEnabled = true,
@@ -1687,6 +1685,7 @@ export function ProtocolEditor({
           >
             {pdfBusyByProtocol[protocol.id] ? "…" : t("exportPdfButton")}
           </button>
+          <DocumentExportButton className="button-ghost" context={{ documentType: "protocol", protocolId: protocol.id }} />
           {!isReadOnly && workflowMeta[protocolStatus]?.ctaLabel && (
             <button
               type="button"
@@ -1839,7 +1838,6 @@ export function ProtocolEditor({
               pendingTodos={pendingTodos}
               onPendingUpdate={(updated) => setPendingTodos((prev) => prev.map((t) => t.id === updated.id ? { ...t, ...updated } : t))}
               onPendingDone={(todoId) => setPendingTodos((prev) => prev.filter((t) => t.id !== todoId))}
-              documentTemplates={documentTemplates}
             />
             </div>
           ))}

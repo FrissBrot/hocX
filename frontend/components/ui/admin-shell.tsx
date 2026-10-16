@@ -14,7 +14,7 @@ import { AdminAccountSettings } from "@/components/admin/admin-account-settings"
 import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
-type AdminIconKey = "dashboard" | "tenants" | "pricing" | "users" | "domains" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security";
+type AdminIconKey = "dashboard" | "tenants" | "pricing" | "users" | "domains" | "verifications" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security";
 
 type AdminNavLink = { href: string; labelKey: string; icon: AdminIconKey; badge?: "count" };
 
@@ -29,6 +29,7 @@ const navGroups: { titleKey: string | null; links: AdminNavLink[] }[] = [
       { href: "/admin/plans", labelKey: "nav.pricing", icon: "pricing" },
       { href: "/admin/users", labelKey: "nav.users", icon: "users" },
       { href: "/admin/domains", labelKey: "nav.domains", icon: "domains" },
+      { href: "/admin/verifications", labelKey: "nav.verifications", icon: "verifications" },
     ],
   },
   {
@@ -90,6 +91,12 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
       <>
         <circle cx="12" cy="12" r="8.5" />
         <path d="M3.5 12h17M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5s1.1-6.1 3.4-8.5z" />
+      </>
+    ),
+    verifications: (
+      <>
+        <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z" />
+        <path d="M9 12l2 2 4-4" />
       </>
     ),
     errors: (

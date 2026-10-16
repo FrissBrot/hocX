@@ -366,7 +366,6 @@ export function blockPayload(form: BlockForm): ElementDefinitionBlock {
     is_visible: form.is_visible,
     sort_index: form.sort_index,
     render_order: form.sort_index,
-    latex_template: null,
     configuration_json: configPayload(form),
   };
 }

@@ -24,9 +24,11 @@ Covers:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -47,7 +49,11 @@ from app.models.entities import (
     Protocol,
     ProtocolElement,
     ProtocolElementBlock,
-    ProtocolExportCache,
+    DocumentExport,
+    DocumentRegistry,
+    DocumentRecipe,
+    DocumentStyle,
+    DocumentStyleAsset,
     ProtocolTodo,
     Role,
     StoredFile,
@@ -149,7 +155,7 @@ def test_export_bundles_only_own_users_and_nulls_foreign_references(db):
         assert "foreign@x.example" not in json.dumps(manifest)
         assert manifest["tables"]["template"][0]["created_by"] is None
         assert "user_tenant_role" not in manifest["tables"]
-        assert manifest["format_version"] == 4
+        assert manifest["format_version"] == 6
     finally:
         zip_path.unlink(missing_ok=True)
 
@@ -279,22 +285,47 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
             tenant_id=tenant.id, template_id=template.id, signal_type="event_match",
             suggested_score=0.87, was_accepted=True,
         ),
-        ProtocolExportCache(
-            protocol_id=protocol.id, export_format="pdf", latex_source="source",
-            generated_file_id=generated_file.id, generator_version="test-v1",
+        DocumentExport(
+            tenant_id=tenant.id, protocol_id=protocol.id, document_type="protocol", version_label="v0.1",
+            content_hash="ab" * 32, stored_file_id=generated_file.id,
+        ),
+        DocumentRegistry(
+            # Hash der mitgesicherten PDF (TYPST-007: sonst «importiert, nicht verifiziert»)
+            tenant_id=tenant.id, sha256=hashlib.sha256(b"pdf-cache").hexdigest(), document_type="protocol", title="Sitzung", status_code="abgeschlossen",
+            version_major=1, version_minor=0, version_label="v1.0", source_public_id=protocol.public_id,
         ),
         UserProtocolScroll(user_id=user.id, protocol_id=protocol.id, last_element_id=17),
     ])
+    db.flush()
+    # Hausstil mit hochgeladenem Logo, Vorlage verweist darauf, Rezept mit Protokoll-Verweis
+    logo_path = tmp_path / "document_style_assets" / "logo.png"
+    logo_path.parent.mkdir(parents=True)
+    logo_path.write_bytes(b"png-logo")
+    logo = DocumentStyleAsset(tenant_id=tenant.id, kind="image", name="Logo", storage_path="document_style_assets/logo.png", mime_type="image/png")
+    db.add(logo)
+    db.flush()
+    style = DocumentStyle(tenant_id=tenant.id, name="Verein", style_key="classic", tokens_json={"logo_asset_id": str(logo.public_id), "header": "logo"}, is_default=True)
+    db.add(style)
+    db.flush()
+    template.document_style_id = style.id
+    db.add(DocumentRecipe(tenant_id=tenant.id, name="Monatsbrief", style_id=style.id, blocks_json=[{"type": "session_notes", "params": {"protocol_id": str(protocol.public_id)}}]))
     db.flush()
 
     zip_path, _ = TenantExportService().export(db, tenant.id, "full")
     try:
         manifest = _read_manifest(zip_path)
+        assert len(manifest["tables"]["document_style"]) == 1
+        assert len(manifest["tables"]["document_style_asset"]) == 1
+        assert len(manifest["tables"]["document_recipe"]) == 1
         assert len(manifest["tables"]["word_import_profile"]) == 1
         assert len(manifest["tables"]["word_import_suggestion_outcome"]) == 1
-        assert len(manifest["tables"]["protocol_export_cache"]) == 1
+        assert len(manifest["tables"]["document_export"]) == 1
+        assert len(manifest["tables"]["document_registry"]) == 1
         assert manifest["tables"]["user_protocol_scroll"][0]["user_id"] == str(user.public_id)
-        # Fresh target installation: the source account isn't there (see the word import test).
+        # Fresh target installation: the source account isn't there (see the word import test),
+        # and neither is the source tenant's document registry.
+        registry_id = db.scalar(select(DocumentRegistry.public_id).where(DocumentRegistry.tenant_id == tenant.id))
+        db.query(DocumentRegistry).filter(DocumentRegistry.tenant_id == tenant.id).delete()
         db.delete(user)
         db.flush()
         imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Complete Backup (Import)")
@@ -305,7 +336,10 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     imported_protocol = db.scalar(select(Protocol).where(Protocol.tenant_id == imported_tenant.id))
     profile = db.scalar(select(WordImportProfile).where(WordImportProfile.tenant_id == imported_tenant.id))
     outcome = db.scalar(select(WordImportSuggestionOutcome).where(WordImportSuggestionOutcome.tenant_id == imported_tenant.id))
-    cache = db.scalar(select(ProtocolExportCache).where(ProtocolExportCache.protocol_id == imported_protocol.id))
+    cache = db.scalar(select(DocumentExport).where(DocumentExport.protocol_id == imported_protocol.id))
+    imported_style = db.scalar(select(DocumentStyle).where(DocumentStyle.tenant_id == imported_tenant.id, DocumentStyle.name == "Verein"))
+    imported_logo = db.scalar(select(DocumentStyleAsset).where(DocumentStyleAsset.tenant_id == imported_tenant.id))
+    imported_recipe = db.scalar(select(DocumentRecipe).where(DocumentRecipe.tenant_id == imported_tenant.id))
     restored_user = db.scalar(select(AppUser).where(AppUser.email == "backup@example.com"))
     scroll = db.get(UserProtocolScroll, (restored_user.id, imported_protocol.id))
 
@@ -314,9 +348,20 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     assert profile.mapping_config_json == {"learned": {"source": "target"}}
     assert outcome.template_id == imported_template.id
     assert outcome.suggested_score == pytest.approx(0.87)
-    assert cache.generated_file_id is not None
-    assert db.get(StoredFile, cache.generated_file_id).tenant_id == imported_tenant.id
-    assert (tmp_path / db.get(StoredFile, cache.generated_file_id).storage_path).read_bytes() == b"pdf-cache"
+    assert cache.stored_file_id is not None and cache.version_label == "v0.1" and cache.content_hash == "ab" * 32
+    assert db.get(StoredFile, cache.stored_file_id).tenant_id == imported_tenant.id
+    assert (tmp_path / db.get(StoredFile, cache.stored_file_id).storage_path).read_bytes() == b"pdf-cache"
+    assert imported_style.is_default and imported_style.style_key == "classic"
+    assert imported_style.tokens_json["logo_asset_id"] == str(imported_logo.public_id)
+    assert (tmp_path / imported_logo.storage_path).read_bytes() == b"png-logo"
+    assert imported_template.document_style_id == imported_style.id
+    assert imported_recipe.style_id == imported_style.id
+    assert imported_recipe.blocks_json[0]["params"]["protocol_id"] == str(imported_protocol.public_id)
+    registry = db.scalar(select(DocumentRegistry).where(DocumentRegistry.tenant_id == imported_tenant.id))
+    # Dokument-ID bleibt (sie steht im PDF), Quelle zeigt auf das importierte Protokoll
+    assert registry.public_id == registry_id and registry.sha256 == hashlib.sha256(b"pdf-cache").hexdigest() and registry.import_unverified is False
+    assert registry.status_code == "abgeschlossen" and registry.version_label == "v1.0"
+    assert registry.source_public_id == imported_protocol.public_id
     assert scroll.last_element_id == 17
 
 
@@ -1535,6 +1580,30 @@ def test_import_skips_partner_relations_when_partner_is_missing(db):
     assert any("Vertrauensbeziehung" in warning for warning in warnings)
 
 
+def test_import_keeps_registry_with_original_and_never_imports_identity_verification(db):
+    """Ein Archiv, das in dieselbe Installation zurückgespielt wird: der Hash gehört weiter dem
+    Original (Eintrag übersprungen, Warnung). Die Bestätigung der Organisation durch hocX reist nie
+    mit - auch nicht, wenn ein (manipuliertes) Archiv sie behauptet."""
+    tenant = make_tenant(db, "Registerverein")
+    tenant.identity_verified_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    tenant.identity_verification_note = "Handelsregister geprüft"
+    tenant.verify_show_identity = True
+    db.add(DocumentRegistry(tenant_id=tenant.id, sha256="ef" * 32, document_type="todos", title="Pendenzen"))
+    db.flush()
+
+    zip_path, _ = TenantExportService().export(db, tenant.id, "full")
+    try:
+        imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Registerverein (Kopie)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    assert db.scalar(select(DocumentRegistry.tenant_id).where(DocumentRegistry.sha256 == "ef" * 32)) == tenant.id
+    assert db.scalar(select(DocumentRegistry).where(DocumentRegistry.tenant_id == imported_tenant.id)) is None
+    assert any("Dokumentenregister: 1 Einträge übersprungen" in warning for warning in warnings)
+    assert imported_tenant.identity_verified_at is None and imported_tenant.identity_verification_note is None
+    assert imported_tenant.verify_show_identity is True
+
+
 def test_import_merges_duplicate_fines_from_old_archives(db):
     """MAIN-BE-016: Archive von vor Migration 0116 können doppelte Bussen enthalten - der
     Import führt sie zusammen (kassiert vor offen) statt am Unique-Index abzubrechen."""
@@ -1566,3 +1635,33 @@ def test_import_merges_duplicate_fines_from_old_archives(db):
     assert [fine.status for fine in fines] == ["collected"]
     assert any("doppelte Busse" in warning for warning in warnings)
 
+
+
+def test_import_marks_registry_entries_without_matching_pdf_as_unverified(db, monkeypatch, tmp_path):
+    """TYPST-007: Ein Register-Eintrag gilt nach dem Import nur als belegt, wenn das Archiv eine
+    PDF mit genau diesem Hash enthält; sonst «importiert, nicht verifiziert". Der Wert aus dem
+    Archiv selbst zählt nicht."""
+    import hashlib
+
+    from sqlalchemy import delete
+
+    _storage(monkeypatch, tmp_path)
+    tenant = make_tenant(db, "Registerprüfung")
+    pdf = b"%PDF-1.7 hocx test"
+    (tmp_path / "export.pdf").write_bytes(pdf)
+    db.add(StoredFile(tenant_id=tenant.id, original_name="export.pdf", mime_type="application/pdf", storage_path="export.pdf", file_size_bytes=len(pdf)))
+    backed = hashlib.sha256(pdf).hexdigest()
+    db.add(DocumentRegistry(tenant_id=tenant.id, sha256=backed, document_type="protocol", title="Mit Datei"))
+    db.add(DocumentRegistry(tenant_id=tenant.id, sha256="ab" * 32, document_type="protocol", title="Ohne Datei"))
+    db.flush()
+
+    def fresh_installation(zip_path):
+        # Auf einer frischen Installation sind die Hashes noch frei (sonst würden sie übersprungen).
+        db.execute(delete(DocumentRegistry).where(DocumentRegistry.tenant_id == tenant.id))
+        _rewrite_manifest(zip_path, lambda manifest: [row.update(import_unverified=False) for row in manifest["tables"]["document_registry"]])
+
+    imported, warnings = _export_import(db, tenant.id, before_import=fresh_installation)
+
+    flags = dict(db.execute(select(DocumentRegistry.sha256, DocumentRegistry.import_unverified).where(DocumentRegistry.tenant_id == imported.id)).all())
+    assert flags == {backed: False, "ab" * 32: True}
+    assert any("nicht verifiziert" in warning for warning in warnings)

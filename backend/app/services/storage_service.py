@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     GalleryImage,
-    ProtocolExportCache,
+    DocumentExport,
     ProtocolImage,
     StoredFile,
     SubmissionUploadFile,
@@ -33,7 +33,7 @@ class StorageService:
 
     - photos:    uploaded images (protocol images, gallery uploads, image submissions)
     - files:     every other upload (word-import sources, abgabebox documents, ...)
-    - protocols: generated PDF/LaTeX exports (protocol_export_cache). The "Dateien"
+    - protocols: generated PDF exports (document_export). The "Dateien"
                  overview deliberately excludes these (a generated PDF isn't something a
                  user "hochgeladen" hat), but they occupy real disk space and belong in a
                  storage report.
@@ -46,7 +46,7 @@ class StorageService:
 
     def _category_sums(self, db: Session, tenant_id: int | None) -> dict[int, dict[str, int]]:
         """tenant_id=None sums across every tenant at once (admin list), otherwise scoped to one."""
-        is_export = StoredFile.id.in_(select(ProtocolExportCache.generated_file_id))
+        is_export = StoredFile.id.in_(select(DocumentExport.stored_file_id).where(DocumentExport.stored_file_id.is_not(None)))
         is_upload = or_(
             StoredFile.id.in_(select(ProtocolImage.stored_file_id)),
             StoredFile.id.in_(select(GalleryImage.stored_file_id)),
