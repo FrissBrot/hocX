@@ -435,7 +435,19 @@ export type UploadFileResult = {
   applied?: MetadataField[];
   conflicts?: MetadataField[];
   message?: string | null;
+  // Grund eines Fehlschlags (siehe backend UploadFailureCode) - übersetzt statt Servertext.
+  code?: UploadFailureCode | null;
+  params?: Record<string, string | number>;
 };
+
+export type UploadFailureCode =
+  | "too_large"
+  | "unsupported_format"
+  | "scan_failed"
+  | "infected"
+  | "quota_exceeded"
+  | "heic_unreadable"
+  | "rule_violation";
 
 export type GalleryUploadJobDetail = GalleryUploadJob & {
   imported_items: FileOverviewItem[];

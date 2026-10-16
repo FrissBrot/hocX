@@ -83,6 +83,7 @@ from app.services.upload_pipeline import (
     _sniff_live_clip_mime,
     _sniff_word_import_mime,
     extract_word_import_files_from_zip,
+    upload_failure,
     generate_thumbnail_bytes,
     ingest_file,
     iter_gallery_zip_entries,
@@ -1049,7 +1050,7 @@ class FileService:
                 converted = await asyncio.to_thread(convert_heic_to_jpeg, content)
                 if converted is None:
                     errors.append(f"{label}: HEIC-Datei konnte nicht gelesen werden")
-                    results.append({"name": label, "status": "failed", "message": "HEIC-Datei konnte nicht gelesen werden"})
+                    results.append({"name": label, "status": "failed", "message": "HEIC-Datei konnte nicht gelesen werden", "code": "heic_unreadable"})
                     continue
                 content, filename = converted, jpeg_filename(filename)
                 converted_from_heic = True
@@ -1076,7 +1077,7 @@ class FileService:
                 )
             except HTTPException as exc:
                 errors.append(f"{label}: {exc.detail}")
-                results.append({"name": label, "status": "failed", "message": str(exc.detail)})
+                results.append(upload_failure(label, exc))
                 continue
 
             stored_file = result.stored_file
@@ -1423,7 +1424,7 @@ class FileService:
                 )
             except HTTPException as exc:
                 errors.append(f"{label}: {exc.detail}")
-                results.append({"name": label, "status": "failed", "message": str(exc.detail)})
+                results.append(upload_failure(label, exc))
                 continue
 
             stored_file = result.stored_file
@@ -1669,7 +1670,10 @@ class FileService:
             with _tenant_protocol_image_upload_lock(db, job.tenant_id):
                 rules = submission_upload_rules.load_rules(db, upload_assignment, job.upload_element_ref)
             batch, rule_errors = rules.filter_batch(batch)
-        batch_results: list[dict] = [{"name": error.split(":", 1)[0], "status": "failed", "message": error} for error in rule_errors]
+        # Regeltexte (Abgabe-Regeln des Mandanten) bleiben Text; der Code ordnet sie nur ein.
+        batch_results: list[dict] = [
+            {"name": error.split(":", 1)[0], "status": "failed", "message": error, "code": "rule_violation"} for error in rule_errors
+        ]
 
         def checkpoint(items: list[FileOverviewItem], errors: list[str]) -> None:
             job.imported_file_ids = [*job.imported_file_ids, *(str(item.id) for item in items)]

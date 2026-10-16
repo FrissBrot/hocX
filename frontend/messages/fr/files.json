@@ -152,6 +152,14 @@
       "dimensions": "dimensions",
       "orientation": "orientation",
       "estimated_taken_on": "date de prise de vue estimée"
+    },
+    "errors": {
+      "too_large": "Trop volumineux (maximum {max_mb} Mo).",
+      "unsupported_format": "Format de fichier non pris en charge ou ne correspondant pas à l'extension.",
+      "scan_failed": "Impossible de vérifier la présence de logiciels malveillants.",
+      "infected": "Détecté comme infecté par l'antivirus, non enregistré.",
+      "quota_exceeded": "Quota de stockage atteint, non enregistré.",
+      "heic_unreadable": "Le fichier HEIC n'a pas pu être lu."
     }
   }
 }

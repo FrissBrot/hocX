@@ -152,6 +152,14 @@
       "dimensions": "Bildmasse",
       "orientation": "Ausrichtung",
       "estimated_taken_on": "geschätztes Aufnahmedatum"
+    },
+    "errors": {
+      "too_large": "Zu gross (maximal {max_mb} MB).",
+      "unsupported_format": "Dateiformat wird nicht unterstützt oder passt nicht zur Dateiendung.",
+      "scan_failed": "Konnte nicht auf Schadsoftware geprüft werden.",
+      "infected": "Von der Virenprüfung als infiziert erkannt, nicht gespeichert.",
+      "quota_exceeded": "Speicherkontingent erreicht, nicht gespeichert.",
+      "heic_unreadable": "HEIC-Datei konnte nicht gelesen werden."
     }
   }
 }

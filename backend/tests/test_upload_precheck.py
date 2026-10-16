@@ -323,6 +323,33 @@ def test_unsupported_format_is_reported_as_failed(db):
     detail = _queue_and_process(db, user, [("kein-bild.jpg", b"definitely not an image")])
     assert [result.status for result in detail.file_results] == ["failed"]
     assert detail.file_results[0].message
+    # IMGMETA-012: maschinenlesbarer Grund, den das Frontend übersetzt.
+    assert detail.file_results[0].code == "unsupported_format"
+
+
+def test_upload_rejections_carry_a_code_and_parameters(db):
+    """IMGMETA-012: ingest_file lehnt mit Code ab; der deutsche Text bleibt als detail."""
+    from app.services import upload_pipeline
+
+    tenant = make_tenant(db)
+    with pytest.raises(upload_pipeline.UploadRejected) as too_large:
+        upload_pipeline.ingest_file(
+            db, tenant_id=tenant.id, content=b"x" * 2048, original_filename="gross.jpg", scan_status="clean",
+            sniff=upload_pipeline._sniff_image_mime, max_bytes=1024, storage_subdir_parts=("test",),
+            enable_perceptual_dedupe=False, enable_thumbnail=False, created_by=None,
+        )
+    assert (too_large.value.status_code, too_large.value.code) == (413, "too_large")
+    assert too_large.value.params == {"max_mb": 0}
+    failure = upload_pipeline.upload_failure("gross.jpg", too_large.value)
+    assert failure["code"] == "too_large" and failure["message"] == too_large.value.detail
+
+    with pytest.raises(upload_pipeline.UploadRejected) as infected:
+        upload_pipeline.ingest_file(
+            db, tenant_id=tenant.id, content=jpeg(), original_filename="virus.jpg", scan_status="infected",
+            sniff=upload_pipeline._sniff_image_mime, max_bytes=10 * 1024 * 1024, storage_subdir_parts=("test",),
+            enable_perceptual_dedupe=False, enable_thumbnail=False, created_by=None,
+        )
+    assert infected.value.code == "infected"
 
 
 def test_mixed_batch_counts_each_file_exactly_once(db, monkeypatch):

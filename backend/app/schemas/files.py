@@ -154,6 +154,11 @@ class GalleryUploadJobRead(BaseModel):
     error: str | None
 
 
+UploadFailureCode = Literal[
+    "too_large", "unsupported_format", "scan_failed", "infected", "quota_exceeded", "heic_unreadable", "rule_violation"
+]
+
+
 class UploadFileResult(BaseModel):
     """Ergebnis einer einzelnen Datei: hochgeladen, übersprungen (exaktes Duplikat, nichts zu
     tun), übersprungen mit ergänzten Metadaten oder fehlgeschlagen. `applied` nennt nur
@@ -165,6 +170,10 @@ class UploadFileResult(BaseModel):
     applied: list[MetadataField] = []
     conflicts: list[MetadataField] = []
     message: str | None = None
+    # Maschinenlesbarer Grund eines Fehlschlags (IMGMETA-012) - das Frontend übersetzt ihn;
+    # `message` bleibt deutscher Text für ältere Clients und unbekannte Codes.
+    code: UploadFailureCode | None = None
+    params: dict[str, int | str] = {}
 
 
 class GalleryUploadJobDetail(GalleryUploadJobRead):
