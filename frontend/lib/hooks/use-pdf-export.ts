@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useToast } from "@/contexts/toast-context";
-import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { browserApiBaseUrl, browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 
 export type PdfExportResult = {
   content_url?: string | null;
@@ -36,6 +36,7 @@ export function usePdfExport() {
 
       const result = await browserApiFetch<PdfExportResult>(`/api/protocols/${protocolId}/exports/pdf`, {
         method: "POST",
+        timeoutMs: LONG_RUNNING_TIMEOUT_MS,
       });
       if (!result.content_url) {
         throw new Error("Die PDF konnte nicht bereitgestellt werden.");

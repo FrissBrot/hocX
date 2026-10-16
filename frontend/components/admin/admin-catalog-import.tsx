@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
-import { ApiError, browserApiFetch } from "@/lib/api/client";
+import { ApiError, browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 import { CatalogImportChange, CatalogImportPreview, CatalogImportRequest } from "@/types/api";
 
 const ACTION_VARIANTS = {
@@ -126,7 +126,7 @@ export function AdminCatalogImportModal({ open, onClose, onImported }: Props) {
     setBusy(true);
     try {
       const body: CatalogImportRequest = { config, overwrite, base_fingerprint: preview.base_fingerprint };
-      const result = await browserApiFetch<CatalogImportPreview>("/api/admin/catalog/import", { method: "POST", body: JSON.stringify(body) });
+      const result = await browserApiFetch<CatalogImportPreview>("/api/admin/catalog/import", { method: "POST", body: JSON.stringify(body), timeoutMs: LONG_RUNNING_TIMEOUT_MS });
       showToast(t("applied", { count: result.changes.length }), "success");
       reset();
       onImported();
