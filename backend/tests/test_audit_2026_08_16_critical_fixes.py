@@ -325,18 +325,16 @@ def test_import_zip_forces_pending_scan_status_despite_manifest_claiming_clean(d
     assert imported.scan_status != "clean"
 
 
-# --- S1: export_latex (app/api/routes/exports.py) missing tenant check on protocol_id -------
+# --- S1: Protokoll-Export einer fremden Mandanten-ID -------------------------------------
 #
-# export_latex only checked require_admin(user) but never verified the protocol belonged to
-# the caller's tenant - unlike its sibling routes (export_pdf, latest_export, ...) which all
-# call access_service.ensure_can_read_protocol(...). A Tenant-A admin could export any
-# Tenant-B protocol's LaTeX source by guessing/enumerating its id. Fixed by adding the same
-# access_service.ensure_can_read_protocol(db, user, protocol_id) call used by the neighboring
-# routes, right after require_admin(user).
+# Ursprünglich prüfte der Protokoll-Quelltext-Export den Mandanten des Protokolls nicht. Die Dokument-Engine
+# (POST /api/documents/render) löst protocol_id mandantengebunden auf und prüft zusätzlich das
+# Protokoll-Leserecht; eine fremde ID ist von einer unbekannten nicht zu unterscheiden (404).
 
 
-def test_s1_export_latex_rejects_protocol_from_foreign_tenant(db):
-    from app.api.routes import exports as exports_route
+def test_s1_document_render_rejects_protocol_from_foreign_tenant(db):
+    from app.api.routes import documents as documents_route
+    from app.documents.service import DocumentRequest
     from tests.factories import make_current_user
 
     tenant_a = make_tenant(db, "Tenant A (S1)")
@@ -346,104 +344,64 @@ def test_s1_export_latex_rejects_protocol_from_foreign_tenant(db):
     user_a = make_current_user(tenant_a.id, role="admin")
 
     with pytest.raises(HTTPException) as exc_info:
-        exports_route.export_latex(protocol_b.public_id, request=None, db=db, user=user_a)
-    # Tenant-scoped public_id resolution now rejects a foreign tenant's protocol id before
-    # the object-level access check ever runs, so it's 404 (not-found), not 403.
+        _run(documents_route.render_document(DocumentRequest(protocol_id=protocol_b.public_id), db=db, user=user_a))
     assert exc_info.value.status_code == 404
 
 
-def test_s1_export_latex_tenant_check_passes_through_for_own_tenant_protocol(db):
-    """Sanity check that the new access check doesn't break same-tenant access: a Tenant-A
-    admin exporting their own protocol must get past the tenant check. The protocol has no
-    materialized document-template snapshot, so it still fails - but with a 404 ValueError
-    from deeper in the service, proving the tenant check itself passed (rather than a 404
-    from public_id resolution itself, as the cross-tenant case gets)."""
-    from app.api.routes import exports as exports_route
+def test_s1_document_preview_passes_for_own_tenant_protocol(db):
+    """Gegenprobe: das eigene Protokoll passiert die Mandantenprüfung."""
+    from app.api.routes import documents as documents_route
+    from app.documents.service import DocumentRequest
     from tests.factories import make_current_user
 
     tenant_a = make_tenant(db, "Tenant A (S1b)")
     template_a = make_template(db, tenant_a.id)
     protocol_a = make_protocol(db, tenant_a.id, template_a.id, protocol_number="S1-A-1")
-    # Deterministically missing (not "" - which resolves to the cwd and would actually exist).
-    protocol_a.document_template_path_snapshot = "/nonexistent/does-not-matter-s1"
-    db.add(protocol_a)
-    db.flush()
     user_a = make_current_user(tenant_a.id, role="admin")
 
-    with pytest.raises(HTTPException) as exc_info:
-        exports_route.export_latex(protocol_a.public_id, request=None, db=db, user=user_a)
-    assert exc_info.value.status_code == 404
+    result = _run(documents_route.preview_document(DocumentRequest(protocol_id=protocol_a.public_id), _ConnectedRequest(), max_pages=1, db=db, user=user_a))
+    assert result.pages
 
 
-# --- S2: export_global_pdf's "list" branch (app/services/export_service.py) missing
-# tenant check on list_definition_id -----------------------------------------------------
+# --- S2: Listen-Export mit list_id eines fremden Mandanten --------------------------------
 #
-# list_definition_id comes straight from the POST /exports/lists request body
-# (GlobalListExportRequest). export_global_pdf loaded the referenced ListDefinition via
-# db.get(...) without ever checking it belonged to the caller's tenant, so a Tenant-A user
-# could export the contents of any Tenant-B list by passing its id. Fixed by checking
-# list_def.tenant_id == tenant_id right after the db.get(...) lookup and raising the same
-# ValueError("List not found") used for the not-found case (-> 404 at the route layer),
-# so a foreign-tenant id is indistinguishable from a nonexistent one.
+# Ursprünglich lud export_global_pdf die Liste ohne Mandantenprüfung. Der Listen-Provider der
+# Dokument-Engine löst list_id mandantengebunden auf; eine fremde ID ergibt 404 und nie Inhalte.
 
 
-def _s2_make_document_template_with_dir(db, tenant_id: int, code: str = "s2-default"):
-    """A DocumentTemplate row backed by a real (empty) directory, so export_global_pdf gets
-    past its template_path.exists()/shutil.copytree steps and actually reaches the
-    list_definition_id lookup under test."""
-    import tempfile
-
-    from app.models import DocumentTemplate
-
-    template_dir = tempfile.mkdtemp(prefix="hocx-test-s2-doctemplate-")
-    doc_template = DocumentTemplate(
-        tenant_id=tenant_id, code=code, name="Test Layout", filesystem_path=template_dir,
-    )
-    db.add(doc_template)
-    db.flush()
-    return doc_template
-
-
-def test_s2_export_global_list_rejects_list_definition_from_foreign_tenant(db):
-    from app.api.routes import exports as exports_route
+def test_s2_document_list_rejects_list_definition_from_foreign_tenant(db):
+    from app.api.routes import documents as documents_route
+    from app.documents.catalog import BlockSpec
+    from app.documents.service import DocumentRequest
     from tests.factories import make_current_user, make_list_definition
 
     tenant_a = make_tenant(db, "Tenant A (S2)")
     tenant_b = make_tenant(db, "Tenant B (S2)")
-    doc_template_a = _s2_make_document_template_with_dir(db, tenant_a.id)
     list_def_b = make_list_definition(db, tenant_b.id, name="Foreign List (S2)")
     user_a = make_current_user(tenant_a.id, role="admin")
 
-    body = exports_route.GlobalListExportRequest(
-        template_id=doc_template_a.public_id,
-        list_definition_id=list_def_b.public_id,
-    )
-
+    body = DocumentRequest(document_type="list", blocks=[BlockSpec(type="list_table", params={"list_id": str(list_def_b.public_id)})])
     with pytest.raises(HTTPException) as exc_info:
-        _run(exports_route.export_global_list(body, request=None, db=db, user=user_a))
+        _run(documents_route.render_document(body, db=db, user=user_a))
     assert exc_info.value.status_code == 404
 
 
-def test_s2_export_global_pdf_service_rejects_list_definition_from_foreign_tenant(db):
-    """Same as above but exercising ExportService.export_global_pdf directly, to pin the fix
-    at the service layer (where the actual db.get(ListDefinition, ...) call lives) regardless
-    of how future routes call into it."""
-    from app.services.export_service import ExportService
+def test_s2_list_provider_rejects_list_definition_from_foreign_tenant(db):
+    """Gleiches auf Provider-Ebene, unabhängig von der Route."""
+    from app.documents.builder import build_blocks
+    from app.documents.catalog import BlockSpec
+    from app.documents.context import BuildContext, DocumentNotFoundError
     from tests.factories import make_list_definition
 
     tenant_a = make_tenant(db, "Tenant A (S2b)")
     tenant_b = make_tenant(db, "Tenant B (S2b)")
-    doc_template_a = _s2_make_document_template_with_dir(db, tenant_a.id)
     list_def_b = make_list_definition(db, tenant_b.id, name="Foreign List (S2b)")
 
-    service = ExportService()
-    with pytest.raises(ValueError, match="List not found"):
-        _run(
-            service.export_global_pdf(
-                db, tenant_a.id, doc_template_a.id, "list",
-                list_definition_id=list_def_b.id,
-            )
-        )
+    with pytest.raises(DocumentNotFoundError):
+        build_blocks(BuildContext(db=db, tenant_id=tenant_a.id, language="de"), [BlockSpec(type="list_table", params={"list_id": str(list_def_b.public_id)})])
+    # Ebenso ein Matrix-Block mit einer fremden bzw. unbekannten Block-ID
+    with pytest.raises(DocumentNotFoundError):
+        build_blocks(BuildContext(db=db, tenant_id=tenant_a.id, language="de"), [BlockSpec(type="matrix", params={"protocol_block_id": str(list_def_b.public_id)})])
 
 
 def _run(coro):
@@ -589,3 +547,11 @@ def test_update_element_definition_rejects_linked_list_from_foreign_tenant(db):
     created_internal_id = public_id_service.resolve_internal_id(db, ElementDefinition, created.id)
     with pytest.raises(ValueError, match="ListDefinition"):
         service.update_element_definition(db, created_internal_id, update_payload)
+
+
+class _ConnectedRequest:
+    """Stand-in für den Request der Vorschau-Route: der Client bleibt verbunden."""
+
+    async def is_disconnected(self) -> bool:
+        return False
+

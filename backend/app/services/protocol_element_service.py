@@ -88,7 +88,6 @@ class ProtocolElementService:
                     is_required_snapshot=block.is_required_snapshot,
                     is_visible_snapshot=block.is_visible_snapshot,
                     export_visible_snapshot=block.export_visible_snapshot,
-                    latex_template_snapshot=block.latex_template_snapshot,
                     configuration_snapshot_json=config,
                     public_reference_ids=snapshot_reference_ids(db, config, protocol_tenant_id),
                     text_content=row.text_content,

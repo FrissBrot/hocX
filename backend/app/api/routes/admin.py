@@ -382,7 +382,8 @@ async def update_tenant(
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     try:
         tenant = await tenant_service.update_tenant(
-            db, internal_tenant_id, TenantUpdate(name=name, public_slug=public_slug), profile_image
+            db, internal_tenant_id, TenantUpdate(name=name, public_slug=public_slug), profile_image,
+            admin_email=current_admin.email,
         )
     except SQLAlchemyError as exc:
         db.rollback()

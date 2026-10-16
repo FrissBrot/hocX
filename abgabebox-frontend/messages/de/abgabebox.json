@@ -109,5 +109,65 @@
   "language": {
     "label": "Sprache"
   },
-  "copyright": "Copyright © {year} hocX Project · Alle Rechte vorbehalten."
+  "copyright": "Copyright © {year} hocX Project · Alle Rechte vorbehalten.",
+  "verify": {
+    "brand": {
+      "subtitle": "Echtheitsprüfung",
+      "headline": "Stammt dieses Dokument wirklich aus hocX?",
+      "lead": "Lege die PDF-Datei ab. Wir vergleichen ihren digitalen Fingerabdruck mit allen Dokumenten, die mit hocX erstellt wurden.",
+      "privacyNote": "Die Datei verlässt dein Gerät nicht - geprüft wird nur ihr Fingerabdruck."
+    },
+    "title": "Echtheit prüfen",
+    "hint": "Prüfe, ob eine PDF-Datei unverändert aus hocX stammt.",
+    "documentHint": "Dokument {id} – lege die PDF-Datei hier ab, um sie zu prüfen.",
+    "dropLabel": "PDF-Datei hierher ziehen oder auswählen",
+    "dropLabelTouch": "PDF-Datei auswählen",
+    "dropRelease": "Loslassen zum Prüfen",
+    "dropOverlay": "Datei loslassen, um sie zu prüfen",
+    "privacy": "Die Datei wird nicht hochgeladen. Dein Browser berechnet ihren digitalen Fingerabdruck (SHA-256) und schickt nur diesen zur Prüfung.",
+    "checking": "Wird geprüft …",
+    "checkAnother": "Andere Datei prüfen",
+    "fileName": "Geprüfte Datei: {name}",
+    "originalTitle": "Original",
+    "originalText": "Diese Datei ist eine unveränderte Kopie eines Dokuments, das am {date} mit hocX erstellt wurde.",
+    "fields": {
+      "documentType": "Dokumenttyp",
+      "title": "Titel",
+      "status": "Status",
+      "version": "Version",
+      "documentId": "Dokument-ID"
+    },
+    "statusLabel": {
+      "geplant": "Entwurf (geplant)",
+      "durchgeführt": "Entwurf (durchgeführt)",
+      "abgeschlossen": "Abgeschlossen"
+    },
+    "docType": {
+      "protocol": "Protokoll",
+      "invitation": "Einladung",
+      "todos": "Pendenzenliste",
+      "events": "Terminplan",
+      "attendance_sheet": "Präsenzliste",
+      "members": "Mitgliederliste",
+      "finance": "Finanzbericht",
+      "statistics": "Jahresbericht",
+      "list": "Liste",
+      "custom": "Dokument",
+      "protocol_excerpt": "Protokollauszug"
+    },
+    "createdBy": "Erstellt im hocX-Konto von {name}.",
+    "verifiedBadge": "Verifizierte Organisation",
+    "verifiedExplanation": "hocX hat bestätigt, dass dieses Konto zur Organisation «{name}» gehört.",
+    "logoAlt": "Logo von {name}",
+    "otherDocument": "Die Datei ist echt, gehört aber zu einem anderen Dokument als der gescannte QR-Code.",
+    "importUnverified": "Importiert, nicht verifiziert: Dieser Eintrag stammt aus einem Datenimport und konnte dabei nicht mit der Originaldatei abgeglichen werden.",
+    "newerVersion": "Es gibt eine neuere Version ({version}) dieses Dokuments.",
+    "notFoundTitle": "Nicht gefunden",
+    "notFoundText": "Diese Datei stimmt mit keinem bei hocX erstellten Dokument überein. Sie wurde verändert oder stammt nicht aus hocX.",
+    "notFoundHint": "Schon erneutes Speichern, «Drucken als PDF» oder Komprimieren verändert die Datei, auch wenn der Inhalt gleich aussieht. Prüfe deshalb immer die ursprünglich erhaltene Datei.",
+    "error": "Die Prüfung ist gerade nicht möglich. Bitte versuche es gleich nochmal.",
+    "readError": "Die Datei konnte nicht gelesen werden.",
+    "tooLarge": "Die Datei ist zu gross (höchstens {size} MB).",
+    "noCrypto": "Dein Browser unterstützt die Prüfung nicht. Bitte verwende einen aktuellen Browser."
+  }
 }

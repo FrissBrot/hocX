@@ -80,5 +80,6 @@
   "includedModulesEyebrow": "Modules inclus dans le plan",
   "noModulesBooked": "Aucun module réservé.",
   "pricePerMonth": "+{price}/mois",
-  "moduleActive": "Actif"
+  "moduleActive": "Actif",
+  "saveSuccessVerificationRevoked": "Enregistré. Le nom ayant changé, la vérification par hocX a été révoquée (Modèles → Vérification d’authenticité)."
 }

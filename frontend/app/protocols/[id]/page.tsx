@@ -6,7 +6,6 @@ import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchAllPagesWithSession, backendFetchWithSession, requireSession } from "@/lib/api/server";
 import {
-  DocumentTemplate,
   EventSummary,
   FinanceAccount,
   FinanceTransaction,
@@ -32,8 +31,7 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
     redirect("/protocols");
   }
 
-  const [documentTemplates, templates, events, lists, elements, participants, participantDirectory] = await Promise.all([
-    backendFetchWithSession<DocumentTemplate[]>("/api/document-templates").then((v) => v ?? []),
+  const [templates, events, lists, elements, participants, participantDirectory] = await Promise.all([
     backendFetchWithSession<TemplateSummary[]>("/api/templates").then((v) => v ?? []),
     backendFetchAllPagesWithSession<EventSummary>("/api/events"),
     backendFetchWithSession<StructuredListDefinition[]>("/api/lists").then((v) => v ?? []),
@@ -126,7 +124,6 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
               availableAccounts={financeAccounts}
               initialFinanceTransactions={initialFinanceTransactions}
               initialPendingTodos={pendingTodos}
-              documentTemplates={documentTemplates}
               forceReadOnly={isRestricted}
               canViewFines={canViewFines}
               accordionEnabled={session.user?.protocol_accordion_enabled ?? true}

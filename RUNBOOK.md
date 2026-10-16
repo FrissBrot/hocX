@@ -400,7 +400,7 @@ und werden bei Ausbleiben nicht gemeldet.
 
 ### `scripts/cleanup_storage.sh`
 
-- **Zweck**: räumt ausschließlich `storage/exports/` (generierte PDF/LaTeX-Exportdateien)
+- **Zweck**: räumt ausschließlich `storage/exports/` (generierte PDF-Exportdateien)
   nach Alter auf. Bewusst **nicht** angefasst werden `storage/tenant_imports`,
   `storage/tenant_clones` und `storage/abgabebox-uploads` - das sind laut Code- und
   Live-DB-Prüfung permanente Speicherorte für echte Mandantendaten, keine Temp-Dateien
@@ -460,7 +460,8 @@ Im Platform-Admin unter **System**:
 
 - **Systemstatus** (`/admin/system`): Container (Status, Healthcheck, Neustarts, CPU/RAM,
   Version) und Dienste (Postgres, Redis, ClamAV inkl. Signaturalter, Speicherplatz,
-  Fehlerrate, Rückstand der Virenprüfung, Bildanalyse-Warteschlange), offene Probleme und
+  Fehlerrate, Rückstand der Virenprüfung, Bildanalyse-Warteschlange, öffentliche
+  Prüfseite der Dokumente), offene Probleme und
   die letzten Ereignisse. Gesammelt alle 30 s vom Loop `system_monitor` im Backend
   (`app/services/system_health_service.py`, Schwellwerte dort oben).
 - **Jobs** (`/admin/jobs`): alle Hintergrund-Loops, der Bildanalyse-Worker und die
@@ -532,3 +533,54 @@ DNS oder ein abgelaufenes Zertifikat der Website-Domain.
 - „Container-Status nicht verfügbar“: `docker compose ps docker-socket-proxy`, Logs des
   Proxys; läuft das Backend im Netz `docker-api`?
 - Virensignaturen veraltet: Logs des `clamav`-Containers (freshclam) prüfen.
+
+## 13. Öffentliche Prüfseite (Echtheit von PDFs)
+
+hocX signiert keine PDFs. Jedes erzeugte PDF wird mit seinem SHA-256 im Dokumentenregister
+erfasst; die öffentliche Prüfseite `https://<TRAEFIK_ABGABEBOX_DOMAIN>/verify` (Abgabebox)
+vergleicht den im Browser berechneten Hash einer Datei mit dem Register. Es gibt keine
+Zertifikate und keine Schlüssel zu verwalten.
+
+### Konfiguration
+
+- `DOCUMENT_VERIFY_BASE_URL` (optional): Prüf-URL, die in jedem PDF steht (Fusszeile, QR-Code,
+  XMP). Leer = `ABGABEBOX_BASE_URL` + `/verify`. Bewusst die Plattform-Domain, nicht eine
+  Mandanten-Domain - gedruckte Links müssen stabil bleiben. Nach einer Änderung tragen nur neue
+  PDFs die neue Adresse; alte Links funktionieren nur, solange die alte Domain auf die Abgabebox
+  zeigt.
+- Traefik: Router `abgabebox-verify` (30 Anfragen/min, Burst 10, Body 4 KiB) ist Teil der
+  Compose-Labels bzw. der generierten Mandanten-Domain-Router; nichts einzurichten.
+- Die Abgabebox-Rolle `hocx_abgabebox` darf nur die Funktion `verify_document` ausführen
+  (Migration 0117), nicht das Register lesen.
+
+### Systemcheck
+
+`/admin/system` → «Öffentliche Prüfseite»: das Backend fragt den Endpoint intern
+(`ABGABEBOX_INTERNAL_URL`, Standard `http://abgabebox-backend:8000`) mit einem Hash ohne Treffer
+ab und erwartet `{"found": false}`. Kritisch heisst: `abgabebox-backend` nicht erreichbar oder die
+Funktion/Rechte fehlen (Migration 0117 gelaufen? `docker compose logs abgabebox-backend`).
+
+### Organisationen verifizieren (Plattform-Admin)
+
+1. Mandanten-Admins beantragen die Verifizierung unter Vorlagen → Echtheitsprüfung.
+2. Offene Anträge: Admin-Panel → **Verifizierungen** (oder Mandant öffnen → Tab «Verifizierung»).
+3. Identität prüfen, z. B. Handelsregister/UID-Register, Statuten, Website mit Impressum, Rückruf
+   an eine unabhängig gefundene Nummer. Erst dann **Bestätigen** und in der Notiz festhalten, wie
+   geprüft wurde. Ablehnen nur mit Begründung (der Mandant sieht sie).
+4. Bei Missbrauch: **Verifizierung entziehen** (sofort wirksam auf der Prüfseite).
+
+Eine Namensänderung des Mandanten hebt die Verifizierung automatisch auf (auch durch einen
+Plattform-Admin). Alle Schritte stehen im Audit-Log (`identity_verification.*`,
+`admin.identity_verification_*`).
+
+### Nach dem Update auf die Dokument-Engine
+
+Migration `0115` übernimmt die alten Dokumentvorlagen als Hausstile. Danach die nicht mehr
+benutzten Vorlagen-Dateien entfernen (erst mit `--dry-run` ansehen):
+
+```bash
+./scripts/cleanup-legacy-document-templates.sh --dry-run "${HOCX_STORAGE_PATH:-./storage}"
+./scripts/cleanup-legacy-document-templates.sh "${HOCX_STORAGE_PATH:-./storage}"
+```
+
+Hochgeladene Logos, Fussbilder und Schriften bleiben erhalten.

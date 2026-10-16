@@ -8,6 +8,79 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+Neue Dokument-Engine: Alle PDFs entstehen über eine einheitliche Engine (Typst statt TeX) mit
+Block-Katalog, Hausstilen, Live-Vorschau und PDF/A-2b. Jedes PDF wird registriert und lässt sich
+auf einer öffentlichen Prüfseite auf Echtheit prüfen. **Breaking Changes** - vor dem Update die
+Schritte unten lesen.
+
+### Update auf diese Version
+
+1. Frisches Backup ziehen: Migration `0115` ist **nicht umkehrbar** (Rollback nur über das
+   Backup).
+2. `HOCX_VERSION` setzen, `./scripts/update_deploy_code.sh` und
+   `./scripts/deploy.sh <test|prod>` ausführen. Die Migrationen `0114` bis `0117` laufen
+   automatisch. Keine neuen Pflicht-Umgebungsvariablen; optional `DOCUMENT_VERIFY_BASE_URL`
+   (Standard `https://<TRAEFIK_ABGABEBOX_DOMAIN>/verify`).
+3. Nach erfolgreichem Deploy alte Vorlagen-Dateien entfernen:
+   `./scripts/cleanup-legacy-document-templates.sh --dry-run`, dann ohne `--dry-run`.
+4. Unter `/admin/system` den Check «Öffentliche Prüfseite» prüfen, ein Protokoll exportieren und
+   die Datei auf `/verify` der Abgabebox ablegen: Ergebnis «Original».
+
+**Wer einen Vorabstand mit digitaler Dokumentsignatur installiert hatte:** Die Signatur entfällt
+vollständig. Die Variablen `DOCUMENT_SIGNING_*` werden ignoriert und können aus `.env` entfernt
+werden, ebenso das Verzeichnis `.signing/` bzw. `DOCUMENT_SIGNING_DIR` und die Datei
+`.secrets/document_signing_key_password`. Bereits signiert exportierte PDFs bleiben über die
+Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116`).
+
+### Breaking Changes
+
+- Der TeX-Export ist entfernt (inkl. TeX Live im Backend-Image). Dokumentvorlagen werden
+  automatisch zu **Hausstilen**: Farben, Schrift (inkl. hochgeladener Schriften), Format,
+  Kopf-/Fuss-/Titelseiten-/TOC-Variante, Nummerierung, Ort, Absender, Logo und Fussbild
+  werden übernommen, ebenso TOC-Abstand, Farbe des Absenders, «Metadaten anzeigen» und die
+  Kopfzeile «Logo mit Farbbalken». **Eigener Vorlagen-Code (Slots) entfällt ersatzlos**;
+  betroffene Mandanten schreibt die Migration ins Log.
+- Die Element-Option `latex_template` entfällt. Das Render-Format «Raw LaTeX» wird entfernt,
+  sofern es nirgends verwendet wird; die PDF-Ausgabe richtet sich nur noch nach dem
+  Element-Typ.
+- API: `/api/exports/*` und `/api/document-templates/*` sind entfernt, neu sind
+  `/api/documents/*`, `/api/document-styles`, `/api/document-style-assets`,
+  `/api/document-recipes`, `/api/document-settings` und `/api/document-verification`.
+- Vorlagen und Protokolle verweisen über `document_style_id` auf einen Hausstil
+  (vorher `document_template_id`).
+- Mandanten-Export: Archivformat 6 mit Hausstilen, Assets, Rezepten, Export-Historie und
+  Dokumentenregister. Archive der Formate 2-5 lassen sich weiter importieren (Vorlagen werden
+  zu Hausstilen). Die Verifizierung einer Organisation durch hocX wird nie mit importiert.
+- Die Abgabebox-Datenbankrolle `hocx_abgabebox` liest von `tenant` nur noch `id` und
+  `storage_quota_bytes` (vorher die ganze Tabelle).
+- Abgabe-Link-Tokens können nicht `verify` lauten (Route der Prüfseite).
+
+### Neu
+
+- Ein Export-Dialog für alle Dokumente (Protokolle, Todos, Termine, Listen, Statistik) mit
+  Live-Vorschau, Dokumenttypen, frei zusammenstellbaren Blöcken (Ziehen zum Sortieren) und
+  speicherbaren **Rezepten**.
+- Block-Katalog mit über 30 Blöcken, u. a. Monatskalender, Agenda, Präsenzliste zum
+  Unterschreiben, Mitgliederliste, Kennzahlen-Kacheln, Diagramme als Vektorgrafik,
+  QR-Code, Unterschriftsfelder.
+- Drei Hausstile (Modern, Klassisch, Kompakt), anpassbar unter **Vorlagen → Hausstile**.
+- Dokumentsprache pro Verein, pro Export änderbar; alle festen PDF-Texte in allen Sprachen.
+- PDFs als PDF/A-2b; Metadaten (Dokument-ID, Mandant, Typ, Version, Inhalts-Hash, Prüf-URL)
+  im XMP.
+- **Dokumentenregister und Echtheitsprüfung:** Jedes PDF wird mit seinem SHA-256 registriert und
+  trägt (je nach Hausstil) Prüf-URL, Kurz-ID und QR-Code. Die öffentliche Prüfseite `/verify`
+  der Abgabebox zeigt ohne Konto, ob eine Datei unverändert aus hocX stammt, mit Status, Version
+  und Hinweis auf eine neuere Version. Die Datei verlässt dabei nie den Browser.
+- **Vorlagen → Echtheitsprüfung:** Name und Logo auf der Prüfseite anzeigen (Standard aus), auf
+  neuere Versionen hinweisen (Standard an), Verifizierung durch hocX beantragen, Vorschau.
+- **Adminportal → Verifizierungen:** Anträge bestätigen oder ablehnen, Verifizierung entziehen;
+  eine Namensänderung hebt sie automatisch auf. Bestätigte Organisationen erhalten auf der
+  Prüfseite das Abzeichen «Verifizierte Organisation».
+- Version steigt nur bei geändertem Inhalt (Inhalts-Hash); jeder Export wird protokolliert.
+- Weitere Formate aus demselben Modell: CSV, XLSX, ICS, Markdown.
+- Systemcheck «Öffentliche Prüfseite» inkl. ntfy.
+- CI: visuelle Regressionstests der Hausstile, Galerie-PDF als Artefakt, Katalogprüfung.
+
 ### Betrieb
 
 - Prod lief bisher mit `HOCX_ENVIRONMENT=prod` und damit für das Backend nicht als

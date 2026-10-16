@@ -9,39 +9,53 @@ from tests.factories import (
     make_tenant,
     make_template,
 )
-from tests.test_audit_2026_08_16_critical_fixes import _s2_make_document_template_with_dir
 
 
-# --- S5: export_standalone_pdf/export_global_pdf accepted a foreign-tenant template_id ----
+# --- S5: Exporte akzeptierten Layout-Vorlagen fremder Mandanten -------------------------
+#
+# Früher konnte template_id (Dokumentvorlage) eines fremden Mandanten das Layout liefern.
+# Heute entspricht dem style_id (Hausstil): eine fremde ID ergibt «nicht gefunden», weder
+# Vorschau noch Export verwenden fremde Hausstile oder deren Logos/Schriften.
 
 
-def test_export_standalone_pdf_rejects_document_template_from_foreign_tenant(db):
+def _foreign_style(db, tenant_id: int):
+    from app.models import DocumentStyle
+
+    style = DocumentStyle(tenant_id=tenant_id, name="Fremd", style_key="classic", tokens_json={})
+    db.add(style)
+    db.flush()
+    return style
+
+
+def test_document_preview_rejects_style_from_foreign_tenant(db):
     import asyncio
 
-    from app.services.export_service import ExportService
+    from app.documents.context import DocumentNotFoundError
+    from app.documents.service import DocumentRequest, preview
 
     tenant_a = make_tenant(db, "Tenant A (S5)")
     tenant_b = make_tenant(db, "Tenant B (S5)")
     protocol_a = make_protocol(db, tenant_a.id, make_template(db, tenant_a.id).id)
-    doc_template_b = _s2_make_document_template_with_dir(db, tenant_b.id, code="s5-foreign")
+    style_b = _foreign_style(db, tenant_b.id)
 
-    service = ExportService()
-    with pytest.raises(ValueError, match="Template not found"):
-        asyncio.run(service.export_standalone_pdf(db, protocol_a.id, doc_template_b.id, "todo-list"))
+    with pytest.raises(DocumentNotFoundError):
+        asyncio.run(preview(db, None, tenant_a.id, DocumentRequest(protocol_id=protocol_a.public_id, style_id=style_b.public_id)))
 
 
-def test_export_global_pdf_rejects_document_template_from_foreign_tenant(db):
-    import asyncio
-
-    from app.services.export_service import ExportService
+def test_style_override_cannot_load_foreign_assets(db):
+    """Ein ungespeicherter Stil (Live-Vorschau) mit Asset-IDs eines fremden Mandanten zeigt
+    die fremden Bilder nicht: Assets werden immer mandantengebunden aufgelöst."""
+    from app.documents import style_service
+    from app.models import DocumentStyle, DocumentStyleAsset
 
     tenant_a = make_tenant(db, "Tenant A (S5b)")
     tenant_b = make_tenant(db, "Tenant B (S5b)")
-    doc_template_b = _s2_make_document_template_with_dir(db, tenant_b.id, code="s5b-foreign")
-
-    service = ExportService()
-    with pytest.raises(ValueError, match="Template not found"):
-        asyncio.run(service.export_global_pdf(db, tenant_a.id, doc_template_b.id, "todos"))
+    asset_b = DocumentStyleAsset(tenant_id=tenant_b.id, kind="image", name="Fremdes Logo", storage_path="document_style_assets/x.png")
+    db.add(asset_b)
+    db.flush()
+    transient = DocumentStyle(tenant_id=tenant_a.id, name="preview", style_key="modern", tokens_json={"logo_asset_id": str(asset_b.public_id), "header": "logo"})
+    resolved, _tokens, _fonts, files = style_service.resolve(db, tenant_a.id, transient)
+    assert resolved.logo is None and files == {}
 
 
 # --- D2: renumbering cascade ignored cross-template n_cycle_all siblings ------------------

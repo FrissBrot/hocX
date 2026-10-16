@@ -86,6 +86,8 @@ export type TenantSummary = {
   created_at?: string | null;
   updated_at?: string | null;
   enabled_features: string[];
+  // Nur in der Antwort auf eine Änderung: die Namensänderung hat die Verifizierung durch hocX aufgehoben
+  identity_verification_revoked?: boolean;
 };
 
 export type TenantSubscriptionFeature = {
@@ -676,7 +678,7 @@ export type AdminTenantPage = {
 };
 
 // User-facing groupings (see storage_service.py's docstring): uploaded images, other uploads,
-// generated PDF/LaTeX exports, and the catch-all "everything else" bucket.
+// generated PDF exports, and the catch-all "everything else" bucket.
 export type StorageCategoryKey = "photos" | "files" | "protocols" | "other";
 
 export type StorageCategoryUsage = {
@@ -963,7 +965,7 @@ export type TemplateSummary = {
   cycle_config?: CycleConfigSummary | null;
   version: number;
   status: string;
-  document_template_id?: string | null;
+  document_style_id?: string | null;
   created_by?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -1170,8 +1172,7 @@ export type ProtocolSummary = {
   tenant_id?: string;
   template_id?: string;
   template_version?: number;
-  document_template_id?: string | null;
-  document_template_version?: number | null;
+  document_style_id?: string | null;
   protocol_number: string;
   title: string | null;
   protocol_date?: string;
@@ -1203,34 +1204,7 @@ export type NextSessionInfo = {
   entries: NextSessionAttendanceEntry[];
 };
 
-export type DocumentTemplatePart = {
-  id: string;
-  tenant_id: string;
-  code: string;
-  name: string;
-  part_type: string;
-  description: string | null;
-  storage_path: string;
-  version: number;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-};
-
-export type DocumentTemplate = {
-  id: string;
-  tenant_id: string;
-  code: string;
-  name: string;
-  description: string | null;
-  filesystem_path: string;
-  version: number;
-  is_active: boolean;
-  is_default: boolean;
-  configuration_json: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-};
+export type { DocumentStyle } from "@/lib/documents/api";
 
 export type ElementDefinitionBlock = {
   // Client-owned opaque id living inside ElementDefinition.configuration_json["blocks"][].id -
@@ -1252,7 +1226,6 @@ export type ElementDefinitionBlock = {
   is_visible: boolean;
   sort_index: number;
   render_order: number | null;
-  latex_template: string | null;
   configuration_json: Record<string, unknown>;
 };
 
@@ -1289,7 +1262,6 @@ export type TemplateElementBlock = {
   behavior_defaults?: Partial<Record<TemplateElementBehaviorField, boolean>>;
   sort_index: number;
   render_order: number | null;
-  latex_template: string | null;
   configuration_json: Record<string, unknown>;
   created_at: string;
 };
@@ -1408,7 +1380,6 @@ export type ProtocolElementBlock = {
   is_required_snapshot: boolean;
   is_visible_snapshot: boolean;
   export_visible_snapshot: boolean;
-  latex_template_snapshot: string | null;
   public_reference_ids?: { lists?: Record<string, string>; finance_accounts?: Record<string, string>; events?: Record<string, string> };
   configuration_snapshot_json: Record<string, unknown>;
   text_content: string | null;

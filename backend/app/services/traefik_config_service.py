@@ -104,6 +104,16 @@ def _abgabebox_routers(domain: str, domain_id: int) -> dict:
             "middlewares": [f"{settings.traefik_middleware_prefix}{name}@docker" for name in ("abgabebox-upload-ratelimit", "abgabebox-upload-inflight", "abgabebox-upload-body-limit")],
             "tls": {"certResolver": "letsencrypt"},
         },
+        f"{base}-verify": {
+            # Echtheitsprüfung: vor dem Upload-Router (Priorität 300 > 200), eigenes Rate-Limit
+            # und 4 KiB Body-Limit - gleiche Middlewares wie docker-compose.yml.
+            "rule": f"Host(`{domain}`) && Path(`/api/public/verify`) && Method(`POST`)",
+            "entryPoints": ["websecure"],
+            "service": f"{settings.router_prefix}-abgabebox-backend@docker",
+            "priority": 300,
+            "middlewares": [f"{settings.traefik_middleware_prefix}{name}@docker" for name in ("abgabebox-verify-ratelimit", "abgabebox-verify-body-limit")],
+            "tls": {"certResolver": "letsencrypt"},
+        },
         f"{base}-public-get": {
             # Same rate-limit as docker-compose.yml's abgabebox-public-get router, but for
             # a tenant's own custom domain - protects the unauthenticated listing/detail

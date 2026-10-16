@@ -55,6 +55,15 @@ jobs:
       - name: i18n - t()-Aufrufe loesen existierende Keys auf
         run: python3 scripts/check-i18n-key-resolution.py
 
+      # Dokument-Engine: Typst-Tokens kommen aus design/tokens.css, die festen PDF-Texte aus
+      # frontend/messages/*/documentPdf.json - beide Kopien im Backend werden nie von Hand
+      # bearbeitet.
+      - name: Dokument-Engine - Typst-Tokens aktuell generiert
+        run: python3 scripts/sync-document-tokens.py --check
+
+      - name: Dokument-Engine - PDF-Texte aktuell kopiert
+        run: python3 scripts/sync-document-i18n.py --check
+
   migration-check:
     runs-on: ubuntu-latest
     services:
@@ -141,18 +150,12 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements-dev.txt
 
-      # PDF export tests exercise the real LaTeX toolchain, same packages as
-      # backend/Dockerfile(.test) - ubuntu-latest doesn't have these preinstalled.
-      - name: Install LaTeX toolchain
+      # Die Dokument-Engine rendert mit Typst (Python-Paket, Schriften im Repo); die Tests
+      # lesen erzeugte PDFs mit pdftotext/pdfinfo aus - wie backend/Dockerfile.test.
+      - name: Install PDF test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            texlive-latex-base \
-            texlive-latex-recommended \
-            texlive-fonts-recommended \
-            texlive-xetex \
-            texlive-pictures \
-            fonts-lmodern
+          sudo apt-get install -y --no-install-recommends poppler-utils
 
       - name: Run alembic upgrade head against a fresh database
         working-directory: backend
@@ -175,14 +178,8 @@ jobs:
           ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
           # These all default to /app/... (docker-compose.yml's WORKDIR), which doesn't
           # exist on a bare runner and can't be created by the unprivileged runner user
-          # either - PDF export tests need the real committed tenant-1 templates, not just
-          # a writable empty dir, so these point at the actual checked-out storage/ tree.
-          # Must be absolute: pdflatex runs with -cnf-line=openin_any=p (export_service.py) -
-          # its "paranoid" file-access mode rejects any path containing a '..' component,
-          # which a relative override (e.g. "../storage") would be once combined with the
-          # export's own subdirectory.
+          # either, so they point at the checked-out storage/ tree (absolute paths).
           STORAGE_ROOT: ${{ github.workspace }}/storage
-          LATEX_TEMPLATE_ROOT: ${{ github.workspace }}/storage/latex_templates
           EXPORT_ROOT: ${{ github.workspace }}/storage/exports
           UPLOAD_ROOT: ${{ github.workspace }}/storage/uploads
           # Defaults to /app/storage-local/thumbnails (same unwritable-on-a-runner problem
@@ -191,6 +188,9 @@ jobs:
           # Same for the Traefik dynamic-config dir (default /app/traefik_dynamic) that the
           # app lifespan writes on startup (tests/test_app_lifespan_smoke.py).
           TRAEFIK_DYNAMIC_CONFIG_DIR: ${{ runner.temp }}/traefik_dynamic
+          # Dokument-Engine: Golden-Diffs und Galerie als Artefakte (siehe Upload-Schritte).
+          DOCUMENT_GOLDEN_DIFF_DIR: ${{ runner.temp }}/document-golden-diffs
+          DOCUMENT_GALLERY_OUT: ${{ runner.temp }}/document-gallery.pdf
         # No coverage threshold gate: per hocX.wiki/Bekannte-offene-Punkte, meaningful
         # domain/security test cases matter more than a bare percentage. This is purely
         # for visibility into which areas have no test coverage at all.
@@ -199,6 +199,33 @@ jobs:
       - name: Audit-log coverage report (informational)
         working-directory: backend
         run: python3 scripts/check_audit_coverage.py
+
+      # Jeder Block-Typ hat Modell, Provider, Basis-Komponente und Texte; Typst-Pakete sind
+      # vendored (der Compile greift nie aufs Netz).
+      - name: Dokument-Engine - Block-Katalog vollstaendig
+        env:
+          DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
+          AUTH_SECRET: ci-backend-tests-dummy-secret-0123456789
+          ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
+        run: python3 scripts/check-document-catalog.py
+
+      # Visuelle Regression: bei Abweichungen Ist- und Differenzbilder zum Ansehen.
+      - name: Upload document golden diffs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: document-golden-diffs
+          path: ${{ runner.temp }}/document-golden-diffs
+          if-no-files-found: ignore
+
+      # Galerie «alle Hausstile × alle Dokumenttypen» (entsteht im pytest-Lauf oben).
+      - name: Upload document gallery
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: document-gallery
+          path: ${{ runner.temp }}/document-gallery.pdf
+          if-no-files-found: ignore
 
   abgabebox-backend-tests:
     runs-on: ubuntu-latest
@@ -252,9 +279,8 @@ jobs:
           ABGABEBOX_CAPTCHA_SESSION_SECRET: ci-abgabebox-captcha-secret-0123456789
           # Defaults to /app/storage (docker-compose.yml overrides it for the real
           # container) - doesn't exist on a bare runner and the unprivileged runner user
-          # can't create it either. Only needs to be writable, unlike the main backend's
-          # LATEX_TEMPLATE_ROOT, so any real path works - absolute to match that job's
-          # reasoning for the same class of variable rather than for a concrete need here.
+          # can't create it either. Only needs to be writable, so any real path works -
+          # absolute to match the backend job's storage variables.
           ABGABEBOX_STORAGE_ROOT: ${{ github.workspace }}/storage/abgabebox-uploads
         run: python3 -m pytest tests/ -v --cov=app --cov-report=term-missing
 

@@ -40,7 +40,6 @@ function attendanceBlock(overrides: Partial<ProtocolElementBlock> = {}): Protoco
     is_required_snapshot: false,
     is_visible_snapshot: true,
     export_visible_snapshot: true,
-    latex_template_snapshot: null,
     configuration_snapshot_json: {},
     text_content: null,
     display_compiled_text: null,

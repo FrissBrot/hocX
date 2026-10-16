@@ -167,4 +167,11 @@ grep -q '\./storage-local/thumbnails:/app/storage-local/thumbnails' docker-compo
 grep -q 'THUMBNAIL_ROOT: /app/storage-local/thumbnails' docker-compose.release.yml
 grep -q 'PHOTO_WORKER_DB_PASSWORD_FILE: /run/secrets/photo_worker_db_password' docker-compose.release.yml
 
+# Keine Dokumentsignatur mehr: weder Zertifikate noch Signatur-Konfiguration im Release.
+if grep -q 'DOCUMENT_SIGNING\|hocx-signing' docker-compose.release.yml scripts/deploy.sh; then
+  echo "Signatur-Konfiguration ist entfernt (Hash-Prüfung über die Abgabebox)." >&2
+  exit 1
+fi
+grep -q 'DOCUMENT_VERIFY_BASE_URL' docker-compose.release.yml
+
 echo "release config tests: ok"

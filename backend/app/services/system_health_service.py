@@ -8,9 +8,11 @@ Problem meldet - eine Stelle, damit Seite und ntfy nie unterschiedlich urteilen.
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import time
+import urllib.request
 from datetime import datetime, timedelta, timezone
 
 import pyclamd
@@ -288,6 +290,29 @@ def _check_photo_queue(db: Session, now: datetime) -> HealthCheckRead:
     return HealthCheckRead(key="photo_queue", status=status, params={"queued": queued, "oldestMinutes": oldest_minutes})
 
 
+# Hash ohne Treffer (64 Nullen) für den Systemcheck der Prüfseite - nie ein echtes Dokument.
+VERIFY_PROBE_SHA256 = "0" * 64
+VERIFY_LATENCY_WARNING_MS = 2000
+
+
+def _check_document_verification() -> HealthCheckRead:
+    """Öffentliche Prüfseite: Prüf-Endpoint der Abgabebox erreichbar und die Funktion
+    verify_document (Rechte der Rolle hocx_abgabebox) lesbar. Intern ohne Traefik, damit das
+    Rate-Limit nicht zählt. Erwartet 200 {"found": false}."""
+    url = f"{settings.abgabebox_internal_url.rstrip('/')}/api/public/verify"
+    request = urllib.request.Request(
+        url, data=json.dumps({"sha256": VERIFY_PROBE_SHA256}).encode(), headers={"Content-Type": "application/json"}, method="POST"
+    )
+    started = time.monotonic()
+    with urllib.request.urlopen(request, timeout=5) as response:
+        body = json.loads(response.read().decode() or "{}")
+    latency_ms = round((time.monotonic() - started) * 1000)
+    if body != {"found": False}:
+        raise RuntimeError(f"Unerwartete Antwort: {str(body)[:200]}")
+    status: HealthStatus = "warning" if latency_ms > VERIFY_LATENCY_WARNING_MS else "ok"
+    return HealthCheckRead(key="document_verification", status=status, params={"latencyMs": latency_ms})
+
+
 def _run_check(key: str, fn, *, failure_status: HealthStatus = "critical", db: Session | None = None) -> list[HealthCheckRead]:
     """Ein Ausfall einer Prüfung ist selbst ein Befund (Dienst nicht erreichbar) - er darf aber
     die übrigen Prüfungen nicht verhindern."""
@@ -314,6 +339,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("error_rate", lambda: _check_error_rate(db), failure_status="unknown", db=db)
     checks += _run_check("scan_backlog", lambda: _check_scan_backlog(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
+    checks += _run_check("document_verification", _check_document_verification)
     return checks
 
 

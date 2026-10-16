@@ -149,7 +149,6 @@ INSERT INTO public.render_type (id, code, description) VALUES (3, 'todo_list', '
 INSERT INTO public.render_type (id, code, description) VALUES (4, 'image', 'Image block');
 INSERT INTO public.render_type (id, code, description) VALUES (5, 'key_value', 'Key-value output');
 INSERT INTO public.render_type (id, code, description) VALUES (6, 'plain_text', 'Plain rendered text');
-INSERT INTO public.render_type (id, code, description) VALUES (7, 'raw_latex', 'Raw LaTeX fragment');
 
 
 --

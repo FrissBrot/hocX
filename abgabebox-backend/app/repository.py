@@ -357,3 +357,14 @@ def get_tenant_storage_usage_bytes(db: Session, *, tenant_id: int) -> int:
 
 def upload_path_referenced(db: Session, path: str) -> bool:
     return bool(db.scalar(text("SELECT public.upload_path_referenced(:path)"), {"path": path}))
+
+
+def verify_document(db: Session, *, sha256: str) -> dict | None:
+    """Öffentliche Prüfung eines PDFs über seinen SHA-256 (Prüfseite /verify).
+
+    Die restricted Rolle darf weder das Dokumentenregister noch die View lesen, nur die
+    SECURITY-DEFINER-Funktion verify_document() aufrufen (Migration 0117): sie liefert höchstens
+    eine Zeile für einen bekannten Hash, und was angezeigt werden darf (Name, Logo, Abzeichen,
+    Hinweis auf neuere Version), entscheidet allein die View dahinter."""
+    row = db.execute(text("SELECT * FROM verify_document(:sha256)"), {"sha256": sha256}).mappings().first()
+    return dict(row) if row else None

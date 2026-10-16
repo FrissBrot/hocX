@@ -1,7 +1,7 @@
 """Shared aggregation helpers for the statistics dashboard and the PDF chart generator.
 
 Used by both app/api/routes/statistics.py (/statistics/overview API) and
-app/services/chart_service.py (matplotlib PNGs embedded in exported PDFs). The two call
+app/documents/providers/statistics.py (Diagramme und Kennzahlen der Dokument-Engine). The two call
 sites used to implement the attendance/groups/fines/todo aggregation logic independently
 and had already begun to drift (2026-08-12 audit, findings M4/M10/M11/M12) - keep the
 logic here instead, so a rule change only has to be made in one place.
@@ -102,7 +102,7 @@ class AttendanceCounts:
         return self.present + self.late + self.absent + self.excused
 
     def bump(self, status: str) -> None:
-        # Four-value status, matching export_service's counting: "late" is its own
+        # Four-value status, matching the document engine's attendance block: "late" is its own
         # bucket, not lumped into "absent" (a late arrival is not the same as a no-show).
         if status == "present":
             self.present += 1
@@ -248,7 +248,7 @@ def fetch_fines_by_type(db: Session, tenant_id: int, bounds: tuple[date, date] |
 
 def fetch_finance_by_month(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
     """Income/expenses per month, combined across all of the tenant's finance accounts -
-    used by chart_service's "finance_by_month" PNG (one combined bar per month)."""
+    used by the document engine's "finance_by_month" chart (one combined bar per month)."""
     return db.execute(
         text("""
             SELECT to_char(ft.transaction_date, 'YYYY-MM') AS month,

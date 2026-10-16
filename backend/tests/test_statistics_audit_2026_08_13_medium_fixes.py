@@ -6,14 +6,15 @@ M4  - attendance was aggregated by participant_name instead of participant_id, s
 M10 - the "Gruppen" list lookup only ever read column_one_value_json, silently returning
       nothing for tenants who put the group name text in column two.
 M11 - the attendance/todo/fines/groups aggregation logic was implemented independently in
-      app/api/routes/statistics.py and app/services/chart_service.py; both now delegate to
+      app/api/routes/statistics.py and the PDF-chart path (heute die Dokument-Engine,
+      app/documents/providers/statistics.py); both delegate to
       app/services/statistics_common.py.
 M12 - fine amounts were summed as repeated Python float additions instead of a DB-side
       Decimal SUM().
 
 Each test below exercises the shared statistics_common.py helpers directly, and - where
 practical - the two call sites (the /statistics/overview route function and
-chart_service's PDF-chart data fetchers) to prove they now agree (M11).
+the document engine's chart provider) to prove they agree (M11).
 """
 from __future__ import annotations
 
@@ -22,7 +23,9 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from app.api.routes.statistics import get_statistics_overview
-from app.services.chart_service import _fetch_attendance_data, _fetch_fines_data, _fetch_groups_data
+from app.documents.catalog import BlockSpec, ChartParams
+from app.documents.context import BuildContext
+from app.documents.providers.statistics import provide_chart
 from app.services.statistics_common import (
     aggregate_attendance,
     aggregate_group_rows,
@@ -31,6 +34,11 @@ from app.services.statistics_common import (
     fetch_fines_by_type,
     fetch_group_session_rows,
 )
+
+def _chart(db, tenant_id: int, chart_type: str):
+    ctx = BuildContext(db=db, tenant_id=tenant_id, language="de")
+    return provide_chart(ctx, BlockSpec(type="chart"), ChartParams(chart_type=chart_type))[0]
+
 
 from tests.factories import (
     make_current_user,
@@ -91,11 +99,10 @@ def test_m4_attendance_survives_participant_rename(db):
     assert stat.name == "Anna Meier"
     assert stat.total == 2
 
-    # 3. chart_service (PDF export data): same merge, same single row.
-    _, by_participant = _fetch_attendance_data(db, tenant.id)
-    assert len(by_participant) == 1
-    assert by_participant[0]["name"] == "Anna Meier"
-    assert by_participant[0]["total"] == 2
+    # 3. Dokument-Engine (PDF-Diagramm): same merge, same single row.
+    chart = _chart(db, tenant.id, "attendance_by_participant")
+    assert chart.categories == ["Anna Meier"]
+    assert sum(series.values[0] for series in chart.series) == 2
 
 
 # --- M10: "Gruppen" list works regardless of which column holds the text -------------------
@@ -122,9 +129,8 @@ def test_m10_groups_list_reads_column_two(db):
     assert "Adler" in names, "group whose name lives in column_two_value_json must be found (M10)"
     assert "Falken" in names, "column_one_value_json path must still work"
 
-    # chart_service wiring (M11): same result via the shared fetch + merge.
-    merged = _fetch_groups_data(db, tenant.id)
-    merged_names = {m["name"] for m in merged}
+    # Dokument-Engine (M11): same result via the shared fetch + merge.
+    merged_names = set(_chart(db, tenant.id, "groups_sessions").categories)
     assert {"Adler", "Falken"} <= merged_names
 
     # Route wiring: /statistics/overview must list both groups too.
@@ -136,7 +142,7 @@ def test_m10_groups_list_reads_column_two(db):
 # --- M11: aggregate_group_rows (weighted "Ø Teilnehmer" merge) --------------------------
 
 def test_m11_aggregate_group_rows_weights_by_sessions_with_participants():
-    """Pure unit test of the merge extracted out of chart_service._fetch_groups_data (now
+    """Pure unit test of the merge in statistics_common (used by the document engine's charts, now
     also the logic the frontend's groupsFiltered "all" branch has to mirror by hand - see
     the comment there and in aggregate_group_rows' docstring).
 
@@ -194,5 +200,5 @@ def test_m12_fine_amounts_summed_as_exact_decimal(db):
     overview = get_statistics_overview(db=db, user=make_current_user(tenant.id))
     assert overview.fines_by_participant[0].amount == exact
 
-    by_participant, by_type = _fetch_fines_data(db, tenant.id)
-    assert by_participant[0]["amount"] == exact
+    chart = _chart(db, tenant.id, "fines_by_participant")
+    assert chart.series[0].values[0] == exact

@@ -146,7 +146,7 @@
     "noCycle": "Nessun ciclo",
     "noDescription": "Nessuna descrizione",
     "noElementsYet": "Nessun elemento nel modello finora.",
-    "noLayoutAssigned": "Nessun layout assegnato",
+    "noLayoutAssigned": "Stile della casa predefinito dell’associazione",
     "noListSelected": "Nessuna lista selezionata",
     "noMatchingElements": "Nessun elemento corrispondente trovato.",
     "noMatchingParticipants": "Nessun partecipante trovato per il termine di ricerca attuale.",
@@ -158,8 +158,8 @@
     "participantAssignmentsSaveFailed": "Le assegnazioni dei partecipanti non hanno potuto essere salvate",
     "participantFallback": "Partecipante",
     "patternTokensHelp": "Token: '{n}' = tutti i verbali, '{n_year}' = quest'anno, '{n_month}' = questo mese, '{n_cycle}' = nel proprio ciclo. Token di data: '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
-    "pdfLayoutHelp": "Usato per l'esportazione PDF. Può essere configurato in Impostazioni → Layout documento.",
-    "pdfLayoutLabel": "Layout PDF",
+    "pdfLayoutHelp": "Usato per l’esportazione PDF dei verbali di questo modello. Gestisci gli stili della casa in Impostazioni → Stili della casa.",
+    "pdfLayoutLabel": "Stile della casa",
     "positionAbbr": "Pos.",
     "protocolNumberPatternHelp": "Esempi: Sessione [n], Sessione [mm].[n_month], A[yy]-[n_cycle]. Funzionano sia le parentesi quadre che quelle graffe.",
     "protocolNumberPatternLabel": "Modello numero verbale",
@@ -186,7 +186,7 @@
     "searchParticipantsPlaceholder": "Cerca partecipanti",
     "searchPlaceholder": "Cerca modelli",
     "settingSaveFailed": "L'impostazione non ha potuto essere salvata",
-    "settingsDescription": "Informazioni generali su questo modello e sul layout documento utilizzato.",
+    "settingsDescription": "Informazioni generali su questo modello e sullo stile della casa utilizzato.",
     "settingsTitle": "Impostazioni modello",
     "statusChangeFailedToast": "Lo stato non ha potuto essere modificato",
     "tableLinkUpdateFailed": "Il collegamento alla tabella non ha potuto essere aggiornato",
@@ -204,7 +204,8 @@
     "unknownList": "Lista sconosciuta",
     "unknownParticipant": "Partecipante sconosciuto",
     "unknownRow": "Riga sconosciuta",
-    "unnamed": "Senza nome"
+    "unnamed": "Senza nome",
+    "defaultStyleSuffix": "(predefinito)"
   },
   "editor": {
     "active": "Attivo",
@@ -295,7 +296,7 @@
     "noCycle": "Nessun ciclo",
     "noDescription": "Nessuna descrizione",
     "noElementsYet": "Nessun elemento nel modello finora.",
-    "noLayoutAssigned": "Nessun layout assegnato",
+    "noLayoutAssigned": "Stile della casa predefinito dell’associazione",
     "noListSelected": "Nessuna lista selezionata",
     "noMatchingElements": "Nessun elemento corrispondente trovato.",
     "noMatchingParticipants": "Nessun partecipante trovato per il termine di ricerca attuale.",
@@ -307,8 +308,8 @@
     "participantAssignmentsSaveFailed": "Le assegnazioni dei partecipanti non hanno potuto essere salvate",
     "participantFallback": "Partecipante",
     "patternTokensHelp": "Token: '{n}' = tutti i verbali, '{n_year}' = quest'anno, '{n_month}' = questo mese, '{n_cycle}' = nel proprio ciclo. Token di data: '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
-    "pdfLayoutHelp": "Usato per l'esportazione PDF. Può essere configurato in Impostazioni → Layout documento.",
-    "pdfLayoutLabel": "Layout PDF",
+    "pdfLayoutHelp": "Usato per l’esportazione PDF dei verbali di questo modello. Gestisci gli stili della casa in Impostazioni → Stili della casa.",
+    "pdfLayoutLabel": "Stile della casa",
     "positionAbbr": "Pos.",
     "protocolNumberPatternHelp": "Esempi: Sessione [n], Sessione [mm].[n_month], A[yy]-[n_cycle]. Funzionano sia le parentesi quadre che quelle graffe.",
     "protocolNumberPatternLabel": "Modello numero verbale",
@@ -335,7 +336,7 @@
     "searchParticipantsPlaceholder": "Cerca partecipanti",
     "searchPlaceholder": "Cerca modelli",
     "settingSaveFailed": "L'impostazione non ha potuto essere salvata",
-    "settingsDescription": "Informazioni generali su questo modello e sul layout documento utilizzato.",
+    "settingsDescription": "Informazioni generali su questo modello e sullo stile della casa utilizzato.",
     "settingsTitle": "Impostazioni modello",
     "statusChangeFailedToast": "Lo stato non ha potuto essere modificato",
     "tableLinkUpdateFailed": "Il collegamento alla tabella non ha potuto essere aggiornato",
@@ -355,6 +356,7 @@
     "unknownRow": "Riga sconosciuta",
     "unnamed": "Senza nome",
     "behaviorOverridden": "{label} – diverso dal predefinito dell’elemento",
+    "defaultStyleSuffix": "(predefinito)",
     "nameFormatSetToast": "Formato del nome dei responsabili impostato",
     "nameFormatSavedToast": "Formato del nome dei responsabili salvato",
     "autoAssignedToast": "{count, plural, one {# elemento è stato assegnato} other {# elementi sono stati assegnati}} automaticamente",
@@ -366,325 +368,6 @@
     "participantAssignmentsSavedToast": "Assegnazioni dei partecipanti salvate",
     "elementsAddedToast": "{count, plural, one {# elemento aggiunto} other {# elementi aggiunti}}",
     "elementRemovedToast": "Elemento rimosso dal modello"
-  },
-  "documentTemplates": {
-    "advancedInfoNote": "I file LaTeX personalizzati sovrascrivono i preset scelti nella scheda Struttura. Lasciare vuoto per usare il preset.",
-    "bottomLeftFooterImageHelp": "Silhouette o simile — scegliere dalla libreria dei parts.",
-    "bottomLeftFooterImageLabel": "Immagine del piè di pagina in basso a sinistra",
-    "browse": "sfoglia",
-    "cancel": "Annulla",
-    "chooseColor": "Scegli colore",
-    "chooseLayoutFromList": "Scegliere un layout dall'elenco.",
-    "chooseOtherFile": "scegli un altro file",
-    "close": "Chiudi",
-    "colActions": "Azioni",
-    "colorsLabel": "Colori",
-    "combinedTocHint": "L'indice è integrato in questa pagina del titolo.",
-    "combinedTocLabel": "Pagina del titolo + indice — configurazione",
-    "createErrorToast": "Errore durante la creazione",
-    "createLayoutSubmit": "Crea layout",
-    "createLayoutTitle": "Crea nuovo layout",
-    "customLatexFilesTitle": "File LaTeX personalizzati impostati",
-    "defaultForTenant": "Predefinito per l'organizzazione",
-    "delete": "Elimina",
-    "deleteErrorToast": "Errore durante l'eliminazione",
-    "deleteLayoutConfirm": "Eliminare definitivamente questo layout?",
-    "deleteLayoutConfirmNamed": "Eliminare definitivamente il layout \"{name}\"?",
-    "deletePartConfirm": "Eliminare definitivamente questo part?",
-    "deletePartConfirmNamed": "Eliminare definitivamente il part \"{name}\"?",
-    "dragFileHere": "Trascina qui un file",
-    "emptyStateDescription": "I modelli di documento determinano il layout, il logo e le intestazioni dei verbali esportati.",
-    "emptyStateTitle": "Nessun modello di documento finora",
-    "fieldActive": "Attivo",
-    "fieldDescription": "Descrizione",
-    "fieldName": "Nome",
-    "fieldStandard": "Predefinito",
-    "fieldVersion": "Versione",
-    "fontCustom": "Font personalizzato",
-    "fontDescArial": "Classico, molto leggibile",
-    "fontDescCenturyGothic": "Geometrico, moderno",
-    "fontDescCustom": "Carica file di font",
-    "fontDescHelvetica": "Moderno, neutro",
-    "fontDescPalatino": "Elegante, serio",
-    "fontFamilyLabel": "Font",
-    "fontNoteCustom": "Carica i tuoi file di font nella libreria dei parts. Regular è obbligatorio, le varianti sono facoltative.",
-    "fontNoteNotPreinstalled": "Questo font non è preinstallato — carica i file di font nella libreria dei parts. Regular è obbligatorio, le varianti sono facoltative.",
-    "fontSizeLabel": "Dimensione del font",
-    "footerContactHelp": "I ritorni a capo sono supportati.",
-    "footerContactLabel": "Testo del piè di pagina (contatto)",
-    "footerContactPlaceholder": "p.es. Associazione Esempio | 1234 Città Esempio\nwww.esempio.ch",
-    "footerHint": "Appare in fondo a ogni pagina.",
-    "footerLabel": "Piè di pagina",
-    "footerTextColor": "Colore del testo del piè di pagina",
-    "footerTextColorHelp": "Colore per il testo di contatto.",
-    "formatLabel": "Formato",
-    "headerHint": "Appare in cima a ogni pagina.",
-    "headerImageHelp": "PNG o JPG — scegliere dalla libreria dei parts. Altezza nell'intestazione: circa 0,8 cm.",
-    "headerImageLabel": "Logo / immagine per l'intestazione",
-    "headerLabel": "Intestazione",
-    "inactive": "Inattivo",
-    "kindFont": "Font",
-    "kindFontFile": "File font",
-    "kindFontHint": "I file di font vengono assegnati alle quattro varianti sotto \"Font personalizzato\" nella scheda Design. Regular è obbligatorio.",
-    "kindImage": "Immagine",
-    "kindImageFile": "File immagine",
-    "kindImageHint": "Le immagini appaiono nel selettore \"Logo / immagine\" dei preset di pagina del titolo e intestazione nell'editor di layout.",
-    "kindLatex": "Componente LaTeX",
-    "kindLatexFile": "File LaTeX",
-    "kindLatexHint": "I componenti LaTeX sovrascrivono lo slot corrispondente nella scheda Avanzate — necessario solo se i preset non sono sufficienti.",
-    "layoutCreatedToast": "Layout creato",
-    "layoutDeletedToast": "Layout eliminato",
-    "layoutLabel": "Layout",
-    "layoutSavedToast": "Layout salvato",
-    "layoutsLabel": "Layout",
-    "libraryEntryLabel": "Voce nella libreria",
-    "locationHelp": "Appare con la data in alto a sinistra.",
-    "locationLabel": "Luogo",
-    "locationPlaceholder": "p.es. Città Esempio",
-    "moreOptionsLabel": "Altre opzioni",
-    "newDocumentTemplateButton": "+ Modello di documento",
-    "newLayoutButton": "+ Nuovo layout",
-    "newPartButton": "+ Nuovo part",
-    "noImage": "Nessuna immagine",
-    "noLayouts": "Nessun layout.",
-    "none": "Nessuno",
-    "noPartsFound": "Nessun part trovato.",
-    "numberingLabel": "Numerazione",
-    "numberingNone": "Senza numeri",
-    "numberingNoneDesc": "Solo titolo, nessun numero",
-    "numberingSections": "Con numeri",
-    "numberingSectionsDesc": "1. Sezione, 1.1 Sottosezione",
-    "optionalSuffix": "— facoltativo",
-    "or": "oppure",
-    "orientationLandscape": "Orizzontale",
-    "orientationLandscapeDesc": "A4 orizzontale — per elenchi e tabelle",
-    "orientationPortrait": "Verticale",
-    "orientationPortraitDesc": "A4 verticale — per i verbali",
-    "pageIntro": "Gestisci i layout PDF e i componenti LaTeX riutilizzabili per l'esportazione dei verbali.",
-    "pageIntroEmpty": "Layout per le esportazioni PDF e Word.",
-    "pageTitle": "Modelli di documento",
-    "partDeletedToast": "Part eliminato",
-    "partDescriptionPlaceholder": "A cosa serve questo part?",
-    "partKindLabel": "Tipo di part",
-    "partNamePlaceholder": "p.es. Logo",
-    "partsLibraryDescription": "Immagini, file di font e componenti LaTeX che i layout possono utilizzare.",
-    "partsLibraryLabel": "Libreria dei parts",
-    "partUploadedToast": "Part caricato",
-    "pdfLayoutsDescription": "I layout definiscono l'aspetto del verbale esportato.",
-    "pdfLayoutsLabel": "Layout PDF",
-    "pleaseChooseFile": "Scegli un file",
-    "preview": "Anteprima",
-    "primaryColor": "Colore primario",
-    "resetColors": "Ripristina colori",
-    "saveErrorToast": "Errore durante il salvataggio",
-    "saveLayoutButton": "Salva layout",
-    "searchEllipsis": "Cerca…",
-    "searchLayoutsAriaLabel": "Cerca layout",
-    "searchPartsPlaceholder": "Cerca parts…",
-    "secondaryColor": "Colore secondario",
-    "showMetadataHelp": "Mostra un blocco automatico di metadati (numero, titolo, data, stato) nel PDF esportato. Nascosto per impostazione predefinita.",
-    "showMetadataLabel": "Mostra metadati del verbale",
-    "slotLabel": "Slot",
-    "standardLayoutCreatedToast": "Layout standard creato",
-    "standardLayoutName": "Layout standard",
-    "statusLabel": "Stato",
-    "tabAdvanced": "Avanzate",
-    "tabDesign": "Design",
-    "tabStructure": "Struttura",
-    "titlePageHint": "Prima pagina del verbale con i metadati.",
-    "titlePageLabel": "Pagina del titolo",
-    "tocHint": "Panoramica di tutte le sezioni.",
-    "tocLabel": "Indice",
-    "tocSpacingCompact": "Compatto",
-    "tocSpacingHelp": "Spaziatura tra le voci dell'indice.",
-    "tocSpacingLabel": "Interlinea dell'indice",
-    "tocSpacingStandard": "Standard",
-    "tocSpacingVeryCompact": "Molto compatto",
-    "topLeftImageHelp": "PNG o JPG — scegliere dalla libreria dei parts.",
-    "topLeftImageLabel": "Logo / immagine in alto a sinistra",
-    "typeLabel": "Tipo",
-    "upload": "Carica",
-    "uploadErrorToast": "Errore durante il caricamento",
-    "uploadPartDescription": "Aggiungi un tuo file alla libreria dei parts — i layout lo integrano poi tramite il suo slot.",
-    "uploadPartTitle": "Carica part",
-    "usePreset": "— Usa preset —",
-    "useStandardLayoutButton": "Usa il layout standard",
-    "preset": {
-      "footer": {
-        "datePage": {
-          "label": "Data e pagina",
-          "desc": "Data a sinistra, numero di pagina a destra"
-        },
-        "minimal": {
-          "label": "Numero di pagina",
-          "desc": "Solo numero di pagina centrato"
-        },
-        "none": {
-          "label": "Nessun piè di pagina",
-          "desc": "Pagina senza piè di pagina"
-        },
-        "standard": {
-          "label": "Verbale e pagina",
-          "desc": "Numero di verbale a sinistra, pagina a destra"
-        },
-        "withVersion": {
-          "label": "Con versione",
-          "desc": "Numero a sinistra, versione al centro, pagina a destra"
-        }
-      },
-      "header": {
-        "bar": {
-          "label": "Barra colorata",
-          "desc": "Colore d'accento con testo bianco"
-        },
-        "logoBar": {
-          "label": "Logo + barra colorata",
-          "desc": "Logo e titolo in una barra colorata"
-        },
-        "logoDate": {
-          "label": "Logo + data",
-          "desc": "Logo a sinistra, data al centro, pagina a destra"
-        },
-        "logo": {
-          "label": "Logo + titolo",
-          "desc": "Logo a sinistra, titolo al centro, data a destra"
-        },
-        "minimal": {
-          "label": "Numero di pagina",
-          "desc": "Solo numero di pagina in alto a destra"
-        },
-        "none": {
-          "label": "Nessuna intestazione",
-          "desc": "Pagina senza intestazione"
-        },
-        "standard": {
-          "label": "Titolo e data",
-          "desc": "Titolo a sinistra, data a destra"
-        }
-      },
-      "titlePage": {
-        "bold": {
-          "label": "Deciso",
-          "desc": "Colore d'accento a piena pagina"
-        },
-        "combinedToc": {
-          "label": "Pagina del titolo + indice",
-          "desc": "Logo, caselle colorate, titolo e indice su una pagina"
-        },
-        "minimal": {
-          "label": "Minimale",
-          "desc": "Titolo centrato, pulito"
-        },
-        "modern": {
-          "label": "Moderno",
-          "desc": "Blocco di intestazione colorato"
-        },
-        "none": {
-          "label": "Nessuna pagina del titolo",
-          "desc": "Inizia direttamente con il contenuto"
-        }
-      },
-      "toc": {
-        "compact": {
-          "label": "Compatto",
-          "desc": "Più piccolo, più denso"
-        },
-        "none": {
-          "label": "Nessun indice",
-          "desc": "Senza pagina di panoramica"
-        },
-        "standard": {
-          "label": "Standard",
-          "desc": "Con numeri di pagina"
-        }
-      }
-    },
-    "slot": {
-      "elementAttendance": {
-        "label": "Elemento — Presenza",
-        "help": "Come vengono visualizzati gli elenchi di presenza nel PDF."
-      },
-      "elementBulletList": {
-        "label": "Elemento — Elenco puntato",
-        "help": "Come vengono visualizzati gli elenchi puntati nel PDF."
-      },
-      "elementEvents": {
-        "label": "Elemento — Elenco eventi",
-        "help": "Come vengono visualizzati gli elenchi di eventi nel PDF."
-      },
-      "elementForm": {
-        "label": "Elemento — Modulo",
-        "help": "Come vengono visualizzate le righe del modulo nel PDF."
-      },
-      "elementImage": {
-        "label": "Elemento — Immagine",
-        "help": "Come vengono visualizzate le immagini nel PDF."
-      },
-      "elementSessionDate": {
-        "label": "Elemento — Data della sessione",
-        "help": "Come viene visualizzata la prossima data di sessione nel PDF."
-      },
-      "elementStaticText": {
-        "label": "Elemento — Testo statico",
-        "help": "Come viene visualizzato il testo fisso nel PDF."
-      },
-      "elementText": {
-        "label": "Elemento — Testo",
-        "help": "Come vengono visualizzati i blocchi di testo nel PDF."
-      },
-      "elementTodo": {
-        "label": "Elemento — Elenco attività",
-        "help": "Come vengono visualizzati gli elenchi di attività nel PDF."
-      },
-      "fontBold": {
-        "label": "Font — Grassetto",
-        "short": "Grassetto",
-        "help": "Variante grassetto facoltativa."
-      },
-      "fontBoldItalic": {
-        "label": "Font — Grassetto corsivo",
-        "short": "Grassetto corsivo",
-        "help": "Variante grassetto corsivo facoltativa."
-      },
-      "fontItalic": {
-        "label": "Font — Corsivo",
-        "short": "Corsivo",
-        "help": "Variante corsiva facoltativa."
-      },
-      "fontRegular": {
-        "label": "Font — Regular",
-        "short": "Regular",
-        "help": "File font principale, obbligatorio."
-      },
-      "headerFooter": {
-        "label": "Layout — Intestazione e piè di pagina",
-        "help": "Sovrascrive i preset di intestazione/piè di pagina scelti."
-      },
-      "macros": {
-        "label": "LaTeX — Macro",
-        "help": "Comandi riutilizzabili."
-      },
-      "preamble": {
-        "label": "LaTeX — Preambolo",
-        "help": "Pacchetti e impostazioni globali."
-      },
-      "titleFooterImage": {
-        "label": "Immagine — Piè di pagina della pagina del titolo",
-        "help": "Immagine in basso a sinistra sulla pagina del titolo."
-      },
-      "titleHeaderImage": {
-        "label": "Immagine — Logo della pagina del titolo",
-        "help": "Logo in alto a sinistra sulla pagina del titolo."
-      },
-      "titlePage": {
-        "label": "Layout — Pagina del titolo",
-        "help": "Sovrascrive il preset di pagina del titolo scelto."
-      },
-      "toc": {
-        "label": "Layout — Indice",
-        "help": "Sovrascrive il preset di indice scelto."
-      }
-    }
   },
   "elementEditor": {
     "advancedShow": "Avanzate",

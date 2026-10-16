@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.error_log import record_system_error
 from app.models import (
     AppUser,
+    DocumentStyleAsset,
     Feature,
     Participant,
     Plan,
@@ -47,9 +48,8 @@ from app.schemas.admin import (
 )
 from app.schemas.public_catalog import PublicCustomerRead, PublicPlanFeature, PublicPlanRead
 from app.schemas.user import TenantUpdate
-from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import _safe_storage_path
-from app.services import submission_link_service, traefik_config_service
+from app.services import identity_verification_service, submission_link_service, traefik_config_service
 from app.services.storage_service import StorageService
 from app.services.tenant_service import apply_tenant_profile_image
 
@@ -66,7 +66,6 @@ class AdminTenantService:
     """Cross-tenant tenant management for the platform-admin panel - unscoped by design."""
 
     def __init__(self) -> None:
-        self.document_template_service = DocumentTemplateService()
         self.storage_service = StorageService()
 
     def _read_model(
@@ -588,7 +587,11 @@ class AdminTenantService:
         db.add(tenant)
         db.commit()
         db.refresh(tenant)
-        self.document_template_service.ensure_default_template_for_tenant(db, tenant.id, tenant.name)
+        from app.documents import style_service
+
+        # Jeder Mandant startet mit einem Standard-Hausstil (Dokument-Engine).
+        style_service.ensure_default_style(db, tenant.id)
+        db.commit()
         # Every new tenant starts with a default Abgabe link (preselected for new Abgaben).
         submission_link_service.create_default_link(db, tenant.id)
         if payload.plan_code is not None:
@@ -610,12 +613,16 @@ class AdminTenantService:
         tenant_id: int,
         payload: TenantUpdate,
         profile_image: UploadFile | None = None,
+        *,
+        admin_email: str | None = None,
     ) -> AdminTenantRead | None:
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
             return None
+        old_name = tenant.name
         if payload.name is not None:
             tenant.name = payload.name
+        identity_verification_service.handle_rename(db, tenant, old_name, actor_email=admin_email)
         if payload.public_slug is not None:
             tenant.public_slug = payload.public_slug
         if profile_image is not None:
@@ -637,13 +644,13 @@ class AdminTenantService:
         first (each cascading its own dependents in one self-contained statement) clears every
         such RESTRICT before the final tenant delete ever touches its cascade targets:
         - protocol: takes protocol_element/_block/_image/_text/... and attendance_fine with it,
-          clearing protocol_image's restrict into stored_file and protocol's own restricts into
-          template/document_template.
+          clearing protocol_image's restrict into stored_file and protocol's own restrict into
+          template.
         - submission_assignment: takes submission_upload/_file with it, clearing
           submission_upload_file's restrict into stored_file and its own restrict into
           list_definition.
         - template: takes template_element/_block with it, clearing their restrict into
-          element_definition, and its own restrict into document_template.
+          element_definition, and its own restricts.
         - word_import_document: has its own (non-nullable) restricts straight into template
           and stored_file - it doesn't cascade from protocol/submission_assignment/template
           (its protocol_id link is SET NULL, not CASCADE), so it must be cleared explicitly
@@ -655,7 +662,7 @@ class AdminTenantService:
 
         # Captured before any DB delete below (audit finding, 2026-08-25): this method
         # only ever removed DB rows - not one unlink() for protocol images, document
-        # template parts, abgabebox uploads, or the tenant's profile image. Every full
+        # style assets, abgabebox uploads, or the tenant's profile image. Every full
         # tenant delete permanently leaked every physical file the tenant ever had,
         # exactly the failure class behind this app's two prior real disk-full outages.
         # stored_file cascades from tenant_id (ondelete="CASCADE"), so every row for this
@@ -684,6 +691,9 @@ class AdminTenantService:
         # "<id>.jpg" löschen - ein übernommener Fremdname gehört einer anderen Datei.
         thumbnail_paths = [row.thumbnail_path for row in stored_files if row.thumbnail_path == f"{row.id}.jpg"]
         profile_image_path = tenant.profile_image_path
+        # Hausstil-Assets einzeln merken: aus alten Dokumentvorlagen übernommene (Migration
+        # 0115) liegen weiter unter document_template_parts/, nicht unter document_style_assets/.
+        style_asset_paths = list(db.scalars(select(DocumentStyleAsset.storage_path).where(DocumentStyleAsset.tenant_id == tenant_id)))
 
         db.execute(delete(WordImportDocument).where(WordImportDocument.tenant_id == tenant_id))
         db.execute(delete(Protocol).where(Protocol.tenant_id == tenant_id))
@@ -700,14 +710,15 @@ class AdminTenantService:
             self._unlink_quietly(settings.thumbnail_root, thumbnail_path)
         if profile_image_path:
             self._unlink_quietly(settings.storage_root, profile_image_path)
+        for storage_path in style_asset_paths:
+            self._unlink_quietly(settings.storage_root, storage_path)
         self._remove_tenant_directories(tenant_id)
         return True
 
     def _remove_tenant_directories(self, tenant_id: int) -> None:
         for relative_dir in (
-            f"document_templates/tenant-{tenant_id}",
+            f"document_style_assets/tenant-{tenant_id}",
             f"document_template_parts/tenant-{tenant_id}",
-            f"document_template_snapshots/tenant-{tenant_id}",
             f"tenant_imports/tenant-{tenant_id}",
             f"tenant_clones/tenant-{tenant_id}",
         ):

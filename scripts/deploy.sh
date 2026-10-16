@@ -492,6 +492,7 @@ prepare_thumbnail_dir() {
     -c 'chgrp -R 5001 /target && chmod -R g+rwX,o-rwx /target && find /target -type d -exec chmod g+s {} +'
 }
 
+
 verify_release_images() {
   local service image repository digest_ref
 

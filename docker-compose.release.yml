@@ -151,7 +151,6 @@ services:
       PHOTO_WORKER_DB_PASSWORD_FILE: /run/secrets/photo_worker_db_password
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
-      LATEX_TEMPLATE_ROOT: /app/storage/latex_templates
       EXPORT_ROOT: /app/storage/exports
       UPLOAD_ROOT: /app/storage/uploads
       THUMBNAIL_ROOT: /app/storage-local/thumbnails
@@ -194,6 +193,8 @@ services:
       # ENVIRONMENT=test, and the script itself refuses to run against a
       # HOCX_ENVIRONMENT=production backend - setting this here is inert on prod either way.
       DEMO_TOTP_SEED: ${DEMO_TOTP_SEED:-}
+      # Öffentliche Prüfseite (Abgabebox), steht in jedem PDF; leer = ABGABEBOX_BASE_URL/verify
+      DOCUMENT_VERIFY_BASE_URL: ${DOCUMENT_VERIFY_BASE_URL:-}
     secrets:
       - database_url
       - app_database_url
@@ -539,6 +540,18 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit,${ROUTER_PREFIX:-hocx}-api-inflight"
+      # Echtheitsprüfung (POST /api/public/verify): eigener Router VOR dem Upload-Router, eigenes
+      # Rate-Limit und 4 KiB Body-Limit (nur Hash plus optionale Dokument-ID).
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && Path(`/api/public/verify`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.priority=300"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit,${ROUTER_PREFIX:-hocx}-abgabebox-verify-body-limit"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.average=30"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.burst=10"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-body-limit.buffering.maxRequestBodyBytes=4096"
 
   abgabebox-frontend:
     image: ${HOCX_ABGABEBOX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}}

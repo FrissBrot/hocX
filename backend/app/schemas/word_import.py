@@ -227,7 +227,7 @@ class WordImportEventMapping(BaseModel):
     tag: str | None = None
     # Only set for rows extracted from a Matrix "events" row when a trailing "(N)" was
     # found right after the date (e.g. "18.10.2025 (7)") - the exact format
-    # export_service._matrix_event_row_value writes for event_show_participant_count,
+    # app/documents/providers/protocol.py (_matrix_event_lines) writes for event_show_participant_count,
     # so a previously exported/re-imported protocol round-trips its attendance counts.
     participant_count: int | None = None
     # Matrix/row/column context, only set alongside `tag` (Matrix-sourced rows) - lets

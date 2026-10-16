@@ -173,6 +173,11 @@
         "title": "Analyse d'images",
         "detail": "{queued, number} en file d'attente · le plus ancien {oldestMinutes, number} min",
         "problem": "La file d'analyse d'images s'engorge"
+      },
+      "document_verification": {
+        "title": "Page publique de vérification",
+        "detail": "Réponse en {latencyMs, number} ms",
+        "problem": "Page publique de vérification lente"
       }
     },
     "problems": {
@@ -482,7 +487,8 @@
       "plan": "Plan & abonnement",
       "users": "Utilisateurs ({count})",
       "cleanup": "Nettoyage",
-      "storage": "Stockage"
+      "storage": "Stockage",
+      "verification": "Vérification"
     },
     "fields": {
       "tenantName": "Nom de l'organisation",
@@ -967,5 +973,80 @@
     "packageQuantity": "{name} × {count}",
     "rebook": "Réaffecter",
     "footnote": "Organisations avec un plan ou un pack de stockage non réservable (mis en évidence). « Réaffecter » ouvre les paramètres de l'organisation : modifiez le plan dans l'onglet « Plan & abonnement » et les packs dans l'onglet « Stockage »."
+  },
+  "verification": {
+    "title": "Vérification des organisations",
+    "description": "Les organisations confirmées reçoivent le badge « Organisation vérifiée » sur la page publique de vérification (si elles affichent leur nom et leur logo). C’est le nom au moment de la demande qui est confirmé ; un changement de nom révoque la vérification.",
+    "loading": "Chargement …",
+    "empty": "Aucune demande.",
+    "requestedAs": "Demandé sous « {name} »",
+    "filter": {
+      "pending": "Ouvertes",
+      "approved": "Confirmées",
+      "rejected": "Refusées",
+      "withdrawn": "Retirées",
+      "all": "Toutes"
+    },
+    "columns": {
+      "organisation": "Organisation",
+      "message": "Message",
+      "requested": "Demandé",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "status": {
+      "pending": "Ouverte",
+      "approved": "Confirmée",
+      "rejected": "Refusée",
+      "withdrawn": "Retirée"
+    },
+    "actions": {
+      "approve": "Confirmer",
+      "reject": "Refuser",
+      "revoke": "Révoquer la vérification"
+    },
+    "modal": {
+      "approveTitle": "Vérifier « {name} »",
+      "rejectTitle": "Refuser la demande de « {name} »",
+      "revokeTitle": "Révoquer la vérification de « {name} »",
+      "approveHint": "Ne confirmer qu’après avoir vérifié l’identité (p. ex. registre du commerce, statuts, rappel à un numéro connu).",
+      "rejectHint": "L’administrateur du mandant voit le motif dans les paramètres.",
+      "revokeHint": "Le badge disparaît immédiatement de la page de vérification.",
+      "note": "Note (comment c’est vérifié)",
+      "reasonRequired": "Motif (obligatoire)",
+      "approvePlaceholder": "p. ex. registre du commerce CHE-123.456.789 vérifié",
+      "rejectPlaceholder": "p. ex. aucune preuve du pouvoir de représentation",
+      "revokePlaceholder": "p. ex. signalement d’abus",
+      "cancel": "Annuler"
+    },
+    "done": {
+      "approve": "« {name} » est vérifiée.",
+      "reject": "Demande de « {name} » refusée.",
+      "revoke": "Vérification de « {name} » révoquée."
+    },
+    "tenant": {
+      "title": "Vérification par hocX",
+      "verified": "Vérifiée depuis le {date}",
+      "notVerified": "Non vérifiée",
+      "by": "par {email}",
+      "note": "Note : {note}",
+      "hidden": "Le mandant n’affiche pas son nom et son logo sur la page de vérification - le badge n’est donc pas visible.",
+      "history": "Demandes",
+      "noRequests": "Aucune demande pour l’instant.",
+      "withdrawnByRename": "Retirée par un changement de nom",
+      "revoked": {
+        "name_changed": "Révoquée le {date} : nom modifié.",
+        "admin": "Révoquée le {date}."
+      }
+    },
+    "errors": {
+      "generic": "L’action a échoué.",
+      "verificationAlreadyVerified": "L’organisation est déjà vérifiée.",
+      "verificationAlreadyPending": "Une demande est déjà en cours.",
+      "verificationNoPending": "Aucune demande n’est en cours.",
+      "verificationNameChanged": "Le nom a changé depuis la demande.",
+      "verificationReasonRequired": "Veuillez indiquer un motif.",
+      "verificationNotVerified": "L’organisation n’est pas vérifiée."
+    }
   }
 }

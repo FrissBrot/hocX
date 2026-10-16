@@ -146,7 +146,7 @@
     "noCycle": "Kein Zyklus",
     "noDescription": "Keine Beschreibung",
     "noElementsYet": "Noch keine Elemente im Template.",
-    "noLayoutAssigned": "Kein Layout zugewiesen",
+    "noLayoutAssigned": "Standard-Hausstil des Vereins",
     "noListSelected": "Keine Liste ausgewählt",
     "noMatchingElements": "Keine passenden Elemente gefunden.",
     "noMatchingParticipants": "Keine Teilnehmenden für den aktuellen Suchbegriff gefunden.",
@@ -158,8 +158,8 @@
     "participantAssignmentsSaveFailed": "Teilnehmerzuordnungen konnten nicht gespeichert werden",
     "participantFallback": "Teilnehmer",
     "patternTokensHelp": "Tokens: '{n}' = alle Protokolle, '{n_year}' = in diesem Jahr, '{n_month}' = in diesem Monat, '{n_cycle}' = im eigenen Zyklus. Datums-Tokens: '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
-    "pdfLayoutHelp": "Wird beim PDF-Export verwendet. Kann in den Einstellungen → Dokumentlayouts konfiguriert werden.",
-    "pdfLayoutLabel": "PDF-Layout",
+    "pdfLayoutHelp": "Wird beim PDF-Export der Protokolle dieser Vorlage verwendet. Hausstile verwaltest du unter Einstellungen → Hausstile.",
+    "pdfLayoutLabel": "Hausstil",
     "positionAbbr": "Pos.",
     "protocolNumberPatternHelp": "Beispiele: Sitzung [n], Sitzung [mm].[n_month], J[yy]-[n_year], V[n_cycle]. Eckige und geschweifte Klammern funktionieren beide.",
     "protocolNumberPatternLabel": "Protokollnummer-Muster",
@@ -186,7 +186,7 @@
     "searchParticipantsPlaceholder": "Teilnehmer suchen",
     "searchPlaceholder": "Vorlagen durchsuchen",
     "settingSaveFailed": "Einstellung konnte nicht gespeichert werden",
-    "settingsDescription": "Allgemeine Angaben zu dieser Vorlage und dem verwendeten Dokumentlayout.",
+    "settingsDescription": "Allgemeine Angaben zu dieser Vorlage und dem verwendeten Hausstil.",
     "settingsTitle": "Vorlagen-Einstellungen",
     "statusChangeFailedToast": "Status konnte nicht geändert werden",
     "tableLinkUpdateFailed": "Tabellen-Verknüpfung konnte nicht aktualisiert werden",
@@ -204,7 +204,8 @@
     "unknownList": "Unbekannte Liste",
     "unknownParticipant": "Unbekannter Teilnehmer",
     "unknownRow": "Unbekannte Zeile",
-    "unnamed": "Unbenannt"
+    "unnamed": "Unbenannt",
+    "defaultStyleSuffix": "(Standard)"
   },
   "editor": {
     "active": "Aktiv",
@@ -295,7 +296,7 @@
     "noCycle": "Kein Zyklus",
     "noDescription": "Keine Beschreibung",
     "noElementsYet": "Noch keine Elemente im Template.",
-    "noLayoutAssigned": "Kein Layout zugewiesen",
+    "noLayoutAssigned": "Standard-Hausstil des Vereins",
     "noListSelected": "Keine Liste ausgewählt",
     "noMatchingElements": "Keine passenden Elemente gefunden.",
     "noMatchingParticipants": "Keine Teilnehmenden für den aktuellen Suchbegriff gefunden.",
@@ -307,8 +308,8 @@
     "participantAssignmentsSaveFailed": "Teilnehmerzuordnungen konnten nicht gespeichert werden",
     "participantFallback": "Teilnehmer",
     "patternTokensHelp": "Tokens: '{n}' = alle Protokolle, '{n_year}' = in diesem Jahr, '{n_month}' = in diesem Monat, '{n_cycle}' = im eigenen Zyklus. Datums-Tokens: '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
-    "pdfLayoutHelp": "Wird beim PDF-Export verwendet. Kann in den Einstellungen → Dokumentlayouts konfiguriert werden.",
-    "pdfLayoutLabel": "PDF-Layout",
+    "pdfLayoutHelp": "Wird beim PDF-Export der Protokolle dieser Vorlage verwendet. Hausstile verwaltest du unter Einstellungen → Hausstile.",
+    "pdfLayoutLabel": "Hausstil",
     "positionAbbr": "Pos.",
     "protocolNumberPatternHelp": "Beispiele: Sitzung [n], Sitzung [mm].[n_month], J[yy]-[n_year], V[n_cycle]. Eckige und geschweifte Klammern funktionieren beide.",
     "protocolNumberPatternLabel": "Protokollnummer-Muster",
@@ -335,7 +336,7 @@
     "searchParticipantsPlaceholder": "Teilnehmer suchen",
     "searchPlaceholder": "Vorlagen durchsuchen",
     "settingSaveFailed": "Einstellung konnte nicht gespeichert werden",
-    "settingsDescription": "Allgemeine Angaben zu dieser Vorlage und dem verwendeten Dokumentlayout.",
+    "settingsDescription": "Allgemeine Angaben zu dieser Vorlage und dem verwendeten Hausstil.",
     "settingsTitle": "Vorlagen-Einstellungen",
     "statusChangeFailedToast": "Status konnte nicht geändert werden",
     "tableLinkUpdateFailed": "Tabellen-Verknüpfung konnte nicht aktualisiert werden",
@@ -355,6 +356,7 @@
     "unknownRow": "Unbekannte Zeile",
     "unnamed": "Unbenannt",
     "behaviorOverridden": "{label} – weicht vom Default des Elements ab",
+    "defaultStyleSuffix": "(Standard)",
     "nameFormatSetToast": "Namensformat für Verantwortliche gesetzt",
     "nameFormatSavedToast": "Namensformat für Verantwortliche gespeichert",
     "autoAssignedToast": "{count, plural, one {# Element wurde} other {# Elemente wurden}} automatisch zugeordnet",
@@ -366,325 +368,6 @@
     "participantAssignmentsSavedToast": "Teilnehmerzuordnungen gespeichert",
     "elementsAddedToast": "{count, plural, one {# Element hinzugefügt} other {# Elemente hinzugefügt}}",
     "elementRemovedToast": "Element aus Vorlage entfernt"
-  },
-  "documentTemplates": {
-    "advancedInfoNote": "Eigene LaTeX-Dateien überschreiben die gewählten Presets aus dem Struktur-Tab. Leer lassen = Preset verwenden.",
-    "bottomLeftFooterImageHelp": "Silhouette o.ä. — aus der Parts-Bibliothek wählen.",
-    "bottomLeftFooterImageLabel": "Footer-Bild unten links",
-    "browse": "durchsuchen",
-    "cancel": "Abbrechen",
-    "chooseColor": "Farbe wählen",
-    "chooseLayoutFromList": "Layout aus der Liste auswählen.",
-    "chooseOtherFile": "andere Datei wählen",
-    "close": "Schliessen",
-    "colActions": "Aktionen",
-    "colorsLabel": "Farben",
-    "combinedTocHint": "Das Inhaltsverzeichnis ist in diesem Titelblatt integriert.",
-    "combinedTocLabel": "Titelblatt + Inhaltsverzeichnis — Konfiguration",
-    "createErrorToast": "Fehler beim Erstellen",
-    "createLayoutSubmit": "Layout erstellen",
-    "createLayoutTitle": "Neues Layout erstellen",
-    "customLatexFilesTitle": "Eigene LaTeX-Dateien hinterlegt",
-    "defaultForTenant": "Standard für Tenant",
-    "delete": "Löschen",
-    "deleteErrorToast": "Fehler beim Löschen",
-    "deleteLayoutConfirm": "Layout wirklich löschen?",
-    "deleteLayoutConfirmNamed": "Layout \"{name}\" wirklich löschen?",
-    "deletePartConfirm": "Part wirklich löschen?",
-    "deletePartConfirmNamed": "Part \"{name}\" wirklich löschen?",
-    "dragFileHere": "Datei hierher ziehen",
-    "emptyStateDescription": "Dokument-Vorlagen bestimmen Layout, Logo und Kopfzeilen der exportierten Protokolle.",
-    "emptyStateTitle": "Noch keine Dokument-Vorlage",
-    "fieldActive": "Aktiv",
-    "fieldDescription": "Beschreibung",
-    "fieldName": "Name",
-    "fieldStandard": "Standard",
-    "fieldVersion": "Version",
-    "fontCustom": "Eigene Schrift",
-    "fontDescArial": "Klassisch, gut lesbar",
-    "fontDescCenturyGothic": "Geometrisch, modern",
-    "fontDescCustom": "Font-Dateien hochladen",
-    "fontDescHelvetica": "Modern, neutral",
-    "fontDescPalatino": "Elegant, seriös",
-    "fontFamilyLabel": "Schriftart",
-    "fontNoteCustom": "Eigene Font-Dateien in der Parts-Bibliothek hinterlegen. Regular ist erforderlich, Varianten optional.",
-    "fontNoteNotPreinstalled": "Diese Schrift ist nicht vorinstalliert — Font-Dateien in der Parts-Bibliothek hinterlegen. Regular ist erforderlich, Varianten optional.",
-    "fontSizeLabel": "Schriftgrösse",
-    "footerContactHelp": "Zeilenumbrüche werden unterstützt.",
-    "footerContactLabel": "Footer-Text (Kontakt)",
-    "footerContactPlaceholder": "z.B. Verein Musterort | 1234 Musterort\nwww.beispiel.ch",
-    "footerHint": "Erscheint unten auf jeder Seite.",
-    "footerLabel": "Fusszeile (Footer)",
-    "footerTextColor": "Textfarbe Footer",
-    "footerTextColorHelp": "Farbe für den Kontakttext.",
-    "formatLabel": "Format",
-    "headerHint": "Erscheint oben auf jeder Seite.",
-    "headerImageHelp": "PNG oder JPG — aus der Parts-Bibliothek wählen. Höhe im Header: ca. 0.8 cm.",
-    "headerImageLabel": "Logo / Bild für Header",
-    "headerLabel": "Kopfzeile (Header)",
-    "inactive": "Inaktiv",
-    "kindFont": "Schriftart",
-    "kindFontFile": "Font-Datei",
-    "kindFontHint": "Font-Dateien werden im Tab Gestaltung unter «Eigene Schrift» den vier Schnitten zugewiesen. Regular ist erforderlich.",
-    "kindImage": "Bild",
-    "kindImageFile": "Bilddatei",
-    "kindImageHint": "Bilder erscheinen in der Auswahl «Logo / Bild» der Titelblatt- und Header-Presets im Layout-Editor.",
-    "kindLatex": "LaTeX-Baustein",
-    "kindLatexFile": "LaTeX-Datei",
-    "kindLatexHint": "LaTeX-Parts überschreiben den entsprechenden Slot im Tab Erweitert — nur nötig, wenn die Presets nicht ausreichen.",
-    "layoutCreatedToast": "Layout erstellt",
-    "layoutDeletedToast": "Layout gelöscht",
-    "layoutLabel": "Layout",
-    "layoutSavedToast": "Layout gespeichert",
-    "layoutsLabel": "Layouts",
-    "libraryEntryLabel": "Eintrag in der Bibliothek",
-    "locationHelp": "Erscheint mit Datum links oben.",
-    "locationLabel": "Ort",
-    "locationPlaceholder": "z.B. Musterort",
-    "moreOptionsLabel": "Weitere Optionen",
-    "newDocumentTemplateButton": "+ Dokument-Vorlage",
-    "newLayoutButton": "+ Neues Layout",
-    "newPartButton": "+ Neuer Part",
-    "noImage": "Kein Bild",
-    "noLayouts": "Keine Layouts.",
-    "none": "Keine",
-    "noPartsFound": "Keine Parts gefunden.",
-    "numberingLabel": "Nummerierung",
-    "numberingNone": "Ohne Nummern",
-    "numberingNoneDesc": "Nur Titel, keine Nummern",
-    "numberingSections": "Mit Nummern",
-    "numberingSectionsDesc": "1. Abschnitt, 1.1 Unterabschnitt",
-    "optionalSuffix": "— optional",
-    "or": "oder",
-    "orientationLandscape": "Querformat",
-    "orientationLandscapeDesc": "A4 horizontal — für Listen & Tabellen",
-    "orientationPortrait": "Hochformat",
-    "orientationPortraitDesc": "A4 vertikal — für Protokolle",
-    "pageIntro": "PDF-Layouts und wiederverwendbare LaTeX-Parts für den Protokoll-Export verwalten.",
-    "pageIntroEmpty": "Layouts für PDF- und Word-Exporte.",
-    "pageTitle": "Dokument-Vorlagen",
-    "partDeletedToast": "Part gelöscht",
-    "partDescriptionPlaceholder": "Wofür wird dieser Part verwendet?",
-    "partKindLabel": "Art des Parts",
-    "partNamePlaceholder": "z.B. Jungwacht Logo",
-    "partsLibraryDescription": "Bilder, Schriftdateien und LaTeX-Bausteine, die Layouts einbinden.",
-    "partsLibraryLabel": "Parts-Bibliothek",
-    "partUploadedToast": "Part hochgeladen",
-    "pdfLayoutsDescription": "Layouts definieren das Aussehen des exportierten Protokolls.",
-    "pdfLayoutsLabel": "PDF-Layouts",
-    "pleaseChooseFile": "Bitte eine Datei auswählen",
-    "preview": "Vorschau",
-    "primaryColor": "Primärfarbe",
-    "resetColors": "Farben zurücksetzen",
-    "saveErrorToast": "Fehler beim Speichern",
-    "saveLayoutButton": "Layout speichern",
-    "searchEllipsis": "Suchen…",
-    "searchLayoutsAriaLabel": "Layouts suchen",
-    "searchPartsPlaceholder": "Parts suchen…",
-    "secondaryColor": "Sekundärfarbe",
-    "showMetadataHelp": "Zeigt einen automatischen Metadaten-Block (Nummer, Titel, Datum, Status) im exportierten PDF an. Standardmässig ausgeblendet.",
-    "showMetadataLabel": "Protokoll-Metadaten anzeigen",
-    "slotLabel": "Slot",
-    "standardLayoutCreatedToast": "Standard-Layout angelegt",
-    "standardLayoutName": "Standard-Layout",
-    "statusLabel": "Status",
-    "tabAdvanced": "Erweitert",
-    "tabDesign": "Gestaltung",
-    "tabStructure": "Struktur",
-    "titlePageHint": "Erste Seite des Protokolls mit Metadaten.",
-    "titlePageLabel": "Titelblatt",
-    "tocHint": "Übersicht aller Abschnitte.",
-    "tocLabel": "Inhaltsverzeichnis",
-    "tocSpacingCompact": "Kompakt",
-    "tocSpacingHelp": "Abstände zwischen IHV-Einträgen.",
-    "tocSpacingLabel": "Zeilenabstand IHV",
-    "tocSpacingStandard": "Standard",
-    "tocSpacingVeryCompact": "Sehr kompakt",
-    "topLeftImageHelp": "PNG oder JPG — aus der Parts-Bibliothek wählen.",
-    "topLeftImageLabel": "Logo / Bild oben links",
-    "typeLabel": "Typ",
-    "upload": "Hochladen",
-    "uploadErrorToast": "Fehler beim Hochladen",
-    "uploadPartDescription": "Eigene Datei in die Parts-Bibliothek legen — Layouts binden sie danach über ihren Slot ein.",
-    "uploadPartTitle": "Part hochladen",
-    "usePreset": "— Preset verwenden —",
-    "useStandardLayoutButton": "Standard-Layout verwenden",
-    "preset": {
-      "footer": {
-        "datePage": {
-          "label": "Datum & Seite",
-          "desc": "Datum links, Seitennummer rechts"
-        },
-        "minimal": {
-          "label": "Seitennummer",
-          "desc": "Nur Seitennummer zentriert"
-        },
-        "none": {
-          "label": "Kein Footer",
-          "desc": "Seite ohne Fusszeile"
-        },
-        "standard": {
-          "label": "Protokoll & Seite",
-          "desc": "Protokollnummer links, Seite rechts"
-        },
-        "withVersion": {
-          "label": "Mit Version",
-          "desc": "Nummer links, Version Mitte, Seite rechts"
-        }
-      },
-      "header": {
-        "bar": {
-          "label": "Farbiger Balken",
-          "desc": "Akzentfarbe mit weissem Text"
-        },
-        "logoBar": {
-          "label": "Logo + Farbbalken",
-          "desc": "Logo und Titel in farbigem Balken"
-        },
-        "logoDate": {
-          "label": "Logo + Datum",
-          "desc": "Logo links, Datum Mitte, Seite rechts"
-        },
-        "logo": {
-          "label": "Logo + Titel",
-          "desc": "Logo links, Titel Mitte, Datum rechts"
-        },
-        "minimal": {
-          "label": "Seitennummer",
-          "desc": "Nur Seitennummer oben rechts"
-        },
-        "none": {
-          "label": "Kein Header",
-          "desc": "Seite ohne Kopfzeile"
-        },
-        "standard": {
-          "label": "Titel & Datum",
-          "desc": "Titel links, Datum rechts"
-        }
-      },
-      "titlePage": {
-        "bold": {
-          "label": "Bold",
-          "desc": "Vollflächige Akzentfarbe"
-        },
-        "combinedToc": {
-          "label": "Titelblatt + Inhaltsverzeichnis",
-          "desc": "Logo, Farb-Boxen, Titel & TOC auf einer Seite"
-        },
-        "minimal": {
-          "label": "Minimalistisch",
-          "desc": "Zentrierter Titel, clean"
-        },
-        "modern": {
-          "label": "Modern",
-          "desc": "Farbiger Header-Block"
-        },
-        "none": {
-          "label": "Kein Titelblatt",
-          "desc": "Direkt mit Inhalt starten"
-        }
-      },
-      "toc": {
-        "compact": {
-          "label": "Kompakt",
-          "desc": "Kleiner, dichter gesetzt"
-        },
-        "none": {
-          "label": "Kein Inhaltsverzeichnis",
-          "desc": "Ohne Übersichtsseite"
-        },
-        "standard": {
-          "label": "Standard",
-          "desc": "Mit Seitenzahlen"
-        }
-      }
-    },
-    "slot": {
-      "elementAttendance": {
-        "label": "Element — Anwesenheit",
-        "help": "Wie Anwesenheitslisten im PDF gerendert werden."
-      },
-      "elementBulletList": {
-        "label": "Element — Aufzählung",
-        "help": "Wie Aufzählungen im PDF gerendert werden."
-      },
-      "elementEvents": {
-        "label": "Element — Terminliste",
-        "help": "Wie Terminlisten im PDF gerendert werden."
-      },
-      "elementForm": {
-        "label": "Element — Formular",
-        "help": "Wie Formularzeilen im PDF gerendert werden."
-      },
-      "elementImage": {
-        "label": "Element — Bild",
-        "help": "Wie Bilder im PDF gerendert werden."
-      },
-      "elementSessionDate": {
-        "label": "Element — Sitzungsdatum",
-        "help": "Wie das nächste Sitzungsdatum im PDF gerendert wird."
-      },
-      "elementStaticText": {
-        "label": "Element — Statischer Text",
-        "help": "Wie fixer Text im PDF gerendert wird."
-      },
-      "elementText": {
-        "label": "Element — Text",
-        "help": "Wie Textblöcke im PDF gerendert werden."
-      },
-      "elementTodo": {
-        "label": "Element — Todo-Liste",
-        "help": "Wie Todo-Listen im PDF gerendert werden."
-      },
-      "fontBold": {
-        "label": "Schrift — Fett",
-        "short": "Fett",
-        "help": "Optionale Fett-Variante."
-      },
-      "fontBoldItalic": {
-        "label": "Schrift — Fett Kursiv",
-        "short": "Fett Kursiv",
-        "help": "Optionale Fett-Kursiv-Variante."
-      },
-      "fontItalic": {
-        "label": "Schrift — Kursiv",
-        "short": "Kursiv",
-        "help": "Optionale Kursiv-Variante."
-      },
-      "fontRegular": {
-        "label": "Schrift — Regular",
-        "short": "Regular",
-        "help": "Haupt-Fontdatei, erforderlich."
-      },
-      "headerFooter": {
-        "label": "Layout — Kopf- & Fusszeile",
-        "help": "Überschreibt die gewählten Header/Footer-Presets."
-      },
-      "macros": {
-        "label": "LaTeX — Makros",
-        "help": "Wiederverwendbare Befehle."
-      },
-      "preamble": {
-        "label": "LaTeX — Präambel",
-        "help": "Pakete und globale Einstellungen."
-      },
-      "titleFooterImage": {
-        "label": "Bild — Titelblatt Footer",
-        "help": "Bild unten links auf dem Titelblatt."
-      },
-      "titleHeaderImage": {
-        "label": "Bild — Titelblatt Logo",
-        "help": "Logo oben links auf dem Titelblatt."
-      },
-      "titlePage": {
-        "label": "Layout — Titelblatt",
-        "help": "Überschreibt das gewählte Titelblatt-Preset."
-      },
-      "toc": {
-        "label": "Layout — Inhaltsverzeichnis",
-        "help": "Überschreibt das gewählte Inhaltsverzeichnis-Preset."
-      }
-    }
   },
   "elementEditor": {
     "advancedShow": "Erweitert",

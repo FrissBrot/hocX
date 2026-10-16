@@ -210,7 +210,6 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
-      LATEX_TEMPLATE_ROOT: /app/storage/latex_templates
       EXPORT_ROOT: /app/storage/exports
       UPLOAD_ROOT: /app/storage/uploads
       THUMBNAIL_ROOT: /app/storage-local/thumbnails
@@ -604,6 +603,19 @@ services:
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.average=60"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.burst=20"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.period=1m"
+      # Echtheitsprüfung (POST /api/public/verify): eigener Router VOR dem Upload-Router (der
+      # matcht sonst jeden POST unter /api/public mit 151-MiB-Body und In-Flight 2). Der Body ist
+      # nur ein Hash plus optionaler Dokument-ID - 4 KiB reichen weit.
+      - "traefik.http.routers.abgabebox-verify.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && Path(`/api/public/verify`) && Method(`POST`)"
+      - "traefik.http.routers.abgabebox-verify.entrypoints=websecure"
+      - "traefik.http.routers.abgabebox-verify.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.abgabebox-verify.priority=300"
+      - "traefik.http.routers.abgabebox-verify.service=hocx-abgabebox-backend"
+      - "traefik.http.routers.abgabebox-verify.middlewares=abgabebox-verify-ratelimit,abgabebox-verify-body-limit"
+      - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.average=30"
+      - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.burst=10"
+      - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.abgabebox-verify-body-limit.buffering.maxRequestBodyBytes=4096"
 
   clamav:
     image: clamav/clamav@sha256:9cb27d7660bdf66e9878c832cb433dd8aa152cfbe16f3c2c0084c80b04ae22b4

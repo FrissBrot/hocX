@@ -4,7 +4,9 @@ from datetime import date
 
 from app.models import FinanceTransaction
 from app.repositories.finance_repository import FinanceRepository
-from app.services.export_service import ExportService
+from app.documents.context import BuildContext
+from app.documents.providers import finance as finance_provider
+from app.documents.providers.protocol import _finance_balance_block
 from app.services.protocol_period_service import protocol_period, transaction_matches
 from tests.factories import make_cycle_config, make_finance_account, make_fine, make_protocol, make_template, make_tenant
 
@@ -52,10 +54,9 @@ def test_balance_as_of_protocol_date(db):
 
     assert FinanceRepository().balance_as_of(db, account.id, date(2026, 4, 1)) == 100.0
     assert FinanceRepository().balance_as_of(db, account.id) == 150.0
-    content = ExportService()._finance_balance_content(
-        db, {"finance_account_id": account.id, "finance_balance_date": "protocol_date"}, tenant.id, protocol=current
-    )
-    assert "100.00" in content
+    ctx = BuildContext(db=db, tenant_id=tenant.id, language="de", protocol=current)
+    block = _finance_balance_block(ctx, current, {"finance_account_id": account.id, "finance_balance_date": "protocol_date"}, {})
+    assert block.balances[0].amount == "100.00"
 
 
 def test_fine_list_options_in_export(db):
@@ -68,11 +69,15 @@ def test_fine_list_options_in_export(db):
     make_fine(db, current.id, other.id, participant_name_snapshot="Ben")
     db.flush()
 
-    service = ExportService()
-    content = service._fine_list_content(db, current.id, config={"fine_list_account_id": account.id, "fine_list_status": "open"})
-    assert "Zora" in content and "Anna" not in content and "Ben" not in content
+    ctx = BuildContext(db=db, tenant_id=tenant.id, language="de", protocol=current)
 
-    grouped = service._fine_list_content(db, current.id, config={"fine_list_group_by": "participant"})
+    def names(table) -> list[str]:
+        return [row.cells[0].v for group in table.groups for row in group.rows]
+
+    content = names(finance_provider.protocol_fines(ctx, current, {"fine_list_account_id": account.id, "fine_list_status": "open"}))
+    assert content == ["Zora"]
+
+    grouped = names(finance_provider.protocol_fines(ctx, current, {"fine_list_group_by": "participant"}))
     assert grouped.index("Anna") < grouped.index("Ben") < grouped.index("Zora")
 
 

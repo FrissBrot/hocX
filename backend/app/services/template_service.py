@@ -4,13 +4,12 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
-from app.models import CycleConfig, DocumentTemplate, Event, Participant, Template, TemplateElement
+from app.models import CycleConfig, DocumentStyle, Event, Participant, Template, TemplateElement
 from app.repositories.template_element_repository import TemplateElementRepository
 from app.repositories.template_repository import TemplateRepository
 from app.schemas.participant import TemplateParticipantAssignmentRead
 from app.services import public_id_service
 from app.services.access_service import AccessService
-from app.services.document_template_service import DocumentTemplateService
 from app.schemas.template import TemplateCreate, TemplateUpdate
 
 
@@ -23,7 +22,6 @@ class TemplateService:
         self.repository = repository or TemplateRepository()
         self.template_element_repository = template_element_repository or TemplateElementRepository()
         self.access_service = AccessService()
-        self.document_template_service = DocumentTemplateService()
 
     def list_templates(
         self,
@@ -51,20 +49,20 @@ class TemplateService:
         next_event_id: uuid.UUID | None = None,
         last_event_id: uuid.UUID | None = None,
         cycle_config_id: uuid.UUID | None = None,
-        document_template_id: uuid.UUID | None = None,
+        document_style_id: uuid.UUID | None = None,
     ) -> dict[str, int | None]:
-        """Resolves next_event_id/last_event_id/cycle_config_id/document_template_id from
+        """Resolves next_event_id/last_event_id/cycle_config_id/document_style_id from
         public UUIDs to internal ids, scoped to tenant_id - all four are client-supplied on
         template create/update, so this also serves as their ownership validation: without
         it, a writer could point a template at another tenant's Event/CycleConfig/
-        DocumentTemplate, which then leaks into every protocol created from it (title/date
-        snapshots, LaTeX layout, ...)."""
+        DocumentStyle, which then leaks into every protocol created from it (title/date
+        snapshots, house style, ...)."""
         resolved: dict[str, int | None] = {}
         for label, model, value in (
             ("next_event_id", Event, next_event_id),
             ("last_event_id", Event, last_event_id),
             ("cycle_config_id", CycleConfig, cycle_config_id),
-            ("document_template_id", DocumentTemplate, document_template_id),
+            ("document_style_id", DocumentStyle, document_style_id),
         ):
             if value is None:
                 resolved[label] = None
@@ -82,20 +80,12 @@ class TemplateService:
             next_event_id=payload.next_event_id,
             last_event_id=payload.last_event_id,
             cycle_config_id=payload.cycle_config_id,
-            document_template_id=payload.document_template_id,
+            document_style_id=payload.document_style_id,
         )
-        # An explicitly-supplied document_template_id that doesn't belong to this tenant
-        # used to be silently swapped for the tenant's default instead of rejected -
-        # unlike every other reference here (next_event_id/last_event_id/cycle_config_id)
-        # and unlike update_template's identical check just below, which both raise
-        # (audit finding, 2026-08-25). Only an *omitted* document_template_id (None) is a
-        # legitimate default-fill case.
-        document_template_id = refs["document_template_id"]
-        if payload.document_template_id is None:
-            document_template_id = self.document_template_service.default_document_template_id(db, tenant_id)
+        # Ohne document_style_id gilt beim Export der Standard-Hausstil des Mandanten.
         template = Template(
             tenant_id=tenant_id,
-            document_template_id=document_template_id,
+            document_style_id=refs["document_style_id"],
             next_event_id=refs["next_event_id"],
             last_event_id=refs["last_event_id"],
             name=payload.name,
@@ -123,9 +113,9 @@ class TemplateService:
             next_event_id=values.get("next_event_id"),
             last_event_id=values.get("last_event_id"),
             cycle_config_id=values.get("cycle_config_id"),
-            document_template_id=values.get("document_template_id"),
+            document_style_id=values.get("document_style_id"),
         )
-        for field in ("next_event_id", "last_event_id", "cycle_config_id", "document_template_id"):
+        for field in ("next_event_id", "last_event_id", "cycle_config_id", "document_style_id"):
             if field in values:
                 values[field] = refs[field]
         return self.repository.update(db, template, values)
@@ -144,7 +134,7 @@ class TemplateService:
 
         duplicate = Template(
             tenant_id=source.tenant_id,
-            document_template_id=source.document_template_id,
+            document_style_id=source.document_style_id,
             next_event_id=source.next_event_id,
             last_event_id=source.last_event_id,
             todo_due_event_tag=source.todo_due_event_tag,

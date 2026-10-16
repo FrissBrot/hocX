@@ -991,3 +991,145 @@ input[type="file"] {
   /* Unter 16 px zoomt iOS Safari beim Fokussieren ins Formular. */
   .page-header-language select { font-size: var(--text-lg); }
 }
+
+/* --- Echtheitspruefung (/verify) ------------------------------------------------------ */
+
+.verify-expected {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--info-bg);
+  color: var(--info-fg);
+  font-size: var(--text-base);
+}
+
+.verify-drop { min-height: 220px; justify-content: center; }
+
+.verify-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--border);
+  background: var(--panel);
+}
+.verify-result p { margin: 0; }
+.verify-result-ok { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
+.verify-result-fail { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+
+.verify-result-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--text-xl);
+}
+.verify-result-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex: none;
+}
+.verify-result-ok .verify-result-icon { background: var(--success-bg); color: var(--success-fg); }
+.verify-result-fail .verify-result-icon { background: var(--danger-bg); color: var(--danger-fg); }
+.verify-result-note { color: var(--muted); font-size: var(--text-base); }
+
+.verify-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+.verify-identity-logo {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+.verify-identity-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--text-xl);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+.verify-identity-text { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.verify-identity-name { font-weight: 600; font-size: var(--text-md); overflow-wrap: anywhere; }
+.verify-identity-hint { color: var(--muted); font-size: var(--text-sm); }
+.verify-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  align-self: flex-start;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--success-bg);
+  color: var(--success-fg);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.verify-notice {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+}
+.verify-notice-warning { background: var(--warning-bg); color: var(--warning-fg); }
+.verify-notice-info { background: var(--info-bg); color: var(--info-fg); }
+
+.verify-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  font-size: var(--text-base);
+}
+.verify-facts dt { color: var(--muted); }
+.verify-facts dd { margin: 0; overflow-wrap: anywhere; }
+.verify-id { font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+.verify-file { color: var(--muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.verify-again { margin-top: var(--space-4); }
+
+/* Seitenweites Ablegen - gleiches Muster wie file-drop-overlay der Haupt-App */
+.file-drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  pointer-events: none;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  backdrop-filter: blur(3px);
+}
+.file-drop-overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: min(560px, 100%);
+  padding: 44px var(--space-5) var(--space-6);
+  text-align: center;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--panel-solid) 94%, var(--accent));
+  box-shadow: var(--shadow-overlay);
+}
+.file-drop-overlay-card p { margin: 0; }
+
+@media (max-width: 720px) {
+  .verify-result { padding: var(--space-4); }
+  .verify-facts { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .verify-facts dd { margin-bottom: var(--space-2); }
+  .verify-again { width: 100%; min-height: 48px; }
+}

@@ -9,7 +9,6 @@ const { apiFetch, showToast } = vi.hoisted(() => ({
 vi.mock("@/lib/api/client", () => ({
   browserApiBaseUrl: "https://hocx.test",
   browserApiFetch: apiFetch,
-  LONG_RUNNING_TIMEOUT_MS: 300_000,
 }));
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => showToast }));
 
@@ -20,8 +19,7 @@ const protocol = {
 };
 const exported = {
   content_url: "/current.pdf",
-  status: "generated",
-  export_format: "pdf",
+  version_label: "v0.2",
 };
 
 describe("usePdfExport", () => {
@@ -39,10 +37,12 @@ describe("usePdfExport", () => {
     const { result } = renderHook(() => usePdfExport());
 
     await act(async () => { await result.current.openOrGeneratePdf(protocol, onExported); });
-    // LaTeX-Kompilierung dauert laenger als der 15-s-Standard (Audit MAIN-FE-004).
-    expect(apiFetch).toHaveBeenCalledWith("/api/protocols/protocol-1/exports/pdf", { method: "POST", timeoutMs: 300_000 });
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/api/documents/render",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ protocol_id: "protocol-1", document_type: "protocol" }) })
+    );
     expect(pdfWindow.location.replace).toHaveBeenLastCalledWith("https://hocx.test/current.pdf");
-    expect(onExported).toHaveBeenCalledWith(exported);
+    expect(onExported).toHaveBeenCalledWith({ content_url: "/current.pdf", version_label: "v0.2", version_major: 0, version_minor: 2 });
 
     await act(async () => { await result.current.openOrGeneratePdf(protocol); });
     expect(apiFetch).toHaveBeenCalledTimes(2);
@@ -93,6 +93,6 @@ describe("usePdfExport", () => {
     await act(async () => { await result.current.openOrGeneratePdf(protocol); });
     expect(pdfWindow.close).toHaveBeenCalledOnce();
     expect(pdfWindow.location.replace).not.toHaveBeenCalled();
-    expect(showToast).toHaveBeenCalledWith("Die PDF konnte nicht bereitgestellt werden.", "error");
+    expect(showToast).toHaveBeenCalledWith("Das Dokument konnte nicht erstellt werden.", "error");
   });
 });

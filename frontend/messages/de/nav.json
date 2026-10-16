@@ -26,7 +26,7 @@
   "fines": "Bussen",
   "protocolTemplates": "Protokoll-Vorlagen",
   "elements": "Elemente",
-  "documentLayouts": "Dokument-Layouts",
+  "documentLayouts": "Hausstile",
   "general": "Allgemein",
   "domains": "Domains",
   "subscriptionAndUsage": "Abo & Nutzung",
@@ -50,5 +50,6 @@
   "sessionReady": "Bereit",
   "sessionLoading": "Arbeitsbereich wird geladen…",
   "connections": "Verknüpfungen",
-  "taskPackages": "Aufgabenpakete"
+  "taskPackages": "Aufgabenpakete",
+  "documentVerification": "Echtheitsprüfung"
 }

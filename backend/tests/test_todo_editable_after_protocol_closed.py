@@ -11,7 +11,7 @@ from sqlalchemy import select
 from app.api.routes import protocols as protocols_route
 from app.api.routes import todos as todos_route
 from app.models.entities import Protocol, ProtocolTodo, TodoStatus
-from app.repositories.export_repository import ExportRepository
+from app.documents import repository as document_repository
 from app.schemas.protocol import ProtocolTodoCreate, ProtocolTodoUpdate, ProtocolUpdate
 from app.services.protocol_service import ProtocolService
 
@@ -84,7 +84,8 @@ def test_closing_freezes_todos_and_closed_protocol_shows_snapshot(db):
     assert [item.task for item in shown] == ["Offen"]
 
     # Export liest ebenfalls die Momentaufnahme.
-    export_rows = ExportRepository().list_protocol_todos(db, block.id)
+    db.refresh(protocol)
+    export_rows = document_repository.list_block_todos(db, protocol, block.id)
     assert [(row.ProtocolTodo.task, row.todo_status_code) for row in export_rows] == [("Offen", "open")]
 
 

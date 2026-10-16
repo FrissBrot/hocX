@@ -28,6 +28,7 @@ export function templateTabs(t: TFunc): RouteTab[] {
     { href: "/templates", label: t("protocolTemplates") },
     { href: "/elements", label: t("elements") },
     { href: "/settings", label: t("documentLayouts") },
+    { href: "/settings/verification", label: t("documentVerification") },
     { href: "/task-packages", label: t("taskPackages") },
   ];
 }

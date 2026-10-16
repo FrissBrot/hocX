@@ -17,7 +17,7 @@ from app.api.routes import storage as storage_routes
 from app.core.admin_security import CurrentAdmin
 from app.models.entities import (
     GalleryImage,
-    ProtocolExportCache,
+    DocumentExport,
     ProtocolImage,
     StoredFile,
     SubmissionAssignment,
@@ -104,7 +104,7 @@ def _make_export(db, tenant_id, protocol, *, size=4000):
     )
     db.add(stored_file)
     db.flush()
-    db.add(ProtocolExportCache(protocol_id=protocol.id, export_format="pdf", generated_file_id=stored_file.id))
+    db.add(DocumentExport(tenant_id=protocol.tenant_id, protocol_id=protocol.id, document_type="protocol", stored_file_id=stored_file.id))
     db.flush()
     return stored_file
 

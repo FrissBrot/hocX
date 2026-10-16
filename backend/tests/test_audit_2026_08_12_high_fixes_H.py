@@ -46,8 +46,9 @@ from app.api.routes import admin as admin_routes
 from app.core.admin_security import CurrentAdmin, get_current_admin
 from app.db.base import Base
 from app.models.entities import (
-    DocumentTemplate,
-    DocumentTemplatePart,
+    DocumentRecipe,
+    DocumentStyle,
+    DocumentStyleAsset,
     FinanceTransaction,
     GroupEntity,
     Leader,
@@ -174,15 +175,17 @@ def make_leader(db, tenant_id: int, name: str) -> Leader:
     return row
 
 
-def make_document_template(db, tenant_id: int, code: str) -> DocumentTemplate:
-    row = DocumentTemplate(tenant_id=tenant_id, code=code, name="Doc", filesystem_path=f"/tmp/{code}.tex")
+def make_document_style(db, tenant_id: int, code: str) -> DocumentStyle:
+    row = DocumentStyle(tenant_id=tenant_id, name=f"Stil {code}", style_key="modern", tokens_json={})
     db.add(row)
+    db.flush()
+    db.add(DocumentRecipe(tenant_id=tenant_id, name=f"Rezept {code}", style_id=row.id, blocks_json=[]))
     db.flush()
     return row
 
 
-def make_document_template_part(db, tenant_id: int, code: str) -> DocumentTemplatePart:
-    row = DocumentTemplatePart(tenant_id=tenant_id, code=code, name="Part", part_type="header", storage_path=f"/tmp/{code}.tex")
+def make_document_style_asset(db, tenant_id: int, code: str) -> DocumentStyleAsset:
+    row = DocumentStyleAsset(tenant_id=tenant_id, kind="image", name=f"Logo {code}", storage_path=f"document_style_assets/tenant-{tenant_id}/{code}.png")
     db.add(row)
     db.flush()
     return row
@@ -257,8 +260,8 @@ def _build_tenant_dataset(db, tenant: Tenant, suffix: str) -> dict:
     make_group_entity(db, tenant.id, name=f"Gruppe {suffix}")
     make_leader(db, tenant.id, name=f"Leiter {suffix}")
     domain = make_tenant_domain(db, tenant.id, domain=f"{suffix}.example.com")
-    make_document_template(db, tenant.id, code=f"doc-{suffix}")
-    make_document_template_part(db, tenant.id, code=f"part-{suffix}")
+    make_document_style(db, tenant.id, code=f"doc-{suffix}")
+    make_document_style_asset(db, tenant.id, code=f"part-{suffix}")
     make_user_template_access(db, user.id, tenant.id, template.id)
     make_user_protocol_access(db, user.id, tenant.id, protocol.id)
 

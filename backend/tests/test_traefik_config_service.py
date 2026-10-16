@@ -117,6 +117,11 @@ def test_regenerate_abgabebox_purpose_produces_abgabebox_routers(db, monkeypatch
     frontend_key = f"tenant-abgabebox-{domain_row.id}-frontend"
     assert routers[frontend_key]["rule"] == "Host(`box.example.com`)"
     assert routers[frontend_key]["service"] == "hocx-abgabebox-frontend@docker"
+    # Echtheitsprüfung: eigener Router vor dem Upload-Router (sonst 151-MiB-Body, In-Flight 2)
+    verify = routers[f"tenant-abgabebox-{domain_row.id}-verify"]
+    assert verify["rule"] == "Host(`box.example.com`) && Path(`/api/public/verify`) && Method(`POST`)"
+    assert verify["priority"] > routers[f"tenant-abgabebox-{domain_row.id}-upload"]["priority"]
+    assert verify["middlewares"] == ["abgabebox-verify-ratelimit@docker", "abgabebox-verify-body-limit@docker"]
 
 
 def test_regenerate_malicious_domain_string_stays_a_single_contained_value(db, monkeypatch, tmp_path):

@@ -109,5 +109,65 @@
   "language": {
     "label": "Language"
   },
-  "copyright": "Copyright © {year} hocX Project · All rights reserved."
+  "copyright": "Copyright © {year} hocX Project · All rights reserved.",
+  "verify": {
+    "brand": {
+      "subtitle": "Authenticity check",
+      "headline": "Does this document really come from hocX?",
+      "lead": "Drop the PDF file. We compare its digital fingerprint with every document created with hocX.",
+      "privacyNote": "The file never leaves your device - only its fingerprint is checked."
+    },
+    "title": "Verify authenticity",
+    "hint": "Check whether a PDF file comes unchanged from hocX.",
+    "documentHint": "Document {id} – drop the PDF file here to verify it.",
+    "dropLabel": "Drag the PDF file here or choose it",
+    "dropLabelTouch": "Choose PDF file",
+    "dropRelease": "Release to verify",
+    "dropOverlay": "Release the file to verify it",
+    "privacy": "The file is not uploaded. Your browser computes its digital fingerprint (SHA-256) and sends only that for verification.",
+    "checking": "Checking …",
+    "checkAnother": "Check another file",
+    "fileName": "Checked file: {name}",
+    "originalTitle": "Original",
+    "originalText": "This file is an unchanged copy of a document created with hocX on {date}.",
+    "fields": {
+      "documentType": "Document type",
+      "title": "Title",
+      "status": "Status",
+      "version": "Version",
+      "documentId": "Document ID"
+    },
+    "statusLabel": {
+      "geplant": "Draft (planned)",
+      "durchgeführt": "Draft (held)",
+      "abgeschlossen": "Final"
+    },
+    "docType": {
+      "protocol": "Minutes",
+      "invitation": "Invitation",
+      "todos": "Task list",
+      "events": "Schedule",
+      "attendance_sheet": "Attendance sheet",
+      "members": "Member list",
+      "finance": "Financial report",
+      "statistics": "Annual report",
+      "list": "List",
+      "custom": "Document",
+      "protocol_excerpt": "Protocol excerpt"
+    },
+    "createdBy": "Created in the hocX account of {name}.",
+    "verifiedBadge": "Verified organisation",
+    "verifiedExplanation": "hocX has confirmed that this account belongs to the organisation “{name}”.",
+    "logoAlt": "Logo of {name}",
+    "otherDocument": "The file is authentic but belongs to a different document than the scanned QR code.",
+    "importUnverified": "Imported, not verified: this entry comes from a data import and could not be checked against the original file at that time.",
+    "newerVersion": "There is a newer version ({version}) of this document.",
+    "notFoundTitle": "Not found",
+    "notFoundText": "This file does not match any document created with hocX. It has been modified or does not come from hocX.",
+    "notFoundHint": "Even saving again, “Print to PDF” or compressing changes the file, even if the content looks the same. Always check the file you originally received.",
+    "error": "The check is not possible right now. Please try again in a moment.",
+    "readError": "The file could not be read.",
+    "tooLarge": "The file is too large (at most {size} MB).",
+    "noCrypto": "Your browser does not support the check. Please use an up-to-date browser."
+  }
 }

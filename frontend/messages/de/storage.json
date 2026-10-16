@@ -2,7 +2,7 @@
   "categoryHints": {
     "photos": "Galerie, Protokoll-Bilder und Abgabebox-Bilder",
     "files": "Word-Importe, Abgabebox-Dokumente und weitere Uploads",
-    "protocols": "Erzeugte PDF-/LaTeX-Exporte",
+    "protocols": "Erzeugte PDF-Exporte",
     "other": "Logos, Importe und übrige Dateien"
   },
   "quotaComposition": {

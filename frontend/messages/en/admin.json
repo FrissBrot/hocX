@@ -173,6 +173,11 @@
         "title": "Image analysis",
         "detail": "{queued, number} queued · oldest {oldestMinutes, number} min",
         "problem": "Image analysis queue is backing up"
+      },
+      "document_verification": {
+        "title": "Public verification page",
+        "detail": "Response in {latencyMs, number} ms",
+        "problem": "Public verification page slow"
       }
     },
     "problems": {
@@ -482,7 +487,8 @@
       "plan": "Plan & subscription",
       "users": "Users ({count})",
       "cleanup": "Cleanup",
-      "storage": "Storage"
+      "storage": "Storage",
+      "verification": "Verification"
     },
     "fields": {
       "tenantName": "Organization name",
@@ -967,5 +973,80 @@
     "packageQuantity": "{name} × {count}",
     "rebook": "Rebook",
     "footnote": "Organizations on a plan or with a storage package that is not bookable (highlighted). \"Rebook\" opens the organization's settings: change the plan in the \"Plan & subscription\" tab and packages in the \"Storage\" tab."
+  },
+  "verification": {
+    "title": "Verification of organisations",
+    "description": "Confirmed organisations get the “Verified organisation” badge on the public verification page (if they show name and logo). The name at the time of the request is confirmed; renaming revokes the verification.",
+    "loading": "Loading …",
+    "empty": "No requests.",
+    "requestedAs": "Requested as “{name}”",
+    "filter": {
+      "pending": "Open",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "withdrawn": "Withdrawn",
+      "all": "All"
+    },
+    "columns": {
+      "organisation": "Organisation",
+      "message": "Message",
+      "requested": "Requested",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "status": {
+      "pending": "Open",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "withdrawn": "Withdrawn"
+    },
+    "actions": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "revoke": "Revoke verification"
+    },
+    "modal": {
+      "approveTitle": "Verify “{name}”",
+      "rejectTitle": "Reject request from “{name}”",
+      "revokeTitle": "Revoke verification of “{name}”",
+      "approveHint": "Only approve once the identity has been checked (e.g. commercial register, articles of association, call back to a known number).",
+      "rejectHint": "The tenant admin sees the reason in the settings.",
+      "revokeHint": "The badge disappears from the verification page immediately.",
+      "note": "Note (how it was checked)",
+      "reasonRequired": "Reason (required)",
+      "approvePlaceholder": "e.g. commercial register CHE-123.456.789 checked",
+      "rejectPlaceholder": "e.g. no proof of authority to represent",
+      "revokePlaceholder": "e.g. report of misuse",
+      "cancel": "Cancel"
+    },
+    "done": {
+      "approve": "“{name}” is verified.",
+      "reject": "Request from “{name}” rejected.",
+      "revoke": "Verification of “{name}” revoked."
+    },
+    "tenant": {
+      "title": "Verification by hocX",
+      "verified": "Verified since {date}",
+      "notVerified": "Not verified",
+      "by": "by {email}",
+      "note": "Note: {note}",
+      "hidden": "The tenant does not show name and logo on the verification page - so the badge is not visible.",
+      "history": "Requests",
+      "noRequests": "No requests yet.",
+      "withdrawnByRename": "Withdrawn by renaming",
+      "revoked": {
+        "name_changed": "Revoked on {date}: name changed.",
+        "admin": "Revoked on {date}."
+      }
+    },
+    "errors": {
+      "generic": "The action failed.",
+      "verificationAlreadyVerified": "The organisation is already verified.",
+      "verificationAlreadyPending": "There is already an open request.",
+      "verificationNoPending": "There is no open request.",
+      "verificationNameChanged": "The name has changed since the request.",
+      "verificationReasonRequired": "Please give a reason.",
+      "verificationNotVerified": "The organisation is not verified."
+    }
   }
 }
