@@ -25146,6 +25146,8 @@ a.mobile-list-row { color: var(--text); }
   .studio-assign-add {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
 /* ── Wartungshinweis (Anmeldeseite, /maintenance) ── */
 .maintenance-notice {
   display: grid;
