@@ -1247,8 +1247,24 @@ class TenantImportService:
         return id_map
 
     def _import_attendance_fines(self, protocol_map, participant_map, finance_account_map, finance_transaction_map) -> None:
+        # Ältere Archive können doppelte Bussen enthalten (vor Migration 0116). Pro Protokoll,
+        # Teilnehmer und Typ bleibt wie in 0116 die Busse mit dem stärksten Status bzw. die
+        # älteste - sonst bräche der Unique-Index den ganzen Import ab.
+        status_rank = {"collected": 0, "pending": 1}
+        keepers: dict[tuple, dict] = {}
         for row in self._t("attendance_fine"):
             data = self._resolve_row("attendance_fine", row)
+            participant_key = f"id:{data['participant_id']}" if data.get("participant_id") else f"name:{data.get('participant_name_snapshot')}"
+            key = (data["protocol_id"], participant_key, data.get("fine_type"))
+            rank = (status_rank.get(data.get("status"), 2), str(data.get("created_at") or ""), data.get("id") or 0)
+            current = keepers.get(key)
+            if current is None or rank < current["rank"]:
+                keepers[key] = {"rank": rank, "data": data}
+        skipped = len(self._t("attendance_fine")) - len(keepers)
+        if skipped:
+            self.warnings.append(f"attendance_fine: {skipped} doppelte Busse(n) zusammengeführt.")
+        for keeper in keepers.values():
+            data = keeper["data"]
             new_protocol_id = protocol_map.get(data["protocol_id"])
             new_account_id = finance_account_map.get(data["account_id"])
             if new_protocol_id is None or new_account_id is None:

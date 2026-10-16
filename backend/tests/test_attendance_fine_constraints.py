@@ -1,4 +1,5 @@
-"""Audit MAIN-BE-016: Status und Typ einer Busse sind per CHECK-Constraint abgesichert."""
+"""Audit MAIN-BE-016: Status und Typ einer Busse sind per CHECK-Constraint abgesichert
+(Baseline bzw. Migration 0115)."""
 from decimal import Decimal
 
 import pytest
