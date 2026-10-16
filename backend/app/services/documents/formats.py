@@ -55,6 +55,7 @@ EXTRACTION_PARSERS: dict[str, str] = {
     TXT: "text",
     MD: "markdown",
     CSV: "csv",
+    XLSX: "xlsx",
 }
 
 DOCUMENT_MIMES = frozenset({PDF, *CONVERTIBLE_TO_PDF, *EXTRACTION_PARSERS})

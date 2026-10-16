@@ -101,7 +101,7 @@ def test_pdf_job_for_uploaded_pdf_only_renders_preview(db, document_storage):
 
 def test_spreadsheet_gets_pdf_job_but_extraction_is_unsupported(db, document_storage):
     tenant = make_tenant(db)
-    stored_file = gallery_document(db, tenant.id, "kasse.xlsx", b"PK\x03\x04 xlsx")
+    stored_file = gallery_document(db, tenant.id, "kasse.ods", b"PK\x03\x04 ods")
     document = document_service.register_upload(db, stored_file)
     assert set(_jobs(db, document)) == {"pdf"}
     extraction = db.scalar(select(DocumentExtraction).where(DocumentExtraction.document_version_id == document.current_version_id))
@@ -451,3 +451,11 @@ def test_abgabebox_original_is_read_from_its_own_namespace(db, document_storage)
     document = document_service.register_upload(db, report)
     outcome = _run(db, _jobs(db, document)["extract"])
     assert outcome.result == "extracted"
+
+
+def test_xlsx_gets_pdf_and_extraction_jobs(db, document_storage):
+    """Release 1.2.0: XLSX wird extrahiert (openpyxl), nicht nur als PDF angezeigt."""
+    tenant = make_tenant(db)
+    stored_file = gallery_document(db, tenant.id, "kasse.xlsx", b"PK\x03\x04 xlsx")
+    document = document_service.register_upload(db, stored_file)
+    assert set(_jobs(db, document)) == {"pdf", "extract"}

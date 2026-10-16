@@ -154,7 +154,8 @@ Videos und sonstige Dateien bleiben unverändert normale Einträge ohne Dokument
 | RTF | LibreOffice | eigener RTF-Tokenizer (Absätze, Tabellen) |
 | DOC | LibreOffice | LibreOffice → DOCX im Sandbox-Prozess, dann DOCX-Parser |
 | TXT, MD, CSV | LibreOffice (Text-Import UTF-8) | direkt (Markdown-Struktur, CSV als Tabelle) |
-| XLSX, XLS, ODS, PPTX, PPT, ODP | LibreOffice | nicht unterstützt (Status `unsupported`) |
+| XLSX | LibreOffice | openpyxl: je Blatt Überschrift + Tabelle (berechnete Werte) |
+| XLS, ODS, PPTX, PPT, ODP | LibreOffice | nicht unterstützt (Status `unsupported`) |
 | Pages/Keynote/Numbers, ZIP, Bilder, Video | – | kein Dokument |
 
 ## 5. Inhaltsformat (`hocx.document-content`, Schema-Version 1)
@@ -268,7 +269,9 @@ Capabilities, `no-new-privileges`. Mehrere Worker-Instanzen sind möglich.
 - Tabellen ohne Rahmenlinien in PDFs werden als Textzeilen extrahiert (pdfplumber erkennt nur
   linierte Tabellen); Kopf-/Fusszeilen und Fussnoten von DOCX werden nicht übernommen (Warnung
   `header_footer_not_extracted`).
-- Tabellenkalkulationen und Präsentationen bekommen eine PDF-Ansicht, aber keine Extraktion.
+- XLSX wird je Tabellenblatt als Tabelle extrahiert (openpyxl, zuletzt berechnete Werte, höchstens
+  5000 Zeilen × 100 Spalten je Blatt); andere Tabellenkalkulationen (XLS, ODS) und Präsentationen
+  bekommen eine PDF-Ansicht, aber keine Extraktion.
 - Apple-iWork-Dateien (Pages/Keynote/Numbers) bleiben ohne Dokumentebene.
 - OCR-Text ist unkorrigiert (Warnung `ocr_text_unverified`).
 - Exporte ohne Protokollbezug (mandantenweite Listen, Statistik, eigene Dokumente) und die

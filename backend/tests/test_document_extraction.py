@@ -188,7 +188,8 @@ def test_formats_classify_documents_and_exclude_images_and_archives():
         assert not formats.is_document_mime(mime)
     assert not formats.needs_conversion(formats.PDF)
     assert formats.needs_conversion(formats.DOCX)
-    assert formats.extraction_parser(formats.XLSX) is None
+    # Seit Release 1.2.0 XLSX über openpyxl; ODS/XLS weiterhin ohne Extraktion.
+    assert formats.extraction_parser(formats.ODS) is None
 
 
 def test_sandbox_entry_runs_isolated_without_app_configuration(tmp_path):
@@ -216,3 +217,52 @@ def test_sandbox_entry_reports_errors_on_stderr_without_traceback(tmp_path):
     assert result.returncode == 1
     assert b"Traceback" not in result.stderr
     assert sys.executable  # Interpreter des Tests = Interpreter des Kindprozesses
+
+
+def _xlsx(build) -> bytes:
+    import io as _io
+
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    build(workbook)
+    buffer = _io.BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
+def test_xlsx_becomes_one_table_per_sheet_with_computed_values():
+    """Release 1.2.0: openpyxl (XLSX-Export der Dokument-Engine) liefert auch die Extraktion."""
+    from datetime import date as _date
+
+    def build(workbook):
+        sheet = workbook.active
+        sheet.title = "Kasse"
+        sheet.append(["Posten", "Betrag", "Datum"])
+        sheet.append(["Zelt", 120.0, _date(2026, 5, 1)])
+        sheet["E10"].number_format = "0.00"  # formatierte, aber leere Zelle: kein Rand
+        workbook.create_sheet("Leer")
+        second = workbook.create_sheet("Mitglieder")
+        second.append(["Anna", True])
+
+    parsed = get_parser("xlsx")(_xlsx(build))
+    assert formats.extraction_parser(formats.XLSX) == "xlsx"
+    assert parsed.blocks == [
+        {"type": "heading", "text": "Kasse", "level": 2},
+        {"type": "table", "rows": [["Posten", "Betrag", "Datum"], ["Zelt", "120", "2026-05-01"]], "header_rows": 0},
+        {"type": "heading", "text": "Mitglieder", "level": 2},
+        {"type": "table", "rows": [["Anna", "WAHR"]], "header_rows": 0},
+    ]
+
+
+def test_xlsx_truncates_huge_sheets_with_a_warning(monkeypatch):
+    from app.services.documents.parsers import xlsx
+
+    monkeypatch.setattr(xlsx, "MAX_ROWS_PER_SHEET", 3)
+
+    def build(workbook):
+        for index in range(10):
+            workbook.active.append([f"Zeile {index}"])
+
+    parsed = xlsx.parse_xlsx(_xlsx(build))
+    assert len(parsed.blocks[1]["rows"]) == 3 and "sheet_truncated" in parsed.warnings

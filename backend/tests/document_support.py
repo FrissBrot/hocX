@@ -24,6 +24,7 @@ MIME_BY_SUFFIX = {
     ".md": formats.MD,
     ".csv": formats.CSV,
     ".xlsx": formats.XLSX,
+    ".ods": formats.ODS,
     ".png": "image/png",
     ".zip": "application/zip",
 }

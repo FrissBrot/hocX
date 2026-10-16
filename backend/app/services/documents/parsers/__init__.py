@@ -35,6 +35,10 @@ def get_parser(name: str) -> Callable[[bytes], ParsedContent]:
         from app.services.documents.parsers.odt import parse_odt
 
         return parse_odt
+    if name == "xlsx":
+        from app.services.documents.parsers.xlsx import parse_xlsx
+
+        return parse_xlsx
     if name == "rtf":
         from app.services.documents.parsers.rtf import parse_rtf
 
