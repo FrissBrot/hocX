@@ -29,6 +29,10 @@ assert users == ["backend", "redis"], f"cache-Netz genutzt von: {users}"
 docker compose --env-file .env.prod.example "${COMPOSE_FILES[@]}" config --format json | assert_redis_isolated
 docker compose -p hocx-e2e --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml config --format json | assert_redis_isolated
 
+# MAIN-OPS-008: Der Dev-Overlay landet ohne -p nie im Projekt der Server-Instanz (hocx).
+dev_project="$(docker compose --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')"
+test "$dev_project" = hocx-dev || { echo "Dev-Overlay ergibt Projekt '$dev_project' statt hocx-dev" >&2; exit 1; }
+
 # MAIN-OPS-007: Basis- und Release-Stack verwenden dieselbe Traefik-Version.
 base_traefik="$(grep -m1 -E '^    image: traefik:' docker-compose.yml)"
 release_traefik="$(grep -m1 -E '^    image: traefik:' docker-compose.traefik.yml)"

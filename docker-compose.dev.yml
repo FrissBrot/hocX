@@ -1,3 +1,9 @@
+# Fester Projektname (Audit MAIN-OPS-008): ohne -p ergab der Verzeichnisname `hocX` das Projekt
+# `hocx` - dasselbe wie die Server-Instanz aus docker-compose.yml. Ein versehentlicher Dev-Start
+# haette deren Container mit Demo-Seeding (seed_demo=true) und unsicheren Cookies neu erstellt.
+# Ein explizites -p (scripts/e2e.sh: hocx-e2e) hat weiterhin Vorrang.
+name: hocx-dev
+
 services:
   backend:
     environment:

@@ -14,8 +14,12 @@ Drei Umgebungen:
 
 ```bash
 cp .env.example .env
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+docker compose -p hocx-dev -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
+
+Der Overlay setzt das Projekt fest auf `hocx-dev` (auch ohne `-p`). **Nie** auf einem Server mit
+Echtdaten starten: er seedet Demo-Konten (`@hocx.local`/`ChangeMe123!`) und schaltet
+Secure-Cookies ab.
 
 Optional dazu: `--profile scan` (ClamAV), `--profile docs` (Docs auf localhost:3002),
 `--profile edge` (lokaler Traefik).

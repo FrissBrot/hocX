@@ -73,10 +73,12 @@ und prüft die erreichbaren Dienste. Nach dem Start sind verfügbar:
 | Abgabebox | <http://localhost:3001> |
 | Abgabebox-API | <http://localhost:8001> |
 
-Der gleiche Stack kann ohne Wrapper gestartet werden:
+Der gleiche Stack kann ohne Wrapper gestartet werden (`docker-compose.dev.yml` setzt den
+Projektnamen fest auf `hocx-dev`, damit ein Dev-Start nie die Container eines anderen
+Projekts im selben Checkout neu erstellt):
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+docker compose -p hocx-dev -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
 Optionale Profile:
