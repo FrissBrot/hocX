@@ -180,13 +180,22 @@ def _fetch_fines_data(db: Session, tenant_id: int, bounds=None) -> tuple[list[di
     participant_rows = fetch_fines_by_participant(db, tenant_id, bounds)
     type_rows = fetch_fines_by_type(db, tenant_id, bounds)
 
+    # Beträge verschiedener Währungen nicht addieren (MAIN-BE-019): das Diagramm zeigt die
+    # Währung mit den meisten Bussen, die Anzahl je Typ gilt über alle Währungen.
+    counts_by_currency: dict[str, int] = {}
+    for r in participant_rows:
+        counts_by_currency[r.currency or ""] = counts_by_currency.get(r.currency or "", 0) + int(r.count)
+    main_currency = max(counts_by_currency, key=lambda c: (counts_by_currency[c], c)) if counts_by_currency else ""
     by_participant = sorted(
-        [{"name": r.name, "amount": float(r.amount or 0)} for r in participant_rows],
+        [{"name": r.name, "amount": float(r.amount or 0)} for r in participant_rows if (r.currency or "") == main_currency],
         key=lambda x: x["amount"],
         reverse=True,
     )[:10]
     fine_labels = {"absent": "Unentschuldigt", "late": "Verspätet"}
-    by_type = [{"label": fine_labels.get(r.fine_type, r.fine_type), "count": r.count} for r in type_rows]
+    counts_by_type: dict[str, int] = {}
+    for r in type_rows:
+        counts_by_type[r.fine_type] = counts_by_type.get(r.fine_type, 0) + int(r.count)
+    by_type = [{"label": fine_labels.get(fine_type, fine_type), "count": count} for fine_type, count in counts_by_type.items()]
     return by_participant, by_type
 
 
