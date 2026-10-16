@@ -94,4 +94,14 @@ test "$INITIAL_ADMIN_PASSWORD" = "bleibt # wie es ist"
 # Wie Compose: ohne Wert davor ist '#' kein Kommentar.
 test "$TRAEFIK_DOMAIN" = "# nur Kommentar"
 
+# MAIN-OPS-016: Prod akzeptiert nur Release-Tags, Test auch Candidate-Tags.
+require_release_version_for prod v1.2.3
+require_release_version_for prod 1.2.3
+require_release_version_for test test-20260825-abc1234-r42
+if require_release_version_for prod test-20260825-abc1234-r42 2> /dev/null; then
+  echo "Candidate-Tag wurde auf Prod akzeptiert." >&2
+  exit 1
+fi
+grep -q 'require_release_version_for "$ENVIRONMENT" "$HOCX_VERSION"' "$REPO_DIR/scripts/deploy.sh"
+
 echo "env loader tests: ok"

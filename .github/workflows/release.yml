@@ -90,9 +90,11 @@ jobs:
         run: |
           set -euo pipefail
           candidate_sha="$(printf '%s' "$SOURCE_TAG" | sed -E 's/^test-[0-9]{8}-([0-9a-f]{7,40})-r[0-9]+$/\1/')"
-          proof="$(gh api \
+          # --paginate: aeltere Kandidaten jenseits der neuesten 100 Deployments bleiben
+          # promotebar (Audit MAIN-OPS-016). awk statt head, damit gh kein SIGPIPE bekommt.
+          proof="$(gh api --paginate \
             'repos/${{ github.repository }}/deployments?environment=test&task=hocx-candidate&per_page=100' \
-            --jq "first(.[] | select(.payload.candidate_tag == \"$SOURCE_TAG\")) | [.id, .sha] | @tsv")"
+            --jq ".[] | select(.payload.candidate_tag == \"$SOURCE_TAG\") | [.id, .sha] | @tsv" | awk 'NR == 1')"
           read -r deployment_id deployment_sha <<< "$proof"
           [ -n "$deployment_id" ] || {
             echo "Kein Testnachweis fuer $SOURCE_TAG vorhanden." >&2

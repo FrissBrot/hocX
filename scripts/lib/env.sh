@@ -62,6 +62,16 @@ app_environment_for() {
   esac
 }
 
+# Prod nimmt nur Release-Tags (Format wie in release.yml), nie einen test-*-Candidate-Tag.
+require_release_version_for() {
+  local environment="$1" version="$2"
+  if [ "$environment" = prod ] && [[ ! "$version" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Auf Prod sind nur Release-Tags erlaubt (z. B. v1.2.3), nicht: $version" >&2
+    echo "Kandidaten zuerst auf Test verifizieren und per release.yml promoten (RUNBOOK Abschnitt 3)." >&2
+    return 1
+  fi
+}
+
 require_unprovisioned_dev_host() {
   local marker="${1:-/etc/hocx/environment}"
   local actual

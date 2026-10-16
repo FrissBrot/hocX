@@ -293,6 +293,10 @@ if [[ ! "$HOCX_VERSION" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
   echo "Ungueltige HOCX_VERSION: $HOCX_VERSION" >&2
   exit 1
 fi
+# Prod nimmt nur Release-Tags (wie release.yml sie vergibt), nie einen Candidate-Tag: die
+# Signaturpruefung allein akzeptiert jedes Image aus build-test-images.yml, auch ungetestete
+# test-*-Kandidaten (Audit MAIN-OPS-016). Die Test-Freigabe erzwingt release.yml.
+require_release_version_for "$ENVIRONMENT" "$HOCX_VERSION" || exit 1
 if [[ ! "$GHCR_NAMESPACE" =~ ^[a-z0-9][a-z0-9-]{0,38}$ ]]; then
   echo "Ungueltiger GHCR_NAMESPACE: $GHCR_NAMESPACE" >&2
   exit 1
