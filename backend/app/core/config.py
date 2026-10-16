@@ -27,6 +27,10 @@ def _load_file_secrets() -> None:
 _load_file_secrets()
 
 
+# Werte von HOCX_ENVIRONMENT, die als Produktion gelten (kanonisch: 'production').
+PRODUCTION_ENVIRONMENT_NAMES = frozenset({"production", "prod"})
+
+
 class Settings(BaseSettings):
     app_name: str = "hocX API"
     # docker-compose.yml/docker-compose.release.yml set HOCX_ENVIRONMENT (matching the
@@ -169,7 +173,7 @@ class Settings(BaseSettings):
                 file=sys.stderr,
             )
             sys.exit(1)
-        if self.environment.strip().lower() == "production":
+        if self.is_production:
             if not self.auth_secure_cookies:
                 print("FATAL: AUTH_SECURE_COOKIES must be true in production.", file=sys.stderr)
                 sys.exit(1)
@@ -182,7 +186,9 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.environment.strip().lower() == "production"
+        # 'prod' ist ein Alias: scripts/deploy.sh schrieb bis zum Audit MAIN-OPS-001 den
+        # Host-Namen 'prod' in die .env, solche Hosts muessen weiter als Produktion gelten.
+        return self.environment.strip().lower() in PRODUCTION_ENVIRONMENT_NAMES
 
     @property
     def local_dev_origins(self) -> tuple[str, ...]:

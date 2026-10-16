@@ -51,6 +51,11 @@ migrate_env_file "$ENV_FILE" > "$TEST_DIR/out.txt"
 grep -q 'entfernt: TRAEFIK_WEB_DOMAIN' "$TEST_DIR/out.txt" || fail "Entfernen nicht gemeldet"
 grep -q 'PHOTO_WORKER_DB_PASSWORD' "$TEST_DIR/out.txt" || fail "Ergaenzen nicht gemeldet"
 
+# MAIN-OPS-001: 1.0.x schrieb den Host-Namen 'prod'; die Anwendung braucht 'production'.
+grep -q 'HOCX_ENVIRONMENT prod -> production' "$TEST_DIR/out.txt" || fail "Umstellung prod -> production nicht gemeldet"
+test "$(value_of "$ENV_FILE" HOCX_ENVIRONMENT)" = production || fail "HOCX_ENVIRONMENT wurde nicht auf production migriert"
+test "$(grep -c 'HOCX_ENVIRONMENT=' "$ENV_FILE")" -eq 1 || fail "HOCX_ENVIRONMENT steht mehrfach in der .env"
+
 if grep -q '^TRAEFIK_WEB_DOMAIN=' "$ENV_FILE"; then
   fail "TRAEFIK_WEB_DOMAIN steht noch in der .env"
 fi
@@ -66,6 +71,7 @@ chmod 600 "$TEST_DIR/original.env"
 while IFS='=' read -r key _; do
   [[ "$key" =~ ^[A-Z_]+$ ]] || continue
   [ "$key" != TRAEFIK_WEB_DOMAIN ] || continue
+  [ "$key" != HOCX_ENVIRONMENT ] || continue
   test "$(value_of "$ENV_FILE" "$key")" = "$(value_of "$TEST_DIR/original.env" "$key")" \
     || fail "Bestehender Wert von $key wurde veraendert"
 done < <(grep -E '^[A-Z_]+=' "$FIXTURE")
@@ -139,6 +145,12 @@ for variable in POSTGRES_PASSWORD APP_DB_PASSWORD AUTH_SECRET ADMIN_AUTH_SECRET 
   PHOTO_WORKER_DB_PASSWORD PHOTO_WORKER_DATABASE_URL; do
   test -n "${!variable-}" || fail "$variable ist nach der Migration leer"
 done
+
+# --- 7b. Test-Hosts behalten 'test' ----------------------------------------------------------
+fresh_env
+sed -i "s/^HOCX_ENVIRONMENT=.*/HOCX_ENVIRONMENT='test'/" "$ENV_FILE"
+migrate_env_file "$ENV_FILE" > /dev/null
+test "$(value_of "$ENV_FILE" HOCX_ENVIRONMENT)" = test || fail "HOCX_ENVIRONMENT=test wurde veraendert"
 
 # --- 8. Compose loest die migrierte .env fuer Test und Prod ohne fehlende Variablen auf --
 if command -v docker > /dev/null 2>&1 && docker compose version > /dev/null 2>&1; then

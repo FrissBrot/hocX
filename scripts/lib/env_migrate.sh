@@ -84,6 +84,17 @@ migrate_env_file() {
     changed=true
   fi
 
+  # MAIN-OPS-001: deploy.sh hat frueher HOCX_ENVIRONMENT='prod' (Host-Name) geschrieben. Die
+  # Anwendung erkennt den Produktionsmodus am kanonischen Wert 'production' (Backend und Frontend
+  # akzeptieren 'prod' zwar als Alias, die .env wird aber auf den kanonischen Wert gebracht).
+  if [ "$(env_file_value "$env_file" HOCX_ENVIRONMENT)" = prod ]; then
+    grep -Ev "^[[:space:]]*(export[[:space:]]+)?HOCX_ENVIRONMENT=" "$tmp_file" > "$tmp_file.next" || true
+    mv "$tmp_file.next" "$tmp_file"
+    printf "HOCX_ENVIRONMENT='production'\n" >> "$tmp_file"
+    notes+=("geaendert: HOCX_ENVIRONMENT prod -> production")
+    changed=true
+  fi
+
   if [ "$changed" = true ]; then
     backup_file="$env_file.bak-$(date +%Y%m%d-%H%M%S)"
     cp -p "$env_file" "$backup_file"

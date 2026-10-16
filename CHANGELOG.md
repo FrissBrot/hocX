@@ -8,6 +8,15 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Betrieb
+
+- Prod lief bisher mit `HOCX_ENVIRONMENT=prod` und damit für das Backend nicht als
+  Produktion (offenes `/docs`/`/openapi.json`, Demo-Daten- und Konfigurationssperren aus).
+  `deploy.sh` schreibt jetzt `production`, migriert eine bestehende `.env` beim nächsten
+  Deploy automatisch (`prod` → `production`, Sicherung als `.env.bak-*`) und
+  `verify_release.sh` prüft den Produktionsmodus. Backend und Frontend akzeptieren `prod`
+  weiterhin als Alias.
+
 ## [1.1.13] - 2026-10-13
 
 Feature-Release auf 1.1.12: Offene Protokolle lassen sich nach Änderungen an der Vorlage

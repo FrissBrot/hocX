@@ -23,6 +23,10 @@ describe("getServerVersion", () => {
     expect(getServerVersion()).toMatchObject({ version: "v1.2.0", environment: "production" });
     expect(execFileSync).not.toHaveBeenCalled();
   });
+  it("behandelt den Alias prod bestehender Hosts als production", () => {
+    setup("prod", "v1.2.0");
+    expect(getServerVersion()).toMatchObject({ version: "v1.2.0", environment: "production" });
+  });
   it("zeigt in Test den Tag des tatsaechlich ausgewaehlten Images", () => {
     setup("test", "test-old");
     vi.stubEnv("HOCX_FRONTEND_IMAGE", "registry:5000/hocx-frontend:test-20261011-abc1234-r42");

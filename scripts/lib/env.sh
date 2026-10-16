@@ -49,6 +49,19 @@ require_host_environment() {
   fi
 }
 
+# Host-Marker und deploy.sh-Argument heissen prod/test, die Anwendung (HOCX_ENVIRONMENT, siehe
+# backend/app/core/config.py::is_production) kennt production/test. Bis zum Audit MAIN-OPS-001
+# schrieb deploy.sh den Host-Namen 'prod' in die .env, wodurch das Backend sich auf Prod nicht als
+# Produktion sah (/docs offen, Demo-Daten-Sperre aus). Gibt den kanonischen Anwendungswert aus;
+# 'prod' wird als Alias fuer bestehende Hosts weiter akzeptiert.
+app_environment_for() {
+  case "${1,,}" in
+    prod|production) printf 'production\n' ;;
+    test) printf 'test\n' ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
 require_unprovisioned_dev_host() {
   local marker="${1:-/etc/hocx/environment}"
   local actual

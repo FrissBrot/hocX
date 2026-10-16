@@ -64,4 +64,13 @@ if require_unprovisioned_dev_host "$ENVIRONMENT_MARKER" 2> /dev/null; then
   exit 1
 fi
 
+# MAIN-OPS-001: Host-Umgebung prod -> Anwendungswert production; 'prod' bleibt als Alias gueltig.
+test "$(app_environment_for prod)" = production
+test "$(app_environment_for production)" = production
+test "$(app_environment_for test)" = test
+# deploy.sh schreibt den kanonischen Wert und vergleicht im Preflight ueber dieselbe Abbildung.
+grep -q 'write_env_value HOCX_ENVIRONMENT "$(app_environment_for "$ENVIRONMENT")"' "$REPO_DIR/scripts/deploy.sh"
+grep -q 'app_environment_for "${HOCX_ENVIRONMENT:-}"' "$REPO_DIR/scripts/deploy.sh"
+grep -q '^HOCX_ENVIRONMENT=production$' "$REPO_DIR/.env.prod.example"
+
 echo "env loader tests: ok"

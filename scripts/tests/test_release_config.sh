@@ -59,6 +59,8 @@ if grep -q 'seed_demo=true' docker-compose.release.yml scripts/deploy.sh; then
   exit 1
 fi
 grep -q 'HOCX_ENVIRONMENT:.*production' docker-compose.release.yml
+# MAIN-OPS-001: verify_release.sh prueft, dass das Backend in der erwarteten Umgebung laeuft.
+grep -q 'run_check "Backend laeuft in der erwarteten Umgebung" check_backend_environment' scripts/verify_release.sh
 grep -q 'docs_url=None if settings.is_production' backend/app/main.py
 grep -q 'Lokale Demo-Admin-Adresse ist in Release-Umgebungen verboten' scripts/deploy.sh
 

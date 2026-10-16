@@ -227,7 +227,7 @@ create_env_file() {
   trap 'rm -f "$ENV_TMP_FILE"' EXIT
   printf '# Automatisch durch scripts/deploy.sh fuer %s erzeugt. Nicht committen.\n' "$ENVIRONMENT" > "$ENV_TMP_FILE"
   write_env_value HOCX_VERSION "$HOCX_VERSION"
-  write_env_value HOCX_ENVIRONMENT "$ENVIRONMENT"
+  write_env_value HOCX_ENVIRONMENT "$(app_environment_for "$ENVIRONMENT")"
   write_env_value GHCR_NAMESPACE "$GHCR_NAMESPACE"
   write_env_value HOCX_SIGNING_IDENTITY_REGEXP "(?i)^https://github.com/${GHCR_NAMESPACE}/hocx/.github/workflows/build-test-images[.]yml@refs/heads/main$"
   write_env_value ROUTER_PREFIX "$PROJECT_NAME"
@@ -318,10 +318,17 @@ run_preflight() {
   ensure_github_auth
   "${DC[@]}" config --quiet
 
-  if [ "${HOCX_ENVIRONMENT:-}" != "$ENVIRONMENT" ]; then
-    echo "HOCX_ENVIRONMENT muss auf diesem Host '$ENVIRONMENT' sein." >&2
+  # Host-Umgebung prod -> Anwendungswert production (Alias 'prod' wird toleriert, siehe
+  # lib/env.sh::app_environment_for). Der kanonische Wert wird exportiert: Compose bevorzugt
+  # Shell-Variablen vor der --env-file, die Container sehen also immer 'production'.
+  local app_environment
+  app_environment="$(app_environment_for "$ENVIRONMENT")"
+  if [ "$(app_environment_for "${HOCX_ENVIRONMENT:-}")" != "$app_environment" ]; then
+    echo "HOCX_ENVIRONMENT muss auf diesem Host '$app_environment' sein (aktuell: '${HOCX_ENVIRONMENT:-}')." >&2
     return 1
   fi
+  HOCX_ENVIRONMENT="$app_environment"
+  export HOCX_ENVIRONMENT
   if [ "${AUTH_SECURE_COOKIES:-true}" != true ]; then
     echo "AUTH_SECURE_COOKIES darf in Release-Umgebungen nicht deaktiviert sein." >&2
     return 1
