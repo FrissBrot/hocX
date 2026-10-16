@@ -169,3 +169,18 @@ def test_partial_config_still_fails_closed_even_in_dev_environment(monkeypatch):
     monkeypatch.setattr(settings, "friendly_captcha_api_key", "")
 
     assert captcha.verify_captcha_session_token("anything-or-empty", "acme", "hw1", "e1") is False
+
+
+# --- Audit MAIN-OPS-001: Prod-Hosts liefen mit HOCX_ENVIRONMENT='prod' -----------------------
+# docker-compose.release.yml reicht HOCX_ENVIRONMENT als ABGABEBOX_ENVIRONMENT durch. Bestehende
+# Hosts haben dort noch 'prod' stehen - das muss wie 'production' fail-closed bleiben.
+
+
+@pytest.mark.parametrize("value", ["prod", "production", "PROD"])
+def test_production_aliases_are_not_dev_like(monkeypatch, value):
+    from app.config import is_dev_or_test_environment
+
+    monkeypatch.setattr(settings, "environment", value)
+
+    assert is_dev_or_test_environment() is False
+    assert _run(captcha.verify_captcha("")) is False

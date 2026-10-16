@@ -145,7 +145,8 @@
     "uploadFailed": "Upload failed",
     "uploadPlain": "Upload",
     "uploadingPercent": "Uploading… {percent}%",
-    "uploadingPlain": "Uploading…"
+    "uploadingPlain": "Uploading…",
+    "largeZipHint": "Large ZIP file: on a slow connection the upload may stop after one hour. Better split the archive into several smaller ZIPs or upload the photos directly."
   },
   "shareModal": {
     "actionAriaLabelActive": "Remove access for {name}",

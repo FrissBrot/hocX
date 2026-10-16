@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useToast } from "@/contexts/toast-context";
-import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { browserApiBaseUrl, browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 
 export type PdfExportResult = {
   content_url?: string | null;
@@ -15,6 +16,7 @@ export type PdfExportResult = {
 /** Öffnet eine PDF aus dem aktuellen gespeicherten Stand, in Liste und Detailansicht. */
 export function usePdfExport() {
   const showToast = useToast();
+  const tCommon = useTranslations("common");
   const [busyByProtocol, setBusyByProtocol] = useState<Record<string, boolean>>({});
   const pendingProtocols = useRef(new Set<string>());
 
@@ -36,22 +38,23 @@ export function usePdfExport() {
 
       const result = await browserApiFetch<PdfExportResult>(`/api/protocols/${protocolId}/exports/pdf`, {
         method: "POST",
+        timeoutMs: LONG_RUNNING_TIMEOUT_MS,
       });
       if (!result.content_url) {
-        throw new Error("Die PDF konnte nicht bereitgestellt werden.");
+        throw new Error(tCommon("clientErrors.pdfNotProvided"));
       }
       onExported?.(result);
       const pdfUrl = `${browserApiBaseUrl}${result.content_url}`;
       if (pdfWindow && !pdfWindow.closed) {
         pdfWindow.location.replace(pdfUrl);
       } else {
-        showToast("PDF bereit – hier klicken zum Öffnen", "success", {
+        showToast(tCommon("clientErrors.pdfReadyClick"), "success", {
           onMessageClick: () => window.open(pdfUrl, "_blank", "noopener,noreferrer"),
         });
       }
     } catch (error) {
       pdfWindow?.close();
-      showToast(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen", "error");
+      showToast(error instanceof Error ? error.message : tCommon("clientErrors.pdfExportFailed"), "error");
     } finally {
       pendingProtocols.current.delete(protocolId);
       setBusyByProtocol((current) => ({ ...current, [protocolId]: false }));

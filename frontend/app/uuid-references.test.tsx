@@ -40,14 +40,14 @@ it("loads snapshot references using public UUIDs and retains snapshot cache keys
       public_reference_ids: { lists: { "42": listId }, finance_accounts: { "73": accountId } },
     }] }];
     if (url === `/api/lists/${listId}/entries`) return entries;
-    if (url === `/api/finance/accounts/${accountId}/transactions`) return transactions;
+    if (url === `/api/finance/accounts/${accountId}/transactions?limit=200`) return transactions;
     return [];
   });
   render(await ProtocolDetailPage({ params: Promise.resolve({ id: "protocol" }) }));
   expect(fetchMock).toHaveBeenCalledWith(`/api/lists/${listId}/entries`);
-  expect(fetchMock).toHaveBeenCalledWith(`/api/finance/accounts/${accountId}/transactions`);
+  expect(fetchMock).toHaveBeenCalledWith(`/api/finance/accounts/${accountId}/transactions?limit=200`);
   expect(fetchMock).not.toHaveBeenCalledWith("/api/lists/42/entries");
-  expect(fetchMock).not.toHaveBeenCalledWith("/api/finance/accounts/73/transactions");
+  expect(fetchMock).not.toHaveBeenCalledWith("/api/finance/accounts/73/transactions?limit=200");
   const props = editorMock.mock.calls[0][0];
   expect(props.initialListEntries["42"]).toEqual(entries);
   expect(props.initialListEntries[listId]).toEqual(entries);

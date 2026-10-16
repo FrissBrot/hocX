@@ -53,6 +53,8 @@ type StructuredListTableProps = {
    * kommen fix aus der Liste, zugeteilte Personen als Chips, Besetzungsgrad oben.
    * `highlightEmpty` kommt aus der Block-Konfiguration im Template. Gilt nur ohne Gruppierung. */
   protocolView?: { highlightEmpty?: boolean };
+  /** Nur Zeilen zeigen, deren Wert in `column` den Text enthält (Block-Option der Vorlage). */
+  rowFilter?: { column: StructuredListDisplayColumn; text: string } | null;
   heading?: ReactNode;
   headingActions?: ReactNode;
   emptyMessage?: string;
@@ -226,6 +228,7 @@ export function StructuredListTable({
   masterList = false,
   visibleEntryIds,
   protocolView,
+  rowFilter = null,
   heading,
   headingActions,
   emptyMessage,
@@ -622,7 +625,11 @@ export function StructuredListTable({
     const manualCompare = (left: StructuredListEntry, right: StructuredListEntry) =>
       (left.sort_index - right.sort_index) || compareIsoDate(left.created_at, right.created_at);
 
-    return entries.filter((entry) => !visibleEntryIds || visibleEntryIds.includes(entry.id)).sort((left, right) => {
+    const filterText = rowFilter?.text.trim().toLowerCase() ?? "";
+    return entries
+      .filter((entry) => !visibleEntryIds || visibleEntryIds.includes(entry.id))
+      .filter((entry) => !filterText || !rowFilter || entrySortText(entry, rowFilter.column).toLowerCase().includes(filterText))
+      .sort((left, right) => {
       if (sortByColumn) {
         const leftText = entrySortText(left, sortByColumn).trim();
         const rightText = entrySortText(right, sortByColumn).trim();
@@ -639,7 +646,7 @@ export function StructuredListTable({
       }
       return manualCompare(left, right);
     });
-  }, [entries, visibleEntryIds, entryDrafts, sortByColumn, sortDirection, textCollator, participantNames, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
+  }, [entries, visibleEntryIds, rowFilter, entryDrafts, sortByColumn, sortDirection, textCollator, participantNames, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
 
   const groupedEntries = useMemo(() => {
     if (!groupByColumn) {

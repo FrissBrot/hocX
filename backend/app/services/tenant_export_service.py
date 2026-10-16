@@ -52,6 +52,7 @@ from app.models import (
     Event,
     EventCycle,
     FinanceAccount,
+    FineTariff,
     FinanceTransaction,
     GalleryImage,
     GroupEntity,
@@ -278,6 +279,10 @@ class TenantExportService:
         )
         tables["finance_account"] = self._rows(
             db.scalars(select(FinanceAccount).where(FinanceAccount.tenant_id == tenant_id)).all(), "finance_account"
+        )
+        # Zentraler Bussentarif (0113_element_config_schema) - eine Zeile pro Mandant.
+        tables["fine_tariff"] = self._rows(
+            db.scalars(select(FineTariff).where(FineTariff.tenant_id == tenant_id)).all(), "fine_tariff"
         )
         # verification_token/status/verified_at travel unchanged (no LOOKUP_COLUMNS/
         # USER_ID_COLUMNS entry needed) - a tenant import is meant to reconstruct the source

@@ -669,7 +669,6 @@
       "cleanupDone": "Organisation nettoyée",
       "cleanupFailed": "Le nettoyage a échoué",
       "usersLoadFailed": "Les utilisateurs n'ont pas pu être chargés",
-      "imagePickInvalid": "Veuillez choisir une image (PNG ou JPG)",
       "tenantSaved": "Organisation enregistrée",
       "tenantSaveFailed": "L'organisation n'a pas pu être enregistrée",
       "roleChanged": "Rôle modifié",

@@ -20,7 +20,16 @@ from app.core.config import settings
 from app.core.cycle_utils import get_cycle_year
 from app.core.storage import ABGABEBOX, MAIN, InvalidObjectKey, ObjectNotFound, get_object_store, namespace_for_root
 from app.models import AppUser, Event, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile
-from app.models.entities import CycleConfig, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAnalysisJob, SubmissionAssignment
+from app.models.entities import (
+    CycleConfig,
+    GalleryUploadJob,
+    PhotoAlbum,
+    PhotoAlbumItem,
+    PhotoAnalysisJob,
+    SubmissionAssignment,
+    SubmissionUploadFile,
+    WordImportDocument,
+)
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
 from app.schemas.files import FileAlbumRef, FileOverviewItem, FileStats, PhotoAnalysisProgress, SimilarityGroup, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
@@ -184,6 +193,18 @@ def _safe_storage_path(storage_root: str, relative_path: str) -> Path:
     return full
 
 
+def owned_thumbnail_path(stored_file: StoredFile) -> Path | None:
+    """Pfad der eigenen Vorschau ("<id>.jpg" im thumbnail_root) oder None.
+
+    Nur dieser Name gehört sicher zur Datei (Audit MAIN-BE-003): ältere Importe/Klone haben
+    thumbnail_path einer anderen StoredFile übernommen - beim Löschen darf deren Vorschau
+    nicht mit entfernt werden.
+    """
+    if stored_file.thumbnail_path != f"{stored_file.id}.jpg":
+        return None
+    return _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
+
+
 class FileService:
     def __init__(
         self,
@@ -235,7 +256,9 @@ class FileService:
         thumbnail_root = thumbnail_root or settings.thumbnail_root
         if not stored_file.mime_type or not stored_file.mime_type.startswith("image/"):
             return None
-        if stored_file.thumbnail_path:
+        # Nur der eigene Name "<id>.jpg" gilt (Audit MAIN-BE-003): ein aus Import/Klon oder
+        # Altbestand übernommener Name kann auf die Vorschau einer fremden Datei zeigen.
+        if stored_file.thumbnail_path and stored_file.thumbnail_path == f"{stored_file.id}.jpg":
             existing = _safe_storage_path(thumbnail_root, stored_file.thumbnail_path)
             if existing.exists():
                 return existing
@@ -1639,10 +1662,10 @@ class FileService:
         # Löschung über das Journal: eine laufende Migration übernimmt sie, die Datei taucht im
         # Ziel nicht wieder auf (siehe objstore_client.ObjectStore.delete).
         get_object_store().delete(db, MAIN, storage_key)
-        if stored_file.thumbnail_path:
-            thumbnail_path = _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
-            if thumbnail_path.exists():
-                thumbnail_path.unlink()
+        # Nur das eigene Vorschaubild "<id>.jpg" löschen (Audit MAIN-BE-005).
+        thumbnail_path = owned_thumbnail_path(stored_file)
+        if thumbnail_path is not None and thumbnail_path.exists():
+            thumbnail_path.unlink()
 
     def delete_gallery_images(
         self, db: Session, tenant_id: int, file_ids: list[uuid.UUID]
@@ -1722,13 +1745,37 @@ class FileService:
 
         stored_file = self.stored_file_repository.get(db, protocol_image.stored_file_id)
         self.protocol_image_repository.delete(db, protocol_image)
-        if stored_file is not None:
+        db.flush()
+        # Audit MAIN-BE-001: "Aus letztem Protokoll übernehmen" legt ProtocolImage-Zeilen mit
+        # derselben stored_file_id an. Datei und StoredFile nur löschen, wenn nichts anderes
+        # mehr darauf verweist; das Vorschaubild erst nach dem Commit entfernen.
+        paths_to_unlink: list[Path] = []
+        if stored_file is not None and not self._stored_file_still_referenced(db, stored_file.id):
             storage_key = stored_file.storage_path
+            thumbnail_path = owned_thumbnail_path(stored_file)
+            if thumbnail_path is not None:
+                paths_to_unlink.append(thumbnail_path)
             self.stored_file_repository.delete(db, stored_file)
             db.flush()
             get_object_store().delete(db, MAIN, storage_key)
         db.commit()
+        for path in paths_to_unlink:
+            path.unlink(missing_ok=True)
         return True
+
+    @staticmethod
+    def _stored_file_still_referenced(db: Session, stored_file_id: int) -> bool:
+        """True, wenn noch eine Zeile mit RESTRICT-FK auf die Datei zeigt."""
+        referencing_columns = (
+            ProtocolImage.stored_file_id,
+            GalleryImage.stored_file_id,
+            WordImportDocument.stored_file_id,
+            SubmissionUploadFile.stored_file_id,
+        )
+        for column in referencing_columns:
+            if db.scalar(select(column).where(column == stored_file_id).limit(1)) is not None:
+                return True
+        return False
 
     def _resolve_tenant_id(self, db: Session, protocol_element_block_id: int) -> int:
         protocol_element_block = db.get(ProtocolElementBlock, protocol_element_block_id)

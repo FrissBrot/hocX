@@ -20,6 +20,7 @@ export PATH="$TEST_DIR/bin:$PATH"
 printf "POSTGRES_USER=hocx\nPOSTGRES_DB=hocx\n" > "$TEST_DIR/test.env"
 chmod 600 "$TEST_DIR/test.env"
 export HOCX_ENV_FILE="$TEST_DIR/test.env"
+export HOCX_HOST_MARKER_FILE="$TEST_DIR/no-marker"
 
 # Erfolg: Start + success, Exit-Code 0, Ausgabe wird durchgereicht.
 OUTPUT="$("$REPO_DIR/scripts/run_job.sh" backup_db sh -c 'echo hallo')"
@@ -27,6 +28,14 @@ test "$OUTPUT" = "hallo"
 grep -q "record_job_start(:'job')" "$TEST_DIR/calls.log"
 grep -q "record_job_run(:'job', 'success'" "$TEST_DIR/calls.log"
 grep -q -- "-v job=backup_db" "$TEST_DIR/calls.log"
+
+# Explizites Compose-Projekt statt implizitem Verzeichnisnamen (Audit MAIN-OPS-010).
+grep -q -- "-p hocx --env-file $TEST_DIR/test.env -f $REPO_DIR/docker-compose.yml --project-directory $REPO_DIR exec -T db" "$TEST_DIR/calls.log"
+: > "$TEST_DIR/calls.log"
+printf 'test\n' > "$TEST_DIR/marker"
+chmod 444 "$TEST_DIR/marker"
+HOCX_HOST_MARKER_FILE="$TEST_DIR/marker" "$REPO_DIR/scripts/run_job.sh" backup_db true
+grep -q -- "-p hocx-test .* -f $REPO_DIR/docker-compose.test.yml" "$TEST_DIR/calls.log"
 
 # Fehler: Exit-Code des Befehls bleibt erhalten, Ausgabe landet in der Fehlermeldung.
 : > "$TEST_DIR/calls.log"

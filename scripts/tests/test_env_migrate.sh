@@ -51,6 +51,11 @@ migrate_env_file "$ENV_FILE" > "$TEST_DIR/out.txt"
 grep -q 'entfernt: TRAEFIK_WEB_DOMAIN' "$TEST_DIR/out.txt" || fail "Entfernen nicht gemeldet"
 grep -q 'PHOTO_WORKER_DB_PASSWORD' "$TEST_DIR/out.txt" || fail "Ergaenzen nicht gemeldet"
 
+# MAIN-OPS-001: 1.0.x schrieb den Host-Namen 'prod'; die Anwendung braucht 'production'.
+grep -q 'HOCX_ENVIRONMENT prod -> production' "$TEST_DIR/out.txt" || fail "Umstellung prod -> production nicht gemeldet"
+test "$(value_of "$ENV_FILE" HOCX_ENVIRONMENT)" = production || fail "HOCX_ENVIRONMENT wurde nicht auf production migriert"
+test "$(grep -c 'HOCX_ENVIRONMENT=' "$ENV_FILE")" -eq 1 || fail "HOCX_ENVIRONMENT steht mehrfach in der .env"
+
 if grep -q '^TRAEFIK_WEB_DOMAIN=' "$ENV_FILE"; then
   fail "TRAEFIK_WEB_DOMAIN steht noch in der .env"
 fi
@@ -59,6 +64,9 @@ password="$(value_of "$ENV_FILE" PHOTO_WORKER_DB_PASSWORD)"
 test "$(value_of "$ENV_FILE" PHOTO_WORKER_DATABASE_URL)" = \
   "postgresql+psycopg://hocx_photo_worker:${password}@db:5432/hocx" \
   || fail "PHOTO_WORKER_DATABASE_URL passt nicht zum Passwort"
+# MAIN-OPS-005: Redis-Passwort fuer bestehende Installationen erzeugen.
+grep -q 'ergaenzt: REDIS_PASSWORD' "$TEST_DIR/out.txt" || fail "REDIS_PASSWORD-Ergaenzung nicht gemeldet"
+[[ "$(value_of "$ENV_FILE" REDIS_PASSWORD)" =~ ^[0-9a-f]{64}$ ]] || fail "REDIS_PASSWORD ist kein 64-stelliger Hex-Wert"
 
 # Git behaelt Modus 600 nicht; fuer den Wertevergleich braucht load_env_file eine 600er Kopie.
 cp "$FIXTURE" "$TEST_DIR/original.env"
@@ -66,6 +74,7 @@ chmod 600 "$TEST_DIR/original.env"
 while IFS='=' read -r key _; do
   [[ "$key" =~ ^[A-Z_]+$ ]] || continue
   [ "$key" != TRAEFIK_WEB_DOMAIN ] || continue
+  [ "$key" != HOCX_ENVIRONMENT ] || continue
   test "$(value_of "$ENV_FILE" "$key")" = "$(value_of "$TEST_DIR/original.env" "$key")" \
     || fail "Bestehender Wert von $key wurde veraendert"
 done < <(grep -E '^[A-Z_]+=' "$FIXTURE")
@@ -75,7 +84,7 @@ backups=("$TEST_DIR"/.env.bak-*)
 test "${#backups[@]}" -eq 1 || fail "Erwartet genau eine Sicherung, gefunden: ${#backups[@]}"
 test "$(stat -c '%a' "${backups[0]}")" = 600 || fail "Sicherung hat nicht Modus 600"
 cmp -s "${backups[0]}" "$FIXTURE" || fail "Sicherung entspricht nicht der urspruenglichen .env"
-test -z "$(ls "$TEST_DIR" | grep -F '.tmp.' || true)" || fail "Temporaere Datei uebrig geblieben"
+test -z "$(find "$TEST_DIR" -maxdepth 1 -name '*.tmp.*' -print -quit)" || fail "Temporaere Datei uebrig geblieben"
 
 # --- 3. Idempotenz: zweiter Lauf aendert nichts, legt keine weitere Sicherung an ---------
 cp "$ENV_FILE" "$TEST_DIR/after-first-run"
@@ -115,10 +124,13 @@ test "$(value_of "$ENV_FILE" HOCX_SINGLE_TENANT_RESOLUTION)" = auto
 
 # --- 7. deploy.sh: Verdrahtung des Update-Pfads --------------------------------------------
 DEPLOY="$REPO_DIR/scripts/deploy.sh"
+# shellcheck disable=SC2016  # Literale Suchmuster in deploy.sh
 migrate_line="$(grep -n '^  migrate_env_file "\$ENV_FILE"' "$DEPLOY" | head -n 1 | cut -d: -f1)"
+# shellcheck disable=SC2016
 load_line="$(grep -n '^load_env_file "\$ENV_FILE"' "$DEPLOY" | head -n 1 | cut -d: -f1)"
 test -n "$migrate_line" && test -n "$load_line" && test "$migrate_line" -lt "$load_line" \
   || fail "deploy.sh muss die .env vor dem Laden migrieren"
+# shellcheck disable=SC2016
 grep -q 'source "\$REPO_DIR/scripts/lib/env_migrate.sh"' "$DEPLOY" || fail "deploy.sh laedt env_migrate.sh nicht"
 grep -q 'HOCX_PHOTO_ANALYSIS_WORKER_IMAGE' "$DEPLOY" || fail "Worker-Image wird nicht aus der Shell entfernt"
 test "$(grep -c 'docs photo-analysis-worker' "$DEPLOY")" -ge 4 \
@@ -136,9 +148,15 @@ migrate_env_file "$ENV_FILE" > /dev/null
 load_env_file "$ENV_FILE"
 for variable in POSTGRES_PASSWORD APP_DB_PASSWORD AUTH_SECRET ADMIN_AUTH_SECRET \
   INITIAL_ADMIN_PASSWORD ABGABEBOX_DB_PASSWORD ABGABEBOX_CAPTCHA_SESSION_SECRET \
-  PHOTO_WORKER_DB_PASSWORD PHOTO_WORKER_DATABASE_URL; do
+  PHOTO_WORKER_DB_PASSWORD PHOTO_WORKER_DATABASE_URL REDIS_PASSWORD; do
   test -n "${!variable-}" || fail "$variable ist nach der Migration leer"
 done
+
+# --- 7b. Test-Hosts behalten 'test' ----------------------------------------------------------
+fresh_env
+sed -i "s/^HOCX_ENVIRONMENT=.*/HOCX_ENVIRONMENT='test'/" "$ENV_FILE"
+migrate_env_file "$ENV_FILE" > /dev/null
+test "$(value_of "$ENV_FILE" HOCX_ENVIRONMENT)" = test || fail "HOCX_ENVIRONMENT=test wurde veraendert"
 
 # --- 8. Compose loest die migrierte .env fuer Test und Prod ohne fehlende Variablen auf --
 if command -v docker > /dev/null 2>&1 && docker compose version > /dev/null 2>&1; then

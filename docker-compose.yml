@@ -1,6 +1,41 @@
 services:
+  # Traefik liest die Docker-API nur über diesen Proxy (Audit MAIN-OPS-004): der rohe Socket ist
+  # root-äquivalent, Traefik hängt am Internet. Erlaubt sind nur GET auf Container, Events,
+  # Ping und Version - genau das, was der Docker-Provider braucht (live geprüft 2026-10-16:
+  # Router, später gestartete Container über Events; POST, /info, /secrets, exec -> 403).
+  traefik-socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:3.4.6-r0-ls101@sha256:362cadf55b3c7920189347d0f4d60b389e2f80e929581bf10793f2371aab41e5
+    restart: unless-stopped
+    mem_limit: 64m
+    cpus: 0.25
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /run
+    environment:
+      CONTAINERS: 1
+      EVENTS: 1
+      PING: 1
+      VERSION: 1
+      POST: 0
+      LOG_LEVEL: warning
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik-docker-api
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   traefik:
-    image: traefik:v3.1
+    # Gleiche Version wie docker-compose.traefik.yml: v3.1 spricht die Docker-API 1.24 fest an
+    # und laedt gegen Docker Engine >= 29 keine Router (Audit MAIN-OPS-007).
+    image: traefik:v3.6.1@sha256:fd5932c796f7e2db9fd6bff485ef693d53797f0ee8ad03dc68aa424ea6f21958
     restart: unless-stopped
     # M28 (Mittel, Audit 2026-08-12): Ceiling gegen einen durchgehenden Container, der den
     # ganzen (knappen) Host mitreisst - keine Zielwerte fuer Normalbetrieb, nur eine Obergrenze.
@@ -14,6 +49,7 @@ services:
     depends_on:
       - frontend
       - backend
+      - traefik-socket-proxy
     environment:
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL}
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPTDNS_ACME_EMAIL: ${ACME_EMAIL}
@@ -23,8 +59,10 @@ services:
       - "443:443"
       # Nur lokal gebunden: vorgesehen als Ziel fuer den OpenZiti-Host-Tunnel.
       - "127.0.0.1:${TRAEFIK_ADMIN_PORT:-8443}:8443"
+    networks:
+      - default
+      - traefik-docker-api
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./infra/traefik/letsencrypt:/letsencrypt
       # Vom backend generierte Router pro Mandanten-Custom-Domain (siehe traefik_config_service.py)
@@ -33,7 +71,7 @@ services:
       - --configFile=/etc/traefik/traefik.yml
 
   db:
-    image: postgres:16
+    image: postgres:16@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
     restart: unless-stopped
     mem_limit: 768m
     cpus: 1.0
@@ -88,7 +126,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     restart: unless-stopped
     mem_limit: 128m
     cpus: 0.5
@@ -97,6 +135,12 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    # Eigenes internes Netz nur zwischen Backend und Redis (Audit MAIN-OPS-005): Redis haelt
+    # Domain-Bridge- und MFA-Flow-Tokens sowie Lockout-Zaehler ohne eigene Authentifizierung. Im
+    # Default-Netz haette jeder kompromittierte oeffentliche Dienst (abgabebox, Frontends) daraus
+    # eine Sitzung als beliebiger Nutzer erzeugen koennen.
+    networks:
+      - cache
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -157,7 +201,10 @@ services:
       - path: .env
         required: false
     environment:
-      HOCX_ENVIRONMENT: development
+      # Steuerbar fuer eine Instanz mit Echtdaten aus diesem Stack (Audit MAIN-OPS-009): dort
+      # HOCX_ENVIRONMENT=production in .env setzen, sonst sind /docs und /openapi.json offen und
+      # die Produktionssperren aus. docker-compose.dev.yml pinnt development.
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-development}
       DATABASE_URL: ${DATABASE_URL}
       APP_DATABASE_URL: ${APP_DATABASE_URL}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
@@ -205,6 +252,7 @@ services:
       - default
       - docker-api
       - storage
+      - cache
     depends_on:
       db:
         condition: service_healthy
@@ -244,11 +292,14 @@ services:
       - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_default"
       # Main API router (all non-auth paths)
       - "traefik.http.routers.hocx-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && ((PathPrefix(`/api`) && !PathPrefix(`/api/admin`)) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
+      - "traefik.http.routers.hocx-backend.middlewares=api-inflight"
       - "traefik.http.routers.hocx-backend.entrypoints=websecure"
       - "traefik.http.routers.hocx-backend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-backend.priority=100"
       - "traefik.http.routers.hocx-backend.service=hocx-backend"
       - "traefik.http.services.hocx-backend.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.api-inflight.inflightreq.amount=100"
+      - "traefik.http.middlewares.api-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
       # Platform-Admin-API: nur auf dem lokal gebundenen OpenZiti-EntryPoint.
       - "traefik.http.routers.hocx-admin-api.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && PathPrefix(`/api/admin`)"
       - "traefik.http.routers.hocx-admin-api.entrypoints=adminsecure"
@@ -415,7 +466,10 @@ services:
       - path: .env
         required: false
     environment:
-      HOCX_ENVIRONMENT: development
+      # Steuerbar fuer eine Instanz mit Echtdaten aus diesem Stack (Audit MAIN-OPS-009): dort
+      # HOCX_ENVIRONMENT=production in .env setzen, sonst sind /docs und /openapi.json offen und
+      # die Produktionssperren aus. docker-compose.dev.yml pinnt development.
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-development}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       INTERNAL_API_URL: ${INTERNAL_API_URL}
       # See the backend service's comment above on why this needs to be explicit: without
@@ -448,6 +502,9 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hocx-frontend.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`)"
+      - "traefik.http.middlewares.web-inflight.inflightreq.amount=200"
+      - "traefik.http.middlewares.web-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
+      - "traefik.http.routers.hocx-frontend.middlewares=web-inflight"
       - "traefik.http.routers.hocx-frontend.entrypoints=websecure"
       - "traefik.http.routers.hocx-frontend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-frontend.priority=10"
@@ -464,6 +521,7 @@ services:
       # Cert-Resolver bleibt leer - sonst versucht Traefik ein ACME-Zertifikat fuer
       # website.invalid zu holen und loggt bei jedem Start einen Fehler.
       - "traefik.http.routers.hocx-website-frontend.rule=Host(`${TRAEFIK_WEBSITE_DOMAIN:-website.invalid}`)"
+      - "traefik.http.routers.hocx-website-frontend.middlewares=web-inflight"
       - "traefik.http.routers.hocx-website-frontend.entrypoints=websecure"
       - "traefik.http.routers.hocx-website-frontend.tls.certresolver=${TRAEFIK_WEBSITE_DOMAIN:+letsencrypt}"
       - "traefik.http.routers.hocx-website-frontend.priority=10"
@@ -516,6 +574,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.abgabebox-backend.middlewares=api-inflight"
       - "traefik.http.routers.abgabebox-backend.entrypoints=websecure"
       - "traefik.http.routers.abgabebox-backend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.abgabebox-backend.priority=100"
@@ -561,8 +620,9 @@ services:
       - "traefik.http.routers.abgabebox-public-get.tls.certresolver=letsencrypt"
       - "traefik.http.routers.abgabebox-public-get.priority=200"
       - "traefik.http.routers.abgabebox-public-get.service=hocx-abgabebox-backend"
-      - "traefik.http.routers.abgabebox-public-get.middlewares=abgabebox-public-ratelimit"
-      - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.average=30"
+      - "traefik.http.routers.abgabebox-public-get.middlewares=abgabebox-public-ratelimit,api-inflight"
+      # Gleicher Wert wie docker-compose.release.yml (Audit MAIN-OPS-014).
+      - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.average=60"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.burst=20"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.period=1m"
 
@@ -796,6 +856,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`)"
+      - "traefik.http.routers.abgabebox-frontend.middlewares=web-inflight"
       - "traefik.http.routers.abgabebox-frontend.entrypoints=websecure"
       - "traefik.http.routers.abgabebox-frontend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.abgabebox-frontend.priority=10"
@@ -833,6 +894,12 @@ services:
 networks:
   # Siehe docker-socket-proxy: internes Netz nur zwischen Backend und Proxy.
   docker-api:
+    internal: true
+  # Siehe redis: internes Netz nur zwischen Backend und Redis.
+  cache:
+    internal: true
+  # Siehe traefik-socket-proxy: nur Traefik und sein Proxy.
+  traefik-docker-api:
     internal: true
   # Objektspeicher: nur Backend, Worker, Abgabebox und Foto-Worker erreichen das lokale S3.
   storage:

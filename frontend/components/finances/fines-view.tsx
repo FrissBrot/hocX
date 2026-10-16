@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -8,16 +8,17 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FineCreateModal } from "@/components/finances/fine-create-modal";
+import { restoreFine as restoreFineRequest, useFineDelete } from "@/components/finances/fine-delete";
+import { FineTariffModal } from "@/components/finances/fine-tariff-modal";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
-import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import type { Locale } from "@/i18n/locale-config.generated";
-import { AttendanceFineListItem, FinanceAccount } from "@/types/api";
+import { AttendanceFineListItem, FinanceAccount, FineTariff } from "@/types/api";
 
 const PAGE_SIZE = 50;
 
@@ -36,10 +37,9 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
   const fineTypeLabel = useMemo(() => fineTypeLabels(t), [t]);
   const locale = useLocale();
   const router = useRouter();
-  const confirm = useConfirm();
   const showToast = useToast();
   const [fines, setFines] = useState<AttendanceFineListItem[]>(initialFines);
-  const [statusFilter, setStatusFilter] = useState<"pending" | "collected" | "all">("pending");
+  const [statusFilter, setStatusFilter] = useState<"pending" | "collected" | "deleted" | "all">("pending");
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [sortKey, setSortKey] = useState<SortKey>("participant_name_snapshot");
@@ -47,6 +47,18 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
   const [hasMore, setHasMore] = useState(initialFines.length === PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [tariff, setTariff] = useState<FineTariff | null>(null);
+  const [tariffOpen, setTariffOpen] = useState(false);
+  const { requestDelete, dialog: deleteDialog } = useFineDelete();
+
+  useEffect(() => {
+    if (ownOnly) return;
+    let cancelled = false;
+    browserApiFetch<FineTariff>("/api/fines/tariff")
+      .then((loaded) => { if (!cancelled) setTariff(loaded); })
+      .catch(() => { if (!cancelled) setTariff(null); });
+    return () => { cancelled = true; };
+  }, [ownOnly]);
 
   const accountMap = new Map(accounts.map((a) => [a.id, a]));
 
@@ -82,7 +94,7 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
       .filter((f) => {
         const matchStatus =
           statusFilter === "all" ||
-          (statusFilter === "pending" ? f.status === "pending" : f.status === "collected");
+          f.status === statusFilter;
         const matchSearch =
           !q ||
           f.participant_name_snapshot.toLowerCase().includes(q) ||
@@ -105,6 +117,7 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
   const counts = useMemo(() => ({
     pending: fines.filter((f) => f.status === "pending").length,
     collected: fines.filter((f) => f.status === "collected").length,
+    deleted: fines.filter((f) => f.status === "deleted").length,
   }), [fines]);
 
   async function collectFine(fine: AttendanceFineListItem) {
@@ -120,12 +133,21 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
   }
 
   async function deleteFine(fine: AttendanceFineListItem) {
-    if (!(await confirm({ message: t("deleteFineConfirm", { name: fine.participant_name_snapshot }), tone: "danger", confirmLabel: tCommon("delete") }))) return;
+    const outcome = await requestDelete(fine);
+    if (outcome === "hard") setFines((prev) => prev.filter((f) => f.id !== fine.id));
+    // Mit Begründung gelöscht: Status, Begründung und Protokoll kommen vom Server.
+    else if (outcome === "soft") await reloadFines();
+  }
+
+  async function restoreFine(fine: AttendanceFineListItem) {
+    setBusy((b) => ({ ...b, [fine.id]: true }));
     try {
-      await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
-      setFines((prev) => prev.filter((f) => f.id !== fine.id));
+      const updated = await restoreFineRequest(fine.id);
+      setFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteFineFailed"), "error");
+      showToast(error instanceof Error ? error.message : t("restoreFineFailed"), "error");
+    } finally {
+      setBusy((b) => ({ ...b, [fine.id]: false }));
     }
   }
 
@@ -163,8 +185,27 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
         <div>
           <h1 className="page-title">{t("finesPageTitle")}</h1>
           <p className="muted">{ownOnly ? t("ownOnlyDescription") : t("allDescription")}</p>
+          {tariff ? (
+            <p className="muted">
+              {tariff.account_id
+                ? t("tariffSummary", {
+                    late: tariff.amount_late.toFixed(2),
+                    absent: tariff.amount_absent.toFixed(2),
+                    account: accountMap.get(tariff.account_id)?.name ?? t("unknownAccount"),
+                  })
+                : t("tariffNotSet")}
+            </p>
+          ) : null}
         </div>
+        {canWrite && tariff ? (
+          <button type="button" className="button-secondary" onClick={() => setTariffOpen(true)}>
+            {t("tariffButton")}
+          </button>
+        ) : null}
       </div>
+      {tariff ? (
+        <FineTariffModal open={tariffOpen} tariff={tariff} accounts={accounts} onClose={() => setTariffOpen(false)} onSaved={setTariff} />
+      ) : null}
 
       {hasNoFines ? (
         <EmptyState
@@ -186,6 +227,7 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
           options={[
             { value: "pending", label: t("filterPending"), count: counts.pending || undefined },
             { value: "collected", label: t("filterCollected"), count: counts.collected || undefined },
+            ...(counts.deleted ? [{ value: "deleted" as const, label: t("filterDeleted"), count: counts.deleted }] : []),
             { value: "all", label: t("filterAll") },
           ]}
           value={statusFilter}
@@ -212,18 +254,20 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
       >
         {filtered.map((fine) => {
           const isCollected = fine.status === "collected";
+          const isDeleted = fine.status === "deleted";
+          const isClosed = isCollected || isDeleted;
           const account = accountMap.get(fine.account_id);
           const cur = fine.currency_label ?? account?.currency_label ?? "";
           return (
-            <tr key={fine.id} className={isCollected ? "table-row-done" : ""}>
+            <tr key={fine.id} className={isClosed ? "table-row-done" : ""}>
               {canWrite && (
                 <td>
                   <button
                     type="button"
                     className={`todo-check${isCollected ? " todo-check-done" : ""}`}
                     title={isCollected ? t("alreadyCollected") : t("markCollected")}
-                    disabled={busy[fine.id] || isCollected}
-                    onClick={() => !isCollected && void collectFine(fine)}
+                    disabled={busy[fine.id] || isClosed}
+                    onClick={() => !isClosed && void collectFine(fine)}
                   >
                     {isCollected ? (
                       <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="4" fill="currentColor"/><path d="M4.5 8.5l2.5 2.5 4.5-4.5" stroke="var(--on-solid)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -244,7 +288,18 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
               <td>{account?.name ?? t("unknownAccount")}</td>
               <td>{fine.amount.toFixed(2)} {cur}</td>
               <td>
-                <Badge variant={isCollected ? "success" : "neutral"}>{isCollected ? t("statusCollected") : t("statusPending")}</Badge>
+                {isDeleted ? (
+                  <Badge variant="danger">{t("statusDeleted")}</Badge>
+                ) : (
+                  <Badge variant={isCollected ? "success" : "neutral"}>{isCollected ? t("statusCollected") : t("statusPending")}</Badge>
+                )}
+                {isDeleted && fine.deleted_at ? (
+                  <div className="muted fines-collected-note">
+                    {fine.deleted_by_display_name
+                      ? t("deletedNoteWithUser", { date: formatDateTime(fine.deleted_at, locale as Locale), user: fine.deleted_by_display_name, reason: fine.delete_comment ?? "" })
+                      : t("deletedNote", { date: formatDateTime(fine.deleted_at, locale as Locale), reason: fine.delete_comment ?? "" })}
+                  </div>
+                ) : null}
                 {isCollected && fine.collected_at ? (
                   <div className="muted fines-collected-note">
                     {fine.collected_by_display_name
@@ -256,9 +311,14 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
               {canWrite && (
                 <td>
                   <div className="table-actions table-actions-start">
-                    {!isCollected && (
+                    {!isClosed && (
                       <button type="button" className="row-text-action row-text-action-danger" onClick={() => void deleteFine(fine)}>
                         {tCommon("delete")}
+                      </button>
+                    )}
+                    {isDeleted && fine.can_restore && (
+                      <button type="button" className="row-text-action" disabled={busy[fine.id]} onClick={() => void restoreFine(fine)}>
+                        {t("restoreFine")}
                       </button>
                     )}
                     {isCollected && fine.can_reopen && (
@@ -288,6 +348,7 @@ export function FinesView({ initialFines, accounts, canWrite, ownOnly }: Props) 
         </div>
       )}
 
+      {deleteDialog}
       <FineCreateModal open={createOpen} accounts={accounts} onClose={() => setCreateOpen(false)} onCreated={() => void reloadFines()} />
     </div>
   );

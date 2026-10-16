@@ -22,6 +22,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatDate, formatFileSize } from "@/lib/utils/format";
 import { CATEGORY_COLORS, categoryHints, formatPercent, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
+import { PROFILE_IMAGE_ACCEPT, profileImageProblem } from "@/lib/utils/profile-image";
 import {
   AdminFeature,
   AdminPlan,
@@ -81,6 +82,7 @@ type SettingsTab = "stammdaten" | "abo" | "benutzer" | "aufraeumen" | "speicher"
 
 export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Props) {
   const t = useTranslations("admin");
+  const tCommon = useTranslations("common");
   const storageHints = categoryHints(useTranslations("storage"));
   const roleOptions = useMemo(() => getRoleOptions(t), [t]);
   const cleanupCategories = useMemo(() => getCleanupCategories(t), [t]);
@@ -371,8 +373,9 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
 
   function pickProfileImage(file: File | null | undefined) {
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      showToast(t("tenantModal.toasts.imagePickInvalid"), "error");
+    const problem = profileImageProblem(file);
+    if (problem) {
+      showToast(tCommon(`profileImage.${problem}`), "error");
       return;
     }
     setTenantForm((current) => ({ ...current, profileImage: file }));
@@ -566,7 +569,7 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/png,image/jpeg"
+                      accept={PROFILE_IMAGE_ACCEPT}
                       className="admin-image-drop-input"
                       aria-label={t("tenantModal.fields.profileImageAria")}
                       onChange={(event) => pickProfileImage(event.target.files?.[0])}

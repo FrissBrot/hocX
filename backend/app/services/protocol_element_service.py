@@ -16,6 +16,7 @@ from app.schemas.protocol import (
 )
 from app.services.snapshot_reference_ids import snapshot_reference_ids, translate_attendance_entries, translate_participant_refs
 from app.services import public_id_service
+from app.services.fine_tariff_service import tariff_block_values
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 
 
@@ -44,21 +45,19 @@ class ProtocolElementService:
         blocks_by_element: dict[int, list[ProtocolElementBlockRead]] = {}
         section_titles_by_element_id = resolve_display_section_titles_batch(db, elements, protocol_status or "", protocol_tenant_id)
 
+        fine_values: dict | None = None
         for row in block_rows:
             block = row.ProtocolElementBlock
             config = dict(block.configuration_snapshot_json or {})
-            # For attendance blocks: backfill fine config from element_definition if missing in snapshot
-            if row.element_type_code == "attendance" and row.element_definition_configuration_json:
-                ed_cfg = row.element_definition_configuration_json or {}
-                ed_blocks = ed_cfg.get("blocks") or []
-                fine_source = {}
-                for b in ed_blocks:
-                    if isinstance(b, dict) and b.get("element_type_id") == 9:
-                        fine_source = b.get("configuration_json") or {}
-                        break
-                for fine_key in ("fine_account_id", "fine_amount_late", "fine_amount_absent"):
-                    if config.get(fine_key) is None and fine_source.get(fine_key) is not None:
-                        config[fine_key] = fine_source[fine_key]
+            # Bussen: der Block trägt nur fines_enabled, Konto und Beträge kommen aus dem
+            # zentralen Tarif (fine_tariff_service). attendance-fines.ts liest diese Schlüssel.
+            if row.element_type_code == "attendance":
+                if config.get("fines_enabled") and protocol_tenant_id is not None:
+                    if fine_values is None:
+                        fine_values = tariff_block_values(db, protocol_tenant_id)
+                    config.update(fine_values)
+                else:
+                    config.update({"fine_account_id": None, "fine_amount_late": 0, "fine_amount_absent": 0})
             if row.element_type_code == "attendance":
                 config = translate_attendance_entries(db, config)
             if protocol_tenant_id is not None:

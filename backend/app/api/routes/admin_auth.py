@@ -1,8 +1,14 @@
+import hashlib
+import hmac
+import urllib.parse
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.admin_security import CurrentAdmin, get_optional_current_admin, issue_admin_session_cookie
+from app.core.config import settings
+from app.core.client_ip import client_ip
 from app.core.db import get_db
 from app.models import PlatformAdmin
 from app.schemas.admin import AdminLoginRequest, AdminSessionRead
@@ -15,10 +21,18 @@ router = APIRouter()
 service = AdminAuthService()
 oidc_service = PlatformOidcService()
 
+_OIDC_STATE_COOKIE = "hocx_admin_oidc_state"
+_OIDC_STATE_COOKIE_PATH = "/api/admin/auth/oidc"
+_OIDC_STATE_COOKIE_MAX_AGE = 600
+
+
+def _state_fingerprint(state: str) -> str:
+    return hashlib.sha256(state.encode("utf-8")).hexdigest()
+
 
 @router.post("/login", response_model=AdminSessionRead)
-def login(payload: AdminLoginRequest, response: Response, db: Session = Depends(get_db)):
-    return service.login(db, response, payload)
+def login(payload: AdminLoginRequest, response: Response, request: Request, db: Session = Depends(get_db)):
+    return service.login(db, response, payload, client_address=client_ip(request))
 
 
 # ── MFA (audit finding, 2026-08-27 - platform admins previously had no MFA option at all) ──
@@ -70,11 +84,27 @@ def oidc_authorize(request: Request, redirect_to: str = "/", db: Session = Depen
     # this route is the first point that ever sees the client-controlled query param.
     base = str(request.base_url).rstrip("/")
     url = oidc_service.build_authorize_url(db, base, sanitize_redirect_to(redirect_to))
-    return RedirectResponse(url, status_code=302)
+    response = RedirectResponse(url, status_code=302)
+    # Audit MAIN-SEC-006: state an diesen Browser binden - der Callback akzeptiert nur einen
+    # state, dessen Hash in diesem kurzlebigen httpOnly-Cookie steht (Login-CSRF).
+    state = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query).get("state", [""])[0]
+    response.set_cookie(
+        key=_OIDC_STATE_COOKIE,
+        value=_state_fingerprint(state),
+        httponly=True,
+        secure=settings.auth_secure_cookies,
+        samesite="lax",
+        max_age=_OIDC_STATE_COOKIE_MAX_AGE,
+        path=_OIDC_STATE_COOKIE_PATH,
+    )
+    return response
 
 
 @router.get("/oidc/callback")
 def oidc_callback(code: str, state: str, request: Request, db: Session = Depends(get_db)):
+    expected = request.cookies.get(_OIDC_STATE_COOKIE)
+    if not expected or not hmac.compare_digest(expected, _state_fingerprint(state)):
+        raise HTTPException(status_code=400, detail="OIDC state does not belong to this browser")
     base = str(request.base_url).rstrip("/")
     redirect_to, admin_id = oidc_service.handle_callback(db, code, state, base)
     admin = db.get(PlatformAdmin, admin_id)
@@ -91,4 +121,5 @@ def oidc_callback(code: str, state: str, request: Request, db: Session = Depends
     # top of an org's own IdP-enforced MFA policy). Local password login has no such
     # external factor to lean on, so it goes through AdminMfaService instead.
     issue_admin_session_cookie(redirect, admin.id, mfa_verified=True)
+    redirect.delete_cookie(_OIDC_STATE_COOKIE, path=_OIDC_STATE_COOKIE_PATH)
     return redirect

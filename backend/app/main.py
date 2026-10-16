@@ -244,7 +244,7 @@ async def export_cleanup_loop() -> None:
     await run_advisory_locked_loop(
         name="export_cleanup",
         interval_seconds=settings.export_cleanup_interval_minutes * 60,
-        task=lambda db: export_service.cleanup_old_generated_exports(db),
+        task=export_service.cleanup_old_generated_exports,
     )
 
 
@@ -480,6 +480,30 @@ from app.upload_admission import UploadAdmissionMiddleware
 from app.services.upload_pipeline import GALLERY_REQUEST_MAX_BYTES
 app.add_middleware(UploadAdmissionMiddleware, path="/api/files/gallery-uploads", max_bytes=GALLERY_REQUEST_MAX_BYTES, storage_dir=settings.upload_root)
 
+# Audit MAIN-SEC-004: Multipart nur mit signierter Session und mit Grössenlimit, bevor
+# Starlette den Body auf die Platte spoolt (Galerie hat oben ihre eigene Admission).
+from app.multipart_guard import MultipartGuardMiddleware
+from app.services.upload_pipeline import MAX_UPLOAD_BYTES as _MAX_UPLOAD_BYTES
+_MULTIPART_OVERHEAD_BYTES = 5 * 1024 * 1024
+app.add_middleware(
+    MultipartGuardMiddleware,
+    default_max_bytes=_MAX_UPLOAD_BYTES + _MULTIPART_OVERHEAD_BYTES,
+    path_limits=(
+        ("/api/files/document-uploads", files.MAX_DOCUMENT_UPLOAD_BATCH_BYTES + _MULTIPART_OVERHEAD_BYTES),
+        ("/api/tools/word-import/", word_import.MAX_WORD_IMPORT_BATCH_BYTES + _MULTIPART_OVERHEAD_BYTES),
+        ("/api/admin/tenants/import", admin.MAX_TENANT_IMPORT_UPLOAD_BYTES + _MULTIPART_OVERHEAD_BYTES),
+    ),
+    skip_prefixes=("/api/files/gallery-uploads",),
+)
+
+# MAIN-OPS-013: übrige Bodies (JSON etc.) begrenzen; Multipart deckt der Guard oben ab.
+from app.request_body_limit import RequestBodyLimitMiddleware
+app.add_middleware(
+    RequestBodyLimitMiddleware,
+    max_bytes=settings.max_request_body_bytes,
+    skip_prefixes=("/api/files/gallery-uploads",),
+)
+
 from app.core.maintenance_middleware import MaintenanceMiddleware
 # Vor der Upload-Annahme (äussere Schicht): während einer Wartung wird ein grosser Upload sofort
 # abgewiesen, statt erst gepuffert zu werden. CORS liegt noch weiter aussen, damit auch die
@@ -489,8 +513,7 @@ app.add_middleware(MaintenanceMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o for o in [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
+        *settings.local_dev_origins,
         f"https://{settings.traefik_domain}" if settings.traefik_domain else None,
     ] if o] + sorted(settings.extra_cors_origin_set),
     allow_credentials=True,

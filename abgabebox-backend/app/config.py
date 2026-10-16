@@ -101,6 +101,8 @@ settings = Settings()
 # ABGABEBOX_ENVIRONMENT to one of these to keep today's "no FriendlyCaptcha account needed
 # locally" behavior - otherwise they now fail closed like production, since unset defaults to
 # production-like.
+# Alles andere - auch der Alias 'prod', den aeltere Prod-Hosts ueber HOCX_ENVIRONMENT
+# weiterreichen (Audit MAIN-OPS-001) - gilt als Produktion.
 _DEV_LIKE_ENVIRONMENTS = {"development", "dev", "test", "testing", "local"}
 
 

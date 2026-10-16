@@ -91,6 +91,6 @@ def revoke_share_link(share_link_id: uuid.UUID, db: Session = Depends(get_db), u
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     link = db.get(ShareLink, share_link_id)
-    if link is None or link.tenant_id != user.current_tenant_id:
+    if link is None or not share_link_service.can_manage(db, link, user.current_tenant_id):
         raise HTTPException(status_code=404, detail="Link nicht gefunden")
     share_link_service.revoke(db, link)

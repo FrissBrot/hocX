@@ -11,6 +11,7 @@ import { CHART_COLORS, CHART_PIE_PALETTE } from "@/lib/constants/chart-colors";
 import { browserApiFetch } from "@/lib/api/client";
 import { ChartCycleSelection } from "@/components/protocol/chart-cycle-selection";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { fineCountsByType, fineTotalsByCurrency } from "@/lib/utils/fine-stats";
 
 const STATS_BUMP_EVENT = "hocx:stats-refresh";
 let _statsVersion = 0;
@@ -248,7 +249,13 @@ function ChartPreview({ chartType, cycleKey, data, t, locale }: { chartType: str
   }
 
   if (chartType === "fines_by_participant") {
-    const d = data.fines_by_participant.slice(0, 10).map((f) => ({ name: f.name, amount: f.amount }));
+    // Beträge nur in der Hauptwährung (wie der PDF-Export, MAIN-BE-019).
+    const mainCurrency = fineTotalsByCurrency(data.fines_by_participant)[0]?.currency ?? "";
+    const d = data.fines_by_participant
+      .filter((f) => (f.currency ?? "") === mainCurrency)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 10)
+      .map((f) => ({ name: f.name, amount: f.amount }));
     if (!d.length) return <NoData t={t} />;
     return (
       <ResponsiveContainer width="100%" height={Math.max(h, d.length * 28)}>
@@ -264,7 +271,7 @@ function ChartPreview({ chartType, cycleKey, data, t, locale }: { chartType: str
   }
 
   if (chartType === "fines_by_type") {
-    const d = data.fines_by_type.map((f, i) => ({ name: f.label, value: f.count, color: PIE[i % PIE.length] }));
+    const d = fineCountsByType(data.fines_by_type).map((f, i) => ({ name: f.label, value: f.count, color: PIE[i % PIE.length] }));
     if (!d.length) return <NoData t={t} />;
     return (
       <ResponsiveContainer width="100%" height={h}>

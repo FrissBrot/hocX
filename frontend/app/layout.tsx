@@ -5,8 +5,10 @@ import { Inter } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { getMainAppUrl } from "@/lib/site-config";
+import { ClientMessagesBridge } from "@/components/i18n/client-messages-bridge";
 import { ViewportProvider } from "@/lib/hooks/use-is-mobile";
 import { isMobileUserAgent } from "@/lib/utils/viewport";
+import { NONCE_HEADER } from "@/lib/csp";
 import "./tokens.css";
 import "./globals.css";
 
@@ -47,7 +49,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // volle Prioritaetskette inkl. der gespeicherten Benutzerpraeferenz.
   const locale = await getLocale();
   const messages = await getMessages();
-  const initialMobile = isMobileUserAgent((await headers()).get("user-agent"));
+  const requestHeaders = await headers();
+  const initialMobile = isMobileUserAgent(requestHeaders.get("user-agent"));
+  // Von proxy.ts pro Request gesetzt (Nonce-CSP, MAIN-FE-013).
+  const nonce = requestHeaders.get(NONCE_HEADER) ?? undefined;
 
   return (
     <html lang={locale} className={inter.variable} suppressHydrationWarning>
@@ -57,12 +62,14 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <head>
         <script
           id="hocx-runtime-config"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `window.__HOCX_CONFIG__ = ${JSON.stringify(runtimeConfig).replace(/</g, "\\u003c")};`
           }}
         />
         <script
           id="hocx-theme"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `
               (function () {
@@ -82,6 +89,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       </head>
       <body suppressHydrationWarning>
         <NextIntlClientProvider locale={locale} messages={messages}>
+          <ClientMessagesBridge />
           <ViewportProvider initialMobile={initialMobile}>{children}</ViewportProvider>
         </NextIntlClientProvider>
       </body>

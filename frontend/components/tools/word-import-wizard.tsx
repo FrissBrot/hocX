@@ -15,7 +15,7 @@ import { AssigneeOption, TodoAssigneeMenu } from "@/components/todos/todo-assign
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
-import { EVENT_SYNC_FIELD_LABELS } from "@/lib/constants/event-sync-fields";
+import { syncFieldLabel } from "@/lib/constants/event-sync-fields";
 import {
   analyzeWordImport,
   commitWordImport,
@@ -938,6 +938,7 @@ export function WordImportWizard({
 }) {
   const router = useRouter();
   const t = useTranslations("tools.wordImport");
+  const tSyncFields = useTranslations("templates.elementEditor");
   const steps = wizardSteps(t);
   const tableRolePills = tableRolePillOptions(t);
   // Queue documents live at their own URL (/tools/import/[id], mirroring /protocols/[id])
@@ -3259,7 +3260,7 @@ export function WordImportWizard({
                                     {text.syncFieldStatus === "conflict" ? (
                                       <>
                                         <span>
-                                          Das Feld &quot;{EVENT_SYNC_FIELD_LABELS[text.syncTargetField] ?? text.syncTargetField}&quot; des
+                                          Das Feld &quot;{syncFieldLabel(text.syncTargetField, tSyncFields)}&quot; des
                                           verknüpften Termins enthält bereits einen abweichenden Wert. Welcher Wert soll übernommen werden?
                                         </span>
                                         <div className="word-import-diff-options">
@@ -3299,12 +3300,12 @@ export function WordImportWizard({
                                       </>
                                     ) : text.syncFieldStatus === "match" ? (
                                       <span>
-                                        Dieser Text wird außerdem in das Feld &quot;{EVENT_SYNC_FIELD_LABELS[text.syncTargetField] ?? text.syncTargetField}
+                                        Dieser Text wird außerdem in das Feld &quot;{syncFieldLabel(text.syncTargetField, tSyncFields)}
                                         &quot; des verknüpften Termins geschrieben – der dortige Wert stimmt bereits damit überein.
                                       </span>
                                     ) : (
                                       <span>
-                                        Dieser Text wird außerdem in das Feld &quot;{EVENT_SYNC_FIELD_LABELS[text.syncTargetField] ?? text.syncTargetField}
+                                        Dieser Text wird außerdem in das Feld &quot;{syncFieldLabel(text.syncTargetField, tSyncFields)}
                                         &quot; des verknüpften Termins übernommen (dort aktuell leer).
                                       </span>
                                     )}

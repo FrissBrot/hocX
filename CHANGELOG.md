@@ -55,6 +55,34 @@ Dokumentverarbeitung (Migrationen 0115, 0116, Dienst `document-worker`): RUNBOOK
 Neue Cronjobs und die Anleitung zur ersten Migration: RUNBOOK Abschnitt 13. Das Dateisystem
 bleibt aktiv, bis die Erstmigration im Adminportal gestartet wird.
 
+### Betrieb
+
+- Prod lief bisher mit `HOCX_ENVIRONMENT=prod` und damit für das Backend nicht als
+  Produktion (offenes `/docs`/`/openapi.json`, Demo-Daten- und Konfigurationssperren aus).
+  `deploy.sh` schreibt jetzt `production`, migriert eine bestehende `.env` beim nächsten
+  Deploy automatisch (`prod` → `production`, Sicherung als `.env.bak-*`) und
+  `verify_release.sh` prüft den Produktionsmodus. Backend und Frontend akzeptieren `prod`
+  weiterhin als Alias.
+- Neues `scripts/restore_db.sh` für das Zurückspielen eines Dumps (stoppt die DB-Dienste,
+  sichert den aktuellen Stand, legt die DB neu an, spielt mit `ON_ERROR_STOP` in einer
+  Transaktion ein). Die bisherige RUNBOOK-Anleitung (`gunzip | psql` in die laufende DB) ist
+  ersetzt.
+- `backup_db.sh`, `restore_db.sh` und `run_job.sh` verwenden explizit Compose-Projekt und
+  -Dateien je Host-Markierung; ohne Markierung gilt `HOCX_COMPOSE_PROJECT` (Default `hocx`,
+  für eine über `dev.sh` betriebene Instanz `hocx-dev`). `backup_db.sh` läuft jetzt auch auf
+  Hosts ohne Markierung und meldet eine fehlgeschlagene Offsite-Kopie als Fehler.
+- `deploy.sh` behält nur die neuesten 10 Pre-Deploy-Dumps (`PRE_DEPLOY_BACKUP_KEEP`) und nimmt
+  auf Prod nur noch Release-Tags (`vX.Y.Z`) als `HOCX_VERSION`.
+- Der Env-Loader von `deploy.sh` liest unquotierte Werte mit Inline-Kommentar und Escapes in
+  doppelt quotierten Werten jetzt wie Compose.
+- Redis hängt nur noch im internen Netz `cache` zwischen Backend und Redis.
+- `docker-compose.dev.yml` setzt den Projektnamen fest auf `hocx-dev`. Wer den Dev-Stack bisher
+  ohne `-p` gestartet hat, bekommt dadurch neue (leere) Dev-Volumes.
+- `docker-compose.yml`: `HOCX_ENVIRONMENT` ist per `.env` steuerbar (Default `development`);
+  `.env.example` setzt `ABGABEBOX_ENVIRONMENT` nicht mehr. Bestehende `.env`-Dateien einer
+  Server-Instanz mit `ABGABEBOX_ENVIRONMENT=development` sollten den Eintrag entfernen.
+- Basis-Stack nutzt Traefik v3.6.1 wie der Release-Stack.
+
 ## [1.1.13] - 2026-10-13
 
 Feature-Release auf 1.1.12: Offene Protokolle lassen sich nach Änderungen an der Vorlage

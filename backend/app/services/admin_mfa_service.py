@@ -342,7 +342,8 @@ class AdminMfaService:
             available_methods=methods,
             default_factor_type="totp" if has_factor else None,
             default_factor_label="Authenticator-App" if has_factor else None,
-            can_add_totp=True,
+            # Im Login nur bei Ersteinrichtung neue Faktoren anbieten (MAIN-SEC-001).
+            can_add_totp=not has_factor,
             can_add_passkey=False,
         )
 
@@ -358,8 +359,21 @@ class AdminMfaService:
         self._delete_flow(ticket)
         return context
 
+    def _ensure_login_setup_allowed(self, db: Session, admin_id: int) -> None:
+        """Faktor-Einrichtung im Login-Flow nur ohne bestehenden Faktor (Audit MAIN-SEC-001).
+
+        Sonst genügte das Passwort, um einen eigenen TOTP-Faktor zu registrieren und eine
+        Admin-Session mit ``mfa=True`` zu erhalten.
+        """
+        if self._list_factors(db, admin_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Für dieses Konto ist bereits ein MFA-Faktor eingerichtet. Bitte mit diesem anmelden.",
+            )
+
     def start_login_totp_enrollment(self, db: Session, ticket: str) -> TotpEnrollmentStartRead:
         context = self._load_login_ticket(db, ticket)
+        self._ensure_login_setup_allowed(db, context.admin.id)
         secret = generate_totp_secret()
         flow_token = self._create_flow(
             "admin_login_totp_enrollment",
@@ -378,6 +392,7 @@ class AdminMfaService:
         self, db: Session, *, flow_token: str, code: str, label: str | None
     ) -> AdminPendingLoginContext:
         flow = self._load_flow(flow_token, expected_kind="admin_login_totp_enrollment")
+        self._ensure_login_setup_allowed(db, int(flow["admin_id"]))
         self._complete_totp_enrollment(
             db,
             flow_token=flow_token,

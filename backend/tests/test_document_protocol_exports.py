@@ -70,6 +70,8 @@ def test_repeated_exports_form_versions_of_one_document(db):
     assert versions[0].label is None and versions[1].label == "v0.1"
     assert _pdf_of(db, versions[0]).public_id == second.generated_file_id
     assert _pdf_of(db, versions[1]).public_id == third.generated_file_id
+    # Der Export räumt ältere Caches ab (MAIN-BE-004) - die Datei der alten Version bleibt.
+    assert get_object_store().exists(MAIN, _pdf_of(db, versions[0]).storage_path)
     assert first.generated_file_id != third.generated_file_id
     # Ein Dokument je Protokoll und Exportart - nicht je Datei.
     assert db.scalar(select(Document.id).where(Document.protocol_id == protocol.id).limit(2).offset(1)) is None
