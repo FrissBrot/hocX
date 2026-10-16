@@ -15,6 +15,20 @@ docker compose --env-file .env.test.example "${COMPOSE_FILES[@]}" -f docker-comp
 docker compose -p hocx-tests -f docker-compose.tests.yml --profile tests config --quiet
 docker compose -p hocx-e2e --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.e2e.yml config --quiet
 
+# MAIN-OPS-005: Redis haengt nur im internen Netz "cache", das ausser Redis nur das Backend nutzt.
+assert_redis_isolated() {
+  python3 -c '
+import json, sys
+services = json.load(sys.stdin)["services"]
+redis = sorted((services["redis"].get("networks") or {}).keys())
+assert redis == ["cache"], f"redis-Netze: {redis}"
+users = sorted(n for n, s in services.items() if "cache" in (s.get("networks") or {}))
+assert users == ["backend", "redis"], f"cache-Netz genutzt von: {users}"
+'
+}
+docker compose --env-file .env.prod.example "${COMPOSE_FILES[@]}" config --format json | assert_redis_isolated
+docker compose -p hocx-e2e --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml config --format json | assert_redis_isolated
+
 if grep -q 'env_file:' docker-compose.release.yml; then
   echo "Release-Services duerfen nicht die komplette .env erhalten." >&2
   exit 1

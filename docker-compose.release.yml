@@ -60,6 +60,12 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    # Eigenes internes Netz nur zwischen Backend und Redis (Audit MAIN-OPS-005): Redis haelt
+    # Domain-Bridge- und MFA-Flow-Tokens sowie Lockout-Zaehler ohne eigene Authentifizierung. Im
+    # Default-Netz haette jeder kompromittierte oeffentliche Dienst (abgabebox, Frontends) daraus
+    # eine Sitzung als beliebiger Nutzer erzeugen koennen.
+    networks:
+      - cache
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -185,6 +191,7 @@ services:
     networks:
       - default
       - docker-api
+      - cache
     depends_on:
       db:
         condition: service_healthy
@@ -601,6 +608,9 @@ services:
 networks:
   # Siehe docker-socket-proxy: internes Netz nur zwischen Backend und Proxy.
   docker-api:
+    internal: true
+  # Siehe redis: internes Netz nur zwischen Backend und Redis.
+  cache:
     internal: true
 
 volumes:
