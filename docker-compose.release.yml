@@ -133,7 +133,8 @@ services:
       INITIAL_ADMIN_PASSWORD_FILE: /run/secrets/initial_admin_password
       ABGABEBOX_DB_PASSWORD_FILE: /run/secrets/abgabebox_db_password
       # Migration 0067 creates the hocx_photo_worker role (see photo-analysis-worker/) -
-      # needed here too since this service's image entrypoint runs `alembic upgrade head`.
+      # needed here too since deploy.sh runs `alembic upgrade head` through this service
+      # (`run --rm backend alembic …`); the image's own CMD only starts uvicorn.
       PHOTO_WORKER_DB_PASSWORD_FILE: /run/secrets/photo_worker_db_password
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
@@ -502,7 +503,7 @@ services:
       # endpoint before the app-level size check ever runs. Lowered from 2000 MB (audit
       # finding, 2026-08-25) - routes/public.py's upload() holds every file's full content
       # in memory at once, and 2000 MB reliably OOM-kills the abgabebox-backend container
-      # (384m mem_limit, 2 workers) for every tenant at once. Keep in sync with
+      # (mem_limit damals 384m, heute 1024m, 2 workers) for every tenant at once. Keep in sync with
       # MAX_UPLOAD_REQUEST_BYTES in abgabebox-backend/app/routes/public.py.
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-body-limit.buffering.maxRequestBodyBytes=158334976"
       - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-upload-inflight.inflightreq.amount=2"

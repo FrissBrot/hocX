@@ -556,7 +556,8 @@ services:
       - "traefik.http.routers.abgabebox-public-get.priority=200"
       - "traefik.http.routers.abgabebox-public-get.service=hocx-abgabebox-backend"
       - "traefik.http.routers.abgabebox-public-get.middlewares=abgabebox-public-ratelimit"
-      - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.average=30"
+      # Gleicher Wert wie docker-compose.release.yml (Audit MAIN-OPS-014).
+      - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.average=60"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.burst=20"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.period=1m"
 

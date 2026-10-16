@@ -274,8 +274,9 @@ sudo -iu hocx-deploy
 gh auth status
 ```
 
-Der Token wird von `gh` im geschuetzten Benutzer-Credential-Speicher verwaltet und
-gehoert nicht in `.env`. Die Deployment-Schreibberechtigung kann ohne einen kuenstlichen
+Der Fine-grained-Token liegt mit Dateirechten 600 in `.tools/github-api-token` im
+Repo-Checkout des Benutzers `hocx-deploy` (siehe `scripts/lib/github.sh`) und gehoert nicht in
+`.env`. Die Deployment-Schreibberechtigung kann ohne einen kuenstlichen
 Testeintrag nicht vorab geprueft werden; sie wird spaetestens beim ersten erfolgreichen
 `verify_release.sh test` real validiert. Scheitert dieser Eintrag, bleibt die
 Prod-Promotion gesperrt.

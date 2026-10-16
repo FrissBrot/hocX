@@ -142,8 +142,10 @@ ohne die Compose-Dateien zu ändern.
 
 ## Datenbank und Migrationen
 
-Beim Start des Backends wird automatisch `alembic upgrade head` ausgeführt. Manuelle
-Kontrolle und Migration im laufenden Entwicklungs-Stack:
+Im Entwicklungs-Stack und in der Quellcode-Instanz (`docker-compose.yml`) führt das Backend beim Start
+automatisch `alembic upgrade head` aus. In Test und Produktion migriert `scripts/deploy.sh`
+vor dem Start der neuen Images; das Release-Image selbst startet nur uvicorn. Manuelle Kontrolle und
+Migration im laufenden Entwicklungs-Stack:
 
 ```bash
 docker compose -p hocx-dev exec backend alembic current
@@ -159,7 +161,8 @@ Der einheitliche Test-Runner baut bei Bedarf eigene Python-Test-Images. Die Pyth
 verwenden eine flüchtige PostgreSQL-Instanz und niemals die Entwicklungsdatenbank. Der
 Browserlauf startet ebenfalls einen vollständig separaten Stack unter dem Projektnamen
 `hocx-e2e`, verwendet eigene Ports und löscht anschließend Datenbank-Volume sowie
-E2E-Dateispeicher. Für die beiden Vitest-Befehle muss der Entwicklungs-Stack laufen:
+E2E-Dateispeicher. Die Vitest-Läufe (`frontend`, `abgabebox-frontend`) nutzen eigene
+`frontend-test`-Container und brauchen keinen laufenden Entwicklungs-Stack:
 
 ```bash
 # Gesamte Testsuite
