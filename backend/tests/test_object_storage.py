@@ -117,6 +117,9 @@ def test_put_and_delete_are_journaled_with_increasing_versions(db, tmp_path, mon
     assert rows[1].sha256 == hashlib.sha256(b"v2").hexdigest()
     registry = db.execute(text("SELECT status, version FROM storage_object WHERE namespace='main' AND key=:k"), {"k": key}).one()
     assert (registry.status, registry.version) == ("deleted", 3)
+    # S3-008: physisch entfernt erst der Purge nach dem Commit.
+    assert (tmp_path / key).exists()
+    store.purge_deleted(db)
     assert not (tmp_path / key).exists()
 
 

@@ -13,6 +13,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.models.entities import ProtocolExportCache, StoredFile
 from app.services.export_service import ExportService
+from app.core.storage import get_object_store
 from tests.factories import make_protocol, make_protocol_element, make_template, make_tenant
 from tests.test_export_service import _protocol_with_template_dir
 
@@ -44,6 +45,8 @@ def test_repeated_pdf_export_keeps_only_newest_cache_and_file(db):
     assert len(caches) == 1
     assert caches[0].generated_file_id != first_file_id
     assert db.get(StoredFile, first_file_id) is None
+    # S3-008: physisch entfernt erst der Purge-Job nach dem Commit.
+    get_object_store().purge_deleted(db)
     assert not first_path.exists()
 
 
@@ -105,6 +108,8 @@ def test_sweep_deletes_rows_and_files_but_keeps_final_pdf(db, monkeypatch, tmp_p
     assert result["deleted_rows"] == 2
     assert db.get(StoredFile, open_file_id) is None
     assert db.get(StoredFile, older_file_id) is None
+    # S3-008: physisch entfernt erst der Purge-Job nach dem Commit.
+    get_object_store().purge_deleted(db)
     assert not open_path.exists()
     assert not older_closed_path.exists()
     assert not orphan.exists()

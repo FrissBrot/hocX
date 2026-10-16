@@ -95,6 +95,9 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
     _loop("storage_journal_cleanup", "storage", 24 * 60),
     # Legt Dokumente für Abgabebox-Uploads und den Bestand an, räumt verwaiste Dokumentdateien auf.
     _loop("document_sync", "documents", settings.document_sync_interval_minutes),
+    # Entfernt gelöschte Objekte physisch, sobald die Löschung committet ist (Tombstones, S3-008).
+    # Pausiert während voller Wartung; ein Write-Fence beendet den Tick ohne Fehler.
+    _loop("storage_purge", "storage", 1),
     # Takt kommt aus abgabebox-backend/app/config.py (ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES,
     # Default 30) - das Backend kennt die Einstellung nicht, darum hier mit Reserve.
     JobDefinition(

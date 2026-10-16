@@ -45,6 +45,11 @@ NAMESPACES = ("main", "abgabebox")
 CHUNK_BYTES = 1024 * 1024
 MULTIPART_THRESHOLD_BYTES = 16 * 1024 * 1024
 MULTIPART_CHUNK_BYTES = 16 * 1024 * 1024
+# Advisory-Lock-Klasse (zweiteilige Form, eigener Schlüsselraum neben den bigint-Lock-IDs der
+# Hintergrundjobs) für einzelne Keys: Schreiber halten sie vom physischen Schreiben bis zum Ende
+# ihrer Transaktion, der Purge-Job vor dem physischen Löschen (S3-008).
+KEY_LOCK_CLASS = 0x5303008
+PURGE_BATCH = 200
 MAX_KEY_LENGTH = 1024
 # Wie lange ein Prozess die aktive Konfiguration zwischenspeichert. Schreiber verlassen sich nie
 # darauf (storage_begin_write liefert immer den aktuellen Stand), Leser fragen bei einem
@@ -878,10 +883,18 @@ class ObjectStore:
             },
         )
 
+    @staticmethod
+    def _lock_key(db: Any, namespace: str, key: str) -> None:
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(:cls, hashtext(:ns || '/' || :key))"),
+            {"cls": KEY_LOCK_CLASS, "ns": namespace, "key": key},
+        )
+
     def put_bytes(self, db: Any, namespace: str, key: str, data: bytes, *, content_type: str | None = None) -> ObjectInfo:
         validate_namespace(namespace)
         validate_key(key)
         ticket, backend = self._begin_write(db)
+        self._lock_key(db, namespace, key)
         info = backend.put_stream(namespace, key, io.BytesIO(data), size=len(data), sha256=hashlib.sha256(data).hexdigest(), content_type=content_type)
         self._register(db, ticket, namespace, key, "put", info)
         return info
@@ -896,6 +909,7 @@ class ObjectStore:
                     digest.update(chunk)
             sha256 = digest.hexdigest()
         ticket, backend = self._begin_write(db)
+        self._lock_key(db, namespace, key)
         with path.open("rb") as handle:
             info = backend.put_stream(namespace, key, handle, size=path.stat().st_size, sha256=sha256, content_type=content_type)
         self._register(db, ticket, namespace, key, "put", info)
@@ -906,6 +920,7 @@ class ObjectStore:
         Dateisystem-Backends (lokaler Arbeitsordner == Speicherort), wird nur registriert statt die
         Datei auf sich selbst zu kopieren."""
         ticket, backend = self._begin_write(db)
+        self._lock_key(db, namespace, key)
         local = backend.local_path(namespace, key)
         if local is not None and local.resolve() == path.resolve():
             digest = hashlib.sha256()
@@ -918,11 +933,38 @@ class ObjectStore:
         return self.put_file(db, namespace, key, path, content_type=content_type)
 
     def delete(self, db: Any, namespace: str, key: str) -> None:
+        """Registriert die Löschung in der Transaktion des Aufrufers (Tombstone, S3-008). Physisch
+        entfernt wird das Objekt erst nach dem Commit durch purge_deleted (Job storage_purge) - ein
+        Rollback des Aufrufers lässt es damit unverändert bestehen."""
         validate_namespace(namespace)
         validate_key(key)
-        ticket, backend = self._begin_write(db)
-        backend.delete(namespace, key)
+        ticket, _backend = self._begin_write(db)
         self._register(db, ticket, namespace, key, "delete", None)
+
+    def purge_deleted(self, db: Any, *, limit: int = PURGE_BATCH) -> int:
+        """Löscht committete Tombstones physisch; der Aufrufer committet danach. Die Zeilen sind
+        bis dahin gesperrt (storage_purge_claim), quittiert wird nur die geprüfte Version. Ein Key,
+        den gerade ein Schreiber hält, wird übersprungen und im nächsten Lauf erneut versucht.
+        Tombstones einer älteren Generation werden nur quittiert: deren Bestand verwaltet die
+        Migration (Aufbewahrung/Purge der Generation), nicht dieser Job."""
+        ticket, backend = self._begin_write(db)
+        rows = db.execute(text("SELECT * FROM storage_purge_claim(:limit)"), {"limit": limit}).all()
+        purged = 0
+        for row in rows:
+            namespace, key, version, generation = row.namespace, row.key, int(row.version), int(row.generation)
+            if generation == ticket.generation:
+                acquired = db.execute(
+                    text("SELECT pg_try_advisory_xact_lock(:cls, hashtext(:ns || '/' || :key))"),
+                    {"cls": KEY_LOCK_CLASS, "ns": namespace, "key": key},
+                ).scalar()
+                if not acquired:
+                    continue
+                backend.delete(namespace, key)
+            done = db.execute(
+                text("SELECT storage_purge_done(:ns, :key, :version)"), {"ns": namespace, "key": key, "version": version}
+            ).scalar()
+            purged += int(bool(done))
+        return purged
 
     def discard_unregistered(self, namespace: str, key: str) -> None:
         """Entfernt ein Objekt physisch, ohne das Register anzufassen - nur für Objekte, deren
@@ -938,6 +980,7 @@ class ObjectStore:
         validate_key(source_key)
         validate_key(target_key)
         ticket, backend = self._begin_write(db)
+        self._lock_key(db, namespace, target_key)
         info = backend.copy(namespace, source_key, target_key)
         if info.sha256 is None:
             digest = hashlib.sha256()

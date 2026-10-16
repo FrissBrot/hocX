@@ -57,6 +57,7 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     # 202600026 statt 202600023: diese ID hält storage_migration_service.create_migration als
     # Transaktions-Lock (gegenseitiges Blockieren bzw. übersprungene Ticks).
     "document_sync": 202600026,
+    "storage_purge": 202600025,  # 202600024 ist auf feature/borg-backup-restore vergeben (backup_worker_repository)
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

@@ -12,6 +12,7 @@ from starlette.datastructures import Headers
 from app.api.routes import files as files_routes
 from app.models import ProtocolImage, StoredFile
 from app.services.file_service import FileService, _safe_storage_path
+from app.core.storage import get_object_store
 from tests.factories import (
     make_current_user,
     make_protocol,
@@ -93,6 +94,8 @@ def test_delete_last_protocol_image_reference_removes_file_and_thumbnail(db):
     service.delete_protocol_image(db, image_a.id)
 
     assert db.get(StoredFile, stored_file_id) is None
+    # S3-008: physisch entfernt erst der Purge-Job nach dem Commit.
+    get_object_store().purge_deleted(db)
     assert not file_path.exists()
     if thumb_path is not None:
         assert not Path(thumb_path).exists()

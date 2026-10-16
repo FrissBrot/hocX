@@ -23,8 +23,10 @@ Installationen aktualisieren können.
   erfüllten Bedingungen. Serverseitige Sperre (503 + Retry-After, WebSocket 1013) für Backend
   und Abgabebox, Wartungshinweis auf der Anmeldeseite, konservative Dauerabschätzung.
 - Neue Jobs: `storage_migration_worker`, `maintenance_supervisor`, `storage_journal_cleanup`,
-  `storage_controller`, `backup_storage`; neue Systemprüfungen `object_storage`,
+  `storage_purge`, `storage_controller`, `backup_storage`; neue Systemprüfungen `object_storage`,
   `storage_migration`.
+- Gelöschte Dateien werden erst nach dem Commit physisch entfernt (Tombstone + Job
+  `storage_purge`): scheitert eine Löschung in der Datenbank, bleibt die Datei erhalten.
 
 ### Neu: Dokumentverwaltung mit PDF-Ansicht und Textextraktion
 

@@ -420,6 +420,15 @@ async def document_sync_loop() -> None:
     )
 
 
+async def storage_purge_loop() -> None:
+    """Gelöschte Objekte nach dem Commit physisch entfernen (Tombstones, S3-008)."""
+    await run_advisory_locked_loop(
+        name="storage_purge",
+        interval_seconds=60,
+        task=storage_migration_service.purge_deleted_objects,
+    )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     FileService().ensure_storage()
@@ -446,10 +455,12 @@ async def lifespan(_: FastAPI):
         maintenance_supervisor_task = asyncio.create_task(maintenance_supervisor_loop())
         storage_journal_cleanup_task = asyncio.create_task(storage_journal_cleanup_loop())
         document_sync_task = asyncio.create_task(document_sync_loop())
+        storage_purge_task = asyncio.create_task(storage_purge_loop())
         yield
         maintenance_supervisor_task.cancel()
         storage_journal_cleanup_task.cancel()
         document_sync_task.cancel()
+        storage_purge_task.cancel()
         health_check_task.cancel()
         photo_analysis_auto_queue_task.cancel()
         photo_quality_backfill_task.cancel()

@@ -159,6 +159,8 @@ def test_backfill_skips_exports_whose_file_is_gone(db):
     _tenant, _template, protocol = _protocol_with_template_dir(db)
     gone = _legacy_export(db, protocol, "A", minutes_ago=10)
     get_object_store().delete(db, MAIN, gone.storage_path)
+    # S3-008/DOCMGMT-005: physisch entfernt erst der Purge-Job nach dem Commit.
+    get_object_store().purge_deleted(db)
     protocol_export_document_service.backfill(db, limit=10_000)
     assert _protocol_document(db, protocol.id) is None
 
@@ -177,6 +179,8 @@ def test_export_retention_keeps_files_that_are_document_versions(db):
     service.cleanup_old_generated_exports(db, retention_days=1)
 
     assert store.exists(MAIN, kept.storage_path)
+    # S3-008/DOCMGMT-005: physisch entfernt erst der Purge-Job nach dem Commit.
+    store.purge_deleted(db)
     assert not store.exists(MAIN, unreferenced_key)
 
 

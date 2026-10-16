@@ -238,6 +238,8 @@ def test_missing_original_object_is_not_retried_forever(db, document_storage):
     stored_file = gallery_document(db, tenant.id, "sample.md")
     document = document_service.register_upload(db, stored_file)
     get_object_store().delete(db, MAIN, stored_file.storage_path)
+    # S3-008/DOCMGMT-005: physisch entfernt erst der Purge-Job nach dem Commit.
+    get_object_store().purge_deleted(db)
     job = _jobs(db, document)["extract"]
     job.max_attempts = 1
     db.flush()
@@ -364,6 +366,8 @@ def test_reconversion_replaces_previous_generated_pdf(db, document_storage):
     second = _files(db, document.current_version_id)["pdf"]
     assert second.stored_file_id != first_id
     assert db.scalar(select(StoredFile.id).where(StoredFile.id == first_id)) is None
+    # S3-008/DOCMGMT-005: physisch entfernt erst der Purge-Job nach dem Commit.
+    get_object_store().purge_deleted(db)
     assert not get_object_store().exists(MAIN, first_key)
 
 
@@ -380,6 +384,8 @@ def test_releasing_the_original_removes_document_and_generated_files(db, documen
     db.flush()
     assert db.scalar(select(Document.id).where(Document.id == document.id)) is None
     assert db.scalar(select(StoredFile.id).where(StoredFile.id == pdf_id)) is None
+    # S3-008/DOCMGMT-005: physisch entfernt erst der Purge-Job nach dem Commit.
+    get_object_store().purge_deleted(db)
     assert not get_object_store().exists(MAIN, pdf_key)
     # Das Original selbst gehört dem Uploadweg und bleibt.
     assert db.scalar(select(StoredFile.id).where(StoredFile.id == stored_file.id)) == stored_file.id

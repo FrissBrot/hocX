@@ -358,6 +358,10 @@
         "title": "Nettoyage du journal de stockage",
         "description": "Supprime les anciennes entrées du journal des modifications dont aucune migration ouverte n'a plus besoin."
       },
+      "storage_purge": {
+        "title": "Purge des objets de stockage supprimés",
+        "description": "Supprime physiquement les fichiers supprimés du stockage dès que la suppression est enregistrée."
+      },
       "storage_migration_worker": {
         "title": "Worker de migration du stockage",
         "description": "Copie, vérifie et bascule le stockage des fichiers (signe de vie de la boucle d'interrogation)."

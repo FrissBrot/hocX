@@ -20,6 +20,7 @@ from app.models.entities import PhotoAlbum, PhotoAlbumItem, ProtocolImage, Store
 from app.schemas.files import FileBulkDelete, FileBulkTagsUpdate, PhotoAlbumItemBestUpdate
 from app.services import photo_album_service
 from app.services.file_service import FileService
+from app.core.storage import get_object_store
 from tests.factories import (
     make_current_user,
     make_protocol,
@@ -81,6 +82,8 @@ def test_delete_gallery_images_removes_row_and_disk_files(db):
     assert deleted == [item.id]
     assert errors == []
     assert service.stored_file_repository.get_by_public_id(db, item.id, tenant_id=tenant.id) is None
+    # S3-008: physisch entfernt erst der Purge-Job nach dem Commit.
+    get_object_store().purge_deleted(db)
     assert not disk_path.exists()
 
 

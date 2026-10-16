@@ -56,7 +56,8 @@ Generation in der Rückfallfrist halten, lassen sich weder löschen noch in ihre
 ## Monitoring
 
 - **/admin/jobs**: `storage_migration_worker` (Heartbeat, Alarm nach 5 min Stille),
-  `maintenance_supervisor`, `storage_journal_cleanup`, `storage_controller` (Host-Cron).
+  `maintenance_supervisor`, `storage_journal_cleanup`, `storage_purge` (entfernt gelöschte
+  Objekte nach dem Commit, pausiert bei Wartung/Fence), `storage_controller` (Host-Cron).
 - **/admin/system** und ntfy: `object_storage` (aktiver Speicher erreichbar, kritisch bei Ausfall),
   `storage_migration` (Warnung bei hängendem Worker, Retries oder dauerhaft fehlgeschlagenen
   Objekten, kritisch bei `rollback_required`), `storage` (lokaler Plattenplatz).

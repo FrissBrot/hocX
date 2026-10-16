@@ -93,6 +93,8 @@ class StorageObject(Base):
     version: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"))
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'active'"))
     generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # Tombstone: Löschung committet, physisches Entfernen durch den Job storage_purge offen (S3-008).
+    purge_pending: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = _now()
     updated_at: Mapped[datetime] = _now()
 
