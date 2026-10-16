@@ -54,12 +54,13 @@ persistente Ort aus der Speichermatrix ([Dateispeicher](../storage/architektur.m
 | Ort | Gesichert | Bemerkung |
 |---|---|---|
 | Uploads (Galerie, Dokumente, Protokollbilder, Live-Photo-Clips, Word-Importe), Mandantenlogos | ja | Objekte `main` |
-| Erzeugte PDF-Exporte | ja | Objekte `main`, im Rahmen von `EXPORT_RETENTION_DAYS` |
-| Dokumentvorlagen-Bauteile und Vorlagen-Snapshots | ja | Objekte `main` |
+| Erzeugte PDF-Exporte der Dokument-Engine | ja | Objekte `main`, im Rahmen von `EXPORT_RETENTION_DAYS`; Versionen logischer Dokumente (Dateien-Tab) ohne Frist |
+| Document-Studio-Assets (Logos, Bilder, Schriften, auch aus alten Vorlagen übernommene) | ja | Objekte `main` (`document_asset.storage_path`) |
+| Erzeugte Dateien logischer Dokumente (PDF-Ansicht, Vorschaubild der ersten Seite) | ja | Objekte `main`; die Extraktion liegt in der Datenbank |
 | Mandanten-Klon/-Import-Dateien | ja | Objekte im jeweiligen Namespace |
 | Abgabebox-Uploads inkl. Quarantäne | ja | Objekte `abgabebox` |
 | Datenbank inkl. Konfiguration (Custom-Domains, Speicherprofile verschlüsselt) | ja | Dump |
-| Thumbnails, materialisierte Vorlagen, `latex_templates/` | nein | Caches, werden neu erzeugt |
+| Thumbnails, Vorschaubilder der Studio-Vorlagen (`document_thumbnails/`) | nein | Caches, werden neu erzeugt |
 | Upload-Zwischenablage (`uploads/_staging`, `_multipart`), Export-Arbeitsordner | nein | temporär, siehe unten |
 | Traefik-Konfiguration für Custom-Domains | nein | wird beim Start aus der Datenbank erzeugt |
 | `.env`, `STORAGE_CREDENTIALS_KEY`, Borg-Passphrase/-Schlüssel | nein | gehören in die Notfallmappe ([Betrieb](betrieb.md)) |
@@ -71,7 +72,8 @@ auszulassen (bewusst übersteuerbar mit `BACKUP_TRUST_FILESYSTEM_REGISTRY`).
 Einzige fachliche Lücke: ZIP- bzw. Sammel-Uploads, die zum Backup-Zeitpunkt noch in der
 Warteschlange standen (`gallery_upload_job` mit Status `queued`/`running`). Ihre Zeile ist im
 Dump, die zwischengespeicherte Datei nicht. Nach einer Wiederherstellung schlagen diese Aufträge
-sichtbar fehl und müssen neu hochgeladen werden.
+sichtbar fehl und müssen neu hochgeladen werden. Aufträge des document-worker (`document_job`)
+liegen vollständig in der Datenbank und laufen nach einer Wiederherstellung einfach erneut.
 
 ## Repository-Layout im Borg-Repository
 
