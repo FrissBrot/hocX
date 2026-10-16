@@ -181,3 +181,23 @@ __all__ += [
     "StorageProfile",
     "StorageState",
 ]
+
+from app.models.backup_entities import (  # noqa: E402 - eigene Datei, siehe Migration 0115
+    BackupContent,
+    BackupEvent,
+    BackupJob,
+    BackupPoolArchive,
+    BackupRestoreJob,
+    BackupSet,
+    BackupSettings,
+)
+
+__all__ += [
+    "BackupContent",
+    "BackupEvent",
+    "BackupJob",
+    "BackupPoolArchive",
+    "BackupRestoreJob",
+    "BackupSet",
+    "BackupSettings",
+]

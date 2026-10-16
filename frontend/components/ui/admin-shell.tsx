@@ -14,7 +14,7 @@ import { AdminAccountSettings } from "@/components/admin/admin-account-settings"
 import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
-type AdminIconKey = "dashboard" | "tenants" | "pricing" | "users" | "domains" | "verifications" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security" | "storage" | "maintenance";
+type AdminIconKey = "dashboard" | "tenants" | "pricing" | "users" | "domains" | "verifications" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security" | "storage" | "backups" | "maintenance";
 
 type AdminNavLink = { href: string; labelKey: string; icon: AdminIconKey; badge?: "count" };
 
@@ -40,6 +40,7 @@ const navGroups: { titleKey: string | null; links: AdminNavLink[] }[] = [
       { href: "/admin/upload-pipeline", labelKey: "nav.uploadPipeline", icon: "pipeline" },
       { href: "/admin/jobs", labelKey: "nav.jobs", icon: "jobs" },
       { href: "/admin/storage", labelKey: "nav.storage", icon: "storage" },
+      { href: "/admin/backups", labelKey: "nav.backups", icon: "backups" },
       { href: "/admin/maintenance", labelKey: "nav.maintenance", icon: "maintenance" },
       { href: "/admin/notifications", labelKey: "nav.notifications", icon: "notifications" },
     ],
@@ -144,6 +145,13 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
         <ellipse cx="12" cy="6" rx="7.5" ry="2.5" />
         <path d="M4.5 6v6c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5V6" />
         <path d="M4.5 12v6c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5v-6" />
+      </>
+    ),
+    backups: (
+      <>
+        <path d="M4.5 12a7.5 7.5 0 101.9-5" />
+        <path d="M4.5 4.5V8H8" />
+        <path d="M12 8v4l2.5 1.5" />
       </>
     ),
     maintenance: (

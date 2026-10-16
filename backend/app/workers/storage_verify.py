@@ -26,7 +26,7 @@ from typing import Any
 from sqlalchemy import select
 
 from app.core.db import SessionLocal
-from app.core.objstore_client import StorageError
+from app.core.objstore_client import StorageError, is_internal_key
 from app.core.storage import get_object_store
 from app.models import StorageObject
 from app.services.storage_migration_service import EXPORT_REFERENCE_KIND, database_references
@@ -58,6 +58,8 @@ def verify(*, full: bool = False) -> dict[str, Any]:
     present: dict[tuple[str, str], int] = {}
     for namespace in ("main", "abgabebox"):
         for info in backend.list(namespace, ""):
+            if is_internal_key(info.key):
+                continue
             present[(namespace, info.key)] = info.size
     present_dirs = {(ns, "/".join(key.split("/")[:i]) + "/") for ns, key in present for i in range(1, len(key.split("/")))}
     for (namespace, key), kind in refs.items():
@@ -86,7 +88,7 @@ def verify(*, full: bool = False) -> dict[str, Any]:
     if registry:
         # Nur sinnvoll, wenn das Register befüllt ist (nach der Erstmigration).
         report["unregistered_objects"] = [
-            {"namespace": ns, "key": key} for ns, key in sorted(present) if (ns, key) not in registry and not key.startswith("_hocx-connection-test/")
+            {"namespace": ns, "key": key} for ns, key in sorted(present) if (ns, key) not in registry
         ]
     counts = {name: len(report[name]) for name in ("missing_references", "expired_exports", "registry_missing", "registry_mismatch", "unregistered_objects")}
     for name in counts:

@@ -188,6 +188,21 @@
         "title": "Migration du stockage",
         "detail": "{verified, number} objets vérifiés sur {total, number} · {dead, number} en échec définitif",
         "problem": "La migration du stockage requiert de l'attention"
+      },
+      "backup": {
+        "title": "Sauvegarde",
+        "detail": "{state, select, disabled {Non configurée} never {Aucune sauvegarde réussie} other {Dernière sauvegarde réussie il y a {hours, number} h}} · {points, number} points de restauration",
+        "problem": "Sauvegarde en retard ou non configurée"
+      },
+      "backup_repository": {
+        "title": "Dépôt de sauvegarde",
+        "detail": "{reachable, select, yes {Storage Box accessible} other {Storage Box inaccessible}} · {quota, select, yes {{usedPercent, number} % occupé} other {capacité inconnue}}",
+        "problem": "Dépôt de sauvegarde en panne ou plein"
+      },
+      "backup_verification": {
+        "title": "Contrôles de sauvegarde",
+        "detail": "{verified, select, yes {Vérifiée il y a {verifyDays, number} jours} other {Jamais vérifiée}} · {tested, select, yes {Test de restauration il y a {testDays, number} jours} other {Aucun test de restauration}}",
+        "problem": "Vérification ou test de restauration en retard"
       }
     },
     "problems": {
@@ -376,6 +391,26 @@
       "backup_storage": {
         "title": "Sauvegarde des fichiers",
         "description": "Sauvegarde de manière incrémentielle les objets de la génération de stockage active après la sauvegarde de la base de données et vérifie le résultat."
+      },
+      "backup_worker": {
+        "title": "Worker de sauvegarde",
+        "description": "Planifie et exécute sauvegardes, vérifications, tests de restauration et restaurations (conteneur backup-worker)."
+      },
+      "backup_run": {
+        "title": "Sauvegarde (Borg)",
+        "description": "Sauvegarde chiffrée de la base et du stockage de fichiers sur la Storage Box, toutes les 6 heures par défaut."
+      },
+      "backup_retention": {
+        "title": "Conservation des sauvegardes",
+        "description": "Supprime les points et contenus devenus inutiles après vérification de toutes les références."
+      },
+      "backup_verify": {
+        "title": "Vérification d'intégrité",
+        "description": "Vérifie le dépôt, les archives, le dump de la base et un échantillon des fichiers."
+      },
+      "backup_restore_test": {
+        "title": "Test de restauration",
+        "description": "Restaure le dernier point dans une base isolée et vérifie références et application."
       }
     }
   },

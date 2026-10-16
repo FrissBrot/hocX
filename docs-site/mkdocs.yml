@@ -106,6 +106,7 @@ nav:
       - Import-Testbook: technik/import-testbook.md
       - Abgabe-Links-Testbook: technik/abgabe-links-testbook.md
       - Upload-Testbook: technik/upload-testbook.md
+      - Backup-Testbook: technik/backup-testbook.md
       - Sicherheit: technik/sicherheit.md
       - Dateispeicher (S3) & Wartung:
           - Übersicht: technik/storage/index.md
@@ -114,5 +115,11 @@ nav:
           - Lokales S3: technik/storage/lokales-s3.md
           - Migrationen: technik/storage/migration.md
           - Wartungsmodus: technik/storage/wartung.md
-          - Backup & Recovery: technik/storage/backup.md
+          - Backup & Recovery (bisher): technik/storage/backup.md
+      - Backup (BorgBackup):
+          - Übersicht: technik/backup/index.md
+          - Architektur: technik/backup/architektur.md
+          - Einrichtung & Betrieb: technik/backup/betrieb.md
+          - Wiederherstellung: technik/backup/restore.md
+          - Sicherheit: technik/backup/sicherheit.md
       - Bekannte offene Punkte: technik/offene-punkte.md

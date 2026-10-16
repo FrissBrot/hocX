@@ -59,6 +59,14 @@ if [ "$STACK_KIND" = test ]; then
   fail "Dieser Host ist als 'test' provisioniert - dort liegen nur Demo-Daten, kein Backup."
 fi
 
+# Abgelöst durch das Borg-Backup (docs-site/docs/technik/backup/, RUNBOOK Abschnitt 7): sobald
+# es aktiv ist, laeuft dieses Skript nicht mehr unkontrolliert parallel. Bestehende Dumps in
+# backups/ bleiben unangetastet. Bewusst trotzdem ausfuehren: HOCX_LEGACY_BACKUP_FORCE=true.
+if [ "${BACKUP_ENABLED:-false}" = true ] && [ "${HOCX_LEGACY_BACKUP_FORCE:-false}" != true ]; then
+  log "Borg-Backup ist aktiv (BACKUP_ENABLED=true) - lokales Cron-Backup uebersprungen. Cron-Eintrag entfernen (RUNBOOK Abschnitt 7)."
+  exit 0
+fi
+
 : "${POSTGRES_USER:?POSTGRES_USER fehlt in $ENV_FILE}"
 : "${POSTGRES_DB:?POSTGRES_DB fehlt in $ENV_FILE}"
 

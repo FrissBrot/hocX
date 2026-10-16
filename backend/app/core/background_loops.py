@@ -54,7 +54,7 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "task_package_rollover": 202600018,
     "maintenance_supervisor": 202600019,
     "storage_journal_cleanup": 202600020,
-    "storage_purge": 202600025,  # 202600024 ist auf feature/borg-backup-restore vergeben (backup_worker_repository)
+    "storage_purge": 202600025,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht
@@ -72,6 +72,8 @@ RESERVED_LOCK_IDS: dict[str, int] = {
     "startup_local_storage_profile": 202600021,
     "storage_worker_claim": 202600022,
     "storage_migration_create": 202600023,  # storage_migration_service.create_migration
+    # Backup-Worker: genau ein Schreiber auf Repository und Inhaltsindex (app/workers/backup_worker.py).
+    "backup_worker_repository": 202600024,
 }
 
 _ALL_LOCK_IDS = [*BACKGROUND_LOCK_IDS.values(), *EXTERNAL_LOCK_IDS.values(), *RESERVED_LOCK_IDS.values()]

@@ -22,6 +22,7 @@
     "security": "Sicurezza",
     "verifications": "Verifiche",
     "storage": "Archiviazione",
+    "backups": "Backup",
     "maintenance": "Manutenzione"
   },
   "logout": "Disconnetti",

@@ -72,7 +72,8 @@
     "manual": "Manual maintenance",
     "storage_initial_migration": "Initial file storage migration",
     "storage_cutover": "Storage cutover",
-    "other": "System job"
+    "other": "System job",
+    "backup_restore": "Restore from backup"
   },
   "state": {
     "scheduled": "Scheduled",
@@ -98,7 +99,9 @@
     "storage_initial_migration": "Initial storage migration",
     "storage_cutover": "Storage cutover",
     "other": "System job",
-    "manual": "Administrator"
+    "manual": "Administrator",
+    "backup_restore": "Full restore (backup)",
+    "backup_restore_cli": "Restore via recovery CLI"
   },
   "feature": {
     "all": "Entire application",

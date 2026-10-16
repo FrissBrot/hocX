@@ -72,7 +72,8 @@
     "manual": "Manutenzione manuale",
     "storage_initial_migration": "Migrazione iniziale dell'archivio",
     "storage_cutover": "Passaggio dell'archivio",
-    "other": "Processo di sistema"
+    "other": "Processo di sistema",
+    "backup_restore": "Ripristino dal backup"
   },
   "state": {
     "scheduled": "Pianificata",
@@ -98,7 +99,9 @@
     "storage_initial_migration": "Migrazione iniziale dell'archivio",
     "storage_cutover": "Passaggio dell'archivio",
     "other": "Processo di sistema",
-    "manual": "Amministratore"
+    "manual": "Amministratore",
+    "backup_restore": "Ripristino completo (backup)",
+    "backup_restore_cli": "Ripristino tramite CLI di recupero"
   },
   "feature": {
     "all": "Intera applicazione",

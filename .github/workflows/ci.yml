@@ -30,6 +30,7 @@ jobs:
           bash scripts/tests/test_env_migrate.sh
           bash scripts/tests/test_run_job.sh
           bash scripts/tests/test_backup_restore.sh
+          bash scripts/tests/test_legacy_backup_guard.sh
           bash scripts/sync-design-tokens.sh --check
           python3 scripts/check-design-rules.py
 
@@ -156,6 +157,24 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends poppler-utils
+
+      # Backup-Tests (tests/test_backup_*.py) brauchen borg 1.4 - Ubuntu liefert nur 1.2, auf PyPI
+      # gibt es keine Wheels. Scheitert der Build, werden diese Tests übersprungen (requires_borg)
+      # statt die CI zu blockieren; vollständig laufen sie im Backend-Testimage (scripts/test.sh).
+      - name: Install BorgBackup 1.4 for backup tests
+        run: |
+          sudo apt-get install -y --no-install-recommends libacl1-dev liblz4-dev libzstd-dev libxxhash-dev libssl-dev pkg-config \
+            && pip install "borgbackup==1.4.1" \
+            || echo "borg 1.4 nicht installiert - Borg-Tests werden übersprungen"
+
+      # Backup-Tests (tests/test_backup_*.py) brauchen borg 1.4 - Ubuntu liefert nur 1.2, auf PyPI
+      # gibt es keine Wheels. Scheitert der Build, werden diese Tests übersprungen (requires_borg)
+      # statt die CI zu blockieren; vollständig laufen sie im Backend-Testimage (scripts/test.sh).
+      - name: Install BorgBackup 1.4 for backup tests
+        run: |
+          sudo apt-get install -y --no-install-recommends libacl1-dev liblz4-dev libzstd-dev libxxhash-dev libssl-dev pkg-config \
+            && pip install "borgbackup==1.4.1" \
+            || echo "borg 1.4 nicht installiert - Borg-Tests werden übersprungen"
 
       - name: Run alembic upgrade head against a fresh database
         working-directory: backend

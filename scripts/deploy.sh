@@ -436,7 +436,66 @@ write_secret_files() {
   write_secret_file "$secrets_dir" local_s3_secret_key "$LOCAL_S3_SECRET_KEY"
   write_secret_file "$secrets_dir" local_s3_abgabebox_secret_key "$LOCAL_S3_ABGABEBOX_SECRET_KEY"
   write_secret_file "$secrets_dir" redis_password "$REDIS_PASSWORD"
+  # Backup (docs-site/docs/technik/backup/betrieb.md): Passphrase aus .env, SSH-Schlüssel und
+  # known_hosts als Dateien auf dem Host. Nicht konfiguriert = leere Platzhalter (der
+  # backup-worker meldet dann "nicht eingerichtet" statt dass Compose den Start verweigert).
+  write_secret_file "$secrets_dir" backup_passphrase "${BACKUP_PASSPHRASE:-}"
+  copy_secret_file "$secrets_dir" backup_ssh_key "${BACKUP_SSH_KEY_PATH:-}" || return 1
+  copy_secret_file "$secrets_dir" backup_known_hosts "${BACKUP_KNOWN_HOSTS_PATH:-}" || return 1
   echo "    Secret-Dateien aktuell: $secrets_dir"
+}
+
+copy_secret_file() {
+  local secrets_dir="$1" name="$2" source="$3" mode owner_uid
+  if [ -z "$source" ]; then
+    write_secret_file "$secrets_dir" "$name" ""
+    return 0
+  fi
+  if [ ! -f "$source" ] || [ -L "$source" ]; then
+    echo "$source (fuer $name) muss eine regulaere Datei und darf kein Symlink sein." >&2
+    return 1
+  fi
+  owner_uid="$(stat -c '%u' "$source")"
+  mode="$(stat -c '%a' "$source")"
+  if { [ "$owner_uid" != "$EUID" ] && [ "$owner_uid" != 0 ]; } || (( (8#$mode & 077) != 0 )); then
+    echo "Unsichere Rechte fuer $source: Besitzer $owner_uid, Modus $mode (erwartet: eigener Benutzer, 600)." >&2
+    return 1
+  fi
+  write_secret_file "$secrets_dir" "$name" "$(cat "$source")
+"
+}
+
+# Vor Datenbankmigrationen: geschütztes Backup über den laufenden backup-worker, auf dessen Ende
+# gewartet wird. Ohne erfolgreiches Backup bricht der Deploy ab - ausser HOCX_PRE_DEPLOY_BACKUP=skip
+# ist bewusst gesetzt (dann bleibt der lokale pg_dump oben die einzige Absicherung).
+run_pre_deploy_backup() {
+  if [ "${BACKUP_ENABLED:-false}" != true ]; then
+    echo "    Borg-Backup nicht eingerichtet - nur lokaler Datenbank-Dump."
+    return 0
+  fi
+  if [ "${HOCX_PRE_DEPLOY_BACKUP:-required}" = skip ]; then
+    echo "    WARNUNG: HOCX_PRE_DEPLOY_BACKUP=skip - Deploy ohne vorheriges Offsite-Backup (bewusste Entscheidung)."
+    return 0
+  fi
+  if ! "${DC[@]}" ps backup-worker --status running -q 2>/dev/null | grep -q .; then
+    echo "backup-worker laeuft nicht - kein Backup vor dem Update moeglich." >&2
+    echo "Entweder backup-worker starten oder bewusst HOCX_PRE_DEPLOY_BACKUP=skip setzen." >&2
+    return 1
+  fi
+  # Teilweise erfolgreich (Datenbank-Dump vollstaendig, einzelne Objekte fehlen schon vorher)
+  # blockiert den Deploy nicht; die fehlenden Objekte stehen im Log. Streng: ..._ALLOW_PARTIAL=false.
+  local partial_args=(--accept-partial)
+  if [ "${HOCX_PRE_DEPLOY_BACKUP_ALLOW_PARTIAL:-true}" = false ]; then
+    partial_args=()
+  fi
+  echo "==> [$ENVIRONMENT] Offsite-Backup vor dem Update (geschuetzt, wartet auf Abschluss bzw. ein laufendes Backup)"
+  if ! "${DC[@]}" exec -T backup-worker python -m app.backup.cli enqueue-backup --trigger pre_deploy \
+      --key "$HOCX_VERSION-$(date +%Y%m%d%H%M%S)" --protect --reason "Vor Update auf $HOCX_VERSION" \
+      --wait --timeout "${HOCX_PRE_DEPLOY_BACKUP_TIMEOUT:-7200}" "${partial_args[@]}"; then
+    echo "Offsite-Backup vor dem Update fehlgeschlagen - Update abgebrochen, die laufende App ist unveraendert." >&2
+    echo "Details: Admin-Portal -> System -> Backups. Bewusst ohne Backup: HOCX_PRE_DEPLOY_BACKUP=skip." >&2
+    return 1
+  fi
 }
 
 prepare_runtime_permissions() {
@@ -484,7 +543,7 @@ prepare_thumbnail_dir() {
   local dir
 
   echo "==> [$ENVIRONMENT] Lokale Arbeitsverzeichnisse vorbereiten"
-  for dir in "$base/thumbnails" "$base/work" "$PROJECT_DIR/backups/storage"; do
+  for dir in "$base/thumbnails" "$base/work" "$PROJECT_DIR/backups/storage" "$PROJECT_DIR/backups/borg-work"; do
     if [ -L "$base" ] || [ -L "$dir" ]; then
       echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
       return 1
@@ -733,6 +792,9 @@ if "${DC[@]}" ps db --status running -q > /dev/null 2>&1 && [ -n "$("${DC[@]}" p
   prune_pre_deploy_backups "$BACKUP_DIR" "${PRE_DEPLOY_BACKUP_KEEP:-10}"
 else
   echo "    db-Container laeuft noch nicht (erster Deploy) - kein Backup noetig."
+fi
+if "${DC[@]}" ps db --status running -q > /dev/null 2>&1 && [ -n "$("${DC[@]}" ps db --status running -q)" ]; then
+  run_pre_deploy_backup || exit 1
 fi
 
 echo "==> [$ENVIRONMENT] Pull Images ($HOCX_VERSION)"

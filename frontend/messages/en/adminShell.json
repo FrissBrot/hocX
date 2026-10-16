@@ -22,6 +22,7 @@
     "security": "Security",
     "verifications": "Verifications",
     "storage": "Storage",
+    "backups": "Backups",
     "maintenance": "Maintenance"
   },
   "logout": "Log out",

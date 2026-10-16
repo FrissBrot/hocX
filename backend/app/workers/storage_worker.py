@@ -59,6 +59,7 @@ from app.core.objstore_client import (
     StorageIntegrityError,
     StorageThrottled,
     StorageUnavailable,
+    is_internal_key,
     validate_key,
 )
 from app.core.storage import get_object_store
@@ -532,6 +533,10 @@ def phase_inventory(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
             ctx.check()
             if info.size < 0:
                 raise sms.MigrationError(f"Ungültiger Dateiname: {namespace}/{info.key}")
+            if is_internal_key(info.key):
+                # Backup-Hold, Restore-Staging, Verbindungstests: nie fachliche Objekte, werden
+                # nicht migriert (ein Backup-Hold gehört zur Quellgeneration).
+                continue
             if migration.kind == "initial" and sms.is_excluded_initial_key(namespace, info.key):
                 report["excluded_objects"] += 1
                 report["excluded_bytes"] += info.size
@@ -1219,8 +1224,13 @@ def purge_generations() -> int:
     """Führt bestätigte Bereinigungen alter Generationen aus (nie automatisch angestossen)."""
     purged = 0
     with SessionLocal() as db:
-        generation = db.scalars(select(StorageGeneration).where(StorageGeneration.status == "purge_requested")
-                                .order_by(StorageGeneration.id).limit(1).with_for_update(skip_locked=True)).first()
+        # Eine Generation, auf der noch ein Backup-Hold liegt, liest ein laufendes Backup gerade
+        # zu Ende (Cutover während des Backups) - erst nach dem Lösen des Holds bereinigen.
+        held = db.scalar(select(StorageState.backup_hold_generation).where(StorageState.id == 1))
+        query = select(StorageGeneration).where(StorageGeneration.status == "purge_requested")
+        if held is not None:
+            query = query.where(StorageGeneration.generation != held)
+        generation = db.scalars(query.order_by(StorageGeneration.id).limit(1).with_for_update(skip_locked=True)).first()
         if generation is None:
             return 0
         generation.status = "purging"

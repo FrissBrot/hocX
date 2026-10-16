@@ -63,6 +63,9 @@ _CHECK_TITLES_DE = {
     "document_verification": "Öffentliche Prüfseite",
     "object_storage": "Dateispeicher",
     "storage_migration": "Storage-Migration",
+    "backup": "Backup",
+    "backup_repository": "Backup-Repository (Storage Box)",
+    "backup_verification": "Backup-Prüfungen",
 }
 # Titel, wenn die Prüfung lief, aber einen Schwellwert reisst (sonst "<Name> nicht erreichbar").
 _CHECK_PROBLEM_TITLES_DE = {
@@ -76,6 +79,9 @@ _CHECK_PROBLEM_TITLES_DE = {
     "document_verification": "Öffentliche Prüfseite langsam",
     "object_storage": "Dateispeicher nicht erreichbar",
     "storage_migration": "Storage-Migration braucht Aufmerksamkeit",
+    "backup": "Backup überfällig oder nicht eingerichtet",
+    "backup_repository": "Backup-Repository gestört oder voll",
+    "backup_verification": "Backup-Prüfung oder Restore-Test überfällig",
 }
 _JOB_REASONS_DE = {
     "failing": "ist fehlgeschlagen",
@@ -120,6 +126,24 @@ def _check_message(check) -> str:
             return f"Prüf-Endpoint der Abgabebox antwortet nach {params.get('latencyMs')} ms - abgabebox-backend und Datenbank prüfen."
         case "object_storage":
             return "Der aktive Dateispeicher (S3) antwortet nicht - Uploads und Downloads schlagen fehl."
+        case "backup":
+            if params.get("code") == "disabled":
+                return "Das Offsite-Backup (BorgBackup) ist nicht eingerichtet - siehe RUNBOOK, Abschnitt Backup."
+            if params.get("code") == "configuration":
+                return "Die Backup-Konfiguration ist ungültig - Logs des backup-worker prüfen."
+            if params.get("code") == "schedule_disabled":
+                return "Der automatische Backup-Zeitplan ist abgeschaltet - siehe Adminportal, Backups, Einstellungen."
+            if params.get("state") == "never":
+                return "Es gibt noch keine erfolgreiche Sicherung."
+            return f"Letzte erfolgreiche Sicherung vor {params.get('hours')} Stunden - siehe Adminportal, Backups."
+        case "backup_repository":
+            if params.get("code") in ("capacity_low",):
+                return f"Die Storage Box ist zu {params.get('usedPercent')} % belegt."
+            if params.get("code") == "staging_low":
+                return "Zu wenig lokaler Platz für den Datenbank-Dump des nächsten Backups."
+            return f"Das Borg-Repository ist nicht erreichbar oder abgewiesen ({params.get('code')}) - Backups laufen nicht."
+        case "backup_verification":
+            return "Integritätsprüfung oder Restore-Test des Backups sind überfällig - siehe Adminportal, Backups."
         case "storage_migration":
             return f"{params.get('verified')} von {params.get('total')} Objekten geprüft, {params.get('dead')} dauerhaft fehlgeschlagen - siehe Adminportal, Storage."
     return "Siehe Systemstatus."
@@ -189,7 +213,10 @@ def derive_problems(
     for job in jobs.items:
         definition = JOBS_BY_NAME.get(job.name)
         if job.state == "failing":
-            severity = "critical" if job.consecutive_failures >= 3 else "warning"
+            # Ein fehlgeschlagenes Backup, eine fehlgeschlagene Prüfung oder ein teilweises Backup
+            # ist sofort kritisch - die Daten sind dann nicht sicher wiederherstellbar.
+            critical_now = definition is not None and definition.category == "backup"
+            severity = "critical" if critical_now or job.consecutive_failures >= 3 else "warning"
             message = f"{job.consecutive_failures} Fehlschläge in Folge. Letzter Fehler: {(job.last_error or '-')[:300]}"
         elif job.state == "overdue":
             severity = "critical" if definition and definition.category == "backup" else "warning"

@@ -211,6 +211,13 @@ def create_migration(db: Session, *, target_profile_id: int, options: dict[str, 
     open_migration = db.scalar(select(StorageMigration.id).where(StorageMigration.state.notin_(TERMINAL_STATES)).limit(1))
     if open_migration is not None:
         raise MigrationError("Es läuft bereits eine Migration")
+    # Ein Restore aus dem Backup reserviert eine neue Generation und tauscht ggf. die Datenbank -
+    # parallel dazu darf kein Cutover laufen (docs-site/docs/technik/backup/restore.md).
+    from app.models import BackupRestoreJob
+
+    open_restore = db.scalar(select(BackupRestoreJob.id).where(BackupRestoreJob.state.in_(("queued", "preparing", "running", "verifying", "cutover"))).limit(1))
+    if open_restore is not None:
+        raise MigrationError("Es läuft eine Wiederherstellung aus dem Backup - keine Migration möglich")
     source = db.get(StorageProfile, state.active_profile_id)
     target = db.get(StorageProfile, target_profile_id)
     if source is None or target is None:

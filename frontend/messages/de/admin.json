@@ -188,6 +188,21 @@
         "title": "Storage-Migration",
         "detail": "{verified, number} von {total, number} Objekten geprüft · {dead, number} dauerhaft fehlgeschlagen",
         "problem": "Storage-Migration braucht Aufmerksamkeit"
+      },
+      "backup": {
+        "title": "Backup",
+        "detail": "{state, select, disabled {Nicht eingerichtet} never {Noch keine erfolgreiche Sicherung} other {Letzte erfolgreiche Sicherung vor {hours, number} h}} · {points, number} Sicherungspunkte",
+        "problem": "Backup überfällig oder nicht eingerichtet"
+      },
+      "backup_repository": {
+        "title": "Backup-Repository",
+        "detail": "{reachable, select, yes {Storage Box erreichbar} other {Storage Box nicht erreichbar}} · {quota, select, yes {{usedPercent, number} % belegt} other {Kapazität unbekannt}}",
+        "problem": "Backup-Repository gestört oder voll"
+      },
+      "backup_verification": {
+        "title": "Backup-Prüfungen",
+        "detail": "{verified, select, yes {Geprüft vor {verifyDays, number} Tagen} other {Noch nie geprüft}} · {tested, select, yes {Restore-Test vor {testDays, number} Tagen} other {Noch kein Restore-Test}}",
+        "problem": "Backup-Prüfung oder Restore-Test überfällig"
       }
     },
     "problems": {
@@ -376,6 +391,26 @@
       "backup_storage": {
         "title": "Datei-Backup",
         "description": "Sichert die Objekte der aktiven Speichergeneration inkrementell nach dem Datenbank-Backup und prüft das Ergebnis."
+      },
+      "backup_worker": {
+        "title": "Backup-Worker",
+        "description": "Plant und führt Backups, Prüfungen, Restore-Tests und Wiederherstellungen aus (eigener Container backup-worker)."
+      },
+      "backup_run": {
+        "title": "Backup (Borg)",
+        "description": "Verschlüsselte Sicherung von Datenbank und Dateispeicher auf die Storage Box, standardmässig alle 6 Stunden."
+      },
+      "backup_retention": {
+        "title": "Backup-Aufbewahrung",
+        "description": "Entfernt nicht mehr benötigte Sicherungspunkte und unreferenzierte Inhalte nach Prüfung aller Verweise."
+      },
+      "backup_verify": {
+        "title": "Backup-Integritätsprüfung",
+        "description": "Prüft Repository, Archive, Datenbank-Dump und eine Stichprobe der Dateiinhalte."
+      },
+      "backup_restore_test": {
+        "title": "Restore-Test",
+        "description": "Stellt den letzten Sicherungspunkt in eine isolierte Datenbank wieder her und prüft Verweise und Anwendung."
       }
     }
   },

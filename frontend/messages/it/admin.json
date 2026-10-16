@@ -188,6 +188,21 @@
         "title": "Migrazione dell'archivio",
         "detail": "{verified, number} di {total, number} oggetti verificati · {dead, number} non riusciti definitivamente",
         "problem": "La migrazione dell'archivio richiede attenzione"
+      },
+      "backup": {
+        "title": "Backup",
+        "detail": "{state, select, disabled {Non configurato} never {Nessun backup riuscito} other {Ultimo backup riuscito {hours, number} h fa}} · {points, number} punti di ripristino",
+        "problem": "Backup in ritardo o non configurato"
+      },
+      "backup_repository": {
+        "title": "Repository di backup",
+        "detail": "{reachable, select, yes {Storage Box raggiungibile} other {Storage Box non raggiungibile}} · {quota, select, yes {{usedPercent, number} % occupato} other {capacità sconosciuta}}",
+        "problem": "Repository di backup guasto o pieno"
+      },
+      "backup_verification": {
+        "title": "Verifiche dei backup",
+        "detail": "{verified, select, yes {Verificato {verifyDays, number} giorni fa} other {Mai verificato}} · {tested, select, yes {Test di ripristino {testDays, number} giorni fa} other {Nessun test di ripristino}}",
+        "problem": "Verifica o test di ripristino in ritardo"
       }
     },
     "problems": {
@@ -376,6 +391,26 @@
       "backup_storage": {
         "title": "Backup dei file",
         "description": "Esegue il backup incrementale degli oggetti della generazione di archiviazione attiva dopo il backup del database e verifica il risultato."
+      },
+      "backup_worker": {
+        "title": "Worker di backup",
+        "description": "Pianifica ed esegue backup, verifiche, test di ripristino e ripristini (container backup-worker)."
+      },
+      "backup_run": {
+        "title": "Backup (Borg)",
+        "description": "Backup cifrato di database e archivio file sulla Storage Box, per impostazione predefinita ogni 6 ore."
+      },
+      "backup_retention": {
+        "title": "Conservazione dei backup",
+        "description": "Rimuove punti e contenuti non più necessari dopo aver verificato tutti i riferimenti."
+      },
+      "backup_verify": {
+        "title": "Verifica d'integrità",
+        "description": "Verifica repository, archivi, dump del database e un campione dei file."
+      },
+      "backup_restore_test": {
+        "title": "Test di ripristino",
+        "description": "Ripristina l'ultimo punto in un database isolato e verifica riferimenti e applicazione."
       }
     }
   },
