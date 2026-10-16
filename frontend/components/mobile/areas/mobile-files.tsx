@@ -26,6 +26,7 @@ const SOURCES: { value: SourceFilter; key: string }[] = [
   { value: "submission_upload", key: "submissions" },
   { value: "gallery_upload", key: "uploads" },
   { value: "word_import", key: "wordImport" },
+  { value: "protocol_export", key: "protocolExports" },
 ];
 const SORTS = [
   { id: "created_at:desc", key: "newestFirst" },

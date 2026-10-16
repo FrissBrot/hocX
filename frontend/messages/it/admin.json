@@ -262,14 +262,16 @@
       "cleanup": "Pulizia",
       "maintenance": "Manutenzione",
       "other": "Altri",
-      "storage": "Archiviazione"
+      "storage": "Archiviazione",
+      "documents": "Documenti"
     },
     "service": {
       "backend": "Backend",
       "abgabebox-backend": "Backend Abgabebox",
       "photo-analysis-worker": "Worker analisi immagini",
       "host": "Server (cron)",
-      "storage-worker": "Worker di archiviazione"
+      "storage-worker": "Worker di archiviazione",
+      "document-worker": "Worker documenti"
     },
     "interval": {
       "onDemand": "Su richiesta",
@@ -411,6 +413,14 @@
       "backup_restore_test": {
         "title": "Test di ripristino",
         "description": "Ripristina l'ultimo punto in un database isolato e verifica riferimenti e applicazione."
+      },
+      "document_sync": {
+        "title": "Sincronizza documenti",
+        "description": "Crea i documenti per i caricamenti della casella di consegna e i file esistenti e rimuove i file di documento orfani."
+      },
+      "document_worker": {
+        "title": "Worker documenti",
+        "description": "Genera le anteprime PDF ed estrae il testo dei documenti caricati (segnale di vita dal ciclo di polling)."
       }
     }
   },

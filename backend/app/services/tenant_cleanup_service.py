@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import (
+    Document,
     Event,
     ListDefinition,
     ListEntry,
@@ -148,6 +149,10 @@ class TenantCleanupService:
 
     def _cleanup_documents(self, db: Session, tenant_id: int) -> int:
         deleted = 0
+        # Logische Dokumente zuerst: ihre erzeugten Dateien (PDF-Ansichten) sind danach
+        # unreferenziert und fallen in den Orphan-Sweep unten (samt Objekt).
+        db.execute(update(Document).where(Document.tenant_id == tenant_id).values(current_version_id=None))
+        db.execute(delete(Document).where(Document.tenant_id == tenant_id))
         # No-op if "protocols" already cleared these in the same call.
         result = db.execute(delete(WordImportDocument).where(WordImportDocument.tenant_id == tenant_id))
         deleted += result.rowcount or 0

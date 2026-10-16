@@ -137,3 +137,31 @@ def test_purge_also_removes_deleted_abgabebox_objects(db, tmp_path, monkeypatch)
     store.purge_deleted(db)
 
     assert not (tmp_path / "abgabebox" / key).exists()
+
+
+def test_deleting_a_document_version_keeps_its_files_until_the_purge(db, tmp_path, monkeypatch):
+    """DOCMGMT-005: erzeugte Dateien eines Dokuments verschwinden erst nach dem Commit."""
+    from app.services import document_service
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    store = get_object_store()
+    key = _key()
+    store.put_bytes(db, MAIN, key, b"%PDF")
+    from app.models import StoredFile
+    from tests.factories import make_tenant
+
+    tenant = make_tenant(db)
+    stored = StoredFile(tenant_id=tenant.id, original_name="x.pdf", mime_type="application/pdf", storage_path=key,
+                        file_size_bytes=4, checksum_sha256=None, created_by=None)
+    db.add(stored)
+    db.flush()
+
+    savepoint = db.begin_nested()
+    document_service._delete_generated_files(db, [stored.id])
+    savepoint.rollback()
+    assert (tmp_path / key).exists(), "Rollback des Aufrufers: Datei bleibt erhalten"
+
+    document_service._delete_generated_files(db, [stored.id])
+    assert (tmp_path / key).exists()
+    store.purge_deleted(db)
+    assert not (tmp_path / key).exists()

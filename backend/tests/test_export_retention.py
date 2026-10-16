@@ -1,11 +1,15 @@
 """Audit MAIN-BE-004 (aus main übernommen, auf die Dokument-Engine portiert): Ein Protokoll
 behält nur die Datei seines neuesten Exports; der Retention-Job gibt alte Dateien samt
 StoredFile frei, ausser dem neuesten Export abgeschlossener Protokolle. Exportverlauf und
-Dokumentenregister bleiben vollständig. (MAIN-BE-013 - LaTeX-Export erhöhte die PDF-Version -
+Dokumentenregister bleiben vollständig. Seit Release 1.2.0 gehören Protokollexporte zudem als
+Versionen zu logischen Dokumenten (Dateien-Tab); deren Dateien gibt die Aufbewahrung nie frei,
+siehe tests/documents/test_protocol_export_documents.py. (MAIN-BE-013 - LaTeX-Export erhöhte die PDF-Version -
 entfällt mit dem TeX-Export; die Engine versioniert über den Inhalts-Hash, siehe TYPST-010.)"""
 from __future__ import annotations
 
 import asyncio
+
+import pytest
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -17,6 +21,15 @@ from app.documents import service
 from app.documents.service import DocumentRequest
 from app.models import DocumentExport, DocumentRegistry, StoredFile
 from tests.factories import make_protocol, make_protocol_element, make_protocol_element_block, make_protocol_text, make_template, make_tenant
+
+
+@pytest.fixture(autouse=True)
+def _system_templates(db):
+    """Systemvorlagen wie beim App-Start in der Testtransaktion (sonst reihenfolgeabhängig)."""
+    from app.documents.system_templates import sync_system_templates
+
+    sync_system_templates(db)
+    db.flush()
 
 
 def _protocol(db, number: str, status: str = "durchgeführt"):
@@ -58,15 +71,19 @@ def test_sweep_frees_old_files_but_keeps_the_final_pdf_of_closed_protocols(db):
     closed_tenant, closed_protocol = _protocol(db, "RT-3", status="abgeschlossen")
     old_open = _render(db, tenant, open_protocol)
     final = _render(db, closed_tenant, closed_protocol)
+    # Export ohne Protokollbezug: kein logisches Dokument, fällt unter die Frist.
+    old_list = asyncio.run(service.render(db, None, tenant.id, DocumentRequest(document_type="todos")))
     long_ago = datetime.now(UTC) - timedelta(days=400)
-    for result in (old_open, final):
+    for result in (old_open, final, old_list):
         result.export.created_at = long_ago
     db.flush()
-    old_path, final_path = _path(old_open.stored_file), _path(final.stored_file)
+    open_path, final_path, list_path = _path(old_open.stored_file), _path(final.stored_file), _path(old_list.stored_file)
 
     result = service.cleanup_old_generated_exports(db, retention_days=30)
     get_object_store().purge_deleted(db)
 
     assert result["released"] == 1
-    assert not old_path.exists() and db.get(DocumentExport, old_open.export.id).stored_file_id is None
+    assert not list_path.exists() and db.get(DocumentExport, old_list.export.id).stored_file_id is None
     assert final_path.exists() and db.get(DocumentExport, final.export.id).stored_file_id is not None
+    # Aktuelle Version des Protokoll-Dokuments (Dateien-Tab) bleibt trotz Frist.
+    assert open_path.exists() and db.get(DocumentExport, old_open.export.id).stored_file_id is not None

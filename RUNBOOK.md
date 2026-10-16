@@ -649,7 +649,7 @@ verschoben, bis die Erstmigration gestartet wird.
 Migrationsverlauf/Fehlerprotokoll prüfen, Migration fortsetzen oder abbrechen; die Wartung lässt
 sich unter System → Wartung erst beenden, wenn alle Freigabebedingungen erfüllt sind.
 
-## 14. Offsite-Backup (BorgBackup, Hetzner Storage Box)
+## 15. Offsite-Backup (BorgBackup, Hetzner Storage Box)
 
 Ausführlich: `docs-site/docs/technik/backup/` (Architektur, Einrichtung & Betrieb,
 Wiederherstellung, Sicherheit). Kurzfassung:
@@ -692,3 +692,29 @@ ein geschütztes Backup an und bricht bei Fehlschlag ab (bewusst überspringen:
 | Worker hängt/abgestürzt | Container startet neu und setzt den Auftrag fort; verwaister Backup-Hold wird automatisch gelöst |
 | Verwaister Borg-Lock nach Absturz | nur wenn sicher kein Worker läuft: `… python -m app.backup.cli break-lock --yes` |
 
+
+## 16. Dokumentverarbeitung (PDF-Ansicht, Textextraktion)
+
+Ausführlich: `docs-site/docs/technik/dokumente.md`.
+
+**Update**: Migration `0115_documents` (neue Tabellen, keine Datenänderung) läuft mit dem
+normalen Deploy (`0116_protocol_export_formats` ist seit der Dokument-Engine ein No-op). Das Backend-Image enthält jetzt LibreOffice, Tesseract und Poppler (grösseres
+Image). `deploy.sh` startet den neuen Dienst `document-worker` automatisch (`up -d`). Keine neuen
+Secrets oder Umgebungsvariablen nötig; Grenzwerte sind optional (`DOCUMENT_*`, siehe Doku).
+
+**Nach dem Deploy**: Der Loop `document_sync` legt Dokumente für bestehende Dateien und Exporte
+in Batches an (alle 2 Minuten, `DOCUMENT_SYNC_BATCH_SIZE`); der Worker verarbeitet sie danach.
+Bei vielen Altdateien läuft das einige Zeit - Fortschritt:
+
+```bash
+docker compose exec backend python -m app.workers.document_admin status
+```
+
+Sofort statt schrittweise: `... document_admin backfill`. Fehlgeschlagene Aufträge nach einer
+Störung erneut einreihen: `... document_admin requeue`. Übernahme pausieren:
+`DOCUMENT_BACKFILL_ENABLED=false` (stoppt auch die Anlage für neue Abgabebox-Uploads).
+
+**Überwachung**: `/admin/jobs` → Kategorie Dokumente (`document_sync`, `document_worker`). Ein
+überfälliger `document_worker` heisst: Container läuft nicht oder hängt
+(`docker compose logs document-worker`). Aufträge mit abgelaufener Lease übernimmt ein neu
+gestarteter Worker automatisch.

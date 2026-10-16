@@ -61,6 +61,7 @@ from app.models import (
     StoredFile,
     Tenant,
 )
+from app.models.document_entities import DocumentFile
 
 logger = logging.getLogger(__name__)
 
@@ -543,8 +544,15 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
             )
         )
         db.flush()
+        if protocol is not None:
+            # Logisches Dokument im Dateien-Tab (feature/document-management): neuer Inhalt = neue
+            # Version, gleicher Inhalt ersetzt nur die Darstellung. Vor dem Freigeben älterer
+            # Dateien, damit der Backfill sie noch als Versionen übernehmen kann.
+            from app.services import protocol_export_document_service
+
+            protocol_export_document_service.record_export(db, protocol=protocol, export=export, stored_file=stored)
         # Ältere Dateien als Tombstones in derselben Transaktion (S3-008); physisch löscht der
-        # Job storage_purge nach dem Commit.
+        # Job storage_purge nach dem Commit. Dateien von Dokumentversionen bleiben (_release_files).
         _prune_superseded_files(db, export)
         db.commit()
     except Exception:
@@ -555,11 +563,22 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
     return RenderResult(export=export, stored_file=stored)
 
 
+def _without_document_versions(db: Session, exports: list[DocumentExport]) -> list[DocumentExport]:
+    """Exporte, deren Datei zu einer Version eines logischen Dokuments gehört (document_file,
+    Dateien-Tab), werden nie freigegeben - sonst verschwände die Version still aus der Historie."""
+    candidate_ids = {export.stored_file_id for export in exports if export.stored_file_id is not None}
+    if not candidate_ids:
+        return exports
+    versioned = set(db.scalars(select(DocumentFile.stored_file_id).where(DocumentFile.stored_file_id.in_(candidate_ids))))
+    return [export for export in exports if export.stored_file_id not in versioned]
+
+
 def _release_files(db: Session, exports: list[DocumentExport]) -> list[str]:
     """Löst die PDF-Datei (StoredFile) von Exporten; Export-Zeile und Register-Eintrag bleiben
     (Verlauf und Echtheitsprüfung über den Hash). Die Objekte werden in der Transaktion des
     Aufrufers als gelöscht registriert (Tombstone, S3-008) - ein Rollback nimmt beides zurück,
     physisch entfernt sie der Job storage_purge nach dem Commit. Gibt die Keys zurück."""
+    exports = _without_document_versions(db, exports)
     file_ids = {export.stored_file_id for export in exports if export.stored_file_id is not None}
     for export in exports:
         export.stored_file_id = None
@@ -650,13 +669,13 @@ def cleanup_old_generated_exports(db: Session | None = None, *, retention_days: 
         if db is not None:
             protected = _protected_export_ids(db)
             cutoff = datetime.fromtimestamp(cutoff_timestamp, tz=UTC)
-            expired = [
+            expired = _without_document_versions(db, [
                 export
                 for export in db.scalars(
                     select(DocumentExport).where(DocumentExport.created_at < cutoff, DocumentExport.stored_file_id.is_not(None))
                 )
                 if export.id not in protected
-            ]
+            ])
             try:
                 _release_files(db, expired)
                 db.commit()

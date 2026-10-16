@@ -787,6 +787,58 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Dokument-Worker (app/workers/document_worker.py): PDF-Konvertierung (LibreOffice) und
+  # Textextraktion hochgeladener Dokumente, gleicher Code wie das Backend. Verarbeitet nicht
+  # vertrauenswürdige Dateien: eigenes, knappes Ressourcenbudget, keine Ports, kein Docker-Socket.
+  # Mehrere Instanzen sind sicher (Lease, FOR UPDATE SKIP LOCKED).
+  document-worker:
+    build:
+      context: ./backend
+    user: "0:0"
+    # Root nur wegen der Bind-Mount-Rechte im Dev-Checkout; ohne Capabilities und ohne
+    # Rechteausweitung, weil hier nicht vertrauenswürdige Dokumente verarbeitet werden.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    mem_limit: 1536m
+    cpus: 1.0
+    pids_limit: 256
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOCX_ENVIRONMENT: development
+      DATABASE_URL: ${DATABASE_URL}
+      APP_DATABASE_URL: ${APP_DATABASE_URL}
+      # Keine Anmelde-/Admin-Secrets: zufällige Werte je Prozess (SECRETLESS_PROCESS_KINDS).
+      HOCX_PROCESS_KIND: document-worker
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+    command: ["python", "-m", "app.workers.document_worker"]
+    volumes:
+      - ./backend:/app
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   clamav:
     image: clamav/clamav@sha256:9cb27d7660bdf66e9878c832cb433dd8aa152cfbe16f3c2c0084c80b04ae22b4
     restart: unless-stopped

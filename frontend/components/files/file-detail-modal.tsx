@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { DocumentDetails, DocumentPreview, useDocumentDetail } from "./document-panel";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { TagInput } from "@/components/ui/tag-input";
@@ -18,6 +19,7 @@ const SOURCE_KEY: Record<FileOverviewSource, string> = {
   word_import: "wordImport",
   submission_upload: "submission",
   gallery_upload: "upload",
+  protocol_export: "protocolExport",
 };
 
 const SOURCE_BADGE_VARIANT: Record<FileOverviewSource, BadgeVariant> = {
@@ -25,6 +27,7 @@ const SOURCE_BADGE_VARIANT: Record<FileOverviewSource, BadgeVariant> = {
   word_import: "neutral",
   submission_upload: "success",
   gallery_upload: "warning",
+  protocol_export: "info",
 };
 
 export function FileDetailModal({
@@ -49,6 +52,8 @@ export function FileDetailModal({
   const [tagsValue, setTagsValue] = useState(item.tags.join(","));
   const { schedule, flush, saving, saveError } = useDeferredPopupSave();
   const [previewFailed, setPreviewFailed] = useState(false);
+  // Logisches Dokument: PDF-Ansicht als Vorschau, Original/Text/Versionen in den Details.
+  const documentState = useDocumentDetail(item.document);
 
 
   const fileUrl = `${browserApiBaseUrl}${item.content_url}`;
@@ -92,6 +97,9 @@ export function FileDetailModal({
       {saveError && <p role="alert">{saveError}</p>}
       <div className="file-detail">
         <div className="file-detail-preview">
+          {item.document ? (
+            <DocumentPreview detail={documentState.detail} name={item.original_name} />
+          ) : (
           <a href={fileUrl} target="_blank" rel="noreferrer" className={isImage ? "file-detail-preview-link" : "file-detail-preview-icon"}>
             {isImage ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -106,6 +114,7 @@ export function FileDetailModal({
               </>
             )}
           </a>
+          )}
         </div>
 
         <div className="file-detail-meta">
@@ -165,6 +174,10 @@ export function FileDetailModal({
             </dl>
           </section>
 
+          {item.document ? (
+            <DocumentDetails detail={documentState.detail} loadFailed={documentState.loadFailed} onReload={documentState.reload} />
+          ) : null}
+
           <section className="file-detail-section">
             <h3 className="file-detail-section-title">{t("detail.originTitle")}</h3>
             <span className="tag-chip tag-chip-sm tag-chip-origin">{item.origin_tag}</span>
@@ -177,9 +190,15 @@ export function FileDetailModal({
             <TagInput value={tagsValue} onChange={handleTagsChange} suggestions={tagSuggestions} placeholder={t("detail.tagPlaceholder")} />
           </section>
 
-          <a href={fileUrl} target="_blank" rel="noreferrer" className="button-secondary button-ghost file-detail-open">
-            {t("detail.openOriginalNewTab")}
-          </a>
+          {item.document?.pdf_url ? (
+            <a href={`${browserApiBaseUrl}${item.document.pdf_url}`} target="_blank" rel="noreferrer" className="button-secondary button-ghost file-detail-open">
+              {t("document.openPdfNewTab")}
+            </a>
+          ) : (
+            <a href={fileUrl} target="_blank" rel="noreferrer" className="button-secondary button-ghost file-detail-open">
+              {t("detail.openOriginalNewTab")}
+            </a>
+          )}
           {onShare ? (
             <button type="button" className="button-secondary file-detail-open" onClick={onShare}>
               {t("detail.shareLink")}

@@ -12,6 +12,7 @@ from app.models import (
     Tenant,
     WordImportDocument,
 )
+from app.models.document_entities import DocumentFile
 from app.schemas.storage import StorageCategoryUsage, StorageUsageRead
 
 CATEGORY_LABELS: dict[str, str] = {
@@ -32,7 +33,8 @@ class StorageService:
     only_images vs. exclude_images, i.e. `mime_type LIKE 'image/%'`):
 
     - photos:    uploaded images (protocol images, gallery uploads, image submissions)
-    - files:     every other upload (word-import sources, abgabebox documents, ...)
+    - files:     every other upload (word-import sources, abgabebox documents, ...) and the
+                 PDF views generated from them (document_file.is_generated)
     - protocols: generated PDF exports (document_export). The "Dateien"
                  overview deliberately excludes these (a generated PDF isn't something a
                  user "hochgeladen" hat), but they occupy real disk space and belong in a
@@ -53,9 +55,15 @@ class StorageService:
             StoredFile.id.in_(select(WordImportDocument.stored_file_id)),
             StoredFile.id.in_(select(SubmissionUploadFile.stored_file_id)),
         )
+        # Von der Dokumentverarbeitung erzeugte PDF-Ansichten und Vorschaubilder gehören zu den
+        # Dateien, aus denen sie entstanden sind - auch das PNG der Vorschau ist kein Foto.
+        is_generated_document_file = StoredFile.id.in_(
+            select(DocumentFile.stored_file_id).where(DocumentFile.is_generated.is_(True))
+        )
         is_image = StoredFile.mime_type.like("image/%")
         category = case(
             (is_export, "protocols"),
+            (is_generated_document_file, "files"),
             (is_upload & is_image, "photos"),
             (is_upload, "files"),
             else_="other",

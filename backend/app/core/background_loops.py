@@ -54,6 +54,9 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "task_package_rollover": 202600018,
     "maintenance_supervisor": 202600019,
     "storage_journal_cleanup": 202600020,
+    # 202600026 statt 202600023: diese ID hält storage_migration_service.create_migration als
+    # Transaktions-Lock (gegenseitiges Blockieren bzw. übersprungene Ticks).
+    "document_sync": 202600026,
     "storage_purge": 202600025,
 }
 

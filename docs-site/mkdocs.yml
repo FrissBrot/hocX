@@ -91,6 +91,7 @@ nav:
       - Todos: benutzer/todos.md
       - Verknüpfungen (Kalender): benutzer/verknuepfungen.md
       - Abgabebox: benutzer/abgabebox.md
+      - Dateien & Dokumente: benutzer/dateien.md
       - Word-Import: benutzer/word-import.md
       - Dokumente & Document Studio: benutzer/dokumente.md
       - Echtheit prüfen: benutzer/echtheit.md
@@ -108,6 +109,7 @@ nav:
       - Upload-Testbook: technik/upload-testbook.md
       - Backup-Testbook: technik/backup-testbook.md
       - Sicherheit: technik/sicherheit.md
+      - Dokumentverwaltung: technik/dokumente.md
       - Dateispeicher (S3) & Wartung:
           - Übersicht: technik/storage/index.md
           - Architektur: technik/storage/architektur.md

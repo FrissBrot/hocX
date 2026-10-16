@@ -262,14 +262,16 @@
       "cleanup": "Nettoyage",
       "maintenance": "Maintenance",
       "other": "Autres",
-      "storage": "Stockage"
+      "storage": "Stockage",
+      "documents": "Documents"
     },
     "service": {
       "backend": "Backend",
       "abgabebox-backend": "Backend Abgabebox",
       "photo-analysis-worker": "Worker d'analyse d'images",
       "host": "Serveur (cron)",
-      "storage-worker": "Worker de stockage"
+      "storage-worker": "Worker de stockage",
+      "document-worker": "Worker de documents"
     },
     "interval": {
       "onDemand": "À la demande",
@@ -411,6 +413,14 @@
       "backup_restore_test": {
         "title": "Test de restauration",
         "description": "Restaure le dernier point dans une base isolée et vérifie références et application."
+      },
+      "document_sync": {
+        "title": "Synchroniser les documents",
+        "description": "Crée les documents pour les dépôts de la boîte de dépôt et les fichiers existants, et supprime les fichiers de documents orphelins."
+      },
+      "document_worker": {
+        "title": "Worker de documents",
+        "description": "Génère les aperçus PDF et extrait le texte des documents téléversés (signal de vie de la boucle d’interrogation)."
       }
     }
   },

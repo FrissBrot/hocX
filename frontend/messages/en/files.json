@@ -41,7 +41,8 @@
     "protocol": "Protocol",
     "wordImport": "Word import",
     "submission": "Submission",
-    "upload": "Upload"
+    "upload": "Upload",
+    "protocolExport": "Protocol export"
   },
   "detail": {
     "openOriginal": "Open original",
@@ -71,7 +72,8 @@
     "empty": "No files found.",
     "protocolRef": "Protocol {label}",
     "download": "Download",
-    "share": "Share"
+    "share": "Share",
+    "openPdf": "Open PDF"
   },
   "view": {
     "title": "Files",
@@ -96,7 +98,8 @@
     "protocols": "Protocols",
     "wordImport": "Word import",
     "submissions": "Submissions",
-    "uploads": "Uploads"
+    "uploads": "Uploads",
+    "protocolExports": "Protocol exports"
   },
   "sortOptions": {
     "newestFirst": "Newest first",
@@ -128,5 +131,53 @@
     "rulesMaxFiles": "max. {max} files per element",
     "elementLabel": "Submission item",
     "elementPlaceholder": "Choose item…"
+  },
+  "document": {
+    "title": "Document",
+    "status": "Status",
+    "statusLabel": {
+      "processing": "Processing",
+      "ready": "Ready",
+      "partial": "Partially processed",
+      "failed": "Processing failed"
+    },
+    "pdf": "PDF view",
+    "pdfReady": "Ready",
+    "text": "Text",
+    "jobStatus": {
+      "queued": "Waiting for processing",
+      "running": "Being created",
+      "done": "Not available",
+      "failed": "Failed",
+      "blocked": "Blocked (virus scan)",
+      "none": "Not available"
+    },
+    "extractionStatus": {
+      "ready": "Extracted",
+      "empty": "No text found",
+      "ocr_required": "Text recognition (OCR) required",
+      "unsupported": "Not supported for this format",
+      "failed": "Failed"
+    },
+    "currentVersion": "Current version",
+    "versionNumber": "Version {number}",
+    "downloadPdf": "Download PDF",
+    "downloadOriginal": "Download original file",
+    "showText": "Show extracted text",
+    "hideText": "Hide text",
+    "textEmpty": "No text available.",
+    "textLoadError": "The text could not be loaded.",
+    "reprocess": "Process again",
+    "reprocessStarted": "Processing has been restarted.",
+    "reprocessError": "Processing could not be restarted.",
+    "historyTitle": "Versions ({count})",
+    "current": "Current",
+    "openPdf": "Open PDF",
+    "original": "Original",
+    "previewTitle": "PDF preview of {name}",
+    "previewProcessing": "The PDF view is being created …",
+    "previewUnavailable": "There is no PDF view for this document. The original file is available in the details.",
+    "loadError": "Document details could not be loaded.",
+    "openPdfNewTab": "Open PDF in new tab"
   }
 }

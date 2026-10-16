@@ -33,7 +33,7 @@ from app.models.entities import (
 from app.repositories.file_repository import ProtocolImageRepository, StoredFileRepository
 from app.schemas.files import FileAlbumRef, FileOverviewItem, FileStats, PhotoAnalysisProgress, SimilarityGroup, StoredFileMetadata
 from app.schemas.protocol import ProtocolImageRead
-from app.services import public_id_service
+from app.services import document_service, public_id_service
 from app.services.stored_file_location import abgabebox_stored_file_ids
 from app.services.apple_media import (
     convert_heic_to_jpeg,
@@ -341,7 +341,28 @@ class FileService:
             exclude_album_id=exclude_album_id,
             album_share_pending=album_share_pending,
         )
-        return [self._build_overview_item(row) for row in rows]
+        items = [self._build_overview_item(row) for row in rows]
+        self._attach_documents(db, rows, items)
+        return items
+
+    def _attach_documents(self, db: Session, rows, items: list[FileOverviewItem]) -> None:
+        """Kurzstatus des logischen Dokuments je Eintrag (eine Abfragerunde je Seite). Nur für
+        Nicht-Bilder - Fotoseiten zahlen dafür nichts."""
+        candidates = [(row, item) for row, item in zip(rows, items) if not item.is_image]
+        if not candidates:
+            return
+        # Lazy: document_read_service -> access_service -> ... -> document_template_service ->
+        # file_service wäre beim Modulimport zirkulär.
+        from app.services import document_read_service
+
+        by_tenant: dict[int, list[int]] = {}
+        for row, _item in candidates:
+            by_tenant.setdefault(row.tenant_id, []).append(row.id)
+        summaries = {}
+        for tenant_id, stored_file_ids in by_tenant.items():
+            summaries.update(document_read_service.summaries_for_files(db, tenant_id, stored_file_ids))
+        for row, item in candidates:
+            item.document = summaries.get(row.id)
 
     def analysis_progress(self, db: Session, tenant_id: int) -> PhotoAnalysisProgress:
         """Backs the Fotos page's tenant-wide "Foto-Analyse läuft - X von Y Bildern
@@ -405,6 +426,12 @@ class FileService:
             tags_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/tags"
             metadata_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/metadata"
             ref_href = f"/submission-assignments/{row.ref_id}" if row.ref_id is not None else None
+        elif row.source == "protocol_export":
+            content_url = self.build_content_url(row.public_id)
+            thumbnail_url = None
+            tags_url = self.build_tags_url(row.public_id)
+            metadata_url = self.build_metadata_url(row.public_id)
+            ref_href = f"/protocols/{row.ref_public_id}" if row.ref_public_id is not None else None
         elif row.source == "protocol_image":
             content_url = self.build_content_url(row.public_id)
             thumbnail_url = self.build_thumbnail_url(row.public_id) if is_image else None
@@ -1260,6 +1287,9 @@ class FileService:
                 )
             )
             db.flush()
+            # Logisches Dokument samt PDF-/Extraktionsauftrag in derselben Transaktion (ZIP und
+            # andere Nicht-Dokumente bekommen keins, siehe documents/formats.py).
+            document_service.register_upload(db, stored_file)
             saved_public_ids.append(stored_file.public_id)
 
         db.commit()
@@ -1576,6 +1606,9 @@ class FileService:
             infected_message=f"Datei '{filename}' wurde von der Virenprüfung als infiziert erkannt und wurde nicht gespeichert",
             stored_file_repository=self.stored_file_repository,
         )
+        # Allgemeine Dokumentebene (PDF-Ansicht, Textextraktion) - unabhängig vom
+        # protokollspezifischen Import, der die Datei weiter selbst liest.
+        document_service.register_upload(db, result.stored_file)
         return result.stored_file
 
     def rescan_pending_internal_files(self, db: Session) -> dict:
@@ -1620,6 +1653,9 @@ class FileService:
         # against a caller-side rollback recreating the opposite inconsistency (row
         # survives, file gone) - but flush() catches the far more common failure mode.
         storage_key = stored_file.storage_path
+        # Ist die Datei Original eines Dokuments, verschwinden Dokument und daraus erzeugte
+        # Dateien (PDF) mit ihr.
+        document_service.release_original(db, stored_file.id)
         self.stored_file_repository.delete(db, stored_file)
         db.flush()
         # Löschung über das Journal: eine laufende Migration übernimmt sie, die Datei taucht im

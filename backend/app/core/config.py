@@ -1,4 +1,5 @@
 import os
+import secrets
 import sys
 from pathlib import Path
 
@@ -33,6 +34,13 @@ _load_file_secrets()
 # Werte von HOCX_ENVIRONMENT, die als Produktion gelten (kanonisch: 'production').
 PRODUCTION_ENVIRONMENT_NAMES = frozenset({"production", "prod"})
 
+# Prozessarten ohne Anmelde-/Admin-Sitzungen (HOCX_PROCESS_KIND). Sie bekommen AUTH_SECRET und
+# ADMIN_AUTH_SECRET nicht (Least Privilege: der document-worker verarbeitet nicht
+# vertrauenswürdige Dateien) und erhalten stattdessen zufällige Werte je Prozess - damit lässt
+# sich nichts signieren, was das Backend anerkennt, und ein versehentliches Entschlüsseln mit
+# secret_crypto schlägt sichtbar fehl.
+SECRETLESS_PROCESS_KINDS = frozenset({"document-worker"})
+
 
 class Settings(BaseSettings):
     app_name: str = "hocX API"
@@ -44,6 +52,8 @@ class Settings(BaseSettings):
     # existed; now it makes that guard fire in dev too, since INITIAL_ADMIN_EMAIL there is
     # an @hocx.local address. Mirrors abgabebox-backend/app/config.py's Settings.environment.
     environment: str = Field(default="production", validation_alias="HOCX_ENVIRONMENT")
+    # Art des Prozesses (backend, document-worker, ...), siehe SECRETLESS_PROCESS_KINDS.
+    process_kind: str = Field(default="backend", validation_alias="HOCX_PROCESS_KIND")
     # Admin/migration connection (superuser role) - used by alembic (see alembic/env.py).
     database_url: str = "postgresql+psycopg://hocx:hocx@db:5432/hocx"
     # Runtime connection for the FastAPI app itself, using the least-privilege
@@ -196,6 +206,25 @@ class Settings(BaseSettings):
     storage_work_root: str = "/app/storage-local/work"
     storage_journal_retention_days: int = 30
 
+    # --- Dokumentverarbeitung (docs-site/docs/technik/dokumente.md) -------------------------
+    # Grösste Originaldatei, die konvertiert/extrahiert wird; grössere bleiben nur als Original.
+    document_max_input_mb: int = 50
+    document_convert_timeout_seconds: int = 120
+    document_extract_timeout_seconds: int = 90
+    document_ocr_timeout_seconds: int = 300
+    # Adressraum-Limits der Kindprozesse (LibreOffice reserviert viel virtuellen Speicher).
+    document_convert_memory_mb: int = 3072
+    document_extract_memory_mb: int = 1024
+    document_ocr_max_pages: int = 50
+    document_max_text_chars: int = 5_000_000
+    document_job_max_attempts: int = 5
+    document_job_lease_seconds: int = 600
+    document_worker_poll_seconds: float = 5.0
+    # Backend-Loop document_sync: Anlage für Abgabebox-Uploads und Bestand, Aufräumen.
+    document_sync_interval_minutes: float = 2
+    document_sync_batch_size: int = 200
+    document_backfill_enabled: bool = True
+
     # --- Wartungsmodus -----------------------------------------------------------------------
     # Wie lange ein Prozess den Wartungszustand zwischenspeichert (Middleware). Kurz halten: der
     # Initial-Migrations-Worker wartet vor dem Fencen mindestens zweimal so lange.
@@ -221,15 +250,27 @@ class Settings(BaseSettings):
     def extra_cors_origin_set(self) -> set[str]:
         return {o.strip() for o in self.extra_cors_origins.split(",") if o.strip()}
 
+    @property
+    def is_secretless_process(self) -> bool:
+        return self.process_kind.strip().lower() in SECRETLESS_PROCESS_KINDS
+
+    def apply_process_kind(self) -> None:
+        if self.is_secretless_process:
+            self.auth_secret = secrets.token_hex(32)
+            self.admin_auth_secret = secrets.token_hex(32)
+
     def validate_for_production(self) -> None:
-        if self.auth_secret in _INSECURE_DEFAULTS or len(self.auth_secret) < 32:
+        # Prozesse ohne Sitzungen bekommen ihre Werte aus apply_process_kind, nicht aus der Konfiguration.
+        if not self.is_secretless_process and (self.auth_secret in _INSECURE_DEFAULTS or len(self.auth_secret) < 32):
             print(
                 "FATAL: AUTH_SECRET is insecure or not set. "
                 "Set a random value of at least 32 characters in .env.",
                 file=sys.stderr,
             )
             sys.exit(1)
-        if self.admin_auth_secret in _INSECURE_DEFAULTS or len(self.admin_auth_secret) < 32:
+        if not self.is_secretless_process and (
+            self.admin_auth_secret in _INSECURE_DEFAULTS or len(self.admin_auth_secret) < 32
+        ):
             print(
                 "FATAL: ADMIN_AUTH_SECRET is insecure or not set. "
                 "Set a random value of at least 32 characters in .env.",
@@ -281,4 +322,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+settings.apply_process_kind()
 settings.validate_for_production()

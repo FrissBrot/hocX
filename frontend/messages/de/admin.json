@@ -262,14 +262,16 @@
       "cleanup": "Aufräumen",
       "maintenance": "Wartung",
       "other": "Weitere",
-      "storage": "Speicher"
+      "storage": "Speicher",
+      "documents": "Dokumente"
     },
     "service": {
       "backend": "Backend",
       "abgabebox-backend": "Abgabebox-Backend",
       "photo-analysis-worker": "Bildanalyse-Worker",
       "host": "Server (Cron)",
-      "storage-worker": "Storage-Worker"
+      "storage-worker": "Storage-Worker",
+      "document-worker": "Dokument-Worker"
     },
     "interval": {
       "onDemand": "Bei Bedarf",
@@ -411,6 +413,14 @@
       "backup_restore_test": {
         "title": "Restore-Test",
         "description": "Stellt den letzten Sicherungspunkt in eine isolierte Datenbank wieder her und prüft Verweise und Anwendung."
+      },
+      "document_sync": {
+        "title": "Dokumente abgleichen",
+        "description": "Legt Dokumente für Abgabebox-Uploads und bestehende Dateien an und räumt verwaiste Dokumentdateien auf."
+      },
+      "document_worker": {
+        "title": "Dokument-Worker",
+        "description": "Erzeugt PDF-Ansichten und extrahiert den Text hochgeladener Dokumente (Lebenszeichen aus der Poll-Schleife)."
       }
     }
   },

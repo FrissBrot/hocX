@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, admin_backups, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
+from app.api.routes import admin, admin_auth, admin_backups, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
@@ -19,7 +19,7 @@ from app.core.error_log import best_effort_actor_from_request, record_system_err
 from app.core.redis_client import close_redis_pool
 from app.core.security import hash_password
 from app.models import AppUser, ElementType, PlatformAdmin, Role, Tenant
-from app.services import domain_health_check_service, traefik_config_service
+from app.services import document_sync_service, domain_health_check_service, traefik_config_service
 from app.services.admin_error_log_service import AdminErrorLogService
 from app.services.admin_job_status_service import AdminJobStatusService
 from app.services.audit_service import AuditService
@@ -415,6 +415,17 @@ async def storage_journal_cleanup_loop() -> None:
     )
 
 
+async def document_sync_loop() -> None:
+    """Dokumente für Abgabebox-Uploads und den Bestand anlegen, verwaiste Dokumentdateien
+    entfernen (app/services/document_sync_service.py). Die eigentliche Verarbeitung macht der
+    document-worker."""
+    await run_advisory_locked_loop(
+        name="document_sync",
+        interval_seconds=settings.document_sync_interval_minutes * 60,
+        task=document_sync_service.run_tick,
+    )
+
+
 async def storage_purge_loop() -> None:
     """Gelöschte Objekte nach dem Commit physisch entfernen (Tombstones, S3-008)."""
     await run_advisory_locked_loop(
@@ -451,10 +462,12 @@ async def lifespan(_: FastAPI):
         system_monitor_task = asyncio.create_task(system_monitor_loop())
         maintenance_supervisor_task = asyncio.create_task(maintenance_supervisor_loop())
         storage_journal_cleanup_task = asyncio.create_task(storage_journal_cleanup_loop())
+        document_sync_task = asyncio.create_task(document_sync_loop())
         storage_purge_task = asyncio.create_task(storage_purge_loop())
         yield
         maintenance_supervisor_task.cancel()
         storage_journal_cleanup_task.cancel()
+        document_sync_task.cancel()
         storage_purge_task.cancel()
         health_check_task.cancel()
         photo_analysis_auto_queue_task.cancel()
@@ -619,6 +632,9 @@ app.include_router(protocols.router, prefix="/api", tags=["protocols"])
 app.include_router(protocol_elements.router, prefix="/api", tags=["protocol-elements"])
 app.include_router(todos.router, prefix="/api", tags=["todos"])
 app.include_router(files.router, prefix="/api", tags=["files"])
+# Logische Dokumente (Dateien-Tab, feature/document-management): GET /api/documents/{uuid}… -
+# bewusst nach dem Router der Dokument-Engine, damit feste Pfade wie /documents/exports vorgehen.
+app.include_router(managed_documents.router, prefix="/api", tags=["managed-documents"])
 app.include_router(share_links.router, prefix="/api", tags=["share-links"])
 app.include_router(public_share.router, prefix="/api", tags=["public-share"])
 app.include_router(public_catalog.router, prefix="/api", tags=["public-catalog"])

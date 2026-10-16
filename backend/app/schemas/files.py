@@ -4,9 +4,10 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
+from app.schemas.documents import DocumentSummary
 from pydantic import BaseModel, Field
 
-FileOverviewSource = Literal["protocol_image", "word_import", "submission_upload", "gallery_upload"]
+FileOverviewSource = Literal["protocol_image", "word_import", "submission_upload", "gallery_upload", "protocol_export"]
 
 PhotoAlbumKind = Literal["manual", "cycle", "submission", "submission_element"]
 
@@ -75,6 +76,9 @@ class FileOverviewItem(BaseModel):
     # Live Photo: content URL of the short MP4 the Fotos grid plays on hover - None for every
     # ordinary photo (see apple_media.py).
     live_video_url: str | None = None
+    # Logisches Dokument hinter diesem Eintrag (PDF-Ansicht, Verarbeitungsstatus, Versionen) -
+    # None für Bilder, ZIPs und andere Nicht-Dokumente (siehe app/services/documents/formats.py).
+    document: DocumentSummary | None = None
     # Every album this file belongs to (unscoped GET /files only - see
     # FileService.attach_album_context; empty when the file is in no album).
     albums: list[FileAlbumRef] = []

@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { FileTypeIcon } from "./file-type-icon";
+import { DOCUMENT_STATUS_VARIANT } from "./document-panel";
 import { SOURCE_BADGE_VARIANT, SOURCE_KEY } from "./file-detail-modal";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
@@ -34,6 +35,12 @@ export function FilesTable({
               <span className="files-table-name">
                 <FileTypeIcon name={item.original_name} />
                 <span title={item.original_name}>{item.original_name}</span>
+                {item.document && item.document.status !== "ready" ? (
+                  <Badge variant={DOCUMENT_STATUS_VARIANT[item.document.status]}>{t(`document.statusLabel.${item.document.status}`)}</Badge>
+                ) : null}
+                {item.document && item.document.version_count > 1 ? (
+                  <Badge variant="neutral">{item.document.current_version_label ?? t("document.versionNumber", { number: item.document.current_version_number ?? 1 })}</Badge>
+                ) : null}
               </span>
             </td>
             <td><Badge variant={SOURCE_BADGE_VARIANT[item.source]}>{t(`source.${SOURCE_KEY[item.source]}`)}</Badge></td>
@@ -54,8 +61,14 @@ export function FilesTable({
             <td>{formatDate(item.created_at)}</td>
             <td>{item.file_size_bytes ? formatFileSize(item.file_size_bytes) : <span className="muted">–</span>}</td>
             <td className="files-table-actions" onClick={(event) => event.stopPropagation()}>
-              <a href={`${browserApiBaseUrl}${item.content_url}`} target="_blank" rel="noreferrer" className="button-secondary button-ghost">
-                {t("table.download")}
+              {/* Bevorzugt die PDF-Darstellung; Originale gibt es in den Dokumentdetails. */}
+              <a
+                href={`${browserApiBaseUrl}${item.document?.pdf_url ?? item.content_url}`}
+                target="_blank"
+                rel="noreferrer"
+                className="button-secondary button-ghost"
+              >
+                {item.document?.pdf_url ? t("table.openPdf") : t("table.download")}
               </a>
               <button type="button" className="button-secondary button-ghost" onClick={() => onShare(item)}>
                 {t("table.share")}

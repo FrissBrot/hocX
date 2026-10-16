@@ -88,8 +88,9 @@ def test_preview_creates_no_entry(db):
 
 
 def test_retention_deletes_files_but_never_registry_entries(db):
-    tenant, protocol = _setup(db)
-    result = _render(db, tenant, protocol)
+    tenant, _protocol = _setup(db)
+    # Ohne Protokollbezug: Protokollexporte sind Versionen logischer Dokumente und bleiben.
+    result = asyncio.run(service.render(db, None, tenant.id, DocumentRequest(document_type="todos")))
     path = Path(settings.storage_root) / result.stored_file.storage_path
     old = path.stat().st_mtime - 400 * 86400
     os.utime(path, (old, old))

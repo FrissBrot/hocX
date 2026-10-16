@@ -118,9 +118,32 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116`).
 - Die Adresse eines S3-Endpunkts wird bei jeder Verbindung neu aufgelöst und geprüft
   (Schutz vor DNS-Rebinding auf interne Ziele).
 
+### Neu: Dokumentverwaltung mit PDF-Ansicht und Textextraktion
+
+- Hochgeladene Dokumente (Dateien-Tab, Word-/PDF-Import, Abgabebox) sind logische Dokumente:
+  genau ein Eintrag im Dateien-Tab, bevorzugt als PDF angezeigt. Originaldatei, extrahierter
+  Text und ältere Versionen stehen in den Dokumentdetails.
+- Automatische PDF-Konvertierung (LibreOffice, isoliert) und formatspezifische Textextraktion
+  (PDF, DOCX, DOC, ODT, RTF, TXT, Markdown, CSV; OCR für gescannte PDFs) im neuen Dienst
+  `document-worker`, mit persistenten Aufträgen, Wiederholungen und Statusanzeige.
+- Einheitliches, versioniertes Inhaltsformat (`hocx.document-content` v1) als Grundlage für das
+  spätere Zusammenführen mehrerer Dokumente.
+- Protokollexporte bilden je Protokoll und Exportart ein Dokument mit Versionshistorie; der
+  Dateien-Tab zeigt die aktuelle Version (Filter «Protokollexporte»).
+- Bestehende Dateien und Exporte werden automatisch übernommen (`document_sync`, wiederholbar).
+- Neue Jobs: `document_sync`, `document_worker`.
+
+### Behoben
+
+- Todo- und Terminlisten-Exporte scheiterten beim Speichern am CHECK auf
+  `protocol_export_cache.export_format` (Migration 0116).
+- Die Protokollversion zählte hoch, wenn zwischen zwei Protokoll-PDFs eine Liste oder LaTeX
+  exportiert wurde (Inhaltsvergleich jetzt nur mit früheren Protokoll-PDFs).
+
 ### Update
 
 `./scripts/deploy.sh <test|prod>` ergänzt die neuen Secrets automatisch (Migrationen 0113, 0114).
+Dokumentverarbeitung (Migrationen 0115, 0116, Dienst `document-worker`): RUNBOOK Abschnitt 14.
 Neue Cronjobs und die Anleitung zur ersten Migration: RUNBOOK Abschnitt 13. Das Dateisystem
 bleibt aktiv, bis die Erstmigration im Adminportal gestartet wird.
 

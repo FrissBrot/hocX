@@ -29,6 +29,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends postgresql-comm
     && rm -rf /var/lib/apt/lists/*
 ENV PATH="/usr/lib/postgresql/${PG_MAJOR}/bin:${PATH}"
 
+# Dokumentverarbeitung (document-worker, app/services/documents/): LibreOffice ohne GUI für die
+# PDF-Konvertierung, Tesseract + Poppler für den OCR-Fallback, metrisch kompatible Schriften für
+# Office-Dokumente. Eigene Schicht, damit die Schichten davor im Cache bleiben. Nur der
+# document-worker ruft diese Programme auf - nie der Webprozess.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libreoffice-writer-nogui \
+    libreoffice-calc-nogui \
+    libreoffice-impress-nogui \
+    tesseract-ocr \
+    tesseract-ocr-deu \
+    tesseract-ocr-fra \
+    tesseract-ocr-ita \
+    poppler-utils \
+    fonts-liberation \
+    fonts-dejavu-core \
+    fonts-crosextra-carlito \
+    fonts-crosextra-caladea \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --gid 5001 hocx-storage \
     && useradd --create-home --uid 5000 --gid 5001 hocx
 
