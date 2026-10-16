@@ -7,7 +7,8 @@ Architektur und Betrieb: [Backup (BorgBackup)](backup/index.md).
 
 ## Vorbereitung und Ausführung
 
-Die Testdatenbank muss bis einschliesslich `0115_backup_system` migriert sein. Das
+Die Testdatenbank muss bis einschliesslich `0115_backup_system` migriert sein (im Release 1.2.0:
+`alembic upgrade head`, Stand `0125_release_merge_imgmeta`). Das
 Backend-Testimage enthält borg 1.4, den PostgreSQL-16-Client und `sshd`; die Tests laufen gegen
 das isolierte Test-S3 (Garage) und ein lokales Borg-Repository, die SSH-Fälle gegen einen
 `sshd` im Testcontainer mit `borg serve --append-only` als Ersatz für die Storage Box.
@@ -62,10 +63,10 @@ Dateien relativ zu `backend/tests/` bzw. `frontend/components/admin/`.
 
 | ID | Prüfung | Erwartung | Testdatei / Test |
 |---|---|---|---|
-| HOLD-01 | Registriertes Objekt unter aktivem Hold löschen | bisheriger Inhalt liegt unter `_hocx-backup-hold/<hold>/<sha256>` | `test_backup_hold.py::test_delete_under_hold_preserves_the_registered_content` |
+| HOLD-01 | Registriertes Objekt unter aktivem Hold löschen, danach Purge-Job | `delete` legt nur einen Tombstone an, die Datei bleibt; erst `purge_deleted` sichert den bisherigen Inhalt nach `_hocx-backup-hold/<hold>/<sha256>` und löscht dann (Migration `0123_backup_hold_tombstones`: der Hold findet auch Tombstones) | `test_backup_hold.py::test_delete_under_hold_preserves_the_registered_content` |
 | HOLD-02 | Objekt unter Hold zweimal überschreiben | jeder vorherige Stand nach Inhalt gesichert | `test_backup_hold.py::test_overwrite_under_hold_preserves_the_previous_version_once` |
 | HOLD-03 | Ohne Hold bzw. Hold auf anderer Generation löschen | keine Kopie | `test_backup_hold.py::test_without_hold_nothing_is_copied`, `::test_hold_on_another_generation_does_not_copy` |
-| HOLD-04 | Sicherungskopie schlägt fehl | Löschen scheitert, Objekt bleibt erhalten | `test_backup_hold.py::test_failed_preservation_aborts_the_destructive_write` |
+| HOLD-04 | Sicherungskopie schlägt beim Purge fehl | Purge-Job bricht mit `StorageUnavailable` ab, Objekt bleibt erhalten und wird im nächsten Lauf erneut versucht | `test_backup_hold.py::test_failed_preservation_aborts_the_destructive_write` |
 | HOLD-05 | Löschen/Überschreiben/Neuanlage nach dem Snapshot, während der Übertragung | Sicherungspunkt enthält den Snapshot-Stand, neue Datei fehlt, Hold-Kopien danach entfernt | `test_backup_worker_e2e.py::test_changes_during_transfer_keep_the_snapshot_content` |
 | HOLD-06 | Storage-Cutover während des Backups | Backup liest die eingefrorene alte Generation zu Ende | `test_backup_worker_e2e.py::test_cutover_during_backup_reads_the_frozen_generation` |
 
@@ -122,6 +123,7 @@ Dateien relativ zu `backend/tests/` bzw. `frontend/components/admin/`.
 | UI-03 | Einstellungen | nur «vorhanden/fehlt», nie Secrets | `admin-backups.test.tsx` |
 | OPS-01 | `backup_storage.sh` bei aktivem Borg-Backup | läuft nicht (ohne Docker-Aufruf), nur mit `HOCX_LEGACY_BACKUP_FORCE=true` | `scripts/tests/test_legacy_backup_guard.sh` |
 | OPS-02 | Release-Konfiguration | `backup-worker` gehärtet, Backend ohne Borg-Secrets, `deploy.sh` initialisiert nie ein Repository | `scripts/tests/test_release_config.sh` |
+| OPS-03 | Rollback von `deploy.sh` auf ein Release ohne `backup-worker` (z. B. 1.1.x) | Worker wird gestoppt statt mit dem neuen Image weiterzulaufen; Release-Manifest führt `HOCX_BACKEND_WORKERS` | `scripts/tests/test_release_config.sh` (Konfiguration), Ablauf manuell: [Release 1.2.0](release-1.2.0-testbook.md) REL-M5 |
 
 ## Manuelle Prüfungen und Abnahme
 
@@ -143,6 +145,9 @@ Dateien relativ zu `backend/tests/` bzw. `frontend/components/admin/`.
 ## Bekannte Lücken
 
 - Ein Ausfall der PostgreSQL-Datenbank mitten im Backup ist nicht automatisiert getestet.
+- Das Zusammenspiel von laufendem Backup und Purge-Job ist nur auf Ebene `purge_deleted`
+  (HOLD-01/-04) geprüft, nicht mit gleichzeitig laufendem `backup-worker`; manuell BAK-M7 mit
+  parallelem Löschen von Dateien ergänzen.
 - Hetzner-spezifisches Verhalten (BAK-M1 bis BAK-M4) ist nur manuell prüfbar.
 - Der Restore-Test im Betrieb prüft Dateiinhalte standardmässig stichprobenartig; vollständig
   über «alle Objekte» (`objects=all`).

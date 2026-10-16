@@ -11,7 +11,9 @@ Metadaten-Backfill. Fachliche Beschreibung: `backend/UPLOAD_DUPLICATES.md`.
 
 ## Vorbereitung und Ausführung
 
-Die Testdatenbank muss bis einschließlich `0113_image_capture_metadata` migriert sein.
+Die Testdatenbank muss bis einschließlich `0113_image_capture_metadata` migriert sein (im Release
+1.2.0: `alembic upgrade head`). Seit 1.2.0 lesen alle Downloads aus dem Objektspeicher; die
+automatisierten Tests laufen gegen die Dateisystem-Generation, S3 prüfen STO-M1/STO-M2.
 Die regulären Testskripte bereiten die Testumgebung vor:
 
 ```bash
@@ -103,9 +105,12 @@ Testdatei `backend/tests/test_upload_precheck.py`, sofern nicht anders angegeben
 | EXP-04 | PNG, einfaches und erweitertes WebP | Datum geschrieben, Bild bleibt gültig | `test_image_export.py` | 42 |
 | EXP-05 | GPS nur in der Datenbank | In die Kopie geschrieben (inkl. Höhe unter Meeresspiegel) | `test_image_export.py` | 44 |
 | EXP-06 | GIF, TIFF, defektes JPEG | Unverändert exportierbar | `test_image_export.py` | 47 |
-| EXP-07 | Einzeldownload mit/ohne Schätzdatum | Temporäre Kopie bzw. Original; gespeicherte Datei byte-gleich | `test_image_export.py` | 45 |
+| EXP-07 | Einzeldownload mit/ohne Schätzdatum | Exportfassung als eigene Antwort (nie das gespeicherte Objekt) bzw. Original per `object_response`; gespeicherte Datei byte-gleich | `test_image_export.py` | 45 |
 | EXP-08 | Freigabe-ZIP mit/ohne geteiltes Aufnahmedatum | Datumslogik je Datei; ohne Freigabe kein Datum und keine Markierung | `test_image_export.py` | 46 |
 | EXP-09 | Freigabe ohne Standort, GPS nur in der Datenbank | Kein GPS in Datei und API | `test_image_export.py` | 34 |
+| LOC-01 | Album-Freigabe an Partner mit/ohne Standort, Partner-Fotos beim Besitzer | Inhalts- und Download-Route liefern GPS nur mit Freigabe, sonst bereinigte Bytes; Kamera/Datum bleiben | `test_album_share_location.py` | IMGMETA-007 |
+| LOC-02 | GPS nur in der Datenbank, Partner ohne Standortfreigabe | Exportfassung schreibt kein GPS in die Kopie | `test_album_share_location.py::test_database_only_gps_is_not_written_into_the_partner_copy` | IMGMETA-007 |
+| LOC-03 | Live-Photo-Clip für Partner ohne Standort | Clip aus dem Objektspeicher per ffmpeg ohne Container-Metadaten | `test_album_share_location.py::test_live_photo_video_loses_its_location_for_partners_without_the_location` (braucht ffmpeg) | IMGMETA-007 |
 | BFL-01 | Backfill mit vollständigem, leerem, fehlendem und defektem Original sowie fremdem Mandanten | Datum/GPS rekonstruiert; Status `no_metadata`/`missing_file`/`unreadable`; Auswertung stimmt; zweiter Lauf ohne Änderungen; `--rescan` nur ergänzend | `test_image_metadata_backfill.py` | 48–51 |
 | BFL-02 | Lauf nach zwei Bildern abbrechen, neu starten | Setzt fort, kein Bild doppelt | `test_image_metadata_backfill.py` | 52 |
 | BFL-03 | Dry-Run | Auswertung ohne Schreiben | `test_image_metadata_backfill.py` | 51 |
@@ -155,6 +160,8 @@ Testdatei `backend/tests/test_upload_precheck.py`, sofern nicht anders angegeben
 | EXP-M1 | Bild mit Schätzdatum einzeln, als Mehrfachauswahl und über einen Freigabe-Link herunterladen; in einem Fotoprogramm (z. B. Apple Fotos, Lightroom, `exiftool`) öffnen | Programm sortiert unter dem geschätzten Tag; `exiftool` zeigt `CaptureDateEstimated=True`; Original auf dem Server unverändert (Hash vergleichen) |
 | EXP-M2 | Exportiertes Bild wieder hochladen | Wird als vorhanden bzw. mit geschätztem (nicht echtem) Datum übernommen |
 | BFL-M1 | Auf einer Kopie der Testdaten `python -m scripts.backfill_image_metadata --dry-run`, dann ohne `--dry-run`, dann erneut ausführen | Plausible Auswertung; zweiter Lauf `checked: 0`; Abbruch mit Ctrl+C und Neustart setzt fort |
+| STO-M1 | Nach einer Storage-Migration auf S3 (Testumgebung): Foto mit Schätzdatum einzeln, als Live-Photo-ZIP und als Partner ohne Standort herunterladen | Exportfassung bzw. bereinigte Datei wie auf dem Dateisystem; Videos im Browser spulbar (Range/206) |
+| STO-M2 | Nach der Migration den Metadaten-Backfill und den Vorab-Abgleich ausführen | Backfill liest aus S3 (`missing_file` nur bei wirklich fehlenden Objekten); vorhandene Bilder werden weiter erkannt |
 | ABX-M1 | Handyfoto mit GPS über die Abgabebox einreichen | Aufnahmedatum und Standort in der Detailansicht; Abgabebox-Antwort unverändert (kein Duplikat- oder Metadatenhinweis) |
 
 ## Grenzen und Nachweise
