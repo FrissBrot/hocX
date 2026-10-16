@@ -8,56 +8,88 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
-Neue Dokument-Engine mit **Document Studio**: Alle PDFs entstehen über eine einheitliche Engine
-(Typst statt TeX) mit Brand Studio (Corporate Design), Vorlagenbibliothek, Visual Designer,
-einheitlichem Export-Dialog, Live-Vorschau und PDF/A-2b. Jedes PDF wird registriert und lässt sich
-auf einer öffentlichen Prüfseite auf Echtheit prüfen. **Breaking Changes** - vor dem Update die
-Schritte unten lesen.
+## [1.2.0] - 2026-10-16
 
-### Update auf diese Version
+Feature-Release auf 1.1.13. Fünf Entwicklungszweige sind zusammengeführt und aufeinander
+abgestimmt: die neue **Dokument-Engine mit Document Studio** (Typst statt TeX, Corporate Design,
+Vorlagen, Echtheitsprüfung), ein einheitlicher **Objektspeicher** (Dateisystem oder S3) mit
+Wartungsmodus, ein **Offsite-Backup mit BorgBackup** inklusive Restore, eine
+**Dokumentverwaltung** mit PDF-Ansicht und Textextraktion sowie **Bild-Metadaten** mit
+Vorab-Abgleich beim Upload. Dazu die Audit-Reparaturen aus `main` (Abschnitt «Betrieb»).
+**Breaking Changes** - vor dem Update die Schritte unten lesen.
 
-1. Frisches Backup ziehen: Migration `0115` ist **nicht umkehrbar** (Rollback nur über das
-   Backup).
-2. `HOCX_VERSION` setzen, `./scripts/update_deploy_code.sh` und
-   `./scripts/deploy.sh <test|prod>` ausführen. Die Migrationen `0114` bis `0118` laufen
-   automatisch. Keine neuen Pflicht-Umgebungsvariablen; optional `DOCUMENT_VERIFY_BASE_URL`
-   (Standard `https://<TRAEFIK_ABGABEBOX_DOMAIN>/verify`).
-3. Nach erfolgreichem Deploy alte Vorlagen-Dateien entfernen:
-   `./scripts/cleanup-legacy-document-templates.sh --dry-run`, dann ohne `--dry-run`.
-4. Unter `/admin/system` den Check «Öffentliche Prüfseite» prüfen, ein Protokoll exportieren und
-   die Datei auf `/verify` der Abgabebox ablegen: Ergebnis «Original».
+### Update von 1.1.13 auf 1.2.0
+
+1. **Backup ziehen.** `deploy.sh` legt vor den Migrationen einen Datenbank-Dump an, die
+   Dateiablage (`HOCX_STORAGE_PATH`) zusätzlich selbst sichern. Migration
+   `0115_document_engine_migrate` (TeX-Vorlagen → Hausstile → Brand-Profile) ist **nicht
+   umkehrbar**: ein echter Rückweg auf 1.1.13 geht nur über dieses Backup. Der automatische
+   App-Rollback von `deploy.sh` startet zwar die alten Images, rollt aber keine Migration zurück.
+2. **Platz prüfen.** Das Backend-Image wird grösser (LibreOffice, Tesseract, Poppler für den
+   `document-worker`; BorgBackup, SSH und PostgreSQL-Client für den `backup-worker`; TeX Live
+   entfällt). Lokales S3 (Garage) belegt erst nach einer Storage-Migration nennenswert Platz.
+3. **Code und Version.** `HOCX_VERSION=v1.2.0` in `.env`, dann `./scripts/update_deploy_code.sh`
+   und `./scripts/deploy.sh <test|prod>`. `deploy.sh` ergänzt die neuen Secrets
+   (`STORAGE_CREDENTIALS_KEY`, Zugangsdaten des lokalen S3, leere Backup-Platzhalter) selbst. Keine
+   neuen Pflicht-Variablen; optional `DOCUMENT_VERIFY_BASE_URL` (Standard
+   `ABGABEBOX_BASE_URL/verify`), `BACKUP_*` und `DOCUMENT_*` (siehe `.env.prod.example`).
+4. **Migrationen** `0113` bis `0125` laufen automatisch; neue Dienste `storage-init`,
+   `storage-worker`, `local-s3`, `backup-worker` und `document-worker` startet `deploy.sh` mit
+   `up -d`. Die Smoke-Checks prüfen zusätzlich `document-worker` und `storage-worker`.
+5. **Nach dem Deploy:**
+   - `/admin/system`: Checks «Öffentliche Prüfseite», «Dateispeicher» und
+     «Dokumentverarbeitung» grün; ein Protokoll exportieren und auf `/verify` der Abgabebox
+     prüfen (Ergebnis «Original»).
+   - Alte TeX-Vorlagen-Dateien entfernen, **solange noch das Dateisystem aktiv ist** (vor einer
+     Umstellung auf S3): `./scripts/cleanup-legacy-document-templates.sh --dry-run`, dann ohne
+     `--dry-run` (RUNBOOK Abschnitt 13).
+   - `document_sync` übernimmt bestehende Dateien und Protokollexporte schrittweise als
+     logische Dokumente; Fortschritt: `docker compose exec backend python -m app.workers.document_admin status`
+     (RUNBOOK Abschnitt 16).
+   - Optional einmalig den Bild-Metadaten-Backfill:
+     `docker compose exec backend python -m scripts.backfill_image_metadata`
+     (`backend/UPLOAD_DUPLICATES.md`, Abschnitt 12).
+6. **Später, bewusst entscheiden:** Erstmigration der Dateien in den Objektspeicher (RUNBOOK
+   Abschnitt 14) und Einrichtung des Borg-Offsite-Backups mit Ablösung der Cronjobs
+   `backup_db`/`backup_storage` (RUNBOOK Abschnitt 15). Bis dahin bleibt das Dateisystem aktiv und
+   die bisherigen Backup-Cronjobs gelten weiter.
 
 **Wer einen Vorabstand mit digitaler Dokumentsignatur installiert hatte:** Die Signatur entfällt
 vollständig. Die Variablen `DOCUMENT_SIGNING_*` werden ignoriert und können aus `.env` entfernt
 werden, ebenso das Verzeichnis `.signing/` bzw. `DOCUMENT_SIGNING_DIR` und die Datei
 `.secrets/document_signing_key_password`. Bereits signiert exportierte PDFs bleiben über die
-Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116`).
+Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_registry`).
 
 ### Breaking Changes
 
 - Der TeX-Export ist entfernt (inkl. TeX Live im Backend-Image). Dokumentvorlagen werden
-  automatisch zu **Brand-Profilen** des Document Studio (Migrationen `0115` und `0118`): Farben, Schrift (inkl. hochgeladener Schriften), Format,
-  Kopf-/Fuss-/Titelseiten-/TOC-Variante, Nummerierung, Ort, Absender, Logo und Fussbild
-  werden übernommen, ebenso TOC-Abstand, Farbe des Absenders, «Metadaten anzeigen» und die
-  Kopfzeile «Logo mit Farbbalken». **Eigener Vorlagen-Code (Slots) entfällt ersatzlos**;
-  betroffene Mandanten schreibt die Migration ins Log.
+  automatisch zu **Brand-Profilen** des Document Studio (Migrationen `0115` und `0118`): Farben,
+  Schrift (inkl. hochgeladener Schriften), Format, Kopf-/Fuss-/Titelseiten-/TOC-Variante,
+  Nummerierung, Ort, Absender, Logo und Fussbild werden übernommen, ebenso TOC-Abstand, Farbe des
+  Absenders, «Metadaten anzeigen» und die Kopfzeile «Logo mit Farbbalken». **Eigener
+  Vorlagen-Code (Slots) entfällt ersatzlos**; betroffene Mandanten schreibt die Migration ins Log.
 - Die Element-Option `latex_template` entfällt. Das Render-Format «Raw LaTeX» wird entfernt,
-  sofern es nirgends verwendet wird; die PDF-Ausgabe richtet sich nur noch nach dem
-  Element-Typ.
+  sofern es nirgends verwendet wird; die PDF-Ausgabe richtet sich nur noch nach dem Element-Typ.
 - API: `/api/exports/*` und die alten `/api/document-templates/*` sind entfernt, neu sind
   `/api/documents/*`, `/api/document-templates` (Document Studio), `/api/document-brands`,
   `/api/document-assets`, `/api/document-components`, `/api/document-template-assignments`,
-  `/api/document-studio/*`, `/api/document-settings` und `/api/document-verification`.
+  `/api/document-studio/*`, `/api/document-settings` und `/api/document-verification`. Die
+  Dokumentverwaltung belegt `/api/documents/{uuid}…` (Details, Dateien, Text, Neuverarbeitung).
 - Protokollvorlagen verweisen nicht mehr direkt auf eine Dokumentvorlage. Welche Vorlage und
   welches Corporate Design gelten, regeln Zuweisungen pro Dokumenttyp und Protokollvorlage.
 - Mandanten-Export: Archivformat 7 mit Brand-Profilen, Assets, Vorlagen samt Revisionen,
   Komponenten, Zuweisungen, Export-Historie und Dokumentenregister. Archive der Formate 2-6
-  lassen sich weiter importieren (alte Vorlagen und Hausstile werden umgewandelt). Die Verifizierung einer Organisation durch hocX wird nie mit importiert.
+  lassen sich weiter importieren (alte Vorlagen und Hausstile werden umgewandelt). Die
+  Verifizierung einer Organisation durch hocX wird nie mit importiert.
 - Die Abgabebox-Datenbankrolle `hocx_abgabebox` liest von `tenant` nur noch `id` und
   `storage_quota_bytes` (vorher die ganze Tabelle).
 - Abgabe-Link-Tokens können nicht `verify` lauten (Route der Prüfseite).
+- Protokoll-PDFs, die Version eines logischen Dokuments sind (Dateien-Tab), fallen nicht mehr
+  unter `EXPORT_RETENTION_DAYS` und die Regel «nur die neueste Datei je Protokoll»; nur ersetzte
+  Darstellungen (gleicher Inhalt neu exportiert) und Exporte ohne Protokollbezug werden
+  freigegeben. Das Speicherkontingent wächst dadurch mit jeder inhaltlich neuen Protokollfassung.
 
-### Neu
+### Neu: Dokument-Engine und Document Studio
 
 - **Document Studio** (Navigation «Dokumente»):
   - **Vorlagen:** Bibliothek mit 26 mitgelieferten Vorlagen für alle 16 Dokumenttypen
@@ -72,35 +104,40 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116`).
     Seitenaufbau, Angaben zur Organisation und Prüfvermerk, Live-Vorschau, Versionen.
   - **Bilder und Schriften**, **wiederverwendbare Komponenten**, **Export-Verlauf**.
 - Ein Export-Dialog für alle Dokumente (Protokolle, Todos, Termine, Listen, Statistik): Vorlage
-  wählen, Vorschau mit echten Daten, Optionen, PDF oder Zusatzformat.
+  wählen, Vorschau mit echten Daten, Optionen, PDF oder Zusatzformat (CSV, XLSX, ICS, Markdown).
 - Fachkomponenten u. a. Monatskalender, Agenda, Präsenzliste zum Unterschreiben,
   Mitgliederliste, Kennzahlen-Kacheln, Diagramme als Vektorgrafik, QR-Code, Unterschriftsfelder.
 - Datenfelder werden beim Export mit den Rechten der exportierenden Person gefüllt (z. B.
-  Finanzdaten nur mit Finanz-Feature).
+  Finanzdaten nur mit Finanz-Feature, Listen und Mitgliederdaten nur für Schreibende).
 - Dokumentsprache pro Verein, pro Export änderbar; alle festen PDF-Texte in allen Sprachen.
-- PDFs als PDF/A-2b; Metadaten (Dokument-ID, Mandant, Typ, Version, Inhalts-Hash, Prüf-URL)
-  im XMP.
+- PDFs als PDF/A-2b; Metadaten (Dokument-ID, Typ, Version, Inhalts-Hash, Prüf-URL, Mandant nur
+  bei freigegebener Anzeige) im XMP.
 - **Dokumentenregister und Echtheitsprüfung:** Jedes PDF wird mit seinem SHA-256 registriert und
-  trägt (je nach Corporate Design) Prüf-URL, Kurz-ID und QR-Code. Die öffentliche Prüfseite `/verify`
-  der Abgabebox zeigt ohne Konto, ob eine Datei unverändert aus hocX stammt, mit Status, Version
-  und Hinweis auf eine neuere Version. Die Datei verlässt dabei nie den Browser.
+  trägt (je nach Corporate Design) Prüf-URL, Kurz-ID und QR-Code. Die öffentliche Prüfseite
+  `/verify` der Abgabebox zeigt ohne Konto, ob eine Datei unverändert aus hocX stammt, mit
+  Status, Version, Hinweis auf eine neuere Version, einem beim Export überschriebenen Titel und
+  importierten, nicht verifizierten Einträgen. Die Datei verlässt dabei nie den Browser.
 - **Dokumente → Echtheitsprüfung:** Name und Logo auf der Prüfseite anzeigen (Standard aus), auf
   neuere Versionen hinweisen (Standard an), Verifizierung durch hocX beantragen, Vorschau.
 - **Adminportal → Verifizierungen:** Anträge bestätigen oder ablehnen, Verifizierung entziehen;
   eine Namensänderung hebt sie automatisch auf. Bestätigte Organisationen erhalten auf der
   Prüfseite das Abzeichen «Verifizierte Organisation».
-- Version steigt nur bei geändertem Inhalt (Inhalts-Hash). Eine andere Vorlage oder ein anderes
-  Corporate Design erzeugt keine neue Version (Design-Hash separat). Jeder Export wird mit
-  Vorlagen- und Brand-Revision protokolliert.
-- Weitere Formate aus demselben Modell: CSV, XLSX, ICS, Markdown.
+- Version steigt nur bei geändertem Inhalt (Inhalts-Hash). Eine andere Vorlage, ein anderes
+  Corporate Design oder eine andere Sprache erzeugt keine neue Version (Design-Hash separat); die
+  erste Endfassung ist immer v1.0. Jeder Export wird mit Vorlagen- und Brand-Revision protokolliert.
+- Entwürfe tragen immer ein Wasserzeichen, ausser Schreibende schalten es ab.
+- Render-Warteschlange begrenzt (HTTP 503 statt Stau), abgebrochene Vorschauen beenden das
+  Warten, Vorschau und Thumbnails rastern nur die benötigten Seiten.
 - Systemcheck «Öffentliche Prüfseite» inkl. ntfy.
 - CI: visuelle Regressionstests (Golden-Bilder), Galerie-PDF als Artefakt, Katalogprüfung inkl.
   aller Studio-Texte.
+
 ### Neu: Objektspeicher (S3), Live-Migration und Wartungssystem
 
-- Alle persistenten Dateien (Uploads, Abgabebox inkl. Quarantäne, Vorlagen-Bauteile und
-  -Snapshots, Exporte, Mandantenlogos, Klon-/Import-Dateien) laufen über eine einheitliche
-  Objektspeicher-Abstraktion (Dateisystem oder S3: AWS, Hetzner, Garage, S3-kompatibel).
+- Alle persistenten Dateien (Uploads, Abgabebox inkl. Quarantäne, Document-Studio-Assets,
+  erzeugte PDFs, Dateien logischer Dokumente, Mandantenlogos, Klon-/Import-Dateien) laufen über
+  eine einheitliche Objektspeicher-Abstraktion (Dateisystem oder S3: AWS, Hetzner, Garage,
+  S3-kompatibel).
 - Lokales S3 (Garage v2.3.0) wird beim Deployment automatisch bereitgestellt; ein Host-Controller
   stoppt es nur, wenn es nachweislich nicht mehr gebraucht wird, und löscht nie Daten.
 - Adminportal **System → Storage**: verschlüsselte Speicherprofile, Verbindungstest,
@@ -110,13 +147,30 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116`).
 - Adminportal **System → Wartung**: Wartungsfenster planen/starten/beenden; Freigabe nur bei
   erfüllten Bedingungen. Serverseitige Sperre (503 + Retry-After, WebSocket 1013) für Backend
   und Abgabebox, Wartungshinweis auf der Anmeldeseite, konservative Dauerabschätzung.
-- Neue Jobs: `storage_migration_worker`, `maintenance_supervisor`, `storage_journal_cleanup`,
-  `storage_purge`, `storage_controller`, `backup_storage`; neue Systemprüfungen `object_storage`,
-  `storage_migration`.
 - Gelöschte Dateien werden erst nach dem Commit physisch entfernt (Tombstone + Job
   `storage_purge`): scheitert eine Löschung in der Datenbank, bleibt die Datei erhalten.
 - Die Adresse eines S3-Endpunkts wird bei jeder Verbindung neu aufgelöst und geprüft
   (Schutz vor DNS-Rebinding auf interne Ziele).
+- Neue Jobs: `storage_migration_worker`, `maintenance_supervisor`, `storage_journal_cleanup`,
+  `storage_purge`, `storage_controller`, `backup_storage`; neue Systemprüfungen
+  `object_storage`, `storage_migration`.
+
+### Neu: Offsite-Backup mit BorgBackup
+
+- Dienst `backup-worker` (einziger Dienst mit Borg-Schlüssel und -Passphrase): verschlüsselte,
+  deduplizierte Backups von Datenbank und allen Objekten auf eine Hetzner Storage Box
+  (append-only), inkrementelle Objektsicherung, Retention, Integritätsprüfung und monatlicher
+  Restore-Test.
+- Konsistente Sicherung im laufenden Betrieb: Während eines Backups sichert jeder Schreiber und
+  der Purge-Job den bisherigen Inhalt eines Objekts vor dem Überschreiben bzw. Löschen
+  (Copy-on-Write-Hold).
+- Adminportal **System → Backups**: Status, Einstellungen, Sicherungspunkte, Wiederherstellung
+  eines Mandanten **als Kopie** oder **vollständig** (Rettungspunkt, isolierte Datenbank, neue
+  Speichergeneration, Tausch mit automatischem Rücktausch), jede Wiederherstellung mit frischer
+  TOTP-Bestätigung; Recovery-CLI für den Notfall ohne laufende App.
+- `deploy.sh` legt vor den Migrationen ein geschütztes Backup an, sobald Borg eingerichtet ist
+  (`HOCX_PRE_DEPLOY_BACKUP`, `..._ALLOW_PARTIAL`, `..._TIMEOUT`).
+- Neue Systemprüfungen `backup`, `backup_repository`, `backup_verification` inkl. ntfy.
 
 ### Neu: Dokumentverwaltung mit PDF-Ansicht und Textextraktion
 
@@ -124,35 +178,18 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116`).
   genau ein Eintrag im Dateien-Tab, bevorzugt als PDF angezeigt. Originaldatei, extrahierter
   Text und ältere Versionen stehen in den Dokumentdetails.
 - Automatische PDF-Konvertierung (LibreOffice, isoliert) und formatspezifische Textextraktion
-  (PDF, DOCX, DOC, ODT, RTF, TXT, Markdown, CSV; OCR für gescannte PDFs) im neuen Dienst
+  (PDF, DOCX, DOC, ODT, RTF, TXT, Markdown, CSV, XLSX; OCR für gescannte PDFs) im neuen Dienst
   `document-worker`, mit persistenten Aufträgen, Wiederholungen und Statusanzeige.
 - Einheitliches, versioniertes Inhaltsformat (`hocx.document-content` v1) als Grundlage für das
   spätere Zusammenführen mehrerer Dokumente.
-- Protokollexporte bilden je Protokoll und Exportart ein Dokument mit Versionshistorie; der
-  Dateien-Tab zeigt die aktuelle Version (Filter «Protokollexporte»).
+- **Protokollexporte der Dokument-Engine** bilden je Protokoll und Dokumenttyp ein Dokument mit
+  Versionshistorie (neue Version nur bei neuem Inhalt); der Dateien-Tab zeigt die aktuelle
+  Version (Filter «Protokollexporte»).
 - Bestehende Dateien und Exporte werden automatisch übernommen (`document_sync`, wiederholbar).
-- Neue Jobs: `document_sync`, `document_worker`.
+- Neue Jobs `document_sync`, `document_worker`; neue Systemprüfung `document_queue`
+  (gestaute oder endgültig gescheiterte Aufträge, inkl. ntfy).
 
-### Behoben
-
-- Todo- und Terminlisten-Exporte scheiterten beim Speichern am CHECK auf
-  `protocol_export_cache.export_format` (Migration 0116).
-- Die Protokollversion zählte hoch, wenn zwischen zwei Protokoll-PDFs eine Liste oder LaTeX
-  exportiert wurde (Inhaltsvergleich jetzt nur mit früheren Protokoll-PDFs).
-
-### Update
-
-`./scripts/deploy.sh <test|prod>` ergänzt die neuen Secrets automatisch (Migrationen 0113, 0114).
-Dokumentverarbeitung (Migrationen 0115, 0116, Dienst `document-worker`): RUNBOOK Abschnitt 14.
-Neue Cronjobs und die Anleitung zur ersten Migration: RUNBOOK Abschnitt 13. Das Dateisystem
-bleibt aktiv, bis die Erstmigration im Adminportal gestartet wird.
-
-Enthält die Migration `0113` (rein additiv, umkehrbar). Keine neuen Umgebungsvariablen.
-Nach dem Deploy optional einmalig den Metadaten-Backfill ausführen
-(`docker compose exec backend python -m scripts.backfill_image_metadata`, siehe
-`backend/UPLOAD_DUPLICATES.md`, Abschnitt 12).
-
-### Neu
+### Neu: Bild-Metadaten und Vorab-Abgleich beim Upload
 
 - Bild-Upload prüft Bilder vorab im Browser (Web Worker): SHA-256, Aufnahmedatum,
   Zeitzone, GPS, Kamera, Abmessungen, Ausrichtung – für JPEG, PNG, WebP, TIFF und HEIC/HEIF.
@@ -167,22 +204,60 @@ Nach dem Deploy optional einmalig den Metadaten-Backfill ausführen
   Drag & Drop oder „Ordner auswählen“, automatische Aufteilung grosser Auswahlen in Aufträge zu
   höchstens 50 Dateien, Abbrechen während der Übertragung.
 - Upload-Ergebnis je Datei: Hochgeladen, Übersprungen, Übersprungen · Metadaten ergänzt,
-  Fehlgeschlagen – mit Zusammenfassung und Detailliste.
+  Fehlgeschlagen – mit Zusammenfassung und Detailliste; Upload-Fehler übersetzt (Fehlercodes).
 - Bilddetails: echtes Aufnahmedatum (in Kamerazeit, mit Offset), geschätztes Datum
   (bearbeiten/entfernen, `PATCH /api/stored-files/{id}/capture-date`), Uploaddatum und
   Standort getrennt.
-- GPS-Daten werden gespeichert (Breite, Länge, Höhe, Blickrichtung, Genauigkeit, Herkunft) –
-  Grundlage für eine spätere Kartenansicht.
+- GPS-Daten werden gespeichert (Breite, Länge, Höhe, Blickrichtung, Genauigkeit, Herkunft).
+  **Standort je Album-Freigabe schaltbar:** Freigaben an Partner-Mandanten teilen ihn
+  standardmässig, Freigabe-Links nicht; ohne Freigabe entfernen Downloads, Vorschau und
+  Live-Photo-Clips den Standort.
 - Downloads, Mehrfachdownload und Freigabe-Links schreiben ein geschätztes Datum in EXIF/XMP
   einer temporären Kopie, wenn kein echtes Aufnahmedatum existiert; Originale bleiben
   unverändert.
 - Abgabebox und Protokollbilder speichern Aufnahmedatum, GPS und Kamera beim Upload.
 - Gezielter Metadaten-Backfill für ältere Bilder (fortsetzbar, wiederholbar, mit Auswertung).
+- Ein nur geschätztes Datum führt nie zu einer automatischen Termin-Zuordnung; Aufnahmezeiten
+  werden in der Detailansicht nicht mehr um die App-Zeitzone verschoben.
 
-### Geändert
+### Abstimmung beim Zusammenführen (Release 1.2.0)
 
-- Ein nur geschätztes Datum führt nie zu einer automatischen Termin-Zuordnung.
-- Aufnahmezeiten werden in der Detailansicht nicht mehr um die App-Zeitzone verschoben.
+- Document Studio liest und schreibt Assets und erzeugte PDFs über den Objektspeicher (vorher
+  direkt im Dateisystem - nach einer S3-Migration wären Logos, Schriften und PDFs verloren
+  gewesen); Protokollbilder im PDF ebenso.
+- Storage-Migration und `storage_verify` prüfen die Referenzen des Document Studio
+  (`document_asset`) statt der entfallenen TeX-Vorlagen-Bauteile.
+- Der Backup-Hold sichert auch noch nicht gelöschte Tombstones (Migration
+  `0123_backup_hold_tombstones`) - sonst hätte der Purge-Job während eines Backups Inhalte
+  gelöscht, die das Backup noch braucht.
+- Downloads mit Standortschutz und Exportfassung (Bild-Metadaten) laufen über den
+  Objektspeicher; Mandanten-Restore aus Borg prüft importierte Register-Einträge wie der
+  ZIP-Import.
+- `deploy.sh`: Rollback stoppt bzw. startet die Worker mit Backend-Image passend zum vorherigen
+  Release; Smoke-Checks für `document-worker` und `storage-worker`.
+- Migration `0118_docmgmt_storage_purge` ist ein No-op (doppelte Einführung desselben Verfahrens,
+  die Fassung aus `0118_storage_purge_after_commit` behält die Rollenbindung der Abgabebox).
+
+### Neu und geändert aus main (Audit-Reparatur seit 1.1.13)
+
+- **Bussen:** mitgeführte Bussen mit Pflichtbegründung löschen (Soft-Delete, Anzeige im
+  Protokoll, rückgängig solange offen), doppelte Bussen beim Update zusammengeführt und per
+  Unique-Index ausgeschlossen, CHECK auf Status und Typ, offene Bussen aus abgeschlossenen
+  Protokollen einkassierbar, Bussen-Buchungen und Konten mit Historie geschützt, Statistik je
+  Währung.
+- **Elemente:** einheitliches Konfigurationsschema, ein Block-Editor für Anlegen und Bearbeiten,
+  gemeinsamer Terminfilter, zentraler Bussentarif, fehlende Optionen je Elementtyp.
+- **Sicherheit:** Login-Sperre pro Konto und Quell-IP (Traefik als Trusted Proxy), Domain-Wechsel
+  erst nach Bestätigung auf der Ziel-Domain, Nonce-CSP statt `unsafe-inline`, OIDC-state an den
+  startenden Browser gebunden, Admin-SSO nur mit bestätigter E-Mail, Multipart nur mit
+  signierter Session und Grössenlimit, localhost-Origins nur ausserhalb der Produktion,
+  Profilbilder validiert und neu kodiert.
+- **Betrieb:** Traefik liest Docker nur über einen Socket-Proxy, Lese-/Schreib-Timeouts 1 h,
+  Body- und Inflight-Grenzen je IP; Redis mit Passwort; Images per Digest und Actions per SHA
+  gepinnt (Dependabot); shellcheck in der CI.
+- Zahlreiche Korrekturen in Uploads, Thumbnails, Mandanten-Import/-Klon, Autosave,
+  Offline-Outbox, Kollaboration und Oberfläche (siehe Git-Historie).
+
 ### Betrieb
 
 - Prod lief bisher mit `HOCX_ENVIRONMENT=prod` und damit für das Backend nicht als
