@@ -356,6 +356,10 @@
         "title": "Pulizia del journal di archiviazione",
         "description": "Rimuove le vecchie voci del journal delle modifiche non più necessarie a migrazioni aperte."
       },
+      "storage_purge": {
+        "title": "Rimozione degli oggetti di archiviazione eliminati",
+        "description": "Rimuove fisicamente dall'archivio i file eliminati non appena l'eliminazione è stata salvata."
+      },
       "storage_migration_worker": {
         "title": "Worker di migrazione dell'archivio",
         "description": "Copia, verifica e cambia l'archivio dei file (segnale dal ciclo di polling)."

@@ -462,6 +462,28 @@ def request_generation_purge(db: Session, generation_id: int, *, confirmation: s
 # --- Journal ----------------------------------------------------------------------------------
 
 
+def purge_deleted_objects(db: Session) -> dict[str, int]:
+    """Gelöschte Objekte nach dem Commit physisch entfernen (Tombstones, S3-008), in Batches mit
+    eigenem Commit. Bei einem Write-Fence (Cutover/Wartung) endet der Lauf ohne Fehler - der
+    nächste Tick macht weiter."""
+    from app.core.objstore_client import PURGE_BATCH, StorageWriteFenced
+    from app.core.storage import get_object_store
+
+    store = get_object_store()
+    purged = 0
+    while True:
+        try:
+            batch = store.purge_deleted(db)
+            db.commit()
+        except StorageWriteFenced:
+            db.rollback()
+            break
+        purged += batch
+        if batch < PURGE_BATCH:
+            break
+    return {"purged": purged}
+
+
 def cleanup_journal(db: Session) -> dict[str, int]:
     """Journal-Einträge älter als storage_journal_retention_days löschen - nie solche, die eine
     offene Migration noch nachziehen muss."""

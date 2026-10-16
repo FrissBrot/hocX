@@ -494,6 +494,10 @@ def phase_inventory(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
             row.key: row for row in db.execute(select(StorageObject.key, StorageObject.size_bytes, StorageObject.sha256, StorageObject.version)
                                                 .where(StorageObject.namespace == namespace, StorageObject.status == "active")).all()
         }
+        # Gelöscht, aber physisch noch nicht entfernt (Tombstone, S3-008): weder kopieren noch
+        # wieder als aktiv registrieren - der Purge-Job räumt die Quelle ab.
+        tombstones = set(db.scalars(select(StorageObject.key).where(
+            StorageObject.namespace == namespace, StorageObject.status == "deleted", StorageObject.purge_pending.is_(True))))
         listed: set[str] = set()
         batch: list[dict[str, Any]] = []
 
@@ -515,6 +519,7 @@ def phase_inventory(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
                     FROM jsonb_to_recordset(CAST(:rows AS jsonb)) AS x(namespace text, key text, size bigint, sha text, version bigint)
                     ON CONFLICT (namespace, key) DO UPDATE SET size_bytes = EXCLUDED.size_bytes, sha256 = EXCLUDED.sha256,
                         status = 'active', updated_at = NOW()
+                    WHERE NOT storage_object.purge_pending
                 """), {"rows": _json(batch), "gen": migration.source_generation})
             guarded(db, ctx, heartbeat_at=datetime.now(UTC))
             db.commit()
@@ -530,6 +535,8 @@ def phase_inventory(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
             if migration.kind == "initial" and sms.is_excluded_initial_key(namespace, info.key):
                 report["excluded_objects"] += 1
                 report["excluded_bytes"] += info.size
+                continue
+            if info.key in tombstones:
                 continue
             listed.add(info.key)
             if migration.kind == "initial":

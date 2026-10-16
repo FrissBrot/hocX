@@ -23,6 +23,7 @@ from app.core.config import settings
 from app.models.entities import StoredFile, TodoStatus
 from app.services import public_id_service
 from app.services.export_service import ExportService
+from app.core.storage import get_object_store
 from tests.factories import (
     make_event,
     make_participant,
@@ -426,6 +427,8 @@ def test_m17_cleanup_old_generated_exports_deletes_only_files_past_retention(db,
     result = service.cleanup_old_generated_exports(db)
 
     assert result == {"deleted": 1, "deleted_rows": 0}
+    # S3-008: physisch entfernt erst der Purge-Job nach dem Commit.
+    get_object_store().purge_deleted(db)
     assert not old_file.exists()
     assert recent_file.exists()
 
@@ -448,12 +451,15 @@ def test_m17_cleanup_old_generated_exports_respects_custom_retention(db, tmp_pat
     assert file_path.exists()
 
     assert service.cleanup_old_generated_exports(db, retention_days=5) == {"deleted": 1, "deleted_rows": 0}
+    # S3-008: physisch entfernt erst der Purge-Job nach dem Commit.
+    get_object_store().purge_deleted(db)
     assert not file_path.exists()
 
 
-def test_cleanup_old_generated_exports_commits_per_key_and_stops_on_write_fence(db, tmp_path, monkeypatch):
-    """S3-008: ein Fence mitten im Lauf darf bereits physisch gelöschte Exporte nicht per Rollback
-    im Register wieder "aktiv" stehen lassen - pro Key committen, beim Fence sauber aufhören."""
+def test_cleanup_old_generated_exports_registers_deletes_atomically_and_stops_on_write_fence(db, tmp_path, monkeypatch):
+    """S3-008: Löschungen werden nur registriert (Tombstones) und gemeinsam committet. Ein Fence
+    mitten im Lauf rollt sie vollständig zurück - kein Objekt ist dann physisch weg, und der
+    nächste Lauf versucht es erneut."""
     from app.core.storage import StorageWriteFenced, get_object_store
 
     monkeypatch.setattr(settings, "storage_root", str(tmp_path))
@@ -470,7 +476,6 @@ def test_cleanup_old_generated_exports_commits_per_key_and_stops_on_write_fence(
         files.append(path)
     store = get_object_store()
     real_delete = store.delete
-    commits: list[int] = []
     calls = {"n": 0}
 
     def fenced_second(session, namespace, key):
@@ -480,16 +485,19 @@ def test_cleanup_old_generated_exports_commits_per_key_and_stops_on_write_fence(
         return real_delete(session, namespace, key)
 
     monkeypatch.setattr(store, "delete", fenced_second)
-    real_commit = db.commit
-    monkeypatch.setattr(db, "commit", lambda: (commits.append(calls["n"]), real_commit()))
     try:
         result = ExportService().cleanup_old_generated_exports(db)
+        assert result == {"deleted": 0, "deleted_rows": 0}
+        store.purge_deleted(db)
+        assert all(path.exists() for path in files)
+
+        monkeypatch.setattr(store, "delete", real_delete)
+        assert ExportService().cleanup_old_generated_exports(db) == {"deleted": 2, "deleted_rows": 0}
+        assert all(path.exists() for path in files)  # erst der Purge entfernt sie physisch
+        store.purge_deleted(db)
+        assert not any(path.exists() for path in files)
     finally:
         get_object_store.cache_clear()
-    assert result == {"deleted": 1, "deleted_rows": 0}
-    # 0: Commit der (hier leeren) DB-Aufbewahrung aus main, 1: erster Key vor dem Fence
-    assert commits == [0, 1]
-    assert sum(path.exists() for path in files) == 1
 
 
 def test_m17_cleanup_old_generated_exports_missing_dir_is_a_noop(db, tmp_path, monkeypatch):

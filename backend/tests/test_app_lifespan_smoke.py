@@ -45,7 +45,7 @@ def test_background_loops_start_without_crashing(monkeypatch):
             # schedules onto *this* running loop - asyncio.all_tasks() from right here sees
             # them all, still pending (they haven't had a chance to run yet).
             tasks = [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
-            assert len(tasks) == 14, f"expected the 14 background loop tasks, found {len(tasks)}"
+            assert len(tasks) == 15, f"expected the 15 background loop tasks, found {len(tasks)}"
 
             # Give the event loop real wall-clock time to actually step each task once -
             # run_advisory_locked_loop (app/core/background_loops.py) does its first

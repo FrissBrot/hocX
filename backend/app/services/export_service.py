@@ -17,7 +17,7 @@ from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import AttendanceFine, DocumentTemplate, ElementType, Event, FinanceAccount, FinanceTransaction, ListDefinition, ListEntry, Participant, Protocol as ProtocolModel, ProtocolElement, ProtocolExportCache, StoredFile, Tenant
+from app.models import AttendanceFine, DocumentTemplate, ElementType, Event, FinanceAccount, FinanceTransaction, ListDefinition, ListEntry, Participant, Protocol as ProtocolModel, ProtocolElement, ProtocolExportCache, StorageObject, StoredFile, Tenant
 from app.repositories.export_repository import ExportRepository
 from app.services import public_id_service
 from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
@@ -83,8 +83,8 @@ class ExportService:
             ),
         )
         superseded_paths = self._prune_superseded_exports(db, protocol_id=protocol.id, export_format="latex", keep_cache_id=cache.id)
-        db.commit()
         self._delete_objects(superseded_paths, db)
+        db.commit()
 
         return ProtocolExportRead(
             protocol_id=protocol.public_id,
@@ -166,6 +166,7 @@ class ExportService:
             ),
         )
         superseded_paths = self._prune_superseded_exports(db, protocol_id=protocol.id, export_format="pdf", keep_cache_id=cache.id)
+        self._delete_objects(superseded_paths, db)
 
         if (new_major != protocol.version_major
                 or new_minor != protocol.version_minor
@@ -176,7 +177,6 @@ class ExportService:
             db.add(protocol)
 
         db.commit()
-        self._delete_objects(superseded_paths, db)
         db.refresh(protocol)
 
         return ProtocolExportRead(
@@ -294,8 +294,8 @@ class ExportService:
         superseded_paths = self._prune_superseded_exports(
             db, protocol_id=protocol.id, export_format=f"pdf-{export_type}", keep_cache_id=cache.id
         )
-        db.commit()
         self._delete_objects(superseded_paths, db)
+        db.commit()
 
         return ProtocolExportRead(
             protocol_id=protocol.public_id,
@@ -2475,7 +2475,7 @@ Status: {protocol_status}
 
         Audit MAIN-BE-004: Jeder Export legte eine neue StoredFile- und Cache-Zeile an, die nie
         gelöscht wurden - das Speicherkontingent wuchs mit jedem (auch lesenden) Export. Gibt
-        die Objekt-Keys zurück, die der Aufrufer erst nach dem Commit löscht (_delete_objects).
+        die Objekt-Keys zurück, deren Löschung der Aufrufer vor dem Commit registriert (_delete_objects).
         """
         superseded = db.scalars(
             select(ProtocolExportCache).where(
@@ -2503,33 +2503,14 @@ Status: {protocol_status}
         return keys
 
     @staticmethod
-    def _delete_objects(keys: list[str], session: Session | None = None) -> int:
-        """Objekte nach dem Commit der Zeilen löschen, je Key eine eigene Transaktion (S3-008):
-        das Objekt ist sofort physisch weg, ein späterer Rollback darf keinen Registereintrag
-        «aktiv» für ein gelöschtes Objekt zurücklassen. Bei einem Write-Fence (Cutover/Wartung)
-        abbrechen - übrig gebliebene Objekte räumt der Retention-Sweep später ab."""
-        if not keys:
-            return 0
+    def _delete_objects(keys: list[str], db: Session) -> int:
+        """Löschungen in der Transaktion des Aufrufers registrieren (Tombstones, S3-008): ein
+        Rollback nimmt sie samt den gelöschten Zeilen zurück, physisch entfernt der Job
+        storage_purge die Objekte erst nach dem Commit."""
         store = get_object_store()
-        own_session = session is None
-        session = session or SessionLocal()
-        deleted = 0
-        try:
-            for key in keys:
-                try:
-                    store.delete(session, MAIN, key)
-                    session.commit()
-                except StorageWriteFenced:
-                    session.rollback()
-                    break
-                except ObjectNotFound:
-                    session.rollback()
-                    continue
-                deleted += 1
-        finally:
-            if own_session:
-                session.close()
-        return deleted
+        for key in keys:
+            store.delete(db, MAIN, key)
+        return len(keys)
 
     def _protected_export_cache_ids(self, db: Session) -> set[int]:
         """Neuester Cache je Protokoll und Format abgeschlossener Protokolle - das finale PDF
@@ -2560,8 +2541,9 @@ Status: {protocol_status}
         als die Frist werden samt StoredFile und Objekt gelöscht (sonst blieben die Bytes im
         Speicherkontingent und latest_export_metadata zeigte auf ein fehlendes Objekt),
         ausgenommen der neueste Export abgeschlossener Protokolle. Danach entfernt der
-        Objekt-Sweep verwaiste Objekte ohne Zeile, ebenfalls ohne die geschützten; jedes Objekt
-        in eigener Transaktion, bei einem Write-Fence ist für diesen Lauf Schluss (S3-008).
+        Objekt-Sweep verwaiste Objekte ohne Zeile, ebenfalls ohne die geschützten. Löschungen
+        werden als Tombstones registriert und vom Job storage_purge nach dem Commit physisch
+        entfernt; bei einem Write-Fence ist für diesen Lauf Schluss (S3-008).
         """
         retention = retention_days if retention_days is not None else settings.export_retention_days
         cutoff_timestamp = datetime.now(UTC).timestamp() - retention * 86400
@@ -2578,8 +2560,13 @@ Status: {protocol_status}
                     if cache.id not in protected_ids
                 ]
                 keys = self._delete_export_caches(db, expired)
-                db.commit()
-                self._delete_objects(keys, db)
+                try:
+                    self._delete_objects(keys, db)
+                    db.commit()
+                except StorageWriteFenced:
+                    # Cutover/Wartung: Zeilen und Objekte bleiben gemeinsam bis zum nächsten Lauf.
+                    db.rollback()
+                    return {"deleted": 0, "deleted_rows": 0}
                 deleted_rows = len(expired)
                 if protected_ids:
                     protected_keys = set(
@@ -2599,7 +2586,18 @@ Status: {protocol_status}
                     info.key for info in get_object_store().list(MAIN, prefix)
                     if info.last_modified is not None and info.last_modified.timestamp() < cutoff_timestamp and info.key not in protected_keys
                 ]
-                deleted = self._delete_objects(stale, session)
+                if stale:
+                    # Schon gelöscht, nur physisch noch nicht entfernt: nicht erneut registrieren.
+                    pending = set(session.scalars(select(StorageObject.key).where(
+                        StorageObject.namespace == MAIN, StorageObject.status == "deleted",
+                        StorageObject.purge_pending.is_(True), StorageObject.key.in_(stale))))
+                    stale = [key for key in stale if key not in pending]
+                try:
+                    deleted = self._delete_objects(stale, session)
+                    session.commit()
+                except StorageWriteFenced:
+                    session.rollback()
+                    deleted = 0
         finally:
             if db is None:
                 session.close()

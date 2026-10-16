@@ -82,11 +82,24 @@ Jede Migration schreibt in eine **neue Generation** (`storage_generation`). Dadu
 1. `storage_begin_write()` – `SELECT … FOR SHARE` auf `storage_state`. Viele Schreiber parallel,
    aber ein Cutover (`UPDATE`) wartet auf alle offenen Schreibtransaktionen, und Schreiber
    danach sehen das Fence (`StorageWriteFenced` → HTTP 503 mit `Retry-After`).
-2. Objekt schreiben (S3: Inhalt wird vorab gegen SHA-256 geprüft, falscher Inhalt verlässt den
+2. Advisory-Lock auf den Key (`pg_advisory_xact_lock`, bis zum Ende der Transaktion), dann
+   Objekt schreiben (S3: Inhalt wird vorab gegen SHA-256 geprüft, falscher Inhalt verlässt den
    Host nie).
 3. `storage_register_write()` – Objektregister (`storage_object`: Grösse, SHA-256, Version,
    Status, Generation) und Änderungsjournal (`storage_change_outbox`) in derselben Transaktion.
    Stimmt die Generation nicht mehr (Cutover dazwischen), schlägt die Transaktion fehl.
+
+**Löschen erst nach dem Commit** (Tombstone, S3-008): `delete` schreibt nichts physisch, sondern
+registriert nur `status = 'deleted'` mit `purge_pending = true` in der Transaktion des Aufrufers.
+Rollt sie zurück, bleiben Objekt und Registereintrag unverändert. Der Backend-Job `storage_purge`
+(jede Minute, beide Namespaces) holt committete Tombstones mit `storage_purge_claim`
+(`FOR UPDATE SKIP LOCKED`), nimmt den Key-Lock per `pg_try_advisory_xact_lock` und löscht erst
+dann physisch; `storage_purge_done` quittiert nur die geprüfte Version. Ein neuer `put` desselben
+Keys setzt `purge_pending` zurück, und ein Schreiber, der den Key gerade hält, wird übersprungen –
+das verzögerte Löschen trifft nie neuen Inhalt. Tombstones einer älteren Generation werden nur
+quittiert, die Inventur einer Migration überspringt noch nicht entfernte Tombstones.
+Uploads, deren Transaktion ohne Commit endet, entfernt `discard_unregistered` direkt (nie
+registriert, also auch kein Tombstone).
 
 Leser cachen die aktive Konfiguration höchstens 2 s; ein Fehltreffer lädt sie sofort neu und
 versucht es genau einmal mit der dann aktiven Generation – ein Rückgriff auf eine möglicherweise

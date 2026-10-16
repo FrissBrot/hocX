@@ -356,6 +356,10 @@
         "title": "Speicher-Journal aufräumen",
         "description": "Entfernt alte Einträge des Änderungsjournals, die keine offene Migration mehr braucht."
       },
+      "storage_purge": {
+        "title": "Gelöschte Speicherobjekte entfernen",
+        "description": "Entfernt gelöschte Dateien physisch aus dem Speicher, sobald die Löschung gespeichert ist."
+      },
       "storage_migration_worker": {
         "title": "Storage-Migrations-Worker",
         "description": "Kopiert, prüft und schaltet Dateispeicher um (Lebenszeichen aus der Poll-Schleife)."

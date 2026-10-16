@@ -356,6 +356,10 @@
         "title": "Storage journal cleanup",
         "description": "Removes old change-journal entries that no open migration still needs."
       },
+      "storage_purge": {
+        "title": "Purge deleted storage objects",
+        "description": "Physically removes deleted files from storage once the deletion has been committed."
+      },
       "storage_migration_worker": {
         "title": "Storage migration worker",
         "description": "Copies, verifies and switches file storage (heartbeat from the poll loop)."
