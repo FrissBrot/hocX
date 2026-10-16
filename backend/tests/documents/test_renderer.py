@@ -142,7 +142,7 @@ def test_diagnosis_stops_at_first_failed_probe(monkeypatch):
     renderer = DocumentRenderer(concurrency=1)
     calls = []
 
-    async def fake_run(document_json, assets, fmt, ppi):
+    async def fake_run(document_json, assets, fmt, ppi, max_pages=None):
         calls.append(fmt)
         if len(calls) == 1:
             return CompileResult(ok=False, error="kaputt")
@@ -164,7 +164,7 @@ def test_diagnosis_respects_time_budget(monkeypatch):
     monkeypatch.setattr(renderer_module, "_MAX_DIAGNOSE_COMPILES", 10_000)
     calls = []
 
-    async def failing_run(document_json, assets, fmt, ppi):
+    async def failing_run(document_json, assets, fmt, ppi, max_pages=None):
         calls.append(fmt)
         await asyncio.sleep(0.04)
         return CompileResult(ok=False, error="kaputt")
@@ -189,3 +189,56 @@ def test_queue_wait_is_bounded():
         return excinfo.value.key
 
     assert asyncio.run(scenario()) == "error.busy"
+
+
+def test_preview_rasterizes_only_the_requested_pages(renderer, assets, monkeypatch):
+    """TYPST-005: Die Vorschau kompiliert ein PDF und rastert nur die angeforderten Seiten,
+    nicht alle (typst-py kennt keine Seitenauswahl)."""
+    from app.documents import renderer as renderer_module
+
+    rasterized: list[int] = []
+    original = renderer_module._rasterize
+
+    def counting(pdf, *, ppi, max_pages):
+        pages = original(pdf, ppi=ppi, max_pages=max_pages)
+        rasterized.append(len(pages))
+        return pages
+
+    # Der Compile läuft im Worker-Prozess; zum Zählen direkt im Testprozess ausführen.
+    monkeypatch.setattr(renderer_module, "_rasterize", counting)
+    document = load_fixture("all_blocks")
+    result = renderer_module._compile_job(renderer_module._dump(document), assets.files, assets.fonts, "png", 40, 2)
+
+    assert result.ok and len(result.output) == 2 and rasterized == [2]
+    assert all(page.startswith(b"\x89PNG") for page in result.output)
+
+
+def test_cancelled_preview_keeps_the_slot_until_the_compile_finished(monkeypatch):
+    """Ein abgebrochener Request gibt seinen Compile-Platz erst frei, wenn der Prozess fertig ist -
+    sonst liefen mehr Compiles parallel als erlaubt."""
+    import asyncio
+    import concurrent.futures
+
+    from app.documents import renderer as renderer_module
+
+    gate = concurrent.futures.Future()
+
+    class FakePool:
+        def submit(self, *args, **kwargs):
+            return gate
+
+    renderer = renderer_module.DocumentRenderer(concurrency=1, timeout_seconds=30, memory_limit_mb=512)
+    monkeypatch.setattr(renderer, "_pool", lambda: FakePool())
+
+    async def scenario():
+        semaphore = renderer._semaphore()
+        task = asyncio.ensure_future(renderer._run("{}", renderer_module.RenderAssets(), "png", 40, 1))
+        await asyncio.sleep(0.05)
+        task.cancel()
+        await asyncio.sleep(0.05)
+        assert semaphore.locked(), "Platz wurde vor Ende des Compiles freigegeben"
+        gate.set_result(renderer_module.CompileResult(ok=True, output=[]))
+        await asyncio.sleep(0.05)
+        assert not semaphore.locked()
+
+    asyncio.run(scenario())

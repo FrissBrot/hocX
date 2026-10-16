@@ -6,12 +6,13 @@ Renderfehler gehen mit ``from exc`` an den globalen Handler und damit ins Admin-
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -134,16 +135,33 @@ class PreviewRead(BaseModel):
     pages: list[str]
 
 
+async def _until_disconnected(request: Request) -> None:
+    while not await request.is_disconnected():
+        await asyncio.sleep(0.25)
+
+
 @router.post("/documents/preview", response_model=PreviewRead)
 async def preview_document(
     body: DocumentRequest,
+    request: Request,
     max_pages: int = Query(default=3, ge=1, le=8),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
+    # Bricht der Browser die Vorschau ab (neuere Eingabe, Dialog geschlossen), wartet der Server
+    # nicht weiter: noch wartende Renders entfallen ganz (TYPST-005).
+    render = asyncio.ensure_future(document_service.preview(db, user, user.current_tenant_id, body, max_pages=max_pages))
+    watcher = asyncio.ensure_future(_until_disconnected(request))
     try:
-        pages = await document_service.preview(db, user, user.current_tenant_id, body, max_pages=max_pages)
+        await asyncio.wait({render, watcher}, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        watcher.cancel()
+    if not render.done():
+        render.cancel()
+        return Response(status_code=499)
+    try:
+        pages = render.result()
     except DocumentRenderError as exc:
         raise _render_error(user, exc) from exc
     except (DocumentPermissionError, DocumentNotFoundError, ValueError) as exc:

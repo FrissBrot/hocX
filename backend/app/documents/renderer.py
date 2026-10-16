@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import json
 import logging
 import multiprocessing
@@ -178,7 +179,31 @@ def _safe_name(name: str) -> str:
     return candidate.name
 
 
-def _compile_job(document_json: str, files: dict[str, bytes], fonts: dict[str, bytes], fmt: str, ppi: float | None) -> CompileResult:
+def _rasterize(pdf: bytes, *, ppi: float, max_pages: int) -> list[bytes]:
+    """Nur die ersten ``max_pages`` Seiten des PDFs als PNG (TYPST-005): typst-py rastert sonst
+    immer alle Seiten, ein langes Dokument kostete pro Vorschau Hunderte Seitenbilder."""
+    import pypdfium2
+
+    document = pypdfium2.PdfDocument(pdf)
+    try:
+        pages: list[bytes] = []
+        for index in range(min(max_pages, len(document))):
+            page = document[index]
+            try:
+                image = page.render(scale=ppi / 72).to_pil()
+            finally:
+                page.close()
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            pages.append(buffer.getvalue())
+        return pages
+    finally:
+        document.close()
+
+
+def _compile_job(
+    document_json: str, files: dict[str, bytes], fonts: dict[str, bytes], fmt: str, ppi: float | None, max_pages: int | None = None,
+) -> CompileResult:
     import typst
 
     global _WORKER_FONTS
@@ -225,13 +250,17 @@ def _compile_job(document_json: str, files: dict[str, bytes], fonts: dict[str, b
             package_path=str(PACKAGES_DIR),
             package_cache_path=str(cache_dir),
         )
+        # Vorschau mit Seitenlimit: einmal als PDF kompilieren und nur die nötigen Seiten rastern.
+        rasterize_pages = fmt == "png" and max_pages is not None
         try:
             output, warnings = compiler.compile_with_warnings(
-                format=fmt,
-                ppi=ppi,
+                format="pdf" if rasterize_pages else fmt,
+                ppi=None if rasterize_pages else ppi,
                 pdf_standards=[PDF_STANDARD] if fmt == "pdf" else [],
                 timestamp=datetime.now(UTC).replace(microsecond=0),
             )
+            if rasterize_pages:
+                output = _rasterize(output, ppi=ppi or PREVIEW_PPI, max_pages=max_pages)
         except typst.TypstError as exc:
             return CompileResult(
                 ok=False,
@@ -310,13 +339,22 @@ class DocumentRenderer:
             raise DocumentRenderError("error.busy", detail=f"Kein freier Compile-Platz nach {self.queue_timeout_seconds}s") from exc
         return semaphore
 
-    async def _run(self, document_json: str, assets: RenderAssets, fmt: OutputFormat, ppi: float | None) -> CompileResult:
+    async def _run(
+        self, document_json: str, assets: RenderAssets, fmt: OutputFormat, ppi: float | None, max_pages: int | None = None,
+    ) -> CompileResult:
         semaphore = await self._acquire_slot()
+        release_on_done = False
         try:
             loop = asyncio.get_running_loop()
+            future = loop.run_in_executor(self._pool(), _compile_job, document_json, assets.files, assets.fonts, fmt, ppi, max_pages)
             try:
-                future = loop.run_in_executor(self._pool(), _compile_job, document_json, assets.files, assets.fonts, fmt, ppi)
-                return await asyncio.wait_for(future, timeout=self.timeout_seconds)
+                # shield: ein Abbruch des Requests (Vorschau ersetzt durch neuere) bricht nur das
+                # Warten ab; der Compile-Platz bleibt belegt, bis der Prozess wirklich fertig ist.
+                return await asyncio.wait_for(asyncio.shield(future), timeout=self.timeout_seconds)
+            except asyncio.CancelledError:
+                release_on_done = True
+                future.add_done_callback(lambda _: semaphore.release())
+                raise
             except asyncio.TimeoutError as exc:
                 self._reset_pool()
                 raise DocumentRenderError("error.timeout", detail=f"Typst-Compile nach {self.timeout_seconds}s abgebrochen") from exc
@@ -326,11 +364,12 @@ class DocumentRenderer:
                 self._reset_pool()
                 raise DocumentRenderError("error.render", detail=f"Typst-Worker beendet: {exc}") from exc
         finally:
-            semaphore.release()
+            if not release_on_done:
+                semaphore.release()
 
     async def render(self, document: Document, assets: RenderAssets | None = None, *, fmt: OutputFormat = "pdf", max_pages: int | None = None, ppi: float | None = None) -> RenderOutput:
         assets = assets or RenderAssets()
-        result = await self._run(_dump(document), assets, fmt, ppi if fmt == "png" else None)
+        result = await self._run(_dump(document), assets, fmt, ppi if fmt == "png" else None, max_pages if fmt == "png" else None)
         if not result.ok:
             label = await self._locate_failing_block(document, assets)
             detail = _format_diagnostic(result)

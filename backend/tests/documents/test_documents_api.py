@@ -67,7 +67,7 @@ def test_foreign_protocol_is_not_found(db, setup):
 
 def test_preview_returns_png_data_urls(db, setup):
     body = DocumentRequest(document_type="todos")
-    result = asyncio.run(routes.preview_document(body, max_pages=2, db=db, user=setup["admin"]))
+    result = asyncio.run(routes.preview_document(body, _ConnectedRequest(), max_pages=2, db=db, user=setup["admin"]))
     assert result.pages and result.pages[0].startswith("data:image/png;base64,")
 
 
@@ -91,7 +91,7 @@ def test_extra_formats(db, setup):
 def test_invalid_block_is_422(db, setup):
     body = DocumentRequest(blocks=[BlockSpec(type="todo_table", params={"status": "kaputt"})])
     with pytest.raises(HTTPException) as excinfo:
-        asyncio.run(routes.preview_document(body, max_pages=1, db=db, user=setup["admin"]))
+        asyncio.run(routes.preview_document(body, _ConnectedRequest(), max_pages=1, db=db, user=setup["admin"]))
     assert excinfo.value.status_code == 422
 
 
@@ -142,7 +142,7 @@ def test_asset_upload_validation(db, setup, monkeypatch):
     assert excinfo.value.status_code == 409  # noch verwendet
     with pytest.raises(HTTPException):
         routes.create_document_style(routes.DocumentStyleWrite(name="Fremd", tokens=DocumentStyleTokens(logo_asset_id=asset.id)), db=db, user=setup["other_admin"])
-    preview = asyncio.run(routes.preview_document(DocumentRequest(document_type="todos", style_id=style.id), max_pages=1, db=db, user=setup["admin"]))
+    preview = asyncio.run(routes.preview_document(DocumentRequest(document_type="todos", style_id=style.id), _ConnectedRequest(), max_pages=1, db=db, user=setup["admin"]))
     assert preview.pages
 
 
@@ -157,7 +157,7 @@ def test_recipe_crud(db, setup):
     with pytest.raises(HTTPException) as excinfo:
         routes.update_document_recipe(recipe.id, routes.DocumentRecipeWrite(blocks=[BlockSpec(type="heading", params={"farbe": "rot"})]), db=db, user=writer)
     assert excinfo.value.status_code == 422
-    preview = asyncio.run(routes.preview_document(DocumentRequest(recipe_id=recipe.id), max_pages=1, db=db, user=writer))
+    preview = asyncio.run(routes.preview_document(DocumentRequest(recipe_id=recipe.id), _ConnectedRequest(), max_pages=1, db=db, user=writer))
     assert preview.pages
     routes.delete_document_recipe(recipe.id, db=db, user=writer)
     assert routes.list_document_recipes(db=db, user=writer) == []
@@ -213,3 +213,11 @@ def test_reader_can_download_own_rendered_pdf(db, setup):
         access.ensure_can_read_stored_file(db, make_current_user(setup["other"].id, role="reader", user_id=owner.id), stored.id)
     assert excinfo.value.status_code == 403
     access.ensure_can_read_stored_file(db, make_current_user(tenant.id, role="writer", user_id=other.id), stored.id)
+
+
+class _ConnectedRequest:
+    """Stand-in für den Request der Vorschau-Route: der Client bleibt verbunden."""
+
+    async def is_disconnected(self) -> bool:
+        return False
+

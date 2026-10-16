@@ -359,7 +359,7 @@ def test_s1_document_preview_passes_for_own_tenant_protocol(db):
     protocol_a = make_protocol(db, tenant_a.id, template_a.id, protocol_number="S1-A-1")
     user_a = make_current_user(tenant_a.id, role="admin")
 
-    result = _run(documents_route.preview_document(DocumentRequest(protocol_id=protocol_a.public_id), max_pages=1, db=db, user=user_a))
+    result = _run(documents_route.preview_document(DocumentRequest(protocol_id=protocol_a.public_id), _ConnectedRequest(), max_pages=1, db=db, user=user_a))
     assert result.pages
 
 
@@ -547,3 +547,11 @@ def test_update_element_definition_rejects_linked_list_from_foreign_tenant(db):
     created_internal_id = public_id_service.resolve_internal_id(db, ElementDefinition, created.id)
     with pytest.raises(ValueError, match="ListDefinition"):
         service.update_element_definition(db, created_internal_id, update_payload)
+
+
+class _ConnectedRequest:
+    """Stand-in für den Request der Vorschau-Route: der Client bleibt verbunden."""
+
+    async def is_disconnected(self) -> bool:
+        return False
+

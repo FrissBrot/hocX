@@ -43,7 +43,10 @@ def _changed_ratio(actual: Image.Image, expected: Image.Image) -> tuple[float, I
 
 
 def _compare(renderer, assets, document, pages: int, prefix: str) -> None:
-    output = asyncio.run(renderer.render_preview(document, assets, max_pages=pages, ppi=PPI))
+    # Native Typst-Rasterung (alle Seiten, dann gekürzt): die Goldens prüfen das Layout, nicht
+    # den Rasterizer der Vorschau (die rastert seit TYPST-005 nur die nötigen Seiten über pdfium).
+    output = asyncio.run(renderer.render(document, assets, fmt="png", ppi=PPI))
+    output.pages = output.pages[:pages]
     assert output.pages
     failures: list[str] = []
     for index, png in enumerate(output.pages, start=1):
