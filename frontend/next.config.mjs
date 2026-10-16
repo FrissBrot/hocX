@@ -2,14 +2,18 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 // CSP script-src erlaubt 'unsafe-inline': app/layout.tsx rendert zwei Inline-<script>-Tags
 // (Runtime-Config __HOCX_CONFIG__ + Theme-Vorab-Anwendung vor dem ersten Paint, um FOUC zu
-// vermeiden) ueber dangerouslySetInnerHTML, die auf JEDER Seite laufen muessen - auch auf
-// /login und /admin/login, die proxy.ts (ehemals middleware.ts) bewusst vom Matcher ausschliesst (siehe dortiger
-// Kommentar zum Login-Loop-Fix). Ein Nonce-Ansatz wuerde daher entweder den Matcher erweitern
-// und die Auth-Redirect-Logik dort um Pfad-Ausnahmen ergaenzen (Risiko einer Regression in
-// genau dem Login-Loop-Fix), oder die CSP komplett aus next.config.mjs in die Middleware
-// verlagern (Nonces sind pro Request und koennen nicht statisch in next.config.mjs stehen).
-// Beides ist fuer eine reine Security-Header-Ergaenzung unverhaeltnismaessig invasiv - bewusster
-// Kompromiss: 'unsafe-inline' nur fuer script-src, kein CDN/keine Fremd-Domains in script-src.
+// vermeiden) ueber dangerouslySetInnerHTML, dazu kommen die Inline-Skripte von Next selbst.
+// Eine statische CSP in next.config.mjs kann dafuer keine Nonce tragen (Nonces sind pro Request).
+//
+// Stand nach Audit MAIN-FE-013: Die fruehere Begruendung ("proxy.ts schliesst /login und
+// /admin/login vom Matcher aus") gilt nicht mehr - der Matcher in proxy.ts erfasst inzwischen
+// alle Seiten inkl. der Login-Seiten. Der Weg zu einer Nonce-CSP ist damit offen: proxy.ts
+// erzeugt pro Request eine Nonce, setzt den CSP-Header (script-src 'self' 'nonce-…'
+// 'strict-dynamic') und reicht sie per Request-Header `x-nonce` weiter; layout.tsx liest sie
+// ueber headers() und setzt sie auf beide Inline-Skripte, Next versieht seine eigenen Skripte
+// automatisch damit. Das ist noch nicht umgesetzt (braucht einen Browser-Test aller Seiten,
+// inkl. statisch gerenderter), bis dahin bleibt 'unsafe-inline' der bewusste Kompromiss: kein
+// CDN und keine Fremd-Domains in script-src.
 const isDevelopment = process.env.NODE_ENV !== "production";
 const scriptSrc = ["'self'", "'unsafe-inline'", isDevelopment && "'unsafe-eval'"]
   .filter(Boolean)
