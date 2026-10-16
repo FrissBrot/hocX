@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16
+    image: postgres:16@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
     restart: unless-stopped
     # Audit I1, 2026-08-16: this file had NO resource limits at all, unlike
     # docker-compose.yml (dev) after M28 - a runaway container here could take down the
@@ -51,7 +51,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     restart: unless-stopped
     mem_limit: 256m
     cpus: 0.5

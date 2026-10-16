@@ -69,6 +69,15 @@ for name in set(re.findall(r"traefik_middleware_prefix\}([a-z-]+)@docker", sourc
 done
 grep -q 'endpoint: "tcp://traefik-socket-proxy:2375"' infra/traefik/traefik.yml
 
+# MAIN-OPS-012: Fremd-Images per Digest, Actions per Commit-SHA gepinnt (Updates via Dependabot).
+unpinned_images="$(grep -hE '^[[:space:]]*image:' docker-compose*.yml | grep -v '@sha256:' | grep -v 'HOCX_' || true)"
+test -z "$unpinned_images" || { echo "Images ohne Digest: $unpinned_images" >&2; exit 1; }
+unpinned_from="$(git grep -hE '^FROM ' -- '*Dockerfile*' | grep -v '@sha256:' || true)"
+test -z "$unpinned_from" || { echo "FROM ohne Digest: $unpinned_from" >&2; exit 1; }
+unpinned_actions="$(grep -hE '^[[:space:]]*(- )?uses:' .github/workflows/*.yml | grep -vE '@[0-9a-f]{40}( |$)' || true)"
+test -z "$unpinned_actions" || { echo "Actions ohne SHA: $unpinned_actions" >&2; exit 1; }
+test -f .github/dependabot.yml
+
 # MAIN-OPS-008: Der Dev-Overlay landet ohne -p nie im Projekt der Server-Instanz (hocx).
 dev_project="$(docker compose --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')"
 test "$dev_project" = hocx-dev || { echo "Dev-Overlay ergibt Projekt '$dev_project' statt hocx-dev" >&2; exit 1; }
@@ -128,7 +137,7 @@ done
 grep -q '^USER hocx$' backend/Dockerfile
 grep -q '^USER node$' frontend/Dockerfile
 grep -q '^USER node$' abgabebox-frontend/Dockerfile
-grep -q '^FROM nginxinc/nginx-unprivileged:alpine$' docs-site/Dockerfile
+grep -qE '^FROM nginxinc/nginx-unprivileged:alpine(@sha256:[0-9a-f]{64})?$' docs-site/Dockerfile
 if grep -q 'alembic upgrade head.*uvicorn' backend/Dockerfile; then
   echo "Release-Backend darf Migration und App-Start nicht koppeln." >&2
   exit 1
