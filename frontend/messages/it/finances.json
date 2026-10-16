@@ -107,5 +107,7 @@
   "tariffSaved": "Tariffa salvata",
   "tariffSaveFailed": "Impossibile salvare la tariffa",
   "tariffSummary": "Tariffa: ritardo {late} · non giustificato {absent} · conto {account}",
-  "tariffNotSet": "Nessuna tariffa impostata – i blocchi presenze non creano multe."
+  "tariffNotSet": "Nessuna tariffa impostata – i blocchi presenze non creano multe.",
+  "accountDeleteConflict": "Il conto contiene ancora movimenti o multe e non può essere eliminato.",
+  "txLockedByFineConflict": "Questo movimento appartiene a una multa incassata. Riapri la multa invece di modificare il movimento."
 }

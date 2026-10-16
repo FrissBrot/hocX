@@ -107,5 +107,7 @@
   "tariffSaved": "Bussentarif gespeichert",
   "tariffSaveFailed": "Bussentarif konnte nicht gespeichert werden",
   "tariffSummary": "Tarif: zu spät {late} · unentschuldigt {absent} · Konto {account}",
-  "tariffNotSet": "Kein Bussentarif hinterlegt – Anwesenheitsblöcke erzeugen keine Bussen."
+  "tariffNotSet": "Kein Bussentarif hinterlegt – Anwesenheitsblöcke erzeugen keine Bussen.",
+  "accountDeleteConflict": "Das Konto hat noch Buchungen oder Bussen und kann nicht gelöscht werden.",
+  "txLockedByFineConflict": "Diese Buchung gehört zu einer einkassierten Busse. Bitte die Busse wiedereröffnen statt die Buchung zu ändern."
 }

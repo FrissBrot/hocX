@@ -28,6 +28,12 @@ import { browserApiFetch } from "@/lib/api/client";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
 import type { AttendanceFineListItem, FinanceAccount, FinanceTransaction } from "@/types/api";
 
+// Konflikte (409) aus dem Backend uebersetzt anzeigen: Konto mit Buchungen/Bussen loeschen bzw.
+// Buchung einer einkassierten Busse aendern (siehe backend finance_repository.FinanceConflictError).
+function isConflict(error: unknown): boolean {
+  return error instanceof Error && (error as { status?: number }).status === 409;
+}
+
 function money(amount: number, currency?: string | null) {
   const value = new Intl.NumberFormat("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
   return currency ? `${currency} ${value}` : value;
@@ -118,7 +124,7 @@ export function MobileFinances({ initialAccounts, canWrite }: { initialAccounts:
       setSelectedId(list[0]?.id ?? null);
       setAccountSheet(null);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteAccountFailed"), "error");
+      showToast(isConflict(error) ? t("accountDeleteConflict") : error instanceof Error ? error.message : t("deleteAccountFailed"), "error");
     }
   }
 
@@ -261,7 +267,7 @@ function TransactionSheet({
       else await browserApiFetch(`/api/finance/accounts/${account.id}/transactions`, { method: "POST", body });
       await onSaved();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("saveTxFailed"), "error");
+      showToast(isConflict(error) ? t("txLockedByFineConflict") : error instanceof Error ? error.message : t("saveTxFailed"), "error");
     } finally {
       setSaving(false);
     }
@@ -273,7 +279,7 @@ function TransactionSheet({
       await browserApiFetch(`/api/finance/transactions/${transaction.id}`, { method: "DELETE" });
       await onSaved();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteTxFailed"), "error");
+      showToast(isConflict(error) ? t("txLockedByFineConflict") : error instanceof Error ? error.message : t("deleteTxFailed"), "error");
     }
   }
 

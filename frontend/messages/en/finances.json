@@ -107,5 +107,7 @@
   "tariffSaved": "Fine rates saved",
   "tariffSaveFailed": "Fine rates could not be saved",
   "tariffSummary": "Rates: late {late} · unexcused {absent} · account {account}",
-  "tariffNotSet": "No fine rates set – attendance blocks create no fines."
+  "tariffNotSet": "No fine rates set – attendance blocks create no fines.",
+  "accountDeleteConflict": "The account still has transactions or fines and cannot be deleted.",
+  "txLockedByFineConflict": "This transaction belongs to a collected fine. Please reopen the fine instead of changing the transaction."
 }

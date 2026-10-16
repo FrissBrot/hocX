@@ -102,5 +102,9 @@
     "tagColorTransferFailed": "Étiquette renommée, mais sa couleur n'a pas pu être transférée",
     "noHistoricalCycleSelected": "Aucun cycle historique sélectionné",
     "noDraftToConfirm": "Aucun brouillon à confirmer"
+  },
+  "profileImage": {
+    "invalidType": "Veuillez choisir une image PNG, JPG, GIF ou WebP (le SVG n'est pas pris en charge).",
+    "tooLarge": "L'image est trop volumineuse (5 Mo max.)."
   }
 }

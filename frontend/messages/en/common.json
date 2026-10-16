@@ -102,5 +102,9 @@
     "tagColorTransferFailed": "Tag renamed, but its colour could not be transferred",
     "noHistoricalCycleSelected": "No historical cycle selected",
     "noDraftToConfirm": "No draft to confirm"
+  },
+  "profileImage": {
+    "invalidType": "Please choose a PNG, JPG, GIF or WebP image (SVG is not supported).",
+    "tooLarge": "The image is too large (max. 5 MB)."
   }
 }

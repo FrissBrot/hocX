@@ -107,5 +107,7 @@
   "tariffSaved": "Barème enregistré",
   "tariffSaveFailed": "Impossible d’enregistrer le barème",
   "tariffSummary": "Barème : retard {late} · non excusé {absent} · compte {account}",
-  "tariffNotSet": "Aucun barème défini – les blocs de présence ne créent pas d’amendes."
+  "tariffNotSet": "Aucun barème défini – les blocs de présence ne créent pas d’amendes.",
+  "accountDeleteConflict": "Le compte contient encore des écritures ou des amendes et ne peut pas être supprimé.",
+  "txLockedByFineConflict": "Cette écriture appartient à une amende encaissée. Veuillez rouvrir l'amende au lieu de modifier l'écriture."
 }

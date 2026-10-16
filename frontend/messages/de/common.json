@@ -102,5 +102,9 @@
     "tagColorTransferFailed": "Tag umbenannt, Farbe konnte aber nicht übertragen werden",
     "noHistoricalCycleSelected": "Kein historischer Zyklus ausgewählt",
     "noDraftToConfirm": "Kein Entwurf zum Bestätigen"
+  },
+  "profileImage": {
+    "invalidType": "Bitte ein PNG-, JPG-, GIF- oder WebP-Bild wählen (SVG wird nicht unterstützt).",
+    "tooLarge": "Das Bild ist zu gross (maximal 5 MB)."
   }
 }

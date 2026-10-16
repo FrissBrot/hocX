@@ -627,7 +627,6 @@
       "cleanupDone": "Mandant aufgeräumt",
       "cleanupFailed": "Aufräumen fehlgeschlagen",
       "usersLoadFailed": "Benutzer konnten nicht geladen werden",
-      "imagePickInvalid": "Bitte ein Bild (PNG oder JPG) wählen",
       "tenantSaved": "Mandant gespeichert",
       "tenantSaveFailed": "Mandant konnte nicht gespeichert werden",
       "roleChanged": "Rolle geändert",
