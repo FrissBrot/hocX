@@ -54,7 +54,7 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "task_package_rollover": 202600018,
     "maintenance_supervisor": 202600019,
     "storage_journal_cleanup": 202600020,
-    "storage_purge": 202600024,
+    "storage_purge": 202600025,  # 202600024 ist auf feature/borg-backup-restore vergeben (backup_worker_repository)
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht
