@@ -73,4 +73,25 @@ grep -q 'write_env_value HOCX_ENVIRONMENT "$(app_environment_for "$ENVIRONMENT")
 grep -q 'app_environment_for "${HOCX_ENVIRONMENT:-}"' "$REPO_DIR/scripts/deploy.sh"
 grep -q '^HOCX_ENVIRONMENT=production$' "$REPO_DIR/.env.prod.example"
 
+
+# MAIN-OPS-015: Werte wie der dotenv-Parser von Compose lesen.
+printf '%s\n' \
+  'POSTGRES_DB=hocx # Kommentar # noch einer' \
+  'POSTGRES_USER=  hocx_user   ' \
+  'POSTGRES_PASSWORD=abc#def' \
+  'AUTH_SECRET="a\\nb"' \
+  'ADMIN_AUTH_SECRET="zeile1\nzeile2"' \
+  "INITIAL_ADMIN_PASSWORD='bleibt # wie es ist'" \
+  'TRAEFIK_DOMAIN= # nur Kommentar' > "$ENV_FILE"
+chmod 600 "$ENV_FILE"
+load_env_file "$ENV_FILE"
+test "$POSTGRES_DB" = "hocx" || { echo "Inline-Kommentar wurde nicht entfernt: '$POSTGRES_DB'" >&2; exit 1; }
+test "$POSTGRES_USER" = "hocx_user"
+test "$POSTGRES_PASSWORD" = "abc#def"
+test "$AUTH_SECRET" = 'a\nb' || { echo "Literales \\\\n wurde falsch entschluesselt: '$AUTH_SECRET'" >&2; exit 1; }
+test "$ADMIN_AUTH_SECRET" = $'zeile1\nzeile2'
+test "$INITIAL_ADMIN_PASSWORD" = "bleibt # wie es ist"
+# Wie Compose: ohne Wert davor ist '#' kein Kommentar.
+test "$TRAEFIK_DOMAIN" = "# nur Kommentar"
+
 echo "env loader tests: ok"

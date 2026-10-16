@@ -123,6 +123,54 @@ is_allowed_env_key() {
   esac
 }
 
+# Ersetzt \n, \r, \t, \" und \\ in einem Durchgang. Die fruehere Kette einzelner Ersetzungen
+# machte aus einem literalen Backslash vor n (in der Datei \\n) einen Zeilenumbruch.
+# Ergebnis in REPLY (keine Command-Substitution, die abschliessende Zeilenumbrueche verschluckt).
+unescape_double_quoted() {
+  local input="$1" output="" char next i=0
+  while [ "$i" -lt "${#input}" ]; do
+    char="${input:i:1}"
+    if [ "$char" = "\\" ] && [ $((i + 1)) -lt "${#input}" ]; then
+      next="${input:i+1:1}"
+      case "$next" in
+        n) output+=$'\n' ;;
+        r) output+=$'\r' ;;
+        t) output+=$'\t' ;;
+        '"') output+='"' ;;
+        "\\") output+="\\" ;;
+        *) output+="$char$next" ;;
+      esac
+      i=$((i + 2))
+      continue
+    fi
+    output+="$char"
+    i=$((i + 1))
+  done
+  REPLY="$output"
+}
+
+# Ergebnis in REPLY: Wert ohne Inline-Kommentar (Leerraum + '#') und ohne Leerraum an den Raendern.
+strip_unquoted_comment() {
+  local value="$1" i seen_text=false
+  # Erstes '#' mit Leerraum davor und Text davor beginnt den Kommentar (wie Compose).
+  for ((i = 0; i < ${#value}; i++)); do
+    case "${value:i:1}" in
+      [[:space:]]) ;;
+      "#")
+        if [ "$seen_text" = true ] && [ "$i" -gt 0 ] && [[ "${value:i-1:1}" == [[:space:]] ]]; then
+          value="${value:0:i}"
+          break
+        fi
+        seen_text=true
+        ;;
+      *) seen_text=true ;;
+    esac
+  done
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  REPLY="$value"
+}
+
 load_env_file() {
   local env_file="$1"
   local line key value mode owner_uid
@@ -167,12 +215,14 @@ load_env_file() {
     if [[ "$value" == "'"*"'" && ${#value} -ge 2 ]]; then
       value="${value:1:${#value}-2}"
     elif [[ "$value" == '"'*'"' && ${#value} -ge 2 ]]; then
-      value="${value:1:${#value}-2}"
-      value="${value//\\n/$'\n'}"
-      value="${value//\\r/$'\r'}"
-      value="${value//\\t/$'\t'}"
-      value="${value//\\\"/\"}"
-      value="${value//\\\\/\\}"
+      unescape_double_quoted "${value:1:${#value}-2}"
+      value="$REPLY"
+    else
+      # Wie der dotenv-Parser von Compose (Audit MAIN-OPS-015): bei unquotierten Werten beginnt
+      # mit Leerraum + '#' ein Kommentar, abschliessender Leerraum zaehlt nicht. Sonst sahen
+      # deploy.sh (Secret-Dateien) und Compose (Interpolation) unterschiedliche Werte.
+      strip_unquoted_comment "$value"
+      value="$REPLY"
     fi
 
     printf -v "$key" '%s' "$value"
