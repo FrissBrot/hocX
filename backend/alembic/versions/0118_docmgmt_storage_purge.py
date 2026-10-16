@@ -11,12 +11,16 @@ scheiterte), zeigte die Zeile auf ein Objekt, das es nicht mehr gab. Ab jetzt:
   Ein neuer put desselben Keys setzt purge_pending zurück; zusätzlich halten Schreiber und Job
   denselben Advisory-Lock je Key, damit das verzögerte Löschen nie neuen Inhalt trifft.
 
+Eigene Revisions-ID (nicht 0118_storage_purge_after_commit wie auf feature/s3-storage-maintenance):
+beim späteren Zusammenführen beider Branches muss eine der beiden Migrationen zum No-op werden
+(Spalte und Funktionen existieren dann schon) - eine geteilte ID wäre für Alembic mehrdeutig.
+
 Rein additiv: neue Spalte mit Default, CREATE OR REPLACE der Registerfunktion (Signatur und
 Rechte unverändert), zwei neue Funktionen nur für hocx_app. Der Downgrade stellt die Fassung aus
 0113 wieder her; noch nicht gelöschte Tombstones bleiben dann als Objekte liegen (der
 Prüfbericht der Migration zeigt sie als verwaist).
 
-Revision ID: 0118_storage_purge_after_commit
+Revision ID: 0118_docmgmt_storage_purge
 Revises: 0117_docmgmt_merge_main
 Create Date: 2026-10-16
 """
@@ -24,7 +28,7 @@ Create Date: 2026-10-16
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0118_storage_purge_after_commit"
+revision = "0118_docmgmt_storage_purge"
 down_revision = "0117_docmgmt_merge_main"
 branch_labels = None
 depends_on = None
