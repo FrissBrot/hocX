@@ -47,7 +47,7 @@ _ISSUER = "hocX"
 # password login, so the pre-existing per-ticket limit (mfa-login-totp:{ticket}, 10/10min)
 # only capped guesses within a single ticket - an attacker who already has valid credentials
 # could mint unlimited tickets and get 10 more TOTP guesses each, with no ceiling on the
-# account as a whole. Mirrors the password lockout in auth_service.py (_ACCOUNT_LOGIN_ATTEMPT_LIMIT).
+# account as a whole. Mirrors the password lockout (app/core/rate_limit.py, LOGIN_LOCKOUT_*).
 _ACCOUNT_TOTP_ATTEMPT_LIMIT = 10
 _ACCOUNT_TOTP_WINDOW_SECONDS = 15 * 60
 

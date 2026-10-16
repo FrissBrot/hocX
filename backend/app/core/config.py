@@ -151,6 +151,9 @@ class Settings(BaseSettings):
     clamav_host: str = "clamav"
     clamav_port: int = 3310
     redis_url: str = "redis://redis:6379/0"
+    # Proxys, deren X-Forwarded-For ausgewertet wird (Traefik im Compose-Netz), siehe
+    # app/core/client_ip.py.
+    trusted_proxy_cidrs: str = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,::1/128,fc00::/7"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

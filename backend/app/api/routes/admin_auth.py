@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.admin_security import CurrentAdmin, get_optional_current_admin, issue_admin_session_cookie
 from app.core.config import settings
+from app.core.client_ip import client_ip
 from app.core.db import get_db
 from app.models import PlatformAdmin
 from app.schemas.admin import AdminLoginRequest, AdminSessionRead
@@ -30,8 +31,8 @@ def _state_fingerprint(state: str) -> str:
 
 
 @router.post("/login", response_model=AdminSessionRead)
-def login(payload: AdminLoginRequest, response: Response, db: Session = Depends(get_db)):
-    return service.login(db, response, payload)
+def login(payload: AdminLoginRequest, response: Response, request: Request, db: Session = Depends(get_db)):
+    return service.login(db, response, payload, client_address=client_ip(request))
 
 
 # ── MFA (audit finding, 2026-08-27 - platform admins previously had no MFA option at all) ──

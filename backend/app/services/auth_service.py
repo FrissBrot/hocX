@@ -6,7 +6,7 @@ from fastapi import HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.rate_limit import check_account_lockout, record_failed_attempt
+from app.core.rate_limit import check_login_lockout, record_failed_login
 from app.core.security import CurrentUser, DUMMY_PASSWORD_HASH, build_current_user, issue_locale_cookie, issue_session_cookie, verify_password
 from app.models import AppUser
 from app.schemas.mfa import (
@@ -28,19 +28,22 @@ from app.services.tenant_service import build_tenant_profile_image_url
 
 _audit = AuditService()
 
-# Account-scoped lockout, independent of source IP - complements Traefik's per-IP rate limit
-# (10/min), which a distributed or shared-IP bruteforce attempt can bypass entirely.
-_ACCOUNT_LOGIN_ATTEMPT_LIMIT = 20
-_ACCOUNT_LOGIN_WINDOW_SECONDS = 15 * 60
 
 
 class AuthService:
     def __init__(self) -> None:
         self.mfa_service = MfaService()
 
-    def login(self, db: Session, response: Response, payload: LoginRequest, request_host: str | None = None) -> LoginResponse:
-        lockout_key = f"login-account:{payload.email.strip().lower()}"
-        check_account_lockout(lockout_key, limit=_ACCOUNT_LOGIN_ATTEMPT_LIMIT)
+    def login(
+        self,
+        db: Session,
+        response: Response,
+        payload: LoginRequest,
+        request_host: str | None = None,
+        client_address: str | None = None,
+    ) -> LoginResponse:
+        # Sperre pro Konto und Quell-IP plus höhere Grenze pro Konto (MAIN-SEC-007).
+        check_login_lockout("login-account", payload.email, client_address)
 
         user = db.query(AppUser).filter(AppUser.email == payload.email.strip().lower(), AppUser.login_enabled.is_(True)).one_or_none()
         # Always run verify_password's full PBKDF2 work, even for a nonexistent account
@@ -48,7 +51,7 @@ class AuthService:
         # channel that let an attacker enumerate valid emails (audit finding, 2026-08-25).
         password_ok = verify_password(payload.password, user.password_hash if user is not None and user.password_hash else DUMMY_PASSWORD_HASH)
         if user is None or not user.is_active or not password_ok:
-            record_failed_attempt(lockout_key, period_seconds=_ACCOUNT_LOGIN_WINDOW_SECONDS)
+            record_failed_login("login-account", payload.email, client_address)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-Mail oder Passwort ist ungültig.")
         if not user.login_enabled:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login ist für dieses Konto deaktiviert.")

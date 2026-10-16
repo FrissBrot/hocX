@@ -7,6 +7,12 @@ api:
   # (e.g. basicauth/forwardauth middleware) if the dashboard is ever actually needed.
   dashboard: false
 
+# Client-IP (MAIN-SEC-007): Ohne forwardedHeaders.trustedIPs vertraut Traefik keinen vom
+# Client mitgeschickten X-Forwarded-*-Headern und setzt X-Forwarded-For selbst auf die
+# Quelladresse. Das Backend liest die IP daraus (app/core/client_ip.py) für Login-Sperre und
+# Rate-Limits. Steht später ein weiterer Proxy/CDN davor, dessen Adressbereiche hier je
+# EntryPoint unter forwardedHeaders.trustedIPs eintragen - sonst teilen sich alle Clients die
+# IP des CDN. Über den Admin-Einstieg (OpenZiti, 127.0.0.1) sehen alle Zugriffe dieselbe IP.
 entryPoints:
   web:
     address: ":80"
