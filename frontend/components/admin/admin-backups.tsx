@@ -517,6 +517,20 @@ function RestorePanel({ t, locale, restoreId, isOwner, onChanged }: { t: TFunc; 
   );
 }
 
+/** Ein Idempotenzschlüssel je geöffneter Bestätigung: eine Wiederholung (z. B. nach einem
+ * Netzwerkfehler) schickt denselben Schlüssel, der Server liefert dann den laufenden Auftrag. */
+export function useIdempotencyKey() {
+  const ref = useRef<string | null>(null);
+  const get = useCallback((prefix: string) => {
+    ref.current ??= `${prefix}-${crypto.randomUUID()}`;
+    return ref.current;
+  }, []);
+  const reset = useCallback(() => {
+    ref.current = null;
+  }, []);
+  return { get, reset };
+}
+
 function Restore({ t, locale, isOwner, status, onChanged }: { t: TFunc; locale: string; isOwner: boolean; status: BackupStatus; onChanged: () => Promise<void> }) {
   const showToast = useToast();
   const confirm = useConfirm();
@@ -536,6 +550,7 @@ function Restore({ t, locale, isOwner, status, onChanged }: { t: TFunc; locale: 
   const [skipReason, setSkipReason] = useState("");
   const [working, setWorking] = useState(false);
   const [watching, setWatching] = useState<string | null>(status.current_restore?.id ?? null);
+  const { get: restoreKeyFor, reset: resetRestoreKey } = useIdempotencyKey();
 
   const loadHistory = useCallback(async () => {
     try {
@@ -571,6 +586,11 @@ function Restore({ t, locale, isOwner, status, onChanged }: { t: TFunc; locale: 
     setConfirmation("");
   }, [kind, tenantId, newName, profileId]);
 
+  // Neue Vorschau = neue Bestätigung = neuer Schlüssel.
+  useEffect(() => {
+    resetRestoreKey();
+  }, [preview, resetRestoreKey]);
+
   async function loadPreview() {
     if (!setId) return;
     setWorking(true);
@@ -599,7 +619,7 @@ function Restore({ t, locale, isOwner, status, onChanged }: { t: TFunc; locale: 
           backup_set_id: setId, kind, target_profile_id: kind === "full" ? profileId : null, source_tenant_id: kind === "tenant_copy" ? tenantId : null,
           new_name: kind === "tenant_copy" ? newName : null, confirmation, totp_code: totp.replace(/\s/g, ""),
           skip_rescue_backup: kind === "full" ? skipRescue : false, skip_rescue_reason: skipRescue ? skipReason : null,
-          idempotency_key: `restore-${setId}-${Date.now()}`,
+          idempotency_key: restoreKeyFor(`restore-${setId}`),
         }),
       });
       showToast(t("toast.restoreQueued"), "success");

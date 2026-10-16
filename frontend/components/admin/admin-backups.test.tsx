@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const browserApiFetchMock = vi.fn();
@@ -9,7 +9,7 @@ vi.mock("@/lib/api/client", () => ({
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn(async () => true) }));
 
-import { AdminBackups } from "./admin-backups";
+import { AdminBackups, useIdempotencyKey } from "./admin-backups";
 import { BackupSet, BackupSettings, BackupStatus } from "@/types/api";
 
 function backupSet(overrides: Partial<BackupSet> = {}): BackupSet {
@@ -92,5 +92,17 @@ describe("AdminBackups", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Einstellungen" }));
     expect(screen.getByText("SSH-Schlüssel vorhanden · Passphrase vorhanden")).toBeTruthy();
     expect(container.textContent).not.toMatch(/PRIVATE KEY/);
+  });
+});
+
+describe("useIdempotencyKey", () => {
+  it("liefert bis zum Zurücksetzen denselben Schlüssel (Wiederholung nach Netzwerkfehler)", () => {
+    const { result, rerender } = renderHook(() => useIdempotencyKey());
+    const first = result.current.get("restore-s-1");
+    rerender();
+    expect(result.current.get("restore-s-1")).toBe(first);
+    expect(first).toMatch(/^restore-s-1-[A-Za-z0-9_.:-]+$/);
+    act(() => result.current.reset());
+    expect(result.current.get("restore-s-1")).not.toBe(first);
   });
 });
