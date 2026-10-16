@@ -147,6 +147,55 @@ def test_cli_full_restore_into_new_database_and_new_provider(backup_env, tmp_pat
             pg.drop_database(target_db)
 
 
+def test_cli_full_restore_resumes_after_abort_in_the_object_phase(backup_env, tmp_path, monkeypatch):  # noqa: F811
+    """BORG-011: Abbruch in der Objektphase, Fortsetzung mit --resume ohne erneuten DB-Restore.
+    Eine Zieldatenbank ohne Abschlussmarkierung wird dagegen nie übernommen."""
+    from app.backup import cli as cli_module
+    from app.backup.restore_core import RestoreError
+
+    db, env, _ = backup_env
+    put_object(db, "uploads/resume/a.bin", b"fortsetzen")
+    backup = run_backup_job(env)
+    archive = db.get(BackupSet, backup.backup_set_id).archive_name
+    for name, value in (("BACKUP_REPOSITORY_URL", env.config.repository_url), ("BACKUP_PASSPHRASE_FILE", str(env.config.passphrase_file)),
+                        ("BACKUP_WORK_DIR", str(env.config.work_dir)), ("BACKUP_ENABLED", "true")):
+        monkeypatch.setenv(name, value)
+    url_file = tmp_path / "db-url"
+    url_file.write_text(settings.database_url)
+    target_db = f"hocx_cli_{uuid.uuid4().hex[:8]}"
+    fs_root = tmp_path / "fs"
+    argv = ["restore-full", "--archive", archive, "--target-db", target_db, "--storage", "filesystem", "--filesystem-root", str(fs_root),
+            "--filesystem-abgabebox-root", str(tmp_path / "fs-abgabebox"), "--database-url-file", str(url_file), "--yes"]
+    real_objects = cli_module.restore_objects
+    real_database = cli_module.restore_database
+    calls = {"database": 0}
+
+    def abort_objects(*args, **kwargs):
+        raise RestoreError("objects_interrupted", "simulierter Abbruch in der Objektphase")
+
+    def counting_database(*args, **kwargs):
+        result = real_database(*args, **kwargs)
+        calls["database"] += 1  # nur tatsächlich durchgeführte DB-Restores
+        return result
+
+    monkeypatch.setattr(cli_module, "restore_database", counting_database)
+    try:
+        monkeypatch.setattr(cli_module, "restore_objects", abort_objects)
+        assert cli_main(argv) == 1
+        monkeypatch.setattr(cli_module, "restore_objects", real_objects)
+        assert cli_main(argv) == 1  # ohne --resume: Zieldatenbank existiert -> verweigert
+        assert cli_main([*argv, "--resume"]) == 0
+        assert calls["database"] == 1
+        with PgTools(PgTarget.from_url(settings.database_url)) as pg:
+            # Ohne Markierung (z. B. Abbruch in pg_restore) wird nichts übernommen.
+            pg.psql(f'COMMENT ON DATABASE "{target_db}" IS NULL;', database="postgres")
+        assert cli_main([*argv, "--resume"]) == 1
+        assert calls["database"] == 1
+    finally:
+        with PgTools(PgTarget.from_url(settings.database_url)) as pg:
+            pg.drop_database(target_db)
+
+
 def test_cli_rejects_untrusted_archive_names(backup_env, monkeypatch, capsys):  # noqa: F811
     _db, env, _ = backup_env
     for name, value in (("BACKUP_REPOSITORY_URL", env.config.repository_url), ("BACKUP_PASSPHRASE_FILE", str(env.config.passphrase_file)),

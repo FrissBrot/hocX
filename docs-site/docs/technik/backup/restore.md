@@ -129,7 +129,11 @@ Repository-Zugang und die Notfallmappe (Passphrase, Borg-Schlüssel-Export, `.en
 
    Die CLI legt Profil, Generation und Speicherzustand in der wiederhergestellten DB neu an,
    aktiviert dort eine Wartung (`--no-maintenance` zum Abschalten) und prüft alle Verweise.
-   `--resume` setzt einen abgebrochenen Objekt-Restore fort, `--allow-schema-upgrade` migriert
+   `--resume` setzt einen abgebrochenen Objekt-Restore fort: eine vorhandene Zieldatenbank wird
+   übernommen, wenn sie als vollständig aus genau diesem Punkt wiederhergestellt markiert ist
+   (Datenbank-Kommentar, gesetzt nach erfolgreichem `pg_restore`); sonst bricht die CLI ab, ohne
+   etwas zu verändern – dann die unvollständige Datenbank löschen und ohne `--resume` neu
+   starten. `--allow-schema-upgrade` migriert
    ein älteres Schema kontrolliert. Auf einem fremden PostgreSQL ohne hocX-Rollen: `--no-owner`.
    Die eingeschränkten Rollen (`hocx_app`, `hocx_abgabebox`, `hocx_photo_worker`) sind
    clusterweit und nicht im Dump: `restore-full` legt fehlende an und setzt ihre Passwörter, wenn

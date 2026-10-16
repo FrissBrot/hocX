@@ -232,11 +232,19 @@ def _insert_maintenance(database_url: str) -> None:
         with engine.begin() as conn:
             conn.execute(text("""
                 INSERT INTO maintenance_window (kind, block_scope, state, reason_code, affected_features, source_job_type, started_at, internal_note)
-                VALUES ('full', 'all', 'active', 'backup_restore', '["all"]'::jsonb, 'backup_restore_cli', NOW(),
-                        'Wiederherstellung per Recovery-CLI - nach Prüfung im Admin-Portal (System -> Wartung) freigeben')
-            """))
+                SELECT 'full', 'all', 'active', 'backup_restore', '["all"]'::jsonb, 'backup_restore_cli', NOW(),
+                       'Wiederherstellung per Recovery-CLI - nach Prüfung im Admin-Portal (System -> Wartung) freigeben'
+                WHERE NOT EXISTS (SELECT 1 FROM maintenance_window WHERE source_job_type = 'backup_restore_cli' AND state = 'active')
+            """))  # Fortsetzung (--resume): keine zweite Wartung
     finally:
         engine.dispose()
+
+
+_DB_COMPLETE_MARKER = "hocx-restore-database-complete"
+
+
+def _database_comment(pg: PgTools, name: str) -> str:
+    return pg.psql(f"SELECT shobj_description(oid, 'pg_database') FROM pg_database WHERE datname = '{validate_db_name(name)}';", database="postgres")
 
 
 def cmd_restore_full(args: argparse.Namespace) -> int:
@@ -260,15 +268,31 @@ def cmd_restore_full(args: argparse.Namespace) -> int:
             return 1
         generation = args.generation or int((metadata.get("storage") or {}).get("generation") or 0) + 1
         backend, profile = _target_backend(args, generation)
-        ensure_empty_generation(backend)
-        print(f"Wiederherstellungspunkt {args.archive} (hocX {metadata.get('app_version')}, {metadata.get('object_count')} Objekte)")
-        print(f"Ziel: Datenbank {db_name} auf {target.host}, Objekte nach {args.storage} (Generation {generation})")
-        _confirm(args, "Fortfahren?")
+        # Fortsetzung (--resume): eine vorhandene Zieldatenbank wird nur übernommen, wenn sie als
+        # vollständig wiederhergestellt aus GENAU diesem Punkt markiert ist - sonst nichts anfassen.
+        marker = f"{_DB_COMPLETE_MARKER}:{args.archive}"
         with PgTools(target) as pg:
-            if not args.no_owner:
-                report["roles"] = ensure_app_roles(pg)
-            report["database"] = restore_database(view, args.archive, metadata, pg, db_name, work, max_bytes=config.staging_max_bytes,
-                                                  jobs=config.pg_restore_jobs, no_owner=args.no_owner)
+            resume_db = bool(args.resume and pg.database_exists(db_name))
+            if resume_db and _database_comment(pg, db_name) != marker:
+                print(f"FEHLER: Zieldatenbank {db_name} existiert, ist aber nicht als vollständig aus {args.archive} wiederhergestellt "
+                      "markiert (z. B. Abbruch während pg_restore). Nichts verändert - Datenbank prüfen und ggf. löschen, dann neu starten.",
+                      file=sys.stderr)
+                return 1
+        if not resume_db:
+            ensure_empty_generation(backend)
+        print(f"Wiederherstellungspunkt {args.archive} (hocX {metadata.get('app_version')}, {metadata.get('object_count')} Objekte)")
+        print(f"Ziel: Datenbank {db_name} auf {target.host}, Objekte nach {args.storage} (Generation {generation})"
+              + (" - Fortsetzung: Datenbank bereits wiederhergestellt" if resume_db else ""))
+        _confirm(args, "Fortfahren?")
+        if resume_db:
+            report["database"] = {"resumed": True}
+        else:
+            with PgTools(target) as pg:
+                if not args.no_owner:
+                    report["roles"] = ensure_app_roles(pg)
+                report["database"] = restore_database(view, args.archive, metadata, pg, db_name, work, max_bytes=config.staging_max_bytes,
+                                                      jobs=config.pg_restore_jobs, no_owner=args.no_owner)
+                pg.psql(f"COMMENT ON DATABASE \"{db_name}\" IS '{marker}';", database="postgres")
         print("Datenbank wiederhergestellt, Objekte werden übertragen ...")
         objects = restore_objects(view, args.archive, metadata, backend, work, skip_existing=args.resume,
                                   progress=lambda v: print(f"  {v['contents_restored']} Inhalte, {v['bytes_restored'] // 1024 ** 2} MiB", flush=True))
