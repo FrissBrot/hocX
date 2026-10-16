@@ -178,3 +178,36 @@ def test_every_brand_preset_renders_without_warnings(renderer, preset, orientati
 def test_heading_and_table_styles_render(renderer, heading_style, table_style):
     compiled = compile_scenario(Scenario(system("protocol_compact"), {"protocol": [all_data_blocks()[0], {"type": "protocol_element", "title": "T", "children": [{**all_data_blocks()[10], "level": 2}]}]}, brand={"layout": {"heading_style": heading_style, "table_style": table_style}}))
     assert _render(renderer, compiled).warnings == []
+
+
+def test_png_with_page_limit_rasterizes_only_those_pages_but_reports_all(monkeypatch):
+    """STUDIO-015: Thumbnails/Vorschau rastern nur die angeforderten Seiten über das PDF und
+    melden trotzdem die Gesamtzahl der Seiten."""
+    from app.documents import renderer as renderer_module
+
+    calls: list[int] = []
+    original = renderer_module._rasterize
+
+    def counting(pdf, *, ppi, max_pages):
+        pages, total = original(pdf, ppi=ppi, max_pages=max_pages)
+        calls.append(len(pages))
+        return pages, total
+
+    monkeypatch.setattr(renderer_module, "_rasterize", counting)
+    pdf = _three_page_pdf()
+    pages, total = renderer_module._rasterize(pdf, ppi=30, max_pages=1)
+    assert len(pages) == 1 and total == 3 and pages[0].startswith(b"\x89PNG")
+    assert calls == [1]
+
+
+def _three_page_pdf() -> bytes:
+    import io
+
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    for _ in range(3):
+        writer.add_blank_page(width=200, height=200)
+    buffer = io.BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()

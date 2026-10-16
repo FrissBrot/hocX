@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import json
 import logging
 import multiprocessing
@@ -71,6 +72,8 @@ class CompileResult:
     error: str | None = None
     hints: list[str] = field(default_factory=list)
     trace: list[str] = field(default_factory=list)
+    # Gesamtzahl der Seiten, wenn nur ein Teil gerastert wurde
+    page_count: int | None = None
 
 
 @dataclass
@@ -178,7 +181,31 @@ def _safe_name(name: str) -> str:
     return candidate.name
 
 
-def _compile_job(document_json: str, files: dict[str, bytes], fonts: dict[str, bytes], fmt: str, ppi: float | None) -> CompileResult:
+def _rasterize(pdf: bytes, *, ppi: float, max_pages: int) -> tuple[list[bytes], int]:
+    """Nur die ersten ``max_pages`` Seiten als PNG und die Gesamtzahl der Seiten (STUDIO-015):
+    typst-py rastert sonst immer alle Seiten - ein Thumbnail kostete den ganzen Satz."""
+    import pypdfium2
+
+    document = pypdfium2.PdfDocument(pdf)
+    try:
+        pages: list[bytes] = []
+        for index in range(min(max_pages, len(document))):
+            page = document[index]
+            try:
+                image = page.render(scale=ppi / 72).to_pil()
+            finally:
+                page.close()
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            pages.append(buffer.getvalue())
+        return pages, len(document)
+    finally:
+        document.close()
+
+
+def _compile_job(
+    document_json: str, files: dict[str, bytes], fonts: dict[str, bytes], fmt: str, ppi: float | None, max_pages: int | None = None,
+) -> CompileResult:
     import typst
 
     global _WORKER_FONTS
@@ -226,12 +253,16 @@ def _compile_job(document_json: str, files: dict[str, bytes], fonts: dict[str, b
             package_cache_path=str(cache_dir),
         )
         try:
+            rasterize_pages = fmt == "png" and max_pages is not None
             output, warnings = compiler.compile_with_warnings(
-                format=fmt,
-                ppi=ppi,
+                format="pdf" if rasterize_pages else fmt,
+                ppi=None if rasterize_pages else ppi,
                 pdf_standards=[PDF_STANDARD] if fmt == "pdf" else [],
                 timestamp=datetime.now(UTC).replace(microsecond=0),
             )
+            page_count = None
+            if rasterize_pages:
+                output, page_count = _rasterize(output, ppi=ppi or PREVIEW_PPI, max_pages=max_pages)
         except typst.TypstError as exc:
             return CompileResult(
                 ok=False,
@@ -241,7 +272,7 @@ def _compile_job(document_json: str, files: dict[str, bytes], fonts: dict[str, b
             )
         except Exception as exc:  # noqa: BLE001 - Diagnose wird als Daten zurückgegeben
             return CompileResult(ok=False, error=f"{type(exc).__name__}: {exc}")
-        return CompileResult(ok=True, output=output, warnings=[getattr(w, "message", str(w)) for w in warnings])
+        return CompileResult(ok=True, output=output, warnings=[getattr(w, "message", str(w)) for w in warnings], page_count=page_count)
 
 
 # ── Pool ─────────────────────────────────────────────────────────────────────
@@ -298,11 +329,13 @@ class DocumentRenderer:
             self._semaphores[key] = asyncio.Semaphore(self.concurrency)
         return self._semaphores[key]
 
-    async def _run(self, document_json: str, assets: RenderAssets, fmt: OutputFormat, ppi: float | None) -> CompileResult:
+    async def _run(
+        self, document_json: str, assets: RenderAssets, fmt: OutputFormat, ppi: float | None, max_pages: int | None = None,
+    ) -> CompileResult:
         async with self._semaphore():
             loop = asyncio.get_running_loop()
             try:
-                future = loop.run_in_executor(self._pool(), _compile_job, document_json, assets.files, assets.fonts, fmt, ppi)
+                future = loop.run_in_executor(self._pool(), _compile_job, document_json, assets.files, assets.fonts, fmt, ppi, max_pages)
                 return await asyncio.wait_for(future, timeout=self.timeout_seconds)
             except asyncio.TimeoutError as exc:
                 self._reset_pool()
@@ -315,7 +348,7 @@ class DocumentRenderer:
 
     async def render(self, document: dict, assets: RenderAssets | None = None, *, fmt: OutputFormat = "pdf", max_pages: int | None = None, ppi: float | None = None) -> RenderOutput:
         assets = assets or RenderAssets()
-        result = await self._run(_dump(document), assets, fmt, ppi if fmt == "png" else None)
+        result = await self._run(_dump(document), assets, fmt, ppi if fmt == "png" else None, max_pages if fmt == "png" else None)
         if not result.ok:
             located = await self._locate_failing_node(document, assets)
             detail = _format_diagnostic(result)
@@ -325,7 +358,7 @@ class DocumentRenderer:
         if fmt == "pdf":
             return RenderOutput(pdf=result.output if isinstance(result.output, bytes) else None, warnings=result.warnings)
         pages = result.output if isinstance(result.output, list) else [result.output] if result.output else []
-        total = len(pages)
+        total = result.page_count if result.page_count is not None else len(pages)
         if max_pages is not None:
             pages = pages[:max_pages]
         return RenderOutput(pages=list(pages), warnings=result.warnings, page_count=total)

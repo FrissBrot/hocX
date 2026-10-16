@@ -714,6 +714,7 @@ class AdminTenantService:
             # Document-Studio-Assets (ältere Uploads liegen noch unter document_style_assets)
             f"document_assets/tenant-{tenant_id}",
             f"document_style_assets/tenant-{tenant_id}",
+            f"document_thumbnails/tenant-{tenant_id}",
             f"tenant_imports/tenant-{tenant_id}",
             f"tenant_clones/tenant-{tenant_id}",
         ):

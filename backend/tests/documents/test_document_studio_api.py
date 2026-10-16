@@ -412,3 +412,68 @@ def test_catalog_and_thumbnail(db, world):
     template = db.query(DocumentTemplate).filter(DocumentTemplate.system_key == "invitation_letter").one()
     response = asyncio.run(studio.get_document_template_thumbnail(template.public_id, db=db, user=world["reader"]))
     assert response.body.startswith(b"\x89PNG")
+
+
+# --- STUDIO-015: Bibliothek ohne N+1, Thumbnails dauerhaft gecacht -----------------------------
+
+
+def test_default_template_ids_match_the_per_type_resolution(db, world):
+    from app.models import DocumentTemplateAssignment
+
+    created = _create(db, world)
+    template = db.query(DocumentTemplate).filter(DocumentTemplate.public_id == created.id).one()
+    template_service.publish(db, template, user_id=None)
+    db.add(DocumentTemplateAssignment(tenant_id=world["tenant"].id, document_type="protocol", document_template_id=template.id))
+    db.flush()
+    expected: dict[str, int] = {}
+    for document_type in template_service.DOCUMENT_TYPES:
+        try:
+            expected[document_type] = template_service.resolve_template(db, world["tenant"].id, document_type).template.id
+        except template_service.TemplateStateError:
+            continue
+    assert template_service.default_template_ids(db, world["tenant"].id) == expected
+
+
+def test_library_query_count_does_not_grow_with_templates(db, world):
+    from sqlalchemy import event
+
+    def count_queries() -> int:
+        statements: list[str] = []
+
+        def record(*args, **kwargs):
+            statements.append(args[2])
+
+        connection = db.connection()
+        event.listen(connection, "before_cursor_execute", record)
+        try:
+            studio.list_document_templates(document_type=None, include_archived=True, db=db, user=world["writer"])
+        finally:
+            event.remove(connection, "before_cursor_execute", record)
+        return len(statements)
+
+    _create(db, world)
+    few = count_queries()
+    for index in range(5):
+        studio.create_document_template(studio.TemplateCreate(name=f"Weitere {index}", document_type="custom", content=SIMPLE), db=db, user=world["writer"])
+    assert count_queries() == few
+
+
+def test_thumbnail_is_cached_on_disk(db, world, monkeypatch, tmp_path):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    studio._THUMBNAILS.clear()
+    template = db.query(DocumentTemplate).filter(DocumentTemplate.system_key == "invitation_letter").one()
+    first = asyncio.run(studio.get_document_template_thumbnail(template.public_id, db=db, user=world["reader"]))
+    files = list((tmp_path / studio.THUMBNAIL_DIR / f"tenant-{world['tenant'].id}").glob("*.png"))
+    assert len(files) == 1 and files[0].read_bytes() == first.body
+
+    # Neuer Prozess (leerer Speicher-Cache): kein erneutes Rendern
+    studio._THUMBNAILS.clear()
+
+    async def no_render(*args, **kwargs):
+        raise AssertionError("Thumbnail wurde neu gerendert")
+
+    monkeypatch.setattr(studio.get_renderer(), "render", no_render)
+    second = asyncio.run(studio.get_document_template_thumbnail(template.public_id, db=db, user=world["reader"]))
+    assert second.body == first.body

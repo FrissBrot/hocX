@@ -23,6 +23,8 @@ Pillow==12.3.0
 typst==0.15.0
 markdown-it-py==4.2.0
 pypdf==6.20.1
+# Vorschau/Thumbnails: nur die benötigten Seiten aus dem PDF rastern (STUDIO-015)
+pypdfium2==5.14.0
 openpyxl==3.1.5
 # Zeichenabdeckung der Schriften (PDF/A verbietet fehlende Glyphen, siehe renderer.py)
 fonttools==4.66.1

@@ -592,13 +592,38 @@ def resolve_template(
 
 
 def default_template_ids(db: Session, tenant_id: int) -> dict[str, int]:
-    """Dokumenttyp → ID der aktuell geltenden Standardvorlage (für die Bibliothek)."""
+    """Dokumenttyp → ID der aktuell geltenden Standardvorlage (für die Bibliothek).
+
+    Dieselbe Auflösung wie ``resolve_template`` ohne Protokollvorlage, aber gebündelt in drei
+    Abfragen statt bis zu fünf je Dokumenttyp (STUDIO-015)."""
+    tenant_defaults = {
+        row.document_type: row
+        for row in db.scalars(
+            select(DocumentTemplateAssignment).where(
+                DocumentTemplateAssignment.tenant_id == tenant_id, DocumentTemplateAssignment.protocol_template_id.is_(None)
+            )
+        )
+    }
+    assigned_ids = {row.document_template_id for row in tenant_defaults.values() if row.document_template_id}
+    assigned = {template.id: template for template in db.scalars(select(DocumentTemplate).where(DocumentTemplate.id.in_(assigned_ids)))} if assigned_ids else {}
+    system = list(
+        db.scalars(
+            select(DocumentTemplate)
+            .where(DocumentTemplate.tenant_id.is_(None), DocumentTemplate.status == "active", DocumentTemplate.published_revision_id.is_not(None))
+            .order_by(DocumentTemplate.sort_index, DocumentTemplate.id)
+        )
+    )
     result: dict[str, int] = {}
     for document_type in DOCUMENT_TYPES:
-        try:
-            result[document_type] = resolve_template(db, tenant_id, document_type).template.id
-        except TemplateStateError:
+        assignment = tenant_defaults.get(document_type)
+        template = assigned.get(assignment.document_template_id) if assignment is not None and assignment.document_template_id else None
+        if _usable(template, tenant_id, document_type):
+            result[document_type] = template.id
             continue
+        candidates = [candidate for candidate in system if candidate.document_type == document_type]
+        chosen = next((candidate for candidate in candidates if candidate.is_platform_default), None) or (candidates[0] if candidates else None)
+        if chosen is not None:
+            result[document_type] = chosen.id
     return result
 
 

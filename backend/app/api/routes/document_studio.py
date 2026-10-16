@@ -12,15 +12,19 @@ import hashlib
 import threading
 import uuid
 from collections import OrderedDict
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.api.routes.documents import http_error, render_error
+from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user
 from app.documents import assets as asset_service
@@ -131,9 +135,10 @@ class RevisionRead(BaseModel):
     published_by_name: str | None = None
 
 
-def _revision_read(db: Session, revision: DocumentTemplateRevision | None) -> RevisionRead | None:
+def _revision_read(db: Session, revision: DocumentTemplateRevision | None, names: dict[int, str] | None = None) -> RevisionRead | None:
     if revision is None:
         return None
+    name = (lambda user_id: names.get(user_id) if user_id is not None else None) if names is not None else (lambda user_id: _user_name(db, user_id))
     return RevisionRead(
         id=revision.public_id,
         revision_no=revision.revision_no,
@@ -145,8 +150,8 @@ def _revision_read(db: Session, revision: DocumentTemplateRevision | None) -> Re
         created_at=revision.created_at,
         updated_at=revision.updated_at,
         published_at=revision.published_at,
-        created_by_name=_user_name(db, revision.created_by),
-        published_by_name=_user_name(db, revision.published_by),
+        created_by_name=name(revision.created_by),
+        published_by_name=name(revision.published_by),
     )
 
 
@@ -176,10 +181,49 @@ class TemplateDetail(TemplateRead):
     diagnostics: list[dict[str, Any]] = Field(default_factory=list)
 
 
-def _template_read(db: Session, user: CurrentUser, template: DocumentTemplate, defaults: dict[str, int] | None = None) -> TemplateRead:
+@dataclass
+class _Prefetched:
+    """Vorab geladene Bezüge für viele Vorlagen (Bibliothek, STUDIO-015)."""
+
+    brands: dict[int, DocumentBrand]
+    sources: dict[int, DocumentTemplate]
+    published: dict[int, DocumentTemplateRevision]
+    drafts: dict[int, DocumentTemplateRevision]
+    names: dict[int, str]
+
+
+def _prefetch(db: Session, templates: list[DocumentTemplate]) -> _Prefetched:
+    def by_id(model, ids):
+        ids = {item for item in ids if item}
+        return {row.id: row for row in db.scalars(select(model).where(model.id.in_(ids)))} if ids else {}
+
+    published = by_id(DocumentTemplateRevision, (template.published_revision_id for template in templates))
+    template_ids = [template.id for template in templates]
+    drafts = {
+        row.template_id: row
+        for row in db.scalars(
+            select(DocumentTemplateRevision).where(DocumentTemplateRevision.template_id.in_(template_ids), DocumentTemplateRevision.status == "draft")
+        )
+    } if template_ids else {}
+    user_ids = {user_id for revision in (*published.values(), *drafts.values()) for user_id in (revision.created_by, revision.published_by) if user_id}
+    names = dict(db.execute(select(AppUser.id, AppUser.display_name).where(AppUser.id.in_(user_ids))).all()) if user_ids else {}
+    return _Prefetched(
+        brands=by_id(DocumentBrand, (template.brand_id for template in templates)),
+        sources=by_id(DocumentTemplate, (template.source_template_id for template in templates)),
+        published=published,
+        drafts=drafts,
+        names=names,
+    )
+
+
+def _template_read(
+    db: Session, user: CurrentUser, template: DocumentTemplate, defaults: dict[str, int] | None = None, prefetched: _Prefetched | None = None,
+) -> TemplateRead:
     defaults = defaults if defaults is not None else template_service.default_template_ids(db, user.current_tenant_id)
-    brand = db.get(DocumentBrand, template.brand_id) if template.brand_id else None
-    source = db.get(DocumentTemplate, template.source_template_id) if template.source_template_id else None
+    if prefetched is None:
+        prefetched = _prefetch(db, [template])
+    brand = prefetched.brands.get(template.brand_id) if template.brand_id else None
+    source = prefetched.sources.get(template.source_template_id) if template.source_template_id else None
     return TemplateRead(
         id=template.public_id,
         name=template.name,
@@ -194,8 +238,8 @@ def _template_read(db: Session, user: CurrentUser, template: DocumentTemplate, d
         editable=template.tenant_id == user.current_tenant_id and user.current_role in {"writer", "admin"},
         is_default=defaults.get(template.document_type) == template.id,
         brand_id=brand.public_id if brand is not None else None,
-        published_revision=_revision_read(db, template_service.published_revision(db, template)),
-        draft_revision=_revision_read(db, template_service.draft_revision(db, template)),
+        published_revision=_revision_read(db, prefetched.published.get(template.published_revision_id), prefetched.names),
+        draft_revision=_revision_read(db, prefetched.drafts.get(template.id), prefetched.names),
         created_at=template.created_at,
         updated_at=template.updated_at,
     )
@@ -256,7 +300,9 @@ def list_document_templates(
 ):
     permissions.require_view(user)
     defaults = template_service.default_template_ids(db, user.current_tenant_id)
-    return [_template_read(db, user, template, defaults) for template in template_service.list_templates(db, user.current_tenant_id, document_type=document_type, include_archived=include_archived)]
+    templates = template_service.list_templates(db, user.current_tenant_id, document_type=document_type, include_archived=include_archived)
+    prefetched = _prefetch(db, templates)
+    return [_template_read(db, user, template, defaults, prefetched) for template in templates]
 
 
 class TemplateCreate(BaseModel):
@@ -513,10 +559,29 @@ def compare_document_template_revisions(
     return template_service.compare_revisions(template_service.revision_content(old), template_service.revision_content(new))
 
 
-# Vorschaubilder der Bibliothek: Beispieldaten, erste Seite, kleine Auflösung, im Prozess gecacht
+# Vorschaubilder der Bibliothek: Beispieldaten, erste Seite, kleine Auflösung. Zwei Ebenen
+# (STUDIO-015): im Prozess (LRU) und auf Platte je Mandant, damit ein Neustart oder ein anderer
+# Worker nicht jede Vorlage neu rendert. Der Schlüssel enthält Revision, Bearbeitungsstand und
+# Brand-Revision - ein geänderter Stand erzeugt eine neue Datei, alte verdrängt das Limit.
 _THUMBNAILS: OrderedDict[str, bytes] = OrderedDict()
 _THUMBNAIL_LOCK = threading.Lock()
 _THUMBNAIL_LIMIT = 300
+_THUMBNAIL_FILES_PER_TENANT = 500
+THUMBNAIL_DIR = "document_thumbnails"
+
+
+def _thumbnail_file(tenant_id: int, key: str) -> Path:
+    return Path(settings.storage_root) / THUMBNAIL_DIR / f"tenant-{tenant_id}" / f"{key}.png"
+
+
+def _store_thumbnail_file(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(".tmp")
+    temp.write_bytes(content)
+    temp.replace(path)
+    files = sorted(path.parent.glob("*.png"), key=lambda item: item.stat().st_mtime)
+    for stale in files[: max(0, len(files) - _THUMBNAIL_FILES_PER_TENANT)]:
+        stale.unlink(missing_ok=True)
 
 
 @router.get("/document-templates/{template_id}/thumbnail")
@@ -530,11 +595,17 @@ async def get_document_template_thumbnail(template_id: uuid.UUID, db: Session = 
     key = hashlib.sha256(f"{user.current_tenant_id}:{revision.id}:{revision.lock_version}:{brand_revision.id if brand_revision else 0}:{_lang(user)}".encode()).hexdigest()
     with _THUMBNAIL_LOCK:
         cached = _THUMBNAILS.get(key)
+    disk_file = _thumbnail_file(user.current_tenant_id, key)
+    if cached is None and disk_file.is_file():
+        cached = disk_file.read_bytes()
+        with _THUMBNAIL_LOCK:
+            _THUMBNAILS[key] = cached
     if cached is None:
         request = document_service.DocumentRequest(document_type=template.document_type, template_id=template.public_id, revision_id=revision.public_id, data_mode="sample", language=user.preferred_language)
         savepoint = db.begin_nested()
         try:
-            prepared = document_service.prepare(db, user, user.current_tenant_id, request, preview=True)
+            # Synchrone DB-Arbeit nicht im Event-Loop (STUDIO-015)
+            prepared = await run_in_threadpool(document_service.prepare, db, user, user.current_tenant_id, request, preview=True)
             output = await get_renderer().render(prepared.compiled.data, document_service.RenderAssets(files=prepared.compiled.files, fonts=prepared.compiled.fonts), fmt="png", max_pages=1, ppi=40)
         except DocumentRenderError as exc:
             raise render_error(user, exc) from exc
@@ -544,6 +615,8 @@ async def get_document_template_thumbnail(template_id: uuid.UUID, db: Session = 
             if savepoint.is_active:
                 savepoint.rollback()
         cached = output.pages[0] if output.pages else b""
+        if cached:
+            await run_in_threadpool(_store_thumbnail_file, disk_file, cached)
         with _THUMBNAIL_LOCK:
             _THUMBNAILS[key] = cached
             while len(_THUMBNAILS) > _THUMBNAIL_LIMIT:

@@ -50,7 +50,10 @@ def test_scenario_pages_match_goldens(renderer, name):
     scenario = SCENARIOS[name]
     compiled = compile_scenario(scenario)
     assert not [item for item in compiled.diagnostics if item.severity == "error"], compiled.diagnostics
-    output = asyncio.run(renderer.render_preview(compiled.data, compiled_assets(compiled), max_pages=scenario.pages, ppi=PPI))
+    # Native Typst-Rasterung (alle Seiten, dann gekürzt): die Goldens prüfen das Layout, nicht
+    # den Rasterizer der Vorschau (der rastert seit STUDIO-015 nur die nötigen Seiten über pdfium).
+    output = asyncio.run(renderer.render(compiled.data, compiled_assets(compiled), fmt="png", ppi=PPI))
+    output.pages = output.pages[: scenario.pages]
     assert output.pages
     failures: list[str] = []
     for index, png in enumerate(output.pages, start=1):
