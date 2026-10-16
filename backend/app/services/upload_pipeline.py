@@ -309,11 +309,21 @@ def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | Gallery
 
 
 STAGE_CHUNK_BYTES = 4 * 1024 * 1024  # 4 MB
+# Mindestens so viel Platz bleibt beim Zwischenspeichern frei (gleiche Reserve wie
+# upload_admission). Unbekannte Grössen werden während des Schreibens geprüft statt vorab
+# den Platz für max_bytes (bis 10 GiB) zu verlangen.
+STAGE_DISK_RESERVE_BYTES = 256 * 1024**2
+
+
+def _ensure_free_space(target_dir: Path, needed: int) -> None:
+    import shutil
+
+    if shutil.disk_usage(target_dir).free < needed + STAGE_DISK_RESERVE_BYTES:
+        raise HTTPException(507, "Zu wenig freier Speicher für den Upload")
 
 
 async def stage_upload_to_disk(file: UploadFile, *, target_dir: Path, max_bytes: int, suffix: str) -> Path:
     """Kopiert begrenzt auf Platte und räumt auch bei Abbruch/Plattenfehlern auf."""
-    import shutil
     from starlette.concurrency import run_in_threadpool
 
     if file.size is not None and file.size > max_bytes:
@@ -323,8 +333,7 @@ async def stage_upload_to_disk(file: UploadFile, *, target_dir: Path, max_bytes:
     if isinstance(file.file, GalleryTemporaryFile):
         target_path = target_dir / f"{uuid4().hex}{suffix}"
         return await run_in_threadpool(file.file.adopt, target_path)
-    if shutil.disk_usage(target_dir).free < (file.size or max_bytes) + 256 * 1024**2:
-        raise HTTPException(507, "Zu wenig freier Speicher für den Upload")
+    _ensure_free_space(target_dir, file.size or 0)
     target_path = target_dir / f"{uuid4().hex}{suffix}"
     written = 0
     try:
@@ -333,6 +342,8 @@ async def stage_upload_to_disk(file: UploadFile, *, target_dir: Path, max_bytes:
                 written += len(chunk)
                 if written > max_bytes:
                     raise HTTPException(413, f"{file.filename or 'Datei'}: zu gross (maximal {max_bytes // 1024**2} MiB)")
+                if file.size is None:
+                    _ensure_free_space(target_dir, len(chunk))
                 await run_in_threadpool(handle.write, chunk)
         return target_path
     except BaseException:
