@@ -1,6 +1,8 @@
 services:
   traefik:
-    image: traefik:v3.1
+    # Gleiche Version wie docker-compose.traefik.yml: v3.1 spricht die Docker-API 1.24 fest an
+    # und laedt gegen Docker Engine >= 29 keine Router (Audit MAIN-OPS-007).
+    image: traefik:v3.6.1
     restart: unless-stopped
     # M28 (Mittel, Audit 2026-08-12): Ceiling gegen einen durchgehenden Container, der den
     # ganzen (knappen) Host mitreisst - keine Zielwerte fuer Normalbetrieb, nur eine Obergrenze.

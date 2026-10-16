@@ -29,6 +29,14 @@ assert users == ["backend", "redis"], f"cache-Netz genutzt von: {users}"
 docker compose --env-file .env.prod.example "${COMPOSE_FILES[@]}" config --format json | assert_redis_isolated
 docker compose -p hocx-e2e --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml config --format json | assert_redis_isolated
 
+# MAIN-OPS-007: Basis- und Release-Stack verwenden dieselbe Traefik-Version.
+base_traefik="$(grep -m1 -E '^    image: traefik:' docker-compose.yml)"
+release_traefik="$(grep -m1 -E '^    image: traefik:' docker-compose.traefik.yml)"
+test -n "$base_traefik" && test "$base_traefik" = "$release_traefik" || {
+  echo "Traefik-Version weicht ab: '$base_traefik' vs. '$release_traefik'" >&2
+  exit 1
+}
+
 if grep -q 'env_file:' docker-compose.release.yml; then
   echo "Release-Services duerfen nicht die komplette .env erhalten." >&2
   exit 1
