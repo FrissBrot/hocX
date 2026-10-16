@@ -45,6 +45,30 @@ assert any(s["source"] == "redis_password" for s in backend.get("secrets", [])),
 # shellcheck disable=SC2016  # literales Suchmuster
 grep -q 'write_secret_file "$secrets_dir" redis_password "$REDIS_PASSWORD"' scripts/deploy.sh
 
+# MAIN-OPS-004: Nur die Socket-Proxys mounten den Docker-Socket; Traefik spricht die API nur
+# über seinen Proxy. MAIN-OPS-013: jede Middleware, die traefik_config_service.py für
+# Custom-Domains referenziert, ist in den Compose-Labels definiert.
+for files in "--env-file .env.prod.example ${COMPOSE_FILES[*]}" "-p hocx-e2e --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml"; do
+  # shellcheck disable=SC2086  # bewusst in Worte zerlegt
+  docker compose $files config --format json | python3 -c '
+import json, re, sys
+config = json.load(sys.stdin)
+services = config["services"]
+mounts = sorted(name for name, s in services.items()
+                if any("docker.sock" in str(v.get("source", "")) for v in s.get("volumes", [])))
+assert all(name.endswith("socket-proxy") for name in mounts), f"docker.sock gemountet von: {mounts}"
+if "traefik" in services:
+    assert "traefik-socket-proxy" in mounts, mounts
+    assert "traefik-docker-api" in (services["traefik"].get("networks") or {}), "traefik ohne Proxy-Netz"
+labels = " ".join(str(v) for s in services.values() for v in (s.get("labels") or {}).items())
+prefix = services["backend"]["environment"].get("TRAEFIK_MIDDLEWARE_PREFIX", "")
+source = open("backend/app/services/traefik_config_service.py").read()
+for name in set(re.findall(r"traefik_middleware_prefix\}([a-z-]+)@docker", source)):
+    assert f"traefik.http.middlewares.{prefix}{name}." in labels, f"Middleware fehlt: {prefix}{name}"
+'
+done
+grep -q 'endpoint: "tcp://traefik-socket-proxy:2375"' infra/traefik/traefik.yml
+
 # MAIN-OPS-008: Der Dev-Overlay landet ohne -p nie im Projekt der Server-Instanz (hocx).
 dev_project="$(docker compose --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')"
 test "$dev_project" = hocx-dev || { echo "Dev-Overlay ergibt Projekt '$dev_project' statt hocx-dev" >&2; exit 1; }
@@ -87,17 +111,19 @@ test "$(grep -c 'no-new-privileges:true' docker-compose.release.yml)" -eq 7
 # docker-compose.yml, so its dev-only hardening for these two never applied to prod) had no
 # resource limits or container-hardening at all. Assert both are present here so this class
 # of gap gets caught going forward.
-for f in docker-compose.traefik.yml docker-compose.clamav.yml; do
-  test "$(grep -c 'read_only: true' "$f")" -eq 1
-  test "$(grep -c 'no-new-privileges:true' "$f")" -eq 1
-  test "$(grep -c 'mem_limit:' "$f")" -eq 1
+# Je Dienst einmal: traefik.yml hat seit MAIN-OPS-004 zwei Dienste (traefik, traefik-socket-proxy).
+for entry in docker-compose.traefik.yml:2 docker-compose.clamav.yml:1; do
+  f="${entry%%:*}"; services="${entry##*:}"
+  test "$(grep -c 'read_only: true' "$f")" -eq "$services"
+  test "$(grep -c 'no-new-privileges:true' "$f")" -eq "$services"
+  test "$(grep -c 'mem_limit:' "$f")" -eq "$services"
   # Anchored (unlike the other three greps above) because this file's own comment
   # explaining CAP_DAC_OVERRIDE mentions "cap_drop:ALL" in prose - an unanchored grep
   # double-counts that as a second directive, permanently red long before this diff
   # (found while adding photo-analysis-worker's docker-compose.release.yml entry, which
   # legitimately changed the read_only:true/no-new-privileges:true counts above from 5 to
   # 6 and prompted actually running this test).
-  test "$(grep -c '^[[:space:]]*cap_drop:' "$f")" -eq 1
+  test "$(grep -c '^[[:space:]]*cap_drop:' "$f")" -eq "$services"
 done
 grep -q '^USER hocx$' backend/Dockerfile
 grep -q '^USER node$' frontend/Dockerfile

@@ -145,7 +145,8 @@
     "uploadFailed": "Upload fehlgeschlagen",
     "uploadPlain": "Hochladen",
     "uploadingPercent": "Lädt hoch… {percent} %",
-    "uploadingPlain": "Lädt hoch…"
+    "uploadingPlain": "Lädt hoch…",
+    "largeZipHint": "Grosse ZIP-Datei: Bei langsamer Verbindung kann der Upload nach einer Stunde abbrechen. Teile das Archiv besser in mehrere kleinere ZIPs auf oder lade die Fotos direkt hoch."
   },
   "shareModal": {
     "actionAriaLabelActive": "Freigabe für {name} entfernen",

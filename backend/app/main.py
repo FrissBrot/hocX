@@ -445,6 +445,14 @@ app.add_middleware(
     skip_prefixes=("/api/files/gallery-uploads",),
 )
 
+# MAIN-OPS-013: übrige Bodies (JSON etc.) begrenzen; Multipart deckt der Guard oben ab.
+from app.request_body_limit import RequestBodyLimitMiddleware
+app.add_middleware(
+    RequestBodyLimitMiddleware,
+    max_bytes=settings.max_request_body_bytes,
+    skip_prefixes=("/api/files/gallery-uploads",),
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o for o in [

@@ -151,6 +151,8 @@ class Settings(BaseSettings):
     clamav_host: str = "clamav"
     clamav_port: int = 3310
     redis_url: str = "redis://redis:6379/0"
+    # Obergrenze für Request-Bodies ausser Multipart (JSON etc.), MAIN-OPS-013.
+    max_request_body_bytes: int = 10 * 1024 * 1024
     # requirepass im Release-Stack (REDIS_PASSWORD_FILE, MAIN-OPS-005); leer = ohne Passwort.
     redis_password: str | None = None
     # Proxys, deren X-Forwarded-For ausgewertet wird (Traefik im Compose-Netz), siehe

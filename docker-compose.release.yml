@@ -239,11 +239,14 @@ services:
       # je nach Reihenfolge die dort unerreichbare IP.
       - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_default"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && ((PathPrefix(`/api`) && !PathPrefix(`/api/admin`)) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.middlewares=${ROUTER_PREFIX:-hocx}-api-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.priority=100"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-backend.service=${ROUTER_PREFIX:-hocx}-backend"
       - "traefik.http.services.${ROUTER_PREFIX:-hocx}-backend.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-api-inflight.inflightreq.amount=100"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-api-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && PathPrefix(`/api/admin`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.entrypoints=adminsecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-admin-api.tls.certresolver=letsencryptdns"
@@ -417,6 +420,9 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`)"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-web-inflight.inflightreq.amount=200"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-web-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.middlewares=${ROUTER_PREFIX:-hocx}-web-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-frontend.priority=10"
@@ -431,6 +437,7 @@ services:
       # Cert-Resolver bleibt leer - sonst versucht Traefik ein ACME-Zertifikat fuer
       # website.invalid zu holen und loggt bei jedem Start einen Fehler.
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.rule=Host(`${TRAEFIK_WEBSITE_DOMAIN:-website.invalid}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.middlewares=${ROUTER_PREFIX:-hocx}-web-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.tls.certresolver=${TRAEFIK_WEBSITE_DOMAIN:+${TRAEFIK_CERTRESOLVER:-letsencrypt}}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.priority=10"
@@ -497,6 +504,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.middlewares=${ROUTER_PREFIX:-hocx}-api-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.priority=100"
@@ -530,7 +538,7 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
-      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit,${ROUTER_PREFIX:-hocx}-api-inflight"
 
   abgabebox-frontend:
     image: ${HOCX_ABGABEBOX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}}
@@ -568,6 +576,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.middlewares=${ROUTER_PREFIX:-hocx}-web-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.entrypoints=websecure"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-frontend.priority=10"
