@@ -753,8 +753,8 @@ services:
       HOCX_ENVIRONMENT: development
       DATABASE_URL: ${DATABASE_URL}
       APP_DATABASE_URL: ${APP_DATABASE_URL}
-      AUTH_SECRET: ${AUTH_SECRET}
-      ADMIN_AUTH_SECRET: ${ADMIN_AUTH_SECRET}
+      # Keine Anmelde-/Admin-Secrets: zufällige Werte je Prozess (SECRETLESS_PROCESS_KINDS).
+      HOCX_PROCESS_KIND: document-worker
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
       EXPORT_ROOT: /app/storage/exports

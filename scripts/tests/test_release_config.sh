@@ -113,6 +113,19 @@ if grep -q 'env_file:' docker-compose.release.yml; then
 fi
 
 test "$(grep -c 'read_only: true' docker-compose.release.yml)" -eq 11  # +local-s3, storage-init, storage-worker (Objektspeicher), document-worker
+
+# Der document-worker verarbeitet nicht vertrauenswürdige Dateien: keine Anmelde-/Admin-Secrets
+# und keine Owner-Datenbank-URL (Audit DOCMGMT-003, Entscheidung Worker-Secrets).
+document_worker_block="$(awk '/^  document-worker:$/{f=1;next} f&&/^  [a-z][a-z0-9-]*:$/{f=0} f&&!/^ *#/' docker-compose.release.yml)"
+test -n "$document_worker_block" || { echo "document-worker fehlt in docker-compose.release.yml" >&2; exit 1; }
+if grep -Eq 'AUTH_SECRET|auth_secret|DATABASE_URL_FILE: /run/secrets/database_url|- database_url$' <<<"$document_worker_block"; then
+  echo "document-worker darf weder AUTH_SECRET/ADMIN_AUTH_SECRET noch die Owner-DB-URL erhalten." >&2
+  exit 1
+fi
+grep -q 'HOCX_PROCESS_KIND: document-worker' <<<"$document_worker_block" || {
+  echo "document-worker braucht HOCX_PROCESS_KIND=document-worker." >&2
+  exit 1
+}
 test "$(grep -c 'no-new-privileges:true' docker-compose.release.yml)" -eq 11
 
 # Audit finding, 2026-08-27: docker-compose.traefik.yml/docker-compose.clamav.yml (the

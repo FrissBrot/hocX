@@ -235,6 +235,12 @@ Capabilities, `no-new-privileges`. Mehrere Worker-Instanzen sind möglich.
   Qualitäts-Backfill ausgenommen und zählen im Speicher zu den Dateien.
 - **LibreOffice im Backend-Image** statt eigenem Image: keine Änderung an CI/Release-Matrix und
   `deploy.sh`; aufgerufen wird es nur im `document-worker`.
+- **Minimale Secrets im `document-worker`:** er verarbeitet nicht vertrauenswürdige Dateien und
+  bekommt nur die eingeschränkte App-Datenbank-URL und den Speicherschlüssel – weder die
+  Owner-URL noch `AUTH_SECRET`/`ADMIN_AUTH_SECRET`. `HOCX_PROCESS_KIND=document-worker` nimmt
+  ihn von der Produktionsprüfung dieser beiden aus; er erhält zufällige Werte je Prozess, kann
+  also keine Sitzung signieren, die das Backend anerkennt (`app/core/config.py`,
+  `SECRETLESS_PROCESS_KINDS`, geprüft in `scripts/tests/test_release_config.sh`).
 - **Automatischer Backfill** in kleinen Batches statt einer Datenmigration in Alembic: braucht
   Speicherzugriffe (Existenzprüfung der Exportdateien) und darf beliebig oft laufen.
 - **Gleicher Exportinhalt ersetzt die Darstellung:** eine neue Version entsteht nur bei neuem

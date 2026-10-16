@@ -606,9 +606,9 @@ services:
       - /tmp:rw,noexec,nosuid,nodev,mode=1777
     environment:
       HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
+      # Keine Anmelde-/Admin-Secrets (app/core/config.py, SECRETLESS_PROCESS_KINDS).
+      HOCX_PROCESS_KIND: document-worker
       APP_DATABASE_URL_FILE: /run/secrets/app_database_url
-      AUTH_SECRET_FILE: /run/secrets/auth_secret
-      ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
       EXPORT_ROOT: /app/storage/exports
@@ -617,11 +617,10 @@ services:
       STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
       STORAGE_WORK_ROOT: /app/storage-local/work
     # Nur die eingeschränkte App-Rolle (app/core/db.py nutzt APP_DATABASE_URL), nie die
-    # Owner-URL: der Dienst verarbeitet nicht vertrauenswürdige Dateien.
+    # Owner-URL, und keine AUTH_SECRET/ADMIN_AUTH_SECRET: der Dienst verarbeitet nicht
+    # vertrauenswürdige Dateien.
     secrets:
       - app_database_url
-      - auth_secret
-      - admin_auth_secret
       - storage_credentials_key
     volumes:
       - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
