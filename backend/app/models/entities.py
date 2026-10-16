@@ -956,6 +956,26 @@ class StoredFile(Base, TimestampMixin):
             "scan_status",
             postgresql_where=text("scan_status <> 'clean'"),
         ),
+        Index("idx_stored_file_tenant_gps", "tenant_id", postgresql_where=text("gps_latitude IS NOT NULL")),
+        Index(
+            "idx_stored_file_metadata_backfill",
+            "id",
+            postgresql_where=text("metadata_scanned_at IS NULL AND mime_type LIKE 'image/%'"),
+        ),
+        CheckConstraint("(gps_latitude IS NULL) = (gps_longitude IS NULL)", name="ck_stored_file_gps_pair"),
+        CheckConstraint(
+            "gps_latitude IS NULL OR (gps_latitude BETWEEN -90 AND 90 AND gps_longitude BETWEEN -180 AND 180)",
+            name="ck_stored_file_gps_range",
+        ),
+        CheckConstraint(
+            "gps_direction_deg IS NULL OR (gps_direction_deg >= 0 AND gps_direction_deg < 360)",
+            name="ck_stored_file_gps_direction",
+        ),
+        CheckConstraint(
+            "(exif_taken_source IS NULL OR exif_taken_source IN ('server', 'client', 'backfill'))"
+            " AND (gps_source IS NULL OR gps_source IN ('server', 'client', 'backfill'))",
+            name="ck_stored_file_metadata_source",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -1006,6 +1026,39 @@ class StoredFile(Base, TimestampMixin):
     # every file from disk on each request. None for non-images, images PIL couldn't
     # decode, images without EXIF, and files uploaded before this column existed.
     exif_taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Konvention (seit 0083): exif_taken_at haelt die lokale Uhrzeit der Kamera, gespeichert
+    # als waere sie UTC ("floating"), damit cast(... AS date) immer den Kalendertag des
+    # Fotografen liefert. Ein vorhandener EXIF-Offset (OffsetTimeOriginal) steht separat hier.
+    exif_taken_offset: Mapped[str | None] = mapped_column(Text)
+    # "server" (Analyse beim Upload), "client" (vom Browser geliefert, nur fuer konvertierte
+    # Bilder ohne serverseitig pruefbares Original) oder "backfill" - siehe image_metadata_service.
+    exif_taken_source: Mapped[str | None] = mapped_column(Text)
+    # Vom Benutzer geschaetztes Aufnahmedatum - bewusst reines Kalenderdatum ohne Uhrzeit oder
+    # Zeitzone, getrennt von exif_taken_at (echt) und created_at (Upload). Prioritaet siehe
+    # capture_date.py: exif_taken_at > estimated_taken_on > created_at.
+    estimated_taken_on: Mapped[date | None] = mapped_column(Date)
+    estimated_taken_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    estimated_taken_set_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    # GPS (WGS84, Sued/West negativ) fuer eine spaetere Kartenansicht. Als Wert nur ueber
+    # berechtigte, mandantengebundene Endpunkte lesbar (/metadata). Exportierte Dateikopien
+    # (Download, auch fuer Partner-Mandanten geteilter Alben, und oeffentliche Freigaben, die
+    # den Standort teilen) koennen nur in der DB vorhandenes GPS enthalten, siehe
+    # image_export_service und UPLOAD_DUPLICATES.md §10/§11.
+    gps_latitude: Mapped[float | None] = mapped_column(Float)
+    gps_longitude: Mapped[float | None] = mapped_column(Float)
+    gps_altitude_m: Mapped[float | None] = mapped_column(Float)
+    gps_direction_deg: Mapped[float | None] = mapped_column(Float)
+    gps_accuracy_m: Mapped[float | None] = mapped_column(Float)
+    gps_timestamp: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    gps_source: Mapped[str | None] = mapped_column(Text)
+    camera_make: Mapped[str | None] = mapped_column(Text)
+    camera_model: Mapped[str | None] = mapped_column(Text)
+    orientation: Mapped[int | None] = mapped_column(SmallInteger)
+    # Letzte serverseitige Metadatenanalyse (Upload oder Backfill) und ihr Ergebnis
+    # ("ok", "no_metadata", "unreadable", "missing_file", "source_unavailable") - NULL heisst
+    # "noch nie analysiert", der Backfill setzt genau dort an.
+    metadata_scanned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    metadata_scan_status: Mapped[str | None] = mapped_column(Text)
     scan_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'clean'"))
     # User-assigned tags for the "Dateien" overview page's filter/editor - separate from the
     # auto-derived "origin tag" (which protocol/word-import/submission this file came from,
@@ -1788,6 +1841,10 @@ class PhotoAlbumTenantShare(Base, TimestampMixin):
     invited_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     responded_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Standort (GPS) der Fotos dieses Albums mit dem Partner teilen - Standard an (Partner
+    # vertrauen sich), vom Besitzer abschaltbar. Aus: Originale und Downloads ohne Standort
+    # (siehe photo_album_share_service.location_shared_with, files.py).
+    share_location: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
 
 
 class TenantTrust(Base, TimestampMixin):
@@ -1952,5 +2009,16 @@ class GalleryUploadJob(Base, TimestampMixin):
     errors: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     # Fatal/unexpected exception text, distinct from the per-file `errors` above.
     error: Mapped[str | None] = mapped_column(Text)
+    # Im Upload-Popup angegebenes Schaetzdatum - gilt fuer jedes Bild dieses Auftrags, fuer
+    # das der Server kein echtes Aufnahmedatum findet (auch ZIP-Eintraege).
+    estimated_taken_on: Mapped[date | None] = mapped_column(Date)
+    # Clientseitig extrahierte Metadaten je SHA-256 (Browser-Analyse vor dem Upload, nur fuer
+    # HEIC/HEIF). Nur Hinweise: angewendet wird ein Eintrag ausschliesslich, wenn der
+    # serverseitig neu berechnete Hash der Datei passt (siehe FileService._apply_upload_metadata
+    # und _enrich_duplicates). Wird bei Jobende (done/failed) geleert - keine Zweitablage von GPS.
+    file_hints: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    # Ergebnis je Datei fuer die Upload-Ergebnisanzeige: {name, status, file_id?, applied?, message?}
+    # mit status in uploaded/skipped/metadata_updated/failed.
+    file_results: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

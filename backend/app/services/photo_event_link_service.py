@@ -14,28 +14,27 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import Date, cast, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.entities import Event, GalleryImage, StoredFile
+from app.services.capture_date import auto_link_date, auto_link_date_sql
 
-# The column expression for "the day this photo was actually taken/happened", shared by
-# both directions below: EXIF capture date when known, else the upload date as the best
-# available fallback for photos uploaded before exif_taken_at was persisted (or without
-# EXIF at all, e.g. screenshots).
-_capture_date_expr = func.coalesce(cast(StoredFile.exif_taken_at, Date), cast(StoredFile.created_at, Date))
+# Datum fuer die automatische Zuordnung, zentral definiert in capture_date.py: echtes
+# Aufnahmedatum, sonst Uploaddatum - aber NULL (keine automatische Zuordnung), sobald nur ein
+# geschaetztes Datum vorliegt. Eine Schaetzung ist zu unsicher, um ein Foto ohne Zutun einem
+# Termin zuzuordnen, und das Uploaddatum ist in diesem Fall erwiesenermassen falsch.
+_capture_date_expr = auto_link_date_sql(StoredFile)
 
 
-def capture_date(stored_file: StoredFile) -> date:
+def capture_date(stored_file: StoredFile) -> date | None:
     """Python-side equivalent of _capture_date_expr, for the single-file upload path where
     the StoredFile row already exists in memory and a round-trip through SQL would be
-    wasteful."""
-    if stored_file.exif_taken_at is not None:
-        return stored_file.exif_taken_at.date()
-    return stored_file.created_at.date()
+    wasteful. None means "do not auto-link" (only an estimated date is known)."""
+    return auto_link_date(stored_file)
 
 
-def find_matching_event(db: Session, tenant_id: int, on_date: date) -> Event | None:
+def find_matching_event(db: Session, tenant_id: int, on_date: date | None) -> Event | None:
     """The Termin (if any) covering `on_date`, for auto-linking a just-uploaded photo.
     Multi-day Termine match every day in their [event_date, event_end_date] range.
     Cancelled Termine never match - a cancelled Termin's days almost certainly didn't
@@ -43,6 +42,8 @@ def find_matching_event(db: Session, tenant_id: int, on_date: date) -> Event | N
     same day) favour the one that started most recently, then the lower id, purely for a
     deterministic result - genuinely overlapping Termine are rare enough not to warrant
     linking a photo to more than one."""
+    if on_date is None:
+        return None
     return db.scalars(
         select(Event)
         .where(
@@ -86,7 +87,7 @@ def sync_photos_for_event(db: Session, event: Event) -> None:
         .where(
             GalleryImage.event_id == event.id,
             GalleryImage.event_auto_linked.is_(True),
-            or_(_capture_date_expr < event.event_date, _capture_date_expr > end_date),
+            or_(_capture_date_expr.is_(None), _capture_date_expr < event.event_date, _capture_date_expr > end_date),
         )
     ).scalars().all()
     for gallery_image in to_unlink:
@@ -95,3 +96,21 @@ def sync_photos_for_event(db: Session, event: Event) -> None:
 
     if to_link or to_unlink:
         db.commit()
+
+
+def resync_photo_after_date_change(db: Session, stored_file: StoredFile) -> None:
+    """Nach einer Aenderung von exif_taken_at/estimated_taken_on (Hash-Abgleich, Backfill,
+    Bearbeitung): automatische Termin-Verknuepfungen dieses Fotos neu bewerten. Eine manuell
+    gewaehlte Verknuepfung (event_auto_linked False mit event_id) bleibt immer unberuehrt.
+    Committet nicht - der Aufrufer schliesst seine Transaktion selbst ab."""
+    on_date = auto_link_date(stored_file)
+    for gallery_image in db.scalars(select(GalleryImage).where(GalleryImage.stored_file_id == stored_file.id)):
+        if gallery_image.event_id is not None and not gallery_image.event_auto_linked:
+            continue
+        match = find_matching_event(db, gallery_image.tenant_id, on_date)
+        if match is None:
+            gallery_image.event_id = None
+            gallery_image.event_auto_linked = False
+        elif gallery_image.event_id != match.id:
+            gallery_image.event_id = match.id
+            gallery_image.event_auto_linked = True

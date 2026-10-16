@@ -26,6 +26,7 @@ from app.models import (
 # straight from .entities instead, same convention photo_album_service.py already uses.
 from app.models.entities import PhotoAlbumItem
 from app.services import public_id_service
+from app.services.capture_date import date_source_sql, effective_capture_date_sql
 
 # Cap for the "list every tag/origin-tag currently in use" suggestion query - this app is
 # per-tenant scout/school data (hundreds to low thousands of files), not enterprise scale,
@@ -121,7 +122,7 @@ class StoredFileRepository:
 
     @staticmethod
     def _shared_file_overview_columns() -> list:
-        """The 18-column prefix every branch of _files_overview_branches shares - factored
+        """The 20-column prefix every branch of _files_overview_branches shares - factored
         out (audit fix, 2026-09-17) so column position is enforced structurally instead of
         by four independently hand-maintained copies. That matters because union_all below
         matches columns *positionally*, not by label: before this, adding a column to
@@ -149,6 +150,8 @@ class StoredFileRepository:
             StoredFile.face_analyzed_at.label("face_analyzed_at"),
             StoredFile.width.label("width"),
             StoredFile.height.label("height"),
+            StoredFile.exif_taken_at.label("exif_taken_at"),
+            StoredFile.estimated_taken_on.label("estimated_taken_on"),
         ]
 
     def _files_overview_branches(self, tenant_id: int | None):
@@ -189,7 +192,7 @@ class StoredFileRepository:
                         ProtocolElementBlock.title_snapshot,
                     ),
                 ).label("origin_tag"),
-                func.coalesce(Protocol.protocol_date, cast(StoredFile.created_at, Date)).label("group_date"),
+                func.coalesce(Protocol.protocol_date, effective_capture_date_sql(StoredFile)).label("group_date"),
                 func.concat(
                     func.coalesce(Protocol.title, func.concat("Protokoll ", Protocol.protocol_number)),
                     " · ",
@@ -201,6 +204,10 @@ class StoredFileRepository:
                 ).label("context_label"),
                 cast(null(), String).label("ref_kind"),
                 cast(null(), PG_UUID(as_uuid=True)).label("live_video_public_id"),
+                case(
+                    (Protocol.protocol_date.is_not(None), literal("context")),
+                    else_=date_source_sql(StoredFile),
+                ).label("date_source"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -223,10 +230,14 @@ class StoredFileRepository:
                 cast(null(), BigInteger).label("upload_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("upload_public_id"),
                 func.concat("Word-Import: ", WordImportDocument.display_name).label("origin_tag"),
-                func.coalesce(WordImportDocument.protocol_date, cast(StoredFile.created_at, Date)).label("group_date"),
+                func.coalesce(WordImportDocument.protocol_date, effective_capture_date_sql(StoredFile)).label("group_date"),
                 WordImportDocument.display_name.label("context_label"),
                 cast(null(), String).label("ref_kind"),
                 cast(null(), PG_UUID(as_uuid=True)).label("live_video_public_id"),
+                case(
+                    (WordImportDocument.protocol_date.is_not(None), literal("context")),
+                    else_=date_source_sql(StoredFile),
+                ).label("date_source"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -246,10 +257,11 @@ class StoredFileRepository:
                 SubmissionUpload.id.label("upload_id"),
                 SubmissionUpload.public_id.label("upload_public_id"),
                 func.concat("Abgabe: ", SubmissionAssignment.title).label("origin_tag"),
-                cast(StoredFile.created_at, Date).label("group_date"),
+                effective_capture_date_sql(StoredFile).label("group_date"),
                 SubmissionAssignment.title.label("context_label"),
                 cast(null(), String).label("ref_kind"),
                 cast(null(), PG_UUID(as_uuid=True)).label("live_video_public_id"),
+                date_source_sql(StoredFile).label("date_source"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -296,7 +308,9 @@ class StoredFileRepository:
                 # linked Termin's event_date, so a multi-day Termin's photos still land in
                 # one date-section per day (see photo-date-groups.tsx/grouping.ts for the
                 # "Termin, Tag 1/Tag 2/..." header built from this plus ref_date/ref_end_date).
-                func.coalesce(cast(StoredFile.exif_taken_at, Date), cast(StoredFile.created_at, Date)).label("group_date"),
+                # Zentrale Prioritaet (capture_date.py): echtes Aufnahmedatum, sonst geschaetztes,
+                # sonst Uploaddatum.
+                effective_capture_date_sql(StoredFile).label("group_date"),
                 Event.title.label("context_label"),
                 case(
                     (SubmissionAssignment.id.is_not(None), literal("submission_assignment")),
@@ -305,6 +319,7 @@ class StoredFileRepository:
                     else_=cast(null(), String),
                 ).label("ref_kind"),
                 live_video.public_id.label("live_video_public_id"),
+                date_source_sql(StoredFile).label("date_source"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -442,7 +457,13 @@ class StoredFileRepository:
             "group_date": union_query.c.group_date,
         }.get(sort_by, union_query.c.created_at)
         order = sort_column.asc() if sort_dir == "asc" else sort_column.desc()
-        query = query.order_by(order, union_query.c.id.desc()).offset(skip).limit(limit)
+        orderings = [order]
+        if sort_by == "group_date":
+            # Innerhalb eines Tages nach Aufnahmezeit (ein geschaetztes Datum hat keine Uhrzeit,
+            # dort entscheidet die Uploadzeit) - gleiche Richtung wie der Tag selbst.
+            moment = func.coalesce(union_query.c.exif_taken_at, union_query.c.created_at)
+            orderings.append(moment.asc() if sort_dir == "asc" else moment.desc())
+        query = query.order_by(*orderings, union_query.c.id.desc()).offset(skip).limit(limit)
 
         return list(db.execute(query).all())
 

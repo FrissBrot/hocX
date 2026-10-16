@@ -128,5 +128,38 @@
     "rulesMaxFiles": "max. {max} Dateien pro Element",
     "elementLabel": "Abgabe-Element",
     "elementPlaceholder": "Element wählen…"
+  },
+  "uploadResults": {
+    "title": "Upload-Ergebnis",
+    "summaryImages": "{count, plural, one {1 Bild verarbeitet} other {# Bilder verarbeitet}}: {parts}.",
+    "summaryFiles": "{count, plural, one {1 Datei verarbeitet} other {# Dateien verarbeitet}}: {parts}.",
+    "partUploaded": "{count} hochgeladen",
+    "partSkipped": "{count} übersprungen",
+    "partMetadataUpdated": "{count} übersprungen und Metadaten ergänzt",
+    "partFailed": "{count} fehlgeschlagen",
+    "detailsAction": "Details",
+    "appliedDetail": "Ergänzt: {fields}",
+    "status": {
+      "uploaded": "Hochgeladen",
+      "skipped": "Übersprungen",
+      "metadata_updated": "Übersprungen · Metadaten ergänzt",
+      "failed": "Fehlgeschlagen"
+    },
+    "fields": {
+      "taken_at": "Aufnahmedatum",
+      "gps": "Standort (GPS)",
+      "camera": "Kamera",
+      "dimensions": "Bildmasse",
+      "orientation": "Ausrichtung",
+      "estimated_taken_on": "geschätztes Aufnahmedatum"
+    },
+    "errors": {
+      "too_large": "Zu gross (maximal {max_mb} MB).",
+      "unsupported_format": "Dateiformat wird nicht unterstützt oder passt nicht zur Dateiendung.",
+      "scan_failed": "Konnte nicht auf Schadsoftware geprüft werden.",
+      "infected": "Von der Virenprüfung als infiziert erkannt, nicht gespeichert.",
+      "quota_exceeded": "Speicherkontingent erreicht, nicht gespeichert.",
+      "heic_unreadable": "HEIC-Datei konnte nicht gelesen werden."
+    }
   }
 }

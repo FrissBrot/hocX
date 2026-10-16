@@ -10,6 +10,13 @@ FileOverviewSource = Literal["protocol_image", "word_import", "submission_upload
 
 PhotoAlbumKind = Literal["manual", "cycle", "submission", "submission_element"]
 
+DateSource = Literal["exif", "estimated", "upload", "context"]
+
+# Ergebnis je Datei eines Uploads bzw. Vorab-Abgleichs (siehe UPLOAD_DUPLICATES.md).
+UploadFileStatus = Literal["uploaded", "skipped", "metadata_updated", "failed"]
+PrecheckStatus = Literal["upload_required", "already_exists", "metadata_updated", "fallback_required"]
+MetadataField = Literal["taken_at", "gps", "camera", "dimensions", "orientation", "estimated_taken_on"]
+
 
 class FileAlbumRef(BaseModel):
     """One album a photo belongs to - the unscoped GET /files listing's per-item context
@@ -66,8 +73,15 @@ class FileOverviewItem(BaseModel):
     width: int | None = None
     height: int | None = None
     # The photo's logical date for the Fotos page's date-group headers - protocol/word-
-    # import date, the Termin's event_date for a gallery upload, else the upload date.
+    # import date, else the central capture-date priority (capture_date.py): real EXIF date,
+    # estimated date, upload date.
     group_date: date | None = None
+    # Woher group_date stammt: "exif" (echtes Aufnahmedatum), "estimated" (geschaetzt),
+    # "upload" (Fallback Uploaddatum) oder "context" (Protokoll-/Word-Import-Datum). Steuert
+    # die dezente Kennzeichnung in der Galerie.
+    date_source: DateSource = "upload"
+    exif_taken_at: datetime | None = None
+    estimated_taken_on: date | None = None
     # Short context label for that date group's header (protocol title + block title, word-
     # import display name, submission assignment title, or event title) - None when there's
     # nothing more specific than the plain upload date (e.g. an event-less gallery upload).
@@ -140,6 +154,28 @@ class GalleryUploadJobRead(BaseModel):
     error: str | None
 
 
+UploadFailureCode = Literal[
+    "too_large", "unsupported_format", "scan_failed", "infected", "quota_exceeded", "heic_unreadable", "rule_violation"
+]
+
+
+class UploadFileResult(BaseModel):
+    """Ergebnis einer einzelnen Datei: hochgeladen, übersprungen (exaktes Duplikat, nichts zu
+    tun), übersprungen mit ergänzten Metadaten oder fehlgeschlagen. `applied` nennt nur
+    tatsächlich gespeicherte Ergänzungen."""
+
+    name: str
+    status: UploadFileStatus
+    file_id: uuid.UUID | None = None
+    applied: list[MetadataField] = []
+    conflicts: list[MetadataField] = []
+    message: str | None = None
+    # Maschinenlesbarer Grund eines Fehlschlags (IMGMETA-012) - das Frontend übersetzt ihn;
+    # `message` bleibt deutscher Text für ältere Clients und unbekannte Codes.
+    code: UploadFailureCode | None = None
+    params: dict[str, int | str] = {}
+
+
 class GalleryUploadJobDetail(GalleryUploadJobRead):
     """Full result, fetched once a job has left the active listing (GET
     /files/gallery-upload-jobs/{id}) - same (items, errors) shape the old synchronous
@@ -147,6 +183,7 @@ class GalleryUploadJobDetail(GalleryUploadJobRead):
 
     imported_items: list[FileOverviewItem]
     errors: list[str]
+    file_results: list[UploadFileResult] = []
 
 
 class DocumentUploadResult(BaseModel):
@@ -155,6 +192,82 @@ class DocumentUploadResult(BaseModel):
 
     items: list[FileOverviewItem]
     errors: list[str]
+    file_results: list[UploadFileResult] = []
+
+
+class ClientGpsMetadata(BaseModel):
+    """GPS aus der Browser-Analyse - WGS84-Dezimalgrad, Süd/West negativ. Bereichsprüfung
+    hier, Plausibilitätsprüfung (z. B. 0/0) in image_metadata_service."""
+
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    altitude_m: float | None = None
+    direction_deg: float | None = None
+    accuracy_m: float | None = None
+    timestamp: datetime | None = None
+
+
+class ClientImageMetadata(BaseModel):
+    """Im Browser extrahierte Metadaten - nicht vertrauenswürdig, siehe image_metadata_service."""
+
+    # Lokale Kamerazeit ohne Zeitzone ("YYYY-MM-DDTHH:MM:SS"); ein Offset kommt separat.
+    taken_at: str | None = Field(default=None, max_length=40)
+    taken_offset: str | None = Field(default=None, max_length=8)
+    gps: ClientGpsMetadata | None = None
+    camera_make: str | None = Field(default=None, max_length=200)
+    camera_model: str | None = Field(default=None, max_length=200)
+    width: int | None = None
+    height: int | None = None
+    orientation: int | None = None
+
+
+class UploadPrecheckFile(BaseModel):
+    # Frei wählbare Kennung des Clients, kommt unverändert zurück.
+    client_id: str = Field(max_length=100)
+    sha256: str = Field(pattern=r"^[0-9a-fA-F]{64}$")
+    name: str = Field(default="", max_length=500)
+    size: int = Field(ge=0)
+    mime_type: str | None = Field(default=None, max_length=100)
+    # "ok": vollständig analysiert, "unsupported"/"failed": Browser konnte die Datei nicht
+    # (sicher) analysieren - der Server fällt dann auf den normalen Upload zurück.
+    analysis: Literal["ok", "unsupported", "failed"] = "ok"
+    metadata: ClientImageMetadata | None = None
+
+
+class UploadPrecheckRequest(BaseModel):
+    context: Literal["gallery", "document", "protocol_image"] = "gallery"
+    # Schätzdatum aus dem Upload-Popup - gilt nur für Bilder ohne echtes Aufnahmedatum.
+    estimated_taken_on: date | None = None
+    files: list[UploadPrecheckFile] = Field(max_length=500)
+
+
+class UploadPrecheckResult(BaseModel):
+    client_id: str
+    status: PrecheckStatus
+    # Nur bei already_exists/metadata_updated: das vorhandene Bild (immer aus dem eigenen Mandanten).
+    file_id: uuid.UUID | None = None
+    applied: list[MetadataField] = []
+    conflicts: list[MetadataField] = []
+
+
+class UploadPrecheckResponse(BaseModel):
+    results: list[UploadPrecheckResult]
+
+
+class CaptureDateUpdate(BaseModel):
+    """PATCH /stored-files/{id}/capture-date - null entfernt das geschätzte Datum."""
+
+    estimated_taken_on: date | None
+
+
+class GpsMetadataRead(BaseModel):
+    latitude: float
+    longitude: float
+    altitude_m: float | None = None
+    direction_deg: float | None = None
+    accuracy_m: float | None = None
+    timestamp: datetime | None = None
+    source: str | None = None
 
 
 class StoredFileMetadata(BaseModel):
@@ -174,6 +287,19 @@ class StoredFileMetadata(BaseModel):
     exif_taken_at: datetime | None
     exif_camera: str | None
     uploaded_by_name: str | None
+    # Drei getrennte Datumsarten plus das daraus nach capture_date.py gewählte Datum.
+    exif_taken_offset: str | None = None
+    exif_taken_source: str | None = None
+    estimated_taken_on: date | None = None
+    estimated_taken_set_at: datetime | None = None
+    estimated_taken_set_by_name: str | None = None
+    effective_date: date | None = None
+    date_source: DateSource = "upload"
+    camera_make: str | None = None
+    camera_model: str | None = None
+    gps: GpsMetadataRead | None = None
+    # Darf der aktuelle Benutzer das geschätzte Datum bearbeiten (nur Bilder, Schreibrecht)?
+    can_edit_capture_date: bool = False
 
 
 class PhotoAlbumCreate(BaseModel):
@@ -188,6 +314,8 @@ class AlbumTenantShareStatus(BaseModel):
     status: Literal["pending", "accepted", "declined"]
     invited_at: datetime
     responded_at: datetime | None = None
+    # Standort (GPS) der Fotos mit diesem Partner teilen (IMGMETA-007).
+    share_location: bool = True
 
 
 class PhotoAlbumRead(BaseModel):
@@ -245,6 +373,12 @@ class SharedTargetAlbumRead(BaseModel):
 
 class AlbumShareCreate(BaseModel):
     target_tenant_public_id: uuid.UUID
+    # Standard an: Mandanten, die ein Album teilen, vertrauen sich (Freigabe-Links: Standard aus).
+    share_location: bool = True
+
+
+class AlbumShareUpdate(BaseModel):
+    share_location: bool
 
 
 class AlbumShareRespond(BaseModel):

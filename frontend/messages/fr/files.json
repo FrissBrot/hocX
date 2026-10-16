@@ -128,5 +128,38 @@
     "rulesMaxFiles": "max. {max} fichiers par élément",
     "elementLabel": "Élément de dépôt",
     "elementPlaceholder": "Choisir un élément…"
+  },
+  "uploadResults": {
+    "title": "Résultat de l'envoi",
+    "summaryImages": "{count, plural, one {1 image traitée} other {# images traitées}} : {parts}.",
+    "summaryFiles": "{count, plural, one {1 fichier traité} other {# fichiers traités}} : {parts}.",
+    "partUploaded": "{count} envoyé(s)",
+    "partSkipped": "{count} ignoré(s)",
+    "partMetadataUpdated": "{count} ignoré(s) avec métadonnées complétées",
+    "partFailed": "{count} en échec",
+    "detailsAction": "Détails",
+    "appliedDetail": "Complété : {fields}",
+    "status": {
+      "uploaded": "Envoyé",
+      "skipped": "Ignoré",
+      "metadata_updated": "Ignoré · métadonnées complétées",
+      "failed": "Échec"
+    },
+    "fields": {
+      "taken_at": "date de prise de vue",
+      "gps": "lieu (GPS)",
+      "camera": "appareil photo",
+      "dimensions": "dimensions",
+      "orientation": "orientation",
+      "estimated_taken_on": "date de prise de vue estimée"
+    },
+    "errors": {
+      "too_large": "Trop volumineux (maximum {max_mb} Mo).",
+      "unsupported_format": "Format de fichier non pris en charge ou ne correspondant pas à l'extension.",
+      "scan_failed": "Impossible de vérifier la présence de logiciels malveillants.",
+      "infected": "Détecté comme infecté par l'antivirus, non enregistré.",
+      "quota_exceeded": "Quota de stockage atteint, non enregistré.",
+      "heic_unreadable": "Le fichier HEIC n'a pas pu être lu."
+    }
   }
 }

@@ -8,6 +8,42 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+Enthält die Migration `0113` (rein additiv, umkehrbar). Keine neuen Umgebungsvariablen.
+Nach dem Deploy optional einmalig den Metadaten-Backfill ausführen
+(`docker compose exec backend python -m scripts.backfill_image_metadata`, siehe
+`backend/UPLOAD_DUPLICATES.md`, Abschnitt 12).
+
+### Neu
+
+- Bild-Upload prüft Bilder vorab im Browser (Web Worker): SHA-256, Aufnahmedatum,
+  Zeitzone, GPS, Kamera, Abmessungen, Ausrichtung – für JPEG, PNG, WebP, TIFF und HEIC/HEIF.
+  Bereits vorhandene Bilder werden nicht erneut übertragen (`POST /api/files/upload-precheck`);
+  fehlende Metadaten vorhandener Bilder werden dabei ohne Upload ergänzt. Auch Dokumente und
+  Protokollbilder nutzen den Vorab-Abgleich (nur Hash).
+- Drei getrennte Datumsarten: echtes Aufnahmedatum, neues **geschätztes Aufnahmedatum**
+  (reines Kalenderdatum) und Uploaddatum. Galerie-Sortierung, -Gruppierung und Bilddetails
+  folgen zentral dieser Reihenfolge; geschätzte Daten und der Uploaddatum-Fallback sind in den
+  Datumsüberschriften dezent gekennzeichnet.
+- Upload-Popup: Hinweis und optionales Schätzdatum für Bilder ohne Aufnahmedatum, Ordner per
+  Drag & Drop oder „Ordner auswählen“, automatische Aufteilung grosser Auswahlen in Aufträge zu
+  höchstens 50 Dateien, Abbrechen während der Übertragung.
+- Upload-Ergebnis je Datei: Hochgeladen, Übersprungen, Übersprungen · Metadaten ergänzt,
+  Fehlgeschlagen – mit Zusammenfassung und Detailliste.
+- Bilddetails: echtes Aufnahmedatum (in Kamerazeit, mit Offset), geschätztes Datum
+  (bearbeiten/entfernen, `PATCH /api/stored-files/{id}/capture-date`), Uploaddatum und
+  Standort getrennt.
+- GPS-Daten werden gespeichert (Breite, Länge, Höhe, Blickrichtung, Genauigkeit, Herkunft) –
+  Grundlage für eine spätere Kartenansicht.
+- Downloads, Mehrfachdownload und Freigabe-Links schreiben ein geschätztes Datum in EXIF/XMP
+  einer temporären Kopie, wenn kein echtes Aufnahmedatum existiert; Originale bleiben
+  unverändert.
+- Abgabebox und Protokollbilder speichern Aufnahmedatum, GPS und Kamera beim Upload.
+- Gezielter Metadaten-Backfill für ältere Bilder (fortsetzbar, wiederholbar, mit Auswertung).
+
+### Geändert
+
+- Ein nur geschätztes Datum führt nie zu einer automatischen Termin-Zuordnung.
+- Aufnahmezeiten werden in der Detailansicht nicht mehr um die App-Zeitzone verschoben.
 ### Betrieb
 
 - Prod lief bisher mit `HOCX_ENVIRONMENT=prod` und damit für das Backend nicht als

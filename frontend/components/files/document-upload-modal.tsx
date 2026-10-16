@@ -7,8 +7,9 @@ import { findUploadRuleProblems, UploadTargetFields, useUploadTarget } from "./u
 import { Modal } from "@/components/ui/modal";
 import { TagInput } from "@/components/ui/tag-input";
 import { browserApiFetch } from "@/lib/api/client";
+import { hashForPrecheck, needsUpload, precheckToFileResult, precheckUploads } from "@/lib/image-analysis/precheck";
 import { formatFileSize } from "@/lib/utils/format";
-import { DocumentUploadResult } from "@/types/api";
+import { DocumentUploadResult, UploadFileResult } from "@/types/api";
 
 // Mirrors DOCUMENT_UPLOAD_EXTENSIONS in backend/app/services/upload_pipeline.py - the backend
 // re-checks every file's actual content, this list only spares a pointless round trip.
@@ -112,18 +113,40 @@ export function DocumentUploadModal({
     setUploading(true);
     setError(null);
     try {
+      // Vorab-Abgleich per SHA-256: im Mandanten schon vorhandene Dokumente nicht übertragen.
+      // Ohne Antwort des Servers (Fehler) wird einfach alles normal hochgeladen.
+      const hashes = await Promise.all(selectedFiles.map((file) => hashForPrecheck(file)));
+      const precheck = await precheckUploads(
+        selectedFiles.map((file, index) => ({ index, file, analysis: hashes[index] })),
+        { context: "document" },
+      );
+      const skipped: UploadFileResult[] = [];
+      const toUpload = selectedFiles.filter((file, index) => {
+        const known = precheck?.get(index);
+        if (known && !needsUpload(known)) {
+          skipped.push(precheckToFileResult(file.name, known));
+          return false;
+        }
+        return true;
+      });
+      if (toUpload.length === 0) {
+        onUploaded({ items: [], errors: [], file_results: skipped });
+        onClose();
+        return;
+      }
       const body = new FormData();
-      selectedFiles.forEach((file) => body.append("files", file));
+      toUpload.forEach((file) => body.append("files", file));
       body.append("tags", tagsValue);
       target.appendTo(body);
-      const result = await browserApiFetch<DocumentUploadResult>("/api/files/document-uploads", {
+      const response = await browserApiFetch<DocumentUploadResult>("/api/files/document-uploads", {
         method: "POST",
         body,
         // browserApiFetch's default 15s timeout is too short for a batch of large documents
         // plus the virus scan - same fix as the photo upload's own request.
         signal: AbortSignal.timeout(300_000),
       });
-      if (!result || result.items.length === 0) {
+      const result = response && skipped.length ? { ...response, file_results: [...skipped, ...(response.file_results ?? [])] } : response;
+      if (!result || (result.items.length === 0 && skipped.length === 0 && !(result.file_results ?? []).some((entry) => entry.status === "skipped"))) {
         // Nothing was saved: stay open so the reasons stay readable next to the queue.
         setError(result?.errors.join(" · ") || t("errors.uploadFailed"));
         return;

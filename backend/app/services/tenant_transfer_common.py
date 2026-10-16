@@ -62,7 +62,7 @@ password_hash column."""
 USER_ID_COLUMNS: dict[str, list[str]] = {
     "template": ["created_by"],
     "protocol": ["created_by"],
-    "stored_file": ["created_by"],
+    "stored_file": ["created_by", "estimated_taken_set_by"],
     "gallery_image": ["created_by"],
     "word_import_document": ["created_by", "imported_by"],
     "protocol_todo": ["assigned_user_id", "created_by"],

@@ -297,6 +297,8 @@ def insert_full_upload(
                 # Per-file, no longer a single status applied to the whole batch (audit
                 # finding, 2026-08-25) - see routes/public.py's upload().
                 scan_status=f["scan_status"],
+                # Aufnahmedatum/GPS/Kamera, serverseitig gelesen (app/image_metadata.py).
+                **f.get("image_metadata", {}),
             )
             .returning(stored_file_table.c.id)
         )

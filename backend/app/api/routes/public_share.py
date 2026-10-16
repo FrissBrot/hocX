@@ -25,6 +25,7 @@ from app.models.entities import PhotoAlbum, ShareLink, StoredFile, Tenant
 from app.schemas.files import PublicShareFile, PublicShareRead
 from app.services import share_link_service
 from app.services.file_service import FileService, _safe_storage_path
+from app.services import image_export_service
 from app.services.photo_metadata_privacy import SANITIZABLE_MIME_TYPES, sanitize_image
 
 router = APIRouter()
@@ -72,13 +73,20 @@ def _resolve_file_or_404(db: Session, link: ShareLink, file_id: uuid.UUID) -> St
 
 
 def _needs_sanitizing(link: ShareLink, stored_file: StoredFile) -> bool:
-    return stored_file.mime_type in SANITIZABLE_MIME_TYPES and not share_link_service.metadata_policy_for(link).keeps_everything
+    """Muss die Datei fuer den Abruf umgeschrieben werden - Metadaten entfernen, die der Link
+    nicht teilt, oder ein geschaetztes Aufnahmedatum eintragen (image_export_service)?"""
+    sanitize = stored_file.mime_type in SANITIZABLE_MIME_TYPES and not share_link_service.metadata_policy_for(link).keeps_everything
+    return sanitize or image_export_service.needs_export_processing(stored_file)
 
 
 def _public_file_bytes(link: ShareLink, stored_file: StoredFile, file_path: Path) -> bytes:
-    """Dateiinhalt fuer den oeffentlichen Abruf - Fotos ohne die Metadaten, die der Link nicht
-    teilt (Standort/Aufnahmedatum/Kamera, siehe photo_metadata_privacy.py)."""
-    return sanitize_image(file_path.read_bytes(), stored_file.mime_type, share_link_service.metadata_policy_for(link))
+    """Dateiinhalt fuer den oeffentlichen Abruf - erst die Exportfassung (geschaetztes Datum,
+    GPS aus der Datenbank), dann ohne die Metadaten, die der Link nicht teilt
+    (Standort/Aufnahmedatum/Kamera, siehe photo_metadata_privacy.py). Die Reihenfolge stellt
+    sicher, dass nichts eingetragen wird, was der Link anschliessend nicht teilen darf."""
+    original = file_path.read_bytes()
+    content = image_export_service.export_bytes(stored_file, original) or original
+    return sanitize_image(content, stored_file.mime_type, share_link_service.metadata_policy_for(link))
 
 
 def _public_file_response(link: ShareLink, stored_file: StoredFile, *, attachment: bool, headers: dict[str, str]) -> FileResponse:
