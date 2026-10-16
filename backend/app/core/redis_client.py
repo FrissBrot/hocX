@@ -13,7 +13,7 @@ def get_redis() -> Redis:
     """Returns a lightweight Redis client bound to the shared connection pool."""
     global _pool
     if _pool is None:
-        _pool = ConnectionPool.from_url(settings.redis_url, decode_responses=True)
+        _pool = ConnectionPool.from_url(settings.redis_url, decode_responses=True, password=settings.redis_password or None)
     return Redis(connection_pool=_pool)
 
 
@@ -22,7 +22,9 @@ def get_redis_sync() -> redis_sync.Redis:
     (login/select-tenant/bridge routes), which has no async context to await an async client in."""
     global _sync_pool
     if _sync_pool is None:
-        _sync_pool = redis_sync.ConnectionPool.from_url(settings.redis_url, decode_responses=True)
+        _sync_pool = redis_sync.ConnectionPool.from_url(
+            settings.redis_url, decode_responses=True, password=settings.redis_password or None
+        )
     return redis_sync.Redis(connection_pool=_sync_pool)
 
 

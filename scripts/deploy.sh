@@ -217,6 +217,7 @@ create_env_file() {
   ABGABEBOX_DB_PASSWORD="$(generate_secret)"
   ABGABEBOX_CAPTCHA_SESSION_SECRET="$(generate_secret)"
   PHOTO_WORKER_DB_PASSWORD="$(generate_secret)"
+  REDIS_PASSWORD="$(generate_secret)"
   DATABASE_URL="postgresql+psycopg://hocx:${POSTGRES_PASSWORD}@db:5432/hocx"
   APP_DATABASE_URL="postgresql+psycopg://hocx_app:${APP_DB_PASSWORD}@db:5432/hocx"
   ABGABEBOX_DATABASE_URL="postgresql+psycopg://hocx_abgabebox:${ABGABEBOX_DB_PASSWORD}@db:5432/hocx"
@@ -261,6 +262,7 @@ create_env_file() {
   write_env_value ABGABEBOX_CAPTCHA_SESSION_SECRET "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
   write_env_value PHOTO_WORKER_DB_PASSWORD "$PHOTO_WORKER_DB_PASSWORD"
   write_env_value PHOTO_WORKER_DATABASE_URL "$PHOTO_WORKER_DATABASE_URL"
+  write_env_value REDIS_PASSWORD "$REDIS_PASSWORD"
   if [ -n "$DEMO_TOTP_SEED" ]; then
     write_env_value DEMO_TOTP_SEED "$DEMO_TOTP_SEED"
   fi
@@ -345,7 +347,7 @@ run_preflight() {
   esac
   for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
     "$ADMIN_AUTH_SECRET" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
-    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD"; do
+    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "${REDIS_PASSWORD:-}"; do
     case "$value" in
       ""|ChangeMe123\!*|change-me*|changeme*|secret|hocx|hocx_app|hocx_abgabebox|hocx_photo_worker|*keep-local-only*)
         echo "Unsicherer Entwicklungs- oder Platzhalterwert in der Release-Konfiguration." >&2
@@ -425,6 +427,7 @@ write_secret_files() {
   write_secret_file "$secrets_dir" friendly_captcha_api_key "$FRIENDLY_CAPTCHA_API_KEY"
   write_secret_file "$secrets_dir" abgabebox_captcha_session_secret "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
   write_secret_file "$secrets_dir" cf_dns_api_token "$CF_DNS_API_TOKEN"
+  write_secret_file "$secrets_dir" redis_password "$REDIS_PASSWORD"
   echo "    Secret-Dateien aktuell: $secrets_dir"
 }
 

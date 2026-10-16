@@ -29,6 +29,22 @@ assert users == ["backend", "redis"], f"cache-Netz genutzt von: {users}"
 docker compose --env-file .env.prod.example "${COMPOSE_FILES[@]}" config --format json | assert_redis_isolated
 docker compose -p hocx-e2e --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml config --format json | assert_redis_isolated
 
+# MAIN-OPS-005 (Rest): Im Release-Stack verlangt Redis ein Passwort aus dem Secret, das Backend
+# bekommt dasselbe Secret; das Passwort steht nie in der Kommandozeile.
+docker compose --env-file .env.prod.example "${COMPOSE_FILES[@]}" config --format json | python3 -c '
+import json, sys
+services = json.load(sys.stdin)["services"]
+redis, backend = services["redis"], services["backend"]
+assert any(s["source"] == "redis_password" for s in redis.get("secrets", [])), "redis ohne Secret"
+command = " ".join(redis["command"])
+assert "requirepass" in command and "/run/secrets/redis_password" in command, command
+assert "--requirepass" not in command, "Passwort als Argument"
+assert backend["environment"].get("REDIS_PASSWORD_FILE") == "/run/secrets/redis_password"
+assert any(s["source"] == "redis_password" for s in backend.get("secrets", [])), "backend ohne Secret"
+'
+# shellcheck disable=SC2016  # literales Suchmuster
+grep -q 'write_secret_file "$secrets_dir" redis_password "$REDIS_PASSWORD"' scripts/deploy.sh
+
 # MAIN-OPS-008: Der Dev-Overlay landet ohne -p nie im Projekt der Server-Instanz (hocx).
 dev_project="$(docker compose --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')"
 test "$dev_project" = hocx-dev || { echo "Dev-Overlay ergibt Projekt '$dev_project' statt hocx-dev" >&2; exit 1; }

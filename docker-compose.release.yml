@@ -66,8 +66,21 @@ services:
     # eine Sitzung als beliebiger Nutzer erzeugen koennen.
     networks:
       - cache
+    # Passwort aus dem Secret (MAIN-OPS-005), nicht als Argument (sonst in der Prozessliste
+    # sichtbar): Konfigurationsdatei schreiben, dann wie gewohnt über das Entrypoint-Skript
+    # starten, das auf den Benutzer redis wechselt.
+    secrets:
+      - redis_password
+    command:
+      - sh
+      - -c
+      - >-
+        umask 027 &&
+        printf 'requirepass %s\n' "$$(cat /run/secrets/redis_password)" > /tmp/redis.conf &&
+        chown root:redis /tmp/redis.conf &&
+        exec docker-entrypoint.sh redis-server /tmp/redis.conf
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/redis_password)\" redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -150,6 +163,7 @@ services:
       ABGABEBOX_BASE_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       CLAMAV_HOST: clamav
       REDIS_URL: redis://redis:6379/0
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
       DOCKER_API_URL: http://docker-socket-proxy:2375
       TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
       ROUTER_PREFIX: ${ROUTER_PREFIX:-hocx}
@@ -189,6 +203,7 @@ services:
       - initial_admin_password
       - abgabebox_db_password
       - photo_worker_db_password
+      - redis_password
     networks:
       - default
       - docker-api
@@ -651,3 +666,5 @@ secrets:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/friendly_captcha_api_key
   abgabebox_captcha_session_secret:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_captcha_session_secret
+  redis_password:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/redis_password

@@ -18,7 +18,7 @@ _INSECURE_DEFAULTS = {
 
 def _load_file_secrets() -> None:
     """Resolve Docker-style VAR_FILE inputs without exposing values in Config.Env."""
-    for variable in ("DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD"):
+    for variable in ("DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD", "REDIS_PASSWORD"):
         file_variable = f"{variable}_FILE"
         if variable not in os.environ and (path := os.environ.get(file_variable)):
             os.environ[variable] = Path(path).read_text(encoding="utf-8").rstrip("\r\n")
@@ -151,6 +151,8 @@ class Settings(BaseSettings):
     clamav_host: str = "clamav"
     clamav_port: int = 3310
     redis_url: str = "redis://redis:6379/0"
+    # requirepass im Release-Stack (REDIS_PASSWORD_FILE, MAIN-OPS-005); leer = ohne Passwort.
+    redis_password: str | None = None
     # Proxys, deren X-Forwarded-For ausgewertet wird (Traefik im Compose-Netz), siehe
     # app/core/client_ip.py.
     trusted_proxy_cidrs: str = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,::1/128,fc00::/7"
