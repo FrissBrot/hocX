@@ -354,7 +354,18 @@
     "unknownParticipant": "Unbekannter Teilnehmer",
     "unknownRow": "Unbekannte Zeile",
     "unnamed": "Unbenannt",
-    "behaviorOverridden": "{label} – weicht vom Default des Elements ab"
+    "behaviorOverridden": "{label} – weicht vom Default des Elements ab",
+    "nameFormatSetToast": "Namensformat für Verantwortliche gesetzt",
+    "nameFormatSavedToast": "Namensformat für Verantwortliche gespeichert",
+    "autoAssignedToast": "{count, plural, one {# Element wurde} other {# Elemente wurden}} automatisch zugeordnet",
+    "tableLinkUpdatedToast": "Tabellen-Verknüpfung aktualisiert",
+    "tableRowNotFoundToast": "Die gewählte Tabellenzeile wurde nicht gefunden",
+    "tableRowNoParticipantsToast": "Die gewählte Tabellenzeile enthält keine Teilnehmenden",
+    "elementLinkedToRowToast": "Element mit Tabellenzeile verknüpft",
+    "templateSavedToast": "Vorlage gespeichert",
+    "participantAssignmentsSavedToast": "Teilnehmerzuordnungen gespeichert",
+    "elementsAddedToast": "{count, plural, one {# Element hinzugefügt} other {# Elemente hinzugefügt}}",
+    "elementRemovedToast": "Element aus Vorlage entfernt"
   },
   "documentTemplates": {
     "advancedInfoNote": "Eigene LaTeX-Dateien überschreiben die gewählten Presets aus dem Struktur-Tab. Leer lassen = Preset verwenden.",

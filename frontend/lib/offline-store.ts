@@ -1,5 +1,7 @@
 "use client";
 
+import { clientMessage } from "@/lib/i18n/client-messages";
+
 export type PendingMutation = {
   id: string;
   key: string;
@@ -160,7 +162,7 @@ export async function flushOutbox(): Promise<void> {
           // (visible via ConnectivityStatus's "verwerfen" action) until the user discards it or
           // a fresh edit re-queues the same key.
           if (response.status < 500 && response.status !== 408 && response.status !== 429) {
-            const message = detail || `Speichern fehlgeschlagen (${response.status})`;
+            const message = detail || clientMessage("saveFailedStatus", { status: response.status });
             const current = readOutbox();
             writeOutbox(current.map((entry) => entry.key === item.key ? {
               ...entry,
@@ -171,7 +173,7 @@ export async function flushOutbox(): Promise<void> {
             emit({ lastError: message });
             continue;
           }
-          throw new Error(detail || `Backend nicht erreichbar (${response.status})`);
+          throw new Error(detail || clientMessage("unreachableStatus", { status: response.status }));
         }
         removeMutation(item.key);
         retryDelayMs = 1_000;
@@ -181,9 +183,9 @@ export async function flushOutbox(): Promise<void> {
         writeOutbox(current.map((entry) => entry.key === item.key ? {
           ...entry,
           attempts: entry.attempts + 1,
-          lastError: error instanceof Error ? error.message : "Verbindungsfehler",
+          lastError: error instanceof Error ? error.message : clientMessage("connectionError"),
         } : entry));
-        emit({ lastError: error instanceof Error ? error.message : "Verbindungsfehler" });
+        emit({ lastError: error instanceof Error ? error.message : clientMessage("connectionError") });
         if (navigator.onLine) {
           if (flushTimer !== null) window.clearTimeout(flushTimer);
           flushTimer = window.setTimeout(() => void flushOutbox(), retryDelayMs);

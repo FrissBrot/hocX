@@ -235,7 +235,10 @@
     "workflowPostProcessingMode": "Nachbearbeitungsmodus",
     "workflowPreparationMode": "Vorbereitungsmodus",
     "workflowSessionMode": "Sitzungsmodus",
-    "templateSyncedByOther": "{name} hat die Elemente aus der Vorlage neu geladen. Die Ansicht wird aktualisiert."
+    "templateSyncedByOther": "{name} hat die Elemente aus der Vorlage neu geladen. Die Ansicht wird aktualisiert.",
+    "statusChangedByOtherToast": "Status wurde von {name} zu „{status}“ geändert.",
+    "draftsRestoredToast": "{count, plural, one {# lokaler Textentwurf wurde} other {# lokale Textentwürfe wurden}} wiederhergestellt.",
+    "conflictToast": "Konflikt: Diese Stelle wurde inzwischen von jemand anderem gespeichert. Die aktuelle Version wurde geladen – Ihre letzte Änderung wurde nicht übernommen, ist aber als lokaler Entwurf gesichert."
   },
   "embeddedBlock": {
     "attendance": "Anwesenheit",

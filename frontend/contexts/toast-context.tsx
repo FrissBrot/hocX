@@ -96,6 +96,6 @@ function ToastList({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id:
 
 export function useToast() {
   const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error("useToast must be used inside ToastProvider");
+  if (!ctx) throw new Error("useToast must be used inside ToastProvider"); // i18n-ok: Entwicklerfehler
   return ctx.showToast;
 }

@@ -1,5 +1,7 @@
 {
-  "meta": { "description": "Arbeitsbereich für Protokolle und Vorlagen" },
+  "meta": {
+    "description": "Arbeitsbereich für Protokolle und Vorlagen"
+  },
   "save": "Speichern",
   "cancel": "Abbrechen",
   "delete": "Löschen",
@@ -82,5 +84,23 @@
     "retryButton": "Jetzt erneut versuchen",
     "discardBlocked": "{count, plural, one {Fehlgeschlagene Änderung verwerfen} other {# fehlgeschlagene Änderungen verwerfen}}",
     "leaveConfirm": "Es gibt noch nicht gespeicherte Änderungen. Seite trotzdem verlassen?"
+  },
+  "clientErrors": {
+    "offline": "Keine Internetverbindung",
+    "timeout": "Zeitüberschreitung beim Server",
+    "unreachable": "Backend nicht erreichbar",
+    "unreachableStatus": "Backend nicht erreichbar ({status})",
+    "invalidResponse": "Ungültige Antwort vom Server",
+    "saveFailed": "Änderungen konnten nicht gespeichert werden.",
+    "saveFailedStatus": "Speichern fehlgeschlagen ({status})",
+    "connectionError": "Verbindungsfehler",
+    "passkeyCreateCancelled": "Passkey-Erstellung wurde abgebrochen",
+    "passkeyLoginCancelled": "Passkey-Anmeldung wurde abgebrochen",
+    "pdfNotProvided": "Die PDF konnte nicht bereitgestellt werden.",
+    "pdfReadyClick": "PDF bereit – hier klicken zum Öffnen",
+    "pdfExportFailed": "PDF-Export fehlgeschlagen",
+    "tagColorTransferFailed": "Tag umbenannt, Farbe konnte aber nicht übertragen werden",
+    "noHistoricalCycleSelected": "Kein historischer Zyklus ausgewählt",
+    "noDraftToConfirm": "Kein Entwurf zum Bestätigen"
   }
 }

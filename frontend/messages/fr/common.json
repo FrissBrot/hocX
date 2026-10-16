@@ -84,5 +84,23 @@
     "retryButton": "Réessayer maintenant",
     "discardBlocked": "{count, plural, one {Abandonner la modification échouée} other {Abandonner # modifications échouées}}",
     "leaveConfirm": "Il y a des modifications non enregistrées. Quitter la page quand même ?"
+  },
+  "clientErrors": {
+    "offline": "Pas de connexion Internet",
+    "timeout": "Le serveur met trop de temps à répondre",
+    "unreachable": "Serveur injoignable",
+    "unreachableStatus": "Serveur injoignable ({status})",
+    "invalidResponse": "Réponse invalide du serveur",
+    "saveFailed": "Les modifications n'ont pas pu être enregistrées.",
+    "saveFailedStatus": "Échec de l'enregistrement ({status})",
+    "connectionError": "Erreur de connexion",
+    "passkeyCreateCancelled": "La création de la clé d'accès a été annulée",
+    "passkeyLoginCancelled": "La connexion par clé d'accès a été annulée",
+    "pdfNotProvided": "Le PDF n'a pas pu être fourni.",
+    "pdfReadyClick": "PDF prêt – cliquez ici pour l'ouvrir",
+    "pdfExportFailed": "Échec de l'export PDF",
+    "tagColorTransferFailed": "Étiquette renommée, mais sa couleur n'a pas pu être transférée",
+    "noHistoricalCycleSelected": "Aucun cycle historique sélectionné",
+    "noDraftToConfirm": "Aucun brouillon à confirmer"
   }
 }

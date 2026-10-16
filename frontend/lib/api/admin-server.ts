@@ -8,7 +8,7 @@ export async function requireAdminSession(): Promise<AdminSessionInfo> {
   if (session === null) {
     // Siehe requireSession() in server.ts: ein nicht erreichbares Backend darf nie wie "nicht
     // eingeloggt" behandelt werden, sonst entsteht derselbe Login-Loop im Admin-Panel.
-    throw new Error("Sitzungsprüfung fehlgeschlagen (Backend nicht erreichbar)");
+    throw new Error("Sitzungsprüfung fehlgeschlagen (Backend nicht erreichbar)"); // i18n-ok: Server-Log, error.tsx zeigt eigenen Text
   }
   if (!session.authenticated) {
     redirect("/admin/login");

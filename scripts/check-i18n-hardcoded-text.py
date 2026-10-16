@@ -10,6 +10,12 @@ Erkennt (regex-basiert, keine echte JSX-AST-Analyse - analog zu check-design-rul
     placeholder=, alt=, description=, nullLabel=, emptySelectionLabel=, emptyMessage=,
     confirmLabel=, cancelLabel=
 
+  - String-Literale als erstes Argument von Meldungs-Aufrufen - showToast(, setError(,
+    setSaveError(, new Error(, new ApiError( - in .tsx UND .ts (auch lib/, contexts/,
+    hooks/). Solche Texte landen ueber error.message bzw. als Toast unuebersetzt in der UI
+    (Audit MAIN-FE-010). Technische Entwicklerfehler (z. B. "useToast must be used inside
+    ToastProvider") mit `// i18n-ok: <Grund>` markieren.
+
 Bekannte Grenze (bewusst nicht behoben): JSX-Text, der sich über mehrere Zeilen erstreckt
 (z.B. ein längerer Absatz in einem <p>), wird nicht erkannt, weil jede Zeile isoliert geprüft
 wird - ein Versuch, das zeilenübergreifend zu matchen, erzeugte hunderte Falsch-Positive durch
@@ -35,6 +41,13 @@ TSX_GLOBS = [
     (ROOT / "frontend", ["components/**/*.tsx", "app/**/*.tsx"]),
     (ROOT / "abgabebox-frontend", ["components/**/*.tsx", "app/**/*.tsx"]),
 ]
+# Fuer Meldungs-Aufrufe (MESSAGE_CALL_PATTERN) zusaetzlich alle .ts/.tsx ausserhalb von JSX.
+MESSAGE_GLOBS = [
+    (ROOT / "frontend", ["app/**/*.ts", "app/**/*.tsx", "components/**/*.ts", "components/**/*.tsx",
+                         "lib/**/*.ts", "lib/**/*.tsx", "contexts/**/*.ts", "contexts/**/*.tsx"]),
+    (ROOT / "abgabebox-frontend", ["app/**/*.ts", "app/**/*.tsx", "components/**/*.ts",
+                                   "components/**/*.tsx", "lib/**/*.ts"]),
+]
 
 # Dateien mit bewusst keinem/kaum UI-Text (reine Icon-/Wrapper-Komponenten) oder deren Strings
 # technischer Natur sind (IDs, CSS-Klassen als Props, Testdaten) - neue Ausnahmen nur, wenn
@@ -54,6 +67,10 @@ ATTR_PATTERN = re.compile(
 # JSX-Text. Reine TS-Typzeilen ausserhalb von JSX koennen trotzdem vereinzelt durchrutschen
 # (keine echte AST-Analyse, siehe Modulkommentar) - der `i18n-ok`-Kommentar deckt den Rest ab.
 TEXT_PATTERN = re.compile(r"(?<!=)>([^<>{}\n]+)<")
+MESSAGE_CALL_PATTERN = re.compile(
+    r"""(?:\bshowToast|\bsetError|\bsetSaveError|\bnew\s+Error|\bnew\s+ApiError)\(\s*(["'`])((?:\\.|(?!\1).)*)\1"""
+)
+TEMPLATE_EXPR = re.compile(r"\$\{[^}]*\}")
 LETTERS_RUN = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿ]{2,}")
 ALL_CAPS_TOKEN = re.compile(r"^[A-Z0-9][A-Z0-9/._-]*$")
 # Produkt-/Markennamen werden nie uebersetzt (wie Eigennamen in jeder Sprache) - exaktes Match,
@@ -84,6 +101,24 @@ def looks_like_user_text(candidate: str) -> bool:
     return True
 
 
+def check_message_calls(path: Path) -> None:
+    r = rel(path)
+    if r in ALLOWED_FILES:
+        return
+    for no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if "i18n-ok" in line:
+            continue
+        stripped = line.strip()
+        if stripped.startswith("//") or stripped.startswith("*") or stripped.startswith("/*"):
+            continue
+        for match in MESSAGE_CALL_PATTERN.finditer(line):
+            literal = TEMPLATE_EXPR.sub(" ", match.group(2))
+            if looks_like_user_text(literal):
+                violations.append(
+                    f'{r}:{no}: [hardcoded-text] Meldung "{match.group(2).strip()}" - Translation Key statt Literal verwenden'
+                )
+
+
 def check_file(path: Path) -> None:
     r = rel(path)
     if r in ALLOWED_FILES:
@@ -107,6 +142,19 @@ def check_file(path: Path) -> None:
                 violations.append(f"{r}:{no}: [hardcoded-text] JSX-Text \"{candidate.strip()}\" - Translation Key statt Literal verwenden")
 
 
+def collect_message_files(explicit: list[str]) -> list[Path]:
+    if explicit:
+        return [Path(p).resolve() for p in explicit if p.endswith((".ts", ".tsx")) and not p.endswith((".test.ts", ".test.tsx", ".d.ts"))]
+    files: set[Path] = set()
+    for base, globs in MESSAGE_GLOBS:
+        for g in globs:
+            for f in base.glob(g):
+                if "node_modules" in f.parts or f.name.endswith((".test.ts", ".test.tsx", ".d.ts")):
+                    continue
+                files.add(f)
+    return sorted(files)
+
+
 def collect_files(explicit: list[str]) -> list[Path]:
     if explicit:
         return [Path(p).resolve() for p in explicit if p.endswith(".tsx")]
@@ -124,6 +172,9 @@ def main() -> int:
     for f in collect_files(sys.argv[1:]):
         if f.exists():
             check_file(f)
+    for f in collect_message_files(sys.argv[1:]):
+        if f.exists():
+            check_message_calls(f)
 
     if violations:
         print(f"Hardcoded-UI-Text-Check: {len(violations)} moegliche Fund(e)\n", file=sys.stderr)

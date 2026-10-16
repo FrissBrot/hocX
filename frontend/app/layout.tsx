@@ -5,6 +5,7 @@ import { Inter } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { getMainAppUrl } from "@/lib/site-config";
+import { ClientMessagesBridge } from "@/components/i18n/client-messages-bridge";
 import { ViewportProvider } from "@/lib/hooks/use-is-mobile";
 import { isMobileUserAgent } from "@/lib/utils/viewport";
 import "./tokens.css";
@@ -82,6 +83,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       </head>
       <body suppressHydrationWarning>
         <NextIntlClientProvider locale={locale} messages={messages}>
+          <ClientMessagesBridge />
           <ViewportProvider initialMobile={initialMobile}>{children}</ViewportProvider>
         </NextIntlClientProvider>
       </body>

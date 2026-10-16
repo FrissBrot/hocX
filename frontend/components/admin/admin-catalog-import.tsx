@@ -87,7 +87,7 @@ export function AdminCatalogImportModal({ open, onClose, onImported }: Props) {
     if (!file) return;
     try {
       const parsed: unknown = JSON.parse(await file.text());
-      if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
+      if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object"); // i18n-ok: interner Parse-Fehler, catch zeigt eigene Meldung
       setConfig(parsed as Record<string, unknown>);
     } catch {
       setParseError(t("invalidJson"));

@@ -1,5 +1,7 @@
 {
-  "meta": { "description": "Area di lavoro per verbali e modelli" },
+  "meta": {
+    "description": "Area di lavoro per verbali e modelli"
+  },
   "save": "Salva",
   "cancel": "Annulla",
   "delete": "Elimina",
@@ -82,5 +84,23 @@
     "retryButton": "Riprova ora",
     "discardBlocked": "{count, plural, one {Scarta la modifica non riuscita} other {Scarta # modifiche non riuscite}}",
     "leaveConfirm": "Ci sono modifiche non salvate. Lasciare comunque la pagina?"
+  },
+  "clientErrors": {
+    "offline": "Nessuna connessione a Internet",
+    "timeout": "Il server impiega troppo tempo a rispondere",
+    "unreachable": "Server non raggiungibile",
+    "unreachableStatus": "Server non raggiungibile ({status})",
+    "invalidResponse": "Risposta non valida dal server",
+    "saveFailed": "Non è stato possibile salvare le modifiche.",
+    "saveFailedStatus": "Salvataggio non riuscito ({status})",
+    "connectionError": "Errore di connessione",
+    "passkeyCreateCancelled": "La creazione della passkey è stata annullata",
+    "passkeyLoginCancelled": "L'accesso con passkey è stato annullato",
+    "pdfNotProvided": "Non è stato possibile fornire il PDF.",
+    "pdfReadyClick": "PDF pronto – clicca qui per aprirlo",
+    "pdfExportFailed": "Esportazione PDF non riuscita",
+    "tagColorTransferFailed": "Tag rinominato, ma non è stato possibile trasferirne il colore",
+    "noHistoricalCycleSelected": "Nessun ciclo storico selezionato",
+    "noDraftToConfirm": "Nessuna bozza da confermare"
   }
 }

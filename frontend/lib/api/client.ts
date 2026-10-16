@@ -1,3 +1,5 @@
+import { clientMessage } from "@/lib/i18n/client-messages";
+
 const internalApiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 // Browser-seitige Aufrufe laufen immer same-origin (relative Pfade), damit sie auf jeder
 // Domain (Hauptdomain oder Mandanten-Custom-Domain) automatisch gegen die richtige Origin
@@ -63,7 +65,7 @@ export async function backendFetch<T>(path: string, init?: RequestInit): Promise
 export async function browserApiFetch<T>(path: string, options?: BrowserApiFetchInit): Promise<T> {
   const { timeoutMs, ...init } = options ?? {};
   const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
-  if (typeof navigator !== "undefined" && !navigator.onLine) throw new ApiError("Keine Internetverbindung", "offline");
+  if (typeof navigator !== "undefined" && !navigator.onLine) throw new ApiError(clientMessage("offline"), "offline");
   let response: Response;
   try {
     response = await fetch(`${publicApiUrl}${path}`, {
@@ -73,8 +75,8 @@ export async function browserApiFetch<T>(path: string, options?: BrowserApiFetch
       headers: isFormData ? init.headers : { "Content-Type": "application/json", ...(init.headers ?? {}) }
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === "TimeoutError") throw new ApiError("Zeitüberschreitung beim Server", "timeout");
-    throw new ApiError("Backend nicht erreichbar", "backend");
+    if (error instanceof DOMException && error.name === "TimeoutError") throw new ApiError(clientMessage("timeout"), "timeout");
+    throw new ApiError(clientMessage("unreachable"), "backend");
   }
 
   if (!response.ok) throw errorFromResponse(response.status, await response.text());
@@ -118,7 +120,7 @@ export function browserApiUpload<T>(
   body: FormData,
   options: { timeoutMs: number; onProgress?: (loaded: number, total: number) => void; signal?: AbortSignal },
 ): Promise<T> {
-  if (typeof navigator !== "undefined" && !navigator.onLine) return Promise.reject(new ApiError("Keine Internetverbindung", "offline"));
+  if (typeof navigator !== "undefined" && !navigator.onLine) return Promise.reject(new ApiError(clientMessage("offline"), "offline"));
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${publicApiUrl}${path}`);
@@ -142,11 +144,11 @@ export function browserApiUpload<T>(
       try {
         resolve(JSON.parse(xhr.responseText) as T);
       } catch {
-        reject(new ApiError("Ungültige Antwort vom Server", "backend", xhr.status));
+        reject(new ApiError(clientMessage("invalidResponse"), "backend", xhr.status));
       }
     };
-    xhr.ontimeout = () => reject(new ApiError("Zeitüberschreitung beim Server", "timeout"));
-    xhr.onerror = () => reject(new ApiError("Backend nicht erreichbar", "backend"));
+    xhr.ontimeout = () => reject(new ApiError(clientMessage("timeout"), "timeout"));
+    xhr.onerror = () => reject(new ApiError(clientMessage("unreachable"), "backend"));
     xhr.onabort = () => reject(new DOMException("Upload abgebrochen", "AbortError"));
     if (options.signal) {
       if (options.signal.aborted) {

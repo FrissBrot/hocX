@@ -51,13 +51,13 @@ export function loadFriendlyChallenge(doc: Document = document, win: CaptchaWind
     const onLoad = () => {
       const api = currentApi(win);
       if (api) resolve(api);
-      else reject(new Error("friendlyChallenge API nach dem Laden nicht verfuegbar"));
+      else reject(new Error("friendlyChallenge API nach dem Laden nicht verfuegbar")); // i18n-ok: nur Konsolen-Log, nie in der UI
     };
     const onError = () => {
       // Fehlgeschlagenes Skript-Tag entfernen, sonst wartet ein spaeterer Versuch ewig auf
       // ein `load`, das fuer dieses Element nie mehr kommt.
       script?.remove();
-      reject(new Error("FriendlyCaptcha-Skript konnte nicht geladen werden"));
+      reject(new Error("FriendlyCaptcha-Skript konnte nicht geladen werden")); // i18n-ok: nur Konsolen-Log, nie in der UI
     };
     if (!script) {
       script = doc.createElement("script");
