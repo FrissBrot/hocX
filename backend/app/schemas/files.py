@@ -305,6 +305,8 @@ class AlbumTenantShareStatus(BaseModel):
     status: Literal["pending", "accepted", "declined"]
     invited_at: datetime
     responded_at: datetime | None = None
+    # Standort (GPS) der Fotos mit diesem Partner teilen (IMGMETA-007).
+    share_location: bool = True
 
 
 class PhotoAlbumRead(BaseModel):
@@ -362,6 +364,12 @@ class SharedTargetAlbumRead(BaseModel):
 
 class AlbumShareCreate(BaseModel):
     target_tenant_public_id: uuid.UUID
+    # Standard an: Mandanten, die ein Album teilen, vertrauen sich (Freigabe-Links: Standard aus).
+    share_location: bool = True
+
+
+class AlbumShareUpdate(BaseModel):
+    share_location: bool
 
 
 class AlbumShareRespond(BaseModel):

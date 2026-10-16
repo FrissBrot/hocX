@@ -263,6 +263,8 @@ export type AlbumTenantShareStatus = {
   status: "pending" | "accepted" | "declined";
   invited_at: string;
   responded_at: string | null;
+  // Standort (GPS) der Fotos mit diesem Partner teilen (Standard an).
+  share_location: boolean;
 };
 
 export type PhotoAlbum = {

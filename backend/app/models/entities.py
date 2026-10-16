@@ -1841,6 +1841,10 @@ class PhotoAlbumTenantShare(Base, TimestampMixin):
     invited_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     responded_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Standort (GPS) der Fotos dieses Albums mit dem Partner teilen - Standard an (Partner
+    # vertrauen sich), vom Besitzer abschaltbar. Aus: Originale und Downloads ohne Standort
+    # (siehe photo_album_share_service.location_shared_with, files.py).
+    share_location: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
 
 
 class TenantTrust(Base, TimestampMixin):

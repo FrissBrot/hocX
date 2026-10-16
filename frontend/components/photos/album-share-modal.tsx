@@ -77,6 +77,9 @@ export function AlbumShareModal({
   const [lookupError, setLookupError] = useState("");
   const [suggestions, setSuggestions] = useState<TenantLookup[] | null>(null);
   const [busy, setBusy] = useState(false);
+  // Standort (GPS) mit dem Partner teilen - Standard an (Partner vertrauen sich, IMGMETA-007).
+  const [shareLocation, setShareLocation] = useState(true);
+  const [locationBusy, setLocationBusy] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
   const trimmed = query.trim();
@@ -125,16 +128,32 @@ export function AlbumShareModal({
     try {
       await browserApiFetch(`/api/files/albums/${album.id}/shares`, {
         method: "POST",
-        body: JSON.stringify({ target_tenant_public_id: preview.id }),
+        body: JSON.stringify({ target_tenant_public_id: preview.id, share_location: shareLocation }),
       });
       toast(preview.name ? t("invitedToast", { name: preview.name }) : t("invitedToastNoName"), "success");
       setQuery("");
       setPreview(null);
+      setShareLocation(true);
       onChanged();
     } catch (error) {
       toast(error instanceof Error ? error.message : t("inviteError"), "error");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function toggleLocation(share: AlbumTenantShareStatus, value: boolean) {
+    setLocationBusy(share.tenant_public_id);
+    try {
+      await browserApiFetch(`/api/files/albums/${album.id}/shares/${share.tenant_public_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ share_location: value }),
+      });
+      onChanged();
+    } catch {
+      toast(t("locationError"), "error");
+    } finally {
+      setLocationBusy(null);
     }
   }
 
@@ -249,6 +268,14 @@ export function AlbumShareModal({
             ))}
           </ul>
         )}
+        <label className="share-metadata-option">
+          <input type="checkbox" role="switch" checked={shareLocation} onChange={(event) => setShareLocation(event.target.checked)} />
+          <span className="album-picker-switch-track" aria-hidden="true" />
+          <span className="share-metadata-text">
+            <span>{t("shareLocationLabel")}</span>
+            <span className="field-help">{t("shareLocationHelp")}</span>
+          </span>
+        </label>
       </ModalSaveForm>
 
       {album.shared_with.length > 0 && (
@@ -272,6 +299,18 @@ export function AlbumShareModal({
                       )}
                     </span>
                   </span>
+                  <label className="album-picker-switch album-share-location-switch">
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      checked={share.share_location}
+                      disabled={locationBusy === share.tenant_public_id}
+                      onChange={(event) => void toggleLocation(share, event.target.checked)}
+                      aria-label={t("locationAriaLabel", { name: displayName })}
+                    />
+                    <span className="album-picker-switch-track" aria-hidden="true" />
+                    <span>{t("locationShort")}</span>
+                  </label>
                   <Badge variant={STATUS_VARIANT[share.status]}>{statusLabel(t)[share.status]}</Badge>
                   <button
                     type="button"

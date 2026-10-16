@@ -208,7 +208,12 @@
     "title": "Share with another tenant",
     "unknownTenant": "Unknown tenant",
     "withdrawLabel": "Withdraw",
-    "withdrawnToast": "Invitation withdrawn."
+    "withdrawnToast": "Invitation withdrawn.",
+    "shareLocationLabel": "Share location",
+    "shareLocationHelp": "The partner receives this album's photos with GPS data. Can be changed per share later.",
+    "locationShort": "Location",
+    "locationAriaLabel": "Share location with {name}",
+    "locationError": "Could not save the location setting."
   },
   "shareRelease": {
     "confirmLabel": "Add and share",

@@ -208,7 +208,12 @@
     "title": "Partager avec un autre tenant",
     "unknownTenant": "Tenant inconnu",
     "withdrawLabel": "Retirer",
-    "withdrawnToast": "Invitation retirée."
+    "withdrawnToast": "Invitation retirée.",
+    "shareLocationLabel": "Partager la position",
+    "shareLocationHelp": "Le partenaire reçoit les photos de cet album avec les données GPS. Modifiable ensuite pour chaque partage.",
+    "locationShort": "Position",
+    "locationAriaLabel": "Partager la position avec {name}",
+    "locationError": "Impossible d'enregistrer le réglage de position."
   },
   "shareRelease": {
     "confirmLabel": "Ajouter et partager",

@@ -298,9 +298,19 @@ Standort nicht teilt.
 **Dateikopien:** Der Export (§11) schreibt nur in der DB vorhandenes GPS (Client-GPS bzw.
 konvertierte HEIC) und das Schätzdatum in die heruntergeladene Kopie. Das gilt für den
 Einzeldownload - auch für Partner-Mandanten geteilter Alben, die das Bild herunterladen dürfen
-- und für öffentliche Freigaben, deren Link den Standort teilt. Ob Partner-Mandanten diese
-Ergänzung erhalten sollen, ist eine offene Produktentscheidung (derzeitiges Verhalten: ja,
-wie das Original selbst, das Datei-GPS ohnehin enthält).
+- und für öffentliche Freigaben, deren Link den Standort teilt.
+
+**Standort für Partner-Mandanten (IMGMETA-007):** Jede Album-Freigabe hat einen Schalter
+„Standort teilen“ (`photo_album_tenant_share.share_location`, Standard **an** – zwei Mandanten,
+die ein Album teilen, vertrauen sich). Der Besitzer setzt ihn beim Einladen und kann ihn später
+ändern (`PATCH /api/files/albums/{id}/shares/{tenant}`). Ist er aus, bekommt der Partner
+Originale (`/content`), Downloads (`/download`, inkl. Live-Photo-Video) ohne Standort: das
+GPS-IFD fällt weg (nach dem Export, damit auch DB-GPS nicht hineinkommt), Videos werden ohne
+Container-Metadaten umverpackt; fehlt ffmpeg, wird das Video nicht ausgeliefert. Massgeblich
+ist `photo_album_share_service.location_shared_with`: es braucht ein Album mit dem Foto, in dem
+Betrachter **und** Mandant des Fotos (Besitzer oder Partner mit Schalter an) den Standort
+teilen. Öffentliche Freigabe-Links haben ihren eigenen Schalter (`share_location`, Standard
+**aus**). Thumbnails tragen nie Metadaten.
 Der Mandantenexport (Backup) enthält die Spalten unverändert.
 
 Browser-Hinweise (`file_metadata` des Galerie-Uploads, ggf. mit GPS) schickt das Upload-Popup

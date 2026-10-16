@@ -62,6 +62,7 @@ function share(overrides: Partial<AlbumTenantShareStatus> = {}): AlbumTenantShar
     status: "accepted",
     invited_at: "2026-09-10T08:00:00Z",
     responded_at: "2026-09-12T08:00:00Z",
+    share_location: true,
     ...overrides,
   };
 }
@@ -150,8 +151,43 @@ describe("AlbumShareModal", () => {
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
     const [path, init] = browserApiFetchMock.mock.calls[1];
     expect(path).toBe("/api/files/albums/album-1/shares");
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ target_tenant_public_id: TENANT_ID });
+    // Standort wird standardmässig geteilt (Partner vertrauen sich).
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ target_tenant_public_id: TENANT_ID, share_location: true });
     expect(showToastMock).toHaveBeenCalledWith("Einladung gesendet.", "success");
+  });
+
+  it("invites without the location when the switch is turned off", async () => {
+    browserApiFetchMock.mockResolvedValueOnce(anonymous());
+    browserApiFetchMock.mockResolvedValueOnce(undefined);
+    const onChanged = vi.fn();
+
+    render(<AlbumShareModal open album={makeAlbum()} onClose={() => {}} onChanged={onChanged} />);
+    typeInto(TENANT_ID);
+    await screen.findByText("Mandant gefunden");
+    const locationSwitch = screen.getByRole("switch", { name: /Standort teilen/ });
+    expect((locationSwitch as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(locationSwitch);
+    fireEvent.click(screen.getByRole("button", { name: "Einladen" }));
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+    const [, init] = browserApiFetchMock.mock.calls[1];
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ target_tenant_public_id: TENANT_ID, share_location: false });
+  });
+
+  it("switches the location of an existing share", async () => {
+    browserApiFetchMock.mockResolvedValue(undefined);
+    const onChanged = vi.fn();
+
+    render(<AlbumShareModal open album={makeAlbum({ shared_with: [share()] })} onClose={() => {}} onChanged={onChanged} />);
+    fireEvent.click(screen.getByRole("switch", { name: "Standort mit Pfadi Wildegg teilen" }));
+
+    await waitFor(() =>
+      expect(browserApiFetchMock).toHaveBeenCalledWith("/api/files/albums/album-1/shares/partner-1", {
+        method: "PATCH",
+        body: JSON.stringify({ share_location: false }),
+      }),
+    );
+    expect(onChanged).toHaveBeenCalledTimes(1);
   });
 
   it("lists a pending invite to an untrusted tenant anonymously", () => {

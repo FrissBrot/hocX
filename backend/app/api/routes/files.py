@@ -26,6 +26,7 @@ from app.schemas.files import (
     AlbumReleaseResult,
     SharedTargetAlbumRead,
     AlbumShareCreate,
+    AlbumShareUpdate,
     AlbumShareRequestRead,
     AlbumShareRespond,
     AlbumTenantShareStatus,
@@ -53,7 +54,9 @@ from app.schemas.files import (
 from app.schemas.protocol import ProtocolImageRead
 from app.services import image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
 from app.services.access_service import AccessService
+from app.services import apple_media
 from app.services.apple_media import pair_live_clips, MAX_LIVE_CLIP_BYTES
+from app.services.photo_metadata_privacy import MetadataPolicy, sanitize_image
 from app.services.file_service import MAX_UPLOAD_BYTES, FileService, _safe_storage_path
 from app.services import submission_upload_rules
 from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref
@@ -796,6 +799,30 @@ def delete_image(
     return {"message": "Image deleted"}
 
 
+# Partner-Mandant ohne Standortfreigabe (IMGMETA-007): nur der Standort fällt weg, Datum und
+# Kamera bleiben wie bisher.
+_WITHOUT_LOCATION = MetadataPolicy(location=False, capture_date=True, camera=True)
+
+
+def _strips_location(db: Session, user: CurrentUser, stored_file: StoredFile) -> bool:
+    return user.current_tenant_id is not None and not photo_album_share_service.location_shared_with(
+        db, user.current_tenant_id, stored_file.id, stored_file.tenant_id
+    )
+
+
+def _temporary_copy(suffix: str) -> Path:
+    work_dir = Path(settings.upload_root) / "_staging" / "download"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    return work_dir / f"{uuid.uuid4().hex}{suffix}"
+
+
+def _video_without_metadata(video_path: Path) -> Path:
+    target = _temporary_copy(".mp4")
+    if not apple_media.clip_without_metadata(video_path, target):
+        raise HTTPException(status_code=404, detail="Video ist ohne Standortdaten nicht verfügbar")
+    return target
+
+
 @router.get("/stored-files/{stored_file_id}/content")
 def get_stored_file_content(
     stored_file_id: uuid.UUID,
@@ -826,6 +853,21 @@ def get_stored_file_content(
     # for a real image mime type.
     # video/mp4 is the Live Photo clip (see apple_media.py) the Fotos grid plays via <video src>.
     is_inline_safe = stored_file.mime_type in {"application/pdf", "video/mp4"} or (stored_file.mime_type or "").startswith("image/")
+    is_media = stored_file.mime_type == "video/mp4" or (stored_file.mime_type or "").startswith("image/")
+    if is_media and _strips_location(db, user, stored_file):
+        if stored_file.mime_type == "video/mp4":
+            clean_path = _video_without_metadata(file_path)
+        else:
+            clean_path = _temporary_copy(file_path.suffix)
+            clean_path.write_bytes(sanitize_image(file_path.read_bytes(), stored_file.mime_type, _WITHOUT_LOCATION))
+        return FileResponse(
+            path=clean_path,
+            media_type=stored_file.mime_type,
+            filename=stored_file.original_name,
+            content_disposition_type="inline",
+            headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"},
+            background=BackgroundTask(clean_path.unlink, missing_ok=True),
+        )
     return FileResponse(
         path=file_path,
         media_type=stored_file.mime_type,
@@ -972,6 +1014,11 @@ def download_stored_file(
     # Exportfassung: geschaetztes Aufnahmedatum (und nur in der Datenbank vorhandenes GPS) in
     # einer temporaeren Kopie - das gespeicherte Original bleibt unveraendert.
     export_content = image_export_service.export_bytes(stored_file, image_path.read_bytes()) if part != "video" and image_export_service.needs_export_processing(stored_file) else None
+    # Partner ohne Standortfreigabe (IMGMETA-007): Standort aus Bild (nach der Exportfassung,
+    # damit kein GPS aus der Datenbank hineinkommt) und Video entfernen.
+    strip_location = _strips_location(db, user, stored_file)
+    if strip_location and part != "video":
+        export_content = sanitize_image(export_content or image_path.read_bytes(), stored_file.mime_type, _WITHOUT_LOCATION)
     work_dir = Path(settings.upload_root) / "_staging" / "download"
 
     if part == "image" or (part == "both" and live_video is None):
@@ -998,6 +1045,9 @@ def download_stored_file(
     video_path = _safe_storage_path(settings.storage_root, live_video.storage_path)
     if not video_path.exists():
         raise HTTPException(status_code=404, detail="File missing on filesystem")
+    cleanup_video: Path | None = None
+    if strip_location:
+        video_path = cleanup_video = _video_without_metadata(video_path)
     if part == "video":
         return FileResponse(
             path=video_path,
@@ -1005,6 +1055,7 @@ def download_stored_file(
             filename=live_video.original_name,
             content_disposition_type="attachment",
             headers=headers,
+            background=BackgroundTask(cleanup_video.unlink, missing_ok=True) if cleanup_video is not None else None,
         )
 
     # Both: JPEG and MP4 are already compressed, so the ZIP just stores them. Built on disk (not
@@ -1017,6 +1068,8 @@ def download_stored_file(
         else:
             archive.write(image_path, arcname=Path(stored_file.original_name).name)
         archive.write(video_path, arcname=Path(live_video.original_name).name)
+    if cleanup_video is not None:
+        cleanup_video.unlink(missing_ok=True)
     return FileResponse(
         path=zip_path,
         media_type="application/zip",
@@ -1058,6 +1111,7 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
                     status=row.status,
                     invited_at=row.invited_at,
                     responded_at=row.responded_at,
+                    share_location=row.share_location,
                 )
                 for row in photo_album_share_service.list_shares_for_album(db, entry.album.id)
             ]
@@ -1173,9 +1227,37 @@ def create_album_share(
     if target_tenant is None:
         raise HTTPException(status_code=404, detail="Kein Mandant mit dieser ID gefunden")
     try:
-        photo_album_share_service.invite(db, album, target_tenant_id=target_tenant.id, invited_by=user.user_id)
+        photo_album_share_service.invite(
+            db, album, target_tenant_id=target_tenant.id, invited_by=user.user_id, share_location=payload.share_location
+        )
     except photo_album_share_service.AlbumShareError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+@router.patch("/files/albums/{album_id}/shares/{tenant_public_id}", status_code=204)
+def update_album_share(
+    album_id: uuid.UUID,
+    tenant_public_id: uuid.UUID,
+    payload: AlbumShareUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Standort (GPS) für einen Partner an- oder abschalten - nur der Besitzer-Mandant."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == user.current_tenant_id))
+    if album is None:
+        raise HTTPException(status_code=404, detail="Album nicht gefunden")
+    shared_tenant = public_id_service.get_by_public_id(db, Tenant, tenant_public_id)
+    if shared_tenant is None:
+        raise HTTPException(status_code=404, detail="Mandant nicht gefunden")
+    try:
+        photo_album_share_service.set_share_location(
+            db, album=album, tenant_id=shared_tenant.id, share_location=payload.share_location
+        )
+    except photo_album_share_service.AlbumShareError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
 
 
 @router.post("/files/albums/{album_id}/respond", status_code=204)

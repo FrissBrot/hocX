@@ -208,7 +208,12 @@
     "title": "Condividi con un altro tenant",
     "unknownTenant": "Tenant sconosciuto",
     "withdrawLabel": "Ritira",
-    "withdrawnToast": "Invito ritirato."
+    "withdrawnToast": "Invito ritirato.",
+    "shareLocationLabel": "Condividi posizione",
+    "shareLocationHelp": "Il partner riceve le foto di questo album con i dati GPS. Modificabile in seguito per ogni condivisione.",
+    "locationShort": "Posizione",
+    "locationAriaLabel": "Condividi la posizione con {name}",
+    "locationError": "Impossibile salvare l'impostazione della posizione."
   },
   "shareRelease": {
     "confirmLabel": "Aggiungi e condividi",

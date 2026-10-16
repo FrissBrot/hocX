@@ -17959,6 +17959,13 @@ input[type="radio"] {
   flex-shrink: 0;
 }
 
+/* Standort-Schalter je Freigabe (album-share-modal.tsx). */
+.album-share-location-switch {
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
 @media (max-width: 640px) {
   .album-share-entry {
     flex-wrap: wrap;

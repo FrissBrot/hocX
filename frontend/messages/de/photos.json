@@ -208,7 +208,12 @@
     "title": "Mit anderem Mandanten teilen",
     "unknownTenant": "Unbekannter Mandant",
     "withdrawLabel": "Zurückziehen",
-    "withdrawnToast": "Einladung zurückgezogen."
+    "withdrawnToast": "Einladung zurückgezogen.",
+    "shareLocationLabel": "Standort teilen",
+    "shareLocationHelp": "Der Partner erhält Fotos dieses Albums mit GPS-Daten. Später pro Freigabe änderbar.",
+    "locationShort": "Standort",
+    "locationAriaLabel": "Standort mit {name} teilen",
+    "locationError": "Standort-Einstellung konnte nicht gespeichert werden."
   },
   "shareRelease": {
     "confirmLabel": "Hinzufügen und teilen",
