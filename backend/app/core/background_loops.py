@@ -54,7 +54,9 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "task_package_rollover": 202600018,
     "maintenance_supervisor": 202600019,
     "storage_journal_cleanup": 202600020,
-    "document_sync": 202600023,
+    # 202600026 statt 202600023: diese ID hält storage_migration_service.create_migration als
+    # Transaktions-Lock (gegenseitiges Blockieren bzw. übersprungene Ticks).
+    "document_sync": 202600026,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht
@@ -71,6 +73,7 @@ RESERVED_LOCK_IDS: dict[str, int] = {
     "startup_seed_data": 202600004,
     "startup_local_storage_profile": 202600021,
     "storage_worker_claim": 202600022,
+    "storage_migration_create": 202600023,  # storage_migration_service.create_migration
 }
 
 _ALL_LOCK_IDS = [*BACKGROUND_LOCK_IDS.values(), *EXTERNAL_LOCK_IDS.values(), *RESERVED_LOCK_IDS.values()]
