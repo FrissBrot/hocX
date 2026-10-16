@@ -24,6 +24,7 @@ from app.core.config import settings
 from app.core.error_log import record_system_error
 from app.core.redis_client import get_redis_sync
 from app.models import StoredFile, SystemErrorLog, SystemHealthEvent
+from app.models.document_entities import DocumentJob
 from app.models.entities import PhotoAnalysisJob
 from app.schemas.admin import ContainerStatusRead, HealthCheckRead, HealthStatus, SystemHealthSnapshot
 
@@ -45,6 +46,10 @@ ERRORS_PER_HOUR_WARNING = 20
 ERRORS_PER_HOUR_CRITICAL = 100
 SCAN_BACKLOG_MIN_AGE = timedelta(hours=1)
 PHOTO_QUEUE_WARNING_AGE = timedelta(hours=6)
+# Dokumentverarbeitung (document-worker): fällige Aufträge, die so lange warten, bzw. Aufträge,
+# die in diesem Zeitraum endgültig gescheitert sind (nach max_attempts, «Erneut verarbeiten»).
+DOCUMENT_QUEUE_WARNING_AGE = timedelta(minutes=30)
+DOCUMENT_FAILED_WINDOW = timedelta(hours=24)
 CONTAINER_MEMORY_WARNING_RATIO = 0.9
 _HEALTH_OUTPUT_MAX_LENGTH = 500
 
@@ -378,6 +383,22 @@ def _check_photo_queue(db: Session, now: datetime) -> HealthCheckRead:
     return HealthCheckRead(key="photo_queue", status=status, params={"queued": queued, "oldestMinutes": oldest_minutes})
 
 
+def _check_document_queue(db: Session, now: datetime) -> HealthCheckRead:
+    """Warteschlange des document-worker (PDF-Ansicht, Textextraktion): staut sie sich, läuft
+    der Worker nicht oder kommt nicht nach; endgültig gescheiterte Aufträge brauchen eine
+    Entscheidung (Datei prüfen, «Erneut verarbeiten», document_admin requeue)."""
+    queued, oldest = db.execute(
+        select(func.count(), func.min(DocumentJob.run_after)).where(DocumentJob.status == "queued", DocumentJob.run_after <= now)
+    ).one()
+    failed = db.scalar(
+        select(func.count()).where(DocumentJob.status == "failed", DocumentJob.updated_at >= now - DOCUMENT_FAILED_WINDOW)
+    ) or 0
+    oldest_minutes = round((now - oldest).total_seconds() / 60) if oldest else 0
+    stalled = bool(oldest and now - oldest > DOCUMENT_QUEUE_WARNING_AGE)
+    status: HealthStatus = "warning" if stalled or failed else "ok"
+    return HealthCheckRead(key="document_queue", status=status, params={"queued": queued, "oldestMinutes": oldest_minutes, "failed": failed})
+
+
 # Hash ohne Treffer (64 Nullen) für den Systemcheck der Prüfseite - nie ein echtes Dokument.
 VERIFY_PROBE_SHA256 = "0" * 64
 VERIFY_LATENCY_WARNING_MS = 2000
@@ -428,6 +449,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("error_rate", lambda: _check_error_rate(db), failure_status="unknown", db=db)
     checks += _run_check("scan_backlog", lambda: _check_scan_backlog(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
+    checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_verification", _check_document_verification)
     checks += _run_check("storage_migration", lambda: _check_storage_migration(db, now), failure_status="unknown", db=db)
     checks += _run_check("backup", lambda: _check_backup(db, now), failure_status="unknown", db=db)

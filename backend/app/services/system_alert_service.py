@@ -60,6 +60,7 @@ _CHECK_TITLES_DE = {
     "error_rate": "Fehlerrate",
     "scan_backlog": "Virenprüfung im Rückstand",
     "photo_queue": "Bildanalyse-Warteschlange",
+    "document_queue": "Dokumentverarbeitung",
     "document_verification": "Öffentliche Prüfseite",
     "object_storage": "Dateispeicher",
     "storage_migration": "Storage-Migration",
@@ -76,6 +77,7 @@ _CHECK_PROBLEM_TITLES_DE = {
     "error_rate": "Viele Einträge im Fehlerprotokoll",
     "scan_backlog": "Virenprüfung im Rückstand",
     "photo_queue": "Bildanalyse-Warteschlange staut sich",
+    "document_queue": "Dokumentverarbeitung staut sich oder scheitert",
     "document_verification": "Öffentliche Prüfseite langsam",
     "object_storage": "Dateispeicher nicht erreichbar",
     "storage_migration": "Storage-Migration braucht Aufmerksamkeit",
@@ -122,6 +124,11 @@ def _check_message(check) -> str:
             return f"{params.get('count')} Dateien warten seit über einer Stunde auf die Virenprüfung."
         case "photo_queue":
             return f"{params.get('queued')} Aufträge warten, der älteste seit {params.get('oldestMinutes')} Minuten."
+        case "document_queue":
+            return (
+                f"{params.get('queued')} Aufträge warten (ältester seit {params.get('oldestMinutes')} Minuten), "
+                f"{params.get('failed')} in 24 h endgültig gescheitert - document-worker prüfen (docker compose logs document-worker)."
+            )
         case "document_verification":
             return f"Prüf-Endpoint der Abgabebox antwortet nach {params.get('latencyMs')} ms - abgabebox-backend und Datenbank prüfen."
         case "object_storage":

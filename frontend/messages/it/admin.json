@@ -174,6 +174,11 @@
         "detail": "{queued, number} in coda · il più vecchio {oldestMinutes, number} min",
         "problem": "La coda di analisi immagini si accumula"
       },
+      "document_queue": {
+        "title": "Elaborazione documenti",
+        "detail": "{queued, number} in coda · il più vecchio {oldestMinutes, number} min · {failed, number} non riusciti (24 h)",
+        "problem": "L'elaborazione dei documenti è in ritardo o non riesce"
+      },
       "document_verification": {
         "title": "Pagina pubblica di verifica",
         "detail": "Risposta in {latencyMs, number} ms",
