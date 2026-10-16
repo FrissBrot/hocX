@@ -52,6 +52,8 @@ infra/traefik/dynamic/tenant-domains.yml
 
 # DB backups and abgabebox uploads — real user data, never committed
 backups/
+# ... aber nicht die gleichnamige Admin-Route
+!frontend/app/admin/backups/
 storage/abgabebox-uploads/*
 
 # Generated thumbnails (FileService.ensure_thumbnail) — real tenant images, never committed.
