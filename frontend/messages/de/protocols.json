@@ -178,6 +178,11 @@
   "deleteEventConfirmNamed": "Termin \"{title}\" endgültig löschen? Das entfernt ihn aus allen Protokollen.",
   "deleteFine": "Busse löschen",
   "deleteFineConfirm": "Busse endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+  "fineDeletedLabel": "Gelöscht",
+  "fineDeletedLater": "Später gelöscht",
+  "fineDeletedReason": "Begründung: {reason}",
+  "restoreFine": "Wiederherstellen",
+  "fineRestoreFailed": "Busse konnte nicht wiederhergestellt werden",
   "deleteImageAction": "Bild löschen",
   "descriptionLabel": "Beschreibung",
   "discardNewEventRow": "Neue Terminzeile verwerfen",
@@ -235,7 +240,10 @@
     "workflowPostProcessingMode": "Nachbearbeitungsmodus",
     "workflowPreparationMode": "Vorbereitungsmodus",
     "workflowSessionMode": "Sitzungsmodus",
-    "templateSyncedByOther": "{name} hat die Elemente aus der Vorlage neu geladen. Die Ansicht wird aktualisiert."
+    "templateSyncedByOther": "{name} hat die Elemente aus der Vorlage neu geladen. Die Ansicht wird aktualisiert.",
+    "statusChangedByOtherToast": "Status wurde von {name} zu „{status}“ geändert.",
+    "draftsRestoredToast": "{count, plural, one {# lokaler Textentwurf wurde} other {# lokale Textentwürfe wurden}} wiederhergestellt.",
+    "conflictToast": "Konflikt: Diese Stelle wurde inzwischen von jemand anderem gespeichert. Die aktuelle Version wurde geladen – Ihre letzte Änderung wurde nicht übernommen, ist aber als lokaler Entwurf gesichert."
   },
   "embeddedBlock": {
     "attendance": "Anwesenheit",
@@ -471,5 +479,8 @@
   "undoAction": "Rückgängig",
   "unknownEvent": "Unbekannter Termin",
   "uploadImageAction": "Bild hochladen",
-  "valueFallback": "Wert"
+  "valueFallback": "Wert",
+  "locationLabel": "Ort",
+  "organizersLabel": "Organisatoren",
+  "balanceAsOf": "Stand {date}"
 }

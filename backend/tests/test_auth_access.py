@@ -340,10 +340,11 @@ def test_tenant_by_domain_rate_limited_per_source_ip(db):
 
 
 def test_tenant_by_domain_client_ip_prefers_x_forwarded_for(db):
-    """_client_ip must read the real client IP from X-Forwarded-For (set by Traefik) rather
+    """client_ip must read the real client IP from X-Forwarded-For (set by Traefik) rather
     than request.client.host, which would just be Traefik's own container IP - otherwise every
-    request through the proxy shares a single rate-limit bucket."""
-    from app.api.routes.auth import _client_ip
+    request through the proxy shares a single rate-limit bucket. (Seit MAIN-SEC-007 zentral in
+    app/core/client_ip.py, siehe test_login_lockout_per_ip.py.)"""
+    from app.core.client_ip import client_ip as _client_ip
 
     real_client_ip = f"198.51.100.{uuid.uuid4().hex[:6]}"
     request = _FakeRequest(host="10.0.0.5", forwarded_for=f"{real_client_ip}, 10.0.0.5")

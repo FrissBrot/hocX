@@ -129,36 +129,46 @@ async def run_advisory_locked_loop(
     # Nachzügler warteten bis zum 30-s-Pool-Timeout (2026-10-11 im Dev-Stack gemessen: fast
     # alle ersten Ticks ~30 s, system_monitor bekam gar keine Verbindung).
     await asyncio.sleep(random.uniform(0, min(_MAX_START_JITTER_SECONDS, interval_seconds)))
+    def run_tick() -> tuple[str, datetime, datetime, str | None] | None:
+        """Ein kompletter Tick inklusive Lock-Verbindung - läuft per asyncio.to_thread
+        (Audit MAIN-BE-018): Checkout und Lock-Abfrage liefen vorher synchron auf dem
+        Event-Loop und blockierten bei erschöpftem Pool den ganzen Worker bis zum
+        Pool-Timeout."""
+        # Während voller Wartung pausieren alle nicht ausgenommenen Loops (Tick ohne Meldung,
+        # wie ein übersprungener Tick - die Job-Übersicht zeigt die Wartung separat).
+        if not runs_during_maintenance and current_effective_state().full_active:
+            return None
+        if should_run is not None and not should_run():
+            return None
+        with engine.begin() as lock_conn:
+            acquired = lock_conn.execute(
+                text("SELECT pg_try_advisory_xact_lock(:lock_id)"),
+                {"lock_id": lock_id},
+            ).scalar()
+            if not acquired:
+                return None
+            with SessionLocal() as db:
+                started_at = datetime.now(timezone.utc)
+                try:
+                    task(db)
+                except Exception as exc:
+                    db.rollback()
+                    result = ("failure", started_at, datetime.now(timezone.utc), format_job_error(exc))
+                    # source defaults to "backend" - system_error_log.source has a
+                    # CHECK constraint allowing only "backend"/"abgabebox-backend"
+                    # (see SystemErrorLog in app/models/entities.py); "background_loop"
+                    # violated it, so every write here silently failed inside
+                    # record_system_error's own try/except and never reached the
+                    # admin panel (found while auditing why central error logging
+                    # "didn't always work").
+                    record_system_error(db, exc=exc)
+                    return result
+                return ("success", started_at, datetime.now(timezone.utc), None)
+
     while True:
         outcome: tuple[str, datetime, datetime, str | None] | None = None
         try:
-            # Während voller Wartung pausieren alle nicht ausgenommenen Loops (Tick ohne Meldung,
-            # wie ein übersprungener Tick - die Job-Übersicht zeigt die Wartung separat).
-            paused = not runs_during_maintenance and current_effective_state().full_active
-            if not paused and (should_run is None or should_run()):
-                with engine.begin() as lock_conn:
-                    acquired = lock_conn.execute(
-                        text("SELECT pg_try_advisory_xact_lock(:lock_id)"),
-                        {"lock_id": lock_id},
-                    ).scalar()
-                    if acquired:
-                        with SessionLocal() as db:
-                            started_at = datetime.now(timezone.utc)
-                            try:
-                                await asyncio.to_thread(task, db)
-                            except Exception as exc:
-                                db.rollback()
-                                outcome = ("failure", started_at, datetime.now(timezone.utc), format_job_error(exc))
-                                # source defaults to "backend" - system_error_log.source has a
-                                # CHECK constraint allowing only "backend"/"abgabebox-backend"
-                                # (see SystemErrorLog in app/models/entities.py); "background_loop"
-                                # violated it, so every write here silently failed inside
-                                # record_system_error's own try/except and never reached the
-                                # admin panel (found while auditing why central error logging
-                                # "didn't always work").
-                                record_system_error(db, exc=exc)
-                            else:
-                                outcome = ("success", started_at, datetime.now(timezone.utc), None)
+            outcome = await asyncio.to_thread(run_tick)
         except Exception as exc:
             # Fehler ausserhalb von task(db) - Lock-Verbindung nicht zu bekommen (Pool erschöpft,
             # DB weg), should_run() wirft, ... Ohne dieses except beendete so ein Fehler den

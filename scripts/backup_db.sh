@@ -20,22 +20,29 @@ set -euo pipefail
 #      unattended from cron and failures need to be visible (e.g. via cron's mail-on-error
 #      or a monitoring wrapper), not silently swallowed.
 #
-# Usage: scripts/backup_db.sh   (no arguments - always targets this repo checkout, i.e.
-#                                 the prod deployment at /docker/hocX)
+# Usage: scripts/backup_db.sh   (keine Argumente - sichert die Instanz dieses Checkouts)
 #
-# Suggested crontab entry (installed via this task): run nightly at 03:15.
-#   15 3 * * * /docker/hocX/scripts/backup_db.sh >> /docker/hocX/backups/backup_db.log 2>&1
+# Welche Instanz das ist, bestimmt scripts/lib/stack.sh (Audit MAIN-OPS-003/-010): auf einem
+# als prod markierten Host der Release-Stack (Projekt hocx), auf einem Host ohne Markierung die
+# Instanz aus dem Quellcode (docker-compose.yml, Projekt aus HOCX_COMPOSE_PROJECT, Default hocx;
+# laeuft sie ueber scripts/dev.sh, HOCX_COMPOSE_PROJECT=hocx-dev setzen). Auf einem als test
+# markierten Host wird abgelehnt: dort liegen nur Demo-Daten, die jeder Test-Deploy neu befuellt.
+#
+# Zurueckspielen: scripts/restore_db.sh <dump> (siehe RUNBOOK Abschnitt 5).
+#
+# Suggested crontab entry: run nightly at 03:15 (Pfad an den Checkout anpassen).
+#   15 3 * * * <repo>/scripts/run_job.sh backup_db <repo>/scripts/backup_db.sh >> <repo>/backups/backup_db.log 2>&1
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_DIR="$REPO_DIR"
-ENV_FILE="$PROJECT_DIR/.env"
-BACKUP_DIR="$PROJECT_DIR/backups"
+ENV_FILE="${HOCX_ENV_FILE:-$PROJECT_DIR/.env}"
+BACKUP_DIR="${HOCX_BACKUP_DIR:-$PROJECT_DIR/backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 
 # shellcheck source=scripts/lib/env.sh
 source "$REPO_DIR/scripts/lib/env.sh"
-
-require_host_environment prod
+# shellcheck source=scripts/lib/stack.sh
+source "$REPO_DIR/scripts/lib/stack.sh"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 fail() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2; exit 1; }
@@ -45,6 +52,12 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 load_env_file "$ENV_FILE"
+
+# Nach dem Laden der .env, damit dort ein HOCX_COMPOSE_PROJECT greift.
+resolve_hocx_stack "$REPO_DIR" || fail "Host-Markierung ungueltig - kein Backup."
+if [ "$STACK_KIND" = test ]; then
+  fail "Dieser Host ist als 'test' provisioniert - dort liegen nur Demo-Daten, kein Backup."
+fi
 
 # Abgelöst durch das Borg-Backup (docs-site/docs/technik/backup/, RUNBOOK Abschnitt 7): sobald
 # es aktiv ist, laeuft dieses Skript nicht mehr unkontrolliert parallel. Bestehende Dumps in
@@ -58,10 +71,10 @@ fi
 : "${POSTGRES_DB:?POSTGRES_DB fehlt in $ENV_FILE}"
 
 cd "$PROJECT_DIR"
-DC=(docker compose --env-file "$ENV_FILE")
+DC=(docker compose -p "$STACK_PROJECT" --env-file "$ENV_FILE" "${STACK_COMPOSE_ARGS[@]}")
 
 if ! "${DC[@]}" ps db --status running -q > /dev/null 2>&1 || [ -z "$("${DC[@]}" ps db --status running -q)" ]; then
-  fail "db-Container laeuft nicht - kein Backup moeglich."
+  fail "db-Container von Projekt '$STACK_PROJECT' laeuft nicht - kein Backup moeglich (ggf. HOCX_COMPOSE_PROJECT setzen, siehe Kopfkommentar)."
 fi
 
 mkdir -p "$BACKUP_DIR"
@@ -101,19 +114,20 @@ find "$BACKUP_DIR" -maxdepth 1 -type f -name "*-cron.sql.gz" -mtime "+$RETENTION
 # (an rclone remote name, e.g. "s3:my-bucket/hocx-backups" - see
 # https://rclone.org/docs/#configure for setting one up) and the `rclone` binary is
 # installed, so this is safe to leave disabled until someone actually configures a remote.
+# Ein Offsite-Fehler laesst den Lauf scheitern (Audit MAIN-OPS-006): frueher endete das Skript
+# trotzdem mit 0, run_job.sh meldete "success" und niemand bemerkte die fehlende Offsite-Kopie.
+# Das lokale Backup oben ist in dem Fall trotzdem geschrieben.
 if [ -n "${OFFSITE_BACKUP_REMOTE:-}" ]; then
-  if command -v rclone > /dev/null 2>&1; then
-    log "Kopiere Backup nach OFFSITE_BACKUP_REMOTE=$OFFSITE_BACKUP_REMOTE..."
-    if rclone copy "$BACKUP_FILE" "$OFFSITE_BACKUP_REMOTE" --quiet; then
-      log "Offsite-Kopie abgeschlossen."
-    else
-      log "WARNUNG: Offsite-Kopie fehlgeschlagen (lokales Backup ist trotzdem vorhanden)."
-    fi
-  else
-    log "WARNUNG: OFFSITE_BACKUP_REMOTE gesetzt, aber 'rclone' ist nicht installiert - offsite-Kopie uebersprungen."
+  if ! command -v rclone > /dev/null 2>&1; then
+    fail "OFFSITE_BACKUP_REMOTE gesetzt, aber 'rclone' ist nicht installiert - Offsite-Kopie fehlt (lokales Backup vorhanden: $BACKUP_FILE)."
   fi
+  log "Kopiere Backup nach OFFSITE_BACKUP_REMOTE=$OFFSITE_BACKUP_REMOTE..."
+  if ! rclone copy "$BACKUP_FILE" "$OFFSITE_BACKUP_REMOTE" --quiet; then
+    fail "Offsite-Kopie fehlgeschlagen (lokales Backup vorhanden: $BACKUP_FILE)."
+  fi
+  log "Offsite-Kopie abgeschlossen."
 else
-  log "Kein OFFSITE_BACKUP_REMOTE gesetzt - Backup bleibt lokal (siehe RUNBOOK.md Abschnitt 7)."
+  log "Kein OFFSITE_BACKUP_REMOTE gesetzt - Backup bleibt lokal (siehe RUNBOOK.md Abschnitt 10)."
 fi
 
 log "Fertig."

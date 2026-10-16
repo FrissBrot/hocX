@@ -217,6 +217,7 @@ create_env_file() {
   ABGABEBOX_DB_PASSWORD="$(generate_secret)"
   ABGABEBOX_CAPTCHA_SESSION_SECRET="$(generate_secret)"
   PHOTO_WORKER_DB_PASSWORD="$(generate_secret)"
+  REDIS_PASSWORD="$(generate_secret)"
   DATABASE_URL="postgresql+psycopg://hocx:${POSTGRES_PASSWORD}@db:5432/hocx"
   APP_DATABASE_URL="postgresql+psycopg://hocx_app:${APP_DB_PASSWORD}@db:5432/hocx"
   ABGABEBOX_DATABASE_URL="postgresql+psycopg://hocx_abgabebox:${ABGABEBOX_DB_PASSWORD}@db:5432/hocx"
@@ -227,7 +228,7 @@ create_env_file() {
   trap 'rm -f "$ENV_TMP_FILE"' EXIT
   printf '# Automatisch durch scripts/deploy.sh fuer %s erzeugt. Nicht committen.\n' "$ENVIRONMENT" > "$ENV_TMP_FILE"
   write_env_value HOCX_VERSION "$HOCX_VERSION"
-  write_env_value HOCX_ENVIRONMENT "$ENVIRONMENT"
+  write_env_value HOCX_ENVIRONMENT "$(app_environment_for "$ENVIRONMENT")"
   write_env_value GHCR_NAMESPACE "$GHCR_NAMESPACE"
   write_env_value HOCX_SIGNING_IDENTITY_REGEXP "(?i)^https://github.com/${GHCR_NAMESPACE}/hocx/.github/workflows/build-test-images[.]yml@refs/heads/main$"
   write_env_value ROUTER_PREFIX "$PROJECT_NAME"
@@ -261,6 +262,7 @@ create_env_file() {
   write_env_value ABGABEBOX_CAPTCHA_SESSION_SECRET "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
   write_env_value PHOTO_WORKER_DB_PASSWORD "$PHOTO_WORKER_DB_PASSWORD"
   write_env_value PHOTO_WORKER_DATABASE_URL "$PHOTO_WORKER_DATABASE_URL"
+  write_env_value REDIS_PASSWORD "$REDIS_PASSWORD"
   if [ -n "$DEMO_TOTP_SEED" ]; then
     write_env_value DEMO_TOTP_SEED "$DEMO_TOTP_SEED"
   fi
@@ -295,6 +297,10 @@ if [[ ! "$HOCX_VERSION" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
   echo "Ungueltige HOCX_VERSION: $HOCX_VERSION" >&2
   exit 1
 fi
+# Prod nimmt nur Release-Tags (wie release.yml sie vergibt), nie einen Candidate-Tag: die
+# Signaturpruefung allein akzeptiert jedes Image aus build-test-images.yml, auch ungetestete
+# test-*-Kandidaten (Audit MAIN-OPS-016). Die Test-Freigabe erzwingt release.yml.
+require_release_version_for "$ENVIRONMENT" "$HOCX_VERSION" || exit 1
 if [[ ! "$GHCR_NAMESPACE" =~ ^[a-z0-9][a-z0-9-]{0,38}$ ]]; then
   echo "Ungueltiger GHCR_NAMESPACE: $GHCR_NAMESPACE" >&2
   exit 1
@@ -320,10 +326,17 @@ run_preflight() {
   ensure_github_auth
   "${DC[@]}" config --quiet
 
-  if [ "${HOCX_ENVIRONMENT:-}" != "$ENVIRONMENT" ]; then
-    echo "HOCX_ENVIRONMENT muss auf diesem Host '$ENVIRONMENT' sein." >&2
+  # Host-Umgebung prod -> Anwendungswert production (Alias 'prod' wird toleriert, siehe
+  # lib/env.sh::app_environment_for). Der kanonische Wert wird exportiert: Compose bevorzugt
+  # Shell-Variablen vor der --env-file, die Container sehen also immer 'production'.
+  local app_environment
+  app_environment="$(app_environment_for "$ENVIRONMENT")"
+  if [ "$(app_environment_for "${HOCX_ENVIRONMENT:-}")" != "$app_environment" ]; then
+    echo "HOCX_ENVIRONMENT muss auf diesem Host '$app_environment' sein (aktuell: '${HOCX_ENVIRONMENT:-}')." >&2
     return 1
   fi
+  HOCX_ENVIRONMENT="$app_environment"
+  export HOCX_ENVIRONMENT
   if [ "${AUTH_SECURE_COOKIES:-true}" != true ]; then
     echo "AUTH_SECURE_COOKIES darf in Release-Umgebungen nicht deaktiviert sein." >&2
     return 1
@@ -337,7 +350,7 @@ run_preflight() {
   for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
     "$ADMIN_AUTH_SECRET" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
     "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "$STORAGE_CREDENTIALS_KEY" \
-    "$GARAGE_RPC_SECRET" "$GARAGE_ADMIN_TOKEN" "$LOCAL_S3_SECRET_KEY" "$LOCAL_S3_ABGABEBOX_SECRET_KEY"; do
+    "$GARAGE_RPC_SECRET" "$GARAGE_ADMIN_TOKEN" "$LOCAL_S3_SECRET_KEY" "$LOCAL_S3_ABGABEBOX_SECRET_KEY" "${REDIS_PASSWORD:-}"; do
     case "$value" in
       ""|ChangeMe123\!*|change-me*|changeme*|secret|hocx|hocx_app|hocx_abgabebox|hocx_photo_worker|*keep-local-only*)
         echo "Unsicherer Entwicklungs- oder Platzhalterwert in der Release-Konfiguration." >&2
@@ -422,6 +435,7 @@ write_secret_files() {
   write_secret_file "$secrets_dir" garage_admin_token "$GARAGE_ADMIN_TOKEN"
   write_secret_file "$secrets_dir" local_s3_secret_key "$LOCAL_S3_SECRET_KEY"
   write_secret_file "$secrets_dir" local_s3_abgabebox_secret_key "$LOCAL_S3_ABGABEBOX_SECRET_KEY"
+  write_secret_file "$secrets_dir" redis_password "$REDIS_PASSWORD"
   # Backup (docs-site/docs/technik/backup/betrieb.md): Passphrase aus .env, SSH-Schlüssel und
   # known_hosts als Dateien auf dem Host. Nicht konfiguriert = leere Platzhalter (der
   # backup-worker meldet dann "nicht eingerichtet" statt dass Compose den Start verweigert).
@@ -483,7 +497,6 @@ run_pre_deploy_backup() {
     return 1
   fi
 }
-
 prepare_runtime_permissions() {
   local storage_path="${HOCX_STORAGE_PATH:-./storage}"
   local path
@@ -745,6 +758,21 @@ run_smoke_checks() {
   fi
 }
 
+# Behaelt die neuesten <keep> Pre-Deploy-Dumps (*-pre-*.sql.gz) und loescht aeltere. Der
+# Zeitstempel am Dateianfang sortiert lexikografisch chronologisch.
+prune_pre_deploy_backups() {
+  local dir="$1" keep="$2" file
+  [[ "$keep" =~ ^[1-9][0-9]*$ ]] || {
+    echo "    PRE_DEPLOY_BACKUP_KEEP muss eine positive Zahl sein - keine Rotation." >&2
+    return 0
+  }
+  find "$dir" -maxdepth 1 -type f -name '*-pre-*.sql.gz' -printf '%f\n' | sort -r | tail -n "+$((keep + 1))" |
+    while IFS= read -r file; do
+      rm -f -- "$dir/$file"
+      echo "    Altes Pre-Deploy-Backup entfernt: $file"
+    done
+}
+
 run_preflight
 write_secret_files
 prepare_runtime_permissions
@@ -757,6 +785,9 @@ BACKUP_FILE="$BACKUP_DIR/$(date +%Y%m%d-%H%M%S)-pre-$HOCX_VERSION.sql.gz"
 if "${DC[@]}" ps db --status running -q > /dev/null 2>&1 && [ -n "$("${DC[@]}" ps db --status running -q)" ]; then
   "${DC[@]}" exec -T db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" | gzip > "$BACKUP_FILE"
   echo "    Backup: $BACKUP_FILE"
+  # Pre-Deploy-Dumps wuchsen bisher unbegrenzt auf derselben Partition (Audit MAIN-OPS-010).
+  # Die neuesten PRE_DEPLOY_BACKUP_KEEP (Default 10) bleiben fuer Rollbacks erhalten.
+  prune_pre_deploy_backups "$BACKUP_DIR" "${PRE_DEPLOY_BACKUP_KEEP:-10}"
 else
   echo "    db-Container laeuft noch nicht (erster Deploy) - kein Backup noetig."
 fi

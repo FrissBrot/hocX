@@ -85,7 +85,7 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
   const financeTransactionsList = await Promise.all(
     [...new Set(Object.values(accountReferences))].map(async (publicId) => ({
       publicId,
-      transactions: (await backendFetchWithSession<FinanceTransaction[]>(`/api/finance/accounts/${publicId}/transactions`)) ?? [],
+      transactions: (await backendFetchWithSession<FinanceTransaction[]>(`/api/finance/accounts/${publicId}/transactions?limit=200`)) ?? [],
     }))
   );
   const transactionsByPublicId = Object.fromEntries(financeTransactionsList.map((item) => [item.publicId, item.transactions]));

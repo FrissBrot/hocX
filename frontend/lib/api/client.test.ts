@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, browserApiUpload } from "./client";
+import { ApiError, backendFetch, browserApiFetch, browserApiUpload, DEFAULT_BROWSER_TIMEOUT_MS, LONG_RUNNING_TIMEOUT_MS, SERVER_FETCH_TIMEOUT_MS } from "./client";
 
 class FakeXhr {
   static last: FakeXhr;
@@ -75,5 +75,43 @@ describe("browserApiUpload", () => {
     const promise = browserApiUpload("/api/upload", new FormData(), { timeoutMs: 1000 });
     FakeXhr.last.ontimeout?.();
     await expect(promise).rejects.toMatchObject({ kind: "timeout" });
+  });
+});
+
+describe("Timeouts (Audit MAIN-FE-002/-004)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("browserApiFetch nutzt den Standard oder den uebergebenen laengeren Timeout", async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+
+    await browserApiFetch("/api/a");
+    expect(timeoutSpy).toHaveBeenLastCalledWith(DEFAULT_BROWSER_TIMEOUT_MS);
+
+    await browserApiFetch("/api/b", { method: "POST", timeoutMs: LONG_RUNNING_TIMEOUT_MS });
+    expect(timeoutSpy).toHaveBeenLastCalledWith(LONG_RUNNING_TIMEOUT_MS);
+    // timeoutMs ist keine fetch-Option und darf nicht durchgereicht werden.
+    const init = fetchSpy.mock.calls[1][1] as Record<string, unknown>;
+    expect(init.timeoutMs).toBeUndefined();
+    expect(init.method).toBe("POST");
+  });
+
+  it("backendFetch bricht ein haengendes Backend ab und wiederholt einen Timeout nicht", async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new DOMException("timed out", "TimeoutError"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(backendFetch("/api/auth/session")).resolves.toBeNull();
+    expect(timeoutSpy).toHaveBeenCalledWith(SERVER_FETCH_TIMEOUT_MS);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("backendFetch wiederholt einen echten Verbindungsfehler einmal", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new TypeError("socket hang up"))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ authenticated: true }), { status: 200 }));
+
+    await expect(backendFetch("/api/auth/session")).resolves.toEqual({ authenticated: true });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 });

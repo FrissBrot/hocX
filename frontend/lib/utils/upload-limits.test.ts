@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { photoUploadProblem, PHOTO_MAX_BYTES, PHOTO_ZIP_MAX_BYTES } from "./upload-limits";
+import { hasLargeZip, photoUploadProblem, PHOTO_MAX_BYTES, PHOTO_ZIP_MAX_BYTES, PHOTO_ZIP_SLOW_LINE_WARNING_BYTES } from "./upload-limits";
 const file = (name: string, size: number) => ({ name, size }) as File;
 
 describe("Foto-Uploadgrenzen", () => {
@@ -17,3 +17,12 @@ describe("Foto-Uploadgrenzen", () => {
     expect(photoUploadProblem(Array.from({ length: 51 }, () => file("a.jpg", 1)), new Set())).toContain("50 Dateien");
   });
 });
+
+describe("hasLargeZip", () => {
+  it("warnt nur bei ZIPs über der Grenze für langsame Leitungen (MAIN-OPS-013)", () => {
+    expect(hasLargeZip([file("fotos.zip", PHOTO_ZIP_SLOW_LINE_WARNING_BYTES)])).toBe(false);
+    expect(hasLargeZip([file("Fotos.ZIP", PHOTO_ZIP_SLOW_LINE_WARNING_BYTES + 1)])).toBe(true);
+    expect(hasLargeZip([file("video.mov", PHOTO_ZIP_SLOW_LINE_WARNING_BYTES + 1)])).toBe(false);
+  });
+});
+

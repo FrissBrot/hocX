@@ -7,33 +7,31 @@ from sqlalchemy.orm import Session
 
 from app.core.admin_security import CurrentAdmin, issue_admin_session_cookie
 from app.core.config import settings
-from app.core.rate_limit import check_account_lockout, record_failed_attempt
+from app.core.rate_limit import check_login_lockout, record_failed_login
 from app.core.security import DUMMY_PASSWORD_HASH, verify_password
 from app.models import PlatformAdmin
 from app.schemas.admin import AdminLoginRequest, AdminSelfRead, AdminSessionRead
 from app.schemas.mfa import MfaTicketRequest, TotpEnrollmentComplete, TotpEnrollmentStartRead, TotpLoginVerifyRequest
 from app.services.admin_mfa_service import AdminMfaService
 
-# Account-scoped lockout, independent of source IP - see auth_service.py for the customer-login
-# equivalent. Particularly relevant here since this is the highest-privilege account tier.
-_ACCOUNT_LOGIN_ATTEMPT_LIMIT = 20
-_ACCOUNT_LOGIN_WINDOW_SECONDS = 15 * 60
-
 
 class AdminAuthService:
     def __init__(self) -> None:
         self.mfa_service = AdminMfaService()
 
-    def login(self, db: Session, response: Response, payload: AdminLoginRequest) -> AdminSessionRead:
-        lockout_key = f"login-admin:{payload.email.strip().lower()}"
-        check_account_lockout(lockout_key, limit=_ACCOUNT_LOGIN_ATTEMPT_LIMIT)
+    def login(
+        self, db: Session, response: Response, payload: AdminLoginRequest, client_address: str | None = None,
+    ) -> AdminSessionRead:
+        # Sperre pro Konto und Quell-IP plus höhere Grenze pro Konto (MAIN-SEC-007), wie im
+        # Kunden-Login (auth_service.py).
+        check_login_lockout("login-admin", payload.email, client_address)
 
         admin = db.query(PlatformAdmin).filter(PlatformAdmin.email == payload.email).one_or_none()
         # See auth_service.py's identical fix - always run verify_password's full PBKDF2
         # work to avoid an email-enumeration timing side channel (audit finding, 2026-08-25).
         password_ok = verify_password(payload.password, admin.password_hash if admin is not None else DUMMY_PASSWORD_HASH)
         if admin is None or not admin.is_active or not password_ok:
-            record_failed_attempt(lockout_key, period_seconds=_ACCOUNT_LOGIN_WINDOW_SECONDS)
+            record_failed_login("login-admin", payload.email, client_address)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-Mail oder Passwort ist ungültig.")
 
         # Audit finding, 2026-08-27: a correct password alone used to grant a full,

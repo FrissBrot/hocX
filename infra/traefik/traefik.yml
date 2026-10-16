@@ -7,6 +7,12 @@ api:
   # (e.g. basicauth/forwardauth middleware) if the dashboard is ever actually needed.
   dashboard: false
 
+# Client-IP (MAIN-SEC-007): Ohne forwardedHeaders.trustedIPs vertraut Traefik keinen vom
+# Client mitgeschickten X-Forwarded-*-Headern und setzt X-Forwarded-For selbst auf die
+# Quelladresse. Das Backend liest die IP daraus (app/core/client_ip.py) für Login-Sperre und
+# Rate-Limits. Steht später ein weiterer Proxy/CDN davor, dessen Adressbereiche hier je
+# EntryPoint unter forwardedHeaders.trustedIPs eintragen - sonst teilen sich alle Clients die
+# IP des CDN. Über den Admin-Einstieg (OpenZiti, 127.0.0.1) sehen alle Zugriffe dieselbe IP.
 entryPoints:
   web:
     address: ":80"
@@ -17,10 +23,15 @@ entryPoints:
           scheme: https
   websecure:
     address: ":443"
+    # MAIN-OPS-013: Traefik kennt Timeouts nur pro EntryPoint. readTimeout begrenzt den ganzen
+    # Request inkl. Body (live geprüft) - 1 h reicht für alle Uploads ausser sehr grossen
+    # Galerie-ZIPs bei langsamer Leitung (das UI empfiehlt dann den Ordner-Upload in Teilen).
+    # WebSockets (Kollaboration) laufen über beide Timeouts hinaus weiter, Traefik hebt die
+    # Fristen beim Upgrade auf (live geprüft). Vorher 3h/unbegrenzt.
     transport:
       respondingTimeouts:
-        readTimeout: 3h
-        writeTimeout: 0s
+        readTimeout: 1h
+        writeTimeout: 1h
     http:
       # Audit finding (Low), 2026-08-27: baseline security headers (HSTS etc., defined in
       # infra/traefik/dynamic/security.yml) for every router on this entrypoint, so origins
@@ -40,7 +51,8 @@ entryPoints:
 
 providers:
   docker:
-    endpoint: "unix:///var/run/docker.sock"
+    # Nur über den Lese-Proxy (MAIN-OPS-004), siehe traefik-socket-proxy in den Compose-Dateien.
+    endpoint: "tcp://traefik-socket-proxy:2375"
     exposedByDefault: false
   file:
     directory: /etc/traefik/dynamic

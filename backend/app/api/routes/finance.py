@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -8,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_finance_read, require_finance_write
 from app.models.entities import FinanceAccount
-from app.repositories.finance_repository import FinanceRepository
+from app.repositories.finance_repository import FinanceConflictError, FinanceRepository
 from app.schemas.finance import (
     FinanceAccountCreate,
     FinanceAccountRead,
@@ -75,7 +76,13 @@ def delete_account(
 ):
     require_finance_write(user)
     internal_id = public_id_service.resolve_internal_id(db, FinanceAccount, account_id, tenant_id=user.current_tenant_id)
-    if internal_id is None or not repo.delete_account(db, internal_id, user.current_tenant_id):
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    try:
+        deleted = repo.delete_account(db, internal_id, user.current_tenant_id)
+    except FinanceConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if not deleted:
         raise HTTPException(status_code=404, detail="Account not found")
     audit.log(db, action="finance_account.deleted", actor=user, entity_type="finance_account", entity_id=internal_id)
     return {"message": "Account deleted"}
@@ -96,6 +103,22 @@ def list_transactions(
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Account not found")
     return repo.list_transactions(db, internal_id, skip=skip, limit=limit)
+
+
+@router.get("/finance/accounts/{account_id}/balance", response_model=dict[str, float])
+def get_balance_as_of(
+    account_id: uuid.UUID,
+    as_of: date | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Kontostand inkl. aller Buchungen bis und mit `as_of` (Kontostand-Block mit Stichtag
+    Protokolldatum); ohne Datum der aktuelle Stand."""
+    require_finance_read(user)
+    internal_id = public_id_service.resolve_internal_id(db, FinanceAccount, account_id, tenant_id=user.current_tenant_id)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"balance": repo.balance_as_of(db, internal_id, as_of)}
 
 
 @router.post("/finance/accounts/{account_id}/transactions", response_model=FinanceTransactionRead, status_code=status.HTTP_201_CREATED)
@@ -136,7 +159,10 @@ def update_transaction(
     existing = repo._get_transaction_scoped_by_public_id(db, tx_id, user.current_tenant_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    result = repo.update_transaction(db, existing.id, user.current_tenant_id, payload)
+    try:
+        result = repo.update_transaction(db, existing.id, user.current_tenant_id, payload)
+    except FinanceConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
     audit.log(
@@ -154,7 +180,13 @@ def delete_transaction(
 ):
     require_finance_write(user)
     existing = repo._get_transaction_scoped_by_public_id(db, tx_id, user.current_tenant_id)
-    if existing is None or not repo.delete_transaction(db, existing.id, user.current_tenant_id):
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    try:
+        deleted = repo.delete_transaction(db, existing.id, user.current_tenant_id)
+    except FinanceConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if not deleted:
         raise HTTPException(status_code=404, detail="Transaction not found")
     audit.log(db, action="finance_transaction.deleted", actor=user, entity_type="finance_transaction", entity_id=existing.id)
     return {"message": "Transaction deleted"}

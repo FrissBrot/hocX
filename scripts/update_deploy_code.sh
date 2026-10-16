@@ -155,7 +155,11 @@ bash -n \
   "$REPO_DIR/scripts/lib/env.sh" \
   "$REPO_DIR/scripts/lib/env_migrate.sh" \
   "$REPO_DIR/scripts/lib/cosign.sh" \
+  "$REPO_DIR/scripts/lib/stack.sh" \
   "$REPO_DIR/scripts/deploy.sh" \
+  "$REPO_DIR/scripts/backup_db.sh" \
+  "$REPO_DIR/scripts/restore_db.sh" \
+  "$REPO_DIR/scripts/run_job.sh" \
   "$REPO_DIR/scripts/update_deploy_code.sh"
 echo "==> Deploy-Code erfolgreich aktualisiert und geprueft"
 

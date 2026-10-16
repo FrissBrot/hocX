@@ -73,10 +73,12 @@ und prüft die erreichbaren Dienste. Nach dem Start sind verfügbar:
 | Abgabebox | <http://localhost:3001> |
 | Abgabebox-API | <http://localhost:8001> |
 
-Der gleiche Stack kann ohne Wrapper gestartet werden:
+Der gleiche Stack kann ohne Wrapper gestartet werden (`docker-compose.dev.yml` setzt den
+Projektnamen fest auf `hocx-dev`, damit ein Dev-Start nie die Container eines anderen
+Projekts im selben Checkout neu erstellt):
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+docker compose -p hocx-dev -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
 Optionale Profile:
@@ -140,8 +142,10 @@ ohne die Compose-Dateien zu ändern.
 
 ## Datenbank und Migrationen
 
-Beim Start des Backends wird automatisch `alembic upgrade head` ausgeführt. Manuelle
-Kontrolle und Migration im laufenden Entwicklungs-Stack:
+Im Entwicklungs-Stack und in der Quellcode-Instanz (`docker-compose.yml`) führt das Backend beim Start
+automatisch `alembic upgrade head` aus. In Test und Produktion migriert `scripts/deploy.sh`
+vor dem Start der neuen Images; das Release-Image selbst startet nur uvicorn. Manuelle Kontrolle und
+Migration im laufenden Entwicklungs-Stack:
 
 ```bash
 docker compose -p hocx-dev exec backend alembic current
@@ -157,7 +161,8 @@ Der einheitliche Test-Runner baut bei Bedarf eigene Python-Test-Images. Die Pyth
 verwenden eine flüchtige PostgreSQL-Instanz und niemals die Entwicklungsdatenbank. Der
 Browserlauf startet ebenfalls einen vollständig separaten Stack unter dem Projektnamen
 `hocx-e2e`, verwendet eigene Ports und löscht anschließend Datenbank-Volume sowie
-E2E-Dateispeicher. Für die beiden Vitest-Befehle muss der Entwicklungs-Stack laufen:
+E2E-Dateispeicher. Die Vitest-Läufe (`frontend`, `abgabebox-frontend`) nutzen eigene
+`frontend-test`-Container und brauchen keinen laufenden Entwicklungs-Stack:
 
 ```bash
 # Gesamte Testsuite
@@ -238,7 +243,8 @@ mit eingeschränkter Datenbankrolle.
 ## Deployment und Betrieb
 
 Test und Produktion verwenden gepinnte Images aus GHCR, getrennte Compose-Overlays,
-Cosign-Signaturprüfung, automatische Datenbank-Backups, Smoke-Checks und einen
+Cosign-Signaturprüfung, ein Datenbank-Backup vor jedem Update (nächtliche Backups per
+Cron nach RUNBOOK Abschnitt 10; die Dateiablage sichert kein Skript), Smoke-Checks und einen
 Digest-basierten Rollback. Die vollständigen Abläufe für Provisionierung, Candidate-Build,
 Test, Promotion, Produktion, Rollback und Restore stehen im [RUNBOOK](RUNBOOK.md).
 
@@ -250,6 +256,7 @@ Wichtige Skripte:
 | `scripts/deploy.sh` | Test- oder Produktionsrelease ausrollen |
 | `scripts/verify_release.sh` | Deployment und Migrationen verifizieren |
 | `scripts/backup_db.sh` | PostgreSQL-Backup erstellen |
+| `scripts/restore_db.sh` | PostgreSQL-Backup zurückspielen (RUNBOOK Abschnitt 5) |
 | `scripts/cleanup_storage.sh` | nicht mehr benötigte Dateien bereinigen |
 
 Für ein öffentliches Deployment müssen die DNS-Einträge vor dem ersten Start auf den

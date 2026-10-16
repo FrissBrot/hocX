@@ -114,6 +114,6 @@ function ConfirmDialog({
 
 export function useConfirm() {
   const ctx = useContext(ConfirmContext);
-  if (!ctx) throw new Error("useConfirm must be used inside ConfirmProvider");
+  if (!ctx) throw new Error("useConfirm must be used inside ConfirmProvider"); // i18n-ok: Entwicklerfehler
   return ctx;
 }

@@ -11,8 +11,8 @@ read/write boundaries route through encode/decode here.
 
 Field inventory (kept in sync with element-definition-manager.tsx/template-builder.tsx's
 BlockFormState -> configuration_json mapping):
-- top-level: linked_list_id, matrix_column_source_list_id (legacy, read-only for old
-  data), finance_account_id, fine_account_id, auto_source.list_id
+- top-level: linked_list_id, finance_account_id, fine_list_account_id, auto_source.list_id
+  (Bussen-Konto und -Beträge liegen seit 0113 zentral in fine_tariff)
 - per-row (config["rows"]): template_participant_id, template_participant_ids[],
   template_event_id, row_config.linked_list_id, row_config.linked_list_entry_id
 """
@@ -110,12 +110,16 @@ def encode_block_config(db: Session, config: dict | None) -> dict:
     result = dict(config)
     if result.get("linked_list_id") is not None:
         result["linked_list_id"] = _encode_id(db, ListDefinition, result["linked_list_id"])
-    if result.get("matrix_column_source_list_id") is not None:
-        result["matrix_column_source_list_id"] = _encode_id(db, ListDefinition, result["matrix_column_source_list_id"])
     if result.get("finance_account_id") is not None:
         result["finance_account_id"] = _encode_id(db, FinanceAccount, result["finance_account_id"])
-    if result.get("fine_account_id") is not None:
-        result["fine_account_id"] = _encode_id(db, FinanceAccount, result["fine_account_id"])
+    if result.get("fine_list_account_id") is not None:
+        result["fine_list_account_id"] = _encode_id(db, FinanceAccount, result["fine_list_account_id"])
+    if result.get("todo_assignee_participant_id") is not None:
+        result["todo_assignee_participant_id"] = _encode_id(db, Participant, result["todo_assignee_participant_id"])
+    excluded = [int(pid) for pid in (result.get("attendance_excluded_participant_ids") or []) if pid]
+    if excluded:
+        mapping = public_id_service.resolve_public_ids(db, Participant, excluded)
+        result["attendance_excluded_participant_ids"] = [mapping[pid] for pid in excluded if pid in mapping]
     auto_source = result.get("auto_source")
     if isinstance(auto_source, dict) and auto_source.get("list_id") is not None:
         result["auto_source"] = {**auto_source, "list_id": _encode_id(db, ListDefinition, auto_source["list_id"])}
@@ -137,12 +141,16 @@ def decode_block_config(db: Session, config: dict | None, *, tenant_id: int) -> 
     result = dict(config)
     if result.get("linked_list_id") is not None:
         result["linked_list_id"] = _decode_id(db, ListDefinition, result["linked_list_id"], tenant_id=tenant_id)
-    if result.get("matrix_column_source_list_id") is not None:
-        result["matrix_column_source_list_id"] = _decode_id(db, ListDefinition, result["matrix_column_source_list_id"], tenant_id=tenant_id)
     if result.get("finance_account_id") is not None:
         result["finance_account_id"] = _decode_id(db, FinanceAccount, result["finance_account_id"], tenant_id=tenant_id)
-    if result.get("fine_account_id") is not None:
-        result["fine_account_id"] = _decode_id(db, FinanceAccount, result["fine_account_id"], tenant_id=tenant_id)
+    if result.get("fine_list_account_id") is not None:
+        result["fine_list_account_id"] = _decode_id(db, FinanceAccount, result["fine_list_account_id"], tenant_id=tenant_id)
+    if result.get("todo_assignee_participant_id") is not None:
+        result["todo_assignee_participant_id"] = _decode_id(db, Participant, result["todo_assignee_participant_id"], tenant_id=tenant_id)
+    if result.get("attendance_excluded_participant_ids"):
+        result["attendance_excluded_participant_ids"] = [
+            _decode_id(db, Participant, pid, tenant_id=tenant_id) for pid in result["attendance_excluded_participant_ids"] if pid
+        ]
     auto_source = result.get("auto_source")
     if isinstance(auto_source, dict) and auto_source.get("list_id") is not None:
         result["auto_source"] = {**auto_source, "list_id": _decode_id(db, ListDefinition, auto_source["list_id"], tenant_id=tenant_id)}

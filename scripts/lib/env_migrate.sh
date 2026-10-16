@@ -109,6 +109,32 @@ migrate_env_file() {
     changed=true
   done
 
+  # MAIN-OPS-005: Redis verlangt im Release-Stack ein Passwort (requirepass).
+  if [ -z "$(env_file_value "$env_file" REDIS_PASSWORD)" ]; then
+    command -v openssl > /dev/null 2>&1 || {
+      rm -f "$tmp_file"
+      umask "$umask_before"
+      echo "openssl wird zum sicheren Erzeugen der Secrets benoetigt." >&2
+      return 1
+    }
+    grep -Ev "^[[:space:]]*(export[[:space:]]+)?REDIS_PASSWORD=" "$tmp_file" > "$tmp_file.next" || true
+    mv "$tmp_file.next" "$tmp_file"
+    printf "REDIS_PASSWORD='%s'\n" "$(openssl rand -hex 32)" >> "$tmp_file"
+    notes+=("ergaenzt: REDIS_PASSWORD (neu erzeugt)")
+    changed=true
+  fi
+
+  # MAIN-OPS-001: deploy.sh hat frueher HOCX_ENVIRONMENT='prod' (Host-Name) geschrieben. Die
+  # Anwendung erkennt den Produktionsmodus am kanonischen Wert 'production' (Backend und Frontend
+  # akzeptieren 'prod' zwar als Alias, die .env wird aber auf den kanonischen Wert gebracht).
+  if [ "$(env_file_value "$env_file" HOCX_ENVIRONMENT)" = prod ]; then
+    grep -Ev "^[[:space:]]*(export[[:space:]]+)?HOCX_ENVIRONMENT=" "$tmp_file" > "$tmp_file.next" || true
+    mv "$tmp_file.next" "$tmp_file"
+    printf "HOCX_ENVIRONMENT='production'\n" >> "$tmp_file"
+    notes+=("geaendert: HOCX_ENVIRONMENT prod -> production")
+    changed=true
+  fi
+
   if [ "$changed" = true ]; then
     backup_file="$env_file.bak-$(date +%Y%m%d-%H%M%S)"
     cp -p "$env_file" "$backup_file"

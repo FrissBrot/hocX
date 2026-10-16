@@ -116,7 +116,22 @@ check_alembic_head() {
   fi
 }
 
+# MAIN-OPS-001: Das Backend muss auf Prod im Produktionsmodus laufen (kein /docs, Demo-Daten-
+# und Konfigurationssperren aktiv). Frueher lief Prod mit HOCX_ENVIRONMENT=prod still als
+# Nicht-Produktion; dieser Check macht eine solche Abweichung beim Deploy sichtbar.
+check_backend_environment() {
+  local expected actual
+  expected="$(app_environment_for "$ENVIRONMENT")"
+  actual="$("${DC[@]}" exec -T -w /app backend python3 -c \
+    "from app.core.config import settings; print('production' if settings.is_production else settings.environment.strip().lower())")"
+  if [ "$actual" != "$expected" ]; then
+    echo "Backend laeuft als '$actual', erwartet '$expected' (HOCX_ENVIRONMENT pruefen)." >&2
+    return 1
+  fi
+}
+
 run_check "Backend-Health lokal" check_backend_health
+run_check "Backend laeuft in der erwarteten Umgebung" check_backend_environment
 run_check "Abgabebox-Backend-Health lokal" check_abgabebox_backend_health
 run_check "Frontend antwortet lokal" check_frontend_local
 run_check "Docs antworten lokal" check_docs_local

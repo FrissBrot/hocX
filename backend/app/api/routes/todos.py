@@ -44,7 +44,7 @@ def create_standalone_todo(
     """Create a todo not tied to any protocol block."""
     require_writer(user)
     try:
-        todo = service.create_standalone_todo(db, user.current_tenant_id, payload)
+        todo = service.create_standalone_todo(db, user.current_tenant_id, payload, actor_user_id=user.user_id)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Todo could not be created") from exc
@@ -131,7 +131,7 @@ def create_todo(
     protocol = _get_protocol_or_404(db, protocol_id)
     track_changes_active = bool(protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
-        todo = service.create_todo(db, block.id, payload, track_changes_active=track_changes_active)
+        todo = service.create_todo(db, block.id, payload, track_changes_active=track_changes_active, actor_user_id=user.user_id)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Todo could not be created") from exc

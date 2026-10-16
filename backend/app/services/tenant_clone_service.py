@@ -21,6 +21,7 @@ from app.models import (
     Event,
     EventCycle,
     FinanceAccount,
+    FineTariff,
     FinanceTransaction,
     GroupEntity,
     Leader,
@@ -63,6 +64,7 @@ from app.services.tenant_transfer_common import (
     remap_repeat_source_todo,
     remap_responsible_assignments,
     remap_template_element_config,
+    remap_todos_snapshot,
     replace_public_ids,
 )
 
@@ -138,11 +140,13 @@ class TenantCloneService:
         self._partial_tenant_id: int | None = None
         try:
             return impl(db, source_tenant_id, new_name)
-        except Exception:
+        except Exception as exc:
             db.rollback()
             if self._partial_tenant_id is not None:
-                db.query(Tenant).filter(Tenant.id == self._partial_tenant_id).delete()
-                db.commit()
+                # Vollständiges Aufräumen inkl. Dateien (Audit MAIN-BE-006).
+                from app.services.admin_tenant_service import AdminTenantService
+
+                AdminTenantService().cleanup_partial_tenant(db, self._partial_tenant_id, original=exc)
             raise
 
     def _clone_structure_impl(self, db: Session, source_tenant_id: int, new_name: str) -> Tenant:
@@ -156,6 +160,7 @@ class TenantCloneService:
         part_map = self._clone_document_template_parts(db, source.id, new_tenant.id)
         document_template_map = self._clone_document_templates(db, source.id, new_tenant.id, part_map)
         finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
+        self._clone_fine_tariff(db, source.id, new_tenant.id, finance_account_map)
         # Cloned before element_definitions/templates (mirrors _clone_full_impl's ordering)
         # and its returned id map threaded through both, instead of the empty dict used
         # here before this fix (audit finding, 2026-08-25) - element/template
@@ -218,6 +223,7 @@ class TenantCloneService:
             db, list_definition_map=list_definition_map, participant_map=participant_map, event_map=event_map
         )
         finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
+        self._clone_fine_tariff(db, source.id, new_tenant.id, finance_account_map)
         # Abgabe-Element references ("event-<public_id>"/"entry-<public_id>" in
         # submission_upload_log.element_ref and protocol_todo.element_ref) - every cloned row
         # gets a fresh public_id, so these strings have to be rewritten old -> new.
@@ -299,7 +305,37 @@ class TenantCloneService:
         )
         self._clone_protocol_todo_assignees(db, todo_map=todo_map, participant_map=participant_map)
         self._remap_todo_repeat_sources(db, protocol_element_block_map=protocol_element_block_map, todo_map=todo_map)
+        self._clone_todo_snapshots(
+            db,
+            protocol_map=protocol_map,
+            protocol_element_block_map=protocol_element_block_map,
+            public_id_map={
+                **self._public_id_map(db, Protocol, protocol_map),
+                **self._public_id_map(db, ProtocolElementBlock, protocol_element_block_map),
+                **self._public_id_map(db, ProtocolTodo, todo_map),
+                **self._public_id_map(db, Participant, participant_map),
+                **self._element_ref_public_ids,
+            },
+        )
         return new_tenant
+
+    def _clone_todo_snapshots(
+        self, db: Session, *, protocol_map: dict[int, int], protocol_element_block_map: dict[int, int], public_id_map: dict[str, str]
+    ) -> None:
+        """Eingefrorene Todo-Liste abgeschlossener Protokolle mitnehmen (Audit MAIN-BE-012)."""
+        if not protocol_map:
+            return
+        sources = db.execute(
+            select(Protocol.id, Protocol.todos_snapshot_json).where(
+                Protocol.id.in_(list(protocol_map.keys())), Protocol.todos_snapshot_json.is_not(None)
+            )
+        ).all()
+        for source_id, snapshot in sources:
+            target = db.get(Protocol, protocol_map[source_id])
+            if target is not None:
+                target.todos_snapshot_json = remap_todos_snapshot(snapshot, protocol_element_block_map, public_id_map)
+        if sources:
+            db.commit()
 
     # ── tenant base + physical files ───────────────────────────────────────
 
@@ -445,6 +481,18 @@ class TenantCloneService:
             id_map[row.id] = new_row.id
         db.commit()
         return id_map
+
+    def _clone_fine_tariff(self, db: Session, source_tenant_id: int, new_tenant_id: int, finance_account_map: dict[int, int]) -> None:
+        tariff = db.get(FineTariff, source_tenant_id)
+        if tariff is None:
+            return
+        db.add(FineTariff(
+            tenant_id=new_tenant_id,
+            account_id=finance_account_map.get(tariff.account_id) if tariff.account_id else None,
+            amount_late=tariff.amount_late,
+            amount_absent=tariff.amount_absent,
+        ))
+        db.commit()
 
     def _clone_finance_accounts(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> dict[int, int]:
         rows = db.scalars(select(FinanceAccount).where(FinanceAccount.tenant_id == source_tenant_id)).all()
@@ -777,7 +825,9 @@ class TenantCloneService:
         for row in rows:
             namespace = ABGABEBOX if row.id in abgabebox_ids else MAIN
             new_storage_path = self._clone_stored_file_content(db, row.storage_path, namespace=namespace, new_tenant_id=new_tenant_id)
-            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "storage_path": new_storage_path})
+            # Eigene Vorschau statt der der Quelle (Audit MAIN-BE-003): sonst teilen sich Quelle und
+            # Klon "<quell_id>.jpg", und Löschen im Klon entfernt das Thumbnail der Quelle.
+            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "storage_path": new_storage_path, "thumbnail_path": None})
             db.add(new_row)
             db.flush()
             id_map[row.id] = new_row.id
@@ -821,8 +871,8 @@ class TenantCloneService:
                 "event_id": event_map.get(row.event_id) if row.event_id else None,
                 # document_template_path_snapshot intentionally left pointing at the ORIGINAL
                 # tenant's immutable snapshot directory - see class docstring.
-                # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - die
-                # Kopie zeigt deshalb die (ebenfalls geklonten) Live-Todos.
+                # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - sie wird
+                # nach dem Klonen der Blöcke und Todos umgeschrieben (_clone_todo_snapshots).
                 "todos_snapshot_json": None,
             })
             db.add(new_row)
