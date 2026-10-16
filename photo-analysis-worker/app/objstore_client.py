@@ -23,9 +23,11 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import ipaddress
 import logging
 import os
 import re
+import socket
 import tempfile
 import threading
 import time
@@ -459,6 +461,64 @@ def _map_client_error(exc: Exception, key: str) -> Exception:
     return exc
 
 
+def _blocked_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Ziele, die ein Speicherprofil nie erreichen darf (Loopback, Link-Local inkl.
+    Cloud-Metadaten, unspezifiziert, Multicast, reserviert). Private Netze (eigenes S3 im LAN)
+    bleiben erlaubt - wie die Eingabeprüfung im Admin-API (S3-009)."""
+    mapped = getattr(address, "ipv4_mapped", None) or address
+    return mapped.is_loopback or mapped.is_link_local or mapped.is_unspecified or mapped.is_multicast or mapped.is_reserved
+
+
+def resolve_allowed_address(host: str, port: int) -> str:
+    """Löst host bei jedem Verbindungsaufbau selbst auf und liefert eine geprüfte IP. Zeigt
+    eine Auflösung auf ein gesperrtes Ziel, wird die Verbindung abgelehnt (S3-009: die Prüfung
+    nur bei der Eingabe liess DNS-Rebinding zu)."""
+    try:
+        addresses = [ipaddress.ip_address(host)]
+    except ValueError:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        addresses = [ipaddress.ip_address(info[4][0].split("%", 1)[0]) for info in infos]
+    if not addresses:
+        raise OSError(f"{host} hat keine Adresse")
+    if any(_blocked_address(address) for address in addresses):
+        raise OSError(f"{host} zeigt auf eine nicht erlaubte Adresse")
+    return str(addresses[0])
+
+
+def _pin_resolved_connections(client: Any) -> None:
+    """Ersetzt die Verbindungsklassen des boto3-Clients: jede neue Verbindung geht an eine selbst
+    aufgelöste und geprüfte IP (resolve_allowed_address); TLS und SNI verwenden weiter den
+    Hostnamen. Zwischen Prüfung und Verbindung kann die Auflösung so nicht mehr wechseln."""
+    from urllib3.connection import HTTPConnection, HTTPSConnection
+    from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
+    from urllib3.exceptions import NewConnectionError
+    from urllib3.util import connection as urllib3_connection
+
+    def new_conn(self):
+        try:
+            address = resolve_allowed_address(self._dns_host, self.port)
+            return urllib3_connection.create_connection(
+                (address, self.port), self.timeout, source_address=self.source_address, socket_options=self.socket_options,
+            )
+        except OSError as exc:
+            raise NewConnectionError(self, f"Verbindung zu {self.host} abgelehnt oder fehlgeschlagen: {exc}") from exc
+
+    class PinnedHTTPConnection(HTTPConnection):
+        _new_conn = new_conn
+
+    class PinnedHTTPSConnection(HTTPSConnection):
+        _new_conn = new_conn
+
+    class PinnedHTTPConnectionPool(HTTPConnectionPool):
+        ConnectionCls = PinnedHTTPConnection
+
+    class PinnedHTTPSConnectionPool(HTTPSConnectionPool):
+        ConnectionCls = PinnedHTTPSConnection
+
+    manager = client._endpoint.http_session._manager
+    manager.pool_classes_by_scheme = {"http": PinnedHTTPConnectionPool, "https": PinnedHTTPSConnectionPool}
+
+
 class S3Backend:
     """AWS S3, Hetzner Object Storage, Garage (lokal) und andere S3-kompatible Anbieter."""
 
@@ -498,6 +558,10 @@ class S3Backend:
                 response_checksum_validation="when_required",
             ),
         )
+        # Das lokale Garage im internen Docker-Netz legt das Backend selbst an; alle anderen
+        # Endpoints stammen aus Admin-Eingaben und werden bei jeder Verbindung geprüft (S3-009).
+        if config.provider != "garage_local":
+            _pin_resolved_connections(self._client)
 
     def __del__(self) -> None:  # pragma: no cover - Aufräumen der temporären CA-Datei
         if getattr(self, "_ca_file", None):
