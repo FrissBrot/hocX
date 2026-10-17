@@ -1,7 +1,7 @@
 {
   "title": "Stockage",
   "loadFailed": "L'aperçu du stockage n'a pas pu être chargé.",
-  "description": "Gérer les profils de stockage S3 et migrer les fichiers en toute sécurité entre stockages. Un changement n'a lieu qu'après une copie complète, une vérification et un basculement contrôlé.",
+  "description": "Gérer les profils de stockage et migrer les fichiers entre stockages. La bascule n’a lieu qu’une fois chaque fichier copié et vérifié.",
   "actions": {
     "newProfile": "Créer un profil",
     "startMigration": "Préparer une migration",
@@ -63,7 +63,8 @@
     "generation": "Génération",
     "location": "Emplacement",
     "localS3": "S3 local",
-    "filesystem": "Système de fichiers local (données existantes)"
+    "filesystem": "Système de fichiers local (données existantes)",
+    "extent": "Volume"
   },
   "provider": {
     "filesystem": "Système de fichiers",
@@ -128,7 +129,11 @@
     "title": "Générations de stockage",
     "description": "Chaque migration écrit dans une nouvelle génération. Les générations remplacées sont conservées jusqu'à une purge délibérée.",
     "empty": "Aucune génération.",
-    "size": "{count, plural, one {# objet} other {# objets}}, {size}"
+    "size": "{count, plural, one {# objet} other {# objets}}, {size}",
+    "since": "depuis le {date}",
+    "retainUntil": "à conserver jusqu’au {date}",
+    "next": "Créée lors de la prochaine migration",
+    "nextMeta": "Sera créée sur le profil cible"
   },
   "generationStatus": {
     "preparing": "En préparation",
@@ -142,7 +147,11 @@
   "history": {
     "title": "Dernières migrations",
     "empty": "Aucune migration pour l'instant.",
-    "objects": "{verified} sur {total} vérifiés"
+    "objects": "{verified} sur {total} vérifiés",
+    "created": "Créée le {date}",
+    "copied": "{copied} / {total} objets",
+    "checked": "{verified} vérifiés · {failed} échoués",
+    "emptyHint": "La première migration déplace les données existantes vers un profil S3."
   },
   "state": {
     "pending": "Créée",
@@ -245,7 +254,27 @@
     "bandwidthHelp": "0 = illimitée",
     "verifyMode": "Vérification",
     "autoCutover": "Basculer automatiquement après une vérification réussie",
-    "nextStep": "Un contrôle préalable avec estimation de durée est effectué d'abord. La migration ne démarre qu'après ta confirmation."
+    "nextStep": "Un contrôle préalable avec estimation de durée est effectué d'abord. La migration ne démarre qu'après ta confirmation.",
+    "to": "Vers",
+    "newGeneration": "{generation} · nouvelle",
+    "flow": "Déroulement",
+    "advanced": "Options avancées",
+    "retention": "La génération remplacée est conservée et n’est jamais nettoyée automatiquement.",
+    "test": {
+      "ok": {
+        "title": "Connexion à la cible réussie",
+        "text": "L’écriture, la lecture et la suppression d’un objet de test fonctionnent."
+      },
+      "missing": {
+        "title": "Profil cible pas encore testé",
+        "text": "La migration ne peut pas démarrer sans test réussi."
+      },
+      "failed": {
+        "title": "Dernier test de connexion échoué",
+        "text": "La migration ne peut pas démarrer sans test réussi."
+      }
+    },
+    "from": "De"
   },
   "verifyMode": {
     "full": "Complète (relire le contenu et vérifier le SHA-256)",
@@ -255,5 +284,53 @@
     "title": "Purger la génération {generation}",
     "warning": "Supprime définitivement les données de cette génération dans le profil « {profile} ». La génération active n'est pas concernée.",
     "label": "Saisir « {expected} » pour confirmer"
+  },
+  "hero": {
+    "initialPending": "Migration initiale en attente",
+    "target": "Cible : {name}",
+    "noTarget": "Pas encore de profil cible",
+    "noTargetText": "La migration initiale nécessite un profil S3 activé.",
+    "initialText": "Les données existantes sont encore dans le système de fichiers. Le profil « {name} » est prévu pour la migration initiale.",
+    "tested": {
+      "ok": "Connexion testée avec succès.",
+      "failed": "Le dernier test de connexion a échoué.",
+      "never": "La connexion n’a encore jamais été testée."
+    },
+    "switched": "Basculé le {date}",
+    "switchedObjects": "{count, plural, one {# objet copié et vérifié} other {# objets copiés et vérifiés}}",
+    "retained": "La génération remplacée {generation} est conservée jusqu’au {date} et peut ensuite être nettoyée délibérément.",
+    "noMigration": "Aucune migration en cours. Un autre profil ne devient actif que par une migration.",
+    "progress": "{copied} sur {total} objets copiés"
+  },
+  "steps": {
+    "prepare": {
+      "title": "Préparer",
+      "description": "Tester la cible, créer une nouvelle génération"
+    },
+    "copy": {
+      "title": "Copier",
+      "description": "Tous les objets dans la nouvelle génération"
+    },
+    "verify": {
+      "title": "Vérifier",
+      "description": "Comparer taille et SHA-256 de chaque objet"
+    },
+    "switch": {
+      "title": "Basculer",
+      "description": "La nouvelle génération devient active"
+    }
+  },
+  "profileCard": {
+    "endpoint": "Endpoint",
+    "bucket": "Bucket / préfixe",
+    "abgabeboxBucket": "Bucket Abgabebox",
+    "credentials": "Identifiants",
+    "credentialsStored": "•••••• stockés chiffrés",
+    "credentialsMissing": "Non enregistrés",
+    "noTestNeeded": "Aucun test nécessaire – chemin local",
+    "lastTestOk": "Dernier test {time} · réussi",
+    "lastTestFailed": "Dernier test {time} · échoué",
+    "testing": "Test de la connexion …",
+    "retest": "Tester à nouveau"
   }
 }

@@ -1,7 +1,7 @@
 {
   "title": "Storage",
   "loadFailed": "Die Speicherübersicht konnte nicht geladen werden.",
-  "description": "S3-Speicherprofile verwalten und Dateien sicher zwischen Speichern migrieren. Ein Wechsel erfolgt nur nach vollständiger Kopie, Prüfung und kontrolliertem Umschalten.",
+  "description": "Speicherprofile verwalten und Dateien zwischen Speichern migrieren. Umgeschaltet wird erst, wenn jede Datei kopiert und geprüft ist.",
   "actions": {
     "newProfile": "Profil anlegen",
     "startMigration": "Migration vorbereiten",
@@ -63,7 +63,8 @@
     "generation": "Generation",
     "location": "Ort",
     "localS3": "Lokales S3",
-    "filesystem": "Lokales Dateisystem (bisheriger Bestand)"
+    "filesystem": "Lokales Dateisystem (bisheriger Bestand)",
+    "extent": "Umfang"
   },
   "provider": {
     "filesystem": "Dateisystem",
@@ -128,7 +129,11 @@
     "title": "Speichergenerationen",
     "description": "Jede Migration schreibt in eine neue Generation. Abgelöste Generationen bleiben bis zur bewussten Bereinigung erhalten.",
     "empty": "Keine Generationen.",
-    "size": "{count, plural, one {# Objekt} other {# Objekte}}, {size}"
+    "size": "{count, plural, one {# Objekt} other {# Objekte}}, {size}",
+    "since": "seit {date}",
+    "retainUntil": "aufbewahren bis {date}",
+    "next": "Entsteht bei der nächsten Migration",
+    "nextMeta": "Wird auf dem Zielprofil angelegt"
   },
   "generationStatus": {
     "preparing": "In Vorbereitung",
@@ -142,7 +147,11 @@
   "history": {
     "title": "Letzte Migrationen",
     "empty": "Noch keine Migrationen.",
-    "objects": "{verified} von {total} geprüft"
+    "objects": "{verified} von {total} geprüft",
+    "created": "Angelegt {date}",
+    "copied": "{copied} / {total} Objekte",
+    "checked": "{verified} geprüft · {failed} fehlgeschlagen",
+    "emptyHint": "Die erste Migration verschiebt den bisherigen Bestand in ein S3-Profil."
   },
   "state": {
     "pending": "Angelegt",
@@ -245,7 +254,27 @@
     "bandwidthHelp": "0 = unbegrenzt",
     "verifyMode": "Prüfung",
     "autoCutover": "Nach erfolgreicher Prüfung automatisch umschalten",
-    "nextStep": "Zuerst läuft eine Vorprüfung mit Zeitschätzung. Gestartet wird erst nach deiner Bestätigung."
+    "nextStep": "Zuerst läuft eine Vorprüfung mit Zeitschätzung. Gestartet wird erst nach deiner Bestätigung.",
+    "to": "Nach",
+    "newGeneration": "{generation} · neu",
+    "flow": "Ablauf",
+    "advanced": "Erweiterte Optionen",
+    "retention": "Die abgelöste Generation bleibt erhalten und wird nie automatisch bereinigt.",
+    "test": {
+      "ok": {
+        "title": "Verbindung zum Ziel erfolgreich",
+        "text": "Schreiben, Lesen und Löschen eines Testobjekts funktioniert."
+      },
+      "missing": {
+        "title": "Zielprofil noch nicht getestet",
+        "text": "Ohne erfolgreichen Test kann die Migration nicht starten."
+      },
+      "failed": {
+        "title": "Letzter Verbindungstest fehlgeschlagen",
+        "text": "Ohne erfolgreichen Test kann die Migration nicht starten."
+      }
+    },
+    "from": "Von"
   },
   "verifyMode": {
     "full": "Vollständig (Inhalt neu lesen und SHA-256 prüfen)",
@@ -255,5 +284,53 @@
     "title": "Generation {generation} bereinigen",
     "warning": "Löscht die Daten dieser Generation im Profil «{profile}» endgültig. Die aktive Generation ist davon nicht betroffen.",
     "label": "Zur Bestätigung «{expected}» eingeben"
+  },
+  "hero": {
+    "initialPending": "Erstmigration ausstehend",
+    "target": "Ziel: {name}",
+    "noTarget": "Noch kein Zielprofil",
+    "noTargetText": "Für die Erstmigration braucht es ein aktiviertes S3-Profil.",
+    "initialText": "Der bisherige Bestand liegt noch im Dateisystem. Für die Erstmigration ist das Profil «{name}» vorgesehen.",
+    "tested": {
+      "ok": "Verbindung erfolgreich getestet.",
+      "failed": "Der letzte Verbindungstest ist fehlgeschlagen.",
+      "never": "Die Verbindung wurde noch nie getestet."
+    },
+    "switched": "Umgeschaltet am {date}",
+    "switchedObjects": "{count, plural, one {# Objekt} other {# Objekte}} kopiert und geprüft",
+    "retained": "Die abgelöste Generation {generation} bleibt bis {date} erhalten und kann danach bewusst bereinigt werden.",
+    "noMigration": "Keine Migration offen. Ein anderes Profil wird nur über eine Migration aktiv.",
+    "progress": "{copied} von {total} Objekten kopiert"
+  },
+  "steps": {
+    "prepare": {
+      "title": "Vorbereiten",
+      "description": "Ziel testen, neue Generation anlegen"
+    },
+    "copy": {
+      "title": "Kopieren",
+      "description": "Alle Objekte in die neue Generation"
+    },
+    "verify": {
+      "title": "Prüfen",
+      "description": "Grösse und SHA-256 je Objekt vergleichen"
+    },
+    "switch": {
+      "title": "Umschalten",
+      "description": "Neue Generation wird aktiv"
+    }
+  },
+  "profileCard": {
+    "endpoint": "Endpoint",
+    "bucket": "Bucket / Präfix",
+    "abgabeboxBucket": "Abgabebox-Bucket",
+    "credentials": "Zugangsdaten",
+    "credentialsStored": "•••••• verschlüsselt hinterlegt",
+    "credentialsMissing": "Nicht hinterlegt",
+    "noTestNeeded": "Kein Test nötig – lokaler Pfad",
+    "lastTestOk": "Zuletzt getestet {time} · erfolgreich",
+    "lastTestFailed": "Zuletzt getestet {time} · fehlgeschlagen",
+    "testing": "Verbindung wird geprüft …",
+    "retest": "Erneut testen"
   }
 }

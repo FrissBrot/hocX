@@ -13,7 +13,7 @@ export default async function AdminStoragePage() {
   const overview = await backendFetchWithSession<StorageOverview>("/api/admin/storage/overview");
   return (
     <AdminShell session={session}>
-      <section className="panel">
+      <section className="admin-page">
         {overview ? <AdminStorage initialOverview={overview} /> : <StatusBanner tone="error" message={t("loadFailed")} />}
       </section>
     </AdminShell>

@@ -1,7 +1,7 @@
 {
   "title": "Archiviazione",
   "loadFailed": "Impossibile caricare la panoramica dell'archiviazione.",
-  "description": "Gestire i profili di archiviazione S3 e migrare i file in sicurezza tra archivi. Il cambio avviene solo dopo copia completa, verifica e passaggio controllato.",
+  "description": "Gestire i profili di archiviazione e migrare i file tra archivi. Il passaggio avviene solo quando ogni file è stato copiato e verificato.",
   "actions": {
     "newProfile": "Crea profilo",
     "startMigration": "Prepara migrazione",
@@ -63,7 +63,8 @@
     "generation": "Generazione",
     "location": "Posizione",
     "localS3": "S3 locale",
-    "filesystem": "File system locale (dati esistenti)"
+    "filesystem": "File system locale (dati esistenti)",
+    "extent": "Volume"
   },
   "provider": {
     "filesystem": "File system",
@@ -128,7 +129,11 @@
     "title": "Generazioni di archiviazione",
     "description": "Ogni migrazione scrive in una nuova generazione. Le generazioni sostituite vengono mantenute fino a una pulizia consapevole.",
     "empty": "Nessuna generazione.",
-    "size": "{count, plural, one {# oggetto} other {# oggetti}}, {size}"
+    "size": "{count, plural, one {# oggetto} other {# oggetti}}, {size}",
+    "since": "dal {date}",
+    "retainUntil": "conservare fino al {date}",
+    "next": "Creata alla prossima migrazione",
+    "nextMeta": "Verrà creata sul profilo di destinazione"
   },
   "generationStatus": {
     "preparing": "In preparazione",
@@ -142,7 +147,11 @@
   "history": {
     "title": "Ultime migrazioni",
     "empty": "Ancora nessuna migrazione.",
-    "objects": "{verified} di {total} verificati"
+    "objects": "{verified} di {total} verificati",
+    "created": "Creata il {date}",
+    "copied": "{copied} / {total} oggetti",
+    "checked": "{verified} verificati · {failed} non riusciti",
+    "emptyHint": "La prima migrazione sposta i dati esistenti in un profilo S3."
   },
   "state": {
     "pending": "Creata",
@@ -245,7 +254,27 @@
     "bandwidthHelp": "0 = illimitata",
     "verifyMode": "Verifica",
     "autoCutover": "Passa automaticamente dopo una verifica riuscita",
-    "nextStep": "Prima viene eseguita una verifica preliminare con stima dei tempi. La migrazione inizia solo dopo la tua conferma."
+    "nextStep": "Prima viene eseguita una verifica preliminare con stima dei tempi. La migrazione inizia solo dopo la tua conferma.",
+    "to": "A",
+    "newGeneration": "{generation} · nuova",
+    "flow": "Procedura",
+    "advanced": "Opzioni avanzate",
+    "retention": "La generazione sostituita viene conservata e mai ripulita automaticamente.",
+    "test": {
+      "ok": {
+        "title": "Connessione alla destinazione riuscita",
+        "text": "Scrittura, lettura ed eliminazione di un oggetto di test funzionano."
+      },
+      "missing": {
+        "title": "Profilo di destinazione non ancora testato",
+        "text": "Senza un test riuscito la migrazione non può partire."
+      },
+      "failed": {
+        "title": "Ultimo test di connessione non riuscito",
+        "text": "Senza un test riuscito la migrazione non può partire."
+      }
+    },
+    "from": "Da"
   },
   "verifyMode": {
     "full": "Completa (rilettura del contenuto e verifica SHA-256)",
@@ -255,5 +284,53 @@
     "title": "Ripulisci la generazione {generation}",
     "warning": "Elimina definitivamente i dati di questa generazione nel profilo «{profile}». La generazione attiva non è interessata.",
     "label": "Digita «{expected}» per confermare"
+  },
+  "hero": {
+    "initialPending": "Migrazione iniziale in sospeso",
+    "target": "Destinazione: {name}",
+    "noTarget": "Ancora nessun profilo di destinazione",
+    "noTargetText": "La migrazione iniziale richiede un profilo S3 attivato.",
+    "initialText": "I dati esistenti sono ancora nel file system. Per la migrazione iniziale è previsto il profilo «{name}».",
+    "tested": {
+      "ok": "Connessione testata con successo.",
+      "failed": "L’ultimo test di connessione non è riuscito.",
+      "never": "La connessione non è mai stata testata."
+    },
+    "switched": "Commutato il {date}",
+    "switchedObjects": "{count, plural, one {# oggetto copiato e verificato} other {# oggetti copiati e verificati}}",
+    "retained": "La generazione sostituita {generation} viene conservata fino al {date} e può poi essere ripulita consapevolmente.",
+    "noMigration": "Nessuna migrazione aperta. Un altro profilo diventa attivo solo tramite una migrazione.",
+    "progress": "{copied} di {total} oggetti copiati"
+  },
+  "steps": {
+    "prepare": {
+      "title": "Preparare",
+      "description": "Testare la destinazione, creare una nuova generazione"
+    },
+    "copy": {
+      "title": "Copiare",
+      "description": "Tutti gli oggetti nella nuova generazione"
+    },
+    "verify": {
+      "title": "Verificare",
+      "description": "Confrontare dimensione e SHA-256 di ogni oggetto"
+    },
+    "switch": {
+      "title": "Commutare",
+      "description": "La nuova generazione diventa attiva"
+    }
+  },
+  "profileCard": {
+    "endpoint": "Endpoint",
+    "bucket": "Bucket / prefisso",
+    "abgabeboxBucket": "Bucket Abgabebox",
+    "credentials": "Credenziali",
+    "credentialsStored": "•••••• salvate cifrate",
+    "credentialsMissing": "Non salvate",
+    "noTestNeeded": "Nessun test necessario – percorso locale",
+    "lastTestOk": "Ultimo test {time} · riuscito",
+    "lastTestFailed": "Ultimo test {time} · non riuscito",
+    "testing": "Test della connessione …",
+    "retest": "Testa di nuovo"
   }
 }

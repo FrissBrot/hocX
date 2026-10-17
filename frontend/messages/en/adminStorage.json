@@ -1,7 +1,7 @@
 {
   "title": "Storage",
   "loadFailed": "The storage overview could not be loaded.",
-  "description": "Manage S3 storage profiles and migrate files safely between storages. A switch only happens after a complete copy, verification and controlled cutover.",
+  "description": "Manage storage profiles and migrate files between storages. The switch only happens once every file has been copied and verified.",
   "actions": {
     "newProfile": "Add profile",
     "startMigration": "Prepare migration",
@@ -63,7 +63,8 @@
     "generation": "Generation",
     "location": "Location",
     "localS3": "Local S3",
-    "filesystem": "Local file system (existing data)"
+    "filesystem": "Local file system (existing data)",
+    "extent": "Size"
   },
   "provider": {
     "filesystem": "File system",
@@ -128,7 +129,11 @@
     "title": "Storage generations",
     "description": "Every migration writes to a new generation. Superseded generations are kept until they are purged deliberately.",
     "empty": "No generations.",
-    "size": "{count, plural, one {# object} other {# objects}}, {size}"
+    "size": "{count, plural, one {# object} other {# objects}}, {size}",
+    "since": "since {date}",
+    "retainUntil": "keep until {date}",
+    "next": "Created by the next migration",
+    "nextMeta": "Will be created on the target profile"
   },
   "generationStatus": {
     "preparing": "Preparing",
@@ -142,7 +147,11 @@
   "history": {
     "title": "Recent migrations",
     "empty": "No migrations yet.",
-    "objects": "{verified} of {total} verified"
+    "objects": "{verified} of {total} verified",
+    "created": "Created {date}",
+    "copied": "{copied} / {total} objects",
+    "checked": "{verified} verified · {failed} failed",
+    "emptyHint": "The first migration moves the existing data into an S3 profile."
   },
   "state": {
     "pending": "Created",
@@ -245,7 +254,27 @@
     "bandwidthHelp": "0 = unlimited",
     "verifyMode": "Verification",
     "autoCutover": "Switch over automatically after successful verification",
-    "nextStep": "A preflight with a time estimate runs first. The migration only starts after your confirmation."
+    "nextStep": "A preflight with a time estimate runs first. The migration only starts after your confirmation.",
+    "to": "To",
+    "newGeneration": "{generation} · new",
+    "flow": "Process",
+    "advanced": "Advanced options",
+    "retention": "The replaced generation is kept and never purged automatically.",
+    "test": {
+      "ok": {
+        "title": "Connection to the target successful",
+        "text": "Writing, reading and deleting a test object works."
+      },
+      "missing": {
+        "title": "Target profile not tested yet",
+        "text": "The migration cannot start without a successful test."
+      },
+      "failed": {
+        "title": "Last connection test failed",
+        "text": "The migration cannot start without a successful test."
+      }
+    },
+    "from": "From"
   },
   "verifyMode": {
     "full": "Full (re-read content and check SHA-256)",
@@ -255,5 +284,53 @@
     "title": "Purge generation {generation}",
     "warning": "Permanently deletes the data of this generation in profile “{profile}”. The active generation is not affected.",
     "label": "Type “{expected}” to confirm"
+  },
+  "hero": {
+    "initialPending": "Initial migration pending",
+    "target": "Target: {name}",
+    "noTarget": "No target profile yet",
+    "noTargetText": "The initial migration needs an enabled S3 profile.",
+    "initialText": "The existing data is still on the file system. The profile “{name}” is intended for the initial migration.",
+    "tested": {
+      "ok": "Connection tested successfully.",
+      "failed": "The last connection test failed.",
+      "never": "The connection has never been tested."
+    },
+    "switched": "Switched on {date}",
+    "switchedObjects": "{count, plural, one {# object} other {# objects}} copied and verified",
+    "retained": "The replaced generation {generation} is kept until {date} and can be purged deliberately afterwards.",
+    "noMigration": "No migration open. Another profile only becomes active through a migration.",
+    "progress": "{copied} of {total} objects copied"
+  },
+  "steps": {
+    "prepare": {
+      "title": "Prepare",
+      "description": "Test the target, create a new generation"
+    },
+    "copy": {
+      "title": "Copy",
+      "description": "All objects into the new generation"
+    },
+    "verify": {
+      "title": "Verify",
+      "description": "Compare size and SHA-256 of every object"
+    },
+    "switch": {
+      "title": "Switch",
+      "description": "The new generation becomes active"
+    }
+  },
+  "profileCard": {
+    "endpoint": "Endpoint",
+    "bucket": "Bucket / prefix",
+    "abgabeboxBucket": "Abgabebox bucket",
+    "credentials": "Credentials",
+    "credentialsStored": "•••••• stored encrypted",
+    "credentialsMissing": "Not stored",
+    "noTestNeeded": "No test needed – local path",
+    "lastTestOk": "Last tested {time} · successful",
+    "lastTestFailed": "Last tested {time} · failed",
+    "testing": "Testing connection …",
+    "retest": "Test again"
   }
 }

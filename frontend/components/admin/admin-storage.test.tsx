@@ -9,7 +9,7 @@ vi.mock("@/lib/api/client", () => ({
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn(async () => true) }));
 
-import { AdminStorage } from "./admin-storage";
+import { AdminStorage, migrationStep } from "./admin-storage";
 import { StorageMigration, StorageOverview, StorageProfile } from "@/types/api";
 
 function profile(overrides: Partial<StorageProfile> = {}): StorageProfile {
@@ -81,5 +81,27 @@ describe("AdminStorage", () => {
   it("bietet beim Umschalten keinen Abbruch mehr an", () => {
     render(<AdminStorage initialOverview={overview({ open_migration: migration({ state: "cutting_over" }) })} />);
     expect(screen.queryByRole("button", { name: "Abbrechen" })).toBeNull();
+  });
+
+  it("zeigt den aktiven Speicher, die ausstehende Erstmigration und Profile als Karten", () => {
+    render(<AdminStorage initialOverview={overview()} />);
+    expect(screen.getByText("Erstmigration ausstehend")).toBeTruthy();
+    expect(screen.getByText("Ziel: Hetzner Prod")).toBeTruthy();
+    expect(screen.getByText("Verbindung erfolgreich getestet.", { exact: false })).toBeTruthy();
+    expect(screen.getByText("Kein Test nötig – lokaler Pfad")).toBeTruthy();
+    expect(screen.getByText("•••••• verschlüsselt hinterlegt")).toBeTruthy();
+    expect(screen.getByText("Entsteht bei der nächsten Migration")).toBeTruthy();
+    expect(screen.getByText("Noch keine Migrationen.")).toBeTruthy();
+  });
+
+  it("ordnet Migrationszustände den vier Schritten zu", () => {
+    expect(migrationStep(null, true, false)).toBe(0);
+    expect(migrationStep(null, true, true)).toBe(1);
+    expect(migrationStep(null, false, false)).toBe(4);
+    expect(migrationStep(migration({ state: "copying" }), false, true)).toBe(1);
+    expect(migrationStep(migration({ state: "verifying" }), false, true)).toBe(2);
+    expect(migrationStep(migration({ state: "paused", resume_state: "verifying" }), false, true)).toBe(2);
+    expect(migrationStep(migration({ state: "ready_for_cutover" }), false, true)).toBe(3);
+    expect(migrationStep(migration({ state: "completed" }), false, true)).toBe(4);
   });
 });
