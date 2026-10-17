@@ -421,14 +421,14 @@ function ProfileCard({ profile, t, locale, busy, migrationTarget, onTest, onEdit
         <div className="storage-profile-name">
           <strong>{profile.name}</strong>
           <span className="muted storage-small">{t(`provider.${profile.provider}`)}</span>
-        </div>
-        <div className="storage-badges">
-          {profile.is_active ? <Badge variant="success">{t("status.active")}</Badge> : null}
-          {migrationTarget || profile.in_use_by_migration ? <Badge variant="info">{t("status.inMigration")}</Badge> : null}
-          {profile.is_builtin ? <Badge variant="neutral">{t("status.builtin")}</Badge> : null}
-          {!profile.is_enabled ? <Badge variant="neutral">{t("status.disabled")}</Badge> : null}
-          {profile.pinned_generations.length && !profile.is_active ? <Badge variant="warning">{t("status.pinned")}</Badge> : null}
-          {!filesystem && !profile.has_restricted_credentials ? <Badge variant="warning">{t("status.sharedCredentials")}</Badge> : null}
+          <div className="storage-badges">
+            {profile.is_active ? <Badge variant="success">{t("status.active")}</Badge> : null}
+            {migrationTarget || profile.in_use_by_migration ? <Badge variant="info">{t("status.inMigration")}</Badge> : null}
+            {profile.is_builtin ? <Badge variant="neutral">{t("status.builtin")}</Badge> : null}
+            {!profile.is_enabled ? <Badge variant="neutral">{t("status.disabled")}</Badge> : null}
+            {profile.pinned_generations.length && !profile.is_active ? <Badge variant="warning">{t("status.pinned")}</Badge> : null}
+            {!filesystem && !profile.has_restricted_credentials ? <Badge variant="warning">{t("status.sharedCredentials")}</Badge> : null}
+          </div>
         </div>
       </div>
       <dl className="storage-facts storage-profile-facts">

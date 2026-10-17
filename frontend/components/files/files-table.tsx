@@ -75,26 +75,28 @@ export function FilesTable({
             <td>{formatDate(item.created_at)}</td>
             <td>{item.file_size_bytes ? formatFileSize(item.file_size_bytes) : <span className="muted">–</span>}</td>
             <td className="files-table-actions" onClick={(event) => event.stopPropagation()}>
-              {/* Bevorzugt die PDF-Darstellung; Originale gibt es in den Dokumentdetails. */}
-              <a
-                href={`${browserApiBaseUrl}${item.document?.pdf_url ?? item.content_url}`}
-                target="_blank"
-                rel="noreferrer"
-                className="button-secondary button-icon"
-                aria-label={item.document?.pdf_url ? t("table.openPdf") : t("table.download")}
-                title={item.document?.pdf_url ? t("table.openPdf") : t("table.download")}
-              >
-                <ActionIcon name="download" />
-              </a>
-              <button
-                type="button"
-                className="button-secondary button-icon"
-                aria-label={t("table.share")}
-                title={t("table.share")}
-                onClick={() => onShare(item)}
-              >
-                <ActionIcon name="link" />
-              </button>
+              <div className="files-table-actions-inner">
+                {/* Bevorzugt die PDF-Darstellung; Originale gibt es in den Dokumentdetails. */}
+                <a
+                  href={`${browserApiBaseUrl}${item.document?.pdf_url ?? item.content_url}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="button-secondary button-icon"
+                  aria-label={item.document?.pdf_url ? t("table.openPdf") : t("table.download")}
+                  title={item.document?.pdf_url ? t("table.openPdf") : t("table.download")}
+                >
+                  <ActionIcon name="download" />
+                </a>
+                <button
+                  type="button"
+                  className="button-secondary button-icon"
+                  aria-label={t("table.share")}
+                  title={t("table.share")}
+                  onClick={() => onShare(item)}
+                >
+                  <ActionIcon name="link" />
+                </button>
+              </div>
             </td>
           </tr>
         );
