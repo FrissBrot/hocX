@@ -83,5 +83,15 @@
   "endOfWeek": "Ende Woche",
   "endOfMonth": "Ende Monat",
   "inTwoWeeks": "In 2 Wochen",
-  "fromPackageTitle": "Aus einem Aufgabenpaket erzeugt"
+  "fromPackageTitle": "Aus einem Aufgabenpaket erzeugt",
+  "notesLabel": "Notizen",
+  "notesPlaceholder": "Notizen, Details, nächste Schritte …",
+  "notesEmpty": "Keine Notizen",
+  "filesLabel": "Dateien",
+  "filesSearchPlaceholder": "Hochgeladene Datei suchen …",
+  "filesLoading": "Wird geladen …",
+  "filesNoMatches": "Keine passenden Dateien",
+  "filesEmpty": "Keine Dateien verknüpft",
+  "removeFile": "{name} entfernen",
+  "detailsLoadFailed": "Notizen und Dateien konnten nicht geladen werden"
 }

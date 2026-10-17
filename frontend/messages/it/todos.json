@@ -83,5 +83,15 @@
   "endOfWeek": "Fine settimana",
   "endOfMonth": "Fine mese",
   "inTwoWeeks": "Tra 2 settimane",
-  "fromPackageTitle": "Creato da un pacchetto di attività"
+  "fromPackageTitle": "Creato da un pacchetto di attività",
+  "notesLabel": "Note",
+  "notesPlaceholder": "Note, dettagli, prossimi passi …",
+  "notesEmpty": "Nessuna nota",
+  "filesLabel": "File",
+  "filesSearchPlaceholder": "Cerca un file caricato …",
+  "filesLoading": "Caricamento …",
+  "filesNoMatches": "Nessun file corrispondente",
+  "filesEmpty": "Nessun file collegato",
+  "removeFile": "Rimuovi {name}",
+  "detailsLoadFailed": "Impossibile caricare note e file"
 }

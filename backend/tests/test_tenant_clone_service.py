@@ -282,3 +282,28 @@ def test_clone_copies_document_studio_data(db, tmp_path, monkeypatch):
     assert published.template_id == new_document_template.id
     assert published.content_json["body"][0]["component_id"] == str(new_component.public_id)
     assert new_assignment.protocol_template_id == new_template.id and new_assignment.brand_id == new_brand.id
+
+
+def test_clone_full_copies_todo_notes_and_file_links(db):
+    from app.models.entities import ProtocolTodoFile, StoredFile
+
+    source = make_tenant(db, "Quelle")
+    template = make_template(db, source.id)
+    protocol = make_protocol(db, source.id, template.id)
+    element = make_protocol_element(db, protocol.id)
+    block = make_protocol_element_block(db, element.id, {}, sort_index=0, element_type_code="todo")
+    todo = make_protocol_todo(db, block.id, tenant_id=source.id)
+    todo.notes = "**Notiz**"
+    stored = StoredFile(tenant_id=source.id, original_name="plan.pdf", storage_path="test-clone/plan.pdf")
+    db.add(stored)
+    db.flush()
+    db.add(ProtocolTodoFile(protocol_todo_id=todo.id, stored_file_id=stored.id))
+    db.flush()
+
+    cloned = TenantCloneService().clone_full(db, source.id, "Quelle (Kopie)")
+
+    cloned_todo = db.scalar(select(ProtocolTodo).where(ProtocolTodo.tenant_id == cloned.id))
+    link = db.scalar(select(ProtocolTodoFile).where(ProtocolTodoFile.protocol_todo_id == cloned_todo.id))
+    assert cloned_todo.notes == "**Notiz**"
+    assert link is not None
+    assert db.get(StoredFile, link.stored_file_id).tenant_id == cloned.id

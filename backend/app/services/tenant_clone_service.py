@@ -40,6 +40,7 @@ from app.models import (
     ProtocolText,
     ProtocolTodo,
     ProtocolTodoAssignee,
+    ProtocolTodoFile,
     StoredFile,
     SubmissionAssignment,
     SubmissionLink,
@@ -312,6 +313,7 @@ class TenantCloneService:
             cycle_config_map=cycle_config_map,
         )
         self._clone_protocol_todo_assignees(db, todo_map=todo_map, participant_map=participant_map)
+        self._clone_protocol_todo_files(db, todo_map=todo_map, stored_file_map=stored_file_map)
         self._remap_todo_repeat_sources(db, protocol_element_block_map=protocol_element_block_map, todo_map=todo_map)
         self._clone_document_templates(
             db, source.id, new_tenant.id,
@@ -1183,6 +1185,19 @@ class TenantCloneService:
                 if participant_id is None:
                     continue
                 db.add(ProtocolTodoAssignee(protocol_todo_id=todo_map[row.protocol_todo_id], participant_id=participant_id, sort_index=row.sort_index))
+        db.commit()
+
+    def _clone_protocol_todo_files(self, db: Session, *, todo_map: dict[int, int], stored_file_map: dict[int, int]) -> None:
+        source_todo_ids = list(todo_map)
+        for start in range(0, len(source_todo_ids), 1000):
+            rows = db.scalars(
+                select(ProtocolTodoFile).where(ProtocolTodoFile.protocol_todo_id.in_(source_todo_ids[start:start + 1000]))
+            ).all()
+            for row in rows:
+                stored_file_id = stored_file_map.get(row.stored_file_id)
+                if stored_file_id is None:
+                    continue
+                db.add(ProtocolTodoFile(protocol_todo_id=todo_map[row.protocol_todo_id], stored_file_id=stored_file_id, sort_index=row.sort_index))
         db.commit()
 
     def _remap_todo_repeat_sources(

@@ -33,7 +33,7 @@ Vorab-Abgleich beim Upload. Dazu die Audit-Reparaturen aus `main` (Abschnitt «B
    (`STORAGE_CREDENTIALS_KEY`, Zugangsdaten des lokalen S3, leere Backup-Platzhalter) selbst. Keine
    neuen Pflicht-Variablen; optional `DOCUMENT_VERIFY_BASE_URL` (Standard
    `ABGABEBOX_BASE_URL/verify`), `BACKUP_*` und `DOCUMENT_*` (siehe `.env.prod.example`).
-4. **Migrationen** `0113` bis `0126` laufen automatisch; neue Dienste `storage-init`,
+4. **Migrationen** `0113` bis `0128` laufen automatisch; neue Dienste `storage-init`,
    `storage-worker`, `local-s3`, `backup-worker` und `document-worker` startet `deploy.sh` mit
    `up -d`. Die Smoke-Checks prüfen zusätzlich `document-worker` und `storage-worker`.
 5. **Nach dem Deploy:**
@@ -170,6 +170,18 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   `tenant.billing_start_date`/`billing_charged_until`). Beim ersten Öffnen entstehen für alle
   Mandanten mit Preis die Forderungen seit Erstellung zum heutigen Preis: falls das nicht stimmt,
   den Abo-Start setzen (offene Forderungen werden neu erzeugt) oder alte Forderungen erlassen.
+
+### Neu: Notizen und Dateien an Todos
+
+- Im Todo-Popup der Todo-Liste gibt es ein Feld **Notizen** mit demselben Markdown-Editor wie im
+  Protokoll (fett, kursiv, Listen) und den Bereich **Dateien**: bereits hochgeladene Dateien
+  (Dateien- und Fotos-Seite) lassen sich per Suche verknüpfen, öffnen und wieder entfernen.
+  Gespeichert wird mit «Speichern».
+- Notizen und Dateien erscheinen bewusst nur im Popup, nicht in Liste, Übersicht, Protokoll oder
+  Exporten. Wird eine Datei gelöscht, verschwindet nur ihre Verknüpfung.
+- Migration `0128_todo_notes_files` (Spalte `protocol_todo.notes`, Tabelle `protocol_todo_file`);
+  Endpoints `GET`/`PUT /api/protocol-todos/{id}/details`. Mandanten-Export, -Import und -Klon
+  übernehmen beides.
 
 ### Neu: Objektspeicher (S3), Live-Migration und Wartungssystem
 

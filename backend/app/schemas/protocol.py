@@ -322,6 +322,27 @@ class TodoListItem(ProtocolTodoRead):
     element_ref: str | None = None
 
 
+class TodoDetailFile(BaseModel):
+    id: uuid.UUID
+    original_name: str
+    mime_type: str | None = None
+    file_size_bytes: int | None = None
+    content_url: str
+
+
+class TodoDetails(BaseModel):
+    """Notizen und verknüpfte Dateien eines Todos - nur für das Todo-Popup, darum bewusst nicht
+    Teil von ProtocolTodoRead (Übersicht, Momentaufnahmen, Exporte)."""
+
+    notes: str = ""
+    files: list[TodoDetailFile] = []
+
+
+class TodoDetailsUpdate(BaseModel):
+    notes: str | None = Field(default=None, max_length=100_000)
+    file_ids: list[uuid.UUID] | None = Field(default=None, max_length=200)
+
+
 class ProtocolImageRead(BaseModel):
     # Built via explicit keyword construction in FileService (joins ProtocolImage with its
     # StoredFile) - id/protocol_element_block_id/stored_file_id are set from the respective

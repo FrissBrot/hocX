@@ -1446,6 +1446,8 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
     cycle_year: Mapped[int | None] = mapped_column(Integer)
     occurrence_key: Mapped[str | None] = mapped_column(Text)
     overridden_fields: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+    # Freier Markdown-Text (Migration 0128) - nur im Todo-Popup, nie in Übersicht oder Export.
+    notes: Mapped[str | None] = mapped_column(Text)
 
 
 class ProtocolTodoAssignee(Base):
@@ -1461,6 +1463,21 @@ class ProtocolTodoAssignee(Base):
 
     protocol_todo_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol_todo.id", ondelete="CASCADE"), nullable=False)
     participant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+
+
+class ProtocolTodoFile(Base, TimestampMixin):
+    """Mit einem Todo verknüpfte, bereits hochgeladene Datei (Migration 0128). Nur im
+    Todo-Popup sichtbar, siehe ProtocolTodoService.get_details."""
+
+    __tablename__ = "protocol_todo_file"
+    __table_args__ = (
+        PrimaryKeyConstraint("protocol_todo_id", "stored_file_id", name="pk_protocol_todo_file"),
+        Index("idx_protocol_todo_file_stored_file", "stored_file_id"),
+    )
+
+    protocol_todo_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol_todo.id", ondelete="CASCADE"), nullable=False)
+    stored_file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="CASCADE"), nullable=False)
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
 
 

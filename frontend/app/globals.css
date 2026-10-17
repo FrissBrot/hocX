@@ -14996,6 +14996,17 @@ input[type="radio"] {
 
 .todo-edit-modal .todo-edit-title:focus-visible { outline: 2px solid var(--focus-ring-color); outline-offset: 3px; }
 
+/* Todo-Popup: Notizen (Markdown wie im Protokoll) und verknüpfte Dateien */
+.todo-edit-notes .rich-text-editor-content { min-height: 96px; max-height: 320px; overflow-y: auto; }
+.todo-edit-files { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.todo-edit-files li { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.todo-edit-file { display: flex; flex: 1; align-items: center; gap: var(--space-2); min-width: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); text-decoration: none; }
+.todo-edit-file:hover { border-color: var(--border-strong); background: var(--neutral-bg); }
+.todo-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-file-picker { display: flex; flex-direction: column; gap: var(--space-1); }
+.todo-file-results { position: static; }
+.todo-file-option { display: flex; align-items: center; gap: var(--space-2); }
+
 .todo-edit-actions .button-secondary { --button-bg: var(--panel-solid); --button-hover-bg: var(--neutral-bg); background: var(--button-bg); color: var(--text); border-color: var(--border-strong); }
 
 /* Abgabe erstellen/bearbeiten (Aufbau wie der Todo-Editor: Kopf, Formular + Seitenleiste, Fuss) */

@@ -41,6 +41,7 @@ from app.core.secret_crypto import decrypt_secret
 from app.models import (
     AppUser,
     ProtocolTodoAssignee,
+    ProtocolTodoFile,
     TaskPackage,
     TaskPackageCycle,
     TaskPackageItem,
@@ -556,6 +557,12 @@ class TenantExportService:
             if todo_ids
             else [],
             "protocol_todo_assignee",
+        )
+        tables["protocol_todo_file"] = self._rows(
+            db.scalars(select(ProtocolTodoFile).where(ProtocolTodoFile.protocol_todo_id.in_(todo_ids))).all()
+            if todo_ids
+            else [],
+            "protocol_todo_file",
         )
         tables["user_template_access"] = self._rows(
             db.scalars(select(UserTemplateAccess).where(UserTemplateAccess.tenant_id == tenant_id)).all(),

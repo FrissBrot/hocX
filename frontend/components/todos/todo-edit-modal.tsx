@@ -2,7 +2,7 @@
 
 import { useParticipantSelectable } from "@/contexts/participant-date-context";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Modal } from "@/components/ui/modal";
 import { ActionIcon } from "@/components/ui/action-icons";
@@ -10,11 +10,14 @@ import { TagInput } from "@/components/ui/tag-input";
 import { SearchableMultiSelect } from "@/components/ui/searchable-select";
 import { Badge } from "@/components/ui/badge";
 import { TodoDueMenu, DuePatch } from "./todo-due-menu";
+import { TodoFilePicker } from "./todo-file-picker";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { FileTypeIcon } from "@/components/files/file-type-icon";
 import { TODO_STATUS } from "@/components/protocol/protocol-editor-shared";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
-import { formatDate } from "@/lib/utils/format";
-import type { ParticipantSummary, TodoListItem } from "@/types/api";
+import { formatDate, formatFileSize } from "@/lib/utils/format";
+import type { ParticipantSummary, TodoDetails, TodoListItem } from "@/types/api";
 import { useConfirm } from "@/contexts/confirm-context";
 
 export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onClose, onSaved, onDeleted }: {
@@ -34,11 +37,27 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
   const assignedLabel = assignedIds.map((id) => participants.find((person) => person.id === id)?.display_name).filter(Boolean).join(", ") || draft.assigned_participant_name || t("nobodyLabel");
   const [duePatch, setDuePatch] = useState<DuePatch | null>(null);
   const [busy, setBusy] = useState(false);
+  // Notizen und Dateien kommen aus einem eigenen Endpunkt (nicht Teil der Todo-Liste/Exporte).
+  const [details, setDetails] = useState<TodoDetails | null>(null);
+  const [detailsDraft, setDetailsDraft] = useState<TodoDetails | null>(null);
   const confirm = useConfirm();
   const showToast = useToast();
   const editable = canEdit && !busy;
   const dueLabel = draft.resolved_due_label || (draft.resolved_due_date ? formatDate(draft.resolved_due_date) : t("noEndDate"));
   const overdueDays = draft.resolved_due_date ? Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(`${draft.resolved_due_date}T00:00:00`).getTime()) / 86400000) : 0;
+
+  useEffect(() => {
+    let cancelled = false;
+    browserApiFetch<TodoDetails>(`/api/protocol-todos/${todo.id}/details`)
+      .then((loaded) => { if (!cancelled) { setDetails(loaded); setDetailsDraft(loaded); } })
+      .catch((error) => { if (!cancelled) showToast(error instanceof Error ? error.message : t("detailsLoadFailed"), "error"); });
+    return () => { cancelled = true; };
+    // showToast/t bewusst nicht als Abhängigkeit: nur beim Öffnen eines Todos laden
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todo.id]);
+
+  const notesChanged = !!details && !!detailsDraft && detailsDraft.notes.trim() !== details.notes.trim();
+  const filesChanged = !!details && !!detailsDraft && detailsDraft.files.map((file) => file.id).join() !== details.files.map((file) => file.id).join();
 
   async function save() {
     if (!editable || !draft.task.trim()) return;
@@ -49,6 +68,15 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
         body: JSON.stringify({ task: draft.task.trim(), tags: draft.tags, assigned_participant_ids: assignedIds,
           ...(!todo.submission_assignment_id ? { todo_status_id: draft.todo_status_id } : {}), ...duePatch }),
       });
+      if (detailsDraft && (notesChanged || filesChanged)) {
+        await browserApiFetch<TodoDetails>(`/api/protocol-todos/${todo.id}/details`, {
+          method: "PUT",
+          body: JSON.stringify({
+            ...(notesChanged ? { notes: detailsDraft.notes } : {}),
+            ...(filesChanged ? { file_ids: detailsDraft.files.map((file) => file.id) } : {}),
+          }),
+        });
+      }
       onSaved({ ...draft, ...updated });
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("saveFailed"), "error");
@@ -82,6 +110,29 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
           {todo.submission_assignment_id && <small className="muted">{t("autoClosedHint")}</small>}
         </div>
         <div className="field-stack"><span className="field-label">{t("colTags")}</span><TagInput value={draft.tags.join(',')} onChange={(value) => setDraft({ ...draft, tags: value.split(',').map((tag) => tag.trim()).filter(Boolean) })} suggestions={tagSuggestions} alwaysShowPlaceholder placeholder={t("addTagPlaceholder")} readOnly={!editable} /></div>
+        {/* Plain div, kein <label>: der RichTextEditor hat Toolbar-Buttons vor dem Eingabefeld */}
+        <div className="field-stack todo-edit-notes"><span className="field-label">{t("notesLabel")}</span>
+          {detailsDraft ? (canEdit || detailsDraft.notes.trim()
+            ? <RichTextEditor value={detailsDraft.notes} onChange={(notes) => setDetailsDraft((current) => current && { ...current, notes })} readOnly={!canEdit} placeholder={t("notesPlaceholder")} />
+            : <span className="muted">{t("notesEmpty")}</span>)
+            : <span className="muted">{t("filesLoading")}</span>}
+        </div>
+        <div className="field-stack"><span className="field-label">{t("filesLabel")}</span>
+          {detailsDraft && <>
+            {detailsDraft.files.length > 0 ? <ul className="todo-edit-files">
+              {detailsDraft.files.map((file) => <li key={file.id}>
+                <a className="todo-edit-file" href={file.content_url} target="_blank" rel="noreferrer">
+                  <FileTypeIcon name={file.original_name} />
+                  <span className="todo-file-name">{file.original_name}</span>
+                  {file.file_size_bytes != null && <small className="muted">{formatFileSize(file.file_size_bytes)}</small>}
+                </a>
+                {editable && <button type="button" className="button-icon-soft-sm" aria-label={t("removeFile", { name: file.original_name })} title={t("removeFile", { name: file.original_name })}
+                  onClick={() => setDetailsDraft((current) => current && { ...current, files: current.files.filter((item) => item.id !== file.id) })}><ActionIcon name="close" /></button>}
+              </li>)}
+            </ul> : !canEdit && <span className="muted">{t("filesEmpty")}</span>} {/* i18n-ok: JS-Ausdruck, kein UI-Text */}
+            {editable && <TodoFilePicker excludeIds={detailsDraft.files.map((file) => file.id)} onPick={(file) => setDetailsDraft((current) => current && { ...current, files: [...current.files, file] })} />}
+          </>}
+        </div>
         <div className="field-stack"><span className="field-label">{t("originLabel")}</span>
           {todo.task_package_name ? (
             <span title={t("fromPackageTitle")}><Badge variant="info">{todo.task_package_name}</Badge></span>

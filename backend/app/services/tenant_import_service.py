@@ -39,6 +39,7 @@ from app.core.security import hash_password
 from app.models import (
     AppUser,
     ProtocolTodoAssignee,
+    ProtocolTodoFile,
     TaskPackage,
     TaskPackageCycle,
     TaskPackageItem,
@@ -475,6 +476,7 @@ class TenantImportService:
             task_package_item_map=task_package_item_map, cycle_config_map=cycle_config_map,
         )
         self._import_protocol_todo_assignees(todo_map, participant_map)
+        self._import_protocol_todo_files(todo_map, stored_file_map)
         self._remap_todo_repeat_sources(todo_map)
         self._restore_todo_snapshots(protocol_map, protocol_element_block_map)
         album_map = self._import_photo_albums(new_tenant.id, cycle_config_map, submission_assignment_map)
@@ -1637,6 +1639,15 @@ class TenantImportService:
             if todo_id is None or participant_id is None:
                 continue
             self.db.add(ProtocolTodoAssignee(protocol_todo_id=todo_id, participant_id=participant_id, sort_index=row.get("sort_index") or 0))
+        self.db.commit()
+
+    def _import_protocol_todo_files(self, todo_map: dict[int, int], stored_file_map: dict[int, int]) -> None:
+        for row in self._t("protocol_todo_file"):
+            todo_id = todo_map.get(row["protocol_todo_id"])
+            stored_file_id = stored_file_map.get(row["stored_file_id"])
+            if todo_id is None or stored_file_id is None:
+                continue
+            self.db.add(ProtocolTodoFile(protocol_todo_id=todo_id, stored_file_id=stored_file_id, sort_index=row.get("sort_index") or 0))
         self.db.commit()
 
     def _import_protocol_todos(

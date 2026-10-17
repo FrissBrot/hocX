@@ -1472,6 +1472,21 @@ export type ProtocolTodo = {
   overridden_fields?: string[];
 };
 
+// Notizen und verknüpfte Dateien eines Todos - nur im Todo-Popup (GET/PUT
+// /api/protocol-todos/{id}/details), bewusst nicht Teil von TodoListItem.
+export type TodoDetailFile = {
+  id: string;
+  original_name: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  content_url: string;
+};
+
+export type TodoDetails = {
+  notes: string;
+  files: TodoDetailFile[];
+};
+
 export type TodoListItem = ProtocolTodo & {
   protocol_id: string | null;
   protocol_number: string | null;

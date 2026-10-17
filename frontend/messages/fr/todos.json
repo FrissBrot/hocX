@@ -83,5 +83,15 @@
   "endOfWeek": "Fin de semaine",
   "endOfMonth": "Fin du mois",
   "inTwoWeeks": "Dans 2 semaines",
-  "fromPackageTitle": "Créé à partir d’un paquet de tâches"
+  "fromPackageTitle": "Créé à partir d’un paquet de tâches",
+  "notesLabel": "Notes",
+  "notesPlaceholder": "Notes, détails, prochaines étapes …",
+  "notesEmpty": "Aucune note",
+  "filesLabel": "Fichiers",
+  "filesSearchPlaceholder": "Rechercher un fichier téléversé …",
+  "filesLoading": "Chargement …",
+  "filesNoMatches": "Aucun fichier correspondant",
+  "filesEmpty": "Aucun fichier lié",
+  "removeFile": "Retirer {name}",
+  "detailsLoadFailed": "Impossible de charger les notes et les fichiers"
 }

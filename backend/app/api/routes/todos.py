@@ -10,7 +10,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.models.entities import Event, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo, Template
-from app.schemas.protocol import ProtocolTodoCreate, ProtocolTodoRead, ProtocolTodoUpdate, TodoListItem
+from app.schemas.protocol import (
+    ProtocolTodoCreate,
+    ProtocolTodoRead,
+    ProtocolTodoUpdate,
+    TodoDetails,
+    TodoDetailsUpdate,
+    TodoListItem,
+)
 from app.services import public_id_service
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
@@ -245,6 +252,42 @@ def patch_todo(
         return service._row_to_todo_read(db, row)
     todos = service.list_todos(db, todo.protocol_element_block_id)
     return next(item for item in todos if item.id == todo_id)
+
+
+@router.get("/protocol-todos/{todo_id}/details", response_model=TodoDetails)
+def get_todo_details(
+    todo_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Notizen und verknüpfte Dateien für das Todo-Popup (nicht in Liste/Übersicht/Export)."""
+    require_reader(user)
+    todo = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id)
+    if todo is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    access_service.ensure_can_read_todo(db, user, todo.id)
+    return service.get_details(db, todo)
+
+
+@router.put("/protocol-todos/{todo_id}/details", response_model=TodoDetails)
+def put_todo_details(
+    todo_id: uuid.UUID,
+    payload: TodoDetailsUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_writer(user)
+    todo = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id)
+    if todo is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    access_service.ensure_can_read_todo(db, user, todo.id)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    try:
+        return service.update_details(db, todo, payload, tenant_id=user.current_tenant_id)
+    except (SQLAlchemyError, ValueError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Todo details could not be saved") from exc
 
 
 @router.post("/protocol-todos/{todo_id}/accept-tracked-change")
