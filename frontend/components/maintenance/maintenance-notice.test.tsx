@@ -53,6 +53,15 @@ describe("MaintenanceNotice", () => {
   it("kündigt geplante Wartung an, ohne zu sperren", () => {
     render(<MaintenanceNotice status={status({ active: false, estimate_state: null, upcoming: [{ starts_at: "2026-10-20T18:00:00Z", ends_at: "2026-10-20T19:00:00Z", kind: "full", reason_code: "manual", messages: {} }] })} />);
     expect(screen.getByText("Geplante Wartung")).toBeTruthy();
+    // Gleicher Tag: Wochentag/Datum einmal, dann Beginn – ca. Ende
+    expect(screen.getByText(/^Dienstag, 20\. Oktober 2026 · \d\d:00 – ca\. \d\d:00$/)).toBeTruthy();
+    expect(screen.getByText(/hocX ist von .* bis voraussichtlich .* nicht verfügbar/)).toBeTruthy();
+  });
+
+  it("zeigt bei angekündigter Wartung die Meldung des Admins", () => {
+    render(<MaintenanceNotice status={status({ active: false, estimate_state: null, upcoming: [{ starts_at: "2026-10-24T20:00:00Z", ends_at: null, kind: "full", reason_code: "manual", messages: { de: "Update auf 1.2.0" } }] })} />);
+    expect(screen.getByText("Update auf 1.2.0")).toBeTruthy();
+    expect(screen.getByText(/· ab \d\d:00$/)).toBeTruthy();
   });
 
   it("zeigt nichts, wenn weder Wartung aktiv noch geplant ist", () => {

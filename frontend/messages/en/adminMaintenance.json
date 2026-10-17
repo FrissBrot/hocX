@@ -19,7 +19,9 @@
     "edit": "Edit",
     "editMessage": "Edit message",
     "close": "Close",
-    "save": "Save"
+    "save": "Save",
+    "more": "More actions",
+    "cancelPlanned": "Cancel maintenance"
   },
   "toast": {
     "release": "Maintenance ended",
@@ -41,7 +43,9 @@
   },
   "scheduled": {
     "title": "Scheduled maintenance",
-    "empty": "No maintenance scheduled."
+    "empty": "No maintenance scheduled.",
+    "meta": "Shown on the login page from now on",
+    "metaBy": "Shown on the login page from now on · scheduled by {email}"
   },
   "history": {
     "title": "History",
@@ -56,7 +60,9 @@
     "reason": "Reason",
     "state": "Status",
     "duration": "Duration",
-    "estimate": "Estimated"
+    "estimate": "Estimated",
+    "period": "Period",
+    "durationEstimate": "Duration · estimated"
   },
   "kind": {
     "full": "Full maintenance",
@@ -118,7 +124,7 @@
     "aria": "Verification progress"
   },
   "conditions": {
-    "title": "Release conditions",
+    "title": "Safety checks before ending",
     "met": "Met",
     "unmet": "Open",
     "blockedHint": "Only possible once the release conditions are met",
@@ -126,6 +132,18 @@
       "storage_migration_settled": "Data migration completed and verified, or source demonstrably still active and unchanged",
       "storage_not_fenced": "No storage write fence active",
       "no_open_storage_migration_cutover": "No open storage cutover"
+    },
+    "reasons": {
+      "ok": "Met",
+      "fenced": "Storage is still write-locked",
+      "cutover_open": "A storage cutover is still open",
+      "migration_missing": "The related migration was not found",
+      "integrity_not_confirmed": "Final integrity check not yet confirmed",
+      "target_verified": "New storage target verified and active",
+      "target_unverified": "New storage target not yet verified",
+      "source_consistent": "Previous storage still active and unchanged",
+      "inconsistent": "Storage state is inconsistent – please check",
+      "migration_running": "Data migration still running"
     }
   },
   "form": {
@@ -147,5 +165,50 @@
   },
   "edit": {
     "title": "Edit maintenance message"
-  }
+  },
+  "idle": {
+    "title": "hocX is available as usual",
+    "next": "Next maintenance {countdown} · {start}",
+    "viewLogin": "View the notice on the login page →",
+    "viewLoginShort": "View login page"
+  },
+  "running": {
+    "kicker": "{state, select, preparing {Maintenance being prepared} verifying {Maintenance being verified} overdue {Maintenance overdue} other {Maintenance in progress}} · {kind}",
+    "started": "Started {time}",
+    "notStarted": "Not started yet",
+    "until": "planned until {time} · about {remaining} left",
+    "overdue": "planned until {time} · exceeded",
+    "job": "triggered by {job}"
+  },
+  "kindLabel": {
+    "full": "Full maintenance",
+    "writes": "Write lock",
+    "uploads": "Upload lock"
+  },
+  "kindDescription": {
+    "full": "hocX is unavailable, only the notice is shown.",
+    "writes": "Reading stays possible, changes are blocked.",
+    "uploads": "Everything stays usable, only uploads are blocked."
+  },
+  "kindHint": {
+    "full": "During full maintenance hocX redirects all requests to the maintenance page. The admin portal stays available.",
+    "writes": "During a write lock hocX stays readable. Saving shows this notice.",
+    "uploads": "During an upload lock hocX stays usable. Uploads show this notice."
+  },
+  "countdown": {
+    "due": "due now",
+    "minutes": "in {count, plural, one {# minute} other {# minutes}}",
+    "hours": "in {count, plural, one {# hour} other {# hours}}",
+    "days": "in {count, plural, one {# day} other {# days}}"
+  },
+  "preview": {
+    "title": "Login page preview",
+    "now": "Starting now",
+    "range": "{start} – approx. {end}",
+    "noDate": "No start selected yet",
+    "kickerRunning": "Maintenance in progress",
+    "kickerPlanned": "Scheduled maintenance"
+  },
+  "quoted": "“{message}”",
+  "defaultMessageHint": "Default text of the login page"
 }

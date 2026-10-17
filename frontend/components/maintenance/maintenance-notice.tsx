@@ -3,7 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 
 import { remainingMinutes } from "@/lib/maintenance";
-import { formatDateTime, formatTime } from "@/lib/utils/format";
+import { formatDateTime, formatTime, formatWeekdayDate } from "@/lib/utils/format";
 import { PublicMaintenanceStatus } from "@/types/api";
 
 type Props = {
@@ -11,6 +11,12 @@ type Props = {
   /** "page": eigene Wartungsseite (mit Überschrift), "inline": Hinweis auf der Anmeldeseite. */
   variant?: "page" | "inline";
 };
+
+/** Kalendertag in Ortszeit ("YYYY-MM-DD") - für "gleicher Tag" und die Wochentagsanzeige. */
+function localIsoDate(iso: string): string {
+  const date = new Date(iso);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
 const KNOWN_REASONS = new Set(["manual", "storage_initial_migration", "storage_cutover"]);
 
@@ -25,15 +31,29 @@ export function MaintenanceNotice({ status, variant = "inline" }: Props) {
   if (!status.active && !status.partial) {
     const next = status.upcoming[0];
     if (!next?.starts_at) return null;
+    const date = formatWeekdayDate(localIsoDate(next.starts_at), locale);
+    const when = !next.ends_at
+      ? t("upcoming.whenOpen", { date, start: formatTime(next.starts_at, locale) })
+      : localIsoDate(next.starts_at) === localIsoDate(next.ends_at)
+        ? t("upcoming.when", { date, start: formatTime(next.starts_at, locale), end: formatTime(next.ends_at, locale) })
+        : t("upcoming.whenRange", { start: formatDateTime(next.starts_at, locale), end: formatDateTime(next.ends_at, locale) });
+    const message = next.messages[locale] || next.messages.de;
+    // Banner oben in der Anmeldekarte: Ankündigung, Zeitraum, Meldung des Admins.
     return (
-      <div className="maintenance-notice maintenance-notice-upcoming" role="status">
-        <strong>{t("upcoming.title")}</strong>
-        <p>
-          {next.ends_at
-            ? t("upcoming.withEnd", { start: formatDateTime(next.starts_at, locale), end: formatDateTime(next.ends_at, locale) })
-            : t("upcoming.withoutEnd", { start: formatDateTime(next.starts_at, locale) })}
-        </p>
-        {next.messages[locale] ? <p>{next.messages[locale]}</p> : null}
+      <div className="maintenance-banner" role="status">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+          <path d="M4.5 6.5h15v13h-15zM4.5 10.5h15M8.5 4v4M15.5 4v4" />
+        </svg>
+        <div className="maintenance-banner-text">
+          <span className="maintenance-banner-kicker">{t("upcoming.title")}</span>
+          <strong>{when}</strong>
+          <span>
+            {message ||
+              (next.ends_at
+                ? t("upcoming.withEnd", { start: formatDateTime(next.starts_at, locale), end: formatDateTime(next.ends_at, locale) })
+                : t("upcoming.withoutEnd", { start: formatDateTime(next.starts_at, locale) }))}
+          </span>
+        </div>
       </div>
     );
   }

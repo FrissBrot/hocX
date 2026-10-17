@@ -3,8 +3,9 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
@@ -12,13 +13,15 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { locales } from "@/i18n/locale-config.generated";
-import { formatDateTime } from "@/lib/utils/format";
-import { MaintenanceOverview, MaintenanceState, MaintenanceWindow } from "@/types/api";
+import { formatDate, formatDateTime, formatTime, toIntlLocale } from "@/lib/utils/format";
+import { MaintenanceCondition, MaintenanceOverview, MaintenanceState, MaintenanceWindow } from "@/types/api";
 
 type TFunc = ReturnType<typeof useTranslations>;
 
 const ACTIVE_POLL_MS = 10_000;
 const IDLE_POLL_MS = 30_000;
+// Anmeldeseite der Anwendung (dort erscheint der Wartungshinweis)
+const LOGIN_PATH = "/login";
 
 export const MAINTENANCE_STATE_VARIANTS: Record<MaintenanceState, BadgeVariant> = {
   scheduled: "info",
@@ -39,12 +42,53 @@ export function formatDuration(seconds: number | null | undefined, t: TFunc): st
   return t("duration.hours", { count: Math.round(minutes / 60) });
 }
 
+/** Laufzeituhr HH:MM:SS (zählt über 24 h weiter). */
+export function formatClock(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(Math.floor(total / 3600))}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
+}
+
 function combine(date: string, time: string): string | null {
   if (!date) return null;
   const match = /^(\d{1,2}):(\d{2})$/.exec(time.trim() || "00:00");
   if (!match) return null;
   const local = new Date(`${date}T${match[1].padStart(2, "0")}:${match[2]}:00`);
   return Number.isNaN(local.getTime()) ? null : local.toISOString();
+}
+
+function seconds(from: string | null, to: string | null): number | null {
+  if (!from || !to) return null;
+  return (new Date(to).getTime() - new Date(from).getTime()) / 1000;
+}
+
+function sameDay(a: string, b: string): boolean {
+  return new Date(a).toDateString() === new Date(b).toDateString();
+}
+
+/** "03.10.2026, 22:00 – 22:41" bzw. mit vollem Ende, wenn es an einem anderen Tag liegt. */
+function formatRange(start: string | null, end: string | null, locale: string): string {
+  if (!start) return "—";
+  if (!end) return formatDateTime(start, locale);
+  return `${formatDateTime(start, locale)} – ${sameDay(start, end) ? formatTime(end, locale) : formatDateTime(end, locale)}`;
+}
+
+function kindKey(window: MaintenanceWindow): "full" | "writes" | "uploads" {
+  return window.kind === "full" ? "full" : window.block_scope === "uploads" ? "uploads" : "writes";
+}
+
+function messageOf(window: MaintenanceWindow, locale: string): string | null {
+  return window.public_message[locale] || window.public_message.de || null;
+}
+
+/** "in 7 Tagen" / "in 5 Stunden" / "in 20 Minuten" bis zum geplanten Beginn. */
+function countdown(start: string | null, now: number, t: TFunc): string | null {
+  if (!start) return null;
+  const minutes = Math.round((new Date(start).getTime() - now) / 60_000);
+  if (minutes <= 0) return t("countdown.due");
+  if (minutes < 120) return t("countdown.minutes", { count: minutes });
+  if (minutes < 48 * 60) return t("countdown.hours", { count: Math.round(minutes / 60) });
+  return t("countdown.days", { count: Math.round(minutes / (60 * 24)) });
 }
 
 type Props = { initialOverview: MaintenanceOverview };
@@ -58,6 +102,7 @@ export function AdminMaintenance({ initialOverview }: Props) {
   const [planning, setPlanning] = useState(false);
   const [editing, setEditing] = useState<MaintenanceWindow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const loadingRef = useRef(false);
 
   const reload = useCallback(async () => {
@@ -77,6 +122,13 @@ export function AdminMaintenance({ initialOverview }: Props) {
     return () => clearInterval(interval);
   }, [overview.blocking, reload]);
 
+  // Laufzeituhr: nur während einer laufenden Wartung sekündlich, sonst minütlich (Countdown).
+  const running = overview.current.length > 0;
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), running ? 1000 : 60_000);
+    return () => clearInterval(interval);
+  }, [running]);
+
   async function act(window: MaintenanceWindow, action: "release" | "start" | "cancel") {
     const messages = { release: t("confirm.release"), start: t("confirm.start"), cancel: t("confirm.cancel") };
     if (!(await confirm({ message: messages[action], tone: action === "cancel" ? "danger" : "default", confirmLabel: t(`actions.${action}`) }))) return;
@@ -92,144 +144,246 @@ export function AdminMaintenance({ initialOverview }: Props) {
     }
   }
 
-  let banner = null;
-  if (overview.full_active) banner = <StatusBanner tone="error" message={t("banner.fullActive")} />;
-  else if (overview.blocking) banner = <StatusBanner tone="neutral" message={t("banner.partialActive")} />;
+  const next = overview.scheduled[0] ?? null;
 
   return (
-    <div className="grid">
-      <DataToolbar
-        title={t("title")}
-        description={t("description")}
-        actions={<button type="button" className="button-primary" onClick={() => setPlanning(true)}>{t("actions.plan")}</button>}
-      />
-
-      {banner}
-
-      <article className="card">
-        <DataToolbar title={t("current.title")} />
-        {overview.current.length === 0 ? <p className="muted">{t("current.empty")}</p> : null}
-        <div className="grid">
-          {overview.current.map((window) => (
-            <WindowCard key={window.id} window={window} t={t} locale={locale} busy={busy}
-              onRelease={() => void act(window, "release")} onStart={() => void act(window, "start")} onEdit={() => setEditing(window)} />
-          ))}
+    <div className="grid maintenance-page">
+      <div className="page-header maintenance-page-header">
+        <div>
+          <h1 className="page-title">{t("title")}</h1>
+          <p className="muted">{t("description")}</p>
         </div>
-      </article>
+        <button type="button" className="button-primary" onClick={() => setPlanning(true)}>{t("actions.plan")}</button>
+      </div>
 
-      <article className="card">
-        <DataToolbar title={t("scheduled.title")} />
-        <DataTable columns={[t("columns.start"), t("columns.end"), t("columns.kind"), t("columns.message"), t("columns.actions")]} emptyMessage={t("scheduled.empty")}>
-          {overview.scheduled.map((window) => (
-            <tr key={window.id}>
-              <td>{formatDateTime(window.scheduled_start_at, locale)}</td>
-              <td>{window.scheduled_end_at ? formatDateTime(window.scheduled_end_at, locale) : "—"}</td>
-              <td>{t(`kind.${window.kind}`)}</td>
-              <td className="muted">{window.public_message[locale] ?? window.public_message.de ?? t("defaultMessage")}</td>
-              <td>
-                <div className="table-actions">
-                  <button type="button" className="button-secondary" disabled={busy !== null} onClick={() => void act(window, "start")}>{t("actions.startNow")}</button>
-                  <button type="button" className="button-secondary" onClick={() => setEditing(window)}>{t("actions.edit")}</button>
-                  <button type="button" className="button-danger" disabled={busy !== null} onClick={() => void act(window, "cancel")}>{t("actions.cancel")}</button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </DataTable>
-      </article>
+      {running ? (
+        overview.current.map((window) => (
+          <RunningCard
+            key={window.id}
+            window={window}
+            t={t}
+            locale={locale}
+            now={now}
+            busy={busy}
+            onRelease={() => void act(window, "release")}
+            onStart={() => void act(window, "start")}
+            onEdit={() => setEditing(window)}
+          />
+        ))
+      ) : (
+        <section className="maintenance-idle">
+          <span className="maintenance-idle-dot" aria-hidden="true" />
+          <div className="maintenance-idle-text">
+            <strong>{t("idle.title")}</strong>
+            <span className="muted">
+              {next?.scheduled_start_at
+                ? t("idle.next", { countdown: countdown(next.scheduled_start_at, now, t) ?? "", start: formatDateTime(next.scheduled_start_at, locale) })
+                : t("scheduled.empty")}
+            </span>
+          </div>
+          {next ? (
+            <a className="maintenance-link" href={LOGIN_PATH} target="_blank" rel="noreferrer">{t("idle.viewLogin")}</a>
+          ) : null}
+        </section>
+      )}
 
-      <article className="card">
-        <DataToolbar title={t("history.title")} />
-        <DataTable columns={[t("columns.reason"), t("columns.state"), t("columns.start"), t("columns.end"), t("columns.duration"), t("columns.estimate")]} emptyMessage={t("history.empty")}>
+      <section className="maintenance-section">
+        <h2 className="maintenance-section-title">{t("scheduled.title")}</h2>
+        {overview.scheduled.length === 0 ? (
+          <div className="maintenance-empty">{t("scheduled.empty")}</div>
+        ) : (
+          overview.scheduled.map((window) => (
+            <ScheduledCard
+              key={window.id}
+              window={window}
+              t={t}
+              locale={locale}
+              now={now}
+              busy={busy}
+              onStart={() => void act(window, "start")}
+              onEdit={() => setEditing(window)}
+              onCancel={() => void act(window, "cancel")}
+            />
+          ))
+        )}
+      </section>
+
+      <section className="card maintenance-history">
+        <h2 className="maintenance-section-title">{t("history.title")}</h2>
+        <DataTable columns={[t("columns.reason"), t("columns.state"), t("columns.period"), t("columns.durationEstimate")]} emptyMessage={t("history.empty")}>
           {overview.history.map((window) => {
-            const actual = window.started_at && window.ended_at ? (new Date(window.ended_at).getTime() - new Date(window.started_at).getTime()) / 1000 : null;
-            const planned = window.started_at && window.original_estimated_end_at ? (new Date(window.original_estimated_end_at).getTime() - new Date(window.started_at).getTime()) / 1000 : null;
+            const actual = seconds(window.started_at, window.ended_at);
+            const planned = seconds(window.started_at, window.original_estimated_end_at);
+            const ratio = actual !== null && planned ? actual / planned : null;
+            const tone = window.state === "completed" ? (ratio !== null && ratio > 1 ? "over" : "ok") : "neutral";
             return (
               <tr key={window.id}>
-                <td>{t(`reason.${knownReason(window.reason_code)}`)}</td>
+                <td className="maintenance-history-reason">{t(`reason.${knownReason(window.reason_code)}`)}</td>
                 <td><Badge variant={MAINTENANCE_STATE_VARIANTS[window.state]}>{t(`state.${window.state}`)}</Badge></td>
-                <td>{window.started_at ? formatDateTime(window.started_at, locale) : "—"}</td>
-                <td>{window.ended_at ? formatDateTime(window.ended_at, locale) : "—"}</td>
-                <td>{formatDuration(actual, t)}</td>
-                <td className="muted">{formatDuration(planned, t)}</td>
+                <td className="muted">{formatRange(window.started_at, window.ended_at, locale)}</td>
+                <td>
+                  <div className="maintenance-duration">
+                    <span>
+                      {formatDuration(actual, t)} <span className="muted">· {formatDuration(planned, t)}</span>
+                    </span>
+                    {ratio !== null ? (
+                      <span className={`maintenance-bar maintenance-bar-${tone}`} aria-hidden="true">
+                        <span style={{ width: `${Math.min(100, ratio * 100)}%` }} />
+                      </span>
+                    ) : null}
+                  </div>
+                </td>
               </tr>
             );
           })}
         </DataTable>
-      </article>
+      </section>
 
-      {planning ? <PlanModal t={t} onClose={() => setPlanning(false)} onSaved={() => { setPlanning(false); void reload(); }} /> : null}
+      {planning ? <PlanModal t={t} locale={locale} onClose={() => setPlanning(false)} onSaved={() => { setPlanning(false); void reload(); }} /> : null}
       {editing ? <EditModal t={t} window={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void reload(); }} /> : null}
     </div>
   );
 }
 
-const REASONS = new Set(["manual", "storage_initial_migration", "storage_cutover"]);
+const REASONS = new Set(["manual", "storage_initial_migration", "storage_cutover", "backup_restore"]);
 
 function knownReason(code: string): string {
   return REASONS.has(code) ? code : "other";
 }
 
-function WindowCard({ window, t, locale, busy, onRelease, onStart, onEdit }: {
-  window: MaintenanceWindow; t: TFunc; locale: string; busy: string | null; onRelease: () => void; onStart: () => void; onEdit: () => void;
+const CONDITION_REASONS = new Set([
+  "ok", "fenced", "cutover_open", "migration_missing", "integrity_not_confirmed", "target_verified", "target_unverified", "source_consistent", "inconsistent",
+]);
+
+function conditionDetail(condition: MaintenanceCondition, t: TFunc): string | null {
+  if (CONDITION_REASONS.has(condition.reason)) return t(`conditions.reasons.${condition.reason}`);
+  if (condition.reason.startsWith("migration_")) return t("conditions.reasons.migration_running");
+  return null;
+}
+
+function RunningCard({ window, t, locale, now, busy, onRelease, onStart, onEdit }: {
+  window: MaintenanceWindow; t: TFunc; locale: string; now: number; busy: string | null; onRelease: () => void; onStart: () => void; onEdit: () => void;
 }) {
-  const runtime = window.started_at ? (Date.now() - new Date(window.started_at).getTime()) / 1000 : null;
+  const runtime = window.started_at ? (now - new Date(window.started_at).getTime()) / 1000 : null;
+  const planned = seconds(window.started_at, window.estimated_end_at);
+  const remaining = window.estimated_end_at ? (new Date(window.estimated_end_at).getTime() - now) / 1000 : null;
   const unmet = window.conditions.filter((condition) => !condition.satisfied);
   const total = Number(window.progress.objects_total ?? 0);
   const verified = Number(window.progress.objects_verified ?? 0);
   const copied = Number(window.progress.objects_copied ?? 0);
+  const message = messageOf(window, locale);
+  const job = window.source_job_type
+    ? t(`job.${["storage_initial_migration", "storage_cutover", "backup_restore", "backup_restore_cli"].includes(window.source_job_type) ? window.source_job_type : "other"}`)
+    : null;
   return (
-    <section className="maintenance-admin-card">
-      <div className="maintenance-admin-head">
-        <Badge variant={MAINTENANCE_STATE_VARIANTS[window.state]} dot>{t(`state.${window.state}`)}</Badge>
-        <strong>{t(`reason.${knownReason(window.reason_code)}`)}</strong>
-        <span className="muted">{window.kind === "full" ? t("kind.full") : t(`scope.${window.block_scope}`)}</span>
-      </div>
-      <dl className="maintenance-admin-facts">
-        <dt>{t("facts.job")}</dt>
-        <dd>{window.source_job_type ? t(`job.${window.source_job_type === "storage_initial_migration" || window.source_job_type === "storage_cutover" ? window.source_job_type : "other"}`) : t("job.manual")}</dd>
-        <dt>{t("facts.started")}</dt>
-        <dd>{window.started_at ? formatDateTime(window.started_at, locale) : "—"}</dd>
-        <dt>{t("facts.runtime")}</dt>
-        <dd>{formatDuration(runtime, t)}</dd>
-        <dt>{t("facts.estimatedEnd")}</dt>
-        <dd>{window.estimated_end_at ? formatDateTime(window.estimated_end_at, locale) : t("facts.estimating")}</dd>
-        <dt>{t("facts.originalEnd")}</dt>
-        <dd>{window.original_estimated_end_at ? formatDateTime(window.original_estimated_end_at, locale) : "—"}</dd>
-        <dt>{t("facts.reserve")}</dt>
-        <dd>{formatDuration(window.safety_margin_seconds, t)}</dd>
-        <dt>{t("facts.features")}</dt>
-        <dd>{window.affected_features.length ? window.affected_features.map((feature) => t(`feature.${feature}`)).join(", ") : "—"}</dd>
-      </dl>
-      {total > 0 ? (
-        <div className="maintenance-admin-progress">
-          <span className="muted">{t("progress.label", { copied, verified, total })}</span>
-          <progress className="storage-progress" max={total} value={verified} aria-label={t("progress.aria")} />
+    <section className="maintenance-running" aria-label={t("current.title")}>
+      <div className="maintenance-running-main">
+        <div className="maintenance-running-kicker">
+          <span className="maintenance-running-dot" aria-hidden="true" />
+          <span>{t("running.kicker", { state: window.state, kind: t(`kindLabel.${kindKey(window)}`) })}</span>
         </div>
-      ) : null}
-      {window.state === "overdue" ? <StatusBanner tone="error" message={t("banner.overdue")} /> : null}
-      {window.last_error ? <StatusBanner tone="error" message={window.last_error} /> : null}
-      {window.conditions.length ? (
-        <ul className="maintenance-admin-conditions" aria-label={t("conditions.title")}>
-          {window.conditions.map((condition) => (
-            <li key={condition.key}>
-              <Badge variant={condition.satisfied ? "success" : "warning"}>{condition.satisfied ? t("conditions.met") : t("conditions.unmet")}</Badge>
-              <span>{t(`conditions.keys.${condition.key}`)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <div className="table-actions">
-        {window.state === "preparing" && !window.source_job_type ? (
-          <button type="button" className="button-secondary" disabled={busy !== null} onClick={onStart}>{t("actions.start")}</button>
+        <div className="maintenance-running-clock" aria-label={t("facts.runtime")}>{runtime !== null ? formatClock(runtime) : "—"}</div>
+        <div className="maintenance-running-meta">
+          {window.started_at ? t("running.started", { time: formatTime(window.started_at, locale) }) : t("running.notStarted")}
+          {" · "}
+          {window.estimated_end_at
+            ? remaining !== null && remaining > 0
+              ? t("running.until", { time: formatTime(window.estimated_end_at, locale), remaining: formatDuration(remaining, t) })
+              : t("running.overdue", { time: formatTime(window.estimated_end_at, locale) })
+            : t("facts.estimating")}
+          {job ? ` · ${t("running.job", { job })}` : null}
+        </div>
+        {runtime !== null && planned ? (
+          <span className="maintenance-running-bar" aria-hidden="true">
+            <span style={{ width: `${Math.min(100, (runtime / planned) * 100)}%` }} />
+          </span>
         ) : null}
-        <button type="button" className="button-secondary" onClick={onEdit}>{t("actions.editMessage")}</button>
-        <button type="button" className="button-primary" disabled={busy !== null || unmet.length > 0} onClick={onRelease}
-          title={unmet.length ? t("conditions.blockedHint") : undefined}>
-          {t("actions.release")}
+        {total > 0 ? (
+          <div className="maintenance-running-progress">
+            <span>{t("progress.label", { copied, verified, total })}</span>
+            <progress className="storage-progress" max={total} value={verified} aria-label={t("progress.aria")} />
+          </div>
+        ) : null}
+        <p className="maintenance-running-message">{message ?? t(`reason.${knownReason(window.reason_code)}`)}</p>
+        {window.state === "overdue" ? <StatusBanner tone="error" message={t("banner.overdue")} /> : null}
+        {window.last_error ? <StatusBanner tone="error" message={window.last_error} /> : null}
+        <div className="maintenance-running-actions">
+          {window.state === "preparing" && !window.source_job_type ? (
+            <button type="button" className="button-secondary" disabled={busy !== null} onClick={onStart}>{t("actions.start")}</button>
+          ) : null}
+          <button type="button" className="button-secondary" onClick={onEdit}>{t("actions.editMessage")}</button>
+        </div>
+      </div>
+      <div className="maintenance-checks">
+        <h3 className="maintenance-checks-title">{t("conditions.title")}</h3>
+        <ul>
+          {window.conditions.map((condition) => {
+            const detail = conditionDetail(condition, t);
+            return (
+              <li key={condition.key} className={condition.satisfied ? "maintenance-check-met" : "maintenance-check-unmet"}>
+                <span className="maintenance-check-mark" aria-label={condition.satisfied ? t("conditions.met") : t("conditions.unmet")}>
+                  {condition.satisfied ? "✓" : "!"} {/* i18n-ok: Symbol, Bedeutung steht im aria-label */}
+                </span>
+                <div className="maintenance-check-text">
+                  <span>{t.has(`conditions.keys.${condition.key}`) ? t(`conditions.keys.${condition.key}`) : condition.key}</span>
+                  {detail ? <span className="maintenance-check-detail">{detail}</span> : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        <button type="button" className="maintenance-release" disabled={busy !== null || unmet.length > 0} onClick={onRelease}>
+          {unmet.length > 0 ? t("conditions.blockedHint") : t("actions.release")}
         </button>
       </div>
     </section>
+  );
+}
+
+function ScheduledCard({ window, t, locale, now, busy, onStart, onEdit, onCancel }: {
+  window: MaintenanceWindow; t: TFunc; locale: string; now: number; busy: string | null; onStart: () => void; onEdit: () => void; onCancel: () => void;
+}) {
+  const start = window.scheduled_start_at;
+  const date = start ? new Date(start) : null;
+  const intl = toIntlLocale(locale);
+  const duration = seconds(start, window.scheduled_end_at);
+  const message = messageOf(window, locale);
+  return (
+    <article className="maintenance-scheduled">
+      {date ? (
+        <div className="maintenance-date-tile" aria-label={formatDate(start)}>
+          <span className="maintenance-date-month">{new Intl.DateTimeFormat(intl, { month: "short" }).format(date).replace(".", "")}</span>
+          <span className="maintenance-date-day">{date.getDate()}</span>
+          <span className="maintenance-date-weekday">{new Intl.DateTimeFormat(intl, { weekday: "long" }).format(date)}</span>
+        </div>
+      ) : null}
+      <div className="maintenance-scheduled-body">
+        <div className="maintenance-scheduled-line">
+          <span className="maintenance-scheduled-time">
+            {start ? formatTime(start, locale) : "—"}
+            {window.scheduled_end_at ? ` – ${sameDay(start ?? window.scheduled_end_at, window.scheduled_end_at) ? formatTime(window.scheduled_end_at, locale) : formatDateTime(window.scheduled_end_at, locale)}` : ""}
+          </span>
+          {duration ? <span className="muted">{formatDuration(duration, t)}</span> : null}
+          <Badge variant="warning">{t(`kindLabel.${kindKey(window)}`)}</Badge>
+          <span className="muted">{countdown(start, now, t)}</span>
+        </div>
+        <p className="maintenance-scheduled-message">{message ? t("quoted", { message }) : t("defaultMessageHint")}</p>
+        <span className="muted maintenance-scheduled-meta">
+          {window.created_by_email ? t("scheduled.metaBy", { email: window.created_by_email }) : t("scheduled.meta")}
+        </span>
+      </div>
+      <div className="maintenance-scheduled-actions">
+        <button type="button" className="button-secondary" disabled={busy !== null} onClick={onStart}>{t("actions.startNow")}</button>
+        <button type="button" className="button-secondary" onClick={onEdit}>{t("actions.edit")}</button>
+        <ActionMenu
+          ariaLabel={t("actions.more")}
+          items={[
+            { label: t("idle.viewLoginShort"), onClick: () => globalThis.open(LOGIN_PATH, "_blank", "noopener") },
+            { label: t("actions.cancelPlanned"), onClick: onCancel, danger: true },
+          ]}
+        />
+      </div>
+    </article>
   );
 }
 
@@ -250,10 +404,12 @@ function MessageFields({ t, messages, onChange }: MessageFieldsProps) {
   );
 }
 
-function PlanModal({ t, onClose, onSaved }: { t: TFunc; onClose: () => void; onSaved: () => void }) {
+type PlanKind = "full" | "writes" | "uploads";
+
+function PlanModal({ t, locale, onClose, onSaved }: { t: TFunc; locale: string; onClose: () => void; onSaved: () => void }) {
   const showToast = useToast();
-  const [kind, setKind] = useState<"full" | "partial">("full");
-  const [scope, setScope] = useState<"writes" | "uploads">("writes");
+  const tm = useTranslations("maintenance");
+  const [kind, setKind] = useState<PlanKind>("full");
   const [startNow, setStartNow] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [startTime, setStartTime] = useState("");
@@ -275,8 +431,8 @@ function PlanModal({ t, onClose, onSaved }: { t: TFunc; onClose: () => void; onS
       await browserApiFetch("/api/admin/maintenance", {
         method: "POST",
         body: JSON.stringify({
-          kind, block_scope: kind === "full" ? "all" : scope, start_now: startNow, scheduled_start_at: start, scheduled_end_at: end,
-          public_message: messages, internal_note: note || null,
+          kind: kind === "full" ? "full" : "partial", block_scope: kind === "full" ? "all" : kind, start_now: startNow,
+          scheduled_start_at: start, scheduled_end_at: end, public_message: messages, internal_note: note || null,
         }),
       });
       showToast(startNow ? t("toast.started") : t("toast.planned"), "success");
@@ -288,61 +444,87 @@ function PlanModal({ t, onClose, onSaved }: { t: TFunc; onClose: () => void; onS
     }
   }
 
+  const previewWhen = startNow
+    ? t("preview.now")
+    : start
+      ? end
+        ? t("preview.range", { start: formatDateTime(start, locale), end: sameDay(start, end) ? formatTime(end, locale) : formatDateTime(end, locale) })
+        : formatDateTime(start, locale)
+      : t("preview.noDate");
+  // Ohne eigene Meldung zeigt die Anmeldeseite den Standardtext der manuellen Wartung.
+  const previewMessage = messages[locale] || messages.de || tm("reasons.manual");
+
   return (
     <Modal open title={t("plan.title")} onClose={onClose} size="wide">
-      <ModalSaveForm className="grid" onSubmit={submit}>
-        <p className="muted">{t("plan.description")}</p>
-        <div className="two-col">
-          <label className="field-stack">
+      <ModalSaveForm className="maintenance-plan" onSubmit={submit}>
+        <div className="maintenance-plan-form grid">
+          <p className="muted">{t("plan.description")}</p>
+          <div className="field-stack">
             <span className="field-label">{t("form.kind")}</span>
-            <select className="input" value={kind} onChange={(event) => setKind(event.target.value as "full" | "partial")}>
-              <option value="full">{t("kind.full")}</option>
-              <option value="partial">{t("kind.partial")}</option>
-            </select>
+            <div className="maintenance-kind-options" role="radiogroup" aria-label={t("form.kind")}>
+              {(["full", "writes", "uploads"] as PlanKind[]).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="radio"
+                  aria-checked={kind === option}
+                  className={`maintenance-kind-option${kind === option ? " maintenance-kind-option-active" : ""}`}
+                  onClick={() => setKind(option)}
+                >
+                  <strong>{t(`kindLabel.${option}`)}</strong>
+                  <span>{t(`kindDescription.${option}`)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="checkbox-row">
+            <input type="checkbox" checked={startNow} onChange={(event) => setStartNow(event.target.checked)} />
+            <span>{t("form.startNow")}</span>
           </label>
-          {kind === "partial" ? (
-            <label className="field-stack">
-              <span className="field-label">{t("form.scope")}</span>
-              <select className="input" value={scope} onChange={(event) => setScope(event.target.value as "writes" | "uploads")}>
-                <option value="writes">{t("scope.writes")}</option>
-                <option value="uploads">{t("scope.uploads")}</option>
-              </select>
-            </label>
+          {!startNow ? (
+            <div className="two-col">
+              <label className="field-stack">
+                <span className="field-label">{t("form.startDate")}</span>
+                <DateInput value={startDate} onChange={setStartDate} />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">{t("form.startTime")}</span>
+                <input className="input" inputMode="numeric" placeholder="22:00" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
+              </label>
+            </div>
           ) : null}
-        </div>
-        <label className="checkbox-row">
-          <input type="checkbox" checked={startNow} onChange={(event) => setStartNow(event.target.checked)} />
-          <span>{t("form.startNow")}</span>
-        </label>
-        {!startNow ? (
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">{t("form.startDate")}</span>
-              <DateInput value={startDate} onChange={setStartDate} />
+              <span className="field-label">{t("form.endDate")}</span>
+              <DateInput value={endDate} onChange={setEndDate} />
             </label>
             <label className="field-stack">
-              <span className="field-label">{t("form.startTime")}</span>
-              <input className="input" inputMode="numeric" placeholder="14:30" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
+              <span className="field-label">{t("form.endTime")}</span>
+              <input className="input" inputMode="numeric" placeholder="23:30" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
             </label>
           </div>
-        ) : null}
-        <div className="two-col">
+          <span className="field-help">{t("form.endHelp")}</span>
+          <MessageFields t={t} messages={messages} onChange={setMessages} />
           <label className="field-stack">
-            <span className="field-label">{t("form.endDate")}</span>
-            <DateInput value={endDate} onChange={setEndDate} />
-          </label>
-          <label className="field-stack">
-            <span className="field-label">{t("form.endTime")}</span>
-            <input className="input" inputMode="numeric" placeholder="15:30" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
+            <span className="field-label">{t("form.note")}</span>
+            <input className="input" value={note} maxLength={4000} onChange={(event) => setNote(event.target.value)} />
           </label>
         </div>
-        <span className="field-help">{t("form.endHelp")}</span>
-        <MessageFields t={t} messages={messages} onChange={setMessages} />
-        <label className="field-stack">
-          <span className="field-label">{t("form.note")}</span>
-          <input className="input" value={note} maxLength={4000} onChange={(event) => setNote(event.target.value)} />
-        </label>
-        <div className="modal-actions">
+        <aside className="maintenance-plan-preview" aria-label={t("preview.title")}>
+          <span className="maintenance-eyebrow">{t("preview.title")}</span>
+          <div className="maintenance-preview-card">
+            <div className="maintenance-login-banner">
+              <span className="maintenance-login-banner-kicker">{startNow ? t("preview.kickerRunning") : t("preview.kickerPlanned")}</span>
+              <strong>{previewWhen}</strong>
+              <span>{previewMessage}</span>
+            </div>
+            <div className="maintenance-preview-skeleton" aria-hidden="true">
+              <span /><span /><span /><span />
+            </div>
+          </div>
+          <p className="muted maintenance-preview-hint">{t(`kindHint.${kind}`)}</p>
+        </aside>
+        <div className="modal-actions maintenance-plan-actions">
           <button type="button" className="button-ghost" onClick={onClose}>{t("actions.close")}</button>
           <button type="submit" className="button-primary" disabled={!valid || saving}>{startNow ? t("actions.startNow") : t("actions.plan")}</button>
         </div>

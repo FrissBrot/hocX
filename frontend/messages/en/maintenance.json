@@ -23,7 +23,10 @@
   "upcoming": {
     "title": "Scheduled maintenance",
     "withEnd": "hocX will be unavailable from {start} until approximately {end}.",
-    "withoutEnd": "From {start}, hocX will be temporarily unavailable due to maintenance."
+    "withoutEnd": "From {start}, hocX will be temporarily unavailable due to maintenance.",
+    "when": "{date} · {start} – approx. {end}",
+    "whenOpen": "{date} · from {start}",
+    "whenRange": "{start} – approx. {end}"
   },
   "ended": "Maintenance has ended. Redirecting …",
   "checking": "Checking maintenance status …"

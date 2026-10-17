@@ -1099,7 +1099,7 @@ input[type="file"] {
 .verify-file-chip svg { flex: none; }
 .verify-file-chip-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .verify-file-chip-name { overflow: hidden; color: var(--text); font-size: var(--text-sm); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.verify-file-chip-hash { overflow: hidden; font-family: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace; font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.verify-file-chip-hash { overflow: hidden; font-family: var(--font-mono); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
 
 .verify-identity {
   display: flex;
@@ -1197,7 +1197,7 @@ input[type="file"] {
 }
 .verify-facts dt { color: var(--muted); }
 .verify-facts dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
-.verify-id { font-family: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace; font-variant-numeric: tabular-nums; }
+.verify-id { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .verify-again { margin-top: var(--space-4); }
 
 /* Seitenweites Ablegen - gleiches Muster wie file-drop-overlay der Haupt-App */

@@ -19,7 +19,9 @@
     "edit": "Modifier",
     "editMessage": "Modifier le message",
     "close": "Fermer",
-    "save": "Enregistrer"
+    "save": "Enregistrer",
+    "more": "Autres actions",
+    "cancelPlanned": "Annuler la maintenance"
   },
   "toast": {
     "release": "Maintenance terminée",
@@ -41,7 +43,9 @@
   },
   "scheduled": {
     "title": "Maintenances planifiées",
-    "empty": "Aucune maintenance planifiée."
+    "empty": "Aucune maintenance planifiée.",
+    "meta": "Affiché dès maintenant sur la page de connexion",
+    "metaBy": "Affiché dès maintenant sur la page de connexion · planifiée par {email}"
   },
   "history": {
     "title": "Historique",
@@ -56,7 +60,9 @@
     "reason": "Motif",
     "state": "Statut",
     "duration": "Durée",
-    "estimate": "Estimation"
+    "estimate": "Estimation",
+    "period": "Période",
+    "durationEstimate": "Durée · estimée"
   },
   "kind": {
     "full": "Maintenance complète",
@@ -118,7 +124,7 @@
     "aria": "Progression de la vérification"
   },
   "conditions": {
-    "title": "Conditions de levée",
+    "title": "Contrôles de sécurité avant la fin",
     "met": "Remplie",
     "unmet": "Ouverte",
     "blockedHint": "Possible uniquement une fois les conditions de levée remplies",
@@ -126,6 +132,18 @@
       "storage_migration_settled": "Migration des données terminée et vérifiée, ou source manifestement toujours active et inchangée",
       "storage_not_fenced": "Aucun verrou d'écriture du stockage actif",
       "no_open_storage_migration_cutover": "Aucun basculement de stockage en cours"
+    },
+    "reasons": {
+      "ok": "Rempli",
+      "fenced": "Le stockage est encore bloqué en écriture",
+      "cutover_open": "Une bascule du stockage est encore ouverte",
+      "migration_missing": "La migration associée est introuvable",
+      "integrity_not_confirmed": "Contrôle d’intégrité final pas encore confirmé",
+      "target_verified": "Nouvelle cible de stockage vérifiée et active",
+      "target_unverified": "Nouvelle cible de stockage pas encore vérifiée",
+      "source_consistent": "Ancien stockage toujours actif et inchangé",
+      "inconsistent": "État du stockage incohérent – veuillez vérifier",
+      "migration_running": "Migration des données encore en cours"
     }
   },
   "form": {
@@ -147,5 +165,50 @@
   },
   "edit": {
     "title": "Modifier le message de maintenance"
-  }
+  },
+  "idle": {
+    "title": "hocX est disponible normalement",
+    "next": "Prochaine maintenance {countdown} · {start}",
+    "viewLogin": "Voir l’avis sur la page de connexion →",
+    "viewLoginShort": "Voir la page de connexion"
+  },
+  "running": {
+    "kicker": "{state, select, preparing {Maintenance en préparation} verifying {Maintenance en vérification} overdue {Maintenance en retard} other {Maintenance en cours}} · {kind}",
+    "started": "Démarrée à {time}",
+    "notStarted": "Pas encore démarrée",
+    "until": "prévue jusqu’à {time} · encore environ {remaining}",
+    "overdue": "prévue jusqu’à {time} · dépassée",
+    "job": "déclenchée par {job}"
+  },
+  "kindLabel": {
+    "full": "Maintenance complète",
+    "writes": "Blocage des écritures",
+    "uploads": "Blocage des téléversements"
+  },
+  "kindDescription": {
+    "full": "hocX est indisponible, seul l’avis est affiché.",
+    "writes": "La lecture reste possible, les modifications sont bloquées.",
+    "uploads": "Tout reste utilisable, seuls les téléversements sont bloqués."
+  },
+  "kindHint": {
+    "full": "Pendant une maintenance complète, hocX redirige toutes les requêtes vers la page de maintenance. Le portail d’administration reste accessible.",
+    "writes": "Pendant un blocage des écritures, hocX reste consultable. L’enregistrement affiche cet avis.",
+    "uploads": "Pendant un blocage des téléversements, hocX reste utilisable. Les téléversements affichent cet avis."
+  },
+  "countdown": {
+    "due": "imminente",
+    "minutes": "dans {count, plural, one {# minute} other {# minutes}}",
+    "hours": "dans {count, plural, one {# heure} other {# heures}}",
+    "days": "dans {count, plural, one {# jour} other {# jours}}"
+  },
+  "preview": {
+    "title": "Aperçu de la page de connexion",
+    "now": "Dès maintenant",
+    "range": "{start} – env. {end}",
+    "noDate": "Début pas encore choisi",
+    "kickerRunning": "Maintenance en cours",
+    "kickerPlanned": "Maintenance planifiée"
+  },
+  "quoted": "« {message} »",
+  "defaultMessageHint": "Texte standard de la page de connexion"
 }

@@ -11,7 +11,7 @@ export default async function AdminMaintenancePage() {
   const overview = await backendFetchWithSession<MaintenanceOverview>("/api/admin/maintenance");
   return (
     <AdminShell session={session}>
-      <section className="panel">
+      <section className="admin-page">
         <AdminMaintenance initialOverview={overview ?? EMPTY} />
       </section>
     </AdminShell>

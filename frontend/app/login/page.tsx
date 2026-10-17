@@ -731,6 +731,7 @@ export default function LoginPage() {
   return (
     <main className="login-frame">
       <section className={loginPanelClassName}>
+        {maintenance ? <MaintenanceNotice status={maintenance} /> : null}
         {!isVerifyScreen ? (
           <>
             <div className="login-brand">
@@ -752,8 +753,6 @@ export default function LoginPage() {
             </div>
           </>
         ) : null}
-
-        {maintenance ? <MaintenanceNotice status={maintenance} /> : null}
 
         {maintenanceActive ? null : !pendingMfa ? renderPasswordStep() : pendingMfa.status === "setup_required" ? renderSetupStep() : renderVerifyStep()}
 

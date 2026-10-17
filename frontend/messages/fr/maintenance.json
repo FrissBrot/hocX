@@ -23,7 +23,10 @@
   "upcoming": {
     "title": "Maintenance planifiée",
     "withEnd": "hocX sera indisponible du {start} jusqu'à environ {end}.",
-    "withoutEnd": "À partir du {start}, hocX sera temporairement indisponible pour maintenance."
+    "withoutEnd": "À partir du {start}, hocX sera temporairement indisponible pour maintenance.",
+    "when": "{date} · {start} – env. {end}",
+    "whenOpen": "{date} · dès {start}",
+    "whenRange": "{start} – env. {end}"
   },
   "ended": "La maintenance est terminée. Redirection …",
   "checking": "Vérification de l'état de maintenance …"

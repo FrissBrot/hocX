@@ -23,7 +23,10 @@
   "upcoming": {
     "title": "Geplante Wartung",
     "withEnd": "hocX ist von {start} bis voraussichtlich {end} nicht verfügbar.",
-    "withoutEnd": "Ab {start} ist hocX wegen Wartungsarbeiten vorübergehend nicht verfügbar."
+    "withoutEnd": "Ab {start} ist hocX wegen Wartungsarbeiten vorübergehend nicht verfügbar.",
+    "when": "{date} · {start} – ca. {end}",
+    "whenOpen": "{date} · ab {start}",
+    "whenRange": "{start} – ca. {end}"
   },
   "ended": "Die Wartung ist beendet. Du wirst weitergeleitet …",
   "checking": "Wartungsstatus wird geprüft …"

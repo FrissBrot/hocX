@@ -19,7 +19,9 @@
     "edit": "Modifica",
     "editMessage": "Modifica messaggio",
     "close": "Chiudi",
-    "save": "Salva"
+    "save": "Salva",
+    "more": "Altre azioni",
+    "cancelPlanned": "Annulla manutenzione"
   },
   "toast": {
     "release": "Manutenzione terminata",
@@ -41,7 +43,9 @@
   },
   "scheduled": {
     "title": "Manutenzioni pianificate",
-    "empty": "Nessuna manutenzione pianificata."
+    "empty": "Nessuna manutenzione pianificata.",
+    "meta": "Mostrato da subito sulla pagina di accesso",
+    "metaBy": "Mostrato da subito sulla pagina di accesso · pianificata da {email}"
   },
   "history": {
     "title": "Cronologia",
@@ -56,7 +60,9 @@
     "reason": "Motivo",
     "state": "Stato",
     "duration": "Durata",
-    "estimate": "Stima"
+    "estimate": "Stima",
+    "period": "Periodo",
+    "durationEstimate": "Durata · stimata"
   },
   "kind": {
     "full": "Manutenzione completa",
@@ -118,7 +124,7 @@
     "aria": "Avanzamento della verifica"
   },
   "conditions": {
-    "title": "Condizioni di sblocco",
+    "title": "Controlli di sicurezza prima della fine",
     "met": "Soddisfatta",
     "unmet": "Aperta",
     "blockedHint": "Possibile solo quando le condizioni di sblocco sono soddisfatte",
@@ -126,6 +132,18 @@
       "storage_migration_settled": "Migrazione dei dati completata e verificata, oppure origine dimostrabilmente ancora attiva e invariata",
       "storage_not_fenced": "Nessun blocco di scrittura dell'archivio attivo",
       "no_open_storage_migration_cutover": "Nessun passaggio di archivio in corso"
+    },
+    "reasons": {
+      "ok": "Soddisfatto",
+      "fenced": "Lo storage è ancora bloccato in scrittura",
+      "cutover_open": "Un passaggio dello storage è ancora aperto",
+      "migration_missing": "La migrazione associata non è stata trovata",
+      "integrity_not_confirmed": "Controllo d’integrità finale non ancora confermato",
+      "target_verified": "Nuova destinazione dello storage verificata e attiva",
+      "target_unverified": "Nuova destinazione dello storage non ancora verificata",
+      "source_consistent": "Storage precedente ancora attivo e invariato",
+      "inconsistent": "Stato dello storage incoerente – verificare",
+      "migration_running": "Migrazione dei dati ancora in corso"
     }
   },
   "form": {
@@ -147,5 +165,50 @@
   },
   "edit": {
     "title": "Modifica messaggio di manutenzione"
-  }
+  },
+  "idle": {
+    "title": "hocX è disponibile normalmente",
+    "next": "Prossima manutenzione {countdown} · {start}",
+    "viewLogin": "Vedi l’avviso sulla pagina di accesso →",
+    "viewLoginShort": "Vedi pagina di accesso"
+  },
+  "running": {
+    "kicker": "{state, select, preparing {Manutenzione in preparazione} verifying {Manutenzione in verifica} overdue {Manutenzione in ritardo} other {Manutenzione in corso}} · {kind}",
+    "started": "Avviata alle {time}",
+    "notStarted": "Non ancora avviata",
+    "until": "prevista fino alle {time} · ancora circa {remaining}",
+    "overdue": "prevista fino alle {time} · superata",
+    "job": "avviata da {job}"
+  },
+  "kindLabel": {
+    "full": "Manutenzione completa",
+    "writes": "Blocco scritture",
+    "uploads": "Blocco caricamenti"
+  },
+  "kindDescription": {
+    "full": "hocX non è raggiungibile, viene mostrato solo l’avviso.",
+    "writes": "La lettura resta possibile, le modifiche sono bloccate.",
+    "uploads": "Tutto resta utilizzabile, solo i caricamenti sono bloccati."
+  },
+  "kindHint": {
+    "full": "Durante la manutenzione completa hocX reindirizza tutte le richieste alla pagina di manutenzione. Il portale di amministrazione resta raggiungibile.",
+    "writes": "Durante un blocco scritture hocX resta consultabile. Il salvataggio mostra questo avviso.",
+    "uploads": "Durante un blocco caricamenti hocX resta utilizzabile. I caricamenti mostrano questo avviso."
+  },
+  "countdown": {
+    "due": "imminente",
+    "minutes": "tra {count, plural, one {# minuto} other {# minuti}}",
+    "hours": "tra {count, plural, one {# ora} other {# ore}}",
+    "days": "tra {count, plural, one {# giorno} other {# giorni}}"
+  },
+  "preview": {
+    "title": "Anteprima pagina di accesso",
+    "now": "Da subito",
+    "range": "{start} – ca. {end}",
+    "noDate": "Inizio non ancora scelto",
+    "kickerRunning": "Manutenzione in corso",
+    "kickerPlanned": "Manutenzione pianificata"
+  },
+  "quoted": "«{message}»",
+  "defaultMessageHint": "Testo standard della pagina di accesso"
 }

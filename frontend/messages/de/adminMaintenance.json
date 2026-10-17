@@ -19,7 +19,9 @@
     "edit": "Bearbeiten",
     "editMessage": "Meldung bearbeiten",
     "close": "Schliessen",
-    "save": "Speichern"
+    "save": "Speichern",
+    "more": "Weitere Aktionen",
+    "cancelPlanned": "Wartung absagen"
   },
   "toast": {
     "release": "Wartung beendet",
@@ -41,7 +43,9 @@
   },
   "scheduled": {
     "title": "Geplante Wartungen",
-    "empty": "Keine Wartung geplant."
+    "empty": "Keine Wartung geplant.",
+    "meta": "Wird ab sofort auf der Anmeldeseite angezeigt",
+    "metaBy": "Wird ab sofort auf der Anmeldeseite angezeigt · geplant von {email}"
   },
   "history": {
     "title": "Verlauf",
@@ -56,7 +60,9 @@
     "reason": "Grund",
     "state": "Status",
     "duration": "Dauer",
-    "estimate": "Geschätzt"
+    "estimate": "Geschätzt",
+    "period": "Zeitraum",
+    "durationEstimate": "Dauer · geschätzt"
   },
   "kind": {
     "full": "Volle Wartung",
@@ -118,7 +124,7 @@
     "aria": "Fortschritt der Prüfung"
   },
   "conditions": {
-    "title": "Freigabebedingungen",
+    "title": "Sicherheitsprüfungen vor dem Beenden",
     "met": "Erfüllt",
     "unmet": "Offen",
     "blockedHint": "Erst nach erfüllten Freigabebedingungen möglich",
@@ -126,6 +132,18 @@
       "storage_migration_settled": "Datenmigration abgeschlossen und geprüft bzw. Quelle nachweislich unverändert aktiv",
       "storage_not_fenced": "Keine Schreibsperre des Speichers aktiv",
       "no_open_storage_migration_cutover": "Kein offener Speicher-Cutover"
+    },
+    "reasons": {
+      "ok": "Erfüllt",
+      "fenced": "Der Speicher ist noch schreibgesperrt",
+      "cutover_open": "Ein Speicher-Cutover ist noch offen",
+      "migration_missing": "Die zugehörige Migration wurde nicht gefunden",
+      "integrity_not_confirmed": "Abschliessende Integritätsprüfung noch nicht bestätigt",
+      "target_verified": "Neues Speicherziel geprüft und aktiv",
+      "target_unverified": "Neues Speicherziel noch nicht geprüft",
+      "source_consistent": "Bisheriger Speicher unverändert aktiv",
+      "inconsistent": "Speicherzustand widersprüchlich – bitte prüfen",
+      "migration_running": "Datenmigration läuft noch"
     }
   },
   "form": {
@@ -147,5 +165,50 @@
   },
   "edit": {
     "title": "Wartungsmeldung bearbeiten"
-  }
+  },
+  "idle": {
+    "title": "hocX ist normal erreichbar",
+    "next": "Nächste Wartung {countdown} · {start}",
+    "viewLogin": "Hinweis auf der Anmeldeseite ansehen →",
+    "viewLoginShort": "Anmeldeseite ansehen"
+  },
+  "running": {
+    "kicker": "{state, select, preparing {Wartung wird vorbereitet} verifying {Wartung wird geprüft} overdue {Wartung überfällig} other {Wartung läuft}} · {kind}",
+    "started": "Gestartet {time}",
+    "notStarted": "Noch nicht gestartet",
+    "until": "geplant bis {time} · noch rund {remaining}",
+    "overdue": "geplant bis {time} · überschritten",
+    "job": "ausgelöst durch {job}"
+  },
+  "kindLabel": {
+    "full": "Volle Wartung",
+    "writes": "Schreibsperre",
+    "uploads": "Upload-Sperre"
+  },
+  "kindDescription": {
+    "full": "hocX ist nicht erreichbar, nur der Hinweis wird gezeigt.",
+    "writes": "Lesen bleibt möglich, Änderungen sind gesperrt.",
+    "uploads": "Alles bleibt nutzbar, nur Uploads sind gesperrt."
+  },
+  "kindHint": {
+    "full": "Bei voller Wartung leitet hocX alle Anfragen auf die Wartungsseite um. Das Adminportal bleibt erreichbar.",
+    "writes": "Bei einer Schreibsperre bleibt hocX lesbar. Speichern zeigt diesen Hinweis.",
+    "uploads": "Bei einer Upload-Sperre bleibt hocX nutzbar. Uploads zeigen diesen Hinweis."
+  },
+  "countdown": {
+    "due": "steht an",
+    "minutes": "in {count, plural, one {# Minute} other {# Minuten}}",
+    "hours": "in {count, plural, one {# Stunde} other {# Stunden}}",
+    "days": "in {count, plural, one {# Tag} other {# Tagen}}"
+  },
+  "preview": {
+    "title": "Vorschau Anmeldeseite",
+    "now": "Ab sofort",
+    "range": "{start} – ca. {end}",
+    "noDate": "Beginn noch nicht gewählt",
+    "kickerRunning": "Wartung läuft",
+    "kickerPlanned": "Geplante Wartung"
+  },
+  "quoted": "«{message}»",
+  "defaultMessageHint": "Standardtext der Anmeldeseite"
 }
