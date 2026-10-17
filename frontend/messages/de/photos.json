@@ -383,7 +383,6 @@
     "takenUnknown": "Unbekannt",
     "estimatedLabel": "Geschätztes Aufnahmedatum",
     "estimatedRemove": "Entfernen",
-    "estimatedOverridden": "Das echte Aufnahmedatum hat Vorrang.",
     "uploadedLabel": "Hochgeladen",
     "locationLabel": "Standort",
     "locationValue": "{latitude}, {longitude}",

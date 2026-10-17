@@ -351,7 +351,8 @@ export function PhotoViewer({
                       : "…"}
                 </dd>
               </div>
-              {metadata && (metadata.can_edit_capture_date || metadata.estimated_taken_on) ? (
+              {/* Das Schätzdatum zählt nur ohne echtes Aufnahmedatum - mit EXIF-Datum ist es überflüssig. */}
+              {metadata && !metadata.exif_taken_at && (metadata.can_edit_capture_date || metadata.estimated_taken_on) ? (
                 <div>
                   <dt>{t("estimatedLabel")}</dt>
                   <dd className="photo-viewer-estimate">
@@ -372,7 +373,6 @@ export function PhotoViewer({
                     ) : (
                       formatDate(metadata.estimated_taken_on)
                     )}
-                    {metadata.exif_taken_at && metadata.estimated_taken_on ? <span className="photo-viewer-estimate-note">{t("estimatedOverridden")}</span> : null}
                   </dd>
                 </div>
               ) : null}

@@ -383,7 +383,6 @@
     "takenUnknown": "Inconnue",
     "estimatedLabel": "Date de prise de vue estimée",
     "estimatedRemove": "Supprimer",
-    "estimatedOverridden": "La vraie date de prise de vue est prioritaire.",
     "uploadedLabel": "Envoyée",
     "locationLabel": "Lieu",
     "locationValue": "{latitude}, {longitude}",

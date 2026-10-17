@@ -206,8 +206,8 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
 - Upload-Ergebnis je Datei: Hochgeladen, Übersprungen, Übersprungen · Metadaten ergänzt,
   Fehlgeschlagen – mit Zusammenfassung und Detailliste; Upload-Fehler übersetzt (Fehlercodes).
 - Bilddetails: echtes Aufnahmedatum (in Kamerazeit, mit Offset), geschätztes Datum
-  (bearbeiten/entfernen, `PATCH /api/stored-files/{id}/capture-date`), Uploaddatum und
-  Standort getrennt.
+  (bearbeiten/entfernen, `PATCH /api/stored-files/{id}/capture-date`; nur bei Bildern ohne
+  echtes Aufnahmedatum), Uploaddatum und Standort getrennt.
 - GPS-Daten werden gespeichert (Breite, Länge, Höhe, Blickrichtung, Genauigkeit, Herkunft).
   **Standort je Album-Freigabe schaltbar:** Freigaben an Partner-Mandanten teilen ihn
   standardmässig, Freigabe-Links nicht; ohne Freigabe entfernen Downloads, Vorschau und

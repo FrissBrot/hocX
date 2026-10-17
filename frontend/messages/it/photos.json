@@ -383,7 +383,6 @@
     "takenUnknown": "Sconosciuta",
     "estimatedLabel": "Data di scatto stimata",
     "estimatedRemove": "Rimuovi",
-    "estimatedOverridden": "La data di scatto reale ha la precedenza.",
     "uploadedLabel": "Caricata",
     "locationLabel": "Luogo",
     "locationValue": "{latitude}, {longitude}",

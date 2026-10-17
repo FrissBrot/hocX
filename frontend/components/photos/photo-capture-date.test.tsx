@@ -77,13 +77,14 @@ describe("Bilddetails: drei getrennte Datumsarten", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("zeigt echtes Datum in Kamerazeit (ohne Zeitzonenverschiebung), Schätzung und Upload getrennt", async () => {
+  it("zeigt echtes Datum in Kamerazeit (ohne Zeitzonenverschiebung) und Upload, aber kein überflüssiges Schätzdatum", async () => {
     browserApiFetchMock.mockResolvedValue(
       metadata({ exif_taken_at: "2023-07-14T10:30:00Z", exif_taken_offset: "+02:00", estimated_taken_on: "1999-01-01", date_source: "exif", gps: { latitude: -33.86882, longitude: -70.66933, altitude_m: 540, direction_deg: null, accuracy_m: null, timestamp: null, source: "server" } }),
     );
     render(<PhotoViewer items={[makeItem()]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
     expect(await screen.findByText("14.07.2023, 10:30 (+02:00)")).toBeInTheDocument();
-    expect(screen.getByText("Das echte Aufnahmedatum hat Vorrang.")).toBeInTheDocument();
+    expect(screen.queryByText("Geschätztes Aufnahmedatum")).toBeNull();
+    expect(document.querySelector(".photo-viewer-estimate")).toBeNull();
     expect(screen.getByText("Hochgeladen")).toBeInTheDocument();
     expect(screen.getByText("-33.86882, -70.66933 · 540 m ü. M.")).toBeInTheDocument();
   });
