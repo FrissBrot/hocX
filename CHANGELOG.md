@@ -91,7 +91,7 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
 
 ### Neu: Dokument-Engine und Document Studio
 
-- **Document Studio** (Navigation «Dokumente»):
+- **Document Studio** (Navigation «Dokument-Studio», eigenes Icon zur Unterscheidung von «Dateien»):
   - **Vorlagen:** Bibliothek mit 26 mitgelieferten Vorlagen für alle 16 Dokumenttypen
     (Protokoll in fünf Varianten), eigene Vorlagen und angepasste Kopien, Entwurf und
     Veröffentlichung, Versionen vergleichen und wiederherstellen, Standardvorlagen pro

@@ -74,7 +74,7 @@ test("export dialog, template library, brand studio and designer render (light/d
       // Smartphone: das Document Studio ist bewusst nur am Desktop bedienbar (Hinweis mit Link)
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto("/documents");
-      await expect(page.getByRole("heading", { name: "Dokumente", level: 1 })).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByRole("heading", { name: "Dokument-Studio", level: 1 })).toBeVisible({ timeout: 60_000 });
       await expect(page.getByText("Diesen Bereich bearbeitest du am Computer.", { exact: false })).toBeVisible();
       await page.screenshot({ path: `test-results/document-studio-${theme}-390.png` });
     }
