@@ -26,7 +26,7 @@ export default async function TenantVerificationPage() {
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
-        mobile={<MobileTenantSettings title={tTenant("pageTitle")}>{content}</MobileTenantSettings>}
+        mobile={<MobileTenantSettings title={tTenant("pageTitle")}><div className="mobile-section">{content}</div></MobileTenantSettings>}
         desktop={
           <>
           <section className="panel">

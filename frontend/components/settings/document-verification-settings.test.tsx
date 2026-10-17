@@ -25,9 +25,12 @@ describe("DocumentVerificationSettings", () => {
     apiFetch.mockResolvedValue({ ...base, show_identity: true });
     render(<DocumentVerificationSettings initialState={base} />);
     expect(screen.queryByText("Musikverein")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Name und Logo auf der Prüfseite anzeigen"));
+    expect(screen.getByText(/Herausgeber wird nicht angezeigt/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch", { name: /Name und Logo anzeigen/ }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/api/document-verification", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ show_identity: true }) })));
-    expect(await screen.findByText("Erstellt im hocX-Konto von Musikverein.")).toBeInTheDocument();
+    expect(await screen.findByText("Musikverein")).toBeInTheDocument();
+    expect(screen.getByText("Herausgegeben von")).toBeInTheDocument();
+    expect(screen.getByText("M")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Prüfseite öffnen" })).toHaveAttribute("href", "https://abgabe.example.ch/verify");
   });
 
@@ -48,7 +51,8 @@ describe("DocumentVerificationSettings", () => {
   it("shows verification, badge preview and the hint after a rename", () => {
     const { rerender } = render(<DocumentVerificationSettings initialState={{ ...base, show_identity: true, verified_at: "2026-09-01T00:00:00Z" }} />);
     expect(screen.getByText("Verifiziert seit 01.09.2026")).toBeInTheDocument();
-    expect(screen.getByText("Verifizierte Organisation")).toBeInTheDocument();
+    expect(screen.getByText(/Verifizierte Organisation/)).toBeInTheDocument();
+    expect(screen.getByText("Ändert sich der Name, wird die Verifizierung aufgehoben.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Verifizierung beantragen" })).not.toBeInTheDocument();
     rerender(<DocumentVerificationSettings key="renamed" initialState={{ ...base, revoked_at: "2026-10-01T00:00:00Z", revoked_reason: "name_changed" }} />);
     expect(screen.getByText(/weil sich der Name geändert hat/)).toBeInTheDocument();
@@ -61,8 +65,9 @@ describe("DocumentVerificationSettings", () => {
     );
     expect(screen.getByText("verify.musikverein.ch")).toBeInTheDocument();
     expect(screen.getByText("Aktiv")).toBeInTheDocument();
-    expect(screen.getByText("Prüf-Domain verifiziert: verify.musikverein.ch")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Domains verwalten" })).toHaveAttribute("href", "/tenant-settings/domains");
+    expect(screen.getByText("Prüf-Domain verifiziert")).toBeInTheDocument();
+    expect(screen.getByText("verify.musikverein.ch/249A-0313")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Domains verwalten/ })).toHaveAttribute("href", "/tenant-settings/domains");
     expect(screen.getByRole("link", { name: "Prüfseite öffnen" })).toHaveAttribute("href", "https://verify.musikverein.ch/verify");
 
     // Name und Logo ausgeblendet: Domain bleibt eingerichtet, wird aber nicht verwendet
@@ -71,12 +76,21 @@ describe("DocumentVerificationSettings", () => {
     );
     expect(screen.getByText("Inaktiv")).toBeInTheDocument();
     expect(screen.getByText(/erst verwendet, wenn Name und Logo/)).toBeInTheDocument();
-    expect(screen.queryByText(/Prüf-Domain verifiziert:/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Prüf-Domain verifiziert")).not.toBeInTheDocument();
+    expect(screen.getByText("abgabe.example.ch/249A-0313")).toBeInTheDocument();
   });
 
   it("explains that the verification domain is not booked", () => {
     render(<DocumentVerificationSettings initialState={base} />);
     expect(screen.getByText("Nicht im Abo")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Prüf-Domain einrichten" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Prüf-Domain einrichten/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Immer aktiv")).toBeInTheDocument();
+    expect(screen.getByText("Nicht verifiziert")).toBeInTheDocument();
+  });
+
+  it("offers to set up the domain when the feature is booked", () => {
+    render(<DocumentVerificationSettings initialState={{ ...base, has_verify_domain_feature: true }} />);
+    expect(screen.getByText("Nicht eingerichtet")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Prüf-Domain einrichten/ })).toHaveAttribute("href", "/tenant-settings/domains");
   });
 });

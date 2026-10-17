@@ -71,8 +71,8 @@ test("authenticity settings (light/dark, 1440)", async ({ page }) => {
     await page.goto("/tenant-settings/verification");
     await page.evaluate((value) => localStorage.setItem("hocx-theme", value), theme);
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Echtheitsprüfung" })).toBeVisible();
-    await expect(page.getByText("Vorschau der Prüfseite")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Was die Prüfseite zeigt" })).toBeVisible();
+    await expect(page.getByText("Live-Vorschau der Prüfseite")).toBeVisible();
     await page.screenshot({ path: `test-results/verify-settings-${theme}-1440.png`, fullPage: true });
   }
 });
