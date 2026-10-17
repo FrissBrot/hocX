@@ -68,7 +68,7 @@ test("authenticity settings (light/dark, 1440)", async ({ page }) => {
   test.setTimeout(90_000);
   for (const theme of ["light", "dark"]) {
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto("/settings/verification");
+    await page.goto("/tenant-settings/verification");
     await page.evaluate((value) => localStorage.setItem("hocx-theme", value), theme);
     await page.reload();
     await expect(page.getByRole("heading", { name: "Echtheitsprüfung" })).toBeVisible();

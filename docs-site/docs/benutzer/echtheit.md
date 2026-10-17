@@ -30,7 +30,7 @@ Die Prüfseite funktioniert auch auf der eigenen Abgabebox-Adresse eines Vereins
 
 ## Name und Logo auf der Prüfseite anzeigen
 
-Unter **Vorlagen → Echtheitsprüfung** (nur Administratorinnen und Administratoren):
+Unter **Mandanten-Einstellungen → Echtheitsprüfung** (nur Administratorinnen und Administratoren):
 
 - **Name und Logo auf der Prüfseite anzeigen** (Standard: aus). Ausgeschaltet zeigt die Prüfseite
   nur, dass das Dokument unverändert aus hocX stammt – nicht, von welchem Verein.
@@ -38,7 +38,7 @@ Unter **Vorlagen → Echtheitsprüfung** (nur Administratorinnen und Administrat
 - Eine **Vorschau** zeigt, wie das Ergebnis aussieht, und **Prüfseite öffnen** führt direkt hin.
 
 Welche Angaben im PDF selbst stehen (Prüfadresse, Dokument-ID, QR-Code), legt das Corporate Design fest:
-**Dokumente → Corporate Design**, Abschnitt «Echtheitsprüfung».
+**Dokument-Studio → Corporate Design**, Abschnitt «Echtheitsprüfung».
 
 ## Verifizierte Organisation
 
@@ -46,7 +46,7 @@ hocX kann bestätigen, dass ein Konto wirklich zu einer Organisation gehört. Au
 erscheint dann das Abzeichen **«Verifizierte Organisation»** – aber nur, wenn Name und Logo
 angezeigt werden. Ohne Verifizierung steht dort «Erstellt im hocX-Konto von …».
 
-1. Unter **Vorlagen → Echtheitsprüfung** auf **Verifizierung beantragen** klicken, optional mit
+1. Unter **Mandanten-Einstellungen → Echtheitsprüfung** auf **Verifizierung beantragen** klicken, optional mit
    einer Nachricht (z. B. Eintrag im Handelsregister, Website, Statuten).
 2. hocX prüft den Antrag und bestätigt oder lehnt ihn mit Begründung ab. Der Stand ist auf
    derselben Seite sichtbar; ein offener Antrag lässt sich zurückziehen.

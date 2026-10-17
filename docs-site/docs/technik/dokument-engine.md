@@ -267,7 +267,7 @@ Schlüsselverwaltung, und kann die Organisation zeigen, wenn sie es freigibt und
 verifiziert hat. *Später (nur Notiz):* PAdES pro Mandant über einen Cloud-Signaturdienst könnte die
 Hash-Prüfung ergänzen.
 
-**Verifizierung durch hocX:** Mandanten-Admins beantragen sie unter Vorlagen → Echtheitsprüfung
+**Verifizierung durch hocX:** Mandanten-Admins beantragen sie unter Mandanten-Einstellungen → Echtheitsprüfung (`/tenant-settings/verification`)
 (`identity_verification_request`, höchstens ein offener Antrag). Plattform-Admins bestätigen oder
 lehnen ab (`/admin/verifications`, Tab «Verifizierung» im Mandanten-Dialog) und können entziehen.
 Bestätigt wird der Name zum Antragszeitpunkt; eine Namensänderung hebt die Bestätigung auf und

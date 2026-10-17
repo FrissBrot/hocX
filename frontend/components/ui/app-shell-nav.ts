@@ -44,7 +44,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
         { href: "/protocols", labelKey: "protocols", icon: "protocols" },
         ...(isWriter ? [{ href: "/events", labelKey: "events", icon: "events" as const }] : []),
         { href: "/todos", labelKey: "todos", icon: "todos" },
-        { href: "/documents", labelKey: "documentStudio", icon: "studio", match: ["/settings/verification"] },
+        { href: "/documents", labelKey: "documentStudio", icon: "studio" },
         ...(isWriter && hasAbgabebox ? [{ href: "/submission-assignments", labelKey: "submissions", icon: "submissions" as const }] : []),
         ...(hasFinance ? [{ href: "/finances", labelKey: "finances", icon: "finances" as const, match: ["/fines"] }] : []),
       ],

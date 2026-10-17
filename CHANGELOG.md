@@ -117,7 +117,7 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   `/verify` der Abgabebox zeigt ohne Konto, ob eine Datei unverändert aus hocX stammt, mit
   Status, Version, Hinweis auf eine neuere Version, einem beim Export überschriebenen Titel und
   importierten, nicht verifizierten Einträgen. Die Datei verlässt dabei nie den Browser.
-- **Dokumente → Echtheitsprüfung:** Name und Logo auf der Prüfseite anzeigen (Standard aus), auf
+- **Mandanten-Einstellungen → Echtheitsprüfung:** Name und Logo auf der Prüfseite anzeigen (Standard aus), auf
   neuere Versionen hinweisen (Standard an), Verifizierung durch hocX beantragen, Vorschau.
 - **Adminportal → Verifizierungen:** Anträge bestätigen oder ablehnen, Verifizierung entziehen;
   eine Namensänderung hebt sie automatisch auf. Bestätigte Organisationen erhalten auf der

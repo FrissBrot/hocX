@@ -31,16 +31,15 @@ export function templateTabs(t: TFunc): RouteTab[] {
   ];
 }
 
-// Document Studio: Vorlagen, Corporate Design, Assets, Komponenten, Exporte; die
-// Echtheitsprüfung (Einstellungen der Prüfseite) nur für Admins.
-export function documentStudioTabs(t: TFunc, isAdmin: boolean): RouteTab[] {
+// Document Studio: Vorlagen, Corporate Design, Assets, Komponenten, Exporte. Die
+// Echtheitsprüfung liegt in den Mandanten-Einstellungen.
+export function documentStudioTabs(t: TFunc): RouteTab[] {
   return [
     { href: "/documents", label: t("documentTemplates") },
     { href: "/documents/brand", label: t("documentBrand") },
     { href: "/documents/assets", label: t("documentAssets") },
     { href: "/documents/components", label: t("documentComponents") },
     { href: "/documents/exports", label: t("documentExports") },
-    ...(isAdmin ? [{ href: "/settings/verification", label: t("documentVerification") }] : []),
   ];
 }
 
@@ -50,5 +49,6 @@ export function tenantSettingsTabs(t: TFunc): RouteTab[] {
     { href: "/tenant-settings", label: t("general") },
     { href: "/tenant-settings/domains", label: t("domains") },
     { href: "/tenant-settings/abo", label: t("subscriptionAndUsage") },
+    { href: "/tenant-settings/verification", label: t("documentVerification") },
   ];
 }

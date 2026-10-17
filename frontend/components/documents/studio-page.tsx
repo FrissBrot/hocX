@@ -19,7 +19,7 @@ export async function StudioPage({ session, activeHref, children }: { session: S
         mobile={<MobileDesktopOnly navKey="documentStudio" />}
         desktop={
           <>
-            <RouteTabs tabs={documentStudioTabs(t, session.current_role === "admin")} activeHref={activeHref} />
+            <RouteTabs tabs={documentStudioTabs(t)} activeHref={activeHref} />
             {children}
           </>
         }
