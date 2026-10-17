@@ -73,35 +73,25 @@
   },
   "system": {
     "title": "État du système",
-    "description": "État de tous les conteneurs et des services dont hocX dépend. Actualisé toutes les 30 secondes.",
+    "description": "État de tous les conteneurs et des services dont hocX dépend.",
     "notificationsLink": "Notifications",
-    "allGood": "Tout va bien - aucun problème en cours.",
-    "problemCount": "{count, plural, one {# problème en cours} other {# problèmes en cours}}",
     "staleSince": "L'état du système n'est plus à jour (dernière actualisation {time}). La surveillance du backend ne fonctionne pas.",
     "noData": "Pas encore de données - la surveillance les collecte au prochain passage.",
-    "collectedAt": "État : {time}",
     "since": "depuis {time}",
     "checksTitle": "Services",
     "containersTitle": "Conteneurs",
-    "composeProject": "Projet Compose {project}",
     "dockerNotConfigured": "La vue des conteneurs n'est pas configurée (DOCKER_API_URL manquant, voir RUNBOOK).",
     "dockerUnavailable": "État des conteneurs indisponible : {error}",
     "containerColumns": {
       "service": "Service",
       "status": "Statut",
       "uptime": "Actif depuis",
-      "restarts": "Redémarrages",
       "cpu": "CPU",
       "memory": "Mémoire",
       "version": "Version"
     },
     "eventsTitle": "Événements",
     "eventsDescription": "Les 50 derniers changements d'état - les mêmes que ceux envoyés via ntfy.",
-    "eventColumns": {
-      "time": "Date",
-      "kind": "Type",
-      "event": "Événement"
-    },
     "noEvents": "Aucun événement pour l'instant.",
     "eventKinds": {
       "problem": "Problème",
@@ -233,9 +223,49 @@
       }
     },
     "events": {
-      "containerRestart": "Le conteneur {subject} a redémarré",
-      "resolved": "Résolu : {text}"
-    }
+      "containerRestart": "Le conteneur {subject} a redémarré"
+    },
+    "hero": {
+      "label": "État général",
+      "stale": "État obsolète",
+      "critical": "{critical, plural, one {# problème critique} other {# problèmes critiques}}{warnings, plural, =0 {} one {, # avertissement} other {, # avertissements}}",
+      "warnings": "{count, plural, one {# avertissement} other {# avertissements}}, rien de critique",
+      "allGood": "Tout est en ordre"
+    },
+    "liveBadge": "En direct · état au {time}",
+    "staleBadge": "Obsolète · état au {time}",
+    "tally": {
+      "critical": "critique",
+      "warning": "{count, plural, one {avertissement} other {avertissements}}",
+      "ok": "OK",
+      "unknown": "inconnu"
+    },
+    "noProblems": "Aucun problème ouvert.",
+    "filters": {
+      "all": "Tous",
+      "problems": "Anomalies seulement"
+    },
+    "noIssues": "Aucune anomalie.",
+    "groups": {
+      "infrastructure": "Infrastructure",
+      "security": "Sécurité",
+      "processing": "Traitement",
+      "backup": "Sauvegarde",
+      "other": "Autres"
+    },
+    "groupSummary": "{ok, number}/{total, number} OK",
+    "composeProjectRich": "Projet Compose <mono>{project}</mono>",
+    "containerSummary": "{count, plural, one {# conteneur} other {# conteneurs}} · {restarts, plural, one {# redémarrage} other {# redémarrages}}",
+    "problemLinks": {
+      "jobs": "Jobs →",
+      "storage": "Stockage →",
+      "backups": "Sauvegardes →",
+      "containers": "Conteneurs →"
+    },
+    "containerStates": {
+      "exitedOk": "terminé (init)"
+    },
+    "restartCount": "{count, plural, one {# redémarrage} other {# redémarrages}}"
   },
   "jobs": {
     "title": "Tâches",

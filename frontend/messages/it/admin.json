@@ -73,35 +73,25 @@
   },
   "system": {
     "title": "Stato del sistema",
-    "description": "Stato di tutti i container e dei servizi da cui dipende hocX. Aggiornato ogni 30 secondi.",
+    "description": "Stato di tutti i container e dei servizi da cui dipende hocX.",
     "notificationsLink": "Notifiche",
-    "allGood": "Tutto a posto - nessun problema aperto.",
-    "problemCount": "{count, plural, one {# problema aperto} other {# problemi aperti}}",
     "staleSince": "Lo stato del sistema non è aggiornato (ultimo aggiornamento {time}). Il monitoraggio nel backend non è attivo.",
     "noData": "Nessun dato finora - il monitoraggio li raccoglie al prossimo passaggio.",
-    "collectedAt": "Aggiornato: {time}",
     "since": "dal {time}",
     "checksTitle": "Servizi",
     "containersTitle": "Container",
-    "composeProject": "Progetto Compose {project}",
     "dockerNotConfigured": "La panoramica dei container non è configurata (manca DOCKER_API_URL, vedi RUNBOOK).",
     "dockerUnavailable": "Stato dei container non disponibile: {error}",
     "containerColumns": {
       "service": "Servizio",
       "status": "Stato",
       "uptime": "Attivo da",
-      "restarts": "Riavvii",
       "cpu": "CPU",
       "memory": "Memoria",
       "version": "Versione"
     },
     "eventsTitle": "Eventi",
     "eventsDescription": "Gli ultimi 50 cambi di stato - gli stessi inviati tramite ntfy.",
-    "eventColumns": {
-      "time": "Data",
-      "kind": "Tipo",
-      "event": "Evento"
-    },
     "noEvents": "Nessun evento finora.",
     "eventKinds": {
       "problem": "Problema",
@@ -233,9 +223,49 @@
       }
     },
     "events": {
-      "containerRestart": "Il container {subject} è stato riavviato",
-      "resolved": "Risolto: {text}"
-    }
+      "containerRestart": "Il container {subject} è stato riavviato"
+    },
+    "hero": {
+      "label": "Stato generale",
+      "stale": "Stato non aggiornato",
+      "critical": "{critical, plural, one {# problema critico} other {# problemi critici}}{warnings, plural, =0 {} one {, # avviso} other {, # avvisi}}",
+      "warnings": "{count, plural, one {# avviso} other {# avvisi}}, niente di critico",
+      "allGood": "Tutto in ordine"
+    },
+    "liveBadge": "Live · stato al {time}",
+    "staleBadge": "Non aggiornato · stato al {time}",
+    "tally": {
+      "critical": "critici",
+      "warning": "{count, plural, one {avviso} other {avvisi}}",
+      "ok": "OK",
+      "unknown": "sconosciuti"
+    },
+    "noProblems": "Nessun problema aperto.",
+    "filters": {
+      "all": "Tutti",
+      "problems": "Solo anomalie"
+    },
+    "noIssues": "Nessuna anomalia.",
+    "groups": {
+      "infrastructure": "Infrastruttura",
+      "security": "Sicurezza",
+      "processing": "Elaborazione",
+      "backup": "Backup",
+      "other": "Altri"
+    },
+    "groupSummary": "{ok, number}/{total, number} OK",
+    "composeProjectRich": "Progetto Compose <mono>{project}</mono>",
+    "containerSummary": "{count, plural, one {# container} other {# container}} · {restarts, plural, one {# riavvio} other {# riavvii}}",
+    "problemLinks": {
+      "jobs": "Job →",
+      "storage": "Storage →",
+      "backups": "Backup →",
+      "containers": "Container →"
+    },
+    "containerStates": {
+      "exitedOk": "terminato (init)"
+    },
+    "restartCount": "{count, plural, one {# riavvio} other {# riavvii}}"
   },
   "jobs": {
     "title": "Job",

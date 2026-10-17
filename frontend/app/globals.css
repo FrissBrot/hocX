@@ -23346,46 +23346,131 @@ a.mobile-list-row { color: var(--text); }
   }
 }
 
-/* Systemstatus im Platform-Admin (/admin/system) */
-.admin-system-checks {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--space-3);
-}
+/* Systemstatus im Platform-Admin (/admin/system) - Gesamtzustand, gruppierte Dienste,
+   Container und Ereignisse. Statusfarben über eine Klasse je Zustand. */
+.admin-page { padding: var(--space-5); }
+@media (max-width: 640px) { .admin-page { padding: var(--space-4); } }
 
-.admin-system-check {
+.admin-status-ok { --status-dot: var(--success); --status-fg: var(--success-fg); --status-halo: var(--success-bg); }
+.admin-status-running { --status-dot: var(--info-fg); --status-fg: var(--info-fg); --status-halo: var(--info-bg); }
+.admin-status-warning { --status-dot: var(--warning); --status-fg: var(--warning-fg); --status-halo: var(--warning-bg); }
+.admin-status-critical { --status-dot: var(--danger); --status-fg: var(--danger-fg); --status-halo: var(--danger-bg); }
+.admin-status-unknown { --status-dot: var(--border-strong); --status-fg: var(--muted); --status-halo: var(--neutral-bg); }
+
+.admin-status-page { gap: var(--space-4); }
+.admin-status-header { align-items: flex-end; }
+.admin-status-header > div:first-child { flex: 1; min-width: 0; }
+.admin-status-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.admin-status-live { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--muted); font-size: var(--text-sm); }
+.admin-status-live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); animation: admin-status-pulse 2s ease-in-out infinite; }
+.admin-status-live-stale { color: var(--danger-fg); }
+.admin-status-live-stale .admin-status-live-dot { background: var(--danger); animation: none; }
+@keyframes admin-status-pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .admin-status-live-dot { animation: none; } }
+
+.admin-status-eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.admin-status-small { margin: 0; font-size: var(--text-xs); line-height: 1.4; }
+.admin-status-mono { color: var(--muted); font-family: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace; font-size: var(--text-xs); overflow-wrap: anywhere; }
+.admin-status-numeric { font-variant-numeric: tabular-nums; }
+.admin-status-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--status-dot); }
+.admin-status-dot-halo { margin-top: 5px; box-shadow: 0 0 0 3px var(--status-halo); } /* design-ok: Punkt auf die erste Textzeile ausgerichtet */
+.admin-status-label { color: var(--status-fg); font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
+
+.admin-status-hero {
   display: grid;
-  gap: var(--space-1);
-  padding: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
+  background: var(--panel-solid);
+  box-shadow: var(--shadow-soft);
+}
+.admin-status-hero-summary { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5); }
+.admin-status-tone-ok .admin-status-hero-summary { background: color-mix(in srgb, var(--success-bg) 55%, var(--panel-solid)); }
+.admin-status-tone-warning .admin-status-hero-summary { background: color-mix(in srgb, var(--warning-bg) 55%, var(--panel-solid)); }
+.admin-status-tone-critical .admin-status-hero-summary { background: color-mix(in srgb, var(--danger-bg) 55%, var(--panel-solid)); }
+.admin-status-tone-ok .admin-status-eyebrow { color: var(--success-fg); }
+.admin-status-tone-warning .admin-status-hero-summary .admin-status-eyebrow { color: var(--warning-fg); }
+.admin-status-tone-critical .admin-status-hero-summary .admin-status-eyebrow { color: var(--danger-fg); }
+.admin-status-hero-title { margin: 0; font-size: var(--text-2xl); line-height: 1.2; }
+.admin-status-tally { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.admin-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--panel-solid);
+  font-size: var(--text-sm);
+}
+.admin-status-chip strong { font-weight: 600; }
+.admin-status-hero-problems { display: flex; flex-direction: column; justify-content: center; padding: var(--space-3) var(--space-5); border-left: 1px solid var(--border); }
+.admin-status-hero-problems > .muted { margin: 0; }
+
+.admin-system-problems { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.admin-system-problems li { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+.admin-system-problems li:last-child { border-bottom: 0; }
+.admin-system-problems .admin-status-dot { margin-top: 6px; } /* design-ok: Punkt auf die erste Textzeile ausgerichtet */
+.admin-system-problem-text { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.admin-system-problem-title { font-weight: 600; }
+.admin-system-problem-link { font-size: var(--text-sm); font-weight: 600; white-space: nowrap; }
+
+.admin-status-section { display: flex; flex-direction: column; gap: var(--space-3); }
+.admin-status-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.admin-status-section-title { margin: 0; font-size: var(--text-xl); }
+.admin-status-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: var(--space-3); align-items: start; }
+.admin-status-group {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3) var(--space-4) var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   background: var(--panel-solid);
 }
+.admin-status-group-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding-bottom: var(--space-2); }
+.admin-status-group-summary { color: var(--muted); font-size: var(--text-xs); }
+.admin-system-check { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-2) 0; border-top: 1px solid var(--border); }
+.admin-system-check-body { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.admin-system-check-head { display: flex; justify-content: space-between; gap: var(--space-2); }
+.admin-system-check-title { font-weight: 600; }
+.admin-status-bar { display: block; max-width: 180px; height: 4px; margin-top: 3px; overflow: hidden; border-radius: var(--radius-pill); background: var(--neutral-bg); }
+.admin-system-check .admin-status-bar { max-width: none; }
+.admin-status-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--status-dot, var(--accent)); }
+.admin-status-memory .admin-status-bar > span { background: var(--accent); }
+.admin-status-memory .admin-status-bar-high > span { background: var(--warning); }
 
-.admin-system-check-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
+.admin-status-card { display: flex; flex-direction: column; gap: var(--space-2); }
+.admin-status-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-3); padding-bottom: var(--space-2); }
+.admin-status-card-meta { margin: 0; color: var(--muted); font-size: var(--text-sm); }
+.admin-status-card-meta code { font-size: var(--text-xs); }
+.admin-status-card .table-shell { max-width: none; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.admin-status-state { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--status-fg); font-size: var(--text-sm); }
+.admin-status-state .admin-status-dot { width: 7px; height: 7px; }
+.admin-status-memory { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-sm); }
 
-.admin-system-check p {
-  margin: 0;
-}
+.admin-status-event-day .admin-status-eyebrow { padding: var(--space-2) 0 var(--space-1); }
+.admin-status-events { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.admin-status-event { display: grid; grid-template-columns: 52px 14px minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; font-size: var(--text-sm); }
+.admin-status-event time { color: var(--muted); font-family: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace; font-size: var(--text-xs); }
+.admin-status-event-kind { color: var(--status-fg); font-size: var(--text-xs); font-weight: 600; }
+.admin-status-event-resolved { --status-dot: var(--success); --status-fg: var(--success-fg); }
+.admin-status-event-container_restart { --status-dot: var(--warning); --status-fg: var(--warning-fg); }
+.admin-status-event-problem { --status-dot: var(--danger); --status-fg: var(--danger-fg); }
 
-.admin-system-problems {
-  display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.admin-system-problems li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
+@media (max-width: 640px) {
+  .admin-status-hero-problems { border-top: 1px solid var(--border); border-left: 0; }
+  .admin-status-hero-summary, .admin-status-hero-problems { padding: var(--space-4); }
+  .admin-status-event { grid-template-columns: 44px 10px minmax(0, 1fr); }
+  .admin-status-event-kind { grid-column: 3; }
 }
 
 /* Stammlisten-Tabellenblock im Protokoll (StructuredListTable mit protocolView): Zeilen fix

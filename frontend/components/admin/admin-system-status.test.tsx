@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const browserApiFetchMock = vi.fn();
@@ -62,13 +62,30 @@ describe("AdminSystemStatus", () => {
   it("zeigt Dienste, Container und den Gesamtzustand", () => {
     render(<AdminSystemStatus initialStatus={makeStatus()} />);
 
-    expect(screen.getByText("Alles in Ordnung - keine offenen Probleme.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Alles in Ordnung" })).toBeInTheDocument();
+    expect(screen.getByText("Keine offenen Probleme.")).toBeInTheDocument();
+    // Dienste fachlich gruppiert, je Gruppe mit Anteil OK
+    expect(screen.getByRole("heading", { name: "Infrastruktur" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sicherheit" })).toBeInTheDocument();
+    expect(screen.getAllByText("0/1 OK")).toHaveLength(2);
     expect(screen.getByText("Speicherplatz")).toBeInTheDocument();
     expect(screen.getByText("9,9 % frei · 7,8 von 78,6 GB")).toBeInTheDocument();
     expect(screen.getByText("Nicht erreichbar: ConnectionError: refused")).toBeInTheDocument();
     expect(screen.getByText("backend")).toBeInTheDocument();
     expect(screen.getByText("2 Tage")).toBeInTheDocument();
     expect(screen.getByText("1.2.0")).toBeInTheDocument();
+    expect(screen.getByText(/^512.*MB von 1.*GB$/)).toBeInTheDocument();
+  });
+
+  it("blendet mit «Nur Auffälligkeiten» Dienste im Zustand OK aus", () => {
+    const status = makeStatus();
+    status.snapshot!.checks.push({ key: "redis", status: "ok", params: { latencyMs: 1, usedMb: 1.3 }, error: null });
+    render(<AdminSystemStatus initialStatus={status} />);
+
+    expect(screen.getByText("Redis")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Nur Auffälligkeiten" }));
+    expect(screen.queryByText("Redis")).not.toBeInTheDocument();
+    expect(screen.getByText("Speicherplatz")).toBeInTheDocument();
   });
 
   it("übersetzt Probleme und Ereignisse anhand ihrer Schlüssel", () => {
@@ -87,10 +104,13 @@ describe("AdminSystemStatus", () => {
       />,
     );
 
-    expect(screen.getByText("2 offene Probleme")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "1 kritisches Problem, 1 Warnung" })).toBeInTheDocument();
     expect(screen.getByText("Container backend ist unhealthy")).toBeInTheDocument();
     expect(screen.getByText("Speicherplatz knapp")).toBeInTheDocument();
-    expect(screen.getByText("Behoben: Job export_cleanup ist fehlgeschlagen")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Storage →" })).toHaveAttribute("href", "/admin/storage");
+    // Ereignisse: Art als eigene Markierung, der Text ohne «Behoben:»-Präfix
+    const resolved = screen.getByText("Job export_cleanup ist fehlgeschlagen").closest("li")!;
+    expect(within(resolved).getByText("Behoben")).toBeInTheDocument();
     expect(screen.getByText("Container frontend wurde neu gestartet")).toBeInTheDocument();
   });
 

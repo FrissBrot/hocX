@@ -73,35 +73,25 @@
   },
   "system": {
     "title": "System status",
-    "description": "State of all containers and of the services hocX depends on. Refreshes every 30 seconds.",
+    "description": "State of all containers and of the services hocX depends on.",
     "notificationsLink": "Notifications",
-    "allGood": "All good - no open problems.",
-    "problemCount": "{count, plural, one {# open problem} other {# open problems}}",
     "staleSince": "The system status is out of date (last updated {time}). Monitoring in the backend is not running.",
     "noData": "No data yet - monitoring collects on its next run.",
-    "collectedAt": "As of {time}",
     "since": "since {time}",
     "checksTitle": "Services",
     "containersTitle": "Containers",
-    "composeProject": "Compose project {project}",
     "dockerNotConfigured": "The container overview is not set up (DOCKER_API_URL missing, see RUNBOOK).",
     "dockerUnavailable": "Container status unavailable: {error}",
     "containerColumns": {
       "service": "Service",
       "status": "Status",
       "uptime": "Up for",
-      "restarts": "Restarts",
       "cpu": "CPU",
       "memory": "Memory",
       "version": "Version"
     },
     "eventsTitle": "Events",
     "eventsDescription": "The last 50 status changes - the same ones that are sent via ntfy.",
-    "eventColumns": {
-      "time": "Time",
-      "kind": "Type",
-      "event": "Event"
-    },
     "noEvents": "No events yet.",
     "eventKinds": {
       "problem": "Problem",
@@ -233,9 +223,49 @@
       }
     },
     "events": {
-      "containerRestart": "Container {subject} was restarted",
-      "resolved": "Resolved: {text}"
-    }
+      "containerRestart": "Container {subject} was restarted"
+    },
+    "hero": {
+      "label": "Overall status",
+      "stale": "Status outdated",
+      "critical": "{critical, plural, one {# critical problem} other {# critical problems}}{warnings, plural, =0 {} one {, # warning} other {, # warnings}}",
+      "warnings": "{count, plural, one {# warning} other {# warnings}}, nothing critical",
+      "allGood": "All good"
+    },
+    "liveBadge": "Live · as of {time}",
+    "staleBadge": "Outdated · as of {time}",
+    "tally": {
+      "critical": "critical",
+      "warning": "{count, plural, one {warning} other {warnings}}",
+      "ok": "OK",
+      "unknown": "unknown"
+    },
+    "noProblems": "No open problems.",
+    "filters": {
+      "all": "All",
+      "problems": "Issues only"
+    },
+    "noIssues": "No issues.",
+    "groups": {
+      "infrastructure": "Infrastructure",
+      "security": "Security",
+      "processing": "Processing",
+      "backup": "Backup",
+      "other": "Other"
+    },
+    "groupSummary": "{ok, number}/{total, number} OK",
+    "composeProjectRich": "Compose project <mono>{project}</mono>",
+    "containerSummary": "{count, plural, one {# container} other {# containers}} · {restarts, plural, one {# restart} other {# restarts}}",
+    "problemLinks": {
+      "jobs": "Jobs →",
+      "storage": "Storage →",
+      "backups": "Backups →",
+      "containers": "Containers →"
+    },
+    "containerStates": {
+      "exitedOk": "exited (init)"
+    },
+    "restartCount": "{count, plural, one {# restart} other {# restarts}}"
   },
   "jobs": {
     "title": "Jobs",
