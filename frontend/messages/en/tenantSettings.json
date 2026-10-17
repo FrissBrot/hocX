@@ -26,7 +26,7 @@
   "emptyDomainHintWithFeature": "Until then, the organization stays reachable at the default address.",
   "emptyDomainHintWithoutFeature": "Custom domains must be added to your plan (tab \"Plan & usage\"). Until then, the organization stays reachable at the default address.",
   "domainsEyebrow": "Domains",
-  "domainsDescription": "A custom domain for the hocX app and/or the submission box. hocx.example.com and the default submission box domain always stay reachable too.",
+  "domainsDescription": "Custom domains for the hocX app, the submission box and the verification page. hocx.example.com and the default submission box domain always stay reachable too.",
   "wizardTitle": "Set up custom domain",
   "wizardDescription": "Connect a custom domain for this organization in three steps.",
   "stepDomain": "Domain",
@@ -81,5 +81,9 @@
   "noModulesBooked": "No modules booked.",
   "pricePerMonth": "+{price}/month",
   "moduleActive": "Active",
-  "saveSuccessVerificationRevoked": "Saved. Because the name changed, the verification by hocX was revoked (Templates → Authenticity check)."
+  "saveSuccessVerificationRevoked": "Saved. Because the name changed, the verification by hocX was revoked (Templates → Authenticity check).",
+  "purposeVerify": "Verification page",
+  "wizardPurposeVerifyDescription": "Let people verify your documents under your own address, e.g. verify.club.com.",
+  "domainPlaceholderVerify": "e.g. verify.club.com",
+  "successVerifyDescription": "New PDFs now point to this verification page, as long as name and logo are shown on the verification page (document verification)."
 }

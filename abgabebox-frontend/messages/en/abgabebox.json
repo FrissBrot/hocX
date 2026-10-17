@@ -169,7 +169,28 @@
     "error": "The check is not possible right now. Please try again in a moment.",
     "readError": "The file could not be read.",
     "tooLarge": "The file is too large (at most {size} MB).",
-    "noCrypto": "Your browser does not support the check. Please use an up-to-date browser."
+    "noCrypto": "Your browser does not support the check. Please use an up-to-date browser.",
+    "site": {
+      "label": "Verification page of {name}",
+      "eyebrow": "Official verification page",
+      "hint": "Check whether a PDF file comes unchanged from {name}.",
+      "poweredBy": "Verification provided by hocX"
+    },
+    "domainBadge": "Verification domain confirmed: {domain}",
+    "domainExplanation": "The domain {domain} is linked to the hocX account of “{name}” through a DNS record. It does not prove the organisation's identity – only the confirmation by hocX does.",
+    "foreignDocument": "This document was not issued by “{site}”.",
+    "forwarded": "The fingerprint of the file you selected on the previous verification page was checked.",
+    "redirect": {
+      "tenantTitle": "Continue to the verification page of “{name}”",
+      "tenantText": "“{name}” confirms its documents at {domain}. Redirecting in {seconds, plural, one {# second} other {# seconds}} – the check runs there automatically, without selecting the file again.",
+      "tenantStayed": "“{name}” also confirms its documents at {domain}.",
+      "centralTitle": "Document from another organisation",
+      "centralText": "This document was not issued by “{site}”. Redirecting to the hocX verification page in {seconds, plural, one {# second} other {# seconds}}.",
+      "centralStayed": "This document was not issued by “{site}”. The hocX verification page shows who issued it.",
+      "stay": "Stay here",
+      "openTenant": "Open verification page",
+      "openCentral": "Go to the hocX verification page"
+    }
   },
   "maintenance": {
     "title": "The submission box is under maintenance",

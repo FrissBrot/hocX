@@ -12386,7 +12386,8 @@ input[type="radio"] {
 
 .wizard-purpose-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* zwei oder drei Zwecke (App, Abgabebox, Prüfseite), je nach gebuchten Features */
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--space-3);
 }
 
@@ -23447,6 +23448,7 @@ a.mobile-list-row { color: var(--text); }
 .docverify-hint { margin: calc(-1 * var(--space-2)) 0 0; font-size: var(--text-sm); }
 .docverify-status-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
 .docverify-request { margin: 0; }
+.docverify-domain { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .docverify-preview {
   display: grid;
   gap: var(--space-3);

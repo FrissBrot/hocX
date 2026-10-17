@@ -65,6 +65,11 @@ def build_admin_tenant_profile_image_url(tenant_public_id: uuid.UUID, profile_im
     return f"/api/admin/tenants/{tenant_public_id}/profile-image"
 
 
+# Features, deren Buchung bestimmt, ob Traefik Mandanten-Domains bedient
+# (traefik_config_service.FEATURE_BY_PURPOSE)
+_DOMAIN_FEATURES = frozenset(traefik_config_service.FEATURE_BY_PURPOSE.values())
+
+
 class AdminTenantService:
     """Cross-tenant tenant management for the platform-admin panel - unscoped by design."""
 
@@ -426,9 +431,14 @@ class AdminTenantService:
             already_booked = set(
                 db.scalars(select(TenantFeature.feature_code).where(TenantFeature.tenant_id == tenant_id))
             )
-            for feature_code in plan_feature_codes - already_booked:
+            added = plan_feature_codes - already_booked
+            for feature_code in added:
                 db.add(TenantFeature(tenant_id=tenant_id, feature_code=feature_code, enabled_by_admin_id=admin_id))
+        else:
+            added = set()
         db.commit()
+        if _DOMAIN_FEATURES & added:
+            traefik_config_service.regenerate(db)
         self.recompute_effective_storage_quota(db, tenant_id)
         return self._read_model(db, tenant)
 
@@ -564,11 +574,12 @@ class AdminTenantService:
         for code in wanted - current.keys():
             db.add(TenantFeature(tenant_id=tenant_id, feature_code=code, enabled_by_admin_id=admin_id))
         db.commit()
-        if "custom_domain" in (current.keys() - wanted):
+        if _DOMAIN_FEATURES & (current.keys() ^ wanted):
             # security-audit FEAT-01: regenerate() only runs at startup and after domain
             # create/verify/delete - without this call, revoking the feature here would leave
             # an already-active domain routed until one of those unrelated events happens to
-            # trigger a regenerate.
+            # trigger a regenerate. Ebenso beim Wieder-Zubuchen: eine noch aktive Domain soll
+            # sofort wieder bedient werden, nicht erst beim nächsten Start.
             traefik_config_service.regenerate(db)
         return self._read_model(db, tenant)
 

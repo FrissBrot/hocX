@@ -1,3 +1,5 @@
+import type { VerifySite } from "@/lib/verify";
+
 export type AssignmentPublic = {
   public_slug: string;
   title: string;
@@ -106,4 +108,16 @@ export function getElement(linkToken: string, assignmentSlug: string, elementRef
 // das auf jeder Domain (Standard- oder Mandanten-Custom-Domain) automatisch korrekt aufgeloest wird.
 export function publicApiUrl(path: string): string {
   return path;
+}
+
+// Kopf der Prüfseite (SSR): Mandant hinter der Prüf-Domain, über die die Seite aufgerufen wurde.
+// Fehler sind kein Grund, die Prüfung zu blockieren - die Seite fällt dann auf die zentrale
+// Darstellung zurück (null).
+export async function getVerifySite(host: string): Promise<VerifySite | null> {
+  try {
+    const response = await fetch(`${internalBase}/api/public/verify/site?domain=${encodeURIComponent(host)}`, { cache: "no-store" });
+    return response.ok ? ((await response.json()) as VerifySite) : null;
+  } catch {
+    return null;
+  }
 }

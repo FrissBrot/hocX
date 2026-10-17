@@ -70,3 +70,20 @@ class VerifyResult(BaseModel):
     import_unverified: bool | None = None
     # STUDIO-007: Titel beim Export abweichend vom Protokoll gesetzt
     title_overridden: bool | None = None
+    # Prüf-Domain des ausstellenden Mandanten (z. B. verify.verein.ch): die Prüfseite leitet
+    # dorthin weiter. Nur gesetzt, wenn der Mandant Name und Logo freigegeben hat (View 0126).
+    verify_domain: str | None = None
+
+
+class VerifySiteRead(BaseModel):
+    """Kopf der Prüfseite unter einer Mandanten-Prüf-Domain (GET /api/public/verify/site).
+    tenant_* nur, wenn die Domain eine aktive Prüf-Domain mit freigegebener Anzeige ist."""
+
+    domain: str | None = None
+    tenant_name: str | None = None
+    tenant_public_id: uuid.UUID | None = None
+    tenant_has_logo: bool | None = None
+    organization_verified: bool | None = None
+    # Zentrale Prüfseite von hocX: Ziel, wenn hier ein Dokument eines anderen Mandanten ohne
+    # eigene Prüf-Domain geprüft wird
+    central_verify_url: str

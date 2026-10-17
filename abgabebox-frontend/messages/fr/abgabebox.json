@@ -169,7 +169,28 @@
     "error": "La vérification est impossible pour le moment. Veuillez réessayer dans un instant.",
     "readError": "Le fichier n’a pas pu être lu.",
     "tooLarge": "Le fichier est trop volumineux ({size} Mo au maximum).",
-    "noCrypto": "Votre navigateur ne prend pas en charge la vérification. Veuillez utiliser un navigateur récent."
+    "noCrypto": "Votre navigateur ne prend pas en charge la vérification. Veuillez utiliser un navigateur récent.",
+    "site": {
+      "label": "Page de vérification de {name}",
+      "eyebrow": "Page de vérification officielle",
+      "hint": "Vérifie si un fichier PDF provient sans modification de {name}.",
+      "poweredBy": "Vérification fournie par hocX"
+    },
+    "domainBadge": "Domaine de vérification confirmé : {domain}",
+    "domainExplanation": "Le domaine {domain} est relié au compte hocX de « {name} » par un enregistrement DNS. Il ne prouve pas l'identité de l'organisation – seule la confirmation par hocX le fait.",
+    "foreignDocument": "Ce document n'a pas été émis par « {site} ».",
+    "forwarded": "L'empreinte du fichier que tu as sélectionné sur la page de vérification précédente a été vérifiée.",
+    "redirect": {
+      "tenantTitle": "Continuer vers la page de vérification de « {name} »",
+      "tenantText": "« {name} » confirme ses documents sur {domain}. Redirection dans {seconds, plural, one {# seconde} other {# secondes}} – la vérification s'y fait automatiquement, sans resélectionner le fichier.",
+      "tenantStayed": "« {name} » confirme aussi ses documents sur {domain}.",
+      "centralTitle": "Document d'une autre organisation",
+      "centralText": "Ce document n'a pas été émis par « {site} ». Redirection vers la page de vérification de hocX dans {seconds, plural, one {# seconde} other {# secondes}}.",
+      "centralStayed": "Ce document n'a pas été émis par « {site} ». La page de vérification de hocX indique qui l'a émis.",
+      "stay": "Rester ici",
+      "openTenant": "Ouvrir la page de vérification",
+      "openCentral": "Vers la page de vérification de hocX"
+    }
   },
   "maintenance": {
     "title": "La boîte de dépôt est en maintenance",

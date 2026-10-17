@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     captcha_session_secret: str = Field(default="", validation_alias="ABGABEBOX_CAPTCHA_SESSION_SECRET")
     captcha_session_ttl_minutes: int = Field(default=120, validation_alias="ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES")
     cors_allow_origin: str = Field(default="https://abgabe.example.com", validation_alias="ABGABEBOX_CORS_ORIGIN")
+    # Zentrale Prüfseite (wie DOCUMENT_VERIFY_BASE_URL im Backend). Leer = <ABGABEBOX_CORS_ORIGIN>/verify.
+    document_verify_base_url: str = Field(default="", validation_alias="DOCUMENT_VERIFY_BASE_URL")
     clamav_host: str = Field(default="clamav", validation_alias="CLAMAV_HOST")
     clamav_port: int = Field(default=3310, validation_alias="CLAMAV_PORT")
     # Absolute ceiling on disk space (quarantine + accepted files combined) any single tenant's
@@ -92,6 +94,10 @@ class Settings(BaseSettings):
     environment: str = Field(default="production", validation_alias="ABGABEBOX_ENVIRONMENT")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @property
+    def central_verify_url(self) -> str:
+        return (self.document_verify_base_url or f"{self.cors_allow_origin.rstrip('/')}/verify").rstrip("/")
 
 
 settings = Settings()

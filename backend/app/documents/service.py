@@ -50,6 +50,7 @@ from app.documents.providers.common import PROTOCOL_STATUS_CODES
 from app.documents.renderer import RenderAssets, get_renderer
 from app.documents.strings import normalize_language, strings_for
 from app.documents.xmp import DocumentXmp, add_document_xmp
+from app.services import verify_domain_service
 from app.models import (
     DocumentBrandRevision,
     DocumentExport,
@@ -174,8 +175,10 @@ def short_document_id(document_id: str | uuid.UUID) -> str:
     return f"{tail[:4]}-{tail[4:]}"
 
 
-def verify_render_info(document_id: uuid.UUID | None, *, preview: bool = False) -> RenderInfo:
-    base = settings.verify_base_url
+def verify_render_info(document_id: uuid.UUID | None, *, preview: bool = False, base: str | None = None) -> RenderInfo:
+    """``base``: Prüfseite des Mandanten (verify_domain_service.tenant_verify_base_url), sonst
+    die zentrale Prüfseite."""
+    base = (base or settings.verify_base_url).rstrip("/")
     display = re.sub(r"^https?://", "", base)
     if preview or document_id is None:
         return RenderInfo(preview=True, short_id="VORSCHAU", verify_display=display, verify_link=base)
@@ -331,7 +334,7 @@ def prepare(
         if not protocol_draft or can_write:
             is_draft = False
 
-    render = render_info or verify_render_info(None, preview=True)
+    render = render_info or verify_render_info(None, preview=True, base=verify_domain_service.tenant_verify_base_url(db, tenant_id))
     document_env = {
         "title": meta.title,
         "subtitle": meta.subtitle,
@@ -467,13 +470,14 @@ def _discard_pdf(key: str) -> None:
 
 async def render(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest) -> RenderResult:
     export_public_id = _uuid7()
-    prepared = await _prepare_off_loop(db, user, tenant_id, request, render_info=verify_render_info(export_public_id))
+    # Prüfseite einmal festlegen: Vermerk, QR-Code, XMP und Export müssen dieselbe URL tragen.
+    render_info = verify_render_info(export_public_id, base=verify_domain_service.tenant_verify_base_url(db, tenant_id))
+    prepared = await _prepare_off_loop(db, user, tenant_id, request, render_info=render_info)
     compiled = prepared.compiled
     meta = prepared.meta
 
     output = await get_renderer().render_pdf(compiled.data, RenderAssets(files=compiled.files, fonts=compiled.fonts))
     tenant = db.get(Tenant, tenant_id)
-    render_info = verify_render_info(export_public_id)
     pdf = await run_in_threadpool(
         add_document_xmp,
         output.pdf or b"",
@@ -519,7 +523,13 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
             template_id=prepared.template.id if prepared.template is not None else None,
             template_revision_id=prepared.revision.id if prepared.revision is not None else None,
             brand_revision_id=prepared.brand_revision.id if prepared.brand_revision is not None else None,
-            options_json={"options": request.options.model_dump(mode="json"), "params": request.params, "template_source": prepared.template_source},
+            options_json={
+                "options": request.options.model_dump(mode="json"),
+                "params": request.params,
+                "template_source": prepared.template_source,
+                # Prüf-Link genau wie im PDF (Prüf-Domain des Mandanten kann später wechseln)
+                "verify_url": render_info.verify_link,
+            },
             language=prepared.language,
             stored_file_id=stored.id,
             created_by=user.user_id if user else None,

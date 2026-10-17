@@ -33,6 +33,22 @@
     "previewText": "Diese Datei ist eine unveränderte Kopie eines Dokuments, das am {date} mit hocX erstellt wurde.",
     "previewBadge": "Verifizierte Organisation",
     "previewCreatedBy": "Erstellt im hocX-Konto von {name}.",
-    "previewNewer": "Es gibt eine neuere Version (v1.3) dieses Dokuments."
+    "previewNewer": "Es gibt eine neuere Version (v1.3) dieses Dokuments.",
+    "domainTitle": "Eigene Prüf-Domain",
+    "domainIntro": "Mit einer eigenen Prüf-Domain wie verify.verein.ch prüfen Empfänger eure Dokumente unter eurer Adresse. Neue PDFs verweisen im QR-Code dorthin, und wer ein Dokument von euch auf der Prüfseite von hocX prüft, wird automatisch weitergeleitet. Bereits erstellte PDFs behalten ihren Prüf-Link.",
+    "domainLevelHint": "Auf der Prüfseite erscheint dann die Stufe «Prüf-Domain verifiziert». Sie ist schwächer als die Verifizierung durch hocX, denn eine Domain kann jeder registrieren.",
+    "domainNotBooked": "Die eigene Prüf-Domain ist nicht im Abo enthalten und kann bei hocX dazugebucht werden.",
+    "domainSetup": "Prüf-Domain einrichten",
+    "domainManage": "Domains verwalten",
+    "domainStatusActive": "Aktiv",
+    "domainStatusPending": "DNS-Bestätigung ausstehend",
+    "domainStatusUnhealthy": "Nicht erreichbar",
+    "domainStatusHidden": "Inaktiv",
+    "domainStatusNotBooked": "Nicht im Abo",
+    "domainPendingHint": "Schliesst die DNS-Einrichtung unter Domains ab.",
+    "domainHiddenHint": "Die Prüf-Domain wird erst verwendet, wenn Name und Logo auf der Prüfseite angezeigt werden.",
+    "domainUnhealthyHint": "Die Domain zeigt im DNS nicht mehr auf hocX. Bis das behoben ist, verweisen neue PDFs auf die Prüfseite von hocX.",
+    "domainNotBookedHint": "Die Funktion «Eigene Prüf-Domain» ist nicht mehr im Abo. Neue PDFs verweisen auf die Prüfseite von hocX.",
+    "previewDomainBadge": "Prüf-Domain verifiziert: {domain}"
   }
 }

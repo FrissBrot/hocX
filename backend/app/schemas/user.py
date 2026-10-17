@@ -211,7 +211,7 @@ class TenantUpdate(BaseModel):
 
 
 class TenantDomainCreate(BaseModel):
-    purpose: str = Field(pattern=r"^(app|abgabebox)$")
+    purpose: str = Field(pattern=r"^(app|abgabebox|verify)$")
     domain: str = Field(min_length=1, max_length=253)
 
 

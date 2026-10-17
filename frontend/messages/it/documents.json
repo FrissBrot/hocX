@@ -33,6 +33,22 @@
     "previewText": "Questo file è una copia non modificata di un documento creato con hocX il {date}.",
     "previewBadge": "Organizzazione verificata",
     "previewCreatedBy": "Creato nell’account hocX di {name}.",
-    "previewNewer": "Esiste una versione più recente (v1.3) di questo documento."
+    "previewNewer": "Esiste una versione più recente (v1.3) di questo documento.",
+    "domainTitle": "Dominio di verifica proprio",
+    "domainIntro": "Con un dominio di verifica proprio, ad es. verify.associazione.ch, i destinatari verificano i vostri documenti al vostro indirizzo. I nuovi PDF vi rimandano nel codice QR e chi verifica un vostro documento sulla pagina di verifica di hocX viene reindirizzato automaticamente. I PDF già creati mantengono il loro link di verifica.",
+    "domainLevelHint": "La pagina di verifica mostra allora il livello «Dominio di verifica confermato». È più debole della verifica da parte di hocX, perché chiunque può registrare un dominio.",
+    "domainNotBooked": "Il dominio di verifica proprio non è incluso nell'abbonamento e può essere aggiunto da hocX.",
+    "domainSetup": "Configura dominio di verifica",
+    "domainManage": "Gestisci domini",
+    "domainStatusActive": "Attivo",
+    "domainStatusPending": "Conferma DNS in sospeso",
+    "domainStatusUnhealthy": "Non raggiungibile",
+    "domainStatusHidden": "Inattivo",
+    "domainStatusNotBooked": "Non nell'abbonamento",
+    "domainPendingHint": "Completate la configurazione DNS in Domini.",
+    "domainHiddenHint": "Il dominio di verifica viene usato solo quando nome e logo sono mostrati sulla pagina di verifica.",
+    "domainUnhealthyHint": "Il dominio non punta più a hocX nel DNS. Finché non è risolto, i nuovi PDF rimandano alla pagina di verifica di hocX.",
+    "domainNotBookedHint": "La funzione «Dominio di verifica proprio» non è più inclusa nell'abbonamento. I nuovi PDF rimandano alla pagina di verifica di hocX.",
+    "previewDomainBadge": "Dominio di verifica confermato: {domain}"
   }
 }

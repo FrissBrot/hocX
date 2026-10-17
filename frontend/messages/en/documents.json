@@ -33,6 +33,22 @@
     "previewText": "This file is an unchanged copy of a document created with hocX on {date}.",
     "previewBadge": "Verified organisation",
     "previewCreatedBy": "Created in the hocX account of {name}.",
-    "previewNewer": "There is a newer version (v1.3) of this document."
+    "previewNewer": "There is a newer version (v1.3) of this document.",
+    "domainTitle": "Own verification domain",
+    "domainIntro": "With your own verification domain such as verify.club.com, recipients check your documents under your address. New PDFs point there in their QR code, and anyone checking one of your documents on the hocX verification page is redirected automatically. PDFs created earlier keep their verification link.",
+    "domainLevelHint": "The verification page then shows the level “Verification domain confirmed”. It is weaker than the verification by hocX, because anyone can register a domain.",
+    "domainNotBooked": "An own verification domain is not part of your plan and can be added by hocX.",
+    "domainSetup": "Set up verification domain",
+    "domainManage": "Manage domains",
+    "domainStatusActive": "Active",
+    "domainStatusPending": "DNS confirmation pending",
+    "domainStatusUnhealthy": "Unreachable",
+    "domainStatusHidden": "Inactive",
+    "domainStatusNotBooked": "Not in plan",
+    "domainPendingHint": "Finish the DNS setup under Domains.",
+    "domainHiddenHint": "The verification domain is only used once name and logo are shown on the verification page.",
+    "domainUnhealthyHint": "The domain no longer points to hocX in DNS. Until this is fixed, new PDFs point to the hocX verification page.",
+    "domainNotBookedHint": "The feature “Own verification domain” is no longer part of your plan. New PDFs point to the hocX verification page.",
+    "previewDomainBadge": "Verification domain confirmed: {domain}"
   }
 }

@@ -4,16 +4,21 @@ Der Browser berechnet den SHA-256 der Datei selbst (Web Crypto API) und schickt 
 optional die Dokument-ID aus dem QR-Code. Hier wird nichts gespeichert: kein Cookie, keine
 Session, weder Hash noch IP (das Rate-Limit hält Traefik im Speicher). Eigener Traefik-Router mit
 kleinem Body-Limit und eigenem Rate-Limit (docker-compose.yml, traefik_config_service).
+
+Prüf-Domains der Mandanten (z. B. verify.verein.ch, Feature verify_domain) zeigen dieselbe Seite.
+GET /public/verify/site liefert deren Kopf (Name, Logo, Bestätigung); die Seite ruft das
+serverseitig über das interne Netz mit dem Host der Anfrage auf.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app import repository
+from app.config import settings
 from app.db import get_db
-from app.schemas import VerifyRequest, VerifyResult
+from app.schemas import VerifyRequest, VerifyResult, VerifySiteRead
 
 router = APIRouter()
 
@@ -34,3 +39,19 @@ def verify(body: VerifyRequest, response: Response, db: Session = Depends(get_db
         document_id_matches=(row["document_id"] == body.document_id) if body.document_id is not None else None,
         **row,
     )
+
+
+@router.get("/public/verify/site", response_model=VerifySiteRead, response_model_exclude_none=True)
+def verify_site(
+    response: Response,
+    domain: str = Query(min_length=1, max_length=253, pattern=r"^[A-Za-z0-9.-]+(:[0-9]{1,5})?$"),
+    db: Session = Depends(get_db),
+) -> VerifySiteRead:
+    response.headers["Cache-Control"] = "no-store"
+    host = domain.split(":", 1)[0].lower().rstrip(".")
+    try:
+        row = repository.verify_site(db, domain=host)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="Die Prüfung ist gerade nicht verfügbar.") from exc
+    return VerifySiteRead(central_verify_url=settings.central_verify_url, **(row or {}))

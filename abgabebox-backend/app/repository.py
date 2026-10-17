@@ -370,3 +370,10 @@ def verify_document(db: Session, *, sha256: str) -> dict | None:
     Hinweis auf neuere Version), entscheidet allein die View dahinter."""
     row = db.execute(text("SELECT * FROM verify_document(:sha256)"), {"sha256": sha256}).mappings().first()
     return dict(row) if row else None
+
+
+def verify_site(db: Session, *, domain: str) -> dict | None:
+    """Mandant hinter einer Prüf-Domain (SECURITY-DEFINER-Funktion verify_site, Migration 0126).
+    Liefert nur etwas für eine aktive Prüf-Domain mit gebuchtem Feature und freigegebener Anzeige."""
+    row = db.execute(text("SELECT * FROM verify_site(:domain)"), {"domain": domain}).mappings().first()
+    return dict(row) if row else None

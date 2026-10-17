@@ -33,7 +33,7 @@ Vorab-Abgleich beim Upload. Dazu die Audit-Reparaturen aus `main` (Abschnitt «B
    (`STORAGE_CREDENTIALS_KEY`, Zugangsdaten des lokalen S3, leere Backup-Platzhalter) selbst. Keine
    neuen Pflicht-Variablen; optional `DOCUMENT_VERIFY_BASE_URL` (Standard
    `ABGABEBOX_BASE_URL/verify`), `BACKUP_*` und `DOCUMENT_*` (siehe `.env.prod.example`).
-4. **Migrationen** `0113` bis `0125` laufen automatisch; neue Dienste `storage-init`,
+4. **Migrationen** `0113` bis `0126` laufen automatisch; neue Dienste `storage-init`,
    `storage-worker`, `local-s3`, `backup-worker` und `document-worker` startet `deploy.sh` mit
    `up -d`. Die Smoke-Checks prüfen zusätzlich `document-worker` und `storage-worker`.
 5. **Nach dem Deploy:**
@@ -131,6 +131,21 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
 - Systemcheck «Öffentliche Prüfseite» inkl. ntfy.
 - CI: visuelle Regressionstests (Golden-Bilder), Galerie-PDF als Artefakt, Katalogprüfung inkl.
   aller Studio-Texte.
+
+### Neu: Eigene Prüf-Domain je Mandant
+
+- Neues Feature **«Eigene Prüf-Domain»** (`verify_domain`), im Adminportal unabhängig von
+  «Eigene Domain» Plänen oder einzelnen Mandanten zuzuordnen (keinem Plan vorbelegt). Mandanten
+  richten unter Domains eine Domain mit dem Zweck **Prüfseite** ein (z. B. `verify.verein.ch`, DNS
+  wie bei den anderen Domains).
+- Die Prüfseite unter dieser Domain zeigt Logo und Name des Vereins; seine Dokumente erhalten die
+  Stufe «Prüf-Domain verifiziert», schwächer als «Verifizierte Organisation».
+- Neue PDFs verweisen in Prüfvermerk, QR-Code und XMP auf die Prüf-Domain. Die zentrale Prüfseite
+  leitet Dokumente solcher Vereine automatisch weiter (mit «Hier bleiben»), ohne dass die Datei
+  erneut ausgewählt werden muss; fremde Dokumente gehen von einer Vereinsseite weiter zur
+  richtigen Prüf-Domain bzw. zu hocX. Voraussetzung: Name und Logo sind freigegeben.
+- Migration `0126_verify_domain`; neuer Endpoint `GET /api/public/verify/site` (Abgabebox).
+  Optional `DOCUMENT_VERIFY_BASE_URL` jetzt auch für `abgabebox-backend`.
 
 ### Neu: Objektspeicher (S3), Live-Migration und Wartungssystem
 

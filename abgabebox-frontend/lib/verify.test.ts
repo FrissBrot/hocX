@@ -1,6 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { classifyResult, parseDocumentId, sha256Hex, shortDocumentId, verifyHash } from "./verify";
+import {
+  classifyResult,
+  isSiteDocument,
+  parseDocumentId,
+  parseHashFragment,
+  redirectTarget,
+  sha256Hex,
+  shortDocumentId,
+  verifyHash,
+  type VerifySite,
+} from "./verify";
 
 const DOC_ID = "0192f0aa-0000-7000-8000-00007f3a91c2";
 
@@ -86,5 +96,51 @@ describe("verifyHash", () => {
   it("wirft bei Serverfehlern", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 503 })));
     await expect(verifyHash("a".repeat(64), null)).rejects.toThrow("verify 503");
+  });
+});
+
+describe("Prüf-Domains der Mandanten", () => {
+  const SHA = "a".repeat(64);
+  const own = "11111111-1111-4111-8111-111111111111";
+  const other = "22222222-2222-4222-8222-222222222222";
+  const site: VerifySite = { domain: "verify.tv-seedorf.ch", tenant_name: "TV Seedorf", tenant_public_id: own, central_verify_url: "https://abgabe.hocx.ch/verify" };
+  const found = (tenant: string, verifyDomain?: string) => ({ found: true, tenant_name: "X", tenant_public_id: tenant, verify_domain: verifyDomain });
+
+  it("liest nur einen gültigen Hash aus dem Fragment", () => {
+    expect(parseHashFragment(`#sha256=${SHA}`)).toBe(SHA);
+    expect(parseHashFragment(`#sha256=${SHA.toUpperCase()}`)).toBe(SHA);
+    expect(parseHashFragment("#sha256=abc")).toBeNull();
+    expect(parseHashFragment(`#x=${SHA}`)).toBeNull();
+    expect(parseHashFragment("")).toBeNull();
+  });
+
+  it("zentrale Seite leitet zur Prüf-Domain des Ausstellers weiter, Hash im Fragment", () => {
+    const target = redirectTarget(found(own, "verify.tv-seedorf.ch"), { currentHost: "abgabe.hocx.ch", site: null, documentId: DOC_ID, sha256: SHA });
+    expect(target).toEqual({ kind: "tenant", domain: "verify.tv-seedorf.ch", url: `https://verify.tv-seedorf.ch/verify?id=${DOC_ID}#sha256=${SHA}` });
+  });
+
+  it("ohne Prüf-Domain oder nicht gefunden: keine Weiterleitung", () => {
+    expect(redirectTarget(found(own), { currentHost: "abgabe.hocx.ch", site: null, documentId: null, sha256: SHA })).toBeNull();
+    expect(redirectTarget({ found: false }, { currentHost: "abgabe.hocx.ch", site, documentId: null, sha256: SHA })).toBeNull();
+  });
+
+  it("eigene Dokumente bleiben auf der Prüfseite des Mandanten (keine Schleife)", () => {
+    const result = found(own, "verify.tv-seedorf.ch");
+    expect(isSiteDocument(result, site)).toBe(true);
+    expect(redirectTarget(result, { currentHost: "verify.tv-seedorf.ch", site, documentId: null, sha256: SHA })).toBeNull();
+  });
+
+  it("fremde Dokumente: zur Prüf-Domain des richtigen Mandanten, sonst zu hocX", () => {
+    expect(redirectTarget(found(other, "verify.fc-beispiel.ch"), { currentHost: "verify.tv-seedorf.ch", site, documentId: null, sha256: SHA })).toEqual({
+      kind: "tenant",
+      domain: "verify.fc-beispiel.ch",
+      url: `https://verify.fc-beispiel.ch/verify#sha256=${SHA}`,
+    });
+    expect(redirectTarget(found(other), { currentHost: "verify.tv-seedorf.ch", site, documentId: null, sha256: SHA })).toEqual({
+      kind: "central",
+      url: `https://abgabe.hocx.ch/verify#sha256=${SHA}`,
+    });
+    // anonym ausgestellt (keine Mandanten-ID freigegeben): ebenfalls nicht von diesem Mandanten
+    expect(redirectTarget({ found: true }, { currentHost: "verify.tv-seedorf.ch", site, documentId: null, sha256: SHA })?.kind).toBe("central");
   });
 });

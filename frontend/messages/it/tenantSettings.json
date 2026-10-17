@@ -26,7 +26,7 @@
   "emptyDomainHintWithFeature": "Fino ad allora l'organizzazione resta raggiungibile all'indirizzo predefinito.",
   "emptyDomainHintWithoutFeature": "I domini personalizzati devono essere aggiunti all'abbonamento (scheda «Abbonamento e utilizzo»). Fino ad allora l'organizzazione resta raggiungibile all'indirizzo predefinito.",
   "domainsEyebrow": "Domini",
-  "domainsDescription": "Dominio personalizzato per l'app hocX e/o la consegna file. hocx.example.com e il dominio predefinito per la consegna file restano comunque sempre raggiungibili.",
+  "domainsDescription": "Domini personalizzati per l'app hocX, la consegna file e la pagina di verifica. hocx.example.com e il dominio predefinito per la consegna file restano comunque sempre raggiungibili.",
   "wizardTitle": "Configura dominio personalizzato",
   "wizardDescription": "Collega un dominio personalizzato per questa organizzazione in tre passaggi.",
   "stepDomain": "Dominio",
@@ -81,5 +81,9 @@
   "noModulesBooked": "Nessun modulo prenotato.",
   "pricePerMonth": "+{price}/mese",
   "moduleActive": "Attivo",
-  "saveSuccessVerificationRevoked": "Salvato. Poiché il nome è cambiato, la verifica da parte di hocX è stata revocata (Modelli → Verifica di autenticità)."
+  "saveSuccessVerificationRevoked": "Salvato. Poiché il nome è cambiato, la verifica da parte di hocX è stata revocata (Modelli → Verifica di autenticità).",
+  "purposeVerify": "Pagina di verifica",
+  "wizardPurposeVerifyDescription": "Fai verificare i tuoi documenti con il tuo indirizzo, ad es. verify.associazione.ch.",
+  "domainPlaceholderVerify": "ad es. verify.associazione.ch",
+  "successVerifyDescription": "I nuovi PDF rimandano ora a questa pagina di verifica, purché nome e logo siano mostrati sulla pagina di verifica (verifica di autenticità)."
 }

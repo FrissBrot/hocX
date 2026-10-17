@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { DomainWizardModal } from "@/components/ui/domain-wizard-modal";
 import { EmptyState } from "@/components/ui/empty-state";
-import { domainStatus, TenantDomainRowContent } from "@/components/settings/tenant-domain-row";
+import { bookablePurposes, domainStatus, TenantDomainRowContent } from "@/components/settings/tenant-domain-row";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -60,7 +60,9 @@ export function TenantDomainsManager({ initialTenant }: Props) {
   const t = useTranslations("tenantSettings");
   const tCommon = useTranslations("common");
   const tenantId = initialTenant.id;
-  const hasCustomDomainFeature = initialTenant.enabled_features.includes("custom_domain");
+  // Eigene App-/Abgabebox-Domain (custom_domain) und Prüf-Domain (verify_domain) sind getrennt buchbar
+  const purposes = bookablePurposes(initialTenant.enabled_features);
+  const hasCustomDomainFeature = purposes.length > 0;
   const { domains, loadDomains, deleteDomain } = useTenantDomains(tenantId);
 
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -139,6 +141,7 @@ export function TenantDomainsManager({ initialTenant }: Props) {
         onClose={() => setWizardOpen(false)}
         tenantId={tenantId}
         domain={wizardDomain}
+        purposes={purposes}
         onChanged={loadDomains}
       />
     </>

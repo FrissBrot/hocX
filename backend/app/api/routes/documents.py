@@ -125,7 +125,8 @@ def export_read(db: Session, export: DocumentExport) -> DocumentExportRead:
         title=export.title,
         version_label=export.version_label,
         short_id=document_service.short_document_id(export.public_id),
-        verify_url=f"{settings.verify_base_url}?id={export.public_id}",
+        # Exporte vor 1.2.0 (bzw. ohne Prüf-Domain) tragen die zentrale Prüfseite
+        verify_url=(export.options_json or {}).get("verify_url") or f"{settings.verify_base_url}?id={export.public_id}",
         language=export.language,
         template_id=template.public_id if template else None,
         template_name=template.name if template else None,

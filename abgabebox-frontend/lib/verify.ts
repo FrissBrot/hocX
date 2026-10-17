@@ -19,7 +19,26 @@ export type VerifyResponse = {
   organization_verified?: boolean;
   import_unverified?: boolean;
   title_overridden?: boolean;
+  // Prüf-Domain des ausstellenden Mandanten (z. B. verify.verein.ch)
+  verify_domain?: string;
 };
+
+// Kopf der Prüfseite unter einer Mandanten-Prüf-Domain (GET /api/public/verify/site). tenant_*
+// fehlen auf der zentralen Prüfseite und auf Domains, die keine aktive Prüf-Domain sind.
+export type VerifySite = {
+  domain?: string;
+  tenant_name?: string;
+  tenant_public_id?: string;
+  tenant_has_logo?: boolean;
+  organization_verified?: boolean;
+  central_verify_url: string;
+};
+
+export type VerifyRedirect =
+  // Prüfseite des ausstellenden Mandanten
+  | { kind: "tenant"; domain: string; url: string }
+  // Dokument eines anderen Mandanten ohne eigene Prüf-Domain: zurück zur Prüfseite von hocX
+  | { kind: "central"; url: string };
 
 export type VerifyOutcome =
   | { kind: "not_found" }
@@ -68,6 +87,48 @@ export function classifyResult(result: VerifyResponse): VerifyOutcome {
     titleOverridden: result.title_overridden === true,
     identity,
   };
+}
+
+// Fremdes Dokument auf der Prüfseite eines Mandanten? Nur Dokumente des Mandanten hinter der
+// Prüf-Domain tragen deren Stufe «Prüf-Domain verifiziert».
+export function isSiteDocument(result: VerifyResponse, site: VerifySite | null): boolean {
+  return Boolean(site?.tenant_public_id && result.tenant_public_id && site.tenant_public_id === result.tenant_public_id);
+}
+
+// Der Hash reist bei der Weiterleitung im Fragment (#sha256=...): der Browser schickt ihn nie an
+// einen Server, die Zielseite prüft damit sofort, ohne die Datei erneut zu verlangen.
+const HASH_FRAGMENT = /^#?sha256=([0-9a-f]{64})$/;
+
+export function parseHashFragment(fragment: string | null | undefined): string | null {
+  const match = HASH_FRAGMENT.exec((fragment ?? "").trim().toLowerCase());
+  return match ? match[1] : null;
+}
+
+function withCheck(base: string, documentId: string | null, sha256: string): string {
+  const url = new URL(base);
+  if (documentId) url.searchParams.set("id", documentId);
+  url.hash = `sha256=${sha256}`;
+  return url.toString();
+}
+
+// Wohin nach einem Treffer weitergeleitet wird - null, wenn das Dokument hierher gehört. Endet
+// nie in einer Schleife: die Prüfseite des Mandanten leitet dessen eigene Dokumente nicht weiter,
+// die zentrale Seite (keine Prüf-Domain) nur zu einem Mandanten mit verify_domain.
+export function redirectTarget(
+  result: VerifyResponse,
+  options: { currentHost: string; site: VerifySite | null; documentId: string | null; sha256: string }
+): VerifyRedirect | null {
+  if (!result.found) return null;
+  const { currentHost, site, documentId, sha256 } = options;
+  const host = currentHost.toLowerCase();
+  const domain = result.verify_domain?.toLowerCase();
+  if (domain && domain !== host) {
+    return { kind: "tenant", domain, url: withCheck(`https://${domain}/verify`, documentId, sha256) };
+  }
+  if (site?.tenant_public_id && !isSiteDocument(result, site) && !domain) {
+    return { kind: "central", url: withCheck(site.central_verify_url, documentId, sha256) };
+  }
+  return null;
 }
 
 // Same-origin: funktioniert auf der Plattform-Domain und auf Mandanten-Abgabebox-Domains.

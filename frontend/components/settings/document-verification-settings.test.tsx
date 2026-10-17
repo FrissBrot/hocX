@@ -11,6 +11,7 @@ vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => confirm }));
 const base: DocumentVerificationState = {
   show_identity: false, show_newer_version: true, tenant_id: "t1", tenant_name: "Musikverein", has_logo: false,
   verified_at: null, revoked_at: null, revoked_reason: null, request: null, verify_base_url: "https://abgabe.example.ch/verify",
+  has_verify_domain_feature: false, verify_domain: null,
 };
 
 describe("DocumentVerificationSettings", () => {
@@ -51,5 +52,31 @@ describe("DocumentVerificationSettings", () => {
     expect(screen.queryByRole("button", { name: "Verifizierung beantragen" })).not.toBeInTheDocument();
     rerender(<DocumentVerificationSettings key="renamed" initialState={{ ...base, revoked_at: "2026-10-01T00:00:00Z", revoked_reason: "name_changed" }} />);
     expect(screen.getByText(/weil sich der Name geändert hat/)).toBeInTheDocument();
+  });
+
+  it("shows the own verification domain with its status and the preview level", () => {
+    const domain = { domain: "verify.musikverein.ch", status: "active" as const, is_healthy: true, in_use: true };
+    const { rerender } = render(
+      <DocumentVerificationSettings initialState={{ ...base, show_identity: true, has_verify_domain_feature: true, verify_domain: domain, verify_base_url: "https://verify.musikverein.ch/verify" }} />
+    );
+    expect(screen.getByText("verify.musikverein.ch")).toBeInTheDocument();
+    expect(screen.getByText("Aktiv")).toBeInTheDocument();
+    expect(screen.getByText("Prüf-Domain verifiziert: verify.musikverein.ch")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Domains verwalten" })).toHaveAttribute("href", "/tenant-settings/domains");
+    expect(screen.getByRole("link", { name: "Prüfseite öffnen" })).toHaveAttribute("href", "https://verify.musikverein.ch/verify");
+
+    // Name und Logo ausgeblendet: Domain bleibt eingerichtet, wird aber nicht verwendet
+    rerender(
+      <DocumentVerificationSettings key="hidden" initialState={{ ...base, has_verify_domain_feature: true, verify_domain: { ...domain, in_use: false } }} />
+    );
+    expect(screen.getByText("Inaktiv")).toBeInTheDocument();
+    expect(screen.getByText(/erst verwendet, wenn Name und Logo/)).toBeInTheDocument();
+    expect(screen.queryByText(/Prüf-Domain verifiziert:/)).not.toBeInTheDocument();
+  });
+
+  it("explains that the verification domain is not booked", () => {
+    render(<DocumentVerificationSettings initialState={base} />);
+    expect(screen.getByText("Nicht im Abo")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Prüf-Domain einrichten" })).not.toBeInTheDocument();
   });
 });

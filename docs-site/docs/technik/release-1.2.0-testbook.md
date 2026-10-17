@@ -42,7 +42,7 @@ shellcheck ✓, Design/i18n/Katalog ✓. E2E-Suiten nicht ausgeführt.
 | INT-08 | Dokumentverwaltung × Bestand | XLSX-Extraktion mit openpyxl (Abhängigkeit der Engine) | `backend/tests/test_document_extraction.py::test_xlsx_*`, `test_document_processing.py::test_xlsx_gets_pdf_and_extraction_jobs` |
 | INT-09 | Monitoring | Check `document_queue`; Checks und Alarmtexte aller Zweige vorhanden | `backend/tests/test_system_health_document_queue.py`, `test_storage_health.py`, `test_admin_backups.py::test_health_checks_include_backup` |
 | INT-10 | Hintergrund-Loops | alle 16 Loops starten mit dem echten Lifespan; Lock-IDs eindeutig | `backend/tests/test_app_lifespan_smoke.py` |
-| INT-11 | Alembic | eine Head-Revision `0125_release_merge_imgmeta`; Revisions-IDs ≤ 32 Zeichen | Test-Stack `test-migrations` (`alembic upgrade head`) |
+| INT-11 | Alembic | eine Head-Revision `0126_verify_domain`; Revisions-IDs ≤ 32 Zeichen | Test-Stack `test-migrations` (`alembic upgrade head`) |
 | INT-12 | Release-Konfiguration | 12 gehärtete Dienste, document-worker ohne Anmelde-Secrets, Worker mit Backend-Image im Rollback-Manifest | `scripts/tests/test_release_config.sh` |
 
 ## Manuelle Abnahme auf der Testumgebung
@@ -53,7 +53,7 @@ Office-Dokumenten. Ergebnis, Datum und Version je Fall festhalten.
 
 | ID | Durchführung | Erwartung |
 |---|---|---|
-| REL-M1 | Update nach `CHANGELOG.md` (1.2.0) von 1.1.13: `update_deploy_code.sh`, `deploy.sh test` | Pre-Deploy-Dump angelegt, Secrets ergänzt, Migrationen bis `0125`, alle Dienste laufen, Smoke-Checks inkl. document-/storage-worker grün |
+| REL-M1 | Update nach `CHANGELOG.md` (1.2.0) von 1.1.13: `update_deploy_code.sh`, `deploy.sh test` | Pre-Deploy-Dump angelegt, Secrets ergänzt, Migrationen bis `0126`, alle Dienste laufen, Smoke-Checks inkl. document-/storage-worker grün |
 | REL-M2 | `/admin/system` und `/admin/jobs` | Checks «Öffentliche Prüfseite», «Dateispeicher», «Storage-Migration», «Backup», «Dokumentverarbeitung» bewertet; keine nicht registrierten Jobs |
 | REL-M3 | Fachtestbooks DOC-M1/M2, DVW-M1/M2, PRE-M1, DAT-M3 auf dem Dateisystem, dann Erstmigration auf lokales S3 (STO-M1) und dieselben Fälle erneut | identische Ergebnisse vor und nach der Migration; Studio-Logos und -Schriften in PDFs vorhanden |
 | REL-M4 | `cleanup-legacy-document-templates.sh --dry-run`, dann ohne, **vor** REL-M3-Migration | nur TeX-Code entfernt, Logos/Schriften bleiben; Prüfbericht der Migration ohne Altlasten |
@@ -62,6 +62,7 @@ Office-Dokumenten. Ergebnis, Datum und Version je Fall festhalten.
 | REL-M7 | Mandant als Kopie aus dem Backup wiederherstellen | Brand-Profile, Vorlagen, Dokumente mit Versionen, Fotos mit Metadaten und Standortschaltern vorhanden |
 | REL-M8 | E2E-Suite `./scripts/e2e.sh up && ./scripts/e2e.sh test` inkl. `frontend/e2e/csp.spec.ts` | grün; Nonce-CSP ohne Verstösse auf angemeldeten Seiten |
 | REL-M9 | Light/Dark, 1440/390 px: neue Seiten (Dokumente, Storage, Wartung, Backups, Verifizierungen, Dateien-Tab) | Design-Regeln eingehalten |
+| REL-M10 | Prüf-Domain: Feature `verify_domain` einem Testmandanten zuordnen, `verify.<testdomain>` mit TXT und CNAME auf die Abgabebox-Domain einrichten, Name/Logo freigeben, Protokoll exportieren; QR-Code scannen; dieselbe Datei auf der zentralen Prüfseite prüfen; ein Dokument eines anderen Mandanten auf der Prüf-Domain prüfen; Feature entziehen | Zertifikat ausgestellt, `/` leitet auf `/verify`, Abgabe-Links 404; PDF-Fusszeile/QR zeigen die Prüf-Domain; zentrale Seite leitet nach 4 s weiter und prüft dort ohne erneute Dateiauswahl, Stufe «Prüf-Domain verifiziert»; fremdes Dokument wird als fremd markiert und weitergeleitet; nach Entzug kein Routing mehr, neue PDFs mit zentraler Prüfseite |
 
 ## Bekannte Lücken
 

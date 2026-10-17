@@ -26,7 +26,7 @@
   "emptyDomainHintWithFeature": "En attendant, l'organisation reste accessible à l'adresse par défaut.",
   "emptyDomainHintWithoutFeature": "Les domaines personnalisés doivent être ajoutés à l'abonnement (onglet « Abonnement et utilisation »). En attendant, l'organisation reste accessible à l'adresse par défaut.",
   "domainsEyebrow": "Domaines",
-  "domainsDescription": "Domaine personnalisé pour l'application hocX et/ou le dépôt de fichiers. hocx.example.com et le domaine de dépôt par défaut restent également toujours accessibles.",
+  "domainsDescription": "Domaines personnalisés pour l'application hocX, le dépôt de fichiers et la page de vérification. hocx.example.com et le domaine de dépôt par défaut restent également toujours accessibles.",
   "wizardTitle": "Configurer un domaine personnalisé",
   "wizardDescription": "Connectez un domaine personnalisé pour cette organisation en trois étapes.",
   "stepDomain": "Domaine",
@@ -81,5 +81,9 @@
   "noModulesBooked": "Aucun module réservé.",
   "pricePerMonth": "+{price}/mois",
   "moduleActive": "Actif",
-  "saveSuccessVerificationRevoked": "Enregistré. Le nom ayant changé, la vérification par hocX a été révoquée (Modèles → Vérification d’authenticité)."
+  "saveSuccessVerificationRevoked": "Enregistré. Le nom ayant changé, la vérification par hocX a été révoquée (Modèles → Vérification d’authenticité).",
+  "purposeVerify": "Page de vérification",
+  "wizardPurposeVerifyDescription": "Faire vérifier vos documents sous votre propre adresse, p. ex. verify.club.ch.",
+  "domainPlaceholderVerify": "p. ex. verify.club.ch",
+  "successVerifyDescription": "Les nouveaux PDF renvoient désormais à cette page de vérification, tant que le nom et le logo sont affichés sur la page de vérification (vérification d'authenticité)."
 }

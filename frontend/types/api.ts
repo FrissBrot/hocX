@@ -118,7 +118,7 @@ export type TenantSubscription = {
   estimated_yearly_cost_rp: number | null;
 };
 
-export type TenantDomainPurpose = "app" | "abgabebox";
+export type TenantDomainPurpose = "app" | "abgabebox" | "verify";
 
 export type TenantDomain = {
   id: string;

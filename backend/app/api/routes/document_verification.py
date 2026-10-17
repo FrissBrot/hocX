@@ -5,6 +5,8 @@
   document_verification_public (Migration 0117) anhand dieser beiden Schalter.
 - Antrag auf Bestätigung der Organisation durch hocX stellen bzw. zurückziehen; bestätigt oder
   abgelehnt wird im Plattform-Admin (routes/admin.py).
+- Stand der eigenen Prüf-Domain (Feature verify_domain): eingerichtet wird sie unter Domains,
+  hier wird nur angezeigt, ob neue PDFs und die Weiterleitung sie schon verwenden.
 """
 from __future__ import annotations
 
@@ -13,14 +15,15 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, require_admin, require_reader
 from app.documents.strings import normalize_language, text
-from app.models import Tenant
+from app.models import Tenant, TenantFeature
 from app.services import identity_verification_service as verification
+from app.services import verify_domain_service
 from app.services.audit_service import AuditService
 
 router = APIRouter()
@@ -36,6 +39,14 @@ class VerificationRequestRead(BaseModel):
     decision_note: str | None
 
 
+class VerifyDomainRead(BaseModel):
+    domain: str
+    status: str
+    is_healthy: bool
+    # Neue PDFs und die Weiterleitung der zentralen Prüfseite verwenden die Domain
+    in_use: bool
+
+
 class DocumentVerificationRead(BaseModel):
     show_identity: bool
     show_newer_version: bool
@@ -47,6 +58,8 @@ class DocumentVerificationRead(BaseModel):
     revoked_reason: str | None
     request: VerificationRequestRead | None
     verify_base_url: str
+    has_verify_domain_feature: bool
+    verify_domain: VerifyDomainRead | None
 
 
 class DocumentVerificationWrite(BaseModel):
@@ -64,6 +77,7 @@ class VerificationRequestWrite(BaseModel):
 
 def _read(db: Session, tenant: Tenant) -> DocumentVerificationRead:
     latest = verification.latest_request(db, tenant.id)
+    domain_row = verify_domain_service.verify_domain_row(db, tenant.id)
     return DocumentVerificationRead(
         show_identity=tenant.verify_show_identity,
         show_newer_version=tenant.verify_show_newer_version,
@@ -74,7 +88,20 @@ def _read(db: Session, tenant: Tenant) -> DocumentVerificationRead:
         revoked_at=tenant.identity_verification_revoked_at,
         revoked_reason=tenant.identity_verification_revoked_reason,
         request=VerificationRequestRead.model_validate(latest, from_attributes=True) if latest is not None else None,
-        verify_base_url=settings.verify_base_url,
+        verify_base_url=verify_domain_service.tenant_verify_base_url(db, tenant.id),
+        has_verify_domain_feature=db.scalar(
+            select(TenantFeature.id).where(TenantFeature.tenant_id == tenant.id, TenantFeature.feature_code == "verify_domain")
+        ) is not None,
+        verify_domain=(
+            VerifyDomainRead(
+                domain=domain_row.domain,
+                status=domain_row.status,
+                is_healthy=domain_row.is_healthy,
+                in_use=verify_domain_service.usable_verify_domain(db, tenant.id) == domain_row.domain,
+            )
+            if domain_row is not None
+            else None
+        ),
     )
 
 

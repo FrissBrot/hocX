@@ -26,7 +26,8 @@ nur diesen zur Prüfung. hocX speichert weder Fingerabdruck noch IP-Adresse der 
     verändert die Datei, auch wenn der Inhalt gleich aussieht. Geprüft werden kann nur die
     ursprünglich erhaltene Datei.
 
-Die Prüfseite funktioniert auch auf der eigenen Abgabebox-Adresse eines Vereins.
+Die Prüfseite funktioniert auch auf der eigenen Abgabebox-Adresse eines Vereins und auf seiner
+eigenen Prüf-Domain (siehe unten).
 
 ## Name und Logo auf der Prüfseite anzeigen
 
@@ -53,3 +54,48 @@ angezeigt werden. Ohne Verifizierung steht dort «Erstellt im hocX-Konto von …
 
 Bestätigt wird der Name zum Zeitpunkt des Antrags. **Ändert sich der Name des Vereins, wird die
 Verifizierung automatisch aufgehoben** und kann neu beantragt werden. Ein neues Logo ändert nichts.
+
+## Eigene Prüf-Domain
+
+Mit der Zusatzfunktion **«Eigene Prüf-Domain»** prüfen Empfänger Dokumente eines Vereins unter
+dessen eigener Adresse, zum Beispiel `verify.turnverein-seedorf.ch`. So sieht jede Person, dass ein
+bestätigtes Dokument mit dieser Domain in Verbindung steht. Die Funktion wird von hocX separat
+freigeschaltet, unabhängig von eigenen Domains für die App oder die Abgabebox.
+
+**Einrichten** (Administratorinnen und Administratoren):
+
+1. Unter **Mandanten-Einstellungen → Domains** auf **Domain hinzufügen** klicken, den Zweck
+   **Prüfseite** wählen und die Domain eingeben. Der Name ist frei wählbar, `verify.` ist üblich.
+2. Die beiden angezeigten DNS-Einträge beim Domain-Anbieter setzen (TXT-Eintrag als
+   Besitznachweis, CNAME auf die Abgabebox-Adresse von hocX) und **Jetzt prüfen** klicken.
+3. Unter **Mandanten-Einstellungen → Echtheitsprüfung** muss **Name und Logo auf der Prüfseite
+   anzeigen** eingeschaltet sein. Der Abschnitt «Eigene Prüf-Domain» zeigt, ob die Domain verwendet
+   wird.
+
+**Was sich ändert, sobald die Prüf-Domain aktiv ist:**
+
+- **Neue PDFs** tragen die eigene Prüf-Domain in Fusszeile, QR-Code und Metadaten. Bereits
+  erstellte PDFs behalten ihren bisherigen Prüf-Link und bleiben prüfbar.
+- **Weiterleitung:** Wer ein Dokument des Vereins auf der Prüfseite von hocX prüft, wird nach
+  wenigen Sekunden auf die Prüfseite des Vereins weitergeleitet («Hier bleiben» bricht ab). Die
+  Datei muss dort nicht erneut ausgewählt werden: Der Fingerabdruck reist im Teil der Adresse nach
+  `#` mit, den der Browser nie an einen Server schickt.
+- **Fremde Dokumente:** Wird auf der Prüfseite eines Vereins ein Dokument eines anderen Vereins
+  geprüft, steht das deutlich da, und es geht weiter zu dessen Prüf-Domain bzw. zur Prüfseite von
+  hocX.
+- Die Prüfseite des Vereins zeigt oben Logo und Name. Seine eigenen Dokumente erhalten die Stufe
+  **«Prüf-Domain verifiziert»**.
+
+**Stufen auf der Prüfseite** (von schwach nach stark):
+
+| Stufe | Bedeutung |
+|---|---|
+| **Original** | Die Datei ist unverändert aus hocX. |
+| **Prüf-Domain verifiziert** | Die Domain ist per DNS-Eintrag mit dem hocX-Konto des Vereins verbunden. Das belegt nicht, dass das Konto wirklich zur Organisation gehört – eine Domain kann jeder registrieren. |
+| **Verifizierte Organisation** | hocX hat bestätigt, dass das Konto zur Organisation gehört (siehe oben). |
+
+!!! info "Wann die Prüf-Domain nicht verwendet wird"
+    Neue PDFs und die Weiterleitung nutzen wieder die Prüfseite von hocX, solange Name und Logo
+    ausgeblendet sind, die Domain im DNS nicht mehr auf hocX zeigt oder die Zusatzfunktion nicht
+    mehr gebucht ist. Gibt der Verein die Domain ganz auf, funktionieren QR-Codes bereits
+    verteilter PDFs nicht mehr. Die Datei bleibt dann aber auf der Prüfseite von hocX prüfbar.

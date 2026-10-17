@@ -169,7 +169,28 @@
     "error": "Al momento la verifica non è possibile. Riprova tra poco.",
     "readError": "Impossibile leggere il file.",
     "tooLarge": "Il file è troppo grande (al massimo {size} MB).",
-    "noCrypto": "Il tuo browser non supporta la verifica. Usa un browser aggiornato."
+    "noCrypto": "Il tuo browser non supporta la verifica. Usa un browser aggiornato.",
+    "site": {
+      "label": "Pagina di verifica di {name}",
+      "eyebrow": "Pagina di verifica ufficiale",
+      "hint": "Verifica se un file PDF proviene senza modifiche da {name}.",
+      "poweredBy": "Verifica fornita da hocX"
+    },
+    "domainBadge": "Dominio di verifica confermato: {domain}",
+    "domainExplanation": "Il dominio {domain} è collegato all'account hocX di «{name}» tramite un record DNS. Non prova l'identità dell'organizzazione – solo la conferma da parte di hocX lo fa.",
+    "foreignDocument": "Questo documento non è stato emesso da «{site}».",
+    "forwarded": "È stata verificata l'impronta del file selezionato nella pagina di verifica precedente.",
+    "redirect": {
+      "tenantTitle": "Continua alla pagina di verifica di «{name}»",
+      "tenantText": "«{name}» conferma i propri documenti su {domain}. Reindirizzamento tra {seconds, plural, one {# secondo} other {# secondi}} – la verifica avviene lì automaticamente, senza selezionare di nuovo il file.",
+      "tenantStayed": "«{name}» conferma i propri documenti anche su {domain}.",
+      "centralTitle": "Documento di un'altra organizzazione",
+      "centralText": "Questo documento non è stato emesso da «{site}». Reindirizzamento alla pagina di verifica di hocX tra {seconds, plural, one {# secondo} other {# secondi}}.",
+      "centralStayed": "Questo documento non è stato emesso da «{site}». La pagina di verifica di hocX mostra chi l'ha emesso.",
+      "stay": "Resta qui",
+      "openTenant": "Apri la pagina di verifica",
+      "openCentral": "Alla pagina di verifica di hocX"
+    }
   },
   "maintenance": {
     "title": "La casella di consegna è in manutenzione",

@@ -169,7 +169,28 @@
     "error": "Die Prüfung ist gerade nicht möglich. Bitte versuche es gleich nochmal.",
     "readError": "Die Datei konnte nicht gelesen werden.",
     "tooLarge": "Die Datei ist zu gross (höchstens {size} MB).",
-    "noCrypto": "Dein Browser unterstützt die Prüfung nicht. Bitte verwende einen aktuellen Browser."
+    "noCrypto": "Dein Browser unterstützt die Prüfung nicht. Bitte verwende einen aktuellen Browser.",
+    "site": {
+      "label": "Prüfseite von {name}",
+      "eyebrow": "Offizielle Prüfseite",
+      "hint": "Prüfe, ob eine PDF-Datei unverändert von {name} stammt.",
+      "poweredBy": "Prüfung bereitgestellt von hocX"
+    },
+    "domainBadge": "Prüf-Domain verifiziert: {domain}",
+    "domainExplanation": "Die Domain {domain} ist per DNS-Eintrag mit dem hocX-Konto von «{name}» verbunden. Sie belegt nicht die Identität der Organisation – das tut nur die Bestätigung durch hocX.",
+    "foreignDocument": "Dieses Dokument wurde nicht von «{site}» ausgestellt.",
+    "forwarded": "Geprüft wurde der Fingerabdruck der Datei, die du auf der vorherigen Prüfseite ausgewählt hast.",
+    "redirect": {
+      "tenantTitle": "Weiter zur Prüfseite von «{name}»",
+      "tenantText": "«{name}» bestätigt seine Dokumente unter {domain}. Weiterleitung in {seconds, plural, one {# Sekunde} other {# Sekunden}} – die Prüfung läuft dort automatisch, ohne die Datei erneut auszuwählen.",
+      "tenantStayed": "«{name}» bestätigt seine Dokumente auch unter {domain}.",
+      "centralTitle": "Dokument einer anderen Organisation",
+      "centralText": "Dieses Dokument stammt nicht von «{site}». Weiterleitung zur Prüfseite von hocX in {seconds, plural, one {# Sekunde} other {# Sekunden}}.",
+      "centralStayed": "Dieses Dokument stammt nicht von «{site}». Die Prüfseite von hocX zeigt, wer es ausgestellt hat.",
+      "stay": "Hier bleiben",
+      "openTenant": "Prüfseite öffnen",
+      "openCentral": "Zur Prüfseite von hocX"
+    }
   },
   "maintenance": {
     "title": "Die Abgabebox wird gerade gewartet",

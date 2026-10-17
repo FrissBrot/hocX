@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.models import TenantDomain
 from app.services import domain_verification_service, traefik_config_service
 
@@ -22,13 +21,13 @@ def run_health_check(db: Session) -> None:
         db.query(TenantDomain)
         .filter(
             TenantDomain.status == "active",
-            TenantDomain.tenant_id.in_(traefik_config_service.tenant_ids_with_custom_domain_feature(db)),
+            traefik_config_service.domain_feature_booked(),
         )
         .all()
     )
     now = datetime.now(timezone.utc)
     for row in rows:
-        target_host = settings.traefik_domain if row.purpose == "app" else settings.traefik_abgabebox_domain
+        target_host = traefik_config_service.target_host_for_purpose(row.purpose)
         healthy = bool(target_host) and domain_verification_service.is_still_routable(row.domain, target_host)
         row.is_healthy = healthy
         row.last_checked_at = now

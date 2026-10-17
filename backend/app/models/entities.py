@@ -124,7 +124,7 @@ class TenantDomain(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("tenant_id", "purpose", name="uq_tenant_domain_tenant_purpose"),
         UniqueConstraint("domain", name="uq_tenant_domain_domain"),
-        CheckConstraint("purpose IN ('app', 'abgabebox')", name="ck_tenant_domain_purpose"),
+        CheckConstraint("purpose IN ('app', 'abgabebox', 'verify')", name="ck_tenant_domain_purpose"),
         CheckConstraint("status IN ('pending', 'active')", name="ck_tenant_domain_status"),
     )
 

@@ -26,7 +26,7 @@
   "emptyDomainHintWithFeature": "Bis dahin bleibt der Mandant unter der Standard-Adresse erreichbar.",
   "emptyDomainHintWithoutFeature": "Eigene Domains müssen zum Abo dazugebucht werden (Tab «Abo & Nutzung»). Bis dahin bleibt der Mandant unter der Standard-Adresse erreichbar.",
   "domainsEyebrow": "Domains",
-  "domainsDescription": "Eigene Domain für die hocX-App und/oder die Abgabebox. hocx.example.com bzw. die Standard-Abgabebox-Domain bleiben zusätzlich immer erreichbar.",
+  "domainsDescription": "Eigene Domains für die hocX-App, die Abgabebox und die Prüfseite. hocx.example.com bzw. die Standard-Abgabebox-Domain bleiben zusätzlich immer erreichbar.",
   "wizardTitle": "Custom Domain einrichten",
   "wizardDescription": "In drei Schritten eine eigene Domain für diesen Mandanten verbinden.",
   "stepDomain": "Domain",
@@ -81,5 +81,9 @@
   "noModulesBooked": "Keine Module gebucht.",
   "pricePerMonth": "+{price}/Monat",
   "moduleActive": "Aktiv",
-  "saveSuccessVerificationRevoked": "Gespeichert. Weil sich der Name geändert hat, wurde die Verifizierung durch hocX aufgehoben (Vorlagen → Echtheitsprüfung)."
+  "saveSuccessVerificationRevoked": "Gespeichert. Weil sich der Name geändert hat, wurde die Verifizierung durch hocX aufgehoben (Vorlagen → Echtheitsprüfung).",
+  "purposeVerify": "Prüfseite",
+  "wizardPurposeVerifyDescription": "Eure Dokumente unter eigener Adresse prüfen lassen, z. B. verify.verein.ch.",
+  "domainPlaceholderVerify": "z.B. verify.verein.ch",
+  "successVerifyDescription": "Neue PDFs verweisen ab sofort auf diese Prüfseite, sofern Name und Logo auf der Prüfseite angezeigt werden (Echtheitsprüfung)."
 }

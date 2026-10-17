@@ -33,6 +33,22 @@
     "previewText": "Ce fichier est une copie non modifiée d’un document créé avec hocX le {date}.",
     "previewBadge": "Organisation vérifiée",
     "previewCreatedBy": "Créé dans le compte hocX de {name}.",
-    "previewNewer": "Il existe une version plus récente (v1.3) de ce document."
+    "previewNewer": "Il existe une version plus récente (v1.3) de ce document.",
+    "domainTitle": "Domaine de vérification propre",
+    "domainIntro": "Avec votre propre domaine de vérification, p. ex. verify.club.ch, les destinataires vérifient vos documents sous votre adresse. Les nouveaux PDF y renvoient dans leur code QR, et quiconque vérifie l'un de vos documents sur la page de vérification de hocX est redirigé automatiquement. Les PDF déjà créés conservent leur lien de vérification.",
+    "domainLevelHint": "La page de vérification affiche alors le niveau « Domaine de vérification confirmé ». Il est plus faible que la vérification par hocX, car tout le monde peut enregistrer un domaine.",
+    "domainNotBooked": "Le domaine de vérification propre n'est pas inclus dans votre abonnement et peut être ajouté par hocX.",
+    "domainSetup": "Configurer le domaine de vérification",
+    "domainManage": "Gérer les domaines",
+    "domainStatusActive": "Actif",
+    "domainStatusPending": "Confirmation DNS en attente",
+    "domainStatusUnhealthy": "Inaccessible",
+    "domainStatusHidden": "Inactif",
+    "domainStatusNotBooked": "Hors abonnement",
+    "domainPendingHint": "Terminez la configuration DNS sous Domaines.",
+    "domainHiddenHint": "Le domaine de vérification n'est utilisé que lorsque le nom et le logo sont affichés sur la page de vérification.",
+    "domainUnhealthyHint": "Le domaine ne pointe plus vers hocX dans le DNS. Tant que ce n'est pas corrigé, les nouveaux PDF renvoient à la page de vérification de hocX.",
+    "domainNotBookedHint": "La fonction « Domaine de vérification propre » n'est plus incluse dans l'abonnement. Les nouveaux PDF renvoient à la page de vérification de hocX.",
+    "previewDomainBadge": "Domaine de vérification confirmé : {domain}"
   }
 }

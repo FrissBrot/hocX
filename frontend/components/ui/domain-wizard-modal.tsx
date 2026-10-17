@@ -16,7 +16,21 @@ type Props = {
   tenantId: string;
   /** Pending domain to resume verification for, or null to start a fresh "add domain" flow. */
   domain: TenantDomain | null;
+  /** Zwecke, die das Abo erlaubt (custom_domain: app/abgabebox, verify_domain: verify). */
+  purposes: TenantDomainPurpose[];
   onChanged: () => void;
+};
+
+const PURPOSE_CARDS: { purpose: TenantDomainPurpose; title: string; description: string }[] = [
+  { purpose: "app", title: "purposeApp", description: "wizardPurposeAppDescription" },
+  { purpose: "abgabebox", title: "purposeAbgabebox", description: "wizardPurposeAbgabeboxDescription" },
+  { purpose: "verify", title: "purposeVerify", description: "wizardPurposeVerifyDescription" },
+];
+
+const SUCCESS_KEYS: Record<TenantDomainPurpose, string> = {
+  app: "successAppDescription",
+  abgabebox: "successAbgabeboxDescription",
+  verify: "successVerifyDescription",
 };
 
 type Step = "purpose" | "dns" | "success";
@@ -29,7 +43,7 @@ function CheckIcon() {
   );
 }
 
-export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }: Props) {
+export function DomainWizardModal({ open, onClose, tenantId, domain, purposes, onChanged }: Props) {
   const t = useTranslations("tenantSettings");
   const tCommon = useTranslations("common");
   const showToast = useToast();
@@ -56,10 +70,11 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
       setStep(domain.status === "active" ? "success" : "dns");
     } else {
       setActiveDomain(null);
-      setPurpose("app");
+      setPurpose(purposes[0] ?? "app");
       setDomainInput("");
       setStep("purpose");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, domain]);
 
   async function createDomain() {
@@ -148,14 +163,17 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
       {step === "purpose" && (
         <>
           <div className="wizard-purpose-grid">
-            <button type="button" className={`wizard-purpose-card${purpose === "app" ? " is-selected" : ""}`} onClick={() => setPurpose("app")}>
-              <span className="wizard-purpose-title">{t("purposeApp")}</span>
-              <span className="wizard-purpose-desc">{t("wizardPurposeAppDescription")}</span>
-            </button>
-            <button type="button" className={`wizard-purpose-card${purpose === "abgabebox" ? " is-selected" : ""}`} onClick={() => setPurpose("abgabebox")}>
-              <span className="wizard-purpose-title">{t("purposeAbgabebox")}</span>
-              <span className="wizard-purpose-desc">{t("wizardPurposeAbgabeboxDescription")}</span>
-            </button>
+            {PURPOSE_CARDS.filter((card) => purposes.includes(card.purpose)).map((card) => (
+              <button
+                key={card.purpose}
+                type="button"
+                className={`wizard-purpose-card${purpose === card.purpose ? " is-selected" : ""}`}
+                onClick={() => setPurpose(card.purpose)}
+              >
+                <span className="wizard-purpose-title">{t(card.title)}</span>
+                <span className="wizard-purpose-desc">{t(card.description)}</span>
+              </button>
+            ))}
           </div>
           <label className="field-stack">
             <span className="field-label">{t("domainLabel")}</span>
@@ -163,7 +181,7 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
               className="input"
               value={domainInput}
               onChange={(event) => setDomainInput(event.target.value.toLowerCase())}
-              placeholder={t("domainPlaceholder")}
+              placeholder={purpose === "verify" ? t("domainPlaceholderVerify") : t("domainPlaceholder")}
               autoFocus
             />
           </label>
@@ -226,9 +244,7 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, onChanged }
             <div>
               {t("successActive", { domain: activeDomain.domain })}
               <p className="muted" style={{ marginTop: "var(--space-1)" }}>
-                {activeDomain.purpose === "app"
-                  ? t("successAppDescription")
-                  : t("successAbgabeboxDescription")}
+                {t(SUCCESS_KEYS[activeDomain.purpose])}
               </p>
             </div>
           </div>

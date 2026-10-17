@@ -757,6 +757,8 @@ services:
       ABGABEBOX_DATABASE_URL_FILE: /run/secrets/abgabebox_database_url
       ABGABEBOX_STORAGE_ROOT: /app/storage
       ABGABEBOX_CORS_ORIGIN: https://${TRAEFIK_ABGABEBOX_DOMAIN}
+      # Zentrale Prüfseite (Weiterleitung von Mandanten-Prüf-Domains); leer = ABGABEBOX_CORS_ORIGIN/verify
+      DOCUMENT_VERIFY_BASE_URL: ${DOCUMENT_VERIFY_BASE_URL:-}
       # Steuert, ob captcha.py bei fehlenden FriendlyCaptcha-Keys sicher ablehnt
       # (production) oder Uploads ohne Bot-Check zulaesst (dev/test) - siehe
       # abgabebox-backend/app/config.py:_DEV_LIKE_ENVIRONMENTS. HOCX_ENVIRONMENT ist

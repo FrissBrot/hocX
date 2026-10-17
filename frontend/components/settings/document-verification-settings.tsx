@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -30,7 +31,30 @@ export type DocumentVerificationState = {
   revoked_reason: string | null;
   request: VerificationRequest | null;
   verify_base_url: string;
+  has_verify_domain_feature: boolean;
+  verify_domain: VerifyDomainState | null;
 };
+
+// Eigene Prüf-Domain (Feature verify_domain); eingerichtet wird sie unter Domains.
+type VerifyDomainState = {
+  domain: string;
+  status: "pending" | "active";
+  is_healthy: boolean;
+  // neue PDFs und die Weiterleitung der zentralen Prüfseite verwenden sie
+  in_use: boolean;
+};
+
+type TFunc = (key: string) => string;
+
+function verifyDomainStatus(state: DocumentVerificationState, t: TFunc): { label: string; variant: "success" | "warning" | "info" | "neutral"; hint: string | null } {
+  const domain = state.verify_domain;
+  if (!domain) return { label: "", variant: "neutral", hint: null };
+  if (!state.has_verify_domain_feature) return { label: t("domainStatusNotBooked"), variant: "warning", hint: t("domainNotBookedHint") };
+  if (domain.status === "pending") return { label: t("domainStatusPending"), variant: "info", hint: t("domainPendingHint") };
+  if (!state.show_identity) return { label: t("domainStatusHidden"), variant: "warning", hint: t("domainHiddenHint") };
+  if (!domain.is_healthy) return { label: t("domainStatusUnhealthy"), variant: "warning", hint: t("domainUnhealthyHint") };
+  return { label: t("domainStatusActive"), variant: "success", hint: null };
+}
 
 const API = "/api/document-verification";
 
@@ -75,6 +99,8 @@ export function DocumentVerificationSettings({ initialState }: { initialState: D
   const pending = state.request?.status === "pending";
   const rejected = !state.verified_at && state.request?.status === "rejected";
   const verifyLink = state.verify_base_url;
+  const domainStatus = verifyDomainStatus(state, t);
+  const domainInUse = state.verify_domain?.in_use ? state.verify_domain.domain : null;
 
   return (
     <div className="grid docverify">
@@ -98,6 +124,29 @@ export function DocumentVerificationSettings({ initialState }: { initialState: D
         <div>
           <a className="button-secondary" href={verifyLink} target="_blank" rel="noopener noreferrer">{t("openPage")}</a>
         </div>
+      </section>
+
+      <section className="panel docverify-section">
+        <div className="docverify-status-row">
+          <h3 className="docverify-heading">{t("domainTitle")}</h3>
+          {state.verify_domain ? (
+            <Badge variant={domainStatus.variant} dot>{domainStatus.label}</Badge>
+          ) : !state.has_verify_domain_feature ? (
+            <Badge variant="neutral">{t("domainStatusNotBooked")}</Badge>
+          ) : null}
+        </div>
+        <p className="muted docverify-hint">{t("domainIntro")}</p>
+        <p className="muted docverify-hint">{t("domainLevelHint")}</p>
+        {state.verify_domain && <p className="docverify-domain">{state.verify_domain.domain}</p>}
+        {domainStatus.hint && <StatusBanner tone="neutral" message={domainStatus.hint} />}
+        {!state.verify_domain && !state.has_verify_domain_feature && <StatusBanner tone="neutral" message={t("domainNotBooked")} />}
+        {(state.verify_domain || state.has_verify_domain_feature) && (
+          <div className="docverify-actions-row">
+            <Link className="button-secondary" href="/tenant-settings/domains">
+              {state.verify_domain ? t("domainManage") : t("domainSetup")}
+            </Link>
+          </div>
+        )}
       </section>
 
       <section className="panel docverify-section">
@@ -163,6 +212,11 @@ export function DocumentVerificationSettings({ initialState }: { initialState: D
                 <div className="docverify-preview-sub">
                   {state.verified_at ? <Badge variant="success">{t("previewBadge")}</Badge> : t("previewCreatedBy", { name: state.tenant_name })}
                 </div>
+                {domainInUse && (
+                  <div className="docverify-preview-sub">
+                    <Badge variant="info">{t("previewDomainBadge", { domain: domainInUse })}</Badge>
+                  </div>
+                )}
               </div>
             </div>
           )}

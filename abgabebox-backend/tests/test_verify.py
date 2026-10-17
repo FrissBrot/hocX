@@ -103,3 +103,47 @@ def test_restricted_role_reaches_only_the_function():
             db.rollback()
     finally:
         db.close()
+
+
+def test_verify_domain_of_the_issuer_is_passed_on(registry):
+    registry[SHA] = _row(verify_domain="verify.musterverein.ch")
+    assert client.post("/api/public/verify", json={"sha256": SHA}).json()["verify_domain"] == "verify.musterverein.ch"
+    registry[SHA] = _row(verify_domain=None)
+    assert "verify_domain" not in client.post("/api/public/verify", json={"sha256": SHA}).json()
+
+
+def test_verify_site_for_a_tenant_verify_domain(monkeypatch):
+    seen = {}
+
+    def fake_site(db, *, domain):
+        seen["domain"] = domain
+        return {"domain": domain, "tenant_name": "Musterverein", "tenant_public_id": TENANT_ID, "tenant_has_logo": False, "organization_verified": True}
+
+    monkeypatch.setattr(repository, "verify_site", fake_site)
+    response = client.get("/api/public/verify/site", params={"domain": "Verify.Musterverein.ch:443"})
+    assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
+    body = response.json()
+    # Port und Grossschreibung des Host-Headers spielen keine Rolle
+    assert seen["domain"] == "verify.musterverein.ch"
+    assert body["tenant_name"] == "Musterverein" and body["organization_verified"] is True
+    assert body["central_verify_url"].endswith("/verify")
+
+
+def test_verify_site_on_the_central_page_has_only_the_central_url(monkeypatch):
+    monkeypatch.setattr(repository, "verify_site", lambda db, *, domain: None)
+    body = client.get("/api/public/verify/site", params={"domain": "abgabe.example.com"}).json()
+    assert set(body) == {"central_verify_url"}
+
+
+@pytest.mark.parametrize("domain", ["", "a b", "x" * 254, "evil.ch/path", "evil.ch?x=1"])
+def test_verify_site_rejects_malformed_hosts(monkeypatch, domain):
+    monkeypatch.setattr(repository, "verify_site", lambda *a, **k: pytest.fail("darf nicht abgefragt werden"))
+    assert client.get("/api/public/verify/site", params={"domain": domain}).status_code == 422
+
+
+def test_restricted_role_can_call_verify_site():
+    db = SessionLocal()
+    try:
+        assert repository.verify_site(db, domain="unknown.example.ch") is None
+    finally:
+        db.close()

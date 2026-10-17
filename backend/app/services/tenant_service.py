@@ -284,7 +284,7 @@ class TenantService:
             status=row.status,
             verification_token=row.verification_token,
             challenge_record_name=domain_verification_service.challenge_record_name(row.domain),
-            target_host=settings.traefik_domain if row.purpose == "app" else settings.traefik_abgabebox_domain,
+            target_host=traefik_config_service.target_host_for_purpose(row.purpose),
             verified_at=row.verified_at,
             is_healthy=row.is_healthy,
             last_checked_at=row.last_checked_at,
@@ -299,7 +299,8 @@ class TenantService:
         self, db: Session, tenant_id: int, actor: CurrentUser, payload: TenantDomainCreate
     ) -> TenantDomainRead:
         self._require_manageable(tenant_id, actor)
-        require_feature(actor, "custom_domain")
+        # Prüf-Domain ('verify') hat ein eigenes Feature, unabhängig von custom_domain
+        require_feature(actor, traefik_config_service.FEATURE_BY_PURPOSE[payload.purpose])
 
         domain = domain_verification_service.normalize_domain(payload.domain)
         if not domain_verification_service.is_valid_domain_format(domain):
@@ -347,12 +348,12 @@ class TenantService:
         # downgrade/admin revoke), and still activate it afterwards via this route. Only
         # delete_domain stays deliberately ungated, so an existing domain remains removable after
         # a downgrade.
-        require_feature(actor, "custom_domain")
         row = db.query(TenantDomain).filter(TenantDomain.id == domain_id, TenantDomain.tenant_id == tenant_id).one_or_none()
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Domain nicht gefunden")
+        require_feature(actor, traefik_config_service.FEATURE_BY_PURPOSE[row.purpose])
 
-        target_host = settings.traefik_domain if row.purpose == "app" else settings.traefik_abgabebox_domain
+        target_host = traefik_config_service.target_host_for_purpose(row.purpose)
         if not target_host:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Server-Domain nicht konfiguriert")
 

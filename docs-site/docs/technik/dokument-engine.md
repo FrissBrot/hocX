@@ -274,6 +274,40 @@ Bestätigt wird der Name zum Antragszeitpunkt; eine Namensänderung hebt die Bes
 zieht einen offenen Antrag zurück. Logo-Änderungen werden nur protokolliert. Ein Mandanten-Archiv
 bringt die Bestätigung nie mit (`FORCED_SECURE_DEFAULTS`).
 
+**Prüf-Domain je Mandant** (Feature `verify_domain`, Migration `0126_verify_domain`): eigenständig
+buchbar, unabhängig von `custom_domain`. `tenant_domain.purpose = 'verify'` (eine je Mandant),
+Einrichtung und DNS-Prüfung wie bei den übrigen Mandanten-Domains; der CNAME zeigt auf
+`TRAEFIK_ABGABEBOX_DOMAIN`. Welches Feature ein Zweck braucht, steht an einer Stelle:
+`traefik_config_service.FEATURE_BY_PURPOSE` (Anlage, Aktivierung, Routing, Health-Check;
+`domain_feature_booked()` ersetzt dort die reine `custom_domain`-Prüfung).
+
+- *Routing* (`_verify_routers`): nur `/` (Redirect-Middleware `tenant-verify-root-redirect@file`
+  auf `/verify`), `/verify*`, `/_next/*`, `/favicon.ico`, `POST /api/public/verify` mit den
+  Middlewares des zentralen Prüf-Routers und `GET /api/public/maintenance-status`. Abgabe-Links und die übrige Abgabebox-API sind auf der
+  Prüf-Domain nicht erreichbar. Entzug **und** Wieder-Zubuchen des Features erzeugen die
+  Traefik-Konfiguration sofort neu.
+- *Freigabe:* Die View liefert zusätzlich `verify_domain` – nur bei aktiver, gesunder Domain,
+  gebuchtem Feature und `verify_show_identity` (sonst `NULL`). `verify_site(domain)` (`SECURITY
+  DEFINER`, nur `EXECUTE` für `hocx_abgabebox`) liefert den Kopf der Mandantenseite (Name,
+  `public_id`, Logo-Hinweis, Bestätigung); dort ohne Health-Bedingung, weil die Seite gerade
+  erreichbar ist.
+- *Seite:* `app/verify/page.tsx` fragt serverseitig `GET /api/public/verify/site?domain=<Host>`
+  (intern, ohne Traefik) und zeigt bei einem Treffer Logo und Name. Nach einer Prüfung bestimmt
+  `lib/verify.ts::redirectTarget` die Weiterleitung: zur `verify_domain` des Ausstellers, wenn sie
+  vom aktuellen Host abweicht; auf einer Mandantenseite bei fremden Dokumenten ohne Prüf-Domain
+  zur zentralen Prüfseite (`central_verify_url`, `DOCUMENT_VERIFY_BASE_URL` bzw.
+  `ABGABEBOX_CORS_ORIGIN/verify`). Eigene Dokumente einer Mandantenseite werden nie
+  weitergeleitet, damit entsteht keine Schleife. Der Hash reist als `#sha256=…` im Fragment;
+  die Zielseite prüft damit sofort und entfernt das Fragment. 4 Sekunden Countdown,
+  «Hier bleiben» bricht ab und lässt den Link stehen.
+- *Stufen:* «Prüf-Domain verifiziert» (Info-Farbe) nur für Dokumente des Mandanten hinter der
+  aktuellen Prüf-Domain; «Verifizierte Organisation» bleibt die stärkere Stufe (Erfolgsfarbe),
+  denn die Domain belegt nur DNS-Kontrolle, nicht die Identität.
+- *PDFs:* `verify_domain_service.tenant_verify_base_url` liefert für neue Exporte
+  `https://<domain>/verify` unter denselben Bedingungen wie die View. Prüfvermerk, QR-Code, XMP und
+  `document_export.options_json.verify_url` tragen dieselbe URL; ältere Exporte fallen auf
+  `DOCUMENT_VERIFY_BASE_URL` zurück.
+
 **Konfiguration:** `DOCUMENT_VERIFY_BASE_URL` (Standard `ABGABEBOX_BASE_URL` + `/verify`, bewusst
 die Plattform-Domain, damit gedruckte Links stabil bleiben); `ABGABEBOX_INTERNAL_URL` (Standard
 `http://abgabebox-backend:8000`) für den Systemcheck `document_verification`, der einen Hash ohne
@@ -375,10 +409,11 @@ geladenen Schriften werden durch `�` ersetzt, weil PDF/A fehlende Glyphen verb
 | `GET/PATCH /api/document-settings` | Dokumentsprache des Mandanten | reader / admin |
 | `GET /api/documents/sources/{source}` | Auswahllisten für Parameter (Listen, Konten, …) | reader |
 | `/api/document-templates`, `/api/document-brands`, `/api/document-assets`, `/api/document-components`, `/api/document-template-assignments`, `/api/document-studio/*` | Document Studio, siehe [Document Studio](document-studio.md#api) | reader / writer / admin |
-| `GET/PATCH /api/document-verification` | Prüfseite: Name/Logo anzeigen, auf neuere Versionen hinweisen | reader / admin |
+| `GET/PATCH /api/document-verification` | Prüfseite: Name/Logo anzeigen, auf neuere Versionen hinweisen; Stand der eigenen Prüf-Domain | reader / admin |
 | `POST/DELETE /api/document-verification/request` | Verifizierung beantragen / Antrag zurückziehen | admin |
 | `/api/admin/identity-verification-requests`, `/api/admin/tenants/{id}/identity-verification[/approve\|reject\|revoke]` | Anträge entscheiden, Verifizierung entziehen | Plattform-Admin |
 | `POST /api/public/verify` (Abgabebox) | Öffentliche Prüfung eines Hashes | öffentlich |
+| `GET /api/public/verify/site?domain=` (Abgabebox) | Kopf der Prüfseite unter einer Mandanten-Prüf-Domain, zentrale Prüfseite | öffentlich (intern genutzt) |
 
 Alle schreibenden Aufrufe und jeder Export landen im Audit-Log (`document.render`,
 `document.export_<format>`, `document_template.*`, `document_brand.*`, `document_asset.*`, …).

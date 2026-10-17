@@ -6,7 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { MobileActionSheet, MobileCard, MobileCardHeader, MobileEmpty, MobileFab, MobileGroupCard, MobileListRow, MobileProgress, MobileStat } from "@/components/mobile/mobile-ui";
 import { initials } from "@/components/protocol/collaboration-presence";
-import { domainStatus } from "@/components/settings/tenant-domain-row";
+import { bookablePurposes, domainPurposeLabel, domainStatus } from "@/components/settings/tenant-domain-row";
 import { useTenantDomains } from "@/components/settings/tenant-domains-manager";
 import { useTenantGeneralForm } from "@/components/settings/tenant-general-settings";
 import { FEATURE_ICONS, subscriptionCostRp, useTenantSubscriptionData } from "@/components/settings/tenant-subscription-view";
@@ -32,7 +32,7 @@ function DomainRow({ domain, onClick }: { domain: TenantDomain; onClick?: () => 
         <span className="mobile-row-stack">
           <span className="mobile-row-title mobile-tenant-domain-host">{domain.domain}</span>
           <span className={`mobile-row-meta tenant-domain-row-status-${status.variant}`} title={status.title}>
-            {domain.purpose === "app" ? t("purposeApp") : t("purposeAbgabebox")} · {status.label}
+            {domainPurposeLabel(domain.purpose, t)} · {status.label}
           </span>
         </span>
       }
@@ -122,7 +122,8 @@ export function MobileTenantGeneral({ initialTenant }: { initialTenant: TenantSu
 export function MobileTenantDomains({ initialTenant }: { initialTenant: TenantSummary }) {
   const t = useTranslations("tenantSettings");
   const tMobile = useTranslations("mobile");
-  const hasCustomDomainFeature = initialTenant.enabled_features.includes("custom_domain");
+  const purposes = bookablePurposes(initialTenant.enabled_features);
+  const hasCustomDomainFeature = purposes.length > 0;
   const { domains, loadDomains, deleteDomain } = useTenantDomains(initialTenant.id);
   const [actionsFor, setActionsFor] = useState<TenantDomain | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -164,7 +165,7 @@ export function MobileTenantDomains({ initialTenant }: { initialTenant: TenantSu
         />
       ) : null}
 
-      <DomainWizardModal open={wizardOpen} onClose={() => setWizardOpen(false)} tenantId={initialTenant.id} domain={wizardDomain} onChanged={loadDomains} />
+      <DomainWizardModal open={wizardOpen} onClose={() => setWizardOpen(false)} tenantId={initialTenant.id} domain={wizardDomain} purposes={purposes} onChanged={loadDomains} />
     </>
   );
 }
