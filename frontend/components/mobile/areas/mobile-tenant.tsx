@@ -10,6 +10,7 @@ import { bookablePurposes, domainPurposeLabel, domainStatus } from "@/components
 import { useTenantDomains } from "@/components/settings/tenant-domains-manager";
 import { useTenantGeneralForm } from "@/components/settings/tenant-general-settings";
 import { FEATURE_ICONS, subscriptionCostRp, useTenantSubscriptionData } from "@/components/settings/tenant-subscription-view";
+import { MobileTenantCharges } from "@/components/settings/tenant-charges";
 import { CATEGORY_COLORS, categoryHints, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
 import { Badge } from "@/components/ui/badge";
 import { CopyField } from "@/components/ui/copy-field";
@@ -205,6 +206,8 @@ export function MobileTenantSubscription({ initialTenant }: { initialTenant: Ten
           {subscription.plan_code === "legacy" ? <p className="mobile-hint-box">{t("legacyPlanNote")}</p> : null}
         </div>
       </MobileCard>
+
+      <MobileTenantCharges tenantId={initialTenant.id} />
 
       <div className="mobile-stat-grid">
         <MobileStat

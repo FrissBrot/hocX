@@ -11,6 +11,7 @@ from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, require_writer
 from app.models import Participant, Tenant, TenantDomain
+from app.schemas.cashflow import TenantPortalCharges
 from app.schemas.user import TenantDomainCreate, TenantDomainRead, TenantLookupRead, TenantRead, TenantSubscriptionRead, TenantUpdate
 from app.services import public_id_service, tenant_trust_service
 from app.services.tenant_service import TenantService, build_tenant_profile_image_url, tenant_profile_image_response
@@ -109,6 +110,21 @@ def get_tenant_subscription(
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
     result = service.get_subscription(db, internal_id, user)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return result
+
+
+@router.get("/tenants/{tenant_id}/charges", response_model=TenantPortalCharges)
+def get_tenant_charges(
+    tenant_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    internal_id = public_id_service.resolve_internal_id(db, Tenant, tenant_id)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    result = service.get_charges(db, internal_id, user)
     if result is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
     return result

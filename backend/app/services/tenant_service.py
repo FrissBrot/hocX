@@ -25,6 +25,8 @@ from app.schemas.user import (
     TenantSubscriptionRead,
     TenantUpdate,
 )
+from app.schemas.cashflow import TenantPortalCharges
+from app.services import cashflow_service
 from app.services import domain_verification_service, identity_verification_service, traefik_config_service
 from app.services.audit_service import AuditService
 from app.services.storage_service import StorageService
@@ -154,6 +156,16 @@ class TenantService:
         if tenant_id not in self._manageable_tenant_ids(actor):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant not accessible")
         return self._read_model(tenant, actor)
+
+    def get_charges(self, db: Session, tenant_id: int, actor: CurrentUser) -> TenantPortalCharges | None:
+        """Forderungen des Betreibers an diesen Mandanten (Cashflow im Adminportal), nur für
+        Mandanten-Admins - wie get_subscription."""
+        tenant = db.get(Tenant, tenant_id)
+        if tenant is None:
+            return None
+        if tenant_id not in self._manageable_tenant_ids(actor):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant not accessible")
+        return cashflow_service.tenant_charges(db, tenant)
 
     def get_subscription(self, db: Session, tenant_id: int, actor: CurrentUser) -> TenantSubscriptionRead | None:
         tenant = db.get(Tenant, tenant_id)

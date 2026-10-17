@@ -1,0 +1,183 @@
+{
+  "title": "Flux de trésorerie",
+  "description": "Recettes des abonnements des mandants et dépenses de la plateforme. Aucune vraie facture n’est créée.",
+  "loading": "Chargement …",
+  "tabs": {
+    "overview": "Aperçu",
+    "charges": "Créances",
+    "costs": "Coûts"
+  },
+  "actions": {
+    "newCost": "Saisir une dépense",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "create": "Saisir",
+    "edit": "Modifier",
+    "delete": "Supprimer"
+  },
+  "overview": {
+    "year": "Année",
+    "includePlanned": "Inclure les coûts prévus",
+    "income": "Recettes {year}",
+    "incomeSub": "Créances payées à ce jour",
+    "expenses": "Dépenses {year}",
+    "expensesSub": "Coûts actifs à ce jour",
+    "expensesSubPlanned": "Dont prévus : {planned}",
+    "result": "Résultat {year}",
+    "resultSub": "Recettes moins dépenses",
+    "balance": "Bilan global",
+    "balancePlanned": "Avec coûts prévus : {amount}"
+  },
+  "runRate": {
+    "title": "Par mois, état actuel",
+    "income": "Abonnements ({count, plural, one {# mandant payant} other {# mandants payants}})",
+    "fixed": "Dépenses fixes",
+    "percent": "Frais",
+    "net": "Résultat par mois",
+    "planned": "Avec coûts prévus ({amount})",
+    "hint": "Les montants annuels sont ramenés à un mois."
+  },
+  "receivables": {
+    "title": "Créances",
+    "open": "Ouvertes ({count, plural, one {# créance} other {# créances}})",
+    "waived": "Remises ({count, plural, one {# créance} other {# créances}})",
+    "hint": "Les créances ouvertes et remises ne comptent pas comme recettes.",
+    "overdue": "En retard ({count, plural, one {# créance} other {# créances}})"
+  },
+  "chart": {
+    "title": "Évolution {year}",
+    "income": "Recettes",
+    "expenses": "Dépenses",
+    "planned": "Prévu"
+  },
+  "table": {
+    "month": "Mois",
+    "income": "Recettes",
+    "fixed": "Dépenses fixes",
+    "percent": "Frais",
+    "net": "Résultat",
+    "open": "Ouvert",
+    "forecast": "Prévision",
+    "total": "Total {year}",
+    "totalToDate": "Total à ce jour"
+  },
+  "charges": {
+    "intro": "Ce que chaque mandant doit par période de facturation. Les créances sont créées automatiquement dès le début de l’abonnement. Seules les créances payées apparaissent dans le flux de trésorerie.",
+    "all": "Toutes",
+    "search": "Rechercher un mandant",
+    "sum": "{count, plural, one {# créance} other {# créances}} · {amount}",
+    "empty": "Aucune créance dans cette vue.",
+    "deletedTenant": "(supprimé)",
+    "columns": {
+      "tenant": "Mandant",
+      "period": "Période",
+      "amount": "Montant",
+      "status": "Statut",
+      "paidOn": "Payé le",
+      "dueOn": "Échéance"
+    },
+    "actions": {
+      "details": "Détails et paiement",
+      "recalculate": "Recalculer le montant"
+    }
+  },
+  "charge": {
+    "discount": "Rabais {percent} %",
+    "quantity": "{label} × {quantity}",
+    "total": "Total",
+    "frozen": "Montant fixé à la création de la créance.",
+    "status": "Statut",
+    "paidOn": "Payé le",
+    "note": "Note"
+  },
+  "chargeStatus": {
+    "open": "Ouverte",
+    "paid": "Payée",
+    "waived": "Remise",
+    "overdue": "En retard"
+  },
+  "cycle": {
+    "monthly": "Mensuel",
+    "yearly": "Annuel"
+  },
+  "costs": {
+    "intro": "Les dépenses fixes sont dues dès la date d’abonnement selon l’intervalle choisi. Les dépenses en pourcentage (p. ex. frais de paiement) sont déduites de chaque créance payée. Seuls les coûts actifs sont comptés.",
+    "all": "Tous",
+    "monthlySum": "Dépenses fixes par mois : {active} actives · {planned} avec prévues",
+    "empty": "Aucun coût saisi.",
+    "percentAmount": "{percent} par paiement",
+    "fixedAmount": {
+      "monthly": "{amount} / mois",
+      "yearly": "{amount} / an",
+      "once": "{amount} unique"
+    },
+    "until": "jusqu’au {date}",
+    "perPayment": "À chaque paiement",
+    "confirmDelete": "Supprimer « {name} » ? La dépense disparaît aussi des mois passés.",
+    "columns": {
+      "name": "Nom",
+      "kind": "Type",
+      "amount": "Montant",
+      "start": "Date d’abonnement",
+      "next": "Prochaine échéance",
+      "status": "Statut"
+    }
+  },
+  "costKind": {
+    "fixed": "Fixe",
+    "percent": "Pourcentage"
+  },
+  "costStatus": {
+    "active": "Actif",
+    "planned": "Prévu"
+  },
+  "interval": {
+    "monthly": "Mensuel",
+    "yearly": "Annuel",
+    "once": "Unique"
+  },
+  "costForm": {
+    "newTitle": "Saisir une dépense",
+    "editTitle": "Modifier la dépense",
+    "kind": "Type",
+    "kindHelp": {
+      "fixed": "Montant fixe, p. ex. serveur ou licence",
+      "percent": "Part de chaque paiement, p. ex. frais"
+    },
+    "name": "Nom",
+    "namePlaceholder": {
+      "fixed": "p. ex. serveur Hetzner",
+      "percent": "p. ex. frais de paiement TWINT"
+    },
+    "amount": "Montant",
+    "interval": "Intervalle",
+    "percent": "Pourcentage",
+    "percentHelp": "Calculé sur chaque créance payée.",
+    "startDate": "Date d’abonnement",
+    "date": "Date",
+    "endDate": "Date de fin (facultatif)",
+    "status": "Statut",
+    "statusHelp": {
+      "active": "Compté dans le flux de trésorerie.",
+      "planned": "Uniquement dans le calcul « avec coûts prévus »."
+    },
+    "note": "Note"
+  },
+  "toast": {
+    "loadFailed": "Impossible de charger le flux de trésorerie.",
+    "failed": "L’action a échoué.",
+    "charge": {
+      "open": "La créance est de nouveau ouverte.",
+      "paid": "Créance marquée comme payée.",
+      "waived": "Créance remise."
+    },
+    "recalculated": "Montant recalculé.",
+    "cost": {
+      "active": "« {name} » est actif.",
+      "planned": "« {name} » est prévu."
+    },
+    "costCreated": "Dépense saisie.",
+    "costUpdated": "Dépense enregistrée.",
+    "costDeleted": "Dépense supprimée."
+  }
+}

@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, admin_backups, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
+from app.api.routes import admin, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
@@ -651,3 +651,4 @@ app.include_router(maintenance_public.router, prefix="/api", tags=["maintenance"
 app.include_router(admin_storage.router, prefix="/api/admin", tags=["admin-storage"])
 app.include_router(admin_maintenance.router, prefix="/api/admin", tags=["admin-maintenance"])
 app.include_router(admin_backups.router, prefix="/api/admin", tags=["admin-backups"])
+app.include_router(admin_cashflow.router, prefix="/api/admin", tags=["admin-cashflow"])

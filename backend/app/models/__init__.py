@@ -217,3 +217,13 @@ __all__ += [
     "DocumentJob",
     "DocumentVersion",
 ]
+
+from app.models.cashflow_entities import (  # noqa: E402 - eigene Datei, siehe Migration 0127
+    CashflowCost,
+    TenantCharge,
+)
+
+__all__ += [
+    "CashflowCost",
+    "TenantCharge",
+]

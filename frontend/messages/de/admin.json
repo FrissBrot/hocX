@@ -620,6 +620,8 @@
       "discount": "Rabatt",
       "internalNote": "Interne Notiz",
       "internalNotePlaceholder": "z.B. Vereinsrabatt bis 2027",
+      "billingStart": "Abo-Start",
+      "billingStartHelp": "Ab diesem Datum entstehen im Cashflow Forderungen je Abrechnungsperiode. Leer = Erstellungsdatum ({date}). Eine Änderung erzeugt die offenen Forderungen neu.",
       "userLimitOverride": "Benutzerlimit überschreiben",
       "userLimitPlanLimit": "Plan-Limit: {limit}",
       "userLimitUnlimited": "Plan-Limit: unbegrenzt",

@@ -620,6 +620,8 @@
       "discount": "Discount",
       "internalNote": "Internal note",
       "internalNotePlaceholder": "e.g. club discount until 2027",
+      "billingStart": "Subscription start",
+      "billingStartHelp": "From this date, receivables per billing period appear in the cash flow. Empty = creation date ({date}). Changing it recreates the open receivables.",
       "userLimitOverride": "Override user limit",
       "userLimitPlanLimit": "Plan limit: {limit}",
       "userLimitUnlimited": "Plan limit: unlimited",

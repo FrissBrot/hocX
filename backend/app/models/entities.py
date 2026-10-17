@@ -98,6 +98,11 @@ class Tenant(Base, TimestampMixin):
     identity_verification_note: Mapped[str | None] = mapped_column(Text)
     identity_verification_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     identity_verification_revoked_reason: Mapped[str | None] = mapped_column(Text)
+    # Cashflow im Adminportal (0127_cashflow): ab diesem Datum entstehen Forderungen je
+    # Abrechnungsperiode (NULL = Erstellungsdatum). billing_charged_until ist der Cursor der
+    # Forderungserzeugung - bis hierhin sind alle Perioden abgerechnet (siehe cashflow_service).
+    billing_start_date: Mapped[date | None] = mapped_column(Date)
+    billing_charged_until: Mapped[date | None] = mapped_column(Date)
 
 
 class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):

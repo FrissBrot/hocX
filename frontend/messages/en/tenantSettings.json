@@ -85,5 +85,29 @@
   "purposeVerify": "Verification page",
   "wizardPurposeVerifyDescription": "Let people verify your documents under your own address, e.g. verify.club.com.",
   "domainPlaceholderVerify": "e.g. verify.club.com",
-  "successVerifyDescription": "New PDFs now point to this verification page, as long as name and logo are shown on the verification page (document verification)."
+  "successVerifyDescription": "New PDFs now point to this verification page, as long as name and logo are shown on the verification page (document verification).",
+  "charges": {
+    "eyebrow": "Billing",
+    "allPaid": "All amounts are paid.",
+    "openSum": "Open: {amount} ({count, plural, one {# period} other {# periods}})",
+    "overdueSum": "of which overdue {amount}",
+    "hint": "Payable within {days} days from the start of the billing period.",
+    "columns": {
+      "period": "Period",
+      "amount": "Amount",
+      "dueOn": "Due on",
+      "status": "Status",
+      "paidOn": "Paid on"
+    },
+    "status": {
+      "open": "Open",
+      "overdue": "Overdue",
+      "paid": "Paid",
+      "waived": "Waived"
+    },
+    "paidOn": "Paid on {date}",
+    "dueOn": "Due on {date}",
+    "showAll": "Show all {count}",
+    "showLess": "Show less"
+  }
 }

@@ -1,0 +1,183 @@
+{
+  "title": "Cashflow",
+  "description": "Einnahmen aus den Abos der Mandanten und Ausgaben der Plattform. Es werden keine echten Rechnungen erstellt.",
+  "loading": "Wird geladen …",
+  "tabs": {
+    "overview": "Übersicht",
+    "charges": "Forderungen",
+    "costs": "Kosten"
+  },
+  "actions": {
+    "newCost": "Ausgabe erfassen",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "create": "Erfassen",
+    "edit": "Bearbeiten",
+    "delete": "Löschen"
+  },
+  "overview": {
+    "year": "Jahr",
+    "includePlanned": "Geplante Kosten einrechnen",
+    "income": "Einnahmen {year}",
+    "incomeSub": "Bezahlte Forderungen bis heute",
+    "expenses": "Ausgaben {year}",
+    "expensesSub": "Aktive Kosten bis heute",
+    "expensesSubPlanned": "Davon geplant: {planned}",
+    "result": "Ergebnis {year}",
+    "resultSub": "Einnahmen minus Ausgaben",
+    "balance": "Bilanz gesamt",
+    "balancePlanned": "Mit geplanten Kosten: {amount}"
+  },
+  "runRate": {
+    "title": "Pro Monat, aktueller Stand",
+    "income": "Abos ({count, plural, one {# zahlender Mandant} other {# zahlende Mandanten}})",
+    "fixed": "Fixe Ausgaben",
+    "percent": "Gebühren",
+    "net": "Ergebnis pro Monat",
+    "planned": "Inkl. geplanter Kosten ({amount})",
+    "hint": "Jährliche Beträge sind auf einen Monat umgerechnet."
+  },
+  "receivables": {
+    "title": "Forderungen",
+    "open": "Offen ({count, plural, one {# Forderung} other {# Forderungen}})",
+    "waived": "Erlassen ({count, plural, one {# Forderung} other {# Forderungen}})",
+    "hint": "Offene und erlassene Forderungen zählen nicht als Einnahmen.",
+    "overdue": "Überfällig ({count, plural, one {# Forderung} other {# Forderungen}})"
+  },
+  "chart": {
+    "title": "Verlauf {year}",
+    "income": "Einnahmen",
+    "expenses": "Ausgaben",
+    "planned": "Geplant"
+  },
+  "table": {
+    "month": "Monat",
+    "income": "Einnahmen",
+    "fixed": "Fixe Ausgaben",
+    "percent": "Gebühren",
+    "net": "Ergebnis",
+    "open": "Offen",
+    "forecast": "Prognose",
+    "total": "Total {year}",
+    "totalToDate": "Total bis heute"
+  },
+  "charges": {
+    "intro": "Was jeder Mandant je Abrechnungsperiode schuldet. Die Forderungen entstehen automatisch ab dem Abo-Start. Nur bezahlte Forderungen erscheinen im Cashflow.",
+    "all": "Alle",
+    "search": "Mandant suchen",
+    "sum": "{count, plural, one {# Forderung} other {# Forderungen}} · {amount}",
+    "empty": "Keine Forderungen in dieser Ansicht.",
+    "deletedTenant": "(gelöscht)",
+    "columns": {
+      "tenant": "Mandant",
+      "period": "Periode",
+      "amount": "Betrag",
+      "status": "Status",
+      "paidOn": "Bezahlt am",
+      "dueOn": "Fällig am"
+    },
+    "actions": {
+      "details": "Details und Zahlung",
+      "recalculate": "Betrag neu berechnen"
+    }
+  },
+  "charge": {
+    "discount": "Rabatt {percent} %",
+    "quantity": "{label} × {quantity}",
+    "total": "Total",
+    "frozen": "Betrag beim Entstehen der Forderung festgehalten.",
+    "status": "Status",
+    "paidOn": "Bezahlt am",
+    "note": "Notiz"
+  },
+  "chargeStatus": {
+    "open": "Offen",
+    "paid": "Bezahlt",
+    "waived": "Erlassen",
+    "overdue": "Überfällig"
+  },
+  "cycle": {
+    "monthly": "Monatlich",
+    "yearly": "Jährlich"
+  },
+  "costs": {
+    "intro": "Fixe Ausgaben fallen ab dem Abo-Datum im gewählten Intervall an. Prozentuale Ausgaben (z. B. Zahlungsgebühren) werden von jeder bezahlten Forderung abgezogen. Nur aktive Kosten werden verrechnet.",
+    "all": "Alle",
+    "monthlySum": "Fixe Ausgaben pro Monat: {active} aktiv · {planned} inkl. geplant",
+    "empty": "Noch keine Kosten erfasst.",
+    "percentAmount": "{percent} je Zahlung",
+    "fixedAmount": {
+      "monthly": "{amount} / Monat",
+      "yearly": "{amount} / Jahr",
+      "once": "{amount} einmalig"
+    },
+    "until": "bis {date}",
+    "perPayment": "Bei jeder Zahlung",
+    "confirmDelete": "«{name}» löschen? Die Ausgabe verschwindet auch aus vergangenen Monaten.",
+    "columns": {
+      "name": "Name",
+      "kind": "Art",
+      "amount": "Betrag",
+      "start": "Abo-Datum",
+      "next": "Nächste Fälligkeit",
+      "status": "Status"
+    }
+  },
+  "costKind": {
+    "fixed": "Fix",
+    "percent": "Prozentual"
+  },
+  "costStatus": {
+    "active": "Aktiv",
+    "planned": "Geplant"
+  },
+  "interval": {
+    "monthly": "Monatlich",
+    "yearly": "Jährlich",
+    "once": "Einmalig"
+  },
+  "costForm": {
+    "newTitle": "Ausgabe erfassen",
+    "editTitle": "Ausgabe bearbeiten",
+    "kind": "Art",
+    "kindHelp": {
+      "fixed": "Fester Betrag, z. B. Server oder Lizenz",
+      "percent": "Anteil jeder Zahlung, z. B. Gebühren"
+    },
+    "name": "Name",
+    "namePlaceholder": {
+      "fixed": "z. B. Hetzner Server",
+      "percent": "z. B. Zahlungsgebühr TWINT"
+    },
+    "amount": "Betrag",
+    "interval": "Intervall",
+    "percent": "Prozentsatz",
+    "percentHelp": "Wird von jeder bezahlten Forderung berechnet.",
+    "startDate": "Abo-Datum",
+    "date": "Datum",
+    "endDate": "Enddatum (optional)",
+    "status": "Status",
+    "statusHelp": {
+      "active": "Wird im Cashflow verrechnet.",
+      "planned": "Nur in der Rechnung «inkl. geplanter Kosten»."
+    },
+    "note": "Notiz"
+  },
+  "toast": {
+    "loadFailed": "Cashflow konnte nicht geladen werden.",
+    "failed": "Aktion fehlgeschlagen.",
+    "charge": {
+      "open": "Forderung ist wieder offen.",
+      "paid": "Forderung als bezahlt markiert.",
+      "waived": "Forderung erlassen."
+    },
+    "recalculated": "Betrag neu berechnet.",
+    "cost": {
+      "active": "«{name}» ist aktiv.",
+      "planned": "«{name}» ist geplant."
+    },
+    "costCreated": "Ausgabe erfasst.",
+    "costUpdated": "Ausgabe gespeichert.",
+    "costDeleted": "Ausgabe gelöscht."
+  }
+}

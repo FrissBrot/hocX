@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
+import { TenantChargesSection } from "@/components/settings/tenant-charges";
 import { Badge } from "@/components/ui/badge";
 import { NavIcon, NavIconKey } from "@/components/ui/nav-icons";
 import { colorForUser, initials } from "@/components/protocol/collaboration-presence";
@@ -118,6 +119,8 @@ export function TenantSubscriptionView({ initialTenant }: Props) {
               </div>
             </div>
           </section>
+
+          <TenantChargesSection tenantId={initialTenant.id} />
 
           <div className="two-col">
             <section className="card grid">

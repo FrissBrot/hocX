@@ -675,6 +675,7 @@ export type AdminTenantSummary = {
   assigned_storage_packages: AdminTenantStoragePackage[];
   discount_percent: number;
   billing_note: string | null;
+  billing_start_date: string | null;
   show_on_website: boolean;
 };
 
@@ -812,6 +813,7 @@ export type AdminTenantSubscriptionUpdate = {
   user_limit_override: number | null;
   discount_percent: number;
   billing_note: string | null;
+  billing_start_date: string | null;
 };
 
 export type AdminTenantCreate = {
@@ -2092,4 +2094,127 @@ export type RestorePreview = {
   confirmation_phrase: string;
   requires_totp: boolean;
   estimated_bytes: number;
+};
+
+// Cashflow im Plattform-Adminportal (/admin/cashflow), Beträge in Rappen.
+export type CashflowCostKind = "fixed" | "percent";
+export type CashflowCostStatus = "active" | "planned";
+export type CashflowCostInterval = "monthly" | "yearly" | "once";
+export type TenantChargeStatus = "open" | "paid" | "waived";
+
+export type CashflowCost = {
+  id: string;
+  name: string;
+  kind: CashflowCostKind;
+  amount_rp: number | null;
+  percent_bp: number | null;
+  interval: CashflowCostInterval | null;
+  start_date: string;
+  end_date: string | null;
+  status: CashflowCostStatus;
+  note: string | null;
+  next_due_on: string | null;
+  monthly_equivalent_rp: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CashflowCostWrite = {
+  name: string;
+  kind: CashflowCostKind;
+  amount_rp: number | null;
+  percent_bp: number | null;
+  interval: CashflowCostInterval | null;
+  start_date: string;
+  end_date: string | null;
+  status: CashflowCostStatus;
+  note: string | null;
+};
+
+export type TenantChargeLine = {
+  kind: "plan" | "feature" | "storage_package" | "discount";
+  label: string;
+  amount_rp: number;
+  quantity?: number | null;
+  percent?: number | null;
+};
+
+export type TenantCharge = {
+  id: string;
+  tenant_id: string | null;
+  tenant_name: string;
+  period_start: string;
+  period_end: string;
+  billing_cycle: "monthly" | "yearly";
+  amount_rp: number;
+  lines: TenantChargeLine[];
+  status: TenantChargeStatus;
+  paid_on: string | null;
+  note: string | null;
+  updated_at: string;
+  due_on: string;
+  is_overdue: boolean;
+};
+
+export type TenantChargeStatusTotals = { count: number; amount_rp: number };
+
+export type TenantChargePage = {
+  items: TenantCharge[];
+  total: number;
+  totals: Record<TenantChargeStatus | "overdue", TenantChargeStatusTotals>;
+};
+
+export type CashflowMonth = {
+  month: string;
+  income_rp: number;
+  fixed_rp: number;
+  percent_rp: number;
+  planned_fixed_rp: number;
+  planned_percent_rp: number;
+  open_rp: number;
+  is_future: boolean;
+};
+
+export type CashflowBalance = { income_rp: number; expenses_rp: number; planned_expenses_rp: number };
+
+export type CashflowOverview = {
+  year: number;
+  years: number[];
+  today: string;
+  months: CashflowMonth[];
+  year_to_date: CashflowBalance;
+  all_time: CashflowBalance;
+  run_rate: {
+    income_rp: number;
+    fixed_rp: number;
+    percent_rp: number;
+    planned_fixed_rp: number;
+    planned_percent_rp: number;
+    paying_tenants: number;
+  };
+  open: TenantChargeStatusTotals;
+  waived: TenantChargeStatusTotals;
+  overdue: TenantChargeStatusTotals;
+};
+
+// Forderungen aus Sicht des Mandanten (Abo & Nutzung), ohne interne Notiz.
+export type TenantPortalChargeStatus = "open" | "overdue" | "paid" | "waived";
+
+export type TenantPortalCharge = {
+  id: string;
+  period_start: string;
+  period_end: string;
+  billing_cycle: "monthly" | "yearly";
+  amount_rp: number;
+  lines: TenantChargeLine[];
+  status: TenantPortalChargeStatus;
+  due_on: string;
+  paid_on: string | null;
+};
+
+export type TenantPortalCharges = {
+  items: TenantPortalCharge[];
+  open: TenantChargeStatusTotals;
+  overdue: TenantChargeStatusTotals;
+  payment_term_days: number;
 };

@@ -620,6 +620,8 @@
       "discount": "Remise",
       "internalNote": "Note interne",
       "internalNotePlaceholder": "p. ex. remise association jusqu'en 2027",
+      "billingStart": "Début de l’abonnement",
+      "billingStartHelp": "Dès cette date, des créances par période de facturation apparaissent dans le flux de trésorerie. Vide = date de création ({date}). Une modification recrée les créances ouvertes.",
       "userLimitOverride": "Remplacer la limite d'utilisateurs",
       "userLimitPlanLimit": "Limite du plan : {limit}",
       "userLimitUnlimited": "Limite du plan : illimitée",

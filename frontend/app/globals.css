@@ -25710,3 +25710,60 @@ a.mobile-list-row { color: var(--text); }
 }
 .upload-results-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-base); }
 .upload-results-detail { grid-column: 1 / -1; font-size: var(--text-sm); color: var(--muted); }
+
+/* ── Cashflow (/admin/cashflow) ───────────────────────────────────────────── */
+.cashflow-page { gap: var(--space-4); }
+.cashflow-overview { gap: var(--space-4); }
+.cashflow-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-3); }
+.cashflow-year { display: flex; align-items: center; gap: var(--space-2); }
+.cashflow-year select { width: auto; min-width: 110px; }
+.cashflow-positive { color: var(--success-fg); }
+.cashflow-negative { color: var(--danger-fg); }
+.cashflow-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
+.cashflow-cards .admin-section-title { margin: 0 0 var(--space-1); }
+.cashflow-planned-row { border-bottom: none; padding-top: var(--space-2); border-top: 1px dashed var(--border); color: var(--muted); }
+.cashflow-month-cell { display: inline-flex; align-items: center; gap: var(--space-2); }
+.cashflow-row-future td { color: var(--muted); }
+.cashflow-total-row td { font-weight: 600; border-top: 1px solid var(--border-strong); }
+.cashflow-month-table td:not(:first-child),
+.cashflow-month-table th:not(:first-child),
+.cashflow-amount { font-variant-numeric: tabular-nums; }
+.cashflow-tab-intro { margin: 0; max-width: 72ch; }
+.cashflow-sum-line { margin: 0; font-size: var(--text-sm); }
+.cashflow-period { display: inline-flex; flex-direction: column; gap: 2px; }
+.cashflow-period .muted,
+.cashflow-note,
+.cashflow-deleted { font-size: var(--text-xs); }
+.cashflow-amount { white-space: nowrap; font-weight: 500; }
+.cashflow-actions-cell { width: 1%; white-space: nowrap; text-align: right; }
+.cashflow-row-actions { display: inline-flex; gap: var(--space-1); }
+.cashflow-status-cell { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.cashflow-overdue { color: var(--danger-fg); font-weight: 500; }
+.cashflow-kind-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.cashflow-toolbar .button-toggle { color: var(--text); }
+.cashflow-link {
+  --button-bg: transparent;
+  --button-hover-bg: transparent;
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-weight: 600;
+  text-align: left;
+}
+.cashflow-link:hover { color: var(--accent-strong); text-decoration: underline; }
+
+.tenant-charges-summary { margin: var(--space-1) 0 0; font-weight: 600; }
+.tenant-charges-overdue { color: var(--danger-fg); }
+.tenant-charges-hint { margin: var(--space-1) 0 0; font-size: var(--text-sm); }
+.tenant-charges-meta { font-size: var(--text-xs); }
+.tenant-charges-amount { white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 500; }
+
+@media (max-width: 640px) {
+  .cashflow-overview .stats-card { padding: var(--space-3) var(--space-4); }
+  .cashflow-overview .stats-card-value { font-size: var(--text-lg); }
+  .cashflow-cards,
+  .cashflow-kind-options { grid-template-columns: minmax(0, 1fr); }
+}

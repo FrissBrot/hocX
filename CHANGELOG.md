@@ -147,6 +147,30 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
 - Migration `0126_verify_domain`; neuer Endpoint `GET /api/public/verify/site` (Abgabebox).
   Optional `DOCUMENT_VERIFY_BASE_URL` jetzt auch für `abgabebox-backend`.
 
+### Neu: Cashflow im Adminportal
+
+- Adminportal **Mandanten → Cashflow** mit drei Bereichen. **Kosten:** fixe Ausgaben mit
+  Abo-Datum (monatlich, jährlich oder einmalig, optional mit Enddatum) und prozentuale Ausgaben
+  wie Zahlungsgebühren, die von jeder bezahlten Forderung abgehen. Jede Ausgabe ist **aktiv**
+  (wird verrechnet) oder **geplant** (nur in der Rechnung «inkl. geplanter Kosten»).
+- **Forderungen:** was jeder Mandant je Abrechnungsperiode schuldet, ohne echte Rechnung.
+  Sie entstehen automatisch ab dem neuen Feld **Abo-Start** (Tab «Plan & Abo», leer =
+  Erstellungsdatum). Der Betrag (Plan + Zusatzmodule − Rabatt + Speicherpakete) wird beim
+  Entstehen festgehalten und lässt sich bei offenen Forderungen neu berechnen. Status **offen**,
+  **bezahlt** (mit Zahlungsdatum) oder **erlassen**; nur bezahlte zählen als Einnahme.
+- **Überfällig:** offene Forderungen, deren Zahlungsfrist (30 Tage ab Periodenbeginn) abgelaufen
+  ist; eigener Filter und Hinweis in Liste und Übersicht.
+- **Mandanten sehen ihre Forderungen** unter Mandanten-Einstellungen → Abo & Nutzung (nur
+  Mandanten-Admins, auch mobil): Periode, Betrag, Fälligkeit, Status bezahlt, offen, überfällig
+  oder erlassen, Zahlungsdatum. Interne Notizen des Betreibers bleiben verborgen. Neuer Endpoint
+  `GET /api/tenants/{id}/charges`.
+- **Übersicht:** Einnahmen, Ausgaben und Ergebnis des Jahres, Bilanz seit Beginn (real und mit
+  geplanten Kosten), Monatsrechnung nach aktuellem Stand, Verlauf je Monat mit Prognose.
+- Migration `0127_cashflow` (Tabellen `cashflow_cost`, `tenant_charge`, Spalten
+  `tenant.billing_start_date`/`billing_charged_until`). Beim ersten Öffnen entstehen für alle
+  Mandanten mit Preis die Forderungen seit Erstellung zum heutigen Preis: falls das nicht stimmt,
+  den Abo-Start setzen (offene Forderungen werden neu erzeugt) oder alte Forderungen erlassen.
+
 ### Neu: Objektspeicher (S3), Live-Migration und Wartungssystem
 
 - Alle persistenten Dateien (Uploads, Abgabebox inkl. Quarantäne, Document-Studio-Assets,

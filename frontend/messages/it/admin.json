@@ -620,6 +620,8 @@
       "discount": "Sconto",
       "internalNote": "Nota interna",
       "internalNotePlaceholder": "ad es. sconto associazione fino al 2027",
+      "billingStart": "Inizio abbonamento",
+      "billingStartHelp": "Da questa data nascono nel flusso di cassa crediti per periodo di fatturazione. Vuoto = data di creazione ({date}). Una modifica ricrea i crediti aperti.",
       "userLimitOverride": "Sovrascrivi limite utenti",
       "userLimitPlanLimit": "Limite del piano: {limit}",
       "userLimitUnlimited": "Limite del piano: illimitato",

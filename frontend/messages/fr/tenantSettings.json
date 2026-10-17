@@ -85,5 +85,29 @@
   "purposeVerify": "Page de vérification",
   "wizardPurposeVerifyDescription": "Faire vérifier vos documents sous votre propre adresse, p. ex. verify.club.ch.",
   "domainPlaceholderVerify": "p. ex. verify.club.ch",
-  "successVerifyDescription": "Les nouveaux PDF renvoient désormais à cette page de vérification, tant que le nom et le logo sont affichés sur la page de vérification (vérification d'authenticité)."
+  "successVerifyDescription": "Les nouveaux PDF renvoient désormais à cette page de vérification, tant que le nom et le logo sont affichés sur la page de vérification (vérification d'authenticité).",
+  "charges": {
+    "eyebrow": "Facturation",
+    "allPaid": "Tous les montants sont payés.",
+    "openSum": "Ouvert : {amount} ({count, plural, one {# période} other {# périodes}})",
+    "overdueSum": "dont en retard {amount}",
+    "hint": "Payable dans les {days} jours dès le début de la période de facturation.",
+    "columns": {
+      "period": "Période",
+      "amount": "Montant",
+      "dueOn": "Échéance",
+      "status": "Statut",
+      "paidOn": "Payé le"
+    },
+    "status": {
+      "open": "Ouvert",
+      "overdue": "En retard",
+      "paid": "Payé",
+      "waived": "Remis"
+    },
+    "paidOn": "Payé le {date}",
+    "dueOn": "Échéance le {date}",
+    "showAll": "Afficher les {count}",
+    "showLess": "Afficher moins"
+  }
 }

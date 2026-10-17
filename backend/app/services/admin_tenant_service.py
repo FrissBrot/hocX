@@ -50,7 +50,7 @@ from app.schemas.admin import (
 from app.schemas.public_catalog import PublicCustomerRead, PublicPlanFeature, PublicPlanRead
 from app.schemas.user import TenantUpdate
 from app.services.file_service import _safe_storage_path
-from app.services import identity_verification_service, submission_link_service, traefik_config_service
+from app.services import cashflow_service, identity_verification_service, submission_link_service, traefik_config_service
 from app.services.storage_service import StorageService
 from app.services.tenant_service import apply_tenant_profile_image
 
@@ -133,6 +133,7 @@ class AdminTenantService:
             assigned_storage_packages=assigned_storage_packages,
             discount_percent=tenant.discount_percent,
             billing_note=tenant.billing_note,
+            billing_start_date=tenant.billing_start_date,
             show_on_website=tenant.show_on_website,
         )
 
@@ -418,6 +419,10 @@ class AdminTenantService:
         tenant.user_limit_override = payload.user_limit_override
         tenant.discount_percent = payload.discount_percent
         tenant.billing_note = (payload.billing_note or "").strip() or None
+        if payload.billing_start_date != tenant.billing_start_date:
+            tenant.billing_start_date = payload.billing_start_date
+            # Offene Forderungen ab dem neuen Abo-Start neu erzeugen lassen (Cashflow).
+            cashflow_service.reset_open_charges(db, tenant)
         db.add(tenant)
         db.flush()
 

@@ -85,5 +85,29 @@
   "purposeVerify": "Prüfseite",
   "wizardPurposeVerifyDescription": "Eure Dokumente unter eigener Adresse prüfen lassen, z. B. verify.verein.ch.",
   "domainPlaceholderVerify": "z.B. verify.verein.ch",
-  "successVerifyDescription": "Neue PDFs verweisen ab sofort auf diese Prüfseite, sofern Name und Logo auf der Prüfseite angezeigt werden (Echtheitsprüfung)."
+  "successVerifyDescription": "Neue PDFs verweisen ab sofort auf diese Prüfseite, sofern Name und Logo auf der Prüfseite angezeigt werden (Echtheitsprüfung).",
+  "charges": {
+    "eyebrow": "Abrechnung",
+    "allPaid": "Alle Beträge sind bezahlt.",
+    "openSum": "Offen: {amount} ({count, plural, one {# Periode} other {# Perioden}})",
+    "overdueSum": "davon überfällig {amount}",
+    "hint": "Zahlbar innert {days} Tagen ab Beginn der Abrechnungsperiode.",
+    "columns": {
+      "period": "Periode",
+      "amount": "Betrag",
+      "dueOn": "Fällig am",
+      "status": "Status",
+      "paidOn": "Bezahlt am"
+    },
+    "status": {
+      "open": "Offen",
+      "overdue": "Überfällig",
+      "paid": "Bezahlt",
+      "waived": "Erlassen"
+    },
+    "paidOn": "Bezahlt am {date}",
+    "dueOn": "Fällig am {date}",
+    "showAll": "Alle {count} anzeigen",
+    "showLess": "Weniger anzeigen"
+  }
 }

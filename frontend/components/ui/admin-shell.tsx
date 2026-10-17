@@ -14,7 +14,7 @@ import { AdminAccountSettings } from "@/components/admin/admin-account-settings"
 import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
-type AdminIconKey = "dashboard" | "tenants" | "pricing" | "users" | "domains" | "verifications" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security" | "storage" | "backups" | "maintenance";
+type AdminIconKey = "dashboard" | "tenants" | "pricing" | "cashflow" | "users" | "domains" | "verifications" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security" | "storage" | "backups" | "maintenance";
 
 type AdminNavLink = { href: string; labelKey: string; icon: AdminIconKey; badge?: "count" };
 
@@ -27,6 +27,7 @@ const navGroups: { titleKey: string | null; links: AdminNavLink[] }[] = [
     links: [
       { href: "/admin/tenants", labelKey: "nav.tenants", icon: "tenants", badge: "count" },
       { href: "/admin/plans", labelKey: "nav.pricing", icon: "pricing" },
+      { href: "/admin/cashflow", labelKey: "nav.cashflow", icon: "cashflow" },
       { href: "/admin/users", labelKey: "nav.users", icon: "users" },
       { href: "/admin/domains", labelKey: "nav.domains", icon: "domains" },
       { href: "/admin/verifications", labelKey: "nav.verifications", icon: "verifications" },
@@ -81,6 +82,13 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
       <>
         <path d="M3.5 12.2V4.5a1 1 0 011-1h7.7l8.3 8.3a1.5 1.5 0 010 2.1l-6.4 6.4a1.5 1.5 0 01-2.1 0z" />
         <circle cx="8" cy="8" r="1.4" />
+      </>
+    ),
+    cashflow: (
+      <>
+        <path d="M3.5 20.5h17" />
+        <path d="M4 15.5l4.5-4.5 3.5 3 7.5-7.5" />
+        <path d="M15 6.5h4.5V11" />
       </>
     ),
     users: (

@@ -1,0 +1,183 @@
+{
+  "title": "Flusso di cassa",
+  "description": "Entrate dagli abbonamenti dei mandanti e uscite della piattaforma. Non vengono create fatture reali.",
+  "loading": "Caricamento …",
+  "tabs": {
+    "overview": "Panoramica",
+    "charges": "Crediti",
+    "costs": "Costi"
+  },
+  "actions": {
+    "newCost": "Registra uscita",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "create": "Registra",
+    "edit": "Modifica",
+    "delete": "Elimina"
+  },
+  "overview": {
+    "year": "Anno",
+    "includePlanned": "Includi costi pianificati",
+    "income": "Entrate {year}",
+    "incomeSub": "Crediti pagati fino a oggi",
+    "expenses": "Uscite {year}",
+    "expensesSub": "Costi attivi fino a oggi",
+    "expensesSubPlanned": "Di cui pianificati: {planned}",
+    "result": "Risultato {year}",
+    "resultSub": "Entrate meno uscite",
+    "balance": "Bilancio complessivo",
+    "balancePlanned": "Con costi pianificati: {amount}"
+  },
+  "runRate": {
+    "title": "Al mese, stato attuale",
+    "income": "Abbonamenti ({count, plural, one {# mandante pagante} other {# mandanti paganti}})",
+    "fixed": "Uscite fisse",
+    "percent": "Commissioni",
+    "net": "Risultato al mese",
+    "planned": "Incl. costi pianificati ({amount})",
+    "hint": "Gli importi annuali sono convertiti su un mese."
+  },
+  "receivables": {
+    "title": "Crediti",
+    "open": "Aperti ({count, plural, one {# credito} other {# crediti}})",
+    "waived": "Condonati ({count, plural, one {# credito} other {# crediti}})",
+    "hint": "I crediti aperti e condonati non contano come entrate.",
+    "overdue": "Scaduti ({count, plural, one {# credito} other {# crediti}})"
+  },
+  "chart": {
+    "title": "Andamento {year}",
+    "income": "Entrate",
+    "expenses": "Uscite",
+    "planned": "Pianificato"
+  },
+  "table": {
+    "month": "Mese",
+    "income": "Entrate",
+    "fixed": "Uscite fisse",
+    "percent": "Commissioni",
+    "net": "Risultato",
+    "open": "Aperto",
+    "forecast": "Previsione",
+    "total": "Totale {year}",
+    "totalToDate": "Totale a oggi"
+  },
+  "charges": {
+    "intro": "Quanto deve ogni mandante per periodo di fatturazione. I crediti nascono automaticamente dall’inizio dell’abbonamento. Solo i crediti pagati compaiono nel flusso di cassa.",
+    "all": "Tutti",
+    "search": "Cerca mandante",
+    "sum": "{count, plural, one {# credito} other {# crediti}} · {amount}",
+    "empty": "Nessun credito in questa vista.",
+    "deletedTenant": "(eliminato)",
+    "columns": {
+      "tenant": "Mandante",
+      "period": "Periodo",
+      "amount": "Importo",
+      "status": "Stato",
+      "paidOn": "Pagato il",
+      "dueOn": "Scadenza"
+    },
+    "actions": {
+      "details": "Dettagli e pagamento",
+      "recalculate": "Ricalcola importo"
+    }
+  },
+  "charge": {
+    "discount": "Sconto {percent} %",
+    "quantity": "{label} × {quantity}",
+    "total": "Totale",
+    "frozen": "Importo fissato alla nascita del credito.",
+    "status": "Stato",
+    "paidOn": "Pagato il",
+    "note": "Nota"
+  },
+  "chargeStatus": {
+    "open": "Aperto",
+    "paid": "Pagato",
+    "waived": "Condonato",
+    "overdue": "Scaduto"
+  },
+  "cycle": {
+    "monthly": "Mensile",
+    "yearly": "Annuale"
+  },
+  "costs": {
+    "intro": "Le uscite fisse maturano dalla data dell’abbonamento nell’intervallo scelto. Le uscite percentuali (p. es. commissioni di pagamento) vengono dedotte da ogni credito pagato. Vengono conteggiati solo i costi attivi.",
+    "all": "Tutti",
+    "monthlySum": "Uscite fisse al mese: {active} attive · {planned} incl. pianificate",
+    "empty": "Nessun costo registrato.",
+    "percentAmount": "{percent} per pagamento",
+    "fixedAmount": {
+      "monthly": "{amount} / mese",
+      "yearly": "{amount} / anno",
+      "once": "{amount} una tantum"
+    },
+    "until": "fino al {date}",
+    "perPayment": "A ogni pagamento",
+    "confirmDelete": "Eliminare «{name}»? L’uscita scompare anche dai mesi passati.",
+    "columns": {
+      "name": "Nome",
+      "kind": "Tipo",
+      "amount": "Importo",
+      "start": "Data abbonamento",
+      "next": "Prossima scadenza",
+      "status": "Stato"
+    }
+  },
+  "costKind": {
+    "fixed": "Fisso",
+    "percent": "Percentuale"
+  },
+  "costStatus": {
+    "active": "Attivo",
+    "planned": "Pianificato"
+  },
+  "interval": {
+    "monthly": "Mensile",
+    "yearly": "Annuale",
+    "once": "Una tantum"
+  },
+  "costForm": {
+    "newTitle": "Registra uscita",
+    "editTitle": "Modifica uscita",
+    "kind": "Tipo",
+    "kindHelp": {
+      "fixed": "Importo fisso, p. es. server o licenza",
+      "percent": "Quota di ogni pagamento, p. es. commissioni"
+    },
+    "name": "Nome",
+    "namePlaceholder": {
+      "fixed": "p. es. server Hetzner",
+      "percent": "p. es. commissione TWINT"
+    },
+    "amount": "Importo",
+    "interval": "Intervallo",
+    "percent": "Percentuale",
+    "percentHelp": "Calcolata su ogni credito pagato.",
+    "startDate": "Data abbonamento",
+    "date": "Data",
+    "endDate": "Data di fine (facoltativa)",
+    "status": "Stato",
+    "statusHelp": {
+      "active": "Conteggiato nel flusso di cassa.",
+      "planned": "Solo nel calcolo «incl. costi pianificati»."
+    },
+    "note": "Nota"
+  },
+  "toast": {
+    "loadFailed": "Impossibile caricare il flusso di cassa.",
+    "failed": "Azione non riuscita.",
+    "charge": {
+      "open": "Il credito è di nuovo aperto.",
+      "paid": "Credito segnato come pagato.",
+      "waived": "Credito condonato."
+    },
+    "recalculated": "Importo ricalcolato.",
+    "cost": {
+      "active": "«{name}» è attivo.",
+      "planned": "«{name}» è pianificato."
+    },
+    "costCreated": "Uscita registrata.",
+    "costUpdated": "Uscita salvata.",
+    "costDeleted": "Uscita eliminata."
+  }
+}
