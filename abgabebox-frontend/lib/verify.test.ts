@@ -8,6 +8,7 @@ import {
   redirectTarget,
   sha256Hex,
   shortDocumentId,
+  shortHash,
   verifyHash,
   type VerifySite,
 } from "./verify";
@@ -142,5 +143,12 @@ describe("Prüf-Domains der Mandanten", () => {
     });
     // anonym ausgestellt (keine Mandanten-ID freigegeben): ebenfalls nicht von diesem Mandanten
     expect(redirectTarget({ found: true }, { currentHost: "verify.tv-seedorf.ch", site, documentId: null, sha256: SHA })?.kind).toBe("central");
+  });
+});
+
+describe("shortHash", () => {
+  it("kürzt einen SHA-256 auf Anfang und Ende", () => {
+    expect(shortHash("f4c3b1569a0e" + "0".repeat(48) + "7d21")).toBe("f4c3b156 9a0e…7d21");
+    expect(shortHash("abc")).toBe("abc");
   });
 });

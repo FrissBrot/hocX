@@ -145,3 +145,8 @@ export async function verifyHash(sha256: string, documentId: string | null): Pro
   }
   return (await response.json()) as VerifyResponse;
 }
+
+/** Kurzform eines SHA-256 für die Anzeige («f4c3b156 9a0e…7d21»); der volle Wert gehört in den title. */
+export function shortHash(hash: string): string {
+  return hash.length > 16 ? `${hash.slice(0, 8)} ${hash.slice(8, 12)}…${hash.slice(-4)}` : hash;
+}

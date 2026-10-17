@@ -120,20 +120,18 @@
     "title": "Verify authenticity",
     "hint": "Check whether a PDF file comes unchanged from hocX.",
     "documentHint": "Document {id} – drop the PDF file here to verify it.",
-    "dropLabel": "Drag the PDF file here or choose it",
     "dropLabelTouch": "Choose PDF file",
     "dropRelease": "Release to verify",
     "dropOverlay": "Release the file to verify it",
     "privacy": "The file is not uploaded. Your browser computes its digital fingerprint (SHA-256) and sends only that for verification.",
     "checking": "Checking …",
     "checkAnother": "Check another file",
-    "fileName": "Checked file: {name}",
     "originalTitle": "Original",
     "originalText": "This file is an unchanged copy of a document created with hocX on {date}.",
     "fields": {
       "documentType": "Document type",
       "title": "Title",
-      "status": "Status",
+      "status": "Status when created",
       "version": "Version",
       "documentId": "Document ID"
     },
@@ -164,8 +162,8 @@
     "titleOverridden": "The title was set differently from the protocol when exporting.",
     "newerVersion": "There is a newer version ({version}) of this document.",
     "notFoundTitle": "Not found",
-    "notFoundText": "This file does not match any document created with hocX. It has been modified or does not come from hocX.",
-    "notFoundHint": "Even saving again, “Print to PDF” or compressing changes the file, even if the content looks the same. Always check the file you originally received.",
+    "notFoundText": "This file does not match any document created with hocX.",
+    "notFoundHint": "Always check the file you originally received.",
     "error": "The check is not possible right now. Please try again in a moment.",
     "readError": "The file could not be read.",
     "tooLarge": "The file is too large (at most {size} MB).",
@@ -190,6 +188,19 @@
       "stay": "Stay here",
       "openTenant": "Open verification page",
       "openCentral": "Go to the hocX verification page"
+    },
+    "checkingHash": "Calculating fingerprint …",
+    "fileWithSize": "{name} · {size}",
+    "dropTitle": "Drag a PDF here",
+    "dropOr": "or <choose>choose a file</choose>",
+    "issuedBy": "Issued by",
+    "hashLabel": "SHA-256 {hash}",
+    "forwardedShort": "File from the previous verification page",
+    "notFoundReasons": {
+      "title": "Common reasons",
+      "changed": "The file was modified after it was downloaded.",
+      "resaved": "Saving again, “Print to PDF” or compressing changes the file – even if the content looks the same.",
+      "notHocx": "The document was not created with hocX."
     }
   },
   "maintenance": {

@@ -120,20 +120,18 @@
     "title": "Vérifier l’authenticité",
     "hint": "Vérifiez qu’un fichier PDF provient de hocX sans modification.",
     "documentHint": "Document {id} – déposez le fichier PDF ici pour le vérifier.",
-    "dropLabel": "Glissez le fichier PDF ici ou sélectionnez-le",
     "dropLabelTouch": "Sélectionner le fichier PDF",
     "dropRelease": "Relâchez pour vérifier",
     "dropOverlay": "Relâchez le fichier pour le vérifier",
     "privacy": "Le fichier n’est pas téléversé. Votre navigateur calcule son empreinte numérique (SHA-256) et n’envoie que celle-ci pour la vérification.",
     "checking": "Vérification …",
     "checkAnother": "Vérifier un autre fichier",
-    "fileName": "Fichier vérifié : {name}",
     "originalTitle": "Original",
     "originalText": "Ce fichier est une copie non modifiée d’un document créé avec hocX le {date}.",
     "fields": {
       "documentType": "Type de document",
       "title": "Titre",
-      "status": "Statut",
+      "status": "Statut lors de la création",
       "version": "Version",
       "documentId": "ID du document"
     },
@@ -164,8 +162,8 @@
     "titleOverridden": "Le titre a été défini différemment du procès-verbal lors de l'export.",
     "newerVersion": "Il existe une version plus récente ({version}) de ce document.",
     "notFoundTitle": "Introuvable",
-    "notFoundText": "Ce fichier ne correspond à aucun document créé avec hocX. Il a été modifié ou ne provient pas de hocX.",
-    "notFoundHint": "Le simple fait de réenregistrer, d’« imprimer en PDF » ou de compresser modifie le fichier, même si le contenu semble identique. Vérifiez toujours le fichier reçu à l’origine.",
+    "notFoundText": "Ce fichier ne correspond à aucun document créé avec hocX.",
+    "notFoundHint": "Vérifiez toujours le fichier que vous avez reçu à l’origine.",
     "error": "La vérification est impossible pour le moment. Veuillez réessayer dans un instant.",
     "readError": "Le fichier n’a pas pu être lu.",
     "tooLarge": "Le fichier est trop volumineux ({size} Mo au maximum).",
@@ -190,6 +188,19 @@
       "stay": "Rester ici",
       "openTenant": "Ouvrir la page de vérification",
       "openCentral": "Vers la page de vérification de hocX"
+    },
+    "checkingHash": "Calcul de l’empreinte …",
+    "fileWithSize": "{name} · {size}",
+    "dropTitle": "Glissez un PDF ici",
+    "dropOr": "ou <choose>choisissez un fichier</choose>",
+    "issuedBy": "Émis par",
+    "hashLabel": "SHA-256 {hash}",
+    "forwardedShort": "Fichier de la page de vérification précédente",
+    "notFoundReasons": {
+      "title": "Raisons fréquentes",
+      "changed": "Le fichier a été modifié après son téléchargement.",
+      "resaved": "Un nouvel enregistrement, « Imprimer en PDF » ou une compression modifient le fichier – même si le contenu semble identique.",
+      "notHocx": "Le document n’a pas été créé avec hocX."
     }
   },
   "maintenance": {

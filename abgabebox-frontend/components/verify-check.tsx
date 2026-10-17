@@ -11,6 +11,7 @@ import {
   redirectTarget,
   sha256Hex,
   shortDocumentId,
+  shortHash,
   verifyHash,
   type VerifyOutcome,
   type VerifyRedirect,
@@ -25,9 +26,15 @@ const REDIRECT_SECONDS = 4;
 // fileName null: Prüfung über den Hash aus der Weiterleitung, ohne Datei auf dieser Seite
 type State =
   | { phase: "idle" }
-  | { phase: "checking"; fileName: string | null }
-  | { phase: "done"; fileName: string | null; outcome: VerifyOutcome; redirect: VerifyRedirect | null }
+  | { phase: "checking"; fileName: string | null; size: number | null }
+  | { phase: "done"; fileName: string | null; hash: string; outcome: VerifyOutcome; redirect: VerifyRedirect | null }
   | { phase: "error"; message: string };
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 
 export function VerifyCheck({ documentId, site }: { documentId: string | null; site: VerifySite | null }) {
   const t = useTranslations("abgabebox.verify");
@@ -47,7 +54,7 @@ export function VerifyCheck({ documentId, site }: { documentId: string | null; s
         setState({ phase: "error", message: t("tooLarge", { size: MAX_FILE_MB }) });
         return;
       }
-      setState({ phase: "checking", fileName: file.name });
+      setState({ phase: "checking", fileName: file.name, size: file.size });
       let hash: string;
       try {
         hash = await sha256Hex(await file.arrayBuffer());
@@ -65,7 +72,7 @@ export function VerifyCheck({ documentId, site }: { documentId: string | null; s
     try {
       const result = await verifyHash(hash, documentId);
       const redirect = redirectTarget(result, { currentHost: window.location.hostname, site, documentId, sha256: hash });
-      setState({ phase: "done", fileName, outcome: classifyResult(result), redirect });
+      setState({ phase: "done", fileName, hash, outcome: classifyResult(result), redirect });
     } catch {
       setState({ phase: "error", message: t("error") });
     }
@@ -77,7 +84,7 @@ export function VerifyCheck({ documentId, site }: { documentId: string | null; s
     const hash = parseHashFragment(window.location.hash);
     if (!hash) return;
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    setState({ phase: "checking", fileName: null });
+    setState({ phase: "checking", fileName: null, size: null });
     void checkHash(hash, null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -126,12 +133,25 @@ export function VerifyCheck({ documentId, site }: { documentId: string | null; s
         <p className="verify-expected">{t("documentHint", { id: shortDocumentId(documentId) })}</p>
       )}
 
-      {state.phase !== "done" && (
+      {state.phase === "checking" && (
+        <div className="verify-checking" role="status" aria-live="polite">
+          <span className="verify-spinner" aria-hidden="true" />
+          <div className="verify-checking-text">
+            <span className="verify-checking-title">{state.fileName === null ? t("checking") : t("checkingHash")}</span>
+            {state.fileName !== null && (
+              <span className="verify-checking-file">
+                {state.size !== null ? t("fileWithSize", { name: state.fileName, size: formatSize(state.size) }) : state.fileName}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {(state.phase === "idle" || state.phase === "error") && (
         <div
           className={`drop-zone verify-drop${dragging ? " drop-zone-active" : ""}`}
           role="button"
           tabIndex={0}
-          aria-busy={state.phase === "checking"}
           onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}
           onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
@@ -145,25 +165,28 @@ export function VerifyCheck({ documentId, site }: { documentId: string | null; s
             tabIndex={-1}
             onChange={(event) => void check(event.target.files?.[0])}
           />
-          <span className="drop-zone-icon" aria-hidden="true">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
-              <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z" />
-              <path d="M9 12l2 2 4-4" />
+          <span className="drop-zone-icon verify-drop-icon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 3.5h8l4 4v13H6zM14 3.5v4h4M12 17v-6m0 0l-2.5 2.5M12 11l2.5 2.5" />
             </svg>
           </span>
           <div className="drop-zone-label">
-            {state.phase === "checking" ? (
-              t("checking")
-            ) : dragging ? (
+            {dragging ? (
               t("dropRelease")
             ) : (
               <>
-                <span className="drop-label-pointer">{t("dropLabel")}</span>
+                <span className="drop-label-pointer">{t("dropTitle")}</span>
                 <span className="drop-label-touch">{t("dropLabelTouch")}</span>
               </>
             )}
           </div>
-          <div className="drop-zone-hint">{t("privacy")}</div>
+          {!dragging && (
+            <div className="drop-zone-hint drop-label-pointer">
+              {t.rich("dropOr", { choose: (chunks) => <span className="verify-drop-choose">{chunks}</span> })}
+            </div>
+          )}
+          {/* Auf dem Smartphone fehlt der Datenschutzhinweis der Markenfläche. */}
+          <div className="drop-zone-hint verify-drop-privacy">{t("privacy")}</div>
         </div>
       )}
 
@@ -172,7 +195,7 @@ export function VerifyCheck({ documentId, site }: { documentId: string | null; s
       {state.phase === "done" && (
         <div aria-live="polite">
           {state.redirect && <VerifyRedirectNotice redirect={state.redirect} outcome={state.outcome} site={site} />}
-          <VerifyResultCard outcome={state.outcome} fileName={state.fileName} site={site} />
+          <VerifyResultCard outcome={state.outcome} fileName={state.fileName} hash={state.hash} site={site} />
           <button type="button" className="button button-outline verify-again" onClick={reset}>{t("checkAnother")}</button>
         </div>
       )}
@@ -282,20 +305,65 @@ function VerifyRedirectNotice({ redirect, outcome, site }: { redirect: VerifyRed
   );
 }
 
-export function VerifyResultCard({ outcome, fileName, site = null }: { outcome: VerifyOutcome; fileName: string | null; site?: VerifySite | null }) {
+function VerifyFileChip({ fileName, hash }: { fileName: string | null; hash: string }) {
+  const t = useTranslations("abgabebox.verify");
+  return (
+    <div className="verify-file-chip">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+        <path d="M6 3.5h8l4 4v13H6zM14 3.5v4h4" />
+      </svg>
+      <div className="verify-file-chip-text">
+        <span className="verify-file-chip-name">{fileName === null ? t("forwardedShort") : fileName}</span>
+        <span className="verify-file-chip-hash" title={hash}>{t("hashLabel", { hash: shortHash(hash) })}</span>
+      </div>
+    </div>
+  );
+}
+
+function ResultHead({ kind, title, lead }: { kind: "ok" | "fail"; title: string; lead: string }) {
+  return (
+    <div className="verify-result-head">
+      <span className="verify-result-icon" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d={kind === "ok" ? "M5 12.5l4.5 4.5L19 7.5" : "M7 7l10 10M17 7L7 17"} />
+        </svg>
+      </span>
+      <div className="verify-result-headline">
+        <h2 className="verify-result-title">{title}</h2>
+        <p className="verify-result-lead">{lead}</p>
+      </div>
+    </div>
+  );
+}
+
+export function VerifyResultCard({
+  outcome,
+  fileName,
+  hash,
+  site = null,
+}: {
+  outcome: VerifyOutcome;
+  fileName: string | null;
+  hash: string;
+  site?: VerifySite | null;
+}) {
   const t = useTranslations("abgabebox.verify");
   if (outcome.kind === "not_found") {
     return (
       <section className="verify-result verify-result-fail" role="status">
-        <h2 className="verify-result-title">
-          <span className="verify-result-icon" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M6 6l12 12M18 6L6 18" /></svg>
-          </span>
-          {t("notFoundTitle")}
-        </h2>
-        <p>{t("notFoundText")}</p>
-        <p className="verify-result-note">{t("notFoundHint")}</p>
-        <p className="verify-file">{fileName === null ? t("forwarded") : t("fileName", { name: fileName })}</p>
+        <ResultHead kind="fail" title={t("notFoundTitle")} lead={t("notFoundText")} />
+        <div className="verify-result-body">
+          <div className="verify-reasons">
+            <h3 className="verify-reasons-title">{t("notFoundReasons.title")}</h3>
+            <ul>
+              <li>{t("notFoundReasons.changed")}</li>
+              <li>{t("notFoundReasons.resaved")}</li>
+              <li>{t("notFoundReasons.notHocx")}</li>
+            </ul>
+            <p className="verify-result-note">{t("notFoundHint")}</p>
+          </div>
+        </div>
+        <VerifyFileChip fileName={fileName} hash={hash} />
       </section>
     );
   }
@@ -309,47 +377,41 @@ export function VerifyResultCard({ outcome, fileName, site = null }: { outcome: 
   const status = result.status_code && t.has(`statusLabel.${result.status_code}`) ? t(`statusLabel.${result.status_code}`) : null;
   return (
     <section className="verify-result verify-result-ok" role="status">
-      <h2 className="verify-result-title">
-        <span className="verify-result-icon" aria-hidden="true">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
-        </span>
-        {t("originalTitle")}
-      </h2>
-      <p>{t("originalText", { date: formatDate(result.created_at) })}</p>
-
-      {identity !== "anonymous" && (
-        <div className="verify-identity">
-          <TenantLogo tenantId={result.tenant_public_id} hasLogo={result.tenant_has_logo} name={name} />
-          <div className="verify-identity-text">
-            <span className="verify-identity-name">{name}</span>
-            {(identity === "verified" || siteDomain) && (
-              <span className="verify-site-badges">
+      <ResultHead kind="ok" title={t("originalTitle")} lead={t("originalText", { date: formatDate(result.created_at) })} />
+      <div className="verify-result-body">
+        {identity !== "anonymous" && (
+          <div className="verify-identity">
+            <TenantLogo tenantId={result.tenant_public_id} hasLogo={result.tenant_has_logo} name={name} />
+            <div className="verify-identity-text">
+              <span className="verify-site-eyebrow">{t("issuedBy")}</span>
+              <span className="verify-identity-line">
+                <span className="verify-identity-name">{name}</span>
                 {identity === "verified" && <OrganizationBadge />}
                 {siteDomain && <DomainBadge domain={siteDomain} />}
               </span>
-            )}
-            <span className="verify-identity-hint">
-              {identity === "verified" ? t("verifiedExplanation", { name }) : t("createdBy", { name })}
-            </span>
-            {siteDomain && <span className="verify-identity-hint">{t("domainExplanation", { domain: siteDomain, name })}</span>}
+              <span className="verify-identity-hint">
+                {identity === "verified" ? t("verifiedExplanation", { name }) : t("createdBy", { name })}
+              </span>
+              {siteDomain && <span className="verify-identity-hint">{t("domainExplanation", { domain: siteDomain, name })}</span>}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {foreign && <p className="verify-notice verify-notice-warning">{t("foreignDocument", { site: site?.tenant_name ?? "" })}</p>}
-      {outcome.otherDocument && <p className="verify-notice verify-notice-warning">{t("otherDocument")}</p>}
-      {outcome.importUnverified && <p className="verify-notice verify-notice-warning">{t("importUnverified")}</p>}
-      {outcome.titleOverridden && <p className="verify-notice verify-notice-info">{t("titleOverridden")}</p>}
-      {outcome.newerVersion && <p className="verify-notice verify-notice-info">{t("newerVersion", { version: outcome.newerVersion })}</p>}
+        {foreign && <p className="verify-notice verify-notice-warning">{t("foreignDocument", { site: site?.tenant_name ?? "" })}</p>}
+        {outcome.otherDocument && <p className="verify-notice verify-notice-warning">{t("otherDocument")}</p>}
+        {outcome.importUnverified && <p className="verify-notice verify-notice-warning">{t("importUnverified")}</p>}
+        {outcome.titleOverridden && <p className="verify-notice verify-notice-info">{t("titleOverridden")}</p>}
+        {outcome.newerVersion && <p className="verify-notice verify-notice-info">{t("newerVersion", { version: outcome.newerVersion })}</p>}
 
-      <dl className="verify-facts">
-        {docType && (<><dt>{t("fields.documentType")}</dt><dd>{docType}</dd></>)}
-        {result.title && (<><dt>{t("fields.title")}</dt><dd>{result.title}</dd></>)}
-        {status && (<><dt>{t("fields.status")}</dt><dd>{status}</dd></>)}
-        {result.version_label && (<><dt>{t("fields.version")}</dt><dd>{result.version_label}</dd></>)}
-        {result.document_id && (<><dt>{t("fields.documentId")}</dt><dd className="verify-id">{shortDocumentId(result.document_id)}</dd></>)}
-      </dl>
-      <p className="verify-file">{fileName === null ? t("forwarded") : t("fileName", { name: fileName })}</p>
+        <dl className="verify-facts">
+          {docType && <div><dt>{t("fields.documentType")}</dt><dd>{docType}</dd></div>}
+          {result.title && <div><dt>{t("fields.title")}</dt><dd>{result.title}</dd></div>}
+          {status && <div><dt>{t("fields.status")}</dt><dd>{status}</dd></div>}
+          {result.version_label && <div><dt>{t("fields.version")}</dt><dd>{result.version_label}</dd></div>}
+          {result.document_id && <div><dt>{t("fields.documentId")}</dt><dd className="verify-id">{shortDocumentId(result.document_id)}</dd></div>}
+        </dl>
+      </div>
+      <VerifyFileChip fileName={fileName} hash={hash} />
     </section>
   );
 }

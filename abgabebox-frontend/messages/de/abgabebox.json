@@ -120,20 +120,18 @@
     "title": "Echtheit prüfen",
     "hint": "Prüfe, ob eine PDF-Datei unverändert aus hocX stammt.",
     "documentHint": "Dokument {id} – lege die PDF-Datei hier ab, um sie zu prüfen.",
-    "dropLabel": "PDF-Datei hierher ziehen oder auswählen",
     "dropLabelTouch": "PDF-Datei auswählen",
     "dropRelease": "Loslassen zum Prüfen",
     "dropOverlay": "Datei loslassen, um sie zu prüfen",
     "privacy": "Die Datei wird nicht hochgeladen. Dein Browser berechnet ihren digitalen Fingerabdruck (SHA-256) und schickt nur diesen zur Prüfung.",
     "checking": "Wird geprüft …",
     "checkAnother": "Andere Datei prüfen",
-    "fileName": "Geprüfte Datei: {name}",
     "originalTitle": "Original",
     "originalText": "Diese Datei ist eine unveränderte Kopie eines Dokuments, das am {date} mit hocX erstellt wurde.",
     "fields": {
       "documentType": "Dokumenttyp",
       "title": "Titel",
-      "status": "Status",
+      "status": "Status beim Erstellen",
       "version": "Version",
       "documentId": "Dokument-ID"
     },
@@ -164,8 +162,8 @@
     "titleOverridden": "Der Titel wurde beim Export abweichend vom Protokoll gesetzt.",
     "newerVersion": "Es gibt eine neuere Version ({version}) dieses Dokuments.",
     "notFoundTitle": "Nicht gefunden",
-    "notFoundText": "Diese Datei stimmt mit keinem bei hocX erstellten Dokument überein. Sie wurde verändert oder stammt nicht aus hocX.",
-    "notFoundHint": "Schon erneutes Speichern, «Drucken als PDF» oder Komprimieren verändert die Datei, auch wenn der Inhalt gleich aussieht. Prüfe deshalb immer die ursprünglich erhaltene Datei.",
+    "notFoundText": "Diese Datei stimmt mit keinem bei hocX erstellten Dokument überein.",
+    "notFoundHint": "Prüfe immer die Datei, die du ursprünglich erhalten hast.",
     "error": "Die Prüfung ist gerade nicht möglich. Bitte versuche es gleich nochmal.",
     "readError": "Die Datei konnte nicht gelesen werden.",
     "tooLarge": "Die Datei ist zu gross (höchstens {size} MB).",
@@ -190,6 +188,19 @@
       "stay": "Hier bleiben",
       "openTenant": "Prüfseite öffnen",
       "openCentral": "Zur Prüfseite von hocX"
+    },
+    "checkingHash": "Fingerabdruck wird berechnet …",
+    "fileWithSize": "{name} · {size}",
+    "dropTitle": "PDF hierher ziehen",
+    "dropOr": "oder <choose>Datei auswählen</choose>",
+    "issuedBy": "Herausgegeben von",
+    "hashLabel": "SHA-256 {hash}",
+    "forwardedShort": "Datei von der vorherigen Prüfseite",
+    "notFoundReasons": {
+      "title": "Häufige Gründe",
+      "changed": "Die Datei wurde nach dem Herunterladen verändert.",
+      "resaved": "Erneutes Speichern, «Drucken als PDF» oder Komprimieren verändert die Datei – auch wenn der Inhalt gleich aussieht.",
+      "notHocx": "Das Dokument wurde nicht mit hocX erstellt."
     }
   },
   "maintenance": {

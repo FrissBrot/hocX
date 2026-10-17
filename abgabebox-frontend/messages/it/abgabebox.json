@@ -120,20 +120,18 @@
     "title": "Verifica autenticità",
     "hint": "Verifica se un file PDF proviene da hocX senza modifiche.",
     "documentHint": "Documento {id} – trascina qui il file PDF per verificarlo.",
-    "dropLabel": "Trascina qui il file PDF o selezionalo",
     "dropLabelTouch": "Seleziona il file PDF",
     "dropRelease": "Rilascia per verificare",
     "dropOverlay": "Rilascia il file per verificarlo",
     "privacy": "Il file non viene caricato. Il tuo browser calcola la sua impronta digitale (SHA-256) e invia solo quella per la verifica.",
     "checking": "Verifica in corso …",
     "checkAnother": "Verifica un altro file",
-    "fileName": "File verificato: {name}",
     "originalTitle": "Originale",
     "originalText": "Questo file è una copia non modificata di un documento creato con hocX il {date}.",
     "fields": {
       "documentType": "Tipo di documento",
       "title": "Titolo",
-      "status": "Stato",
+      "status": "Stato al momento della creazione",
       "version": "Versione",
       "documentId": "ID documento"
     },
@@ -164,8 +162,8 @@
     "titleOverridden": "Il titolo è stato impostato diversamente dal verbale durante l'esportazione.",
     "newerVersion": "Esiste una versione più recente ({version}) di questo documento.",
     "notFoundTitle": "Non trovato",
-    "notFoundText": "Questo file non corrisponde a nessun documento creato con hocX. È stato modificato o non proviene da hocX.",
-    "notFoundHint": "Anche salvare di nuovo, «Stampa in PDF» o comprimere modifica il file, anche se il contenuto sembra uguale. Verifica sempre il file ricevuto originariamente.",
+    "notFoundText": "Questo file non corrisponde a nessun documento creato con hocX.",
+    "notFoundHint": "Verifica sempre il file che hai ricevuto originariamente.",
     "error": "Al momento la verifica non è possibile. Riprova tra poco.",
     "readError": "Impossibile leggere il file.",
     "tooLarge": "Il file è troppo grande (al massimo {size} MB).",
@@ -190,6 +188,19 @@
       "stay": "Resta qui",
       "openTenant": "Apri la pagina di verifica",
       "openCentral": "Alla pagina di verifica di hocX"
+    },
+    "checkingHash": "Calcolo dell’impronta …",
+    "fileWithSize": "{name} · {size}",
+    "dropTitle": "Trascina qui un PDF",
+    "dropOr": "oppure <choose>scegli un file</choose>",
+    "issuedBy": "Emesso da",
+    "hashLabel": "SHA-256 {hash}",
+    "forwardedShort": "File dalla pagina di verifica precedente",
+    "notFoundReasons": {
+      "title": "Motivi frequenti",
+      "changed": "Il file è stato modificato dopo il download.",
+      "resaved": "Un nuovo salvataggio, «Stampa in PDF» o la compressione modificano il file – anche se il contenuto sembra uguale.",
+      "notHocx": "Il documento non è stato creato con hocX."
     }
   },
   "maintenance": {
