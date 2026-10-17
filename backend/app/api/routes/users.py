@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
+from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, issue_locale_cookie, issue_session_cookie
 from app.models.entities import AppUser, UserMfaFactor
@@ -29,7 +30,9 @@ mfa_service = MfaService()
 audit = AuditService()
 
 
-def _expected_origin(request: Request) -> str:
+def _browser_origin(request: Request) -> str:
+    """Origin der Seite, wie der Browser ihn meldet - nur für die Entscheidung, ob auf diesem
+    Host Passkeys angeboten werden (siehe _request_hostname), nie als Prüfwert."""
     origin = request.headers.get("origin")
     if origin:
         return origin
@@ -39,13 +42,23 @@ def _expected_origin(request: Request) -> str:
     return f"https://{host}"
 
 
+def _expected_origin(request: Request) -> str:
+    """Erwarteter WebAuthn-Origin. Mit konfigurierter Hauptdomain fest auf diese gesetzt statt aus
+    dem Origin-Header des Requests übernommen (Security-Audit SEC-021, gleiche Regel wie
+    routes/auth.py) - ein Vergleich mit dem Wert aus demselben Request prüft nichts. Nur lokal
+    (ohne Domain) gilt weiter der Origin des Requests."""
+    if settings.traefik_domain:
+        return f"https://{settings.traefik_domain}"
+    return _browser_origin(request)
+
+
 def _request_hostname(request: Request) -> str | None:
     """See admin.py's identical helper: request.url.hostname is wrong whenever this request
     arrived through the frontend's own /api/* rewrite proxy, which overwrites Host with its
     own upstream target instead of preserving the browser's original one - reuses
-    _expected_origin's own header-derived value (the Origin header, unaffected by that
+    _browser_origin's own header-derived value (the Origin header, unaffected by that
     proxy hop) instead (audit fix, 2026-09-17)."""
-    return urlparse(_expected_origin(request)).hostname
+    return urlparse(_browser_origin(request)).hostname
 
 
 @router.get("", response_model=list[UserRead])

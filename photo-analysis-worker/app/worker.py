@@ -58,7 +58,7 @@ def _process_job(engine, detector, job: dict, store: ObjectStore | None = None) 
     store = store or build_store(engine)
     stored_file_ids = job["stored_file_ids"]
     logger.info("job %s: processing %d files (tenant %s)", job["id"], len(stored_file_ids), job["tenant_id"])
-    files = fetch_files(engine, stored_file_ids)
+    files = fetch_files(engine, stored_file_ids, tenant_id=job.get("tenant_id"))
     scored = 0
     # Accumulated and written in one batched UPDATE after the loop instead of one
     # transaction per file (audit fix, 2026-09-17 - see write_face_quality_scores_batch).

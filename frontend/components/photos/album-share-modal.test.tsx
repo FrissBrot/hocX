@@ -32,6 +32,7 @@ function makeAlbum(overrides: Partial<PhotoAlbum> = {}): PhotoAlbum {
     cover_thumbnail_urls: [],
     owner_tenant_name: null,
     shared_with: [],
+    my_share: null,
     is_shared: false,
     pending_share_count: 0,
     ...overrides,
@@ -63,6 +64,8 @@ function share(overrides: Partial<AlbumTenantShareStatus> = {}): AlbumTenantShar
     invited_at: "2026-09-10T08:00:00Z",
     responded_at: "2026-09-12T08:00:00Z",
     share_location: true,
+    partner_public_links: true,
+    partner_photos_public: true,
     ...overrides,
   };
 }
@@ -172,6 +175,22 @@ describe("AlbumShareModal", () => {
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
     const [, init] = browserApiFetchMock.mock.calls[1];
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({ target_tenant_public_id: TENANT_ID, share_location: false });
+  });
+
+  it("lets the owner switch public links off for a partner (SEC-002)", async () => {
+    browserApiFetchMock.mockResolvedValue(undefined);
+    const onChanged = vi.fn();
+
+    render(<AlbumShareModal open album={makeAlbum({ shared_with: [share()] })} onClose={() => {}} onChanged={onChanged} />);
+    fireEvent.click(screen.getByRole("switch", { name: "Pfadi Wildegg darf dieses Album öffentlich verlinken" }));
+
+    await waitFor(() =>
+      expect(browserApiFetchMock).toHaveBeenCalledWith("/api/files/albums/album-1/shares/partner-1", {
+        method: "PATCH",
+        body: JSON.stringify({ partner_public_links: false }),
+      }),
+    );
+    expect(onChanged).toHaveBeenCalledTimes(1);
   });
 
   it("switches the location of an existing share", async () => {

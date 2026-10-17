@@ -134,7 +134,9 @@ def _resolve_factor_id(db: Session, factor_id: uuid.UUID) -> int:
     return internal_id
 
 
-def _expected_origin(request: Request) -> str:
+def _browser_origin(request: Request) -> str:
+    """Origin der Seite, wie der Browser ihn meldet - nur für die Entscheidung, ob auf diesem
+    Host Passkeys angeboten werden (siehe _request_hostname), nie als Prüfwert."""
     origin = request.headers.get("origin")
     if origin:
         return origin
@@ -144,19 +146,29 @@ def _expected_origin(request: Request) -> str:
     return f"https://{host}"
 
 
+def _expected_origin(request: Request) -> str:
+    """Erwarteter WebAuthn-Origin. Mit konfigurierter Admin-Domain fest auf diese gesetzt statt aus
+    dem Origin-Header des Requests übernommen (Security-Audit SEC-021, gleiche Regel wie
+    routes/auth.py) - ein Vergleich mit dem Wert aus demselben Request prüft nichts. Nur lokal
+    (ohne Domain) gilt weiter der Origin des Requests."""
+    if settings.traefik_admin_domain:
+        return f"https://{settings.traefik_admin_domain}"
+    return _browser_origin(request)
+
+
 def _request_hostname(request: Request) -> str | None:
     """WebAuthn's rp.id must match the browser's real page origin - request.url.hostname is
     wrong whenever this request arrived through the frontend's own /api/* rewrite proxy
     (next.config.mjs's rewrites()), which replaces the Host header with its own upstream
     target (the backend container's internal hostname, e.g. "backend") rather than
-    preserving the browser's original one. Reuses _expected_origin's own header-derived
+    preserving the browser's original one. Reuses _browser_origin's own header-derived
     value (the Origin header the browser sends, which passes through that same proxy hop
     unchanged, unlike Host) instead of computing a second, independently-diverging notion
     of "the request's host" (audit fix, 2026-09-17 - this silently broke every admin
     passkey registration ceremony: navigator.credentials.create() rejects a mismatched
     rp.id with a SecurityError before ever reaching an authenticator, with no server-side
     error to notice)."""
-    return urlparse(_expected_origin(request)).hostname
+    return urlparse(_browser_origin(request)).hostname
 
 
 @router.get("/tenants", response_model=AdminTenantPage)

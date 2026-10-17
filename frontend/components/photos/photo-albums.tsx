@@ -81,6 +81,7 @@ export function PhotoAlbums({
   const toast = useToast();
   const [albums, setAlbums] = useState<Album[]>([]);
   const [active, setActive] = useState<Album | null>(null);
+  const [myShareBusy, setMyShareBusy] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<AlbumShareRequest[]>([]);
   const [creating, setCreating] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -167,7 +168,23 @@ export function PhotoAlbums({
     } finally { setBusy(false); }
   }
 
+  async function setMyPhotosPublic(album: Album, value: boolean) {
+    setMyShareBusy(true);
+    try {
+      await browserApiFetch(`/api/files/albums/${album.id}/my-share`, {
+        method: "PATCH",
+        body: JSON.stringify({ my_photos_public: value }),
+      });
+      setActive((current) => (current && current.my_share ? { ...current, my_share: { ...current.my_share, my_photos_public: value } } : current));
+    } catch {
+      toast(t("myShareError"), "error");
+    } finally {
+      setMyShareBusy(false);
+    }
+  }
+
   if (active) {
+    const publicLinksBlocked = Boolean(active.my_share && !active.my_share.public_links_allowed);
     return (
       <div className="grid">
         <div className="page-header">
@@ -183,10 +200,26 @@ export function PhotoAlbums({
                 {t("sharedWithPrefix")}{active.shared_with.map((share) => `${share.tenant_name ?? t("unknownTenant", { id: `${share.tenant_public_id.slice(0, 8)}…` })} (${share.status === "accepted" ? t("statusActive") : share.status === "pending" ? t("statusPending") : t("statusDeclined")})`).join(", ")}
               </p>
             )}
+            {active.my_share && (
+              <label className="album-picker-switch album-share-location-switch">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={active.my_share.my_photos_public}
+                  disabled={myShareBusy}
+                  onChange={(event) => void setMyPhotosPublic(active, event.target.checked)}
+                />
+                <span className="album-picker-switch-track" aria-hidden="true" />
+                <span>{t("myPhotosPublicLabel")}</span>
+              </label>
+            )}
+            {publicLinksBlocked && <p className="muted">{t("publicLinksNotAllowed")}</p>}
           </div>
           <div className="table-toolbar-actions">
             <button type="button" className="button-secondary" onClick={() => setPicking(true)}>{t("addExistingPhotos")}</button>
-            <button type="button" className="button-secondary" onClick={() => setSharingLink(true)}>{t("shareLink")}</button>
+            {!publicLinksBlocked && (
+              <button type="button" className="button-secondary" onClick={() => setSharingLink(true)}>{t("shareLink")}</button>
+            )}
             {!active.owner_tenant_name && (
               <button type="button" className="button-secondary" onClick={() => setSharingTenant(true)}>{t("shareWithTenant")}</button>
             )}

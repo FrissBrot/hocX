@@ -9,6 +9,9 @@ import { useTranslations } from "next-intl";
 
 import { TrackedChanges } from "@/components/ui/tracked-changes-extension";
 
+// tiptap-markdown 0.9 ergänzt den (ab Tiptap v3 typisierten) Editor-Storage nicht selbst.
+type MarkdownStorage = { markdown: { getMarkdown: () => string } };
+
 type RichTextEditorProps = {
   value: string;
   onChange: (markdown: string) => void;
@@ -47,6 +50,10 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
         blockquote: false,
         horizontalRule: false,
         strike: false,
+        // Ab Tiptap v3 Teil des StarterKit: nicht als Markdown abbildbar (Unterstreichen) bzw.
+        // bisher nicht aktiv (Links) - aus, damit sich Eingabe und gespeichertes Markdown nicht ändern.
+        underline: false,
+        link: false,
       }),
       Markdown.configure({
         html: false,
@@ -58,7 +65,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
     content: value,
     editable: !readOnly,
     onUpdate({ editor }) {
-      const markdown = editor.storage.markdown.getMarkdown();
+      const markdown = (editor.storage as unknown as MarkdownStorage).markdown.getMarkdown();
       lastEmittedRef.current = markdown;
       onChange(markdown);
     },
@@ -117,7 +124,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
     if (!editor) return;
     if (value === lastEmittedRef.current) return;
     lastEmittedRef.current = value;
-    editor.commands.setContent(value, false);
+    editor.commands.setContent(value, { emitUpdate: false });
   }, [value, editor]);
 
   // Sync readOnly changes

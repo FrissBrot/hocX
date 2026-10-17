@@ -307,6 +307,13 @@ class TenantService:
         rows = db.query(TenantDomain).filter(TenantDomain.tenant_id == tenant_id).order_by(TenantDomain.purpose.asc()).all()
         return [self._domain_read_model(row) for row in rows]
 
+    def _ensure_domain_not_active_elsewhere(self, db: Session, domain: str, *, excluding_domain_id: int | None = None) -> None:
+        query = db.query(TenantDomain.id).filter(TenantDomain.domain == domain, TenantDomain.status == "active")
+        if excluding_domain_id is not None:
+            query = query.filter(TenantDomain.id != excluding_domain_id)
+        if query.first() is not None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Domain ist bereits vergeben")
+
     def create_domain(
         self, db: Session, tenant_id: int, actor: CurrentUser, payload: TenantDomainCreate
     ) -> TenantDomainRead:
@@ -320,6 +327,9 @@ class TenantService:
         reserved = {d for d in (settings.traefik_domain, settings.traefik_abgabebox_domain) if d}
         if domain in reserved:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Diese Domain ist bereits durch hocX belegt")
+        # Nur eine aktive (verifizierte) Domain belegt den Namen (Migration 0129, SEC-004); eine
+        # unbestätigte Domain eines anderen Mandanten blockiert nicht mehr.
+        self._ensure_domain_not_active_elsewhere(db, domain)
 
         # Ersetzt einen ggf. vorhandenen (pending oder active) Eintrag fuer denselben Zweck -
         # ein Mandant hat gemaess Vorgabe genau eine Domain pro Zweck.
@@ -372,13 +382,19 @@ class TenantService:
         ok, message = domain_verification_service.verify_domain(row.domain, row.verification_token, target_host)
         if not ok:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+        self._ensure_domain_not_active_elsewhere(db, row.domain, excluding_domain_id=row.id)
 
         row.status = "active"
         row.verified_at = datetime.now(timezone.utc)
         row.is_healthy = True
         row.last_checked_at = row.verified_at
         db.add(row)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            # Gleichzeitige Verifizierung derselben Domain: der partielle Unique-Index entscheidet.
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Domain ist bereits vergeben") from exc
         db.refresh(row)
 
         traefik_config_service.regenerate(db)

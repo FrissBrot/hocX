@@ -50,7 +50,7 @@ from app.schemas.admin import (
 from app.schemas.public_catalog import PublicCustomerRead, PublicPlanFeature, PublicPlanRead
 from app.schemas.user import TenantUpdate
 from app.services.file_service import _safe_storage_path
-from app.services import cashflow_service, identity_verification_service, submission_link_service, traefik_config_service
+from app.services import cashflow_service, identity_verification_service, photo_album_service, submission_link_service, traefik_config_service
 from app.services.storage_service import StorageService
 from app.services.tenant_service import apply_tenant_profile_image
 
@@ -713,6 +713,15 @@ class AdminTenantService:
         # Studio-Assets einzeln merken: aus alten Dokumentvorlagen übernommene (Migration 0115,
         # von 0118 als document_asset weitergeführt) liegen weiter unter document_template_parts/.
         style_asset_paths = list(db.scalars(select(DocumentAsset.storage_path).where(DocumentAsset.tenant_id == tenant_id)))
+
+        # Album-Einträge in Alben ANDERER Mandanten (geteilte Alben) haben keinen Fremdschlüssel auf
+        # die Datei (photo_album_item.file_id = public_id) und überlebten die Kaskade - ein später
+        # importierter Mandant mit derselben public_id hing dann wieder im fremden Album
+        # (Security-Audit release/1.2.0, Nachtrag zu SEC-001).
+        own_file_public_ids = list(db.scalars(select(StoredFile.public_id).where(StoredFile.tenant_id == tenant_id)))
+        if upload_ids:
+            own_file_public_ids += list(db.scalars(select(SubmissionUploadFile.public_id).where(SubmissionUploadFile.upload_id.in_(upload_ids))))
+        photo_album_service.drop_items_for_files(db, own_file_public_ids)
 
         db.execute(delete(WordImportDocument).where(WordImportDocument.tenant_id == tenant_id))
         db.execute(delete(Protocol).where(Protocol.tenant_id == tenant_id))

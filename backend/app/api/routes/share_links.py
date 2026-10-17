@@ -56,6 +56,9 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
         album = photo_album_share_service.get_accessible_album(db, payload.album_id, user.current_tenant_id)
         if album is None:
             raise HTTPException(status_code=404, detail="Album nicht gefunden")
+        if not photo_album_share_service.may_create_public_link(db, album, user.current_tenant_id):
+            # SEC-002: der Besitzer hat öffentliche Links für diesen Partner abgeschaltet.
+            raise HTTPException(status_code=403, detail="Der Besitzer dieses Albums erlaubt keine öffentlichen Links.")
         link = share_link_service.create_for_album(
             db, tenant_id=user.current_tenant_id, name=name, album=album, expires_at=payload.expires_at, created_by=user.user_id, metadata=metadata
         )

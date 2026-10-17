@@ -346,6 +346,16 @@ export type AlbumTenantShareStatus = {
   responded_at: string | null;
   // Standort (GPS) der Fotos mit diesem Partner teilen (Standard an).
   share_location: boolean;
+  // Partner darf das Album öffentlich verlinken (setzt der Besitzer, Standard an).
+  partner_public_links: boolean;
+  // Fotos des Partners dürfen in öffentlichen Links erscheinen (setzt der Partner, Standard an).
+  partner_photos_public: boolean;
+};
+
+// Eigene Freigabe in einem Album eines anderen Mandanten (nur für Partner gesetzt).
+export type AlbumMyShare = {
+  public_links_allowed: boolean;
+  my_photos_public: boolean;
 };
 
 export type PhotoAlbum = {
@@ -357,6 +367,7 @@ export type PhotoAlbum = {
   cover_thumbnail_urls: string[];
   owner_tenant_name: string | null;
   shared_with: AlbumTenantShareStatus[];
+  my_share: AlbumMyShare | null;
   // Gerade geteilt (Mandant eingeladen/angenommen oder aktiver Album-Link); Partner-Alben immer.
   is_shared: boolean;
   // Nur für den Besitzer: automatisch einsortierte Fotos, die noch freigegeben werden müssen.

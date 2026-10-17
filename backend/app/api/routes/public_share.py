@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Annotated
 
@@ -23,11 +24,11 @@ from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
 from app.models.entities import PhotoAlbum, ShareLink, StoredFile, Tenant
 from app.schemas.files import PublicShareFile, PublicShareRead
-from app.services import share_link_service
+from app.services import photo_album_share_service, share_link_service
 from app.core.storage import MAIN, get_object_store, object_response, read_bytes_or_404, safe_suffix, write_object_to_zip
 from app.services.file_service import FileService
 from app.services import image_export_service
-from app.services.photo_metadata_privacy import SANITIZABLE_MIME_TYPES, sanitize_image
+from app.services.photo_metadata_privacy import SANITIZABLE_MIME_TYPES, MetadataPolicy, sanitize_image
 
 router = APIRouter()
 service = FileService()
@@ -73,25 +74,40 @@ def _resolve_file_or_404(db: Session, link: ShareLink, file_id: uuid.UUID) -> St
     raise HTTPException(status_code=404, detail="Datei nicht gefunden")
 
 
-def _needs_sanitizing(link: ShareLink, stored_file: StoredFile) -> bool:
+def _policy_for(db: Session, link: ShareLink, stored_file: StoredFile) -> MetadataPolicy:
+    """Metadaten-Policy des Links für eine einzelne Datei. Den Standort gibt der Link nur weiter,
+    wenn der anlegende Mandant ihn auch intern sehen darf (Security-Audit SEC-002): bei Fotos
+    eines anderen Mandanten in einem geteilten Album entscheidet dessen Standort-Freigabe
+    (photo_album_share_service.location_shared_with, gleiche Regel wie im Innenbereich,
+    IMGMETA-007) - der Link kann sie nicht aufheben."""
+    policy = share_link_service.metadata_policy_for(link)
+    if policy.location and not photo_album_share_service.location_shared_with(db, link.tenant_id, stored_file.id, stored_file.tenant_id):
+        return replace(policy, location=False)
+    return policy
+
+
+def _needs_sanitizing(policy: MetadataPolicy, stored_file: StoredFile) -> bool:
     """Muss die Datei fuer den Abruf umgeschrieben werden - Metadaten entfernen, die der Link
     nicht teilt, oder ein geschaetztes Aufnahmedatum eintragen (image_export_service)?"""
-    sanitize = stored_file.mime_type in SANITIZABLE_MIME_TYPES and not share_link_service.metadata_policy_for(link).keeps_everything
+    sanitize = stored_file.mime_type in SANITIZABLE_MIME_TYPES and not policy.keeps_everything
     return sanitize or image_export_service.needs_export_processing(stored_file)
 
 
-def _public_file_bytes(link: ShareLink, stored_file: StoredFile) -> bytes:
+def _public_file_bytes(policy: MetadataPolicy, stored_file: StoredFile) -> bytes:
     """Dateiinhalt fuer den oeffentlichen Abruf - erst die Exportfassung (geschaetztes Datum,
     GPS aus der Datenbank), dann ohne die Metadaten, die der Link nicht teilt
     (Standort/Aufnahmedatum/Kamera, siehe photo_metadata_privacy.py). Die Reihenfolge stellt
     sicher, dass nichts eingetragen wird, was der Link anschliessend nicht teilen darf."""
     original = read_bytes_or_404(MAIN, stored_file.storage_path, detail="File missing on filesystem")
     content = image_export_service.export_bytes(stored_file, original) or original
-    return sanitize_image(content, stored_file.mime_type, share_link_service.metadata_policy_for(link))
+    return sanitize_image(content, stored_file.mime_type, policy)
 
 
-def _public_file_response(request: Request, link: ShareLink, stored_file: StoredFile, *, attachment: bool, headers: dict[str, str]):
-    if not _needs_sanitizing(link, stored_file):
+def _public_file_response(
+    request: Request, db: Session, link: ShareLink, stored_file: StoredFile, *, attachment: bool, headers: dict[str, str]
+):
+    policy = _policy_for(db, link, stored_file)
+    if not _needs_sanitizing(policy, stored_file):
         return object_response(
             request, MAIN, stored_file.storage_path, media_type=stored_file.mime_type,
             filename=stored_file.original_name if attachment else None, attachment=attachment, headers=headers,
@@ -103,7 +119,7 @@ def _public_file_response(request: Request, link: ShareLink, stored_file: Stored
     work_dir = Path(settings.upload_root) / "_staging" / "download"
     work_dir.mkdir(parents=True, exist_ok=True)
     clean_path = work_dir / f"{uuid.uuid4().hex}{safe_suffix(stored_file.storage_path)}"
-    clean_path.write_bytes(_public_file_bytes(link, stored_file))
+    clean_path.write_bytes(_public_file_bytes(policy, stored_file))
     return FileResponse(
         path=clean_path,
         media_type=stored_file.mime_type,
@@ -184,7 +200,7 @@ def view_public_share_file(token: str, file_id: uuid.UUID, request: Request, db:
     if stored_file.mime_type not in _INLINE_IMAGE_TYPES:
         raise HTTPException(status_code=404, detail="Keine Ansicht verfügbar")
     return _public_file_response(
-        request, link, stored_file, attachment=False, headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=3600"}
+        request, db, link, stored_file, attachment=False, headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=3600"}
     )
 
 
@@ -194,7 +210,7 @@ def download_public_share_file(token: str, file_id: uuid.UUID, request: Request,
     link = _resolve_link_or_404(db, token)
     stored_file = _resolve_file_or_404(db, link, file_id)
     return _public_file_response(
-        request, link, stored_file, attachment=True, headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
+        request, db, link, stored_file, attachment=True, headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
     )
 
 
@@ -234,8 +250,9 @@ def download_public_share_all(
             if name in used_names:
                 name = f"{stored_file.public_id.hex[:8]}_{name}"
             used_names.add(name)
-            if _needs_sanitizing(link, stored_file):
-                archive.writestr(name, _public_file_bytes(link, stored_file))
+            policy = _policy_for(db, link, stored_file)
+            if _needs_sanitizing(policy, stored_file):
+                archive.writestr(name, _public_file_bytes(policy, stored_file))
             else:
                 write_object_to_zip(archive, MAIN, stored_file.storage_path, name)
     return FileResponse(

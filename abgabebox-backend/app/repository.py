@@ -198,14 +198,24 @@ def list_checksums_for_element(
     return {row[0] for row in rows}
 
 
-def list_tenant_image_hashes(db: Session, *, tenant_id: int) -> list[tuple[int, str]]:
-    """(id, perceptual_hash) aller bereits gehashten Bilder eines Mandanten - fuer die
-    mandantenweite Bild-Aehnlichkeitswarnung. Erfasst automatisch Bilder aus beiden
-    Upload-Wegen (Protokoll-Bilder im Haupt-Backend UND Abgabebox-Einreichungen), da beide
-    Services in dieselbe stored_file-Tabelle schreiben."""
+def list_assignment_image_hashes(db: Session, *, assignment_id: int) -> list[tuple[int, str]]:
+    """(id, perceptual_hash) aller bereits gehashten Bilder, die in diese Abgabe eingereicht
+    wurden - fuer die Bild-Aehnlichkeitswarnung. Bewusst nicht mehr mandantenweit
+    (Security-Audit SEC-011): sonst konnte ein anonymer Link-Inhaber pruefen, ob ein bestimmtes
+    Foto irgendwo im Verein (Galerie, Protokoll) vorhanden ist."""
     rows = db.execute(
-        select(stored_file_table.c.id, stored_file_table.c.perceptual_hash).where(
-            stored_file_table.c.tenant_id == tenant_id,
+        select(stored_file_table.c.id, stored_file_table.c.perceptual_hash)
+        .select_from(
+            submission_upload_file_table.join(
+                submission_upload_table,
+                submission_upload_table.c.id == submission_upload_file_table.c.upload_id,
+            ).join(
+                stored_file_table,
+                stored_file_table.c.id == submission_upload_file_table.c.stored_file_id,
+            )
+        )
+        .where(
+            submission_upload_table.c.assignment_id == assignment_id,
             stored_file_table.c.perceptual_hash.is_not(None),
         )
     )

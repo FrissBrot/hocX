@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
-from app.models.entities import CycleConfig, Event, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, SubmissionAssignment
+from app.models.entities import CycleConfig, Event, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, SubmissionAssignment
 from app.schemas.files import PhotoAlbumCreate, PhotoAlbumItemBestUpdate, PhotoAlbumRead, PhotoAlbumItemsUpdate
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ from starlette.background import BackgroundTask
 
 from app.core.db import get_db
 from app.core.config import settings
+from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.models import GalleryImage, Protocol, ProtocolElementBlock, ProtocolImage, StoredFile, Tenant
 from app.schemas.files import (
@@ -27,6 +28,8 @@ from app.schemas.files import (
     SharedTargetAlbumRead,
     AlbumShareCreate,
     AlbumShareUpdate,
+    AlbumMyShareRead,
+    AlbumMyShareUpdate,
     AlbumShareRequestRead,
     AlbumShareRespond,
     AlbumTenantShareStatus,
@@ -903,8 +906,10 @@ def update_stored_file_tags(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id)
-    if stored_file is None:
+    # Nur Dateien des eigenen Mandanten (Security-Audit SEC-003): ensure_can_read_stored_file
+    # erlaubt auch das Lesen von Partner-Fotos aus geteilten Alben - Schreiben darf das nie.
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id, tenant_id=user.current_tenant_id)
+    if stored_file is None or user.current_tenant_id is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
     access_service.ensure_can_read_stored_file(db, user, stored_file.id)
     return service.update_stored_file_tags(db, stored_file, payload.tags)
@@ -1102,6 +1107,9 @@ def download_stored_file(
     )
 
 
+ALBUM_INVITES_PER_HOUR = 30
+
+
 def _get_album(db: Session, user: CurrentUser, album_id: uuid.UUID):
     require_writer(user)
     album = photo_album_share_service.get_accessible_album(db, album_id, user.current_tenant_id)
@@ -1124,6 +1132,7 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
         is_owner = entry.album.tenant_id == user.current_tenant_id
         owner_tenant_name = None
         shared_with: list[AlbumTenantShareStatus] = []
+        my_share: AlbumMyShareRead | None = None
         if is_owner:
             shared_with = [
                 AlbumTenantShareStatus(
@@ -1134,11 +1143,18 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
                     invited_at=row.invited_at,
                     responded_at=row.responded_at,
                     share_location=row.share_location,
+                    partner_public_links=row.partner_public_links,
+                    partner_photos_public=row.partner_photos_public,
                 )
                 for row in photo_album_share_service.list_shares_for_album(db, entry.album.id)
             ]
         else:
             owner_tenant_name = db.scalar(select(Tenant.name).where(Tenant.id == entry.album.tenant_id))
+            own_share = db.get(PhotoAlbumTenantShare, {"album_id": entry.album.id, "tenant_id": user.current_tenant_id})
+            if own_share is not None:
+                my_share = AlbumMyShareRead(
+                    public_links_allowed=own_share.partner_public_links, my_photos_public=own_share.partner_photos_public
+                )
         results.append(
             PhotoAlbumRead(
                 id=entry.album.id,
@@ -1149,6 +1165,7 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
                 cover_thumbnail_urls=entry.cover_thumbnail_urls,
                 owner_tenant_name=owner_tenant_name,
                 shared_with=shared_with,
+                my_share=my_share,
                 is_shared=not is_owner or entry.album.id in shared_ids,
                 pending_share_count=entry.pending_share_count,
             )
@@ -1245,6 +1262,8 @@ def create_album_share(
     album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == user.current_tenant_id))
     if album is None:
         raise HTTPException(status_code=404, detail="Album nicht gefunden")
+    # Einladungen gehen an beliebige Mandanten-IDs - begrenzen gegen Spam (Security-Audit SEC-014).
+    enforce_rate_limit(f"album-share-invite:{user.current_tenant_id}", limit=ALBUM_INVITES_PER_HOUR, period_seconds=3600)
     target_tenant = public_id_service.get_by_public_id(db, Tenant, payload.target_tenant_public_id)
     if target_tenant is None:
         raise HTTPException(status_code=404, detail="Kein Mandant mit dieser ID gefunden")
@@ -1264,7 +1283,8 @@ def update_album_share(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    """Standort (GPS) für einen Partner an- oder abschalten - nur der Besitzer-Mandant."""
+    """Für einen Partner Standort (GPS) teilen und/oder öffentliche Links auf dieses Album erlauben
+    - nur der Besitzer-Mandant (SEC-002)."""
     require_writer(user)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -1275,9 +1295,31 @@ def update_album_share(
     if shared_tenant is None:
         raise HTTPException(status_code=404, detail="Mandant nicht gefunden")
     try:
-        photo_album_share_service.set_share_location(
-            db, album=album, tenant_id=shared_tenant.id, share_location=payload.share_location
+        photo_album_share_service.update_share_settings(
+            db,
+            album=album,
+            tenant_id=shared_tenant.id,
+            share_location=payload.share_location,
+            partner_public_links=payload.partner_public_links,
         )
+    except photo_album_share_service.AlbumShareError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.patch("/files/albums/{album_id}/my-share", status_code=204)
+def update_my_album_share(
+    album_id: uuid.UUID,
+    payload: AlbumMyShareUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Partner-Seite einer Freigabe: eigene Fotos in diesem Album in öffentlichen Links zeigen
+    oder nicht (SEC-002). Nur für die Freigabe des eigenen Mandanten."""
+    require_writer(user)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    try:
+        photo_album_share_service.set_my_photos_public(db, album_id=album_id, tenant_id=user.current_tenant_id, value=payload.my_photos_public)
     except photo_album_share_service.AlbumShareError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None
 

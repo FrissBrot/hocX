@@ -165,6 +165,8 @@ class AlbumShareRow:
     invited_at: datetime
     responded_at: datetime | None
     share_location: bool
+    partner_public_links: bool = True
+    partner_photos_public: bool = True
 
 
 def list_shares_for_album(db: Session, album_id: uuid.UUID) -> list[AlbumShareRow]:
@@ -176,6 +178,8 @@ def list_shares_for_album(db: Session, album_id: uuid.UUID) -> list[AlbumShareRo
             PhotoAlbumTenantShare.created_at,
             PhotoAlbumTenantShare.responded_at,
             PhotoAlbumTenantShare.share_location,
+            PhotoAlbumTenantShare.partner_public_links,
+            PhotoAlbumTenantShare.partner_photos_public,
             Tenant.id,
             Tenant.public_id,
             Tenant.name,
@@ -194,6 +198,8 @@ def list_shares_for_album(db: Session, album_id: uuid.UUID) -> list[AlbumShareRo
             invited_at=row.created_at,
             responded_at=row.responded_at,
             share_location=row.share_location,
+            partner_public_links=row.partner_public_links,
+            partner_photos_public=row.partner_photos_public,
         )
         for row in rows
     ]
@@ -258,15 +264,61 @@ def revoke(db: Session, *, album_id: uuid.UUID, tenant_id: int, acting_tenant_id
     db.commit()
 
 
-def set_share_location(db: Session, *, album: PhotoAlbum, tenant_id: int, share_location: bool) -> PhotoAlbumTenantShare:
-    """Nur der Besitzer schaltet den Standort einer Freigabe um (die Route prüft das)."""
+def update_share_settings(
+    db: Session,
+    *,
+    album: PhotoAlbum,
+    tenant_id: int,
+    share_location: bool | None = None,
+    partner_public_links: bool | None = None,
+) -> PhotoAlbumTenantShare:
+    """Einstellungen des Besitzers für einen Partner (die Route prüft die Besitzerschaft):
+    Standort teilen und ob der Partner das Album öffentlich verlinken darf (SEC-002)."""
     share = db.get(PhotoAlbumTenantShare, {"album_id": album.id, "tenant_id": tenant_id})
     if share is None:
         raise AlbumShareError("Keine Freigabe für diesen Mandanten gefunden.")
-    share.share_location = share_location
+    if share_location is not None:
+        share.share_location = share_location
+    if partner_public_links is not None:
+        share.partner_public_links = partner_public_links
     db.commit()
     db.refresh(share)
     return share
+
+
+def set_my_photos_public(db: Session, *, album_id: uuid.UUID, tenant_id: int, value: bool) -> PhotoAlbumTenantShare:
+    """Entscheidung des Partners: dürfen seine Fotos in diesem Album in öffentlichen Links
+    (auch des Besitzers) erscheinen (SEC-002)."""
+    share = db.get(PhotoAlbumTenantShare, {"album_id": album_id, "tenant_id": tenant_id})
+    if share is None or share.status == "declined":
+        raise AlbumShareError("Keine Freigabe für diesen Mandanten gefunden.")
+    share.partner_photos_public = value
+    db.commit()
+    db.refresh(share)
+    return share
+
+
+def may_create_public_link(db: Session, album: PhotoAlbum, tenant_id: int) -> bool:
+    """Darf `tenant_id` dieses Album öffentlich verlinken? Der Besitzer immer, ein Partner nur mit
+    angenommener Freigabe und Erlaubnis des Besitzers (partner_public_links, SEC-002)."""
+    if album.tenant_id == tenant_id:
+        return True
+    share = db.get(PhotoAlbumTenantShare, {"album_id": album.id, "tenant_id": tenant_id})
+    return share is not None and share.status == "accepted" and share.partner_public_links
+
+
+def tenants_hidden_from_public_links(db: Session, album_id: uuid.UUID, link_tenant_id: int) -> set[int]:
+    """Mandanten, deren Fotos in einem öffentlichen Link dieses Albums fehlen müssen: Partner (nicht
+    der Link-Ersteller selbst), die partner_photos_public abgeschaltet haben (SEC-002)."""
+    return set(
+        db.scalars(
+            select(PhotoAlbumTenantShare.tenant_id).where(
+                PhotoAlbumTenantShare.album_id == album_id,
+                PhotoAlbumTenantShare.partner_photos_public.is_(False),
+                PhotoAlbumTenantShare.tenant_id != link_tenant_id,
+            )
+        )
+    )
 
 
 def location_shared_with(db: Session, viewer_tenant_id: int, stored_file_id: int, file_tenant_id: int) -> bool:

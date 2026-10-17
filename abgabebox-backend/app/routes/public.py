@@ -439,17 +439,17 @@ async def upload(
             return UploadResult(ok=True, files_received=files_received, image_duplicate_warnings=[])
 
         # Bild-Aehnlichkeitspruefung (Perceptual Hash): nur Warnung, blockiert nicht - siehe
-        # _compute_perceptual_hash. Mandantenweit statt element-scoped, und erfasst dank der
-        # gemeinsamen stored_file-Tabelle automatisch auch Protokoll-Bilder aus dem Haupt-Backend.
+        # _compute_perceptual_hash. Nur innerhalb dieser Abgabe (Security-Audit SEC-011): ein
+        # mandantenweiter Vergleich verriet anonymen Link-Inhabern, ob ein Foto im Verein existiert.
         perceptual_hashes = [_compute_perceptual_hash(content, mime) for content, _, mime in contents]
-        tenant_image_hashes = [phash for _id, phash in repository.list_tenant_image_hashes(db, tenant_id=tenant["id"])]
+        tenant_image_hashes = [phash for _id, phash in repository.list_assignment_image_hashes(db, assignment_id=assignment["id"])]
         image_duplicate_warnings: list[str] = []
         for i, ((_content, original_name, _mime), phash) in enumerate(zip(contents, perceptual_hashes)):
             if phash is None:
                 continue
             other_hashes_in_request = [h for j, h in enumerate(perceptual_hashes) if h is not None and j != i]
             if _has_close_perceptual_match(phash, tenant_image_hashes + other_hashes_in_request):
-                image_duplicate_warnings.append(f"{original_name} ähnelt einem bereits im Mandanten hochgeladenen Bild.")
+                image_duplicate_warnings.append(f"{original_name} ähnelt einem bereits in dieser Abgabe hochgeladenen Bild.")
 
         incoming_bytes = sum(len(content) for content, _, _ in contents)
         tenant_quota_bytes = repository.get_tenant_storage_quota_bytes(db, tenant_id=tenant["id"])

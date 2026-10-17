@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { Inter, Source_Serif_4 } from "next/font/google";
-import Script from "next/script";
+import { headers } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { FlowProvider, FlowStepBar, FlowStepList } from "@/components/flow-steps";
 import { BrandIntro, BrandNote, BrandSubtitle } from "@/components/brand-intro";
 import { LanguageSelect } from "@/components/language-select";
 import { MaintenanceBanner } from "@/components/maintenance-banner";
+import { NONCE_HEADER } from "@/lib/csp";
 import "./tokens.css";
 import "./globals.css";
 
@@ -27,16 +28,17 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const locale = await getLocale();
   const messages = await getMessages();
   const t = await getTranslations("abgabebox");
+  // Von proxy.ts pro Request gesetzt (Nonce-CSP, SEC-012).
+  const nonce = (await headers()).get(NONCE_HEADER) ?? undefined;
 
   return (
     <html lang={locale} className={`${inter.variable} ${serif.variable}`} suppressHydrationWarning>
-      <body suppressHydrationWarning>
-        <NextIntlClientProvider locale={locale} messages={messages}>
+      <head>
         {/* Gleiche Theme-Logik wie die Haupt-App (frontend/app/layout.tsx): gespeicherte
             Praeferenz, sonst System. Ohne JS greift der prefers-color-scheme-Block in tokens.css. */}
-        <Script
+        <script
           id="hocx-theme"
-          strategy="beforeInteractive"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `
               (function () {
@@ -53,6 +55,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             `
           }}
         />
+      </head>
+      <body suppressHydrationWarning>
+        <NextIntlClientProvider locale={locale} messages={messages}>
         <FlowProvider>
           <div className="box-shell">
             <aside className="box-brand">

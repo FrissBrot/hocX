@@ -549,9 +549,11 @@ def save_element_position(
     require_reader(user)
     # Audit S11, 2026-08-16 - see get_element_position's identical check above.
     protocol = _get_protocol_or_404(db, protocol_id, user)
-    element_internal_id = public_id_service.resolve_internal_id(db, ProtocolElement, payload.element_id)
-    if element_internal_id is None:
+    # Nur Elemente dieses Protokolls (Security-Audit SEC-015).
+    element = public_id_service.get_by_public_id(db, ProtocolElement, payload.element_id)
+    if element is None or element.protocol_id != protocol.id:
         raise HTTPException(status_code=404, detail="Element not found")
+    element_internal_id = element.id
     stmt = (
         pg_insert(UserProtocolScroll)
         .values(user_id=user.user_id, protocol_id=protocol.id, last_element_id=element_internal_id)

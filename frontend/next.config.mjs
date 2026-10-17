@@ -19,6 +19,8 @@ const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
+  // Kein "X-Powered-By: Next.js" (Security-Audit SEC-012).
+  poweredByHeader: false,
   typedRoutes: true,
   // next dev's cross-origin protection auto-allows "localhost" and the --hostname
   // value (0.0.0.0 here) but not "127.0.0.1" - dev/test tooling (this repo's e2e

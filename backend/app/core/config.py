@@ -73,6 +73,8 @@ class Settings(BaseSettings):
     abgabebox_base_url: str = "https://upload.example.com"
     traefik_domain: str | None = None
     traefik_abgabebox_domain: str | None = None
+    # Domain des Plattform-Admin-Panels: erwarteter WebAuthn-Origin der Admin-Passkeys (SEC-021).
+    traefik_admin_domain: str | None = None
     # Extra Origins for CORS (main.py) and the protocol-collaboration WebSocket
     # (collaboration_ws.py's _static_allowed_origins) beyond localhost/127.0.0.1:3000 and
     # traefik_domain - needed whenever a deployment's published port differs from the

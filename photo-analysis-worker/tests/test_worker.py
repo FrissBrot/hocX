@@ -25,7 +25,7 @@ def test_process_job_marks_an_unreadable_file_as_analyzed_with_no_score(monkeypa
     used to be silently skipped (never marked analyzed), so it got retried by every future
     off-peak run forever. It must now be written back with score=None instead."""
     monkeypatch.setattr(worker, "STORAGE_ROOT", tmp_path)
-    monkeypatch.setattr(worker, "fetch_files", lambda engine, ids: [{"id": 1, "storage_path": "does-not-exist.png", "mime_type": "image/png"}])
+    monkeypatch.setattr(worker, "fetch_files", lambda engine, ids, **_kwargs: [{"id": 1, "storage_path": "does-not-exist.png", "mime_type": "image/png"}])
 
     written: list[list[tuple[int, float | None]]] = []
     monkeypatch.setattr(worker, "write_face_quality_scores_batch", lambda engine, results: written.append(results))
@@ -43,7 +43,7 @@ def test_process_job_scores_a_readable_file_and_marks_it_done(monkeypatch, tmp_p
     image_path = tmp_path / "photo.png"
     image_path.write_bytes(b"fake-image-bytes")
     monkeypatch.setattr(worker, "STORAGE_ROOT", tmp_path)
-    monkeypatch.setattr(worker, "fetch_files", lambda engine, ids: [{"id": 7, "storage_path": "photo.png", "mime_type": "image/png"}])
+    monkeypatch.setattr(worker, "fetch_files", lambda engine, ids, **_kwargs: [{"id": 7, "storage_path": "photo.png", "mime_type": "image/png"}])
     monkeypatch.setattr(worker, "score_face_quality", lambda detector, image_bytes: 8.25)
 
     written: list[list[tuple[int, float | None]]] = []
@@ -67,7 +67,7 @@ def test_process_job_handles_a_mix_of_readable_and_missing_files(monkeypatch, tm
     monkeypatch.setattr(
         worker,
         "fetch_files",
-        lambda engine, ids: [
+        lambda engine, ids, **_kwargs: [
             {"id": 1, "storage_path": "ok.png", "mime_type": "image/png"},
             {"id": 2, "storage_path": "missing.png", "mime_type": "image/png"},
         ],
@@ -97,7 +97,7 @@ def test_process_job_fails_on_transient_storage_errors_instead_of_marking_files_
 
     from app.objstore_client import StorageUnavailable
 
-    monkeypatch.setattr(worker, "fetch_files", lambda engine, ids: [{"id": 1, "storage_path": "a.png", "mime_type": "image/png"}])
+    monkeypatch.setattr(worker, "fetch_files", lambda engine, ids, **_kwargs: [{"id": 1, "storage_path": "a.png", "mime_type": "image/png"}])
     written: list = []
     monkeypatch.setattr(worker, "write_face_quality_scores_batch", lambda engine, results: written.append(results))
     finished: list = []

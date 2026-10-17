@@ -15,6 +15,8 @@ services:
       # placeholder `localhost` redirects sessions to https://localhost/api/...
       # instead of keeping them on the frontend proxy at localhost:3000.
       TRAEFIK_DOMAIN: ""
+      # Ebenso keine Admin-Domain: Plattform-Admin-Passkeys prüfen lokal gegen den Origin des Requests.
+      TRAEFIK_ADMIN_DOMAIN: ""
       # app/core/security.py sets the session cookie with `secure=settings.
       # auth_secure_cookies`, which defaults to true and is otherwise only ever
       # overridden in docker-compose.release.yml. A real browser exempts localhost/

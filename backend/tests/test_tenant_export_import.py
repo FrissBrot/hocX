@@ -1574,7 +1574,7 @@ def test_full_backup_restores_share_links_and_calendar_feeds(db, monkeypatch, tm
     assert calendar_feed_service.token_of(feed) == "feed-token"
 
 
-def test_full_backup_restores_features_storage_packages_and_partner_relations(db, monkeypatch, tmp_path):
+def test_full_backup_restores_features_storage_packages_and_only_reinvites_partners(db, monkeypatch, tmp_path):
     from app.core.security import hash_password
     from app.models.entities import (
         Feature,
@@ -1585,7 +1585,7 @@ def test_full_backup_restores_features_storage_packages_and_partner_relations(db
         TenantStoragePackage,
         TenantTrust,
     )
-    from app.services import tenant_trust_service
+    from app.services import photo_album_share_service, tenant_trust_service
 
     _storage(monkeypatch, tmp_path)
     admin = PlatformAdmin(email="ops@example.com", password_hash=hash_password("x"), display_name="Ops")
@@ -1620,13 +1620,20 @@ def test_full_backup_restores_features_storage_packages_and_partner_relations(db
     new_photo = db.scalar(select(StoredFile).where(StoredFile.tenant_id == new_tenant.id))
     assert (feature.feature_code, feature.enabled_by_admin_id) == (feature_code, admin.id)
     assert (storage.package_code, storage.quantity, storage.added_by_admin_id) == ("test-10gb", 2, admin.id)
+    # Security-Audit SEC-001: ein Archiv belegt keine Zustimmung des Partners. Kein Trust, keine
+    # angenommene Freigabe; eigene Alben gehen als neue Einladung raus, Alben des Partners nicht.
     low, high = sorted((new_tenant.id, partner.id))
-    assert db.get(TenantTrust, (low, high)) is not None
-    assert db.get(PhotoAlbumTenantShare, (own_album_id, partner.id)).status == "accepted"
-    assert db.get(PhotoAlbumTenantShare, (partner_album_id, new_tenant.id)).status == "accepted"
-    assert db.get(PhotoAlbumItem, (partner_album_id, new_photo.public_id)) is not None
-    # Restored relations to other tenants are surfaced to the importing admin.
-    assert any("Partnerverein" in warning for warning in warnings)
+    assert db.get(TenantTrust, (low, high)) is None
+    new_own_album_id = db.scalar(select(PhotoAlbum.id).where(PhotoAlbum.tenant_id == new_tenant.id, PhotoAlbum.name == "Unser Album"))
+    reinvite = db.get(PhotoAlbumTenantShare, (new_own_album_id, partner.id))
+    assert reinvite is not None and reinvite.status == "pending"
+    assert db.get(PhotoAlbumTenantShare, (partner_album_id, new_tenant.id)) is None
+    # Kein Zugriff auf das Partner-Album: ohne Freigabe sieht der neue Mandant es nicht (der
+    # alte Album-Eintrag stammt hier aus der Roh-SQL-Löschung im Test-Hook; die echte
+    # Mandantenlöschung räumt ihn ab, siehe test_delete_tenant_removes_its_photos_from_partner_albums).
+    assert new_tenant.id not in photo_album_share_service.accessible_tenant_ids_for_album(db, partner_album_id)
+    assert any("Partnerverein" in warning and "Einladung" in warning for warning in warnings)
+    assert any("Alben anderer Mandanten nicht übernommen" in warning for warning in warnings)
 
 
 def test_import_skips_partner_relations_when_partner_is_missing(db):
@@ -1767,3 +1774,31 @@ def test_import_marks_registry_entries_without_matching_pdf_as_unverified(db, mo
     flags = dict(db.execute(select(DocumentRegistry.sha256, DocumentRegistry.import_unverified).where(DocumentRegistry.tenant_id == imported.id)).all())
     assert flags == {backed: False, "ab" * 32: True}
     assert any("nicht verifiziert" in warning for warning in warnings)
+
+
+def test_delete_tenant_removes_its_photos_from_partner_albums(db, monkeypatch, tmp_path):
+    """photo_album_item.file_id hat keinen Fremdschlüssel: ohne Aufräumen blieben die Fotos eines
+    gelöschten Mandanten als Einträge in geteilten Alben anderer Mandanten stehen."""
+    from app.models.entities import PhotoAlbumTenantShare
+    from app.services.admin_tenant_service import AdminTenantService
+
+    _storage(monkeypatch, tmp_path)
+    tenant = make_tenant(db, "Wird gelöscht")
+    partner = make_tenant(db, "Partner mit Album")
+    partner_album = PhotoAlbum(tenant_id=partner.id, name="Partner-Album")
+    db.add(partner_album)
+    db.flush()
+    photo = _stored_image(db, tmp_path, tenant.id)
+    partner_photo = _stored_image(db, tmp_path, partner.id)
+    db.add_all([
+        PhotoAlbumTenantShare(album_id=partner_album.id, tenant_id=tenant.id, status="accepted"),
+        PhotoAlbumItem(album_id=partner_album.id, file_id=photo.public_id),
+        PhotoAlbumItem(album_id=partner_album.id, file_id=partner_photo.public_id),
+    ])
+    db.flush()
+    album_id, photo_public_id, partner_photo_public_id = partner_album.id, photo.public_id, partner_photo.public_id
+
+    assert AdminTenantService().delete_tenant(db, tenant.id)
+
+    assert db.get(PhotoAlbumItem, (album_id, photo_public_id)) is None
+    assert db.get(PhotoAlbumItem, (album_id, partner_photo_public_id)) is not None

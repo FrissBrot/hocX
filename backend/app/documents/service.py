@@ -251,6 +251,12 @@ def prepare(
     if doc_type.needs_protocol and protocol is None and not sample:
         raise ValueError("protocol_required")
 
+    # Fremde oder unbekannte Brand vor allem anderen ablehnen (Security-Audit SEC-018): die
+    # Vorlagenauflösung darf mit ihren eigenen Fehlern die Mandantenprüfung nicht verdecken.
+    explicit_brand = brand_service.get_brand(db, tenant_id, request.brand_id) if request.brand_id else None
+    if request.brand_id and explicit_brand is None:
+        raise DocumentNotFoundError("DocumentBrand")
+
     # Vorlage: ungespeicherter Inhalt (Designer) > bestimmte Revision > Prioritätsregel
     resolved = None
     revision: DocumentTemplateRevision | None = None
@@ -281,9 +287,7 @@ def prepare(
         ctx.ensure_can_read_protocol(protocol.id)
 
     # Brand: ungespeicherte Tokens (Brand Studio) > explizit > Zuweisung > Vorlage > Standard
-    explicit_brand = brand_service.get_brand(db, tenant_id, request.brand_id) if request.brand_id else None
-    if request.brand_id and explicit_brand is None:
-        raise DocumentNotFoundError("DocumentBrand")
+    # (explicit_brand ist oben bereits mandantengebunden geladen.)
     if resolved is None and template is not None and revision is not None:
         resolved = template_service.ResolvedTemplate(template=template, revision=revision, source=template_source or "explicit", brand_id=None)
     brand_revision = template_service.resolve_brand_revision(db, tenant_id, resolved, explicit_brand=explicit_brand)

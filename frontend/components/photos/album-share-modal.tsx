@@ -157,6 +157,21 @@ export function AlbumShareModal({
     }
   }
 
+  async function togglePublicLinks(share: AlbumTenantShareStatus, value: boolean) {
+    setLocationBusy(share.tenant_public_id);
+    try {
+      await browserApiFetch(`/api/files/albums/${album.id}/shares/${share.tenant_public_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ partner_public_links: value }),
+      });
+      onChanged();
+    } catch {
+      toast(t("publicLinksError"), "error");
+    } finally {
+      setLocationBusy(null);
+    }
+  }
+
   async function revoke(share: AlbumTenantShareStatus) {
     const pending = share.status === "pending";
     const ok = await confirm({
@@ -290,6 +305,9 @@ export function AlbumShareModal({
                   <TenantAvatar name={share.tenant_name} imageUrl={share.tenant_profile_image_url} />
                   <span className="album-share-entry-text">
                     <strong>{displayName}</strong>
+                    {!share.partner_photos_public && (
+                      <span className="album-share-entry-meta">{t("partnerPhotosHidden")}</span>
+                    )}
                     <span className="album-share-entry-meta">
                       {share.tenant_name ? shareMeta(share, t, locale) : (
                         <>
@@ -310,6 +328,18 @@ export function AlbumShareModal({
                     />
                     <span className="album-picker-switch-track" aria-hidden="true" />
                     <span>{t("locationShort")}</span>
+                  </label>
+                  <label className="album-picker-switch album-share-location-switch">
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      checked={share.partner_public_links}
+                      disabled={locationBusy === share.tenant_public_id}
+                      onChange={(event) => void togglePublicLinks(share, event.target.checked)}
+                      aria-label={t("publicLinksAriaLabel", { name: displayName })}
+                    />
+                    <span className="album-picker-switch-track" aria-hidden="true" />
+                    <span>{t("publicLinksShort")}</span>
                   </label>
                   <Badge variant={STATUS_VARIANT[share.status]}>{statusLabel(t)[share.status]}</Badge>
                   <button

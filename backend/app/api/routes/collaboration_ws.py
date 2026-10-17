@@ -35,6 +35,8 @@ protocol_service = ProtocolService()
 # reliable fallback/primary mechanism for the "Daten aktualisieren" live hint (see
 # poll_list_versions below for why this exists instead of relying on a Redis push).
 LIST_VERSION_POLL_INTERVAL_SECONDS = 15
+# Wie oft eine offene Verbindung Session und Protokollrecht neu prüft (SEC-007).
+SESSION_REVALIDATE_INTERVAL_SECONDS = 30
 
 
 def _record_ws_error(exc: Exception, user: CurrentUser) -> None:
@@ -210,6 +212,7 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
         await websocket.close(code=4401)
         return
 
+    protocol_public_id = protocol_id
     internal_protocol_id = await asyncio.to_thread(_load_and_authorize, protocol_id, user)
     if internal_protocol_id is None:
         await websocket.close(code=4403)
@@ -277,6 +280,32 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
             _record_ws_error(exc, user)
 
     poll_task = asyncio.create_task(poll_list_versions()) if list_ids else None
+
+    async def revalidate_session() -> None:
+        """Security-Audit SEC-007: Session und Protokollrecht nicht nur beim Handshake prüfen.
+        Logout, Deaktivierung, Passwortwechsel (session_revoke_at), Rollenwechsel oder entzogene
+        Protokollfreigabe beenden eine offene Verbindung spätestens nach einem Intervall - wie
+        der REST-Pfad, der jeden Request neu prüft."""
+        nonlocal can_edit
+        try:
+            while True:
+                await asyncio.sleep(SESSION_REVALIDATE_INTERVAL_SECONDS)
+                if websocket.application_state != WebSocketState.CONNECTED:
+                    break
+                current = await asyncio.to_thread(_authenticate, token)
+                if current is None or current.user_id != user.user_id:
+                    await websocket.close(code=4401)
+                    break
+                if await asyncio.to_thread(_load_and_authorize, protocol_public_id, current) != protocol_id:
+                    await websocket.close(code=4403)
+                    break
+                can_edit = _can_edit(current)
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            _record_ws_error(exc, user)
+
+    revalidate_task = asyncio.create_task(revalidate_session())
 
     try:
         await collab.join(protocol_id, connection_id, user.user_id, user.display_name)
@@ -387,10 +416,12 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
             await forward_task
         except asyncio.CancelledError:
             pass
-        if poll_task is not None:
-            poll_task.cancel()
+        for task in (poll_task, revalidate_task):
+            if task is None:
+                continue
+            task.cancel()
             try:
-                await poll_task
+                await task
             except asyncio.CancelledError:
                 pass
         await pubsub.unsubscribe(channel)

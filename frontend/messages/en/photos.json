@@ -77,7 +77,10 @@
     "statusActive": "active",
     "statusDeclined": "declined",
     "statusPending": "requested",
-    "unknownTenant": "Tenant {id}"
+    "unknownTenant": "Tenant {id}",
+    "myPhotosPublicLabel": "Show my photos in public links",
+    "myShareError": "The setting could not be saved.",
+    "publicLinksNotAllowed": "The owner does not allow public links for this album."
   },
   "bulkBar": {
     "addTags": "Add tags",
@@ -213,7 +216,11 @@
     "shareLocationHelp": "The partner receives this album's photos with GPS data. Can be changed per share later.",
     "locationShort": "Location",
     "locationAriaLabel": "Share location with {name}",
-    "locationError": "Could not save the location setting."
+    "locationError": "Could not save the location setting.",
+    "publicLinksShort": "Public links",
+    "publicLinksAriaLabel": "{name} may share this album via public links",
+    "publicLinksError": "The public link setting could not be saved.",
+    "partnerPhotosHidden": "This partner’s photos are not shown in public links."
   },
   "shareRelease": {
     "confirmLabel": "Add and share",

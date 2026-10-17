@@ -56,7 +56,9 @@ def claim_next_job(engine: Engine) -> dict | None:
         return dict(row)
 
 
-def fetch_files(engine: Engine, stored_file_ids: list[int]) -> list[dict]:
+def fetch_files(engine: Engine, stored_file_ids: list[int], *, tenant_id: int | None = None) -> list[dict]:
+    """Dateien eines Auftrags. Mit tenant_id nur Dateien dieses Mandanten (Security-Audit SEC-016):
+    das Backend füllt stored_file_ids bereits mandantengebunden, der Worker prüft es zusätzlich."""
     if not stored_file_ids:
         return []
     with engine.connect() as conn:
@@ -66,9 +68,9 @@ def fetch_files(engine: Engine, stored_file_ids: list[int]) -> list[dict]:
                 SELECT f.id, f.storage_path, f.mime_type,
                        CASE WHEN EXISTS (SELECT 1 FROM submission_upload_file s WHERE s.stored_file_id = f.id)
                             THEN 'abgabebox' ELSE 'main' END AS namespace
-                FROM stored_file f WHERE f.id = ANY(:ids)
+                FROM stored_file f WHERE f.id = ANY(:ids) AND (CAST(:tenant_id AS BIGINT) IS NULL OR f.tenant_id = :tenant_id)
             """),
-            {"ids": stored_file_ids},
+            {"ids": stored_file_ids, "tenant_id": tenant_id},
         ).mappings()
         return [dict(row) for row in rows]
 

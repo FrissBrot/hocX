@@ -115,7 +115,6 @@ from app.services import (
     domain_verification_service,
     share_link_service,
     submission_link_service,
-    tenant_trust_service,
     traefik_config_service,
 )
 from app.services.element_config import derive_fine_tariff, upgrade_snapshot_config, upgrade_template_element_config
@@ -191,7 +190,6 @@ class TenantImportService:
         self._public_id_map: dict[str, str] = {}
         self._taken_public_ids: dict[tuple[type, str], set[str]] = {}
         # Partner tenants a relation (trust, album share) was restored to - reported once.
-        self._linked_partner_names: set[str] = set()
         # Exported public_ids of the StoredFile/SubmissionUploadFile rows that actually
         # made it in (a file can be skipped: missing from the archive, or infected).
         self._imported_file_public_ids: set[str] = set()
@@ -490,11 +488,6 @@ class TenantImportService:
         self._import_user_template_access(new_tenant.id, template_map)
         self._import_user_protocol_access(new_tenant.id, protocol_map)
         self._import_user_protocol_scrolls(protocol_map)
-        if self._linked_partner_names:
-            self.warnings.append(
-                "Hinweis: Beziehungen zu bestehenden Mandanten wiederhergestellt (Vertrauen/Album-Freigaben): "
-                + ", ".join(sorted(self._linked_partner_names))
-            )
         return new_tenant
 
     def _restore_todo_snapshots(self, protocol_map: dict[int, int], protocol_element_block_map: dict[int, int]) -> None:
@@ -720,7 +713,7 @@ class TenantImportService:
         domain already verified on the source (its DNS TXT record already holds this exact
         token) should stay verified on the target rather than forcing the admin through
         domain verification again. `domain` is globally unique across the whole
-        installation (uq_tenant_domain_domain), so a domain already claimed - by hocX
+        installation among active domains (uq_tenant_domain_active_domain, Migration 0129), so a domain already active - by hocX
         itself (settings.traefik_domain/traefik_abgabebox_domain) or by any tenant already
         on this installation, e.g. re-importing an export while the source tenant still
         exists here - is skipped with a warning rather than failing the whole import.
@@ -737,7 +730,7 @@ class TenantImportService:
             if domain in reserved:
                 self.warnings.append(f"Domain '{domain}' ist durch die Installation selbst belegt, wurde nicht importiert.")
                 continue
-            if self.db.query(TenantDomain).filter(TenantDomain.domain == domain).first() is not None:
+            if self.db.query(TenantDomain).filter(TenantDomain.domain == domain, TenantDomain.status == "active").first() is not None:
                 self.warnings.append(f"Domain '{domain}' ist auf dieser Installation bereits vergeben, wurde nicht importiert.")
                 continue
             new_row = self._build(TenantDomain, data, {"tenant_id": new_tenant_id})
@@ -1858,69 +1851,64 @@ class TenantImportService:
         self.db.commit()
 
     def _import_tenant_trusts(self, new_tenant_id: int) -> None:
-        for row in self._t("tenant_trust"):
-            partner = self._lookup_tenant_by_public_id(row.get("partner_tenant_public_id"))
-            if partner is None:
-                self.warnings.append("Vertrauensbeziehung zu einem Mandanten, der auf dieser Installation fehlt - übersprungen.")
-                continue
-            tenant_trust_service.establish(self.db, new_tenant_id, partner.id)
-            self._linked_partner_names.add(partner.name)
-        self.db.commit()
+        """Vertrauensbeziehungen werden nie aus dem Archiv übernommen (Security-Audit SEC-001): ein
+        Archiv belegt keine Zustimmung des Partners, und der neue Mandant ist nicht der, dem der
+        Partner vertraut hat. Trust entsteht wie gewohnt, sobald der Partner eine (wieder
+        ausgesprochene) Album-Einladung annimmt - siehe _import_album_shares."""
+        skipped = sum(1 for _ in self._t("tenant_trust"))
+        if skipped:
+            self.warnings.append(
+                f"{skipped} Vertrauensbeziehung(en) zu anderen Mandanten nicht übernommen - sie entstehen neu, "
+                "sobald der Partner eine Album-Einladung annimmt."
+            )
 
     def _import_album_shares(self, new_tenant_id: int, album_map: dict[str, uuid.UUID]) -> None:
-        """Album-Freigaben in both directions. Only restored when the partner tenant (matched by
-        public_id) exists on this installation - otherwise there is nobody to share with."""
-        received_album_ids: set[uuid.UUID] = set()
+        """Album-Freigaben nur als neue, offene Einladungen (Security-Audit SEC-001).
+
+        Ein Archiv belegt keine Zustimmung eines anderen Mandanten - es kann von einem Umzug
+        stammen, aber genauso eine Kopie eines noch bestehenden Mandanten oder manipuliert sein.
+        Deshalb:
+        - eigene Alben, die mit einem Partner geteilt waren: wieder als Einladung (`pending`) an
+          den Partner, der erneut zustimmen muss; Standort-Freigabe wie im Archiv.
+        - Einladungen in Alben anderer Mandanten (`partner_album`) und die dort abgelegten eigenen
+          Fotos (`partner_album_item`) werden verworfen - der Partner kann neu einladen.
+        Gleiche Regel wie beim Mandanten-Restore aus dem Backup (COPY_EXCLUDED_TABLES), dort
+        fallen Freigaben ganz weg."""
+        reinvited: set[str] = set()
+        dropped_received = 0
         for row in self._t("photo_album_tenant_share"):
             data = self._resolve_row("photo_album_tenant_share", row)
+            if data.get("direction") == "partner_album":
+                dropped_received += 1
+                continue
             partner = self._lookup_tenant_by_public_id(data.get("partner_tenant_public_id"))
-            if partner is None:
+            if partner is None or partner.id == new_tenant_id:
                 self.warnings.append("Album-Freigabe mit einem Mandanten, der auf dieser Installation fehlt - übersprungen.")
                 continue
-            if data.get("direction") == "partner_album":
-                # Invited into the partner's album: that album must still exist and belong to it.
-                try:
-                    album_id = uuid.UUID(str(data.get("album_id")))
-                except ValueError:
-                    continue
-                album = self.db.get(PhotoAlbum, album_id)
-                if album is None or album.tenant_id != partner.id:
-                    self.warnings.append(f"Album-Freigabe von '{partner.name}': Album existiert nicht mehr - übersprungen.")
-                    continue
-                share_tenant_id = new_tenant_id
-                received_album_ids.add(album_id)
-            else:
-                album_id = album_map.get(str(data.get("album_id")).lower())
-                if album_id is None:
-                    continue
-                share_tenant_id = partner.id
+            album_id = album_map.get(str(data.get("album_id")).lower())
+            if album_id is None:
+                continue
             self.db.execute(
                 pg_insert(PhotoAlbumTenantShare)
                 .values(
-                    album_id=album_id, tenant_id=share_tenant_id, status=data.get("status") or "pending",
-                    invited_by=data.get("invited_by"), responded_by=data.get("responded_by"),
-                    responded_at=coerce_value(PhotoAlbumTenantShare.__table__.c.responded_at, data.get("responded_at")),
+                    album_id=album_id, tenant_id=partner.id, status="pending", invited_by=None,
+                    share_location=bool(data.get("share_location", True)),
+                    partner_public_links=bool(data.get("partner_public_links", True)),
                 )
                 .on_conflict_do_nothing()
             )
-            self._linked_partner_names.add(partner.name)
-        # Our own photos inside a partner's album.
-        for row in self._t("partner_album_item"):
-            try:
-                album_id = uuid.UUID(str(row.get("album_id")))
-            except ValueError:
-                continue
-            old_file_id = str(row.get("file_id")).lower()
-            if album_id not in received_album_ids or old_file_id not in self._imported_file_public_ids:
-                continue
-            self.db.execute(
-                pg_insert(PhotoAlbumItem)
-                .values(
-                    album_id=album_id, file_id=uuid.UUID(self._public_id_map.get(old_file_id, old_file_id)),
-                    is_best=bool(row.get("is_best")), best_override=row.get("best_override"),
-                    share_pending=bool(row.get("share_pending")),
-                )
-                .on_conflict_do_nothing()
+            reinvited.add(partner.name)
+        dropped_received_items = sum(1 for _ in self._t("partner_album_item"))
+        if dropped_received:
+            self.warnings.append(
+                f"{dropped_received} Freigabe(n) für Alben anderer Mandanten nicht übernommen"
+                + (f" (inkl. {dropped_received_items} dort abgelegter Fotos)" if dropped_received_items else "")
+                + " - der jeweilige Partner muss neu einladen."
+            )
+        if reinvited:
+            self.warnings.append(
+                "Album-Freigaben als neue Einladung an folgende Mandanten verschickt (Zustimmung erneut nötig): "
+                + ", ".join(sorted(reinvited))
             )
         self.db.commit()
 

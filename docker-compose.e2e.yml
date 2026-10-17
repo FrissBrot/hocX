@@ -9,6 +9,7 @@ services:
       - "127.0.0.1:18000:8000"
     environment:
       TRAEFIK_DOMAIN: ""
+      TRAEFIK_ADMIN_DOMAIN: ""
       # The e2e stack publishes the frontend on host port 13000 (see below) while the
       # container itself still listens on 3000, so the browser's Origin header is
       # "http://127.0.0.1:13000" - not covered by main.py's/collaboration_ws.py's static

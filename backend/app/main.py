@@ -530,12 +530,18 @@ from app.core.maintenance_middleware import MaintenanceMiddleware
 # 503-Antworten die CORS-Header tragen.
 app.add_middleware(MaintenanceMiddleware)
 
+_CORS_ORIGINS = [o for o in [
+    *settings.local_dev_origins,
+    f"https://{settings.traefik_domain}" if settings.traefik_domain else None,
+] if o] + sorted(settings.extra_cors_origin_set)
+
+from app.core.origin_guard import OriginGuardMiddleware
+# Innerhalb von CORS: auch die 403-Antwort trägt CORS-Header (SEC-009, siehe origin_guard.py).
+app.add_middleware(OriginGuardMiddleware, allowed_origins=set(_CORS_ORIGINS))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o for o in [
-        *settings.local_dev_origins,
-        f"https://{settings.traefik_domain}" if settings.traefik_domain else None,
-    ] if o] + sorted(settings.extra_cors_origin_set),
+    allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Cookie", "Authorization"],

@@ -8,6 +8,28 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Sicherheit (Security-Audit release/1.2.0 vom 2026-10-17)
+
+- **Mandantenimport:** Album-Freigaben und Vertrauensbeziehungen zu anderen Mandanten werden
+  nicht mehr aus dem Archiv übernommen. Eigene Alben gehen als neue Einladung an den Partner
+  (Zustimmung erneut nötig), Freigaben fremder Alben fallen weg (Warnung beim Import).
+- **Album-Freigaben, öffentliche Links:** zwei Schalter je Freigabe (Migration `0130`, beide
+  standardmässig an): der Besitzer legt fest, ob der Partner das Album öffentlich verlinken darf,
+  der Partner, ob seine Fotos in öffentlichen Links erscheinen. Öffentliche Links geben den
+  Standort eines Fotos nur weiter, wenn der anlegende Mandant ihn auch intern sehen darf.
+- Tags von Partner-Fotos aus geteilten Alben sind nicht mehr änderbar; Album-Einladungen sind
+  auf 30 pro Stunde und Mandant begrenzt.
+- **Custom-Domains:** eindeutig ist nur noch eine aktive Domain (Migration `0129`); eine
+  unbestätigte Domain eines anderen Mandanten blockiert nicht mehr.
+- Schreibende API-Requests mit fremdem `Origin` werden abgelehnt (CSRF-Schutz zusätzlich zu
+  `SameSite=Lax`); offene Collaboration-WebSockets prüfen Session und Protokollrecht alle 30 s.
+- Löscht ein Admin den MFA-Faktor eines anderen Kontos, enden dessen Sessions. Passkey-
+  Registrierung prüft gegen die konfigurierte Domain (neu: `TRAEFIK_ADMIN_DOMAIN` im Backend).
+- Abgabebox: Nonce-CSP statt `script-src 'unsafe-inline'`; die Ähnlichkeitswarnung vergleicht nur
+  noch mit Bildern derselben Abgabe. Traefik setzt `Permissions-Policy`, Next.js kein
+  `X-Powered-By` mehr. Fotoworker lädt nur Dateien des Job-Mandanten.
+- Abhängigkeiten: PyJWT 2.15.1, Next.js 16.4.2, sharp 0.35.5, Tiptap 3 (inkl. tiptap-markdown 0.9).
+
 ## [1.2.0] - 2026-10-16
 
 Feature-Release auf 1.1.13. Fünf Entwicklungszweige sind zusammengeführt und aufeinander
@@ -33,7 +55,7 @@ Vorab-Abgleich beim Upload. Dazu die Audit-Reparaturen aus `main` (Abschnitt «B
    (`STORAGE_CREDENTIALS_KEY`, Zugangsdaten des lokalen S3, leere Backup-Platzhalter) selbst. Keine
    neuen Pflicht-Variablen; optional `DOCUMENT_VERIFY_BASE_URL` (Standard
    `ABGABEBOX_BASE_URL/verify`), `BACKUP_*` und `DOCUMENT_*` (siehe `.env.prod.example`).
-4. **Migrationen** `0113` bis `0128` laufen automatisch; neue Dienste `storage-init`,
+4. **Migrationen** `0113` bis `0130` laufen automatisch; neue Dienste `storage-init`,
    `storage-worker`, `local-s3`, `backup-worker` und `document-worker` startet `deploy.sh` mit
    `up -d`. Die Smoke-Checks prüfen zusätzlich `document-worker` und `storage-worker`.
 5. **Nach dem Deploy:**

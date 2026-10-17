@@ -248,6 +248,10 @@ class MfaService:
         if factor is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="MFA-Faktor nicht gefunden")
         db.delete(factor)
+        # Fremd gelöschter Faktor beendet alle Sessions des Kontos (Security-Audit SEC-010): wer
+        # den zweiten Faktor zurücksetzt, soll keine bestehende Anmeldung weiterlaufen lassen.
+        user.session_revoke_at = datetime.now(UTC)
+        db.add(user)
         db.commit()
         self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))
         return self.get_managed_user_overview(db, actor, user.id)
@@ -260,6 +264,10 @@ class MfaService:
         if factor is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="MFA-Faktor nicht gefunden")
         db.delete(factor)
+        # Fremd gelöschter Faktor beendet alle Sessions des Kontos (Security-Audit SEC-010): wer
+        # den zweiten Faktor zurücksetzt, soll keine bestehende Anmeldung weiterlaufen lassen.
+        user.session_revoke_at = datetime.now(UTC)
+        db.add(user)
         db.commit()
         self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))
         return self.get_platform_admin_user_overview(db, user.id)

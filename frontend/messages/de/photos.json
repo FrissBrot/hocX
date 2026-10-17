@@ -77,7 +77,10 @@
     "statusActive": "aktiv",
     "statusDeclined": "abgelehnt",
     "statusPending": "angefragt",
-    "unknownTenant": "Mandant {id}"
+    "unknownTenant": "Mandant {id}",
+    "myPhotosPublicLabel": "Meine Fotos in öffentlichen Links zeigen",
+    "myShareError": "Einstellung konnte nicht gespeichert werden.",
+    "publicLinksNotAllowed": "Der Besitzer erlaubt für dieses Album keine öffentlichen Links."
   },
   "bulkBar": {
     "addTags": "Tags hinzufügen",
@@ -213,7 +216,11 @@
     "shareLocationHelp": "Der Partner erhält Fotos dieses Albums mit GPS-Daten. Später pro Freigabe änderbar.",
     "locationShort": "Standort",
     "locationAriaLabel": "Standort mit {name} teilen",
-    "locationError": "Standort-Einstellung konnte nicht gespeichert werden."
+    "locationError": "Standort-Einstellung konnte nicht gespeichert werden.",
+    "publicLinksShort": "Öffentliche Links",
+    "publicLinksAriaLabel": "{name} darf dieses Album öffentlich verlinken",
+    "publicLinksError": "Einstellung für öffentliche Links konnte nicht gespeichert werden.",
+    "partnerPhotosHidden": "Fotos dieses Partners erscheinen nicht in öffentlichen Links."
   },
   "shareRelease": {
     "confirmLabel": "Hinzufügen und teilen",

@@ -128,7 +128,9 @@ class TenantDomain(Base, TimestampMixin):
     __tablename__ = "tenant_domain"
     __table_args__ = (
         UniqueConstraint("tenant_id", "purpose", name="uq_tenant_domain_tenant_purpose"),
-        UniqueConstraint("domain", name="uq_tenant_domain_domain"),
+        # Eindeutig nur unter aktiven Domains (Migration 0129, Security-Audit SEC-004): eine
+        # unbestätigte (pending) Domain darf die Domain für andere Mandanten nicht blockieren.
+        Index("uq_tenant_domain_active_domain", "domain", unique=True, postgresql_where=text("status = 'active'")),
         CheckConstraint("purpose IN ('app', 'abgabebox', 'verify')", name="ck_tenant_domain_purpose"),
         CheckConstraint("status IN ('pending', 'active')", name="ck_tenant_domain_status"),
     )
@@ -2132,6 +2134,11 @@ class PhotoAlbumTenantShare(Base, TimestampMixin):
     # vertrauen sich), vom Besitzer abschaltbar. Aus: Originale und Downloads ohne Standort
     # (siehe photo_album_share_service.location_shared_with, files.py).
     share_location: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    # Öffentliche Links (Migration 0130, Security-Audit SEC-002) - jede Seite schützt ihre Fotos:
+    # vom Besitzer gesetzt: der Partner darf dieses Album öffentlich verlinken.
+    partner_public_links: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    # vom Partner gesetzt: seine Fotos in diesem Album dürfen in öffentlichen Links erscheinen.
+    partner_photos_public: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
 
 
 class TenantTrust(Base, TimestampMixin):

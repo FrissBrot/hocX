@@ -1,6 +1,6 @@
 """Duplicate-check helpers added to routes/public.py for the tenant-wide image-similarity
 warning. No DB fixture exists anywhere in this test suite yet (see test_upload_size_limits.py's
-docstring) - list_checksums_for_element/list_tenant_image_hashes in repository.py are simple,
+docstring) - list_checksums_for_element/list_assignment_image_hashes in repository.py are simple,
 directly-mirrored SQLAlchemy Core selects following the exact join pattern already used (and
 covered) by count_files_by_element, so this file focuses on the actually new logic: the
 perceptual-hash computation and comparison, which is pure and needs no DB."""

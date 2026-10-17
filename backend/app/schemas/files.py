@@ -320,6 +320,19 @@ class AlbumTenantShareStatus(BaseModel):
     responded_at: datetime | None = None
     # Standort (GPS) der Fotos mit diesem Partner teilen (IMGMETA-007).
     share_location: bool = True
+    # Öffentliche Links (SEC-002): Partner darf das Album verlinken (Besitzer entscheidet) bzw.
+    # Fotos des Partners dürfen in öffentlichen Links erscheinen (Partner entscheidet, hier nur Anzeige).
+    partner_public_links: bool = True
+    partner_photos_public: bool = True
+
+
+class AlbumMyShareRead(BaseModel):
+    """Die eigene Freigabe in einem Album eines anderen Mandanten (nur für Partner gesetzt)."""
+
+    # Vom Besitzer: darf ich dieses Album öffentlich verlinken?
+    public_links_allowed: bool
+    # Meine Entscheidung: dürfen meine Fotos in öffentlichen Links erscheinen?
+    my_photos_public: bool
 
 
 class PhotoAlbumRead(BaseModel):
@@ -341,6 +354,8 @@ class PhotoAlbumRead(BaseModel):
     # Partner tenants this album has been shared with - only populated for the owning tenant
     # (see files.py's list_albums), drives the "Freigabe verwalten" section.
     shared_with: list[AlbumTenantShareStatus] = []
+    # Nur für Partner (fremdes Album): eigene Freigabe-Einstellungen für öffentliche Links.
+    my_share: AlbumMyShareRead | None = None
     # Gerade geteilt (Mandanten-Freigabe offen/angenommen oder aktiver Album-Link) - fuer ein
     # Partner-Album immer True. Steuert den Warnhinweis beim Hinzufuegen von Fotos.
     is_shared: bool = False
@@ -382,7 +397,16 @@ class AlbumShareCreate(BaseModel):
 
 
 class AlbumShareUpdate(BaseModel):
-    share_location: bool
+    """Vom Besitzer für einen Partner: Standort teilen und/oder öffentliche Links erlauben."""
+
+    share_location: bool | None = None
+    partner_public_links: bool | None = None
+
+
+class AlbumMyShareUpdate(BaseModel):
+    """Vom Partner für die eigene Freigabe: eigene Fotos in öffentlichen Links zeigen."""
+
+    my_photos_public: bool
 
 
 class AlbumShareRespond(BaseModel):
