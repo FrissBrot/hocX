@@ -108,6 +108,31 @@
     "paidOn": "Paid on {date}",
     "dueOn": "Due on {date}",
     "showAll": "Show all {count}",
-    "showLess": "Show less"
-  }
+    "showLess": "Show less",
+    "title": "Billing periods",
+    "openLabel": "Open",
+    "allPaidShort": "all paid",
+    "openCount": "{count, plural, one {# period} other {# periods}}",
+    "openCountOverdue": "{count, plural, one {# period} other {# periods}} · {overdue} overdue",
+    "overdueHeadline": "{amount} overdue",
+    "overdueDetailOne": "Period {period} was due on {due} – open for {days, plural, one {# day} other {# days}}.",
+    "overdueDetailMany": "{count} periods are overdue, the oldest for {days, plural, one {# day} other {# days}}.",
+    "showOverdue": "Show",
+    "filter": {
+      "all": "All",
+      "open": "Open",
+      "done": "Settled"
+    },
+    "timelineLabel": "Recent periods",
+    "dueIn": "{count, plural, =0 {due today} one {in # day} other {in # days}}",
+    "overdueSince": "{count, plural, one {for # day} other {for # days}}",
+    "paidAt": "on {date}",
+    "empty": "No periods in this view."
+  },
+  "perMonthUnit": "/ month",
+  "perYearUnit": "/ year",
+  "seatsOf": "of {limit} seats",
+  "seatsUnlimited": "seats, unlimited",
+  "seatsFree": "{count, plural, one {# seat free} other {# seats free}}",
+  "noFilesYet": "no files stored yet"
 }

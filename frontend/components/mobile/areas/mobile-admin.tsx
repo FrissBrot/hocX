@@ -566,6 +566,7 @@ export function MobileTenantSettings({ title, children }: { title: string; child
       <div className="mobile-section">
         <MobileSegmented<(typeof TENANT_TABS)[number]["key"]>
           ariaLabel={title}
+          compact
           value={active}
           onChange={(key) => router.push(TENANT_TABS.find((tab) => tab.key === key)!.href as Route)}
           options={TENANT_TABS.map((tab) => ({ value: tab.key, label: labels[tab.key] }))}

@@ -108,6 +108,31 @@
     "paidOn": "Pagato il {date}",
     "dueOn": "Scade il {date}",
     "showAll": "Mostra tutti ({count})",
-    "showLess": "Mostra meno"
-  }
+    "showLess": "Mostra meno",
+    "title": "Periodi di fatturazione",
+    "openLabel": "Aperto",
+    "allPaidShort": "tutto pagato",
+    "openCount": "{count, plural, one {# periodo} other {# periodi}}",
+    "openCountOverdue": "{count, plural, one {# periodo} other {# periodi}} · {overdue} scaduti",
+    "overdueHeadline": "{amount} scaduto",
+    "overdueDetailOne": "Il periodo {period} era in scadenza il {due} – aperto da {days, plural, one {# giorno} other {# giorni}}.",
+    "overdueDetailMany": "{count} periodi sono scaduti, il più vecchio da {days, plural, one {# giorno} other {# giorni}}.",
+    "showOverdue": "Mostra",
+    "filter": {
+      "all": "Tutti",
+      "open": "Aperti",
+      "done": "Chiusi"
+    },
+    "timelineLabel": "Ultimi periodi",
+    "dueIn": "{count, plural, =0 {scade oggi} one {tra # giorno} other {tra # giorni}}",
+    "overdueSince": "{count, plural, one {da # giorno} other {da # giorni}}",
+    "paidAt": "il {date}",
+    "empty": "Nessun periodo in questa vista."
+  },
+  "perMonthUnit": "/ mese",
+  "perYearUnit": "/ anno",
+  "seatsOf": "di {limit} posti",
+  "seatsUnlimited": "posti, illimitati",
+  "seatsFree": "{count, plural, one {# posto libero} other {# posti liberi}}",
+  "noFilesYet": "nessun file salvato"
 }

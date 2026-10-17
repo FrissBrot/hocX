@@ -108,6 +108,31 @@
     "paidOn": "Payé le {date}",
     "dueOn": "Échéance le {date}",
     "showAll": "Afficher les {count}",
-    "showLess": "Afficher moins"
-  }
+    "showLess": "Afficher moins",
+    "title": "Périodes de facturation",
+    "openLabel": "Ouvert",
+    "allPaidShort": "tout est payé",
+    "openCount": "{count, plural, one {# période} other {# périodes}}",
+    "openCountOverdue": "{count, plural, one {# période} other {# périodes}} · {overdue} en retard",
+    "overdueHeadline": "{amount} en retard",
+    "overdueDetailOne": "La période {period} était due le {due} – ouverte depuis {days, plural, one {# jour} other {# jours}}.",
+    "overdueDetailMany": "{count} périodes sont en retard, la plus ancienne depuis {days, plural, one {# jour} other {# jours}}.",
+    "showOverdue": "Afficher",
+    "filter": {
+      "all": "Toutes",
+      "open": "Ouvertes",
+      "done": "Réglées"
+    },
+    "timelineLabel": "Dernières périodes",
+    "dueIn": "{count, plural, =0 {échéance aujourd’hui} one {dans # jour} other {dans # jours}}",
+    "overdueSince": "{count, plural, one {depuis # jour} other {depuis # jours}}",
+    "paidAt": "le {date}",
+    "empty": "Aucune période dans cette vue."
+  },
+  "perMonthUnit": "/ mois",
+  "perYearUnit": "/ an",
+  "seatsOf": "sur {limit} places",
+  "seatsUnlimited": "places, illimité",
+  "seatsFree": "{count, plural, one {# place libre} other {# places libres}}",
+  "noFilesYet": "aucun fichier enregistré"
 }
