@@ -84,6 +84,7 @@ describe("Bilddetails: drei getrennte Datumsarten", () => {
     );
     render(<PhotoViewer items={[makeItem()]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
     expect(await screen.findByText("14.07.2023, 10:30 (+02:00)")).toBeInTheDocument();
+    expect(screen.getByText("Aufgenommen · aus EXIF")).toBeInTheDocument();
     expect(screen.queryByText("Geschätztes Aufnahmedatum")).toBeNull();
     expect(document.querySelector(".photo-viewer-estimate")).toBeNull();
     expect(screen.getByText("Hochgeladen")).toBeInTheDocument();
@@ -101,7 +102,7 @@ describe("Bilddetails: drei getrennte Datumsarten", () => {
     });
     const item = makeItem({ id: "x", date_source: "upload" });
     render(<PhotoViewer items={[item]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} onCaptureDateSaved={onCaptureDateSaved} />);
-    expect(await screen.findByText("Unbekannt")).toBeInTheDocument();
+    expect(await screen.findByText("Aufnahmedatum unbekannt")).toBeInTheDocument();
     const input = document.querySelector(".photo-viewer-estimate input") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "01.08.1998" } });
     fireEvent.blur(input);
@@ -109,6 +110,10 @@ describe("Bilddetails: drei getrennte Datumsarten", () => {
     const patch = browserApiFetchMock.mock.calls.find(([, init]) => init?.method === "PATCH")!;
     expect(patch[0]).toBe("/api/stored-files/x/capture-date");
 
+    // Mit Schätzdatum: hervorgehobener Kasten, Bearbeiten über «Ändern»
+    expect(await screen.findByText("01.08.1998")).toBeInTheDocument();
+    expect(document.querySelector(".photo-date-box-estimated")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Ändern" }));
     fireEvent.click(await screen.findByRole("button", { name: "Entfernen" }));
     await waitFor(() => expect(onCaptureDateSaved).toHaveBeenLastCalledWith("x", expect.objectContaining({ estimated_taken_on: null })));
   });
@@ -118,6 +123,7 @@ describe("Bilddetails: drei getrennte Datumsarten", () => {
     render(<PhotoViewer items={[makeItem()]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
     expect(await screen.findByText("05.05.1999")).toBeInTheDocument();
     expect(document.querySelector(".photo-viewer-estimate input")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Ändern" })).toBeNull();
   });
 });
 

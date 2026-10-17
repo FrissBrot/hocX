@@ -379,14 +379,22 @@
     "sizeLabel": "Grösse",
     "tagPlaceholder": "+ Tag",
     "tagsSection": "Tags",
-    "takenLabel": "Aufgenommen",
     "takenUnknown": "Unbekannt",
     "estimatedLabel": "Geschätztes Aufnahmedatum",
     "estimatedRemove": "Entfernen",
     "uploadedLabel": "Hochgeladen",
     "locationLabel": "Standort",
     "locationValue": "{latitude}, {longitude}",
-    "altitudeValue": "{meters} m ü. M."
+    "altitudeValue": "{meters} m ü. M.",
+    "dateBox": {
+      "exifKicker": "Aufgenommen · aus EXIF",
+      "exifNote": "Aus den Kameradaten der Datei",
+      "estimatedNote": "Datei enthält kein Aufnahmedatum",
+      "unknownKicker": "Aufnahmedatum unbekannt",
+      "unknownNote": "Datei enthält kein Aufnahmedatum – einsortiert unter dem Uploaddatum",
+      "change": "Ändern",
+      "done": "Fertig"
+    }
   },
   "dateMarker": {
     "estimated": "Geschätztes Aufnahmedatum",

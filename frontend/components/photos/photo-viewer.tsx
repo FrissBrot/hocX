@@ -334,79 +334,45 @@ export function PhotoViewer({
 
           <div className="photo-viewer-section">
             <div className="photo-viewer-section-title">{t("detailsSection")}</div>
+            <CaptureDateBox
+              metadata={metadata}
+              locale={locale}
+              onChange={handleEstimatedDateChange}
+            />
             <dl className="photo-viewer-details">
               {bezugParts.length > 0 && (
-                <div>
+                <div className="photo-viewer-details-wide">
                   <dt>{t("refLabel")}</dt>
                   <dd>{bezugParts.join(" · ")}</dd>
                 </div>
               )}
               <div>
-                <dt>{t("takenLabel")}</dt>
-                <dd>
-                  {metadata?.exif_taken_at
-                    ? formatCaptureDateTime(metadata.exif_taken_at, metadata.exif_taken_offset, locale)
-                    : metadata
-                      ? <span className="muted">{t("takenUnknown")}</span>
-                      : "…"}
-                </dd>
-              </div>
-              {/* Das Schätzdatum zählt nur ohne echtes Aufnahmedatum - mit EXIF-Datum ist es überflüssig. */}
-              {metadata && !metadata.exif_taken_at && (metadata.can_edit_capture_date || metadata.estimated_taken_on) ? (
-                <div>
-                  <dt>{t("estimatedLabel")}</dt>
-                  <dd className="photo-viewer-estimate">
-                    {metadata.can_edit_capture_date ? (
-                      <>
-                        <DateInput
-                          value={metadata.estimated_taken_on ?? ""}
-                          onChange={handleEstimatedDateChange}
-                          max={todayIso()}
-                          aria-label={t("estimatedLabel")}
-                        />
-                        {metadata.estimated_taken_on && (
-                          <button type="button" className="button-ghost photo-viewer-estimate-remove" onClick={() => handleEstimatedDateChange("")}>
-                            {t("estimatedRemove")}
-                          </button>
-                        )}
-                      </>
-                    ) : (
-                      formatDate(metadata.estimated_taken_on)
-                    )}
-                  </dd>
-                </div>
-              ) : null}
-              <div>
                 <dt>{t("uploadedLabel")}</dt>
                 <dd>{formatDateTime(item.created_at, locale)}</dd>
               </div>
-              {metadata?.gps ? (
-                <div>
-                  <dt>{t("locationLabel")}</dt>
-                  <dd>
-                    {t("locationValue", { latitude: metadata.gps.latitude.toFixed(5), longitude: metadata.gps.longitude.toFixed(5) })}
-                    {metadata.gps.altitude_m !== null && metadata.gps.altitude_m !== undefined ? ` · ${t("altitudeValue", { meters: Math.round(metadata.gps.altitude_m) })}` : ""}
-                  </dd>
-                </div>
-              ) : null}
-              {dimensions && (
-                <div>
-                  <dt>{t("dimensionsLabel")}</dt>
-                  <dd>{dimensions}</dd>
-                </div>
-              )}
-              {item.file_size_bytes !== null && item.file_size_bytes !== undefined ? (
-                <div>
-                  <dt>{t("sizeLabel")}</dt>
-                  <dd>{formatFileSize(item.file_size_bytes)}</dd>
-                </div>
-              ) : null}
-              {metadata?.exif_camera && (
-                <div>
-                  <dt>{t("cameraLabel")}</dt>
-                  <dd>{metadata.exif_camera}</dd>
-                </div>
-              )}
+              <div>
+                <dt>{t("locationLabel")}</dt>
+                <dd>
+                  {metadata?.gps ? (
+                    <>
+                      {t("locationValue", { latitude: metadata.gps.latitude.toFixed(5), longitude: metadata.gps.longitude.toFixed(5) })}
+                      {metadata.gps.altitude_m !== null && metadata.gps.altitude_m !== undefined ? ` · ${t("altitudeValue", { meters: Math.round(metadata.gps.altitude_m) })}` : ""}
+                    </>
+                  ) : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("dimensionsLabel")}</dt>
+                <dd>{dimensions || "—"}</dd>
+              </div>
+              <div>
+                <dt>{t("sizeLabel")}</dt>
+                <dd>{item.file_size_bytes !== null && item.file_size_bytes !== undefined ? formatFileSize(item.file_size_bytes) : "—"}</dd>
+              </div>
+              <div>
+                <dt>{t("cameraLabel")}</dt>
+                <dd>{metadata?.exif_camera || "—"}</dd>
+              </div>
               <div>
                 <dt>{t("originLabel")}</dt>
                 <dd>{item.origin_tag}</dd>
@@ -475,3 +441,55 @@ function describeExposure(score: number, t: TFunc): string {
   const label = score >= 0.95 ? t("exposureLevels.good") : score >= 0.85 ? t("exposureLevels.slight") : t("exposureLevels.strong");
   return t("exposureFormat", { label, percent: Math.round(score * 100) });
 }
+
+/** Aufnahmedatum als eigener Kasten: echtes Datum aus EXIF, geschätztes Datum (hervorgehoben,
+ * bearbeitbar) oder unbekannt. Das Schätzdatum zählt nur ohne echtes Aufnahmedatum. */
+function CaptureDateBox({ metadata, locale, onChange }: {
+  metadata: StoredFileMetadata | null;
+  locale: string;
+  onChange: (value: string) => void;
+}) {
+  const t = useTranslations("photos.viewer");
+  const [editing, setEditing] = useState(false);
+  if (!metadata) return <div className="photo-date-box">…</div>;
+
+  if (metadata.exif_taken_at) {
+    return (
+      <div className="photo-date-box">
+        <span className="photo-date-box-kicker">{t("dateBox.exifKicker")}</span>
+        <strong className="photo-date-box-value">{formatCaptureDateTime(metadata.exif_taken_at, metadata.exif_taken_offset, locale)}</strong>
+        <span className="photo-date-box-note">{t("dateBox.exifNote")}</span>
+      </div>
+    );
+  }
+
+  const estimated = metadata.estimated_taken_on;
+  const canEdit = metadata.can_edit_capture_date;
+  const showEditor = canEdit && (editing || !estimated);
+  return (
+    <div className={`photo-date-box${estimated ? " photo-date-box-estimated" : ""}`}>
+      <div className="photo-date-box-head">
+        <span className="photo-date-box-kicker">{estimated ? t("estimatedLabel") : t("dateBox.unknownKicker")}</span>
+        {canEdit && estimated ? (
+          <button type="button" className="photo-date-box-action" onClick={() => setEditing((value) => !value)}>
+            {editing ? t("dateBox.done") : t("dateBox.change")}
+          </button>
+        ) : null}
+      </div>
+      {estimated && !editing ? <strong className="photo-date-box-value">{formatDate(estimated)}</strong> : null}
+      {!estimated && !canEdit ? <strong className="photo-date-box-value">{t("takenUnknown")}</strong> : null}
+      {showEditor ? (
+        <div className="photo-viewer-estimate">
+          <DateInput value={estimated ?? ""} onChange={onChange} max={todayIso()} aria-label={t("estimatedLabel")} />
+          {estimated ? (
+            <button type="button" className="button-ghost photo-viewer-estimate-remove" onClick={() => { onChange(""); setEditing(false); }}>
+              {t("estimatedRemove")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      <span className="photo-date-box-note">{estimated ? t("dateBox.estimatedNote") : t("dateBox.unknownNote")}</span>
+    </div>
+  );
+}
+

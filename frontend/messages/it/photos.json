@@ -379,14 +379,22 @@
     "sizeLabel": "Dimensione",
     "tagPlaceholder": "+ Tag",
     "tagsSection": "Tag",
-    "takenLabel": "Scattata il",
     "takenUnknown": "Sconosciuta",
     "estimatedLabel": "Data di scatto stimata",
     "estimatedRemove": "Rimuovi",
     "uploadedLabel": "Caricata",
     "locationLabel": "Luogo",
     "locationValue": "{latitude}, {longitude}",
-    "altitudeValue": "{meters} m s.l.m."
+    "altitudeValue": "{meters} m s.l.m.",
+    "dateBox": {
+      "exifKicker": "Scattata · da EXIF",
+      "exifNote": "Dai dati della fotocamera nel file",
+      "estimatedNote": "Il file non contiene la data di scatto",
+      "unknownKicker": "Data di scatto sconosciuta",
+      "unknownNote": "Il file non contiene la data di scatto – ordinato per data di caricamento",
+      "change": "Modifica",
+      "done": "Fatto"
+    }
   },
   "dateMarker": {
     "estimated": "Data di scatto stimata",

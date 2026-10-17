@@ -379,14 +379,22 @@
     "sizeLabel": "Taille",
     "tagPlaceholder": "+ Tag",
     "tagsSection": "Tags",
-    "takenLabel": "Prise le",
     "takenUnknown": "Inconnue",
     "estimatedLabel": "Date de prise de vue estimée",
     "estimatedRemove": "Supprimer",
     "uploadedLabel": "Envoyée",
     "locationLabel": "Lieu",
     "locationValue": "{latitude}, {longitude}",
-    "altitudeValue": "{meters} m d'altitude"
+    "altitudeValue": "{meters} m d'altitude",
+    "dateBox": {
+      "exifKicker": "Prise de vue · depuis EXIF",
+      "exifNote": "D’après les données de l’appareil",
+      "estimatedNote": "Le fichier ne contient pas de date de prise de vue",
+      "unknownKicker": "Date de prise de vue inconnue",
+      "unknownNote": "Le fichier ne contient pas de date de prise de vue – classé à la date d’envoi",
+      "change": "Modifier",
+      "done": "Terminé"
+    }
   },
   "dateMarker": {
     "estimated": "Date de prise de vue estimée",
