@@ -73,7 +73,13 @@
     "protocolRef": "Verbale {label}",
     "download": "Scarica",
     "share": "Condividi",
-    "openPdf": "Apri PDF"
+    "openPdf": "Apri PDF",
+    "processingStage": "In elaborazione · {stage}",
+    "processingStages": {
+      "scan": "Controllo antivirus",
+      "pdf": "Vista PDF",
+      "text": "Estrazione del testo"
+    }
   },
   "view": {
     "title": "File",
@@ -91,7 +97,8 @@
     "dropOverlayTitle": "Rilascia per caricare",
     "dropOverlayHint": "Imposterai il caricamento in seguito.",
     "loadError": "Impossibile caricare i file.",
-    "uploadedToast": "{count, plural, one {# file caricato.} other {# file caricati.}}"
+    "uploadedToast": "{count, plural, one {# file caricato.} other {# file caricati.}}",
+    "descriptionLinked": "Tutti i file non immagine – da verbali, importazioni Word, consegne e caricamenti diretti. Le immagini si trovano in <photos>Foto</photos>."
   },
   "sourceOptions": {
     "all": "Tutte le origini",

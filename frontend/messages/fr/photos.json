@@ -391,6 +391,10 @@
   "dateMarker": {
     "estimated": "Date de prise de vue estimée",
     "upload": "Date de prise de vue inconnue – la date d'envoi est utilisée.",
-    "partial": "{label} ({count} sur {total} images)"
+    "partial": "{label} ({count} sur {total} images)",
+    "estimatedShort": "Date estimée",
+    "uploadShort": "Date d'envoi",
+    "estimatedHint": "Aucune date de prise de vue dans le fichier – estimée lors de l'envoi.",
+    "partialShort": "{label} · {count}/{total}"
   }
 }

@@ -105,6 +105,18 @@ describe("FilesView (Dateien)", () => {
     expect(link.getAttribute("href")).toContain("/api/stored-files/a1/content");
   });
 
+  it("names the running processing stage below the file name instead of a badge", () => {
+    const document = {
+      id: "d1", status: "processing" as const, processing_stage: "scan" as const, pdf_status: "queued" as const, extraction_status: null,
+      pdf_url: null, pdf_download_url: null, version_count: 1, current_version_number: 1, current_version_label: null, detail_url: "/api/documents/d1",
+    };
+    render(<FilesView initialItems={[makeItem({ id: "a1", original_name: "Vereinsreglement.docx", document })]} />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Wird verarbeitet · Virenprüfung");
+    expect(screen.queryByText("In Verarbeitung", { selector: ".badge" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Teilen" })).toBeInTheDocument();
+  });
+
   it("shows an empty state when there are no files", () => {
     render(<FilesView initialItems={[]} />);
     expect(screen.getByText("Noch keine Dateien vorhanden")).toBeInTheDocument();

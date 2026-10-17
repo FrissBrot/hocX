@@ -201,6 +201,8 @@ export type DocumentJobStatus = "queued" | "running" | "done" | "failed" | "bloc
 export type DocumentSummary = {
   id: string;
   status: DocumentStatus;
+  // Nur während der Verarbeitung: woran sie gerade steht (Virenprüfung, PDF-Ansicht, Text).
+  processing_stage?: "scan" | "pdf" | "text" | null;
   pdf_status: DocumentJobStatus;
   extraction_status: string | null;
   pdf_url: string | null;

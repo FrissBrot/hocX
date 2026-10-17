@@ -39,7 +39,7 @@ function metadata(overrides: Partial<StoredFileMetadata> = {}): StoredFileMetada
 
 const groupProps = { grouped: true, selectedIds: new Set<string>(), onOpen: vi.fn(), onToggleSelect: vi.fn(), onToggleGroup: vi.fn() };
 
-describe("Dezente Datumskennzeichnung in der Galerie", () => {
+describe("Datumskennzeichnung in der Galerie", () => {
   beforeEach(() => {
     vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} });
   });
@@ -54,14 +54,15 @@ describe("Dezente Datumskennzeichnung in der Galerie", () => {
     render(<PhotoDateGroups items={[makeItem({ date_source: "estimated", group_date: "1998-08-01" })]} {...groupProps} />);
     const marker = screen.getByRole("button", { name: "Geschätztes Aufnahmedatum" });
     expect(marker).toHaveAttribute("aria-expanded", "false");
+    expect(marker).toHaveTextContent("Geschätztes Datum"); // ohne Hover lesbar
     fireEvent.click(marker); // Touch/Klick öffnet den Hinweis (mobil kein Hover nötig)
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Geschätztes Aufnahmedatum");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Kein Aufnahmedatum in der Datei – beim Hochladen geschätzt.");
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("1998");
   });
 
   it("kennzeichnet den Uploaddatum-Fallback und zählt gemischte Tage", () => {
     render(<PhotoDateGroups items={[makeItem({ date_source: "upload" }), makeItem({ date_source: "exif" })]} {...groupProps} />);
-    expect(screen.getByRole("button", { name: "Aufnahmedatum unbekannt – Uploaddatum wird verwendet. (1 von 2 Bildern)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Aufnahmedatum unbekannt – Uploaddatum wird verwendet. (1 von 2 Bildern)" })).toHaveTextContent("Uploaddatum · 1/2");
   });
 
   it("fügt den Kacheln keine Textzeilen hinzu", () => {

@@ -23,7 +23,7 @@ export default async function FilesPage() {
         mobile={<MobileFiles initialItems={files ?? []} />}
         desktop={
           <>
-          <section className="panel">
+          <section className="files-page">
             <FilesView initialItems={files ?? []} />
           </section>
           </>

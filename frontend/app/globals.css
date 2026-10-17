@@ -14895,7 +14895,47 @@ input[type="radio"] {
 
 .files-table-actions {
   display: flex;
-  gap: var(--space-2);
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+/* Dateien-Seite wie Fotos: Kopf auf dem Seitenhintergrund, Filterleiste und Tabelle in einer
+   gemeinsamen Karte. */
+.files-page { padding: var(--space-5); }
+.files-overview { gap: var(--space-4); min-width: 0; }
+.files-page-header > div:first-child { flex: 1; min-width: 0; }
+.files-page-header .muted { max-width: 640px; font-size: var(--text-base); }
+.files-card {
+  max-width: var(--table-max-width);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel-solid);
+  box-shadow: var(--shadow-soft);
+}
+.files-toolbar { padding: var(--space-3); border-bottom: 1px solid var(--border); }
+.files-card .table-shell { max-width: none; border: 0; border-radius: 0; box-shadow: none; }
+.files-table-name-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.files-table-name-line { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.files-table-filename { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.files-table-processing { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--info-fg); font-size: var(--text-xs); }
+.files-table-processing-spinner {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid color-mix(in srgb, var(--info-fg) 25%, transparent);
+  border-top-color: var(--info-fg);
+  border-radius: 50%;
+  animation: word-import-spin 1s linear infinite;
+}
+.files-table-ref { white-space: nowrap; }
+.files-table-ref .file-card-ref { font-size: var(--text-sm); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) {
+  .files-table-processing-spinner { animation: none; }
+}
+@media (max-width: 640px) {
+  .files-page { padding: var(--space-4); }
 }
 
 .admin-readonly-banner {
@@ -25299,6 +25339,32 @@ a.mobile-list-row { color: var(--text); }
 @media (max-width: 640px) {
   .photo-date-marker-tooltip { left: auto; right: 0; transform: none; max-width: 220px; }
 }
+/* Tageskopf der Galerie: beschriftete Pille statt reinem Symbol, damit die Kennzeichnung ohne
+   Hover lesbar ist und die Kopfzeile nicht höher macht als die anderen. */
+.photo-date-heading-labels .photo-date-marker { align-self: center; margin-left: 0; }
+.photo-date-marker-button.photo-date-marker-pill {
+  display: inline-flex;
+  gap: var(--space-1);
+  width: auto;
+  height: auto;
+  padding: 2px var(--space-2);
+  border: 1px dashed color-mix(in srgb, var(--warning) 55%, transparent);
+  border-radius: var(--radius-pill);
+  color: var(--warning-fg);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  opacity: 1;
+}
+.photo-date-marker-button.photo-date-marker-pill.photo-date-marker-upload {
+  border-color: var(--border-strong);
+  color: var(--muted);
+}
+.photo-date-marker-button.photo-date-marker-pill:hover,
+.photo-date-marker-button.photo-date-marker-pill[aria-expanded="true"] { background: var(--warning-bg); }
+.photo-date-marker-button.photo-date-marker-upload.photo-date-marker-pill:hover,
+.photo-date-marker-button.photo-date-marker-upload.photo-date-marker-pill[aria-expanded="true"] { background: var(--neutral-bg); }
 .photo-viewer-subtitle .photo-date-marker-button { color: var(--pv-muted); }
 .photo-viewer-subtitle .photo-date-marker-button:hover,
 .photo-viewer-subtitle .photo-date-marker-button[aria-expanded="true"] { background: var(--pv-border); }

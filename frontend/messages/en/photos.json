@@ -391,6 +391,10 @@
   "dateMarker": {
     "estimated": "Estimated capture date",
     "upload": "Capture date unknown – upload date is used.",
-    "partial": "{label} ({count} of {total} images)"
+    "partial": "{label} ({count} of {total} images)",
+    "estimatedShort": "Estimated date",
+    "uploadShort": "Upload date",
+    "estimatedHint": "No capture date in the file – estimated during upload.",
+    "partialShort": "{label} · {count}/{total}"
   }
 }

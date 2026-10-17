@@ -391,6 +391,10 @@
   "dateMarker": {
     "estimated": "Data di scatto stimata",
     "upload": "Data di scatto sconosciuta – viene usata la data di caricamento.",
-    "partial": "{label} ({count} di {total} immagini)"
+    "partial": "{label} ({count} di {total} immagini)",
+    "estimatedShort": "Data stimata",
+    "uploadShort": "Data di caricamento",
+    "estimatedHint": "Nessuna data di scatto nel file – stimata durante il caricamento.",
+    "partialShort": "{label} · {count}/{total}"
   }
 }

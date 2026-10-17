@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
-// Sehr dezente Kennzeichnung, woher ein angezeigtes Bilddatum stammt: nichts bei echtem
-// Aufnahmedatum, ein kleines "≈"-Kalendersymbol bei geschätztem Datum, ein kleines Info-Symbol,
-// wenn mangels Aufnahmedatum das Uploaddatum verwendet wird. Ein Button statt reinem title,
+// Kennzeichnung, woher ein angezeigtes Bilddatum stammt: nichts bei echtem Aufnahmedatum, ein
+// "≈"-Kalendersymbol bei geschätztem Datum, ein Info-Symbol, wenn mangels Aufnahmedatum das
+// Uploaddatum verwendet wird. In den Tagesköpfen der Galerie als beschriftete Pille ("pill"),
+// in der Bildansicht nur als Symbol. Ein Button statt reinem title,
 // damit der Hinweis auch per Tastatur und auf Touch-Geräten (Tippen) erreichbar ist.
 export type DateMarkerKind = "estimated" | "upload";
 
@@ -29,13 +30,24 @@ function InfoIcon() {
   );
 }
 
-export function PhotoDateMarker({ kind, count, total }: { kind: DateMarkerKind; count?: number; total?: number }) {
+export function PhotoDateMarker({
+  kind,
+  count,
+  total,
+  variant = "icon",
+}: {
+  kind: DateMarkerKind;
+  count?: number;
+  total?: number;
+  variant?: "icon" | "pill";
+}) {
   const t = useTranslations("photos.dateMarker");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   const partial = count !== undefined && total !== undefined && count < total;
   const base = kind === "estimated" ? t("estimated") : t("upload");
   const label = partial ? t("partial", { label: base, count: count!, total: total! }) : base;
+  const short = kind === "estimated" ? t("estimatedShort") : t("uploadShort");
 
   useEffect(() => {
     if (!open) return;
@@ -56,7 +68,7 @@ export function PhotoDateMarker({ kind, count, total }: { kind: DateMarkerKind; 
     <span ref={ref} className="photo-date-marker">
       <button
         type="button"
-        className={`photo-date-marker-button photo-date-marker-${kind}`}
+        className={`photo-date-marker-button photo-date-marker-${kind} photo-date-marker-${variant}`}
         aria-label={label}
         aria-expanded={open}
         title={label}
@@ -67,10 +79,13 @@ export function PhotoDateMarker({ kind, count, total }: { kind: DateMarkerKind; 
         onBlur={() => setOpen(false)}
       >
         {kind === "estimated" ? <EstimatedIcon /> : <InfoIcon />}
+        {variant === "pill" ? (
+          <span aria-hidden="true">{partial ? t("partialShort", { label: short, count: count!, total: total! }) : short}</span>
+        ) : null}
       </button>
       {open && (
         <span role="tooltip" className="photo-date-marker-tooltip">
-          {label}
+          {variant === "pill" && kind === "estimated" && !partial ? t("estimatedHint") : label}
         </span>
       )}
     </span>

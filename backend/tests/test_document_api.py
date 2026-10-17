@@ -215,6 +215,26 @@ def test_files_tab_lists_one_entry_per_document_with_pdf_preview(db, document_st
     assert by_name["archiv.zip"].document is None
 
 
+def test_files_tab_names_the_running_processing_stage(db, document_storage):
+    tenant, stored_file, document = _setup(db, "sample.md")
+
+    def stage():
+        items = FileService().list_tenant_files(db, tenant.id, exclude_images=True, limit=100)
+        summary = next(item for item in items if item.original_name == "sample.md").document
+        return summary.status, summary.processing_stage
+
+    # Die Aufträge warten, solange die Virenprüfung des Originals aussteht.
+    stored_file.scan_status = "pending"
+    db.flush()
+    assert stage() == ("processing", "scan")
+    stored_file.scan_status = "clean"
+    db.flush()
+    assert stage() == ("processing", "pdf")
+    _process_all(db, document)
+    status, current = stage()
+    assert status != "processing" and current is None
+
+
 def test_files_tab_shows_current_protocol_export_once(db, document_storage):
     tenant = make_tenant(db)
     template = make_template(db, tenant.id)

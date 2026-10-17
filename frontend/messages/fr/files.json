@@ -73,7 +73,13 @@
     "protocolRef": "Procès-verbal {label}",
     "download": "Télécharger",
     "share": "Partager",
-    "openPdf": "Ouvrir le PDF"
+    "openPdf": "Ouvrir le PDF",
+    "processingStage": "Traitement en cours · {stage}",
+    "processingStages": {
+      "scan": "Analyse antivirus",
+      "pdf": "Vue PDF",
+      "text": "Extraction du texte"
+    }
   },
   "view": {
     "title": "Fichiers",
@@ -91,7 +97,8 @@
     "dropOverlayTitle": "Relâcher pour téléverser",
     "dropOverlayHint": "Vous configurerez le téléversement ensuite.",
     "loadError": "Les fichiers n'ont pas pu être chargés.",
-    "uploadedToast": "{count, plural, one {# fichier téléversé.} other {# fichiers téléversés.}}"
+    "uploadedToast": "{count, plural, one {# fichier téléversé.} other {# fichiers téléversés.}}",
+    "descriptionLinked": "Tous les fichiers hors images – issus des procès-verbaux, des imports Word, des remises et des téléversements directs. Les images se trouvent sous <photos>Photos</photos>."
   },
   "sourceOptions": {
     "all": "Toutes les sources",

@@ -73,7 +73,13 @@
     "protocolRef": "Protocol {label}",
     "download": "Download",
     "share": "Share",
-    "openPdf": "Open PDF"
+    "openPdf": "Open PDF",
+    "processingStage": "Processing · {stage}",
+    "processingStages": {
+      "scan": "Virus scan",
+      "pdf": "PDF view",
+      "text": "Text extraction"
+    }
   },
   "view": {
     "title": "Files",
@@ -91,7 +97,8 @@
     "dropOverlayTitle": "Release to upload",
     "dropOverlayHint": "You'll set up the upload next.",
     "loadError": "Files could not be loaded.",
-    "uploadedToast": "{count, plural, one {# file uploaded.} other {# files uploaded.}}"
+    "uploadedToast": "{count, plural, one {# file uploaded.} other {# files uploaded.}}",
+    "descriptionLinked": "All non-image files – from protocols, Word imports, submissions and direct uploads. Images are under <photos>Photos</photos>."
   },
   "sourceOptions": {
     "all": "All sources",

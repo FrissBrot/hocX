@@ -61,6 +61,8 @@ class DocumentSummary(BaseModel):
 
     id: uuid.UUID
     status: DocumentStatus
+    # Nur während der Verarbeitung: Virenprüfung, PDF-Ansicht oder Textextraktion.
+    processing_stage: Literal["scan", "pdf", "text"] | None = None
     pdf_status: JobStatus
     extraction_status: str | None
     pdf_url: str | None

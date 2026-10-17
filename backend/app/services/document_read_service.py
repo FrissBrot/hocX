@@ -73,6 +73,22 @@ def overall_status(pdf_job: DocumentJob | None, extract_job: DocumentJob | None,
 # ── Zugriff ───────────────────────────────────────────────────────────────────
 
 
+def processing_stage(
+    status_value: str, scan_status: str | None, pdf_job: DocumentJob | None, extract_job: DocumentJob | None, has_pdf: bool
+) -> str | None:
+    """Woran eine laufende Verarbeitung gerade steht (für «Wird verarbeitet · …» im Dateien-Tab).
+    Die Aufträge warten, solange die Virenprüfung des Originals aussteht."""
+    if status_value != "processing":
+        return None
+    if scan_status == "pending":
+        return "scan"
+    if not has_pdf and pdf_job is not None and pdf_job.status in ("queued", "running"):
+        return "pdf"
+    if extract_job is not None and extract_job.status in ("queued", "running"):
+        return "text"
+    return None
+
+
 def original_of(db: Session, version_id: int) -> StoredFile | None:
     return db.scalar(
         select(StoredFile)
@@ -205,7 +221,8 @@ def summaries_for_files(db: Session, tenant_id: int, stored_file_ids: list[int])
     if not stored_file_ids:
         return {}
     rows = db.execute(
-        select(DocumentFile.stored_file_id, Document, DocumentVersion)
+        select(DocumentFile.stored_file_id, Document, DocumentVersion, StoredFile.scan_status)
+        .join(StoredFile, StoredFile.id == DocumentFile.stored_file_id)
         .join(DocumentVersion, DocumentVersion.id == DocumentFile.document_version_id)
         .join(Document, Document.id == DocumentVersion.document_id)
         .where(
@@ -217,8 +234,8 @@ def summaries_for_files(db: Session, tenant_id: int, stored_file_ids: list[int])
     ).all()
     if not rows:
         return {}
-    version_ids = [version.id for _sid, _document, version in rows]
-    document_ids = [document.id for _sid, document, _version in rows]
+    version_ids = [version.id for _sid, _document, version, _scan in rows]
+    document_ids = [document.id for _sid, document, _version, _scan in rows]
     jobs: dict[int, dict[str, DocumentJob]] = defaultdict(dict)
     for job in db.scalars(select(DocumentJob).where(DocumentJob.document_version_id.in_(version_ids))):
         jobs[job.document_version_id][job.kind] = job
@@ -239,15 +256,17 @@ def summaries_for_files(db: Session, tenant_id: int, stored_file_ids: list[int])
         ).all()
     )
     result: dict[int, DocumentSummary] = {}
-    for stored_file_id, document, version in rows:
+    for stored_file_id, document, version, scan_status in rows:
         pdf_job = jobs[version.id].get(JOB_KIND_PDF)
         extract_job = jobs[version.id].get(JOB_KIND_EXTRACT)
         extraction = extractions.get(version.id)
         has_pdf = FILE_ROLE_PDF in roles_by_version[version.id]
         has_preview = FILE_ROLE_PREVIEW in roles_by_version[version.id]
+        status_value = overall_status(pdf_job, extract_job, extraction, has_pdf)
         result[stored_file_id] = DocumentSummary(
             id=document.public_id,
-            status=overall_status(pdf_job, extract_job, extraction, has_pdf),
+            status=status_value,
+            processing_stage=processing_stage(status_value, scan_status, pdf_job, extract_job, has_pdf),
             pdf_status="done" if has_pdf else _job_state(pdf_job).status,
             extraction_status=extraction.status if extraction is not None else (extract_job.status if extract_job else None),
             pdf_url=file_url(document, version, FILE_ROLE_PDF) if has_pdf else None,

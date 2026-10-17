@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Route } from "next";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -199,12 +200,14 @@ export function FilesView({ initialItems }: Props) {
   }
 
   return (
-    <div className="grid grid-tight">
-      <div className="page-header">
+    <div className="grid files-overview">
+      <div className="page-header files-page-header">
         <div>
           <h1 className="page-title">{t("view.title")}</h1>
           <p className="muted">
-            {hasNoFiles ? t("view.descriptionEmpty") : t("view.description")}
+            {hasNoFiles
+              ? t("view.descriptionEmpty")
+              : t.rich("view.descriptionLinked", { photos: (chunks) => <Link href="/photos">{chunks}</Link> })}
           </p>
         </div>
         {hasNoFiles ? null : (
@@ -228,8 +231,8 @@ export function FilesView({ initialItems }: Props) {
           hint={t("view.emptyHint")}
         />
       ) : (
-      <>
-      <div className="list-filter-row list-filter-row-compact">
+      <div className="files-card">
+      <div className="list-filter-row list-filter-row-compact photos-filter-row files-toolbar">
         <FilterTabs options={sourceOptions(t)} value={sourceFilter} onChange={(value) => setSourceFilter(value as SourceFilter)} />
         <div className="list-filter-search">
           <SearchInput value={search} onChange={setSearch} placeholder={t("view.searchPlaceholder")} />
@@ -258,7 +261,7 @@ export function FilesView({ initialItems }: Props) {
       </div>
 
       <FilesTable items={items} onOpenDetail={setDetailItem} onNavigate={(href) => router.push(href as Route)} onShare={setShareItem} />
-      </>
+      </div>
       )}
 
       {hasMore && (

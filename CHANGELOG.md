@@ -194,7 +194,10 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   Text und ältere Versionen stehen in den Dokumentdetails.
 - Automatische PDF-Konvertierung (LibreOffice, isoliert) und formatspezifische Textextraktion
   (PDF, DOCX, DOC, ODT, RTF, TXT, Markdown, CSV, XLSX; OCR für gescannte PDFs) im neuen Dienst
-  `document-worker`, mit persistenten Aufträgen, Wiederholungen und Statusanzeige.
+  `document-worker`, mit persistenten Aufträgen, Wiederholungen und Statusanzeige. Der
+  Dateien-Tab zeigt laufende Verarbeitung unter dem Dateinamen samt Stufe («Wird verarbeitet ·
+  Virenprüfung / PDF-Ansicht / Texterkennung», `DocumentSummary.processing_stage`); Filter und
+  Tabelle in einer Karte, Download und Teilen als Symbol-Buttons.
 - Einheitliches, versioniertes Inhaltsformat (`hocx.document-content` v1) als Grundlage für das
   spätere Zusammenführen mehrerer Dokumente.
 - **Protokollexporte der Dokument-Engine** bilden je Protokoll und Dokumenttyp ein Dokument mit
@@ -214,7 +217,8 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
 - Drei getrennte Datumsarten: echtes Aufnahmedatum, neues **geschätztes Aufnahmedatum**
   (reines Kalenderdatum) und Uploaddatum. Galerie-Sortierung, -Gruppierung und Bilddetails
   folgen zentral dieser Reihenfolge; geschätzte Daten und der Uploaddatum-Fallback sind in den
-  Datumsüberschriften dezent gekennzeichnet.
+  Datumsüberschriften mit einer beschrifteten Pille gekennzeichnet («Geschätztes Datum»,
+  «Uploaddatum», bei gemischten Tagen mit Anteil).
 - Upload-Popup: Hinweis und optionales Schätzdatum für Bilder ohne Aufnahmedatum, Ordner per
   Drag & Drop oder „Ordner auswählen“, automatische Aufteilung grosser Auswahlen in Aufträge zu
   höchstens 50 Dateien, Abbrechen während der Übertragung.
