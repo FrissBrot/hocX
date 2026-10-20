@@ -10,20 +10,32 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.core.db import engine
 from app.core.security import create_session_token, get_optional_current_user
 from app.core.tenant_scope import bind_tenant_scope, bound_tenant_id, tenant_scope_suspended
-from app.models.entities import DocumentTemplate, PhotoAlbum, PhotoAlbumTenantShare, ProtocolTodo, StoredFile, Template
+from app.models.entities import (
+    DocumentTemplate,
+    PhotoAlbum,
+    PhotoAlbumItem,
+    PhotoAlbumTenantShare,
+    ProtocolText,
+    ProtocolTodo,
+    StoredFile,
+    Template,
+    UserMfaFactor,
+)
 from app.services.user_service import UserService
 from tests.factories import (
     make_app_user,
+    make_mfa_enrolled_user,
     make_protocol,
     make_protocol_element,
     make_protocol_element_block,
+    make_protocol_text,
     make_protocol_todo,
     make_template,
     make_tenant,
@@ -282,3 +294,66 @@ def test_scope_is_reapplied_after_commit_and_never_leaks_into_the_pool():
         assert fresh.scalar(text("SELECT current_setting('app.tenant_id', true)")) in (None, "")
     finally:
         fresh.close()
+
+
+def test_child_tables_without_tenant_id_follow_their_parent(db):
+    """Migration 0134_child_table_rls: Untertabellen ohne eigene tenant_id (hier Protokolltexte)."""
+    tenant_a, tenant_b = make_tenant(db), make_tenant(db)
+    protocol_a = make_protocol(db, tenant_a.id, make_template(db, tenant_a.id).id)
+    block = make_protocol_element_block(db, make_protocol_element(db, protocol_a.id).id, configuration_snapshot_json={})
+    text_id = make_protocol_text(db, block.id, content="Vertraulich").id
+    block_id, tenant_a_id, tenant_b_id = block.id, tenant_a.id, tenant_b.id
+
+    with as_app(db, tenant_a_id):
+        assert _visible_ids(db, ProtocolText, {text_id}) == {text_id}
+    with as_app(db, tenant_b_id):
+        assert _visible_ids(db, ProtocolText, {text_id}) == set()
+        updated = db.execute(text("UPDATE protocol_text SET content = 'x' WHERE id = :id"), {"id": text_id}).rowcount
+        assert updated == 0
+        with pytest.raises(DBAPIError, match="row-level security"):
+            with db.begin_nested():
+                db.add(ProtocolText(protocol_element_block_id=block_id, content="Eingeschleust"))
+                db.flush()
+
+
+def test_album_items_of_partners_stay_visible_but_their_mfa_factors_do_not(db):
+    owner, partner = make_tenant(db), make_tenant(db)
+    album = PhotoAlbum(tenant_id=owner.id, name="Gemeinsam", kind="manual")
+    db.add(album)
+    db.flush()
+    partner_file = _stored_file(db, partner.id, "p.png")
+    db.add_all(
+        [
+            PhotoAlbumTenantShare(album_id=album.id, tenant_id=partner.id, status="accepted"),
+            PhotoAlbumItem(album_id=album.id, file_id=partner_file.public_id),
+        ]
+    )
+    partner_user, _secret = make_mfa_enrolled_user(db, email="partner-mfa@rls.test", tenant_id=partner.id)
+    db.flush()
+    album_id, owner_id, partner_id, partner_user_id = album.id, owner.id, partner.id, partner_user.id
+
+    with as_app(db, owner_id):
+        assert db.scalar(select(func.count()).select_from(PhotoAlbumItem).where(PhotoAlbumItem.album_id == album_id)) == 1
+        # Den Kontonamen des Partners sieht der Besitzer (0132), dessen MFA-Faktoren nie.
+        assert db.scalars(select(UserMfaFactor.id).where(UserMfaFactor.user_id == partner_user_id)).all() == []
+    with as_app(db, partner_id):
+        assert db.scalars(select(UserMfaFactor.id).where(UserMfaFactor.user_id == partner_user_id)).all() != []
+
+
+def test_every_child_table_listed_in_0134_has_row_level_security(db):
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "alembic" / "versions" / "0134_child_table_rls.py"
+    spec = importlib.util.spec_from_file_location("child_table_rls", path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    tables = set(migration._policies())
+
+    enabled = set(
+        db.scalars(
+            text("SELECT relname FROM pg_class WHERE relrowsecurity AND relnamespace = 'public'::regnamespace AND relname = ANY(:t)"),
+            {"t": list(tables)},
+        )
+    )
+    assert enabled == tables

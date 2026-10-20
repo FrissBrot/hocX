@@ -121,7 +121,8 @@
       "unhealthy": "Health check failing",
       "oom_killed": "Killed (out of memory)",
       "starting": "Still starting",
-      "memory_high": "Memory almost full"
+      "memory_high": "Memory almost full",
+      "not_needed": "Stopped, not needed (files are stored with another provider)"
     },
     "checks": {
       "postgres": {
@@ -198,6 +199,11 @@
         "title": "Backup checks",
         "detail": "{verified, select, yes {Verified {verifyDays, number} days ago} other {Never verified}} · {tested, select, yes {Restore test {testDays, number} days ago} other {No restore test yet}}",
         "problem": "Backup check or restore test overdue"
+      },
+      "local_s3": {
+        "title": "Local S3 (Garage)",
+        "detail": "{reason, select, active {Active storage} initial_target {Target of the first migration} migration {Part of a running migration} fallback_period {Fallback period after a migration} pending_operation {Cleanup pending} requested {Requested manually} unverified_objects {Objects not yet verified} not_needed {Not needed, stopped} other {Status unknown}} · {objects, number} objects · {gb, number} GB",
+        "problem": "Local S3 (Garage) cannot be evaluated"
       }
     },
     "problems": {

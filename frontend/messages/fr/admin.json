@@ -121,7 +121,8 @@
       "unhealthy": "Le contrôle de santé échoue",
       "oom_killed": "Arrêté (mémoire insuffisante)",
       "starting": "Démarrage en cours",
-      "memory_high": "Mémoire presque pleine"
+      "memory_high": "Mémoire presque pleine",
+      "not_needed": "Arrêté, inutile (les fichiers sont chez un autre fournisseur)"
     },
     "checks": {
       "postgres": {
@@ -198,6 +199,11 @@
         "title": "Contrôles de sauvegarde",
         "detail": "{verified, select, yes {Vérifiée il y a {verifyDays, number} jours} other {Jamais vérifiée}} · {tested, select, yes {Test de restauration il y a {testDays, number} jours} other {Aucun test de restauration}}",
         "problem": "Vérification ou test de restauration en retard"
+      },
+      "local_s3": {
+        "title": "S3 local (Garage)",
+        "detail": "{reason, select, active {Stockage actif} initial_target {Cible de la première migration} migration {Partie d'une migration en cours} fallback_period {Délai de retour après une migration} pending_operation {Nettoyage en attente} requested {Demandé manuellement} unverified_objects {Objets pas encore vérifiés} not_needed {Inutile, arrêté} other {Statut inconnu}} · {objects, number} objets · {gb, number} Go",
+        "problem": "S3 local (Garage) non évaluable"
       }
     },
     "problems": {

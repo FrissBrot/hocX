@@ -1,3 +1,11 @@
+# Projektregeln
+
+Vor jeder Aufgabe `CLAUDE.md` in diesem Verzeichnis lesen und befolgen - es ist die gemeinsame
+Quelle der Projektregeln für alle Agents - samt der dort mit `@pfad` eingebundenen Dateien,
+insbesondere **`SECURITY-RULES.md`** (Sicherheitsregeln, verbindlich) und `design/DESIGN.md`.
+Vor dem Abschluss: `python3 scripts/check-security-rules.py <geänderte Dateien>` muss
+`Sicherheitsregeln: ok` melden.
+
 ## Context Engine (CCE)
 
 This project uses Code Context Engine for intelligent code retrieval and

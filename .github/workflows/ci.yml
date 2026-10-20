@@ -27,6 +27,7 @@ jobs:
           bash scripts/tests/test_env.sh
           bash scripts/tests/test_release_config.sh
           python3 -m unittest discover -s scripts/tests -p "test_release_notes.py"
+          python3 -m unittest discover -s scripts/tests -p "test_security_rules.py"
           bash scripts/tests/test_env_migrate.sh
           bash scripts/tests/test_run_job.sh
           bash scripts/tests/test_backup_restore.sh
@@ -520,10 +521,11 @@ jobs:
           done
           exit "$status"
 
-  # Diff-basiert (nur auf Pull-Requests): neue public_id-Lookups ohne tenant_id= blockieren, bis sie
-  # gescoped oder mit "# nosemgrep: public-id-lookup-without-tenant -- <Begründung>" markiert sind
-  # (.semgrep/tenant-scope.yml). Bestehende Stellen deckt die Row-Level-Security (0132) ab.
-  tenant-scope-lint:
+  # Diff-basiert (nur auf Pull-Requests): neue Verstösse gegen SECURITY-RULES.md blockieren, bis sie
+  # behoben oder in derselben Zeile begründet markiert sind - ungescopte public_id-Lookups
+  # (.semgrep/tenant-scope.yml) und die Regeln aus scripts/check-security-rules.py. Dieselbe Prüfung
+  # läuft lokal im Pre-Commit-Hook und für Claude Code nach jeder Dateiänderung.
+  security-lint:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -541,6 +543,10 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: semgrep scan --config .semgrep/tenant-scope.yml --baseline-commit "$BASE_SHA" --error --metrics off backend/app
+      - name: Neue Verstösse gegen SECURITY-RULES.md suchen
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/check-security-rules.py --base "$BASE_SHA"
 
   # Scans the PR diff for accidentally committed secrets. Unlike
   # dependency-audit this job is a hard gate (no continue-on-error): a newly

@@ -27,7 +27,7 @@ const STATUS_ORDER: Record<HealthStatus, number> = { critical: 0, warning: 1, un
 // Fachliche Gruppen der Dienstprüfungen (Schlüssel aus system_health_service.collect_checks).
 // Unbekannte Schlüssel landen in "other", damit eine neue Prüfung nie verschwindet.
 const CHECK_GROUPS: { key: string; checks: string[] }[] = [
-  { key: "infrastructure", checks: ["postgres", "redis", "storage", "object_storage", "storage_migration"] },
+  { key: "infrastructure", checks: ["postgres", "redis", "storage", "object_storage", "storage_migration", "local_s3"] },
   { key: "security", checks: ["clamav", "clamav_signatures", "scan_backlog", "document_verification"] },
   { key: "processing", checks: ["photo_queue", "document_queue", "error_rate"] },
   { key: "backup", checks: ["backup", "backup_repository", "backup_verification"] },
@@ -36,7 +36,7 @@ const CHECK_GROUPS: { key: string; checks: string[] }[] = [
 // Wohin ein Problem führt (Link rechts in der Problemliste).
 function problemLink(problem: SystemProblem): { href: Route | "#containers"; label: string } | null {
   if (problem.source === "job") return { href: "/admin/jobs", label: "jobs" };
-  if (problem.source === "check" && ["storage", "object_storage", "storage_migration"].includes(problem.subject)) {
+  if (problem.source === "check" && ["storage", "object_storage", "storage_migration", "local_s3"].includes(problem.subject)) {
     return { href: "/admin/storage", label: "storage" };
   }
   if (problem.source === "check" && problem.subject.startsWith("backup")) return { href: "/admin/backups", label: "backups" };

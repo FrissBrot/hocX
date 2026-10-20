@@ -121,7 +121,8 @@
       "unhealthy": "Healthcheck schlägt fehl",
       "oom_killed": "Wegen Speichermangel beendet",
       "starting": "Startet noch",
-      "memory_high": "Speicher fast voll"
+      "memory_high": "Speicher fast voll",
+      "not_needed": "Gestoppt, wird nicht benötigt (Dateien liegen bei einem anderen Anbieter)"
     },
     "checks": {
       "postgres": {
@@ -198,6 +199,11 @@
         "title": "Backup-Prüfungen",
         "detail": "{verified, select, yes {Geprüft vor {verifyDays, number} Tagen} other {Noch nie geprüft}} · {tested, select, yes {Restore-Test vor {testDays, number} Tagen} other {Noch kein Restore-Test}}",
         "problem": "Backup-Prüfung oder Restore-Test überfällig"
+      },
+      "local_s3": {
+        "title": "Lokales S3 (Garage)",
+        "detail": "{reason, select, active {Aktiver Speicher} initial_target {Ziel der ersten Migration} migration {Teil einer laufenden Migration} fallback_period {Rückfallfrist nach einer Migration} pending_operation {Bereinigung ausstehend} requested {Manuell angefordert} unverified_objects {Noch nicht geprüfte Objekte} not_needed {Nicht benötigt, gestoppt} other {Status unbekannt}} · {objects, number} Objekte · {gb, number} GB",
+        "problem": "Lokales S3 (Garage) nicht auswertbar"
       }
     },
     "problems": {

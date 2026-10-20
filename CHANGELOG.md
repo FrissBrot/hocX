@@ -46,6 +46,19 @@ Installationen aktualisieren können.
   `login_enabled` und eine seither erfolgte Session-Beendigung.
 - **Lokales S3:** RPC und Admin-API von Garage nur noch auf `127.0.0.1`; `storage-init` teilt den
   Netz-Namespace von `local-s3`.
+- **RLS für Untertabellen** (Migration `0134`): Mandantendaten ohne eigene `tenant_id`
+  (Traktanden, Blöcke, Texte, Listeneinträge, Buchungen, Bussen, Vorlagen-Elemente, Album-Einträge,
+  Dokumentversionen …) sind jetzt über ihre Elterntabelle geschützt; MFA-Faktoren nur im eigenen
+  Mandanten.
+- **Sicherheitsregeln für Menschen und AI-Agents:** `SECURITY-RULES.md` (über `CLAUDE.md` für alle
+  Agents verbindlich, auch Gemini/Tabnine), `scripts/check-security-rules.py` meldet neu
+  eingeführte Verstösse (ungescopte Lookups, SQL-f-Strings, `HTTPException` ohne `from exc`,
+  Secrets in URLs, `dangerouslySetInnerHTML`) als Claude-Code-Hook, im Pre-Commit und in der CI
+  (`security-lint`); Review-Agent `security-reviewer`.
+- **Systemstatus, lokales S3:** neuer Eintrag „Lokales S3 (Garage)“ mit Bedarf (aktiver Speicher,
+  Migration, Rückfallfrist, nicht benötigt …), Objektanzahl und belegten GB. Ein vom
+  Storage-Controller gestopptes Garage gilt nicht mehr als Ausfall (vorher roter Container und
+  ntfy-Alarm, sobald die Dateien bei einem anderen Anbieter liegen).
 - **Mandanten-Exporte verschlüsselt:** ohne Passwort mit dem Server-Schlüssel (nur auf diesem
   Server importierbar), mit Passwort auch auf einem anderen Server. Neues Secret
   `EXPORT_ENCRYPTION_KEY`, das `deploy.sh` einmalig erzeugt; zusammen mit `.env` sichern. Ältere
@@ -80,7 +93,7 @@ Vorab-Abgleich beim Upload. Dazu die Audit-Reparaturen aus `main` (Abschnitt «B
    Backup-Platzhalter) selbst; die ergänzte `.env` danach neu sichern. Keine
    neuen Pflicht-Variablen; optional `DOCUMENT_VERIFY_BASE_URL` (Standard
    `ABGABEBOX_BASE_URL/verify`), `BACKUP_*` und `DOCUMENT_*` (siehe `.env.prod.example`).
-4. **Migrationen** `0113` bis `0133` laufen automatisch; neue Dienste `storage-init`,
+4. **Migrationen** `0113` bis `0134` laufen automatisch; neue Dienste `storage-init`,
    `storage-worker`, `local-s3`, `backup-worker` und `document-worker` startet `deploy.sh` mit
    `up -d`. Die Smoke-Checks prüfen zusätzlich `document-worker` und `storage-worker`.
 5. **Nach dem Deploy:**

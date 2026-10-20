@@ -252,7 +252,7 @@ class UserService:
             statement = statement.where(AppUser.id != excluding_user_id)
         # Login-E-Mails sind plattformweit eindeutig: die Prüfung muss auch Konten anderer
         # Mandanten sehen (Row-Level-Security, app/core/tenant_scope.py) und gibt nur Ja/Nein zurück.
-        with tenant_scope_suspended(db):
+        with tenant_scope_suspended(db):  # rls-ok: plattformweite Eindeutigkeit, liefert nur Ja/Nein
             taken = db.scalar(statement) is not None
         if taken:
             raise HTTPException(status_code=409, detail="Diese E-Mail-Adresse wird bereits für einen Login verwendet")

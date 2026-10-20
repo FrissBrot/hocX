@@ -121,7 +121,8 @@
       "unhealthy": "Health check non superato",
       "oom_killed": "Terminato (memoria insufficiente)",
       "starting": "Ancora in avvio",
-      "memory_high": "Memoria quasi piena"
+      "memory_high": "Memoria quasi piena",
+      "not_needed": "Fermato, non necessario (i file sono presso un altro fornitore)"
     },
     "checks": {
       "postgres": {
@@ -198,6 +199,11 @@
         "title": "Verifiche dei backup",
         "detail": "{verified, select, yes {Verificato {verifyDays, number} giorni fa} other {Mai verificato}} · {tested, select, yes {Test di ripristino {testDays, number} giorni fa} other {Nessun test di ripristino}}",
         "problem": "Verifica o test di ripristino in ritardo"
+      },
+      "local_s3": {
+        "title": "S3 locale (Garage)",
+        "detail": "{reason, select, active {Archivio attivo} initial_target {Destinazione della prima migrazione} migration {Parte di una migrazione in corso} fallback_period {Periodo di ripristino dopo una migrazione} pending_operation {Pulizia in sospeso} requested {Richiesto manualmente} unverified_objects {Oggetti non ancora verificati} not_needed {Non necessario, fermato} other {Stato sconosciuto}} · {objects, number} oggetti · {gb, number} GB",
+        "problem": "S3 locale (Garage) non valutabile"
       }
     },
     "problems": {

@@ -4,6 +4,10 @@ Before starting any task, read and follow `CLAUDE.md` in this directory as the
 shared source of project instructions. Read and follow the files it references
 with `@path` syntax as well, resolving paths relative to the referencing file.
 
+The security rules in `SECURITY-RULES.md` (referenced from `CLAUDE.md`) are mandatory. Before
+finishing, `python3 scripts/check-security-rules.py <changed files>` must report
+`Sicherheitsregeln: ok`; the pre-commit hook and CI enforce the same check.
+
 Keep shared project rules in `CLAUDE.md` and its referenced files, not here.
 
 ## Codebase navigation

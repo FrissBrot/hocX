@@ -34,7 +34,7 @@ def _lookup_read(db: Session, tenant: Tenant, *, trusted: bool) -> TenantLookupR
         return TenantLookupRead(id=tenant.public_id, trusted=False)
     # Nur bei Trust und nur als Zahl: die Konten des anderen Mandanten sind per Row-Level-Security
     # sonst unsichtbar (app/core/tenant_scope.py).
-    with tenant_scope_suspended(db):
+    with tenant_scope_suspended(db):  # rls-ok: nur bei Trust und nur als Anzahl
         participant_count = db.scalar(
             select(func.count()).select_from(Participant).where(Participant.tenant_id == tenant.id, Participant.is_active.is_(True))
         )

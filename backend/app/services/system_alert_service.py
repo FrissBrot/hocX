@@ -64,6 +64,7 @@ _CHECK_TITLES_DE = {
     "document_verification": "Öffentliche Prüfseite",
     "object_storage": "Dateispeicher",
     "storage_migration": "Storage-Migration",
+    "local_s3": "Lokales S3 (Garage)",
     "backup": "Backup",
     "backup_repository": "Backup-Repository (Storage Box)",
     "backup_verification": "Backup-Prüfungen",
@@ -81,6 +82,7 @@ _CHECK_PROBLEM_TITLES_DE = {
     "document_verification": "Öffentliche Prüfseite langsam",
     "object_storage": "Dateispeicher nicht erreichbar",
     "storage_migration": "Storage-Migration braucht Aufmerksamkeit",
+    "local_s3": "Lokales S3 (Garage) nicht auswertbar",
     "backup": "Backup überfällig oder nicht eingerichtet",
     "backup_repository": "Backup-Repository gestört oder voll",
     "backup_verification": "Backup-Prüfung oder Restore-Test überfällig",
@@ -153,6 +155,8 @@ def _check_message(check) -> str:
             return "Integritätsprüfung oder Restore-Test des Backups sind überfällig - siehe Adminportal, Backups."
         case "storage_migration":
             return f"{params.get('verified')} von {params.get('total')} Objekten geprüft, {params.get('dead')} dauerhaft fehlgeschlagen - siehe Adminportal, Storage."
+        case "local_s3":
+            return f"{params.get('objects')} Objekte, {params.get('gb')} GB - siehe Adminportal, Storage."
     return "Siehe Systemstatus."
 
 

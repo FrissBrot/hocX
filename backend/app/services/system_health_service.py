@@ -182,6 +182,39 @@ def collect_containers() -> tuple[str | None, list[ContainerStatusRead]]:
     return project, sorted(containers, key=lambda container: container.service)
 
 
+# Service-Name des lokalen S3 (Garage) in den Compose-Dateien; scripts/storage_controller.sh stoppt
+# ihn, wenn der Speicher woanders liegt (storage_local_s3_decision, Migration 0113).
+LOCAL_S3_SERVICE = "local-s3"
+
+
+def local_s3_decision(db: Session) -> tuple[bool, str]:
+    needed, reason = db.execute(text("SELECT needed, reason FROM storage_local_s3_decision()")).one()
+    return bool(needed), str(reason)
+
+
+def mark_intentionally_stopped_local_s3(db: Session, containers: list[ContainerStatusRead]) -> list[ContainerStatusRead]:
+    """Ein vom Storage-Controller gestopptes lokales S3 ist der Sollzustand, kein Ausfall: ohne diese
+    Ausnahme meldete der Systemstatus (und ntfy) den Container als "läuft nicht", sobald die Dateien
+    bei einem externen Anbieter liegen."""
+    if not any(c.service == LOCAL_S3_SERVICE and c.state != "running" for c in containers):
+        return containers
+    try:
+        needed, _reason = local_s3_decision(db)
+    except Exception:
+        # Im Zweifel als "benötigt" behandeln: lieber ein Alarm zu viel als ein verschwiegener Ausfall.
+        db.rollback()
+        _logger.warning("Bedarf des lokalen S3 nicht ermittelbar", exc_info=True)
+        return containers
+    if needed:
+        return containers
+    return [
+        c.model_copy(update={"status": "ok", "reasons": ["not_needed"]})
+        if c.service == LOCAL_S3_SERVICE and c.state != "running"
+        else c
+        for c in containers
+    ]
+
+
 # ── Dienst-Prüfungen ──────────────────────────────────────────────────────────────────────
 
 
@@ -285,6 +318,45 @@ def _check_object_storage() -> HealthCheckRead:
         status="ok",
         params={"generation": state.config.generation, "latencyMs": round((time.monotonic() - started) * 1000), "fenced": int(state.fenced)},
     )
+
+
+def _check_local_s3(db: Session) -> list[HealthCheckRead]:
+    """Lokales S3 (Garage): wird es gebraucht und warum, und was liegt dort. Die Zahlen stammen aus
+    der Datenbank (Objektverzeichnis bzw. Generationen), nicht aus Garage selbst - dessen Admin-API
+    ist bewusst nur im Garage-Container erreichbar (infra/garage/garage.toml). Ohne lokales Profil
+    (nie eingerichtet) entfällt die Prüfung."""
+    needed, reason = local_s3_decision(db)
+    if reason == "no_local_profile":
+        return []
+    active = db.execute(
+        text(
+            "SELECT s.active_generation FROM storage_state s JOIN storage_profile p ON p.id = s.active_profile_id "
+            "WHERE p.provider = 'garage_local'"
+        )
+    ).scalar()
+    if active is not None:
+        objects, size = db.execute(
+            text(
+                "SELECT count(*), COALESCE(sum(size_bytes), 0) FROM storage_object "
+                "WHERE generation = :generation AND status = 'active' AND NOT purge_pending"
+            ),
+            {"generation": active},
+        ).one()
+    else:
+        # Nicht mehr aktiv: was eine noch nicht bereinigte Generation (Rückfallfrist) dort belegt.
+        objects, size = db.execute(
+            text(
+                "SELECT COALESCE(sum(g.object_count), 0), COALESCE(sum(g.total_bytes), 0) FROM storage_generation g "
+                "JOIN storage_profile p ON p.id = g.profile_id WHERE p.provider = 'garage_local' AND g.purged_at IS NULL"
+            )
+        ).one()
+    return [
+        HealthCheckRead(
+            key="local_s3",
+            status="ok",
+            params={"needed": int(needed), "reason": reason, "objects": int(objects), "gb": round(int(size) / 1024**3, 2)},
+        )
+    ]
 
 
 def _check_storage_migration(db: Session, now: datetime) -> HealthCheckRead:
@@ -457,6 +529,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_verification", _check_document_verification)
     checks += _run_check("storage_migration", lambda: _check_storage_migration(db, now), failure_status="unknown", db=db)
+    checks += _run_check("local_s3", lambda: _check_local_s3(db), failure_status="unknown", db=db)
     checks += _run_check("backup", lambda: _check_backup(db, now), failure_status="unknown", db=db)
     return checks
 
@@ -479,7 +552,7 @@ def collect_snapshot(db: Session, *, now: datetime | None = None) -> SystemHealt
         docker_available=docker_configured and docker_error is None,
         docker_error=docker_error,
         compose_project=project,
-        containers=containers,
+        containers=mark_intentionally_stopped_local_s3(db, containers),
         checks=collect_checks(db, now),
     )
 
