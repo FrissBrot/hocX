@@ -148,6 +148,7 @@ def _build_protocol_reads(db: Session, protocols: list) -> list[ProtocolRead]:
     import_by_protocol = {row.protocol_id: (row.original_filename, row.stored_file_public_id) for row in import_rows}
 
     cycle_by_template = _cycle_configs_by_template(db, {p.template_id for p in protocols})
+    ProtocolRead.prime_public_ids(db, protocols)
     today = date.today()
 
     result = []

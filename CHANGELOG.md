@@ -46,6 +46,11 @@ Installationen aktualisieren können.
   `login_enabled` und eine seither erfolgte Session-Beendigung.
 - **Lokales S3:** RPC und Admin-API von Garage nur noch auf `127.0.0.1`; `storage-init` teilt den
   Netz-Namespace von `local-s3`.
+- **Datenbank-Performance:** Protokoll-, Todo- und Albenliste laden zugehörige Daten gesammelt statt
+  je Eintrag (20 Einträge: 44 → 6, 41 → 4, 66 → 10 Abfragen; Session-Cache für public_ids, Tests
+  gegen N+1). Migration `0135`: Indizes für 43 Fremdschlüssel (schnelleres Löschen von Konten und
+  Mandanten, Abfragen je Zyklus/Abgabe/Vorlage) und Timeouts für die Laufzeitrollen (Abgabebox und
+  Fotoworker erstmals mit statement_timeout, alle mit idle_in_transaction_session_timeout).
 - **RLS für Untertabellen** (Migration `0134`): Mandantendaten ohne eigene `tenant_id`
   (Traktanden, Blöcke, Texte, Listeneinträge, Buchungen, Bussen, Vorlagen-Elemente, Album-Einträge,
   Dokumentversionen …) sind jetzt über ihre Elterntabelle geschützt; MFA-Faktoren nur im eigenen
@@ -93,7 +98,7 @@ Vorab-Abgleich beim Upload. Dazu die Audit-Reparaturen aus `main` (Abschnitt «B
    Backup-Platzhalter) selbst; die ergänzte `.env` danach neu sichern. Keine
    neuen Pflicht-Variablen; optional `DOCUMENT_VERIFY_BASE_URL` (Standard
    `ABGABEBOX_BASE_URL/verify`), `BACKUP_*` und `DOCUMENT_*` (siehe `.env.prod.example`).
-4. **Migrationen** `0113` bis `0134` laufen automatisch; neue Dienste `storage-init`,
+4. **Migrationen** `0113` bis `0135` laufen automatisch; neue Dienste `storage-init`,
    `storage-worker`, `local-s3`, `backup-worker` und `document-worker` startet `deploy.sh` mit
    `up -d`. Die Smoke-Checks prüfen zusätzlich `document-worker` und `storage-worker`.
 5. **Nach dem Deploy:**

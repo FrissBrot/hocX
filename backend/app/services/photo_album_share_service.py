@@ -171,9 +171,20 @@ class AlbumShareRow:
 
 def list_shares_for_album(db: Session, album_id: uuid.UUID) -> list[AlbumShareRow]:
     owner_tenant_id = db.scalar(select(PhotoAlbum.tenant_id).where(PhotoAlbum.id == album_id))
-    trusted = tenant_trust_service.trusted_tenant_ids(db, owner_tenant_id) if owner_tenant_id is not None else set()
+    if owner_tenant_id is None:
+        return []
+    return list_shares_for_albums(db, [album_id], owner_tenant_id=owner_tenant_id).get(album_id, [])
+
+
+def list_shares_for_albums(db: Session, album_ids: list[uuid.UUID], *, owner_tenant_id: int) -> dict[uuid.UUID, list[AlbumShareRow]]:
+    """Freigaben mehrerer Alben desselben Besitzers mit zwei Abfragen (Trust, Freigaben) statt
+    drei je Album - für die Albenliste (files.py::list_albums)."""
+    if not album_ids:
+        return {}
+    trusted = tenant_trust_service.trusted_tenant_ids(db, owner_tenant_id)
     rows = db.execute(
         select(
+            PhotoAlbumTenantShare.album_id,
             PhotoAlbumTenantShare.status,
             PhotoAlbumTenantShare.created_at,
             PhotoAlbumTenantShare.responded_at,
@@ -186,23 +197,25 @@ def list_shares_for_album(db: Session, album_id: uuid.UUID) -> list[AlbumShareRo
             Tenant.profile_image_path,
         )
         .join(Tenant, Tenant.id == PhotoAlbumTenantShare.tenant_id)
-        .where(PhotoAlbumTenantShare.album_id == album_id)
+        .where(PhotoAlbumTenantShare.album_id.in_(album_ids))
         .order_by(PhotoAlbumTenantShare.created_at)
     ).all()
-    return [
-        AlbumShareRow(
-            tenant_public_id=row.public_id,
-            tenant_name=row.name if row.id in trusted else None,
-            tenant_profile_image_url=build_tenant_profile_image_url(row.public_id, row.profile_image_path) if row.id in trusted else None,
-            status=row.status,
-            invited_at=row.created_at,
-            responded_at=row.responded_at,
-            share_location=row.share_location,
-            partner_public_links=row.partner_public_links,
-            partner_photos_public=row.partner_photos_public,
+    result: dict[uuid.UUID, list[AlbumShareRow]] = {}
+    for row in rows:
+        result.setdefault(row.album_id, []).append(
+            AlbumShareRow(
+                tenant_public_id=row.public_id,
+                tenant_name=row.name if row.id in trusted else None,
+                tenant_profile_image_url=build_tenant_profile_image_url(row.public_id, row.profile_image_path) if row.id in trusted else None,
+                status=row.status,
+                invited_at=row.created_at,
+                responded_at=row.responded_at,
+                share_location=row.share_location,
+                partner_public_links=row.partner_public_links,
+                partner_photos_public=row.partner_photos_public,
+            )
         )
-        for row in rows
-    ]
+    return result
 
 
 def invite(

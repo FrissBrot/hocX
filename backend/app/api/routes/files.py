@@ -1124,9 +1124,25 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     entries = photo_album_service.list_albums_with_stats(db, service, user.current_tenant_id)
-    shared_ids = photo_album_share_service.shared_album_ids(
-        db, [entry.album.id for entry in entries if entry.album.tenant_id == user.current_tenant_id]
-    )
+    own_album_ids = [entry.album.id for entry in entries if entry.album.tenant_id == user.current_tenant_id]
+    foreign_entries = [entry for entry in entries if entry.album.tenant_id != user.current_tenant_id]
+    shared_ids = photo_album_share_service.shared_album_ids(db, own_album_ids)
+    # Gesammelt statt je Album (vorher drei Abfragen pro Album).
+    shares_by_album = photo_album_share_service.list_shares_for_albums(db, own_album_ids, owner_tenant_id=user.current_tenant_id)
+    owner_names = dict(
+        db.execute(
+            select(Tenant.id, Tenant.name).where(Tenant.id.in_({entry.album.tenant_id for entry in foreign_entries}))
+        ).all()
+    ) if foreign_entries else {}
+    own_shares = {
+        share.album_id: share
+        for share in db.scalars(
+            select(PhotoAlbumTenantShare).where(
+                PhotoAlbumTenantShare.tenant_id == user.current_tenant_id,
+                PhotoAlbumTenantShare.album_id.in_([entry.album.id for entry in foreign_entries]),
+            )
+        )
+    } if foreign_entries else {}
     results = []
     for entry in entries:
         is_owner = entry.album.tenant_id == user.current_tenant_id
@@ -1146,11 +1162,11 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
                     partner_public_links=row.partner_public_links,
                     partner_photos_public=row.partner_photos_public,
                 )
-                for row in photo_album_share_service.list_shares_for_album(db, entry.album.id)
+                for row in shares_by_album.get(entry.album.id, [])
             ]
         else:
-            owner_tenant_name = db.scalar(select(Tenant.name).where(Tenant.id == entry.album.tenant_id))
-            own_share = db.get(PhotoAlbumTenantShare, {"album_id": entry.album.id, "tenant_id": user.current_tenant_id})
+            owner_tenant_name = owner_names.get(entry.album.tenant_id)
+            own_share = own_shares.get(entry.album.id)
             if own_share is not None:
                 my_share = AlbumMyShareRead(
                     public_links_allowed=own_share.partner_public_links, my_photos_public=own_share.partner_photos_public

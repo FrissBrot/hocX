@@ -123,6 +123,15 @@ def _env_secret(name: str) -> str | None:
     return None
 
 
+# Timeouts der Laufzeitrollen wie Migration 0135_db_performance (Rolleneinstellungen gehören zum
+# Cluster, nicht zur Datenbank - ein Full-Restore in einen neuen Cluster muss sie neu setzen).
+APP_ROLE_SETTINGS = {
+    "hocx_app": {"idle_in_transaction_session_timeout": "30min"},
+    "hocx_abgabebox": {"statement_timeout": "30s", "idle_in_transaction_session_timeout": "15min"},
+    "hocx_photo_worker": {"statement_timeout": "60s", "idle_in_transaction_session_timeout": "15min"},
+}
+
+
 def ensure_app_roles(pg: PgTools, *, statement_timeout: str = "30s") -> dict[str, str]:
     """Legt fehlende hocX-Rollen an (wie Migration 0001) und setzt ihre Passwörter aus
     APP_DB_PASSWORD/ABGABEBOX_DB_PASSWORD/PHOTO_WORKER_DB_PASSWORD(_FILE), falls vorhanden.
@@ -138,6 +147,9 @@ def ensure_app_roles(pg: PgTools, *, statement_timeout: str = "30s") -> dict[str
             pg.psql(f"ALTER ROLE {role} PASSWORD '{escaped}';", database="postgres")
         result[role] = ("angelegt" if not exists else "vorhanden") + (", Passwort gesetzt" if password else ", Passwort unverändert")
     pg.psql(f"ALTER ROLE hocx_app SET statement_timeout = '{statement_timeout}';", database="postgres")
+    for role, settings in APP_ROLE_SETTINGS.items():
+        for name, value in settings.items():
+            pg.psql(f"ALTER ROLE {role} SET {name} = '{value}';", database="postgres")
     return result
 
 
