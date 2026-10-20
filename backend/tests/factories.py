@@ -166,14 +166,17 @@ def make_protocol_todo(
     sort_index: int = 0,
     tenant_id: int | None = None,
 ) -> ProtocolTodo:
+    """tenant_id muss nur für Todos ohne Block angegeben werden; bei Todos mit Block setzt ihn die
+    Datenbank aus dem Protokoll (Migration 0131_todo_tenant_id)."""
     open_status_id = db.scalar(select(TodoStatus.id).where(TodoStatus.code == "open"))
     todo = ProtocolTodo(
-        tenant_id=tenant_id,
         protocol_element_block_id=protocol_element_block_id,
         sort_index=sort_index,
         task=task,
         todo_status_id=open_status_id,
     )
+    if tenant_id is not None:
+        todo.tenant_id = tenant_id
     db.add(todo)
     db.flush()
     return todo

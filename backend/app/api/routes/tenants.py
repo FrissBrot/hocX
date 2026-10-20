@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, require_writer
+from app.core.tenant_scope import tenant_scope_suspended
 from app.models import Participant, Tenant, TenantDomain
 from app.schemas.cashflow import TenantPortalCharges
 from app.schemas.user import TenantDomainCreate, TenantDomainRead, TenantLookupRead, TenantRead, TenantSubscriptionRead, TenantUpdate
@@ -31,9 +32,12 @@ def list_tenants(
 def _lookup_read(db: Session, tenant: Tenant, *, trusted: bool) -> TenantLookupRead:
     if not trusted:
         return TenantLookupRead(id=tenant.public_id, trusted=False)
-    participant_count = db.scalar(
-        select(func.count()).select_from(Participant).where(Participant.tenant_id == tenant.id, Participant.is_active.is_(True))
-    )
+    # Nur bei Trust und nur als Zahl: die Konten des anderen Mandanten sind per Row-Level-Security
+    # sonst unsichtbar (app/core/tenant_scope.py).
+    with tenant_scope_suspended(db):
+        participant_count = db.scalar(
+            select(func.count()).select_from(Participant).where(Participant.tenant_id == tenant.id, Participant.is_active.is_(True))
+        )
     return TenantLookupRead(
         id=tenant.public_id,
         trusted=True,

@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import Row, Date, cast, func, or_, select, text
+from sqlalchemy import Row, Date, cast, func, select, text
 from sqlalchemy.orm import Session
 
 from app.models.entities import (
@@ -165,13 +165,13 @@ def fetch_todo_rows(db: Session, tenant_id: int, bounds: tuple[date, date] | Non
         select(TodoStatus.code, ProtocolTodo.completed_at)
         # LEFT JOINs - protocol_element_block_id is nullable (standalone todos and
         # submission-assignment/Abgabebox-generated todos have no block), an INNER JOIN
-        # here silently drops both kinds. Those todos carry their own ProtocolTodo.tenant_id
-        # instead, checked in the WHERE below.
+        # here silently drops both kinds. Der Mandant steht seit Migration 0131 in jedem Todo;
+        # der Protocol-Join liefert nur noch das Protokolldatum.
         .outerjoin(ProtocolElementBlock, ProtocolElementBlock.id == ProtocolTodo.protocol_element_block_id)
         .outerjoin(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
         .outerjoin(Protocol, Protocol.id == ProtocolElement.protocol_id)
         .join(TodoStatus, TodoStatus.id == ProtocolTodo.todo_status_id)
-        .where(or_(Protocol.tenant_id == tenant_id, ProtocolTodo.tenant_id == tenant_id))
+        .where(ProtocolTodo.tenant_id == tenant_id)
         .where(*_date_conditions(func.coalesce(Protocol.protocol_date, cast(ProtocolTodo.created_at, Date)), bounds))
     ).all()
 

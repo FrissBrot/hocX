@@ -181,7 +181,7 @@ def test_clone_full_remaps_responsible_assignments_and_block_repeat_sources(db):
         {"participant_id": participant.id, "list_definition_id": definition.id, "list_entry_id": entry.id}
     ]
     todo_block = make_protocol_element_block(db, element.id, {}, sort_index=0, element_type_code="todo")
-    todo = make_protocol_todo(db, todo_block.id, tenant_id=source.id)
+    todo = make_protocol_todo(db, todo_block.id)
     make_protocol_element_block(db, element.id, {"repeat_source_type": "event", "repeat_source_id": event.id}, sort_index=1)
     make_protocol_element_block(db, element.id, {"repeat_source_type": "todo", "repeat_source_id": todo.id}, sort_index=2)
 
@@ -292,7 +292,7 @@ def test_clone_full_copies_todo_notes_and_file_links(db):
     protocol = make_protocol(db, source.id, template.id)
     element = make_protocol_element(db, protocol.id)
     block = make_protocol_element_block(db, element.id, {}, sort_index=0, element_type_code="todo")
-    todo = make_protocol_todo(db, block.id, tenant_id=source.id)
+    todo = make_protocol_todo(db, block.id)
     todo.notes = "**Notiz**"
     stored = StoredFile(tenant_id=source.id, original_name="plan.pdf", storage_path="test-clone/plan.pdf")
     db.add(stored)

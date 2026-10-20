@@ -29,6 +29,15 @@ Installationen aktualisieren können.
   noch mit Bildern derselben Abgabe. Traefik setzt `Permissions-Policy`, Next.js kein
   `X-Powered-By` mehr. Fotoworker lädt nur Dateien des Job-Mandanten.
 - Abhängigkeiten: PyJWT 2.15.1, Next.js 16.4.2, sharp 0.35.5, Tiptap 3 (inkl. tiptap-markdown 0.9).
+- **Todos:** jedes Todo gehört fest seinem Mandanten (Migration `0131`, `protocol_todo.tenant_id`
+  Pflicht); bei Todos in Protokollen setzt die Datenbank den Wert aus dem Protokoll. Behebt, dass
+  Mandanten-Export und -Klon Todos aus Protokollen nicht mitnahmen. Todos ohne jeden Bezug (in
+  keiner Ansicht erreichbar) werden bei der Migration entfernt.
+- **Row-Level-Security** (Migration `0132`): PostgreSQL prüft die Mandantentrennung jetzt
+  zusätzlich zum Code. Angemeldete Mandanten-Anfragen sehen und ändern nur Zeilen ihres Mandanten,
+  auch wenn einer Abfrage der Filter fehlt; Ausnahmen sind die Daten gemeinsamer Fotoalben.
+  Plattform-Admin, Hintergrundjobs, Worker und öffentliche Links bleiben unbeschränkt.
+  Zugriffe auf fremde Datensätze antworten dadurch teils mit 404 statt 403.
 
 ## [1.2.0] - 2026-10-16
 
@@ -55,7 +64,7 @@ Vorab-Abgleich beim Upload. Dazu die Audit-Reparaturen aus `main` (Abschnitt «B
    (`STORAGE_CREDENTIALS_KEY`, Zugangsdaten des lokalen S3, leere Backup-Platzhalter) selbst. Keine
    neuen Pflicht-Variablen; optional `DOCUMENT_VERIFY_BASE_URL` (Standard
    `ABGABEBOX_BASE_URL/verify`), `BACKUP_*` und `DOCUMENT_*` (siehe `.env.prod.example`).
-4. **Migrationen** `0113` bis `0130` laufen automatisch; neue Dienste `storage-init`,
+4. **Migrationen** `0113` bis `0132` laufen automatisch; neue Dienste `storage-init`,
    `storage-worker`, `local-s3`, `backup-worker` und `document-worker` startet `deploy.sh` mit
    `up -d`. Die Smoke-Checks prüfen zusätzlich `document-worker` und `storage-worker`.
 5. **Nach dem Deploy:**

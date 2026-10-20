@@ -12,6 +12,7 @@ from sqlalchemy import (
     Computed,
     Date,
     DateTime,
+    FetchedValue,
     Float,
     ForeignKey,
     Index,
@@ -1420,7 +1421,12 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
     public_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
     )
-    tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"))
+    # Jedes Todo gehört fest einem Mandanten (Migration 0131); der Protokollblock ist optional.
+    # Bei Todos mit Block setzt der Trigger trg_protocol_todo_tenant_from_block den Wert aus dem
+    # Protokoll - ohne Angabe lässt das ORM die Spalte im INSERT weg und liest sie danach nach.
+    tenant_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False, server_default=FetchedValue()
+    )
     protocol_element_block_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol_element_block.id", ondelete="CASCADE"))
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     task: Mapped[str] = mapped_column(Text, nullable=False)

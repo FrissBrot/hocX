@@ -21,6 +21,7 @@ from app.core.security import (
     build_current_user,
     parse_session_token,
 )
+from app.core.tenant_scope import bind_tenant_scope
 from app.models import AppUser, ListDefinition, Protocol, TenantDomain
 from app.services import list_snapshot_service, public_id_service
 from app.services.access_service import AccessService
@@ -87,6 +88,7 @@ def _load_and_authorize(protocol_public_id: uuid.UUID, user: CurrentUser) -> int
     behavior before the public_id migration)."""
     db = SessionLocal()
     try:
+        bind_tenant_scope(db, user.current_tenant_id)
         protocol_id = public_id_service.resolve_internal_id(db, Protocol, protocol_public_id, tenant_id=user.current_tenant_id)
         if protocol_id is None:
             return None

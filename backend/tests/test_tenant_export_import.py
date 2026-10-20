@@ -1194,7 +1194,7 @@ def test_export_import_roundtrip_remaps_block_repeat_sources(db):
     protocol = make_protocol(db, tenant.id, template.id)
     element = make_protocol_element(db, protocol.id)
     todo_block = make_protocol_element_block(db, element.id, {}, sort_index=0, element_type_code="todo")
-    todo = make_protocol_todo(db, todo_block.id, task="Material", tenant_id=tenant.id)
+    todo = make_protocol_todo(db, todo_block.id, task="Material")
     make_protocol_element_block(
         db, element.id, {"repeat_source_type": "event", "repeat_source_id": event.id}, sort_index=1
     )

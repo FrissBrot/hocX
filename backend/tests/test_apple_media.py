@@ -505,4 +505,5 @@ def test_download_is_refused_for_other_tenants(db, monkeypatch):
 
     with pytest.raises(HTTPException) as exc_info:
         files_routes.download_stored_file(photo_id, part="video", db=db, user=make_current_user(other.id, role="writer"))
-    assert exc_info.value.status_code == 403
+    # 404 unter Row-Level-Security (Migration 0132): die fremde Zeile ist dann gar nicht sichtbar.
+    assert exc_info.value.status_code in (403, 404)

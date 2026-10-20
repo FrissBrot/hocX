@@ -103,9 +103,7 @@ class ProtocolTodoRepository:
 
     def list_for_tenant(self, db: Session, tenant_id: int, skip: int = 0, limit: int = 100):
         query, *_ = self._base_todo_query()
-        query = query.where(
-            or_(Protocol.tenant_id == tenant_id, ProtocolTodo.tenant_id == tenant_id)
-        ).where(
+        query = query.where(ProtocolTodo.tenant_id == tenant_id).where(
             ProtocolTodo.pending_delete.is_(False)
         ).order_by(
             ProtocolTodo.todo_status_id.asc(),
@@ -123,9 +121,7 @@ class ProtocolTodoRepository:
             .scalar_subquery()
         )
         query, *_ = self._base_todo_query()
-        query = query.where(
-            or_(Protocol.tenant_id == tenant_id, ProtocolTodo.tenant_id == tenant_id)
-        ).where(
+        query = query.where(ProtocolTodo.tenant_id == tenant_id).where(
             ProtocolTodo.pending_delete.is_(False)
         ).where(
             or_(
@@ -157,9 +153,7 @@ class ProtocolTodoRepository:
         if protocol_ids:
             conditions.append(Protocol.id.in_(protocol_ids))
         query, *_ = self._base_todo_query()
-        query = query.where(
-            or_(Protocol.tenant_id == tenant_id, ProtocolTodo.tenant_id == tenant_id)
-        ).where(
+        query = query.where(ProtocolTodo.tenant_id == tenant_id).where(
             ProtocolTodo.pending_delete.is_(False)
         ).where(
             or_(*conditions)

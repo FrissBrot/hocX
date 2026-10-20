@@ -58,7 +58,8 @@ def test_h5_due_events_rejects_foreign_tenant_todo(db):
     user_b = make_current_user(tenant_b.id, role="reader", user_id=2)
     with pytest.raises(HTTPException) as exc_info:
         todos_route.get_todo_due_events(todo_a.public_id, db=db, user=user_b)
-    assert exc_info.value.status_code == 403
+    # 404 unter Row-Level-Security (Migration 0132): die fremde Zeile ist dann gar nicht sichtbar.
+    assert exc_info.value.status_code in (403, 404)
 
 
 def test_h5_due_events_still_works_for_same_tenant_user(db):
