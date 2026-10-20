@@ -112,7 +112,6 @@ export type TenantSubscription = {
   storage_used_bytes: number;
   storage_quota_bytes: number | null;
   package_storage_bytes: number;
-  storage_quota_manual_override: boolean;
   features: TenantSubscriptionFeature[];
   estimated_monthly_cost_rp: number | null;
   estimated_yearly_cost_rp: number | null;
@@ -682,7 +681,6 @@ export type AdminTenantSummary = {
   plan_storage_bytes: number | null;
   package_storage_bytes: number;
   effective_storage_quota_bytes: number | null;
-  storage_quota_manual_override: boolean;
   assigned_storage_packages: AdminTenantStoragePackage[];
   discount_percent: number;
   billing_note: string | null;
@@ -1429,6 +1427,12 @@ export type FineTariff = {
   account_id: string | null;
   amount_late: number;
   amount_absent: number;
+};
+
+// Bussentarif einer Protokollvorlage (0137): override=false -> tenant_tariff gilt.
+export type TemplateFineTariff = FineTariff & {
+  override: boolean;
+  tenant_tariff: FineTariff;
 };
 
 export type TemplateElementBehaviorField = "is_editable" | "is_visible" | "export_visible" | "copy_from_last_protocol" | "title_as_subtitle";

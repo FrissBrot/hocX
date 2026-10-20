@@ -72,6 +72,37 @@ Installationen aktualisieren können.
   `tenant_id=` blockieren Pull-Requests (Semgrep); Trivy-Scan vor jeder Image-Promotion und
   wöchentlich für die `latest`-Images.
 
+### Korrekturen (Feature-Recovery-Audit v1.2)
+
+- **Live-Photo-Videos nach ClamAV-Ausfall:** Der Nachscan (`upload_pipeline_rescan`) erfasst
+  jetzt auch das Video eines Live Photos. Vorher blieb ein Clip, der beim Upload nicht geprüft
+  werden konnte, dauerhaft `pending` und war nie abspielbar; betroffene Clips werden beim
+  nächsten Lauf automatisch nachgeprüft.
+- **Protokollkopf:** zeigt wieder Erstellungsdatum und Vorlagenversion des Protokolls (seit der
+  neuen Ansicht für abgeschlossene Protokolle nirgends mehr sichtbar).
+- Ungenutzte Komponente `SnapshotSwitcher` samt Texten entfernt.
+- **Manuelles Speicherkontingent vollständig entfernt** (Migration `0136`): Der API-Endpunkt
+  `PATCH /api/admin/tenants/{id}/storage-quota` und das Feld `storage_quota_manual_override`
+  entfallen; das Kontingent ergibt sich nur noch aus Plan + Zusatzpaketen. Mandanten mit einem
+  per API gesetzten Sonderwert (auch eine Einschränkung, die 0088 stehen liess) bekommen beim
+  Update wieder Plan + Pakete; IDs und alte Werte stehen im Migrationslog.
+- **Bussentarif je Protokollvorlage** (Migration `0137`): Im Vorlagen-Editor (Button
+  «Bussentarif», nur mit Finanzen) kann eine Vorlage statt des Mandantentarifs eigene Beträge und
+  ein eigenes Konto haben. Der Tarif gilt sofort für alle offenen Protokolle der Vorlage; bereits
+  erfasste Bussen behalten ihren Betrag. Duplizieren, Klonen und Export/Import nehmen ihn mit.
+  Ersetzt die Tarife je Anwesenheitsblock, die mit `0113` weggefallen waren.
+- **Todos zu Abgaben entstehen automatisch:** beim Anlegen und Ändern einer Abgabe mit
+  Verantwortlichen, bei Terminen mit passendem Tag und bei neuen/geänderten Listeneinträgen.
+  Vorher bekamen Listen-Abgaben nie Todos und bestehende Termine erst nach einer Bearbeitung;
+  Fehler beim Abgleich wurden verschluckt und landen jetzt im Fehlerprotokoll. Der nie
+  angebundene Endpunkt `POST /api/submission-assignments/{id}/sync-todos` entfällt.
+- **Adminportal «Dokumentvorlagen»** (`/admin/document-templates`): mitgelieferte Vorlagen des
+  Document Studio ansehen, je Dokumentart den Plattform-Standard setzen, Vorlagen archivieren
+  oder wieder anbieten (die Routen gab es schon, die Oberfläche fehlte).
+- Entfernt, ohne Oberfläche: `GET /api/tools/word-import/quality-stats` (das Lernen der
+  Schwellwerte im Word-Import bleibt) und `POST/GET /api/files/analysis-jobs` (die Fotoanalyse
+  läuft automatisch nachts, `photo_analysis_auto_queue`).
+
 ## [1.2.0] - 2026-10-16
 
 Feature-Release auf 1.1.13. Fünf Entwicklungszweige sind zusammengeführt und aufeinander
@@ -98,7 +129,7 @@ Vorab-Abgleich beim Upload. Dazu die Audit-Reparaturen aus `main` (Abschnitt «B
    Backup-Platzhalter) selbst; die ergänzte `.env` danach neu sichern. Keine
    neuen Pflicht-Variablen; optional `DOCUMENT_VERIFY_BASE_URL` (Standard
    `ABGABEBOX_BASE_URL/verify`), `BACKUP_*` und `DOCUMENT_*` (siehe `.env.prod.example`).
-4. **Migrationen** `0113` bis `0135` laufen automatisch; neue Dienste `storage-init`,
+4. **Migrationen** `0113` bis `0137` laufen automatisch; neue Dienste `storage-init`,
    `storage-worker`, `local-s3`, `backup-worker` und `document-worker` startet `deploy.sh` mit
    `up -d`. Die Smoke-Checks prüfen zusätzlich `document-worker` und `storage-worker`.
 5. **Nach dem Deploy:**

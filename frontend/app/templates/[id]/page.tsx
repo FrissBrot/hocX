@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/ui/app-shell";
 import { TemplateEditor } from "@/components/template/template-builder";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
-import { CycleConfigSummary, ElementDefinition, EventSummary, ParticipantSummary, StructuredListDefinition, TemplateElement, TemplateSummary } from "@/types/api";
+import { CycleConfigSummary, ElementDefinition, EventSummary, FinanceAccount, ParticipantSummary, StructuredListDefinition, TemplateElement, TemplateSummary } from "@/types/api";
 
 export default async function TemplateDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,6 +27,9 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
   if (!template) {
     redirect("/templates");
   }
+  // Bussentarif je Vorlage nur mit gebuchten Finanzen (FAR-002).
+  const hasFinance = session.current_tenant?.enabled_features?.includes("finance") ?? false;
+  const financeAccounts = hasFinance ? (await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts") ?? []) : null;
 
   return (
     <AppShell initialSession={session}>
@@ -44,6 +47,7 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
               availableLists={lists ?? []}
               initialAssignedParticipants={selectedParticipants ?? []}
               availableCycleConfigs={cycleConfigs ?? []}
+              financeAccounts={financeAccounts}
             />
           </section>
           </>

@@ -4,11 +4,13 @@ import uuid
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from pathlib import Path
 
 from app.core.config import settings
+from app.core.error_log import record_system_error
 from app.core.cycle_utils import cycle_years_for_offsets
 from app import scanner
 from app.models import CycleConfig, GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload
@@ -152,6 +154,7 @@ class SubmissionService:
         )
         entity = SubmissionAssignment(tenant_id=tenant_id, links=links, **values)
         created = self.repository.create_assignment(db, entity)
+        self.sync_todos_if_tracked(db, created)
         return self._assignment_read(created)
 
     def update_assignment(
@@ -170,6 +173,7 @@ class SubmissionService:
                 db.commit()
                 db.refresh(assignment)
                 self.refresh_todo_links(db, assignment)
+                self.sync_todos_if_tracked(db, assignment)
             return self._assignment_read(assignment)
         if "list_definition_id" in values:
             values["list_definition_id"] = self._resolve_list_definition_tenant(
@@ -195,6 +199,7 @@ class SubmissionService:
         updated = self.repository.update_assignment(db, assignment, values)
         if link_ids is not None:
             self.refresh_todo_links(db, updated)
+        self.sync_todos_if_tracked(db, updated)
         return self._assignment_read(updated)
 
     def _resolve_list_definition_tenant(self, db: Session, list_definition_public_id: uuid.UUID | None, *, tenant_id: int) -> int | None:
@@ -542,15 +547,38 @@ class SubmissionService:
             return
         assignments = self.repository.list_assignments(db, tenant_id=event.tenant_id)
         for assignment in assignments:
-            if (
-                assignment.source_type == "events"
-                and assignment.tag_filter == event.tag
-                and assignment.responsible_participant_source
-            ):
-                try:
-                    self.sync_submission_todos(db, assignment)
-                except Exception:
-                    pass
+            if assignment.source_type == "events" and assignment.tag_filter == event.tag:
+                self.sync_todos_if_tracked(db, assignment)
+
+    def sync_todos_for_list(self, db: Session, *, tenant_id: int, list_definition_id: int) -> None:
+        """Nach Änderungen an Einträgen einer Liste: Todos der Listen-Abgaben nachführen, die
+        diese Liste als Quelle haben (Verantwortliche je Eintrag)."""
+        for assignment in self.repository.list_assignments(db, tenant_id=tenant_id):
+            if assignment.source_type == "list" and assignment.list_definition_id == list_definition_id:
+                self.sync_todos_if_tracked(db, assignment)
+
+    def sync_todos_if_tracked(self, db: Session, assignment: SubmissionAssignment) -> None:
+        """Automatischer Todo-Abgleich (FAR-010): nach Anlegen/Ändern einer Abgabe, eines
+        Termins mit passendem Tag oder eines Listeneintrags. Vorher lief er nur bei Terminen und
+        über einen nie angebundenen Endpunkt - Listen-Abgaben bekamen nie Todos, schon
+        bestehende Termine erst nach einer Bearbeitung.
+
+        Ohne Verantwortliche oder ohne erreichbaren Link gibt es nichts abzugleichen (erwarteter
+        Zustand, kein Fehler). Ein unerwarteter Fehler bricht die auslösende Änderung nicht ab,
+        landet aber im Fehlerprotokoll (vorher kommentarlos verschluckt)."""
+        if not assignment.responsible_participant_source:
+            return
+        if submission_link_service.preferred_link(assignment) is None:
+            return
+        tenant_id = assignment.tenant_id
+        try:
+            self.sync_submission_todos(db, assignment)
+        except Exception as exc:
+            # Nur ein Datenbankfehler hinterlässt eine abgebrochene Transaktion; alles andere
+            # lässt die bereits committete auslösende Änderung unberührt.
+            if isinstance(exc, SQLAlchemyError):
+                db.rollback()
+            record_system_error(db, exc=exc, tenant_id=tenant_id)
 
     def sync_submission_todos(self, db: Session, assignment: SubmissionAssignment) -> dict:
         link = submission_link_service.preferred_link(assignment)

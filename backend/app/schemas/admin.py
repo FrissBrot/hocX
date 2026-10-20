@@ -105,7 +105,6 @@ class AdminTenantRead(BaseModel):
     plan_storage_bytes: int | None = None
     package_storage_bytes: int = 0
     effective_storage_quota_bytes: int | None = None
-    storage_quota_manual_override: bool = False
     assigned_storage_packages: list[AdminTenantStoragePackageRead] = []
     discount_percent: int = 0
     billing_note: str | None = None
@@ -118,14 +117,6 @@ class AdminTenantWebsiteListingUpdate(BaseModel):
     show_on_website: bool
 
 
-class AdminTenantStorageQuotaUpdate(BaseModel):
-    # None = manuellen Override entfernen, Kontingent wird wieder automatisch aus Plan +
-    # Paketen berechnet (Feld ist bewusst ohne Default, damit ein Client es nicht aus
-    # Versehen weglassen kann - anders als bei PATCH /tenants/{id} ist das hier der gesamte
-    # Payload, nicht ein optionales Teilfeld eines groesseren Formulars).
-    quota_mb: int | None = Field(ge=1)
-
-
 class AdminFeatureRead(BaseModel):
     code: str
     name: str
@@ -136,7 +127,7 @@ class AdminFeatureRead(BaseModel):
 
 
 class AdminFeatureUpdate(BaseModel):
-    # Full-Replace wie bei AdminTenantStorageQuotaUpdate - der Code selbst (PK) bleibt fest,
+    # Full-Replace wie bei AdminTenantSubscriptionUpdate - der Code selbst (PK) bleibt fest,
     # alles andere wird komplett ersetzt.
     name: str
     description: str | None = None
@@ -144,7 +135,7 @@ class AdminFeatureUpdate(BaseModel):
 
 
 class AdminTenantFeaturesUpdate(BaseModel):
-    # Full-Replace wie bei AdminTenantStorageQuotaUpdate: der gesamte gebuchte Featureumfang,
+    # Full-Replace wie bei AdminTenantSubscriptionUpdate: der gesamte gebuchte Featureumfang,
     # kein Teil-Patch.
     enabled_codes: list[str]
 
@@ -167,7 +158,7 @@ class AdminPlanRead(BaseModel):
 
 class AdminPlanWrite(BaseModel):
     # Full-Replace, auch fuers Anlegen (PUT /api/admin/plans/{code}, Code kommt aus dem Pfad,
-    # nicht aus dem Body - analog zu AdminTenantStorageQuotaUpdate).
+    # nicht aus dem Body - analog zu AdminTenantSubscriptionUpdate).
     name: str
     price_monthly_rp: int | None = Field(default=None, ge=0)
     price_yearly_rp: int | None = Field(default=None, ge=0)

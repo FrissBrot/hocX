@@ -210,6 +210,8 @@
     "offLabel": "Disattivato",
     "onLabel": "Attivato",
     "openOriginalDocument": "Apri documento originale",
+    "createdAtPill": "Creato il {date}",
+    "templateVersionPill": "Versione modello {version, number}",
     "orderSaveFailed": "L'ordine non può essere salvato",
     "otherEditorWarningDescription": "Almeno un'altra persona sta modificando attivamente questo verbale in questo momento. Il cambio di stato verrà applicato immediatamente per tutti.",
     "otherEditorWarningTitle": "Un'altra persona sta modificando",
@@ -416,12 +418,6 @@
   },
   "settledLater": "Saldato più tardi",
   "showAction": "Mostra",
-  "snapshotSwitcher": {
-    "current": "Attuale (modificabile)",
-    "historical": "{name} {year} (storico)",
-    "label": "Vista",
-    "missingSnapshot": "⚠ {name} {year} (nessuna istantanea)"
-  },
   "sortLabel": "Ordina",
   "status": {
     "abgeschlossen": "Concluso",

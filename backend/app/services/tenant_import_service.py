@@ -1160,6 +1160,8 @@ class TenantImportService:
                 "next_event_id": event_map.get(data["next_event_id"]) if data.get("next_event_id") else None,
                 "last_event_id": event_map.get(data["last_event_id"]) if data.get("last_event_id") else None,
                 "cycle_config_id": cycle_config_map.get(data["cycle_config_id"]) if data.get("cycle_config_id") else None,
+                # Eigener Bussentarif der Vorlage (0137); ältere Exporte kennen die Spalten nicht.
+                "fine_account_id": finance_account_map.get(data["fine_account_id"]) if data.get("fine_account_id") else None,
             })
             self.db.add(new_row)
             self.db.flush()

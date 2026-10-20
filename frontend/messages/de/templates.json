@@ -363,7 +363,18 @@
     "templateSavedToast": "Vorlage gespeichert",
     "participantAssignmentsSavedToast": "Teilnehmerzuordnungen gespeichert",
     "elementsAddedToast": "{count, plural, one {# Element hinzugefügt} other {# Elemente hinzugefügt}}",
-    "elementRemovedToast": "Element aus Vorlage entfernt"
+    "elementRemovedToast": "Element aus Vorlage entfernt",
+    "fineTariff": {
+      "button": "Bussentarif",
+      "title": "Bussentarif der Vorlage",
+      "description": "Legt fest, welche Bussen die Anwesenheitsblöcke dieser Vorlage verwenden.",
+      "useTenantTariff": "Mandantentarif verwenden (Finanzen › Bussen)",
+      "useOwnTariff": "Eigener Tarif für diese Vorlage",
+      "liveHint": "Änderungen gelten sofort für alle offenen Protokolle dieser Vorlage. Bereits erfasste Bussen behalten ihren Betrag.",
+      "saved": "Bussentarif der Vorlage gespeichert",
+      "saveFailed": "Bussentarif konnte nicht gespeichert werden",
+      "loadFailed": "Bussentarif konnte nicht geladen werden"
+    }
   },
   "elementEditor": {
     "advancedShow": "Erweitert",

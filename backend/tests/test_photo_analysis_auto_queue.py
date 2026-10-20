@@ -126,7 +126,7 @@ def test_create_pending_analysis_jobs_skips_a_tenant_with_an_already_active_job(
     asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant.id, files=[("a.png", _png_bytes())], tags=[], created_by=None))
     db.commit()
     _mark_clean(db, tenant.id)
-    service.create_analysis_job(db, tenant.id)  # first sweep queues it
+    service.create_pending_analysis_jobs(db)  # first sweep queues it
 
     second_sweep = service.create_pending_analysis_jobs(db)
 

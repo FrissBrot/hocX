@@ -210,6 +210,8 @@
     "offLabel": "Off",
     "onLabel": "On",
     "openOriginalDocument": "Open original document",
+    "createdAtPill": "Created {date}",
+    "templateVersionPill": "Template version {version, number}",
     "orderSaveFailed": "Order could not be saved",
     "otherEditorWarningDescription": "At least one other person is actively editing these minutes right now. The status change will apply for everyone immediately.",
     "otherEditorWarningTitle": "Another person is currently editing",
@@ -416,12 +418,6 @@
   },
   "settledLater": "Settled later",
   "showAction": "Show",
-  "snapshotSwitcher": {
-    "current": "Current (editable)",
-    "historical": "{name} {year} (historical)",
-    "label": "View",
-    "missingSnapshot": "⚠ {name} {year} (no snapshot)"
-  },
   "sortLabel": "Sort",
   "status": {
     "abgeschlossen": "Completed",

@@ -1179,5 +1179,41 @@
       "verificationReasonRequired": "Veuillez indiquer un motif.",
       "verificationNotVerified": "L’organisation n’est pas vérifiée."
     }
+  },
+  "documentTemplates": {
+    "title": "Modèles de documents",
+    "description": "Modèles fournis du Document Studio : lesquels sont proposés aux organisations et lequel est le standard de la plateforme par type de document. Leur contenu provient du code et est mis à jour au démarrage.",
+    "filter": {
+      "active": "Actifs",
+      "archived": "Archivés",
+      "all": "Tous"
+    },
+    "columns": {
+      "template": "Modèle",
+      "documentType": "Type de document",
+      "revision": "Version",
+      "usage": "Utilisation",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "status": {
+      "active": "Proposé",
+      "archived": "Archivé"
+    },
+    "platformDefault": "Standard de la plateforme",
+    "revision": "Version {revision, number}",
+    "unpublished": "Non publié",
+    "usage": "{copies, plural, =0 {Aucune copie} one {# copie} other {# copies}} · {exports, plural, =0 {aucun export} one {# export} other {# exports}}",
+    "actions": {
+      "makeDefault": "Définir comme standard de la plateforme",
+      "archive": "Archiver",
+      "reactivate": "Proposer à nouveau"
+    },
+    "archiveConfirm": "Archiver « {name} » ? Les organisations ne peuvent plus le choisir ; les attributions à ce modèle reviennent au standard de la plateforme. {copies, plural, =0 {} one {La # copie d’une organisation est conservée.} other {Les # copies des organisations sont conservées.}}",
+    "madeDefault": "« {name} » est désormais le standard de la plateforme",
+    "archived": "« {name} » archivé",
+    "reactivated": "« {name} » est de nouveau proposé",
+    "actionFailed": "L’action a échoué",
+    "empty": "Aucun modèle dans cette vue"
   }
 }

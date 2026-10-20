@@ -227,9 +227,8 @@ def test_todo_sync_uses_a_link_url_and_needs_a_link(db):
     )
     assignment = db.scalar(select(SubmissionAssignment).where(SubmissionAssignment.public_id == created.id))
 
-    result = service.sync_submission_todos(db, assignment)
-
-    assert result["created"] == 1
+    # Anlegen gleicht schon ab (FAR-010); ein erneuter Abgleich aktualisiert nur.
+    assert service.sync_submission_todos(db, assignment) == {"created": 0, "updated": 1}
     todo = db.scalar(select(ProtocolTodo).where(ProtocolTodo.submission_assignment_id == assignment.id))
     assert f"/{link.token}/fotos/event-{event.public_id}" in todo.reference_link
 
@@ -245,6 +244,90 @@ def test_todo_sync_uses_a_link_url_and_needs_a_link(db):
     assert todo.reference_link is None
     with pytest.raises(ValueError):
         service.sync_submission_todos(db, assignment)
+
+
+def _todos(db, assignment_public_id) -> list[ProtocolTodo]:
+    assignment = db.scalar(select(SubmissionAssignment).where(SubmissionAssignment.public_id == assignment_public_id))
+    return list(db.scalars(select(ProtocolTodo).where(ProtocolTodo.submission_assignment_id == assignment.id)))
+
+
+def test_event_assignment_creates_todos_for_already_existing_events(db):
+    """FAR-010: vorher entstanden Todos nur, wenn ein Termin danach angelegt oder bearbeitet wurde."""
+    from tests.factories import make_participant
+
+    tenant = make_tenant(db)
+    participant = make_participant(db, tenant.id, display_name="Anna Muster")
+    event = _tagged_event(db, tenant.id)
+    event.spezial1_ids = [participant.id]
+    db.flush()
+    link = links.create_link(db, SubmissionLinkCreate(name="Leiter"), tenant_id=tenant.id)
+
+    created = SubmissionService().create_assignment(
+        db, _assignment_payload(link_ids=[link.id], responsible_participant_source="spezial1_ids"), tenant_id=tenant.id
+    )
+
+    [todo] = _todos(db, created.id)
+    assert (todo.assigned_participant_id, todo.tenant_id) == (participant.id, tenant.id)
+
+
+def test_list_assignment_creates_and_follows_todos_per_list_entry(db):
+    """FAR-010: Listen-Abgaben mit Verantwortlichen bekamen nie Todos."""
+    from app.api.routes import lists as list_routes
+    from app.schemas.list_definition import ListEntryCreate
+    from tests.factories import make_current_user, make_list_definition, make_list_entry, make_participant
+
+    tenant = make_tenant(db)
+    anna = make_participant(db, tenant.id, display_name="Anna Muster")
+    ben = make_participant(db, tenant.id, display_name="Ben Beispiel")
+    definition = make_list_definition(db, tenant.id, column_two_title="Verantwortlich", column_two_value_type="participant")
+    make_list_entry(db, definition.id, column_one_value={"text": "Zelt"}, column_two_value={"participant_id": anna.id})
+    link = links.create_link(db, SubmissionLinkCreate(name="Leiter"), tenant_id=tenant.id)
+
+    created = SubmissionService().create_assignment(
+        db,
+        SubmissionAssignmentCreate(
+            title="Material", public_slug="material", source_type="list", list_definition_id=definition.public_id,
+            responsible_participant_source="column_two", link_ids=[link.id],
+        ),
+        tenant_id=tenant.id,
+    )
+    assert [todo.assigned_participant_id for todo in _todos(db, created.id)] == [anna.id]
+
+    # Neuer Listeneintrag über die Route: das Todo folgt automatisch.
+    list_routes.create_entry(
+        definition.public_id,
+        ListEntryCreate(sort_index=1, column_one_value={"text": "Kocher"}, column_two_value={"participant_id": str(ben.public_id)}),
+        db=db,
+        user=make_current_user(tenant.id, role="writer"),
+    )
+    assert sorted(todo.assigned_participant_id for todo in _todos(db, created.id)) == sorted([anna.id, ben.id])
+
+
+def test_unexpected_sync_error_is_logged_and_does_not_block_the_change(db, monkeypatch):
+    """Vorher verschluckte sync_todos_for_event jeden Fehler (except Exception: pass)."""
+    from app.services import submission_service as submission_module
+    from tests.factories import make_participant
+
+    tenant = make_tenant(db)
+    event = _tagged_event(db, tenant.id)
+    event.spezial1_ids = [make_participant(db, tenant.id, display_name="Anna Muster").id]
+    db.flush()
+    link = links.create_link(db, SubmissionLinkCreate(name="Leiter"), tenant_id=tenant.id)
+    logged: list[tuple[str, int | None]] = []
+
+    def broken(self, db, assignment):
+        raise RuntimeError("sync kaputt")
+
+    # record_system_error schreibt über eine eigene Verbindung, die den Testmandanten der
+    # Rollback-Transaktion nicht sieht - hier nur prüfen, dass der Fehler dort ankäme.
+    monkeypatch.setattr(SubmissionService, "sync_submission_todos", broken)
+    monkeypatch.setattr(submission_module, "record_system_error", lambda db, *, exc, tenant_id=None, **_kw: logged.append((str(exc), tenant_id)))
+    created = SubmissionService().create_assignment(
+        db, _assignment_payload(link_ids=[link.id], responsible_participant_source="spezial1_ids"), tenant_id=tenant.id
+    )
+
+    assert created.id is not None
+    assert logged == [("sync kaputt", tenant.id)]
 
 
 # ── Cloning must never carry tokens over ──────────────────────────────────

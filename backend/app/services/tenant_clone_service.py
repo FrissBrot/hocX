@@ -600,6 +600,7 @@ class TenantCloneService:
                 "next_event_id": event_map.get(row.next_event_id) if row.next_event_id else None,
                 "last_event_id": event_map.get(row.last_event_id) if row.last_event_id else None,
                 "cycle_config_id": cycle_config_map.get(row.cycle_config_id) if row.cycle_config_id else None,
+                "fine_account_id": finance_account_map.get(row.fine_account_id) if row.fine_account_id else None,
             })
             db.add(new_row)
             db.flush()

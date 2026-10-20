@@ -574,59 +574,9 @@ class FileService:
             if len(group) >= min_size
         ]
 
-    def create_analysis_job(
-        self,
-        db: Session,
-        tenant_id: int,
-        *,
-        source: str | None = None,
-        search: str | None = None,
-        tags: list[str] | None = None,
-        file_ids: list[uuid.UUID] | None = None,
-        requested_by: int | None = None,
-    ) -> PhotoAnalysisJob:
-        """Photo-culling Phase 3: queues the (filtered) images for photo-analysis-worker to
-        score. Same filter shape as group_similar_gallery_images, but this only writes a
-        queued row - the actual face-detection work happens out of process, later, in the
-        separate worker container (see that container's README for why)."""
-        rows = self.stored_file_repository.list_tenant_files(
-            db,
-            tenant_id,
-            skip=0,
-            limit=MAX_ANALYSIS_JOB_IMAGES + 1,
-            source=source,
-            only_images=True,
-            search=search,
-            tags=tags,
-            file_ids=file_ids,
-        )
-        if len(rows) > MAX_ANALYSIS_JOB_IMAGES:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Zu viele Bilder für einen Analyse-Auftrag ausgewählt (max. {MAX_ANALYSIS_JOB_IMAGES}) - Filter eingrenzen (z.B. Album, Tag oder Suche).",
-            )
-        if not rows:
-            raise HTTPException(status_code=400, detail="Keine Bilder für diesen Filter gefunden.")
-
-        job = PhotoAnalysisJob(
-            tenant_id=tenant_id,
-            stored_file_ids=[row.id for row in rows],
-            requested_by=requested_by,
-        )
-        db.add(job)
-        db.commit()
-        db.refresh(job)
-        return job
-
-    def get_analysis_job(self, db: Session, tenant_id: int, job_id: uuid.UUID) -> PhotoAnalysisJob:
-        job = db.get(PhotoAnalysisJob, job_id)
-        if job is None or job.tenant_id != tenant_id:
-            raise HTTPException(status_code=404, detail="Analyse-Auftrag nicht gefunden")
-        return job
-
     def create_pending_analysis_jobs(self, db: Session) -> list[PhotoAnalysisJob]:
-        """Automatic off-peak counterpart to the manual "Gesichtsqualität analysieren"
-        button (create_analysis_job): one job per tenant that has at least one clean image
+        """The only way analysis jobs are queued (the manual "Gesichtsqualität analysieren"
+        button and its POST /files/analysis-jobs route are gone): one job per tenant that has at least one clean image
         not yet analyzed and no job already queued/running - called from main.py's
         photo_analysis_auto_queue_loop. Skips a tenant with an in-flight job rather than
         piling on a second one; it'll be picked up again next loop iteration once that job

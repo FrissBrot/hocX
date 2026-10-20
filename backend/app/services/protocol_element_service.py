@@ -34,10 +34,11 @@ class ProtocolElementService:
 
         ProtocolService().refresh_membership_blocks(db, protocol_id)
         protocol_row = db.execute(
-            select(Protocol.status, Protocol.tenant_id).where(Protocol.id == protocol_id)
+            select(Protocol.status, Protocol.tenant_id, Protocol.template_id).where(Protocol.id == protocol_id)
         ).one_or_none()
         protocol_status = protocol_row.status if protocol_row else ""
         protocol_tenant_id = protocol_row.tenant_id if protocol_row else None
+        protocol_template_id = protocol_row.template_id if protocol_row else None
         element_rows = self.repository.list_for_protocol(db, protocol_id)
         elements = [row[0] for row in element_rows]
         show_when_empty_by_id = {row[0].id: row[1] for row in element_rows}
@@ -49,12 +50,13 @@ class ProtocolElementService:
         for row in block_rows:
             block = row.ProtocolElementBlock
             config = dict(block.configuration_snapshot_json or {})
-            # Bussen: der Block trägt nur fines_enabled, Konto und Beträge kommen aus dem
-            # zentralen Tarif (fine_tariff_service). attendance-fines.ts liest diese Schlüssel.
+            # Bussen: der Block trägt nur fines_enabled, Konto und Beträge kommen aus dem Tarif
+            # der Vorlage bzw. des Mandanten (fine_tariff_service). attendance-fines.ts liest
+            # diese Schlüssel.
             if row.element_type_code == "attendance":
                 if config.get("fines_enabled") and protocol_tenant_id is not None:
                     if fine_values is None:
-                        fine_values = tariff_block_values(db, protocol_tenant_id)
+                        fine_values = tariff_block_values(db, protocol_tenant_id, protocol_template_id)
                     config.update(fine_values)
                 else:
                     config.update({"fine_account_id": None, "fine_amount_late": 0, "fine_amount_absent": 0})

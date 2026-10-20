@@ -241,7 +241,6 @@ class TenantService:
             storage_used_bytes=storage_used_bytes,
             storage_quota_bytes=tenant.storage_quota_bytes,
             package_storage_bytes=package_storage_bytes,
-            storage_quota_manual_override=tenant.storage_quota_manual_override,
             features=features,
             estimated_monthly_cost_rp=estimated_monthly_cost_rp,
             estimated_yearly_cost_rp=estimated_yearly_cost_rp,

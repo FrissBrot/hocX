@@ -1179,5 +1179,41 @@
       "verificationReasonRequired": "Indica un motivo.",
       "verificationNotVerified": "L’organizzazione non è verificata."
     }
+  },
+  "documentTemplates": {
+    "title": "Modelli di documento",
+    "description": "Modelli forniti del Document Studio: quali vengono offerti alle organizzazioni e quale è lo standard della piattaforma per tipo di documento. Il contenuto proviene dal codice e viene aggiornato all’avvio.",
+    "filter": {
+      "active": "Attivi",
+      "archived": "Archiviati",
+      "all": "Tutti"
+    },
+    "columns": {
+      "template": "Modello",
+      "documentType": "Tipo di documento",
+      "revision": "Versione",
+      "usage": "Utilizzo",
+      "status": "Stato",
+      "actions": "Azioni"
+    },
+    "status": {
+      "active": "Offerto",
+      "archived": "Archiviato"
+    },
+    "platformDefault": "Standard della piattaforma",
+    "revision": "Versione {revision, number}",
+    "unpublished": "Non pubblicato",
+    "usage": "{copies, plural, =0 {Nessuna copia} one {# copia} other {# copie}} · {exports, plural, =0 {nessuna esportazione} one {# esportazione} other {# esportazioni}}",
+    "actions": {
+      "makeDefault": "Imposta come standard della piattaforma",
+      "archive": "Archivia",
+      "reactivate": "Offri di nuovo"
+    },
+    "archiveConfirm": "Archiviare «{name}»? Le organizzazioni non potranno più sceglierlo; le assegnazioni a questo modello tornano allo standard della piattaforma. {copies, plural, =0 {} one {La # copia di un’organizzazione viene mantenuta.} other {Le # copie delle organizzazioni vengono mantenute.}}",
+    "madeDefault": "«{name}» è ora lo standard della piattaforma",
+    "archived": "«{name}» archiviato",
+    "reactivated": "«{name}» viene di nuovo offerto",
+    "actionFailed": "Azione non riuscita",
+    "empty": "Nessun modello in questa vista"
   }
 }

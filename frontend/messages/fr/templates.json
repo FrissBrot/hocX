@@ -363,7 +363,18 @@
     "templateSavedToast": "Modèle enregistré",
     "participantAssignmentsSavedToast": "Attributions des participants enregistrées",
     "elementsAddedToast": "{count, plural, one {# élément ajouté} other {# éléments ajoutés}}",
-    "elementRemovedToast": "Élément retiré du modèle"
+    "elementRemovedToast": "Élément retiré du modèle",
+    "fineTariff": {
+      "button": "Tarif des amendes",
+      "title": "Tarif des amendes du modèle",
+      "description": "Définit les amendes utilisées par les blocs de présence de ce modèle.",
+      "useTenantTariff": "Utiliser le tarif de l'organisation (Finances › Amendes)",
+      "useOwnTariff": "Tarif propre à ce modèle",
+      "liveHint": "Les modifications s'appliquent immédiatement à tous les procès-verbaux ouverts de ce modèle. Les amendes déjà saisies conservent leur montant.",
+      "saved": "Tarif des amendes du modèle enregistré",
+      "saveFailed": "Le tarif des amendes n'a pas pu être enregistré",
+      "loadFailed": "Le tarif des amendes n'a pas pu être chargé"
+    }
   },
   "elementEditor": {
     "advancedShow": "Avancé",

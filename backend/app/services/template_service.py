@@ -141,6 +141,10 @@ class TemplateService:
             version=1,
             status=source.status,
             created_by=created_by,
+            fine_tariff_override=source.fine_tariff_override,
+            fine_account_id=source.fine_account_id,
+            fine_amount_late=source.fine_amount_late,
+            fine_amount_absent=source.fine_amount_absent,
         )
         created = self.repository.create(db, duplicate)
 

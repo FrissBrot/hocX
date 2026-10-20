@@ -24,7 +24,8 @@
     "verifications": "Verifizierungen",
     "storage": "Storage",
     "backups": "Backups",
-    "maintenance": "Wartung"
+    "maintenance": "Wartung",
+    "documentTemplates": "Dokumentvorlagen"
   },
   "logout": "Logout",
   "menuToggleClose": "Schliessen",

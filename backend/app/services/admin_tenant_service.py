@@ -129,7 +129,6 @@ class AdminTenantService:
             plan_storage_bytes=plan.included_storage_bytes if plan is not None else None,
             package_storage_bytes=package_storage_bytes,
             effective_storage_quota_bytes=tenant.storage_quota_bytes,
-            storage_quota_manual_override=tenant.storage_quota_manual_override,
             assigned_storage_packages=assigned_storage_packages,
             discount_percent=tenant.discount_percent,
             billing_note=tenant.billing_note,
@@ -450,9 +449,7 @@ class AdminTenantService:
     def recompute_effective_storage_quota(self, db: Session, tenant_id: int) -> None:
         """effective = plan.included_storage_bytes + sum(package.bytes * quantity) - called
         after a plan change or a storage-package assignment change (0087_storage_packages).
-        Skipped when storage_quota_manual_override is set, so an admin's individually set
-        quota (e.g. a bespoke enterprise limit) survives the next plan/package change instead
-        of being silently overwritten.
+        There is no manual override any more (0136_drop_manual_storage_quota).
 
         If the plan has no storage limit (included_storage_bytes is NULL, e.g. the 'legacy'
         plan) and no packages are assigned, the quota is left at NULL (unlimited) rather than
@@ -466,7 +463,7 @@ class AdminTenantService:
         """Wie recompute_effective_storage_quota, aber ohne Commit - für Aufrufer, die mehrere
         Mandanten in einer Transaktion nachführen (Katalog-Import). True, wenn etwas gesetzt wurde."""
         tenant = db.get(Tenant, tenant_id)
-        if tenant is None or tenant.storage_quota_manual_override:
+        if tenant is None:
             return False
         plan = db.get(Plan, tenant.plan_code) if tenant.plan_code is not None else None
         plan_bytes = plan.included_storage_bytes if plan is not None else None

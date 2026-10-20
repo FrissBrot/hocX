@@ -59,7 +59,9 @@ class StoredFileRepository:
         """Pending-scan StoredFile rows from any of the three internal upload paths
         (protocol image, gallery upload, word import) - joined through their respective
         origin table's stored_file_id (all three indexed) rather than a storage_path prefix
-        match. Safe to join rather than match by path: each of the three save_* methods
+        match. Includes the Live-Photo clip of a gallery upload (its own StoredFile, linked
+        only via gallery_image.live_video_stored_file_id): without it a clip left pending by a
+        ClamAV outage stayed unplayable forever (Feature-Recovery-Audit FAR-001). Safe to join rather than match by path: each of the three save_* methods
         creates the StoredFile row and its origin row in the same transaction and commits
         them together (see FileService.save_gallery_uploads/save_word_import_document), so
         there's no window where a committed, pending StoredFile row of these three kinds
@@ -76,6 +78,9 @@ class StoredFileRepository:
                     or_(
                         StoredFile.id.in_(select(ProtocolImage.stored_file_id)),
                         StoredFile.id.in_(select(GalleryImage.stored_file_id)),
+                        StoredFile.id.in_(
+                            select(GalleryImage.live_video_stored_file_id).where(GalleryImage.live_video_stored_file_id.is_not(None))
+                        ),
                         StoredFile.id.in_(select(WordImportDocument.stored_file_id)),
                     ),
                 )

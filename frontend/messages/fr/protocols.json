@@ -210,6 +210,8 @@
     "offLabel": "Désactivé",
     "onLabel": "Activé",
     "openOriginalDocument": "Ouvrir le document original",
+    "createdAtPill": "Créé le {date}",
+    "templateVersionPill": "Version du modèle {version, number}",
     "orderSaveFailed": "L'ordre n'a pas pu être enregistré",
     "otherEditorWarningDescription": "Au moins une autre personne modifie activement ce procès-verbal en ce moment. Le changement de statut s'appliquera immédiatement à tout le monde.",
     "otherEditorWarningTitle": "Une autre personne est en train de modifier",
@@ -416,12 +418,6 @@
   },
   "settledLater": "Réglé plus tard",
   "showAction": "Afficher",
-  "snapshotSwitcher": {
-    "current": "Actuel (modifiable)",
-    "historical": "{name} {year} (historique)",
-    "label": "Vue",
-    "missingSnapshot": "⚠ {name} {year} (pas d'instantané)"
-  },
   "sortLabel": "Trier",
   "status": {
     "abgeschlossen": "Terminé",

@@ -1179,5 +1179,41 @@
       "verificationReasonRequired": "Please give a reason.",
       "verificationNotVerified": "The organisation is not verified."
     }
+  },
+  "documentTemplates": {
+    "title": "Document templates",
+    "description": "Built-in Document Studio templates: which ones are offered to organisations and which is the platform default per document type. Their content comes from the code and is updated on startup.",
+    "filter": {
+      "active": "Active",
+      "archived": "Archived",
+      "all": "All"
+    },
+    "columns": {
+      "template": "Template",
+      "documentType": "Document type",
+      "revision": "Version",
+      "usage": "Usage",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "status": {
+      "active": "Offered",
+      "archived": "Archived"
+    },
+    "platformDefault": "Platform default",
+    "revision": "Version {revision, number}",
+    "unpublished": "Not published",
+    "usage": "{copies, plural, =0 {No copies} one {# copy} other {# copies}} · {exports, plural, =0 {no exports} one {# export} other {# exports}}",
+    "actions": {
+      "makeDefault": "Make platform default",
+      "archive": "Archive",
+      "reactivate": "Offer again"
+    },
+    "archiveConfirm": "Archive “{name}”? Organisations can no longer choose it; assignments to this template fall back to the platform default. {copies, plural, =0 {} one {The # copy made by an organisation is kept.} other {The # copies made by organisations are kept.}}",
+    "madeDefault": "“{name}” is now the platform default",
+    "archived": "“{name}” archived",
+    "reactivated": "“{name}” is offered again",
+    "actionFailed": "Action failed",
+    "empty": "No templates in this view"
   }
 }

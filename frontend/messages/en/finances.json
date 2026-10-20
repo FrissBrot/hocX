@@ -108,7 +108,7 @@
   "bookedTo": "Booked to <strong>{account}</strong>",
   "tariffButton": "Fine rates",
   "tariffTitle": "Fine rates",
-  "tariffDescription": "Applies to every attendance block with “Fines active” switched on.",
+  "tariffDescription": "Applies to every attendance block with “Fines active” switched on, unless its template has its own rates.",
   "tariffAccountLabel": "Fine account",
   "tariffAccountHelp": "Without an account no fines are created.",
   "tariffNoAccount": "No account (no fines)",

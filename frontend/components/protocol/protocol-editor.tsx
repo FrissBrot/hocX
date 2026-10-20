@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { formatDateTime } from "@/lib/utils/format";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 
@@ -1710,6 +1711,12 @@ export function ProtocolEditor({
       <div className="status-row">
         <span className="pill">{protocol.protocol_number}</span>
         <span className="pill">{workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus, tRoot)}</span>
+        {protocol.created_at && (
+          <span className="pill">{t("createdAtPill", { date: formatDateTime(protocol.created_at, locale) })}</span>
+        )}
+        {protocol.template_version != null && (
+          <span className="pill">{t("templateVersionPill", { version: protocol.template_version })}</span>
+        )}
         {protocol.import_source_url && (
           <a
             className="pill"

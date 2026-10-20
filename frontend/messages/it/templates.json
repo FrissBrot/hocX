@@ -363,7 +363,18 @@
     "templateSavedToast": "Modello salvato",
     "participantAssignmentsSavedToast": "Assegnazioni dei partecipanti salvate",
     "elementsAddedToast": "{count, plural, one {# elemento aggiunto} other {# elementi aggiunti}}",
-    "elementRemovedToast": "Elemento rimosso dal modello"
+    "elementRemovedToast": "Elemento rimosso dal modello",
+    "fineTariff": {
+      "button": "Tariffa multe",
+      "title": "Tariffa multe del modello",
+      "description": "Definisce quali multe usano i blocchi presenze di questo modello.",
+      "useTenantTariff": "Usa la tariffa dell'organizzazione (Finanze › Multe)",
+      "useOwnTariff": "Tariffa propria per questo modello",
+      "liveHint": "Le modifiche valgono subito per tutti i verbali aperti di questo modello. Le multe già registrate mantengono il loro importo.",
+      "saved": "Tariffa multe del modello salvata",
+      "saveFailed": "Impossibile salvare la tariffa multe",
+      "loadFailed": "Impossibile caricare la tariffa multe"
+    }
   },
   "elementEditor": {
     "advancedShow": "Avanzate",

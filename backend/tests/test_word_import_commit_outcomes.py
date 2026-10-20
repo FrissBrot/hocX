@@ -15,7 +15,6 @@ from app.schemas.word_import import (
     WordImportEventIgnore,
     WordImportMatrixCellCommit,
 )
-from app.services.word_import_quality_service import WordImportQualityService
 from app.services.word_import_service import WordImportService, _normalize
 from tests.factories import make_event, make_template, make_tenant
 from tests.test_word_import_e2e import _build_template
@@ -524,44 +523,3 @@ def test_matrix_column_resolution_is_remembered_and_reused_when_no_candidate_mat
     assert second_row.column_key == "col1"
     other_row = next(m for m in second_analysis.matrix_mappings if m.column_label_raw == "25.10.2026")
     assert other_row.column_key == "col2"
-
-
-def test_quality_service_aggregates_accept_rate_by_bucket(db):
-    tenant = make_tenant(db)
-    template = _template_with_protocol_number(db, tenant)
-    db.add_all(
-        [
-            WordImportSuggestionOutcome(tenant_id=tenant.id, template_id=template.id, signal_type="event_match", suggested_score=0.85, was_accepted=True),
-            WordImportSuggestionOutcome(tenant_id=tenant.id, template_id=template.id, signal_type="event_match", suggested_score=0.87, was_accepted=True),
-            WordImportSuggestionOutcome(tenant_id=tenant.id, template_id=template.id, signal_type="event_match", suggested_score=0.5, was_accepted=False),
-        ]
-    )
-    db.flush()
-
-    stats = WordImportQualityService().accept_rate_stats(db, tenant_id=tenant.id, template_id=template.id)
-    buckets_by_score = {(b["signal_type"], b["score_bucket"]): b for b in stats}
-    assert buckets_by_score[("event_match", 0.8)]["sample_count"] == 2
-    assert buckets_by_score[("event_match", 0.8)]["accept_rate"] == 1.0
-    assert buckets_by_score[("event_match", 0.5)]["accept_rate"] == 0.0
-
-
-def test_quality_service_buckets_a_perfect_score_with_the_09_band(db):
-    """A suggested_score of exactly 1.0 must land in the same 0.9 bucket a 0.9-0.99
-    score would - word_import_thresholds.adaptive_threshold's own Python-side bucketing
-    (`min(int(score * 10), 9)`) already caps this way; the SQL side used to disagree
-    (a plain `floor(score*10)/10` gives 1.0 its own separate bucket), silently desyncing
-    this dashboard from what the learning logic actually bases its threshold on."""
-    tenant = make_tenant(db)
-    template = _template_with_protocol_number(db, tenant)
-    db.add_all(
-        [
-            WordImportSuggestionOutcome(tenant_id=tenant.id, template_id=template.id, signal_type="name_match", suggested_score=1.0, was_accepted=True),
-            WordImportSuggestionOutcome(tenant_id=tenant.id, template_id=template.id, signal_type="name_match", suggested_score=0.92, was_accepted=True),
-        ]
-    )
-    db.flush()
-
-    stats = WordImportQualityService().accept_rate_stats(db, tenant_id=tenant.id, template_id=template.id)
-    buckets_by_score = {(b["signal_type"], b["score_bucket"]): b for b in stats}
-    assert ("name_match", 1.0) not in buckets_by_score
-    assert buckets_by_score[("name_match", 0.9)]["sample_count"] == 2

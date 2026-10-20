@@ -27,6 +27,8 @@ audit = AuditService()
 class SystemTemplateRead(BaseModel):
     id: uuid.UUID
     system_key: str | None
+    name: str
+    description: str | None
     document_type: str
     variant: str | None
     status: str
@@ -42,6 +44,8 @@ def _read(db: Session, template: DocumentTemplate) -> SystemTemplateRead:
     return SystemTemplateRead(
         id=template.public_id,
         system_key=template.system_key,
+        name=template.name,
+        description=template.description,
         document_type=template.document_type,
         variant=template.variant,
         status=template.status,

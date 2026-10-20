@@ -434,21 +434,6 @@ def get_upload_log(
     return service.get_upload_log(db, assignment_id=assignment.id, element_ref=element_ref)
 
 
-@router.post("/submission-assignments/{assignment_id}/sync-todos")
-def sync_todos(
-    assignment_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
-):
-    require_abgabebox_write(user)
-    assignment = _get_assignment_or_404(db, assignment_id, user)
-    try:
-        result = service.sync_submission_todos(db, assignment)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return result
-
-
 @router.get("/submission-assignments/{assignment_id}/download-zip")
 def download_all_files_zip(
     assignment_id: uuid.UUID,

@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.core.security import CurrentUser, get_current_user, require_admin, require_reader
+from app.core.security import CurrentUser, get_current_user, require_admin, require_feature, require_reader
 from app.core.db import get_db
 from app.models.entities import ElementDefinition, Template, TemplateElement
 from app.schemas.template import (
@@ -22,7 +22,9 @@ from app.schemas.template import (
     TemplateRead,
     TemplateUpdate,
 )
-from app.services import public_id_service
+from app.schemas.fines import TemplateFineTariffRead, TemplateFineTariffUpdate
+from app.services import fine_tariff_service, public_id_service
+from app.services.audit_service import AuditService
 from app.services.element_definition_service import ElementDefinitionService
 from app.services.access_service import AccessService
 from app.services.template_element_service import TemplateElementService
@@ -30,6 +32,7 @@ from app.services.template_service import TemplateService
 
 router = APIRouter()
 service = TemplateService()
+audit = AuditService()
 element_definition_service = ElementDefinitionService()
 template_element_service = TemplateElementService()
 access_service = AccessService()
@@ -147,6 +150,37 @@ def delete_template(
     if not deleted:
         raise HTTPException(status_code=404, detail="Template not found")
     return {"message": "Template deleted"}
+
+
+@router.get("/templates/{template_id}/fine-tariff", response_model=TemplateFineTariffRead)
+def get_template_fine_tariff(template_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Bussentarif der Vorlage (eigener oder Mandantentarif, FAR-002)."""
+    require_admin(user)
+    require_feature(user, "finance")
+    template = _get_template_or_404(db, template_id, user)
+    return fine_tariff_service.read_template_tariff(db, template)
+
+
+@router.put("/templates/{template_id}/fine-tariff", response_model=TemplateFineTariffRead)
+def update_template_fine_tariff(
+    template_id: uuid.UUID,
+    payload: TemplateFineTariffUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_admin(user)
+    require_feature(user, "finance")
+    template = _get_template_or_404(db, template_id, user)
+    try:
+        result = fine_tariff_service.update_template_tariff(db, template, payload)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    audit.log(
+        db, action="template.fine_tariff_updated", actor=user, entity_type="template", entity_id=template.id,
+        details={"override": result.override, "amount_late": float(result.amount_late), "amount_absent": float(result.amount_absent)},
+    )
+    return result
 
 
 @router.get("/templates/{template_id}/elements", response_model=list[TemplateElementRead])

@@ -1,4 +1,4 @@
-"""Tests for StorageService (per-tenant disk-usage breakdown + quota) and the tenant-scoped
+"""Tests for StorageService (per-tenant disk-usage breakdown) and the tenant-scoped
 /api/storage/usage route plus the admin storage endpoints. Row builders mirror
 test_files_overview.py's _make_protocol_image/_make_word_import_document/
 _make_submission_upload_file so a stored_file lands in the same category the "Dateien"
@@ -14,7 +14,6 @@ from fastapi import HTTPException
 
 from app.api.routes import admin as admin_routes
 from app.api.routes import storage as storage_routes
-from app.core.admin_security import CurrentAdmin
 from app.models.entities import (
     GalleryImage,
     DocumentExport,
@@ -25,7 +24,6 @@ from app.models.entities import (
     SubmissionUploadFile,
     WordImportDocument,
 )
-from app.schemas.admin import AdminTenantStorageQuotaUpdate
 from app.services.storage_service import StorageService
 from tests.factories import (
     make_current_user,
@@ -177,23 +175,6 @@ def test_total_bytes_by_tenant_covers_multiple_tenants_in_one_query(db):
     assert totals[tenant_b.id] == 500
 
 
-def test_set_quota_persists_and_clears(db):
-    tenant = make_tenant(db)
-
-    updated = service.set_quota(db, tenant.id, 1024 * 1024)
-    assert updated.storage_quota_bytes == 1024 * 1024
-    assert updated.storage_quota_manual_override is True
-    assert service.breakdown_for_tenant(db, tenant.id).quota_bytes == 1024 * 1024
-
-    cleared = service.set_quota(db, tenant.id, None)
-    assert cleared.storage_quota_bytes is None
-    assert cleared.storage_quota_manual_override is False
-
-
-def test_set_quota_returns_none_for_unknown_tenant(db):
-    assert service.set_quota(db, 999999, 1024) is None
-
-
 def test_storage_usage_route_requires_admin_role(db):
     tenant = make_tenant(db)
     writer = make_current_user(tenant.id, role="writer")
@@ -211,12 +192,6 @@ def test_storage_usage_route_returns_breakdown_for_admin(db):
     result = storage_routes.get_storage_usage(db=db, user=admin)
 
     assert result.total_bytes == 1234
-
-
-def _admin() -> CurrentAdmin:
-    return CurrentAdmin(
-        admin_id=1, admin_public_id=uuid.uuid4(), email="admin@example.com", display_name="Test Admin", role="owner"
-    )
 
 
 def test_admin_list_tenants_includes_storage_used_bytes(db):
@@ -246,27 +221,7 @@ def test_admin_get_tenant_storage_404s_for_unknown_tenant(db):
     assert exc_info.value.status_code == 404
 
 
-def test_admin_update_tenant_storage_quota_sets_bytes_from_mb(db):
-    tenant = make_tenant(db)
-
-    result = admin_routes.update_tenant_storage_quota(
-        tenant.public_id, AdminTenantStorageQuotaUpdate(quota_mb=10), db=db, current_admin=_admin(),
-    )
-
-    assert result.storage_quota_bytes == 10 * 1024 * 1024
-
-
-def test_admin_update_tenant_storage_quota_clears_with_none(db):
-    tenant = make_tenant(db)
-    admin_routes.update_tenant_storage_quota(tenant.public_id, AdminTenantStorageQuotaUpdate(quota_mb=10), db=db, current_admin=_admin())
-
-    result = admin_routes.update_tenant_storage_quota(tenant.public_id, AdminTenantStorageQuotaUpdate(quota_mb=None), db=db, current_admin=_admin())
-
-    assert result.storage_quota_bytes is None
-    assert result.storage_quota_manual_override is False
-
-
-def test_admin_update_tenant_storage_quota_404s_for_unknown_tenant(db):
-    with pytest.raises(HTTPException) as exc_info:
-        admin_routes.update_tenant_storage_quota(uuid.uuid4(), AdminTenantStorageQuotaUpdate(quota_mb=10), db=db, current_admin=_admin())
-    assert exc_info.value.status_code == 404
+def test_manual_storage_quota_endpoint_is_gone():
+    """FAR-008: das Kontingent kommt nur noch aus Plan + Zusatzpaketen (0136)."""
+    paths = {getattr(route, "path", "") for route in admin_routes.router.routes}
+    assert not any(path.endswith("/storage-quota") for path in paths)

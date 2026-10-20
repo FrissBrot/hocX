@@ -14,7 +14,7 @@ import { AdminAccountSettings } from "@/components/admin/admin-account-settings"
 import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
-type AdminIconKey = "dashboard" | "tenants" | "pricing" | "cashflow" | "users" | "domains" | "verifications" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security" | "storage" | "backups" | "maintenance";
+type AdminIconKey = "dashboard" | "tenants" | "pricing" | "cashflow" | "users" | "domains" | "verifications" | "documents" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security" | "storage" | "backups" | "maintenance";
 
 type AdminNavLink = { href: string; labelKey: string; icon: AdminIconKey; badge?: "count" };
 
@@ -40,6 +40,7 @@ const navGroups: { titleKey: string | null; links: AdminNavLink[] }[] = [
       { href: "/admin/error-logs", labelKey: "nav.errorLogs", icon: "errors" },
       { href: "/admin/upload-pipeline", labelKey: "nav.uploadPipeline", icon: "pipeline" },
       { href: "/admin/jobs", labelKey: "nav.jobs", icon: "jobs" },
+      { href: "/admin/document-templates", labelKey: "nav.documentTemplates", icon: "documents" },
       { href: "/admin/storage", labelKey: "nav.storage", icon: "storage" },
       { href: "/admin/backups", labelKey: "nav.backups", icon: "backups" },
       { href: "/admin/maintenance", labelKey: "nav.maintenance", icon: "maintenance" },
@@ -108,6 +109,12 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
       <>
         <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z" />
         <path d="M9 12l2 2 4-4" />
+      </>
+    ),
+    documents: (
+      <>
+        <path d="M7 3.5h7l4 4V20.5H7z" />
+        <path d="M14 3.5v4h4M9.5 12h6M9.5 15.5h6" />
       </>
     ),
     errors: (

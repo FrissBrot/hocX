@@ -105,26 +105,6 @@ class FileOverviewItem(BaseModel):
     share_pending: bool = False
 
 
-class PhotoAnalysisJobCreate(BaseModel):
-    """Same filter shape as GET /files/similarity-groups - "analyze whatever this filtered
-    view currently shows"."""
-
-    source: FileOverviewSource | None = None
-    search: str | None = None
-    tags: list[str] | None = None
-    file_ids: list[uuid.UUID] | None = None
-
-
-class PhotoAnalysisJobRead(BaseModel):
-    id: uuid.UUID
-    status: Literal["queued", "running", "done", "failed"]
-    image_count: int
-    created_at: datetime
-    started_at: datetime | None
-    finished_at: datetime | None
-    error: str | None
-
-
 class SimilarityGroup(BaseModel):
     """Photo-culling Phase 2 (see photo_similarity.py). `images` is sorted best-first;
     `best_id` is a convenience duplicate of `images[0].id` for a frontend that only wants

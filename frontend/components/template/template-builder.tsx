@@ -15,6 +15,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
+import { TemplateFineTariffModal } from "@/components/template/template-fine-tariff-modal";
 import { formatDateRange } from "@/lib/utils/format";
 import { elementTypeLabels } from "@/lib/constants/element-types";
 import { EligibleResponsibleList, eligibleResponsibleList, listParticipantIds, listTextValue } from "@/lib/utils/responsible-lists";
@@ -22,6 +23,7 @@ import {
   CycleConfigSummary,
   ElementDefinition,
   EventSummary,
+  FinanceAccount,
   ParticipantSummary,
   StructuredListDefinition,
   StructuredListEntry,
@@ -45,6 +47,8 @@ type TemplateEditorProps = {
   availableLists: StructuredListDefinition[];
   initialAssignedParticipants: ParticipantSummary[];
   availableCycleConfigs: CycleConfigSummary[];
+  // Nur mit gebuchten Finanzen (sonst kein Bussentarif, siehe require_feature im Backend).
+  financeAccounts?: FinanceAccount[] | null;
 };
 
 type TemplateCreateState = {
@@ -625,6 +629,7 @@ export function TemplateEditor({
   availableLists,
   initialAssignedParticipants,
   availableCycleConfigs,
+  financeAccounts = null,
 }: TemplateEditorProps) {
   const router = useRouter();
   const isParticipantSelectable = useParticipantSelectable();
@@ -654,6 +659,7 @@ export function TemplateEditor({
   const [showParticipantModal, setShowParticipantModal] = useState(false);
   const [participantPickerSearch, setParticipantPickerSearch] = useState("");
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showFineTariffModal, setShowFineTariffModal] = useState(false);
   const [showAutoAssignModal, setShowAutoAssignModal] = useState(false);
   const [showResponsibilityModalFor, setShowResponsibilityModalFor] = useState<string | null>(null);
   const [draggedTemplateElementId, setDraggedTemplateElementId] = useState<string | null>(null);
@@ -1518,9 +1524,22 @@ export function TemplateEditor({
             <button type="button" className="button-ghost button-secondary" onClick={() => setShowParticipantModal(true)}>
               Teilnehmer
             </button>
+            {financeAccounts ? (
+              <button type="button" className="button-ghost button-secondary" onClick={() => setShowFineTariffModal(true)}>
+                {t("fineTariff.button")}
+              </button>
+            ) : null}
           </div>
         }
       />
+      {financeAccounts ? (
+        <TemplateFineTariffModal
+          open={showFineTariffModal}
+          templateId={template.id}
+          accounts={financeAccounts}
+          onClose={() => setShowFineTariffModal(false)}
+        />
+      ) : null}
 
       <Modal
         open={showSettingsModal}

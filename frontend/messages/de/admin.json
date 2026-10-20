@@ -1179,5 +1179,41 @@
       "verificationReasonRequired": "Bitte eine Begründung angeben.",
       "verificationNotVerified": "Die Organisation ist nicht verifiziert."
     }
+  },
+  "documentTemplates": {
+    "title": "Dokumentvorlagen",
+    "description": "Mitgelieferte Vorlagen des Document Studio: welche Mandanten angeboten werden und welche je Dokumentart der Plattform-Standard ist. Der Inhalt kommt aus dem Code und wird beim Start aktualisiert.",
+    "filter": {
+      "active": "Aktiv",
+      "archived": "Archiviert",
+      "all": "Alle"
+    },
+    "columns": {
+      "template": "Vorlage",
+      "documentType": "Dokumentart",
+      "revision": "Version",
+      "usage": "Verwendung",
+      "status": "Status",
+      "actions": "Aktionen"
+    },
+    "status": {
+      "active": "Angeboten",
+      "archived": "Archiviert"
+    },
+    "platformDefault": "Plattform-Standard",
+    "revision": "Version {revision, number}",
+    "unpublished": "Nicht veröffentlicht",
+    "usage": "{copies, plural, =0 {Keine Kopien} one {# Kopie} other {# Kopien}} · {exports, plural, =0 {keine Exporte} one {# Export} other {# Exporte}}",
+    "actions": {
+      "makeDefault": "Als Plattform-Standard setzen",
+      "archive": "Archivieren",
+      "reactivate": "Wieder anbieten"
+    },
+    "archiveConfirm": "«{name}» archivieren? Mandanten können die Vorlage nicht mehr neu wählen; Zuweisungen auf diese Vorlage fallen auf den Plattform-Standard zurück. {copies, plural, =0 {} one {Die # Kopie eines Mandanten bleibt erhalten.} other {Die # Kopien von Mandanten bleiben erhalten.}}",
+    "madeDefault": "«{name}» ist jetzt der Plattform-Standard",
+    "archived": "«{name}» archiviert",
+    "reactivated": "«{name}» wird wieder angeboten",
+    "actionFailed": "Aktion fehlgeschlagen",
+    "empty": "Keine Vorlagen in dieser Ansicht"
   }
 }

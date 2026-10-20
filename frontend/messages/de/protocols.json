@@ -210,6 +210,8 @@
     "offLabel": "Aus",
     "onLabel": "An",
     "openOriginalDocument": "Original-Dokument öffnen",
+    "createdAtPill": "Erstellt am {date}",
+    "templateVersionPill": "Vorlagenversion {version, number}",
     "orderSaveFailed": "Reihenfolge konnte nicht gespeichert werden",
     "otherEditorWarningDescription": "Mindestens eine andere Person bearbeitet dieses Protokoll gerade aktiv. Der Statuswechsel wird für alle sofort übernommen.",
     "otherEditorWarningTitle": "Andere Person bearbeitet gerade",
@@ -416,12 +418,6 @@
   },
   "settledLater": "Später beglichen",
   "showAction": "Einblenden",
-  "snapshotSwitcher": {
-    "current": "Aktuell (bearbeitbar)",
-    "historical": "{name} {year} (historisch)",
-    "label": "Ansicht",
-    "missingSnapshot": "⚠ {name} {year} (kein Snapshot)"
-  },
   "sortLabel": "Sortieren",
   "status": {
     "abgeschlossen": "Abgeschlossen",

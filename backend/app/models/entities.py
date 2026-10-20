@@ -60,9 +60,8 @@ class Tenant(Base, TimestampMixin):
     last_word_import_template_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("template.id", ondelete="SET NULL")
     )
-    # NULL = kein Limit gesetzt (Standard fuer alle bestehenden Mandanten). Vom Adminportal aus
-    # gesetzt (siehe AdminTenantStorageQuotaUpdate), gegen StorageService.breakdown_for_tenant
-    # geprueft.
+    # NULL = kein Limit. Immer Plan + Zusatzpakete (AdminTenantService.
+    # recompute_effective_storage_quota), seit 0136 ohne manuellen Override.
     storage_quota_bytes: Mapped[int | None] = mapped_column(BigInteger)
     # Preismodell (0085_plan_pricing): plan_code ist der aktuelle Vertrag, tenant_feature bleibt
     # aber die alleinige Quelle der Wahrheit fuers Enforcement - ein Plan-Wechsel im Adminportal
@@ -74,11 +73,6 @@ class Tenant(Base, TimestampMixin):
     # Ueberschreibt plan.included_user_limit, wenn gesetzt (analog zu storage_quota_bytes als
     # Override-Mechanismus). NULL = das Limit des Plans gilt.
     user_limit_override: Mapped[int | None] = mapped_column(Integer)
-    # True, sobald ein Admin storage_quota_bytes manuell ueber PATCH .../storage-quota gesetzt
-    # hat (0087_storage_packages) - AdminTenantService.recompute_effective_storage_quota()
-    # ueberspringt den Mandanten dann, statt den manuellen Sonderwert (z.B. eine individuelle
-    # Enterprise-Grenze) bei jedem Plan-/Paketwechsel wieder zu ueberschreiben.
-    storage_quota_manual_override: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
     # Abo-Konditionen aus dem Adminportal (0089_plan_catalog_details): Rabatt in Prozent auf Plan
     # + Zusatzmodule und eine nur intern sichtbare Notiz (z.B. "Vereinsrabatt bis 2027").
     discount_percent: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"))
@@ -234,8 +228,7 @@ class StoragePackage(Base):
 class TenantStoragePackage(Base):
     """Zuweisung eines Zusatzpakets an einen Mandanten inkl. Menge - geht in
     AdminTenantService.recompute_effective_storage_quota() ein, das Tenant.storage_quota_bytes
-    neu berechnet (Plan-Kontingent + Summe dieser Zeilen), ausser
-    Tenant.storage_quota_manual_override ist gesetzt."""
+    neu berechnet (Plan-Kontingent + Summe dieser Zeilen)."""
 
     __tablename__ = "tenant_storage_package"
     __table_args__ = (
@@ -520,9 +513,8 @@ class WordImportProfile(Base, TimestampMixin, UpdatedAtMixin):
 class WordImportSuggestionOutcome(Base, TimestampMixin):
     """Append-only log of one row per resolved matching decision at
     WordImportService.commit() time (event/participant/table-role/list-entry/matrix-
-    column match) - never mutated after insert. Used to compute per-tenant accept-rate
-    quality stats (see WordImportQualityService) and, from that data, adaptive
-    per-tenant score thresholds (see word_import_thresholds.adaptive_threshold)."""
+    column match) - never mutated after insert. Used to learn adaptive per-tenant score
+    thresholds (see word_import_thresholds.adaptive_threshold)."""
 
     __tablename__ = "word_import_suggestion_outcome"
     __table_args__ = (
@@ -998,6 +990,8 @@ class Template(Base, TimestampMixin, UpdatedAtMixin):
         Index("idx_template_status", "status"),
         Index("idx_template_created_by", "created_by"),
         Index("idx_template_cycle_config", "cycle_config_id"),
+        CheckConstraint("fine_amount_late >= 0 AND fine_amount_absent >= 0", name="ck_template_fine_amounts"),
+        Index("idx_template_fine_account", "fine_account_id", postgresql_where=text("fine_account_id IS NOT NULL")),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -1018,6 +1012,12 @@ class Template(Base, TimestampMixin, UpdatedAtMixin):
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'active'"))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    # Eigener Bussentarif der Vorlage (0137, FAR-002). False = Mandantentarif (FineTariff) gilt;
+    # gelesen in fine_tariff_service.tariff_block_values, live für alle Protokolle der Vorlage.
+    fine_tariff_override: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    fine_account_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("finance_account.id", ondelete="SET NULL"))
+    fine_amount_late: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, server_default=text("0"))
+    fine_amount_absent: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, server_default=text("0"))
 
 
 class TemplateParticipant(Base, TimestampMixin):

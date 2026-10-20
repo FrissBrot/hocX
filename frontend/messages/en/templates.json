@@ -363,7 +363,18 @@
     "templateSavedToast": "Template saved",
     "participantAssignmentsSavedToast": "Participant assignments saved",
     "elementsAddedToast": "{count, plural, one {# element added} other {# elements added}}",
-    "elementRemovedToast": "Element removed from template"
+    "elementRemovedToast": "Element removed from template",
+    "fineTariff": {
+      "button": "Fine rates",
+      "title": "Template fine rates",
+      "description": "Defines which fines the attendance blocks of this template use.",
+      "useTenantTariff": "Use the organisation's rates (Finances › Fines)",
+      "useOwnTariff": "Own rates for this template",
+      "liveHint": "Changes apply immediately to all open protocols of this template. Fines already recorded keep their amount.",
+      "saved": "Template fine rates saved",
+      "saveFailed": "Fine rates could not be saved",
+      "loadFailed": "Fine rates could not be loaded"
+    }
   },
   "elementEditor": {
     "advancedShow": "Advanced",
