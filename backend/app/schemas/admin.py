@@ -262,6 +262,13 @@ class TenantCloneRequest(BaseModel):
     mode: Literal["structure", "full"] = "structure"
 
 
+class TenantExportRequest(BaseModel):
+    scope: Literal["structure", "structure_lists", "full", "full_abgabebox"] = "structure"
+    # Optional: ohne Passwort wird mit dem Server-Schlüssel verschlüsselt (nur auf diesem Server
+    # importierbar, app/services/export_crypto.py). Im Body, nie in der URL.
+    password: str | None = Field(default=None, max_length=1024)
+
+
 class TenantImportResult(BaseModel):
     tenant: AdminTenantRead
     warnings: list[str] = []

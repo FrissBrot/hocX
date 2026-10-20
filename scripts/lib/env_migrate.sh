@@ -88,7 +88,9 @@ migrate_env_file() {
   # Werte werden einmalig erzeugt; vorhandene bleiben unveraendert (sonst waeren gespeicherte
   # Zugangsdaten nicht mehr entschluesselbar bzw. das lokale S3 nicht mehr erreichbar).
   local storage_key storage_value
-  for storage_key in STORAGE_CREDENTIALS_KEY GARAGE_RPC_SECRET GARAGE_ADMIN_TOKEN \
+  # EXPORT_ENCRYPTION_KEY (Security-Audit release/1.2.0): X25519-Schlüssel der Mandanten-Exporte,
+  # 64 Hex-Zeichen; ein Neuerzeugen machte ohne Passwort erstellte Exporte unlesbar.
+  for storage_key in STORAGE_CREDENTIALS_KEY EXPORT_ENCRYPTION_KEY GARAGE_RPC_SECRET GARAGE_ADMIN_TOKEN \
     LOCAL_S3_ACCESS_KEY LOCAL_S3_SECRET_KEY LOCAL_S3_ABGABEBOX_ACCESS_KEY LOCAL_S3_ABGABEBOX_SECRET_KEY; do
     if [ -n "$(env_file_value "$tmp_file" "$storage_key")" ]; then
       continue

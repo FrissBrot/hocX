@@ -2,7 +2,7 @@ import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
@@ -18,7 +18,7 @@ from app.core.admin_security import CurrentAdmin, get_current_admin, require_adm
 from app.core.config import settings
 from app.core.db import get_db
 from app.models.entities import AppUser, PlatformAdmin, SystemHealthEvent, Tenant, TenantDomain, UserMfaFactor
-from app.services import public_id_service
+from app.services import export_crypto, public_id_service
 from app.schemas.admin import (
     AdminDomainPage,
     AdminDomainRead,
@@ -54,6 +54,7 @@ from app.schemas.admin import (
     TenantCleanupCounts,
     TenantCleanupRequest,
     TenantCloneRequest,
+    TenantExportRequest,
     TenantImportResult,
     UploadPipelineOverview,
 )
@@ -782,10 +783,10 @@ def clone_tenant(
     return result
 
 
-@router.get("/tenants/{tenant_id}/export")
+@router.post("/tenants/{tenant_id}/export")
 def export_tenant(
     tenant_id: uuid.UUID,
-    scope: Literal["structure", "structure_lists", "full", "full_abgabebox"] = "structure",
+    payload: TenantExportRequest,
     db: Session = Depends(get_db),
     # Was get_current_admin (audit finding, 2026-08-25) - a "full"/"full_abgabebox" scope
     # export includes every member's real, immediately-usable password hash (see
@@ -795,20 +796,32 @@ def export_tenant(
     # any tenant.
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
+    """Der Export verlässt den Server nur verschlüsselt (export_crypto.py): mit dem Passwort aus
+    dem Body, sonst mit dem Server-Schlüssel. POST, damit das Passwort nie in einer URL steht."""
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     try:
-        zip_path, filename = export_service.export(db, internal_tenant_id, scope)
+        password = export_crypto.validate_password(payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        zip_path, filename = export_service.export(db, internal_tenant_id, payload.scope)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    encrypted_path = zip_path.with_name(zip_path.name + export_crypto.ENCRYPTED_SUFFIX)
+    try:
+        export_crypto.encrypt_file(zip_path, encrypted_path, password=password)
+    finally:
+        zip_path.unlink(missing_ok=True)
     audit.log(
         db, action="admin.tenant_exported", actor_email=current_admin.email, tenant_id=internal_tenant_id,
-        entity_type="tenant", entity_id=internal_tenant_id, details={"scope": scope},
+        entity_type="tenant", entity_id=internal_tenant_id,
+        details={"scope": payload.scope, "encryption": "password" if password else "server"},
     )
     return FileResponse(
-        zip_path,
-        filename=filename,
-        media_type="application/zip",
-        background=BackgroundTask(lambda: zip_path.unlink(missing_ok=True)),
+        encrypted_path,
+        filename=filename + export_crypto.ENCRYPTED_SUFFIX,
+        media_type="application/octet-stream",
+        background=BackgroundTask(lambda: encrypted_path.unlink(missing_ok=True)),
     )
 
 
@@ -825,6 +838,7 @@ MAX_TENANT_IMPORT_UPLOAD_BYTES = 2000 * 1024 * 1024
 async def import_tenant(
     new_name: str = Form(...),
     file: UploadFile = File(...),
+    password: str | None = Form(default=None),
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
@@ -839,8 +853,19 @@ async def import_tenant(
         max_bytes=MAX_TENANT_IMPORT_UPLOAD_BYTES,
         suffix=".zip",
     )
+    zip_path = tmp_path
     try:
-        new_tenant, warnings = await run_in_threadpool(import_service.import_zip, db, tmp_path, new_name)
+        # Verschlüsselte Exporte (export_crypto.py) erst entschlüsseln; ältere, unverschlüsselte
+        # ZIP-Exporte bleiben importierbar.
+        if export_crypto.is_encrypted(tmp_path):
+            zip_path = tmp_path.with_name(tmp_path.name + ".zip")
+            try:
+                await run_in_threadpool(export_crypto.decrypt_file, tmp_path, zip_path, password=password or None)
+            except export_crypto.ExportDecryptionError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        new_tenant, warnings = await run_in_threadpool(import_service.import_zip, db, zip_path, new_name)
+    except HTTPException:
+        raise
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -849,6 +874,8 @@ async def import_tenant(
         raise HTTPException(status_code=400, detail="Tenant could not be imported") from exc
     finally:
         tmp_path.unlink(missing_ok=True)
+        if zip_path != tmp_path:
+            zip_path.unlink(missing_ok=True)
     result = tenant_service.get_tenant(db, new_tenant.id)
     if result is None:
         raise HTTPException(status_code=500, detail="Imported tenant could not be reloaded")

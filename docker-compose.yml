@@ -239,6 +239,8 @@ services:
       TRAEFIK_MIDDLEWARE_PREFIX: ""
       # Objektspeicher (docs-site/docs/technik/storage/): Schlüssel für Profil-Zugangsdaten und lokales Garage-S3.
       STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      # Schlüssel der Mandanten-Exporte; leer ausserhalb der Produktion = aus AUTH_SECRET abgeleitet.
+      EXPORT_ENCRYPTION_KEY: ${EXPORT_ENCRYPTION_KEY:-}
       STORAGE_WORK_ROOT: /app/storage-local/work
       LOCAL_S3_ENDPOINT: http://local-s3:3900
       LOCAL_S3_BUCKET: hocx-main

@@ -46,6 +46,10 @@ Installationen aktualisieren können.
   `login_enabled` und eine seither erfolgte Session-Beendigung.
 - **Lokales S3:** RPC und Admin-API von Garage nur noch auf `127.0.0.1`; `storage-init` teilt den
   Netz-Namespace von `local-s3`.
+- **Mandanten-Exporte verschlüsselt:** ohne Passwort mit dem Server-Schlüssel (nur auf diesem
+  Server importierbar), mit Passwort auch auf einem anderen Server. Neues Secret
+  `EXPORT_ENCRYPTION_KEY`, das `deploy.sh` einmalig erzeugt; zusammen mit `.env` sichern. Ältere
+  `.zip`-Exporte bleiben importierbar. Der Export-Endpunkt ist jetzt `POST`.
 - **CI/Release:** `pip-audit` und `npm audit` (ab HIGH) blockieren; neue `public_id`-Lookups ohne
   `tenant_id=` blockieren Pull-Requests (Semgrep); Trivy-Scan vor jeder Image-Promotion und
   wöchentlich für die `latest`-Images.
@@ -72,7 +76,8 @@ Vorab-Abgleich beim Upload. Dazu die Audit-Reparaturen aus `main` (Abschnitt «B
    entfällt). Lokales S3 (Garage) belegt erst nach einer Storage-Migration nennenswert Platz.
 3. **Code und Version.** `HOCX_VERSION=v1.2.0` in `.env`, dann `./scripts/update_deploy_code.sh`
    und `./scripts/deploy.sh <test|prod>`. `deploy.sh` ergänzt die neuen Secrets
-   (`STORAGE_CREDENTIALS_KEY`, Zugangsdaten des lokalen S3, leere Backup-Platzhalter) selbst. Keine
+   (`STORAGE_CREDENTIALS_KEY`, `EXPORT_ENCRYPTION_KEY`, Zugangsdaten des lokalen S3, leere
+   Backup-Platzhalter) selbst; die ergänzte `.env` danach neu sichern. Keine
    neuen Pflicht-Variablen; optional `DOCUMENT_VERIFY_BASE_URL` (Standard
    `ABGABEBOX_BASE_URL/verify`), `BACKUP_*` und `DOCUMENT_*` (siehe `.env.prod.example`).
 4. **Migrationen** `0113` bis `0133` laufen automatisch; neue Dienste `storage-init`,

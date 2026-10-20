@@ -349,7 +349,7 @@ run_preflight() {
   esac
   for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
     "$ADMIN_AUTH_SECRET" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
-    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "$STORAGE_CREDENTIALS_KEY" \
+    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "$STORAGE_CREDENTIALS_KEY" "$EXPORT_ENCRYPTION_KEY" \
     "$GARAGE_RPC_SECRET" "$GARAGE_ADMIN_TOKEN" "$LOCAL_S3_SECRET_KEY" "$LOCAL_S3_ABGABEBOX_SECRET_KEY" "${REDIS_PASSWORD:-}"; do
     case "$value" in
       ""|ChangeMe123\!*|change-me*|changeme*|secret|hocx|hocx_app|hocx_abgabebox|hocx_photo_worker|*keep-local-only*)
@@ -431,6 +431,7 @@ write_secret_files() {
   write_secret_file "$secrets_dir" abgabebox_captcha_session_secret "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
   write_secret_file "$secrets_dir" cf_dns_api_token "$CF_DNS_API_TOKEN"
   write_secret_file "$secrets_dir" storage_credentials_key "$STORAGE_CREDENTIALS_KEY"
+  write_secret_file "$secrets_dir" export_encryption_key "$EXPORT_ENCRYPTION_KEY"
   write_secret_file "$secrets_dir" garage_rpc_secret "$GARAGE_RPC_SECRET"
   write_secret_file "$secrets_dir" garage_admin_token "$GARAGE_ADMIN_TOKEN"
   write_secret_file "$secrets_dir" local_s3_secret_key "$LOCAL_S3_SECRET_KEY"

@@ -22,6 +22,7 @@ def _load_file_secrets() -> None:
     for variable in (
         "DATABASE_URL", "APP_DATABASE_URL", "AUTH_SECRET", "ADMIN_AUTH_SECRET", "INITIAL_ADMIN_PASSWORD",
         "STORAGE_CREDENTIALS_KEY", "LOCAL_S3_SECRET_KEY", "LOCAL_S3_ABGABEBOX_SECRET_KEY", "REDIS_PASSWORD",
+        "EXPORT_ENCRYPTION_KEY",
     ):
         file_variable = f"{variable}_FILE"
         if variable not in os.environ and (path := os.environ.get(file_variable)):
@@ -192,6 +193,12 @@ class Settings(BaseSettings):
     # Schlüssel für die Verschlüsselung der S3-Zugangsdaten in storage_profile. Gemeinsam mit
     # abgabebox-backend, photo-analysis-worker und storage-worker; nie im Frontend/Log.
     storage_credentials_key: str = ""
+    # X25519-Schlüssel des Servers (64 Hex-Zeichen) für die Verschlüsselung der Mandanten-Exporte
+    # (app/services/export_crypto.py). deploy.sh erzeugt ihn einmalig (scripts/lib/env_migrate.sh);
+    # zusammen mit .env sichern, sonst sind ohne Passwort erstellte Exporte nicht mehr lesbar.
+    # Ausserhalb der Produktion darf er fehlen (Ableitung aus AUTH_SECRET); in Produktion verweigert
+    # export_crypto ohne ihn jeden Export/Import (deploy.sh prüft ihn vor dem Start).
+    export_encryption_key: str = ""
     # Lokales Garage-S3 aus docker-compose (Profil "Lokales S3" wird beim Start angelegt bzw.
     # aktualisiert, solange die Variablen gesetzt sind). Leer = kein lokales S3 bereitgestellt.
     local_s3_endpoint: str = ""

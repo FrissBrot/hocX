@@ -190,7 +190,10 @@ access_first="$(value_of "$ENV_FILE" LOCAL_S3_ACCESS_KEY)"
 test "${#key_first}" -ge 32 || fail "STORAGE_CREDENTIALS_KEY nicht erzeugt"
 [[ "$access_first" =~ ^GK[0-9a-f]{24}$ ]] || fail "LOCAL_S3_ACCESS_KEY hat nicht das Garage-Format: $access_first"
 [[ "$(value_of "$ENV_FILE" LOCAL_S3_SECRET_KEY)" =~ ^[0-9a-f]{64}$ ]] || fail "LOCAL_S3_SECRET_KEY hat nicht 64 Hex-Zeichen"
+export_key_first="$(value_of "$ENV_FILE" EXPORT_ENCRYPTION_KEY)"
+[[ "$export_key_first" =~ ^[0-9a-f]{64}$ ]] || fail "EXPORT_ENCRYPTION_KEY hat nicht 64 Hex-Zeichen"
 migrate_env_file "$ENV_FILE" > /dev/null
+test "$(value_of "$ENV_FILE" EXPORT_ENCRYPTION_KEY)" = "$export_key_first" || fail "EXPORT_ENCRYPTION_KEY wurde beim zweiten Lauf ueberschrieben"
 test "$(value_of "$ENV_FILE" STORAGE_CREDENTIALS_KEY)" = "$key_first" || fail "STORAGE_CREDENTIALS_KEY wurde beim zweiten Lauf ueberschrieben"
 test "$(value_of "$ENV_FILE" LOCAL_S3_ACCESS_KEY)" = "$access_first" || fail "LOCAL_S3_ACCESS_KEY wurde beim zweiten Lauf ueberschrieben"
 

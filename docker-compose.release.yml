@@ -199,6 +199,8 @@ services:
       DOCUMENT_VERIFY_BASE_URL: ${DOCUMENT_VERIFY_BASE_URL:-}
       # Objektspeicher (docs-site/docs/technik/storage/): Profil-Zugangsdaten-Schlüssel und lokales Garage-S3.
       STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
+      # Schlüssel der Mandanten-Exporte (app/services/export_crypto.py), nur das Backend braucht ihn.
+      EXPORT_ENCRYPTION_KEY_FILE: /run/secrets/export_encryption_key
       STORAGE_WORK_ROOT: /app/storage-local/work
       STORAGE_FALLBACK_DAYS: ${STORAGE_FALLBACK_DAYS:-14}
       # Nur zur Anzeige/Überwachung (Job-Registry, /admin/backups) - Zugang zum Repository hat
@@ -221,6 +223,7 @@ services:
       - abgabebox_db_password
       - photo_worker_db_password
       - storage_credentials_key
+      - export_encryption_key
       - local_s3_secret_key
       - local_s3_abgabebox_secret_key
       - redis_password
@@ -994,6 +997,8 @@ secrets:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_captcha_session_secret
   storage_credentials_key:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/storage_credentials_key
+  export_encryption_key:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/export_encryption_key
   garage_rpc_secret:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/garage_rpc_secret
   garage_admin_token:
