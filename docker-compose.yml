@@ -678,7 +678,7 @@ services:
       context: ./backend
     restart: "no"
     environment:
-      GARAGE_ADMIN_URL: http://local-s3:3903
+      GARAGE_ADMIN_URL: http://127.0.0.1:3903
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-}
       LOCAL_S3_BUCKET: hocx-main
       LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
@@ -689,8 +689,8 @@ services:
     volumes:
       - ./infra/garage/bootstrap.py:/bootstrap/bootstrap.py:ro
     command: ["python3", "/bootstrap/bootstrap.py"]
-    networks:
-      - storage
+    # Admin-API lauscht nur auf 127.0.0.1 im local-s3-Container (infra/garage/garage.toml).
+    network_mode: "service:local-s3"
     depends_on:
       local-s3:
         condition: service_healthy

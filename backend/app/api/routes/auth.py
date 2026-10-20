@@ -155,13 +155,19 @@ def bridge(token: str):
     login CSRF via a link with an attacker-minted token). Sends the browser to the
     confirmation page on this same host, which shows whose session it would get and redeems
     the token only after an explicit click (POST below). Relative redirect, no client-controlled
-    target - there is no open-redirect surface."""
-    return RedirectResponse(url=f"/auth/bridge?{urlencode({'token': token})}", status_code=307)
+    target - there is no open-redirect surface.
+
+    Neue Links zeigen direkt auf die Bestätigungsseite mit dem Token im URL-Fragment (SEC-019,
+    domain_bridge_service.resolve_bridge_redirect); dieser Weg bleibt nur für Links, die vor dem
+    Update ausgestellt wurden, und reicht das Token ebenfalls als Fragment weiter."""
+    return RedirectResponse(url=f"/auth/bridge#{urlencode({'token': token})}", status_code=307)
 
 
-@router.get("/bridge/preview", response_model=BridgePreviewRead)
-def bridge_preview(token: str, request: Request, db: Session = Depends(get_db)):
-    preview = service.preview_bridge_token(db, token, request.url.hostname)
+@router.post("/bridge/preview", response_model=BridgePreviewRead)
+def bridge_preview(payload: BridgeRedeemRequest, request: Request, db: Session = Depends(get_db)):
+    """Vorschau für die Bestätigungsseite. POST mit dem Token im Body statt GET mit Query, damit
+    es nicht in Access-Logs landet (SEC-019)."""
+    preview = service.preview_bridge_token(db, payload.token, request.url.hostname)
     if preview is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anmeldelink ist ungültig oder abgelaufen")
     return preview

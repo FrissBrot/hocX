@@ -11,7 +11,10 @@ replication_factor = 1
 # auch einen Stromausfall.
 data_fsync = true
 metadata_fsync = true
-rpc_bind_addr = "[::]:3901"
+# RPC und Admin-API nur im Container selbst (Security-Audit release/1.2.0, Bericht 05/09): im Netz
+# "storage" hängen auch Backend und Worker, die nur die S3-API brauchen. storage-init teilt sich
+# dafür den Netz-Namespace von local-s3 (network_mode: service:local-s3).
+rpc_bind_addr = "127.0.0.1:3901"
 rpc_public_addr = "127.0.0.1:3901"
 
 [s3_api]
@@ -19,4 +22,4 @@ s3_region = "garage"
 api_bind_addr = "[::]:3900"
 
 [admin]
-api_bind_addr = "[::]:3903"
+api_bind_addr = "127.0.0.1:3903"

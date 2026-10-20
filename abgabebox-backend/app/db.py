@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
 
+from app import link_scope  # noqa: F401  registriert den RLS-Hook (after_begin) für alle Sessions
 from app.config import settings
 
 engine = create_engine(settings.database_url, future=True, pool_pre_ping=True)

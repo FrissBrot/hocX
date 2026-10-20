@@ -47,7 +47,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.test
     environment:
-      GARAGE_ADMIN_URL: http://test-s3:3903
+      GARAGE_ADMIN_URL: http://127.0.0.1:3903
       GARAGE_ADMIN_TOKEN: test-garage-admin-token
       GARAGE_CAPACITY: 1G
       LOCAL_S3_BUCKET: hocx-main
@@ -63,6 +63,8 @@ services:
       test-s3:
         condition: service_healthy
     profiles: [tests]
+    # Admin-API lauscht nur auf 127.0.0.1 im test-s3-Container (infra/garage/garage.toml).
+    network_mode: "service:test-s3"
 
   test-migrations:
     build:

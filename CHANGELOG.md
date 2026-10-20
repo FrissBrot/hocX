@@ -38,6 +38,17 @@ Installationen aktualisieren können.
   auch wenn einer Abfrage der Filter fehlt; Ausnahmen sind die Daten gemeinsamer Fotoalben.
   Plattform-Admin, Hintergrundjobs, Worker und öffentliche Links bleiben unbeschränkt.
   Zugriffe auf fremde Datensätze antworten dadurch teils mit 404 statt 403.
+- **Abgabebox unter RLS** (Migration `0133`): die öffentliche DB-Rolle sieht ohne Upload-Link
+  nichts mehr und mit Link nur dessen Mandanten; gebunden wird das geheime Token, nicht die
+  Mandanten-ID. Von `stored_file` liest sie nur noch Prüfsummen (keine Namen, Pfade, GPS-Daten).
+- **Domain-Bridge:** das Einmal-Token steht im URL-Fragment statt in der Query und geht nur im
+  Request-Body ans Backend (`POST /api/auth/bridge/preview`); Einlösen prüft zusätzlich
+  `login_enabled` und eine seither erfolgte Session-Beendigung.
+- **Lokales S3:** RPC und Admin-API von Garage nur noch auf `127.0.0.1`; `storage-init` teilt den
+  Netz-Namespace von `local-s3`.
+- **CI/Release:** `pip-audit` und `npm audit` (ab HIGH) blockieren; neue `public_id`-Lookups ohne
+  `tenant_id=` blockieren Pull-Requests (Semgrep); Trivy-Scan vor jeder Image-Promotion und
+  wöchentlich für die `latest`-Images.
 
 ## [1.2.0] - 2026-10-16
 
@@ -64,7 +75,7 @@ Vorab-Abgleich beim Upload. Dazu die Audit-Reparaturen aus `main` (Abschnitt «B
    (`STORAGE_CREDENTIALS_KEY`, Zugangsdaten des lokalen S3, leere Backup-Platzhalter) selbst. Keine
    neuen Pflicht-Variablen; optional `DOCUMENT_VERIFY_BASE_URL` (Standard
    `ABGABEBOX_BASE_URL/verify`), `BACKUP_*` und `DOCUMENT_*` (siehe `.env.prod.example`).
-4. **Migrationen** `0113` bis `0132` laufen automatisch; neue Dienste `storage-init`,
+4. **Migrationen** `0113` bis `0133` laufen automatisch; neue Dienste `storage-init`,
    `storage-worker`, `local-s3`, `backup-worker` und `document-worker` startet `deploy.sh` mit
    `up -d`. Die Smoke-Checks prüfen zusätzlich `document-worker` und `storage-worker`.
 5. **Nach dem Deploy:**

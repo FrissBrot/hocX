@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, insert, select, text
 from sqlalchemy.orm import Session
 
+from app.link_scope import bind_link_scope
 from app.models import (
     cycle_config_table,
     event_cycle_table,
@@ -32,7 +33,12 @@ from app.models import (
 def get_link_by_token(db: Session, *, token: str) -> dict | None:
     """The one and only entry point into the public Abgabebox: a valid link token. Everything
     else (tenant, reachable Abgaben) is derived from the returned link and nothing is reachable
-    without one."""
+    without one.
+
+    Bindet die Session zuerst an diesen Link: ab dann sieht die Rolle hocx_abgabebox per
+    Row-Level-Security nur noch Daten dieses Mandanten (app/link_scope.py) - auch die Link-Zeile
+    selbst ist nur mit passendem Token sichtbar."""
+    bind_link_scope(db, token)
     row = db.execute(select(submission_link_table).where(submission_link_table.c.token == token)).mappings().first()
     return dict(row) if row else None
 

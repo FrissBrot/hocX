@@ -17,7 +17,7 @@ import time
 import urllib.error
 import urllib.request
 
-ADMIN_URL = os.environ.get("GARAGE_ADMIN_URL", "http://local-s3:3903").rstrip("/")
+ADMIN_URL = os.environ.get("GARAGE_ADMIN_URL", "http://127.0.0.1:3903").rstrip("/")
 TOKEN = os.environ.get("GARAGE_ADMIN_TOKEN", "")
 CAPACITY = os.environ.get("GARAGE_CAPACITY", "100G")
 

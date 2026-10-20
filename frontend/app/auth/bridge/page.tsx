@@ -1,7 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { browserApiFetch } from "@/lib/api/client";
@@ -12,25 +11,39 @@ type BridgePreview = { display_name: string; email: string; tenant_name: string 
  * Bestätigung des Domain-Wechsels (MAIN-SEC-006): Ein Anmeldelink von der Hauptdomain meldet
  * auf der Mandanten-Domain erst nach diesem Klick an. So kann niemand einem anderen per Link
  * die eigene Sitzung unterschieben, ohne dass Name und Mandant sichtbar werden.
+ *
+ * Das Token kommt im URL-Fragment (`#token=…`, SEC-019): Der Browser schickt es an keinen Server,
+ * und die Seite entfernt es sofort aus Adresszeile und Verlauf. Vorschau und Einlösen senden es
+ * nur im Request-Body.
  */
-function BridgeConfirm() {
+function readTokenFromFragment(): string {
+  const token = new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "";
+  if (window.location.hash) {
+    window.history.replaceState(null, "", window.location.pathname);
+  }
+  return token;
+}
+
+export default function BridgePage() {
   const t = useTranslations("auth.bridge");
-  const token = useSearchParams().get("token") ?? "";
+  const [token, setToken] = useState("");
   const [preview, setPreview] = useState<BridgePreview | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    if (!token) {
+    const fragmentToken = readTokenFromFragment();
+    if (!fragmentToken) {
       setFailed(true);
       return;
     }
-    browserApiFetch<BridgePreview>(`/api/auth/bridge/preview?${new URLSearchParams({ token })}`)
+    setToken(fragmentToken);
+    browserApiFetch<BridgePreview>("/api/auth/bridge/preview", { method: "POST", body: JSON.stringify({ token: fragmentToken }) })
       .then((loaded) => { if (!cancelled) setPreview(loaded); })
       .catch(() => { if (!cancelled) setFailed(true); });
     return () => { cancelled = true; };
-  }, [token]);
+  }, []);
 
   async function confirm() {
     setBusy(true);
@@ -72,13 +85,5 @@ function BridgeConfirm() {
         )}
       </section>
     </main>
-  );
-}
-
-export default function BridgePage() {
-  return (
-    <Suspense>
-      <BridgeConfirm />
-    </Suspense>
   );
 }
