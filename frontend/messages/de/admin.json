@@ -214,6 +214,11 @@
         "title": "Sicherheitsereignisse",
         "detail": "{failedLogins, number} Fehlversuche (15 min) · {exports, number} Exporte (1 h) · {restores, number} Restores (24 h)",
         "problem": "Auffällige Sicherheitsereignisse"
+      },
+      "tenant_offboarding": {
+        "title": "Offboarding",
+        "detail": "{count, number} Mandanten nach Vertragsende (+{days, number} Tage)",
+        "problem": "Mandanten nach Vertragsende noch nicht gelöscht"
       }
     },
     "problems": {
@@ -476,6 +481,10 @@
       "tenant_data_export": {
         "title": "Vereinsexport",
         "description": "Erstellt bestellte Vereinsexporte (AES-ZIP mit Tabellen, Protokoll-PDFs und Dateien) und löscht sie nach 7 Tagen."
+      },
+      "retention_proposals": {
+        "title": "Aufbewahrungsfristen",
+        "description": "Legt nach den Fristen der Vereine Vorschläge an (Einreichungen, ehemalige Mitglieder, alte Galeriebilder) und setzt sie bei «automatisch» um."
       }
     }
   },
@@ -648,7 +657,9 @@
       "userLimitHelp": "Leer = Plan-Limit gilt. Aktuell {count} Benutzer{suffix}",
       "userLimitExceeded": " – Limit erreicht oder überschritten.",
       "showOnWebsite": "Auf der Website als Kunde anzeigen",
-      "showOnWebsiteHelp": "Erscheint auf der öffentlichen Website unter «Im Einsatz bei» (nur der Name). Nur mit Einverständnis des Vereins aktivieren."
+      "showOnWebsiteHelp": "Erscheint auf der öffentlichen Website unter «Im Einsatz bei» (nur der Name). Nur mit Einverständnis des Vereins aktivieren.",
+      "contractEnd": "Vertragsende",
+      "contractEndHelp": "Leer = unbefristet. Nach Vertragsende plus Exportfrist meldet /admin/system, dass die Daten des Mandanten zu löschen sind."
     },
     "meta": {
       "createdAt": "Erstellt am",

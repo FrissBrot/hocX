@@ -60,6 +60,7 @@ _CHECK_TITLES_DE = {
     "error_rate": "Fehlerrate",
     "scan_backlog": "Virenprüfung im Rückstand",
     "orphaned_files": "Verwaiste Dateien",
+    "tenant_offboarding": "Offboarding",
     "security": "Sicherheitsereignisse",
     "photo_queue": "Bildanalyse-Warteschlange",
     "document_queue": "Dokumentverarbeitung",
@@ -80,6 +81,7 @@ _CHECK_PROBLEM_TITLES_DE = {
     "error_rate": "Viele Einträge im Fehlerprotokoll",
     "scan_backlog": "Virenprüfung im Rückstand",
     "orphaned_files": "Verwaiste Dateien im Speicher",
+    "tenant_offboarding": "Mandanten nach Vertragsende noch nicht gelöscht",
     "security": "Auffällige Sicherheitsereignisse",
     "photo_queue": "Bildanalyse-Warteschlange staut sich",
     "document_queue": "Dokumentverarbeitung staut sich oder scheitert",
@@ -143,6 +145,11 @@ def _check_message(check) -> str:
             return "; ".join(parts) + " - siehe Adminportal, Audit-Log."
         case "orphaned_files":
             return f"{params.get('count')} Dateien gehören zu nichts mehr (älter als 1 Tag) - Löschpfad prüfen, Bereinigung im Adminportal (Mandant → Bereinigen)."
+        case "tenant_offboarding":
+            return (
+                f"{params.get('count')} Mandanten haben ihr Vertragsende vor über {params.get('days')} Tagen erreicht - "
+                "Daten löschen (Adminportal → Mandanten)."
+            )
         case "photo_queue":
             return f"{params.get('queued')} Aufträge warten, der älteste seit {params.get('oldestMinutes')} Minuten."
         case "document_queue":

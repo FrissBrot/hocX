@@ -214,6 +214,11 @@
         "title": "Événements de sécurité",
         "detail": "{failedLogins, number} échecs de connexion (15 min) · {exports, number} exports (1 h) · {restores, number} restaurations (24 h)",
         "problem": "Événements de sécurité inhabituels"
+      },
+      "tenant_offboarding": {
+        "title": "Offboarding",
+        "detail": "{count, number} mandants après la fin du contrat (+{days, number} jours)",
+        "problem": "Mandants après la fin du contrat pas encore supprimés"
       }
     },
     "problems": {
@@ -476,6 +481,10 @@
       "tenant_data_export": {
         "title": "Export de l’association",
         "description": "Crée les exports d’association demandés (ZIP AES avec tableaux, PDF des procès-verbaux et fichiers) et les supprime après 7 jours."
+      },
+      "retention_proposals": {
+        "title": "Délais de conservation",
+        "description": "Crée des propositions selon les délais de chaque association (dépôts, anciens membres, anciennes images de la galerie) et les applique en mode automatique."
       }
     }
   },
@@ -648,7 +657,9 @@
       "userLimitHelp": "Vide = la limite du plan s'applique. Actuellement {count} utilisateur(s){suffix}",
       "userLimitExceeded": " – limite atteinte ou dépassée.",
       "showOnWebsite": "Afficher comme client sur le site web",
-      "showOnWebsiteHelp": "Apparaît sur le site web public sous « Ils nous font confiance » (nom uniquement). À activer uniquement avec l’accord de l’association."
+      "showOnWebsiteHelp": "Apparaît sur le site web public sous « Ils nous font confiance » (nom uniquement). À activer uniquement avec l’accord de l’association.",
+      "contractEnd": "Fin du contrat",
+      "contractEndHelp": "Vide = sans fin. Après la fin du contrat plus le délai d’export, /admin/system signale que les données du mandant doivent être supprimées."
     },
     "meta": {
       "createdAt": "Créé le",

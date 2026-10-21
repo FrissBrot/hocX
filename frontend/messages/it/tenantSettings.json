@@ -187,5 +187,47 @@
       "success": "Riuscito",
       "failure": "Non riuscito"
     }
+  },
+  "retention": {
+    "intro": "Stabilisci per quanto tempo l’associazione conserva determinati dati. Tutte le regole sono disattivate finché non le attivi. hocX propone ogni giorno gli elementi interessati; tu li confermi o li scarti. Gli ex membri vengono solo disattivati, mai eliminati.",
+    "rulesTitle": "Termini",
+    "rules": {
+      "submissions_months": {
+        "label": "Eliminare le consegne della casella dopo la scadenza",
+        "hint": "Vale per le consegne con scadenza. Vengono eliminati i file consegnati e le anteprime."
+      },
+      "former_members_years": {
+        "label": "Disattivare gli ex membri dopo l’uscita",
+        "hint": "L’accesso viene bloccato e le sessioni in corso terminano. Nome, presenze, multe e verbali restano invariati."
+      },
+      "unlinked_gallery_years": {
+        "label": "Proporre vecchie immagini della galleria senza album né appuntamento",
+        "hint": "Solo proposta – mai eliminate automaticamente."
+      }
+    },
+    "unit": {
+      "months": "Mesi",
+      "years": "Anni"
+    },
+    "autoApply": "Applicare automaticamente le proposte per consegne ed ex membri",
+    "autoApplyHint": "Le immagini della galleria restano sempre una proposta. Ogni azione compare nella cronologia.",
+    "save": "Salva",
+    "saved": "Conservazione salvata.",
+    "saveFailed": "Salvataggio non riuscito.",
+    "loadFailed": "Impossibile caricare le proposte.",
+    "proposalsTitle": "Proposte",
+    "refresh": "Verifica ora",
+    "empty": "Nessuna proposta aperta.",
+    "kind": {
+      "submission_upload": "Consegne ({count})",
+      "former_member": "Disattivare ex membri ({count})",
+      "gallery_image": "Immagini della galleria ({count})"
+    },
+    "unnamed": "Senza nome",
+    "selectAll": "Seleziona tutto",
+    "dismiss": "Scarta",
+    "apply": "Applica",
+    "applyConfirm": "{count, plural, one {Applicare una proposta?} other {Applicare # proposte?}} Consegne e immagini della galleria vengono eliminate definitivamente, i membri disattivati.",
+    "decided": "{done} eseguite, {failed} non riuscite."
   }
 }

@@ -187,5 +187,47 @@
       "success": "Erfolgreich",
       "failure": "Fehlgeschlagen"
     }
+  },
+  "retention": {
+    "intro": "Lege fest, wie lange der Verein bestimmte Daten aufbewahrt. Alle Regeln sind aus, bis du sie einschaltest. hocX schlägt passende Einträge täglich vor; du bestätigst oder verwirfst sie. Ehemalige Mitglieder werden nur deaktiviert, nie gelöscht.",
+    "rulesTitle": "Fristen",
+    "rules": {
+      "submissions_months": {
+        "label": "Einreichungen der Abgabebox nach Abgabeschluss löschen",
+        "hint": "Gilt für Abgaben mit Abgabeschluss. Gelöscht werden die eingereichten Dateien samt Vorschau."
+      },
+      "former_members_years": {
+        "label": "Ehemalige Mitglieder nach dem Austritt deaktivieren",
+        "hint": "Login wird gesperrt, laufende Sitzungen enden. Name, Anwesenheit, Bussen und Protokolle bleiben unverändert."
+      },
+      "unlinked_gallery_years": {
+        "label": "Alte Galeriebilder ohne Album und Termin vorschlagen",
+        "hint": "Nur Vorschlag – wird nie automatisch gelöscht."
+      }
+    },
+    "unit": {
+      "months": "Monate",
+      "years": "Jahre"
+    },
+    "autoApply": "Vorschläge für Einreichungen und ehemalige Mitglieder automatisch umsetzen",
+    "autoApplyHint": "Galeriebilder bleiben immer ein Vorschlag. Jede Umsetzung steht im Verlauf.",
+    "save": "Speichern",
+    "saved": "Aufbewahrung gespeichert.",
+    "saveFailed": "Speichern fehlgeschlagen.",
+    "loadFailed": "Vorschläge konnten nicht geladen werden.",
+    "proposalsTitle": "Vorschläge",
+    "refresh": "Jetzt prüfen",
+    "empty": "Keine offenen Vorschläge.",
+    "kind": {
+      "submission_upload": "Einreichungen ({count})",
+      "former_member": "Ehemalige Mitglieder deaktivieren ({count})",
+      "gallery_image": "Galeriebilder ({count})"
+    },
+    "unnamed": "Ohne Bezeichnung",
+    "selectAll": "Alle auswählen",
+    "dismiss": "Verwerfen",
+    "apply": "Umsetzen",
+    "applyConfirm": "{count, plural, one {Einen Vorschlag umsetzen?} other {# Vorschläge umsetzen?}} Einreichungen und Galeriebilder werden endgültig gelöscht, Mitglieder deaktiviert.",
+    "decided": "{done} erledigt, {failed} fehlgeschlagen."
   }
 }

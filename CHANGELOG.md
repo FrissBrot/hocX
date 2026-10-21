@@ -102,6 +102,19 @@ Installationen aktualisieren können.
   gelöscht und ihre Registereinträge verlieren den Titel (nur der Prüfwert bleibt, die Prüfseite
   meldet sie als ersetzt). Beschrieben in der Benutzerdoku unter Protokolle.
 
+### Datenschutz (Paket 8: Aufbewahrungsfristen je Verein)
+
+- Neuer Tab **Mandanten-Einstellungen → Aufbewahrung** (Migration `0146`, RLS): Einreichungen der
+  Abgabebox X Monate nach Abgabeschluss löschen, ehemalige Mitglieder X Jahre nach Austritt
+  **deaktivieren** (Login aus, Sitzungen beendet, Daten bleiben), alte Galeriebilder ohne Album und
+  Termin nach X Jahren vorschlagen. Alle Regeln standardmässig aus. Der neue tägliche Job
+  `retention_proposals` legt Vorschläge an; der Admin setzt sie um oder verwirft sie, wahlweise
+  automatisch (Galeriebilder nie automatisch). Löschung über die bestehenden Löschpfade mit
+  Löschjournal und Verlauf.
+- **Offboarding:** Vertragsende je Mandant im Adminportal (Abo); `/admin/system` meldet Mandanten
+  nach Vertragsende plus `TENANT_OFFBOARDING_GRACE_DAYS` (Standard 90) zur Löschung (Check
+  `tenant_offboarding`, gelöscht wird von Hand).
+
 ### Behoben
 
 - **Foto-Analyse:** Der Foto-Worker konnte seit Migration `0134` keine Dateien mehr laden

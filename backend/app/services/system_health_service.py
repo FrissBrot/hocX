@@ -527,6 +527,18 @@ def _check_orphaned_files(db: Session) -> HealthCheckRead:
     return HealthCheckRead(key="orphaned_files", status="warning" if count else "ok", params={"count": count})
 
 
+def _check_tenant_offboarding(db: Session) -> HealthCheckRead:
+    """Mandanten nach Vertragsende plus Exportfenster (Datenschutz-Audit G): ihre Daten gehören
+    gelöscht. Gelöscht wird bewusst von Hand (Adminportal → Mandant löschen), nie automatisch."""
+    from app.services.tenant_retention_service import offboarding_due
+
+    due = offboarding_due(db, grace_days=settings.tenant_offboarding_grace_days)
+    return HealthCheckRead(
+        key="tenant_offboarding", status="warning" if due else "ok",
+        params={"count": len(due), "days": settings.tenant_offboarding_grace_days},
+    )
+
+
 def _check_photo_queue(db: Session, now: datetime) -> HealthCheckRead:
     queued, oldest = db.execute(
         select(func.count(), func.min(PhotoAnalysisJob.created_at)).where(PhotoAnalysisJob.status == "queued")
@@ -602,6 +614,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("error_rate", lambda: _check_error_rate(db), failure_status="unknown", db=db)
     checks += _run_check("scan_backlog", lambda: _check_scan_backlog(db), failure_status="unknown", db=db)
     checks += _run_check("orphaned_files", lambda: _check_orphaned_files(db), failure_status="unknown", db=db)
+    checks += _run_check("tenant_offboarding", lambda: _check_tenant_offboarding(db), failure_status="unknown", db=db)
     checks += _run_check("security", lambda: _check_security(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)

@@ -133,6 +133,7 @@ class AdminTenantService:
             discount_percent=tenant.discount_percent,
             billing_note=tenant.billing_note,
             billing_start_date=tenant.billing_start_date,
+            contract_ends_on=tenant.contract_ends_on,
             show_on_website=tenant.show_on_website,
         )
 
@@ -418,6 +419,7 @@ class AdminTenantService:
         tenant.user_limit_override = payload.user_limit_override
         tenant.discount_percent = payload.discount_percent
         tenant.billing_note = (payload.billing_note or "").strip() or None
+        tenant.contract_ends_on = payload.contract_ends_on
         if payload.billing_start_date != tenant.billing_start_date:
             tenant.billing_start_date = payload.billing_start_date
             # Offene Forderungen ab dem neuen Abo-Start neu erzeugen lassen (Cashflow).

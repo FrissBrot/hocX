@@ -187,5 +187,47 @@
       "success": "Successful",
       "failure": "Failed"
     }
+  },
+  "retention": {
+    "intro": "Decide how long the club keeps certain data. All rules are off until you switch them on. hocX suggests matching entries every day; you confirm or dismiss them. Former members are only deactivated, never deleted.",
+    "rulesTitle": "Retention periods",
+    "rules": {
+      "submissions_months": {
+        "label": "Delete upload box submissions after the deadline",
+        "hint": "Applies to submissions with a deadline. The submitted files and their previews are deleted."
+      },
+      "former_members_years": {
+        "label": "Deactivate former members after they leave",
+        "hint": "Login is blocked and running sessions end. Name, attendance, fines and minutes stay unchanged."
+      },
+      "unlinked_gallery_years": {
+        "label": "Suggest old gallery images without album or event",
+        "hint": "Suggestion only – never deleted automatically."
+      }
+    },
+    "unit": {
+      "months": "Months",
+      "years": "Years"
+    },
+    "autoApply": "Apply suggestions for submissions and former members automatically",
+    "autoApplyHint": "Gallery images always remain a suggestion. Every action is listed in the activity log.",
+    "save": "Save",
+    "saved": "Retention saved.",
+    "saveFailed": "Saving failed.",
+    "loadFailed": "Suggestions could not be loaded.",
+    "proposalsTitle": "Suggestions",
+    "refresh": "Check now",
+    "empty": "No open suggestions.",
+    "kind": {
+      "submission_upload": "Submissions ({count})",
+      "former_member": "Deactivate former members ({count})",
+      "gallery_image": "Gallery images ({count})"
+    },
+    "unnamed": "Unnamed",
+    "selectAll": "Select all",
+    "dismiss": "Dismiss",
+    "apply": "Apply",
+    "applyConfirm": "{count, plural, one {Apply one suggestion?} other {Apply # suggestions?}} Submissions and gallery images are deleted permanently, members are deactivated.",
+    "decided": "{done} done, {failed} failed."
   }
 }

@@ -214,6 +214,11 @@
         "title": "Eventi di sicurezza",
         "detail": "{failedLogins, number} accessi falliti (15 min) · {exports, number} esportazioni (1 h) · {restores, number} ripristini (24 h)",
         "problem": "Eventi di sicurezza anomali"
+      },
+      "tenant_offboarding": {
+        "title": "Offboarding",
+        "detail": "{count, number} mandanti dopo la fine del contratto (+{days, number} giorni)",
+        "problem": "Mandanti dopo la fine del contratto non ancora eliminati"
       }
     },
     "problems": {
@@ -476,6 +481,10 @@
       "tenant_data_export": {
         "title": "Export dell’associazione",
         "description": "Crea gli export dell’associazione richiesti (ZIP AES con tabelle, PDF dei verbali e file) e li elimina dopo 7 giorni."
+      },
+      "retention_proposals": {
+        "title": "Termini di conservazione",
+        "description": "Crea proposte secondo i termini di ogni associazione (consegne, ex membri, vecchie immagini della galleria) e le applica in modalità automatica."
       }
     }
   },
@@ -648,7 +657,9 @@
       "userLimitHelp": "Vuoto = vale il limite del piano. Attualmente {count} utenti{suffix}",
       "userLimitExceeded": " – limite raggiunto o superato.",
       "showOnWebsite": "Mostra come cliente sul sito web",
-      "showOnWebsiteHelp": "Compare sul sito web pubblico sotto «Lo usano» (solo il nome). Attivare solo con il consenso dell’associazione."
+      "showOnWebsiteHelp": "Compare sul sito web pubblico sotto «Lo usano» (solo il nome). Attivare solo con il consenso dell’associazione.",
+      "contractEnd": "Fine del contratto",
+      "contractEndHelp": "Vuoto = senza scadenza. Dopo la fine del contratto più il periodo di export, /admin/system segnala che i dati del mandante vanno eliminati."
     },
     "meta": {
       "createdAt": "Creato il",

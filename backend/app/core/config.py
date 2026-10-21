@@ -123,6 +123,9 @@ class Settings(BaseSettings):
     inactive_share_link_retention_days: int = 90
     # Löschjournal: länger als jede Backup-Aufbewahrung (Migration 0144 erzwingt >= 400)
     erasure_journal_retention_days: int = 400
+    # Offboarding (Datenschutz-Audit G): Tage nach Vertragsende, bis /admin/system die Löschung des
+    # Mandanten anmahnt (Exportfenster für den Verein)
+    tenant_offboarding_grace_days: int = 90
     # Sicherheitsalarme aus dem Audit-Log (system_health_service._check_security, PRIV-022)
     security_failed_logins_warning: int = 50
     security_failed_logins_critical: int = 200

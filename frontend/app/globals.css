@@ -25970,3 +25970,33 @@ a.mobile-list-row { color: var(--text); }
   padding: var(--space-2) 0;
   border-top: 1px solid var(--border);
 }
+
+/* Aufbewahrung (Mandanten-Einstellungen → Aufbewahrung) */
+.retention-rule {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.retention-rule-value {
+  max-width: 160px;
+}
+
+.retention-group {
+  margin-top: var(--space-3);
+}
+
+.retention-group-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.retention-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}

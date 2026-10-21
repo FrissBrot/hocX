@@ -110,6 +110,8 @@ class AdminTenantRead(BaseModel):
     billing_note: str | None = None
     # Abo-Start für die Forderungen im Cashflow (0127_cashflow). None = Erstellungsdatum.
     billing_start_date: date | None = None
+    # Vertragsende für das Offboarding (0146); None = unbefristet
+    contract_ends_on: date | None = None
     show_on_website: bool = False
 
 
@@ -216,6 +218,7 @@ class AdminTenantSubscriptionUpdate(BaseModel):
     billing_note: str | None = None
     # Full-Replace wie die übrigen Felder: None = Erstellungsdatum des Mandanten.
     billing_start_date: date | None = None
+    contract_ends_on: date | None = None
 
 
 class AdminTenantPage(BaseModel):

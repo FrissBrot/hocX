@@ -59,6 +59,7 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "document_sync": 202600026,
     "storage_purge": 202600025,
     "tenant_data_export": 202600027,
+    "retention_proposals": 202600028,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

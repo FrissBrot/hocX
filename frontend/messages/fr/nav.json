@@ -58,5 +58,6 @@
   "documentComponents": "Composants",
   "documentExports": "Historique des exports",
   "privacy": "Protection des données",
-  "activity": "Historique"
+  "activity": "Historique",
+  "retention": "Conservation"
 }

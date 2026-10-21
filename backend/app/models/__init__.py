@@ -1,4 +1,6 @@
 from app.models.entities import (
+    RetentionProposal,
+    TenantRetentionPolicy,
     TenantDataExport,
     AppUser,
     AttendanceFine,
@@ -148,7 +150,9 @@ __all__ = [
     "TenantDomain",
     "TenantTrust",
     "TenantFeature",
+    "RetentionProposal",
     "TenantDataExport",
+    "TenantRetentionPolicy",
     "TenantStoragePackage",
     "TodoStatus",
     "UserProtocolAccess",

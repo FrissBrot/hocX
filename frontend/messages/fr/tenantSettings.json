@@ -187,5 +187,47 @@
       "success": "Réussi",
       "failure": "Échoué"
     }
+  },
+  "retention": {
+    "intro": "Définissez combien de temps l’association conserve certaines données. Toutes les règles sont désactivées jusqu’à ce que vous les activiez. hocX propose chaque jour les éléments concernés ; vous les confirmez ou les rejetez. Les anciens membres sont seulement désactivés, jamais supprimés.",
+    "rulesTitle": "Délais",
+    "rules": {
+      "submissions_months": {
+        "label": "Supprimer les dépôts de la boîte de dépôt après l’échéance",
+        "hint": "Concerne les dépôts avec échéance. Les fichiers déposés et leurs aperçus sont supprimés."
+      },
+      "former_members_years": {
+        "label": "Désactiver les anciens membres après leur départ",
+        "hint": "La connexion est bloquée et les sessions en cours se terminent. Nom, présences, amendes et procès-verbaux restent inchangés."
+      },
+      "unlinked_gallery_years": {
+        "label": "Proposer les anciennes images de la galerie sans album ni rendez-vous",
+        "hint": "Proposition uniquement – jamais supprimées automatiquement."
+      }
+    },
+    "unit": {
+      "months": "Mois",
+      "years": "Ans"
+    },
+    "autoApply": "Appliquer automatiquement les propositions pour les dépôts et les anciens membres",
+    "autoApplyHint": "Les images de la galerie restent toujours une proposition. Chaque action figure dans l’historique.",
+    "save": "Enregistrer",
+    "saved": "Conservation enregistrée.",
+    "saveFailed": "L’enregistrement a échoué.",
+    "loadFailed": "Impossible de charger les propositions.",
+    "proposalsTitle": "Propositions",
+    "refresh": "Vérifier maintenant",
+    "empty": "Aucune proposition ouverte.",
+    "kind": {
+      "submission_upload": "Dépôts ({count})",
+      "former_member": "Désactiver les anciens membres ({count})",
+      "gallery_image": "Images de la galerie ({count})"
+    },
+    "unnamed": "Sans nom",
+    "selectAll": "Tout sélectionner",
+    "dismiss": "Rejeter",
+    "apply": "Appliquer",
+    "applyConfirm": "{count, plural, one {Appliquer une proposition ?} other {Appliquer # propositions ?}} Les dépôts et images de la galerie sont supprimés définitivement, les membres désactivés.",
+    "decided": "{done} effectuées, {failed} en échec."
   }
 }

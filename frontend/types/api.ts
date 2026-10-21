@@ -685,6 +685,7 @@ export type AdminTenantSummary = {
   discount_percent: number;
   billing_note: string | null;
   billing_start_date: string | null;
+  contract_ends_on: string | null;
   show_on_website: boolean;
 };
 
@@ -823,6 +824,7 @@ export type AdminTenantSubscriptionUpdate = {
   discount_percent: number;
   billing_note: string | null;
   billing_start_date: string | null;
+  contract_ends_on: string | null;
 };
 
 export type AdminTenantCreate = {

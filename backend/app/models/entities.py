@@ -100,6 +100,8 @@ class Tenant(Base, TimestampMixin):
     # Abrechnungsperiode (NULL = Erstellungsdatum). billing_charged_until ist der Cursor der
     # Forderungserzeugung - bis hierhin sind alle Perioden abgerechnet (siehe cashflow_service).
     billing_start_date: Mapped[date | None] = mapped_column(Date)
+    # Vertragsende für das Offboarding (0146, Check tenant_offboarding in system_health_service)
+    contract_ends_on: Mapped[date | None] = mapped_column(Date)
     billing_charged_until: Mapped[date | None] = mapped_column(Date)
 
 
@@ -2357,3 +2359,46 @@ class TenantDataExport(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TenantRetentionPolicy(Base):
+    """Aufbewahrungsfristen des Vereins (Migration 0146, services/tenant_retention_service.py).
+    NULL = Regel aus."""
+
+    __tablename__ = "tenant_retention_policy"
+    __table_args__ = (
+        CheckConstraint("submissions_months > 0", name="tenant_retention_policy_submissions_months_check"),
+        CheckConstraint("former_members_years > 0", name="tenant_retention_policy_former_members_years_check"),
+        CheckConstraint("unlinked_gallery_years > 0", name="tenant_retention_policy_unlinked_gallery_years_check"),
+    )
+
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    submissions_months: Mapped[int | None] = mapped_column(SmallInteger)
+    former_members_years: Mapped[int | None] = mapped_column(SmallInteger)
+    unlinked_gallery_years: Mapped[int | None] = mapped_column(SmallInteger)
+    auto_apply: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+
+class RetentionProposal(Base):
+    """Vorschlag des Jobs retention_proposals (Migration 0146). subject_id: submission_upload.id,
+    app_user.id bzw. stored_file.id je nach kind."""
+
+    __tablename__ = "retention_proposal"
+    __table_args__ = (
+        CheckConstraint("kind IN ('submission_upload', 'former_member', 'gallery_image')", name="ck_retention_proposal_kind"),
+        CheckConstraint("status IN ('open', 'applied', 'dismissed')", name="ck_retention_proposal_status"),
+        UniqueConstraint("tenant_id", "kind", "subject_id", name="uq_retention_proposal_subject"),
+        Index("idx_retention_proposal_open", "tenant_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    subject_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    label: Mapped[str | None] = mapped_column(Text)
+    reference_date: Mapped[date | None] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'open'"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decided_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
