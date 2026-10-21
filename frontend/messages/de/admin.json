@@ -209,6 +209,11 @@
         "title": "Verwaiste Dateien",
         "detail": "{count, number} Dateien ohne Bezug",
         "problem": "Verwaiste Dateien im Speicher"
+      },
+      "security": {
+        "title": "Sicherheitsereignisse",
+        "detail": "{failedLogins, number} Fehlversuche (15 min) · {exports, number} Exporte (1 h) · {restores, number} Restores (24 h)",
+        "problem": "Auffällige Sicherheitsereignisse"
       }
     },
     "problems": {
@@ -1220,5 +1225,25 @@
     "reactivated": "«{name}» wird wieder angeboten",
     "actionFailed": "Aktion fehlgeschlagen",
     "empty": "Keine Vorlagen in dieser Ansicht"
+  },
+  "auditLog": {
+    "title": "Audit-Log",
+    "description": "Sicherheits- und Änderungsereignisse aller Mandanten. Die Quelle ist ein gehashter Fingerprint des Netzes, nicht die IP-Adresse.",
+    "filterAll": "Alle",
+    "filterFailures": "Fehlgeschlagen",
+    "tenant": "Mandant",
+    "allTenants": "Alle Mandanten",
+    "actionPlaceholder": "Aktion, z. B. user.login",
+    "colTime": "Zeitpunkt",
+    "colAction": "Vorgang",
+    "colActor": "Von",
+    "colSource": "Quelle",
+    "colOutcome": "Ergebnis",
+    "loading": "Wird geladen …",
+    "empty": "Keine Einträge",
+    "outcome": {
+      "success": "Erfolgreich",
+      "failure": "Fehlgeschlagen"
+    }
   }
 }

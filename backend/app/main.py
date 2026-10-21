@@ -10,16 +10,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
+from app.api.routes import activity, admin, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
 from app.core.objstore_client import StorageUnavailable, StorageWriteFenced
+from app.core.audit_context import AuditContextMiddleware
 from app.core.error_log import best_effort_actor_from_request, record_system_error
 from app.core.redis_client import close_redis_pool
 from app.core.security import hash_password
 from app.models import AppUser, ElementType, PlatformAdmin, Role, Tenant
-from app.services import document_sync_service, domain_health_check_service, retention_service, traefik_config_service
+from app.services import document_sync_service, domain_health_check_service, erasure_journal, retention_service, traefik_config_service
 from app.services.admin_error_log_service import AdminErrorLogService
 from app.services.admin_job_status_service import AdminJobStatusService
 from app.services.audit_service import AuditService
@@ -268,6 +269,7 @@ async def log_cleanup_loop() -> None:
         job_status_service.cleanup_old_runs(db, retention_days=settings.job_run_retention_days)
         system_alert_service.cleanup_old_events(db, retention_days=settings.health_event_retention_days)
         retention_service.cleanup(db)
+        erasure_journal.purge(db, retention_days=settings.erasure_journal_retention_days)
 
     await run_advisory_locked_loop(
         name="log_cleanup",
@@ -539,6 +541,8 @@ _CORS_ORIGINS = [o for o in [
 from app.core.origin_guard import OriginGuardMiddleware
 # Innerhalb von CORS: auch die 403-Antwort trägt CORS-Header (SEC-009, siehe origin_guard.py).
 app.add_middleware(OriginGuardMiddleware, allowed_origins=set(_CORS_ORIGINS))
+# Quelladresse für das Audit-Log (gekürzt und gehasht, Datenschutz-Audit PRIV-013)
+app.add_middleware(AuditContextMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -628,6 +632,7 @@ app.include_router(documents.router, prefix="/api", tags=["documents"])
 app.include_router(document_studio.router, prefix="/api", tags=["document-studio"])
 app.include_router(document_verification.router, prefix="/api", tags=["documents"])
 app.include_router(privacy_settings.router, prefix="/api", tags=["privacy"])
+app.include_router(activity.router, prefix="/api", tags=["privacy"])
 app.include_router(templates.router, prefix="/api", tags=["templates"])
 app.include_router(cycle_configs.router, prefix="/api", tags=["cycle-configs"])
 app.include_router(task_packages.router, prefix="/api", tags=["task-packages"])

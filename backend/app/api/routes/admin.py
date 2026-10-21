@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi import Path as PathParam
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
@@ -20,6 +20,8 @@ from app.core.db import get_db
 from app.models.entities import AppUser, PlatformAdmin, SystemHealthEvent, Tenant, TenantDomain, UserMfaFactor
 from app.services import export_crypto, public_id_service
 from app.schemas.admin import (
+    AuditLogEntryRead,
+    AuditLogPage,
     AdminDomainPage,
     AdminDomainRead,
     AdminFeatureRead,
@@ -222,8 +224,66 @@ def list_error_logs(
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None
+    # Lesezugriff auf mandantenübergreifende Fehlerdaten nachvollziehbar machen (PRIV-013).
+    audit.log(db, action="admin.error_logs_viewed", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+              details={"offset": offset})
     return error_log_service.list_errors(
         db, tenant_id=internal_tenant_id, error_type=error_type, source=source, limit=min(limit, 200), offset=offset
+    )
+
+
+@router.get("/audit-log", response_model=AuditLogPage)
+def list_audit_log(
+    tenant_id: uuid.UUID | None = None,
+    action: str | None = Query(default=None, max_length=100),
+    outcome: str | None = Query(default=None, pattern="^(success|failure)$"),
+    limit: int = Query(50, gt=0, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    """Sicherheits- und Änderungsereignisse aller Mandanten (PRIV-013). ``action`` filtert nach
+    Präfix (``user.login`` trifft auch ``user.login_failed``)."""
+    params = {
+        "tenant_id": _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None,
+        "action": action.replace("%", "").replace("_", "\\_") + "%" if action else None,
+        "outcome": outcome,
+        "limit": limit,
+        "offset": offset,
+    }
+    filters = """
+        WHERE (CAST(:tenant_id AS bigint) IS NULL OR l.tenant_id = :tenant_id)
+          AND (CAST(:action AS text) IS NULL OR l.action LIKE :action)
+          AND (CAST(:outcome AS text) IS NULL OR l.outcome = :outcome)"""
+    rows = db.execute(
+        text(
+            """
+            SELECT l.id, l.created_at, l.action, l.outcome, t.public_id AS tenant_public_id, t.name AS tenant_name,
+                   COALESCE(u.email, l.actor_email) AS actor_email, u.display_name AS actor_name, l.ip_hash,
+                   l.entity_type, l.entity_id, l.details_json
+            FROM audit_log l
+            LEFT JOIN tenant t ON t.id = l.tenant_id
+            LEFT JOIN app_user u ON u.id = l.actor_user_id"""
+            + filters
+            + """
+            ORDER BY l.created_at DESC, l.id DESC
+            LIMIT :limit OFFSET :offset
+            """
+        ),
+        params,
+    ).all()
+    total = db.scalar(text("SELECT count(*) FROM audit_log l" + filters), params) or 0
+    return AuditLogPage(
+        items=[
+            AuditLogEntryRead(
+                id=row.id, created_at=row.created_at, action=row.action, outcome=row.outcome,
+                tenant_id=row.tenant_public_id, tenant_name=row.tenant_name, actor_email=row.actor_email,
+                actor_name=row.actor_name, ip_hash=row.ip_hash, entity_type=row.entity_type,
+                entity_id=row.entity_id, details=row.details_json or {},
+            )
+            for row in rows
+        ],
+        total=total,
     )
 
 
@@ -421,7 +481,8 @@ def delete_tenant(tenant_id: uuid.UUID, db: Session = Depends(get_db), current_a
         raise HTTPException(status_code=404, detail="Tenant not found")
     # tenant_id darf hier NICHT gesetzt werden: der Tenant wurde oben bereits geloescht+committed,
     # audit_log.tenant_id hat eine FK auf tenant(id) - welcher Tenant betroffen war steht in entity_id.
-    audit.log(db, action="admin.tenant_deleted", actor_email=current_admin.email, entity_type="tenant", entity_id=internal_tenant_id)
+    audit.log(db, action="admin.tenant_deleted", actor_email=current_admin.email, entity_type="tenant", entity_id=internal_tenant_id,
+              details={"report": deleted})
 
 
 @router.get("/tenants/{tenant_id}/cleanup/preview", response_model=TenantCleanupCounts)
@@ -867,6 +928,8 @@ def list_tenant_users(
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    audit.log(db, action="admin.tenant_users_viewed", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+              entity_type="tenant", entity_id=internal_tenant_id)
     return tenant_user_service.list_users(db, internal_tenant_id)
 
 
@@ -950,6 +1013,7 @@ def list_users(
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
+    audit.log(db, action="admin.users_viewed", actor_email=current_admin.email, details={"offset": offset, "search": bool(q)})
     return user_service.list_users(db, limit=limit, offset=offset, q=q)
 
 
@@ -967,7 +1031,6 @@ def create_user(
     audit.log(
         db, action="admin.user_created", actor_email=current_admin.email,
         entity_type="user", entity_id=public_id_service.resolve_internal_id(db, AppUser, result.id),
-        details={"email": payload.email},
     )
     return result
 
@@ -982,6 +1045,7 @@ def get_user(
     user = user_service.get_user(db, internal_user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    audit.log(db, action="admin.user_viewed", actor_email=current_admin.email, entity_type="user", entity_id=internal_user_id)
     return user
 
 

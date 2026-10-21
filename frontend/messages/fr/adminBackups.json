@@ -2,7 +2,12 @@
   "title": "Sauvegardes",
   "description": "Sauvegarde externe chiffrée de la base de données et du stockage de fichiers avec BorgBackup sur la Hetzner Storage Box.",
   "loadFailed": "Impossible de charger l'état des sauvegardes.",
-  "tabs": { "overview": "Aperçu", "history": "Historique", "restore": "Restauration", "settings": "Paramètres" },
+  "tabs": {
+    "overview": "Aperçu",
+    "history": "Historique",
+    "restore": "Restauration",
+    "settings": "Paramètres"
+  },
   "actions": {
     "backupNow": "Lancer une sauvegarde",
     "restoreTest": "Lancer un test de restauration",
@@ -19,7 +24,12 @@
     "disabled": "Le système de sauvegarde n'est pas encore configuré (BACKUP_ENABLED). Instructions : RUNBOOK, section sauvegarde.",
     "workerDown": "Le worker de sauvegarde ne répond pas - aucune sauvegarde n'est effectuée actuellement."
   },
-  "overall": { "ok": "En ordre", "warning": "Avertissement", "critical": "Critique", "disabled": "Non configuré" },
+  "overall": {
+    "ok": "En ordre",
+    "warning": "Avertissement",
+    "critical": "Critique",
+    "disabled": "Non configuré"
+  },
   "overview": {
     "overall": "État global",
     "problemCount": "{count, plural, =0 {Aucun problème ouvert} one {# problème ouvert} other {# problèmes ouverts}}",
@@ -50,8 +60,17 @@
     "lastFailure": "Dernière sauvegarde échouée",
     "failureLine": "{time} : {error}"
   },
-  "level": { "created": "créée", "verified": "vérifiée", "restoreTested": "restauration testée" },
-  "repository": { "reachable": "accessible", "unreachable": "inaccessible", "unknown": "inconnu", "checkedAt": "vérifié {time}" },
+  "level": {
+    "created": "créée",
+    "verified": "vérifiée",
+    "restoreTested": "restauration testée"
+  },
+  "repository": {
+    "reachable": "accessible",
+    "unreachable": "inaccessible",
+    "unknown": "inconnu",
+    "checkedAt": "vérifié {time}"
+  },
   "problems": {
     "disabled": "La sauvegarde externe n'est pas configurée.",
     "configuration": "La configuration de sauvegarde du worker est invalide - voir les logs du backup-worker.",
@@ -72,19 +91,59 @@
     "verify_overdue": "La vérification d'intégrité est en retard.",
     "restore_test_overdue": "Le test de restauration est en retard."
   },
-  "kind": { "backup": "Sauvegarde", "verify": "Vérification d'intégrité", "restore_test": "Test de restauration", "retention": "Conservation" },
-  "trigger": { "schedule": "Planification", "manual": "Manuel", "pre_restore": "Point de secours avant restauration", "pre_deploy": "Avant déploiement", "cli": "Ligne de commande" },
+  "kind": {
+    "backup": "Sauvegarde",
+    "verify": "Vérification d'intégrité",
+    "restore_test": "Test de restauration",
+    "retention": "Conservation"
+  },
+  "trigger": {
+    "schedule": "Planification",
+    "manual": "Manuel",
+    "pre_restore": "Point de secours avant restauration",
+    "pre_deploy": "Avant déploiement",
+    "cli": "Ligne de commande"
+  },
   "state": {
-    "queued": "En attente", "preparing": "Préparation", "running": "En cours", "verifying": "Vérification", "completed": "Réussie",
-    "partial": "Partielle", "failed": "Échouée", "cancelled": "Annulée", "interrupted": "Interrompue"
+    "queued": "En attente",
+    "preparing": "Préparation",
+    "running": "En cours",
+    "verifying": "Vérification",
+    "completed": "Réussie",
+    "partial": "Partielle",
+    "failed": "Échouée",
+    "cancelled": "Annulée",
+    "interrupted": "Interrompue"
   },
   "restoreState": {
-    "queued": "En attente", "preparing": "Préparation", "running": "En cours", "verifying": "Vérification", "cutover": "Basculement",
-    "completed": "Terminée", "failed": "Échouée", "cancelled": "Annulée", "interrupted": "Interrompue", "rolled_back": "Annulée (retour)"
+    "queued": "En attente",
+    "preparing": "Préparation",
+    "running": "En cours",
+    "verifying": "Vérification",
+    "cutover": "Basculement",
+    "completed": "Terminée",
+    "failed": "Échouée",
+    "cancelled": "Annulée",
+    "interrupted": "Interrompue",
+    "rolled_back": "Annulée (retour)"
   },
-  "setState": { "completed": "complet", "partial": "partiel", "failed": "échoué", "invalid": "invalide", "pruned": "supprimé" },
-  "verify": { "unverified": "Non vérifiée", "verified": "Vérifiée", "failed": "Vérification échouée" },
-  "restoreTest": { "untested": "Restauration non testée", "passed": "Restauration testée", "failed": "Test de restauration échoué" },
+  "setState": {
+    "completed": "complet",
+    "partial": "partiel",
+    "failed": "échoué",
+    "invalid": "invalide",
+    "pruned": "supprimé"
+  },
+  "verify": {
+    "unverified": "Non vérifiée",
+    "verified": "Vérifiée",
+    "failed": "Vérification échouée"
+  },
+  "restoreTest": {
+    "untested": "Restauration non testée",
+    "passed": "Restauration testée",
+    "failed": "Test de restauration échoué"
+  },
   "phase": {
     "transfer": "Transfert des fichiers",
     "registry_hash": "Hachage des objets existants",
@@ -133,18 +192,59 @@
     "partialDetail": "{count, plural, one {# fichier manquant} other {# fichiers manquants}}"
   },
   "columns": {
-    "time": "Date", "id": "ID", "kind": "Type", "state": "Statut", "duration": "Durée", "database": "Base de données", "objects": "Objets",
-    "newData": "Nouvellement transféré", "stored": "Nouvel espace", "verification": "Preuve", "error": "Erreur", "actions": "Actions", "event": "Événement",
-    "actor": "Déclenché par", "archive": "Point de restauration", "tenant": "Mandant", "users": "Utilisateurs", "size": "Taille"
+    "time": "Date",
+    "id": "ID",
+    "kind": "Type",
+    "state": "Statut",
+    "duration": "Durée",
+    "database": "Base de données",
+    "objects": "Objets",
+    "newData": "Nouvellement transféré",
+    "stored": "Nouvel espace",
+    "verification": "Preuve",
+    "error": "Erreur",
+    "actions": "Actions",
+    "event": "Événement",
+    "actor": "Déclenché par",
+    "archive": "Point de restauration",
+    "tenant": "Mandant",
+    "users": "Utilisateurs",
+    "size": "Taille"
   },
-  "events": { "title": "{count, plural, one {# événement} other {# événements}}", "empty": "Aucun événement.", "worker": "Worker" },
+  "events": {
+    "title": "{count, plural, one {# événement} other {# événements}}",
+    "empty": "Aucun événement.",
+    "worker": "Worker"
+  },
   "event": {
-    "state": "Statut", "requested": "Demandée", "hold_acquired": "Verrou posé", "hold_renewed": "Blocage renouvelé", "registry_hashed": "Registre haché", "cutover_recovery": "Journal d'échange évalué", "captured": "Capturée", "pool_written": "Contenus sauvegardés",
-    "batch_restart": "Lot répété", "restore_point_written": "Point écrit", "restore_point_adopted": "Point repris", "resumed": "Reprise", "retry": "Nouvel essai",
-    "index_reconciled": "Index réconcilié", "retention": "Conservation", "gc": "Nettoyage", "cancel_requested": "Annulation demandée",
-    "rescue_started": "Point de secours", "rescue_done": "Point de secours terminé", "rescue_skipped": "Sans point de secours", "prepared": "Préparée",
-    "database_restored": "Base de données", "objects_restored": "Fichiers", "alembic_upgraded": "Schéma", "verified": "Vérifiée",
-    "cutover_done": "Basculée", "rolled_back": "Retour arrière", "collected": "Collectée"
+    "state": "Statut",
+    "requested": "Demandée",
+    "hold_acquired": "Verrou posé",
+    "hold_renewed": "Blocage renouvelé",
+    "registry_hashed": "Registre haché",
+    "cutover_recovery": "Journal d'échange évalué",
+    "captured": "Capturée",
+    "pool_written": "Contenus sauvegardés",
+    "batch_restart": "Lot répété",
+    "restore_point_written": "Point écrit",
+    "restore_point_adopted": "Point repris",
+    "resumed": "Reprise",
+    "retry": "Nouvel essai",
+    "index_reconciled": "Index réconcilié",
+    "retention": "Conservation",
+    "gc": "Nettoyage",
+    "cancel_requested": "Annulation demandée",
+    "rescue_started": "Point de secours",
+    "rescue_done": "Point de secours terminé",
+    "rescue_skipped": "Sans point de secours",
+    "prepared": "Préparée",
+    "database_restored": "Base de données",
+    "objects_restored": "Fichiers",
+    "alembic_upgraded": "Schéma",
+    "verified": "Vérifiée",
+    "cutover_done": "Basculée",
+    "rolled_back": "Retour arrière",
+    "collected": "Collectée"
   },
   "detail": {
     "title": "{kind} : détails",
@@ -165,7 +265,11 @@
     "missing_objects": "{count, plural, one {# fichier n'a pas pu} other {# fichiers n'ont pas pu}} être sauvegardé(s) (absent(s) du stockage).",
     "dangling_references": "{count, plural, one {# référence} other {# références}} de la base pointai(en)t déjà vers des fichiers manquants lors de la sauvegarde."
   },
-  "duration": { "seconds": "{seconds, number} s", "minutes": "{minutes, number} min", "hours": "{hours, number} h" },
+  "duration": {
+    "seconds": "{seconds, number} s",
+    "minutes": "{minutes, number} min",
+    "hours": "{hours, number} h"
+  },
   "restore": {
     "wizardTitle": "Restauration",
     "wizardDescription": "Restaurer un mandant comme nouvelle copie ou toute l'installation à partir d'un point de restauration.",
@@ -199,8 +303,14 @@
     "confirmationLabel": "Saisir pour confirmer : {phrase}",
     "totp": "Code TOTP actuel",
     "totpHelp": "Confirmation récente avec l'authentificateur de votre compte administrateur.",
-    "panelTitle": { "full": "Restauration complète", "tenant_copy": "Restauration du mandant en copie" },
-    "kindShort": { "full": "Complète", "tenant_copy": "Mandant (copie)" },
+    "panelTitle": {
+      "full": "Restauration complète",
+      "tenant_copy": "Restauration du mandant en copie"
+    },
+    "kindShort": {
+      "full": "Complète",
+      "tenant_copy": "Mandant (copie)"
+    },
     "panelDescription": "{archive} · demandée {time}",
     "cutoverHint": "L'application est en maintenance et les bases de données sont échangées. Cette page peut être brièvement indisponible.",
     "contentsProgress": "{done, number} contenus restaurés ({size})",
@@ -209,9 +319,17 @@
     "rolledBack": "Le test après le basculement a échoué - l'état précédent est de nouveau actif.",
     "importWarnings": "{count, plural, one {# remarque d'import} other {# remarques d'import}}",
     "historyTitle": "Restaurations précédentes",
-    "historyEmpty": "Aucune restauration pour l'instant."
+    "historyEmpty": "Aucune restauration pour l'instant.",
+    "replayErasures": "Réappliquer les suppressions faites après le point de sauvegarde",
+    "replayErasuresHint": "Les personnes, fichiers, procès-verbaux ou mandants supprimés après ce point de sauvegarde sont supprimés à nouveau après la restauration. À désactiver uniquement dans des exceptions justifiées.",
+    "replayErasuresReason": "Raison pour laquelle des données supprimées doivent revenir"
   },
-  "preview": { "schema": "Schéma de base de données", "target": "Cible", "size": "Volume de données", "steps": "Déroulement" },
+  "preview": {
+    "schema": "Schéma de base de données",
+    "target": "Cible",
+    "size": "Volume de données",
+    "steps": "Déroulement"
+  },
   "schema": {
     "same": "correspond à cette version de hocX",
     "upgrade": "plus ancien - migré de façon contrôlée après la restauration",

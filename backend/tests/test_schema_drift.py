@@ -28,6 +28,8 @@ from app.models import *  # noqa: F401,F403  (registers every model onto Base.me
 #    its docstring/module) - not missing from a migration, just never meant to be ORM-mapped.
 _KNOWN_UNMAPPED_TABLES = {
     "audit_log",
+    # Löschjournal (0144): Plattformtabelle, nur per SQL geschrieben/gelesen (services/erasure_journal.py)
+    "erasure_journal",
     # Archiv der Migration 0118 (STUDIO-008), nur für den Downgrade
     "document_style_legacy",
     "document_recipe_legacy",

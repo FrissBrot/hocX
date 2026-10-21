@@ -25,7 +25,8 @@
     "storage": "Stockage",
     "backups": "Sauvegardes",
     "maintenance": "Maintenance",
-    "documentTemplates": "Modèles de documents"
+    "documentTemplates": "Modèles de documents",
+    "auditLog": "Journal d’audit"
   },
   "logout": "Se déconnecter",
   "menuToggleClose": "Fermer",

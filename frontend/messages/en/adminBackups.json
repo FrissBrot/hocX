@@ -2,7 +2,12 @@
   "title": "Backups",
   "description": "Encrypted offsite backup of the database and file storage with BorgBackup on the Hetzner Storage Box.",
   "loadFailed": "The backup status could not be loaded.",
-  "tabs": { "overview": "Overview", "history": "History", "restore": "Restore", "settings": "Settings" },
+  "tabs": {
+    "overview": "Overview",
+    "history": "History",
+    "restore": "Restore",
+    "settings": "Settings"
+  },
   "actions": {
     "backupNow": "Start backup now",
     "restoreTest": "Start restore test",
@@ -19,7 +24,12 @@
     "disabled": "The backup system has not been set up yet (BACKUP_ENABLED). Instructions: RUNBOOK, backup section.",
     "workerDown": "The backup worker is not reporting - backups are currently not running."
   },
-  "overall": { "ok": "OK", "warning": "Warning", "critical": "Critical", "disabled": "Not set up" },
+  "overall": {
+    "ok": "OK",
+    "warning": "Warning",
+    "critical": "Critical",
+    "disabled": "Not set up"
+  },
   "overview": {
     "overall": "Overall status",
     "problemCount": "{count, plural, =0 {No open problems} one {# open problem} other {# open problems}}",
@@ -50,8 +60,17 @@
     "lastFailure": "Last failed backup",
     "failureLine": "{time}: {error}"
   },
-  "level": { "created": "created", "verified": "verified", "restoreTested": "restore tested" },
-  "repository": { "reachable": "reachable", "unreachable": "unreachable", "unknown": "unknown", "checkedAt": "checked {time}" },
+  "level": {
+    "created": "created",
+    "verified": "verified",
+    "restoreTested": "restore tested"
+  },
+  "repository": {
+    "reachable": "reachable",
+    "unreachable": "unreachable",
+    "unknown": "unknown",
+    "checkedAt": "checked {time}"
+  },
   "problems": {
     "disabled": "The offsite backup has not been set up.",
     "configuration": "The worker's backup configuration is invalid - check the backup-worker logs.",
@@ -72,19 +91,59 @@
     "verify_overdue": "The integrity check is overdue.",
     "restore_test_overdue": "The restore test is overdue."
   },
-  "kind": { "backup": "Backup", "verify": "Integrity check", "restore_test": "Restore test", "retention": "Retention" },
-  "trigger": { "schedule": "Schedule", "manual": "Manual", "pre_restore": "Rescue point before restore", "pre_deploy": "Before deployment", "cli": "Command line" },
+  "kind": {
+    "backup": "Backup",
+    "verify": "Integrity check",
+    "restore_test": "Restore test",
+    "retention": "Retention"
+  },
+  "trigger": {
+    "schedule": "Schedule",
+    "manual": "Manual",
+    "pre_restore": "Rescue point before restore",
+    "pre_deploy": "Before deployment",
+    "cli": "Command line"
+  },
   "state": {
-    "queued": "Queued", "preparing": "Preparing", "running": "Running", "verifying": "Verifying", "completed": "Successful",
-    "partial": "Partial", "failed": "Failed", "cancelled": "Cancelled", "interrupted": "Interrupted"
+    "queued": "Queued",
+    "preparing": "Preparing",
+    "running": "Running",
+    "verifying": "Verifying",
+    "completed": "Successful",
+    "partial": "Partial",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "interrupted": "Interrupted"
   },
   "restoreState": {
-    "queued": "Queued", "preparing": "Preparing", "running": "Running", "verifying": "Verifying", "cutover": "Switching over",
-    "completed": "Completed", "failed": "Failed", "cancelled": "Cancelled", "interrupted": "Interrupted", "rolled_back": "Rolled back"
+    "queued": "Queued",
+    "preparing": "Preparing",
+    "running": "Running",
+    "verifying": "Verifying",
+    "cutover": "Switching over",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "interrupted": "Interrupted",
+    "rolled_back": "Rolled back"
   },
-  "setState": { "completed": "complete", "partial": "partial", "failed": "failed", "invalid": "invalid", "pruned": "removed" },
-  "verify": { "unverified": "Unverified", "verified": "Verified", "failed": "Verification failed" },
-  "restoreTest": { "untested": "Restore untested", "passed": "Restore tested", "failed": "Restore test failed" },
+  "setState": {
+    "completed": "complete",
+    "partial": "partial",
+    "failed": "failed",
+    "invalid": "invalid",
+    "pruned": "removed"
+  },
+  "verify": {
+    "unverified": "Unverified",
+    "verified": "Verified",
+    "failed": "Verification failed"
+  },
+  "restoreTest": {
+    "untested": "Restore untested",
+    "passed": "Restore tested",
+    "failed": "Restore test failed"
+  },
   "phase": {
     "transfer": "Transferring files",
     "registry_hash": "Hashing legacy objects",
@@ -133,18 +192,59 @@
     "partialDetail": "{count, plural, one {# file was missing} other {# files were missing}}"
   },
   "columns": {
-    "time": "Time", "id": "ID", "kind": "Type", "state": "Status", "duration": "Duration", "database": "Database", "objects": "Objects",
-    "newData": "Newly transferred", "stored": "Newly stored", "verification": "Evidence", "error": "Error", "actions": "Actions", "event": "Event",
-    "actor": "Initiated by", "archive": "Restore point", "tenant": "Tenant", "users": "Users", "size": "Size"
+    "time": "Time",
+    "id": "ID",
+    "kind": "Type",
+    "state": "Status",
+    "duration": "Duration",
+    "database": "Database",
+    "objects": "Objects",
+    "newData": "Newly transferred",
+    "stored": "Newly stored",
+    "verification": "Evidence",
+    "error": "Error",
+    "actions": "Actions",
+    "event": "Event",
+    "actor": "Initiated by",
+    "archive": "Restore point",
+    "tenant": "Tenant",
+    "users": "Users",
+    "size": "Size"
   },
-  "events": { "title": "{count, plural, one {# event} other {# events}}", "empty": "No events.", "worker": "Worker" },
+  "events": {
+    "title": "{count, plural, one {# event} other {# events}}",
+    "empty": "No events.",
+    "worker": "Worker"
+  },
   "event": {
-    "state": "Status", "requested": "Requested", "hold_acquired": "Hold set", "hold_renewed": "Hold renewed", "registry_hashed": "Registry hashed", "cutover_recovery": "Swap journal evaluated", "captured": "Captured", "pool_written": "Contents saved",
-    "batch_restart": "Batch repeated", "restore_point_written": "Point written", "restore_point_adopted": "Point adopted", "resumed": "Resumed", "retry": "Retry",
-    "index_reconciled": "Index reconciled", "retention": "Retention", "gc": "Cleanup", "cancel_requested": "Cancellation requested",
-    "rescue_started": "Rescue point", "rescue_done": "Rescue point done", "rescue_skipped": "Without rescue point", "prepared": "Prepared",
-    "database_restored": "Database", "objects_restored": "Files", "alembic_upgraded": "Schema", "verified": "Verified",
-    "cutover_done": "Switched over", "rolled_back": "Rolled back", "collected": "Collected"
+    "state": "Status",
+    "requested": "Requested",
+    "hold_acquired": "Hold set",
+    "hold_renewed": "Hold renewed",
+    "registry_hashed": "Registry hashed",
+    "cutover_recovery": "Swap journal evaluated",
+    "captured": "Captured",
+    "pool_written": "Contents saved",
+    "batch_restart": "Batch repeated",
+    "restore_point_written": "Point written",
+    "restore_point_adopted": "Point adopted",
+    "resumed": "Resumed",
+    "retry": "Retry",
+    "index_reconciled": "Index reconciled",
+    "retention": "Retention",
+    "gc": "Cleanup",
+    "cancel_requested": "Cancellation requested",
+    "rescue_started": "Rescue point",
+    "rescue_done": "Rescue point done",
+    "rescue_skipped": "Without rescue point",
+    "prepared": "Prepared",
+    "database_restored": "Database",
+    "objects_restored": "Files",
+    "alembic_upgraded": "Schema",
+    "verified": "Verified",
+    "cutover_done": "Switched over",
+    "rolled_back": "Rolled back",
+    "collected": "Collected"
   },
   "detail": {
     "title": "{kind}: details",
@@ -165,7 +265,11 @@
     "missing_objects": "{count, plural, one {# file could} other {# files could}} not be backed up (not present in storage).",
     "dangling_references": "{count, plural, one {# database reference} other {# database references}} already pointed to missing files at backup time."
   },
-  "duration": { "seconds": "{seconds, number} s", "minutes": "{minutes, number} min", "hours": "{hours, number} h" },
+  "duration": {
+    "seconds": "{seconds, number} s",
+    "minutes": "{minutes, number} min",
+    "hours": "{hours, number} h"
+  },
   "restore": {
     "wizardTitle": "Restore",
     "wizardDescription": "Restore a tenant as a new copy or the entire installation from a restore point.",
@@ -199,8 +303,14 @@
     "confirmationLabel": "Type to confirm: {phrase}",
     "totp": "Current TOTP code",
     "totpHelp": "Fresh confirmation with the authenticator of your admin account.",
-    "panelTitle": { "full": "Full restore", "tenant_copy": "Tenant restore as a copy" },
-    "kindShort": { "full": "Full", "tenant_copy": "Tenant (copy)" },
+    "panelTitle": {
+      "full": "Full restore",
+      "tenant_copy": "Tenant restore as a copy"
+    },
+    "kindShort": {
+      "full": "Full",
+      "tenant_copy": "Tenant (copy)"
+    },
     "panelDescription": "{archive} · requested {time}",
     "cutoverHint": "The application is in maintenance mode and the databases are being swapped. This page may be briefly unavailable.",
     "contentsProgress": "{done, number} contents restored ({size})",
@@ -209,9 +319,17 @@
     "rolledBack": "The smoke test after the switchover failed - the previous state is active again.",
     "importWarnings": "{count, plural, one {# import note} other {# import notes}}",
     "historyTitle": "Previous restores",
-    "historyEmpty": "No restores yet."
+    "historyEmpty": "No restores yet.",
+    "replayErasures": "Re-apply deletions made after the restore point",
+    "replayErasuresHint": "People, files, protocols or tenants deleted after this restore point are deleted again after the restore. Only switch off in justified exceptions.",
+    "replayErasuresReason": "Reason why deleted data should come back"
   },
-  "preview": { "schema": "Database schema", "target": "Target", "size": "Data volume", "steps": "Procedure" },
+  "preview": {
+    "schema": "Database schema",
+    "target": "Target",
+    "size": "Data volume",
+    "steps": "Procedure"
+  },
   "schema": {
     "same": "matches this hocX version",
     "upgrade": "older - migrated in a controlled way after the restore",

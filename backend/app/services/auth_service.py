@@ -52,6 +52,14 @@ class AuthService:
         password_ok = verify_password(payload.password, user.password_hash if user is not None and user.password_hash else DUMMY_PASSWORD_HASH)
         if user is None or not user.is_active or not password_ok:
             record_failed_login("login-account", payload.email, client_address)
+            # Sicherheitsereignis (PRIV-013): die eingegebene E-Mail wird nicht gespeichert, nur das
+            # Konto, falls es existiert, und die gehashte Quelle (audit_context).
+            _audit.log(
+                db, action="user.login_failed", outcome="failure",
+                tenant_id=user.tenant_id if user is not None else None,
+                actor_user_id=user.id if user is not None else None,
+                details={"reason": "unknown_account" if user is None else ("inactive" if not user.is_active else "password")},
+            )
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-Mail oder Passwort ist ungültig.")
         if not user.login_enabled:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login ist für dieses Konto deaktiviert.")

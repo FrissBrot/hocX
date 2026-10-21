@@ -211,9 +211,16 @@ class EventService:
         return event
 
     def delete_event(self, db: Session, event_id: int) -> bool:
+        """Löscht den Termin. Einreichungen der Abgabebox zu diesem Termin verschwinden per Kaskade -
+        ihre Dateien werden vorher vollständig gelöscht, sonst blieben sie verwaist (PRIV-003)."""
+        from app.services import deletion_service, erasure_journal
+
         event = self.repository.get(db, event_id)
         if event is None:
             return False
+        if deletion_service.erase_uploads_of(db, event_id=event_id):
+            event = self.repository.get(db, event_id)
+        erasure_journal.record(db, "event", event.public_id, tenant_id=event.tenant_id)
         self.repository.delete(db, event)
         return True
 

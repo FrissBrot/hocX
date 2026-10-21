@@ -142,5 +142,27 @@
     "statisticsPerPersonPublicHint": "Off: members with read access only see their own figures in the statistics. Writers, treasurers and admins always see everyone.",
     "saved": "Saved",
     "saveFailed": "Saving failed"
+  },
+  "activity": {
+    "intro": "Changes, sign-ins and accesses by the hocX platform to this organisation's data. Without IP or email addresses.",
+    "filterAll": "All",
+    "filterFailures": "Failed",
+    "category": "Area",
+    "allCategories": "All areas",
+    "colTime": "Time",
+    "colAction": "Action",
+    "colActor": "By",
+    "colOutcome": "Result",
+    "loading": "Loading …",
+    "empty": "No entries",
+    "actor": {
+      "platform": "hocX platform",
+      "system": "System",
+      "deleted": "Deleted person"
+    },
+    "outcome": {
+      "success": "Successful",
+      "failure": "Failed"
+    }
   }
 }

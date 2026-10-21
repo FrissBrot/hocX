@@ -28,6 +28,8 @@ from app.services.template_service import TemplateService
 from app.services.user_service import UserService
 from app.schemas.user import UserUpdate
 from app.schemas.template import TemplateRead
+from app.schemas.data_export import ProtectedExportRequest
+from app.services.data_export import personal as personal_data
 
 router = APIRouter()
 participant_service = ParticipantService()
@@ -163,6 +165,20 @@ def delete_participant(
     # fines.py/users.py/protocols.py/todos.py.
     audit.log(db, action="participant.deleted", actor=user, entity_type="participant", entity_id=participant.id)
     return {"message": "Participant deleted"}
+
+
+@router.post("/participants/{participant_id}/personal-data")
+def export_participant_personal_data(
+    participant_id: uuid.UUID,
+    payload: ProtectedExportRequest,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Datenauskunft für eine Person als passwortgeschütztes ZIP (DSG Art. 25, DSGVO Art. 15; PRIV-006).
+    Nur Mandanten-Admins: die Auskunft enthält alle Daten der Person."""
+    require_admin(user)
+    participant = _get_participant_or_404(db, participant_id, user)
+    return personal_data.respond(db, participant, password=payload.password, actor=user, self_export=False)
 
 
 @router.post("/participants/import-csv", response_model=ParticipantImportResult, status_code=status.HTTP_200_OK)

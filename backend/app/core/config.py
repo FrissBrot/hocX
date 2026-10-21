@@ -121,6 +121,14 @@ class Settings(BaseSettings):
     identity_request_retention_days: int = 365
     word_import_outcome_retention_days: int = 365
     inactive_share_link_retention_days: int = 90
+    # Löschjournal: länger als jede Backup-Aufbewahrung (Migration 0144 erzwingt >= 400)
+    erasure_journal_retention_days: int = 400
+    # Sicherheitsalarme aus dem Audit-Log (system_health_service._check_security, PRIV-022)
+    security_failed_logins_warning: int = 50
+    security_failed_logins_critical: int = 200
+    security_failed_logins_per_account: int = 20
+    security_exports_per_hour: int = 3
+    security_alert_admin_logins: bool = False
     # How often the cycle-snapshot loop checks whether any CycleConfig's reset boundary
     # was crossed since the last snapshot (see main.py's cycle_snapshot_loop and
     # table_snapshot_service.run_due_cycle_snapshots). Daily is enough - a cycle boundary

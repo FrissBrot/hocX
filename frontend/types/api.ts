@@ -2250,3 +2250,34 @@ export type TenantPortalCharges = {
   overdue: TenantChargeStatusTotals;
   payment_term_days: number;
 };
+
+// ── Audit-Log / Verlauf (Datenschutz-Audit PRIV-013) ─────────────────────
+
+export type ActivityEntry = {
+  created_at: string;
+  action: string;
+  category: string;
+  outcome: "success" | "failure";
+  actor_kind: "user" | "platform" | "system" | "deleted";
+  actor_name: string | null;
+  entity_type: string | null;
+};
+
+export type ActivityPage = { items: ActivityEntry[]; total: number; categories: string[] };
+
+export type AuditLogEntry = {
+  id: number;
+  created_at: string;
+  action: string;
+  outcome: "success" | "failure";
+  tenant_id: string | null;
+  tenant_name: string | null;
+  actor_email: string | null;
+  actor_name: string | null;
+  ip_hash: string | null;
+  entity_type: string | null;
+  entity_id: number | null;
+  details: Record<string, unknown>;
+};
+
+export type AuditLogPage = { items: AuditLogEntry[]; total: number };

@@ -46,6 +46,38 @@ Installationen aktualisieren können.
 - Eine gemeinsame Löschfunktion räumt bei jeder Dateilöschung Objekt, Vorschaubild, Dokumente,
   Album- und Freigabelink-Einträge ab. `/admin/system` meldet Dateien, die zu nichts mehr gehören.
 
+### Datenschutz (Paket 3: Sicherheitsprotokoll)
+
+- **Audit-Log:** fehlgeschlagene Anmeldungen (App, MFA, Plattform-Admin), Plattform-Logins,
+  hinzugefügte MFA-Faktoren und Einblicke des Plattform-Supports in Mandantendaten werden
+  protokolliert. Statt IP-Adressen steht ein gekürzter, gehashter Netz-Fingerabdruck (`ip_hash`),
+  dazu `outcome` (Migration `0143`). Die App-Rolle darf das Protokoll nicht mehr ändern oder löschen;
+  Aufbewahrung (mindestens 30 Tage) und das Entfernen von E-Mail-Adressen gelöschter Personen bzw.
+  Mandanten laufen über eigene DB-Funktionen.
+- **Verlauf für Mandanten-Admins** unter Mandanten-Einstellungen → Verlauf (nur eigener Mandant,
+  Plattform-Zugriffe als «Plattform-Support»), **Plattform-Ansicht** unter `/admin/audit` (Owner).
+- **Sicherheitsalarme:** neuer Check `security` in `/admin/system` und ntfy (viele fehlgeschlagene
+  Logins, auffällig viele Exporte, Restores, Admin-Änderungen; Schwellen per `SECURITY_*`).
+- Mandanten löschen liefert einen Bericht (Personen, Dateien, Fehler beim Objektlöschen).
+
+### Datenschutz (Paket 4: Löschjournal)
+
+- Endgültige Löschungen (Mandant, Person, Protokoll, Termin, Abgabe, Einreichung, Datei) landen im
+  Löschjournal (Migration `0144`, nur Einfügen für die App-Rolle, Aufbewahrung ≥ 400 Tage). Ein
+  Voll-Restore und eine Mandanten-Kopie wenden sie vor dem Umschalten erneut an, damit gelöschte
+  Daten nicht aus dem Backup zurückkehren. Abschalten nur beim einzelnen Restore mit Begründung.
+- **Behoben:** Termin oder Listeneintrag löschen entfernt jetzt auch die zugehörigen
+  Abgabebox-Einreichungen samt Dateien (blieben vorher verwaist liegen).
+
+### Datenschutz (Paket 5: Datenauskunft)
+
+- **Datenauskunft je Person** (Personen → Menü → Datenauskunft, nur Admin) und **«Meine Daten»** im
+  Profil: passwortgeschützte ZIP-Datei (AES-256) mit `Auskunft.xlsx` (ein Blatt je Bereich),
+  `daten.json` und Lesehinweis. Enthält nur die eigenen Zeilen (Anwesenheit, Bussen, Aufgaben,
+  Termine, Dateien, Sicherheitsereignisse, Erwähnungen in Protokolltexten), keine Zugangsdaten.
+  Abruf wird protokolliert, Selbstauskunft max. 3× pro Stunde. Öffnen mit 7-Zip, Keka oder WinRAR
+  (der macOS-Finder kann AES-ZIP nicht öffnen). Neue Abhängigkeit `pyzipper`.
+
 ### Behoben
 
 - **Foto-Analyse:** Der Foto-Worker konnte seit Migration `0134` keine Dateien mehr laden

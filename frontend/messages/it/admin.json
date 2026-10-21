@@ -209,6 +209,11 @@
         "title": "File orfani",
         "detail": "{count, number} file senza riferimento",
         "problem": "File orfani nell'archivio"
+      },
+      "security": {
+        "title": "Eventi di sicurezza",
+        "detail": "{failedLogins, number} accessi falliti (15 min) · {exports, number} esportazioni (1 h) · {restores, number} ripristini (24 h)",
+        "problem": "Eventi di sicurezza anomali"
       }
     },
     "problems": {
@@ -1220,5 +1225,25 @@
     "reactivated": "«{name}» viene di nuovo offerto",
     "actionFailed": "Azione non riuscita",
     "empty": "Nessun modello in questa vista"
+  },
+  "auditLog": {
+    "title": "Registro di audit",
+    "description": "Eventi di sicurezza e di modifica di tutti i mandanti. La fonte è un'impronta hash della rete, non l'indirizzo IP.",
+    "filterAll": "Tutti",
+    "filterFailures": "Non riusciti",
+    "tenant": "Mandante",
+    "allTenants": "Tutti i mandanti",
+    "actionPlaceholder": "Azione, ad es. user.login",
+    "colTime": "Momento",
+    "colAction": "Operazione",
+    "colActor": "Da",
+    "colSource": "Fonte",
+    "colOutcome": "Esito",
+    "loading": "Caricamento …",
+    "empty": "Nessuna voce",
+    "outcome": {
+      "success": "Riuscito",
+      "failure": "Non riuscito"
+    }
   }
 }

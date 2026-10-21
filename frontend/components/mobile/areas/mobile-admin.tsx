@@ -549,6 +549,7 @@ const TENANT_TABS = [
   { href: "/tenant-settings/abo", key: "subscription" },
   { href: "/tenant-settings/verification", key: "verification" },
   { href: "/tenant-settings/privacy", key: "privacy" },
+  { href: "/tenant-settings/activity", key: "activity" },
 ] as const;
 
 /** Rahmen der Mandanten-Seiten: Kopf mit "‹ Mehr" und Segment statt Pill-Tabs. Inhalt sind
@@ -560,7 +561,7 @@ export function MobileTenantSettings({ title, children }: { title: string; child
   const pathname = usePathname();
   const openMore = useOpenMore();
   const active = TENANT_TABS.find((tab) => tab.href === pathname)?.key ?? "general";
-  const labels = { general: tNav("general"), domains: tNav("domains"), subscription: tNav("subscriptionAndUsage"), verification: tNav("documentVerification"), privacy: tNav("privacy") };
+  const labels = { general: tNav("general"), domains: tNav("domains"), subscription: tNav("subscriptionAndUsage"), verification: tNav("documentVerification"), privacy: tNav("privacy"), activity: tNav("activity") };
   return (
     <div className={`mobile-page${active === "domains" ? " mobile-page-list" : ""}`}>
       <MobileSubHeader title={title} backLabel={tMobile("tabs.more")} onBack={openMore} />

@@ -28,7 +28,7 @@ const STATUS_ORDER: Record<HealthStatus, number> = { critical: 0, warning: 1, un
 // Unbekannte Schlüssel landen in "other", damit eine neue Prüfung nie verschwindet.
 const CHECK_GROUPS: { key: string; checks: string[] }[] = [
   { key: "infrastructure", checks: ["postgres", "redis", "storage", "object_storage", "storage_migration", "local_s3", "orphaned_files"] },
-  { key: "security", checks: ["clamav", "clamav_signatures", "scan_backlog", "document_verification"] },
+  { key: "security", checks: ["clamav", "clamav_signatures", "scan_backlog", "document_verification", "security"] },
   { key: "processing", checks: ["photo_queue", "document_queue", "error_rate"] },
   { key: "backup", checks: ["backup", "backup_repository", "backup_verification"] },
 ];

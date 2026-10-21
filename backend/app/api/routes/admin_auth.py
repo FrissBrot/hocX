@@ -15,6 +15,7 @@ from app.schemas.admin import AdminLoginRequest, AdminSessionRead
 from app.schemas.mfa import MfaTicketRequest, TotpEnrollmentComplete, TotpEnrollmentStartRead, TotpLoginVerifyRequest
 from app.schemas.oidc import PlatformOidcConfigPublic
 from app.services.admin_auth_service import AdminAuthService
+from app.services.audit_service import AuditService
 from app.services.platform_oidc_service import PlatformOidcService, sanitize_redirect_to
 
 router = APIRouter()
@@ -121,5 +122,6 @@ def oidc_callback(code: str, state: str, request: Request, db: Session = Depends
     # top of an org's own IdP-enforced MFA policy). Local password login has no such
     # external factor to lean on, so it goes through AdminMfaService instead.
     issue_admin_session_cookie(redirect, admin.id, mfa_verified=True)
+    AuditService().log(db, action="admin.login", actor_email=admin.email, details={"method": "oidc"})
     redirect.delete_cookie(_OIDC_STATE_COOKIE, path=_OIDC_STATE_COOKIE_PATH)
     return redirect

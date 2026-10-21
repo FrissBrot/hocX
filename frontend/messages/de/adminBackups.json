@@ -2,7 +2,12 @@
   "title": "Backups",
   "description": "Verschlüsselte Offsite-Sicherung von Datenbank und Dateispeicher mit BorgBackup auf der Hetzner Storage Box.",
   "loadFailed": "Der Backup-Status konnte nicht geladen werden.",
-  "tabs": { "overview": "Übersicht", "history": "Verlauf", "restore": "Wiederherstellung", "settings": "Einstellungen" },
+  "tabs": {
+    "overview": "Übersicht",
+    "history": "Verlauf",
+    "restore": "Wiederherstellung",
+    "settings": "Einstellungen"
+  },
   "actions": {
     "backupNow": "Backup jetzt starten",
     "restoreTest": "Restore-Test starten",
@@ -19,7 +24,12 @@
     "disabled": "Das Backup-System ist noch nicht eingerichtet (BACKUP_ENABLED). Anleitung: RUNBOOK, Abschnitt Backup.",
     "workerDown": "Der Backup-Worker meldet sich nicht - Sicherungen laufen derzeit nicht."
   },
-  "overall": { "ok": "In Ordnung", "warning": "Warnung", "critical": "Kritisch", "disabled": "Nicht eingerichtet" },
+  "overall": {
+    "ok": "In Ordnung",
+    "warning": "Warnung",
+    "critical": "Kritisch",
+    "disabled": "Nicht eingerichtet"
+  },
   "overview": {
     "overall": "Gesamtstatus",
     "problemCount": "{count, plural, =0 {Keine offenen Probleme} one {# offenes Problem} other {# offene Probleme}}",
@@ -50,7 +60,11 @@
     "lastFailure": "Letztes fehlgeschlagenes Backup",
     "failureLine": "{time}: {error}"
   },
-  "level": { "created": "erstellt", "verified": "geprüft", "restoreTested": "Restore getestet" },
+  "level": {
+    "created": "erstellt",
+    "verified": "geprüft",
+    "restoreTested": "Restore getestet"
+  },
   "repository": {
     "reachable": "erreichbar",
     "unreachable": "nicht erreichbar",
@@ -77,19 +91,59 @@
     "verify_overdue": "Die Integritätsprüfung ist überfällig.",
     "restore_test_overdue": "Der Restore-Test ist überfällig."
   },
-  "kind": { "backup": "Backup", "verify": "Integritätsprüfung", "restore_test": "Restore-Test", "retention": "Aufbewahrung" },
-  "trigger": { "schedule": "Zeitplan", "manual": "Manuell", "pre_restore": "Rettungspunkt vor Restore", "pre_deploy": "Vor Deployment", "cli": "Kommandozeile" },
+  "kind": {
+    "backup": "Backup",
+    "verify": "Integritätsprüfung",
+    "restore_test": "Restore-Test",
+    "retention": "Aufbewahrung"
+  },
+  "trigger": {
+    "schedule": "Zeitplan",
+    "manual": "Manuell",
+    "pre_restore": "Rettungspunkt vor Restore",
+    "pre_deploy": "Vor Deployment",
+    "cli": "Kommandozeile"
+  },
   "state": {
-    "queued": "Wartet", "preparing": "Vorbereitung", "running": "Läuft", "verifying": "Prüfung", "completed": "Erfolgreich",
-    "partial": "Teilweise", "failed": "Fehlgeschlagen", "cancelled": "Abgebrochen", "interrupted": "Unterbrochen"
+    "queued": "Wartet",
+    "preparing": "Vorbereitung",
+    "running": "Läuft",
+    "verifying": "Prüfung",
+    "completed": "Erfolgreich",
+    "partial": "Teilweise",
+    "failed": "Fehlgeschlagen",
+    "cancelled": "Abgebrochen",
+    "interrupted": "Unterbrochen"
   },
   "restoreState": {
-    "queued": "Wartet", "preparing": "Vorbereitung", "running": "Läuft", "verifying": "Prüfung", "cutover": "Umschaltung",
-    "completed": "Abgeschlossen", "failed": "Fehlgeschlagen", "cancelled": "Abgebrochen", "interrupted": "Unterbrochen", "rolled_back": "Zurückgerollt"
+    "queued": "Wartet",
+    "preparing": "Vorbereitung",
+    "running": "Läuft",
+    "verifying": "Prüfung",
+    "cutover": "Umschaltung",
+    "completed": "Abgeschlossen",
+    "failed": "Fehlgeschlagen",
+    "cancelled": "Abgebrochen",
+    "interrupted": "Unterbrochen",
+    "rolled_back": "Zurückgerollt"
   },
-  "setState": { "completed": "vollständig", "partial": "teilweise", "failed": "fehlgeschlagen", "invalid": "ungültig", "pruned": "entfernt" },
-  "verify": { "unverified": "Ungeprüft", "verified": "Geprüft", "failed": "Prüfung fehlgeschlagen" },
-  "restoreTest": { "untested": "Restore ungetestet", "passed": "Restore getestet", "failed": "Restore-Test fehlgeschlagen" },
+  "setState": {
+    "completed": "vollständig",
+    "partial": "teilweise",
+    "failed": "fehlgeschlagen",
+    "invalid": "ungültig",
+    "pruned": "entfernt"
+  },
+  "verify": {
+    "unverified": "Ungeprüft",
+    "verified": "Geprüft",
+    "failed": "Prüfung fehlgeschlagen"
+  },
+  "restoreTest": {
+    "untested": "Restore ungetestet",
+    "passed": "Restore getestet",
+    "failed": "Restore-Test fehlgeschlagen"
+  },
   "phase": {
     "transfer": "Dateien werden übertragen",
     "registry_hash": "Altbestand wird gehasht",
@@ -138,18 +192,59 @@
     "partialDetail": "{count, plural, one {# Datei fehlte} other {# Dateien fehlten}}"
   },
   "columns": {
-    "time": "Zeitpunkt", "id": "ID", "kind": "Art", "state": "Status", "duration": "Dauer", "database": "Datenbank", "objects": "Objekte",
-    "newData": "Neu übertragen", "stored": "Neu belegt", "verification": "Nachweis", "error": "Fehler", "actions": "Aktionen", "event": "Ereignis",
-    "actor": "Auslöser", "archive": "Sicherungspunkt", "tenant": "Mandant", "users": "Benutzer", "size": "Grösse"
+    "time": "Zeitpunkt",
+    "id": "ID",
+    "kind": "Art",
+    "state": "Status",
+    "duration": "Dauer",
+    "database": "Datenbank",
+    "objects": "Objekte",
+    "newData": "Neu übertragen",
+    "stored": "Neu belegt",
+    "verification": "Nachweis",
+    "error": "Fehler",
+    "actions": "Aktionen",
+    "event": "Ereignis",
+    "actor": "Auslöser",
+    "archive": "Sicherungspunkt",
+    "tenant": "Mandant",
+    "users": "Benutzer",
+    "size": "Grösse"
   },
-  "events": { "title": "{count, plural, one {# Ereignis} other {# Ereignisse}}", "empty": "Keine Ereignisse.", "worker": "Worker" },
+  "events": {
+    "title": "{count, plural, one {# Ereignis} other {# Ereignisse}}",
+    "empty": "Keine Ereignisse.",
+    "worker": "Worker"
+  },
   "event": {
-    "state": "Status", "requested": "Angefordert", "hold_acquired": "Hold gesetzt", "hold_renewed": "Hold erneuert", "registry_hashed": "Register nachgehasht", "cutover_recovery": "Tausch-Journal ausgewertet", "captured": "Erfasst", "pool_written": "Inhalte gesichert",
-    "batch_restart": "Batch wiederholt", "restore_point_written": "Punkt geschrieben", "restore_point_adopted": "Punkt übernommen", "resumed": "Fortgesetzt", "retry": "Neuer Versuch",
-    "index_reconciled": "Index abgeglichen", "retention": "Aufbewahrung", "gc": "Bereinigung", "cancel_requested": "Abbruch angefordert",
-    "rescue_started": "Rettungspunkt", "rescue_done": "Rettungspunkt fertig", "rescue_skipped": "Ohne Rettungspunkt", "prepared": "Vorbereitet",
-    "database_restored": "Datenbank", "objects_restored": "Dateien", "alembic_upgraded": "Schema", "verified": "Geprüft",
-    "cutover_done": "Umgeschaltet", "rolled_back": "Zurückgerollt", "collected": "Gesammelt"
+    "state": "Status",
+    "requested": "Angefordert",
+    "hold_acquired": "Hold gesetzt",
+    "hold_renewed": "Hold erneuert",
+    "registry_hashed": "Register nachgehasht",
+    "cutover_recovery": "Tausch-Journal ausgewertet",
+    "captured": "Erfasst",
+    "pool_written": "Inhalte gesichert",
+    "batch_restart": "Batch wiederholt",
+    "restore_point_written": "Punkt geschrieben",
+    "restore_point_adopted": "Punkt übernommen",
+    "resumed": "Fortgesetzt",
+    "retry": "Neuer Versuch",
+    "index_reconciled": "Index abgeglichen",
+    "retention": "Aufbewahrung",
+    "gc": "Bereinigung",
+    "cancel_requested": "Abbruch angefordert",
+    "rescue_started": "Rettungspunkt",
+    "rescue_done": "Rettungspunkt fertig",
+    "rescue_skipped": "Ohne Rettungspunkt",
+    "prepared": "Vorbereitet",
+    "database_restored": "Datenbank",
+    "objects_restored": "Dateien",
+    "alembic_upgraded": "Schema",
+    "verified": "Geprüft",
+    "cutover_done": "Umgeschaltet",
+    "rolled_back": "Zurückgerollt",
+    "collected": "Gesammelt"
   },
   "detail": {
     "title": "{kind}: Details",
@@ -208,8 +303,14 @@
     "confirmationLabel": "Zur Bestätigung eingeben: {phrase}",
     "totp": "Aktueller TOTP-Code",
     "totpHelp": "Frische Bestätigung mit dem Authenticator deines Admin-Kontos.",
-    "panelTitle": { "full": "Vollständige Wiederherstellung", "tenant_copy": "Mandanten-Wiederherstellung als Kopie" },
-    "kindShort": { "full": "Vollständig", "tenant_copy": "Mandant (Kopie)" },
+    "panelTitle": {
+      "full": "Vollständige Wiederherstellung",
+      "tenant_copy": "Mandanten-Wiederherstellung als Kopie"
+    },
+    "kindShort": {
+      "full": "Vollständig",
+      "tenant_copy": "Mandant (Kopie)"
+    },
     "panelDescription": "{archive} · angefordert {time}",
     "cutoverHint": "Die Anwendung ist im Wartungsmodus, die Datenbanken werden getauscht. Diese Ansicht kann kurz nicht erreichbar sein.",
     "contentsProgress": "{done, number} Inhalte wiederhergestellt ({size})",
@@ -218,9 +319,17 @@
     "rolledBack": "Der Smoke-Test nach der Umschaltung ist fehlgeschlagen - der bisherige Stand ist wieder aktiv.",
     "importWarnings": "{count, plural, one {# Hinweis} other {# Hinweise}} des Imports",
     "historyTitle": "Bisherige Wiederherstellungen",
-    "historyEmpty": "Noch keine Wiederherstellungen."
+    "historyEmpty": "Noch keine Wiederherstellungen.",
+    "replayErasures": "Löschungen nach dem Sicherungspunkt erneut anwenden",
+    "replayErasuresHint": "Personen, Dateien, Protokolle oder Mandanten, die nach diesem Sicherungspunkt gelöscht wurden, werden nach dem Restore wieder gelöscht. Nur in begründeten Ausnahmen abschalten.",
+    "replayErasuresReason": "Begründung, warum gelöschte Daten zurückkommen sollen"
   },
-  "preview": { "schema": "Datenbankschema", "target": "Ziel", "size": "Datenmenge", "steps": "Ablauf" },
+  "preview": {
+    "schema": "Datenbankschema",
+    "target": "Ziel",
+    "size": "Datenmenge",
+    "steps": "Ablauf"
+  },
   "schema": {
     "same": "passt zu dieser hocX-Version",
     "upgrade": "älter - wird nach der Wiederherstellung kontrolliert migriert",

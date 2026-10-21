@@ -33,3 +33,8 @@ ImageHash==4.3.2
 
 # S3-Objektspeicher (app/core/objstore_client.py, docs-site/docs/technik/storage/architektur.md)
 boto3==1.43.113
+
+# Passwortgeschützte ZIP-Dateien (AES-256, WinZip-AE-2) für Datenauskunft und Vereinsexport
+# (app/services/personal_data_export_service.py, Datenschutz-Audit Paket 5/6) - lesbar mit 7-Zip,
+# Keka und WinRAR (nicht mit dem eingebauten Entpacker von macOS).
+pyzipper==0.3.6

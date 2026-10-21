@@ -91,6 +91,9 @@ class FileEraser:
         db.execute(delete(ShareLinkFile).where(ShareLinkFile.file_id.in_(public_ids)))
         thumbnail = _owned_thumbnail(stored_file)
         storage_key = stored_file.storage_path
+        from app.services import erasure_journal
+
+        erasure_journal.record(db, "stored_file", stored_file.public_id, tenant_id=stored_file.tenant_id)
         db.delete(stored_file)
         db.flush()
         get_object_store().delete(db, namespace, storage_key)

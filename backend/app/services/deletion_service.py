@@ -31,6 +31,7 @@ from app.models.entities import (
     SubmissionUpload,
     SubmissionUploadFile,
 )
+from app.services import erasure_journal
 from app.services.file_eraser import FileEraser, is_referenced
 
 
@@ -118,6 +119,7 @@ def delete_protocol(db: Session, protocol: Protocol, *, delete_file_ids: set[uui
             eraser.keep_in_gallery(db, item.stored_file, tag=tag, created_by=actor_user_id)
             result.kept_files += 1
     image_ids = [item.stored_file.id for item in preview if not item.used_elsewhere and _choose(delete_file_ids, item.stored_file)]
+    erasure_journal.record(db, "protocol", protocol.public_id, tenant_id=protocol.tenant_id)
     db.delete(protocol)
     db.flush()
     # Nach dem Protokoll sind protocol_image und document_export weg; gelöscht wird nur, was nun
@@ -224,6 +226,7 @@ def delete_assignment(db: Session, assignment: SubmissionAssignment, *, delete_f
             _erase_gallery_photo(db, eraser, item.stored_file)
         result.deleted_files += 1
     submission_items = [item for item in to_erase if item.group == "submission"]
+    erasure_journal.record(db, "submission_assignment", assignment.public_id, tenant_id=assignment.tenant_id)
     db.delete(assignment)
     db.flush()
     for item in submission_items:
@@ -247,6 +250,9 @@ def delete_submission_files(db: Session, rows: list[tuple[SubmissionUploadFile, 
             erased += 1
     for upload_id in upload_ids:
         if db.scalar(select(SubmissionUploadFile.id).where(SubmissionUploadFile.upload_id == upload_id).limit(1)) is None:
+            upload = db.get(SubmissionUpload, upload_id)
+            tenant_id = db.scalar(select(SubmissionAssignment.tenant_id).where(SubmissionAssignment.id == upload.assignment_id))
+            erasure_journal.record(db, "submission_upload", upload.public_id, tenant_id=tenant_id)
             db.execute(delete(SubmissionUpload).where(SubmissionUpload.id == upload_id))
     db.commit()
     eraser.after_commit(db)
@@ -281,4 +287,22 @@ def preview_read(files: list[DeletionFile]):
             )
         )
     return DeletionPreview(files=items)
+
+
+def erase_uploads_of(db: Session, *, event_id: int | None = None, list_entry_id: int | None = None) -> int:
+    """Einreichungen hängen per CASCADE an Termin bzw. Listeneintrag. Vor deren Löschung hier die
+    Dateien vollständig löschen, sonst blieben sie verwaist im Abgabebox-Speicher (PRIV-003)."""
+    statement = (
+        select(SubmissionUploadFile, StoredFile)
+        .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
+        .join(SubmissionUpload, SubmissionUpload.id == SubmissionUploadFile.upload_id)
+    )
+    if event_id is not None:
+        statement = statement.where(SubmissionUpload.event_id == event_id)
+    elif list_entry_id is not None:
+        statement = statement.where(SubmissionUpload.list_entry_id == list_entry_id)
+    else:
+        return 0
+    rows = [(row[0], row[1]) for row in db.execute(statement).all()]
+    return delete_submission_files(db, rows) if rows else 0
 

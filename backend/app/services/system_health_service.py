@@ -453,6 +453,66 @@ def _check_scan_backlog(db: Session) -> HealthCheckRead:
     return HealthCheckRead(key="scan_backlog", status="warning" if count else "ok", params={"count": count})
 
 
+_EXPORT_ACTIONS = ("admin.tenant_exported", "tenant.exported", "personal_data.exported")
+_ADMIN_CHANGE_ACTIONS = ("admin.admin_created", "admin.user_mfa_factor_deleted", "user.mfa_factor_deleted")
+
+
+def _check_security(db: Session) -> HealthCheckRead:
+    """Auffällige Ereignisse im Audit-Log (Datenschutz-Audit PRIV-022): viele Fehlversuche beim
+    Anmelden (gesamt und je Konto, 15 min), mehrere Exporte in einer Stunde, Restores und
+    Änderungen an Admin-Konten/MFA (24 h), optional jede Plattform-Anmeldung (1 h)."""
+    from sqlalchemy import text
+
+    failure_window = (
+        "outcome = 'failure' AND action IN ('user.login_failed', 'admin.login_failed', 'user.mfa_failed') "
+        "AND created_at > now() - interval '15 minutes'"
+    )
+    total_failed = db.scalar(text("SELECT count(*) FROM audit_log WHERE " + failure_window)) or 0
+    # Je Konto, sonst je E-Mail eines Admins, sonst je Quelle (IP-Hash)
+    max_per_account = db.scalar(
+        text(
+            "SELECT COALESCE(max(n), 0) FROM (SELECT count(*) AS n FROM audit_log WHERE " + failure_window
+            + " GROUP BY COALESCE(actor_user_id::text, actor_email, ip_hash, '?')) per_account"
+        )
+    ) or 0
+    exports = db.scalar(
+        text("SELECT count(*) FROM audit_log WHERE action = ANY(:actions) AND created_at > now() - interval '1 hour'"),
+        {"actions": list(_EXPORT_ACTIONS)},
+    ) or 0
+    restores = db.scalar(text("SELECT count(*) FROM audit_log WHERE action = 'backup.restore.create' AND created_at > now() - interval '24 hours'")) or 0
+    admin_changes = db.scalar(
+        text("SELECT count(*) FROM audit_log WHERE action = ANY(:actions) AND created_at > now() - interval '24 hours'"),
+        {"actions": list(_ADMIN_CHANGE_ACTIONS)},
+    ) or 0
+    admin_logins = db.scalar(text("SELECT count(*) FROM audit_log WHERE action = 'admin.login' AND created_at > now() - interval '1 hour'")) or 0
+    max_per_account = int(max_per_account)
+
+    status = "ok"
+    if (
+        total_failed >= settings.security_failed_logins_warning
+        or max_per_account >= settings.security_failed_logins_per_account
+        or exports > settings.security_exports_per_hour
+        or restores
+        or admin_changes
+        or (settings.security_alert_admin_logins and admin_logins)
+    ):
+        status = "warning"
+    if total_failed >= settings.security_failed_logins_critical:
+        status = "critical"
+    return HealthCheckRead(
+        key="security",
+        status=status,
+        params={
+            "failedLogins": int(total_failed),
+            "maxPerAccount": max_per_account,
+            "exports": int(exports),
+            "restores": int(restores),
+            "adminChanges": int(admin_changes),
+            "adminLogins": int(admin_logins),
+        },
+    )
+
+
 def _check_orphaned_files(db: Session) -> HealthCheckRead:
     """Dateien, auf die nichts mehr zeigt (Datenschutz-Audit PRIV-003/004): sie sind in keiner Ansicht
     erreichbar, liegen aber im Speicher und in Backups. Neue Fälle deuten auf einen Löschpfad, der
@@ -542,6 +602,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("error_rate", lambda: _check_error_rate(db), failure_status="unknown", db=db)
     checks += _run_check("scan_backlog", lambda: _check_scan_backlog(db), failure_status="unknown", db=db)
     checks += _run_check("orphaned_files", lambda: _check_orphaned_files(db), failure_status="unknown", db=db)
+    checks += _run_check("security", lambda: _check_security(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_verification", _check_document_verification)

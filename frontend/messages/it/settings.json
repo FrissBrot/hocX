@@ -4,14 +4,19 @@
     "description": "Impostazioni personali, lingua e sicurezza del tuo account.",
     "tabs": {
       "profile": "Profilo",
-      "security": "Sicurezza"
+      "security": "Sicurezza",
+      "data": "I miei dati"
     },
     "languageLabel": "Lingua",
     "accordionLabel": "Comprimi automaticamente i punti del verbale",
     "accordionHint": "Mostra espanso solo il punto attivo.",
     "save": "Salva profilo",
     "logout": "Disconnetti",
-    "saveFailed": "Impossibile salvare il profilo."
+    "saveFailed": "Impossibile salvare il profilo.",
+    "personalData": {
+      "description": "Scarica tutti i dati che hocX ha salvato su di te – come file ZIP protetto da password con una cartella Excel e un file JSON leggibile da macchina.",
+      "download": "Scarica i miei dati"
+    }
   },
   "logoutFailed": "Disconnessione non riuscita. Riprova.",
   "logoutPendingConfirm": "Ci sono modifiche non ancora salvate. Uscendo andranno perse su questo dispositivo.",

@@ -252,4 +252,7 @@ class RestoreCreate(RestorePreviewRequest):
     totp_code: str = Field(min_length=6, max_length=10, pattern=r"^[0-9 ]+$")
     skip_rescue_backup: bool = False
     skip_rescue_reason: str | None = Field(default=None, max_length=500)
+    # Löschungen nach dem Sicherungspunkt erneut anwenden (Löschjournal, PRIV-010); aus nur mit Begründung.
+    replay_erasures: bool = True
+    replay_erasures_reason: str | None = Field(default=None, max_length=500)
     idempotency_key: str | None = Field(default=None, max_length=100, pattern=r"^[A-Za-z0-9_.:-]+$")

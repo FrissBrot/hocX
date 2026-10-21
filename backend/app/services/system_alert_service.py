@@ -60,6 +60,7 @@ _CHECK_TITLES_DE = {
     "error_rate": "Fehlerrate",
     "scan_backlog": "Virenprüfung im Rückstand",
     "orphaned_files": "Verwaiste Dateien",
+    "security": "Sicherheitsereignisse",
     "photo_queue": "Bildanalyse-Warteschlange",
     "document_queue": "Dokumentverarbeitung",
     "document_verification": "Öffentliche Prüfseite",
@@ -79,6 +80,7 @@ _CHECK_PROBLEM_TITLES_DE = {
     "error_rate": "Viele Einträge im Fehlerprotokoll",
     "scan_backlog": "Virenprüfung im Rückstand",
     "orphaned_files": "Verwaiste Dateien im Speicher",
+    "security": "Auffällige Sicherheitsereignisse",
     "photo_queue": "Bildanalyse-Warteschlange staut sich",
     "document_queue": "Dokumentverarbeitung staut sich oder scheitert",
     "document_verification": "Öffentliche Prüfseite langsam",
@@ -126,6 +128,19 @@ def _check_message(check) -> str:
             return f"{params.get('lastHour')} Fehler in der letzten Stunde, {params.get('lastDay')} in 24 Stunden - siehe Fehlerprotokoll."
         case "scan_backlog":
             return f"{params.get('count')} Dateien warten seit über einer Stunde auf die Virenprüfung."
+        case "security":
+            parts = []
+            if params.get("failedLogins"):
+                parts.append(f"{params.get('failedLogins')} fehlgeschlagene Anmeldungen in 15 Minuten (höchstens {params.get('maxPerAccount')} je Konto)")
+            if params.get("exports"):
+                parts.append(f"{params.get('exports')} Exporte in der letzten Stunde")
+            if params.get("restores"):
+                parts.append(f"{params.get('restores')} Restore(s) in 24 Stunden")
+            if params.get("adminChanges"):
+                parts.append(f"{params.get('adminChanges')} Änderungen an Admin-Konten oder MFA in 24 Stunden")
+            if params.get("adminLogins"):
+                parts.append(f"{params.get('adminLogins')} Plattform-Anmeldungen in der letzten Stunde")
+            return "; ".join(parts) + " - siehe Adminportal, Audit-Log."
         case "orphaned_files":
             return f"{params.get('count')} Dateien gehören zu nichts mehr (älter als 1 Tag) - Löschpfad prüfen, Bereinigung im Adminportal (Mandant → Bereinigen)."
         case "photo_queue":

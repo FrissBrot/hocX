@@ -57,5 +57,6 @@
   "documentAssets": "Images and fonts",
   "documentComponents": "Components",
   "documentExports": "Export history",
-  "privacy": "Privacy"
+  "privacy": "Privacy",
+  "activity": "Activity"
 }

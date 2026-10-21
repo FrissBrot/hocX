@@ -511,3 +511,25 @@ class TenantCleanupCounts(BaseModel):
 class TenantCleanupRequest(BaseModel):
     categories: list[TenantCleanupCategory]
     confirm_name: str
+
+
+class AuditLogEntryRead(BaseModel):
+    """Eintrag im Audit-Log für /admin/audit (Datenschutz-Audit PRIV-013)."""
+
+    id: int
+    created_at: datetime
+    action: str
+    outcome: str
+    tenant_id: uuid.UUID | None = None
+    tenant_name: str | None = None
+    actor_email: str | None = None
+    actor_name: str | None = None
+    ip_hash: str | None = None
+    entity_type: str | None = None
+    entity_id: int | None = None
+    details: dict = {}
+
+
+class AuditLogPage(BaseModel):
+    items: list[AuditLogEntryRead]
+    total: int

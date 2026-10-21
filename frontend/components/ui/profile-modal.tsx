@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { MfaProfilePanel } from "@/components/security/mfa-profile-panel";
 import { Modal } from "@/components/ui/modal";
+import { ProtectedExportForm } from "@/components/ui/protected-export-modal";
 import { Tabs } from "@/components/ui/tabs";
 import { locales, localeConfig } from "@/i18n/locale-config.generated";
 
@@ -96,6 +97,16 @@ export function ProfileModal({
             id: "sicherheit",
             label: t("tabs.security"),
             content: <MfaProfilePanel open={open && activeTab === "sicherheit"} />,
+          },
+          {
+            id: "daten",
+            label: t("tabs.data"),
+            content: (
+              <div className="grid">
+                <p className="muted">{t("personalData.description")}</p>
+                <ProtectedExportForm path="/api/users/me/personal-data" fallbackFilename="hocx-data.zip" submitLabel={t("personalData.download")} />
+              </div>
+            ),
           },
         ]}
       />

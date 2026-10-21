@@ -209,6 +209,11 @@
         "title": "Orphaned files",
         "detail": "{count, number} files without a reference",
         "problem": "Orphaned files in storage"
+      },
+      "security": {
+        "title": "Security events",
+        "detail": "{failedLogins, number} failed sign-ins (15 min) · {exports, number} exports (1 h) · {restores, number} restores (24 h)",
+        "problem": "Unusual security events"
       }
     },
     "problems": {
@@ -1220,5 +1225,25 @@
     "reactivated": "“{name}” is offered again",
     "actionFailed": "Action failed",
     "empty": "No templates in this view"
+  },
+  "auditLog": {
+    "title": "Audit log",
+    "description": "Security and change events of all tenants. The source is a hashed network fingerprint, not the IP address.",
+    "filterAll": "All",
+    "filterFailures": "Failed",
+    "tenant": "Tenant",
+    "allTenants": "All tenants",
+    "actionPlaceholder": "Action, e.g. user.login",
+    "colTime": "Time",
+    "colAction": "Action",
+    "colActor": "By",
+    "colSource": "Source",
+    "colOutcome": "Result",
+    "loading": "Loading …",
+    "empty": "No entries",
+    "outcome": {
+      "success": "Successful",
+      "failure": "Failed"
+    }
   }
 }

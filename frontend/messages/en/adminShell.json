@@ -25,7 +25,8 @@
     "storage": "Storage",
     "backups": "Backups",
     "maintenance": "Maintenance",
-    "documentTemplates": "Document templates"
+    "documentTemplates": "Document templates",
+    "auditLog": "Audit log"
   },
   "logout": "Log out",
   "menuToggleClose": "Close",

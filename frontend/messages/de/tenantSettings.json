@@ -142,5 +142,27 @@
     "statisticsPerPersonPublicHint": "Aus: Mitglieder mit Leserecht sehen in der Statistik nur ihre eigenen Werte. Schreibende, Kassier und Admins sehen immer alle.",
     "saved": "Gespeichert",
     "saveFailed": "Speichern fehlgeschlagen"
+  },
+  "activity": {
+    "intro": "Änderungen, Anmeldungen und Zugriffe der hocX-Plattform auf Daten dieses Vereins. Ohne IP- und E-Mail-Adressen.",
+    "filterAll": "Alle",
+    "filterFailures": "Fehlgeschlagen",
+    "category": "Bereich",
+    "allCategories": "Alle Bereiche",
+    "colTime": "Zeitpunkt",
+    "colAction": "Vorgang",
+    "colActor": "Von",
+    "colOutcome": "Ergebnis",
+    "loading": "Wird geladen …",
+    "empty": "Keine Einträge",
+    "actor": {
+      "platform": "hocX-Plattform",
+      "system": "System",
+      "deleted": "Gelöschte Person"
+    },
+    "outcome": {
+      "success": "Erfolgreich",
+      "failure": "Fehlgeschlagen"
+    }
   }
 }

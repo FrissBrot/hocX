@@ -57,5 +57,6 @@
   "documentAssets": "Images et polices",
   "documentComponents": "Composants",
   "documentExports": "Historique des exports",
-  "privacy": "Protection des données"
+  "privacy": "Protection des données",
+  "activity": "Historique"
 }

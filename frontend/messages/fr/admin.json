@@ -209,6 +209,11 @@
         "title": "Fichiers orphelins",
         "detail": "{count, number} fichiers sans référence",
         "problem": "Fichiers orphelins dans le stockage"
+      },
+      "security": {
+        "title": "Événements de sécurité",
+        "detail": "{failedLogins, number} échecs de connexion (15 min) · {exports, number} exports (1 h) · {restores, number} restaurations (24 h)",
+        "problem": "Événements de sécurité inhabituels"
       }
     },
     "problems": {
@@ -1220,5 +1225,25 @@
     "reactivated": "« {name} » est de nouveau proposé",
     "actionFailed": "L’action a échoué",
     "empty": "Aucun modèle dans cette vue"
+  },
+  "auditLog": {
+    "title": "Journal d’audit",
+    "description": "Événements de sécurité et de modification de tous les mandants. La source est une empreinte hachée du réseau, pas l’adresse IP.",
+    "filterAll": "Tous",
+    "filterFailures": "Échoués",
+    "tenant": "Mandant",
+    "allTenants": "Tous les mandants",
+    "actionPlaceholder": "Action, p. ex. user.login",
+    "colTime": "Moment",
+    "colAction": "Opération",
+    "colActor": "Par",
+    "colSource": "Source",
+    "colOutcome": "Résultat",
+    "loading": "Chargement …",
+    "empty": "Aucune entrée",
+    "outcome": {
+      "success": "Réussi",
+      "failure": "Échoué"
+    }
   }
 }

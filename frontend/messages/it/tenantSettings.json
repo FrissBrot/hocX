@@ -142,5 +142,27 @@
     "statisticsPerPersonPublicHint": "Disattivato: i membri con accesso in lettura vedono nelle statistiche solo i propri valori. Redattori, cassieri e amministratori vedono sempre tutti.",
     "saved": "Salvato",
     "saveFailed": "Salvataggio non riuscito"
+  },
+  "activity": {
+    "intro": "Modifiche, accessi e consultazioni della piattaforma hocX sui dati di questa organizzazione. Senza indirizzi IP né e-mail.",
+    "filterAll": "Tutti",
+    "filterFailures": "Non riusciti",
+    "category": "Ambito",
+    "allCategories": "Tutti gli ambiti",
+    "colTime": "Momento",
+    "colAction": "Operazione",
+    "colActor": "Da",
+    "colOutcome": "Esito",
+    "loading": "Caricamento …",
+    "empty": "Nessuna voce",
+    "actor": {
+      "platform": "Piattaforma hocX",
+      "system": "Sistema",
+      "deleted": "Persona eliminata"
+    },
+    "outcome": {
+      "success": "Riuscito",
+      "failure": "Non riuscito"
+    }
   }
 }

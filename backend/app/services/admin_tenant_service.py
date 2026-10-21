@@ -648,7 +648,7 @@ class AdminTenantService:
         db.refresh(tenant)
         return self._read_model(db, tenant)
 
-    def delete_tenant(self, db: Session, tenant_id: int) -> bool:
+    def delete_tenant(self, db: Session, tenant_id: int) -> dict | None:
         """Deletes a tenant and everything under it.
 
         Plain `DELETE FROM tenant` would fail: several tenant-scoped tables have an
@@ -674,7 +674,7 @@ class AdminTenantService:
         """
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
-            return False
+            return None
 
         # Captured before any DB delete below (audit finding, 2026-08-25): this method
         # only ever removed DB rows - not one unlink() for protocol images, document
@@ -720,6 +720,18 @@ class AdminTenantService:
             own_file_public_ids += list(db.scalars(select(SubmissionUploadFile.public_id).where(SubmissionUploadFile.upload_id.in_(upload_ids))))
         photo_album_service.drop_items_for_files(db, own_file_public_ids)
 
+        # Löschbericht (PRIV-023) und E-Mail-Adressen der Konten aus dem Audit-Log entfernen.
+        from app.services.audit_service import AuditService
+
+        report = {
+            "users": db.scalar(select(func.count()).select_from(AppUser).where(AppUser.tenant_id == tenant_id)) or 0,
+            "stored_files": len(stored_files),
+            "object_delete_errors": 0,
+        }
+        AuditService().forget_tenant(db, tenant_id)
+        from app.services import erasure_journal
+
+        erasure_journal.record(db, "tenant", tenant.public_id, tenant_public_id=tenant.public_id)
         db.execute(delete(WordImportDocument).where(WordImportDocument.tenant_id == tenant_id))
         db.execute(delete(Protocol).where(Protocol.tenant_id == tenant_id))
         db.execute(delete(SubmissionAssignment).where(SubmissionAssignment.tenant_id == tenant_id))
@@ -732,7 +744,8 @@ class AdminTenantService:
         # Löschungen laufen in einer eigenen Transaktion über den Objektspeicher (Journal), damit
         # eine laufende Storage-Migration sie übernimmt.
         for storage_path, namespace in stored_file_paths:
-            self._delete_object_quietly(db, namespace, storage_path)
+            if not self._delete_object_quietly(db, namespace, storage_path):
+                report["object_delete_errors"] += 1
         if profile_image_path:
             self._delete_object_quietly(db, MAIN, profile_image_path)
         for thumbnail_path in thumbnail_paths:
@@ -740,7 +753,7 @@ class AdminTenantService:
         for storage_path in style_asset_paths:
             self._delete_object_quietly(db, MAIN, storage_path)
         self._remove_tenant_directories(db, tenant_id)
-        return True
+        return report
 
     def _remove_tenant_directories(self, db: Session, tenant_id: int) -> None:
         for relative_dir in (
@@ -790,15 +803,17 @@ class AdminTenantService:
             # tenant_id bewusst None: die Zeile kann halb gelöscht sein (FK auf tenant).
             record_system_error(db, exc=cleanup_exc)
 
-    def _delete_object_quietly(self, db: Session, namespace: str, key: str) -> None:
+    def _delete_object_quietly(self, db: Session, namespace: str, key: str) -> bool:
         """Best effort wie bisher _unlink_quietly: eine verbliebene Datei ist danach ein
         unreferenziertes Objekt, das der Prüfbericht der nächsten Migration ausweist."""
         try:
             get_object_store().delete(db, namespace, key)
             db.commit()
+            return True
         except (StorageError, ValueError) as exc:
             db.rollback()
             _logger.warning("Objekt %s/%s konnte nicht gelöscht werden: %s", namespace, key, exc)
+            return False
 
     def _unlink_quietly(self, root: str, relative_path: str) -> None:
         try:
