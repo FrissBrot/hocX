@@ -164,7 +164,11 @@
         "failed": "Non riuscito",
         "expired": "Scaduto"
       }
-    }
+    },
+    "noticeTitle": "Informativa sulla privacy",
+    "noticeUrl": "Link alla vostra informativa sulla privacy",
+    "noticeUrlHint": "Prima del caricamento la casella di consegna indica che la vostra associazione è responsabile e rimanda a questa pagina. Vuoto = informativa predefinita della piattaforma.",
+    "noticeSave": "Salva link"
   },
   "activity": {
     "intro": "Modifiche, accessi e consultazioni della piattaforma hocX sui dati di questa organizzazione. Senza indirizzi IP né e-mail.",

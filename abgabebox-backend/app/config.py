@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     # token is what actually stays valid for repeat uploads, not the raw solution itself. Empty
     # default fails closed, same as friendly_captcha_api_key/sitekey above.
     captcha_session_secret: str = Field(default="", validation_alias="ABGABEBOX_CAPTCHA_SESSION_SECRET")
+    # Datenschutzhinweise, wenn der Verein keinen eigenen Link gesetzt hat (Datenschutz-Audit E2)
+    default_privacy_url: str = Field(default="", validation_alias="ABGABEBOX_DEFAULT_PRIVACY_URL")
     captcha_session_ttl_minutes: int = Field(default=120, validation_alias="ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES")
     cors_allow_origin: str = Field(default="https://abgabe.example.com", validation_alias="ABGABEBOX_CORS_ORIGIN")
     # Zentrale Prüfseite (wie DOCUMENT_VERIFY_BASE_URL im Backend). Leer = <ABGABEBOX_CORS_ORIGIN>/verify.

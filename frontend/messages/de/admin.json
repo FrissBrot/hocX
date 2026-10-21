@@ -219,6 +219,11 @@
         "title": "Offboarding",
         "detail": "{count, number} Mandanten nach Vertragsende (+{days, number} Tage)",
         "problem": "Mandanten nach Vertragsende noch nicht gelöscht"
+      },
+      "captcha_endpoint": {
+        "title": "Captcha-Endpunkt",
+        "detail": "{region, select, eu {EU-Endpunkt (Verarbeitung in der EU)} other {Globaler Endpunkt – für Verarbeitung in der EU FRIENDLY_CAPTCHA_PUZZLE_URL und _VERIFY_URL auf den EU-Endpunkt setzen}}",
+        "problem": "Captcha-Endpunkt nicht erreichbar"
       }
     },
     "problems": {

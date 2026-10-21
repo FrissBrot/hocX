@@ -812,6 +812,28 @@ input[type="file"] {
   border-top: 1px solid var(--border);
 }
 
+/* GPS-Wahl und Datenschutzhinweis vor dem Upload (Datenschutz-Audit Paket 9) - bewusst unauffällig */
+.upload-gps-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.upload-privacy-note {
+  margin: var(--space-2) 0 var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.upload-privacy-note a {
+  color: inherit;
+  text-decoration: underline;
+}
+
 .captcha-card {
   display: flex;
   flex-direction: column;

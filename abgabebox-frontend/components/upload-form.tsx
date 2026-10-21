@@ -20,9 +20,13 @@ type Props = {
   maxFileSizeMb: number;
   alreadyUploadedCount: number;
   sitekey: string;
+  puzzleEndpoint?: string;
+  // Datenschutzhinweis vor dem Upload (Datenschutz-Audit E2)
+  tenantName?: string | null;
+  privacyNoticeUrl?: string | null;
 };
 
-export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTitle, elementLabel, allowedFileTypes, maxFiles, maxFileSizeMb, alreadyUploadedCount, sitekey }: Props) {
+export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTitle, elementLabel, allowedFileTypes, maxFiles, maxFileSizeMb, alreadyUploadedCount, sitekey, puzzleEndpoint, tenantName, privacyNoticeUrl }: Props) {
   const t = useTranslations("abgabebox.upload");
   const locale = useLocale();
   const setFlowDone = useFlowDone();
@@ -39,6 +43,8 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
   const [receipt, setReceipt] = useState<{ files: number; at: Date } | null>(null);
   const [online, setOnline] = useState(true);
   const [uploadedSoFar, setUploadedSoFar] = useState(alreadyUploadedCount);
+  // «GPS-Daten des Bildes mitsenden» (Paket 9.3): standardmässig an, aus = Server entfernt den Standort
+  const [includeGps, setIncludeGps] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
   // Welche rohe FriendlyCaptcha-Loesung bereits gegen ein Sitzungs-Token eingetauscht wurde -
   // handleSolved kann mehrfach mit derselben Loesung feuern (Callback + DOM-Fallback im Widget).
@@ -168,6 +174,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
     try {
       const formData = new FormData();
       formData.append("captcha_session_token", captchaSessionToken);
+      formData.append("include_gps", includeGps ? "true" : "false");
       files.forEach((file) => formData.append("files", file));
       const response = await fetch(
         publicApiUrl(
@@ -338,6 +345,21 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
 
       {error && <p className="error">{error}</p>}
 
+      <label className="upload-gps-option">
+        <input type="checkbox" checked={includeGps} onChange={(event) => setIncludeGps(event.target.checked)} />
+        <span>{t("includeGps")}</span>
+      </label>
+
+      <p className="upload-privacy-note">
+        {tenantName ? t("privacyResponsible", { tenant: tenantName }) : null}{" "}
+        {privacyNoticeUrl?.startsWith("https://") ? (
+          <a href={privacyNoticeUrl} target="_blank" rel="noopener noreferrer">
+            {t("privacyLink")}
+          </a>
+        ) : null}{" "}
+        {sitekey ? t("privacyCaptcha") : null}
+      </p>
+
       <div className="upload-actions">
         {/* Captcha - laeuft einmal beim Laden der Seite, bleibt danach fuer alle weiteren Uploads
             gueltig (siehe handleSolved oben) - das Widget selbst wird nach erfolgreichem Eintausch
@@ -347,7 +369,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
             bleibt. */}
         <div className={`captcha-card${captchaReady ? " captcha-card-ok" : ""}`}>
           {sitekey && !captchaReady && (
-            <CaptchaWidget key={captchaKey} sitekey={sitekey} onSolved={handleSolved} onExpired={() => { exchangedSolutionRef.current = null; }} />
+            <CaptchaWidget key={captchaKey} sitekey={sitekey} puzzleEndpoint={puzzleEndpoint} onSolved={handleSolved} onExpired={() => { exchangedSolutionRef.current = null; }} />
           )}
           <div className="captcha-status-row">
             <span className="captcha-check" aria-hidden="true">

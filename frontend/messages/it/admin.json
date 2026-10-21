@@ -219,6 +219,11 @@
         "title": "Offboarding",
         "detail": "{count, number} mandanti dopo la fine del contratto (+{days, number} giorni)",
         "problem": "Mandanti dopo la fine del contratto non ancora eliminati"
+      },
+      "captcha_endpoint": {
+        "title": "Endpoint captcha",
+        "detail": "{region, select, eu {Endpoint UE (trattamento nell’UE)} other {Endpoint globale – per il trattamento nell’UE impostare FRIENDLY_CAPTCHA_PUZZLE_URL e _VERIFY_URL sull’endpoint UE}}",
+        "problem": "Endpoint captcha non raggiungibile"
       }
     },
     "problems": {

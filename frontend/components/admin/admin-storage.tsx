@@ -18,6 +18,7 @@ import {
   StorageMigration,
   StorageMigrationState,
   StorageOverview,
+  StorageDataLocation,
   StorageProfile,
   StorageProvider,
 } from "@/types/api";
@@ -41,6 +42,16 @@ const GENERATION_VARIANTS: Record<StorageGeneration["status"], BadgeVariant> = {
 
 // "garage_local" ist nicht wählbar: das lokale S3-Profil legt das Backend selbst an (LOCAL_S3_*).
 const PROVIDERS: StorageProvider[] = ["hetzner", "aws_s3", "s3_compatible"];
+const DATA_LOCATIONS: StorageDataLocation[] = ["ch", "eu_eea", "adequate", "third_country"];
+const LOCATION_VARIANTS: Record<StorageDataLocation, BadgeVariant> = { ch: "success", eu_eea: "success", adequate: "info", third_country: "warning" };
+
+// Gleiche Ableitung wie storage_profile_service.derive_location (Datenschutz-Audit E3); null = Admin wählt.
+function derivedLocation(provider: StorageProvider, region: string): StorageDataLocation | null {
+  const value = region.trim().toLowerCase();
+  if (provider === "aws_s3") return value === "eu-central-2" ? "ch" : value.startsWith("eu-") ? "eu_eea" : "third_country";
+  if (provider === "hetzner") return !value || ["fsn1", "nbg1", "hel1"].includes(value) ? "eu_eea" : "third_country";
+  return null;
+}
 
 function rangeText(t: TFunc, low: number | undefined, high: number | undefined): string {
   if (low === undefined || high === undefined) return t("estimate.unknown");
@@ -428,6 +439,8 @@ function ProfileCard({ profile, t, locale, busy, migrationTarget, onTest, onEdit
             {!profile.is_enabled ? <Badge variant="neutral">{t("status.disabled")}</Badge> : null}
             {profile.pinned_generations.length && !profile.is_active ? <Badge variant="warning">{t("status.pinned")}</Badge> : null}
             {!filesystem && !profile.has_restricted_credentials ? <Badge variant="warning">{t("status.sharedCredentials")}</Badge> : null}
+            {profile.data_location ? <Badge variant={LOCATION_VARIANTS[profile.data_location]}>{t(`location.${profile.data_location}`)}</Badge> : null}
+            {profile.server_side_encryption ? <Badge variant="neutral">{t("status.encrypted")}</Badge> : null}
           </div>
         </div>
       </div>
@@ -564,6 +577,7 @@ type ProfileForm = {
   name: string; provider: StorageProvider; endpoint_url: string; region: string; bucket: string; abgabebox_bucket: string; prefix: string;
   addressing_style: "auto" | "path" | "virtual"; access_key: string; secret_key: string; restricted_access_key: string; restricted_secret_key: string;
   tls_verify: boolean; ca_bundle_pem: string; is_enabled: boolean;
+  data_location: StorageDataLocation | ""; transfer_basis: string; location_confirmed: boolean; server_side_encryption: boolean;
 };
 
 function ProfileModal({ t, profile, onClose, onSaved }: { t: TFunc; profile: StorageProfile | null; onClose: () => void; onSaved: () => void }) {
@@ -573,17 +587,27 @@ function ProfileModal({ t, profile, onClose, onSaved }: { t: TFunc; profile: Sto
     region: profile?.region ?? "", bucket: profile?.bucket ?? "", abgabebox_bucket: profile?.abgabebox_bucket ?? "", prefix: profile?.prefix ?? "",
     addressing_style: profile?.addressing_style ?? "auto", access_key: "", secret_key: "", restricted_access_key: "", restricted_secret_key: "",
     tls_verify: profile?.tls_verify ?? true, ca_bundle_pem: "", is_enabled: profile?.is_enabled ?? true,
+    data_location: profile?.data_location ?? "", transfer_basis: profile?.transfer_basis ?? "", location_confirmed: false,
+    server_side_encryption: profile?.server_side_encryption ?? false,
   });
   const [saving, setSaving] = useState(false);
   const locked = profile !== null && (profile.is_active || profile.pinned_generations.length > 0 || profile.is_builtin);
   const update = <K extends keyof ProfileForm>(key: K, value: ProfileForm[K]) => setForm((current) => ({ ...current, [key]: value }));
-  const valid = form.name.trim() !== "" && form.bucket.trim() !== "" && (profile !== null || (form.access_key !== "" && form.secret_key !== ""));
+  const location = derivedLocation(form.provider, form.region) ?? (form.data_location || null);
+  const thirdCountry = location === "third_country";
+  const needsConfirmation = thirdCountry && profile?.data_location !== "third_country";
+  const valid = form.name.trim() !== "" && form.bucket.trim() !== "" && (profile !== null || (form.access_key !== "" && form.secret_key !== ""))
+    && location !== null && (!thirdCountry || (form.transfer_basis.trim() !== "" && (!needsConfirmation || form.location_confirmed)));
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     // Leere Zugangsdaten beim Bearbeiten = unverändert lassen (nie an das Backend senden).
-    const payload: Record<string, unknown> = { name: form.name, tls_verify: form.tls_verify, is_enabled: form.is_enabled };
+    const payload: Record<string, unknown> = {
+      name: form.name, tls_verify: form.tls_verify, is_enabled: form.is_enabled, server_side_encryption: form.server_side_encryption,
+      transfer_basis: form.transfer_basis, location_confirmed: form.location_confirmed,
+    };
+    if (form.provider === "s3_compatible" && form.data_location) payload.data_location = form.data_location;
     if (!locked) {
       Object.assign(payload, {
         provider: form.provider, endpoint_url: form.endpoint_url || null, region: form.region || null, bucket: form.bucket,
@@ -658,6 +682,29 @@ function ProfileModal({ t, profile, onClose, onSaved }: { t: TFunc; profile: Sto
         <label className="checkbox-row"><input type="checkbox" checked={form.tls_verify} onChange={(e) => update("tls_verify", e.target.checked)} /><span>{t("profileForm.tlsVerify")}</span></label>
         <label className="field-stack"><span className="field-label">{t("profileForm.caBundle")}</span>
           <textarea className="input" rows={3} value={form.ca_bundle_pem} placeholder={profile?.has_ca_bundle ? t("profileForm.caBundleStored") : "-----BEGIN CERTIFICATE-----"} onChange={(e) => update("ca_bundle_pem", e.target.value)} /></label>
+        <label className="checkbox-row"><input type="checkbox" checked={form.server_side_encryption} onChange={(e) => update("server_side_encryption", e.target.checked)} /><span>{t("profileForm.serverSideEncryption")}</span></label>
+        <span className="field-help">{t("profileForm.serverSideEncryptionHelp")}</span>
+        {/* Datenstandort (Datenschutz-Audit E3): bei AWS/Hetzner aus der Region abgeleitet */}
+        <label className="field-stack"><span className="field-label">{t("profileForm.dataLocation")}</span>
+          {form.provider === "s3_compatible" ? (
+            <select className="input" value={form.data_location} onChange={(e) => update("data_location", e.target.value as ProfileForm["data_location"])}>
+              <option value="">{t("profileForm.dataLocationChoose")}</option>
+              {DATA_LOCATIONS.map((value) => <option key={value} value={value}>{t(`location.${value}`)}</option>)}
+            </select>
+          ) : (
+            <input className="input" value={location ? t(`location.${location}`) : ""} readOnly />
+          )}
+          <span className="field-help">{t("profileForm.dataLocationHelp")}</span></label>
+        {thirdCountry ? (
+          <>
+            <label className="field-stack"><span className="field-label">{t("profileForm.transferBasis")}</span>
+              <textarea className="input" rows={2} maxLength={1000} value={form.transfer_basis} onChange={(e) => update("transfer_basis", e.target.value)} />
+              <span className="field-help">{t("profileForm.transferBasisHelp")}</span></label>
+            {needsConfirmation ? (
+              <label className="checkbox-row"><input type="checkbox" checked={form.location_confirmed} onChange={(e) => update("location_confirmed", e.target.checked)} /><span>{t("profileForm.locationConfirm")}</span></label>
+            ) : null}
+          </>
+        ) : null}
         <label className="checkbox-row"><input type="checkbox" checked={form.is_enabled} onChange={(e) => update("is_enabled", e.target.checked)} /><span>{t("profileForm.enabled")}</span></label>
         <div className="modal-actions">
           <button type="button" className="button-ghost" onClick={onClose}>{t("actions.close")}</button>
@@ -681,6 +728,7 @@ function StartMigrationModal({ t, overview, activeGeneration, busy, onTest, onCl
   const [bandwidth, setBandwidth] = useState(0);
   const [verifyMode, setVerifyMode] = useState<"full" | "head">("full");
   const [autoCutover, setAutoCutover] = useState(false);
+  const [confirmThirdCountry, setConfirmThirdCountry] = useState(false);
   const [saving, setSaving] = useState(false);
   const initial = overview.active_profile.provider === "filesystem";
   const selected = candidates.find((p) => p.id === target);
@@ -693,7 +741,9 @@ function StartMigrationModal({ t, overview, activeGeneration, busy, onTest, onCl
     try {
       const options: Record<string, unknown> = { parallelism, bandwidth_limit_mbps: bandwidth, verify_mode: verifyMode };
       if (!initial) options.auto_cutover = autoCutover;
-      await browserApiFetch("/api/admin/storage/migrations", { method: "POST", body: JSON.stringify({ target_profile_id: target, options }) });
+      await browserApiFetch("/api/admin/storage/migrations", {
+        method: "POST", body: JSON.stringify({ target_profile_id: target, options, confirm_third_country: confirmThirdCountry }),
+      });
       showToast(t("toast.migrationCreated"), "success");
       onSaved();
     } catch (error) {
@@ -785,9 +835,12 @@ function StartMigrationModal({ t, overview, activeGeneration, busy, onTest, onCl
           </div>
         </details>
         <p className="muted">{t("startForm.nextStep")}</p>
+        {selected?.data_location === "third_country" ? (
+          <label className="checkbox-row"><input type="checkbox" checked={confirmThirdCountry} onChange={(e) => setConfirmThirdCountry(e.target.checked)} /><span>{t("startForm.confirmThirdCountry")}</span></label>
+        ) : null}
         <div className="modal-actions">
           <button type="button" className="button-ghost" onClick={onClose}>{t("actions.close")}</button>
-          <button type="submit" className="button-primary" disabled={!target || saving || !tested}>{t("actions.prepareMigration")}</button>
+          <button type="submit" className="button-primary" disabled={!target || saving || !tested || (selected?.data_location === "third_country" && !confirmThirdCountry)}>{t("actions.prepareMigration")}</button>
         </div>
       </ModalSaveForm>
     </Modal>

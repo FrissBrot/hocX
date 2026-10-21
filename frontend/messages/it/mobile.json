@@ -175,7 +175,8 @@
     "todoCreated": "Attività aggiunta al verbale",
     "tools": "Strumenti",
     "unassigned": "Non assegnata",
-    "you": "{name} (tu)"
+    "you": "{name} (tu)",
+    "includeGps": "Invia i dati GPS dell’immagine"
   },
   "protocols": {
     "fab": "Verbale",

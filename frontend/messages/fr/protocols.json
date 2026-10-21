@@ -479,5 +479,6 @@
   "fineRestoreFailed": "L'amende n'a pas pu être restaurée",
   "locationLabel": "Lieu",
   "organizersLabel": "Organisateurs",
-  "balanceAsOf": "Au {date}"
+  "balanceAsOf": "Au {date}",
+  "includeImageGps": "Envoyer les données GPS de l’image"
 }

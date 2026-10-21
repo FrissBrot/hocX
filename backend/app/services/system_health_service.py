@@ -527,6 +527,16 @@ def _check_orphaned_files(db: Session) -> HealthCheckRead:
     return HealthCheckRead(key="orphaned_files", status="warning" if count else "ok", params={"count": count})
 
 
+def _check_captcha_endpoint() -> HealthCheckRead:
+    """Friendly Captcha der Abgabebox: EU-Endpunkt (Verarbeitung in der EU) oder globaler Endpunkt.
+    Nur ein Hinweis - beides funktioniert, der EU-Endpunkt setzt einen passenden Plan voraus."""
+    from urllib.parse import urlparse
+
+    host = (urlparse(settings.friendly_captcha_verify_url).hostname or "").lower()
+    region = "eu" if host.endswith(".eu") else "global"
+    return HealthCheckRead(key="captcha_endpoint", status="ok", params={"region": region})
+
+
 def _check_tenant_offboarding(db: Session) -> HealthCheckRead:
     """Mandanten nach Vertragsende plus Exportfenster (Datenschutz-Audit G): ihre Daten gehören
     gelöscht. Gelöscht wird bewusst von Hand (Adminportal → Mandant löschen), nie automatisch."""
@@ -615,6 +625,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("scan_backlog", lambda: _check_scan_backlog(db), failure_status="unknown", db=db)
     checks += _run_check("orphaned_files", lambda: _check_orphaned_files(db), failure_status="unknown", db=db)
     checks += _run_check("tenant_offboarding", lambda: _check_tenant_offboarding(db), failure_status="unknown", db=db)
+    checks += _run_check("captcha_endpoint", _check_captcha_endpoint, failure_status="unknown", db=db)
     checks += _run_check("security", lambda: _check_security(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)

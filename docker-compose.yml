@@ -551,6 +551,8 @@ services:
       FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
       FRIENDLY_CAPTCHA_API_KEY: ${FRIENDLY_CAPTCHA_API_KEY}
       ABGABEBOX_CAPTCHA_SESSION_SECRET: ${ABGABEBOX_CAPTCHA_SESSION_SECRET}
+      FRIENDLY_CAPTCHA_VERIFY_URL: ${FRIENDLY_CAPTCHA_VERIFY_URL:-https://api.friendlycaptcha.com/api/v1/siteverify}
+      ABGABEBOX_DEFAULT_PRIVACY_URL: ${ABGABEBOX_DEFAULT_PRIVACY_URL:-}
       CLAMAV_HOST: clamav
       STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
     networks:
@@ -899,6 +901,7 @@ services:
       # falschem 404 zurueck) - hier war der Fix von damals nie nachgezogen worden.
       INTERNAL_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
+      FRIENDLY_CAPTCHA_PUZZLE_URL: ${FRIENDLY_CAPTCHA_PUZZLE_URL:-https://api.friendlycaptcha.com/api/v1/puzzle}
     depends_on:
       - abgabebox-backend
     volumes:

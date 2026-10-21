@@ -126,6 +126,13 @@ class Settings(BaseSettings):
     # Offboarding (Datenschutz-Audit G): Tage nach Vertragsende, bis /admin/system die Löschung des
     # Mandanten anmahnt (Exportfenster für den Verein)
     tenant_offboarding_grace_days: int = 90
+    # Datenstandort der Speicherprofile (Datenschutz-Audit E3): Standort dieses Servers für das
+    # lokale Profil, und optional erlaubte Standorte (z. B. "ch,eu_eea"; leer = alle)
+    hocx_server_location: str = "ch"
+    # Gleicher Wert wie in der Abgabebox (dort wird geprüft); hier nur für den Hinweis in
+    # /admin/system, ob der EU-Endpunkt von Friendly Captcha aktiv ist (Datenschutz-Audit E2)
+    friendly_captcha_verify_url: str = "https://api.friendlycaptcha.com/api/v1/siteverify"
+    storage_allowed_locations: str = ""
     # Sicherheitsalarme aus dem Audit-Log (system_health_service._check_security, PRIV-022)
     security_failed_logins_warning: int = 50
     security_failed_logins_critical: int = 200

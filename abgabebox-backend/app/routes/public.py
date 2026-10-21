@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from PIL import Image
 from sqlalchemy.orm import Session
 
-from app import element_resolver, image_metadata, repository, scanner
+from app import element_resolver, gps_strip, image_metadata, repository, scanner
 from app.captcha import mint_captcha_session_token, verify_captcha, verify_captcha_session_token
 from app.config import settings
 from app.db import get_db, serialized_upload, tenant_upload_lock
@@ -199,6 +199,13 @@ def _exceeds_max_files_per_request(file_count: int) -> bool:
 _LINK_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 
 
+def _without_gps(metadata: dict, include_gps: bool) -> dict:
+    """Ohne «GPS mitsenden» bleiben die GPS-Spalten leer, auch wenn ein Format übrig bliebe."""
+    if include_gps:
+        return metadata
+    return {key: value for key, value in metadata.items() if not key.startswith("gps_")}
+
+
 def _get_tenant_or_404(db: Session, link_token: str) -> dict:
     """Resolves the link token (the URL's only credential) to the tenant it belongs to. The
     returned dict carries the link id too, so every later lookup is scoped to what THIS link may
@@ -276,6 +283,7 @@ def list_assignments(link_token: str, db: Session = Depends(get_db)):
 def get_assignment(link_token: str, assignment_slug: str, db: Session = Depends(get_db)):
     tenant = _get_tenant_or_404(db, link_token)
     assignment = _get_assignment_or_404(db, tenant, assignment_slug)
+    notice = repository.get_privacy_notice(db) or {}
     return AssignmentDetailPublic(
         public_slug=assignment["public_slug"],
         title=assignment["title"],
@@ -283,6 +291,8 @@ def get_assignment(link_token: str, assignment_slug: str, db: Session = Depends(
         allowed_file_types=assignment["allowed_file_types"] or [],
         max_files_per_element=assignment["max_files_per_element"],
         max_file_size_mb=assignment["max_file_size_mb"],
+        tenant_name=notice.get("tenant_name"),
+        privacy_notice_url=notice.get("privacy_notice_url") or settings.default_privacy_url or None,
     )
 
 
@@ -343,6 +353,9 @@ async def upload(
     element_ref: str,
     captcha_session_token: str = Form(...),
     files: list[UploadFile] = File(default_factory=list),
+    # «GPS-Daten des Bildes mitsenden» (Datenschutz-Audit Paket 9.3), Standard an. Aus: Standort
+    # wird vor dem Speichern aus den Dateien entfernt (gps_strip), alles andere bleibt.
+    include_gps: bool = Form(True),
     db: Session = Depends(get_db),
 ):
     tenant = _get_tenant_or_404(db, link_token)
@@ -414,7 +427,11 @@ async def upload(
             _log("validation_failed", f"Dateiinhalt passt nicht zur Endung: .{suffix}")
             raise HTTPException(status_code=400, detail=f"Dateiinhalt passt nicht zur angegebenen Endung '.{suffix}'")
         # Server-derived mime type, never the client-sent Content-Type header - see comment above.
-        contents.append((content, upload_file.filename or "datei", _EXTENSION_MIME_MAP.get(suffix, "application/octet-stream")))
+        mime_type = _EXTENSION_MIME_MAP.get(suffix, "application/octet-stream")
+        if not include_gps:
+            # Vor Duplikat-Prüfung, Hash und Quarantäne: gespeichert wird nur die Fassung ohne Standort.
+            content = await asyncio.to_thread(gps_strip.strip_gps, content, mime_type)
+        contents.append((content, upload_file.filename or "datei", mime_type))
 
     _log("upload_received", f"{len(contents)} Datei(en) empfangen")
 
@@ -561,7 +578,7 @@ async def upload(
                     "file_size_bytes": len(content),
                     "checksum_sha256": checksum,
                     "perceptual_hash": perceptual_hashes[i],
-                    "image_metadata": image_metadata.extract(content) if mime_type in _IMAGE_MIME_TYPES else {},
+                    "image_metadata": _without_gps(image_metadata.extract(content), include_gps) if mime_type in _IMAGE_MIME_TYPES else {},
                     "_content": content,
                 })
 

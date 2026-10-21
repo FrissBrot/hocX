@@ -164,7 +164,11 @@
         "failed": "Échec",
         "expired": "Expiré"
       }
-    }
+    },
+    "noticeTitle": "Protection des données",
+    "noticeUrl": "Lien vers votre déclaration de protection des données",
+    "noticeUrlHint": "Avant le dépôt, la boîte de dépôt indique que votre association est responsable et renvoie vers cette page. Vide = déclaration par défaut de la plateforme.",
+    "noticeSave": "Enregistrer le lien"
   },
   "activity": {
     "intro": "Modifications, connexions et accès de la plateforme hocX aux données de cette organisation. Sans adresses IP ni e-mail.",

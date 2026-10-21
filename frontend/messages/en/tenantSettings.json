@@ -164,7 +164,11 @@
         "failed": "Failed",
         "expired": "Expired"
       }
-    }
+    },
+    "noticeTitle": "Privacy notice",
+    "noticeUrl": "Link to your privacy notice",
+    "noticeUrlHint": "Before uploading, the upload box shows that your club is responsible and links to this page. Empty = the platform’s default notice.",
+    "noticeSave": "Save link"
   },
   "activity": {
     "intro": "Changes, sign-ins and accesses by the hocX platform to this organisation's data. Without IP or email addresses.",

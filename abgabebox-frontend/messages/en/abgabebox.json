@@ -104,7 +104,11 @@
       "element": "Document",
       "files": "Files",
       "receivedAt": "Received"
-    }
+    },
+    "includeGps": "Include the image’s GPS data",
+    "privacyResponsible": "{tenant} is responsible for your files.",
+    "privacyLink": "Privacy notice",
+    "privacyCaptcha": "To prevent spam, Friendly Captcha checks your browser without cookies or tracking."
   },
   "language": {
     "label": "Language"

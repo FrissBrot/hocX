@@ -9,6 +9,7 @@ import { browserApiFetch } from "@/lib/api/client";
 
 export type PrivacySettingsState = {
   statistics_per_person_public: boolean;
+  privacy_notice_url: string | null;
 };
 
 const API = "/api/privacy-settings";
@@ -19,11 +20,12 @@ export function PrivacySettings({ initialState }: { initialState: PrivacySetting
   const toast = useToast();
   const [state, setState] = useState(initialState);
   const [busy, setBusy] = useState(false);
+  const [noticeUrl, setNoticeUrl] = useState(initialState.privacy_notice_url ?? "");
 
-  async function toggle(key: keyof PrivacySettingsState, value: boolean) {
+  async function save(changes: Partial<Record<keyof PrivacySettingsState, boolean | string>>) {
     setBusy(true);
     try {
-      setState(await browserApiFetch<PrivacySettingsState>(API, { method: "PATCH", body: JSON.stringify({ [key]: value }) }));
+      setState(await browserApiFetch<PrivacySettingsState>(API, { method: "PATCH", body: JSON.stringify(changes) }));
       toast(t("saved"), "success");
     } catch (error) {
       toast(error instanceof Error ? error.message : t("saveFailed"), "error");
@@ -46,7 +48,7 @@ export function PrivacySettings({ initialState }: { initialState: PrivacySetting
               role="switch"
               disabled={busy}
               checked={state.statistics_per_person_public}
-              onChange={(event) => void toggle("statistics_per_person_public", event.target.checked)}
+              onChange={(event) => void save({ statistics_per_person_public: event.target.checked })}
             />
             <span className="album-picker-switch-track" aria-hidden="true" />
             <span className="docverify-toggle-text">
@@ -54,6 +56,26 @@ export function PrivacySettings({ initialState }: { initialState: PrivacySetting
               <span className="docverify-toggle-hint">{t("statisticsPerPersonPublicHint")}</span>
             </span>
           </label>
+        </section>
+        <section className="card docverify-card">
+          <div className="docverify-card-head">
+            <h2 className="docverify-heading">{t("noticeTitle")}</h2>
+          </div>
+          <label className="field-stack">
+            <span className="field-label">{t("noticeUrl")}</span>
+            <input type="url" inputMode="url" placeholder="https://" value={noticeUrl} maxLength={500} onChange={(event) => setNoticeUrl(event.target.value)} />
+            <span className="field-help">{t("noticeUrlHint")}</span>
+          </label>
+          <div className="table-actions table-actions-start">
+            <button
+              type="button"
+              className="button-secondary"
+              disabled={busy || noticeUrl.trim() === (state.privacy_notice_url ?? "") || (noticeUrl.trim() !== "" && !noticeUrl.trim().startsWith("https://"))}
+              onClick={() => void save({ privacy_notice_url: noticeUrl.trim() })}
+            >
+              {t("noticeSave")}
+            </button>
+          </div>
         </section>
         <TenantDataExportPanel />
       </div>

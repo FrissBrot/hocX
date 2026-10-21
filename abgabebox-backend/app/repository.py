@@ -44,6 +44,13 @@ def get_link_by_token(db: Session, *, token: str) -> dict | None:
     return dict(row) if row else None
 
 
+def get_privacy_notice(db: Session) -> dict | None:
+    """Name und Datenschutz-Link des Vereins hinter dem gebundenen Upload-Link (Migration 0147:
+    SECURITY-DEFINER-Funktion, keine Spaltenrechte auf tenant)."""
+    row = db.execute(text("SELECT tenant_name, privacy_notice_url FROM abgabebox_privacy_notice()")).mappings().first()
+    return dict(row) if row else None
+
+
 def is_feature_enabled(db: Session, *, tenant_id: int, feature_code: str) -> bool:
     """Feature-Gating (0085_plan_pricing): tenant_feature bleibt die alleinige Quelle der
     Wahrheit, auch hier im Public-Service - kein Cross-Service-Call in den Haupt-Backend noetig,

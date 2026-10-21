@@ -26000,3 +26000,10 @@ a.mobile-list-row { color: var(--text); }
   display: grid;
   gap: var(--space-1);
 }
+
+/* «GPS-Daten des Bildes mitsenden» beim Upload (Datenschutz-Audit Paket 9.3) - bewusst unauffällig */
+.gallery-upload-gps,
+.image-upload-gps {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}

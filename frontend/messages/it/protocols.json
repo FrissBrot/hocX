@@ -479,5 +479,6 @@
   "fineRestoreFailed": "Impossibile ripristinare la multa",
   "locationLabel": "Luogo",
   "organizersLabel": "Organizzatori",
-  "balanceAsOf": "Al {date}"
+  "balanceAsOf": "Al {date}",
+  "includeImageGps": "Invia i dati GPS dell’immagine"
 }

@@ -104,7 +104,11 @@
       "element": "Dokument",
       "files": "Dateien",
       "receivedAt": "Eingegangen"
-    }
+    },
+    "includeGps": "GPS-Daten des Bildes mitsenden",
+    "privacyResponsible": "Verantwortlich für deine Dateien ist {tenant}.",
+    "privacyLink": "Datenschutzhinweise",
+    "privacyCaptcha": "Zum Schutz vor Spam prüft Friendly Captcha deinen Browser ohne Cookies und ohne Tracking."
   },
   "language": {
     "label": "Sprache"

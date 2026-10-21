@@ -118,7 +118,8 @@
     "disabled": "Deaktiviert",
     "inMigration": "In Migration",
     "pinned": "Daten in Rückfallfrist",
-    "sharedCredentials": "Abgabebox ohne eigene Zugangsdaten"
+    "sharedCredentials": "Abgabebox ohne eigene Zugangsdaten",
+    "encrypted": "Verschlüsselt"
   },
   "test": {
     "ok": "OK",
@@ -236,7 +237,15 @@
     "tlsVerify": "TLS-Zertifikat prüfen",
     "caBundle": "Eigenes CA-Zertifikat (PEM, optional)",
     "caBundleStored": "Ein CA-Zertifikat ist hinterlegt",
-    "enabled": "Profil aktiviert"
+    "enabled": "Profil aktiviert",
+    "serverSideEncryption": "Serverseitige Verschlüsselung (AES-256)",
+    "serverSideEncryptionHelp": "Jedes Objekt wird beim Anbieter verschlüsselt gespeichert; der Verbindungstest prüft das.",
+    "dataLocation": "Datenstandort",
+    "dataLocationChoose": "Bitte wählen",
+    "dataLocationHelp": "Bei AWS und Hetzner aus der Region abgeleitet. Bestimmt, ob Daten der Vereine die Schweiz bzw. die EU verlassen.",
+    "transferBasis": "Grundlage der Übermittlung",
+    "transferBasisHelp": "z. B. Standardvertragsklauseln und Auftragsverarbeitungsvertrag vom …",
+    "locationConfirm": "Auslandübermittlung geprüft, Vereine informiert"
   },
   "addressing": {
     "auto": "Automatisch",
@@ -274,7 +283,8 @@
         "text": "Ohne erfolgreichen Test kann die Migration nicht starten."
       }
     },
-    "from": "Von"
+    "from": "Von",
+    "confirmThirdCountry": "Das Ziel liegt in einem Drittland – Übermittlung geprüft, Vereine informiert"
   },
   "verifyMode": {
     "full": "Vollständig (Inhalt neu lesen und SHA-256 prüfen)",
@@ -332,5 +342,11 @@
     "lastTestFailed": "Zuletzt getestet {time} · fehlgeschlagen",
     "testing": "Verbindung wird geprüft …",
     "retest": "Erneut testen"
+  },
+  "location": {
+    "ch": "Schweiz",
+    "eu_eea": "EU/EWR",
+    "adequate": "Angemessenes Land",
+    "third_country": "Drittland"
   }
 }

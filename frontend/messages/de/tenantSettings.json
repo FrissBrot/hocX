@@ -164,7 +164,11 @@
         "failed": "Fehlgeschlagen",
         "expired": "Abgelaufen"
       }
-    }
+    },
+    "noticeTitle": "Datenschutzhinweise",
+    "noticeUrl": "Link zu euren Datenschutzhinweisen",
+    "noticeUrlHint": "Die Abgabebox zeigt vor dem Hochladen, dass euer Verein verantwortlich ist, und verlinkt diese Seite. Leer = Standardhinweis der Plattform.",
+    "noticeSave": "Link speichern"
   },
   "activity": {
     "intro": "Änderungen, Anmeldungen und Zugriffe der hocX-Plattform auf Daten dieses Vereins. Ohne IP- und E-Mail-Adressen.",

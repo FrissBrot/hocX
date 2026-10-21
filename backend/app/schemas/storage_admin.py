@@ -7,6 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 Provider = Literal["garage_local", "aws_s3", "hetzner", "s3_compatible"]
+DataLocation = Literal["ch", "eu_eea", "adequate", "third_country"]
 
 
 class StorageProfileRead(BaseModel):
@@ -35,6 +36,12 @@ class StorageProfileRead(BaseModel):
     last_test_at: datetime | None
     last_test_ok: bool | None
     last_test_error: str | None
+    # Datenstandort (Datenschutz-Audit E3)
+    data_location: DataLocation | None = None
+    transfer_basis: str | None = None
+    location_confirmed_by: str | None = None
+    location_confirmed_at: datetime | None = None
+    server_side_encryption: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -55,6 +62,12 @@ class StorageProfileCreate(BaseModel):
     tls_verify: bool = True
     ca_bundle_pem: str | None = Field(default=None, max_length=20000)
     is_enabled: bool = True
+    # Nur für s3_compatible frei wählbar, sonst aus Anbieter und Region abgeleitet. Drittland nur mit
+    # transfer_basis und location_confirmed (Auslandübermittlung geprüft, Vereine informiert).
+    data_location: DataLocation | None = None
+    transfer_basis: str | None = Field(default=None, max_length=1000)
+    location_confirmed: bool | None = None
+    server_side_encryption: bool | None = None
 
 
 class StorageProfileUpdate(BaseModel):
@@ -75,6 +88,12 @@ class StorageProfileUpdate(BaseModel):
     tls_verify: bool | None = None
     ca_bundle_pem: str | None = Field(default=None, max_length=20000)
     is_enabled: bool | None = None
+    # Nur für s3_compatible frei wählbar, sonst aus Anbieter und Region abgeleitet. Drittland nur mit
+    # transfer_basis und location_confirmed (Auslandübermittlung geprüft, Vereine informiert).
+    data_location: DataLocation | None = None
+    transfer_basis: str | None = Field(default=None, max_length=1000)
+    location_confirmed: bool | None = None
+    server_side_encryption: bool | None = None
 
 
 class StorageConnectionTestRead(BaseModel):
@@ -164,6 +183,8 @@ class StorageMigrationRead(BaseModel):
 class StorageMigrationCreate(BaseModel):
     target_profile_id: uuid.UUID
     options: dict[str, Any] = Field(default_factory=dict)
+    # Ziel in einem Drittland: erneut bestätigen (Datenschutz-Audit E3)
+    confirm_third_country: bool = False
 
 
 class StorageMigrationObjectRead(BaseModel):

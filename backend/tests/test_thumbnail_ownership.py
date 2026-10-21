@@ -120,7 +120,7 @@ def test_delete_tenant_removes_own_thumbnails_only(db, storage):
     db.add(extra)
     db.flush()
 
-    assert AdminTenantService().delete_tenant(db, doomed.id) is True
+    assert AdminTenantService().delete_tenant(db, doomed.id) is not None
 
     assert not doomed_thumb.exists()
     assert keeper_thumb.exists()

@@ -102,6 +102,8 @@ class Tenant(Base, TimestampMixin):
     billing_start_date: Mapped[date | None] = mapped_column(Date)
     # Vertragsende für das Offboarding (0146, Check tenant_offboarding in system_health_service)
     contract_ends_on: Mapped[date | None] = mapped_column(Date)
+    # Datenschutzhinweise des Vereins für die Abgabebox (0147, abgabebox_privacy_notice())
+    privacy_notice_url: Mapped[str | None] = mapped_column(Text)
     billing_charged_until: Mapped[date | None] = mapped_column(Date)
 
 
@@ -2287,6 +2289,8 @@ class GalleryUploadJob(Base, TimestampMixin):
     # own entries keep their in-archive names instead, see iter_gallery_zip_entries).
     staged_paths: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     original_filenames: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    # «GPS-Daten des Bildes mitsenden» (0147, Datenschutz-Audit Paket 9.3)
+    include_gps: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     # At most one of these three targets is ever set - mirrors upload_gallery_images' own
     # mutual-exclusion check.

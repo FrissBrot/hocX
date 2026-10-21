@@ -1245,7 +1245,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function uploadImage(protocolElementBlockId: string) {
+  async function uploadImage(protocolElementBlockId: string, includeGps = true) {
     const file = selectedFiles[protocolElementBlockId];
     if (!file) return;
     setStatus(protocolElementBlockId, "saving");
@@ -1259,6 +1259,7 @@ export function ProtocolEditor({
       }
       const body = new FormData();
       body.append("file", file);
+      if (!includeGps) body.append("include_gps", "false");
       const created = await browserApiFetch<ProtocolImage>(`/api/protocol-element-blocks/${protocolElementBlockId}/images`, {
         method: "POST",
         body

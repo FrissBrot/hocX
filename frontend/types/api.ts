@@ -1820,6 +1820,8 @@ export type MaintenanceOverview = {
 
 export type StorageProvider = "filesystem" | "garage_local" | "aws_s3" | "hetzner" | "s3_compatible";
 
+export type StorageDataLocation = "ch" | "eu_eea" | "adequate" | "third_country";
+
 export type StorageProfile = {
   id: string;
   name: string;
@@ -1844,6 +1846,11 @@ export type StorageProfile = {
   last_test_at: string | null;
   last_test_ok: boolean | null;
   last_test_error: string | null;
+  data_location: StorageDataLocation | null;
+  transfer_basis: string | null;
+  location_confirmed_by: string | null;
+  location_confirmed_at: string | null;
+  server_side_encryption: boolean;
   created_at: string;
   updated_at: string;
 };

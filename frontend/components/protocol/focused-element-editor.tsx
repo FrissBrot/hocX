@@ -202,7 +202,7 @@ export function FocusedElementEditor({
   updateEventFromBlock: (protocolElementBlockId: string, eventId: string, patch: Partial<EventSummary>) => Promise<boolean>;
   deleteEventFromBlock: (protocolElementBlockId: string, eventId: string) => Promise<void>;
   onEventContextMenu: (nativeEvent: React.MouseEvent, eventRow: EventSummary, protocolElementBlockId: string) => void;
-  uploadImage: (protocolElementBlockId: string) => Promise<void>;
+  uploadImage: (protocolElementBlockId: string, includeGps?: boolean) => Promise<void>;
   deleteImage: (protocolElementBlockId: string, imageId: string) => Promise<void>;
   listDefinitionsById: Map<string, StructuredListDefinition>;
   listEntriesByDefinition: Record<string, StructuredListEntry[]>;
@@ -257,6 +257,8 @@ export function FocusedElementEditor({
   const bulletSkipBlurRef = useRef(false);
   // Planning-mode ("geplant") popups: which block's edit/overview modal is currently open.
   const [listEditModalBlockId, setListEditModalBlockId] = useState<string | null>(null);
+  // «GPS-Daten des Bildes mitsenden» je Bild-Block (Datenschutz-Audit Paket 9.3), Standard an
+  const [imageGpsOff, setImageGpsOff] = useState<Record<string, boolean>>({});
   const [eventOverviewBlockId, setEventOverviewBlockId] = useState<string | null>(null);
   const [matrixPickerBlockId, setMatrixPickerBlockId] = useState<string | null>(null);
   // Planning-mode consolidated checkbox popup for "Termine pro Element".
@@ -3418,10 +3420,18 @@ export function FocusedElementEditor({
                         setSelectedFiles((current) => ({ ...current, [block.id]: event.target.files?.[0] ?? null }))
                       }
                     />
-                    <button type="button" onClick={() => uploadImage(block.id)} disabled={!selectedFiles[block.id]}>
+                    <button type="button" onClick={() => uploadImage(block.id, !imageGpsOff[block.id])} disabled={!selectedFiles[block.id]}>
                       {t("uploadImageAction")}
                     </button>
                   </div>
+                  <label className="checkbox-row image-upload-gps">
+                    <input
+                      type="checkbox"
+                      checked={!imageGpsOff[block.id]}
+                      onChange={(event) => setImageGpsOff((current) => ({ ...current, [block.id]: !event.target.checked }))}
+                    />
+                    {t("includeImageGps")}
+                  </label>
                   <div className="image-grid">
                     {(imagesByBlock[block.id] ?? []).map((image) => (
                       <div className="card image-card" key={image.id}>

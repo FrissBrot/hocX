@@ -115,8 +115,30 @@ Installationen aktualisieren können.
   nach Vertragsende plus `TENANT_OFFBOARDING_GRACE_DAYS` (Standard 90) zur Löschung (Check
   `tenant_offboarding`, gelöscht wird von Hand).
 
+### Datenschutz (Paket 9: Abgabebox-Hinweise, GPS-Wahl, Speicherstandort)
+
+- **Abgabebox:** vor dem Upload stehen der verantwortliche Verein, ein Link zu dessen
+  Datenschutzhinweisen (Mandanten-Einstellungen → Datenschutz, sonst `ABGABEBOX_DEFAULT_PRIVACY_URL`)
+  und ein Hinweis zu Friendly Captcha. Die Abgabebox liest Name und Link nur über die DB-Funktion
+  `abgabebox_privacy_notice()` für den Mandanten ihres Links (Migration `0147`).
+- **Friendly Captcha in der EU:** Puzzle- und Verify-Endpunkt per `FRIENDLY_CAPTCHA_PUZZLE_URL` /
+  `FRIENDLY_CAPTCHA_VERIFY_URL` einstellbar (CSP folgt automatisch); `/admin/system` zeigt, ob der
+  EU- oder der globale Endpunkt aktiv ist.
+- **«GPS-Daten des Bildes mitsenden»** (Standard an) bei Galerie-Upload, Protokollbild (auch mobil)
+  und Abgabebox. Aus: der Server entfernt vor dem Speichern nur die Standortangaben (EXIF-GPS in
+  JPEG/HEIC/WebP/PNG/TIFF, XMP-GPS, Ortsangaben in Live-Photo-Clips) ohne Neukodierung; Datum,
+  Kamera und Bild bleiben, die GPS-Spalten leer. Gespeichert wird mit GPS wie bisher.
+- **GPS erst ab Rolle Schreiber:** Leser sehen keine Koordinaten in den Fotodetails und erhalten
+  Originale ohne Standort.
+- **Datenstandort der Speicherprofile:** Schweiz / EU-EWR / angemessen / Drittland, bei AWS und
+  Hetzner aus der Region abgeleitet, bei S3-kompatibel gewählt. Drittland nur mit
+  Übermittlungsgrundlage und Bestätigung, Migration dorthin fragt erneut nach; optional
+  `STORAGE_ALLOWED_LOCATIONS`. Badge in `/admin/storage`. Neu: serverseitige Verschlüsselung (S3
+  `AES256`) je Profil, im Verbindungstest geprüft.
+
 ### Behoben
 
+- **Verlauf:** Aktionen mit mehreren Punkten (z. B. `backup.restore.create`) wurden falsch benannt.
 - **Foto-Analyse:** Der Foto-Worker konnte seit Migration `0134` keine Dateien mehr laden
   (`permission denied for table submission_assignment`), die Gesichtsanalyse fiel aus. Korrigiert
   in Migration `0142`.

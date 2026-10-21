@@ -479,5 +479,6 @@
   "fineRestoreFailed": "Busse konnte nicht wiederhergestellt werden",
   "locationLabel": "Ort",
   "organizersLabel": "Organisatoren",
-  "balanceAsOf": "Stand {date}"
+  "balanceAsOf": "Stand {date}",
+  "includeImageGps": "GPS-Daten des Bildes mitsenden"
 }

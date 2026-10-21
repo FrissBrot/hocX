@@ -189,6 +189,8 @@ export function GalleryUploadModal({
   // die Freigabe direkt mitgeben.
   const [sharedTargets, setSharedTargets] = useState<SharedTargetAlbum[]>([]);
   const [releaseShared, setReleaseShared] = useState(false);
+  // «GPS-Daten des Bildes mitsenden» (Datenschutz-Audit Paket 9.3): Standard an
+  const [includeGps, setIncludeGps] = useState(true);
   let targetQuery = "";
   if (target.targetKind !== "none" && !target.incomplete) {
     const fields = new FormData();
@@ -290,7 +292,7 @@ export function GalleryUploadModal({
         return analysis?.sha256 && analysis.kind === "image" ? [{ index, file, analysis }] : [];
       });
       const precheck = entries.length
-        ? await precheckUploads(entries, { context: "gallery", estimatedTakenOn: estimate, signal: controller.signal })
+        ? await precheckUploads(entries, { context: "gallery", estimatedTakenOn: estimate, signal: controller.signal, includeGps })
         : new Map();
       const skip = new Set<number>();
       for (const [index, result] of precheck ?? []) {
@@ -325,7 +327,8 @@ export function GalleryUploadModal({
           target.appendTo(body);
           if (releaseShared && sharedTargets.length > 0) body.append("release_to_shared_albums", "true");
           if (estimate) body.append("estimated_taken_on", estimate);
-          const hints = fileMetadataHints(batch.map((index) => fileAnalyses[index]).filter((analysis): analysis is FileAnalysis => Boolean(analysis)));
+          if (!includeGps) body.append("include_gps", "false");
+          const hints = fileMetadataHints(batch.map((index) => fileAnalyses[index]).filter((analysis): analysis is FileAnalysis => Boolean(analysis)), includeGps);
           if (hints) body.append("file_metadata", hints);
           // Returns almost immediately once the upload is staged and a gallery_upload_job is
           // queued - scanning/import happen afterwards in the background (see
@@ -484,6 +487,10 @@ export function GalleryUploadModal({
               ))}
             </div>
           </div>
+          <label className="checkbox-row gallery-upload-gps">
+            <input type="checkbox" checked={includeGps} onChange={(event) => setIncludeGps(event.target.checked)} disabled={uploading} />
+            {t("includeGps")}
+          </label>
 
           <div>
             <div className="gallery-upload-queue-heading">

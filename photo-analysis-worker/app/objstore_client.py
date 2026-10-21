@@ -205,6 +205,8 @@ class ProfileConfig:
     tls_verify: bool = True
     ca_bundle_pem: str | None = field(default=None, repr=False)
     config_version: int = 1
+    # S3: jedes Objekt mit ServerSideEncryption=AES256 schreiben (Speicherprofil, Migration 0147)
+    server_side_encryption: bool = False
 
     @property
     def is_filesystem(self) -> bool:
@@ -604,6 +606,9 @@ class S3Backend:
             except OSError:
                 pass
 
+    def _encryption_args(self) -> dict[str, str]:
+        return {"ServerSideEncryption": "AES256"} if self.config.server_side_encryption else {}
+
     def bucket_for(self, namespace: str) -> str:
         validate_namespace(namespace)
         if namespace == "abgabebox" and self.config.abgabebox_bucket:
@@ -636,7 +641,7 @@ class S3Backend:
             spool.close()
             raise StorageIntegrityError("SHA-256 oder Grösse des Inhalts stimmen nicht mit dem Erwarteten überein")
         spool.seek(0)
-        extra: dict[str, Any] = {"Metadata": {SHA256_METADATA_KEY: sha256}}
+        extra: dict[str, Any] = {"Metadata": {SHA256_METADATA_KEY: sha256}, **self._encryption_args()}
         if content_type:
             extra["ContentType"] = content_type
         transfer = TransferConfig(
@@ -669,7 +674,7 @@ class S3Backend:
         if not sha256 or not _HEX64.match(sha256):
             raise StorageIntegrityError("SHA-256 muss vor dem Hochladen bekannt sein")
         reader = _HashingReader(source)
-        extra: dict[str, Any] = {"Metadata": {SHA256_METADATA_KEY: sha256}}
+        extra: dict[str, Any] = {"Metadata": {SHA256_METADATA_KEY: sha256}, **self._encryption_args()}
         if content_type:
             extra["ContentType"] = content_type
         transfer = TransferConfig(
@@ -745,7 +750,7 @@ class S3Backend:
         try:
             self._client.copy(
                 {"Bucket": bucket, "Key": self.physical_key(namespace, source_key)}, bucket, self.physical_key(namespace, target_key),
-                ExtraArgs={"MetadataDirective": "COPY"},
+                ExtraArgs={"MetadataDirective": "COPY", **self._encryption_args()},
             )
         except Exception as exc:
             raise _map_client_error(exc, source_key) from exc
@@ -806,6 +811,7 @@ def _row_to_config(row: Any, credentials_key: str | None) -> ProfileConfig:
         tls_verify=bool(mapping["tls_verify"]),
         ca_bundle_pem=mapping["ca_bundle_pem"],
         config_version=int(mapping["config_version"]),
+        server_side_encryption=bool(mapping.get("server_side_encryption") or False),
     )
 
 

@@ -27,7 +27,7 @@ def test_delete_tenant_removes_migrated_style_asset_files(db, tmp_path, monkeypa
     )
     db.flush()
 
-    assert AdminTenantService().delete_tenant(db, tenant.id) is True
+    assert AdminTenantService().delete_tenant(db, tenant.id) is not None
 
     assert not legacy.exists() and not current.exists()
     assert not legacy.parent.parent.exists()

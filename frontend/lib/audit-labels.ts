@@ -27,7 +27,8 @@ export const AUDIT_CATEGORIES = [
 ] as const;
 
 export function auditVerb(action: string): AuditVerb {
-  const suffix = action.includes(".") ? action.slice(action.indexOf(".") + 1) : action;
+  // Letztes Segment: "backup.restore.create" -> "create"
+  const suffix = action.slice(action.lastIndexOf(".") + 1);
   if (suffix.includes("login_failed")) return "loginFailed";
   if (suffix.includes("mfa_failed")) return "mfaFailed";
   if (suffix === "login") return "login";

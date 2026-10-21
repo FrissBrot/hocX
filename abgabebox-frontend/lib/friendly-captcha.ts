@@ -12,6 +12,17 @@ export const FRIENDLY_CAPTCHA_SCRIPT_SRC = "/friendly-challenge.module.min.js";
 export const FRIENDLY_CAPTCHA_SCRIPT_ID = "friendly-captcha-script";
 export const FRIENDLY_CAPTCHA_PUZZLE_ENDPOINT = "https://api.friendlycaptcha.com/api/v1/puzzle";
 
+// Puzzle-Endpunkt aus der Umgebung (FRIENDLY_CAPTCHA_PUZZLE_URL, z. B. der EU-Endpunkt
+// https://eu-api.friendlycaptcha.eu/api/v1/puzzle - Datenschutz-Audit E2). Nur https, sonst Standard.
+export function resolvePuzzleEndpoint(value: string | undefined | null): string {
+  try {
+    const url = new URL(value ?? "");
+    return url.protocol === "https:" ? url.toString() : FRIENDLY_CAPTCHA_PUZZLE_ENDPOINT;
+  } catch {
+    return FRIENDLY_CAPTCHA_PUZZLE_ENDPOINT;
+  }
+}
+
 export type FriendlyCaptchaWidget = {
   destroy: () => void;
   reset: () => void;
@@ -88,6 +99,7 @@ export function resetFriendlyChallengeLoaderForTests() {
 type MountOptions = {
   sitekey: string;
   language: string;
+  puzzleEndpoint?: string;
   onSolved: (solution: string) => void;
   onError?: (error: unknown) => void;
 };
@@ -103,7 +115,8 @@ export function mountFriendlyCaptcha(container: HTMLElement, api: FriendlyChalle
   host.dataset.sitekey = options.sitekey;
   host.dataset.lang = options.language;
   host.dataset.start = "auto";
-  host.dataset.puzzleEndpoint = FRIENDLY_CAPTCHA_PUZZLE_ENDPOINT;
+  const puzzleEndpoint = options.puzzleEndpoint ?? FRIENDLY_CAPTCHA_PUZZLE_ENDPOINT;
+  host.dataset.puzzleEndpoint = puzzleEndpoint;
   container.appendChild(host);
 
   let widget: FriendlyCaptchaWidget | null = null;
@@ -112,7 +125,7 @@ export function mountFriendlyCaptcha(container: HTMLElement, api: FriendlyChalle
       sitekey: options.sitekey,
       language: options.language,
       startMode: "auto",
-      puzzleEndpoint: FRIENDLY_CAPTCHA_PUZZLE_ENDPOINT,
+      puzzleEndpoint,
       doneCallback: (solution) => options.onSolved(solution),
       errorCallback: (error) => options.onError?.(error),
     });

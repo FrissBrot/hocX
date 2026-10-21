@@ -13,6 +13,8 @@ export type AssignmentDetailPublic = {
   allowed_file_types: string[];
   max_files_per_element: number | null;
   max_file_size_mb: number;
+  tenant_name?: string | null;
+  privacy_notice_url?: string | null;
 };
 
 export type ElementPublic = {

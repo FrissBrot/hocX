@@ -479,5 +479,6 @@
   "fineRestoreFailed": "Fine could not be restored",
   "locationLabel": "Location",
   "organizersLabel": "Organisers",
-  "balanceAsOf": "As of {date}"
+  "balanceAsOf": "As of {date}",
+  "includeImageGps": "Include the image’s GPS data"
 }

@@ -405,6 +405,8 @@ async def upload_gallery_images(
     # Optionale Browser-Analyse je Datei als JSON-Liste [{sha256, metadata}] - reine Hinweise,
     # angewendet nur bei passendem serverseitigem Hash (siehe _parse_file_hints).
     file_metadata: Annotated[str | None, Form()] = None,
+    # «GPS-Daten des Bildes mitsenden» (Datenschutz-Audit Paket 9.3), Standard an
+    include_gps: Annotated[bool, Form()] = True,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -465,6 +467,8 @@ async def upload_gallery_images(
     if estimated_taken_on is not None and image_metadata_service.valid_estimated_date(estimated_taken_on) is None:
         raise HTTPException(status_code=422, detail="Ungültiges geschätztes Aufnahmedatum")
     file_hints = _parse_file_hints(file_metadata)
+    if not include_gps:
+        file_hints = {key: {**hint, "metadata": {k: v for k, v in (hint.get("metadata") or {}).items() if k != "gps"}} for key, hint in file_hints.items()}
 
     # Computed per-request, not as a module-level constant - settings.upload_root must be
     # read fresh each time (tests monkeypatch it; production has no reason to assume it's
@@ -523,6 +527,7 @@ async def upload_gallery_images(
         requested_by=user.user_id,
         estimated_taken_on=estimated_taken_on,
         file_hints=file_hints,
+        include_gps=include_gps,
         # A ZIP's matching entries are only known once the ingest loop opens it; a batch
         # of individually-selected images (no ZIP at all) knows its count immediately.
         total_files=None if has_zip else len(staged_paths) - len(clip_positions),
@@ -711,6 +716,7 @@ async def upload_image(
     file: UploadFile,
     title: str | None = Form(default=None),
     caption: str | None = Form(default=None),
+    include_gps: bool = Form(default=True),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -728,6 +734,7 @@ async def upload_image(
             title=title,
             caption=caption,
             created_by=user.user_id,
+            include_gps=include_gps,
         )
     except SQLAlchemyError as exc:
         db.rollback()
@@ -761,7 +768,15 @@ def delete_image(
 _WITHOUT_LOCATION = MetadataPolicy(location=False, capture_date=True, camera=True)
 
 
+def _sees_location(user: CurrentUser) -> bool:
+    """GPS erst ab Rolle writer (Datenschutz-Audit Paket 9.4): Leser sehen weder Koordinaten in den
+    Metadaten noch GPS im ausgelieferten Original. Gespeichert bleibt alles unverändert."""
+    return user.current_role in {"writer", "admin"}
+
+
 def _strips_location(db: Session, user: CurrentUser, stored_file: StoredFile) -> bool:
+    if not _sees_location(user):
+        return True
     return user.current_tenant_id is not None and not photo_album_share_service.location_shared_with(
         db, user.current_tenant_id, stored_file.id, stored_file.tenant_id
     )
@@ -884,6 +899,8 @@ def get_stored_file_metadata(
     )
     if metadata is None:
         raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
+    if not _sees_location(user):
+        metadata = metadata.model_copy(update={"gps": None})
     return metadata
 
 

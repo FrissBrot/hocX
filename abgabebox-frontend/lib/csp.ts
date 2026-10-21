@@ -8,6 +8,8 @@
  *
  * connect-src/worker-src: siehe Kommentar in next.config.mjs (Friendly Captcha).
  */
+import { resolvePuzzleEndpoint } from "@/lib/friendly-captcha";
+
 export const NONCE_HEADER = "x-nonce";
 
 export function createNonce(): string {
@@ -16,7 +18,16 @@ export function createNonce(): string {
   return btoa(String.fromCharCode(...bytes));
 }
 
-export function contentSecurityPolicy(nonce: string, isDevelopment = process.env.NODE_ENV !== "production"): string {
+// Origin des Captcha-Puzzle-Endpunkts (FRIENDLY_CAPTCHA_PUZZLE_URL, Standard global).
+export function captchaConnectOrigin(value = process.env.FRIENDLY_CAPTCHA_PUZZLE_URL): string {
+  return new URL(resolvePuzzleEndpoint(value)).origin;
+}
+
+export function contentSecurityPolicy(
+  nonce: string,
+  isDevelopment = process.env.NODE_ENV !== "production",
+  captchaOrigin = captchaConnectOrigin(),
+): string {
   const scriptSrc = ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", isDevelopment && "'unsafe-eval'"]
     .filter(Boolean)
     .join(" ");
@@ -26,7 +37,7 @@ export function contentSecurityPolicy(nonce: string, isDevelopment = process.env
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
-    "connect-src 'self' https://api.friendlycaptcha.com",
+    `connect-src 'self' ${captchaOrigin}`,
     "worker-src 'self' blob:",
     "object-src 'none'",
     "frame-src 'none'",

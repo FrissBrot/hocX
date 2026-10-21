@@ -54,7 +54,7 @@ from app.services.apple_media import (
     pair_live_clips,
     transcode_live_clip,
 )
-from app.services import image_metadata_service, photo_event_link_service, upload_precheck_service
+from app.services import gps_strip, image_metadata_service, photo_event_link_service, upload_precheck_service
 from app.services.capture_date import effective_capture
 from app.services.photo_quality import compute_quality_scores
 from app.services.photo_similarity import (
@@ -210,6 +210,12 @@ def owned_thumbnail_path(stored_file: StoredFile) -> Path | None:
     if stored_file.thumbnail_path != f"{stored_file.id}.jpg":
         return None
     return _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
+
+
+def _clear_gps(stored_file: StoredFile) -> None:
+    """GPS-Spalten leeren (Upload ohne «GPS-Daten des Bildes mitsenden»)."""
+    for column in ("gps_latitude", "gps_longitude", "gps_altitude_m", "gps_direction_deg", "gps_accuracy_m", "gps_timestamp", "gps_source"):
+        setattr(stored_file, column, None)
 
 
 class FileService:
@@ -831,6 +837,7 @@ class FileService:
         title: str | None = None,
         caption: str | None = None,
         created_by: int | None = None,
+        include_gps: bool = True,
     ) -> ProtocolImageRead:
         self.ensure_storage()
 
@@ -843,6 +850,9 @@ class FileService:
             raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {MAX_UPLOAD_BYTES // 1024 // 1024} MB")
         if not _content_matches_mime(content, mime):
             raise HTTPException(status_code=400, detail="Dateiinhalt passt nicht zum angegebenen Bildformat")
+        if not include_gps:
+            # «GPS-Daten des Bildes mitsenden» aus (Paket 9.3): nur der Standort fällt weg.
+            content = await asyncio.to_thread(gps_strip.strip_gps, content, mime)
 
         tenant_id = self._resolve_tenant_id(db, protocol_element_block.id)
         await acquire_upload_lock(db, tenant_id)
@@ -952,6 +962,7 @@ class FileService:
         estimated_taken_on: date | None = None,
         file_hints: dict[str, dict] | None = None,
         file_results: list[dict] | None = None,
+        include_gps: bool = True,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         """Persists a batch of already-decoded (filename, bytes) images for the "Dateien"/
         "Fotos" gallery upload window - only genuine images (magic bytes, not filename)
@@ -1034,6 +1045,10 @@ class FileService:
             label = filename or "Bild"
             source_checksum = hashlib.sha256(content).hexdigest()
             source_filename = filename
+            if not include_gps:
+                # «GPS-Daten des Bildes mitsenden» aus (Paket 9.3): Standort vor Konvertierung,
+                # Analyse und Speichern entfernen; Datum, Kamera und Bilddaten bleiben.
+                content = await asyncio.to_thread(gps_strip.strip_gps, content)
             original_content = content
             converted_from_heic = False
             if scan_status not in ("infected", "error") and is_heic(content):
@@ -1076,10 +1091,12 @@ class FileService:
                 stored_file,
                 original_content,
                 converted=converted_from_heic,
-                hint=file_hints.get(source_checksum),
+                hint=file_hints.get(source_checksum) if include_gps else None,
                 estimated_taken_on=estimated_taken_on,
                 user_id=created_by,
             )
+            if not include_gps:
+                _clear_gps(stored_file)
             item_taken_at[stored_file.public_id] = (
                 stored_file.exif_taken_at.date() if stored_file.exif_taken_at is not None else stored_file.estimated_taken_on
             )
@@ -1105,6 +1122,7 @@ class FileService:
                     tenant_id=tenant_id,
                     image_filename=filename,
                     clip=live_clips[source_filename],
+                    include_gps=include_gps,
                     scan_status=clip_scan_status[source_filename],
                     created_by=created_by,
                 )
@@ -1296,6 +1314,7 @@ class FileService:
         clip: bytes,
         scan_status: str,
         created_by: int | None,
+        include_gps: bool = True,
     ) -> tuple[StoredFile | None, str | None]:
         """(StoredFile, None) for a stored Live-Photo clip, else (None, Hinweis) - see
         save_gallery_uploads for why a bad clip only ever costs the "live" part."""
@@ -1306,6 +1325,8 @@ class FileService:
         transcoded = await asyncio.to_thread(transcode_live_clip, clip)
         if transcoded is None:
             return None, "Live-Photo-Video konnte nicht verarbeitet werden, als normales Foto gespeichert"
+        if not include_gps:
+            transcoded = await asyncio.to_thread(gps_strip.strip_gps, transcoded, "video/mp4")
         try:
             result = ingest_file(
                 db,
@@ -1713,6 +1734,7 @@ class FileService:
             estimated_taken_on=job.estimated_taken_on,
             file_hints=dict(job.file_hints or {}),
             file_results=file_results,
+            include_gps=job.include_gps,
         )
 
     def save_word_import_document(

@@ -89,7 +89,60 @@ def profile_config(profile: StorageProfile, generation: int, *, restricted: bool
         tls_verify=profile.tls_verify,
         ca_bundle_pem=profile.ca_bundle_pem,
         config_version=profile.config_version,
+        server_side_encryption=bool(profile.server_side_encryption),
     )
+
+
+# --- Datenstandort (Datenschutz-Audit E3) -----------------------------------------------------
+
+DATA_LOCATIONS = ("ch", "eu_eea", "adequate", "third_country")
+_HETZNER_EU_REGIONS = ("fsn1", "nbg1", "hel1")
+
+
+def derive_location(provider: str, region: str | None) -> str | None:
+    """Standort aus Anbieter und Region; None = nicht ableitbar, der Admin wählt (s3_compatible)."""
+    region = (region or "").strip().lower()
+    if provider in ("filesystem", "garage_local"):
+        return settings.hocx_server_location
+    if provider == "aws_s3":
+        if region == "eu-central-2":
+            return "ch"
+        return "eu_eea" if region.startswith("eu-") else "third_country"
+    if provider == "hetzner":
+        return "eu_eea" if not region or region in _HETZNER_EU_REGIONS else "third_country"
+    return None
+
+
+def allowed_locations() -> set[str] | None:
+    items = {item.strip() for item in (settings.storage_allowed_locations or "").split(",") if item.strip()}
+    return items or None
+
+
+def _apply_location(profile: StorageProfile, values: dict[str, Any], *, actor_email: str | None) -> None:
+    """Standort setzen und prüfen: abgeleitet, wo möglich; Drittland nur mit Rechtsgrundlage und
+    Bestätigung; STORAGE_ALLOWED_LOCATIONS sperrt andere Standorte ganz."""
+    derived = derive_location(profile.provider, profile.region)
+    location = derived or values.get("data_location") or profile.data_location
+    if location is None:
+        raise StorageProfileError("Datenstandort angeben (Schweiz, EU/EWR, angemessenes Land oder Drittland)")
+    if location not in DATA_LOCATIONS:
+        raise StorageProfileError("Unbekannter Datenstandort")
+    allowed = allowed_locations()
+    if allowed is not None and location not in allowed:
+        raise StorageProfileError("Dieser Datenstandort ist auf dieser Installation nicht erlaubt (STORAGE_ALLOWED_LOCATIONS)")
+    if "transfer_basis" in values and values["transfer_basis"] is not None:
+        profile.transfer_basis = values["transfer_basis"].strip() or None
+    if location == "third_country":
+        if not profile.transfer_basis:
+            raise StorageProfileError("Für ein Drittland die Grundlage der Übermittlung angeben (z. B. Standardvertragsklauseln)")
+        if location != profile.data_location or values.get("location_confirmed"):
+            if not values.get("location_confirmed"):
+                raise StorageProfileError("Auslandübermittlung bestätigen: geprüft und Vereine informiert")
+            profile.location_confirmed_by = actor_email
+            profile.location_confirmed_at = datetime.now(UTC)
+    elif location != profile.data_location:
+        profile.location_confirmed_by = profile.location_confirmed_at = None
+    profile.data_location = location
 
 
 # --- Validierung ------------------------------------------------------------------------------
@@ -258,6 +311,8 @@ def create_profile(db: Session, values: dict[str, Any], *, actor_email: str | No
         raise StorageProfileError("Bucket fehlt")
     if profile.addressing_style not in ("auto", "path", "virtual"):
         raise StorageProfileError("Ungültige Adressierung")
+    profile.server_side_encryption = bool(values.get("server_side_encryption", False))
+    _apply_location(profile, values, actor_email=actor_email)
     _apply_credentials(profile, values)
     _check_no_overlap(db, profile)
     db.add(profile)
@@ -305,8 +360,13 @@ def update_profile(db: Session, profile: StorageProfile, values: dict[str, Any],
         if not values["is_enabled"] and info["active"]:
             raise StorageProfileError("Das aktive Profil kann nicht deaktiviert werden")
         profile.is_enabled = bool(values["is_enabled"])
+    encryption_changed = "server_side_encryption" in values and values["server_side_encryption"] is not None and bool(values["server_side_encryption"]) != profile.server_side_encryption
+    if encryption_changed:
+        profile.server_side_encryption = bool(values["server_side_encryption"])
+    if location_change or any(values.get(key) is not None for key in ("data_location", "transfer_basis", "location_confirmed")):
+        _apply_location(profile, values, actor_email=actor_email)
     credentials_changed = _apply_credentials(profile, values)
-    if location_change or credentials_changed or "tls_verify" in values or "ca_bundle_pem" in values:
+    if location_change or credentials_changed or encryption_changed or "tls_verify" in values or "ca_bundle_pem" in values:
         profile.config_version += 1
         # Neue Zugangsdaten/Orte gelten erst nach einem erneuten erfolgreichen Test.
         profile.last_test_ok = None
@@ -362,6 +422,10 @@ def _probe(backend: S3Backend, namespace: str) -> dict[str, Any]:
         content = b"".join(backend.open_read(namespace, key))
         steps["read"] = hashlib.sha256(content).hexdigest() == sha
         steps["list"] = any(info.key == key for info in backend.list(namespace, "_hocx-connection-test/"))
+        if backend.config.server_side_encryption:
+            # Serverseitige Verschlüsselung gefordert: der Anbieter muss sie am Objekt bestätigen.
+            response = backend._client.head_object(Bucket=backend.bucket_for(namespace), Key=backend.physical_key(namespace, key))
+            steps["encryption"] = response.get("ServerSideEncryption") == "AES256"
     finally:
         try:
             backend.delete(namespace, key)
@@ -434,7 +498,7 @@ def ensure_local_profile(db: Session) -> StorageProfile | None:
     if profile is None:
         profile = StorageProfile(
             name=LOCAL_PROFILE_NAME, provider="garage_local", prefix="hocx", addressing_style="path", is_builtin=True,
-            tls_verify=False, **desired,
+            tls_verify=False, data_location=settings.hocx_server_location, **desired,
         )
         db.add(profile)
     else:

@@ -219,6 +219,11 @@
         "title": "Offboarding",
         "detail": "{count, number} tenants past contract end (+{days, number} days)",
         "problem": "Tenants past contract end not yet deleted"
+      },
+      "captcha_endpoint": {
+        "title": "Captcha endpoint",
+        "detail": "{region, select, eu {EU endpoint (processing in the EU)} other {Global endpoint – for processing in the EU set FRIENDLY_CAPTCHA_PUZZLE_URL and _VERIFY_URL to the EU endpoint}}",
+        "problem": "Captcha endpoint unreachable"
       }
     },
     "problems": {

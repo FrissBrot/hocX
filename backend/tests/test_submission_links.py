@@ -383,7 +383,7 @@ def test_reimport_keeps_links_and_assignments_but_never_shares_a_live_token(db):
     SubmissionService().create_assignment(db, _assignment_payload(link_ids=[link.id]), tenant_id=source.id)
     source_tokens = {item.token for item in db.scalars(select(SubmissionLink).where(SubmissionLink.tenant_id == source.id))}
 
-    zip_path, _ = TenantExportService().export(db, source.id, "full_abgabebox")
+    zip_path, _ = TenantExportService().export(db, source.id, "full_abgabebox", include_credentials=True)
     try:
         with zipfile.ZipFile(zip_path) as zf:
             manifest = json.loads(zf.read("manifest.json").decode("utf-8"))
@@ -410,7 +410,7 @@ def test_import_without_links_in_the_archive_creates_a_fresh_default_link(db):
     source = make_tenant(db, "Quelle")
     links.create_link(db, SubmissionLinkCreate(name="Eltern"), tenant_id=source.id)
 
-    zip_path, _ = TenantExportService().export(db, source.id, "full")
+    zip_path, _ = TenantExportService().export(db, source.id, "full", include_credentials=True)
     try:
         imported, _warnings = TenantImportService().import_zip(db, zip_path, "Quelle (Import)")
     finally:
