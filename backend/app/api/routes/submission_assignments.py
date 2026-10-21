@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-import io
 import re
 import uuid
 import zipfile
+from pathlib import Path
 
 from sqlalchemy.exc import SQLAlchemyError
 
 from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from app.core.config import settings
 from app.core.db import get_db, release_for_stream
@@ -539,39 +540,47 @@ def download_all_files_zip(
 
     elements = service.get_assignment_elements(db, assignment)
 
-    buf = io.BytesIO()
+    # Auf der Platte statt im Speicher (Concurrency-Audit CONC-009): eine grosse Abgabe (viele
+    # Fotos) lag vorher vollständig als BytesIO im Backend-Prozess.
+    work_dir = Path(settings.upload_root) / "_staging" / "download"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = work_dir / f"{uuid.uuid4().hex}.zip"
     used_names: dict[str, int] = {}
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for element in elements:
-            if not element.files or element.upload_id is None:
-                continue
-            upload = public_id_service.get_by_public_id(db, SubmissionUpload, element.upload_id)
-            if upload is None:
-                continue
-            for file in element.files:
-                stored_file_row = public_id_service.get_by_public_id(db, StoredFile, file.id)
-                if stored_file_row is None:
+    try:
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for element in elements:
+                if not element.files or element.upload_id is None:
                     continue
-                _, stored_file = service.get_stored_file_for_upload(
-                    db, upload_id=upload.id, stored_file_id=stored_file_row.id
-                )
-                if stored_file is None or stored_file.scan_status != "clean":
+                upload = public_id_service.get_by_public_id(db, SubmissionUpload, element.upload_id)
+                if upload is None:
                     continue
-                if not get_object_store().exists(ABGABEBOX, stored_file.storage_path):
-                    continue
-                arcname = stored_file.original_name
-                if arcname in used_names:
-                    used_names[arcname] += 1
-                    stem, _, ext = arcname.rpartition(".")
-                    arcname = f"{stem}_{used_names[arcname]}.{ext}" if ext else f"{arcname}_{used_names[arcname]}"
-                else:
-                    used_names[arcname] = 0
-                write_object_to_zip(zf, ABGABEBOX, stored_file.storage_path, arcname)
+                for file in element.files:
+                    stored_file_row = public_id_service.get_by_public_id(db, StoredFile, file.id)
+                    if stored_file_row is None:
+                        continue
+                    _, stored_file = service.get_stored_file_for_upload(
+                        db, upload_id=upload.id, stored_file_id=stored_file_row.id
+                    )
+                    if stored_file is None or stored_file.scan_status != "clean":
+                        continue
+                    if not get_object_store().exists(ABGABEBOX, stored_file.storage_path):
+                        continue
+                    arcname = stored_file.original_name
+                    if arcname in used_names:
+                        used_names[arcname] += 1
+                        stem, _, ext = arcname.rpartition(".")
+                        arcname = f"{stem}_{used_names[arcname]}.{ext}" if ext else f"{arcname}_{used_names[arcname]}"
+                    else:
+                        used_names[arcname] = 0
+                    write_object_to_zip(zf, ABGABEBOX, stored_file.storage_path, arcname)
+    except BaseException:
+        zip_path.unlink(missing_ok=True)
+        raise
 
-    buf.seek(0)
     slug = re.sub(r"[^a-z0-9]+", "-", (assignment.title or str(assignment_id)).lower()).strip("-")
-    return release_for_stream(db, StreamingResponse(
-        buf,
+    return release_for_stream(db, FileResponse(
+        path=zip_path,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{slug}.zip"'},
+        background=BackgroundTask(zip_path.unlink, missing_ok=True),
     ))
