@@ -914,6 +914,9 @@ async def _import_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (co
         max_bytes=MAX_TENANT_IMPORT_UPLOAD_BYTES,
         suffix=".zip",
     )
+    # Starlettes Zwischenspeicher des Uploads lebt sonst bis zum Ende der Antwort - also über
+    # den ganzen, minutenlangen Import: bis 2 GiB doppelt auf der Platte (Concurrency-Audit).
+    await file.close()
     zip_path = tmp_path
     try:
         # Verschlüsselte Exporte (export_crypto.py) erst entschlüsseln; ältere, unverschlüsselte
@@ -924,6 +927,8 @@ async def _import_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (co
                 await run_in_threadpool(export_crypto.decrypt_file, tmp_path, zip_path, password=password or None)
             except export_crypto.ExportDecryptionError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
+            # Verschlüsselte Fassung wird nicht mehr gebraucht - vor dem Entpacken freigeben.
+            tmp_path.unlink(missing_ok=True)
         new_tenant, warnings = await run_in_threadpool(import_service.import_zip, db, zip_path, new_name)
     except HTTPException:
         raise

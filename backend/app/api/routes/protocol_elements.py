@@ -39,19 +39,25 @@ protocol_service = ProtocolService()
 access_service = AccessService()
 
 
-def _broadcast_block_update(protocol_id: int, block: ProtocolElementBlock, user: CurrentUser) -> None:
+def _broadcast_block_update(protocol_id: int, read: ProtocolElementBlockRead, user: CurrentUser) -> None:
     """Same mechanism regular block edits already use (collaboration_ws.py's field_update
     passthrough) - other viewers of this same protocol see the refresh/sync/undo live with
-    no new frontend WS handling needed."""
+    no new frontend WS handling needed.
+
+    Sendet dasselbe wie die REST-Antwort (_block_to_read): öffentliche Block- und Nutzer-ID
+    (das Frontend hört auf "block-<public_id>" und filtert eigene Updates über die öffentliche
+    Nutzer-ID), übersetzte Teilnehmer-Referenzen statt interner IDs und config_version, damit
+    die optimistische Sperre der anderen Bearbeiter (CONC-005) nicht auf einem alten Stand
+    bleibt. Vorher kamen diese Updates wegen der internen Block-ID nie an."""
     publish_best_effort(
         protocol_channel(protocol_id),
         json.dumps({
             "type": "field_update",
-            "field_key": f"block-{block.id}",
-            "patch": {"configuration_snapshot_json": block.configuration_snapshot_json},
-            "user_id": user.user_id,
+            "field_key": f"block-{read.id}",
+            "patch": {"configuration_snapshot_json": read.configuration_snapshot_json, "config_version": read.config_version},
+            "user_id": str(user.user_public_id),
             "display_name": user.display_name,
-        }),
+        }, default=str),
     )
 
 
@@ -250,8 +256,9 @@ def set_block_attendance_status(
         raise HTTPException(status_code=400, detail="Attendance status could not be updated") from exc
     if updated is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
-    _broadcast_block_update(protocol.id, updated, user)
-    return _block_to_read(db, updated)
+    read = _block_to_read(db, updated)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/refresh", response_model=ProtocolElementBlockRead)
@@ -268,8 +275,9 @@ def refresh_block_list_snapshot(
     block = list_snapshot_service.refresh_block_list_snapshot(
         db, block, protocol.tenant_id, keep_undo=True, protocol=protocol, track_changes_active=track_changes_active
     )
-    _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(db, block)
+    read = _block_to_read(db, block)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/sync", response_model=ProtocolElementBlockRead)
@@ -287,8 +295,9 @@ def sync_block_list_snapshot(
     block = list_snapshot_service.refresh_block_list_snapshot(
         db, block, protocol.tenant_id, keep_undo=False, protocol=protocol, track_changes_active=track_changes_active
     )
-    _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(db, block)
+    read = _block_to_read(db, block)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/undo", response_model=ProtocolElementBlockRead)
@@ -302,8 +311,9 @@ def undo_block_list_snapshot(
     updated = list_snapshot_service.undo_block_list_snapshot(db, block)
     if updated is None:
         raise HTTPException(status_code=409, detail="Nothing to undo")
-    _broadcast_block_update(protocol.id, updated, user)
-    return _block_to_read(db, updated)
+    read = _block_to_read(db, updated)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.delete("/protocol-element-blocks/{protocol_element_block_id}", status_code=204)
@@ -369,8 +379,9 @@ def accept_tracked_list_entry(
     require_writer(user)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     block = list_snapshot_service.accept_tracked_list_entry(db, block, entry_id)
-    _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(db, block)
+    read = _block_to_read(db, block)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/rows/{row_id}/accept-tracked-change", response_model=ProtocolElementBlockRead)
@@ -384,8 +395,9 @@ def accept_tracked_row(
     require_writer(user)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     block = list_snapshot_service.accept_tracked_row(db, block, row_id)
-    _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(db, block)
+    read = _block_to_read(db, block)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/text/accept-tracked-changes", response_model=ProtocolTextRead)

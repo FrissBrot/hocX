@@ -42,7 +42,9 @@ def _broadcast_template_synced(protocol_id: int, user: CurrentUser) -> None:
             "type": "field_update",
             "field_key": "template-synced",
             "patch": None,
-            "user_id": user.user_id,
+            # Keine interne ID nach aussen; None statt der öffentlichen ID, weil auch die eigenen
+            # anderen Tabs neu laden sollen (das Frontend filtert eigene Updates über die ID).
+            "user_id": None,
             "display_name": user.display_name,
         }),
     )

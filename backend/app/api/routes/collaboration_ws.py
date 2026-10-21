@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import random
 import re
+import threading
+import time
 import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -61,31 +65,36 @@ def _record_ws_error(exc: Exception, user: CurrentUser) -> None:
 
 
 def _authenticate(token: str | None) -> CurrentUser | None:
+    db = SessionLocal()
+    try:
+        return _authenticate_in(db, token)
+    finally:
+        db.close()
+
+
+def _authenticate_in(db: Session, token: str | None) -> CurrentUser | None:
     session_data = parse_session_token(token)
     if session_data is None:
         return None
-    db = SessionLocal()
-    try:
-        user = db.get(AppUser, int(session_data["user_id"]))
-        if user is None or not user.is_active:
+    user = db.get(AppUser, int(session_data["user_id"]))
+    # Wie get_optional_current_user: auch ein gesperrter Login beendet die Verbindung.
+    if user is None or not user.is_active or not user.login_enabled:
+        return None
+    if user.session_revoke_at is not None:
+        token_iat = int(session_data.get("iat", 0))
+        if int(user.session_revoke_at.timestamp()) > token_iat:
             return None
-        if user.session_revoke_at is not None:
-            token_iat = int(session_data.get("iat", 0))
-            if int(user.session_revoke_at.timestamp()) > token_iat:
-                return None
-        current_user = build_current_user(db, user, mfa_verified=bool(session_data.get("mfa")))
-        # Mirrors get_optional_current_user's MFA enforcement (audit finding, 2026-08-25) -
-        # without this, a user who becomes MFA-required (promoted to admin) or whose only
-        # factor is administratively deleted keeps full read/write WebSocket access with
-        # their existing cookie even though the REST path now correctly locks them out.
-        has_mfa_factor = _has_active_mfa_factor(db, user.id)
-        if has_mfa_factor and not current_user.mfa_verified:
-            return None
-        if _requires_mfa(current_user) and (not has_mfa_factor or not current_user.mfa_verified):
-            return None
-        return current_user
-    finally:
-        db.close()
+    current_user = build_current_user(db, user, mfa_verified=bool(session_data.get("mfa")))
+    # Mirrors get_optional_current_user's MFA enforcement (audit finding, 2026-08-25) -
+    # without this, a user who becomes MFA-required (promoted to admin) or whose only
+    # factor is administratively deleted keeps full read/write WebSocket access with
+    # their existing cookie even though the REST path now correctly locks them out.
+    has_mfa_factor = _has_active_mfa_factor(db, user.id)
+    if has_mfa_factor and not current_user.mfa_verified:
+        return None
+    if _requires_mfa(current_user) and (not has_mfa_factor or not current_user.mfa_verified):
+        return None
+    return current_user
 
 
 def _load_and_authorize(protocol_public_id: uuid.UUID, user: CurrentUser) -> int | None:
@@ -96,15 +105,50 @@ def _load_and_authorize(protocol_public_id: uuid.UUID, user: CurrentUser) -> int
     behavior before the public_id migration)."""
     db = SessionLocal()
     try:
-        bind_tenant_scope(db, user.current_tenant_id)
-        protocol_id = public_id_service.resolve_internal_id(db, Protocol, protocol_public_id, tenant_id=user.current_tenant_id)
-        if protocol_id is None:
-            return None
-        if not access_service.can_read_protocol(db, user, protocol_id):
-            return None
-        return protocol_id
+        return _load_and_authorize_in(db, protocol_public_id, user)
     finally:
         db.close()
+
+
+def _load_and_authorize_in(db: Session, protocol_public_id: uuid.UUID, user: CurrentUser) -> int | None:
+    bind_tenant_scope(db, user.current_tenant_id)
+    protocol_id = public_id_service.resolve_internal_id(db, Protocol, protocol_public_id, tenant_id=user.current_tenant_id)
+    if protocol_id is None:
+        return None
+    if not access_service.can_read_protocol(db, user, protocol_id):
+        return None
+    return protocol_id
+
+
+# Revalidierung (SEC-007) je Verbindung alle 30 s kostete zwei DB-Sessions mit mehreren Abfragen;
+# mehrere Tabs desselben Nutzers prüften dasselbe. Jetzt eine Session je Prüfung und ein kurzer
+# Prozess-Cache je (Token, Protokoll): ein entzogenes Recht wirkt spätestens nach
+# SESSION_REVALIDATE_INTERVAL_SECONDS + REVALIDATE_CACHE_SECONDS.
+REVALIDATE_CACHE_SECONDS = 10.0
+_REVALIDATE_CACHE_MAX = 5000
+_revalidate_cache: dict[tuple[str, uuid.UUID], tuple[float, CurrentUser | None, int | None]] = {}
+_revalidate_cache_lock = threading.Lock()
+
+
+def _revalidate(token: str | None, protocol_public_id: uuid.UUID) -> tuple[CurrentUser | None, int | None]:
+    """(aktueller Nutzer oder None, interne Protokoll-ID oder None) - eine DB-Session."""
+    key = (hashlib.sha256((token or "").encode()).hexdigest(), protocol_public_id)
+    now = time.monotonic()
+    with _revalidate_cache_lock:
+        cached = _revalidate_cache.get(key)
+        if cached is not None and now - cached[0] < REVALIDATE_CACHE_SECONDS:
+            return cached[1], cached[2]
+    db = SessionLocal()
+    try:
+        current = _authenticate_in(db, token)
+        protocol_id = _load_and_authorize_in(db, protocol_public_id, current) if current is not None else None
+    finally:
+        db.close()
+    with _revalidate_cache_lock:
+        if len(_revalidate_cache) >= _REVALIDATE_CACHE_MAX:
+            _revalidate_cache.clear()
+        _revalidate_cache[key] = (now, current, protocol_id)
+    return current, protocol_id
 
 
 def _public_user_id_map(user_ids: set[int]) -> dict[int, uuid.UUID]:
@@ -307,15 +351,19 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
         der REST-Pfad, der jeden Request neu prüft."""
         nonlocal can_edit
         try:
+            # Zufälliger erster Abstand: nach einem Deploy verbinden sich alle Clients fast
+            # gleichzeitig neu - ohne Versatz prüften sie danach alle im selben Takt.
+            delay = SESSION_REVALIDATE_INTERVAL_SECONDS * random.uniform(0.5, 1.0)
             while True:
-                await asyncio.sleep(SESSION_REVALIDATE_INTERVAL_SECONDS)
+                await asyncio.sleep(delay)
+                delay = SESSION_REVALIDATE_INTERVAL_SECONDS
                 if websocket.application_state != WebSocketState.CONNECTED:
                     break
-                current = await asyncio.to_thread(_authenticate, token)
+                current, current_protocol_id = await asyncio.to_thread(_revalidate, token, protocol_public_id)
                 if current is None or current.user_id != user.user_id:
                     await websocket.close(code=4401)
                     break
-                if await asyncio.to_thread(_load_and_authorize, protocol_public_id, current) != protocol_id:
+                if current_protocol_id != protocol_id:
                     await websocket.close(code=4403)
                     break
                 can_edit = _can_edit(current)
