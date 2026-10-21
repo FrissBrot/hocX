@@ -135,6 +135,8 @@ services:
     restart: unless-stopped
     mem_limit: 128m
     cpus: 0.5
+    # Unter dem Containerlimit, noeviction wie Release (Schreibfehler statt OOM-Kill, CONC-011).
+    command: ["redis-server", "--maxmemory", "100mb", "--maxmemory-policy", "noeviction"]
     logging:
       driver: json-file
       options:
@@ -282,7 +284,7 @@ services:
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       # Generiert die Router fuer Mandanten-Custom-Domains, gemeinsam mit Traefik (ro-Mount oben)
       - ./infra/traefik/dynamic:/app/traefik_dynamic
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 75 --no-access-log"
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 75 --ws-max-size 65536 --no-access-log"
     healthcheck:
       # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
       # einen simplen Liveness-Check gegen den Health-Endpoint aus app/main.py.

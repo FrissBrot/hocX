@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from redis.exceptions import RedisError
 from starlette.websockets import WebSocketState
 
 from sqlalchemy import select
@@ -13,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.error_log import record_system_error
-from app.core.redis_client import get_redis
+from app.core.redis_client import get_redis, get_redis_pubsub
 from app.core.security import (
     CurrentUser,
     _has_active_mfa_factor,
@@ -38,6 +40,12 @@ protocol_service = ProtocolService()
 LIST_VERSION_POLL_INTERVAL_SECONDS = 15
 # Wie oft eine offene Verbindung Session und Protokollrecht neu prüft (SEC-007).
 SESSION_REVALIDATE_INTERVAL_SECONDS = 30
+# Feldschlüssel kommen vom Client und werden zu Redis-Schlüsseln (Security-Review Paket 6): nur die
+# Formen des Editors (block-<id>, block-<id>-cell-<zeile>-<spalte>) sperren, nur kurze, einfache
+# Namen broadcasten, und höchstens MAX_LOCKS_PER_CONNECTION Sperren je Verbindung.
+_LOCK_FIELD_KEY = re.compile(r"^block-[0-9A-Za-z-]{1,40}(-cell-[0-9A-Za-z_-]{1,80})?$")
+_BROADCAST_FIELD_KEY = re.compile(r"^[A-Za-z0-9_-]{1,160}$")
+MAX_LOCKS_PER_CONNECTION = 50
 
 
 def _record_ws_error(exc: Exception, user: CurrentUser) -> None:
@@ -229,7 +237,8 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
     connection_id = uuid.uuid4().hex
     channel = collab.channel(protocol_id)
 
-    pubsub = redis.pubsub()
+    # Eigener Pool ohne socket_timeout: das Abonnement wartet beliebig lange auf Nachrichten.
+    pubsub = get_redis_pubsub().pubsub()
     await pubsub.subscribe(channel)
 
     async def forward_from_redis() -> None:
@@ -244,6 +253,14 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
             pass
         except Exception as exc:
             _record_ws_error(exc, user)
+            # Ohne Weiterleitung bekäme der Client still keine Änderungen der anderen mehr
+            # (z. B. Redis trennt einen langsamen Abonnenten). Schliessen -> der Client verbindet
+            # sich neu und lädt den aktuellen Stand (Concurrency-Audit CONC-012).
+            if websocket.application_state == WebSocketState.CONNECTED:
+                try:
+                    await websocket.close(code=1011)
+                except RuntimeError:
+                    pass
 
     forward_task = asyncio.create_task(forward_from_redis())
 
@@ -302,10 +319,21 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
                     await websocket.close(code=4403)
                     break
                 can_edit = _can_edit(current)
+                try:
+                    await collab.touch(protocol_id, connection_id, user.user_id, user.display_name)
+                except RedisError:
+                    # Präsenz ist Komfort; die Revalidierung (SEC-007) muss weiterlaufen.
+                    pass
         except asyncio.CancelledError:
             pass
         except Exception as exc:
             _record_ws_error(exc, user)
+            # Ohne Revalidierung bliebe die Verbindung trotz Logout/Rechteentzug offen: fail-closed.
+            if websocket.application_state == WebSocketState.CONNECTED:
+                try:
+                    await websocket.close(code=1011)
+                except RuntimeError:
+                    pass
 
     revalidate_task = asyncio.create_task(revalidate_session())
 
@@ -339,10 +367,17 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
                 payload = json.loads(raw)
             except (TypeError, ValueError):
                 continue
-            msg_type = payload.get("type")
-            field_key = payload.get("field_key")
+            msg_type = payload.get("type") if isinstance(payload, dict) else None
+            field_key = payload.get("field_key") if isinstance(payload, dict) else None
+            if field_key is not None and (not isinstance(field_key, str) or not _BROADCAST_FIELD_KEY.match(field_key)):
+                continue
+            if msg_type in ("lock_request", "unlock", "heartbeat") and field_key and not _LOCK_FIELD_KEY.match(field_key):
+                continue
 
             if msg_type == "lock_request" and can_edit and field_key:
+                if await collab.connection_lock_count(protocol_id, connection_id) >= MAX_LOCKS_PER_CONNECTION:
+                    await websocket.send_json({"type": "lock_denied", "field_key": field_key, "holder": None})
+                    continue
                 holder = await collab.try_acquire_lock(protocol_id, field_key, connection_id, user.user_id, user.display_name)
                 if holder is None:
                     await collab.publish(protocol_id, {

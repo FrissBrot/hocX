@@ -1,13 +1,15 @@
 import json
+import logging
 import uuid
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException
+from redis.exceptions import RedisError
 
 from app.core.db import get_db
-from app.core.redis_client import get_redis_sync
+from app.core.redis_client import get_redis_sync, publish_best_effort
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.models import ElementDefinition, Event, Participant, Protocol, ProtocolElement, ProtocolElementBlock, TemplateElement, TemplateElementBlock
 from app.schemas.protocol import (
@@ -41,7 +43,7 @@ def _broadcast_block_update(protocol_id: int, block: ProtocolElementBlock, user:
     """Same mechanism regular block edits already use (collaboration_ws.py's field_update
     passthrough) - other viewers of this same protocol see the refresh/sync/undo live with
     no new frontend WS handling needed."""
-    get_redis_sync().publish(
+    publish_best_effort(
         protocol_channel(protocol_id),
         json.dumps({
             "type": "field_update",
@@ -78,9 +80,16 @@ def _ensure_block_not_locked_by_other(protocol_id: int, protocol_element_block_i
     proceeds normally when nobody holds it - most writes never acquire a lock at all (matrix
     row/column edits, attendance batch edits, anything outside the click-to-edit text/config
     fields) and must keep working - or when the caller itself is the holder."""
-    holder = conflicting_lock_holder_sync(
-        get_redis_sync(), protocol_id, f"block-{protocol_element_block_id}", user.user_id
-    )
+    try:
+        holder = conflicting_lock_holder_sync(
+            get_redis_sync(), protocol_id, f"block-{protocol_element_block_id}", user.user_id
+        )
+    except RedisError:
+        # Die Feldsperren sind eine Komfortschicht der Live-Bearbeitung, nicht die Quelle der
+        # Wahrheit (dafür gibt es expected_content/config_version). Ist Redis nicht erreichbar,
+        # wird gespeichert statt mit 500 abzubrechen (Concurrency-Audit CONC-011).
+        logging.getLogger(__name__).warning("Feldsperre für Block %s nicht prüfbar (Redis)", protocol_element_block_id, exc_info=True)
+        return
     if holder is not None:
         raise HTTPException(
             status_code=409,

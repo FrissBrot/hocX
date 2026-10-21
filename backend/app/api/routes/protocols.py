@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from app.core.cycle_utils import format_cycle_name
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.core.db import get_db
-from app.core.redis_client import get_redis_sync
+from app.core.redis_client import publish_best_effort
 from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolListCycle, ProtocolRead, ProtocolTemplateSyncRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
 from app.schemas.deletion import DeletionPreview, DeletionRequest, DeletionResultRead
 from app.services import deletion_service, document_render_jobs, protocol_period_service, public_id_service
@@ -36,7 +36,7 @@ event_service = EventService()
 def _broadcast_template_synced(protocol_id: int, user: CurrentUser) -> None:
     """Offene Editoren dieses Protokolls laden nach einem Vorlagen-Abgleich neu (Blöcke
     wurden ersetzt/ergänzt) - gleicher Kanal wie protocol_elements._broadcast_block_update."""
-    get_redis_sync().publish(
+    publish_best_effort(
         protocol_channel(protocol_id),
         json.dumps({
             "type": "field_update",

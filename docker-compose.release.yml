@@ -71,6 +71,9 @@ services:
     # eine Sitzung als beliebiger Nutzer erzeugen koennen.
     networks:
       - cache
+    # maxmemory unter dem Containerlimit (256m), noeviction: bei Speicherdruck scheitern Schreibbefehle
+    # (Auth-Pfade fail-closed) statt dass der OOM-Killer Redis beendet - eine Verdrängungs-Policy
+    # könnte Login-Sperrzähler und MFA-Flows verdrängen (Security-Review Paket 6).
     # Passwort aus dem Secret (MAIN-OPS-005), nicht als Argument (sonst in der Prozessliste
     # sichtbar): Konfigurationsdatei schreiben, dann wie gewohnt über das Entrypoint-Skript
     # starten, das auf den Benutzer redis wechselt.
@@ -81,7 +84,7 @@ services:
       - -c
       - >-
         umask 027 &&
-        printf 'requirepass %s\n' "$$(cat /run/secrets/redis_password)" > /tmp/redis.conf &&
+        printf 'requirepass %s\nmaxmemory 200mb\nmaxmemory-policy noeviction\n' "$$(cat /run/secrets/redis_password)" > /tmp/redis.conf &&
         chown root:redis /tmp/redis.conf &&
         exec docker-entrypoint.sh redis-server /tmp/redis.conf
     healthcheck:
