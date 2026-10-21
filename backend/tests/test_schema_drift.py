@@ -26,11 +26,8 @@ from app.models import *  # noqa: F401,F403  (registers every model onto Base.me
 # Investigated and confirmed harmless (see audit finding F-Niedrig-3):
 #  - audit_log: deliberately has no ORM model (AuditService writes it via raw SQL only, see
 #    its docstring/module) - not missing from a migration, just never meant to be ORM-mapped.
-#  - attendance_fine_merged_duplicate: Prüfkopie der in Migration 0116 zusammengeführten
-#    doppelten Bussen, wird von der Anwendung nicht gelesen oder geschrieben.
 _KNOWN_UNMAPPED_TABLES = {
     "audit_log",
-    "attendance_fine_merged_duplicate",
     # Archiv der Migration 0118 (STUDIO-008), nur für den Downgrade
     "document_style_legacy",
     "document_recipe_legacy",

@@ -8,6 +8,32 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Datenschutz (Datenschutz-Audit vom 2026-10-21, Paket 1)
+
+- **Statistik:** Bussen und Anwesenheit je Person sehen nur noch Schreibende, Kassier und Admins.
+  Leser sehen dort ihre eigenen Werte, auch in PDF-Diagrammen. Mandanten-Admins können die
+  Ranglisten unter Mandanten-Einstellungen → Datenschutz für alle freigeben (Migration `0138`,
+  standardmässig aus). Finanzzahlen in der Statistik nur noch mit gebuchtem Modul Finanzen.
+- **Fehlerprotokoll:** keine Werte aus SQL-Parametern oder Postgres-Details mehr
+  (`hide_parameters`, Redaktion von E-Mail-Adressen). Der Auslöser wird als Konto-ID gespeichert
+  und beim Anzeigen aufgelöst; nach dem Löschen eines Kontos bleibt keine Adresse zurück
+  (Migration `0139`, leert bestehende Adressen). Fehler werden dem Mandanten des Kontos zugeordnet.
+- **Kalender-Abos** übertragen standardmässig nur Titel und Datum (Migration `0140`, bestehende
+  Abos unverändert).
+- **Offline-Entwürfe** im Browser gehören dem angemeldeten Konto und werden beim Abmelden
+  gelöscht (Rückfrage bei ungesendeten Änderungen).
+- **Freigabelinks:** gelöschte Fotos verschwinden aus Dateilinks; ein Dateilink liefert nur Dateien
+  seines Mandanten.
+- **Fristen** für Upload- und Analyse-Jobs (30 Tage), Abgabebox-Uploadverlauf (90 Tage),
+  Betriebsereignisse (2 Jahre), entschiedene Verifizierungsanträge und Word-Import-Lernsignale
+  (1 Jahr) sowie widerrufene/abgelaufene Freigabelinks (90 Tage); Job `log_cleanup`.
+  Die Prüfkopie zusammengeführter Bussen aus Migration 0116 wird entfernt (Migration `0141`).
+- **Dumps:** Pre-Deploy-, Cron- und Restore-Sicherungen werden mit einem öffentlichen GPG-Schlüssel
+  verschlüsselt (`BACKUP_DUMP_PUBLIC_KEY_PATH`, RUNBOOK Abschnitt 10), Pre-Deploy-Dumps nach
+  30 Tagen entfernt. Unverschlüsselte Dumps gehen nur auf ein rclone-crypt-Remote, alte
+  Offsite-Kopien werden gelöscht.
+- Backends schreiben kein Access-Log mehr (Pfade enthielten Link-Tokens).
+
 ### Sicherheit (Security-Audit release/1.2.0 vom 2026-10-17)
 
 - **Mandantenimport:** Album-Freigaben und Vertrauensbeziehungen zu anderen Mandanten werden

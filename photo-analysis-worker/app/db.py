@@ -24,7 +24,7 @@ def _resolve_database_url() -> str:
 
 
 def build_engine() -> Engine:
-    return create_engine(_resolve_database_url(), future=True, pool_pre_ping=True)
+    return create_engine(_resolve_database_url(), future=True, pool_pre_ping=True, hide_parameters=True)
 
 
 def claim_next_job(engine: Engine) -> dict | None:

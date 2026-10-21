@@ -227,7 +227,7 @@ def _insert_maintenance(database_url: str) -> None:
     from sqlalchemy import create_engine, text
     from sqlalchemy.pool import NullPool
 
-    engine = create_engine(database_url, poolclass=NullPool)
+    engine = create_engine(database_url, poolclass=NullPool, hide_parameters=True)
     try:
         with engine.begin() as conn:
             conn.execute(text("""

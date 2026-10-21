@@ -113,6 +113,14 @@ class Settings(BaseSettings):
     docker_api_url: str | None = None
     system_monitor_interval_seconds: int = 30
     health_event_retention_days: int = 90
+    # Fristen für Job-/Ereignistabellen (app/services/retention_service.py, Datenschutz-Audit
+    # PRIV-011). 0 schaltet eine Regel ab.
+    upload_job_retention_days: int = 30
+    submission_upload_log_retention_days: int = 90
+    operations_event_retention_days: int = 730
+    identity_request_retention_days: int = 365
+    word_import_outcome_retention_days: int = 365
+    inactive_share_link_retention_days: int = 90
     # How often the cycle-snapshot loop checks whether any CycleConfig's reset boundary
     # was crossed since the last snapshot (see main.py's cycle_snapshot_loop and
     # table_snapshot_service.run_due_cycle_snapshots). Daily is enough - a cycle boundary

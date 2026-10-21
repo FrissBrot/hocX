@@ -47,5 +47,6 @@
   "totalCountSub": "{count} gesamt",
   "viewByMember": "Pro Mitglied",
   "viewByTime": "Über Zeit",
-  "withParticipants": "Mit Teilnehmern"
+  "withParticipants": "Mit Teilnehmern",
+  "perPersonOwnHint": "Bei Bussen und Anwesenheit je Person siehst du nur deine eigenen Werte."
 }

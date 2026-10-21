@@ -29,7 +29,8 @@ def migration(db, monkeypatch):
     conn = db.connection()
     conn.execute(text("DROP INDEX uq_attendance_fine_participant"))
     conn.execute(text("DROP INDEX uq_attendance_fine_name"))
-    conn.execute(text("DROP TABLE attendance_fine_merged_duplicate"))
+    # Seit 0141 gibt es die Prüfkopie auf head nicht mehr.
+    conn.execute(text("DROP TABLE IF EXISTS attendance_fine_merged_duplicate"))
     return module
 
 

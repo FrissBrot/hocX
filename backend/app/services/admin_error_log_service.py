@@ -5,7 +5,9 @@ from datetime import timedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import SystemErrorLog, Tenant
+from sqlalchemy.orm import aliased
+
+from app.models import AppUser, PlatformAdmin, SystemErrorLog, Tenant
 from app.schemas.admin import SystemErrorLogFilterOptions, SystemErrorLogPage, SystemErrorLogRead
 from app.services import public_id_service
 
@@ -25,7 +27,15 @@ class AdminErrorLogService:
         limit: int = DEFAULT_PAGE_SIZE,
         offset: int = 0,
     ) -> SystemErrorLogPage:
-        query = db.query(SystemErrorLog, Tenant.name).outerjoin(Tenant, SystemErrorLog.tenant_id == Tenant.id)
+        # Akteur über die ID auflösen (0139, PRIV-002): ist das Konto gelöscht, bleibt das Feld leer.
+        actor_user = aliased(AppUser)
+        actor_admin = aliased(PlatformAdmin)
+        query = (
+            db.query(SystemErrorLog, Tenant.name, actor_user.email, actor_admin.email)
+            .outerjoin(Tenant, SystemErrorLog.tenant_id == Tenant.id)
+            .outerjoin(actor_user, SystemErrorLog.actor_user_id == actor_user.id)
+            .outerjoin(actor_admin, SystemErrorLog.actor_admin_id == actor_admin.id)
+        )
         if tenant_id is not None:
             query = query.filter(SystemErrorLog.tenant_id == tenant_id)
         if error_type is not None:
@@ -41,7 +51,7 @@ class AdminErrorLogService:
                 source=entry.source,
                 tenant_id=public_id_service.resolve_public_id(db, Tenant, entry.tenant_id) if entry.tenant_id is not None else None,
                 tenant_name=tenant_name,
-                actor_email=entry.actor_email,
+                actor_email=user_email or admin_email or entry.actor_email,
                 request_method=entry.request_method,
                 request_path=entry.request_path,
                 status_code=entry.status_code,
@@ -50,7 +60,7 @@ class AdminErrorLogService:
                 traceback=entry.traceback,
                 created_at=entry.created_at,
             )
-            for entry, tenant_name in rows
+            for entry, tenant_name, user_email, admin_email in rows
         ]
         return SystemErrorLogPage(items=items, total=total)
 

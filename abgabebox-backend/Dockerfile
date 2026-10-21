@@ -18,4 +18,5 @@ USER abgabebox
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# Kein Access-Log: Pfade enthalten Link-Tokens (Datenschutz-Audit PRIV-025).
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--no-access-log"]

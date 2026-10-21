@@ -134,5 +134,13 @@
   "seatsOf": "of {limit} seats",
   "seatsUnlimited": "seats, unlimited",
   "seatsFree": "{count, plural, one {# seat free} other {# seats free}}",
-  "noFilesYet": "no files stored yet"
+  "noFilesYet": "no files stored yet",
+  "privacy": {
+    "intro": "Decide who sees which personal data. Applies to all members of this organisation.",
+    "statisticsTitle": "Statistics",
+    "statisticsPerPersonPublic": "Fines and attendance per person visible to everyone",
+    "statisticsPerPersonPublicHint": "Off: members with read access only see their own figures in the statistics. Writers, treasurers and admins always see everyone.",
+    "saved": "Saved",
+    "saveFailed": "Saving failed"
+  }
 }

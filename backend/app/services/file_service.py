@@ -27,6 +27,7 @@ from app.models.entities import (
     PhotoAlbum,
     PhotoAlbumItem,
     PhotoAnalysisJob,
+    ShareLinkFile,
     SubmissionAssignment,
     SubmissionUploadFile,
     WordImportDocument,
@@ -1813,6 +1814,8 @@ class FileService:
         # Ist die Datei Original eines Dokuments, verschwinden Dokument und daraus erzeugte
         # Dateien (PDF) mit ihr.
         document_service.release_original(db, stored_file.id)
+        # Freigabelink-Einträge haben keinen Fremdschlüssel auf die Datei (PRIV-016).
+        db.execute(delete(ShareLinkFile).where(ShareLinkFile.file_id == stored_file.public_id))
         self.stored_file_repository.delete(db, stored_file)
         db.flush()
         # Löschung über das Journal: eine laufende Migration übernimmt sie, die Datei taucht im

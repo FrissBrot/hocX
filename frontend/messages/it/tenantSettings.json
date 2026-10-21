@@ -134,5 +134,13 @@
   "seatsOf": "di {limit} posti",
   "seatsUnlimited": "posti, illimitati",
   "seatsFree": "{count, plural, one {# posto libero} other {# posti liberi}}",
-  "noFilesYet": "nessun file salvato"
+  "noFilesYet": "nessun file salvato",
+  "privacy": {
+    "intro": "Stabilisce chi vede quali dati personali. Vale per tutti i membri di questa organizzazione.",
+    "statisticsTitle": "Statistiche",
+    "statisticsPerPersonPublic": "Multe e presenze per persona visibili a tutti",
+    "statisticsPerPersonPublicHint": "Disattivato: i membri con accesso in lettura vedono nelle statistiche solo i propri valori. Redattori, cassieri e amministratori vedono sempre tutti.",
+    "saved": "Salvato",
+    "saveFailed": "Salvataggio non riuscito"
+  }
 }

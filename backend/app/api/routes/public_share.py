@@ -54,10 +54,14 @@ def _clean_stored_files_for_link(db: Session, link: ShareLink) -> list[StoredFil
     file_ids = share_link_service.file_ids_for_link(db, link)
     if not file_ids:
         return []
-    rows = {
-        row.public_id: row
-        for row in db.scalars(select(StoredFile).where(StoredFile.public_id.in_(file_ids), StoredFile.scan_status == "clean"))
-    }
+    statement = select(StoredFile).where(StoredFile.public_id.in_(file_ids), StoredFile.scan_status == "clean")
+    if link.album_id is None:
+        # Dateilinks enthalten nur eigene Dateien (beim Anlegen geprüft). Öffentliche Sessions haben
+        # keinen RLS-Kontext - die Bindung an den Link-Mandanten hier ist das Netz dafür, dass ein
+        # verwaister Eintrag nie eine fremde Datei mit derselben public_id ausliefert (PRIV-016).
+        # Album-Links (auch geteilte Partner-Alben) prüft file_ids_for_link selbst.
+        statement = statement.where(StoredFile.tenant_id == link.tenant_id)
+    rows = {row.public_id: row for row in db.scalars(statement)}
     # Preserve the link's own file order (album order / selection order), not the id-set's.
     return [rows[file_id] for file_id in file_ids if file_id in rows]
 

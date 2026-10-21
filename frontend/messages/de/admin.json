@@ -389,7 +389,7 @@
       },
       "log_cleanup": {
         "title": "Protokolle aufräumen",
-        "description": "Löscht alte Einträge aus Audit-Log, Fehlerprotokoll und Job-Verlauf."
+        "description": "Löscht alte Einträge aus Audit-Log, Fehlerprotokoll, Job- und Ereignisverläufen sowie abgelaufene Freigabelinks."
       },
       "abgabebox_quarantine_cleanup": {
         "title": "Quarantäne aufräumen",

@@ -287,7 +287,7 @@ def smoke_test_database(database_url: str) -> dict[str, Any]:
     from app.db.base import Base
     from app.models import AppUser, Tenant
 
-    engine = create_engine(database_url, poolclass=NullPool)
+    engine = create_engine(database_url, poolclass=NullPool, hide_parameters=True)
     problems: list[str] = []
     try:
         with Session(engine) as session:

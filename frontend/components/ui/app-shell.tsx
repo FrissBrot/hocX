@@ -15,7 +15,8 @@ import { SessionInfo } from "@/types/api";
 import { buildNav, formatRoleLabel, isNavLinkActive, NavLink } from "@/components/ui/app-shell-nav";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ToastProvider, useToast } from "@/contexts/toast-context";
-import { ConfirmProvider } from "@/contexts/confirm-context";
+import { ConfirmProvider, useConfirm } from "@/contexts/confirm-context";
+import { clearOfflineStore, getOfflineSnapshot } from "@/lib/offline-store";
 import { ProfileModal } from "@/components/ui/profile-modal";
 import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
 import { ConnectivityStatus } from "@/components/ui/connectivity-status";
@@ -65,6 +66,7 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
 function AppShellInner({ children, initialSession = null }: { children: ReactNode; initialSession?: SessionInfo | null }) {
   const t = useTranslations("nav");
   const tSettings = useTranslations("settings");
+  const confirm = useConfirm();
   const tCommon = useTranslations("common");
   const showToast = useToast();
   const isMobile = useIsMobile();
@@ -216,8 +218,15 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   }
 
   async function logout() {
+    // Ungesendete Änderungen gehen beim Abmelden verloren - die Ablage wird geleert, damit auf
+    // einem geteilten Gerät kein Protokolltext zurückbleibt (Datenschutz-Audit PRIV-019).
+    if (getOfflineSnapshot().pending > 0) {
+      const ok = await confirm({ tone: "danger", message: tSettings("logoutPendingConfirm"), confirmLabel: tSettings("logoutAnyway") });
+      if (!ok) return;
+    }
     try {
       await browserApiFetch("/api/auth/logout", { method: "POST" });
+      clearOfflineStore();
       window.sessionStorage.removeItem("hocx-tenant-prompted");
       redirectToLogin(router);
     } catch {
@@ -260,7 +269,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
 
   return (
     <main className={`app-frame${isProtocolWriting ? " app-frame-writing" : ""}${protocolExitAnimation ? " app-frame-protocol-exit" : ""}`}>
-      <ConnectivityStatus />
+      <ConnectivityStatus userId={session?.user?.id ?? null} />
       <div className="shell">
         {isProtocolWriting && (
           <div

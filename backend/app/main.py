@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import admin, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
+from app.api.routes import admin, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
@@ -19,7 +19,7 @@ from app.core.error_log import best_effort_actor_from_request, record_system_err
 from app.core.redis_client import close_redis_pool
 from app.core.security import hash_password
 from app.models import AppUser, ElementType, PlatformAdmin, Role, Tenant
-from app.services import document_sync_service, domain_health_check_service, traefik_config_service
+from app.services import document_sync_service, domain_health_check_service, retention_service, traefik_config_service
 from app.services.admin_error_log_service import AdminErrorLogService
 from app.services.admin_job_status_service import AdminJobStatusService
 from app.services.audit_service import AuditService
@@ -267,6 +267,7 @@ async def log_cleanup_loop() -> None:
         error_log_service.cleanup_old_entries(db, retention_days=settings.error_log_retention_days)
         job_status_service.cleanup_old_runs(db, retention_days=settings.job_run_retention_days)
         system_alert_service.cleanup_old_events(db, retention_days=settings.health_event_retention_days)
+        retention_service.cleanup(db)
 
     await run_advisory_locked_loop(
         name="log_cleanup",
@@ -556,8 +557,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     precedence, so normal curated 4xx responses are unaffected by this."""
     db = SessionLocal()
     try:
-        tenant_id, actor_email = best_effort_actor_from_request(db, request)
-        record_system_error(db, exc=exc, request=request, tenant_id=tenant_id, actor_email=actor_email, status_code=500)
+        tenant_id, actor_user_id, actor_admin_id = best_effort_actor_from_request(db, request)
+        record_system_error(db, exc=exc, request=request, tenant_id=tenant_id, actor_user_id=actor_user_id, actor_admin_id=actor_admin_id, status_code=500)
     finally:
         db.close()
     return JSONResponse(status_code=500, content={"detail": "Ein interner Fehler ist aufgetreten."})
@@ -580,8 +581,8 @@ async def storage_unavailable_handler(request: Request, exc: StorageUnavailable)
     statt 500 - der Zustand ist vorübergehend, nichts wurde inkonsistent bestätigt."""
     db = SessionLocal()
     try:
-        tenant_id, actor_email = best_effort_actor_from_request(db, request)
-        record_system_error(db, exc=exc, request=request, tenant_id=tenant_id, actor_email=actor_email, status_code=503)
+        tenant_id, actor_user_id, actor_admin_id = best_effort_actor_from_request(db, request)
+        record_system_error(db, exc=exc, request=request, tenant_id=tenant_id, actor_user_id=actor_user_id, actor_admin_id=actor_admin_id, status_code=503)
     finally:
         db.close()
     return JSONResponse(
@@ -604,8 +605,8 @@ async def logged_http_exception_handler(request: Request, exc: HTTPException):
     if exc.status_code >= 400 and exc.__cause__ is not None and not isinstance(exc.__cause__, ValueError):
         db = SessionLocal()
         try:
-            tenant_id, actor_email = best_effort_actor_from_request(db, request)
-            record_system_error(db, exc=exc.__cause__, request=request, tenant_id=tenant_id, actor_email=actor_email, status_code=exc.status_code)
+            tenant_id, actor_user_id, actor_admin_id = best_effort_actor_from_request(db, request)
+            record_system_error(db, exc=exc.__cause__, request=request, tenant_id=tenant_id, actor_user_id=actor_user_id, actor_admin_id=actor_admin_id, status_code=exc.status_code)
         finally:
             db.close()
     return await http_exception_handler(request, exc)
@@ -626,6 +627,7 @@ app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(documents.router, prefix="/api", tags=["documents"])
 app.include_router(document_studio.router, prefix="/api", tags=["document-studio"])
 app.include_router(document_verification.router, prefix="/api", tags=["documents"])
+app.include_router(privacy_settings.router, prefix="/api", tags=["privacy"])
 app.include_router(templates.router, prefix="/api", tags=["templates"])
 app.include_router(cycle_configs.router, prefix="/api", tags=["cycle-configs"])
 app.include_router(task_packages.router, prefix="/api", tags=["task-packages"])

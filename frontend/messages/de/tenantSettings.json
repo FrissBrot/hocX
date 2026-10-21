@@ -134,5 +134,13 @@
   "seatsOf": "von {limit} Plätzen",
   "seatsUnlimited": "Plätze, unbegrenzt",
   "seatsFree": "{count, plural, one {# Platz frei} other {# Plätze frei}}",
-  "noFilesYet": "noch keine Dateien gespeichert"
+  "noFilesYet": "noch keine Dateien gespeichert",
+  "privacy": {
+    "intro": "Legt fest, wer welche Personendaten sieht. Gilt für alle Mitglieder dieses Vereins.",
+    "statisticsTitle": "Statistik",
+    "statisticsPerPersonPublic": "Bussen und Anwesenheit je Person für alle sichtbar",
+    "statisticsPerPersonPublicHint": "Aus: Mitglieder mit Leserecht sehen in der Statistik nur ihre eigenen Werte. Schreibende, Kassier und Admins sehen immer alle.",
+    "saved": "Gespeichert",
+    "saveFailed": "Speichern fehlgeschlagen"
+  }
 }

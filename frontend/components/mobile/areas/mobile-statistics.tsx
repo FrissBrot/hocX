@@ -9,6 +9,7 @@ import { MobileCard, MobileCardHeader, MobileEmpty, MobileListRow, MobileSegment
 import { Modal } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
 import { toIntlLocale } from "@/lib/utils/format";
+import { StatusBanner } from "@/components/ui/status-banner";
 import { fineTotalsByCurrency, formatFineTotals } from "@/lib/utils/fine-stats";
 import type { StatisticsOverview } from "@/types/api";
 
@@ -118,6 +119,7 @@ export function MobileStatistics({ data }: { data: StatisticsOverview | null }) 
           <MobileStat label={t("kpiTodos")} value={data.todos.open} sub={tMobile("stats.todosDone", { count: data.todos.done })} />
           <MobileStat label={t("kpiFinesAmount")} value={formatFineTotals(fineTotals, (amount) => money(amount, locale))} sub={tMobile("stats.finesCount", { count: finesCount })} />
         </div>
+        {data.per_person_scope === "own" ? <StatusBanner tone="neutral" message={t("perPersonOwnHint")} /> : null}
         <MobileCard className="mobile-chart-card">
           <MobileCardHeader label={t("chartAttendance")} />
           {attendance.length > 0 ? (

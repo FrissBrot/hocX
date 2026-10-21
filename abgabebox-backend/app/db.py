@@ -9,7 +9,7 @@ from sqlalchemy.pool import NullPool
 from app import link_scope  # noqa: F401  registriert den RLS-Hook (after_begin) für alle Sessions
 from app.config import settings
 
-engine = create_engine(settings.database_url, future=True, pool_pre_ping=True)
+engine = create_engine(settings.database_url, future=True, pool_pre_ping=True, hide_parameters=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 
@@ -72,7 +72,7 @@ def tenant_upload_lock(tenant_id: int) -> Iterator[None]:
 # survives the upload log's commits without consuming the request connection pool.
 # Transaction scope releases the lock on errors, cancellation and connection loss.
 UPLOAD_LOCK_NAMESPACE = 909100001
-_upload_lock_engine = create_engine(settings.database_url, poolclass=NullPool)
+_upload_lock_engine = create_engine(settings.database_url, poolclass=NullPool, hide_parameters=True)
 
 
 @asynccontextmanager

@@ -2,7 +2,10 @@
   "profileModal": {
     "title": "Benutzerprofil",
     "description": "Persönliche Einstellungen, Sprache und Sicherheit deines Kontos.",
-    "tabs": { "profile": "Profil", "security": "Sicherheit" },
+    "tabs": {
+      "profile": "Profil",
+      "security": "Sicherheit"
+    },
     "languageLabel": "Sprache",
     "accordionLabel": "Protokollpunkte automatisch einklappen",
     "accordionHint": "Nur den aktiven Punkt geöffnet anzeigen.",
@@ -10,5 +13,7 @@
     "logout": "Logout",
     "saveFailed": "Profil konnte nicht gespeichert werden."
   },
-  "logoutFailed": "Abmelden fehlgeschlagen. Bitte erneut versuchen."
+  "logoutFailed": "Abmelden fehlgeschlagen. Bitte erneut versuchen.",
+  "logoutPendingConfirm": "Es gibt noch nicht gespeicherte Änderungen. Beim Abmelden gehen sie auf diesem Gerät verloren.",
+  "logoutAnyway": "Trotzdem abmelden"
 }

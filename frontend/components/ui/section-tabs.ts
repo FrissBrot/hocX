@@ -50,5 +50,6 @@ export function tenantSettingsTabs(t: TFunc): RouteTab[] {
     { href: "/tenant-settings/domains", label: t("domains") },
     { href: "/tenant-settings/abo", label: t("subscriptionAndUsage") },
     { href: "/tenant-settings/verification", label: t("documentVerification") },
+    { href: "/tenant-settings/privacy", label: t("privacy") },
   ];
 }

@@ -47,7 +47,7 @@ def _record_ws_error(exc: Exception, user: CurrentUser) -> None:
     with nothing in system_error_log to show for it."""
     db = SessionLocal()
     try:
-        record_system_error(db, exc=exc, tenant_id=user.current_tenant_id, actor_email=user.email, source="backend")
+        record_system_error(db, exc=exc, tenant_id=user.current_tenant_id, actor_user_id=user.user_id)
     finally:
         db.close()
 

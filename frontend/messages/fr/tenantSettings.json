@@ -134,5 +134,13 @@
   "seatsOf": "sur {limit} places",
   "seatsUnlimited": "places, illimité",
   "seatsFree": "{count, plural, one {# place libre} other {# places libres}}",
-  "noFilesYet": "aucun fichier enregistré"
+  "noFilesYet": "aucun fichier enregistré",
+  "privacy": {
+    "intro": "Définit qui voit quelles données personnelles. S’applique à tous les membres de cette organisation.",
+    "statisticsTitle": "Statistiques",
+    "statisticsPerPersonPublic": "Amendes et présences par personne visibles par tous",
+    "statisticsPerPersonPublicHint": "Désactivé : les membres en lecture ne voient que leurs propres valeurs dans les statistiques. Rédacteurs, caissiers et administrateurs voient toujours tout le monde.",
+    "saved": "Enregistré",
+    "saveFailed": "Échec de l’enregistrement"
+  }
 }

@@ -389,7 +389,7 @@
       },
       "log_cleanup": {
         "title": "Clean up logs",
-        "description": "Deletes old audit log, error log and job history entries."
+        "description": "Deletes old entries from the audit log, error log, job and event histories, and expired share links."
       },
       "abgabebox_quarantine_cleanup": {
         "title": "Clean up quarantine",

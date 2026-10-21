@@ -1646,6 +1646,8 @@ export type StatisticsOverview = {
   protocols_total: number;
   cycles: { cycle_config_id: string; cycle_config_name: string; cycle_year: number; label: string }[];
   groups_stats: { group_name: string; cycle_config_id: string | null; cycle_year: number | null; session_count: number; session_count_with_participants: number; avg_participants: number }[];
+  /** "own": Bussen/Anwesenheit je Person enthalten nur die eigene Zeile (Leser, PRIV-001). */
+  per_person_scope?: "all" | "own";
 };
 
 // ── Aufgabenpakete ───────────────────────────────────────────────────────

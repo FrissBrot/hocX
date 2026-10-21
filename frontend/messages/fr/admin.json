@@ -389,7 +389,7 @@
       },
       "log_cleanup": {
         "title": "Nettoyer les journaux",
-        "description": "Supprime les anciennes entrées du journal d'audit, du journal des erreurs et de l'historique des tâches."
+        "description": "Supprime les anciennes entrées du journal d'audit, du journal des erreurs, des historiques de tâches et d'événements ainsi que les liens de partage expirés."
       },
       "abgabebox_quarantine_cleanup": {
         "title": "Nettoyer la quarantaine",

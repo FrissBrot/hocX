@@ -2,7 +2,10 @@
   "profileModal": {
     "title": "Profil utilisateur",
     "description": "Paramètres personnels, langue et sécurité de votre compte.",
-    "tabs": { "profile": "Profil", "security": "Sécurité" },
+    "tabs": {
+      "profile": "Profil",
+      "security": "Sécurité"
+    },
     "languageLabel": "Langue",
     "accordionLabel": "Réduire automatiquement les points du procès-verbal",
     "accordionHint": "N'afficher développé que le point actif.",
@@ -10,5 +13,7 @@
     "logout": "Se déconnecter",
     "saveFailed": "Le profil n'a pas pu être enregistré."
   },
-  "logoutFailed": "Échec de la déconnexion. Veuillez réessayer."
+  "logoutFailed": "Échec de la déconnexion. Veuillez réessayer.",
+  "logoutPendingConfirm": "Des modifications ne sont pas encore enregistrées. En te déconnectant, elles seront perdues sur cet appareil.",
+  "logoutAnyway": "Se déconnecter quand même"
 }

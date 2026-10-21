@@ -3,6 +3,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 import {
+  bindOfflineStoreToUser,
   discardBlockedMutations,
   flushOutbox,
   getOfflineServerSnapshot,
@@ -12,11 +13,15 @@ import {
   subscribeOfflineStore,
 } from "@/lib/offline-store";
 
-export function ConnectivityStatus() {
+export function ConnectivityStatus({ userId }: { userId?: string | null }) {
   const t = useTranslations("common.connectivity");
   const state = useSyncExternalStore(subscribeOfflineStore, getOfflineSnapshot, getOfflineServerSnapshot);
 
   useEffect(() => {
+    // Zuerst binden: die Outbox eines anderen Kontos darf nie mit dieser Session gesendet werden.
+    // Ohne bekanntes Konto (Session lädt noch) wird nichts gesendet.
+    if (!userId) return;
+    bindOfflineStoreToUser(userId);
     initializeOfflineStore();
     const online = () => { setNetworkOnline(true); void flushOutbox(); };
     const offline = () => setNetworkOnline(false);
@@ -27,7 +32,7 @@ export function ConnectivityStatus() {
       window.removeEventListener("online", online);
       window.removeEventListener("offline", offline);
     };
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {

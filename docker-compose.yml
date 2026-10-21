@@ -277,7 +277,7 @@ services:
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       # Generiert die Router fuer Mandanten-Custom-Domains, gemeinsam mit Traefik (ro-Mount oben)
       - ./infra/traefik/dynamic:/app/traefik_dynamic
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 75"
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 75 --no-access-log"
     healthcheck:
       # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
       # einen simplen Liveness-Check gegen den Health-Endpoint aus app/main.py.
@@ -564,7 +564,7 @@ services:
     volumes:
       - ./abgabebox-backend:/app
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/storage
-    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --no-access-log"
     healthcheck:
       # Kein curl im python:3.13-slim-Image (siehe Audit), analog zum Haupt-Backend oben.
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]

@@ -15,6 +15,7 @@ allowed to replace or mask the original error being handled.
 from __future__ import annotations
 
 import logging
+import re
 import traceback as traceback_module
 
 from fastapi import Request
@@ -27,6 +28,23 @@ logger = logging.getLogger(__name__)
 _MAX_MESSAGE_LENGTH = 4000
 _MAX_TRACEBACK_LENGTH = 20000
 
+# Personendaten aus Fehlertexten entfernen (Datenschutz-Audit PRIV-002). Die Engines laufen mit
+# hide_parameters=True; das hier fängt ab, was trotzdem im Text steht: Postgres-Details bei
+# Constraint-Verletzungen, E-Mail-Adressen in eigenen Meldungen, Parameterblöcke fremder Engines.
+_REDACTIONS = (
+    # DETAIL:  Key (email)=(max@example.ch) already exists.  /  Failing row contains (...)
+    (re.compile(r"(Key \([^)]*\)=\().*?(\) (?:already exists|is not present|is still referenced|conflicts))"), r"\1<redacted>\2"),
+    (re.compile(r"(Failing row contains \().*(\)\.?)$", re.M), r"\1<redacted>\2"),
+    (re.compile(r"\[parameters: .*?\](?=\n|$)", re.S | re.M), "[parameters: <redacted>]"),
+    (re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"), "<email>"),
+)
+
+
+def redact(text: str) -> str:
+    for pattern, replacement in _REDACTIONS:
+        text = pattern.sub(replacement, text)
+    return text
+
 
 def record_system_error(
     db: Session,
@@ -34,21 +52,25 @@ def record_system_error(
     exc: Exception,
     request: Request | None = None,
     tenant_id: int | None = None,
-    actor_email: str | None = None,
+    actor_user_id: int | None = None,
+    actor_admin_id: int | None = None,
     status_code: int | None = None,
     source: str = "backend",
 ) -> None:
+    """Akteure nur als ID (PRIV-002): die Admin-Ansicht löst die E-Mail beim Lesen auf, nach dem
+    Löschen des Kontos bleibt nichts zurück."""
     try:
         entry = SystemErrorLog(
             source=source,
             tenant_id=tenant_id,
-            actor_email=actor_email,
+            actor_user_id=actor_user_id,
+            actor_admin_id=actor_admin_id,
             request_method=request.method if request is not None else None,
             request_path=request.url.path if request is not None else None,
             status_code=status_code,
             error_type=type(exc).__name__,
-            error_message=str(exc)[:_MAX_MESSAGE_LENGTH],
-            traceback="".join(traceback_module.format_exception(type(exc), exc, exc.__traceback__))[:_MAX_TRACEBACK_LENGTH],
+            error_message=redact(str(exc))[:_MAX_MESSAGE_LENGTH],
+            traceback=redact("".join(traceback_module.format_exception(type(exc), exc, exc.__traceback__)))[:_MAX_TRACEBACK_LENGTH],
         )
         db.add(entry)
         db.commit()
@@ -57,10 +79,11 @@ def record_system_error(
         logger.exception("Failed to persist system_error_log entry (original error: %s: %s)", type(exc).__name__, exc)
 
 
-def best_effort_actor_from_request(db: Session, request: Request) -> tuple[int | None, str | None]:
+def best_effort_actor_from_request(db: Session, request: Request) -> tuple[int | None, int | None, int | None]:
     """Used only by the global safety-net handlers, where no route dependency has already
-    resolved the current user/admin. Returns (tenant_id, actor_email), best-effort - a
-    missing/invalid/expired cookie just yields (None, None), never raises."""
+    resolved the current user/admin. Returns (tenant_id, actor_user_id, actor_admin_id),
+    best-effort - a missing/invalid/expired cookie just yields Nones, never raises. Der Mandant
+    kommt aus dem Konto: Sessions tragen seit der Einzelmandanten-Umstellung kein tenant_id mehr."""
     from app.core.admin_security import parse_admin_session_token
     from app.core.config import settings
     from app.core.security import parse_session_token
@@ -70,13 +93,14 @@ def best_effort_actor_from_request(db: Session, request: Request) -> tuple[int |
         admin_data = parse_admin_session_token(admin_token)
         if admin_data is not None:
             admin = db.get(PlatformAdmin, int(admin_data["admin_id"]))
-            return None, (admin.email if admin is not None else None)
+            return None, None, (admin.id if admin is not None else None)
 
         user_token = request.cookies.get(settings.auth_session_cookie)
         user_data = parse_session_token(user_token)
         if user_data is not None:
             user = db.get(AppUser, int(user_data["user_id"]))
-            return user_data.get("tenant_id"), (user.email if user is not None else None)
+            if user is not None:
+                return user.tenant_id, user.id, None
     except Exception:
         logger.exception("best_effort_actor_from_request failed")
-    return None, None
+    return None, None, None

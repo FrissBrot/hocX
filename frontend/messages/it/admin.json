@@ -389,7 +389,7 @@
       },
       "log_cleanup": {
         "title": "Pulizia registri",
-        "description": "Elimina le voci vecchie del registro di audit, del registro errori e della cronologia dei job."
+        "description": "Elimina le voci vecchie del registro di audit, del registro errori, delle cronologie di job ed eventi e i link di condivisione scaduti."
       },
       "abgabebox_quarantine_cleanup": {
         "title": "Pulizia quarantena",

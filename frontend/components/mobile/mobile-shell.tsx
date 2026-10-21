@@ -124,7 +124,7 @@ export function MobileShell({
     <MobileSessionContext.Provider value={session}>
       <MobileMoreContext.Provider value={() => setMoreOpen(true)}>
       <div className="mobile-shell">
-        <ConnectivityStatus />
+        <ConnectivityStatus userId={session?.user?.id ?? null} />
         {/* Inhalt bleibt beim Oeffnen von "Mehr" montiert, damit Filter/Scrollposition erhalten bleiben. */}
         <div className="mobile-shell-content" hidden={moreOpen}>
           {children}

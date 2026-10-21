@@ -4,6 +4,7 @@ KEIN db.add()/db.refresh() - siehe Kommentar in app/models.py.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 
 from sqlalchemy import func, insert, select, text
@@ -342,6 +343,22 @@ def insert_full_upload(
     return upload_id
 
 
+# Personendaten aus Fehlertexten entfernen (Datenschutz-Audit PRIV-002), gleiche Regeln wie
+# backend/app/core/error_log.redact - bewusst kopiert, dieser Dienst importiert nichts aus dem Backend.
+_REDACTIONS = (
+    (re.compile(r"(Key \([^)]*\)=\().*?(\) (?:already exists|is not present|is still referenced|conflicts))"), r"\1<redacted>\2"),
+    (re.compile(r"(Failing row contains \().*(\)\.?)$", re.M), r"\1<redacted>\2"),
+    (re.compile(r"\[parameters: .*?\](?=\n|$)", re.S | re.M), "[parameters: <redacted>]"),
+    (re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"), "<email>"),
+)
+
+
+def redact(text: str) -> str:
+    for pattern, replacement in _REDACTIONS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
 def insert_error_log(
     db: Session,
     *,
@@ -362,8 +379,8 @@ def insert_error_log(
             request_path=request_path,
             status_code=status_code,
             error_type=error_type,
-            error_message=error_message[:4000],
-            traceback=(traceback or "")[:20000] or None,
+            error_message=redact(error_message)[:4000],
+            traceback=redact(traceback or "")[:20000] or None,
         )
     )
     db.commit()

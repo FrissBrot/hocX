@@ -221,7 +221,7 @@ def _verify(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupRestoreJob, v
 
 
 def _insert_window(database_url: str, job_id: uuid.UUID) -> uuid.UUID:
-    engine = create_engine(database_url, poolclass=NullPool)
+    engine = create_engine(database_url, poolclass=NullPool, hide_parameters=True)
     try:
         with engine.begin() as conn:
             return conn.execute(text("""
@@ -701,7 +701,7 @@ def run_tenant_copy(env: RunEnv, db: Session, ctx: jobs.JobCtx) -> str:
             # Verfügbare Objekte des Sicherungspunkts für die Export-Logik: als Hilfstabelle in der
             # temporären DB statt im Speicher (Installationen mit Millionen Objekten).
             jobs.progress(db, ctx, phase="collect")
-            temp_engine = create_engine(temp_url, poolclass=NullPool)
+            temp_engine = create_engine(temp_url, poolclass=NullPool, hide_parameters=True)
             try:
                 load_manifest_table(temp_engine, iter_manifest_slices(view, job.archive_name, metadata, work))
                 with Session(temp_engine) as temp_session, temp_engine.connect() as lookup_conn:

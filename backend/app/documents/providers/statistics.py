@@ -35,6 +35,17 @@ def _attendance(ctx: BuildContext, bounds):
     return stats.aggregate_attendance(stats.fetch_attendance_blocks(ctx.db, ctx.tenant_id, bounds))
 
 
+def _visible_people(ctx: BuildContext, people):
+    """Ranglisten je Person: Leser sehen nur sich selbst (PRIV-001), wie /statistics/overview."""
+    own_key = stats.own_person_key(ctx.db, ctx.user)
+    return list(people) if own_key is None else [person for person in people if person.key == own_key]
+
+
+def _visible_fine_rows(ctx: BuildContext, rows):
+    own_key = stats.own_person_key(ctx.db, ctx.user)
+    return list(rows) if own_key is None else [row for row in rows if row.participant_key == own_key]
+
+
 def provide_chart(ctx: BuildContext, spec: BlockSpec, params: ChartParams):
     if params.chart_type in FINANCE_CHARTS:
         ctx.require("finance")
@@ -59,6 +70,7 @@ def provide_chart(ctx: BuildContext, spec: BlockSpec, params: ChartParams):
         ]
     elif chart == "attendance_by_participant":
         _, people = _attendance(ctx, bounds)
+        people = _visible_people(ctx, people)
         top = sorted(people, key=lambda person: person.counts.total, reverse=True)[:15]
         categories = [person.name for person in top]
         kind, horizontal = "stacked_bar", True
@@ -76,7 +88,7 @@ def provide_chart(ctx: BuildContext, spec: BlockSpec, params: ChartParams):
         ]
     elif chart == "fines_by_participant":
         # Beträge verschiedener Währungen nicht addieren (MAIN-BE-019 aus main): Hauptwährung.
-        rows = _main_currency_rows(stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds))
+        rows = _main_currency_rows(_visible_fine_rows(ctx, stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds)))
         rows = sorted(rows, key=lambda row: float(row.amount or 0), reverse=True)[:10]
         categories = [row.name for row in rows]
         horizontal = True
@@ -180,13 +192,14 @@ def provide_table(ctx: BuildContext, spec: BlockSpec, params: StatTableParams):
     rows: list[TableRow] = []
     if params.table == "attendance_by_participant":
         _, people = _attendance(ctx, bounds)
+        people = _visible_people(ctx, people)
         columns = [col("name", "col.name", width="fill")] + [col(status, f"attendanceStatus.{status}", align="right") for status in ("present", "late", "excused", "absent")] + [col("rate", "col.rate", align="right")]
         for person in sorted(people, key=lambda item: sort_key(item.name)):
             counts = person.counts
             rows.append(TableRow(cells=[text_cell(person.name), *(amount_cell(str(getattr(counts, status))) for status in ("present", "late", "excused", "absent")), amount_cell(format_percent(counts.present + counts.late, counts.total))]))
     elif params.table == "fines_by_participant":
         columns = [col("name", "col.person", width="fill"), col("count", "col.count", align="right"), col("amount", "col.amount", align="right")]
-        for row in sorted(stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds), key=lambda item: float(item.amount or 0), reverse=True):
+        for row in sorted(_visible_fine_rows(ctx, stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds)), key=lambda item: float(item.amount or 0), reverse=True):
             rows.append(TableRow(cells=[text_cell(row.name), amount_cell(str(int(row.count))), amount_cell(f"{format_amount(row.amount)} {row.currency or ''}".strip())]))
     elif params.table == "groups":
         columns = [col("group", "col.group", width="fill"), col("sessions", "col.sessions", align="right"), col("with", "col.sessionsWithParticipants", align="right"), col("avg", "col.avgParticipants", align="right")]

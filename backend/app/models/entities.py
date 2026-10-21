@@ -86,6 +86,9 @@ class Tenant(Base, TimestampMixin):
     # hinweisen. Die Freigabelogik selbst steckt in der View document_verification_public.
     verify_show_identity: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
     verify_show_newer_version: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"), default=True)
+    # Bussen und Anwesenheit je Person in der Statistik für alle Mitglieder sichtbar (0138). Standard
+    # aus: Leser sehen dort nur ihre eigene Zeile, wie in der Bussenliste (Datenschutz-Audit PRIV-001).
+    statistics_per_person_public: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
     # Identität der Organisation durch einen Plattform-Admin bestätigt (Abzeichen auf der
     # Prüfseite). Eine Namensänderung hebt die Bestätigung auf (revoked_*).
     identity_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -1957,7 +1960,11 @@ class SystemErrorLog(Base):
     )
     source: Mapped[str] = mapped_column(Text, nullable=False)
     tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="SET NULL"))
+    # Veraltet (0139): neue Einträge verweisen über actor_user_id/actor_admin_id auf das Konto, damit
+    # nach dem Löschen einer Person keine E-Mail-Adresse im Protokoll zurückbleibt (PRIV-002).
     actor_email: Mapped[str | None] = mapped_column(Text)
+    actor_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    actor_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
     request_method: Mapped[str | None] = mapped_column(Text)
     request_path: Mapped[str | None] = mapped_column(Text)
     status_code: Mapped[int | None] = mapped_column(Integer)
@@ -2227,7 +2234,7 @@ class CalendarFeed(Base, TimestampMixin, UpdatedAtMixin):
     token_created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     todo_scope: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'mine'"), default="mine")
     include_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
-    hide_details: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    hide_details: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
