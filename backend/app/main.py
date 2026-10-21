@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
 from app.api.routes import activity, admin, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_share, retention, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenant_data_export, tenants, todos, users, word_import
+from app.core import runtime_metrics
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
@@ -492,7 +493,13 @@ async def lifespan(_: FastAPI):
         storage_journal_cleanup_task = asyncio.create_task(storage_journal_cleanup_loop())
         document_sync_task = asyncio.create_task(document_sync_loop())
         storage_purge_task = asyncio.create_task(storage_purge_loop())
+        runtime_metrics_task = asyncio.create_task(
+            runtime_metrics.run_monitor(
+                runtime_metrics.RuntimeReporter(settings.app_database_url or settings.database_url, settings.process_kind), engine
+            )
+        )
         yield
+        runtime_metrics_task.cancel()
         maintenance_supervisor_task.cancel()
         storage_journal_cleanup_task.cancel()
         document_sync_task.cancel()

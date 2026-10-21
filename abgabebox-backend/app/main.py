@@ -13,6 +13,7 @@ from sqlalchemy import text
 
 from app.captcha import captcha_configured, captcha_partially_configured
 from app.config import is_dev_or_test_environment, settings
+from app import runtime_metrics
 from app.db import SessionLocal, engine
 from app.repository import insert_error_log, upload_path_referenced
 from app.routes import public, verify
@@ -123,7 +124,12 @@ async def quarantine_cleanup_loop() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     cleanup_task = asyncio.create_task(quarantine_cleanup_loop())
+    # Laufzeitkennzahlen für /admin/system (Concurrency-Audit Paket 0, app/runtime_metrics.py).
+    runtime_metrics_task = asyncio.create_task(
+        runtime_metrics.run_monitor(runtime_metrics.RuntimeReporter(settings.database_url, "abgabebox-backend"), engine)
+    )
     yield
+    runtime_metrics_task.cancel()
     cleanup_task.cancel()
 
 

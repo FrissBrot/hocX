@@ -597,6 +597,43 @@ def _check_document_verification() -> HealthCheckRead:
     return HealthCheckRead(key="document_verification", status=status, params={"latencyMs": latency_ms})
 
 
+# Laufzeitkennzahlen der Dienstprozesse (core/runtime_metrics.py, Migration 0148).
+RUNTIME_REPORT_MAX_AGE = timedelta(seconds=60)
+RUNTIME_LAG_WARNING_MS = 1000
+RUNTIME_LAG_CRITICAL_MS = 10000
+
+
+def _check_runtime(db: Session, now: datetime) -> HealthCheckRead:
+    """Event-Loop-Verzögerung und Pool-/Threadpool-Sättigung aller Prozesse der letzten Minute.
+    Ein blockierter Event-Loop oder ein voller Pool trifft alle Mandanten dieses Workers - das
+    soll auffallen, bevor Nutzer Zeitüberschreitungen melden."""
+    rows = db.execute(
+        text("SELECT process_kind, metrics FROM system_runtime_metric WHERE reported_at >= :since"),
+        {"since": now - RUNTIME_REPORT_MAX_AGE},
+    ).all()
+    if not rows:
+        return HealthCheckRead(key="runtime", status="unknown", params={"instances": 0})
+    max_lag = pool_peak = thread_peak = timeouts = 0
+    for row in rows:
+        metrics = row.metrics or {}
+        max_lag = max(max_lag, int(metrics.get("loop_lag_max_ms") or 0))
+        timeouts += int(metrics.get("pool_timeouts") or 0)
+        if metrics.get("pool_capacity"):
+            pool_peak = max(pool_peak, round(100 * int(metrics.get("pool_checked_out_max") or 0) / int(metrics["pool_capacity"])))
+        if metrics.get("threadpool_total"):
+            thread_peak = max(thread_peak, round(100 * int(metrics.get("threadpool_busy_max") or 0) / int(metrics["threadpool_total"])))
+    status: HealthStatus = "ok"
+    if max_lag >= RUNTIME_LAG_WARNING_MS or pool_peak >= 100 or thread_peak >= 100 or timeouts:
+        status = "warning"
+    if max_lag >= RUNTIME_LAG_CRITICAL_MS:
+        status = "critical"
+    return HealthCheckRead(
+        key="runtime",
+        status=status,
+        params={"instances": len(rows), "maxLagMs": max_lag, "poolPeakPercent": pool_peak, "threadPeakPercent": thread_peak, "poolTimeouts": timeouts},
+    )
+
+
 def _run_check(key: str, fn, *, failure_status: HealthStatus = "critical", db: Session | None = None) -> list[HealthCheckRead]:
     """Ein Ausfall einer Prüfung ist selbst ein Befund (Dienst nicht erreichbar) - er darf aber
     die übrigen Prüfungen nicht verhindern."""
@@ -629,6 +666,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("security", lambda: _check_security(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)
+    checks += _run_check("runtime", lambda: _check_runtime(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_verification", _check_document_verification)
     checks += _run_check("storage_migration", lambda: _check_storage_migration(db, now), failure_status="unknown", db=db)
     checks += _run_check("local_s3", lambda: _check_local_s3(db), failure_status="unknown", db=db)

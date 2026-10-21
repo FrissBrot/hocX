@@ -16,6 +16,12 @@ Ausnahmen werden in derselben Zeile begründet markiert, z. B.
   # sql-ok: <Begründung>        (nur feste Bezeichner, keine Benutzereingaben)
   # rls-ok: <Begründung>        (bewusst mandantenübergreifende Systemprüfung)
   {/* security-ok: <Begründung> */}
+  # loop-ok: <Begründung>       (DB-Zugriff in async def, der den Event-Loop nicht blockiert)
+  # stream-ok: <Begründung>     (Streaming-Antwort, deren Route die Session nicht hält)
+
+Zusätzlich zu SECURITY-RULES.md zwei Regeln aus dem Concurrency-Audit (CONC-001/-002): ein
+synchroner DB-Zugriff in einer async-Funktion blockiert den Event-Loop des ganzen Workers, und
+eine Streaming-Antwort hält die Session der Route (get_db) bis zum letzten Byte.
 """
 
 from __future__ import annotations
@@ -44,6 +50,8 @@ RULE_TEXT = {
     "tenant-scope-suspended": "tenant_scope_suspended(...) ohne Begründung (# rls-ok: ...)",
     "dangerously-set-inner-html": "dangerouslySetInnerHTML ohne Begründung ({/* security-ok: ... */})",
     "secret-in-url": "Token/Passwort in einer URL-Query (gehört in Body oder Header)",
+    "blocking-db-in-async": "synchroner DB-Zugriff in async def (blockiert den Event-Loop) - per run_in_threadpool/asyncio.to_thread ausführen",
+    "stream-response-holds-db": "Streaming-/Datei-Antwort mit Depends(get_db) ohne scope=\"function\" (Verbindung bis zum letzten Byte belegt)",
 }
 MARKERS = {
     "public-id-lookup-without-tenant": ("nosemgrep: public-id-lookup-without-tenant", "tenant-scope-ok"),
@@ -52,7 +60,13 @@ MARKERS = {
     "tenant-scope-suspended": ("rls-ok",),
     "dangerously-set-inner-html": ("security-ok",),
     "secret-in-url": ("security-ok",),
+    "blocking-db-in-async": ("loop-ok",),
+    "stream-response-holds-db": ("stream-ok",),
 }
+
+OFFLOAD_CALLS = {"run_in_threadpool", "to_thread", "run_in_executor"}
+STREAM_RESPONSES = {"object_response", "FileResponse", "StreamingResponse"}
+DB_NAMES = {"db", "session"}
 
 
 @dataclass(frozen=True)
@@ -79,6 +93,49 @@ def _call_name(node: ast.Call) -> str | None:
     if isinstance(func, ast.Attribute):
         return func.attr
     return None
+
+
+def _uses_db(node: ast.Call) -> bool:
+    func = node.func
+    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id in DB_NAMES:
+        return True
+    values = [*node.args, *(keyword.value for keyword in node.keywords)]
+    return any(isinstance(value, ast.Name) and value.id in DB_NAMES for value in values)
+
+
+def _blocking_db_calls(function: ast.AsyncFunctionDef, add, lines: list[str]) -> None:
+    """Aufrufe mit der Session im Rumpf einer async-Funktion. Ausgenommen: Übergabe an
+    run_in_threadpool/to_thread, direkt erwartete Aufrufe (die aufgerufene async-Funktion wird
+    selbst geprüft) und verschachtelte sync-Funktionen (laufen im Thread). Eine ganze Funktion,
+    die nur in einem Worker-Thread mit eigenem Event-Loop läuft (core/offload.py), wird an der
+    def-Zeile mit `# loop-ok: <Begründung>` ausgenommen."""
+    if _marked(lines, function.lineno, "blocking-db-in-async"):
+        return
+    skip: set[int] = set()
+    for node in ast.walk(function):
+        if node is not function and isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+            skip.update(id(inner) for inner in ast.walk(node))
+        if isinstance(node, ast.Await) and isinstance(node.value, ast.Call):
+            skip.add(id(node.value))
+        if isinstance(node, ast.Call) and _call_name(node) in OFFLOAD_CALLS:
+            skip.update(id(inner) for inner in ast.walk(node))
+    for node in ast.walk(function):
+        if isinstance(node, ast.Call) and id(node) not in skip and _uses_db(node):
+            add("blocking-db-in-async", node)
+
+
+def _holds_db_dependency(function: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    for default in [*function.args.defaults, *function.args.kw_defaults]:
+        if (
+            isinstance(default, ast.Call)
+            and _call_name(default) == "Depends"
+            and default.args
+            and isinstance(default.args[0], ast.Name)
+            and default.args[0].id == "get_db"
+            and not any(keyword.arg == "scope" for keyword in default.keywords)
+        ):
+            return True
+    return False
 
 
 def _python_findings(source: str) -> list[Finding]:
@@ -111,6 +168,12 @@ def _python_findings(source: str) -> list[Finding]:
                     literal = "".join(part.value for part in arg.values if isinstance(part, ast.Constant) and isinstance(part.value, str))
                     if SECRET_QUERY.search(literal) and literal.lstrip().startswith(("http", "/")):
                         add("secret-in-url", node)
+        if isinstance(node, ast.AsyncFunctionDef):
+            _blocking_db_calls(node, add, lines)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and _holds_db_dependency(node):
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Call) and _call_name(inner) in STREAM_RESPONSES:
+                    add("stream-response-holds-db", inner)
         if isinstance(node, ast.ExceptHandler):
             for inner in ast.walk(node):
                 if (

@@ -25,6 +25,24 @@ class SecurityRulesTests(unittest.TestCase):
         marked = "x = resolve_internal_id(db, Tenant, pid)  # nosemgrep: public-id-lookup-without-tenant -- Plattform\n"
         self.assertEqual(rules(PY, marked), [])
 
+    def test_blocking_db_in_async_is_reported(self):
+        blocking = "async def route(db=Depends(get_db)):\n    db.commit()\n    return load(db)\n"
+        self.assertEqual(rules(PY, blocking), ["blocking-db-in-async", "blocking-db-in-async"])
+        offloaded = "async def route(db=Depends(get_db)):\n    await run_in_threadpool(load, db)\n    await asyncio.to_thread(lambda: db.commit())\n"
+        self.assertEqual(rules(PY, offloaded), [])
+        awaited = "async def route(db):\n    return await service.save(db)\n"
+        self.assertEqual(rules(PY, awaited), [])
+        nested = "async def route(db):\n    def work():\n        db.commit()\n    await run_in_threadpool(work)\n"
+        self.assertEqual(rules(PY, nested), [])
+        marked = "async def job(db):  # loop-ok: läuft im Worker-Thread\n    db.commit()\n"
+        self.assertEqual(rules(PY, marked), [])
+
+    def test_stream_response_with_request_scoped_session_is_reported(self):
+        held = "def download(db: Session = Depends(get_db)):\n    return object_response(request, MAIN, key)\n"
+        self.assertEqual(rules(PY, held), ["stream-response-holds-db"])
+        scoped = 'def download(db: Session = Depends(get_db, scope="function")):\n    return FileResponse(path)\n'
+        self.assertEqual(rules(PY, scoped), [])
+
     def test_only_new_findings_count(self):
         old = "a = get_by_public_id(db, A, x)\n"
         self.assertEqual(rules(PY, old, old), [])

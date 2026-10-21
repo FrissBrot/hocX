@@ -712,6 +712,7 @@ services:
       - path: .env
         required: false
     environment:
+      HOCX_PROCESS_KIND: storage-worker
       HOCX_ENVIRONMENT: development
       DATABASE_URL: ${DATABASE_URL}
       APP_DATABASE_URL: ${APP_DATABASE_URL}
@@ -758,6 +759,7 @@ services:
       - path: .env
         required: false
     environment:
+      HOCX_PROCESS_KIND: backup-worker
       HOCX_ENVIRONMENT: development
       DATABASE_URL: ${DATABASE_URL}
       AUTH_SECRET: ${AUTH_SECRET}

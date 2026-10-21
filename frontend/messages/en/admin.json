@@ -170,6 +170,11 @@
         "detail": "{queued, number} due in the queue · oldest {oldestMinutes, number} min · {failed, number} failed (24 h)",
         "problem": "Document processing is backed up or failing"
       },
+      "runtime": {
+        "title": "Service process load",
+        "detail": "{instances, number} processes · event loop max {maxLagMs, number} ms · DB pool {poolPeakPercent, number} % · thread pool {threadPeakPercent, number} % · {poolTimeouts, number} pool timeouts",
+        "problem": "Service processes blocked or saturated"
+      },
       "document_verification": {
         "title": "Public verification page",
         "detail": "Response in {latencyMs, number} ms",

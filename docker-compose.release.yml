@@ -560,6 +560,7 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,mode=1777
     environment:
+      HOCX_PROCESS_KIND: storage-worker
       HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
       DATABASE_URL_FILE: /run/secrets/database_url
       APP_DATABASE_URL_FILE: /run/secrets/app_database_url
@@ -622,6 +623,7 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,mode=1777,size=256m
     environment:
+      HOCX_PROCESS_KIND: backup-worker
       HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
       HOCX_VERSION: ${HOCX_VERSION}
       DATABASE_URL_FILE: /run/secrets/database_url

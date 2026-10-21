@@ -170,6 +170,11 @@
         "detail": "{queued, number} in coda · il più vecchio {oldestMinutes, number} min · {failed, number} non riusciti (24 h)",
         "problem": "L'elaborazione dei documenti è in ritardo o non riesce"
       },
+      "runtime": {
+        "title": "Carico dei processi di servizio",
+        "detail": "{instances, number} processi · event loop max {maxLagMs, number} ms · pool DB {poolPeakPercent, number} % · pool di thread {threadPeakPercent, number} % · {poolTimeouts, number} timeout del pool",
+        "problem": "Processi di servizio bloccati o saturi"
+      },
       "document_verification": {
         "title": "Pagina pubblica di verifica",
         "detail": "Risposta in {latencyMs, number} ms",

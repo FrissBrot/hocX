@@ -170,6 +170,11 @@
         "detail": "{queued, number} en attente · le plus ancien {oldestMinutes, number} min · {failed, number} en échec (24 h)",
         "problem": "Le traitement des documents est en retard ou échoue"
       },
+      "runtime": {
+        "title": "Charge des processus de service",
+        "detail": "{instances, number} processus · boucle d’événements max. {maxLagMs, number} ms · pool BD {poolPeakPercent, number} % · pool de threads {threadPeakPercent, number} % · {poolTimeouts, number} dépassements de délai du pool",
+        "problem": "Processus de service bloqués ou saturés"
+      },
       "document_verification": {
         "title": "Page publique de vérification",
         "detail": "Réponse en {latencyMs, number} ms",

@@ -65,6 +65,7 @@ _CHECK_TITLES_DE = {
     "security": "Sicherheitsereignisse",
     "photo_queue": "Bildanalyse-Warteschlange",
     "document_queue": "Dokumentverarbeitung",
+    "runtime": "Auslastung der Dienstprozesse",
     "document_verification": "Öffentliche Prüfseite",
     "object_storage": "Dateispeicher",
     "storage_migration": "Storage-Migration",
@@ -87,6 +88,7 @@ _CHECK_PROBLEM_TITLES_DE = {
     "security": "Auffällige Sicherheitsereignisse",
     "photo_queue": "Bildanalyse-Warteschlange staut sich",
     "document_queue": "Dokumentverarbeitung staut sich oder scheitert",
+    "runtime": "Dienstprozesse blockiert oder ausgelastet",
     "document_verification": "Öffentliche Prüfseite langsam",
     "object_storage": "Dateispeicher nicht erreichbar",
     "storage_migration": "Storage-Migration braucht Aufmerksamkeit",
@@ -158,6 +160,12 @@ def _check_message(check) -> str:
             return (
                 f"{params.get('queued')} Aufträge warten (ältester seit {params.get('oldestMinutes')} Minuten), "
                 f"{params.get('failed')} in 24 h endgültig gescheitert - document-worker prüfen (docker compose logs document-worker)."
+            )
+        case "runtime":
+            return (
+                f"Event-Loop bis {params.get('maxLagMs')} ms blockiert, DB-Pool bis {params.get('poolPeakPercent')} %, "
+                f"Threadpool bis {params.get('threadPeakPercent')} % belegt, {params.get('poolTimeouts')} Pool-Zeitüberschreitungen "
+                f"({params.get('instances')} Prozesse, letzte Minute) - Logs von backend/abgabebox-backend prüfen."
             )
         case "document_verification":
             return f"Prüf-Endpoint der Abgabebox antwortet nach {params.get('latencyMs')} ms - abgabebox-backend und Datenbank prüfen."
