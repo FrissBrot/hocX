@@ -21,7 +21,7 @@ from app.core.redis_client import close_redis_pool
 from app.core.security import hash_password
 from app.models import AppUser, ElementType, PlatformAdmin, Role, Tenant
 from app.services import traefik_config_service
-from app.services.file_service import FileService
+from app.services.file_service import FileService, ThumbnailBusy
 from app.services.upload_lock import UploadLockBusy
 from app.services.isolated_parse import shutdown_pool as shutdown_word_import_parse_pool
 from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
@@ -332,6 +332,17 @@ def _db_busy_response() -> JSONResponse:
 @app.exception_handler(SQLAlchemyTimeoutError)
 async def db_pool_timeout_handler(request: Request, exc: SQLAlchemyTimeoutError) -> JSONResponse:
     return _db_busy_response()
+
+
+@app.exception_handler(ThumbnailBusy)
+async def thumbnail_busy_handler(request: Request, exc: ThumbnailBusy) -> JSONResponse:
+    """Zu viele Vorschaubilder gleichzeitig in Erzeugung (file_service, CONC-014) - erwartet,
+    kein Eintrag im Fehlerprotokoll. Der Thumbnail-Backfill im job-worker holt sie nach."""
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Vorschau wird erzeugt, bitte gleich erneut versuchen.", "code": "thumbnail_busy"},
+        headers={"Retry-After": "5", "Cache-Control": "no-store"},
+    )
 
 
 @app.exception_handler(UploadLockBusy)

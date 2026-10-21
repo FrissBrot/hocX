@@ -35,7 +35,7 @@ from app.documents.compiler import validate_template
 from app.documents.components import catalog_payload
 from app.documents.context import DocumentNotFoundError, DocumentPermissionError
 from app.documents.layout import LayoutJson, LayoutValidationError, TemplateContent, layout_error_of, parse_content
-from app.documents.renderer import DocumentRenderError, get_renderer
+from app.documents.renderer import PRIORITY_THUMBNAIL, DocumentRenderError, get_renderer
 from app.documents.strings import normalize_language, text
 from app.models import (
     AppUser,
@@ -577,7 +577,9 @@ def _thumbnail_file(tenant_id: int, key: str) -> Path:
 
 def _store_thumbnail_file(path: Path, content: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(".tmp")
+    # Eindeutige Temp-Datei: zwei gleichzeitige Requests für dasselbe Thumbnail schreiben sonst
+    # in dieselbe Datei.
+    temp = path.with_suffix(f".{uuid.uuid4().hex}.tmp")
     temp.write_bytes(content)
     temp.replace(path)
     files = sorted(path.parent.glob("*.png"), key=lambda item: item.stat().st_mtime)
@@ -623,7 +625,10 @@ async def get_document_template_thumbnail(template_id: uuid.UUID, db: Session = 
 
         try:
             prepared = await run_in_threadpool(prepare_and_release)
-            output = await get_renderer().render(prepared.compiled.data, document_service.RenderAssets(files=prepared.compiled.files, fonts=prepared.compiled.fonts), fmt="png", max_pages=1, ppi=40)
+            output = await get_renderer().render(
+                prepared.compiled.data, document_service.RenderAssets(files=prepared.compiled.files, fonts=prepared.compiled.fonts),
+                fmt="png", max_pages=1, ppi=40, priority=PRIORITY_THUMBNAIL, tenant_id=user.current_tenant_id,
+            )
         except DocumentRenderError as exc:
             raise render_error(user, exc) from exc
         except (DocumentPermissionError, DocumentNotFoundError, ValueError) as exc:

@@ -174,6 +174,8 @@ class Settings(BaseSettings):
     # per-image (see photo_quality.py's module docstring), so unlike Phase 3 this doesn't
     # need an off-peak time window.
     photo_quality_backfill_interval_minutes: int = 15
+    # Vorschaubilder für Abgabebox-Uploads nachziehen (job-worker, CONC-014)
+    thumbnail_backfill_interval_minutes: int = 5
     # Auto-album sync (main.py's photo_album_sync_loop): folds newly-submitted (and newly
     # removed) abgabebox submission files into their Zyklus/Abgabe/Abgabe-Element albums -
     # same reason as the backfill above, this can't happen inline in the restricted
@@ -196,9 +198,12 @@ class Settings(BaseSettings):
     clamav_host: str = "clamav"
     clamav_port: int = 3310
     redis_url: str = "redis://redis:6379/0"
-    # Dokument-Engine (app/documents): Grenzen für den Typst-Prozess-Pool. Der Timeout gilt
-    # pro Compile (Wall-Clock); bei Überschreitung wird der Pool beendet und neu gestartet.
-    # Pro Uvicorn-Worker (Dockerfile: 2) ein eigener Pool: 2 × 2 Compiles gleichzeitig.
+    # Dokument-Engine (app/documents): Grenzen für den Typst-Worker-Pool. Der Timeout gilt
+    # pro Compile (Wall-Clock); bei Überschreitung wird nur dieser Worker-Prozess beendet.
+    # Pro Uvicorn-Worker (Dockerfile: 2) und im job-worker je ein eigener Pool.
+    # Speicherlimit (RLIMIT_AS) je Typst-Prozess: eine Galerie mit 60 Fotos braucht gemessen
+    # rund 1,7 GB RSS, kleiner geht nicht. Überbucht der Container trotzdem, beendet der
+    # OOM-Killer nur den grössten Typst-Prozess; das trifft nur dessen Compile (CONC-004).
     document_render_concurrency: int = 2
     document_render_timeout_seconds: int = 60
     document_render_memory_limit_mb: int = 3072

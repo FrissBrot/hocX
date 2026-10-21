@@ -428,7 +428,7 @@ async def preview(db: Session, user: CurrentUser | None, tenant_id: int, request
 
     prepared, template_public_id = await run_in_threadpool(prepare_and_release)
     compiled = prepared.compiled
-    output = await get_renderer().render_preview(compiled.data, RenderAssets(files=compiled.files, fonts=compiled.fonts), max_pages=max_pages)
+    output = await get_renderer().render_preview(compiled.data, RenderAssets(files=compiled.files, fonts=compiled.fonts), max_pages=max_pages, tenant_id=tenant_id)
     return PreviewResult(
         pages=output.pages,
         diagnostics=prepared.diagnostics,
@@ -494,7 +494,7 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
         )
         prepared = await _prepare_off_loop(db, user, tenant_id, request, render_info=render_info)
         compiled = prepared.compiled
-        output = await get_renderer().render_pdf(compiled.data, RenderAssets(files=compiled.files, fonts=compiled.fonts))
+        output = await get_renderer().render_pdf(compiled.data, RenderAssets(files=compiled.files, fonts=compiled.fonts), tenant_id=tenant_id)
         result = await run_in_threadpool(
             _finalize_render, db, user, tenant_id, request, prepared, output, export_public_id, render_info, retry_allowed=attempt == 0
         )

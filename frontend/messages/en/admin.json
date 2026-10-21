@@ -398,6 +398,10 @@
         "title": "Backfill image quality",
         "description": "Computes sharpness and exposure for images that are still missing them."
       },
+      "thumbnail_backfill": {
+        "title": "Backfill thumbnails",
+        "description": "Creates thumbnails for images that have none yet, mainly Abgabebox uploads."
+      },
       "photo_album_sync": {
         "title": "Sync albums",
         "description": "Adds new and removes deleted Abgabebox images in the automatic albums."

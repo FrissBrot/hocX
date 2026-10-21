@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
+import os
+import threading
 import time
 import uuid
+from collections import OrderedDict
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -14,7 +18,7 @@ from typing import Callable, Iterator, Literal
 from fastapi import HTTPException, UploadFile
 from PIL import Image
 from sqlalchemy import delete, func, or_, select, text, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app import scanner
 from app.core.config import settings
@@ -222,6 +226,163 @@ def _clear_gps(stored_file: StoredFile) -> None:
         setattr(stored_file, column, None)
 
 
+# Thumbnails auf Abruf (CONC-014): fehlt eine Vorschau (Abgabebox-Uploads, verlorener Cache),
+# lädt der Request das Original (bis 100 MiB) und dekodiert es. Eine neue Galerie-Ansicht stösst
+# das für jede Kachel gleichzeitig an - begrenzt auf wenige gleichzeitige Erzeugungen je Prozess
+# und wenige Wartende (jeder Wartende belegt einen Threadpool-Platz); der Rest bekommt 503 und
+# der Thumbnail-Backfill im job-worker holt sie nach.
+THUMBNAIL_GENERATION_CONCURRENCY = 3
+THUMBNAIL_MAX_WAITING = 8
+THUMBNAIL_WAIT_SECONDS = 30.0
+_thumbnail_slots = threading.BoundedSemaphore(THUMBNAIL_GENERATION_CONCURRENCY)
+_thumbnail_waiting = 0
+_thumbnail_waiting_lock = threading.Lock()
+# Backfill (job-worker): je Lauf so viele Bilder; nicht dekodierbare merkt sich der Prozess.
+THUMBNAIL_BACKFILL_BATCH = 200
+THUMBNAIL_BACKFILL_FAILED_LIMIT = 10_000
+_THUMBNAIL_BACKFILL_FAILED: set[int] = set()
+
+
+class ThumbnailBusy(Exception):
+    """Gerade zu viele Thumbnails in Arbeit - später erneut versuchen (HTTP 503)."""
+
+
+@contextmanager
+def _thumbnail_generation_slot():
+    global _thumbnail_waiting
+    with _thumbnail_waiting_lock:
+        if _thumbnail_waiting >= THUMBNAIL_MAX_WAITING:
+            raise ThumbnailBusy
+        _thumbnail_waiting += 1
+    try:
+        acquired = _thumbnail_slots.acquire(timeout=THUMBNAIL_WAIT_SECONDS)
+    finally:
+        with _thumbnail_waiting_lock:
+            _thumbnail_waiting -= 1
+    if not acquired:
+        raise ThumbnailBusy
+    try:
+        yield
+    finally:
+        _thumbnail_slots.release()
+
+
+def _written_since(path: Path, since: float) -> bool:
+    try:
+        return path.stat().st_mtime >= since - 1
+    except FileNotFoundError:
+        return False
+
+
+def _write_atomic(path: Path, content: bytes) -> None:
+    """Temp-Datei + replace: ein paralleler Leser sieht nie eine halb geschriebene Vorschau."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        temp.write_bytes(content)
+        os.replace(temp, path)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+# Ähnlichkeitsgruppen (CONC-015): die Gruppierung vergleicht bis 1500 Bilder paarweise und lädt
+# für jedes Kandidatenpaar beide Originale. Jeder Aufruf des Duplikate-Tabs wiederholte das.
+# - Ergebnis-Cache in Redis: Schlüssel aus Mandant, Art und einem Fingerabdruck der gruppierten
+#   Bilder (IDs, Prüfsumme, pHash, Qualitätswerte); jede Änderung daran ergibt einen neuen Schlüssel.
+#   Gespeichert werden nur IDs, Metadaten (Tags, Namen) kommen frisch aus der Abfrage.
+# - Signatur-Cache je Prozess (LRU): Signaturen hängen nur am Dateiinhalt (Prüfsumme).
+SIMILARITY_RESULT_TTL_SECONDS = 3600
+SIMILARITY_SIGNATURE_CACHE_SIZE = 600  # je ~49 KB (128 x 128 x RGB, uint8)
+_similarity_signatures: "OrderedDict[tuple[int, str | None], tuple[float, object] | None]" = OrderedDict()
+_similarity_signatures_lock = threading.Lock()
+
+
+def _similarity_cache_key(tenant_id: int, kind: str, images: list, file_paths: dict) -> str:
+    digest = hashlib.sha256(kind.encode())
+    for image in sorted(images, key=lambda item: item.id):
+        checksum = file_paths.get(image.id, (None, None))[0]
+        digest.update(repr((image.id, checksum, image.perceptual_hash, image.sharpness_score, image.exposure_score, image.face_quality_score)).encode())
+    return f"hocx:similarity:{tenant_id}:{digest.hexdigest()}"
+
+
+def _similarity_cache_get(key: str, rows_by_id: dict) -> list[list[int]] | None:
+    from redis.exceptions import RedisError
+
+    from app.core.redis_client import get_redis_sync
+
+    try:
+        raw = get_redis_sync().get(key)
+    except RedisError:
+        return None
+    if raw is None:
+        return None
+    try:
+        groups = json.loads(raw)
+    except ValueError:
+        return None
+    # Nur IDs aus der aktuellen (berechtigten) Abfrage - sonst neu rechnen.
+    if not all(isinstance(group, list) and all(item in rows_by_id for item in group) for group in groups):
+        return None
+    return groups
+
+
+def _similarity_cache_set(key: str, groups: list[list[int]]) -> None:
+    from redis.exceptions import RedisError
+
+    from app.core.redis_client import get_redis_sync
+
+    try:
+        get_redis_sync().set(key, json.dumps(groups), ex=SIMILARITY_RESULT_TTL_SECONDS)
+    except RedisError:
+        pass  # Cache ist optional
+
+
+def _similarity_groups(service: "FileService", id_groups: list[list[int]], rows_by_id: dict, min_size: int) -> list[SimilarityGroup]:
+    return [
+        SimilarityGroup(
+            best_id=rows_by_id[group[0]].public_id,
+            images=[service._build_overview_item(rows_by_id[image_id]) for image_id in group],
+        )
+        for group in id_groups
+        if len(group) >= min_size
+    ]
+
+
+def _cached_duplicate_signature(stored_file_id: int, checksum: str | None, namespace: str, storage_path: str):
+    """duplicate_signature mit Prozess-Cache; ohne Prüfsumme nicht gecacht (Inhalt unbekannt)."""
+    import numpy as np
+
+    key = (stored_file_id, checksum)
+    if checksum:
+        with _similarity_signatures_lock:
+            if key in _similarity_signatures:
+                _similarity_signatures.move_to_end(key)
+                cached = _similarity_signatures[key]
+                return None if cached is None else (cached[0], cached[1].astype(np.float32))
+    content = _read_object(namespace, storage_path)
+    if content is None:
+        # Original (vorübergehend) nicht lesbar: weder Signatur noch Gruppenergebnis cachen.
+        raise _SignatureUnavailable
+    signature = duplicate_signature(BytesIO(content))
+    del content
+    if checksum:
+        # uint8 statt float32: das Bild ist ganzzahlig (PIL RGB), es geht nichts verloren.
+        stored = None if signature is None else (signature[0], signature[1].astype(np.uint8))
+        with _similarity_signatures_lock:
+            _similarity_signatures[key] = stored
+            while len(_similarity_signatures) > SIMILARITY_SIGNATURE_CACHE_SIZE:
+                _similarity_signatures.popitem(last=False)
+    return signature
+
+
+class _SignatureUnavailable(Exception):
+    pass
+
+
+class _IngestYield(Exception):
+    """Galerie-Ingest gibt seine Zeitscheibe ab (andere Mandanten warten)."""
+
+
 class FileService:
     def __init__(
         self,
@@ -279,20 +440,28 @@ class FileService:
             if existing.exists():
                 return existing
 
-        original = _read_object(namespace_for_root(storage_root), stored_file.storage_path)
-        if original is None:
-            return None
-        generated = generate_thumbnail_bytes(original)
-        if generated is None:
-            return None
-        thumbnail_bytes, width, height = generated
-
-        Path(thumbnail_root).mkdir(parents=True, exist_ok=True)
         thumbnail_path = Path(thumbnail_root).resolve() / f"{stored_file.id}.jpg"
-        thumbnail_path.write_bytes(thumbnail_bytes)
+        storage_path = stored_file.storage_path
+        # Keine DB-Verbindung über Download und Dekodierung halten (CONC-014).
+        db.commit()
+        requested_at = time.time()
+        with _thumbnail_generation_slot():
+            # Ein paralleler Request für dasselbe Bild kann es inzwischen erzeugt haben. Nur eine
+            # während dieses Aufrufs geschriebene Datei gilt: eine ältere "<id>.jpg" kann nach
+            # einem DB-Restore (neu vergebene IDs) zu einem anderen Bild gehören.
+            if not _written_since(thumbnail_path, requested_at):
+                original = _read_object(namespace_for_root(storage_root), storage_path)
+                if original is None:
+                    return None
+                generated = generate_thumbnail_bytes(original)
+                del original
+                if generated is None:
+                    return None
+                thumbnail_bytes, width, height = generated
+                _write_atomic(thumbnail_path, thumbnail_bytes)
+                stored_file.width = width
+                stored_file.height = height
         stored_file.thumbnail_path = thumbnail_path.name
-        stored_file.width = width
-        stored_file.height = height
         db.add(stored_file)
         db.commit()
         return thumbnail_path
@@ -547,10 +716,15 @@ class FileService:
         ]
         threshold = SIMILARITY_HAMMING_THRESHOLD if kind == "duplicate" else SERIES_HAMMING_THRESHOLD
         signatures = {}
+        incomplete: list[int] = []
         # checksum_sha256/storage_path aren't part of the overview rows list_tenant_files
         # returns (see _shared_file_overview_columns) - fetched separately, only for the
         # ids actually being grouped.
         file_paths = self.stored_file_repository.list_checksum_and_storage_path(db, list(rows_by_id))
+        cache_key = _similarity_cache_key(tenant_id, kind, groupable, file_paths)
+        cached = _similarity_cache_get(cache_key, rows_by_id)
+        if cached is not None:
+            return _similarity_groups(self, cached, rows_by_id, min_size)
 
         def matches(a: int, b: int) -> bool:
             row_a, row_b = rows_by_id[a], rows_by_id[b]
@@ -560,9 +734,12 @@ class FileService:
                 return True
             for key, row, path in ((a, row_a, path_a), (b, row_b, path_b)):
                 if key not in signatures:
-                    namespace = ABGABEBOX if row.source == "submission_upload" else MAIN
-                    content = _read_object(namespace, path)
-                    signatures[key] = duplicate_signature(BytesIO(content)) if content is not None else None
+                    try:
+                        signatures[key] = _cached_duplicate_signature(key, file_paths[key][0], ABGABEBOX if row.source == "submission_upload" else MAIN, path)
+                    except _SignatureUnavailable:
+                        # Fehlende Originale sind kein Beleg für ein Duplikat - wie bisher.
+                        signatures[key] = None
+                        incomplete.append(key)
             return same_photo(signatures[a], signatures[b])
 
         if kind == "duplicate":
@@ -575,14 +752,10 @@ class FileService:
                 group for group in groups
                 if len(group) == 1 or any(not matches(group[0].id, image.id) for image in group[1:])
             ]
-        return [
-            SimilarityGroup(
-                best_id=rows_by_id[group[0].id].public_id,
-                images=[self._build_overview_item(rows_by_id[image.id]) for image in group],
-            )
-            for group in groups
-            if len(group) >= min_size
-        ]
+        id_groups = [[image.id for image in group] for group in groups]
+        if not incomplete:
+            _similarity_cache_set(cache_key, id_groups)
+        return _similarity_groups(self, id_groups, rows_by_id, min_size)
 
     def create_pending_analysis_jobs(self, db: Session) -> list[PhotoAnalysisJob]:
         """The only way analysis jobs are queued (the manual "Gesichtsqualität analysieren"
@@ -692,6 +865,48 @@ class FileService:
         if pending:
             db.commit()
         return updated
+
+    def backfill_missing_thumbnails(self, db: Session, *, limit: int = THUMBNAIL_BACKFILL_BATCH) -> int:
+        """Vorschaubilder für saubere Bilder ohne eigene Vorschau nachziehen (CONC-014) - vor
+        allem Abgabebox-Uploads, deren eingeschränkte DB-Rolle nie eines anlegt. Sonst erzeugt
+        die erste Galerie-Ansicht sie alle gleichzeitig auf Abruf. Bilder, die sich nicht
+        dekodieren lassen, merkt sich der Prozess und versucht sie nicht bei jedem Lauf neu.
+        Gibt die Zahl der erzeugten Vorschauen zurück."""
+        query = select(StoredFile.id).where(
+            StoredFile.mime_type.like("image/%"),
+            StoredFile.scan_status == "clean",
+            or_(StoredFile.thumbnail_path.is_(None), StoredFile.thumbnail_path != func.concat(StoredFile.id, ".jpg")),
+        )
+        if _THUMBNAIL_BACKFILL_FAILED:
+            query = query.where(StoredFile.id.not_in(list(_THUMBNAIL_BACKFILL_FAILED)))
+        candidates = list(db.scalars(query.order_by(StoredFile.id.desc()).limit(limit)))
+        abgabebox_ids = abgabebox_stored_file_ids(db, candidates)
+        db.commit()
+        created = 0
+        for stored_file_id in candidates:
+            stored_file = db.get(StoredFile, stored_file_id)
+            if stored_file is None:
+                continue
+            root = settings.abgabebox_storage_root if stored_file_id in abgabebox_ids else settings.storage_root
+            tenant_id = stored_file.tenant_id
+            try:
+                path = self.ensure_thumbnail(db, stored_file, root)
+            except ThumbnailBusy:
+                break  # Requests erzeugen gerade selbst Vorschauen - nächster Lauf
+            except Exception as exc:  # noqa: BLE001 - ein Bild darf den Backfill nicht dauerhaft anhalten
+                from app.core.error_log import record_system_error
+
+                db.rollback()
+                record_system_error(db, exc=exc, tenant_id=tenant_id)
+                path = None
+            if path is None:
+                if len(_THUMBNAIL_BACKFILL_FAILED) >= THUMBNAIL_BACKFILL_FAILED_LIMIT:
+                    _THUMBNAIL_BACKFILL_FAILED.clear()  # gelegentlich erneut versuchen statt unbegrenzt merken
+                _THUMBNAIL_BACKFILL_FAILED.add(stored_file_id)
+                db.rollback()
+            else:
+                created += 1
+        return created
 
     def list_distinct_tags(self, db: Session, tenant_id: int, *, query: str | None = None, limit: int = MAX_TAG_SUGGESTIONS) -> list[str]:
         """Every tag currently in use by this tenant's files (custom + auto origin tags),
@@ -1510,6 +1725,7 @@ class FileService:
     # MAX_UPLOAD_BYTES), independent of the job's total size, instead of the old route's
     # "decode the whole batch, then ingest all of it" shape.
     GALLERY_INGEST_BATCH_SIZE = 4
+    GALLERY_INGEST_SLICE_SECONDS = 120
 
     def cleanup_gallery_staging(self, db: Session) -> None:
         active_paths = {
@@ -1549,16 +1765,26 @@ class FileService:
             interrupted.total_files = None
         db.commit()
         while True:
-            job = db.scalars(
-                select(GalleryUploadJob).where(GalleryUploadJob.status == "queued").order_by(GalleryUploadJob.created_at).limit(1)
-            ).first()
+            job = self._next_fair_gallery_job(db)
             if job is None:
                 return
             job.status = "running"
             job.started_at = datetime.now(UTC)
             db.commit()
+            # Zeitscheibe (Concurrency-Audit CONC-008): ein grosser ZIP gibt nach
+            # GALLERY_INGEST_SLICE_SECONDS ab, sobald andere Mandanten warten.
+            self._ingest_slice_deadline = time.monotonic() + self.GALLERY_INGEST_SLICE_SECONDS
             try:
                 asyncio.run(self._run_gallery_upload_job(db, job))
+            except _IngestYield:
+                # Fortschritt (processed_files, gespeicherte Bilder) ist committet; der Job wird beim
+                # nächsten Durchgang an derselben Stelle fortgesetzt (resume in _run_gallery_upload_job).
+                db.rollback()
+                db.refresh(job)
+                job.status = "queued"
+                job.total_files = None
+                db.commit()
+                continue
             except UploadLockBusy:
                 # Upload-Lock des Mandanten länger belegt (z. B. Word-Import) - Job bleibt in der
                 # Warteschlange und wird beim nächsten Tick fortgesetzt (processed_files bleibt).
@@ -1590,6 +1816,33 @@ class FileService:
                 db.commit()
                 for relative_path in job.staged_paths:
                     (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
+
+    def _next_fair_gallery_job(self, db: Session) -> GalleryUploadJob | None:
+        """Nächster wartender Job: zuerst Mandanten, die am längsten nicht bedient wurden (statt
+        globaler FIFO - ein Verein mit vielen/grossen Uploads hielt alle anderen auf)."""
+        candidate = aliased(GalleryUploadJob)
+        # Letzter Start eines Jobs des Mandanten, unabhängig vom Status: ein Job, der seine
+        # Zeitscheibe abgegeben hat, steht wieder auf "queued", behält aber started_at - sonst
+        # käme sein Mandant (NULL, nulls_first) sofort wieder dran.
+        last_served = (
+            select(func.max(GalleryUploadJob.started_at))
+            .where(GalleryUploadJob.tenant_id == candidate.tenant_id, GalleryUploadJob.started_at.is_not(None))
+            .correlate(candidate)
+            .scalar_subquery()
+        )
+        return db.scalars(
+            select(candidate).where(candidate.status == "queued").order_by(last_served.asc().nulls_first(), candidate.created_at).limit(1)
+        ).first()
+
+    def _yield_if_others_wait(self, db: Session, job: GalleryUploadJob) -> None:
+        deadline = getattr(self, "_ingest_slice_deadline", None)
+        if deadline is None or time.monotonic() < deadline:
+            return
+        waiting = db.scalar(
+            select(func.count()).select_from(GalleryUploadJob).where(GalleryUploadJob.status == "queued", GalleryUploadJob.tenant_id != job.tenant_id)
+        )
+        if waiting:
+            raise _IngestYield()
 
     async def _run_gallery_upload_job(self, db: Session, job: GalleryUploadJob) -> None:  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
         upload_assignment = db.get(SubmissionAssignment, job.upload_assignment_id) if job.upload_assignment_id else None
@@ -1630,6 +1883,7 @@ class FileService:
             elif resume["remaining"]:
                 resume["remaining"] -= 1
             else:
+                self._yield_if_others_wait(db, job)
                 await self._ingest_gallery_batch(
                     db, job, [(original_filename, staged_path.read_bytes())],
                     upload_assignment=upload_assignment, upload_cycle_config=upload_cycle_config,
@@ -1698,6 +1952,7 @@ class FileService:
             # folders) must not share a batch.
             if len(batch) >= self.GALLERY_INGEST_BATCH_SIZE or any(name == item[0] for name, _content in batch):
                 await flush()
+                self._yield_if_others_wait(db, job)
             batch.append(item)
         if batch:
             await flush()

@@ -398,6 +398,10 @@
         "title": "Completare la qualità immagine",
         "description": "Calcola nitidezza ed esposizione per le immagini in cui mancano ancora."
       },
+      "thumbnail_backfill": {
+        "title": "Completare le miniature",
+        "description": "Crea le miniature per le immagini che non ne hanno ancora, soprattutto per i caricamenti Abgabebox."
+      },
       "photo_album_sync": {
         "title": "Sincronizzare gli album",
         "description": "Aggiunge le nuove immagini Abgabebox agli album automatici e rimuove quelle eliminate."

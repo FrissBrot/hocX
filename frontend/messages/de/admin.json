@@ -398,6 +398,10 @@
         "title": "Bildqualität nachberechnen",
         "description": "Berechnet Schärfe und Belichtung für Bilder, bei denen das noch fehlt."
       },
+      "thumbnail_backfill": {
+        "title": "Vorschaubilder nachziehen",
+        "description": "Erzeugt Vorschaubilder für Bilder ohne Vorschau, vor allem für Abgabebox-Uploads."
+      },
       "photo_album_sync": {
         "title": "Alben synchronisieren",
         "description": "Übernimmt neue und entfernte Abgabebox-Bilder in die automatischen Alben."

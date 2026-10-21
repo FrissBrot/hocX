@@ -1,7 +1,7 @@
 """Alle periodischen Hintergrund-Loops (vorher in main.py) und ihre Zuordnung zu Prozessen.
 
 Concurrency-Audit Paket 10: schwere Loops (Galerie-Ingest, Qualitäts-Backfill, Vereinsexport,
-Virenscan-Rescans, Album-Sync, Aufräumjobs, PDF-Export-Aufträge) laufen im eigenen Container
+Virenscan-Rescans, Thumbnail-Backfill, Album-Sync, Aufräumjobs, PDF-Export-Aufträge) laufen im eigenen Container
 job-worker (app/workers/job_worker.py) statt in den uvicorn-Workern - dort konkurrierten sie mit
 den Requests um CPU, RAM, Threadpool und DB-Pool aller Mandanten. Leichte Steuer- und
 Überwachungsloops bleiben im Backend. Welcher Prozess welchen Loop startet, steht in
@@ -201,6 +201,18 @@ async def photo_album_sync_loop() -> None:
     )
 
 
+async def thumbnail_backfill_loop() -> None:
+    """Vorschaubilder für Bilder ohne eigene Vorschau nachziehen, vor allem Abgabebox-Uploads
+    (FileService.backfill_missing_thumbnails, CONC-014) - sonst erzeugt die erste Galerie-
+    Ansicht sie alle gleichzeitig auf Abruf im Backend."""
+    file_service = FileService()
+    await run_advisory_locked_loop(
+        name="thumbnail_backfill",
+        interval_seconds=settings.thumbnail_backfill_interval_minutes * 60,
+        task=file_service.backfill_missing_thumbnails,
+    )
+
+
 async def gallery_upload_ingest_loop() -> None:
     """Processes queued gallery_upload_job rows (see FileService.process_pending_gallery_upload_jobs) -
     scanning/thumbnailing/StoredFile-creation for the "Bilder hochladen" window, deferred
@@ -314,6 +326,7 @@ JOB_WORKER_LOOPS: tuple[LoopFactory, ...] = (
     export_cleanup_loop,
     log_cleanup_loop,
     photo_quality_backfill_loop,
+    thumbnail_backfill_loop,
     photo_album_sync_loop,
     gallery_upload_ingest_loop,
     tenant_data_export_loop,

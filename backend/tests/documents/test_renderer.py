@@ -226,14 +226,14 @@ def _three_nodes(count: int = 3) -> dict:
 
 
 def test_diagnosis_stops_at_first_failed_probe(monkeypatch):
-    """TYPST-009: scheitert ein Probe-Compile selbst (Timeout setzt den Pool zurück), bricht
+    """TYPST-009: scheitert ein Probe-Compile selbst (Timeout, Worker weg), bricht
     die Fehlersuche ab, statt bis zu 80 weitere Compiles anzustossen."""
     from app.documents.renderer import CompileResult
 
     renderer = DocumentRenderer(concurrency=1)
     calls = []
 
-    async def fake_run(document_json, assets, fmt, ppi, max_pages=None):
+    async def fake_run(document_json, assets, fmt, ppi, max_pages=None, **slot):
         calls.append(fmt)
         if len(calls) == 1:
             return CompileResult(ok=False, error="kaputt")
@@ -255,7 +255,7 @@ def test_diagnosis_respects_time_budget(monkeypatch):
     monkeypatch.setattr(renderer_module, "_MAX_DIAGNOSE_COMPILES", 10_000)
     calls = []
 
-    async def failing_run(document_json, assets, fmt, ppi, max_pages=None):
+    async def failing_run(document_json, assets, fmt, ppi, max_pages=None, **slot):
         calls.append(fmt)
         await asyncio.sleep(0.04)
         return CompileResult(ok=False, error="kaputt")
@@ -273,39 +273,190 @@ def test_queue_wait_is_bounded():
     renderer = DocumentRenderer(concurrency=1, queue_timeout_seconds=0.05)
 
     async def scenario():
-        await renderer._semaphore().acquire()  # einziger Platz belegt
+        await renderer._acquire_slot()  # einziger Platz belegt
         with pytest.raises(DocumentRenderError) as excinfo:
             await renderer._acquire_slot()
+        assert renderer._compile_slots().running == 1  # Abbruch gibt keinen fremden Platz frei
         return excinfo.value.key
 
     assert asyncio.run(scenario()) == "error.busy"
 
 
-def test_cancelled_preview_keeps_the_slot_until_the_compile_finished(monkeypatch):
-    """TYPST-005: Ein abgebrochener Request gibt seinen Compile-Platz erst frei, wenn der Prozess
-    fertig ist - sonst liefen mehr Compiles parallel als erlaubt."""
-    import concurrent.futures
+class _FakeProcess:
+    def __init__(self):
+        self.alive = True
+        self.exitcode = None
 
+    def is_alive(self):
+        return self.alive
+
+
+class _FakeWorker:
+    """Steht für einen Typst-Prozess: antwortet erst, wenn der Test es freigibt."""
+
+    instances: list = []
+
+    def __init__(self, memory_limit_bytes=0):
+        import queue
+
+        self.task_queue = queue.Queue()
+        self.result_queue = queue.Queue()
+        self.process = _FakeProcess()
+        self.compiles = 0
+        self.killed = False
+        _FakeWorker.instances.append(self)
+
+    def kill(self):
+        self.killed = True
+        self.process.alive = False
+
+    def answer(self, result):
+        self.result_queue.put(result)
+
+
+@pytest.fixture
+def fake_workers(monkeypatch):
     from app.documents import renderer as renderer_module
 
-    gate = concurrent.futures.Future()
+    _FakeWorker.instances = []
+    monkeypatch.setattr(renderer_module, "_RenderWorker", _FakeWorker)
+    monkeypatch.setattr(renderer_module, "_POLL_SECONDS", 0.01)
+    return _FakeWorker.instances
 
-    class FakePool:
-        def submit(self, *args, **kwargs):
-            return gate
+
+async def _until(predicate, timeout=2.0):
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while not predicate():
+        assert loop.time() < deadline, "Bedingung nicht erreicht"
+        await asyncio.sleep(0.01)
+
+
+def test_cancelled_preview_keeps_the_slot_until_the_compile_finished(fake_workers):
+    """TYPST-005: Ein abgebrochener Request gibt seinen Compile-Platz erst frei, wenn der Prozess
+    fertig ist - sonst liefen mehr Compiles parallel als erlaubt."""
+    from app.documents import renderer as renderer_module
 
     renderer = renderer_module.DocumentRenderer(concurrency=1, timeout_seconds=30, memory_limit_mb=512)
-    monkeypatch.setattr(renderer, "_pool", lambda: FakePool())
 
     async def scenario():
-        semaphore = renderer._semaphore()
         task = asyncio.ensure_future(renderer._run("{}", renderer_module.RenderAssets(), "png", 40, 1))
-        await asyncio.sleep(0.05)
+        await _until(lambda: fake_workers)
         task.cancel()
         await asyncio.sleep(0.05)
-        assert semaphore.locked(), "Platz wurde vor Ende des Compiles freigegeben"
-        gate.set_result(renderer_module.CompileResult(ok=True, output=[]))
-        await asyncio.sleep(0.05)
-        assert not semaphore.locked()
+        assert renderer._compile_slots().locked(), "Platz wurde vor Ende des Compiles freigegeben"
+        fake_workers[0].answer(renderer_module.CompileResult(ok=True, output=[]))
+        await _until(lambda: not renderer._compile_slots().locked())
 
     asyncio.run(scenario())
+    renderer.shutdown()
+
+
+def test_timeout_kills_only_the_hanging_worker(fake_workers):
+    """CONC-004: ein hängender Compile beendet nur seinen eigenen Prozess; ein paralleler Compile
+    (anderer Mandant) läuft zu Ende, statt mit dem ganzen Pool abgebrochen zu werden."""
+    from app.documents import renderer as renderer_module
+
+    renderer = renderer_module.DocumentRenderer(concurrency=2, timeout_seconds=0.3, memory_limit_mb=512)
+
+    async def scenario():
+        hanging = asyncio.ensure_future(renderer._run("{}", renderer_module.RenderAssets(), "pdf", None, tenant_id=1))
+        await _until(lambda: len(fake_workers) == 1)
+        healthy = asyncio.ensure_future(renderer._run("{}", renderer_module.RenderAssets(), "pdf", None, tenant_id=2))
+        await _until(lambda: len(fake_workers) == 2)
+        with pytest.raises(DocumentRenderError) as excinfo:
+            await hanging
+        assert excinfo.value.key == "error.timeout"
+        assert fake_workers[0].killed and not fake_workers[1].killed
+        fake_workers[1].answer(renderer_module.CompileResult(ok=True, output=b"%PDF"))
+        assert (await healthy).ok
+        assert not renderer._compile_slots().locked()
+
+    asyncio.run(scenario())
+    # Der gesunde Worker kommt zurück in den Pool, der beendete nie.
+    assert renderer._idle == [fake_workers[1]]
+    renderer.shutdown()
+
+
+def test_crashed_worker_is_replaced(fake_workers):
+    from app.documents import renderer as renderer_module
+
+    renderer = renderer_module.DocumentRenderer(concurrency=1, timeout_seconds=5, memory_limit_mb=512)
+
+    async def scenario():
+        task = asyncio.ensure_future(renderer._run("{}", renderer_module.RenderAssets(), "pdf", None))
+        await _until(lambda: fake_workers)
+        fake_workers[0].process.alive = False  # z. B. RLIMIT_AS / OOM-Killer
+        with pytest.raises(DocumentRenderError) as excinfo:
+            await task
+        assert excinfo.value.key == "error.render"
+        assert renderer._idle == []
+
+    asyncio.run(scenario())
+    renderer.shutdown()
+
+
+def test_free_slots_go_to_exports_first_then_to_the_least_busy_tenant():
+    from app.documents import renderer as renderer_module
+
+    slots = renderer_module._CompileSlots(1)
+    order = []
+
+    async def wait(name, priority, tenant_id):
+        await slots.acquire(priority=priority, tenant_id=tenant_id, timeout=2)
+        order.append(name)
+
+    async def scenario():
+        await slots.acquire(priority=renderer_module.PRIORITY_PREVIEW, tenant_id=1, timeout=1)  # Mandant 1 belegt den Platz
+        tasks = [
+            asyncio.ensure_future(wait("thumbnail-2", renderer_module.PRIORITY_THUMBNAIL, 2)),
+            asyncio.ensure_future(wait("preview-1", renderer_module.PRIORITY_PREVIEW, 1)),
+            asyncio.ensure_future(wait("preview-2", renderer_module.PRIORITY_PREVIEW, 2)),
+            asyncio.ensure_future(wait("export-3", renderer_module.PRIORITY_EXPORT, 3)),
+        ]
+        await asyncio.sleep(0.01)
+        # Bei der ersten Freigabe hat Mandant 1 noch einen laufenden Compile
+        slots.release(1)
+        for _ in range(3):
+            await asyncio.sleep(0.01)
+            last = order[-1]
+            slots.release(int(last.rsplit("-", 1)[1]))
+        await asyncio.gather(*tasks)
+
+    asyncio.run(scenario())
+    assert order == ["export-3", "preview-1", "preview-2", "thumbnail-2"]
+
+
+def test_tenant_with_running_compiles_waits_behind_others():
+    from app.documents import renderer as renderer_module
+
+    slots = renderer_module._CompileSlots(2)
+    order = []
+
+    async def wait(name, tenant_id):
+        await slots.acquire(priority=renderer_module.PRIORITY_PREVIEW, tenant_id=tenant_id, timeout=2)
+        order.append(name)
+
+    async def scenario():
+        await slots.acquire(priority=renderer_module.PRIORITY_PREVIEW, tenant_id=1, timeout=1)
+        await slots.acquire(priority=renderer_module.PRIORITY_PREVIEW, tenant_id=2, timeout=1)
+        first = asyncio.ensure_future(wait("tenant-1-again", 1))   # früher angekommen
+        await asyncio.sleep(0.01)
+        second = asyncio.ensure_future(wait("tenant-3", 3))
+        await asyncio.sleep(0.01)
+        slots.release(2)  # Mandant 1 hat noch einen laufenden, Mandant 3 keinen
+        await asyncio.sleep(0.01)
+        slots.release(1)
+        await asyncio.gather(first, second)
+
+    asyncio.run(scenario())
+    assert order == ["tenant-3", "tenant-1-again"]
+
+
+def test_real_worker_renders_and_is_reused(renderer):
+    """Echter Typst-Prozess: zwei Compiles nacheinander laufen im selben Worker."""
+    compiled = compile_scenario(scenarios()["long_table"])
+    _render(renderer, compiled)
+    workers = list(renderer._idle)
+    _render(renderer, compiled)
+    assert workers and renderer._idle == workers and workers[0].compiles >= 2

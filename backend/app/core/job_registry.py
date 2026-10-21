@@ -79,6 +79,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         max_silence_seconds=26 * 60 * 60,
     ),
     _loop("photo_quality_backfill", "photo_analysis", settings.photo_quality_backfill_interval_minutes, service="job-worker"),
+    _loop("thumbnail_backfill", "uploads", settings.thumbnail_backfill_interval_minutes, service="job-worker"),
     _loop("photo_album_sync", "photo_analysis", settings.photo_album_sync_interval_minutes, service="job-worker"),
     _loop("domain_health_check", "maintenance", settings.domain_health_check_interval_minutes),
     _loop("cycle_snapshot", "maintenance", settings.cycle_snapshot_check_interval_minutes),
