@@ -21,6 +21,8 @@ from app.core.background_loops import BACKGROUND_LOCK_IDS, EXTERNAL_LOCK_IDS
 from app.core.job_registry import JOBS_BY_NAME
 
 MAIN_PY = Path(__file__).resolve().parents[1] / "app" / "main.py"
+# Die periodischen Loops stehen seit dem Concurrency-Audit (Paket 10) in core/loops.py.
+LOOPS_PY = Path(__file__).resolve().parents[1] / "app" / "core" / "loops.py"
 
 
 def test_background_lock_ids_are_unique():
@@ -52,11 +54,11 @@ def test_every_background_lock_id_key_referenced_in_main_is_defined():
     Uniqueness-of-values (test_background_lock_ids_are_unique) doesn't catch a *missing* key,
     only a duplicate one, so this checks the other direction: every symbolic key main.py
     subscripts BACKGROUND_LOCK_IDS with must actually be defined."""
-    source = MAIN_PY.read_text(encoding="utf-8")
+    source = LOOPS_PY.read_text(encoding="utf-8")
     # Seit 2026-10-11 übergeben die Loops nur noch name="..." an run_advisory_locked_loop,
     # das die Lock-ID selbst in BACKGROUND_LOCK_IDS nachschlägt.
     referenced_keys = set(re.findall(r'run_advisory_locked_loop\(\s*name="([^"]+)"', source))
-    assert referenced_keys, "expected to find run_advisory_locked_loop(name=...) calls in main.py"
+    assert referenced_keys, "expected to find run_advisory_locked_loop(name=...) calls in core/loops.py"
 
     missing = referenced_keys - set(BACKGROUND_LOCK_IDS.keys())
     assert not missing, f"main.py references BACKGROUND_LOCK_IDS key(s) not defined in the dict: {sorted(missing)}"

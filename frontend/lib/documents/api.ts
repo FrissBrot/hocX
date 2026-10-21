@@ -313,12 +313,52 @@ export function previewDocument(request: DocumentRequest, maxPages = 4, signal?:
   });
 }
 
-export function renderDocument(request: DocumentRequest) {
-  return browserApiFetch<DocumentExport>("/api/documents/render", {
+/** PDF-Auftrag (POST /api/documents/render, 202): der job-worker rendert, der Client fragt den Stand ab. */
+export type DocumentRenderJob = {
+  id: string;
+  status: "queued" | "running" | "done" | "failed";
+  export: DocumentExport | null;
+  error_status: number | null;
+  error: unknown;
+  created_at: string;
+};
+
+// Wie lange höchstens auf einen PDF-Auftrag gewartet wird (Warteschlange plus Compile, mit Reserve).
+export const RENDER_JOB_TIMEOUT_MS = 10 * 60_000;
+
+function renderJobError(job: DocumentRenderJob): ApiError {
+  const detail = job.error;
+  const message = typeof detail === "string" ? detail
+    : detail && typeof detail === "object" && typeof (detail as { message?: unknown }).message === "string" ? (detail as { message: string }).message
+    : "";
+  const status = job.error_status ?? 500;
+  return new ApiError(message, status >= 500 ? "backend" : "validation", status, detail);
+}
+
+/** Wartet, bis ein PDF-Auftrag fertig ist (Abfrage mit wachsendem Abstand, 0.75 s bis 3 s). */
+export async function waitForRenderJob(job: DocumentRenderJob, timeoutMs = RENDER_JOB_TIMEOUT_MS): Promise<DocumentExport> {
+  let current = job;
+  let delay = 750;
+  const deadline = Date.now() + timeoutMs;
+  while (current.status === "queued" || current.status === "running") {
+    if (Date.now() > deadline) throw new ApiError("", "timeout");
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    delay = Math.min(3000, Math.round(delay * 1.5));
+    current = await browserApiFetch<DocumentRenderJob>(`/api/documents/render-jobs/${current.id}`);
+  }
+  if (current.status === "failed" || !current.export) throw renderJobError(current);
+  return current.export;
+}
+
+/** PDF erzeugen: Auftrag anlegen und auf das Ergebnis warten (Concurrency-Audit Paket 10). Rechte
+ * und Vorlage prüft der Server sofort; das Rendern übernimmt der job-worker. */
+export async function renderDocument(request: DocumentRequest): Promise<DocumentExport> {
+  const job = await browserApiFetch<DocumentRenderJob>("/api/documents/render", {
     method: "POST",
     body: JSON.stringify(request),
     signal: AbortSignal.timeout(DOCUMENT_TIMEOUT_MS),
   });
+  return waitForRenderJob(job);
 }
 
 export function listExports(params: { protocolId?: string | null; documentType?: string | null; limit?: number; offset?: number } = {}) {

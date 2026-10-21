@@ -41,6 +41,10 @@ PRODUCTION_ENVIRONMENT_NAMES = frozenset({"production", "prod"})
 # sich nichts signieren, was das Backend anerkennt, und ein versehentliches Entschlüsseln mit
 # secret_crypto schlägt sichtbar fehl.
 SECRETLESS_PROCESS_KINDS = frozenset({"document-worker"})
+# Prozesse ohne Anmeldesitzungen, die aber ADMIN_AUTH_SECRET für secret_crypto brauchen (z. B.
+# Passwörter der Vereinsexporte): bekommen nur für AUTH_SECRET einen Zufallswert - damit lassen
+# sich keine Session-Cookies signieren (job-worker verarbeitet nicht vertrauenswürdige Uploads).
+SESSIONLESS_PROCESS_KINDS = frozenset({"job-worker"})
 
 
 class Settings(BaseSettings):
@@ -298,14 +302,19 @@ class Settings(BaseSettings):
     def is_secretless_process(self) -> bool:
         return self.process_kind.strip().lower() in SECRETLESS_PROCESS_KINDS
 
+    @property
+    def is_sessionless_process(self) -> bool:
+        return self.is_secretless_process or self.process_kind.strip().lower() in SESSIONLESS_PROCESS_KINDS
+
     def apply_process_kind(self) -> None:
-        if self.is_secretless_process:
+        if self.is_sessionless_process:
             self.auth_secret = secrets.token_hex(32)
+        if self.is_secretless_process:
             self.admin_auth_secret = secrets.token_hex(32)
 
     def validate_for_production(self) -> None:
         # Prozesse ohne Sitzungen bekommen ihre Werte aus apply_process_kind, nicht aus der Konfiguration.
-        if not self.is_secretless_process and (self.auth_secret in _INSECURE_DEFAULTS or len(self.auth_secret) < 32):
+        if not self.is_sessionless_process and (self.auth_secret in _INSECURE_DEFAULTS or len(self.auth_secret) < 32):
             print(
                 "FATAL: AUTH_SECRET is insecure or not set. "
                 "Set a random value of at least 32 characters in .env.",

@@ -30,6 +30,9 @@ class RetentionRule:
 RULES: tuple[RetentionRule, ...] = (
     RetentionRule("gallery_upload_job", "COALESCE(finished_at, created_at)", "upload_job_retention_days", "status NOT IN ('queued', 'running')"),
     RetentionRule("photo_analysis_job", "COALESCE(finished_at, created_at)", "upload_job_retention_days", "status NOT IN ('queued', 'running')"),
+    # PDF-Aufträge (Migration 0150): request_json kann Freitext enthalten; die PDFs selbst stehen
+    # in document_export/document_registry und bleiben.
+    RetentionRule("document_render_job", "COALESCE(finished_at, created_at)", "upload_job_retention_days", "status NOT IN ('queued', 'running')"),
     RetentionRule("submission_upload_log", "created_at", "submission_upload_log_retention_days"),
     RetentionRule("backup_event", "created_at", "operations_event_retention_days"),
     RetentionRule("storage_migration_event", "created_at", "operations_event_retention_days"),

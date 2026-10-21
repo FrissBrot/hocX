@@ -20,7 +20,7 @@ from app.core.config import settings
 
 JobKind = Literal["loop", "worker", "host_cron"]
 JobCategory = Literal["virus_scan", "photo_analysis", "uploads", "cleanup", "maintenance", "backup", "storage", "documents"]
-JobService = Literal["backend", "abgabebox-backend", "photo-analysis-worker", "storage-worker", "backup-worker", "document-worker", "host"]
+JobService = Literal["backend", "job-worker", "abgabebox-backend", "photo-analysis-worker", "storage-worker", "backup-worker", "document-worker", "host"]
 
 # Mindestspielraum, bevor ein Job als überfällig gilt - ein langer Tick (grosser ZIP-Import,
 # viele Dateien im Rescan) verschiebt den nächsten Lauf, ohne dass etwas kaputt ist.
@@ -47,13 +47,13 @@ class JobDefinition:
 
 def _loop(
     name: str, category: JobCategory, interval_minutes: float, *, max_silence_seconds: int | None = None,
-    runs_during_maintenance: bool = False,
+    runs_during_maintenance: bool = False, service: JobService = "backend",
 ) -> JobDefinition:
     interval_seconds = int(interval_minutes * 60)
     return JobDefinition(
         name=name,
         kind="loop",
-        service="backend",
+        service=service,
         category=category,
         interval_seconds=interval_seconds,
         max_silence_seconds=max_silence_seconds or max(interval_seconds * 3, _MIN_MAX_SILENCE_SECONDS),
@@ -63,12 +63,12 @@ def _loop(
 
 
 JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
-    _loop("upload_pipeline_rescan", "virus_scan", settings.upload_pipeline_rescan_interval_minutes),
-    _loop("abgabebox_rescan", "virus_scan", settings.abgabebox_rescan_interval_minutes),
+    _loop("upload_pipeline_rescan", "virus_scan", settings.upload_pipeline_rescan_interval_minutes, service="job-worker"),
+    _loop("abgabebox_rescan", "virus_scan", settings.abgabebox_rescan_interval_minutes, service="job-worker"),
     # Ein grosser ZIP-Import kann einen einzelnen Tick lange blockieren - 3 x 5 s wäre ein Fehlalarm.
-    _loop("gallery_upload_ingest", "uploads", 5 / 60, max_silence_seconds=60 * 60),
+    _loop("gallery_upload_ingest", "uploads", 5 / 60, max_silence_seconds=60 * 60, service="job-worker"),
     # Vereinsexport (Datenschutz-Audit Paket 6): ein grosser Export mit allen Fotos kann Stunden dauern.
-    _loop("tenant_data_export", "documents", 1, max_silence_seconds=6 * 60 * 60),
+    _loop("tenant_data_export", "documents", 1, max_silence_seconds=6 * 60 * 60, service="job-worker"),
     _loop("retention_proposals", "cleanup", 24 * 60),
     # Läuft nur im konfigurierten Zeitfenster und bei niedriger Host-Last (should_run) - ein
     # Tag ohne Lauf ist darum noch kein Fehler.
@@ -78,13 +78,13 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         settings.photo_analysis_auto_queue_interval_minutes,
         max_silence_seconds=26 * 60 * 60,
     ),
-    _loop("photo_quality_backfill", "photo_analysis", settings.photo_quality_backfill_interval_minutes),
-    _loop("photo_album_sync", "photo_analysis", settings.photo_album_sync_interval_minutes),
+    _loop("photo_quality_backfill", "photo_analysis", settings.photo_quality_backfill_interval_minutes, service="job-worker"),
+    _loop("photo_album_sync", "photo_analysis", settings.photo_album_sync_interval_minutes, service="job-worker"),
     _loop("domain_health_check", "maintenance", settings.domain_health_check_interval_minutes),
     _loop("cycle_snapshot", "maintenance", settings.cycle_snapshot_check_interval_minutes),
     _loop("task_package_rollover", "maintenance", settings.task_package_rollover_interval_minutes),
-    _loop("export_cleanup", "cleanup", settings.export_cleanup_interval_minutes),
-    _loop("log_cleanup", "cleanup", settings.log_cleanup_interval_minutes),
+    _loop("export_cleanup", "cleanup", settings.export_cleanup_interval_minutes, service="job-worker"),
+    _loop("log_cleanup", "cleanup", settings.log_cleanup_interval_minutes, service="job-worker"),
     # Sammelt den Systemstatus und verschickt ntfy-Alarme. Hängt er, fällt das nicht hier auf
     # (er wertet sich selbst aus), sondern über den veralteten Snapshot: Seite und der
     # Summary-Endpoint für Uptime Kuma melden dann "veraltet".
@@ -167,6 +167,18 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         interval_seconds=None,
         max_silence_seconds=15 * 60,
     ),
+    # Schwere Hintergrundarbeit (eigener Container job-worker, app/workers/job_worker.py,
+    # Concurrency-Audit Paket 10): Heartbeat jede Minute; die Läufe der dorthin verlegten Loops
+    # melden sich unter ihrem eigenen Namen (service job-worker), PDF-Aufträge über die Prüfung
+    # render_queue in /admin/system.
+    JobDefinition(
+        name="job_worker",
+        kind="worker",
+        service="job-worker",
+        category="documents",
+        interval_seconds=None,
+        max_silence_seconds=5 * 60,
+    ),
     JobDefinition(
         name="photo_analysis_worker",
         kind="worker",
@@ -220,5 +232,5 @@ else:
 JOBS_BY_NAME: dict[str, JobDefinition] = {job.name: job for job in JOB_DEFINITIONS}
 assert len(JOBS_BY_NAME) == len(JOB_DEFINITIONS), "duplicate job name in JOB_DEFINITIONS"
 
-_missing_loops = set(BACKGROUND_LOCK_IDS) - {job.name for job in JOB_DEFINITIONS if job.service == "backend"}
+_missing_loops = set(BACKGROUND_LOCK_IDS) - {job.name for job in JOB_DEFINITIONS if job.service in ("backend", "job-worker")}
 assert not _missing_loops, f"BACKGROUND_LOCK_IDS has loop(s) without a JOB_DEFINITIONS entry: {sorted(_missing_loops)}"

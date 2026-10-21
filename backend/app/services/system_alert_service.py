@@ -66,6 +66,7 @@ _CHECK_TITLES_DE = {
     "photo_queue": "Bildanalyse-Warteschlange",
     "document_queue": "Dokumentverarbeitung",
     "runtime": "Auslastung der Dienstprozesse",
+    "render_queue": "PDF-Aufträge",
     "document_verification": "Öffentliche Prüfseite",
     "object_storage": "Dateispeicher",
     "storage_migration": "Storage-Migration",
@@ -89,6 +90,7 @@ _CHECK_PROBLEM_TITLES_DE = {
     "photo_queue": "Bildanalyse-Warteschlange staut sich",
     "document_queue": "Dokumentverarbeitung staut sich oder scheitert",
     "runtime": "Dienstprozesse blockiert oder ausgelastet",
+    "render_queue": "PDF-Aufträge stauen sich oder scheitern",
     "document_verification": "Öffentliche Prüfseite langsam",
     "object_storage": "Dateispeicher nicht erreichbar",
     "storage_migration": "Storage-Migration braucht Aufmerksamkeit",
@@ -160,6 +162,11 @@ def _check_message(check) -> str:
             return (
                 f"{params.get('queued')} Aufträge warten (ältester seit {params.get('oldestMinutes')} Minuten), "
                 f"{params.get('failed')} in 24 h endgültig gescheitert - document-worker prüfen (docker compose logs document-worker)."
+            )
+        case "render_queue":
+            return (
+                f"{params.get('queued')} PDF-Aufträge warten (ältester seit {params.get('oldestMinutes')} Minuten), "
+                f"{params.get('failed')} in 24 h gescheitert - job-worker prüfen (docker compose logs job-worker)."
             )
         case "runtime":
             return (

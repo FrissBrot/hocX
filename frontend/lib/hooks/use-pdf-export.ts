@@ -3,8 +3,8 @@
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useToast } from "@/contexts/toast-context";
-import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
-import { DOCUMENT_TIMEOUT_MS, DocumentExport } from "@/lib/documents/api";
+import { browserApiBaseUrl } from "@/lib/api/client";
+import { renderDocument } from "@/lib/documents/api";
 
 export type PdfExportResult = {
   content_url?: string | null;
@@ -18,7 +18,10 @@ function parseVersion(label: string | null | undefined): { major: number | null;
   return match ? { major: Number(match[1]), minor: Number(match[2]) } : { major: null, minor: null };
 }
 
-/** Erzeugt das Protokoll-PDF (Dokument-Engine, im Dokumentenregister erfasst) aus dem aktuellen Stand und öffnet es. */
+/** Erzeugt das Protokoll-PDF (Dokument-Engine, im Dokumentenregister erfasst) aus dem aktuellen Stand und öffnet es.
+ * Seit dem Concurrency-Audit (Paket 10) ein Auftrag für den job-worker: renderDocument fragt den
+ * Stand ab; ist das PDF fertig, öffnet es sich im vorab geöffneten Tab und eine Meldung (auch nach
+ * einem Seitenwechsel, der Toast-Provider lebt in der App-Shell) öffnet es per Klick. */
 export function usePdfExport() {
   const t = useTranslations("documentStudio");
   const showToast = useToast();
@@ -41,24 +44,17 @@ export function usePdfExport() {
       pdfWindow = window.open("about:blank", "_blank");
       if (pdfWindow) pdfWindow.opener = null;
 
-      const result = await browserApiFetch<DocumentExport>("/api/documents/render", {
-        method: "POST",
-        body: JSON.stringify({ protocol_id: protocolId, document_type: "protocol" }),
-        signal: AbortSignal.timeout(DOCUMENT_TIMEOUT_MS),
-      });
+      const result = await renderDocument({ protocol_id: protocolId, document_type: "protocol" });
       if (!result?.content_url) {
         throw new Error(t("export.failed"));
       }
       const version = parseVersion(result.version_label);
       onExported?.({ content_url: result.content_url, version_label: result.version_label, version_major: version.major, version_minor: version.minor });
       const pdfUrl = `${browserApiBaseUrl}${result.content_url}`;
-      if (pdfWindow && !pdfWindow.closed) {
-        pdfWindow.location.replace(pdfUrl);
-      } else {
-        showToast(t("export.pdfReady"), "success", {
-          onMessageClick: () => window.open(pdfUrl, "_blank", "noopener,noreferrer"),
-        });
-      }
+      if (pdfWindow && !pdfWindow.closed) pdfWindow.location.replace(pdfUrl);
+      showToast(t("export.pdfReady"), "success", {
+        onMessageClick: () => window.open(pdfUrl, "_blank", "noopener,noreferrer"),
+      });
     } catch (error) {
       pdfWindow?.close();
       showToast(error instanceof Error && error.message ? error.message : t("export.failed"), "error");

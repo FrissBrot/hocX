@@ -161,7 +161,9 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
       const url = `${browserApiBaseUrl}${result.content_url}`;
       if (pdfWindow && !pdfWindow.closed) pdfWindow.location.replace(url);
       else window.open(url, "_blank", "noopener,noreferrer");
-      toast(result.version_label ? t("export.createdVersion", { version: result.version_label }) : t("export.created"), "success");
+      toast(result.version_label ? t("export.createdVersion", { version: result.version_label }) : t("export.created"), "success", {
+        onMessageClick: () => window.open(url, "_blank", "noopener,noreferrer"),
+      });
       onExported?.();
     } catch (error) {
       pdfWindow?.close();

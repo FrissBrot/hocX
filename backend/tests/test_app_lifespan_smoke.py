@@ -25,6 +25,7 @@ import asyncio
 
 import app.main as main_module
 from app.core import background_loops
+from app.core.loops import BACKEND_LOOPS, JOB_WORKER_LOOPS
 from app.main import app, lifespan
 
 
@@ -45,8 +46,10 @@ def test_background_loops_start_without_crashing(monkeypatch):
             # schedules onto *this* running loop - asyncio.all_tasks() from right here sees
             # them all, still pending (they haven't had a chance to run yet).
             tasks = [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
-            # 18 Hintergrund-Loops + Laufzeitmonitor (core/runtime_metrics.py)
-            assert len(tasks) == 19, f"expected the 18 background loop tasks + runtime monitor, found {len(tasks)}"
+            # Leichte Hintergrund-Loops (core/loops.py BACKEND_LOOPS) + Laufzeitmonitor; die
+            # schweren startet der job-worker (test_job_worker_loops_start_without_crashing).
+            expected = len(BACKEND_LOOPS) + 1
+            assert len(tasks) == expected, f"expected {expected} background tasks, found {len(tasks)}"
 
             # Give the event loop real wall-clock time to actually step each task once -
             # run_advisory_locked_loop (app/core/background_loops.py) does its first
@@ -63,5 +66,26 @@ def test_background_loops_start_without_crashing(monkeypatch):
                 if task.done()
             ]
             assert not crashed, f"background loop(s) crashed on startup: {crashed}"
+
+    asyncio.run(_boot_and_check())
+
+
+def test_job_worker_loops_start_without_crashing(monkeypatch):
+    """Paket 10: die schweren Loops und die PDF-Auftragsschleife laufen im job-worker."""
+    from app.workers import job_worker
+
+    monkeypatch.setattr(background_loops, "_MAX_START_JITTER_SECONDS", 0.0)
+    factories = job_worker.loop_factories()
+    assert set(JOB_WORKER_LOOPS) <= set(factories)
+    assert not set(JOB_WORKER_LOOPS) & set(BACKEND_LOOPS)
+
+    async def _boot_and_check() -> None:
+        tasks = [asyncio.create_task(factory()) for factory in factories]
+        await asyncio.sleep(2)
+        crashed = [(task.get_coro(), task.exception()) for task in tasks if task.done()]
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        assert not crashed, f"job-worker loop(s) crashed on startup: {crashed}"
 
     asyncio.run(_boot_and_check())

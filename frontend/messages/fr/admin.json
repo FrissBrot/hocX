@@ -170,6 +170,11 @@
         "detail": "{queued, number} en attente · le plus ancien {oldestMinutes, number} min · {failed, number} en échec (24 h)",
         "problem": "Le traitement des documents est en retard ou échoue"
       },
+      "render_queue": {
+        "title": "Tâches PDF",
+        "detail": "{queued, number} en attente · la plus ancienne {oldestMinutes, number} min · {failed, number} échouées (24 h)",
+        "problem": "Les tâches PDF s’accumulent ou échouent"
+      },
       "runtime": {
         "title": "Charge des processus de service",
         "detail": "{instances, number} processus · boucle d’événements max. {maxLagMs, number} ms · pool BD {poolPeakPercent, number} % · pool de threads {threadPeakPercent, number} % · {poolTimeouts, number} dépassements de délai du pool",
@@ -337,7 +342,8 @@
       "photo-analysis-worker": "Worker d'analyse d'images",
       "host": "Serveur (cron)",
       "storage-worker": "Worker de stockage",
-      "document-worker": "Worker de documents"
+      "document-worker": "Worker de documents",
+      "job-worker": "Worker de tâches"
     },
     "interval": {
       "onDemand": "À la demande",
@@ -495,6 +501,10 @@
       "retention_proposals": {
         "title": "Délais de conservation",
         "description": "Crée des propositions selon les délais de chaque association (dépôts, anciens membres, anciennes images de la galerie) et les applique en mode automatique."
+      },
+      "job_worker": {
+        "title": "Worker de tâches",
+        "description": "Exécute les tâches lourdes en arrière-plan (import de galerie, exports PDF, exports de l’association, nouvelles analyses antivirus, nettoyage) - signe de vie chaque minute."
       }
     }
   },

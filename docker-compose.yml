@@ -859,6 +859,62 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Schwere Hintergrundarbeit ausserhalb der uvicorn-Worker (Concurrency-Audit Paket 10,
+  # app/workers/job_worker.py) - siehe docker-compose.release.yml.
+  job-worker:
+    build:
+      context: ./backend
+    user: "0:0"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    mem_limit: 3072m
+    cpus: 1.0
+    pids_limit: 512
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOCX_ENVIRONMENT: development
+      DATABASE_URL: ${DATABASE_URL}
+      APP_DATABASE_URL: ${APP_DATABASE_URL}
+      HOCX_PROCESS_KIND: job-worker
+      # Wie beim Backend explizit, damit e2e/tests ihre eigene --env-file durchreichen.
+      # AUTH_SECRET ersetzt der Prozess durch einen Zufallswert (SESSIONLESS_PROCESS_KINDS).
+      ADMIN_AUTH_SECRET: ${ADMIN_AUTH_SECRET}
+      DB_POOL_SIZE: "6"
+      DB_MAX_OVERFLOW: "2"
+      DOCUMENT_RENDER_CONCURRENCY: "2"
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      THUMBNAIL_ROOT: /app/storage-local/thumbnails
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      CLAMAV_HOST: clamav
+    command: ["python", "-m", "app.workers.job_worker"]
+    volumes:
+      - ./backend:/app
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ./storage-local/thumbnails:/app/storage-local/thumbnails
+      - ./storage-local/work:/app/storage-local/work
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   clamav:
     image: clamav/clamav@sha256:9cb27d7660bdf66e9878c832cb433dd8aa152cfbe16f3c2c0084c80b04ae22b4
     restart: unless-stopped

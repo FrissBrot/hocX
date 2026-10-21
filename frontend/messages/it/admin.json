@@ -170,6 +170,11 @@
         "detail": "{queued, number} in coda · il più vecchio {oldestMinutes, number} min · {failed, number} non riusciti (24 h)",
         "problem": "L'elaborazione dei documenti è in ritardo o non riesce"
       },
+      "render_queue": {
+        "title": "Job PDF",
+        "detail": "{queued, number} in attesa · il più vecchio {oldestMinutes, number} min · {failed, number} falliti (24 h)",
+        "problem": "I job PDF si accumulano o falliscono"
+      },
       "runtime": {
         "title": "Carico dei processi di servizio",
         "detail": "{instances, number} processi · event loop max {maxLagMs, number} ms · pool DB {poolPeakPercent, number} % · pool di thread {threadPeakPercent, number} % · {poolTimeouts, number} timeout del pool",
@@ -337,7 +342,8 @@
       "photo-analysis-worker": "Worker analisi immagini",
       "host": "Server (cron)",
       "storage-worker": "Worker di archiviazione",
-      "document-worker": "Worker documenti"
+      "document-worker": "Worker documenti",
+      "job-worker": "Worker dei job"
     },
     "interval": {
       "onDemand": "Su richiesta",
@@ -495,6 +501,10 @@
       "retention_proposals": {
         "title": "Termini di conservazione",
         "description": "Crea proposte secondo i termini di ogni associazione (consegne, ex membri, vecchie immagini della galleria) e le applica in modalità automatica."
+      },
+      "job_worker": {
+        "title": "Worker dei job",
+        "description": "Esegue i lavori pesanti in background (importazione galleria, esportazioni PDF, esportazioni dell’associazione, nuove scansioni antivirus, pulizia) - segnale di vita ogni minuto."
       }
     }
   },

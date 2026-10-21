@@ -170,6 +170,11 @@
         "detail": "{queued, number} fällig in der Warteschlange · älteste {oldestMinutes, number} min · {failed, number} gescheitert (24 h)",
         "problem": "Dokumentverarbeitung staut sich oder scheitert"
       },
+      "render_queue": {
+        "title": "PDF-Aufträge",
+        "detail": "{queued, number} wartend · älteste {oldestMinutes, number} min · {failed, number} gescheitert (24 h)",
+        "problem": "PDF-Aufträge stauen sich oder scheitern"
+      },
       "runtime": {
         "title": "Auslastung der Dienstprozesse",
         "detail": "{instances, number} Prozesse · Event-Loop max. {maxLagMs, number} ms · DB-Pool {poolPeakPercent, number} % · Threadpool {threadPeakPercent, number} % · {poolTimeouts, number} Pool-Zeitüberschreitungen",
@@ -337,7 +342,8 @@
       "photo-analysis-worker": "Bildanalyse-Worker",
       "host": "Server (Cron)",
       "storage-worker": "Storage-Worker",
-      "document-worker": "Dokument-Worker"
+      "document-worker": "Dokument-Worker",
+      "job-worker": "Job-Worker"
     },
     "interval": {
       "onDemand": "Bei Bedarf",
@@ -495,6 +501,10 @@
       "retention_proposals": {
         "title": "Aufbewahrungsfristen",
         "description": "Legt nach den Fristen der Vereine Vorschläge an (Einreichungen, ehemalige Mitglieder, alte Galeriebilder) und setzt sie bei «automatisch» um."
+      },
+      "job_worker": {
+        "title": "Job-Worker",
+        "description": "Führt schwere Hintergrundarbeit aus (Galerie-Import, PDF-Exporte, Vereinsexporte, Virenscan-Nachprüfung, Aufräumen) - Lebenszeichen jede Minute."
       }
     }
   },

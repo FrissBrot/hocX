@@ -570,7 +570,7 @@ prepare_thumbnail_dir() {
 # Release-Manifest merkt sich, welche davon das Release hatte - ein Rollback auf ein älteres
 # Release (z. B. 1.1.x ohne Objektspeicher/Backup/Dokumentverarbeitung) stoppt die übrigen,
 # statt sie mit dem neuen Image neben dem alten Backend weiterlaufen zu lassen.
-BACKEND_IMAGE_WORKERS=(storage-worker backup-worker document-worker)
+BACKEND_IMAGE_WORKERS=(storage-worker backup-worker document-worker job-worker)
 
 backend_workers_in_compose() {
   local worker found=()
@@ -802,6 +802,10 @@ run_smoke_checks() {
   fi
   if service_exists storage-worker && [ -n "$("${DC[@]}" ps -q --status running storage-worker 2> /dev/null || true)" ]; then
     wait_for_exec storage-worker "Storage-Worker" "python3 -c \"import app.workers.storage_worker\"" || return 1
+  fi
+  # Schwere Hintergrundjobs und PDF-Aufträge (Concurrency-Audit Paket 10).
+  if service_exists job-worker && [ -n "$("${DC[@]}" ps -q --status running job-worker 2> /dev/null || true)" ]; then
+    wait_for_exec job-worker "Job-Worker" "python3 -c \"import app.workers.job_worker; app.workers.job_worker.loop_factories()\"" || return 1
   fi
 }
 

@@ -7,17 +7,16 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from app.core.cycle_utils import format_cycle_name
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
-from app.core.db import get_db, SessionLocal
-from app.core.error_log import record_system_error
+from app.core.db import get_db
 from app.core.redis_client import get_redis_sync
 from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolListCycle, ProtocolRead, ProtocolTemplateSyncRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
 from app.schemas.deletion import DeletionPreview, DeletionRequest, DeletionResultRead
-from app.services import deletion_service, protocol_period_service, public_id_service
+from app.services import deletion_service, document_render_jobs, protocol_period_service, public_id_service
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.collaboration_service import protocol_channel
@@ -54,32 +53,6 @@ def _get_protocol_or_404(db: Session, protocol_id: uuid.UUID, user: CurrentUser)
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
     return protocol
-
-
-async def _generate_pdf_background(protocol_id: int) -> None:
-    """Erzeugt nach dem Abschliessen das (signierte) Protokoll-PDF über die Dokument-Engine."""
-    from starlette.concurrency import run_in_threadpool
-
-    from app.documents import service as document_service
-
-    db = SessionLocal()
-    try:
-        protocol = await run_in_threadpool(db.get, Protocol, protocol_id)
-        if protocol is None:
-            return
-        await document_service.render(
-            db, None, protocol.tenant_id, document_service.DocumentRequest(protocol_id=protocol.public_id, document_type="protocol")
-        )
-    except Exception as exc:
-        # Runs via BackgroundTasks, outside the request/response cycle the global exception
-        # handlers in main.py watch - without this, a failure here was invisible everywhere.
-        def record() -> None:
-            db.rollback()
-            record_system_error(db, exc=exc)
-
-        await run_in_threadpool(record)
-    finally:
-        await run_in_threadpool(db.close)
 
 
 def _cycle_configs_by_template(db: Session, template_ids: set[int]) -> dict[int, CycleConfig]:
@@ -308,13 +281,14 @@ def get_protocol(protocol_id: uuid.UUID, db: Session = Depends(get_db), user: Cu
 def patch_protocol(
     protocol_id: uuid.UUID,
     payload: ProtocolUpdate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
     existing = _get_protocol_or_404(db, protocol_id, user)
     protocol_id = existing.id
+    # Vor dem Update festhalten: existing ist dasselbe Objekt, das update_protocol ändert.
+    previous_status = existing.status
     if payload.session_notes is not None and payload.expected_session_notes is not None:
         # Audit MAIN-BE-011: Protokollzeile bis zum Commit sperren und frisch lesen, damit
         # zwei gleichzeitige Saves mit gleichem erwarteten Stand nicht beide durchgehen.
@@ -339,11 +313,13 @@ def patch_protocol(
         raise HTTPException(status_code=400, detail="Protocol could not be updated") from exc
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
-    if payload.status is not None and payload.status != existing.status:
+    if payload.status is not None and payload.status != previous_status:
         audit.log(db, action="protocol.status_changed", actor=user, entity_type="protocol", entity_id=protocol_id,
-                  details={"from": existing.status, "to": payload.status})
+                  details={"from": previous_status, "to": payload.status})
         if payload.status == "abgeschlossen":
-            background_tasks.add_task(_generate_pdf_background, protocol_id)
+            # Signiertes Protokoll-PDF als dauerhafter Auftrag für den job-worker (CONC-020) statt
+            # als BackgroundTask im Request-Prozess (ging bei Neustart oder belegtem Compile-Platz verloren).
+            document_render_jobs.enqueue_protocol_pdf(db, protocol=protocol)
     return protocol
 
 

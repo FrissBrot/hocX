@@ -597,6 +597,27 @@ def _check_document_verification() -> HealthCheckRead:
     return HealthCheckRead(key="document_verification", status=status, params={"latencyMs": latency_ms})
 
 
+RENDER_QUEUE_WARNING_AGE = timedelta(minutes=10)
+RENDER_FAILED_WINDOW = timedelta(hours=24)
+
+
+def _check_render_queue(db: Session, now: datetime) -> HealthCheckRead:
+    """PDF-Aufträge (document_render_job, job-worker): staut sich die Warteschlange, läuft der
+    job-worker nicht oder kommt nicht nach; gescheiterte Aufträge zeigen Vorlagen- oder
+    Renderprobleme (Details im Fehlerprotokoll)."""
+    queued, oldest = db.execute(
+        text("SELECT count(*), min(created_at) FROM document_render_job WHERE status = 'queued'")
+    ).one()
+    failed = db.scalar(
+        text("SELECT count(*) FROM document_render_job WHERE status = 'failed' AND finished_at >= :since AND error_status >= 500"),
+        {"since": now - RENDER_FAILED_WINDOW},
+    ) or 0
+    oldest_minutes = round((now - oldest).total_seconds() / 60) if oldest else 0
+    stalled = bool(oldest and now - oldest > RENDER_QUEUE_WARNING_AGE)
+    status: HealthStatus = "warning" if stalled or failed else "ok"
+    return HealthCheckRead(key="render_queue", status=status, params={"queued": queued, "oldestMinutes": oldest_minutes, "failed": failed})
+
+
 # Laufzeitkennzahlen der Dienstprozesse (core/runtime_metrics.py, Migration 0148).
 RUNTIME_REPORT_MAX_AGE = timedelta(seconds=60)
 RUNTIME_LAG_WARNING_MS = 1000
@@ -666,6 +687,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("security", lambda: _check_security(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)
+    checks += _run_check("render_queue", lambda: _check_render_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("runtime", lambda: _check_runtime(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_verification", _check_document_verification)
     checks += _run_check("storage_migration", lambda: _check_storage_migration(db, now), failure_status="unknown", db=db)

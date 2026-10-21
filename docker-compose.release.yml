@@ -126,10 +126,11 @@ services:
   backend:
     image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
     restart: unless-stopped
-    # Zwei Worker und die Bildverarbeitung teilen sich dieses Budget. ZIPs werden
-    # auf Platte gepuffert; im Speicher liegen höchstens vier Bilder à 100 MiB plus Decoder.
-    mem_limit: 6144m
-    cpus: 3.0
+    # Zwei uvicorn-Worker (Requests, WebSockets, leichte Loops, Vorschau-Compiles). Die schwere
+    # Hintergrundarbeit (Galerie-Ingest, PDF-Aufträge, Vereinsexport, Backfill) hat seit dem
+    # Concurrency-Audit (Paket 10) ihr eigenes Budget im Dienst job-worker.
+    mem_limit: 4096m
+    cpus: 2.5
     init: true
     read_only: true
     cap_drop:
@@ -750,6 +751,81 @@ services:
       - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       - ./storage-local/work:/app/storage-local/work
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Schwere Hintergrundarbeit ausserhalb der uvicorn-Worker (Concurrency-Audit Paket 10,
+  # app/workers/job_worker.py): Galerie-Ingest, PDF-Aufträge, Vereinsexport, Qualitäts-Backfill,
+  # Album-Sync, Virenscan-Nachprüfung, Aufräumjobs. Überwacht über den Heartbeat job_worker
+  # (/admin/jobs), die Laufzeitkennzahlen und die Prüfung render_queue (/admin/system).
+  job-worker:
+    image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
+    restart: unless-stopped
+    mem_limit: 3072m
+    cpus: 1.5
+    pids_limit: 512
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["python", "-m", "app.workers.job_worker"]
+    command: []
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=1g,mode=1777
+    environment:
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
+      HOCX_PROCESS_KIND: job-worker
+      # Nur die App-Rolle hocx_app (app/core/db.py), nie die Owner-URL; kein AUTH_SECRET (Zufallswert,
+      # SESSIONLESS_PROCESS_KINDS) - ADMIN_AUTH_SECRET braucht secret_crypto für Vereinsexporte.
+      DB_POOL_SIZE: "6"
+      DB_MAX_OVERFLOW: "2"
+      # PDF-Aufträge: zwei Compiles gleichzeitig, Speicherlimit je Compile-Prozess.
+      DOCUMENT_RENDER_CONCURRENCY: "2"
+      APP_DATABASE_URL_FILE: /run/secrets/app_database_url
+      ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      THUMBNAIL_ROOT: /app/storage-local/thumbnails
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
+      TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
+      TRAEFIK_ABGABEBOX_DOMAIN: ${TRAEFIK_ABGABEBOX_DOMAIN}
+      ABGABEBOX_BASE_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
+      DOCUMENT_VERIFY_BASE_URL: ${DOCUMENT_VERIFY_BASE_URL:-}
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      ABGABEBOX_RESCAN_INTERVAL_MINUTES: ${ABGABEBOX_RESCAN_INTERVAL_MINUTES:-15}
+      WORD_IMPORT_RESCAN_INTERVAL_MINUTES: ${WORD_IMPORT_RESCAN_INTERVAL_MINUTES:-15}
+      EXPORT_CLEANUP_INTERVAL_MINUTES: ${EXPORT_CLEANUP_INTERVAL_MINUTES:-1440}
+      EXPORT_RETENTION_DAYS: ${EXPORT_RETENTION_DAYS:-30}
+      LOG_CLEANUP_INTERVAL_MINUTES: ${LOG_CLEANUP_INTERVAL_MINUTES:-1440}
+      AUDIT_LOG_RETENTION_DAYS: ${AUDIT_LOG_RETENTION_DAYS:-730}
+      ERROR_LOG_RETENTION_DAYS: ${ERROR_LOG_RETENTION_DAYS:-90}
+      PROTOCOL_IMAGE_STORAGE_QUOTA_MB: ${PROTOCOL_IMAGE_STORAGE_QUOTA_MB:-2048}
+      HOCX_SERVER_LOCATION: ${HOCX_SERVER_LOCATION:-ch}
+    secrets:
+      - app_database_url
+      - admin_auth_secret
+      - storage_credentials_key
+    volumes:
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ./storage-local/thumbnails:/app/storage-local/thumbnails
+      - ./storage-local/work:/app/storage-local/work
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
     networks:
       - default
       - storage

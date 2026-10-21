@@ -170,6 +170,11 @@
         "detail": "{queued, number} due in the queue · oldest {oldestMinutes, number} min · {failed, number} failed (24 h)",
         "problem": "Document processing is backed up or failing"
       },
+      "render_queue": {
+        "title": "PDF jobs",
+        "detail": "{queued, number} waiting · oldest {oldestMinutes, number} min · {failed, number} failed (24 h)",
+        "problem": "PDF jobs are piling up or failing"
+      },
       "runtime": {
         "title": "Service process load",
         "detail": "{instances, number} processes · event loop max {maxLagMs, number} ms · DB pool {poolPeakPercent, number} % · thread pool {threadPeakPercent, number} % · {poolTimeouts, number} pool timeouts",
@@ -337,7 +342,8 @@
       "photo-analysis-worker": "Image analysis worker",
       "host": "Server (cron)",
       "storage-worker": "Storage worker",
-      "document-worker": "Document worker"
+      "document-worker": "Document worker",
+      "job-worker": "Job worker"
     },
     "interval": {
       "onDemand": "On demand",
@@ -495,6 +501,10 @@
       "retention_proposals": {
         "title": "Retention periods",
         "description": "Creates suggestions according to each club’s retention periods (submissions, former members, old gallery images) and applies them when set to automatic."
+      },
+      "job_worker": {
+        "title": "Job worker",
+        "description": "Runs heavy background work (gallery import, PDF exports, organisation exports, virus re-scans, clean-up) - heartbeat every minute."
       }
     }
   },

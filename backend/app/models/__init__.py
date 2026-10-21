@@ -217,6 +217,7 @@ from app.models.document_entities import (  # noqa: E402 - eigene Datei, siehe M
     DocumentExtraction,
     DocumentFile,
     DocumentJob,
+    DocumentRenderJob,
     DocumentVersion,
 )
 
@@ -225,6 +226,7 @@ __all__ += [
     "DocumentExtraction",
     "DocumentFile",
     "DocumentJob",
+    "DocumentRenderJob",
     "DocumentVersion",
 ]
 

@@ -35,7 +35,7 @@ from app.documents.service import DocumentRequest
 from app.documents.strings import normalize_language, text
 from app.documents.template_service import TemplateStateError
 from app.models import DocumentExport, DocumentTemplate, DocumentTemplateRevision, Protocol, StoredFile, Tenant
-from app.services import public_id_service
+from app.services import document_render_jobs, public_id_service
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 
@@ -141,36 +141,66 @@ def export_read(db: Session, export: DocumentExport) -> DocumentExportRead:
     )
 
 
-@router.post("/documents/render", response_model=DocumentExportRead)
+class DocumentRenderJobRead(BaseModel):
+    """PDF-Auftrag (Migration 0150). status: queued | running | done | failed. Bei done steht der
+    Export in export, bei failed die kuratierte Fehlerantwort (wie früher die Route) in error."""
+
+    id: uuid.UUID
+    status: str
+    export: DocumentExportRead | None = None
+    error_status: int | None = None
+    error: Any = None
+    created_at: datetime
+
+
+def _render_job_read(db: Session, job) -> DocumentRenderJobRead:
+    export = db.get(DocumentExport, job.export_id) if job.export_id is not None else None
+    return DocumentRenderJobRead(
+        id=job.id,
+        status=job.status,
+        export=export_read(db, export) if export is not None else None,
+        error_status=job.error_status,
+        error=job.error,
+        created_at=job.created_at,
+    )
+
+
+@router.post("/documents/render", response_model=DocumentRenderJobRead, status_code=202)
 async def render_document(body: DocumentRequest, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """PDF-Export als Auftrag (Concurrency-Audit CONC-003/-004, Nutzerentscheid «Job mit
+    Benachrichtigung»): Rechte, Existenz und Vorlage werden hier sofort geprüft (prepare ohne
+    Typst, danach zurückgerollt), das Rendern übernimmt der job-worker. Der Client fragt
+    GET /documents/render-jobs/{id} ab."""
     permissions.require_export(user)
+
+    def validate_and_enqueue() -> DocumentRenderJobRead:
+        savepoint = db.begin_nested()
+        try:
+            prepared = document_service.prepare(db, user, user.current_tenant_id, body)
+            protocol_id = prepared.protocol.id if prepared.protocol is not None else None
+        finally:
+            if savepoint.is_active:
+                savepoint.rollback()
+        job = document_render_jobs.enqueue(
+            db, tenant_id=user.current_tenant_id, user_id=user.user_id,
+            request_json=body.model_dump(mode="json", exclude_unset=True), protocol_id=protocol_id,
+        )
+        return _render_job_read(db, job)
+
     try:
-        result = await document_service.render(db, user, user.current_tenant_id, body)
-    except DocumentRenderError as exc:
-        await run_in_threadpool(db.rollback)
-        raise render_error(user, exc) from exc
+        return await run_in_threadpool(validate_and_enqueue)
     except (DocumentPermissionError, DocumentNotFoundError, ValueError) as exc:
-        await run_in_threadpool(db.rollback)
         raise http_error(user, exc) from exc
 
-    def audit_and_read() -> DocumentExportRead:
-        # Synchrone DB-Arbeit nicht im Event-Loop (CONC-001).
-        audit.log(
-            db,
-            action="document.render",
-            actor=user,
-            entity_type="document_export",
-            entity_id=result.export.id,
-            details={
-                "document_type": result.export.document_type,
-                "version": result.export.version_label,
-                "protocol_id": str(body.protocol_id) if body.protocol_id else None,
-                "template_id": str(body.template_id) if body.template_id else None,
-            },
-        )
-        return export_read(db, result.export)
 
-    return await run_in_threadpool(audit_and_read)
+@router.get("/documents/render-jobs/{job_id}", response_model=DocumentRenderJobRead)
+def get_render_job(job_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Stand eines eigenen PDF-Auftrags (fremde und fehlende: 404)."""
+    permissions.require_export(user)
+    job = document_render_jobs.get_job(db, job_id, tenant_id=user.current_tenant_id, user_id=user.user_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    return _render_job_read(db, job)
 
 
 class DiagnosticRead(BaseModel):

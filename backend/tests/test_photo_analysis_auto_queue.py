@@ -10,7 +10,7 @@ from PIL import Image
 from sqlalchemy import text
 
 from app.core.config import settings
-from app.main import _host_load_is_low, _photo_analysis_auto_queue_window_is_open
+from app.core.loops import _host_load_is_low, _photo_analysis_auto_queue_window_is_open
 from app.models.entities import PhotoAnalysisJob
 from app.services.file_service import FileService
 from tests.factories import make_tenant
@@ -51,7 +51,7 @@ class _FixedDatetime(datetime):
 
 def _set_hour(monkeypatch, hour: int):
     _FixedDatetime.fixed_hour = hour
-    monkeypatch.setattr("app.main.datetime", _FixedDatetime)
+    monkeypatch.setattr("app.core.loops.datetime", _FixedDatetime)
 
 
 def test_window_is_open_for_a_plain_non_wrapping_range(monkeypatch):

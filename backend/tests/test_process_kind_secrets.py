@@ -45,3 +45,18 @@ def test_other_processes_still_require_the_secrets_in_production(monkeypatch, pr
     _production_env(monkeypatch, **extra)
     with pytest.raises(SystemExit):
         _settings()
+
+
+def test_job_worker_keeps_admin_secret_but_never_the_session_secret(monkeypatch):
+    """Concurrency-Audit Paket 10: der job-worker braucht ADMIN_AUTH_SECRET (secret_crypto,
+    Vereinsexport), darf aber keine Session-Cookies signieren können."""
+    _production_env(monkeypatch, HOCX_PROCESS_KIND="job-worker", ADMIN_AUTH_SECRET="y" * 40, AUTH_SECRET="x" * 40)
+    settings = _settings()
+    assert settings.admin_auth_secret == "y" * 40
+    assert settings.auth_secret != "x" * 40 and len(settings.auth_secret) == 64
+
+
+def test_job_worker_requires_the_admin_secret_in_production(monkeypatch):
+    _production_env(monkeypatch, HOCX_PROCESS_KIND="job-worker")
+    with pytest.raises(SystemExit):
+        _settings()

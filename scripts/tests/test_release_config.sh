@@ -112,7 +112,7 @@ if grep -q 'env_file:' docker-compose.release.yml; then
   exit 1
 fi
 
-test "$(grep -c 'read_only: true' docker-compose.release.yml)" -eq 12  # +local-s3, storage-init, storage-worker (Objektspeicher), backup-worker, document-worker
+test "$(grep -c 'read_only: true' docker-compose.release.yml)" -eq 13  # +local-s3, storage-init, storage-worker (Objektspeicher), backup-worker, document-worker, job-worker
 
 # Der document-worker verarbeitet nicht vertrauenswürdige Dateien: keine Anmelde-/Admin-Secrets
 # und keine Owner-Datenbank-URL (Audit DOCMGMT-003, Entscheidung Worker-Secrets).
@@ -126,7 +126,7 @@ grep -q 'HOCX_PROCESS_KIND: document-worker' <<<"$document_worker_block" || {
   echo "document-worker braucht HOCX_PROCESS_KIND=document-worker." >&2
   exit 1
 }
-test "$(grep -c 'no-new-privileges:true' docker-compose.release.yml)" -eq 12
+test "$(grep -c 'no-new-privileges:true' docker-compose.release.yml)" -eq 13  # + job-worker
 
 # Audit finding, 2026-08-27: docker-compose.traefik.yml/docker-compose.clamav.yml (the
 # actual prod Traefik/ClamAV - deploy.sh/verify_release.sh never include the base
@@ -201,7 +201,7 @@ fi
 
 # Worker mit dem Backend-Image (Release 1.2.0): im Release-Manifest vermerkt, beim Rollback auf
 # ein Release ohne sie gestoppt statt mit dem neuen Image weiterlaufend.
-grep -q '^BACKEND_IMAGE_WORKERS=(storage-worker backup-worker document-worker)$' scripts/deploy.sh
+grep -q '^BACKEND_IMAGE_WORKERS=(storage-worker backup-worker document-worker job-worker)$' scripts/deploy.sh
 grep -q 'HOCX_BACKEND_WORKERS=' scripts/deploy.sh
 for worker in storage-worker backup-worker document-worker; do
   grep -q "^  ${worker}:$" docker-compose.release.yml || { echo "$worker fehlt in docker-compose.release.yml" >&2; exit 1; }
