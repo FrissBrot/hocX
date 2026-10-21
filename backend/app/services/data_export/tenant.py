@@ -185,15 +185,20 @@ def _write_contents(db: Session, archive: EncryptedZip, job: TenantDataExport, l
     missing = 0
     protocols_without_pdf: list[str] = []
     files = _protocol_pdfs(db, tenant_id, lang, protocols_without_pdf)
-    if job.include_files:
+    include_files = job.include_files
+    if include_files:
         files += _photos(db, tenant_id, lang) + _submissions(db, tenant_id, lang) + _documents(db, tenant_id, lang)
+    # Alle Abfragen sind gelaufen: Transaktion beenden, bevor Objekte geladen und verschlüsselt
+    # werden (Minuten bis Stunden). Sonst bliebe die Verbindung untätig in der Transaktion und
+    # PostgreSQL beendete sie nach dem Idle-Timeout der Rolle (Concurrency-Audit CONC-006).
+    db.commit()
     for namespace, key, member in files:
         if not _add_object(archive, namespace, key, member, work):
             missing += 1
 
     readme = _t(
         lang, "tenantReadme", tenant=tenant_name, date=_fmt_date(date.today()),
-        files=_t(lang, "tenant.withFiles" if job.include_files else "tenant.withoutFiles"),
+        files=_t(lang, "tenant.withFiles" if include_files else "tenant.withoutFiles"),
     ).replace("\\n", "\n")
     if protocols_without_pdf:
         readme += "\n\n" + _t(lang, "tenant.protocolsWithoutPdf") + "\n" + "\n".join(f"- {item}" for item in protocols_without_pdf)

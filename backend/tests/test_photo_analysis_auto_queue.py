@@ -171,3 +171,25 @@ def test_create_pending_analysis_jobs_never_requeues_a_photo_with_no_detected_fa
     created = service.create_pending_analysis_jobs(db)
 
     assert tenant.id not in {job.tenant_id for job in created}
+
+
+def test_stale_running_job_no_longer_blocks_the_tenant(db):
+    """CONC-017: ein abgestürzter Foto-Worker liess den Auftrag für immer "running" - der Mandant
+    bekam danach nie wieder eine Analyse."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.models.entities import PhotoAnalysisJob
+    from app.services.file_service import FileService, PHOTO_ANALYSIS_STALE_RUNNING
+    from tests.factories import make_tenant
+
+    tenant = make_tenant(db)
+    stale = PhotoAnalysisJob(tenant_id=tenant.id, status="running", stored_file_ids=[], started_at=datetime.now(UTC) - PHOTO_ANALYSIS_STALE_RUNNING - timedelta(minutes=1))
+    fresh_tenant = make_tenant(db)
+    fresh = PhotoAnalysisJob(tenant_id=fresh_tenant.id, status="running", stored_file_ids=[], started_at=datetime.now(UTC))
+    db.add_all([stale, fresh])
+    db.flush()
+    FileService().create_pending_analysis_jobs(db)
+    db.refresh(stale)
+    db.refresh(fresh)
+    assert stale.status == "failed"
+    assert fresh.status == "running"

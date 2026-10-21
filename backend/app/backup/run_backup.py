@@ -143,13 +143,28 @@ def _update_hold(db: Session, hold_id: uuid.UUID) -> Any:
     """), {"hold": hold_id}).first()
 
 
+RELEASE_HOLD_ATTEMPTS = 20
+
+
 def release_hold(db: Session, hold_id: uuid.UUID) -> bool:
-    result = db.execute(text("""
-        UPDATE storage_state SET backup_hold_id = NULL, backup_hold_generation = NULL, backup_hold_since = NULL, updated_at = NOW()
-        WHERE id = 1 AND backup_hold_id = :hold
-    """), {"hold": hold_id})
-    db.commit()
-    return bool(result.rowcount)
+    """Wie acquire_hold mit begrenzter Wartezeit je Versuch (Concurrency-Audit CONC-023): das
+    UPDATE wartet auf alle offenen Schreibtransaktionen (FOR SHARE auf storage_state). Vorher
+    ohne lock_timeout - der Backup-Worker hing bis zum Ende der längsten Schreibtransaktion."""
+    for attempt in range(RELEASE_HOLD_ATTEMPTS):
+        db.commit()
+        db.execute(text(f"SET LOCAL lock_timeout = '{HOLD_LOCK_TIMEOUT}'"))  # sql-ok: Konstante
+        try:
+            result = db.execute(text("""
+                UPDATE storage_state SET backup_hold_id = NULL, backup_hold_generation = NULL, backup_hold_since = NULL, updated_at = NOW()
+                WHERE id = 1 AND backup_hold_id = :hold
+            """), {"hold": hold_id})
+        except OperationalError:
+            db.rollback()
+            _logger.info("Backup-Hold %s noch nicht lösbar (Versuch %s), erneut versuchen", hold_id, attempt + 1)
+            continue
+        db.commit()
+        return bool(result.rowcount)
+    raise RuntimeError(f"Backup-Hold {hold_id} nach {RELEASE_HOLD_ATTEMPTS} Versuchen nicht gelöst")
 
 
 def purge_hold_area(backend: Backend, hold_id: uuid.UUID) -> int:

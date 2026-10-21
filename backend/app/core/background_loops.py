@@ -148,6 +148,11 @@ async def run_advisory_locked_loop(
         if should_run is not None and not should_run():
             return None
         with engine.begin() as lock_conn:
+            # Die Lock-Verbindung ist während des Ticks untätig in ihrer Transaktion. Ohne das
+            # beendete PostgreSQL sie nach idle_in_transaction_session_timeout der Rolle (30 min,
+            # Migration 0135) - der Lock wäre frei und der Job liefe auf dem anderen Worker ein
+            # zweites Mal (Concurrency-Audit CONC-006, nachgemessen).
+            lock_conn.execute(text("SET LOCAL idle_in_transaction_session_timeout = 0"))
             acquired = lock_conn.execute(
                 text("SELECT pg_try_advisory_xact_lock(:lock_id)"),
                 {"lock_id": lock_id},

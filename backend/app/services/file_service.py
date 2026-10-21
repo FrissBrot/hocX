@@ -6,14 +6,14 @@ import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path, PurePosixPath
 from typing import Callable, Iterator, Literal
 
 from fastapi import HTTPException, UploadFile
 from PIL import Image
-from sqlalchemy import delete, func, or_, select, text
+from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.orm import Session
 
 from app import scanner
@@ -136,6 +136,10 @@ def _tenant_protocol_image_upload_lock(db: Session, tenant_id: int) -> Iterator[
 # behind it - narrower than MAX_GROUPING_IMAGES since this work is genuinely slower
 # per-image (face detection) even though it doesn't block a request the way Phase 2 does.
 MAX_ANALYSIS_JOB_IMAGES = 2000
+QUALITY_BACKFILL_COMMIT_EVERY = 50
+# Ein Analyseauftrag, der so lange "running" bleibt, ist mit dem Foto-Worker gestorben (OOM,
+# Neustart) - ohne Rücksetzen bekam der Mandant nie wieder einen Auftrag (CONC-017).
+PHOTO_ANALYSIS_STALE_RUNNING = timedelta(hours=6)
 
 
 def _extract_image_metadata(content: bytes) -> tuple[int | None, int | None, datetime | None, str | None]:
@@ -592,6 +596,11 @@ class FileService:
         writes a NULL score when no face is detected, so face_quality_score IS NULL means
         either "not analyzed yet" or "analyzed, no face found"; using it here would
         re-queue every faceless photo forever."""
+        db.execute(
+            update(PhotoAnalysisJob)
+            .where(PhotoAnalysisJob.status == "running", PhotoAnalysisJob.started_at < datetime.now(UTC) - PHOTO_ANALYSIS_STALE_RUNNING)
+            .values(status="failed", finished_at=datetime.now(UTC), error="stale: worker hat den Auftrag nicht abgeschlossen")
+        )
         tenants_with_active_jobs = set(
             db.scalars(select(PhotoAnalysisJob.tenant_id).where(PhotoAnalysisJob.status.in_(["queued", "running"])))
         )
@@ -664,7 +673,7 @@ class FileService:
         updated = 0
         # Abgabebox-Bilder liegen im eigenen Namespace (früher: falscher Stamm, Datei "fehlte").
         abgabebox_ids = abgabebox_stored_file_ids(db, [stored_file.id for stored_file in pending])
-        for stored_file in pending:
+        for position, stored_file in enumerate(pending, start=1):
             content = _read_object(ABGABEBOX if stored_file.id in abgabebox_ids else MAIN, stored_file.storage_path)
             if content is not None:
                 stored_file.sharpness_score, stored_file.exposure_score = compute_quality_scores(content)
@@ -675,6 +684,11 @@ class FileService:
                     stored_file.perceptual_hash = _compute_perceptual_hash(content, stored_file.mime_type) or stored_file.perceptual_hash
                 updated += 1
             stored_file.quality_analyzed_at = datetime.now(UTC)
+            # In Batches festschreiben (Concurrency-Audit CONC-006): eine Transaktion über bis zu
+            # 2000 Bilder lief in den Idle-Timeout der Rolle - dann waren alle Ergebnisse verloren
+            # und der nächste Lauf begann mit denselben Bildern von vorn.
+            if position % QUALITY_BACKFILL_COMMIT_EVERY == 0:
+                db.commit()
         if pending:
             db.commit()
         return updated
