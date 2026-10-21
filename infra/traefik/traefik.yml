@@ -45,6 +45,13 @@ entryPoints:
   # erreichbar, aber nicht direkt aus dem Internet.
   adminsecure:
     address: ":8443"
+    # Concurrency-Audit CONC-021: ohne eigene Angabe gilt Traefiks Default readTimeout von 60 s -
+    # ein Mandantenimport (bis 2 GiB, gepuffert) über einen langsameren Admin-Zugang brach ab.
+    # Gleiche Fristen wie websecure.
+    transport:
+      respondingTimeouts:
+        readTimeout: 1h
+        writeTimeout: 1h
     http:
       middlewares:
         - security-headers@file

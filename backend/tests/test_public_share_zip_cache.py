@@ -108,3 +108,17 @@ def test_changed_estimated_date_builds_a_new_zip(share_env):
     files[0].estimated_taken_on = "2026-07-01"
     b = public_share._cached_share_zip(link, files, {0: POLICY})
     assert a != b
+
+
+def test_tenant_import_aborts_cleanly_without_enough_free_space(monkeypatch, tmp_path):
+    """CONC-021: Entpacken nur mit Platzreserve."""
+    import zipfile as zipmod
+
+    from app.services import tenant_import_service as module
+
+    archive = tmp_path / "export.zip"
+    with zipmod.ZipFile(archive, "w") as zf:
+        zf.writestr("manifest.json", "{}")
+    monkeypatch.setattr(module.shutil, "disk_usage", lambda path: SimpleNamespace(free=10))
+    with zipmod.ZipFile(archive) as zf, pytest.raises(ValueError, match="freier Speicher"):
+        module._safe_extract(zf, tmp_path / "out")

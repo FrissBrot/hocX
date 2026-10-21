@@ -368,3 +368,12 @@ def test_wrong_passphrase_fails_permanently_and_releases_hold(backup_env):
     job = _run(env)
     assert job.state == "failed" and job.error_code == "borg_passphrase_wrong"
     assert db.get(StorageState, 1, populate_existing=True).backup_hold_id is None
+
+
+def test_verify_and_restore_test_only_in_the_night_window(monkeypatch):
+    """Concurrency-Audit CONC-018: schwere Prüfläufe nicht zur Hauptnutzungszeit."""
+    monkeypatch.setenv("BACKUP_HEAVY_WINDOW_HOURS", "1-5")
+    assert backup_worker.in_heavy_window(datetime(2026, 10, 15, 1, 30, tzinfo=UTC)) is True   # 03:30 Zürich (Sommerzeit)
+    assert backup_worker.in_heavy_window(datetime(2026, 10, 15, 12, 0, tzinfo=UTC)) is False  # 14:00 Zürich
+    monkeypatch.setenv("BACKUP_HEAVY_WINDOW_HOURS", "22-4")
+    assert backup_worker.in_heavy_window(datetime(2026, 10, 15, 21, 0, tzinfo=UTC)) is True   # 23:00

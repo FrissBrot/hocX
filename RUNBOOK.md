@@ -750,3 +750,49 @@ Störung erneut einreihen: `... document_admin requeue`. Übernahme pausieren:
 überfälliger `document_worker` heisst: Container läuft nicht oder hängt
 (`docker compose logs document-worker`). Aufträge mit abgelaufener Lease übernimmt ein neu
 gestarteter Worker automatisch.
+
+
+## 17. Job-Worker und Lastgrenzen (Concurrency-Audit 1.2)
+
+Hintergrund: `ROBUSTNESS_CONCURRENCY_AUDIT.md` (Befunde CONC-001..024), Lasttests unter `loadtest/`.
+
+**Neuer Dienst `job-worker`** (Backend-Image, `python -m app.workers.job_worker`): Galerie-Ingest,
+PDF-Aufträge, Vereinsexport, Qualitäts-Backfill, Album-Sync, Virenscan-Nachprüfung und die grossen
+Aufräumjobs laufen nicht mehr in den uvicorn-Workern. `deploy.sh` startet und prüft ihn automatisch
+(`BACKEND_IMAGE_WORKERS`); ein Rollback auf ein Release ohne Job-Worker stoppt ihn, das ältere
+Backend führt die Jobs dann wieder selbst aus. Ohne laufenden Job-Worker entstehen keine PDFs aus
+Exporten und keine Galerie-Importe - `/admin/jobs` meldet `job_worker` als überfällig,
+`/admin/system` die Prüfung «PDF-Aufträge».
+
+**PDF-Export als Auftrag**: `POST /api/documents/render` prüft Rechte sofort und antwortet 202 mit
+einem Auftrag (`document_render_job`); der Browser fragt `GET /api/documents/render-jobs/{id}` ab.
+Auch das PDF nach dem Abschliessen eines Protokolls ist ein Auftrag (übersteht Neustarts, wird bei
+«Compile-Platz belegt» oder Timeout bis zu dreimal wiederholt). Hängende Aufträge (> 15 min
+`running`) setzt der Worker automatisch zurück.
+
+**Überwachung**:
+- `/admin/system` → «Auslastung der Dienstprozesse» (`runtime`): Event-Loop-Verzögerung,
+  DB-Pool- und Threadpool-Belegung, Pool-Zeitüberschreitungen aller Prozesse der letzten Minute.
+  Warnung ab 1 s Loop-Lag oder vollem Pool, kritisch ab 10 s.
+- `/admin/system` → «PDF-Aufträge» (`render_queue`): Warteschlange älter als 10 min oder
+  gescheiterte Aufträge (24 h).
+- `pg_stat_activity.application_name` unterscheidet `hocx-backend`, `hocx-job-worker`,
+  `hocx-document-worker`, `hocx-abgabebox-backend` usw.
+
+**Stellschrauben** (Umgebung, Defaults in Klammern):
+
+| Variable | Wirkung |
+|---|---|
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` (12/8, Worker kleiner) | DB-Pool je Prozess; bei Erschöpfung nach `DB_POOL_TIMEOUT_SECONDS` (5) Antwort 503 `db_busy` mit Retry-After |
+| `GALLERY_UPLOAD_CONCURRENCY` (2) / `GALLERY_UPLOAD_SLOT_WAIT_SECONDS` (60) | gleichzeitige Galerie-Uploads je Backend-Worker, Wartezeit auf einen Platz |
+| `ABGABEBOX_UPLOAD_CONCURRENCY` (2) / `ABGABEBOX_UPLOAD_SLOT_WAIT_SECONDS` (120) | gleichzeitige öffentliche Uploads je Abgabebox-Worker (je bis 150 MiB im Speicher) |
+| `DOCUMENT_RENDER_CONCURRENCY` (2) | Typst-Compiles je Prozess (Backend: Vorschau; Job-Worker: PDF-Aufträge) |
+| `BACKUP_HEAVY_WINDOW_HOURS` (`1-5`) | lokales Zeitfenster (Europe/Zurich) für Backup-Verify und Restore-Test; der Backup-Worker läuft mit niedriger CPU-Priorität |
+
+Teure Monitor-Zählungen (verwaiste Dateien, Belegung des lokalen S3) rechnet `/admin/system` nur noch
+stündlich. Der Admin-Entrypoint hat dieselben Lese-/Schreibfristen (1 h) wie der öffentliche, damit
+grosse Mandantenimporte nicht nach Traefiks Default von 60 s abbrechen; vor dem Entpacken eines
+Imports wird freier Speicher geprüft.
+
+PostgreSQL läuft mit `max_connections=150` (Budget rund 100, siehe Kommentar in der Compose-Datei).
+Wer Pools oder Worker erhöht, rechnet das Budget nach.

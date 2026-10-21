@@ -655,6 +655,23 @@ def _check_runtime(db: Session, now: datetime) -> HealthCheckRead:
     )
 
 
+# Teure Vollzählungen (verwaiste Dateien über alle Referenzen, Belegung des lokalen S3) ändern sich
+# langsam - je Prozess höchstens stündlich rechnen statt bei jedem 30-s-Tick (Concurrency-Audit
+# CONC-024: mit wachsendem Bestand näherten sie sich dem statement_timeout).
+SLOW_CHECK_TTL_SECONDS = 3600
+_slow_check_cache: dict[str, tuple[float, object]] = {}
+
+
+def _cached_slow_check(key: str, fn):
+    now = time.monotonic()
+    cached = _slow_check_cache.get(key)
+    if cached is not None and now - cached[0] < SLOW_CHECK_TTL_SECONDS:
+        return cached[1]
+    result = fn()
+    _slow_check_cache[key] = (now, result)
+    return result
+
+
 def _run_check(key: str, fn, *, failure_status: HealthStatus = "critical", db: Session | None = None) -> list[HealthCheckRead]:
     """Ein Ausfall einer Prüfung ist selbst ein Befund (Dienst nicht erreichbar) - er darf aber
     die übrigen Prüfungen nicht verhindern."""
@@ -681,7 +698,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     # Reine DB-Auswertungen: ein Fehler hier ist ein Bug, kein Ausfall - "unknown" statt Alarm.
     checks += _run_check("error_rate", lambda: _check_error_rate(db), failure_status="unknown", db=db)
     checks += _run_check("scan_backlog", lambda: _check_scan_backlog(db), failure_status="unknown", db=db)
-    checks += _run_check("orphaned_files", lambda: _check_orphaned_files(db), failure_status="unknown", db=db)
+    checks += _run_check("orphaned_files", lambda: _cached_slow_check("orphaned_files", lambda: _check_orphaned_files(db)), failure_status="unknown", db=db)
     checks += _run_check("tenant_offboarding", lambda: _check_tenant_offboarding(db), failure_status="unknown", db=db)
     checks += _run_check("captcha_endpoint", _check_captcha_endpoint, failure_status="unknown", db=db)
     checks += _run_check("security", lambda: _check_security(db), failure_status="unknown", db=db)
@@ -691,7 +708,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("runtime", lambda: _check_runtime(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_verification", _check_document_verification)
     checks += _run_check("storage_migration", lambda: _check_storage_migration(db, now), failure_status="unknown", db=db)
-    checks += _run_check("local_s3", lambda: _check_local_s3(db), failure_status="unknown", db=db)
+    checks += _run_check("local_s3", lambda: _cached_slow_check("local_s3", lambda: _check_local_s3(db)), failure_status="unknown", db=db)
     checks += _run_check("backup", lambda: _check_backup(db, now), failure_status="unknown", db=db)
     return checks
 

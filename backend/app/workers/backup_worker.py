@@ -25,6 +25,7 @@ import signal
 import socket
 import threading
 import uuid
+from zoneinfo import ZoneInfo
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -84,6 +85,20 @@ def schedule_slot(now: datetime, interval_hours: int, offset_minutes: int) -> da
     return base + steps * interval
 
 
+# Lokale Stunden [Start, Ende) für Verify/Restore-Test, z. B. "1-5" (BACKUP_HEAVY_WINDOW_HOURS).
+_HEAVY_WINDOW_TZ = ZoneInfo("Europe/Zurich")
+
+
+def in_heavy_window(now: datetime) -> bool:
+    raw = os.environ.get("BACKUP_HEAVY_WINDOW_HOURS", "1-5").strip()
+    try:
+        start, end = (int(part) for part in raw.split("-", 1))
+    except ValueError:
+        start, end = 1, 5
+    hour = now.astimezone(_HEAVY_WINDOW_TZ).hour
+    return start <= hour < end if start <= end else (hour >= start or hour < end)
+
+
 def _enqueue(db, *, kind: str, trigger: str, key: str, options: dict[str, Any] | None = None) -> bool:
     if db.scalar(select(BackupJob.id).where(BackupJob.idempotency_key == key)) is not None:
         return False
@@ -111,12 +126,16 @@ def schedule_tick(db, now: datetime) -> list[str]:
         return created
     last_verify = db.scalar(select(BackupJob.finished_at).where(BackupJob.kind == "verify", BackupJob.state == "completed")
                             .order_by(BackupJob.finished_at.desc()).limit(1))
-    if last_verify is None or now - last_verify > timedelta(hours=row.verify_interval_hours):
+    # Verify und Restore-Test belasten Datenbank (pg_restore in dieselbe Instanz) und Speicher
+    # stark - nur im nächtlichen Wartungsfenster (Concurrency-Audit CONC-018), nicht zu der Uhrzeit,
+    # zu der der letzte Lauf zufällig fertig wurde.
+    heavy_window = in_heavy_window(now)
+    if heavy_window and (last_verify is None or now - last_verify > timedelta(hours=row.verify_interval_hours)):
         if _enqueue(db, kind="verify", trigger="schedule", key=f"verify:{now:%Y%m%d%H}"):
             created.append("verify")
     last_test = db.scalar(select(BackupJob.finished_at).where(BackupJob.kind == "restore_test", BackupJob.state == "completed")
                           .order_by(BackupJob.finished_at.desc()).limit(1))
-    if last_test is None or now - last_test > timedelta(days=row.restore_test_interval_days):
+    if heavy_window and (last_test is None or now - last_test > timedelta(days=row.restore_test_interval_days)):
         if _enqueue(db, kind="restore_test", trigger="schedule", key=f"restore_test:{now:%Y%m%d}"):
             created.append("restore_test")
     if _enqueue(db, kind="retention", trigger="schedule", key=f"retention:{now:%Y%m%d}"):
@@ -388,6 +407,12 @@ def run_once(env: RunEnv | None, owner: str, *, disabled_reason: str = "disabled
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    # Niedrige CPU-Priorität für Worker und alle Kindprozesse (borg, pg_dump, pg_restore): bei
+    # Konkurrenz um die Host-Kerne gehen Requests vor (Concurrency-Audit CONC-018).
+    try:
+        os.nice(10)
+    except OSError:
+        pass
     owner = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:6]}"
     stopping = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: stopping.set())
