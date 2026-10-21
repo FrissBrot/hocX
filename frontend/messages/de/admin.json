@@ -204,6 +204,11 @@
         "title": "Lokales S3 (Garage)",
         "detail": "{reason, select, active {Aktiver Speicher} initial_target {Ziel der ersten Migration} migration {Teil einer laufenden Migration} fallback_period {Rückfallfrist nach einer Migration} pending_operation {Bereinigung ausstehend} requested {Manuell angefordert} unverified_objects {Noch nicht geprüfte Objekte} not_needed {Nicht benötigt, gestoppt} other {Status unbekannt}} · {objects, number} Objekte · {gb, number} GB",
         "problem": "Lokales S3 (Garage) nicht auswertbar"
+      },
+      "orphaned_files": {
+        "title": "Verwaiste Dateien",
+        "detail": "{count, number} Dateien ohne Bezug",
+        "problem": "Verwaiste Dateien im Speicher"
       }
     },
     "problems": {

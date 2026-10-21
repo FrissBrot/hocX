@@ -244,10 +244,13 @@ class SubmissionService:
         )
 
     def delete_assignment(self, db: Session, assignment_id: int) -> bool:
+        """Löscht die Abgabe samt aller eingereichten Dateien (deletion_service, PRIV-003)."""
+        from app.services import deletion_service
+
         assignment = self.repository.get_assignment(db, assignment_id)
         if assignment is None:
             return False
-        self.repository.delete_assignment(db, assignment)
+        deletion_service.delete_assignment(db, assignment, delete_file_ids=None, actor_user_id=None)
         return True
 
     def _validate_source_fields(self, payload: SubmissionAssignmentCreate) -> None:

@@ -27,7 +27,6 @@ from app.models.entities import (
     PhotoAlbum,
     PhotoAlbumItem,
     PhotoAnalysisJob,
-    ShareLinkFile,
     SubmissionAssignment,
     SubmissionUploadFile,
     WordImportDocument,
@@ -1803,28 +1802,14 @@ class FileService:
         return content
 
     def delete_stored_file(self, db: Session, stored_file: StoredFile) -> None:
-        # DB delete (flushed, so a constraint violation surfaces here) before the
-        # irreversible filesystem unlink, not after - the previous order meant a failure
-        # in the caller's own later commit left a DB row referencing an already-deleted
-        # file (audit finding, 2026-08-25). stored_file_repository.delete() doesn't commit
-        # itself (the caller controls that transaction boundary), so this can't guarantee
-        # against a caller-side rollback recreating the opposite inconsistency (row
-        # survives, file gone) - but flush() catches the far more common failure mode.
-        storage_key = stored_file.storage_path
-        # Ist die Datei Original eines Dokuments, verschwinden Dokument und daraus erzeugte
-        # Dateien (PDF) mit ihr.
-        document_service.release_original(db, stored_file.id)
-        # Freigabelink-Einträge haben keinen Fremdschlüssel auf die Datei (PRIV-016).
-        db.execute(delete(ShareLinkFile).where(ShareLinkFile.file_id == stored_file.public_id))
-        self.stored_file_repository.delete(db, stored_file)
-        db.flush()
-        # Löschung über das Journal: eine laufende Migration übernimmt sie, die Datei taucht im
-        # Ziel nicht wieder auf (siehe objstore_client.ObjectStore.delete).
-        get_object_store().delete(db, MAIN, storage_key)
-        # Nur das eigene Vorschaubild "<id>.jpg" löschen (Audit MAIN-BE-005).
-        thumbnail_path = owned_thumbnail_path(stored_file)
-        if thumbnail_path is not None and thumbnail_path.exists():
-            thumbnail_path.unlink()
+        """Datei überall entfernen (Objekt, Vorschau, Dokumente, Album- und Linkeinträge), siehe
+        file_eraser.FileEraser. Der Aufrufer committet; die eigene Vorschau "<id>.jpg" wird wie
+        bisher sofort gelöscht (Audit MAIN-BE-005)."""
+        from app.services.file_eraser import FileEraser
+
+        eraser = FileEraser()
+        eraser.erase(db, stored_file, namespace=MAIN)
+        eraser.after_commit(db)
 
     def delete_gallery_images(
         self, db: Session, tenant_id: int, file_ids: list[uuid.UUID]
@@ -1898,43 +1883,22 @@ class FileService:
         return self.stored_file_repository.get(db, stored_file_id)
 
     def delete_protocol_image(self, db: Session, image_id: int) -> bool:
+        from app.services.file_eraser import FileEraser
+
         protocol_image = self.protocol_image_repository.get(db, image_id)
         if protocol_image is None:
             return False
-
-        stored_file = self.stored_file_repository.get(db, protocol_image.stored_file_id)
+        stored_file_id = protocol_image.stored_file_id
         self.protocol_image_repository.delete(db, protocol_image)
         db.flush()
         # Audit MAIN-BE-001: "Aus letztem Protokoll übernehmen" legt ProtocolImage-Zeilen mit
-        # derselben stored_file_id an. Datei und StoredFile nur löschen, wenn nichts anderes
-        # mehr darauf verweist; das Vorschaubild erst nach dem Commit entfernen.
-        paths_to_unlink: list[Path] = []
-        if stored_file is not None and not self._stored_file_still_referenced(db, stored_file.id):
-            storage_key = stored_file.storage_path
-            thumbnail_path = owned_thumbnail_path(stored_file)
-            if thumbnail_path is not None:
-                paths_to_unlink.append(thumbnail_path)
-            self.stored_file_repository.delete(db, stored_file)
-            db.flush()
-            get_object_store().delete(db, MAIN, storage_key)
+        # derselben stored_file_id an. Die Datei nur löschen, wenn nichts anderes mehr auf sie zeigt;
+        # das Vorschaubild erst nach dem Commit entfernen.
+        eraser = FileEraser(self)
+        eraser.erase_if_unreferenced(db, [stored_file_id])
         db.commit()
-        for path in paths_to_unlink:
-            path.unlink(missing_ok=True)
+        eraser.after_commit(db)
         return True
-
-    @staticmethod
-    def _stored_file_still_referenced(db: Session, stored_file_id: int) -> bool:
-        """True, wenn noch eine Zeile mit RESTRICT-FK auf die Datei zeigt."""
-        referencing_columns = (
-            ProtocolImage.stored_file_id,
-            GalleryImage.stored_file_id,
-            WordImportDocument.stored_file_id,
-            SubmissionUploadFile.stored_file_id,
-        )
-        for column in referencing_columns:
-            if db.scalar(select(column).where(column == stored_file_id).limit(1)) is not None:
-                return True
-        return False
 
     def _resolve_tenant_id(self, db: Session, protocol_element_block_id: int) -> int:
         protocol_element_block = db.get(ProtocolElementBlock, protocol_element_block_id)

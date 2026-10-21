@@ -238,5 +238,10 @@
   "windowHelp": "Feld leer lassen = auf dieser Seite unbegrenzt. Ohne beide Werte bleibt die Abgabe offen, bis sie manuell geschlossen wird.",
   "windowLabel": "Zeitfenster",
   "windowNoneSentence": "Es bleibt offen, bis es manuell geschlossen wird.",
-  "yesterday": "gestern"
+  "yesterday": "gestern",
+  "deleteAssignmentTitle": "Abgabe löschen",
+  "deleteFileConfirm": "Datei «{name}» endgültig löschen? Sie verschwindet auch aus Fotos und Alben.",
+  "deleteFileAction": "Datei löschen",
+  "fileDeletedToast": "Datei gelöscht",
+  "fileDeleteFailed": "Datei konnte nicht gelöscht werden"
 }

@@ -25861,3 +25861,80 @@ a.mobile-list-row { color: var(--text); }
   .cashflow-cards,
   .cashflow-kind-options { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Lösch-Dialog mit Dateiauswahl (components/ui/delete-with-files-modal.tsx) */
+.delete-files {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.delete-files-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.delete-files-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.delete-files-heading {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.delete-files-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.delete-files-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+  cursor: pointer;
+}
+
+.delete-files-item-locked {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.delete-files-thumb {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  object-fit: cover;
+  border-radius: var(--radius-xs);
+  background: var(--neutral-bg);
+}
+
+.delete-files-text {
+  display: grid;
+  min-width: 0;
+}
+
+.delete-files-name {
+  overflow: hidden;
+  font-size: var(--text-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete-files-hint {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}

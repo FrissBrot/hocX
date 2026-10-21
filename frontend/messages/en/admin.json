@@ -204,6 +204,11 @@
         "title": "Local S3 (Garage)",
         "detail": "{reason, select, active {Active storage} initial_target {Target of the first migration} migration {Part of a running migration} fallback_period {Fallback period after a migration} pending_operation {Cleanup pending} requested {Requested manually} unverified_objects {Objects not yet verified} not_needed {Not needed, stopped} other {Status unknown}} · {objects, number} objects · {gb, number} GB",
         "problem": "Local S3 (Garage) cannot be evaluated"
+      },
+      "orphaned_files": {
+        "title": "Orphaned files",
+        "detail": "{count, number} files without a reference",
+        "problem": "Orphaned files in storage"
       }
     },
     "problems": {

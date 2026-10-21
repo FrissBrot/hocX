@@ -45,6 +45,8 @@ STORAGE_FREE_CRITICAL_PERCENT = 5
 ERRORS_PER_HOUR_WARNING = 20
 ERRORS_PER_HOUR_CRITICAL = 100
 SCAN_BACKLOG_MIN_AGE = timedelta(hours=1)
+# Verwaiste Dateien erst nach einem Tag melden (Uploads committen Zeile und Bezug nicht immer zusammen).
+ORPHAN_MIN_AGE = timedelta(hours=24)
 PHOTO_QUEUE_WARNING_AGE = timedelta(hours=6)
 # Dokumentverarbeitung (document-worker): fällige Aufträge, die so lange warten, bzw. Aufträge,
 # die in diesem Zeitraum endgültig gescheitert sind (nach max_attempts, «Erneut verarbeiten»).
@@ -451,6 +453,20 @@ def _check_scan_backlog(db: Session) -> HealthCheckRead:
     return HealthCheckRead(key="scan_backlog", status="warning" if count else "ok", params={"count": count})
 
 
+def _check_orphaned_files(db: Session) -> HealthCheckRead:
+    """Dateien, auf die nichts mehr zeigt (Datenschutz-Audit PRIV-003/004): sie sind in keiner Ansicht
+    erreichbar, liegen aber im Speicher und in Backups. Neue Fälle deuten auf einen Löschpfad, der
+    file_eraser.FileEraser umgeht - z. B. das Löschen eines Termins mit Abgabebox-Einreichungen."""
+    from app.models.document_entities import DocumentFile
+    from app.services.file_eraser import _REFERENCES
+
+    conditions = [~select(column).where(column == StoredFile.id).exists() for column in (*_REFERENCES, DocumentFile.stored_file_id)]
+    count = db.scalar(
+        select(func.count()).select_from(StoredFile).where(StoredFile.created_at < func.now() - ORPHAN_MIN_AGE, *conditions)
+    ) or 0
+    return HealthCheckRead(key="orphaned_files", status="warning" if count else "ok", params={"count": count})
+
+
 def _check_photo_queue(db: Session, now: datetime) -> HealthCheckRead:
     queued, oldest = db.execute(
         select(func.count(), func.min(PhotoAnalysisJob.created_at)).where(PhotoAnalysisJob.status == "queued")
@@ -525,6 +541,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     # Reine DB-Auswertungen: ein Fehler hier ist ein Bug, kein Ausfall - "unknown" statt Alarm.
     checks += _run_check("error_rate", lambda: _check_error_rate(db), failure_status="unknown", db=db)
     checks += _run_check("scan_backlog", lambda: _check_scan_backlog(db), failure_status="unknown", db=db)
+    checks += _run_check("orphaned_files", lambda: _check_orphaned_files(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_verification", _check_document_verification)

@@ -106,5 +106,20 @@
   "profileImage": {
     "invalidType": "Scegli un'immagine PNG, JPG, GIF o WebP (SVG non è supportato).",
     "tooLarge": "L'immagine è troppo grande (max. 5 MB)."
+  },
+  "deleteWithFiles": {
+    "selectedCount": "{selected, number} di {total, number} selezionati per l'eliminazione",
+    "selectAll": "Seleziona tutto",
+    "selectNone": "Deseleziona tutto",
+    "groups": {
+      "protocol_image": "Immagini in questo verbale",
+      "submission": "File consegnati",
+      "gallery": "Foto della galleria per questa consegna"
+    },
+    "usedElsewhere": "Ancora usato altrove – viene mantenuto",
+    "keptHint": "{count, plural, one {Un file non selezionato viene spostato} other {# file non selezionati vengono spostati}} nella galleria.",
+    "cancel": "Annulla",
+    "confirm": "{count, plural, =0 {Elimina, mantieni i file} one {Elimina con un file} other {Elimina con # file}}",
+    "confirmPlain": "Elimina"
   }
 }

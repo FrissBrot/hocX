@@ -16,6 +16,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
+import { useDeleteWithFiles } from "@/components/ui/delete-with-files-modal";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { usePdfExport, PdfExportResult } from "@/lib/hooks/use-pdf-export";
@@ -86,6 +87,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
   }, [initialProtocols]);
   const showToast = useToast();
   const confirm = useConfirm();
+  const { requestDelete, modal: deleteModal } = useDeleteWithFiles();
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [availableTemplates, setAvailableTemplates] = useState(templates);
   const { busyByProtocol: pdfBusyByProtocol, openOrGeneratePdf } = usePdfExport();
@@ -198,16 +200,17 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
   }
 
   async function deleteProtocol(protocolId: string) {
-    const ok = await confirm({
-      message: t("deleteConfirmMessage"),
-      tone: "danger",
-      confirmLabel: t("delete")
-    });
-    if (!ok) return;
     try {
       const deletedProtocol = protocols.find((protocol) => protocol.id === protocolId);
       const deletedLabel = deletedProtocol?.title ?? deletedProtocol?.protocol_number ?? t("unnamed");
-      await browserApiFetch<{ message: string }>(`/api/protocols/${protocolId}`, { method: "DELETE" });
+      // Rückfrage mit Auswahl der Protokollbilder (Datenschutz-Audit PRIV-004).
+      const result = await requestDelete({
+        title: t("deleteProtocol"),
+        message: t("deleteConfirmMessage"),
+        previewUrl: `/api/protocols/${protocolId}/deletion-preview`,
+        deleteUrl: `/api/protocols/${protocolId}/delete`,
+      });
+      if (!result) return;
       setProtocols((current) => current.filter((protocol) => protocol.id !== protocolId));
       showToast(t("deleted", { name: deletedLabel }), "success");
       router.refresh();
@@ -384,6 +387,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
 
   return (
     <div className="grid">
+      {deleteModal}
       <div className="page-header">
         <div>
           <h1 className="page-title">{t("title")}</h1>

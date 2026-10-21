@@ -34,6 +34,18 @@ Installationen aktualisieren können.
   Offsite-Kopien werden gelöscht.
 - Backends schreiben kein Access-Log mehr (Pfade enthielten Link-Tokens).
 
+### Datenschutz (Paket 2: vollständige Dateilöschung)
+
+- **Protokoll löschen:** ein Dialog zeigt die Bilder des Protokolls; standardmässig werden sie
+  mitgelöscht, abgewählte wandern mit Tag «Protokoll …» in die Galerie. Bilder, die noch ein anderes
+  Protokoll verwendet, bleiben. Erzeugte PDFs verschwinden mit. Vorher blieben alle Bilder liegen.
+- **Abgabe löschen:** gleicher Dialog für eingereichte Dateien und Galeriefotos der Abgabe;
+  behaltene Einreichungen werden aus dem Abgabebox-Speicher in die Galerie übernommen.
+- **Einzelne Einreichungen** lassen sich im Abgabe-Detail löschen (z. B. auf Wunsch der
+  einreichenden Person), samt Vorschau, Dokumenten, Album- und Linkeinträgen.
+- Eine gemeinsame Löschfunktion räumt bei jeder Dateilöschung Objekt, Vorschaubild, Dokumente,
+  Album- und Freigabelink-Einträge ab. `/admin/system` meldet Dateien, die zu nichts mehr gehören.
+
 ### Behoben
 
 - **Foto-Analyse:** Der Foto-Worker konnte seit Migration `0134` keine Dateien mehr laden

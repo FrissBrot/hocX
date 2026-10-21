@@ -106,5 +106,20 @@
   "profileImage": {
     "invalidType": "Veuillez choisir une image PNG, JPG, GIF ou WebP (le SVG n'est pas pris en charge).",
     "tooLarge": "L'image est trop volumineuse (5 Mo max.)."
+  },
+  "deleteWithFiles": {
+    "selectedCount": "{selected, number} sur {total, number} sélectionnés pour suppression",
+    "selectAll": "Tout sélectionner",
+    "selectNone": "Ne rien sélectionner",
+    "groups": {
+      "protocol_image": "Images de ce procès-verbal",
+      "submission": "Fichiers déposés",
+      "gallery": "Photos de la galerie pour ce dépôt"
+    },
+    "usedElsewhere": "Encore utilisé ailleurs – sera conservé",
+    "keptHint": "{count, plural, one {Un fichier non sélectionné est déplacé} other {# fichiers non sélectionnés sont déplacés}} dans la galerie.",
+    "cancel": "Annuler",
+    "confirm": "{count, plural, =0 {Supprimer, garder les fichiers} one {Supprimer avec un fichier} other {Supprimer avec # fichiers}}",
+    "confirmPlain": "Supprimer"
   }
 }

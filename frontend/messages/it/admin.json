@@ -204,6 +204,11 @@
         "title": "S3 locale (Garage)",
         "detail": "{reason, select, active {Archivio attivo} initial_target {Destinazione della prima migrazione} migration {Parte di una migrazione in corso} fallback_period {Periodo di ripristino dopo una migrazione} pending_operation {Pulizia in sospeso} requested {Richiesto manualmente} unverified_objects {Oggetti non ancora verificati} not_needed {Non necessario, fermato} other {Stato sconosciuto}} · {objects, number} oggetti · {gb, number} GB",
         "problem": "S3 locale (Garage) non valutabile"
+      },
+      "orphaned_files": {
+        "title": "File orfani",
+        "detail": "{count, number} file senza riferimento",
+        "problem": "File orfani nell'archivio"
       }
     },
     "problems": {

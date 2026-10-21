@@ -59,6 +59,7 @@ _CHECK_TITLES_DE = {
     "storage": "Speicherplatz",
     "error_rate": "Fehlerrate",
     "scan_backlog": "Virenprüfung im Rückstand",
+    "orphaned_files": "Verwaiste Dateien",
     "photo_queue": "Bildanalyse-Warteschlange",
     "document_queue": "Dokumentverarbeitung",
     "document_verification": "Öffentliche Prüfseite",
@@ -77,6 +78,7 @@ _CHECK_PROBLEM_TITLES_DE = {
     "storage": "Speicherplatz knapp",
     "error_rate": "Viele Einträge im Fehlerprotokoll",
     "scan_backlog": "Virenprüfung im Rückstand",
+    "orphaned_files": "Verwaiste Dateien im Speicher",
     "photo_queue": "Bildanalyse-Warteschlange staut sich",
     "document_queue": "Dokumentverarbeitung staut sich oder scheitert",
     "document_verification": "Öffentliche Prüfseite langsam",
@@ -124,6 +126,8 @@ def _check_message(check) -> str:
             return f"{params.get('lastHour')} Fehler in der letzten Stunde, {params.get('lastDay')} in 24 Stunden - siehe Fehlerprotokoll."
         case "scan_backlog":
             return f"{params.get('count')} Dateien warten seit über einer Stunde auf die Virenprüfung."
+        case "orphaned_files":
+            return f"{params.get('count')} Dateien gehören zu nichts mehr (älter als 1 Tag) - Löschpfad prüfen, Bereinigung im Adminportal (Mandant → Bereinigen)."
         case "photo_queue":
             return f"{params.get('queued')} Aufträge warten, der älteste seit {params.get('oldestMinutes')} Minuten."
         case "document_queue":

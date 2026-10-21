@@ -16,7 +16,8 @@ from app.core.db import get_db, SessionLocal
 from app.core.error_log import record_system_error
 from app.core.redis_client import get_redis_sync
 from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolListCycle, ProtocolRead, ProtocolTemplateSyncRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
-from app.services import protocol_period_service, public_id_service
+from app.schemas.deletion import DeletionPreview, DeletionRequest, DeletionResultRead
+from app.services import deletion_service, protocol_period_service, public_id_service
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.collaboration_service import protocol_channel
@@ -497,24 +498,60 @@ def create_quick_todo(
     }
 
 
+def _delete_protocol_with_files(db: Session, existing: Protocol, user: CurrentUser, delete_file_ids: set[uuid.UUID] | None) -> DeletionResultRead:
+    """Gemeinsamer Ablauf von DELETE (alle Dateien) und POST …/delete (Auswahl) - PRIV-004."""
+    from app.services.file_service import FileService
+
+    service.get_protocol_or_404_not_frozen(db, existing.id)
+    audit_details = {"protocol_number": existing.protocol_number, "title": existing.title, "status": existing.status}
+    protocol_internal_id = existing.id
+    try:
+        result = deletion_service.delete_protocol(db, existing, delete_file_ids=delete_file_ids, actor_user_id=user.user_id, file_service=FileService())
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Protocol could not be deleted") from exc
+    audit.log(
+        db, action="protocol.deleted", actor=user, entity_type="protocol", entity_id=protocol_internal_id,
+        details={**audit_details, "deleted_files": result.deleted_files, "kept_files": result.kept_files},
+    )
+    return DeletionResultRead(deleted_files=result.deleted_files, kept_files=result.kept_files, untouched_files=result.untouched_files)
+
+
+@router.get("/protocols/{protocol_id}/deletion-preview", response_model=DeletionPreview)
+def preview_protocol_deletion(
+    protocol_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Welche Bilder mit dem Protokoll verschwinden würden (Lösch-Dialog, Datenschutz-Audit PRIV-004)."""
+    require_writer(user)
+    existing = _get_protocol_or_404(db, protocol_id, user)
+    return deletion_service.preview_read(deletion_service.protocol_preview(db, existing))
+
+
+@router.post("/protocols/{protocol_id}/delete", response_model=DeletionResultRead)
+def delete_protocol_with_selection(
+    protocol_id: uuid.UUID,
+    payload: DeletionRequest,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Löscht das Protokoll; gewählte Bilder werden mitgelöscht, die übrigen in die Galerie übernommen."""
+    require_writer(user)
+    existing = _get_protocol_or_404(db, protocol_id, user)
+    return _delete_protocol_with_files(db, existing, user, set(payload.delete_file_ids))
+
+
 @router.delete("/protocols/{protocol_id}", response_model=dict[str, str])
 def delete_protocol(
     protocol_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    """Ohne Auswahl: alle Bilder, die nur dieses Protokoll verwendet, werden mitgelöscht."""
     require_writer(user)
     existing = _get_protocol_or_404(db, protocol_id, user)
-    audit_details = {"protocol_number": existing.protocol_number, "title": existing.title, "status": existing.status}
-    try:
-        deleted = service.delete_protocol(db, existing.id)
-    except SQLAlchemyError as exc:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Protocol could not be deleted") from exc
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Protocol not found")
-    audit.log(db, action="protocol.deleted", actor=user, entity_type="protocol", entity_id=existing.id,
-              details=audit_details)
+    _delete_protocol_with_files(db, existing, user, None)
     return {"message": "Protocol deleted"}
 
 

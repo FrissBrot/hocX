@@ -106,5 +106,20 @@
   "profileImage": {
     "invalidType": "Please choose a PNG, JPG, GIF or WebP image (SVG is not supported).",
     "tooLarge": "The image is too large (max. 5 MB)."
+  },
+  "deleteWithFiles": {
+    "selectedCount": "{selected, number} of {total, number} selected for deletion",
+    "selectAll": "Select all",
+    "selectNone": "Select none",
+    "groups": {
+      "protocol_image": "Images in this protocol",
+      "submission": "Submitted files",
+      "gallery": "Gallery photos for this submission"
+    },
+    "usedElsewhere": "Still used elsewhere – will be kept",
+    "keptHint": "{count, plural, one {One file not selected is} other {# files not selected are}} moved to the gallery.",
+    "cancel": "Cancel",
+    "confirm": "{count, plural, =0 {Delete, keep files} one {Delete with one file} other {Delete with # files}}",
+    "confirmPlain": "Delete"
   }
 }

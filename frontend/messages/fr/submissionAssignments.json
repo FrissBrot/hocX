@@ -238,5 +238,10 @@
   "windowHelp": "Laissez un champ vide pour une durée illimitée de ce côté. Sans les deux valeurs, le dépôt reste ouvert jusqu'à sa fermeture manuelle.",
   "windowLabel": "Fenêtre temporelle",
   "windowNoneSentence": "Il reste ouvert jusqu'à sa fermeture manuelle.",
-  "yesterday": "hier"
+  "yesterday": "hier",
+  "deleteAssignmentTitle": "Supprimer le dépôt",
+  "deleteFileConfirm": "Supprimer définitivement « {name} » ? Il disparaît aussi des photos et des albums.",
+  "deleteFileAction": "Supprimer le fichier",
+  "fileDeletedToast": "Fichier supprimé",
+  "fileDeleteFailed": "Le fichier n’a pas pu être supprimé"
 }
