@@ -76,6 +76,7 @@
     "captchaPlaceholder": "Security check (no FriendlyCaptcha configured – test/dev environment)",
     "submit": "Submit",
     "submitting": "Uploading…",
+    "busyRetry": "Many uploads at the moment – trying again in {seconds, plural, one {# second} other {# seconds}} …",
     "successTitle": "Thank you, submission received",
     "successCount": "{count, plural, one {# file uploaded for this submission.} other {# files uploaded for this submission.}}",
     "uploadMore": "Submit another file",

@@ -76,6 +76,7 @@
     "captchaPlaceholder": "Verifica di sicurezza (nessun FriendlyCaptcha configurato – ambiente di test/sviluppo)",
     "submit": "Invia",
     "submitting": "Caricamento in corso…",
+    "busyRetry": "Molti caricamenti in corso – nuovo tentativo tra {seconds, plural, one {# secondo} other {# secondi}} …",
     "successTitle": "Grazie, consegna ricevuta",
     "successCount": "{count, plural, one {# file caricato per questa consegna.} other {# file caricati per questa consegna.}}",
     "uploadMore": "Consegna un altro file",

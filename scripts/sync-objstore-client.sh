@@ -6,6 +6,7 @@
 # - backend/app/core/objstore_client.py -> Abgabebox, Foto-Worker (Objektspeicher-Client)
 # - backend/app/services/gps_strip.py   -> Abgabebox (GPS beim Upload weglassen, Paket 9.3)
 # - backend/app/core/runtime_metrics.py -> Abgabebox, Foto-Worker (Laufzeitkennzahlen, /admin/system)
+# - backend/app/scanner.py              -> Abgabebox (ClamAV-Client mit prozessweiter Begrenzung)
 #
 #   scripts/sync-objstore-client.sh          # Kopien aktualisieren
 #   scripts/sync-objstore-client.sh --check  # nur prüfen (CI), Exit 1 bei Abweichung
@@ -18,6 +19,7 @@ PAIRS=(
   "backend/app/core/objstore_client.py|photo-analysis-worker/app/objstore_client.py"
   "backend/app/services/gps_strip.py|abgabebox-backend/app/gps_strip.py"
   "backend/app/core/runtime_metrics.py|abgabebox-backend/app/runtime_metrics.py"
+  "backend/app/scanner.py|abgabebox-backend/app/scanner.py"
   "backend/app/core/runtime_metrics.py|photo-analysis-worker/app/runtime_metrics.py"
 )
 

@@ -8,6 +8,7 @@ import { CaptchaWidget } from "@/components/captcha-widget";
 import { useFlowDone } from "@/components/flow-steps";
 import { publicApiUrl } from "@/lib/api";
 import { validateUploadFiles, SUPPORTED_UPLOAD_EXTENSIONS } from "@/lib/validate-upload";
+import { MAX_BUSY_RETRIES, isRetryableBusy, retryDelaySeconds } from "@/lib/upload-retry";
 
 type Props = {
   linkToken: string;
@@ -36,6 +37,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
   const [captchaVerifying, setCaptchaVerifying] = useState(false);
   const [captchaKey, setCaptchaKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [retryNotice, setRetryNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [done, setDone] = useState(false);
@@ -172,16 +174,27 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
     setError(null);
     setWarnings([]);
     try {
-      const formData = new FormData();
-      formData.append("captcha_session_token", captchaSessionToken);
-      formData.append("include_gps", includeGps ? "true" : "false");
-      files.forEach((file) => formData.append("files", file));
-      const response = await fetch(
-        publicApiUrl(
-          `/api/public/${encodeURIComponent(linkToken)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/upload`
-        ),
-        { method: "POST", body: formData, signal: AbortSignal.timeout(3 * 60 * 60 * 1000) }
+      const uploadUrl = publicApiUrl(
+        `/api/public/${encodeURIComponent(linkToken)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/upload`
       );
+      let response: Response;
+      // Server kurz ausgelastet (503 mit Retry-After, z. B. viele gleichzeitige Uploads kurz vor
+      // einer Frist): selbst erneut senden, die ausgewählten Dateien bleiben erhalten. Wartung
+      // (code "maintenance") wird nicht wiederholt - dafür gibt es das Wartungsbanner.
+      for (let attempt = 0; ; attempt += 1) {
+        const formData = new FormData();
+        formData.append("captcha_session_token", captchaSessionToken);
+        formData.append("include_gps", includeGps ? "true" : "false");
+        files.forEach((file) => formData.append("files", file));
+        response = await fetch(uploadUrl, { method: "POST", body: formData, signal: AbortSignal.timeout(3 * 60 * 60 * 1000) });
+        if (response.status !== 503 || attempt >= MAX_BUSY_RETRIES) break;
+        const busyBody = await response.clone().json().catch(() => null);
+        if (!isRetryableBusy(response.status, busyBody?.code)) break;
+        const waitSeconds = retryDelaySeconds(response.headers.get("Retry-After"));
+        setRetryNotice(t("busyRetry", { seconds: waitSeconds }));
+        await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1000));
+        setRetryNotice(null);
+      }
       if (!response.ok) {
         if (response.status === 429) {
           throw new Error(t("errors.tooManyRequests"));
@@ -344,6 +357,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
       )}
 
       {error && <p className="error">{error}</p>}
+      {retryNotice && <p className="muted" role="status">{retryNotice}</p>}
 
       <label className="upload-gps-option">
         <input type="checkbox" checked={includeGps} onChange={(event) => setIncludeGps(event.target.checked)} />

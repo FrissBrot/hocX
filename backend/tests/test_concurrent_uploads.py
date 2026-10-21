@@ -1,4 +1,4 @@
-"""Independent DB sessions must not scan or store the same concurrent upload twice."""
+"""Independent DB sessions must not store the same concurrent upload twice."""
 import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -54,7 +54,9 @@ def test_concurrent_upload_scans_and_stores_once(monkeypatch, tmp_path, method):
         with ThreadPoolExecutor(2) as pool:
             futures = [pool.submit(upload), pool.submit(upload)]
             results = [future.result(timeout=10) for future in futures]
-        assert len(scans) == 1
+        # Der Scan läuft bewusst ohne Upload-Lock (CONC-008): zwei gleichzeitige identische
+        # Uploads werden ggf. beide gescannt, gespeichert wird trotzdem genau einer.
+        assert 1 <= len(scans) <= 2
         assert sum(len(items) for items, _ in results) == 1
         assert sum('Duplikat' in error for _, errors in results for error in errors) == 1
         with Session(engine) as db:

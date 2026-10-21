@@ -537,7 +537,14 @@ app = FastAPI(
 
 from app.upload_admission import UploadAdmissionMiddleware
 from app.services.upload_pipeline import GALLERY_REQUEST_MAX_BYTES
-app.add_middleware(UploadAdmissionMiddleware, path="/api/files/gallery-uploads", max_bytes=GALLERY_REQUEST_MAX_BYTES, storage_dir=settings.upload_root)
+app.add_middleware(
+    UploadAdmissionMiddleware,
+    path="/api/files/gallery-uploads",
+    max_bytes=GALLERY_REQUEST_MAX_BYTES,
+    storage_dir=settings.upload_root,
+    max_active=settings.gallery_upload_concurrency,
+    wait_seconds=settings.gallery_upload_slot_wait_seconds,
+)
 
 # Audit MAIN-SEC-004: Multipart nur mit signierter Session und mit Grössenlimit, bevor
 # Starlette den Body auf die Platte spoolt (Galerie hat oben ihre eigene Admission).

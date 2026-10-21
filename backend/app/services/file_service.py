@@ -869,15 +869,19 @@ class FileService:
             content = await asyncio.to_thread(gps_strip.strip_gps, content, mime)
 
         tenant_id = self._resolve_tenant_id(db, protocol_element_block.id)
-        await acquire_upload_lock(db, tenant_id)
         checksum = hashlib.sha256(content).hexdigest()
-        existing_block_images = self.protocol_image_repository.list_for_protocol_block(db, protocol_element_block.id)
-        if any(row.StoredFile.checksum_sha256 == checksum for row in existing_block_images):
-            raise HTTPException(status_code=409, detail="Dieses Bild wurde bereits in diesen Block hochgeladen")
 
-        _, duplicates = self._filter_exact_duplicates(db, tenant_id, [(file.filename or "Bild", content)])
-        if duplicates:
-            raise HTTPException(status_code=409, detail=duplicates[0])
+        def reject_duplicates() -> None:
+            existing_block_images = self.protocol_image_repository.list_for_protocol_block(db, protocol_element_block.id)
+            if any(row.StoredFile.checksum_sha256 == checksum for row in existing_block_images):
+                raise HTTPException(status_code=409, detail="Dieses Bild wurde bereits in diesen Block hochgeladen")
+            _, duplicates = self._filter_exact_duplicates(db, tenant_id, [(file.filename or "Bild", content)])
+            if duplicates:
+                raise HTTPException(status_code=409, detail=duplicates[0])
+
+        # Vorprüfung ohne Lock; Scan und Metadaten-Analyse ebenfalls ohne den Upload-Lock des
+        # Mandanten (CONC-008), danach unter Lock erneut prüfen und speichern.
+        reject_duplicates()
 
         # Unlike word-import documents and abgabebox uploads, protocol images were never
         # scanned at all (audit finding, 2026-08-25) - scan_status defaulted to "clean" in
@@ -888,6 +892,8 @@ class FileService:
         scan_status = (await scanner.scan_many([content], host=settings.clamav_host, port=settings.clamav_port))[0]
         # Metadaten-Analyse (PIL/pillow-heif) aus demselben Grund nicht auf dem Event-Loop.
         upload_metadata = await asyncio.to_thread(image_metadata_service.extract_image_metadata, content)
+        await acquire_upload_lock(db, tenant_id)
+        reject_duplicates()
 
         # No per-tenant total quota existed at all before this fix (audit finding,
         # 2026-08-25) - only the per-file MAX_UPLOAD_BYTES check above. Quota check and
@@ -1019,14 +1025,34 @@ class FileService:
         hier neu berechnete Hash passt. Exakte Duplikate werden nicht gespeichert, ergaenzen aber
         fehlende Metadaten des vorhandenen Bildes. file_results (optional) erhaelt je Datei
         {name, status, file_id?, applied, conflicts, message?} fuer die Ergebnisanzeige."""
-        await acquire_upload_lock(db, tenant_id, timeout_seconds=BACKGROUND_TIMEOUT_SECONDS)
         self.ensure_storage()
         normalized_tags = _normalize_tags(tags)
         upload_event = db.get(Event, upload_event_id) if upload_event_id is not None else None
         file_hints = file_hints or {}
         results: list[dict] = file_results if file_results is not None else []
         duplicates: list[tuple[str, str]] = []
+        # Vorfilter ohne Lock (bekannte Duplikate nicht scannen), dann der Virenscan - der
+        # langsamste Schritt - ebenfalls ohne den Upload-Lock des Mandanten (Concurrency-Audit
+        # CONC-008: vorher warteten alle anderen Uploads des Vereins inkl. Abgabebox so lange).
         files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
+        live_clips = live_clips or {}
+        clip_names = [filename for filename, _content in files if filename in live_clips]
+        scan_results = await scanner.scan_many(
+            [content for _filename, content in files] + [live_clips[name] for name in clip_names],
+            host=settings.clamav_host,
+            port=settings.clamav_port,
+        ) if files else []
+        scanned = list(zip(files, scan_results[: len(files)]))
+        clip_scan_status = dict(zip(clip_names, scan_results[len(files) :]))
+        # Ab hier bis zum Commit unter Lock: erneut auf Duplikate prüfen - ein paralleler Upload
+        # desselben Bildes kann inzwischen gespeichert sein.
+        await acquire_upload_lock(db, tenant_id, timeout_seconds=BACKGROUND_TIMEOUT_SECONDS)
+        still_new, late_duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
+        duplicate_errors += late_duplicate_errors
+        keep = {id(file) for file in still_new}
+        scanned = [(file, status) for file, status in scanned if id(file) in keep]
+        files = [file for file, _status in scanned]
+        scan_statuses = [status for _file, status in scanned]
         self._enrich_duplicates(
             db, tenant_id, duplicates, file_hints=file_hints, estimated_taken_on=estimated_taken_on, user_id=created_by, results=results
         )
@@ -1035,15 +1061,6 @@ class FileService:
                 before_commit([], duplicate_errors)
             db.commit()
             return [], duplicate_errors
-        live_clips = live_clips or {}
-        clip_names = [filename for filename, _content in files if filename in live_clips]
-        scan_results = await scanner.scan_many(
-            [content for _filename, content in files] + [live_clips[name] for name in clip_names],
-            host=settings.clamav_host,
-            port=settings.clamav_port,
-        )
-        scan_statuses = scan_results[: len(files)]
-        clip_scan_status = dict(zip(clip_names, scan_results[len(files) :]))
 
         # Fetched once and passed into every ingest_file() call below instead of letting
         # each call re-query it (audit fix, 2026-09-17 - see ingest_file's tenant_hashes
@@ -1404,21 +1421,29 @@ class FileService:
         rejected a batch violating them (see upload_documents); the Dateianzahl is checked
         once more here, under the tenant upload lock, because two near-simultaneous uploads
         into the same element could otherwise both pass the route's check."""
-        await acquire_upload_lock(db, tenant_id)
         self.ensure_storage()
         normalized_tags = _normalize_tags(tags)
         results: list[dict] = file_results if file_results is not None else []
         duplicates: list[tuple[str, str]] = []
+        # Vorfilter und Virenscan ohne den Upload-Lock des Mandanten (CONC-008), danach unter Lock
+        # erneut auf Duplikate prüfen.
         files, duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
+        scanned = list(zip(files, await scanner.scan_many(
+            [content for _filename, content in files], host=settings.clamav_host, port=settings.clamav_port
+        ))) if files else []
+        await acquire_upload_lock(db, tenant_id)
+        still_new, late_duplicate_errors = self._filter_exact_duplicates(db, tenant_id, files, duplicates)
+        duplicate_errors += late_duplicate_errors
+        keep = {id(file) for file in still_new}
+        scanned = [(file, status) for file, status in scanned if id(file) in keep]
+        files = [file for file, _status in scanned]
+        scan_statuses = [status for _file, status in scanned]
         existing = upload_precheck_service.find_existing(db, tenant_id, [checksum for _, checksum in duplicates])
         for name, checksum in duplicates:
             match = existing.get(checksum)
             results.append({"name": name, "status": "skipped", "file_id": str(match[0].public_id) if match else None})
         if not files:
             return [], duplicate_errors
-        scan_statuses = await scanner.scan_many(
-            [content for _filename, content in files], host=settings.clamav_host, port=settings.clamav_port
-        )
         if upload_assignment is not None and upload_element_ref is not None:
             self._recheck_element_capacity(db, tenant_id, upload_assignment, upload_element_ref, len(files))
 
@@ -1691,8 +1716,9 @@ class FileService:
         upload_cycle_config: CycleConfig | None,
         live_clips: dict[str, bytes] | None = None,
     ) -> None:
-        await acquire_upload_lock(db, job.tenant_id, timeout_seconds=BACKGROUND_TIMEOUT_SECONDS)
-        # Die Reservierung dieses Batches wird in derselben Transaktion durch StoredFiles
+        # Den Upload-Lock nimmt save_gallery_uploads erst nach dem Virenscan (CONC-008) - ausser
+        # bei Abgabe-Element-Bezug: dort hält ihn die Regelprüfung unten schon bis zum Commit. Die
+        # Reservierung dieses Batches wird in derselben Transaktion durch StoredFiles
         # ersetzt. Abgewiesene/Duplikat-Dateien geben ihre Reservierung ebenfalls frei.
         db.refresh(job)
         job.reserved_bytes = max(0, (job.reserved_bytes or 0) - sum(len(data) for _, data in batch) - sum(len(data) for data in (live_clips or {}).values()))

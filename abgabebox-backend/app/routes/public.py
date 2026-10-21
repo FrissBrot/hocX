@@ -437,7 +437,27 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
 
     _log("upload_received", f"{len(contents)} Datei(en) empfangen")
 
-    # Hold across checksum lookup, scan and the final database commit.
+    # Virenscan vor dem Upload-Lock des Vereins, aus dem Speicher (Concurrency-Audit CONC-008):
+    # vorher lief ClamAV (bis 60 s je Datei) unter dem Lock, und alle anderen Uploads des Vereins -
+    # auch Galerie und Protokollbilder im Backend - warteten so lange. Reihenfolge der Ablage
+    # bleibt: zuerst Quarantäne, nach sauberem Ergebnis verschieben.
+    # Bekannte identische Einreichungen werden vorab aussortiert (nicht gescannt); unter dem Lock
+    # wird unten erneut geprüft. Nur zwei gleichzeitige identische Einreichungen werden dadurch
+    # ggf. beide gescannt - gespeichert wird weiterhin nur eine.
+    known_checksums = repository.list_checksums_for_element(
+        db, assignment_id=assignment["id"], event_id=element["event_id"], list_entry_id=element["list_entry_id"]
+    )
+    known_checksums = set(known_checksums)
+    to_scan = []
+    for content, _, _ in contents:
+        checksum = hashlib.sha256(content).hexdigest()
+        if checksum not in known_checksums:  # auch Duplikate innerhalb dieser Einreichung
+            known_checksums.add(checksum)
+            to_scan.append(content)
+    prescan = await scanner.scan_many(to_scan, host=settings.clamav_host, port=settings.clamav_port) if to_scan else []
+    scan_by_content = {id(content): status for content, status in zip(to_scan, prescan)}
+
+    # Hold across checksum lookup, quarantine and the final database commit.
     async with serialized_upload(tenant["id"]):
         # Identical submissions are silently acknowledged, before image decoding or ClamAV.
         # Keep the received count stable so the public response does not reveal duplicates.
@@ -595,9 +615,13 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
         # entire async worker (every tenant, every other in-flight request) for the duration of each
         # scan. scan_many() runs each scan in a worker thread (asyncio.to_thread) with a small bounded
         # concurrency instead of a fully sequential loop - see scanner.py for the full rationale.
-        scan_results = await scanner.scan_many(
-            [f["_content"] for f in quarantine_files], host=settings.clamav_host, port=settings.clamav_port
-        )
+        # Vorab gescannt (s. o.). Selten: eine bei der Vorprüfung bekannte Datei wurde inzwischen
+        # gelöscht und ist jetzt neu - die wird hier nachgescannt.
+        unscanned = [f["_content"] for f in quarantine_files if id(f["_content"]) not in scan_by_content]
+        if unscanned:
+            late = await scanner.scan_many(unscanned, host=settings.clamav_host, port=settings.clamav_port)
+            scan_by_content.update({id(content): status for content, status in zip(unscanned, late)})
+        scan_results = [scan_by_content[id(f["_content"])] for f in quarantine_files]
 
         # Step 3: Infected → delete quarantine files, reject upload.
         if "infected" in scan_results or "error" in scan_results:
