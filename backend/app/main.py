@@ -9,6 +9,7 @@ from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from app.api.routes import activity, admin, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_share, retention, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenant_data_export, tenants, todos, users, word_import
 from app.core import runtime_metrics
@@ -609,6 +610,23 @@ async def storage_write_fenced_handler(request: Request, exc: StorageWriteFenced
     )
 
 
+def _db_busy_response() -> JSONResponse:
+    """Pool erschöpft (Concurrency-Audit CONC-010): nach DB_POOL_TIMEOUT_SECONDS schnell 503 mit
+    Retry-After statt langem Warten - Last, kein Programmfehler, deshalb kein Fehlerprotokoll
+    (gezählt in den Laufzeitkennzahlen, /admin/system)."""
+    runtime_metrics.count("pool_timeouts")
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Der Server ist gerade ausgelastet. Bitte gleich erneut versuchen.", "code": "db_busy"},
+        headers={"Retry-After": "5", "Cache-Control": "no-store"},
+    )
+
+
+@app.exception_handler(SQLAlchemyTimeoutError)
+async def db_pool_timeout_handler(request: Request, exc: SQLAlchemyTimeoutError) -> JSONResponse:
+    return _db_busy_response()
+
+
 @app.exception_handler(UploadLockBusy)
 async def upload_lock_busy_handler(request: Request, exc: UploadLockBusy) -> JSONResponse:
     """Andere Uploads desselben Vereins laufen gerade (Upload-Lock, services/upload_lock.py) -
@@ -642,6 +660,9 @@ async def logged_http_exception_handler(request: Request, exc: HTTPException):
     carries a chained cause that isn't a ValueError (this codebase's convention for expected,
     already-safe-to-show validation messages), it's an unexpected error worth recording. The
     response itself is untouched - delegates to FastAPI's default handler unchanged."""
+    if isinstance(exc.__cause__, SQLAlchemyTimeoutError):
+        # Route hat den Pool-Timeout als SQLAlchemyError abgefangen und umgewandelt.
+        return _db_busy_response()
     if exc.status_code >= 400 and exc.__cause__ is not None and not isinstance(exc.__cause__, ValueError):
         await record_request_error(request, exc.__cause__, exc.status_code)
     return await http_exception_handler(request, exc)

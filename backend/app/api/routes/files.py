@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 
-from app.core.db import get_db
+from app.core.db import get_db, release_for_stream
 from app.core.config import settings
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
@@ -913,21 +913,21 @@ def get_stored_file_content(
         no_store = {"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
         if stored_file.mime_type == "video/mp4":
             clean_path = _video_without_metadata(stored_file.storage_path)
-            return FileResponse(
+            return release_for_stream(db, FileResponse(
                 path=clean_path,
                 media_type=stored_file.mime_type,
                 filename=stored_file.original_name,
                 content_disposition_type="inline",
                 headers=no_store,
                 background=BackgroundTask(clean_path.unlink, missing_ok=True),
-            )
+            ))
         content = read_bytes_or_404(MAIN, stored_file.storage_path, detail="File missing on filesystem")
         return Response(
             content=sanitize_image(content, stored_file.mime_type, _WITHOUT_LOCATION),
             media_type=stored_file.mime_type,
             headers={**no_store, **_content_disposition(stored_file.original_name, False)},
         )
-    return object_response(
+    return release_for_stream(db, object_response(
         request,
         MAIN,
         stored_file.storage_path,
@@ -939,7 +939,7 @@ def get_stored_file_content(
         # browser cache can keep this for a long time - saves refetching originals opened again
         # from the Fotos viewer/lightbox within the same session.
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
-    )
+    ))
 
 
 @router.patch("/stored-files/{stored_file_id}/tags", response_model=list[str])
@@ -1033,13 +1033,13 @@ def get_stored_file_thumbnail(
     thumbnail_path = service.ensure_thumbnail(db, stored_file, settings.storage_root)
     if thumbnail_path is None:
         raise HTTPException(status_code=404, detail="Keine Vorschau verfügbar")
-    return FileResponse(
+    return release_for_stream(db, FileResponse(
         path=thumbnail_path,
         media_type="image/jpeg",
         # Same immutability as get_stored_file_content above - once generated, a thumbnail never
         # changes for a given stored_file id, so it's safe to cache far longer than a day.
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
-    )
+    ))
 
 
 @router.get("/stored-files/{stored_file_id}/download")
@@ -1099,28 +1099,28 @@ def download_stored_file(
                 media_type=stored_file.mime_type,
                 headers={**headers, **_content_disposition(stored_file.original_name, True)},
             )
-        return object_response(
+        return release_for_stream(db, object_response(
             request, MAIN, stored_file.storage_path, media_type=stored_file.mime_type,
             filename=stored_file.original_name, attachment=True, headers=headers,
-        )
+        ))
 
     if not store.exists(MAIN, live_video.storage_path):
         raise HTTPException(status_code=404, detail="File missing on filesystem")
     cleanup_video = _video_without_metadata(live_video.storage_path) if strip_location else None
     if part == "video":
         if cleanup_video is not None:
-            return FileResponse(
+            return release_for_stream(db, FileResponse(
                 path=cleanup_video,
                 media_type="video/mp4",
                 filename=live_video.original_name,
                 content_disposition_type="attachment",
                 headers=headers,
                 background=BackgroundTask(cleanup_video.unlink, missing_ok=True),
-            )
-        return object_response(
+            ))
+        return release_for_stream(db, object_response(
             request, MAIN, live_video.storage_path, media_type="video/mp4",
             filename=live_video.original_name, attachment=True, headers=headers,
-        )
+        ))
 
     # Both: JPEG and MP4 are already compressed, so the ZIP just stores them. Built on disk (not
     # in memory) and removed once the response has been sent.
@@ -1143,14 +1143,14 @@ def download_stored_file(
     finally:
         if cleanup_video is not None:
             cleanup_video.unlink(missing_ok=True)
-    return FileResponse(
+    return release_for_stream(db, FileResponse(
         path=zip_path,
         media_type="application/zip",
         filename=f"{Path(stored_file.original_name).stem}-live.zip",
         content_disposition_type="attachment",
         headers=headers,
         background=BackgroundTask(zip_path.unlink, missing_ok=True),
-    )
+    ))
 
 
 ALBUM_INVITES_PER_HOUR = 30

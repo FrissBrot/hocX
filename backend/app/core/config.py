@@ -209,6 +209,12 @@ class Settings(BaseSettings):
     abgabebox_internal_url: str = "http://abgabebox-backend:8000"
     # Obergrenze für Request-Bodies ausser Multipart (JSON etc.), MAIN-OPS-013.
     max_request_body_bytes: int = 10 * 1024 * 1024
+    # SQLAlchemy-Pool je Prozess (Concurrency-Audit CONC-010). pool_timeout kurz: bei erschöpftem
+    # Pool lieber nach wenigen Sekunden 503 mit Retry-After (main.py) als 30 s Warten mit
+    # gehaltenem Thread. Worker-Container setzen kleine Werte (docker-compose*.yml).
+    db_pool_size: int = Field(default=12, ge=1, le=50, validation_alias="DB_POOL_SIZE")
+    db_max_overflow: int = Field(default=8, ge=0, le=50, validation_alias="DB_MAX_OVERFLOW")
+    db_pool_timeout_seconds: float = Field(default=5.0, ge=0.5, le=60, validation_alias="DB_POOL_TIMEOUT_SECONDS")
     # requirepass im Release-Stack (REDIS_PASSWORD_FILE, MAIN-OPS-005); leer = ohne Passwort.
     redis_password: str | None = None
     # Proxys, deren X-Forwarded-For ausgewertet wird (Traefik im Compose-Netz), siehe

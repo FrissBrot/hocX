@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.db import get_db
+from app.core.db import get_db, release_for_stream
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, require_admin
 from app.core.storage import MAIN, object_response
@@ -95,4 +95,4 @@ def download_tenant_data_export(export_id: uuid.UUID, request: Request, db: Sess
         raise HTTPException(status_code=404, detail="Export nicht gefunden")
     AuditService().log(db, action="tenant.data_export_downloaded", actor=user, entity_type="tenant", entity_id=user.current_tenant_id)
     db.commit()
-    return object_response(request, MAIN, job.object_key, media_type="application/zip", filename=job.filename, attachment=True)
+    return release_for_stream(db, object_response(request, MAIN, job.object_key, media_type="application/zip", filename=job.filename, attachment=True))

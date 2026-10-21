@@ -89,6 +89,11 @@ services:
       - postgres
       - -c
       - shared_preload_libraries=pg_stat_statements
+      # Verbindungsbudget (Concurrency-Audit CONC-010): Backend 2 x 20, Abgabebox 2 x 8, Worker je 5,
+      # job-worker 8, dazu ungepoolte Kurzverbindungen (Kennzahlen, Fehlerprotokoll, Upload-Lock,
+      # pg_dump/pg_restore) - rund 100. Ohne explizite Angabe galt der Default 100.
+      - -c
+      - max_connections=150
       - -c
       - pg_stat_statements.max=5000
       - -c
@@ -713,6 +718,9 @@ services:
         required: false
     environment:
       HOCX_PROCESS_KIND: storage-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
       HOCX_ENVIRONMENT: development
       DATABASE_URL: ${DATABASE_URL}
       APP_DATABASE_URL: ${APP_DATABASE_URL}
@@ -760,6 +768,9 @@ services:
         required: false
     environment:
       HOCX_PROCESS_KIND: backup-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
       HOCX_ENVIRONMENT: development
       DATABASE_URL: ${DATABASE_URL}
       AUTH_SECRET: ${AUTH_SECRET}
@@ -820,6 +831,9 @@ services:
       APP_DATABASE_URL: ${APP_DATABASE_URL}
       # Keine Anmelde-/Admin-Secrets: zufällige Werte je Prozess (SECRETLESS_PROCESS_KINDS).
       HOCX_PROCESS_KIND: document-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
       EXPORT_ROOT: /app/storage/exports

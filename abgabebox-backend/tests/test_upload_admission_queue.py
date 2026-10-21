@@ -70,3 +70,13 @@ def test_non_upload_posts_keep_a_small_size_limit():
     middleware = UploadAdmissionMiddleware(_app(active, peak), path="/api/public/", path_suffix="/upload", max_bytes=10_000, small_max_bytes=5)
     statuses = dict(_run(middleware, [CAPTCHA]))
     assert statuses == {CAPTCHA: 413}
+
+
+def test_exhausted_pool_answers_503_with_retry_after():
+    from sqlalchemy.exc import TimeoutError as PoolTimeout
+
+    from app.main import db_pool_timeout_handler
+
+    response = asyncio.run(db_pool_timeout_handler(None, PoolTimeout("QueuePool limit")))
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "5"

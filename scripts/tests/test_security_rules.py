@@ -42,6 +42,8 @@ class SecurityRulesTests(unittest.TestCase):
         self.assertEqual(rules(PY, held), ["stream-response-holds-db"])
         scoped = 'def download(db: Session = Depends(get_db, scope="function")):\n    return FileResponse(path)\n'
         self.assertEqual(rules(PY, scoped), [])
+        released = "def download(db: Session = Depends(get_db)):\n    return release_for_stream(db, FileResponse(path))\n"
+        self.assertEqual(rules(PY, released), [])
 
     def test_only_new_findings_count(self):
         old = "a = get_by_public_id(db, A, x)\n"

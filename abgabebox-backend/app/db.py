@@ -8,8 +8,11 @@ from sqlalchemy.pool import NullPool
 from app import link_scope  # noqa: F401  registriert den RLS-Hook (after_begin) für alle Sessions
 from app.config import settings
 
+# Pool je Worker (Concurrency-Audit CONC-010): Uploads sind über die Annahme begrenzt, der Rest
+# sind kurze Lesezugriffe. pool_timeout kurz -> schnell 503 mit Retry-After (main.py).
 engine = create_engine(
     settings.database_url, future=True, pool_pre_ping=True, hide_parameters=True,
+    pool_size=5, max_overflow=3, pool_timeout=5,
     connect_args={"application_name": "hocx-abgabebox-backend"},
 )
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)

@@ -16,7 +16,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.config import settings
-from app.core.db import get_db
+from app.core.db import get_db, release_for_stream
 from app.models.entities import AppUser, PlatformAdmin, SystemHealthEvent, Tenant, TenantDomain, UserMfaFactor
 from app.services import export_crypto, public_id_service
 from app.schemas.admin import (
@@ -866,12 +866,12 @@ def export_tenant(
         entity_type="tenant", entity_id=internal_tenant_id,
         details={"scope": payload.scope, "encryption": "password" if password else "server", "credentials": payload.include_credentials},
     )
-    return FileResponse(
+    return release_for_stream(db, FileResponse(
         encrypted_path,
         filename=filename + export_crypto.ENCRYPTED_SUFFIX,
         media_type="application/octet-stream",
         background=BackgroundTask(lambda: encrypted_path.unlink(missing_ok=True)),
-    )
+    ))
 
 
 

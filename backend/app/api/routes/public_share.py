@@ -20,7 +20,7 @@ from starlette.background import BackgroundTask
 
 from app.core.config import settings
 from app.core.client_ip import client_ip
-from app.core.db import get_db
+from app.core.db import get_db, release_for_stream
 from app.core.rate_limit import enforce_rate_limit
 from app.models.entities import PhotoAlbum, ShareLink, StoredFile, Tenant
 from app.schemas.files import PublicShareFile, PublicShareRead
@@ -187,11 +187,11 @@ def get_public_share_thumbnail(token: str, file_id: uuid.UUID, request: Request,
     thumbnail_path = service.ensure_thumbnail(db, stored_file, settings.storage_root)
     if thumbnail_path is None:
         raise HTTPException(status_code=404, detail="Keine Vorschau verfügbar")
-    return FileResponse(
+    return release_for_stream(db, FileResponse(
         path=thumbnail_path,
         media_type="image/jpeg",
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
-    )
+    ))
 
 
 @router.get("/public/share/{token}/files/{file_id}/view")
@@ -203,9 +203,9 @@ def view_public_share_file(token: str, file_id: uuid.UUID, request: Request, db:
     stored_file = _resolve_file_or_404(db, link, file_id)
     if stored_file.mime_type not in _INLINE_IMAGE_TYPES:
         raise HTTPException(status_code=404, detail="Keine Ansicht verfügbar")
-    return _public_file_response(
+    return release_for_stream(db, _public_file_response(
         request, db, link, stored_file, attachment=False, headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=3600"}
-    )
+    ))
 
 
 @router.get("/public/share/{token}/files/{file_id}/download")
@@ -213,9 +213,9 @@ def download_public_share_file(token: str, file_id: uuid.UUID, request: Request,
     _enforce_rate_limit(request, "file", limit=60)
     link = _resolve_link_or_404(db, token)
     stored_file = _resolve_file_or_404(db, link, file_id)
-    return _public_file_response(
+    return release_for_stream(db, _public_file_response(
         request, db, link, stored_file, attachment=True, headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
-    )
+    ))
 
 
 @router.get("/public/share/{token}/download")
@@ -259,11 +259,11 @@ def download_public_share_all(
                 archive.writestr(name, _public_file_bytes(policy, stored_file))
             else:
                 write_object_to_zip(archive, MAIN, stored_file.storage_path, name)
-    return FileResponse(
+    return release_for_stream(db, FileResponse(
         path=zip_path,
         media_type="application/zip",
         filename=f"{link.name}.zip",
         content_disposition_type="attachment",
         headers=headers,
         background=BackgroundTask(zip_path.unlink, missing_ok=True),
-    )
+    ))

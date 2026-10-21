@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse, StreamingResponse
 
 from app.core.config import settings
-from app.core.db import get_db
+from app.core.db import get_db, release_for_stream
 from app.core.security import CurrentUser, get_current_user, require_abgabebox_read, require_abgabebox_write
 from app.models.entities import SubmissionAssignment, SubmissionUpload, StoredFile
 from app.schemas.files import StoredFileMetadata, StoredFileTagsUpdate
@@ -366,7 +366,7 @@ def get_submission_file_content(
     # regardless of what mime_type ends up being.
     is_pdf = mime.lower() == "application/pdf"
     disposition = "inline" if is_pdf else "attachment"
-    return object_response(
+    return release_for_stream(db, object_response(
         request,
         ABGABEBOX,
         stored_file.storage_path,
@@ -375,7 +375,7 @@ def get_submission_file_content(
         attachment=disposition == "attachment",
         headers={"X-Content-Type-Options": "nosniff"},
         not_found_detail="Datei fehlt im Dateisystem",
-    )
+    ))
 
 
 @router.get("/submission-uploads/{upload_id}/files/{file_id}/thumbnail")
@@ -408,13 +408,13 @@ def get_submission_file_thumbnail(
     thumbnail_path = file_service.ensure_thumbnail(db, stored_file, settings.abgabebox_storage_root)
     if thumbnail_path is None:
         raise HTTPException(status_code=404, detail="Keine Vorschau verfügbar")
-    return FileResponse(
+    return release_for_stream(db, FileResponse(
         path=thumbnail_path,
         media_type="image/jpeg",
         # Immutable per file id (see get_stored_file_thumbnail in routes/files.py) - safe to
         # cache far longer than a day.
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
-    )
+    ))
 
 
 @router.patch("/submission-uploads/{upload_id}/files/{file_id}/tags", response_model=list[str])
@@ -570,8 +570,8 @@ def download_all_files_zip(
 
     buf.seek(0)
     slug = re.sub(r"[^a-z0-9]+", "-", (assignment.title or str(assignment_id)).lower()).strip("-")
-    return StreamingResponse(
+    return release_for_stream(db, StreamingResponse(
         buf,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{slug}.zip"'},
-    )
+    ))

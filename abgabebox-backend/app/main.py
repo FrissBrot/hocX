@@ -11,6 +11,7 @@ from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
@@ -236,11 +237,28 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     return JSONResponse(status_code=500, content={"detail": "Ein interner Fehler ist aufgetreten."})
 
 
+def _db_busy_response() -> JSONResponse:
+    """Pool erschöpft (Concurrency-Audit CONC-010): Last, kein Programmfehler."""
+    runtime_metrics.count("pool_timeouts")
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Die Abgabebox ist gerade ausgelastet. Bitte gleich erneut versuchen.", "code": "db_busy"},
+        headers={"Retry-After": "5", "Cache-Control": "no-store"},
+    )
+
+
+@app.exception_handler(SQLAlchemyTimeoutError)
+async def db_pool_timeout_handler(request: Request, exc: SQLAlchemyTimeoutError) -> JSONResponse:
+    return _db_busy_response()
+
+
 @app.exception_handler(HTTPException)
 async def logged_http_exception_handler(request: Request, exc: HTTPException):
     """Routes here already convert unexpected errors to a curated HTTPException (`from exc`) -
     this records the original chained cause without changing the response, same convention
     as the main backend's handler."""
+    if isinstance(exc.__cause__, SQLAlchemyTimeoutError):
+        return _db_busy_response()
     if exc.status_code >= 400 and exc.__cause__ is not None:
         await _record_error_off_loop(request, exc.__cause__, exc.status_code)
     return await http_exception_handler(request, exc)

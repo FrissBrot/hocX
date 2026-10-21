@@ -51,7 +51,7 @@ RULE_TEXT = {
     "dangerously-set-inner-html": "dangerouslySetInnerHTML ohne Begründung ({/* security-ok: ... */})",
     "secret-in-url": "Token/Passwort in einer URL-Query (gehört in Body oder Header)",
     "blocking-db-in-async": "synchroner DB-Zugriff in async def (blockiert den Event-Loop) - per run_in_threadpool/asyncio.to_thread ausführen",
-    "stream-response-holds-db": "Streaming-/Datei-Antwort mit Depends(get_db) ohne scope=\"function\" (Verbindung bis zum letzten Byte belegt)",
+    "stream-response-holds-db": "Streaming-/Datei-Antwort mit Depends(get_db) ohne release_for_stream(db, ...) (Verbindung bis zum letzten Byte belegt)",
 }
 MARKERS = {
     "public-id-lookup-without-tenant": ("nosemgrep: public-id-lookup-without-tenant", "tenant-scope-ok"),
@@ -171,8 +171,14 @@ def _python_findings(source: str) -> list[Finding]:
         if isinstance(node, ast.AsyncFunctionDef):
             _blocking_db_calls(node, add, lines)
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and _holds_db_dependency(node):
+            released = {
+                id(arg)
+                for inner in ast.walk(node)
+                if isinstance(inner, ast.Call) and _call_name(inner) == "release_for_stream"
+                for arg in ast.walk(inner)
+            }
             for inner in ast.walk(node):
-                if isinstance(inner, ast.Call) and _call_name(inner) in STREAM_RESPONSES:
+                if isinstance(inner, ast.Call) and _call_name(inner) in STREAM_RESPONSES and id(inner) not in released:
                     add("stream-response-holds-db", inner)
         if isinstance(node, ast.ExceptHandler):
             for inner in ast.walk(node):
