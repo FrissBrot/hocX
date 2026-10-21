@@ -34,6 +34,12 @@ Installationen aktualisieren können.
   Offsite-Kopien werden gelöscht.
 - Backends schreiben kein Access-Log mehr (Pfade enthielten Link-Tokens).
 
+### Behoben
+
+- **Foto-Analyse:** Der Foto-Worker konnte seit Migration `0134` keine Dateien mehr laden
+  (`permission denied for table submission_assignment`), die Gesichtsanalyse fiel aus. Korrigiert
+  in Migration `0142`.
+
 ### Sicherheit (Security-Audit release/1.2.0 vom 2026-10-17)
 
 - **Mandantenimport:** Album-Freigaben und Vertrauensbeziehungen zu anderen Mandanten werden
