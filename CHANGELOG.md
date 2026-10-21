@@ -95,6 +95,13 @@ Installationen aktualisieren können.
 - Datenauskunft: Passwort-Mindestlänge auch im API-Schema, Rate-Limit für die Admin-Auskunft,
   temporäre Dateien werden auch bei Fehlern gelöscht (Security-Review).
 
+### Datenschutz (Paket 7: Korrekturweg abgeschlossener Protokolle)
+
+- Abschliessen → zurückstufen → korrigieren → abschliessen: beim erneuten Abschluss verschwinden
+  die Änderungsmarkierungen samt alter Fassung, die PDFs des früheren Abschlusses werden sofort
+  gelöscht und ihre Registereinträge verlieren den Titel (nur der Prüfwert bleibt, die Prüfseite
+  meldet sie als ersetzt). Beschrieben in der Benutzerdoku unter Protokolle.
+
 ### Behoben
 
 - **Foto-Analyse:** Der Foto-Worker konnte seit Migration `0134` keine Dateien mehr laden

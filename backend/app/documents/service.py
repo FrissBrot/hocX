@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -631,6 +631,37 @@ def _prune_superseded_files(db: Session, export: DocumentExport) -> list[str]:
         )
     ))
     return _release_files(db, older)
+
+
+def supersede_closed_exports(db: Session, protocol: Protocol) -> list[str]:
+    """Erneuter Abschluss nach einer Korrektur (Datenschutz-Audit F, Paket 7): die PDFs des
+    früheren Abschlusses zeigen den alten, ggf. falschen Inhalt. Ihre Dateien werden sofort
+    gelöscht (nicht erst nach der Aufbewahrungsfrist), die Register-Einträge behalten nur den
+    Hash - ohne Titel. Die Prüfseite meldet sie über is_superseded als ersetzt, sobald das neue PDF
+    erzeugt ist. In Dokumentenverwaltung übernommene Versionen bleiben (_without_document_versions).
+    In der Transaktion des Aufrufers; gibt die gelöschten Keys zurück."""
+    previous = select(DocumentRegistry.public_id).where(
+        DocumentRegistry.tenant_id == protocol.tenant_id,
+        DocumentRegistry.source_public_id == protocol.public_id,
+        DocumentRegistry.document_type == "protocol",
+        DocumentRegistry.status_code == "abgeschlossen",
+    )
+    exports = list(db.scalars(
+        select(DocumentExport).where(
+            DocumentExport.protocol_id == protocol.id,
+            DocumentExport.document_type == "protocol",
+            DocumentExport.public_id.in_(previous),
+            DocumentExport.stored_file_id.is_not(None),
+        )
+    ))
+    keys = _release_files(db, exports) if exports else []
+    db.execute(
+        update(DocumentRegistry)
+        .where(DocumentRegistry.public_id.in_(previous), DocumentRegistry.title.is_not(None))
+        .values(title=None)
+        .execution_options(synchronize_session=False)
+    )
+    return keys
 
 
 def _protected_export_ids(db: Session) -> set[int]:
