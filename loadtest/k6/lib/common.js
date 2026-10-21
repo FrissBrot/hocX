@@ -39,12 +39,14 @@ export function sessionForVu(vu, filter = __ENV.TENANT_FILTER) {
 }
 
 export function params(session, tags = {}, extra = {}) {
-  return {
+  const result = {
     headers: { Cookie: `${COOKIE_NAME}=${session.token}`, Origin: BASE_URL, ...(extra.headers || {}) },
     tags: { tenant: String(session.tenantIndex), ...tags },
     timeout: extra.timeout || "120s",
-    responseType: extra.responseType,
   };
+  // k6 lehnt responseType: undefined ab ("does not belong to ResponseType values")
+  if (extra.responseType) result.responseType = extra.responseType;
+  return result;
 }
 
 export function record(res, trend, name) {
@@ -100,6 +102,7 @@ export function stagesFor(profile) {
     { duration: "1m", target: 0 },
   ];
   switch (profile) {
+    case "smoke": return [{ duration: "10s", target: 5 }, { duration: "50s", target: 5 }];
     case "u10": return ramp(10);
     case "u50": return ramp(50);
     case "u100": return ramp(100);

@@ -35,14 +35,29 @@ Der Lastgenerator hat eine IP – deshalb Sessions per Seeder statt Login, und f
 u250 entweder mehrere Lastgeneratoren/IPs oder `BASE_URL` direkt auf den Backend-Port
 (dann **ohne** Traefik-Limits – im Ergebnis vermerken).
 
-## Ablauf
+## Ablauf mit `loadtest/stack/` (empfohlen)
+
+```bash
+loadtest/stack/up.sh                      # baut Images dieses Commits, .env/Secrets unter /docker/loadtest-stack
+/docker/loadtest-stack/dc.sh run --rm --no-deps -T -e HOCX_LOADTEST=1 \
+  -v "$PWD/loadtest:/loadtest:ro" -v /docker/loadtest-stack/seed-out:/out \
+  backend python /loadtest/seed/seed_loadtest.py --tenants 20 --writers 25 --out /out/tokens.json
+loadtest/stack/k6.sh interactive.js u100 -e PROFILE=u100     # Ergebnis: /docker/loadtest-stack/results/u100
+python3 loadtest/stack/summarize.py /docker/loadtest-stack/results u10 u50 u100
+loadtest/stack/down.sh                    # Stack, Volumes, Images entfernen (results/ bleibt)
+```
+
+k6 läuft als Container im Netz des Stacks gegen `backend:8000` (ohne Traefik-Limits), Tokens und
+Messdaten bleiben ausserhalb des Repos. `loadtest/k6/session_consistency.js` prüft CONC-022.
+
+## Ablauf (manuell, eigener Host)
 
 ```bash
 # 1. Daten (im Backend-Container des Lasttest-Stacks)
 docker cp loadtest hocx-loadtest-backend-1:/loadtest
 docker exec -e HOCX_LOADTEST=1 -e DEMO_TOTP_SEED=JBSWY3DPEHPK3PXP hocx-loadtest-backend-1 \
   python /loadtest/seed/seed_loadtest.py --tenants 20 --writers 25 --out /loadtest/tokens.json
-docker cp hocx-loadtest-backend-1:/loadtest/tokens.json loadtest/tokens.json
+docker cp hocx-loadtest-backend-1:/loadtest/tokens.json loadtest/tokens.json   # in .gitignore
 
 # 2. Testdateien
 docker run --rm -v "$PWD/loadtest/fixtures:/out" hocx-tests-backend-test:latest python /out/make_fixtures.py --out /out

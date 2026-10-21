@@ -87,3 +87,9 @@ storage/demo-seed/
 
 # Scratch audit/investigation notes, not living documentation
 .audit-1.1/
+
+# Lasttest: Session-Tokens und Messdaten nie committen (loadtest/README.md)
+loadtest/tokens.json
+loadtest/results/
+loadtest/fixtures/*.jpg
+loadtest/fixtures/*.zip

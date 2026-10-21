@@ -505,6 +505,10 @@ services:
     environment:
       GARAGE_RPC_SECRET_FILE: /run/secrets/garage_rpc_secret
       GARAGE_ADMIN_TOKEN_FILE: /run/secrets/garage_admin_token
+      # Compose übernimmt den Modus der Secret-Datei (deploy.sh: 0644 in einem 0700-Verzeichnis,
+      # weil storage-init denselben Token als uid 5000 liest). Garage verweigert sonst den Start
+      # ("File /run/secrets/garage_rpc_secret is world-readable") - gefunden beim Lasttest-Aufbau.
+      GARAGE_ALLOW_WORLD_READABLE_SECRETS: "true"
     secrets:
       - garage_rpc_secret
       - garage_admin_token
