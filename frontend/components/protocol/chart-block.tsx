@@ -14,10 +14,24 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { fineCountsByType, fineTotalsByCurrency } from "@/lib/utils/fine-stats";
 
 const STATS_BUMP_EVENT = "hocx:stats-refresh";
+// Hintergrund-Aktualisierung offener Diagramme: nur bei sichtbarem Tab und höchstens einmal pro
+// Minute (Concurrency-Audit CONC-016 - vorher alle 15 s, auch in Hintergrund-Tabs). Wird der Tab
+// wieder sichtbar und ist der letzte Stand älter, sofort nachladen.
+const STATS_POLL_MS = 60_000;
 let _statsVersion = 0;
+let _lastStatsBump = Date.now();
+// Versionen aus der Hintergrund-Aktualisierung dürfen das kurz gecachte Server-Ergebnis nutzen
+// (?cached=1); nach eigenen Änderungen (bumpStatsCharts aus dem Editor) wird frisch gerechnet.
+const _cachedVersions = new Set<number>();
 
-export function bumpStatsCharts() {
+// Wird auch direkt als Promise-Callback benutzt (`.then(bumpStatsCharts)`) - das Argument ist dann
+// ein beliebiger Wert, deshalb nur ein ausdrückliches { allowCached: true } auswerten.
+export function bumpStatsCharts(options?: unknown) {
   _statsVersion++;
+  if (typeof options === "object" && options !== null && (options as { allowCached?: unknown }).allowCached === true) {
+    _cachedVersions.add(_statsVersion);
+  }
+  _lastStatsBump = Date.now();
   window.dispatchEvent(new Event(STATS_BUMP_EVENT));
 }
 
@@ -28,10 +42,19 @@ const statsRequests = new Map<string, { version: number; promise: Promise<StatsR
 let _statsPollInterval: ReturnType<typeof setInterval> | null = null;
 let _statsPollRefCount = 0;
 
+function statsPollTick() {
+  if (document.visibilityState === "visible") bumpStatsCharts({ allowCached: true });
+}
+
+function statsVisibilityChanged() {
+  if (document.visibilityState === "visible" && Date.now() - _lastStatsBump >= STATS_POLL_MS) bumpStatsCharts({ allowCached: true });
+}
+
 function acquireStatsPolling() {
   _statsPollRefCount++;
   if (!_statsPollInterval) {
-    _statsPollInterval = setInterval(() => bumpStatsCharts(), 15_000);
+    _statsPollInterval = setInterval(statsPollTick, STATS_POLL_MS);
+    document.addEventListener("visibilitychange", statsVisibilityChanged);
   }
 }
 
@@ -40,6 +63,7 @@ function releaseStatsPolling() {
   if (_statsPollRefCount === 0 && _statsPollInterval) {
     clearInterval(_statsPollInterval);
     _statsPollInterval = null;
+    document.removeEventListener("visibilitychange", statsVisibilityChanged);
   }
 }
 
@@ -48,7 +72,8 @@ function fetchStatsOverview(version: number, scope: string): Promise<StatsResult
   if (cached?.version === version) return Promise.resolve(cached.result);
   const request = statsRequests.get(scope);
   if (request?.version === version) return request.promise;
-  const promise = browserApiFetch<StatisticsOverview>(`/api/statistics/overview?_t=${version}${scope}`)
+  const cachedParam = _cachedVersions.has(version) ? "&cached=1" : "";
+  const promise = browserApiFetch<StatisticsOverview>(`/api/statistics/overview?_t=${version}${cachedParam}${scope}`)
     .then((data) => {
       const result = { data: data ?? null, stale: false };
       statsCaches.set(scope, { version, result });
