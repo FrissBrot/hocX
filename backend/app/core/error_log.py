@@ -76,7 +76,7 @@ def record_system_error(
         db.commit()
     except Exception:
         db.rollback()
-        logger.exception("Failed to persist system_error_log entry (original error: %s: %s)", type(exc).__name__, exc)
+        logger.exception("Failed to persist system_error_log entry (original error: %s: %s)", type(exc).__name__, redact(str(exc)))
 
 
 def best_effort_actor_from_request(db: Session, request: Request) -> tuple[int | None, int | None, int | None]:
@@ -104,3 +104,62 @@ def best_effort_actor_from_request(db: Session, request: Request) -> tuple[int |
     except Exception:
         logger.exception("best_effort_actor_from_request failed")
     return None, None, None
+
+
+# --- Globale Handler (main.py): nie im Event-Loop, nie aus dem Request-Pool -----------------
+# Concurrency-Audit CONC-001: die Handler öffneten SessionLocal() synchron im Event-Loop. Bei
+# erschöpftem Pool (genau dann häufen sich 500er) stand dadurch der ganze Worker bis zum
+# Pool-Timeout. Jetzt: eigene ungepoolte Verbindung mit kurzem Connect-Timeout im Threadpool,
+# höchstens _ERROR_LOG_SLOTS Einträge gleichzeitig - bei einer Fehlerlawine wird der Rest nur ins
+# Log geschrieben statt die Datenbank zusätzlich zu belasten.
+import threading  # noqa: E402
+
+_ERROR_LOG_SLOTS = threading.BoundedSemaphore(4)
+_error_engine = None
+_error_engine_lock = threading.Lock()
+
+
+def _error_log_session() -> Session:
+    global _error_engine
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import NullPool
+
+    from app.core.config import settings
+
+    with _error_engine_lock:
+        if _error_engine is None:
+            _error_engine = create_engine(
+                settings.app_database_url or settings.database_url,
+                poolclass=NullPool,
+                hide_parameters=True,
+                connect_args={"connect_timeout": 3, "application_name": f"hocx-{settings.process_kind}-errorlog"},
+            )
+    return Session(bind=_error_engine, autoflush=False, future=True)
+
+
+def _record_request_error_sync(request: Request, exc: Exception, status_code: int) -> None:
+    try:
+        db = _error_log_session()
+    except Exception:
+        logger.exception("Fehlerprotokoll-Verbindung nicht verfügbar (original error: %s: %s)", type(exc).__name__, redact(str(exc)))
+        return
+    try:
+        tenant_id, actor_user_id, actor_admin_id = best_effort_actor_from_request(db, request)
+        record_system_error(db, exc=exc, request=request, tenant_id=tenant_id, actor_user_id=actor_user_id, actor_admin_id=actor_admin_id, status_code=status_code)
+    finally:
+        db.close()
+
+
+async def record_request_error(request: Request, exc: Exception, status_code: int) -> None:
+    """Für die globalen async Exception-Handler. Wirft nie."""
+    from starlette.concurrency import run_in_threadpool
+
+    if not _ERROR_LOG_SLOTS.acquire(blocking=False):
+        logger.error("Fehlerprotokoll überlastet, Eintrag nur im Log: %s %s -> %s: %s", request.method, request.url.path, type(exc).__name__, redact(str(exc)))
+        return
+    try:
+        await run_in_threadpool(_record_request_error_sync, request, exc, status_code)
+    except Exception:
+        logger.exception("Fehlerprotokoll fehlgeschlagen")
+    finally:
+        _ERROR_LOG_SLOTS.release()

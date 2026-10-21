@@ -17,7 +17,7 @@ from app.core.db import SessionLocal, engine
 from app.core.config import settings
 from app.core.objstore_client import StorageUnavailable, StorageWriteFenced
 from app.core.audit_context import AuditContextMiddleware
-from app.core.error_log import best_effort_actor_from_request, record_system_error
+from app.core.error_log import record_request_error
 from app.core.redis_client import close_redis_pool
 from app.core.security import hash_password
 from app.models import AppUser, ElementType, PlatformAdmin, Role, Tenant
@@ -27,6 +27,7 @@ from app.services.admin_job_status_service import AdminJobStatusService
 from app.services.audit_service import AuditService
 from app.services.submission_service import SubmissionService
 from app.services.file_service import FileService
+from app.services.upload_lock import UploadLockBusy
 from app.services.isolated_parse import shutdown_pool as shutdown_word_import_parse_pool
 from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
 from app.services import maintenance_service, photo_album_service, storage_migration_service, storage_profile_service, system_alert_service
@@ -593,12 +594,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     raw error text (SQL, stack traces, internal paths) ever reaches a customer response.
     FastAPI's own HTTPException/RequestValidationError handlers are more specific and take
     precedence, so normal curated 4xx responses are unaffected by this."""
-    db = SessionLocal()
-    try:
-        tenant_id, actor_user_id, actor_admin_id = best_effort_actor_from_request(db, request)
-        record_system_error(db, exc=exc, request=request, tenant_id=tenant_id, actor_user_id=actor_user_id, actor_admin_id=actor_admin_id, status_code=500)
-    finally:
-        db.close()
+    await record_request_error(request, exc, 500)
     return JSONResponse(status_code=500, content={"detail": "Ein interner Fehler ist aufgetreten."})
 
 
@@ -613,16 +609,22 @@ async def storage_write_fenced_handler(request: Request, exc: StorageWriteFenced
     )
 
 
+@app.exception_handler(UploadLockBusy)
+async def upload_lock_busy_handler(request: Request, exc: UploadLockBusy) -> JSONResponse:
+    """Andere Uploads desselben Vereins laufen gerade (Upload-Lock, services/upload_lock.py) -
+    erwartet, kein Eintrag im Fehlerprotokoll. Das Frontend wiederholt nach Retry-After."""
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Gerade werden andere Dateien dieses Vereins verarbeitet. Bitte gleich erneut versuchen.", "code": "upload_busy"},
+        headers={"Retry-After": str(exc.retry_after_seconds), "Cache-Control": "no-store"},
+    )
+
+
 @app.exception_handler(StorageUnavailable)
 async def storage_unavailable_handler(request: Request, exc: StorageUnavailable) -> JSONResponse:
     """Objektspeicher nicht erreichbar: protokollieren (unerwarteter Betriebsfehler) und 503
     statt 500 - der Zustand ist vorübergehend, nichts wurde inkonsistent bestätigt."""
-    db = SessionLocal()
-    try:
-        tenant_id, actor_user_id, actor_admin_id = best_effort_actor_from_request(db, request)
-        record_system_error(db, exc=exc, request=request, tenant_id=tenant_id, actor_user_id=actor_user_id, actor_admin_id=actor_admin_id, status_code=503)
-    finally:
-        db.close()
+    await record_request_error(request, exc, 503)
     return JSONResponse(
         status_code=503,
         content={"detail": "Der Dateispeicher ist vorübergehend nicht erreichbar.", "code": "storage_unavailable"},
@@ -641,12 +643,7 @@ async def logged_http_exception_handler(request: Request, exc: HTTPException):
     already-safe-to-show validation messages), it's an unexpected error worth recording. The
     response itself is untouched - delegates to FastAPI's default handler unchanged."""
     if exc.status_code >= 400 and exc.__cause__ is not None and not isinstance(exc.__cause__, ValueError):
-        db = SessionLocal()
-        try:
-            tenant_id, actor_user_id, actor_admin_id = best_effort_actor_from_request(db, request)
-            record_system_error(db, exc=exc.__cause__, request=request, tenant_id=tenant_id, actor_user_id=actor_user_id, actor_admin_id=actor_admin_id, status_code=exc.status_code)
-        finally:
-            db.close()
+        await record_request_error(request, exc.__cause__, exc.status_code)
     return await http_exception_handler(request, exc)
 
 

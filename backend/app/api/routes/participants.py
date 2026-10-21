@@ -31,6 +31,7 @@ from app.schemas.user import UserUpdate
 from app.schemas.template import TemplateRead
 from app.schemas.data_export import ProtectedExportRequest
 from app.services.data_export import personal as personal_data
+from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter()
 participant_service = ParticipantService()
@@ -185,6 +186,16 @@ def export_participant_personal_data(
 
 @router.post("/participants/import-csv", response_model=ParticipantImportResult, status_code=status.HTTP_200_OK)
 async def import_participants_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_import_participants_csv_impl, file=file, db=db, user=user)
+
+
+async def _import_participants_csv_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),

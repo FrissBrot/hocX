@@ -625,7 +625,7 @@ class AdminTenantService:
                 return result
         return self._read_model(db, tenant)
 
-    async def update_tenant(
+    async def update_tenant(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
         self,
         db: Session,
         tenant_id: int,

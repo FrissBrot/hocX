@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.core.db import get_db
@@ -146,25 +147,30 @@ async def render_document(body: DocumentRequest, db: Session = Depends(get_db), 
     try:
         result = await document_service.render(db, user, user.current_tenant_id, body)
     except DocumentRenderError as exc:
-        db.rollback()
+        await run_in_threadpool(db.rollback)
         raise render_error(user, exc) from exc
     except (DocumentPermissionError, DocumentNotFoundError, ValueError) as exc:
-        db.rollback()
+        await run_in_threadpool(db.rollback)
         raise http_error(user, exc) from exc
-    audit.log(
-        db,
-        action="document.render",
-        actor=user,
-        entity_type="document_export",
-        entity_id=result.export.id,
-        details={
-            "document_type": result.export.document_type,
-            "version": result.export.version_label,
-            "protocol_id": str(body.protocol_id) if body.protocol_id else None,
-            "template_id": str(body.template_id) if body.template_id else None,
-        },
-    )
-    return export_read(db, result.export)
+
+    def audit_and_read() -> DocumentExportRead:
+        # Synchrone DB-Arbeit nicht im Event-Loop (CONC-001).
+        audit.log(
+            db,
+            action="document.render",
+            actor=user,
+            entity_type="document_export",
+            entity_id=result.export.id,
+            details={
+                "document_type": result.export.document_type,
+                "version": result.export.version_label,
+                "protocol_id": str(body.protocol_id) if body.protocol_id else None,
+                "template_id": str(body.template_id) if body.template_id else None,
+            },
+        )
+        return export_read(db, result.export)
+
+    return await run_in_threadpool(audit_and_read)
 
 
 class DiagnosticRead(BaseModel):
@@ -200,7 +206,7 @@ async def preview_document(
     check_preview_rights(user, body)
     # Bricht der Browser die Vorschau ab (neuere Eingabe, Dialog geschlossen), wartet der Server
     # nicht weiter: noch wartende Renders entfallen ganz (TYPST-005).
-    render = asyncio.ensure_future(document_service.preview(db, user, user.current_tenant_id, body, max_pages=max_pages))
+    render = asyncio.ensure_future(document_service.preview(db, user, user.current_tenant_id, body, max_pages=max_pages))  # loop-ok: preview lagert DB-Arbeit selbst aus
     watcher = asyncio.ensure_future(_until_disconnected(request))
     try:
         await asyncio.wait({render, watcher}, return_when=asyncio.FIRST_COMPLETED)

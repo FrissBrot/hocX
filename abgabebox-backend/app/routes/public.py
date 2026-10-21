@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 from app import element_resolver, gps_strip, image_metadata, repository, scanner
 from app.captcha import mint_captcha_session_token, verify_captcha, verify_captcha_session_token
 from app.config import settings
-from app.db import get_db, serialized_upload, tenant_upload_lock
+from app.db import UploadLockBusy, get_db, serialized_upload, tenant_upload_lock
+from app.offload import run_coroutine_in_thread
 from app.schemas import AssignmentDetailPublic, AssignmentPublic, CaptchaVerifyResult, ElementPublic, UploadResult
 from app.objstore_client import StorageWriteFenced
 from app.storage import delete_object, move_from_quarantine, save_to_quarantine, tenant_storage_bytes
@@ -328,6 +329,11 @@ async def verify_captcha_for_element(
     captcha_solution: str = Form(...),
     db: Session = Depends(get_db),
 ):
+    # DB-Zugriffe im Worker-Thread (Concurrency-Audit CONC-001), siehe app/offload.py.
+    return await run_coroutine_in_thread(_verify_captcha_impl, request, link_token, assignment_slug, element_ref, captcha_solution, db)
+
+
+async def _verify_captcha_impl(request: Request, link_token: str, assignment_slug: str, element_ref: str, captcha_solution: str, db: Session):  # loop-ok: nur über run_coroutine_in_thread
     """Called once when the upload page loads (widget solves automatically), not per upload -
     see upload() below, which accepts the resulting session token instead of a raw
     captcha_solution so a visitor doesn't have to pass the bot-check again for every file."""
@@ -342,11 +348,7 @@ async def verify_captcha_for_element(
     return CaptchaVerifyResult(session_token=token, expires_in_seconds=settings.captcha_session_ttl_minutes * 60)
 
 
-@router.post(
-    "/public/{link_token}/assignments/{assignment_slug}/elements/{element_ref}/upload",
-    response_model=UploadResult,
-)
-async def upload(
+async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
     request: Request,
     link_token: str,
     assignment_slug: str,
@@ -673,3 +675,32 @@ async def upload(
             _log("scan_clean")
         _log("submitted", "Freigegeben")
         return UploadResult(ok=True, files_received=files_received, image_duplicate_warnings=image_duplicate_warnings)
+
+
+@router.post(
+    "/public/{link_token}/assignments/{assignment_slug}/elements/{element_ref}/upload",
+    response_model=UploadResult,
+)
+async def upload(
+    request: Request,
+    link_token: str,
+    assignment_slug: str,
+    element_ref: str,
+    captcha_session_token: str = Form(...),
+    files: list[UploadFile] = File(default_factory=list),
+    # «GPS-Daten des Bildes mitsenden» (Datenschutz-Audit Paket 9.3), Standard an. Aus: Standort
+    # wird vor dem Speichern aus den Dateien entfernt (gps_strip), alles andere bleibt.
+    include_gps: bool = Form(True),
+    db: Session = Depends(get_db),
+):
+    """Öffentlicher Upload. Die ganze Verarbeitung (Prüfsummen, Quarantäne, ClamAV, Commit) läuft
+    in einem Worker-Thread (Concurrency-Audit CONC-001) - sie mischt synchrone DB-Zugriffe mit
+    awaits und blockierte vorher den Event-Loop des ganzen Workers für alle Mandanten."""
+    busy = False
+    try:
+        return await run_coroutine_in_thread(_upload_impl, request=request, link_token=link_token, assignment_slug=assignment_slug, element_ref=element_ref, captcha_session_token=captcha_session_token, files=files, include_gps=include_gps, db=db)
+    except UploadLockBusy:
+        busy = True
+    if busy:
+        # Erwartet (andere Uploads desselben Vereins laufen) - kein Eintrag im Fehlerprotokoll.
+        raise HTTPException(status_code=503, detail="Gerade werden andere Dateien verarbeitet - bitte gleich erneut versuchen", headers={"Retry-After": "10"})

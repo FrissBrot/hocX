@@ -104,7 +104,7 @@ def _normalize_tenant_profile_image(content: bytes) -> bytes:
     return output.getvalue()
 
 
-async def apply_tenant_profile_image(db: Session, tenant: Tenant, profile_image: UploadFile) -> None:
+async def apply_tenant_profile_image(db: Session, tenant: Tenant, profile_image: UploadFile) -> None:  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
     """Prüft und normalisiert ein hochgeladenes Profilbild (MAIN-SEC-002), legt es im
     Objektspeicher ab (Key relativ zu STORAGE_ROOT, Namespace «main») und setzt
     tenant.profile_image_path."""
@@ -246,7 +246,7 @@ class TenantService:
             estimated_yearly_cost_rp=estimated_yearly_cost_rp,
         )
 
-    async def update_tenant(
+    async def update_tenant(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
         self,
         db: Session,
         tenant_id: int,

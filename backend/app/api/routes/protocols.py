@@ -58,11 +58,13 @@ def _get_protocol_or_404(db: Session, protocol_id: uuid.UUID, user: CurrentUser)
 
 async def _generate_pdf_background(protocol_id: int) -> None:
     """Erzeugt nach dem Abschliessen das (signierte) Protokoll-PDF über die Dokument-Engine."""
+    from starlette.concurrency import run_in_threadpool
+
     from app.documents import service as document_service
 
     db = SessionLocal()
     try:
-        protocol = db.get(Protocol, protocol_id)
+        protocol = await run_in_threadpool(db.get, Protocol, protocol_id)
         if protocol is None:
             return
         await document_service.render(
@@ -71,10 +73,13 @@ async def _generate_pdf_background(protocol_id: int) -> None:
     except Exception as exc:
         # Runs via BackgroundTasks, outside the request/response cycle the global exception
         # handlers in main.py watch - without this, a failure here was invisible everywhere.
-        db.rollback()
-        record_system_error(db, exc=exc)
+        def record() -> None:
+            db.rollback()
+            record_system_error(db, exc=exc)
+
+        await run_in_threadpool(record)
     finally:
-        db.close()
+        await run_in_threadpool(db.close)
 
 
 def _cycle_configs_by_template(db: Session, template_ids: set[int]) -> dict[int, CycleConfig]:

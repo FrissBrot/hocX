@@ -91,6 +91,7 @@ from app.services.tenant_clone_service import TenantCloneService
 from app.services.tenant_cleanup_service import TenantCleanupService
 from app.services.tenant_export_service import TenantExportService
 from app.services.tenant_import_service import TenantImportService
+from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter(dependencies=[Depends(get_current_admin)])
 
@@ -443,6 +444,19 @@ def get_tenant(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
 
 @router.patch("/tenants/{tenant_id}", response_model=AdminTenantRead)
 async def update_tenant(
+    tenant_id: uuid.UUID,
+    name: str | None = Form(default=None),
+    public_slug: str | None = Form(default=None),
+    profile_image: UploadFile | None = File(default=None),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_update_tenant_impl, tenant_id=tenant_id, name=name, public_slug=public_slug, profile_image=profile_image, db=db, current_admin=current_admin)
+
+
+async def _update_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
     tenant_id: uuid.UUID,
     name: str | None = Form(default=None),
     public_slug: str | None = Form(default=None),
@@ -871,6 +885,18 @@ MAX_TENANT_IMPORT_UPLOAD_BYTES = 2000 * 1024 * 1024
 
 @router.post("/tenants/import", response_model=TenantImportResult, status_code=201)
 async def import_tenant(
+    new_name: str = Form(...),
+    file: UploadFile = File(...),
+    password: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_import_tenant_impl, new_name=new_name, file=file, password=password, db=db, current_admin=current_admin)
+
+
+async def _import_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
     new_name: str = Form(...),
     file: UploadFile = File(...),
     password: str | None = Form(default=None),

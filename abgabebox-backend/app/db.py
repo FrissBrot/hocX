@@ -1,4 +1,3 @@
-import asyncio
 from contextlib import asynccontextmanager, contextmanager
 from typing import Iterator
 
@@ -67,7 +66,8 @@ def tenant_upload_lock(tenant_id: int) -> Iterator[None]:
     """
     lock_key = _TENANT_UPLOAD_LOCK_OFFSET + tenant_id
     with engine.begin() as conn:
-        conn.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key})
+        _set_lock_timeout(conn)
+        _acquire(conn, text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key})
         yield
 
 
@@ -81,12 +81,35 @@ _upload_lock_engine = create_engine(
 )
 
 
+# Wartezeit auf den Upload-Lock des Mandanten (Concurrency-Audit CONC-008): vorher wurde ohne
+# Obergrenze alle 50 ms gepollt. Danach antwortet die Route 503 mit Retry-After, das Frontend
+# versucht es erneut.
+UPLOAD_LOCK_TIMEOUT_SECONDS = 30
+
+
+class UploadLockBusy(Exception):
+    """Der Upload-Lock des Mandanten war innerhalb von UPLOAD_LOCK_TIMEOUT_SECONDS nicht frei."""
+
+
+def _set_lock_timeout(conn) -> None:
+    conn.execute(text("SELECT set_config('lock_timeout', :value, true)"), {"value": f"{UPLOAD_LOCK_TIMEOUT_SECONDS}s"})
+
+
+def _acquire(conn, statement, params) -> None:
+    from sqlalchemy.exc import OperationalError
+
+    try:
+        conn.execute(statement, params)
+    except OperationalError as exc:
+        if getattr(getattr(exc, "orig", None), "sqlstate", None) == "55P03":  # lock_not_available
+            raise UploadLockBusy() from exc
+        raise
+
+
 @asynccontextmanager
-async def serialized_upload(tenant_id: int):
+async def serialized_upload(tenant_id: int):  # loop-ok: läuft im Worker-Thread der Upload-Route (app/offload.py)
+    """Blockierend mit Obergrenze - aufgerufen nur aus dem Worker-Thread der Upload-Route."""
     with _upload_lock_engine.begin() as conn:
-        while not conn.scalar(
-            text("SELECT pg_try_advisory_xact_lock(:ns, :tenant_id)"),
-            {"ns": UPLOAD_LOCK_NAMESPACE, "tenant_id": tenant_id},
-        ):
-            await asyncio.sleep(0.05)
+        _set_lock_timeout(conn)
+        _acquire(conn, text("SELECT pg_advisory_xact_lock(:ns, :tenant_id)"), {"ns": UPLOAD_LOCK_NAMESPACE, "tenant_id": tenant_id})
         yield

@@ -16,6 +16,7 @@ from app.schemas.cashflow import TenantPortalCharges
 from app.schemas.user import TenantDomainCreate, TenantDomainRead, TenantLookupRead, TenantRead, TenantSubscriptionRead, TenantUpdate
 from app.services import public_id_service, tenant_trust_service
 from app.services.tenant_service import TenantService, build_tenant_profile_image_url, tenant_profile_image_response
+from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter()
 service = TenantService()
@@ -82,6 +83,19 @@ def search_trusted_tenants(
 
 @router.patch("/tenants/{tenant_id}", response_model=TenantRead)
 async def patch_tenant(
+    tenant_id: uuid.UUID,
+    name: str | None = Form(default=None),
+    public_slug: str | None = Form(default=None),
+    profile_image: UploadFile | None = File(default=None),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_patch_tenant_impl, tenant_id=tenant_id, name=name, public_slug=public_slug, profile_image=profile_image, db=db, user=user)
+
+
+async def _patch_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
     tenant_id: uuid.UUID,
     name: str | None = Form(default=None),
     public_slug: str | None = Form(default=None),

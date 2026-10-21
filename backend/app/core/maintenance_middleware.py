@@ -16,7 +16,7 @@ import json
 
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from app.services.maintenance_service import EffectiveState, current_effective_state
+from app.services.maintenance_service import EffectiveState, effective_state_async
 
 EXEMPT_PREFIXES = (
     "/api/admin/",
@@ -60,7 +60,7 @@ class MaintenanceMiddleware:
         if not path.startswith("/api") or is_exempt(path):
             await self.app(scope, receive, send)
             return
-        state = current_effective_state()
+        state = await effective_state_async()
         if not state.any_blocking:
             await self.app(scope, receive, send)
             return

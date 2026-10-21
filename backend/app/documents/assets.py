@@ -99,7 +99,7 @@ def _validated_image(content: bytes) -> tuple[str, str, int, int]:
         raise AssetValidationError("apiError.invalidImage") from exc
 
 
-async def create_asset(
+async def create_asset(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
     db: Session,
     tenant_id: int,
     *,

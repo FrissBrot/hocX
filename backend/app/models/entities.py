@@ -2004,6 +2004,18 @@ class SystemJobStatus(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
 
 
+class SystemRuntimeMetric(Base):
+    """Laufzeitkennzahlen je Dienstprozess (core/runtime_metrics.py, Migration 0148). Geschrieben
+    nur über record_runtime_metrics, gelesen von system_health_service._check_runtime."""
+
+    __tablename__ = "system_runtime_metric"
+
+    instance: Mapped[str] = mapped_column(Text, primary_key=True)
+    process_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    reported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    metrics: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
 class SystemJobRun(Base):
     """Verlauf der Läufe eines Jobs (siehe SystemJobStatus). Bei hochfrequenten Jobs nur Fehler und
     der erste Erfolg danach, Aufräumen über log_cleanup_loop."""

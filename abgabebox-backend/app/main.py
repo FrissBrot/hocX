@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import threading
 import traceback as traceback_module
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -9,7 +10,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import NullPool
 
 from app.captcha import captcha_configured, captcha_partially_configured
 from app.config import is_dev_or_test_environment, settings
@@ -100,24 +103,43 @@ def _record_job_run(*, status: str, started_at: datetime, error: str | None = No
         _record_background_error(exc)
 
 
+def _quarantine_cleanup_tick(max_age_seconds: int) -> tuple[str, datetime, str | None] | None:
+    """Ein Lauf inklusive Lock-Verbindung, im Threadpool (Concurrency-Audit CONC-001: vorher lief
+    der Checkout synchron im Event-Loop). Die Lock-Verbindung ist während des Laufs untätig in
+    der Transaktion - ohne Aufheben des Idle-Timeouts der Rolle gäbe PostgreSQL den Lock bei
+    einem langen Lauf frei (CONC-006)."""
+    with engine.begin() as conn:
+        conn.execute(text("SET LOCAL idle_in_transaction_session_timeout = 0"))
+        acquired = conn.execute(text("SELECT pg_try_advisory_xact_lock(:lock_id)"), {"lock_id": QUARANTINE_CLEANUP_LOCK_ID}).scalar()
+        if not acquired:
+            return None
+        started_at = datetime.now(timezone.utc)
+        try:
+            with SessionLocal() as db:
+                cleanup_stale_quarantine_files(db, max_age_seconds, is_referenced=lambda path: upload_path_referenced(db, path))
+        except Exception as exc:
+            _logger.exception("Quarantäne-Cleanup fehlgeschlagen; beim nächsten Durchlauf erneut versuchen")
+            _record_background_error(exc)
+            return ("failure", started_at, f"{type(exc).__name__}: {exc}"[:4000])
+        return ("success", started_at, None)
+
+
 async def quarantine_cleanup_loop() -> None:
     """Entfernt alte verwaiste Quarantänedateien; registrierte Uploads bleiben erhalten."""
     interval_seconds = settings.quarantine_cleanup_interval_minutes * 60
     max_age_seconds = max(24 * 60 * 60, settings.quarantine_max_age_minutes * 60)
     while True:
-        with engine.begin() as conn:
-            acquired = conn.execute(text(f"SELECT pg_try_advisory_xact_lock({QUARANTINE_CLEANUP_LOCK_ID})")).scalar()
-            if acquired:
-                started_at = datetime.now(timezone.utc)
-                try:
-                    with SessionLocal() as db:
-                        await asyncio.to_thread(cleanup_stale_quarantine_files, db, max_age_seconds, is_referenced=lambda path: upload_path_referenced(db, path))
-                except Exception as exc:
-                    _logger.exception("Quarantäne-Cleanup fehlgeschlagen; beim nächsten Durchlauf erneut versuchen")
-                    _record_background_error(exc)
-                    await asyncio.to_thread(_record_job_run, status="failure", started_at=started_at, error=f"{type(exc).__name__}: {exc}"[:4000])
-                else:
-                    await asyncio.to_thread(_record_job_run, status="success", started_at=started_at)
+        outcome = None
+        try:
+            outcome = await asyncio.to_thread(_quarantine_cleanup_tick, max_age_seconds)
+        except Exception as exc:
+            # Lock-Verbindung nicht zu bekommen (DB weg): Tick zählt als gescheitert, der Loop lebt weiter.
+            _logger.exception("Quarantäne-Cleanup: Tick ausserhalb der Aufgabe fehlgeschlagen")
+            await asyncio.to_thread(_record_background_error, exc)
+            outcome = ("failure", datetime.now(timezone.utc), f"{type(exc).__name__}: {exc}"[:4000])
+        if outcome is not None:
+            status, started_at, error = outcome
+            await asyncio.to_thread(_record_job_run, status=status, started_at=started_at, error=error)
         await asyncio.sleep(interval_seconds)
 
 
@@ -136,7 +158,14 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title=settings.app_name, version="1.2.0", lifespan=lifespan)
 
 from app.upload_admission import UploadAdmissionMiddleware
-app.add_middleware(UploadAdmissionMiddleware, path="/api/public/", max_bytes=public.MAX_UPLOAD_BODY_BYTES)
+app.add_middleware(
+    UploadAdmissionMiddleware,
+    path="/api/public/",
+    path_suffix="/upload",
+    max_bytes=public.MAX_UPLOAD_BODY_BYTES,
+    max_active=settings.upload_concurrency,
+    wait_seconds=settings.upload_slot_wait_seconds,
+)
 
 from app.maintenance import MaintenanceMiddleware, current_state, retry_after
 # Aussen vor der Upload-Annahme: während einer Wartung wird ein Upload sofort abgewiesen.
@@ -151,11 +180,25 @@ app.add_middleware(
 )
 
 
+# Concurrency-Audit CONC-001: Fehlerprotokoll nie im Event-Loop und nie aus dem Request-Pool -
+# bei erschöpftem Pool häufen sich gerade die Fehler. Eigene ungepoolte Verbindung mit kurzem
+# Connect-Timeout, höchstens vier Einträge gleichzeitig, der Rest nur ins Log.
+_ERROR_LOG_SLOTS = threading.BoundedSemaphore(4)
+_error_engine = create_engine(
+    settings.database_url, poolclass=NullPool, hide_parameters=True,
+    connect_args={"connect_timeout": 3, "application_name": "hocx-abgabebox-backend-errorlog"},
+)
+
+
 def _record_error(request: Request, exc: Exception, status_code: int) -> None:
     """Never raises - a failure to log an error must not mask the original error.
     No tenant/actor here: this is the public, unauthenticated Abgabebox - unlike the main
     backend there's no session cookie to resolve a tenant/user from at this generic level."""
-    db = SessionLocal()
+    try:
+        db = Session(bind=_error_engine, autoflush=False, future=True)
+    except Exception:
+        _logger.exception("Fehlerprotokoll-Verbindung nicht verfügbar")
+        return
     try:
         insert_error_log(
             db,
@@ -173,11 +216,23 @@ def _record_error(request: Request, exc: Exception, status_code: int) -> None:
         db.close()
 
 
+async def _record_error_off_loop(request: Request, exc: Exception, status_code: int) -> None:
+    if not _ERROR_LOG_SLOTS.acquire(blocking=False):
+        # Ohne Fehlertext: der kann Personendaten enthalten (Datenschutz-Audit PRIV-002); er steht
+        # nur redigiert im Fehlerprotokoll, das hier gerade überlastet ist.
+        _logger.error("Fehlerprotokoll überlastet, nur im Log: %s %s -> %s", request.method, request.url.path, type(exc).__name__)
+        return
+    try:
+        await asyncio.to_thread(_record_error, request, exc, status_code)
+    finally:
+        _ERROR_LOG_SLOTS.release()
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Safety net for anything a route didn't already catch - guarantees no raw error text
     ever reaches a public, unauthenticated response."""
-    _record_error(request, exc, 500)
+    await _record_error_off_loop(request, exc, 500)
     return JSONResponse(status_code=500, content={"detail": "Ein interner Fehler ist aufgetreten."})
 
 
@@ -187,7 +242,7 @@ async def logged_http_exception_handler(request: Request, exc: HTTPException):
     this records the original chained cause without changing the response, same convention
     as the main backend's handler."""
     if exc.status_code >= 400 and exc.__cause__ is not None:
-        _record_error(request, exc.__cause__, exc.status_code)
+        await _record_error_off_loop(request, exc.__cause__, exc.status_code)
     return await http_exception_handler(request, exc)
 
 

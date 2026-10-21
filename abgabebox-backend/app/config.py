@@ -84,6 +84,11 @@ class Settings(BaseSettings):
     # to 1000 files. Enforced in routes/public.py's upload() before any file is read or scanned,
     # regardless of what max_files_per_element says.
     max_files_per_upload_request: int = Field(default=50, ge=1, le=50, validation_alias="ABGABEBOX_MAX_FILES_PER_UPLOAD_REQUEST")
+    # Gleichzeitig verarbeitete Uploads je uvicorn-Worker (Concurrency-Audit CONC-007). Ein Upload
+    # hält bis 150 MiB im Speicher; 2 je Worker passen in das 1-GiB-Budget des Containers. Weitere
+    # Uploads warten bis upload_slot_wait_seconds auf einen freien Platz, statt sofort 503 zu bekommen.
+    upload_concurrency: int = Field(default=2, ge=1, le=8, validation_alias="ABGABEBOX_UPLOAD_CONCURRENCY")
+    upload_slot_wait_seconds: float = Field(default=120.0, ge=0, le=600, validation_alias="ABGABEBOX_UPLOAD_SLOT_WAIT_SECONDS")
     # Distinguishes genuine local dev/test stacks (where running without a FriendlyCaptcha
     # account is a deliberate, accepted choice - see captcha.py's captcha_enabled()) from a real
     # deployment (audit finding, 2026-08-27: production must fail CLOSED - reject uploads -

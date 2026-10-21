@@ -67,7 +67,7 @@ from app.services.photo_similarity import (
     same_photo,
     verified_duplicate_groups,
 )
-from app.services.upload_lock import UPLOAD_LOCK_NAMESPACE, acquire_upload_lock, acquire_upload_lock_sync
+from app.services.upload_lock import BACKGROUND_TIMEOUT_SECONDS, UPLOAD_LOCK_NAMESPACE, UploadLockBusy, acquire_upload_lock, acquire_upload_lock_sync
 from app.services.upload_pipeline import (
     ALLOWED_IMAGE_MIME_TYPES,
     GALLERY_DIRECT_IMAGE_MAX_BYTES,
@@ -828,7 +828,7 @@ class FileService:
                 seen.add(checksum)
         return accepted, warnings
 
-    async def save_protocol_image(
+    async def save_protocol_image(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
         self,
         db: Session,
         *,
@@ -943,7 +943,7 @@ class FileService:
             duplicate_warning=result.duplicate_warning,
         )
 
-    async def save_gallery_uploads(
+    async def save_gallery_uploads(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
         self,
         db: Session,
         *,
@@ -1005,7 +1005,7 @@ class FileService:
         hier neu berechnete Hash passt. Exakte Duplikate werden nicht gespeichert, ergaenzen aber
         fehlende Metadaten des vorhandenen Bildes. file_results (optional) erhaelt je Datei
         {name, status, file_id?, applied, conflicts, message?} fuer die Ergebnisanzeige."""
-        await acquire_upload_lock(db, tenant_id)
+        await acquire_upload_lock(db, tenant_id, timeout_seconds=BACKGROUND_TIMEOUT_SECONDS)
         self.ensure_storage()
         normalized_tags = _normalize_tags(tags)
         upload_event = db.get(Event, upload_event_id) if upload_event_id is not None else None
@@ -1305,7 +1305,7 @@ class FileService:
             )
         db.flush()
 
-    async def _store_live_clip(
+    async def _store_live_clip(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
         self,
         db: Session,
         *,
@@ -1360,7 +1360,7 @@ class FileService:
             db.rollback()
             raise HTTPException(status_code=400, detail=problem)
 
-    async def save_document_uploads(
+    async def save_document_uploads(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
         self,
         db: Session,
         *,
@@ -1520,6 +1520,14 @@ class FileService:
             db.commit()
             try:
                 asyncio.run(self._run_gallery_upload_job(db, job))
+            except UploadLockBusy:
+                # Upload-Lock des Mandanten länger belegt (z. B. Word-Import) - Job bleibt in der
+                # Warteschlange und wird beim nächsten Tick fortgesetzt (processed_files bleibt).
+                db.rollback()
+                db.refresh(job)
+                job.status = "queued"
+                db.commit()
+                return
             except Exception as exc:
                 db.rollback()
                 db.refresh(job)
@@ -1544,7 +1552,7 @@ class FileService:
                 for relative_path in job.staged_paths:
                     (Path(settings.storage_root) / relative_path).unlink(missing_ok=True)
 
-    async def _run_gallery_upload_job(self, db: Session, job: GalleryUploadJob) -> None:
+    async def _run_gallery_upload_job(self, db: Session, job: GalleryUploadJob) -> None:  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
         upload_assignment = db.get(SubmissionAssignment, job.upload_assignment_id) if job.upload_assignment_id else None
         upload_cycle_config = db.get(CycleConfig, job.upload_cycle_config_id) if job.upload_cycle_config_id else None
 
@@ -1593,7 +1601,7 @@ class FileService:
                     job.total_files += 1
                     db.commit()
 
-    async def _ingest_gallery_zip(
+    async def _ingest_gallery_zip(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
         self,
         db: Session,
         job: GalleryUploadJob,
@@ -1620,7 +1628,7 @@ class FileService:
         live_clips: dict[str, bytes] = {}
         saw_anything = False
 
-        async def flush() -> None:
+        async def flush() -> None:  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
             nonlocal batch, live_clips
             db.refresh(job)
             job.total_files += len(batch)
@@ -1659,7 +1667,7 @@ class FileService:
             job.errors = [*job.errors, "ZIP enthält keine Bilddateien"]
             db.commit()
 
-    async def _ingest_gallery_batch(
+    async def _ingest_gallery_batch(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
         self,
         db: Session,
         job: GalleryUploadJob,
@@ -1669,7 +1677,7 @@ class FileService:
         upload_cycle_config: CycleConfig | None,
         live_clips: dict[str, bytes] | None = None,
     ) -> None:
-        await acquire_upload_lock(db, job.tenant_id)
+        await acquire_upload_lock(db, job.tenant_id, timeout_seconds=BACKGROUND_TIMEOUT_SECONDS)
         # Die Reservierung dieses Batches wird in derselben Transaktion durch StoredFiles
         # ersetzt. Abgewiesene/Duplikat-Dateien geben ihre Reservierung ebenfalls frei.
         db.refresh(job)
@@ -1705,7 +1713,7 @@ class FileService:
                 before_commit=checkpoint, file_results=batch_results,
             )
 
-    async def _save_gallery_batch(
+    async def _save_gallery_batch(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
         self,
         db: Session,
         job: GalleryUploadJob,

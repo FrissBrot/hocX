@@ -68,6 +68,7 @@ from app.services.upload_lock import acquire_upload_lock
 from starlette.concurrency import run_in_threadpool
 
 from app.gallery_upload_route import GalleryUploadRoute
+from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter(route_class=GalleryUploadRoute)
 service = FileService()
@@ -419,6 +420,44 @@ async def upload_gallery_images(
     damit ein mehrere GB grosses ZIP nicht die ganze Request-Laufzeit ueber im Speicher
     gehalten werden muss und der Upload-Dialog sofort schliessen kann. Poll GET
     .../gallery-upload-jobs/{id} fuer den Fortschritt."""
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_upload_gallery_images_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, release_to_shared_albums=release_to_shared_albums, estimated_taken_on=estimated_taken_on, file_metadata=file_metadata, include_gps=include_gps, db=db, user=user)
+
+
+async def _upload_gallery_images_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    files: list[UploadFile] = File(...),
+    tags: str | None = Form(default=None),
+    # Optional target picker: at most one of event_id, (submission_assignment_id +
+    # submission_element_ref) or cycle_config_id - the batch then lands in that Termin's/
+    # Abgabe-Element's/Zyklus' auto-album(s) too (see FileService.process_pending_gallery_upload_jobs).
+    event_id: uuid.UUID | None = Form(default=None),
+    submission_assignment_id: uuid.UUID | None = Form(default=None),
+    submission_element_ref: str | None = Form(default=None),
+    cycle_config_id: uuid.UUID | None = Form(default=None),
+    # Im Upload-Dialog bestaetigt: Fotos, die dabei in ein geteiltes Auto-Album fallen, sofort
+    # freigeben (sonst nur vorgemerkt, siehe photo_album_service.add_items).
+    release_to_shared_albums: Annotated[bool, Form()] = False,
+    # Optionales Schaetzdatum aus dem Upload-Popup - gilt nur fuer Bilder, fuer die der Server
+    # kein echtes Aufnahmedatum findet (siehe FileService.save_gallery_uploads).
+    estimated_taken_on: Annotated[date | None, Form()] = None,
+    # Optionale Browser-Analyse je Datei als JSON-Liste [{sha256, metadata}] - reine Hinweise,
+    # angewendet nur bei passendem serverseitigem Hash (siehe _parse_file_hints).
+    file_metadata: Annotated[str | None, Form()] = None,
+    # «GPS-Daten des Bildes mitsenden» (Datenschutz-Audit Paket 9.3), Standard an
+    include_gps: Annotated[bool, Form()] = True,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Direkter Bild-Upload fuer die "Fotos"-Galerie (nicht an ein Protokoll/Word-Import/
+    Abgabe gebunden) - unterstuetzt einzelne Bilddateien und .zip-Archive, aus denen nur
+    Bilddateien uebernommen werden (siehe iter_gallery_zip_entries). This request only
+    streams the raw upload(s) to disk and queues a gallery_upload_job - Magic-Byte-Pruefung,
+    Virenscan und das eigentliche Speichern laufen danach im Hintergrund (siehe
+    app/main.py's gallery_upload_ingest_loop und FileService.process_pending_gallery_upload_jobs),
+    damit ein mehrere GB grosses ZIP nicht die ganze Request-Laufzeit ueber im Speicher
+    gehalten werden muss und der Upload-Dialog sofort schliessen kann. Poll GET
+    .../gallery-upload-jobs/{id} fuer den Fortschritt."""
     require_writer(user)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -549,6 +588,29 @@ async def upload_gallery_images(
 
 @router.post("/files/document-uploads", response_model=DocumentUploadResult, status_code=status.HTTP_201_CREATED)
 async def upload_documents(
+    files: list[UploadFile] = File(...),
+    tags: str | None = Form(default=None),
+    # Same optional Bezug picker as upload_gallery_images (at most one of Termin / Abgabe-
+    # Element / Zyklus) - here it is stored on the file itself and shown in the "Bezug"
+    # column of the Dateien page, instead of routing it into an auto-album.
+    event_id: uuid.UUID | None = Form(default=None),
+    submission_assignment_id: uuid.UUID | None = Form(default=None),
+    submission_element_ref: str | None = Form(default=None),
+    cycle_config_id: uuid.UUID | None = Form(default=None),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Direkter Dokument-Upload fuer die "Dateien"-Seite (PDF, Office/OpenDocument, RTF, Text,
+    ZIP - siehe upload_pipeline._sniff_document_mime; Bilder gehoeren auf die "Fotos"-Seite).
+    Anders als der Galerie-Upload laeuft alles inline: Magic-Byte-Pruefung, Virenscan und
+    Speichern passieren in diesem Request, das Ergebnis (gespeicherte Dateien + Einzelfehler)
+    kommt direkt zurueck."""
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_upload_documents_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, db=db, user=user)
+
+
+async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
     files: list[UploadFile] = File(...),
     tags: str | None = Form(default=None),
     # Same optional Bezug picker as upload_gallery_images (at most one of Termin / Abgabe-
@@ -712,6 +774,20 @@ def _ensure_block_protocol_not_frozen(db: Session, protocol_element_block_id: in
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/images", response_model=ProtocolImageRead)
 async def upload_image(
+    protocol_element_block_id: uuid.UUID,
+    file: UploadFile,
+    title: str | None = Form(default=None),
+    caption: str | None = Form(default=None),
+    include_gps: bool = Form(default=True),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_upload_image_impl, protocol_element_block_id=protocol_element_block_id, file=file, title=title, caption=caption, include_gps=include_gps, db=db, user=user)
+
+
+async def _upload_image_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
     protocol_element_block_id: uuid.UUID,
     file: UploadFile,
     title: str | None = Form(default=None),

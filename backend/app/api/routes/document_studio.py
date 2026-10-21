@@ -50,6 +50,7 @@ from app.models import (
 )
 from app.services import public_id_service
 from app.services.audit_service import AuditService
+from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter()
 audit = AuditService()
@@ -587,33 +588,46 @@ def _store_thumbnail_file(path: Path, content: bytes) -> None:
 @router.get("/document-templates/{template_id}/thumbnail")
 async def get_document_template_thumbnail(template_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     permissions.require_view(user)
-    template = _template_or_404(db, user, template_id)
-    revision = _visible_revision(db, user, template)
-    if revision is None:
-        raise _not_found(user)
-    brand_revision = template_service.resolve_brand_revision(db, user.current_tenant_id, template_service.ResolvedTemplate(template=template, revision=revision, source="explicit", brand_id=None))
-    key = hashlib.sha256(f"{user.current_tenant_id}:{revision.id}:{revision.lock_version}:{brand_revision.id if brand_revision else 0}:{_lang(user)}".encode()).hexdigest()
-    with _THUMBNAIL_LOCK:
-        cached = _THUMBNAILS.get(key)
-    disk_file = _thumbnail_file(user.current_tenant_id, key)
-    if cached is None and disk_file.is_file():
-        cached = disk_file.read_bytes()
+
+    def resolve() -> tuple[str, Path, bytes | None, str, uuid.UUID, uuid.UUID]:
+        # Synchrone DB- und Datei-Arbeit nicht im Event-Loop (CONC-001).
+        template = _template_or_404(db, user, template_id)
+        revision = _visible_revision(db, user, template)
+        if revision is None:
+            raise _not_found(user)
+        brand_revision = template_service.resolve_brand_revision(db, user.current_tenant_id, template_service.ResolvedTemplate(template=template, revision=revision, source="explicit", brand_id=None))
+        key = hashlib.sha256(f"{user.current_tenant_id}:{revision.id}:{revision.lock_version}:{brand_revision.id if brand_revision else 0}:{_lang(user)}".encode()).hexdigest()
         with _THUMBNAIL_LOCK:
-            _THUMBNAILS[key] = cached
+            cached = _THUMBNAILS.get(key)
+        disk_file = _thumbnail_file(user.current_tenant_id, key)
+        if cached is None and disk_file.is_file():
+            cached = disk_file.read_bytes()
+            with _THUMBNAIL_LOCK:
+                _THUMBNAILS[key] = cached
+        return key, disk_file, cached, template.document_type, template.public_id, revision.public_id
+
+    key, disk_file, cached, document_type, template_public_id, revision_public_id = await run_in_threadpool(resolve)
     if cached is None:
-        request = document_service.DocumentRequest(document_type=template.document_type, template_id=template.public_id, revision_id=revision.public_id, data_mode="sample", language=user.preferred_language)
-        savepoint = db.begin_nested()
+        request = document_service.DocumentRequest(document_type=document_type, template_id=template_public_id, revision_id=revision_public_id, data_mode="sample", language=user.preferred_language)
+
+        def prepare_and_release():
+            # Savepoint sofort zurückrollen und Transaktion beenden: keine Verbindung über den
+            # Compile halten (CONC-003).
+            savepoint = db.begin_nested()
+            try:
+                return document_service.prepare(db, user, user.current_tenant_id, request, preview=True)
+            finally:
+                if savepoint.is_active:
+                    savepoint.rollback()
+                db.commit()
+
         try:
-            # Synchrone DB-Arbeit nicht im Event-Loop (STUDIO-015)
-            prepared = await run_in_threadpool(document_service.prepare, db, user, user.current_tenant_id, request, preview=True)
+            prepared = await run_in_threadpool(prepare_and_release)
             output = await get_renderer().render(prepared.compiled.data, document_service.RenderAssets(files=prepared.compiled.files, fonts=prepared.compiled.fonts), fmt="png", max_pages=1, ppi=40)
         except DocumentRenderError as exc:
             raise render_error(user, exc) from exc
         except (DocumentPermissionError, DocumentNotFoundError, ValueError) as exc:
             raise http_error(user, exc) from exc
-        finally:
-            if savepoint.is_active:
-                savepoint.rollback()
         cached = output.pages[0] if output.pages else b""
         if cached:
             await run_in_threadpool(_store_thumbnail_file, disk_file, cached)
@@ -913,6 +927,19 @@ def list_document_assets(kind: Literal["image", "font"] | None = None, db: Sessi
 
 @router.post("/document-assets", response_model=AssetRead, status_code=201)
 async def upload_document_asset(
+    kind: Literal["image", "font"] = Form(...),
+    category: str | None = Form(None),
+    name: str | None = Form(None),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_upload_document_asset_impl, kind=kind, category=category, name=name, file=file, db=db, user=user)
+
+
+async def _upload_document_asset_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
     kind: Literal["image", "font"] = Form(...),
     category: str | None = Form(None),
     name: str | None = Form(None),
