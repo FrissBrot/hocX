@@ -25,6 +25,7 @@ from app.services.snapshot_reference_ids import normalize_attendance_entries, sn
 from app.services.autosave_service import AutosaveService, TextConflictError
 from app.services.access_service import AccessService
 from app.services.collaboration_service import conflicting_lock_holder_sync, protocol_channel
+from app.services.protocol_element_service import BlockConfigConflict
 from app.services.protocol_element_service import ProtocolElementService
 from app.services.protocol_service import ProtocolService
 from app.services.responsible_label_service import resolve_display_section_title
@@ -105,6 +106,7 @@ def _block_to_read(db: Session, block) -> ProtocolElementBlockRead:
         render_type_id=block.render_type_id,
         element_type_code=None,
         render_type_code=None,
+        config_version=block.config_version,
         title_snapshot=block.title_snapshot,
         display_title_snapshot=block.display_title_snapshot,
         description_snapshot=block.description_snapshot,
@@ -190,6 +192,20 @@ def patch_protocol_element_block(
         payload.configuration_snapshot_json = normalize_attendance_entries(db, payload.configuration_snapshot_json, protocol.tenant_id)
     try:
         protocol_element_block = service.update_protocol_element_block(db, existing.id, payload)
+    except BlockConfigConflict as exc:
+        # Erwartet (jemand anderes hat gespeichert): aktuellen Stand mitliefern, der Client lädt
+        # ihn und weist darauf hin (Concurrency-Audit CONC-005).
+        # Kein eigener Rollback: get_db beendet die Transaktion (und die Zeilensperre) beim Fehler.
+        current = _block_to_read(db, exc.block)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "config_conflict",
+                "message": "Der Block wurde inzwischen geändert",
+                "configuration_snapshot_json": current.configuration_snapshot_json,
+                "config_version": current.config_version,
+            },
+        ) from None
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Protocol element block could not be updated") from exc

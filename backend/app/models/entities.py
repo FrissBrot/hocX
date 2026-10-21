@@ -1236,6 +1236,9 @@ class ProtocolElementBlock(Base, TimestampMixin):
     is_visible_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     export_visible_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     configuration_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    # Zählt jede Änderung von configuration_snapshot_json (Trigger, Migration 0149) - optimistische
+    # Sperre des Konfigurations-PATCH. FetchedValue: nach jedem UPDATE neu laden.
+    config_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), server_onupdate=FetchedValue())
 
 
 Index("idx_protocol_element_block_render", ProtocolElementBlock.protocol_element_id, text("COALESCE(render_order, sort_index)"))

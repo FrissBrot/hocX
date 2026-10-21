@@ -188,6 +188,7 @@
     "autosaveNotice": "Le modifiche vengono salvate automaticamente.",
     "backToProtocols": "← Torna ai verbali",
     "changeSaveFailed": "La modifica non può essere salvata",
+    "configConflictReloaded": "Nel frattempo qualcun altro ha modificato questo blocco – è stata caricata la versione attuale. Ripeti la modifica.",
     "ctrlFHint": "Ctrl+F",
     "entryCreateFailed": "La voce non può essere creata",
     "entryDeleteConfirm": "Eliminare definitivamente questa voce? Questa azione non può essere annullata.",

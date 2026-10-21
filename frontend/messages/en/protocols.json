@@ -188,6 +188,7 @@
     "autosaveNotice": "Changes are saved automatically.",
     "backToProtocols": "← Back to the minutes",
     "changeSaveFailed": "Change could not be saved",
+    "configConflictReloaded": "Someone else changed this block in the meantime – the current version has been loaded. Please make your change again.",
     "ctrlFHint": "Ctrl+F",
     "entryCreateFailed": "Entry could not be created",
     "entryDeleteConfirm": "Permanently delete this entry? This cannot be undone.",

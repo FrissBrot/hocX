@@ -1562,6 +1562,8 @@ export type ProtocolElementBlock = {
   export_visible_snapshot: boolean;
   public_reference_ids?: { lists?: Record<string, string>; finance_accounts?: Record<string, string>; events?: Record<string, string> };
   configuration_snapshot_json: Record<string, unknown>;
+  /** Optimistische Sperre der Blockkonfiguration (409 config_conflict bei veraltetem Stand). */
+  config_version?: number;
   text_content: string | null;
   display_compiled_text: string | null;
   display_snapshot_json: Record<string, unknown> | null;

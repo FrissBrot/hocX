@@ -188,6 +188,7 @@
     "autosaveNotice": "Änderungen werden automatisch gespeichert.",
     "backToProtocols": "← Zurück zu den Protokollen",
     "changeSaveFailed": "Änderung konnte nicht gespeichert werden",
+    "configConflictReloaded": "Dieser Block wurde inzwischen von jemand anderem geändert – der aktuelle Stand ist geladen. Bitte die Änderung erneut vornehmen.",
     "ctrlFHint": "Strg+F",
     "entryCreateFailed": "Eintrag konnte nicht erstellt werden",
     "entryDeleteConfirm": "Eintrag endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
