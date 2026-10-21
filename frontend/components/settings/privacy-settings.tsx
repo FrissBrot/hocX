@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { TenantDataExportPanel } from "@/components/settings/tenant-data-export";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 
@@ -54,6 +55,7 @@ export function PrivacySettings({ initialState }: { initialState: PrivacySetting
             </span>
           </label>
         </section>
+        <TenantDataExportPanel />
       </div>
     </div>
   );

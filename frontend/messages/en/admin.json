@@ -472,6 +472,10 @@
       "document_worker": {
         "title": "Document worker",
         "description": "Generates PDF views and extracts the text of uploaded documents (heartbeat from the polling loop)."
+      },
+      "tenant_data_export": {
+        "title": "Club export",
+        "description": "Builds requested club exports (AES ZIP with tables, minutes PDFs and files) and deletes them after 7 days."
       }
     }
   },
@@ -957,7 +961,9 @@
     "exportPasswordTooShort": "At least {min, number} characters.",
     "exportPasswordMismatch": "The passwords do not match.",
     "importPasswordLabel": "Export password",
-    "importPasswordHelp": "Only needed if a password was set during export."
+    "importPasswordHelp": "Only needed if a password was set during export.",
+    "exportCredentials": "Include credentials",
+    "exportCredentialsHint": "Password hashes, MFA secrets and link and calendar tokens. Only for a move in which all logins and links must keep working. Without this option, imported accounts get a random password and links get a new URL."
   },
   "pricing": {
     "title": "Pricing",

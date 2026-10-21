@@ -26,11 +26,16 @@ class EncryptedZip:
     """Schreibt Einträge nacheinander in eine temporäre, AES-verschlüsselte ZIP-Datei."""
 
     def __init__(self, password: str, *, directory: Path | None = None) -> None:
+        secret = validate_password(password).encode("utf-8")  # vor dem Anlegen: sonst bliebe die Datei liegen
         handle = tempfile.NamedTemporaryFile(prefix="hocx-datenexport-", suffix=".zip", delete=False, dir=str(directory) if directory else None)
         handle.close()
         self.path = Path(handle.name)
-        self._zip = pyzipper.AESZipFile(self.path, "w", compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES)
-        self._zip.setpassword(validate_password(password).encode("utf-8"))
+        try:
+            self._zip = pyzipper.AESZipFile(self.path, "w", compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES)
+        except Exception:
+            self.path.unlink(missing_ok=True)
+            raise
+        self._zip.setpassword(secret)
         self._zip.setencryption(pyzipper.WZ_AES, nbits=256)
         self._names: set[str] = set()
 

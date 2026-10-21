@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from app.core.db import get_db
+from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, require_admin, require_reader, require_writer
 from app.models.entities import Participant, Template
 from app.schemas.participant import (
@@ -177,6 +178,7 @@ def export_participant_personal_data(
     """Datenauskunft für eine Person als passwortgeschütztes ZIP (DSG Art. 25, DSGVO Art. 15; PRIV-006).
     Nur Mandanten-Admins: die Auskunft enthält alle Daten der Person."""
     require_admin(user)
+    enforce_rate_limit(f"personal-data-export-admin:{user.user_id}", limit=30, period_seconds=3600)
     participant = _get_participant_or_404(db, participant_id, user)
     return personal_data.respond(db, participant, password=payload.password, actor=user, self_export=False)
 

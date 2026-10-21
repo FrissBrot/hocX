@@ -255,6 +255,9 @@ class TenantCloneRequest(BaseModel):
 
 class TenantExportRequest(BaseModel):
     scope: Literal["structure", "structure_lists", "full", "full_abgabebox"] = "structure"
+    # Passwort-Hashes, MFA-Secrets und Link-Tokens nur auf ausdrücklichen Wunsch (Umzug, bei dem
+    # alle Logins und Links weiter gelten sollen). Datenschutz-Audit Paket 6.
+    include_credentials: bool = False
     # Optional: ohne Passwort wird mit dem Server-Schlüssel verschlüsselt (nur auf diesem Server
     # importierbar, app/services/export_crypto.py). Im Body, nie in der URL.
     password: str | None = Field(default=None, max_length=1024)

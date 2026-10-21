@@ -141,7 +141,30 @@
     "statisticsPerPersonPublic": "Multe e presenze per persona visibili a tutti",
     "statisticsPerPersonPublicHint": "Disattivato: i membri con accesso in lettura vedono nelle statistiche solo i propri valori. Redattori, cassieri e amministratori vedono sempre tutti.",
     "saved": "Salvato",
-    "saveFailed": "Salvataggio non riuscito"
+    "saveFailed": "Salvataggio non riuscito",
+    "export": {
+      "title": "Export dell’associazione",
+      "description": "Tutti i dati dell’associazione per il lavoro successivo: tabelle Excel (membri, appuntamenti, presenze, multe, finanze, compiti, liste), i PDF dei verbali chiusi e, su richiesta, foto, consegne e documenti come file originali. Senza credenziali. L’export viene creato in background ed è poi disponibile per 7 giorni. Richiede un accesso confermato con autenticazione a due fattori.",
+      "includeFiles": "Includi foto, consegne e documenti",
+      "password": "Password per il file ZIP",
+      "passwordHelp": "Almeno {min} caratteri. Salvata cifrata solo fino alla creazione – senza password il file non si può aprire.",
+      "repeat": "Ripeti la password",
+      "mismatch": "Le password non coincidono.",
+      "hint": "Cifrato AES-256. Aprire ad es. con 7-Zip (Windows), Keka (macOS) o WinRAR.",
+      "start": "Crea export",
+      "queued": "L’export è in creazione. Puoi lasciare la pagina.",
+      "failed": "Impossibile avviare l’export.",
+      "download": "Scarica",
+      "expires": "disponibile fino al {date}",
+      "missingFiles": "{count, plural, one {# file mancava} other {# file mancavano}}",
+      "status": {
+        "queued": "In coda",
+        "running": "In creazione",
+        "done": "Pronto",
+        "failed": "Non riuscito",
+        "expired": "Scaduto"
+      }
+    }
   },
   "activity": {
     "intro": "Modifiche, accessi e consultazioni della piattaforma hocX sui dati di questa organizzazione. Senza indirizzi IP né e-mail.",

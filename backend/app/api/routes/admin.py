@@ -839,7 +839,7 @@ def export_tenant(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
-        zip_path, filename = export_service.export(db, internal_tenant_id, payload.scope)
+        zip_path, filename = export_service.export(db, internal_tenant_id, payload.scope, include_credentials=payload.include_credentials)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     encrypted_path = zip_path.with_name(zip_path.name + export_crypto.ENCRYPTED_SUFFIX)
@@ -850,7 +850,7 @@ def export_tenant(
     audit.log(
         db, action="admin.tenant_exported", actor_email=current_admin.email, tenant_id=internal_tenant_id,
         entity_type="tenant", entity_id=internal_tenant_id,
-        details={"scope": payload.scope, "encryption": "password" if password else "server"},
+        details={"scope": payload.scope, "encryption": "password" if password else "server", "credentials": payload.include_credentials},
     )
     return FileResponse(
         encrypted_path,

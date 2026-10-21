@@ -472,6 +472,10 @@
       "document_worker": {
         "title": "Dokument-Worker",
         "description": "Erzeugt PDF-Ansichten und extrahiert den Text hochgeladener Dokumente (Lebenszeichen aus der Poll-Schleife)."
+      },
+      "tenant_data_export": {
+        "title": "Vereinsexport",
+        "description": "Erstellt bestellte Vereinsexporte (AES-ZIP mit Tabellen, Protokoll-PDFs und Dateien) und löscht sie nach 7 Tagen."
       }
     }
   },
@@ -957,7 +961,9 @@
     "exportPasswordTooShort": "Mindestens {min, number} Zeichen.",
     "exportPasswordMismatch": "Die Passwörter stimmen nicht überein.",
     "importPasswordLabel": "Export-Passwort",
-    "importPasswordHelp": "Nur nötig, wenn beim Export ein Passwort gesetzt wurde."
+    "importPasswordHelp": "Nur nötig, wenn beim Export ein Passwort gesetzt wurde.",
+    "exportCredentials": "Zugangsdaten mitexportieren",
+    "exportCredentialsHint": "Passwort-Hashes, MFA-Secrets sowie Link- und Kalender-Tokens. Nur für einen Umzug, bei dem alle Logins und Links weiter gelten sollen. Ohne diese Option erhalten importierte Konten ein zufälliges Passwort und Links eine neue URL."
   },
   "pricing": {
     "title": "Preise",

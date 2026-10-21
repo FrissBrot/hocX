@@ -744,7 +744,7 @@ def run_tenant_copy(env: RunEnv, db: Session, ctx: jobs.JobCtx) -> str:
                     if temp_session.get(Tenant, source_tenant_id) is None:
                         raise jobs.JobFailure("tenant_not_in_backup", "Der Mandant ist in diesem Sicherungspunkt nicht enthalten")
                     exporter = HistoricalTenantExport(ManifestLookup(lookup_conn))
-                    manifest, pending = exporter.collect(temp_session, source_tenant_id, "full_abgabebox")
+                    manifest, pending = exporter.collect(temp_session, source_tenant_id, "full_abgabebox", include_credentials=True)
                     available = resolve_manifest_entries(lookup_conn, sorted({(ns, key) for ns, key, _member in pending}))
             finally:
                 temp_engine.dispose()

@@ -78,6 +78,23 @@ Installationen aktualisieren können.
   Abruf wird protokolliert, Selbstauskunft max. 3× pro Stunde. Öffnen mit 7-Zip, Keka oder WinRAR
   (der macOS-Finder kann AES-ZIP nicht öffnen). Neue Abhängigkeit `pyzipper`.
 
+### Datenschutz (Paket 6: Vereinsexport)
+
+- **Vereinsexport** unter Mandanten-Einstellungen → Datenschutz (Mandanten-Admin, Anmeldung mit
+  Zwei-Faktor-Bestätigung): AES-ZIP für die Weiterarbeit mit `Mitglieder.xlsx`, `Termine.xlsx`,
+  `Anwesenheit.xlsx` (Person × Sitzung), `Bussen.xlsx`, `Finanzen.xlsx` (Blatt je Konto),
+  `Aufgaben.xlsx`, `Listen/`, den PDFs abgeschlossener Protokolle und auf Wunsch `Fotos/`
+  (nach Album bzw. Termin), `Abgaben/` und `Dokumente/` als Originaldateien. Namen statt IDs,
+  Datum TT.MM.JJJJ, keine Zugangsdaten. Gebaut vom neuen Job `tenant_data_export` (Migration
+  `0145`, RLS), danach 7 Tage abrufbar. Abgeschlossene Protokolle ohne gespeichertes PDF werden im
+  Lesehinweis aufgeführt (nicht automatisch erzeugt).
+- **Plattform-Export ohne Zugangsdaten als Standard:** Passwort-Hashes, MFA-Secrets und Link-/Abo-
+  Tokens nur noch mit der neuen Option «Zugangsdaten mitexportieren» (`include_credentials`). Ohne
+  sie erhalten importierte Konten ein zufälliges Passwort und Links neue URLs. Die Mandanten-Kopie
+  aus dem Backup nimmt sie weiterhin mit.
+- Datenauskunft: Passwort-Mindestlänge auch im API-Schema, Rate-Limit für die Admin-Auskunft,
+  temporäre Dateien werden auch bei Fehlern gelöscht (Security-Review).
+
 ### Behoben
 
 - **Foto-Analyse:** Der Foto-Worker konnte seit Migration `0134` keine Dateien mehr laden

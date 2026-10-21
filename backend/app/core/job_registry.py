@@ -67,6 +67,8 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
     _loop("abgabebox_rescan", "virus_scan", settings.abgabebox_rescan_interval_minutes),
     # Ein grosser ZIP-Import kann einen einzelnen Tick lange blockieren - 3 x 5 s wäre ein Fehlalarm.
     _loop("gallery_upload_ingest", "uploads", 5 / 60, max_silence_seconds=60 * 60),
+    # Vereinsexport (Datenschutz-Audit Paket 6): ein grosser Export mit allen Fotos kann Stunden dauern.
+    _loop("tenant_data_export", "documents", 1, max_silence_seconds=6 * 60 * 60),
     # Läuft nur im konfigurierten Zeitfenster und bei niedriger Host-Last (should_run) - ein
     # Tag ohne Lauf ist darum noch kein Fehler.
     _loop(

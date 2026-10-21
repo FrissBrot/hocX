@@ -58,6 +58,7 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     # Transaktions-Lock (gegenseitiges Blockieren bzw. übersprungene Ticks).
     "document_sync": 202600026,
     "storage_purge": 202600025,
+    "tenant_data_export": 202600027,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

@@ -151,18 +151,23 @@
     "col": {
       "action": "Action",
       "amount": "Amount",
+      "assignees": "Assigned to",
       "block": "Section",
+      "cancelled": "Cancelled",
+      "category": "Category",
       "collected_at": "Collected on",
       "completed_at": "Completed on",
       "created_at": "Created",
       "currency": "Currency",
       "date": "Date",
       "delete_comment": "Deletion reason",
+      "description": "Description",
       "detail": "Detail",
       "display_name": "Display name",
       "due_date": "Due",
       "element": "Agenda item",
       "email": "Email",
+      "end_date": "End date",
       "excerpt": "Excerpt",
       "exclude_from_attendance": "Excluded from attendance",
       "first_name": "First name",
@@ -172,6 +177,7 @@
       "label": "Label",
       "last_name": "Last name",
       "last_used_at": "Last used",
+      "leadership": "Leadership",
       "left_at": "Left",
       "list": "List",
       "location": "Location",
@@ -179,13 +185,16 @@
       "mime_type": "File type",
       "name": "Name",
       "notes": "Notes",
+      "organizers": "Organisers",
       "outcome": "Result",
+      "participants": "Participants",
       "position": "Row",
       "preferred_language": "Language",
       "protocol": "Protocol",
       "role": "Role",
       "size_bytes": "Size (bytes)",
       "status": "Status",
+      "tag": "Tag",
       "taken_at": "Taken",
       "task": "Task",
       "template": "Template",
@@ -212,7 +221,56 @@
       "security": "Sign-in and feeds",
       "templates": "Protocol templates",
       "todos": "Tasks"
-    }
+    },
+    "tenant": {
+      "attendance": {
+        "absent": "absent",
+        "excused": "excused",
+        "late": "late",
+        "present": "present"
+      },
+      "file": {
+        "attendance": "Attendance",
+        "events": "Events",
+        "finances": "Finances",
+        "fines": "Fines",
+        "members": "Members",
+        "todos": "Tasks"
+      },
+      "fineStatus": {
+        "collected": "collected",
+        "deleted": "deleted",
+        "pending": "open"
+      },
+      "fineType": {
+        "absent": "Absence",
+        "late": "Late"
+      },
+      "folder": {
+        "documents": "Documents",
+        "gallery": "Gallery",
+        "lists": "Lists",
+        "photos": "Photos",
+        "protocols": "Minutes",
+        "submissions": "Submissions"
+      },
+      "missingFiles": "Not included because they were not found in storage: {count} file(s).",
+      "no": "no",
+      "prefix": "Club-export",
+      "protocolsWithoutPdf": "Closed minutes without a stored PDF (open them in hocX and export as PDF):",
+      "sheet": {
+        "attendance": "Attendance",
+        "events": "Events",
+        "finances": "Finances",
+        "fines": "Fines",
+        "members": "Members",
+        "todos": "Tasks"
+      },
+      "withFiles": "Photos, submissions and documents are included as original files in the folders Photos, Submissions and Documents.",
+      "withoutFiles": "This export contains no photos, submissions or documents (tables and minutes PDFs only).",
+      "yes": "yes"
+    },
+    "tenantReadme": "Club export of {tenant}, created on {date}.\\n\\nTables (Excel): members, events, attendance (person × session), fines, finances (one sheet per account), tasks and one file per list in the Lists folder. Names instead of internal numbers, dates as DD.MM.YYYY, amounts as numbers.\\nMinutes: the most recently generated PDF of every closed set of minutes.\\n{files}\\n\\nCredentials (passwords, two-factor keys, links) are not included. Please store securely: the file contains personal data."
   },
   "diagnostic": {
     "assetNotFound": "Image not found",

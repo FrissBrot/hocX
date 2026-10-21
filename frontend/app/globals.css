@@ -25952,3 +25952,21 @@ a.mobile-list-row { color: var(--text); }
   font-size: var(--text-sm);
   overflow-x: auto;
 }
+
+/* Vereinsexport (Mandanten-Einstellungen → Datenschutz) */
+.tenant-export-list {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.tenant-export-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+}

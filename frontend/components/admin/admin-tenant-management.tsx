@@ -74,6 +74,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
   const [exportScope, setExportScope] = useState<"structure" | "structure_lists" | "full" | "full_abgabebox">("structure");
   const [exportPassword, setExportPassword] = useState("");
   const [exportPasswordConfirm, setExportPasswordConfirm] = useState("");
+  const [exportCredentials, setExportCredentials] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importName, setImportName] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -245,7 +246,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope: exportScope, password: exportPassword || null }),
+        body: JSON.stringify({ scope: exportScope, password: exportPassword || null, include_credentials: exportCredentials }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
@@ -606,6 +607,9 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
               </span>
             </label>
           </div>
+          {/* Datenschutz-Audit Paket 6: Zugangsdaten nur auf ausdrücklichen Wunsch */}
+          <label className="checkbox-row"><input type="checkbox" checked={exportCredentials} onChange={(event) => setExportCredentials(event.target.checked)} /><span>{t("exportCredentials")}</span></label>
+          <p className="field-help">{t("exportCredentialsHint")}</p>
           <label className="field-stack">
             <span className="field-label">{t("exportPasswordLabel")}</span>
             <input

@@ -151,18 +151,23 @@
     "col": {
       "action": "Opération",
       "amount": "Montant",
+      "assignees": "Responsables",
       "block": "Section",
+      "cancelled": "Annulé",
+      "category": "Catégorie",
       "collected_at": "Encaissé le",
       "completed_at": "Terminé le",
       "created_at": "Créé",
       "currency": "Devise",
       "date": "Date",
       "delete_comment": "Motif de suppression",
+      "description": "Description",
       "detail": "Détail",
       "display_name": "Nom affiché",
       "due_date": "Échéance",
       "element": "Point",
       "email": "E-mail",
+      "end_date": "Date de fin",
       "excerpt": "Extrait",
       "exclude_from_attendance": "Exclu des présences",
       "first_name": "Prénom",
@@ -172,6 +177,7 @@
       "label": "Libellé",
       "last_name": "Nom",
       "last_used_at": "Dernière utilisation",
+      "leadership": "Direction",
       "left_at": "Sortie",
       "list": "Liste",
       "location": "Lieu",
@@ -179,13 +185,16 @@
       "mime_type": "Type de fichier",
       "name": "Nom",
       "notes": "Notes",
+      "organizers": "Organisation",
       "outcome": "Résultat",
+      "participants": "Participants",
       "position": "Ligne",
       "preferred_language": "Langue",
       "protocol": "Procès-verbal",
       "role": "Rôle",
       "size_bytes": "Taille (octets)",
       "status": "Statut",
+      "tag": "Étiquette",
       "taken_at": "Pris le",
       "task": "Tâche",
       "template": "Modèle",
@@ -212,7 +221,56 @@
       "security": "Connexion et abonnements",
       "templates": "Modèles de PV",
       "todos": "Tâches"
-    }
+    },
+    "tenant": {
+      "attendance": {
+        "absent": "absent",
+        "excused": "excusé",
+        "late": "en retard",
+        "present": "présent"
+      },
+      "file": {
+        "attendance": "Présences",
+        "events": "Rendez-vous",
+        "finances": "Finances",
+        "fines": "Amendes",
+        "members": "Membres",
+        "todos": "Tâches"
+      },
+      "fineStatus": {
+        "collected": "encaissée",
+        "deleted": "supprimée",
+        "pending": "ouverte"
+      },
+      "fineType": {
+        "absent": "Absence",
+        "late": "Retard"
+      },
+      "folder": {
+        "documents": "Documents",
+        "gallery": "Galerie",
+        "lists": "Listes",
+        "photos": "Photos",
+        "protocols": "Procès-verbaux",
+        "submissions": "Dépôts"
+      },
+      "missingFiles": "Non inclus car introuvables dans le stockage : {count} fichier(s).",
+      "no": "non",
+      "prefix": "Export-association",
+      "protocolsWithoutPdf": "Procès-verbaux clôturés sans PDF enregistré (à ouvrir dans hocX et exporter en PDF) :",
+      "sheet": {
+        "attendance": "Présences",
+        "events": "Rendez-vous",
+        "finances": "Finances",
+        "fines": "Amendes",
+        "members": "Membres",
+        "todos": "Tâches"
+      },
+      "withFiles": "Les photos, dépôts et documents figurent comme fichiers originaux dans les dossiers Photos, Dépôts et Documents.",
+      "withoutFiles": "Cet export ne contient ni photos, ni dépôts, ni documents (uniquement les tableaux et les PDF des procès-verbaux).",
+      "yes": "oui"
+    },
+    "tenantReadme": "Export de l’association {tenant}, créé le {date}.\\n\\nTableaux (Excel) : membres, rendez-vous, présences (personne × séance), amendes, finances (une feuille par compte), tâches et, dans le dossier Listes, un fichier par liste. Noms au lieu de numéros internes, dates au format JJ.MM.AAAA, montants en nombres.\\nProcès-verbaux : le dernier PDF généré de chaque procès-verbal clôturé.\\n{files}\\n\\nLes identifiants (mots de passe, clés à deux facteurs, liens) ne sont pas inclus. À conserver en lieu sûr : le fichier contient des données personnelles."
   },
   "diagnostic": {
     "assetNotFound": "Image introuvable",

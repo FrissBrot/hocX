@@ -141,7 +141,30 @@
     "statisticsPerPersonPublic": "Fines and attendance per person visible to everyone",
     "statisticsPerPersonPublicHint": "Off: members with read access only see their own figures in the statistics. Writers, treasurers and admins always see everyone.",
     "saved": "Saved",
-    "saveFailed": "Saving failed"
+    "saveFailed": "Saving failed",
+    "export": {
+      "title": "Club export",
+      "description": "All club data for further use: Excel tables (members, events, attendance, fines, finances, tasks, lists), the PDFs of closed minutes and optionally photos, submissions and documents as original files. Without credentials. The export is created in the background and can be downloaded for 7 days. Requires a sign-in confirmed with two-factor authentication.",
+      "includeFiles": "Include photos, submissions and documents",
+      "password": "Password for the ZIP file",
+      "passwordHelp": "At least {min} characters. Stored encrypted only until the export is created – without the password the file cannot be opened.",
+      "repeat": "Repeat password",
+      "mismatch": "The passwords do not match.",
+      "hint": "AES-256 encrypted. Open with e.g. 7-Zip (Windows), Keka (macOS) or WinRAR.",
+      "start": "Create export",
+      "queued": "The export is being created. You can leave this page.",
+      "failed": "The export could not be started.",
+      "download": "Download",
+      "expires": "available until {date}",
+      "missingFiles": "{count, plural, one {# file was missing} other {# files were missing}}",
+      "status": {
+        "queued": "Queued",
+        "running": "Being created",
+        "done": "Ready",
+        "failed": "Failed",
+        "expired": "Expired"
+      }
+    }
   },
   "activity": {
     "intro": "Changes, sign-ins and accesses by the hocX platform to this organisation's data. Without IP or email addresses.",

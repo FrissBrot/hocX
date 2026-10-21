@@ -13,8 +13,10 @@ Three cumulative scopes, mirroring the three options in the admin panel:
 - "full_abgabebox": full + Abgabebox assignments/links/uploads/uploaded files and the
   albums bound to an Abgabe - a complete backup of the tenant.
 
-The archive therefore holds credentials (password hashes, plaintext TOTP secrets, link and
-calendar-feed tokens) and has to be treated like a database dump.
+Zugangsdaten (Passwort-Hashes, TOTP-Secrets im Klartext, Link- und Kalender-Tokens) kommen nur mit
+``include_credentials=True`` ins Archiv (Datenschutz-Audit Paket 6): dann gilt es wie ein
+Datenbank-Dump. Ohne sie setzt der Import zufällige Passwörter, lässt MFA weg und erzeugt neue
+Link- und Abo-URLs (TenantImportService behandelt fehlende Werte schon so).
 
 Every row keeps its public_id; the import reuses it whenever it is still free on the
 target (see TenantImportService._claim_public_id), so references stored by public_id
@@ -131,11 +133,11 @@ ExportScope = Literal["structure", "structure_lists", "full", "full_abgabebox"]
 
 
 class TenantExportService:
-    def export(self, db: Session, tenant_id: int, scope: ExportScope) -> tuple[Path, str]:
+    def export(self, db: Session, tenant_id: int, scope: ExportScope, *, include_credentials: bool = False) -> tuple[Path, str]:
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
             raise ValueError("Tenant not found")
-        manifest, pending_files = self.collect(db, tenant_id, scope)
+        manifest, pending_files = self.collect(db, tenant_id, scope, include_credentials=include_credentials)
 
         tmp = tempfile.NamedTemporaryFile(prefix="hocx-export-", suffix=".zip", delete=False)
         tmp.close()
@@ -157,7 +159,9 @@ class TenantExportService:
         Objektspeicher)."""
         return get_object_store().exists(namespace, key)
 
-    def collect(self, db: Session, tenant_id: int, scope: ExportScope) -> tuple[dict[str, Any], list[tuple[str, str, str]]]:
+    def collect(
+        self, db: Session, tenant_id: int, scope: ExportScope, *, include_credentials: bool = False
+    ) -> tuple[dict[str, Any], list[tuple[str, str, str]]]:
         """Manifest (Tabellen) und Liste der Dateien (namespace, key, member_name) - ohne ZIP."""
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
@@ -211,10 +215,13 @@ class TenantExportService:
         self._export_tenant_settings(db, tenant_id, tables)
         self._export_calendar_feeds(db, tenant_id, tables)
         self._export_tenant_trusts(db, tenant_id, tables)
+        if not include_credentials:
+            _strip_credentials(tables)
 
         manifest = {
             "format_version": FORMAT_VERSION,
             "scope": scope,
+            "include_credentials": include_credentials,
             "exported_at": datetime.now(timezone.utc).isoformat(),
             "source_tenant_name": tenant.name,
             "tables": tables,
@@ -732,3 +739,21 @@ class TenantExportService:
             }
             for trust in trusts
         ]
+
+
+# Tabelle -> Spalten, die ein Login oder einen Link öffnen. Ohne include_credentials geleert.
+_CREDENTIAL_COLUMNS: dict[str, tuple[str, ...]] = {
+    "app_user": ("password_hash",),
+    "calendar_feed": ("token",),
+    "submission_link": ("token",),
+    "share_link": ("token",),
+}
+
+
+def _strip_credentials(tables: dict[str, Any]) -> None:
+    tables["user_mfa_factor"] = []
+    for table, columns in _CREDENTIAL_COLUMNS.items():
+        for row in tables.get(table) or []:
+            for column in columns:
+                if column in row:
+                    row[column] = None

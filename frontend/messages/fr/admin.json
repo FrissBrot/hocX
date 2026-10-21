@@ -472,6 +472,10 @@
       "document_worker": {
         "title": "Worker de documents",
         "description": "Génère les aperçus PDF et extrait le texte des documents téléversés (signal de vie de la boucle d’interrogation)."
+      },
+      "tenant_data_export": {
+        "title": "Export de l’association",
+        "description": "Crée les exports d’association demandés (ZIP AES avec tableaux, PDF des procès-verbaux et fichiers) et les supprime après 7 jours."
       }
     }
   },
@@ -957,7 +961,9 @@
     "exportPasswordTooShort": "Au moins {min, number} caractères.",
     "exportPasswordMismatch": "Les mots de passe ne correspondent pas.",
     "importPasswordLabel": "Mot de passe de l'export",
-    "importPasswordHelp": "Nécessaire uniquement si un mot de passe a été défini lors de l'export."
+    "importPasswordHelp": "Nécessaire uniquement si un mot de passe a été défini lors de l'export.",
+    "exportCredentials": "Inclure les identifiants",
+    "exportCredentialsHint": "Hachages de mots de passe, secrets MFA ainsi que jetons de liens et de calendrier. Uniquement pour un déménagement où tous les accès et liens doivent rester valables. Sans cette option, les comptes importés reçoivent un mot de passe aléatoire et les liens une nouvelle URL."
   },
   "pricing": {
     "title": "Tarifs",

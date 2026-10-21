@@ -141,7 +141,30 @@
     "statisticsPerPersonPublic": "Bussen und Anwesenheit je Person für alle sichtbar",
     "statisticsPerPersonPublicHint": "Aus: Mitglieder mit Leserecht sehen in der Statistik nur ihre eigenen Werte. Schreibende, Kassier und Admins sehen immer alle.",
     "saved": "Gespeichert",
-    "saveFailed": "Speichern fehlgeschlagen"
+    "saveFailed": "Speichern fehlgeschlagen",
+    "export": {
+      "title": "Vereinsexport",
+      "description": "Alle Daten des Vereins für die Weiterarbeit: Excel-Tabellen (Mitglieder, Termine, Anwesenheit, Bussen, Finanzen, Aufgaben, Listen), die PDFs abgeschlossener Protokolle und auf Wunsch Fotos, Abgaben und Dokumente als Originaldateien. Ohne Zugangsdaten. Der Export wird im Hintergrund erstellt und ist danach 7 Tage abrufbar. Erfordert eine Anmeldung mit Zwei-Faktor-Bestätigung.",
+      "includeFiles": "Fotos, Abgaben und Dokumente mitexportieren",
+      "password": "Passwort für die ZIP-Datei",
+      "passwordHelp": "Mindestens {min} Zeichen. Wird nur bis zur Erstellung verschlüsselt gespeichert – ohne Passwort lässt sich die Datei nicht öffnen.",
+      "repeat": "Passwort wiederholen",
+      "mismatch": "Die Passwörter stimmen nicht überein.",
+      "hint": "AES-256-verschlüsselt. Öffnen z. B. mit 7-Zip (Windows), Keka (macOS) oder WinRAR.",
+      "start": "Export erstellen",
+      "queued": "Export wird erstellt. Du kannst die Seite verlassen.",
+      "failed": "Export konnte nicht gestartet werden.",
+      "download": "Herunterladen",
+      "expires": "abrufbar bis {date}",
+      "missingFiles": "{count, plural, one {# Datei fehlte} other {# Dateien fehlten}}",
+      "status": {
+        "queued": "In Warteschlange",
+        "running": "Wird erstellt",
+        "done": "Bereit",
+        "failed": "Fehlgeschlagen",
+        "expired": "Abgelaufen"
+      }
+    }
   },
   "activity": {
     "intro": "Änderungen, Anmeldungen und Zugriffe der hocX-Plattform auf Daten dieses Vereins. Ohne IP- und E-Mail-Adressen.",

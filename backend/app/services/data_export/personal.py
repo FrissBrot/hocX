@@ -251,9 +251,13 @@ def respond(db: Session, person: AppUser, *, password: str, actor, self_export: 
         archive, filename = build_archive(db, person, password=password, language=actor.preferred_language)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    AuditService().log(
-        db, action="personal_data.exported", actor=actor, entity_type="participant", entity_id=person.id,
-        details={"self": self_export},
-    )
     path = archive.path
+    try:
+        AuditService().log(
+            db, action="personal_data.exported", actor=actor, entity_type="participant", entity_id=person.id,
+            details={"self": self_export},
+        )
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
     return FileResponse(path, filename=filename, media_type="application/zip", background=BackgroundTask(lambda: path.unlink(missing_ok=True)))

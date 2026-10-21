@@ -2329,3 +2329,31 @@ class GalleryUploadJob(Base, TimestampMixin):
     file_results: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TenantDataExport(Base):
+    """Vereinsexport (Migration 0145, services/data_export/tenant.py): bestellt vom Mandanten-Admin,
+    gebaut vom Job tenant_data_export, 7 Tage abrufbar. password_encrypted nur bis zum Bau."""
+
+    __tablename__ = "tenant_data_export"
+    __table_args__ = (
+        CheckConstraint("status IN ('queued', 'running', 'done', 'failed', 'expired')", name="ck_tenant_data_export_status"),
+        Index("idx_tenant_data_export_tenant", "tenant_id", text("created_at DESC")),
+        Index("idx_tenant_data_export_status", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    requested_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'queued'"))
+    include_files: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    language: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'de'"))
+    password_encrypted: Mapped[str | None] = mapped_column(Text)
+    object_key: Mapped[str | None] = mapped_column(Text)
+    filename: Mapped[str | None] = mapped_column(Text)
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

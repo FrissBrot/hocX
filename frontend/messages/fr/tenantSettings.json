@@ -141,7 +141,30 @@
     "statisticsPerPersonPublic": "Amendes et présences par personne visibles par tous",
     "statisticsPerPersonPublicHint": "Désactivé : les membres en lecture ne voient que leurs propres valeurs dans les statistiques. Rédacteurs, caissiers et administrateurs voient toujours tout le monde.",
     "saved": "Enregistré",
-    "saveFailed": "Échec de l’enregistrement"
+    "saveFailed": "Échec de l’enregistrement",
+    "export": {
+      "title": "Export de l’association",
+      "description": "Toutes les données de l’association pour la suite du travail : tableaux Excel (membres, rendez-vous, présences, amendes, finances, tâches, listes), les PDF des procès-verbaux clôturés et, sur demande, photos, dépôts et documents en fichiers originaux. Sans identifiants. L’export est créé en arrière-plan puis disponible pendant 7 jours. Nécessite une connexion confirmée par authentification à deux facteurs.",
+      "includeFiles": "Inclure photos, dépôts et documents",
+      "password": "Mot de passe du fichier ZIP",
+      "passwordHelp": "Au moins {min} caractères. Conservé chiffré uniquement jusqu’à la création – sans mot de passe, le fichier ne peut pas être ouvert.",
+      "repeat": "Répéter le mot de passe",
+      "mismatch": "Les mots de passe ne correspondent pas.",
+      "hint": "Chiffré en AES-256. Ouvrir p. ex. avec 7-Zip (Windows), Keka (macOS) ou WinRAR.",
+      "start": "Créer l’export",
+      "queued": "L’export est en cours de création. Vous pouvez quitter la page.",
+      "failed": "L’export n’a pas pu être lancé.",
+      "download": "Télécharger",
+      "expires": "disponible jusqu’au {date}",
+      "missingFiles": "{count, plural, one {# fichier manquait} other {# fichiers manquaient}}",
+      "status": {
+        "queued": "En attente",
+        "running": "En cours",
+        "done": "Prêt",
+        "failed": "Échec",
+        "expired": "Expiré"
+      }
+    }
   },
   "activity": {
     "intro": "Modifications, connexions et accès de la plateforme hocX aux données de cette organisation. Sans adresses IP ni e-mail.",

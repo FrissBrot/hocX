@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 
-from app.api.routes import activity, admin, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
+from app.api.routes import activity, admin, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenant_data_export, tenants, todos, users, word_import
 from app.core.background_loops import run_advisory_locked_loop
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
@@ -387,6 +387,17 @@ async def gallery_upload_ingest_loop() -> None:
     )
 
 
+async def tenant_data_export_loop() -> None:
+    """Baut bestellte Vereinsexporte und löscht abgelaufene (services/data_export/tenant.py)."""
+    from app.services.data_export import tenant as tenant_data_export_service
+
+    await run_advisory_locked_loop(
+        name="tenant_data_export",
+        interval_seconds=60,
+        task=tenant_data_export_service.process_pending,
+    )
+
+
 async def system_monitor_loop() -> None:
     """Systemstatus sammeln (Container, Dienste) und bei Statuswechseln per ntfy benachrichtigen -
     siehe system_health_service/system_alert_service. Same every-worker-but-advisory-locked
@@ -462,6 +473,7 @@ async def lifespan(_: FastAPI):
         photo_quality_backfill_task = asyncio.create_task(photo_quality_backfill_loop())
         photo_album_sync_task = asyncio.create_task(photo_album_sync_loop())
         gallery_upload_ingest_task = asyncio.create_task(gallery_upload_ingest_loop())
+        tenant_data_export_task = asyncio.create_task(tenant_data_export_loop())
         system_monitor_task = asyncio.create_task(system_monitor_loop())
         maintenance_supervisor_task = asyncio.create_task(maintenance_supervisor_loop())
         storage_journal_cleanup_task = asyncio.create_task(storage_journal_cleanup_loop())
@@ -477,6 +489,7 @@ async def lifespan(_: FastAPI):
         photo_quality_backfill_task.cancel()
         photo_album_sync_task.cancel()
         gallery_upload_ingest_task.cancel()
+        tenant_data_export_task.cancel()
         system_monitor_task.cancel()
         rescan_task.cancel()
         upload_pipeline_rescan_task.cancel()
@@ -633,6 +646,7 @@ app.include_router(document_studio.router, prefix="/api", tags=["document-studio
 app.include_router(document_verification.router, prefix="/api", tags=["documents"])
 app.include_router(privacy_settings.router, prefix="/api", tags=["privacy"])
 app.include_router(activity.router, prefix="/api", tags=["privacy"])
+app.include_router(tenant_data_export.router, prefix="/api", tags=["privacy"])
 app.include_router(templates.router, prefix="/api", tags=["templates"])
 app.include_router(cycle_configs.router, prefix="/api", tags=["cycle-configs"])
 app.include_router(task_packages.router, prefix="/api", tags=["task-packages"])

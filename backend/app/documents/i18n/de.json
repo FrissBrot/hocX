@@ -151,18 +151,23 @@
     "col": {
       "action": "Vorgang",
       "amount": "Betrag",
+      "assignees": "Zuständig",
       "block": "Abschnitt",
+      "cancelled": "Abgesagt",
+      "category": "Kategorie",
       "collected_at": "Kassiert am",
       "completed_at": "Erledigt am",
       "created_at": "Erstellt",
       "currency": "Währung",
       "date": "Datum",
       "delete_comment": "Löschgrund",
+      "description": "Beschreibung",
       "detail": "Detail",
       "display_name": "Anzeigename",
       "due_date": "Fällig",
       "element": "Traktandum",
       "email": "E-Mail",
+      "end_date": "Enddatum",
       "excerpt": "Auszug",
       "exclude_from_attendance": "Nicht in Anwesenheit",
       "first_name": "Vorname",
@@ -172,6 +177,7 @@
       "label": "Bezeichnung",
       "last_name": "Nachname",
       "last_used_at": "Zuletzt verwendet",
+      "leadership": "Leitung",
       "left_at": "Austritt",
       "list": "Liste",
       "location": "Ort",
@@ -179,13 +185,16 @@
       "mime_type": "Dateityp",
       "name": "Name",
       "notes": "Notizen",
+      "organizers": "Organisation",
       "outcome": "Ergebnis",
+      "participants": "Teilnehmende",
       "position": "Zeile",
       "preferred_language": "Sprache",
       "protocol": "Protokoll",
       "role": "Rolle",
       "size_bytes": "Grösse (Bytes)",
       "status": "Status",
+      "tag": "Tag",
       "taken_at": "Aufgenommen",
       "task": "Aufgabe",
       "template": "Vorlage",
@@ -212,7 +221,56 @@
       "security": "Anmeldung und Abos",
       "templates": "Protokollvorlagen",
       "todos": "Aufgaben"
-    }
+    },
+    "tenant": {
+      "attendance": {
+        "absent": "abwesend",
+        "excused": "entschuldigt",
+        "late": "verspätet",
+        "present": "anwesend"
+      },
+      "file": {
+        "attendance": "Anwesenheit",
+        "events": "Termine",
+        "finances": "Finanzen",
+        "fines": "Bussen",
+        "members": "Mitglieder",
+        "todos": "Aufgaben"
+      },
+      "fineStatus": {
+        "collected": "kassiert",
+        "deleted": "gelöscht",
+        "pending": "offen"
+      },
+      "fineType": {
+        "absent": "Abwesenheit",
+        "late": "Verspätung"
+      },
+      "folder": {
+        "documents": "Dokumente",
+        "gallery": "Galerie",
+        "lists": "Listen",
+        "photos": "Fotos",
+        "protocols": "Protokolle",
+        "submissions": "Abgaben"
+      },
+      "missingFiles": "Nicht enthalten, weil im Speicher nicht gefunden: {count} Datei(en).",
+      "no": "nein",
+      "prefix": "Vereinsexport",
+      "protocolsWithoutPdf": "Abgeschlossene Protokolle ohne gespeichertes PDF (in hocX öffnen und als PDF exportieren):",
+      "sheet": {
+        "attendance": "Anwesenheit",
+        "events": "Termine",
+        "finances": "Finanzen",
+        "fines": "Bussen",
+        "members": "Mitglieder",
+        "todos": "Aufgaben"
+      },
+      "withFiles": "Fotos, Abgaben und Dokumente liegen als Originaldateien in den Ordnern Fotos, Abgaben und Dokumente.",
+      "withoutFiles": "Dieser Export enthält keine Fotos, Abgaben und Dokumente (nur Tabellen und Protokoll-PDFs).",
+      "yes": "ja"
+    },
+    "tenantReadme": "Vereinsexport von {tenant}, erstellt am {date}.\\n\\nTabellen (Excel): Mitglieder, Termine, Anwesenheit (Person × Sitzung), Bussen, Finanzen (ein Blatt je Konto), Aufgaben und im Ordner Listen je Liste eine Datei. Namen statt interner Nummern, Datum im Format TT.MM.JJJJ, Beträge als Zahl.\\nProtokolle: das zuletzt erzeugte PDF jedes abgeschlossenen Protokolls.\\n{files}\\n\\nZugangsdaten (Passwörter, Zwei-Faktor-Schlüssel, Links) sind nicht enthalten. Bitte sicher aufbewahren: die Datei enthält Personendaten."
   },
   "diagnostic": {
     "assetNotFound": "Bild nicht gefunden",

@@ -151,18 +151,23 @@
     "col": {
       "action": "Operazione",
       "amount": "Importo",
+      "assignees": "Responsabili",
       "block": "Sezione",
+      "cancelled": "Annullato",
+      "category": "Categoria",
       "collected_at": "Incassato il",
       "completed_at": "Completato il",
       "created_at": "Creato",
       "currency": "Valuta",
       "date": "Data",
       "delete_comment": "Motivo dell'eliminazione",
+      "description": "Descrizione",
       "detail": "Dettaglio",
       "display_name": "Nome visualizzato",
       "due_date": "Scadenza",
       "element": "Punto",
       "email": "E-mail",
+      "end_date": "Data di fine",
       "excerpt": "Estratto",
       "exclude_from_attendance": "Escluso dalle presenze",
       "first_name": "Nome",
@@ -172,6 +177,7 @@
       "label": "Etichetta",
       "last_name": "Cognome",
       "last_used_at": "Ultimo utilizzo",
+      "leadership": "Direzione",
       "left_at": "Uscita",
       "list": "Lista",
       "location": "Luogo",
@@ -179,13 +185,16 @@
       "mime_type": "Tipo di file",
       "name": "Nome",
       "notes": "Note",
+      "organizers": "Organizzazione",
       "outcome": "Esito",
+      "participants": "Partecipanti",
       "position": "Riga",
       "preferred_language": "Lingua",
       "protocol": "Verbale",
       "role": "Ruolo",
       "size_bytes": "Dimensione (byte)",
       "status": "Stato",
+      "tag": "Etichetta",
       "taken_at": "Scattata",
       "task": "Attività",
       "template": "Modello",
@@ -212,7 +221,56 @@
       "security": "Accesso e abbonamenti",
       "templates": "Modelli di verbale",
       "todos": "Attività"
-    }
+    },
+    "tenant": {
+      "attendance": {
+        "absent": "assente",
+        "excused": "giustificato",
+        "late": "in ritardo",
+        "present": "presente"
+      },
+      "file": {
+        "attendance": "Presenze",
+        "events": "Appuntamenti",
+        "finances": "Finanze",
+        "fines": "Multe",
+        "members": "Membri",
+        "todos": "Compiti"
+      },
+      "fineStatus": {
+        "collected": "incassata",
+        "deleted": "eliminata",
+        "pending": "aperta"
+      },
+      "fineType": {
+        "absent": "Assenza",
+        "late": "Ritardo"
+      },
+      "folder": {
+        "documents": "Documenti",
+        "gallery": "Galleria",
+        "lists": "Liste",
+        "photos": "Foto",
+        "protocols": "Verbali",
+        "submissions": "Consegne"
+      },
+      "missingFiles": "Non inclusi perché non trovati nell’archivio: {count} file.",
+      "no": "no",
+      "prefix": "Export-associazione",
+      "protocolsWithoutPdf": "Verbali chiusi senza PDF salvato (aprirli in hocX ed esportarli in PDF):",
+      "sheet": {
+        "attendance": "Presenze",
+        "events": "Appuntamenti",
+        "finances": "Finanze",
+        "fines": "Multe",
+        "members": "Membri",
+        "todos": "Compiti"
+      },
+      "withFiles": "Foto, consegne e documenti sono inclusi come file originali nelle cartelle Foto, Consegne e Documenti.",
+      "withoutFiles": "Questo export non contiene foto, consegne o documenti (solo tabelle e PDF dei verbali).",
+      "yes": "sì"
+    },
+    "tenantReadme": "Export dell’associazione {tenant}, creato il {date}.\\n\\nTabelle (Excel): membri, appuntamenti, presenze (persona × seduta), multe, finanze (un foglio per conto), compiti e nella cartella Liste un file per lista. Nomi invece di numeri interni, date nel formato GG.MM.AAAA, importi come numeri.\\nVerbali: l’ultimo PDF generato di ogni verbale chiuso.\\n{files}\\n\\nLe credenziali (password, chiavi a due fattori, link) non sono incluse. Conservare in modo sicuro: il file contiene dati personali."
   },
   "diagnostic": {
     "assetNotFound": "Immagine non trovata",
