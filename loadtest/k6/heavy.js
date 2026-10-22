@@ -8,6 +8,7 @@
 // Fixtures: loadtest/fixtures/ (siehe README, make_fixtures.py).
 import http from "k6/http";
 import { sleep } from "k6";
+import { open as openShared, SeekMode } from "k6/experimental/fs";
 import {
   BASE_URL, TENANTS, discover, getJson, heavyLatency, interactiveLatency, params, pick, record, sessionForVu,
 } from "./lib/common.js";
@@ -15,16 +16,32 @@ import {
 const HEAVY = __ENV.HEAVY_TENANTS || "0";
 const INTERACTIVE = __ENV.INTERACTIVE_TENANTS || "1";
 const DURATION = __ENV.HEAVY_DURATION || "15m";
-const image = open(__ENV.FIXTURE_IMAGE || "../fixtures/photo-8mb.jpg", "b");
-const zip = __ENV.FIXTURE_ZIP ? open(__ENV.FIXTURE_ZIP, "b") : null;
+// k6/experimental/fs statt open(): open() kopiert die Datei in JEDE VU (100+ VUs x 155-MB-ZIP
+// liessen k6 selbst vom OOM-Killer beenden); fs hält den Inhalt einmal und liest je Upload.
+const imageFile = await openShared(__ENV.FIXTURE_IMAGE || "../fixtures/photo-8mb.jpg");
+const zipFile = __ENV.FIXTURE_ZIP ? await openShared(__ENV.FIXTURE_ZIP) : null;
+
+async function readAll(file, extra = 0) {
+  const size = (await file.stat()).size;
+  const out = new Uint8Array(size + extra);
+  const chunk = new Uint8Array(1024 * 1024);
+  await file.seek(0, SeekMode.Start);
+  let offset = 0;
+  while (offset < size) {
+    const read = await file.read(chunk);
+    if (read === null || read === 0) break;
+    out.set(read === chunk.length ? chunk : chunk.subarray(0, read), offset);
+    offset += read;
+  }
+  return out;
+}
 
 // Eindeutige Prüfsumme je Upload (Markierung hinter dem JPEG-EOI), sonst filtert die
 // Duplikaterkennung alles vor Scan und Thumbnail heraus und die Last entsteht nie.
-function uniqueImage(marker) {
-  const source = new Uint8Array(image);
-  const out = new Uint8Array(source.length + marker.length);
-  out.set(source);
-  for (let i = 0; i < marker.length; i += 1) out[source.length + i] = marker.charCodeAt(i) & 0xff;
+async function uniqueImage(marker) {
+  const out = await readAll(imageFile, marker.length);
+  const start = out.length - marker.length;
+  for (let i = 0; i < marker.length; i += 1) out[start + i] = marker.charCodeAt(i) & 0xff;
   return out.buffer;
 }
 
@@ -79,12 +96,12 @@ export function preview() {
   sleep(0.5);
 }
 
-export function galleryUpload() {
+export async function galleryUpload() {
   const session = sessionForVu(__VU, HEAVY);
-  const useZip = zip && Math.random() < 0.3;
+  const useZip = zipFile && Math.random() < 0.3;
   const form = useZip
-    ? { files: http.file(zip, `lt-${__VU}-${__ITER}.zip`, "application/zip") }
-    : { files: http.file(uniqueImage(`lt-${__VU}-${__ITER}-${Date.now()}`), `lt-${__VU}-${__ITER}.jpg`, "image/jpeg") };
+    ? { files: http.file((await readAll(zipFile)).buffer, `lt-${__VU}-${__ITER}.zip`, "application/zip") }
+    : { files: http.file(await uniqueImage(`lt-${__VU}-${__ITER}-${Date.now()}`), `lt-${__VU}-${__ITER}.jpg`, "image/jpeg") };
   // Galerie: max. 1 aktiver Upload je uvicorn-Worker (UploadAdmissionMiddleware) -> 503 zählen.
   record(http.post(`${BASE_URL}/api/files/gallery-uploads`, form,
     params(session, { name: useZip ? "gallery_zip" : "gallery_image" }, { timeout: "600s" })), heavyLatency, useZip ? "gallery_zip" : "gallery_image");

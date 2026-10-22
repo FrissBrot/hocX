@@ -12,6 +12,7 @@ import { BASE_URL, COOKIE_NAME, discover, interactiveLatency, params, pick, reco
 const broadcastDelay = new Trend("hocx_ws_broadcast_ms", true);
 const wsRejected = new Counter("hocx_ws_update_rejected");
 const wsDropped = new Counter("hocx_ws_unexpected_close");
+const wsDenied = new Counter("hocx_ws_lock_denied");
 const wsSnapshot = new Trend("hocx_ws_snapshot_ms", true);
 const USERS = parseInt(__ENV.COLLAB_USERS || "30", 10);
 
@@ -39,8 +40,19 @@ export function editor() {
       if (msg.type === "field_update" && msg.patch && msg.patch.sent_at) broadcastDelay.add(Date.now() - msg.patch.sent_at);
       if (msg.type === "field_update_rejected") wsRejected.add(1);
       if (msg.type === "lock_acquired" && msg.field_key === heldField) {
-        socket.send(JSON.stringify({ type: "field_update", field_key: heldField, patch: { sent_at: Date.now(), vu: __VU } }));
+        // Wie focused-element-editor.tsx: Sperre halten, Live-Update senden, per REST speichern,
+        // erst dann freigeben (vorher ging das unlock vor lock_acquired raus).
+        const key = heldField;
+        const block = key.slice("block-".length);
+        socket.send(JSON.stringify({ type: "field_update", field_key: key, patch: { sent_at: Date.now(), vu: __VU } }));
+        const body = JSON.stringify({ content: `<p>collab ${__VU} ${Date.now()}</p>` });
+        record(http.put(`${BASE_URL}/api/protocol-element-blocks/${block}/text`, body,
+          params(session, { name: "collab_text_save" }, { headers: { "Content-Type": "application/json" } })), interactiveLatency, "collab_text_save");
+        socket.send(JSON.stringify({ type: "unlock", field_key: key }));
+        heldField = null;
       }
+      if (msg.type === "lock_denied") wsDenied.add(1);
+      if (msg.type === "lock_denied" && msg.field_key === heldField) heldField = null;
     });
     socket.on("close", () => {
       if ((Date.now() - opened) / 1000 < holdSeconds - 5) wsDropped.add(1);
@@ -48,13 +60,9 @@ export function editor() {
     socket.setInterval(() => {
       // Abwechselnd ein Feld sperren und per REST speichern (wie focused-element-editor.tsx)
       const target = pick(data.textBlocks.filter((t) => t.protocol === protocol));
-      if (!target) return;
+      if (!target || heldField) return;
       heldField = `block-${target.block}`;
       socket.send(JSON.stringify({ type: "lock_request", field_key: heldField }));
-      const body = JSON.stringify({ content: `<p>collab ${__VU} ${Date.now()}</p>` });
-      record(http.put(`${BASE_URL}/api/protocol-element-blocks/${target.block}/text`, body,
-        params(session, { name: "collab_text_save" }, { headers: { "Content-Type": "application/json" } })), interactiveLatency, "collab_text_save");
-      socket.send(JSON.stringify({ type: "unlock", field_key: heldField }));
     }, 2000 + Math.random() * 2000);
     socket.setInterval(() => {
       if (heldField) socket.send(JSON.stringify({ type: "heartbeat", field_key: heldField }));
