@@ -5,7 +5,7 @@
 | Stand | 2026-10-21 |
 | Geprüfter Code | Branch `feat/privacy`, Commit `d2adb583` (= `release/1.2.0` `9abe82c6` + Datenschutz-Pakete 1–9) |
 | Geprüfte Konfiguration | `docker-compose.release.yml`, `docker-compose.clamav.yml`, `docker-compose.traefik.yml`, `infra/traefik/traefik.yml`, `infra/clamav/clamd.conf`, `backend/Dockerfile`, `abgabebox-backend/Dockerfile`, Migration `0135_db_performance` |
-| Methode | Lesende Code-Analyse aller Ausführungspfade; vier gezielte Reproduktionen in Wegwerf-Containern (keine hocX-Daten berührt); kein Lasttest (keine freigegebene Lastumgebung, Dev-Host zu 95 % belegt) |
+| Methode | Lesende Code-Analyse aller Ausführungspfade; vier gezielte Reproduktionen in Wegwerf-Containern (keine hocX-Daten berührt); kein Lasttest (keine freigegebene Lastumgebung, Dev-Host zu 95 % belegt); Lasttest nach der Umsetzung siehe Anhang C |
 | Begleitmaterial | `loadtest/` (Seeder, k6-Szenarien, Monitoring, Reproduktionen) |
 | Anwendungscode | **nicht verändert**, nichts committet |
 
@@ -924,3 +924,75 @@ Bezug zu Dev-/Testdaten; Container danach entfernt.
 | `abgabebox_quarantine_cleanup` | 5 min | 202600016 | Abgabebox | leicht |
 | photo-analysis-worker | Poll 10 s | `SKIP LOCKED` | eigener Container | ja |
 | document-worker / storage-worker / backup-worker | Poll / Zeitplan | Lease / 202600022, -24 | eigene Container | ja |
+
+### Anhang C – Lasttest nach der Umsetzung (2026-10-21/22)
+
+**Umgebung (Einschränkungen beachten):** Release-Compose (`loadtest/stack/up.sh`: 2 uvicorn-Worker,
+Backend 2,5 CPU / 4 GB, ClamAV, job-worker, Abgabebox; ohne Frontend, Document-/Storage-/Backup-/
+Foto-Worker), **ein** Host mit 8 Kernen / 16 GB, auf dem gleichzeitig die Dev-Instanz läuft. k6 im
+Stack-Netz direkt gegen `backend:8000` (ohne Traefik-Limits), auf 1,5 CPU begrenzt. 20 Mandanten
+mit je 26 Konten (`loadtest/seed`). Dateisystem-Speicher (Generation 0). Rohdaten unter
+`/docker/loadtest-stack/results/build-<tag>/` (nicht im Repo), Ablauf `loadtest/stack/series.sh`,
+Auswertung `loadtest/stack/summarize.py`. Absolute Zahlen sind deshalb eine untere Schranke für
+einen dedizierten Host, die Relationen zwischen den Builds sind belastbar.
+
+**Lastprofile (`interactive.js`, 2 min Rampe, 5 min Halten):**
+
+| Profil | Build | req/s | interaktiv p50 / p95 / p99 (ms) | Fehler | Bemerkung |
+|---|---|---|---|---|---|
+| u100 | `a1f13233` | 33,9 | 68 / 224 / – | 0 % | |
+| u100 | `4ed6252b` | 34,2 | 64 / 171 / 279 | 0 % | |
+| u250 | `a1f13233` | 61,6 | 895 / 1 863 / – | 0 % | |
+| u250 | `9c449076` Lauf 1 | 41,3 | 1 056 / 14 806 / 22 330 | 11,2 % | 2 026 × 503 `db_busy`, bis 40 Verbindungen idle in transaction, Transaktionen bis 25 s |
+| u250 | `9c449076` Lauf 2 | 65,3 | 672 / 1 515 / 2 057 | 0 % | gleicher Build, kein Kippen; trotzdem bis 38 idle in transaction |
+| u250 | `4ed6252b` | 60,7 | 1 077 / 1 610 / 1 832 | 0 % | längste Transaktion 3 s |
+| u500 | `9c449076` | 19,7 | 21 712 / 43 321 / 80 435 | 52,9 % | Kollaps (4 820 × 503) |
+| u500 | `4ed6252b` | 65,0 | 4 876 / 5 778 / 6 226 | 0 % | Sättigung, aber geordnet: Wartezeit statt Fehler |
+
+**Szenarien (Build `4ed6252b`/`dc0c7502`):**
+
+| Szenario | Ergebnis |
+|---|---|
+| CONC-022, 50 req/s `GET /api/auth/session` | p95 30 ms, 0 Fehler, **0 Session-Verwechslungen** |
+| CONC-022, 200 req/s (Überlast) | vorher 93,6 % Fehler bei 13,6 req/s bedient; jetzt 0 % Fehler, 132 req/s bedient, p95 4,9 s; 0 Verwechslungen |
+| Kollaboration, 50 Bearbeiter in einem Protokoll | Broadcast p95 22 ms, Snapshot p95 657 ms (vorher 1,19 s), 0 Verbindungsabbrüche. Viele `lock_denied`, weil das Lastprotokoll nur einen Textblock hat (alle wollen dieselbe Sperre) - erwartet |
+| Abgabebox-Sturm, 50 VUs × 3 × 5 Dateien (1 MB) | 0 Fehler, 0 × 503 „Kapazität belegt“, Upload inkl. Scan Ø 11,5 s, p95 14,3 s |
+| Heavy: Mandant 0 mit 4 PDF-Exporten, 4 Vorschauen, 2 Galerie-Upload-VUs (8-MB-Bild, 155-MB-ZIP), Ähnlichkeit, Vereinsexport; 100 interaktive Nutzer der Mandanten 1–5 | interaktiv p95 2,5–3,5 s (u100 ohne Heavy: 0,17 s), Fehler 0,03–0,2 % |
+
+**Gefundene Probleme und Massnahmen**
+
+1. **Stau aus Threadpool und DB-Pool (bistabil).** FastAPI führt Auth-Dependency, Route und
+   `response_model`-Validierung als einzelne Threadpool-Stufen aus; dazwischen hält der Request
+   seine Verbindung idle in transaction. Bei 40 Threads und 20 Verbindungen je Worker warteten
+   Threads auf Verbindungen von Requests, die auf einen Thread warteten - aufgelöst nur durch
+   `pool_timeout`. → `4ed6252b`: `DbAdmissionMiddleware` (`app/core/db_admission.py`,
+   `DB_ADMISSION_*`, RUNBOOK). u500 jetzt 0 % statt 53 % Fehler bei dreifachem Durchsatz.
+2. **Abgabebox-Einreichungen für das Backend unlesbar.** `FilesystemBackend.put_stream` schrieb über
+   `mkstemp` immer `0600`; das Backend (uid 5000) bekam `PermissionError` auf Dateien der Abgabebox
+   (uid 5001) - Ähnlichkeitsgruppen, Downloads und Vorschauen betroffen, solange Generation 0
+   aktiv ist (auch nach dem Update von 1.1). → `644f9054`: Rechte nach umask. Vorab-Instanzen von
+   1.2 mit Abgabebox-Uploads brauchen einmalig `find <storage>/abgabebox-uploads -type f -perm 600 -exec chmod 640 {} +`.
+3. **Ähnlichkeitsgruppen: Signatur-Cache kleiner als die Gruppierung.** 600 Plätze bei bis 1 500
+   Bildern: bei mehr Kandidaten als Plätzen Trefferquote 0, nach jedem Upload 73 s im Request,
+   Verbindung währenddessen idle in transaction. → `63056a23`: Cache = `MAX_GROUPING_IMAGES`,
+   Transaktion vor dem Rechnen beendet. Gemessen mit 870 inhaltsgleichen Bildern: nach einem
+   Upload 11,5 s statt 73 s (einmalig ~50 s je kaltem Worker). Der Rest ist der paarweise Vergleich
+   einer einzigen Riesengruppe - Artefakt der Testdaten.
+4. **Kapazität ist CPU-gebunden.** Bei u250/u500 steht das Backend an seinem CPU-Limit
+   (~200–250 %), die DB bei ~120 %. Sättigung bei rund 65 req/s mit 2 Workern, das entspricht im
+   Profil `interactive.js` etwa 250 gleichzeitig aktiven Nutzern. CPU-Profil (py-spy, u250):
+   32 % der Backend-Samples in `get_optional_current_user` (je Request Konto, Mandant,
+   MFA-Faktor, `set_config`). **Nicht umgesetzt** (sicherheitskritisch, braucht eigenes Review):
+   Sitzungsdaten je Request zusammenfassen oder kurz cachen.
+5. **Schwere Arbeit eines Mandanten bremst andere Mandanten.** Im Heavy-Szenario steigt p95 der
+   interaktiven Nutzer um Faktor 15–20; Vorschau-Compiles, Upload-Verarbeitung und Ähnlichkeit
+   teilen sich die 2,5 CPU des Backend-Containers mit den Requests. **Offen:** niedrigere
+   CPU-Priorität für Typst-Worker und Galerie-Ingest oder Verlagerung in den job-worker; vorher auf
+   einem dedizierten Host messen.
+6. **Einmaliger Worker-Neustart** (Event-Loop 12 s blockiert, uvicorn beendete den Worker): nur
+   während eines globalen OOM des Hosts (k6 mit 3,3 GB, Swap voll; der Monitor auf dem Host stand
+   zur selben Zeit 18 s). Ohne Speicherdruck in der Wiederholung nicht aufgetreten. Für die
+   Testumgebung: k6 läuft jetzt mit eigenem Speicherlimit.
+7. **Testwerkzeuge** (`596b81d6`, `dc0c7502`): Seed bucht `abgabebox`/`finance` (ohne Feature wies
+   die Abgabebox jeden Link ab), Sturm baut den Multipart-Body als Bytes (jslib-FormData: ~16 Byte
+   je Nutzbyte), Heavy liest Fixtures über `k6/experimental/fs` statt `open()` je VU.
