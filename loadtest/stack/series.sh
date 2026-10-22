@@ -61,7 +61,7 @@ for spec in "$@"; do
     storm) run storm abgabebox_storm.js storm -e STORM_VUS=50 -e STORM_ITERATIONS=3 -e FIXTURE_IMAGE=/data/fixtures/photo-1mb.jpg ;;
     # 155-MB-ZIP: je Upload-VU einmal im Speicher plus Kopien im Versand - 2 Upload-VUs, 3 GB für k6
     heavy) K6_MEMORY=3g run heavy heavy.js heavy -e HEAVY_TENANTS=0 -e INTERACTIVE_TENANTS=1,2,3,4,5 -e INTERACTIVE_VUS=100 \
-             -e UPLOAD_VUS=2 -e HEAVY_DURATION=10m -e FIXTURE_IMAGE=/data/fixtures/photo-8mb.jpg -e FIXTURE_ZIP=/data/fixtures/gallery-200.zip ;;
+             -e UPLOAD_VUS=2 -e HEAVY_DURATION="${HEAVY_DURATION:-10m}" -e FIXTURE_IMAGE=/data/fixtures/photo-8mb.jpg -e FIXTURE_ZIP=/data/fixtures/gallery-200.zip ;;
     *) echo "Unbekannter Lauf: $spec" >&2 ;;
   esac
 done
