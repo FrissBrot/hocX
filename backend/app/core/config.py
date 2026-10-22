@@ -218,15 +218,21 @@ class Settings(BaseSettings):
     abgabebox_internal_url: str = "http://abgabebox-backend:8000"
     # Obergrenze für Request-Bodies ausser Multipart (JSON etc.), MAIN-OPS-013.
     max_request_body_bytes: int = 10 * 1024 * 1024
-    # SQLAlchemy-Pool je Prozess (Concurrency-Audit CONC-010). pool_timeout kurz: bei erschöpftem
-    # Pool lieber nach wenigen Sekunden 503 mit Retry-After (main.py) als 30 s Warten mit
-    # gehaltenem Thread. Worker-Container setzen kleine Werte (docker-compose*.yml).
     # Gleichzeitige Galerie-Uploads je uvicorn-Worker (CONC-007) und Wartezeit auf einen Platz.
     gallery_upload_concurrency: int = Field(default=2, ge=1, le=8, validation_alias="GALLERY_UPLOAD_CONCURRENCY")
     gallery_upload_slot_wait_seconds: float = Field(default=60.0, ge=0, le=600, validation_alias="GALLERY_UPLOAD_SLOT_WAIT_SECONDS")
+    # SQLAlchemy-Pool je Prozess (Concurrency-Audit CONC-010). pool_timeout kurz: bei erschöpftem
+    # Pool lieber nach wenigen Sekunden 503 mit Retry-After (main.py) als 30 s Warten mit
+    # gehaltenem Thread. Worker-Container setzen kleine Werte (docker-compose*.yml).
     db_pool_size: int = Field(default=12, ge=1, le=50, validation_alias="DB_POOL_SIZE")
     db_max_overflow: int = Field(default=8, ge=0, le=50, validation_alias="DB_MAX_OVERFLOW")
     db_pool_timeout_seconds: float = Field(default=5.0, ge=0.5, le=60, validation_alias="DB_POOL_TIMEOUT_SECONDS")
+    # Gleichzeitige HTTP-Requests je uvicorn-Worker (app/core/db_admission.py). Leer = Pool minus
+    # DB_ADMISSION_RESERVE (WebSockets, Hintergrund-Loops, Fehlerprotokoll). Wer keinen Platz bekommt,
+    # wartet ohne Thread und Verbindung bis DB_ADMISSION_WAIT_SECONDS, dann 503 db_busy.
+    db_admission_limit: int | None = Field(default=None, ge=1, le=100, validation_alias="DB_ADMISSION_LIMIT")
+    db_admission_reserve: int = Field(default=4, ge=0, le=50, validation_alias="DB_ADMISSION_RESERVE")
+    db_admission_wait_seconds: float = Field(default=20.0, ge=0.5, le=120, validation_alias="DB_ADMISSION_WAIT_SECONDS")
     # requirepass im Release-Stack (REDIS_PASSWORD_FILE, MAIN-OPS-005); leer = ohne Passwort.
     redis_password: str | None = None
     # Proxys, deren X-Forwarded-For ausgewertet wird (Traefik im Compose-Netz), siehe

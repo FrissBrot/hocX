@@ -45,6 +45,12 @@ def count(name: str, amount: int = 1) -> None:
         _counters[name] = _counters.get(name, 0) + amount
 
 
+def observe_max(name: str, value: float) -> None:
+    """Höchstwert seit der letzten Meldung (z. B. admission_wait_max_ms aus db_admission.py)."""
+    with _counters_lock:
+        _counters[name] = max(_counters.get(name, 0), round(value))
+
+
 def _take_counters() -> dict[str, int]:
     with _counters_lock:
         taken = dict(_counters)

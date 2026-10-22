@@ -638,7 +638,8 @@ def _check_runtime(db: Session, now: datetime) -> HealthCheckRead:
     for row in rows:
         metrics = row.metrics or {}
         max_lag = max(max_lag, int(metrics.get("loop_lag_max_ms") or 0))
-        timeouts += int(metrics.get("pool_timeouts") or 0)
+        # Abgewiesen wegen Überlast: Pool-Timeout oder kein Platz in der Request-Annahme
+        timeouts += int(metrics.get("pool_timeouts") or 0) + int(metrics.get("admission_timeouts") or 0)
         if metrics.get("pool_capacity"):
             pool_peak = max(pool_peak, round(100 * int(metrics.get("pool_checked_out_max") or 0) / int(metrics["pool_capacity"])))
         if metrics.get("threadpool_total"):

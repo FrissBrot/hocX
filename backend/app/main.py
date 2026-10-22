@@ -270,6 +270,23 @@ app.add_middleware(
     skip_prefixes=("/api/files/gallery-uploads",),
 )
 
+# Requests je Worker an den DB-Pool binden (Stau aus Threadpool und Pool unter Last, siehe
+# db_admission.py). Innerhalb der Wartung/CORS-Schichten: auch die 503 trägt CORS-Header.
+from app.core.db_admission import DbAdmissionMiddleware
+app.add_middleware(
+    DbAdmissionMiddleware,
+    max_active=settings.db_admission_limit or max(1, settings.db_pool_size + settings.db_max_overflow - settings.db_admission_reserve),
+    wait_seconds=settings.db_admission_wait_seconds,
+    skip_paths=("/api/health",),
+    # Lange Upload-Bodies belegen sonst einen Platz ohne DB-Arbeit; die Galerie hat eine eigene Annahme.
+    skip_prefixes=(
+        "/api/files/gallery-uploads",
+        "/api/files/document-uploads",
+        "/api/tools/word-import/",
+        "/api/admin/tenants/import",
+    ),
+)
+
 from app.core.maintenance_middleware import MaintenanceMiddleware
 # Vor der Upload-Annahme (äussere Schicht): während einer Wartung wird ein grosser Upload sofort
 # abgewiesen, statt erst gepuffert zu werden. CORS liegt noch weiter aussen, damit auch die
