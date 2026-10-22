@@ -292,7 +292,10 @@ def _write_atomic(path: Path, content: bytes) -> None:
 #   Gespeichert werden nur IDs, Metadaten (Tags, Namen) kommen frisch aus der Abfrage.
 # - Signatur-Cache je Prozess (LRU): Signaturen hängen nur am Dateiinhalt (Prüfsumme).
 SIMILARITY_RESULT_TTL_SECONDS = 3600
-SIMILARITY_SIGNATURE_CACHE_SIZE = 600  # je ~49 KB (128 x 128 x RGB, uint8)
+# So gross wie die erlaubte Gruppierung (je ~49 KB, 128 x 128 x RGB uint8, also bis ~73 MB je
+# Prozess): mit 600 Plätzen und 861 Kandidaten verdrängte der LRU bei jedem Neuaufbau alles
+# (Trefferquote 0), jeder neue Upload kostete im Lasttest 73 s statt Sekundenbruchteilen.
+SIMILARITY_SIGNATURE_CACHE_SIZE = MAX_GROUPING_IMAGES
 _similarity_signatures: "OrderedDict[tuple[int, str | None], tuple[float, object] | None]" = OrderedDict()
 _similarity_signatures_lock = threading.Lock()
 
@@ -725,6 +728,10 @@ class FileService:
         cached = _similarity_cache_get(cache_key, rows_by_id)
         if cached is not None:
             return _similarity_groups(self, cached, rows_by_id, min_size)
+        # Ab hier nur noch Originale lesen und rechnen (bei kaltem Cache bis Minuten): die
+        # DB-Verbindung nicht so lange idle in transaction halten. Bisher nur gelesen, die
+        # Zeilen sind Core-Rows und verfallen nicht.
+        db.commit()
 
         def matches(a: int, b: int) -> bool:
             row_a, row_b = rows_by_id[a], rows_by_id[b]
