@@ -7,7 +7,6 @@
 import http from "k6/http";
 import { check, sleep } from "k6";
 import { Counter, Trend } from "k6/metrics";
-import { FormData } from "https://jslib.k6.io/formdata/0.0.2/index.js"; // mehrere Felder "files"
 import { ABGABEBOX_URL, TENANTS } from "./lib/common.js";
 
 const capacity503 = new Counter("hocx_abgabebox_capacity_503");
@@ -24,6 +23,35 @@ function uniqueImage(marker) {
   out.set(source);
   for (let i = 0; i < marker.length; i += 1) out[source.length + i] = marker.charCodeAt(i) & 0xff;
   return out.buffer;
+}
+
+// Multipart-Body direkt als Bytes (mehrere Felder "files"). Die jslib-FormData baute ihn als
+// JS-Zahlen-Array - rund 16 Byte je Nutzbyte, 50 VUs x 5 Dateien sprengten k6 (Exit 137).
+function ascii(text) {
+  const out = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i += 1) out[i] = text.charCodeAt(i) & 0xff;
+  return out;
+}
+
+function multipart(fields, files) {
+  const boundary = `----hocx-loadtest-${__VU}-${__ITER}-${Date.now()}`;
+  const parts = [];
+  for (const [name, value] of Object.entries(fields)) {
+    parts.push(ascii(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`));
+  }
+  for (const file of files) {
+    parts.push(ascii(`--${boundary}\r\nContent-Disposition: form-data; name="files"; filename="${file.name}"\r\nContent-Type: image/jpeg\r\n\r\n`));
+    parts.push(new Uint8Array(file.data));
+    parts.push(ascii("\r\n"));
+  }
+  parts.push(ascii(`--${boundary}--\r\n`));
+  const body = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    body.set(part, offset);
+    offset += part.length;
+  }
+  return { body: body.buffer, boundary };
 }
 
 export const options = {
@@ -55,16 +83,15 @@ export default function (data) {
   const captcha = http.post(`${base}/captcha-verify`, { captcha_solution: "loadtest" }, { tags: { name: "captcha_verify" } });
   if (captcha.status === 503) capacity503.add(1, { step: "captcha" });
   if (captcha.status !== 200) return;
-  const form = new FormData();
-  form.append("captcha_session_token", captcha.json().session_token);
-  form.append("include_gps", "true");
   // Eindeutige Bytes je Datei, sonst greift die Duplikaterkennung vor dem Scan.
+  const files = [];
   for (let i = 0; i < FILES; i += 1) {
     const marker = `${__VU}-${__ITER}-${i}-${Date.now()}`;
-    form.append("files", http.file(uniqueImage(marker), `storm-${marker}.jpg`, "image/jpeg"));
+    files.push({ name: `storm-${marker}.jpg`, data: uniqueImage(marker) });
   }
+  const form = multipart({ captcha_session_token: captcha.json().session_token, include_gps: "true" }, files);
   const started = Date.now();
-  const res = http.post(`${base}/upload`, form.body(), {
+  const res = http.post(`${base}/upload`, form.body, {
     headers: { "Content-Type": `multipart/form-data; boundary=${form.boundary}` }, timeout: "900s", tags: { name: "abgabebox_upload" },
   });
   uploadMs.add(Date.now() - started);

@@ -136,6 +136,13 @@ Installationen aktualisieren können.
   `STORAGE_ALLOWED_LOCATIONS`. Badge in `/admin/storage`. Neu: serverseitige Verschlüsselung (S3
   `AES256`) je Profil, im Verbindungstest geprüft.
 
+### Stabilität unter Last (Lasttest vom 2026-10-22)
+
+- **Request-Annahme je Backend-Worker:** höchstens so viele gleichzeitige Requests wie
+  DB-Verbindungen (Standard 16), der Rest wartet kurz und bekommt erst nach 20 s ein 503
+  `db_busy`. Vorher konnte der Server bei rund 250 aktiven Nutzern in einen Stau kippen, in dem
+  fast jede Anfrage erst nach Sekunden mit 503 endete. Einstellbar über `DB_ADMISSION_*` (RUNBOOK).
+
 ### Behoben
 
 - **Verlauf:** Aktionen mit mehreren Punkten (z. B. `backup.restore.create`) wurden falsch benannt.

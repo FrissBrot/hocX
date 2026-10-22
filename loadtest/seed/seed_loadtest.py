@@ -31,11 +31,12 @@ from sqlalchemy.engine import make_url  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.db import SessionLocal  # noqa: E402
 from app.core.security import create_session_token, hash_password  # noqa: E402
-from app.models.entities import AppUser, Role, SubmissionAssignment, SubmissionLink, Tenant  # noqa: E402
+from app.models.entities import AppUser, Role, SubmissionAssignment, SubmissionLink, Tenant, TenantFeature  # noqa: E402
 
 import scripts.seed_test_tenant as demo  # noqa: E402  (backend/scripts, liegt im Image unter /app/scripts)
 
 PREFIX = "LT "
+SEED_FEATURES = ("abgabebox", "finance")
 
 
 def _guard() -> None:
@@ -72,6 +73,11 @@ def _seed_tenant(db, index: int, writers: int, password_hash: str, writer_role_i
     demo.create_gallery(db, tenant, users["writer"], list(photos[:5]))
     db.commit()
     demo.create_submission_assignment(db, tenant, list_definition)
+    # Gebuchte Module wie bei einem Verein mit Abo: ohne "abgabebox" weist die öffentliche
+    # Abgabebox jeden Link mit 403 ab (Upload-Sturm fand keine Elemente), ohne "finance" fehlt
+    # die Finanzlast.
+    for code in SEED_FEATURES:
+        db.add(TenantFeature(tenant_id=tenant.id, feature_code=code))
     db.commit()
 
     accounts = [users["writer"]]

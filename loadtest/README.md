@@ -44,6 +44,8 @@ loadtest/stack/up.sh                      # baut Images dieses Commits, .env/Sec
   backend python /loadtest/seed/seed_loadtest.py --tenants 20 --writers 25 --out /out/tokens.json
 loadtest/stack/k6.sh interactive.js u100 -e PROFILE=u100     # Ergebnis: /docker/loadtest-stack/results/u100
 python3 loadtest/stack/summarize.py /docker/loadtest-stack/results u10 u50 u100
+loadtest/stack/series.sh u100 u250 u500 conc022-50 conc022-200 collab storm heavy   # ganze Serie mit Monitor
+python3 loadtest/stack/summarize.py /docker/loadtest-stack/results/build-<tag> u100 u250 u500
 loadtest/stack/down.sh                    # Stack, Volumes, Images entfernen (results/ bleibt)
 ```
 

@@ -784,6 +784,7 @@ Auch das PDF nach dem Abschliessen eines Protokolls ist ein Auftrag (übersteht 
 | Variable | Wirkung |
 |---|---|
 | `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` (12/8, Worker kleiner) | DB-Pool je Prozess; bei Erschöpfung nach `DB_POOL_TIMEOUT_SECONDS` (5) Antwort 503 `db_busy` mit Retry-After |
+| `DB_ADMISSION_LIMIT` (leer = Pool minus `DB_ADMISSION_RESERVE` 4, also 16) / `DB_ADMISSION_WAIT_SECONDS` (20) | gleichzeitige HTTP-Requests je Backend-Worker; der Rest wartet ohne Thread und Verbindung, danach 503 `db_busy`. Verhindert den Stau aus Threadpool und Pool unter Last (`app/core/db_admission.py`). Wer den Pool vergrössert, vergrössert die Annahme mit |
 | `GALLERY_UPLOAD_CONCURRENCY` (2) / `GALLERY_UPLOAD_SLOT_WAIT_SECONDS` (60) | gleichzeitige Galerie-Uploads je Backend-Worker, Wartezeit auf einen Platz |
 | `ABGABEBOX_UPLOAD_CONCURRENCY` (2) / `ABGABEBOX_UPLOAD_SLOT_WAIT_SECONDS` (120) | gleichzeitige öffentliche Uploads je Abgabebox-Worker (je bis 150 MiB im Speicher) |
 | `DOCUMENT_RENDER_CONCURRENCY` (2) | Typst-Compiles je Prozess (Backend: Vorschau; Job-Worker: PDF-Aufträge) |

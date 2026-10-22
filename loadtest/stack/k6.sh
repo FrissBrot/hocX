@@ -7,9 +7,12 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LT_PROJECT="${LT_PROJECT:-hocx-loadtest}"
 LT_DIR="${LT_DIR:-/docker/loadtest-stack}"
 K6_CPUS="${K6_CPUS:-1.5}"
+# Eigenes Speicherlimit: ein k6-Ausreisser (grosse Fixtures) trifft sonst per globalem OOM den
+# ganzen Host, auch das gemessene Backend (Event-Loop bis 36 s blockiert, Worker-Neustart).
+K6_MEMORY="${K6_MEMORY:-2560m}"
 script="$1"; run="$2"; shift 2
 mkdir -p "$LT_DIR/results/$run" && chmod 777 "$LT_DIR/results/$run"
-docker run --rm --network "${LT_PROJECT}_default" --cpus "$K6_CPUS" \
+docker run --rm --network "${LT_PROJECT}_default" --cpus "$K6_CPUS" --memory "$K6_MEMORY" --memory-swap "$K6_MEMORY" \
   -v "$REPO_DIR/loadtest:/lt:ro" -v "$LT_DIR:/data" -w /lt/k6 \
   -e BASE_URL=http://backend:8000 -e ABGABEBOX_URL=http://abgabebox-backend:8000 \
   -e HOCX_LOADTEST_TARGET_CONFIRMED=isolated -e TOKENS_FILE=/data/seed-out/tokens.json \

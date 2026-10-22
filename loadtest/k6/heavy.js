@@ -96,11 +96,16 @@ export function preview() {
   sleep(0.5);
 }
 
+// Die ZIP ist bei jedem Upload gleich: einmal je Upload-VU lesen statt je Iteration 155 MB neu
+// anzulegen (der GC gab die Kopien nicht schnell genug frei, k6 wuchs bis zum OOM-Killer).
+let zipBytes = null;
+
 export async function galleryUpload() {
   const session = sessionForVu(__VU, HEAVY);
   const useZip = zipFile && Math.random() < 0.3;
+  if (useZip && zipBytes === null) zipBytes = (await readAll(zipFile)).buffer;
   const form = useZip
-    ? { files: http.file((await readAll(zipFile)).buffer, `lt-${__VU}-${__ITER}.zip`, "application/zip") }
+    ? { files: http.file(zipBytes, `lt-${__VU}-${__ITER}.zip`, "application/zip") }
     : { files: http.file(await uniqueImage(`lt-${__VU}-${__ITER}-${Date.now()}`), `lt-${__VU}-${__ITER}.jpg`, "image/jpeg") };
   // Galerie: max. 1 aktiver Upload je uvicorn-Worker (UploadAdmissionMiddleware) -> 503 zählen.
   record(http.post(`${BASE_URL}/api/files/gallery-uploads`, form,
