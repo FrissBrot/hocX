@@ -91,6 +91,18 @@ def test_filesystem_backend_writes_atomically_and_verifies_integrity(tmp_path):
     assert not list((tmp_path / "main" / "a").glob(".hocx-upload-*"))
 
 
+def test_filesystem_backend_files_get_umask_permissions_not_mkstemp_0600(tmp_path):
+    # Abgabebox (uid 5001) schreibt, Backend (uid 5000, gleiche Gruppe) liest: mkstemp allein
+    # ergab 0600 und PermissionError beim Lesen der Einreichungen.
+    backend = _fs(tmp_path)
+    old_umask = os.umask(0o027)
+    try:
+        backend.put_stream("abgabebox", "t/1.jpg", io.BytesIO(b"jpg"), size=3, sha256=hashlib.sha256(b"jpg").hexdigest(), content_type=None)
+    finally:
+        os.umask(old_umask)
+    assert (tmp_path / "box" / "t" / "1.jpg").stat().st_mode & 0o777 == 0o640
+
+
 def test_filesystem_backend_range_list_and_traversal_guard(tmp_path):
     backend = _fs(tmp_path)
     backend.put_stream("main", "x/one.bin", io.BytesIO(b"0123456789"), size=10, sha256=hashlib.sha256(b"0123456789").hexdigest(), content_type=None)

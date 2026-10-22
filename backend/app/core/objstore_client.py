@@ -321,6 +321,19 @@ class RateLimiter:
             time.sleep(min(wait, 1.0))
 
 
+def _new_file_mode() -> int:
+    """Rechte, die open() mit der umask des Prozesses vergeben hätte. mkstemp legt immer 0600 an -
+    damit konnte das Backend (uid 5000, Gruppe 5001) keine Abgabebox-Einreichung (uid 5001) mehr
+    lesen (PermissionError im Lasttest 2026-10-22, Ähnlichkeitsgruppen und Downloads)."""
+    try:
+        for line in Path("/proc/self/status").read_text().splitlines():
+            if line.startswith("Umask:"):
+                return 0o666 & ~int(line.split()[1], 8)
+    except (OSError, ValueError, IndexError):
+        pass
+    return 0o644
+
+
 class FilesystemBackend:
     """Bisheriger Bestand (Generation 0) bzw. Tests. Physischer Ort: <root[namespace]>/<key>.
     Schreibt atomar (temporäre Datei im Zielordner + os.replace) mit fsync, damit ein Abbruch
@@ -359,6 +372,7 @@ class FilesystemBackend:
         reader = _HashingReader(source)
         fd, tmp_name = tempfile.mkstemp(prefix=".hocx-upload-", dir=str(target.parent))
         try:
+            os.fchmod(fd, _new_file_mode())
             with os.fdopen(fd, "wb") as handle:
                 while chunk := reader.read(CHUNK_BYTES):
                     handle.write(chunk)
