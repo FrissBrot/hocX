@@ -8,279 +8,58 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
-### Datenschutz (Datenschutz-Audit vom 2026-10-21, Paket 1)
-
-- **Statistik:** Bussen und Anwesenheit je Person sehen nur noch Schreibende, Kassier und Admins.
-  Leser sehen dort ihre eigenen Werte, auch in PDF-Diagrammen. Mandanten-Admins können die
-  Ranglisten unter Mandanten-Einstellungen → Datenschutz für alle freigeben (Migration `0138`,
-  standardmässig aus). Finanzzahlen in der Statistik nur noch mit gebuchtem Modul Finanzen.
-- **Fehlerprotokoll:** keine Werte aus SQL-Parametern oder Postgres-Details mehr
-  (`hide_parameters`, Redaktion von E-Mail-Adressen). Der Auslöser wird als Konto-ID gespeichert
-  und beim Anzeigen aufgelöst; nach dem Löschen eines Kontos bleibt keine Adresse zurück
-  (Migration `0139`, leert bestehende Adressen). Fehler werden dem Mandanten des Kontos zugeordnet.
-- **Kalender-Abos** übertragen standardmässig nur Titel und Datum (Migration `0140`, bestehende
-  Abos unverändert).
-- **Offline-Entwürfe** im Browser gehören dem angemeldeten Konto und werden beim Abmelden
-  gelöscht (Rückfrage bei ungesendeten Änderungen).
-- **Freigabelinks:** gelöschte Fotos verschwinden aus Dateilinks; ein Dateilink liefert nur Dateien
-  seines Mandanten.
-- **Fristen** für Upload- und Analyse-Jobs (30 Tage), Abgabebox-Uploadverlauf (90 Tage),
-  Betriebsereignisse (2 Jahre), entschiedene Verifizierungsanträge und Word-Import-Lernsignale
-  (1 Jahr) sowie widerrufene/abgelaufene Freigabelinks (90 Tage); Job `log_cleanup`.
-  Die Prüfkopie zusammengeführter Bussen aus Migration 0116 wird entfernt (Migration `0141`).
-- **Dumps:** Pre-Deploy-, Cron- und Restore-Sicherungen werden mit einem öffentlichen GPG-Schlüssel
-  verschlüsselt (`BACKUP_DUMP_PUBLIC_KEY_PATH`, RUNBOOK Abschnitt 10), Pre-Deploy-Dumps nach
-  30 Tagen entfernt. Unverschlüsselte Dumps gehen nur auf ein rclone-crypt-Remote, alte
-  Offsite-Kopien werden gelöscht.
-- Backends schreiben kein Access-Log mehr (Pfade enthielten Link-Tokens).
-
-### Datenschutz (Paket 2: vollständige Dateilöschung)
-
-- **Protokoll löschen:** ein Dialog zeigt die Bilder des Protokolls; standardmässig werden sie
-  mitgelöscht, abgewählte wandern mit Tag «Protokoll …» in die Galerie. Bilder, die noch ein anderes
-  Protokoll verwendet, bleiben. Erzeugte PDFs verschwinden mit. Vorher blieben alle Bilder liegen.
-- **Abgabe löschen:** gleicher Dialog für eingereichte Dateien und Galeriefotos der Abgabe;
-  behaltene Einreichungen werden aus dem Abgabebox-Speicher in die Galerie übernommen.
-- **Einzelne Einreichungen** lassen sich im Abgabe-Detail löschen (z. B. auf Wunsch der
-  einreichenden Person), samt Vorschau, Dokumenten, Album- und Linkeinträgen.
-- Eine gemeinsame Löschfunktion räumt bei jeder Dateilöschung Objekt, Vorschaubild, Dokumente,
-  Album- und Freigabelink-Einträge ab. `/admin/system` meldet Dateien, die zu nichts mehr gehören.
-
-### Datenschutz (Paket 3: Sicherheitsprotokoll)
-
-- **Audit-Log:** fehlgeschlagene Anmeldungen (App, MFA, Plattform-Admin), Plattform-Logins,
-  hinzugefügte MFA-Faktoren und Einblicke des Plattform-Supports in Mandantendaten werden
-  protokolliert. Statt IP-Adressen steht ein gekürzter, gehashter Netz-Fingerabdruck (`ip_hash`),
-  dazu `outcome` (Migration `0143`). Die App-Rolle darf das Protokoll nicht mehr ändern oder löschen;
-  Aufbewahrung (mindestens 30 Tage) und das Entfernen von E-Mail-Adressen gelöschter Personen bzw.
-  Mandanten laufen über eigene DB-Funktionen.
-- **Verlauf für Mandanten-Admins** unter Mandanten-Einstellungen → Verlauf (nur eigener Mandant,
-  Plattform-Zugriffe als «Plattform-Support»), **Plattform-Ansicht** unter `/admin/audit` (Owner).
-- **Sicherheitsalarme:** neuer Check `security` in `/admin/system` und ntfy (viele fehlgeschlagene
-  Logins, auffällig viele Exporte, Restores, Admin-Änderungen; Schwellen per `SECURITY_*`).
-- Mandanten löschen liefert einen Bericht (Personen, Dateien, Fehler beim Objektlöschen).
-
-### Datenschutz (Paket 4: Löschjournal)
-
-- Endgültige Löschungen (Mandant, Person, Protokoll, Termin, Abgabe, Einreichung, Datei) landen im
-  Löschjournal (Migration `0144`, nur Einfügen für die App-Rolle, Aufbewahrung ≥ 400 Tage). Ein
-  Voll-Restore und eine Mandanten-Kopie wenden sie vor dem Umschalten erneut an, damit gelöschte
-  Daten nicht aus dem Backup zurückkehren. Abschalten nur beim einzelnen Restore mit Begründung.
-- **Behoben:** Termin oder Listeneintrag löschen entfernt jetzt auch die zugehörigen
-  Abgabebox-Einreichungen samt Dateien (blieben vorher verwaist liegen).
-
-### Datenschutz (Paket 5: Datenauskunft)
-
-- **Datenauskunft je Person** (Personen → Menü → Datenauskunft, nur Admin) und **«Meine Daten»** im
-  Profil: passwortgeschützte ZIP-Datei (AES-256) mit `Auskunft.xlsx` (ein Blatt je Bereich),
-  `daten.json` und Lesehinweis. Enthält nur die eigenen Zeilen (Anwesenheit, Bussen, Aufgaben,
-  Termine, Dateien, Sicherheitsereignisse, Erwähnungen in Protokolltexten), keine Zugangsdaten.
-  Abruf wird protokolliert, Selbstauskunft max. 3× pro Stunde. Öffnen mit 7-Zip, Keka oder WinRAR
-  (der macOS-Finder kann AES-ZIP nicht öffnen). Neue Abhängigkeit `pyzipper`.
-
-### Datenschutz (Paket 6: Vereinsexport)
-
-- **Vereinsexport** unter Mandanten-Einstellungen → Datenschutz (Mandanten-Admin, Anmeldung mit
-  Zwei-Faktor-Bestätigung): AES-ZIP für die Weiterarbeit mit `Mitglieder.xlsx`, `Termine.xlsx`,
-  `Anwesenheit.xlsx` (Person × Sitzung), `Bussen.xlsx`, `Finanzen.xlsx` (Blatt je Konto),
-  `Aufgaben.xlsx`, `Listen/`, den PDFs abgeschlossener Protokolle und auf Wunsch `Fotos/`
-  (nach Album bzw. Termin), `Abgaben/` und `Dokumente/` als Originaldateien. Namen statt IDs,
-  Datum TT.MM.JJJJ, keine Zugangsdaten. Gebaut vom neuen Job `tenant_data_export` (Migration
-  `0145`, RLS), danach 7 Tage abrufbar. Abgeschlossene Protokolle ohne gespeichertes PDF werden im
-  Lesehinweis aufgeführt (nicht automatisch erzeugt).
-- **Plattform-Export ohne Zugangsdaten als Standard:** Passwort-Hashes, MFA-Secrets und Link-/Abo-
-  Tokens nur noch mit der neuen Option «Zugangsdaten mitexportieren» (`include_credentials`). Ohne
-  sie erhalten importierte Konten ein zufälliges Passwort und Links neue URLs. Die Mandanten-Kopie
-  aus dem Backup nimmt sie weiterhin mit.
-- Datenauskunft: Passwort-Mindestlänge auch im API-Schema, Rate-Limit für die Admin-Auskunft,
-  temporäre Dateien werden auch bei Fehlern gelöscht (Security-Review).
-
-### Datenschutz (Paket 7: Korrekturweg abgeschlossener Protokolle)
-
-- Abschliessen → zurückstufen → korrigieren → abschliessen: beim erneuten Abschluss verschwinden
-  die Änderungsmarkierungen samt alter Fassung, die PDFs des früheren Abschlusses werden sofort
-  gelöscht und ihre Registereinträge verlieren den Titel (nur der Prüfwert bleibt, die Prüfseite
-  meldet sie als ersetzt). Beschrieben in der Benutzerdoku unter Protokolle.
-
-### Datenschutz (Paket 8: Aufbewahrungsfristen je Verein)
-
-- Neuer Tab **Mandanten-Einstellungen → Aufbewahrung** (Migration `0146`, RLS): Einreichungen der
-  Abgabebox X Monate nach Abgabeschluss löschen, ehemalige Mitglieder X Jahre nach Austritt
-  **deaktivieren** (Login aus, Sitzungen beendet, Daten bleiben), alte Galeriebilder ohne Album und
-  Termin nach X Jahren vorschlagen. Alle Regeln standardmässig aus. Der neue tägliche Job
-  `retention_proposals` legt Vorschläge an; der Admin setzt sie um oder verwirft sie, wahlweise
-  automatisch (Galeriebilder nie automatisch). Löschung über die bestehenden Löschpfade mit
-  Löschjournal und Verlauf.
-- **Offboarding:** Vertragsende je Mandant im Adminportal (Abo); `/admin/system` meldet Mandanten
-  nach Vertragsende plus `TENANT_OFFBOARDING_GRACE_DAYS` (Standard 90) zur Löschung (Check
-  `tenant_offboarding`, gelöscht wird von Hand).
-
-### Datenschutz (Paket 9: Abgabebox-Hinweise, GPS-Wahl, Speicherstandort)
-
-- **Abgabebox:** vor dem Upload stehen der verantwortliche Verein, ein Link zu dessen
-  Datenschutzhinweisen (Mandanten-Einstellungen → Datenschutz, sonst `ABGABEBOX_DEFAULT_PRIVACY_URL`)
-  und ein Hinweis zu Friendly Captcha. Die Abgabebox liest Name und Link nur über die DB-Funktion
-  `abgabebox_privacy_notice()` für den Mandanten ihres Links (Migration `0147`).
-- **Friendly Captcha in der EU:** Puzzle- und Verify-Endpunkt per `FRIENDLY_CAPTCHA_PUZZLE_URL` /
-  `FRIENDLY_CAPTCHA_VERIFY_URL` einstellbar (CSP folgt automatisch); `/admin/system` zeigt, ob der
-  EU- oder der globale Endpunkt aktiv ist.
-- **«GPS-Daten des Bildes mitsenden»** (Standard an) bei Galerie-Upload, Protokollbild (auch mobil)
-  und Abgabebox. Aus: der Server entfernt vor dem Speichern nur die Standortangaben (EXIF-GPS in
-  JPEG/HEIC/WebP/PNG/TIFF, XMP-GPS, Ortsangaben in Live-Photo-Clips) ohne Neukodierung; Datum,
-  Kamera und Bild bleiben, die GPS-Spalten leer. Gespeichert wird mit GPS wie bisher.
-- **GPS erst ab Rolle Schreiber:** Leser sehen keine Koordinaten in den Fotodetails und erhalten
-  Originale ohne Standort.
-- **Datenstandort der Speicherprofile:** Schweiz / EU-EWR / angemessen / Drittland, bei AWS und
-  Hetzner aus der Region abgeleitet, bei S3-kompatibel gewählt. Drittland nur mit
-  Übermittlungsgrundlage und Bestätigung, Migration dorthin fragt erneut nach; optional
-  `STORAGE_ALLOWED_LOCATIONS`. Badge in `/admin/storage`. Neu: serverseitige Verschlüsselung (S3
-  `AES256`) je Profil, im Verbindungstest geprüft.
-
-### Stabilität unter Last (Lasttest vom 2026-10-22)
-
-- **Request-Annahme je Backend-Worker:** höchstens so viele gleichzeitige Requests wie
-  DB-Verbindungen (Standard 16), der Rest wartet kurz und bekommt erst nach 20 s ein 503
-  `db_busy`. Vorher konnte der Server bei rund 250 aktiven Nutzern in einen Stau kippen, in dem
-  fast jede Anfrage erst nach Sekunden mit 503 endete. Einstellbar über `DB_ADMISSION_*` (RUNBOOK).
-- **Priorität bei Überlast je Abo:** Jeder Plan hat im Preiskatalog eine Priorität (niedrig,
-  normal, hoch). Wird es knapp, sehen neue Nutzer von Abos mit niedriger Priorität zuerst eine
-  Überlast-Seite, die automatisch weiterleitet, sobald wieder Platz ist. Wer bereits arbeitet,
-  bleibt angemeldet. Wartende Anfragen werden nach Priorität bedient. Jede Abweisung wird
-  protokolliert. Das Adminportal zeigt sie unter System → Überlast je Mandant und meldet sie als
-  Warnung (Migration `0151`, `OVERLOAD_*` im RUNBOOK).
-
-### Behoben
-
-- **Verlauf:** Aktionen mit mehreren Punkten (z. B. `backup.restore.create`) wurden falsch benannt.
-- **Foto-Analyse:** Der Foto-Worker konnte seit Migration `0134` keine Dateien mehr laden
-  (`permission denied for table submission_assignment`), die Gesichtsanalyse fiel aus. Korrigiert
-  in Migration `0142`.
-
-### Sicherheit (Security-Audit release/1.2.0 vom 2026-10-17)
-
-- **Mandantenimport:** Album-Freigaben und Vertrauensbeziehungen zu anderen Mandanten werden
-  nicht mehr aus dem Archiv übernommen. Eigene Alben gehen als neue Einladung an den Partner
-  (Zustimmung erneut nötig), Freigaben fremder Alben fallen weg (Warnung beim Import).
-- **Album-Freigaben, öffentliche Links:** zwei Schalter je Freigabe (Migration `0130`, beide
-  standardmässig an): der Besitzer legt fest, ob der Partner das Album öffentlich verlinken darf,
-  der Partner, ob seine Fotos in öffentlichen Links erscheinen. Öffentliche Links geben den
-  Standort eines Fotos nur weiter, wenn der anlegende Mandant ihn auch intern sehen darf.
-- Tags von Partner-Fotos aus geteilten Alben sind nicht mehr änderbar; Album-Einladungen sind
-  auf 30 pro Stunde und Mandant begrenzt.
-- **Custom-Domains:** eindeutig ist nur noch eine aktive Domain (Migration `0129`); eine
-  unbestätigte Domain eines anderen Mandanten blockiert nicht mehr.
-- Schreibende API-Requests mit fremdem `Origin` werden abgelehnt (CSRF-Schutz zusätzlich zu
-  `SameSite=Lax`); offene Collaboration-WebSockets prüfen Session und Protokollrecht alle 30 s.
-- Löscht ein Admin den MFA-Faktor eines anderen Kontos, enden dessen Sessions. Passkey-
-  Registrierung prüft gegen die konfigurierte Domain (neu: `TRAEFIK_ADMIN_DOMAIN` im Backend).
-- Abgabebox: Nonce-CSP statt `script-src 'unsafe-inline'`; die Ähnlichkeitswarnung vergleicht nur
-  noch mit Bildern derselben Abgabe. Traefik setzt `Permissions-Policy`, Next.js kein
-  `X-Powered-By` mehr. Fotoworker lädt nur Dateien des Job-Mandanten.
-- Abhängigkeiten: PyJWT 2.15.1, Next.js 16.4.2, sharp 0.35.5, Tiptap 3 (inkl. tiptap-markdown 0.9).
-- **Todos:** jedes Todo gehört fest seinem Mandanten (Migration `0131`, `protocol_todo.tenant_id`
-  Pflicht); bei Todos in Protokollen setzt die Datenbank den Wert aus dem Protokoll. Behebt, dass
-  Mandanten-Export und -Klon Todos aus Protokollen nicht mitnahmen. Todos ohne jeden Bezug (in
-  keiner Ansicht erreichbar) werden bei der Migration entfernt.
-- **Row-Level-Security** (Migration `0132`): PostgreSQL prüft die Mandantentrennung jetzt
-  zusätzlich zum Code. Angemeldete Mandanten-Anfragen sehen und ändern nur Zeilen ihres Mandanten,
-  auch wenn einer Abfrage der Filter fehlt; Ausnahmen sind die Daten gemeinsamer Fotoalben.
-  Plattform-Admin, Hintergrundjobs, Worker und öffentliche Links bleiben unbeschränkt.
-  Zugriffe auf fremde Datensätze antworten dadurch teils mit 404 statt 403.
-- **Abgabebox unter RLS** (Migration `0133`): die öffentliche DB-Rolle sieht ohne Upload-Link
-  nichts mehr und mit Link nur dessen Mandanten; gebunden wird das geheime Token, nicht die
-  Mandanten-ID. Von `stored_file` liest sie nur noch Prüfsummen (keine Namen, Pfade, GPS-Daten).
-- **Domain-Bridge:** das Einmal-Token steht im URL-Fragment statt in der Query und geht nur im
-  Request-Body ans Backend (`POST /api/auth/bridge/preview`); Einlösen prüft zusätzlich
-  `login_enabled` und eine seither erfolgte Session-Beendigung.
-- **Lokales S3:** RPC und Admin-API von Garage nur noch auf `127.0.0.1`; `storage-init` teilt den
-  Netz-Namespace von `local-s3`.
-- **Datenbank-Performance:** Protokoll-, Todo- und Albenliste laden zugehörige Daten gesammelt statt
-  je Eintrag (20 Einträge: 44 → 6, 41 → 4, 66 → 10 Abfragen; Session-Cache für public_ids, Tests
-  gegen N+1). Migration `0135`: Indizes für 43 Fremdschlüssel (schnelleres Löschen von Konten und
-  Mandanten, Abfragen je Zyklus/Abgabe/Vorlage) und Timeouts für die Laufzeitrollen (Abgabebox und
-  Fotoworker erstmals mit statement_timeout, alle mit idle_in_transaction_session_timeout).
-- **RLS für Untertabellen** (Migration `0134`): Mandantendaten ohne eigene `tenant_id`
-  (Traktanden, Blöcke, Texte, Listeneinträge, Buchungen, Bussen, Vorlagen-Elemente, Album-Einträge,
-  Dokumentversionen …) sind jetzt über ihre Elterntabelle geschützt; MFA-Faktoren nur im eigenen
-  Mandanten.
-- **Sicherheitsregeln für Menschen und AI-Agents:** `SECURITY-RULES.md` (über `CLAUDE.md` für alle
-  Agents verbindlich, auch Gemini/Tabnine), `scripts/check-security-rules.py` meldet neu
-  eingeführte Verstösse (ungescopte Lookups, SQL-f-Strings, `HTTPException` ohne `from exc`,
-  Secrets in URLs, `dangerouslySetInnerHTML`) als Claude-Code-Hook, im Pre-Commit und in der CI
-  (`security-lint`); Review-Agent `security-reviewer`.
-- **Systemstatus, lokales S3:** neuer Eintrag „Lokales S3 (Garage)“ mit Bedarf (aktiver Speicher,
-  Migration, Rückfallfrist, nicht benötigt …), Objektanzahl und belegten GB. Ein vom
-  Storage-Controller gestopptes Garage gilt nicht mehr als Ausfall (vorher roter Container und
-  ntfy-Alarm, sobald die Dateien bei einem anderen Anbieter liegen).
-- **Mandanten-Exporte verschlüsselt:** ohne Passwort mit dem Server-Schlüssel (nur auf diesem
-  Server importierbar), mit Passwort auch auf einem anderen Server. Neues Secret
-  `EXPORT_ENCRYPTION_KEY`, das `deploy.sh` einmalig erzeugt; zusammen mit `.env` sichern. Ältere
-  `.zip`-Exporte bleiben importierbar. Der Export-Endpunkt ist jetzt `POST`.
-- **CI/Release:** `pip-audit` und `npm audit` (ab HIGH) blockieren; neue `public_id`-Lookups ohne
-  `tenant_id=` blockieren Pull-Requests (Semgrep); Trivy-Scan vor jeder Image-Promotion und
-  wöchentlich für die `latest`-Images.
-
-### Korrekturen (Feature-Recovery-Audit v1.2)
-
-- **Live-Photo-Videos nach ClamAV-Ausfall:** Der Nachscan (`upload_pipeline_rescan`) erfasst
-  jetzt auch das Video eines Live Photos. Vorher blieb ein Clip, der beim Upload nicht geprüft
-  werden konnte, dauerhaft `pending` und war nie abspielbar; betroffene Clips werden beim
-  nächsten Lauf automatisch nachgeprüft.
-- **Protokollkopf:** zeigt wieder Erstellungsdatum und Vorlagenversion des Protokolls (seit der
-  neuen Ansicht für abgeschlossene Protokolle nirgends mehr sichtbar).
-- Ungenutzte Komponente `SnapshotSwitcher` samt Texten entfernt.
-- **Manuelles Speicherkontingent vollständig entfernt** (Migration `0136`): Der API-Endpunkt
-  `PATCH /api/admin/tenants/{id}/storage-quota` und das Feld `storage_quota_manual_override`
-  entfallen; das Kontingent ergibt sich nur noch aus Plan + Zusatzpaketen. Mandanten mit einem
-  per API gesetzten Sonderwert (auch eine Einschränkung, die 0088 stehen liess) bekommen beim
-  Update wieder Plan + Pakete; IDs und alte Werte stehen im Migrationslog.
-- **Bussentarif je Protokollvorlage** (Migration `0137`): Im Vorlagen-Editor (Button
-  «Bussentarif», nur mit Finanzen) kann eine Vorlage statt des Mandantentarifs eigene Beträge und
-  ein eigenes Konto haben. Der Tarif gilt sofort für alle offenen Protokolle der Vorlage; bereits
-  erfasste Bussen behalten ihren Betrag. Duplizieren, Klonen und Export/Import nehmen ihn mit.
-  Ersetzt die Tarife je Anwesenheitsblock, die mit `0113` weggefallen waren.
-- **Todos zu Abgaben entstehen automatisch:** beim Anlegen und Ändern einer Abgabe mit
-  Verantwortlichen, bei Terminen mit passendem Tag und bei neuen/geänderten Listeneinträgen.
-  Vorher bekamen Listen-Abgaben nie Todos und bestehende Termine erst nach einer Bearbeitung;
-  Fehler beim Abgleich wurden verschluckt und landen jetzt im Fehlerprotokoll. Der nie
-  angebundene Endpunkt `POST /api/submission-assignments/{id}/sync-todos` entfällt.
-- **Adminportal «Dokumentvorlagen»** (`/admin/document-templates`): mitgelieferte Vorlagen des
-  Document Studio ansehen, je Dokumentart den Plattform-Standard setzen, Vorlagen archivieren
-  oder wieder anbieten (die Routen gab es schon, die Oberfläche fehlte).
-- Entfernt, ohne Oberfläche: `GET /api/tools/word-import/quality-stats` (das Lernen der
-  Schwellwerte im Word-Import bleibt) und `POST/GET /api/files/analysis-jobs` (die Fotoanalyse
-  läuft automatisch nachts, `photo_analysis_auto_queue`).
-
-## [1.2.0] - 2026-10-16
+## [1.2.0] - 2026-10-23
 
 Feature-Release auf 1.1.13. Fünf Entwicklungszweige sind zusammengeführt und aufeinander
 abgestimmt: die neue **Dokument-Engine mit Document Studio** (Typst statt TeX, Corporate Design,
 Vorlagen, Echtheitsprüfung), ein einheitlicher **Objektspeicher** (Dateisystem oder S3) mit
 Wartungsmodus, ein **Offsite-Backup mit BorgBackup** inklusive Restore, eine
 **Dokumentverwaltung** mit PDF-Ansicht und Textextraktion sowie **Bild-Metadaten** mit
-Vorab-Abgleich beim Upload. Dazu die Audit-Reparaturen aus `main` (Abschnitt «Betrieb»).
-**Breaking Changes** - vor dem Update die Schritte unten lesen.
+Vorab-Abgleich beim Upload. Dazu die Audit-Reparaturen aus `main` (Abschnitt «Betrieb») und
+die Umsetzung von vier Audits: **Datenschutz** (DSG/DSGVO: Löschung, Auskunft, Fristen,
+Sicherheitsprotokoll), **Sicherheit** (u. a. Row-Level-Security in PostgreSQL, verschlüsselte
+Exporte), **Stabilität unter Last** (neuer `job-worker`, Überlast-Schutz nach Abo) und
+**Feature-Recovery**. **Breaking Changes** - vor dem Update die Schritte unten lesen.
 
 ### Update von 1.1.13 auf 1.2.0
 
 1. **Backup ziehen.** `deploy.sh` legt vor den Migrationen einen Datenbank-Dump an, die
    Dateiablage (`HOCX_STORAGE_PATH`) zusätzlich selbst sichern. Migration
    `0115_document_engine_migrate` (TeX-Vorlagen → Hausstile → Brand-Profile) ist **nicht
-   umkehrbar**: ein echter Rückweg auf 1.1.13 geht nur über dieses Backup. Der automatische
-   App-Rollback von `deploy.sh` startet zwar die alten Images, rollt aber keine Migration zurück.
-2. **Platz prüfen.** Das Backend-Image wird grösser (LibreOffice, Tesseract, Poppler für den
-   `document-worker`; BorgBackup, SSH und PostgreSQL-Client für den `backup-worker`; TeX Live
-   entfällt). Lokales S3 (Garage) belegt erst nach einer Storage-Migration nennenswert Platz.
-3. **Code und Version.** `HOCX_VERSION=v1.2.0` in `.env`, dann `./scripts/update_deploy_code.sh`
-   und `./scripts/deploy.sh <test|prod>`. `deploy.sh` ergänzt die neuen Secrets
-   (`STORAGE_CREDENTIALS_KEY`, `EXPORT_ENCRYPTION_KEY`, Zugangsdaten des lokalen S3, leere
-   Backup-Platzhalter) selbst; die ergänzte `.env` danach neu sichern. Keine
-   neuen Pflicht-Variablen; optional `DOCUMENT_VERIFY_BASE_URL` (Standard
-   `ABGABEBOX_BASE_URL/verify`), `BACKUP_*` und `DOCUMENT_*` (siehe `.env.prod.example`).
-4. **Migrationen** `0113` bis `0137` laufen automatisch; neue Dienste `storage-init`,
-   `storage-worker`, `local-s3`, `backup-worker` und `document-worker` startet `deploy.sh` mit
-   `up -d`. Die Smoke-Checks prüfen zusätzlich `document-worker` und `storage-worker`.
-5. **Nach dem Deploy:**
+   umkehrbar**, mehrere weitere Migrationen verlieren beim Downgrade Daten (u. a. `0116`,
+   `0118`, `0136`, `0139`, `0141`). Der Rückweg auf 1.1.13 geht nur über `restore_db.sh` mit
+   diesem Dump plus dem alten Deploy-Code. Der automatische App-Rollback von `deploy.sh` startet
+   zwar die alten Images, rollt aber keine Migration zurück, und das 1.1.13-Backend erreicht das
+   jetzt passwortgeschützte Redis nicht.
+2. **Dump-Verschlüsselung vorbereiten (empfohlen).** `gpg` auf dem Host installieren und den
+   öffentlichen Schlüssel unter `~/.hocx-backup/dump-public.asc` ablegen (oder
+   `BACKUP_DUMP_PUBLIC_KEY_PATH` setzen, RUNBOOK Abschnitt 10). Ohne Schlüssel schreibt
+   `deploy.sh` den Dump unverschlüsselt mit Warnung; mit `HOCX_REQUIRE_DUMP_ENCRYPTION=true`
+   bricht er ab. Pre-Deploy-Dumps werden auf 10 Stück und höchstens 30 Tage gekürzt.
+3. **Platz und Wartungsfenster.** Das Backend-Image wird grösser (LibreOffice, Tesseract,
+   Poppler für den `document-worker`; BorgBackup, SSH und PostgreSQL-Client für den
+   `backup-worker`; TeX Live entfällt). Lokales S3 (Garage) belegt erst nach einer
+   Storage-Migration nennenswert Platz. PostgreSQL (`max_connections=150`) und Redis (neu mit
+   Passwort im internen Netz `cache`) werden vor den Migrationen neu gestartet; ab dann bis zum
+   Ende des Deploys ist die App nicht nutzbar. Wartungsfenster einplanen.
+4. **Code und Version.** Release 1.2.0 muss auf `main` stehen und den CI-Nachweis haben
+   (`update_deploy_code.sh` akzeptiert nur `main`). `HOCX_VERSION=v1.2.0` in `.env`, dann
+   `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>`. `deploy.sh` ergänzt
+   die neuen Secrets (`STORAGE_CREDENTIALS_KEY`, `EXPORT_ENCRYPTION_KEY`, `REDIS_PASSWORD`,
+   Zugangsdaten des lokalen S3, leere Backup-Platzhalter) und stellt `HOCX_ENVIRONMENT=prod` auf
+   `production` um; die ergänzte `.env` danach neu sichern. Keine neuen Pflicht-Variablen.
+   Optional (siehe `.env.prod.example`): `DOCUMENT_VERIFY_BASE_URL` (Standard
+   `ABGABEBOX_BASE_URL/verify`), `ABGABEBOX_DEFAULT_PRIVACY_URL`, `HOCX_SERVER_LOCATION`
+   (Standard `ch`), `STORAGE_ALLOWED_LOCATIONS`, `TENANT_OFFBOARDING_GRACE_DAYS`,
+   `FRIENDLY_CAPTCHA_PUZZLE_URL`/`_VERIFY_URL` (EU-Endpunkt), `GARAGE_CAPACITY`, die
+   Lastparameter `DB_POOL_*`, `DB_ADMISSION_*`, `OVERLOAD_*` und die Alarmschwellen
+   `SECURITY_*` (RUNBOOK Abschnitt 17). `BACKUP_ENABLED=true` erst **nach** dem ersten
+   1.2.0-Deploy setzen (vorher läuft kein `backup-worker`, `deploy.sh` bricht sonst ab).
+5. **Migrationen** `0113` bis `0151` laufen automatisch (getestet von 1.1.13 mit Demo- und
+   Testdaten); neue Dienste `storage-init`, `storage-worker`, `local-s3`, `backup-worker`,
+   `document-worker` und `job-worker` startet `deploy.sh` mit `up -d`. Die Smoke-Checks prüfen
+   zusätzlich `document-worker`, `storage-worker` und `job-worker`.
+6. **Nach dem Deploy:**
    - `/admin/system`: Checks «Öffentliche Prüfseite», «Dateispeicher» und
      «Dokumentverarbeitung» grün; ein Protokoll exportieren und auf `/verify` der Abgabebox
      prüfen (Ergebnis «Original»).
@@ -293,7 +72,7 @@ Vorab-Abgleich beim Upload. Dazu die Audit-Reparaturen aus `main` (Abschnitt «B
    - Optional einmalig den Bild-Metadaten-Backfill:
      `docker compose exec backend python -m scripts.backfill_image_metadata`
      (`backend/UPLOAD_DUPLICATES.md`, Abschnitt 12).
-6. **Später, bewusst entscheiden:** Erstmigration der Dateien in den Objektspeicher (RUNBOOK
+7. **Später, bewusst entscheiden:** Erstmigration der Dateien in den Objektspeicher (RUNBOOK
    Abschnitt 14) und Einrichtung des Borg-Offsite-Backups mit Ablösung der Cronjobs
    `backup_db`/`backup_storage` (RUNBOOK Abschnitt 15). Bis dahin bleibt das Dateisystem aktiv und
    die bisherigen Backup-Cronjobs gelten weiter.
@@ -332,6 +111,14 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   unter `EXPORT_RETENTION_DAYS` und die Regel «nur die neueste Datei je Protokoll»; nur ersetzte
   Darstellungen (gleicher Inhalt neu exportiert) und Exporte ohne Protokollbezug werden
   freigegeben. Das Speicherkontingent wächst dadurch mit jeder inhaltlich neuen Protokollfassung.
+- Aus den Audits (Details in den Abschnitten unten): Mandanten-Export ist `POST` und liefert ein
+  verschlüsseltes Archiv; der PDF-Export (`POST /api/documents/render`) antwortet mit `202` und
+  einer Auftrags-ID statt mit der Datei; schreibende Requests mit fremdem `Origin` werden
+  abgelehnt; Zugriffe auf fremde Datensätze antworten wegen Row-Level-Security teils mit `404`
+  statt `403`; das Domain-Bridge-Token steht im URL-Fragment. Entfernt:
+  `PATCH /api/admin/tenants/{id}/storage-quota`,
+  `POST /api/submission-assignments/{id}/sync-todos`, `GET /api/tools/word-import/quality-stats`
+  und `POST/GET /api/files/analysis-jobs`.
 
 ### Neu: Dokument-Engine und Document Studio
 
@@ -519,6 +306,285 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
 - Gezielter Metadaten-Backfill für ältere Bilder (fortsetzbar, wiederholbar, mit Auswertung).
 - Ein nur geschätztes Datum führt nie zu einer automatischen Termin-Zuordnung; Aufnahmezeiten
   werden in der Detailansicht nicht mehr um die App-Zeitzone verschoben.
+
+### Datenschutz (Datenschutz-Audit vom 2026-10-21, Paket 1)
+
+- **Statistik:** Bussen und Anwesenheit je Person sehen nur noch Schreibende, Kassier und Admins.
+  Leser sehen dort ihre eigenen Werte, auch in PDF-Diagrammen. Mandanten-Admins können die
+  Ranglisten unter Mandanten-Einstellungen → Datenschutz für alle freigeben (Migration `0138`,
+  standardmässig aus). Finanzzahlen in der Statistik nur noch mit gebuchtem Modul Finanzen.
+- **Fehlerprotokoll:** keine Werte aus SQL-Parametern oder Postgres-Details mehr
+  (`hide_parameters`, Redaktion von E-Mail-Adressen). Der Auslöser wird als Konto-ID gespeichert
+  und beim Anzeigen aufgelöst; nach dem Löschen eines Kontos bleibt keine Adresse zurück
+  (Migration `0139`, leert bestehende Adressen). Fehler werden dem Mandanten des Kontos zugeordnet.
+- **Kalender-Abos** übertragen standardmässig nur Titel und Datum (Migration `0140`, bestehende
+  Abos unverändert).
+- **Offline-Entwürfe** im Browser gehören dem angemeldeten Konto und werden beim Abmelden
+  gelöscht (Rückfrage bei ungesendeten Änderungen).
+- **Freigabelinks:** gelöschte Fotos verschwinden aus Dateilinks; ein Dateilink liefert nur Dateien
+  seines Mandanten.
+- **Fristen** für Upload- und Analyse-Jobs (30 Tage), Abgabebox-Uploadverlauf (90 Tage),
+  Betriebsereignisse (2 Jahre), entschiedene Verifizierungsanträge und Word-Import-Lernsignale
+  (1 Jahr) sowie widerrufene/abgelaufene Freigabelinks (90 Tage); Job `log_cleanup`.
+  Die Prüfkopie zusammengeführter Bussen aus Migration 0116 wird entfernt (Migration `0141`).
+- **Dumps:** Pre-Deploy-, Cron- und Restore-Sicherungen werden mit einem öffentlichen GPG-Schlüssel
+  verschlüsselt (`BACKUP_DUMP_PUBLIC_KEY_PATH`, RUNBOOK Abschnitt 10), Pre-Deploy-Dumps nach
+  30 Tagen entfernt. Unverschlüsselte Dumps gehen nur auf ein rclone-crypt-Remote, alte
+  Offsite-Kopien werden gelöscht.
+- Backends schreiben kein Access-Log mehr (Pfade enthielten Link-Tokens).
+
+### Datenschutz (Paket 2: vollständige Dateilöschung)
+
+- **Protokoll löschen:** ein Dialog zeigt die Bilder des Protokolls; standardmässig werden sie
+  mitgelöscht, abgewählte wandern mit Tag «Protokoll …» in die Galerie. Bilder, die noch ein anderes
+  Protokoll verwendet, bleiben. Erzeugte PDFs verschwinden mit. Vorher blieben alle Bilder liegen.
+- **Abgabe löschen:** gleicher Dialog für eingereichte Dateien und Galeriefotos der Abgabe;
+  behaltene Einreichungen werden aus dem Abgabebox-Speicher in die Galerie übernommen.
+- **Einzelne Einreichungen** lassen sich im Abgabe-Detail löschen (z. B. auf Wunsch der
+  einreichenden Person), samt Vorschau, Dokumenten, Album- und Linkeinträgen.
+- Eine gemeinsame Löschfunktion räumt bei jeder Dateilöschung Objekt, Vorschaubild, Dokumente,
+  Album- und Freigabelink-Einträge ab. `/admin/system` meldet Dateien, die zu nichts mehr gehören.
+
+### Datenschutz (Paket 3: Sicherheitsprotokoll)
+
+- **Audit-Log:** fehlgeschlagene Anmeldungen (App, MFA, Plattform-Admin), Plattform-Logins,
+  hinzugefügte MFA-Faktoren und Einblicke des Plattform-Supports in Mandantendaten werden
+  protokolliert. Statt IP-Adressen steht ein gekürzter, gehashter Netz-Fingerabdruck (`ip_hash`),
+  dazu `outcome` (Migration `0143`). Die App-Rolle darf das Protokoll nicht mehr ändern oder löschen;
+  Aufbewahrung (mindestens 30 Tage) und das Entfernen von E-Mail-Adressen gelöschter Personen bzw.
+  Mandanten laufen über eigene DB-Funktionen.
+- **Verlauf für Mandanten-Admins** unter Mandanten-Einstellungen → Verlauf (nur eigener Mandant,
+  Plattform-Zugriffe als «Plattform-Support»), **Plattform-Ansicht** unter `/admin/audit` (Owner).
+- **Sicherheitsalarme:** neuer Check `security` in `/admin/system` und ntfy (viele fehlgeschlagene
+  Logins, auffällig viele Exporte, Restores, Admin-Änderungen; Schwellen per `SECURITY_*`, RUNBOOK).
+- Mandanten löschen liefert einen Bericht (Personen, Dateien, Fehler beim Objektlöschen).
+
+### Datenschutz (Paket 4: Löschjournal)
+
+- Endgültige Löschungen (Mandant, Person, Protokoll, Termin, Abgabe, Einreichung, Datei) landen im
+  Löschjournal (Migration `0144`, nur Einfügen für die App-Rolle, Aufbewahrung ≥ 400 Tage). Ein
+  Voll-Restore und eine Mandanten-Kopie wenden sie vor dem Umschalten erneut an, damit gelöschte
+  Daten nicht aus dem Backup zurückkehren. Abschalten nur beim einzelnen Restore mit Begründung.
+- **Behoben:** Termin oder Listeneintrag löschen entfernt jetzt auch die zugehörigen
+  Abgabebox-Einreichungen samt Dateien (blieben vorher verwaist liegen).
+
+### Datenschutz (Paket 5: Datenauskunft)
+
+- **Datenauskunft je Person** (Personen → Menü → Datenauskunft, nur Admin) und **«Meine Daten»** im
+  Profil: passwortgeschützte ZIP-Datei (AES-256) mit `Auskunft.xlsx` (ein Blatt je Bereich),
+  `daten.json` und Lesehinweis. Enthält nur die eigenen Zeilen (Anwesenheit, Bussen, Aufgaben,
+  Termine, Dateien, Sicherheitsereignisse, Erwähnungen in Protokolltexten), keine Zugangsdaten.
+  Abruf wird protokolliert, Selbstauskunft max. 3× pro Stunde. Öffnen mit 7-Zip, Keka oder WinRAR
+  (der macOS-Finder kann AES-ZIP nicht öffnen). Neue Abhängigkeit `pyzipper`.
+
+### Datenschutz (Paket 6: Vereinsexport)
+
+- **Vereinsexport** unter Mandanten-Einstellungen → Datenschutz (Mandanten-Admin, Anmeldung mit
+  Zwei-Faktor-Bestätigung): AES-ZIP für die Weiterarbeit mit `Mitglieder.xlsx`, `Termine.xlsx`,
+  `Anwesenheit.xlsx` (Person × Sitzung), `Bussen.xlsx`, `Finanzen.xlsx` (Blatt je Konto),
+  `Aufgaben.xlsx`, `Listen/`, den PDFs abgeschlossener Protokolle und auf Wunsch `Fotos/`
+  (nach Album bzw. Termin), `Abgaben/` und `Dokumente/` als Originaldateien. Namen statt IDs,
+  Datum TT.MM.JJJJ, keine Zugangsdaten. Gebaut vom neuen Job `tenant_data_export` (Migration
+  `0145`, RLS), danach 7 Tage abrufbar. Abgeschlossene Protokolle ohne gespeichertes PDF werden im
+  Lesehinweis aufgeführt (nicht automatisch erzeugt).
+- **Plattform-Export ohne Zugangsdaten als Standard:** Passwort-Hashes, MFA-Secrets und Link-/Abo-
+  Tokens nur noch mit der neuen Option «Zugangsdaten mitexportieren» (`include_credentials`). Ohne
+  sie erhalten importierte Konten ein zufälliges Passwort und Links neue URLs. Die Mandanten-Kopie
+  aus dem Backup nimmt sie weiterhin mit.
+- Datenauskunft: Passwort-Mindestlänge auch im API-Schema, Rate-Limit für die Admin-Auskunft,
+  temporäre Dateien werden auch bei Fehlern gelöscht (Security-Review).
+
+### Datenschutz (Paket 7: Korrekturweg abgeschlossener Protokolle)
+
+- Abschliessen → zurückstufen → korrigieren → abschliessen: beim erneuten Abschluss verschwinden
+  die Änderungsmarkierungen samt alter Fassung, die PDFs des früheren Abschlusses werden sofort
+  gelöscht und ihre Registereinträge verlieren den Titel (nur der Prüfwert bleibt, die Prüfseite
+  meldet sie als ersetzt). Beschrieben in der Benutzerdoku unter Protokolle.
+
+### Datenschutz (Paket 8: Aufbewahrungsfristen je Verein)
+
+- Neuer Tab **Mandanten-Einstellungen → Aufbewahrung** (Migration `0146`, RLS): Einreichungen der
+  Abgabebox X Monate nach Abgabeschluss löschen, ehemalige Mitglieder X Jahre nach Austritt
+  **deaktivieren** (Login aus, Sitzungen beendet, Daten bleiben), alte Galeriebilder ohne Album und
+  Termin nach X Jahren vorschlagen. Alle Regeln standardmässig aus. Der neue tägliche Job
+  `retention_proposals` legt Vorschläge an; der Admin setzt sie um oder verwirft sie, wahlweise
+  automatisch (Galeriebilder nie automatisch). Löschung über die bestehenden Löschpfade mit
+  Löschjournal und Verlauf.
+- **Offboarding:** Vertragsende je Mandant im Adminportal (Abo); `/admin/system` meldet Mandanten
+  nach Vertragsende plus `TENANT_OFFBOARDING_GRACE_DAYS` (Standard 90) zur Löschung (Check
+  `tenant_offboarding`, gelöscht wird von Hand).
+
+### Datenschutz (Paket 9: Abgabebox-Hinweise, GPS-Wahl, Speicherstandort)
+
+- **Abgabebox:** vor dem Upload stehen der verantwortliche Verein, ein Link zu dessen
+  Datenschutzhinweisen (Mandanten-Einstellungen → Datenschutz, sonst `ABGABEBOX_DEFAULT_PRIVACY_URL`)
+  und ein Hinweis zu Friendly Captcha. Die Abgabebox liest Name und Link nur über die DB-Funktion
+  `abgabebox_privacy_notice()` für den Mandanten ihres Links (Migration `0147`).
+- **Friendly Captcha in der EU:** Puzzle- und Verify-Endpunkt per `FRIENDLY_CAPTCHA_PUZZLE_URL` /
+  `FRIENDLY_CAPTCHA_VERIFY_URL` einstellbar (CSP folgt automatisch); `/admin/system` zeigt, ob der
+  EU- oder der globale Endpunkt aktiv ist.
+- **«GPS-Daten des Bildes mitsenden»** (Standard an) bei Galerie-Upload, Protokollbild (auch mobil)
+  und Abgabebox. Aus: der Server entfernt vor dem Speichern nur die Standortangaben (EXIF-GPS in
+  JPEG/HEIC/WebP/PNG/TIFF, XMP-GPS, Ortsangaben in Live-Photo-Clips) ohne Neukodierung; Datum,
+  Kamera und Bild bleiben, die GPS-Spalten leer. Gespeichert wird mit GPS wie bisher.
+- **GPS erst ab Rolle Schreiber:** Leser sehen keine Koordinaten in den Fotodetails und erhalten
+  Originale ohne Standort.
+- **Datenstandort der Speicherprofile:** Schweiz / EU-EWR / angemessen / Drittland, bei AWS und
+  Hetzner aus der Region abgeleitet, bei S3-kompatibel gewählt. Drittland nur mit
+  Übermittlungsgrundlage und Bestätigung, Migration dorthin fragt erneut nach; optional
+  `STORAGE_ALLOWED_LOCATIONS`. Badge in `/admin/storage`. Neu: serverseitige Verschlüsselung (S3
+  `AES256`) je Profil, im Verbindungstest geprüft.
+
+### Stabilität unter Last (Concurrency-Audit vom 2026-10-21, Lasttest vom 2026-10-22)
+
+- **Neuer Dienst `job-worker`** (Backend-Image): Galerie-Ingest, Qualitäts-Backfill,
+  Vereinsexport, Album-Sync, Virenscan-Nachprüfungen, Thumbnail-Backfill und Aufräumjobs laufen
+  nicht mehr in den Backend-Workern. Eigenes Budget (3 GiB / 1,5 CPU), Backend jetzt
+  4 GiB / 2,5 CPU. `deploy.sh` startet und prüft ihn, Heartbeat unter `/admin/jobs`.
+- **PDF-Export als Auftrag** (Migration `0150`): der Export antwortet sofort, der `job-worker`
+  rendert reihum je Mandant, die Oberfläche meldet «PDF bereit» auch nach einem Seitenwechsel.
+  Das automatische PDF nach Protokollabschluss läuft ebenfalls als Auftrag; dabei behoben, dass
+  der Abschluss weder Audit-Eintrag noch PDF auslöste.
+- **Typst-Renderer** mit eigenen Worker-Prozessen: ein Timeout beendet nur den betroffenen
+  Compile, Exporte haben Vorrang vor Vorschauen und Thumbnails.
+- **Keine Lost Updates in Protokollblöcken** (Migration `0149`): gleichzeitige Änderungen an
+  derselben Blockkonfiguration enden mit einem Hinweis und dem aktuellen Stand statt still
+  überschrieben zu werden; Anwesenheits-Klicks gehen nicht mehr verloren. Live-Updates aus
+  Listen- und Anwesenheitsänderungen kommen bei anderen Bearbeitenden wieder an.
+- **Uploads:** der Virenscan läuft ohne den Upload-Lock des Vereins (vorher warteten alle Uploads
+  eines Vereins, auch die öffentliche Abgabebox, auf ClamAV); Galerie und Abgabebox nehmen mit
+  begrenzten Plätzen an und lassen kurz warten statt sofort 503 zu melden, die Abgabebox
+  wiederholt bei 503 automatisch. Galerie-Ingest reihum je Mandant.
+- **Verbindungen kurz gehalten:** Downloads und Streams geben die DB-Verbindung vor der
+  Auslieferung frei, Pools je Prozess einstellbar (`DB_POOL_*`), ein voller Pool antwortet mit
+  503 `db_busy` und `Retry-After` statt nach 30 s mit 500; nichts Blockierendes mehr im
+  Event-Loop.
+- **Hintergrundjobs:** Singleton-Locks laufen nach 30 min nicht mehr ab (Jobs liefen doppelt),
+  hängende Fotoanalyse-Aufträge werden nach 6 h beendet, Backup-Prüfung und Restore-Test nur im
+  Nachtfenster (`BACKUP_HEAVY_WINDOW_HOURS`).
+- **Redis/Kollaboration:** Timeouts, Feldsperren atomar, Redis-Ausfall blockiert das Speichern
+  von Protokollen nicht mehr, `maxmemory` mit `noeviction` statt OOM-Kill.
+- **Öffentliche Album-ZIPs** werden 10 min wiederverwendet und begrenzt gebaut, Abgaben-ZIPs auf
+  der Platte statt im Speicher; Diagramme aktualisieren nur bei sichtbarem Tab und höchstens
+  minütlich; Thumbnails auf Abruf begrenzt; Ähnlichkeitsgruppen mit Cache (Duplikate-Tab grosser
+  Galerien vorher über 70 s).
+- **Monitoring:** Laufzeitkennzahlen je Prozess (Migration `0148`: Event-Loop-Verzögerung,
+  Pool- und Threadpool-Belegung) mit Check `runtime` und `render_queue` in `/admin/system`.
+- **Behoben:** Abgabebox-Einreichungen im Dateisystem-Speicher waren für das Backend nicht lesbar
+  (Dateien mit 0600 statt umask-Rechten), lokales S3 (Garage) startete im Release-Stack wegen
+  der Rechte der Secret-Dateien nicht, Traefik-Admin brach grosse Mandantenimporte nach 60 s ab.
+- **Request-Annahme je Backend-Worker:** höchstens so viele gleichzeitige Requests wie
+  DB-Verbindungen (Standard 16), der Rest wartet kurz und bekommt erst nach 20 s ein 503
+  `db_busy`. Vorher konnte der Server bei rund 250 aktiven Nutzern in einen Stau kippen, in dem
+  fast jede Anfrage erst nach Sekunden mit 503 endete. Einstellbar über `DB_ADMISSION_*` (RUNBOOK).
+- **Priorität bei Überlast je Abo:** Jeder Plan hat im Preiskatalog eine Priorität (niedrig,
+  normal, hoch). Wird es knapp, sehen neue Nutzer von Abos mit niedriger Priorität zuerst eine
+  Überlast-Seite, die automatisch weiterleitet, sobald wieder Platz ist. Wer bereits arbeitet,
+  bleibt angemeldet. Wartende Anfragen werden nach Priorität bedient. Jede Abweisung wird
+  protokolliert. Das Adminportal zeigt sie unter System → Überlast je Mandant und meldet sie als
+  Warnung (Migration `0151`, `OVERLOAD_*` im RUNBOOK).
+
+### Behoben
+
+- **Verlauf:** Aktionen mit mehreren Punkten (z. B. `backup.restore.create`) wurden falsch benannt.
+- **Foto-Analyse:** Der Foto-Worker konnte seit Migration `0134` keine Dateien mehr laden
+  (`permission denied for table submission_assignment`), die Gesichtsanalyse fiel aus. Korrigiert
+  in Migration `0142`.
+
+### Sicherheit (Security-Audit release/1.2.0 vom 2026-10-17)
+
+- **Mandantenimport:** Album-Freigaben und Vertrauensbeziehungen zu anderen Mandanten werden
+  nicht mehr aus dem Archiv übernommen. Eigene Alben gehen als neue Einladung an den Partner
+  (Zustimmung erneut nötig), Freigaben fremder Alben fallen weg (Warnung beim Import).
+- **Album-Freigaben, öffentliche Links:** zwei Schalter je Freigabe (Migration `0130`, beide
+  standardmässig an): der Besitzer legt fest, ob der Partner das Album öffentlich verlinken darf,
+  der Partner, ob seine Fotos in öffentlichen Links erscheinen. Öffentliche Links geben den
+  Standort eines Fotos nur weiter, wenn der anlegende Mandant ihn auch intern sehen darf.
+- Tags von Partner-Fotos aus geteilten Alben sind nicht mehr änderbar; Album-Einladungen sind
+  auf 30 pro Stunde und Mandant begrenzt.
+- **Custom-Domains:** eindeutig ist nur noch eine aktive Domain (Migration `0129`); eine
+  unbestätigte Domain eines anderen Mandanten blockiert nicht mehr.
+- Schreibende API-Requests mit fremdem `Origin` werden abgelehnt (CSRF-Schutz zusätzlich zu
+  `SameSite=Lax`); offene Collaboration-WebSockets prüfen Session und Protokollrecht alle 30 s.
+- Löscht ein Admin den MFA-Faktor eines anderen Kontos, enden dessen Sessions. Passkey-
+  Registrierung prüft gegen die konfigurierte Domain (neu: `TRAEFIK_ADMIN_DOMAIN` im Backend).
+- Abgabebox: Nonce-CSP statt `script-src 'unsafe-inline'`; die Ähnlichkeitswarnung vergleicht nur
+  noch mit Bildern derselben Abgabe. Traefik setzt `Permissions-Policy`, Next.js kein
+  `X-Powered-By` mehr. Fotoworker lädt nur Dateien des Job-Mandanten.
+- Abhängigkeiten: PyJWT 2.15.1, Next.js 16.4.2, sharp 0.35.5, Tiptap 3 (inkl. tiptap-markdown 0.9).
+- **Todos:** jedes Todo gehört fest seinem Mandanten (Migration `0131`, `protocol_todo.tenant_id`
+  Pflicht); bei Todos in Protokollen setzt die Datenbank den Wert aus dem Protokoll. Behebt, dass
+  Mandanten-Export und -Klon Todos aus Protokollen nicht mitnahmen. Todos ohne jeden Bezug (in
+  keiner Ansicht erreichbar) werden bei der Migration entfernt.
+- **Row-Level-Security** (Migration `0132`): PostgreSQL prüft die Mandantentrennung jetzt
+  zusätzlich zum Code. Angemeldete Mandanten-Anfragen sehen und ändern nur Zeilen ihres Mandanten,
+  auch wenn einer Abfrage der Filter fehlt; Ausnahmen sind die Daten gemeinsamer Fotoalben.
+  Plattform-Admin, Hintergrundjobs, Worker und öffentliche Links bleiben unbeschränkt.
+  Zugriffe auf fremde Datensätze antworten dadurch teils mit 404 statt 403.
+- **Abgabebox unter RLS** (Migration `0133`): die öffentliche DB-Rolle sieht ohne Upload-Link
+  nichts mehr und mit Link nur dessen Mandanten; gebunden wird das geheime Token, nicht die
+  Mandanten-ID. Von `stored_file` liest sie nur noch Prüfsummen (keine Namen, Pfade, GPS-Daten).
+- **Domain-Bridge:** das Einmal-Token steht im URL-Fragment statt in der Query und geht nur im
+  Request-Body ans Backend (`POST /api/auth/bridge/preview`); Einlösen prüft zusätzlich
+  `login_enabled` und eine seither erfolgte Session-Beendigung.
+- **Lokales S3:** RPC und Admin-API von Garage nur noch auf `127.0.0.1`; `storage-init` teilt den
+  Netz-Namespace von `local-s3`.
+- **Datenbank-Performance:** Protokoll-, Todo- und Albenliste laden zugehörige Daten gesammelt statt
+  je Eintrag (20 Einträge: 44 → 6, 41 → 4, 66 → 10 Abfragen; Session-Cache für public_ids, Tests
+  gegen N+1). Migration `0135`: Indizes für 43 Fremdschlüssel (schnelleres Löschen von Konten und
+  Mandanten, Abfragen je Zyklus/Abgabe/Vorlage) und Timeouts für die Laufzeitrollen (Abgabebox und
+  Fotoworker erstmals mit statement_timeout, alle mit idle_in_transaction_session_timeout).
+- **RLS für Untertabellen** (Migration `0134`): Mandantendaten ohne eigene `tenant_id`
+  (Traktanden, Blöcke, Texte, Listeneinträge, Buchungen, Bussen, Vorlagen-Elemente, Album-Einträge,
+  Dokumentversionen …) sind jetzt über ihre Elterntabelle geschützt; MFA-Faktoren nur im eigenen
+  Mandanten.
+- **Sicherheitsregeln für Menschen und AI-Agents:** `SECURITY-RULES.md` (über `CLAUDE.md` für alle
+  Agents verbindlich, auch Gemini/Tabnine), `scripts/check-security-rules.py` meldet neu
+  eingeführte Verstösse (ungescopte Lookups, SQL-f-Strings, `HTTPException` ohne `from exc`,
+  Secrets in URLs, `dangerouslySetInnerHTML`) als Claude-Code-Hook, im Pre-Commit und in der CI
+  (`security-lint`); Review-Agent `security-reviewer`.
+- **Systemstatus, lokales S3:** neuer Eintrag „Lokales S3 (Garage)“ mit Bedarf (aktiver Speicher,
+  Migration, Rückfallfrist, nicht benötigt …), Objektanzahl und belegten GB. Ein vom
+  Storage-Controller gestopptes Garage gilt nicht mehr als Ausfall (vorher roter Container und
+  ntfy-Alarm, sobald die Dateien bei einem anderen Anbieter liegen).
+- **Mandanten-Exporte verschlüsselt:** ohne Passwort mit dem Server-Schlüssel (nur auf diesem
+  Server importierbar), mit Passwort auch auf einem anderen Server. Neues Secret
+  `EXPORT_ENCRYPTION_KEY`, das `deploy.sh` einmalig erzeugt; zusammen mit `.env` sichern. Ältere
+  `.zip`-Exporte bleiben importierbar. Der Export-Endpunkt ist jetzt `POST`.
+- **CI/Release:** `pip-audit` und `npm audit` (ab HIGH) blockieren; neue `public_id`-Lookups ohne
+  `tenant_id=` blockieren Pull-Requests (Semgrep); Trivy-Scan vor jeder Image-Promotion und
+  wöchentlich für die `latest`-Images.
+
+### Korrekturen (Feature-Recovery-Audit v1.2)
+
+- **Live-Photo-Videos nach ClamAV-Ausfall:** Der Nachscan (`upload_pipeline_rescan`) erfasst
+  jetzt auch das Video eines Live Photos. Vorher blieb ein Clip, der beim Upload nicht geprüft
+  werden konnte, dauerhaft `pending` und war nie abspielbar; betroffene Clips werden beim
+  nächsten Lauf automatisch nachgeprüft.
+- **Protokollkopf:** zeigt wieder Erstellungsdatum und Vorlagenversion des Protokolls (seit der
+  neuen Ansicht für abgeschlossene Protokolle nirgends mehr sichtbar).
+- Ungenutzte Komponente `SnapshotSwitcher` samt Texten entfernt.
+- **Manuelles Speicherkontingent vollständig entfernt** (Migration `0136`): Der API-Endpunkt
+  `PATCH /api/admin/tenants/{id}/storage-quota` und das Feld `storage_quota_manual_override`
+  entfallen; das Kontingent ergibt sich nur noch aus Plan + Zusatzpaketen. Mandanten mit einem
+  per API gesetzten Sonderwert (auch eine Einschränkung, die 0088 stehen liess) bekommen beim
+  Update wieder Plan + Pakete; IDs und alte Werte stehen im Migrationslog.
+- **Bussentarif je Protokollvorlage** (Migration `0137`): Im Vorlagen-Editor (Button
+  «Bussentarif», nur mit Finanzen) kann eine Vorlage statt des Mandantentarifs eigene Beträge und
+  ein eigenes Konto haben. Der Tarif gilt sofort für alle offenen Protokolle der Vorlage; bereits
+  erfasste Bussen behalten ihren Betrag. Duplizieren, Klonen und Export/Import nehmen ihn mit.
+  Ersetzt die Tarife je Anwesenheitsblock, die mit `0113` weggefallen waren.
+- **Todos zu Abgaben entstehen automatisch:** beim Anlegen und Ändern einer Abgabe mit
+  Verantwortlichen, bei Terminen mit passendem Tag und bei neuen/geänderten Listeneinträgen.
+  Vorher bekamen Listen-Abgaben nie Todos und bestehende Termine erst nach einer Bearbeitung;
+  Fehler beim Abgleich wurden verschluckt und landen jetzt im Fehlerprotokoll. Der nie
+  angebundene Endpunkt `POST /api/submission-assignments/{id}/sync-todos` entfällt.
+- **Adminportal «Dokumentvorlagen»** (`/admin/document-templates`): mitgelieferte Vorlagen des
+  Document Studio ansehen, je Dokumentart den Plattform-Standard setzen, Vorlagen archivieren
+  oder wieder anbieten (die Routen gab es schon, die Oberfläche fehlte).
+- Entfernt, ohne Oberfläche: `GET /api/tools/word-import/quality-stats` (das Lernen der
+  Schwellwerte im Word-Import bleibt) und `POST/GET /api/files/analysis-jobs` (die Fotoanalyse
+  läuft automatisch nachts, `photo_analysis_auto_queue`).
 
 ### Abstimmung beim Zusammenführen (Release 1.2.0)
 
