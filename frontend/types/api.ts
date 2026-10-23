@@ -781,8 +781,12 @@ export type AdminPlan = {
   description: string | null;
   is_bookable: boolean;
   is_featured: boolean;
+  /** Priorität bei Überlast: 0 niedrig, 1 normal, 2 hoch. */
+  load_priority: LoadPriority;
   tenant_count: number;
 };
+
+export type LoadPriority = 0 | 1 | 2;
 
 export type AdminPlanWrite = {
   name: string;
@@ -795,6 +799,7 @@ export type AdminPlanWrite = {
   description: string | null;
   is_bookable: boolean;
   is_featured: boolean;
+  load_priority: LoadPriority;
   /** Nur beim Anlegen ausgewertet; leer = aus dem Namen erzeugt. */
   code?: string | null;
 };
@@ -1067,11 +1072,24 @@ export type SystemHealthEvent = {
   created_at: string;
 };
 
+/** Abgewiesene neue Nutzer bei Überlast je Mandant (letzte 7 Tage). */
+export type OverloadTenant = {
+  tenant_id: string | null;
+  tenant_name: string | null;
+  plan_name: string | null;
+  load_priority: LoadPriority;
+  rejected: number;
+  users: number;
+  first_at: string;
+  last_at: string;
+};
+
 export type SystemStatus = {
   snapshot: SystemHealthSnapshot | null;
   stale: boolean;
   problems: SystemProblem[];
   events: SystemHealthEvent[];
+  overload: OverloadTenant[];
 };
 
 export type NotificationSettings = {

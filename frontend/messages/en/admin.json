@@ -234,6 +234,11 @@
         "title": "Captcha endpoint",
         "detail": "{region, select, eu {EU endpoint (processing in the EU)} other {Global endpoint – for processing in the EU set FRIENDLY_CAPTCHA_PUZZLE_URL and _VERIFY_URL to the EU endpoint}}",
         "problem": "Captcha endpoint unreachable"
+      },
+      "overload": {
+        "title": "Overload protection",
+        "detail": "{rejected, number} rejections · {users, number} new users · {tenants, number} organizations · load up to {pressurePercent, number} % (last {minutes, number} min)",
+        "problem": "Overload: new users are being turned away"
       }
     },
     "problems": {
@@ -301,7 +306,26 @@
     "containerStates": {
       "exitedOk": "exited (init)"
     },
-    "restartCount": "{count, plural, one {# restart} other {# restarts}}"
+    "restartCount": "{count, plural, one {# restart} other {# restarts}}",
+    "overload": {
+      "title": "Overload",
+      "description": "New users who saw the overload page because of heavy load, per organization (last 7 days). Set the priority per plan in the price catalog.",
+      "columns": {
+        "tenant": "Organization",
+        "plan": "Plan",
+        "rejected": "Rejections",
+        "users": "Users",
+        "last": "Last"
+      },
+      "empty": "Nobody was turned away because of overload in the last 7 days.",
+      "unknownTenant": "Unknown organization",
+      "noPlan": "No plan",
+      "priority": {
+        "0": "low",
+        "1": "normal",
+        "2": "high"
+      }
+    }
   },
   "jobs": {
     "title": "Jobs",
@@ -1099,7 +1123,24 @@
     "delete": "Delete",
     "deleteConfirm": "Permanently delete \"{name}\"?",
     "deleted": "Package deleted",
-    "deleteFailed": "Could not delete the package."
+    "deleteFailed": "Could not delete the package.",
+    "loadPriority": {
+      "label": "Priority under heavy load",
+      "option": {
+        "0": "Low",
+        "1": "Normal",
+        "2": "High"
+      },
+      "help": {
+        "0": "When capacity runs short, new users of this plan are the first to see the overload page. People who are already working stay signed in.",
+        "1": "New users are only turned away at full capacity, after plans with low priority.",
+        "2": "New users are never turned away in advance and get free slots first."
+      },
+      "badge": {
+        "0": "Low priority",
+        "2": "High priority"
+      }
+    }
   },
   "catalogImport": {
     "title": "Import configuration",

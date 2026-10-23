@@ -234,6 +234,11 @@
         "title": "Endpoint captcha",
         "detail": "{region, select, eu {Endpoint UE (trattamento nell’UE)} other {Endpoint globale – per il trattamento nell’UE impostare FRIENDLY_CAPTCHA_PUZZLE_URL e _VERIFY_URL sull’endpoint UE}}",
         "problem": "Endpoint captcha non raggiungibile"
+      },
+      "overload": {
+        "title": "Protezione dal sovraccarico",
+        "detail": "{rejected, number} rifiuti · {users, number} nuovi utenti · {tenants, number} organizzazioni · carico fino al {pressurePercent, number} % (ultimi {minutes, number} min)",
+        "problem": "Sovraccarico: i nuovi utenti vengono respinti"
       }
     },
     "problems": {
@@ -301,7 +306,26 @@
     "containerStates": {
       "exitedOk": "terminato (init)"
     },
-    "restartCount": "{count, plural, one {# riavvio} other {# riavvii}}"
+    "restartCount": "{count, plural, one {# riavvio} other {# riavvii}}",
+    "overload": {
+      "title": "Sovraccarico",
+      "description": "Nuovi utenti che hanno visto la pagina di sovraccarico, per organizzazione (ultimi 7 giorni). La priorità per abbonamento si imposta nel catalogo prezzi.",
+      "columns": {
+        "tenant": "Organizzazione",
+        "plan": "Abbonamento",
+        "rejected": "Rifiuti",
+        "users": "Utenti",
+        "last": "Ultimo"
+      },
+      "empty": "Negli ultimi 7 giorni nessuno è stato respinto per sovraccarico.",
+      "unknownTenant": "Organizzazione sconosciuta",
+      "noPlan": "Nessun abbonamento",
+      "priority": {
+        "0": "bassa",
+        "1": "normale",
+        "2": "alta"
+      }
+    }
   },
   "jobs": {
     "title": "Job",
@@ -1099,7 +1123,24 @@
     "delete": "Elimina",
     "deleteConfirm": "Eliminare definitivamente «{name}»?",
     "deleted": "Pacchetto eliminato",
-    "deleteFailed": "Impossibile eliminare il pacchetto."
+    "deleteFailed": "Impossibile eliminare il pacchetto.",
+    "loadPriority": {
+      "label": "Priorità in caso di sovraccarico",
+      "option": {
+        "0": "Bassa",
+        "1": "Normale",
+        "2": "Alta"
+      },
+      "help": {
+        "0": "Quando la capacità scarseggia, i nuovi utenti di questo abbonamento vedono per primi la pagina di sovraccarico. Chi sta già lavorando resta connesso.",
+        "1": "I nuovi utenti vengono respinti solo a pieno carico, dopo gli abbonamenti con priorità bassa.",
+        "2": "I nuovi utenti non vengono mai respinti in anticipo e ricevono per primi i posti liberi."
+      },
+      "badge": {
+        "0": "Priorità bassa",
+        "2": "Priorità alta"
+      }
+    }
   },
   "catalogImport": {
     "title": "Importa configurazione",

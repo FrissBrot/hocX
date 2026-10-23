@@ -29,7 +29,7 @@ const STATUS_ORDER: Record<HealthStatus, number> = { critical: 0, warning: 1, un
 const CHECK_GROUPS: { key: string; checks: string[] }[] = [
   { key: "infrastructure", checks: ["postgres", "redis", "storage", "object_storage", "storage_migration", "local_s3", "orphaned_files"] },
   { key: "security", checks: ["clamav", "clamav_signatures", "scan_backlog", "document_verification", "security"] },
-  { key: "processing", checks: ["runtime", "photo_queue", "document_queue", "render_queue", "error_rate"] },
+  { key: "processing", checks: ["runtime", "overload", "photo_queue", "document_queue", "render_queue", "error_rate"] },
   { key: "backup", checks: ["backup", "backup_repository", "backup_verification"] },
 ];
 
@@ -270,6 +270,34 @@ export function AdminSystemStatus({ initialStatus }: Props) {
             ))}
           </DataTable>
         )}
+      </section>
+
+      <section className="card admin-status-card">
+        <div className="admin-status-card-head">
+          <div>
+            <h2 className="admin-status-section-title">{t("overload.title")}</h2>
+            <p className="muted admin-status-card-meta">{t("overload.description")}</p>
+          </div>
+        </div>
+        <DataTable
+          columns={[t("overload.columns.tenant"), t("overload.columns.plan"), t("overload.columns.rejected"), t("overload.columns.users"), t("overload.columns.last")]}
+          emptyMessage={t("overload.empty")}
+        >
+          {(status.overload ?? []).map((entry) => (
+            <tr key={`${entry.tenant_id ?? "none"}-${entry.load_priority}`}>
+              <td>{entry.tenant_name ?? t("overload.unknownTenant")}</td>
+              <td>
+                {entry.plan_name ?? t("overload.noPlan")}
+                <span className="muted"> · {t(`overload.priority.${entry.load_priority}`)}</span>
+              </td>
+              <td>{entry.rejected}</td>
+              <td>{entry.users}</td>
+              <td>
+                <time dateTime={entry.last_at}>{formatDateTime(entry.last_at, locale)}</time>
+              </td>
+            </tr>
+          ))}
+        </DataTable>
       </section>
 
       <section className="card admin-status-card">

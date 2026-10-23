@@ -51,13 +51,16 @@ const WEBSITE_PATH = "/website";
 // undici-Default (~300 s) fest, statt in den vorgesehenen null-Pfad zu laufen (Audit MAIN-FE-002).
 export const SESSION_CHECK_TIMEOUT_MS = 5_000;
 
-async function isAuthenticated(cookie: string, sessionPath: string): Promise<boolean | null> {
+async function isAuthenticated(cookie: string, sessionPath: string): Promise<boolean | "overloaded" | null> {
   try {
     const res = await fetch(`${internalApiUrl}${sessionPath}`, {
       headers: cookie ? { Cookie: cookie } : undefined,
       cache: "no-store",
       signal: AbortSignal.timeout(SESSION_CHECK_TIMEOUT_MS)
     });
+    if (res.status === 503 && (await isOverloadedResponse(res))) {
+      return "overloaded";
+    }
     if (!res.ok) {
       return null;
     }
@@ -65,6 +68,16 @@ async function isAuthenticated(cookie: string, sessionPath: string): Promise<boo
     return data.authenticated === true;
   } catch {
     return null;
+  }
+}
+
+// Überlast-Schutz des Backends (db_admission.py): neue Nutzer von Abos mit niedriger Priorität
+// bekommen 503 "overloaded" und sehen /overload, bis wieder Platz ist.
+async function isOverloadedResponse(res: Response): Promise<boolean> {
+  try {
+    return ((await res.json()) as { code?: string }).code === "overloaded";
+  } catch {
+    return false;
   }
 }
 
@@ -112,8 +125,10 @@ async function route(request: NextRequest, requestHeaders: Headers) {
   // Sitzungsprüfung ohnehin mit 503, die Seite selbst braucht keine Session.
   // /auth/bridge: Bestätigung des Domain-Wechsels, der Besucher ist hier per Definition noch
   // nicht angemeldet (MAIN-SEC-006).
+  // /overload ist die Überlast-Ansicht - die Sitzungsprüfung selbst wird dort abgewiesen.
   const isPublicPath =
     rewrittenPathname === "/maintenance" ||
+    rewrittenPathname === "/overload" ||
     rewrittenPathname === "/auth/bridge" ||
     rewrittenPathname === "/share" ||
     rewrittenPathname.startsWith("/share/") ||
@@ -124,6 +139,11 @@ async function route(request: NextRequest, requestHeaders: Headers) {
     const authenticated = await isAuthenticated(cookie, sessionPath);
     if (authenticated === false) {
       return NextResponse.redirect(new URL(loginPath, request.url));
+    }
+    if (authenticated === "overloaded") {
+      const overloadUrl = new URL("/overload", request.url);
+      overloadUrl.searchParams.set("from", `${pathname}${request.nextUrl.search}`);
+      return NextResponse.redirect(overloadUrl);
     }
   }
   // true oder null (Backend nicht sicher erreichbar) -> Seite normal rendern lassen; die

@@ -267,6 +267,7 @@ class AdminTenantService:
             description=plan.description,
             is_bookable=plan.is_bookable,
             is_featured=plan.is_featured,
+            load_priority=plan.load_priority,
             tenant_count=tenant_count,
         )
 
@@ -386,6 +387,7 @@ class AdminTenantService:
         plan.description = (payload.description or "").strip() or None
         plan.is_bookable = payload.is_bookable
         plan.is_featured = payload.is_featured
+        plan.load_priority = payload.load_priority
         db.add(plan)
         db.flush()
         if plan.is_featured:

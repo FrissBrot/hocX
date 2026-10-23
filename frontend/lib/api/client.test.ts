@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, backendFetch, browserApiFetch, browserApiUpload, DEFAULT_BROWSER_TIMEOUT_MS, LONG_RUNNING_TIMEOUT_MS, SERVER_FETCH_TIMEOUT_MS } from "./client";
+import {
+  ApiError,
+  backendFetch,
+  browserApiFetch,
+  browserApiUpload,
+  DEFAULT_BROWSER_TIMEOUT_MS,
+  LONG_RUNNING_TIMEOUT_MS,
+  safeReturnPath,
+  SERVER_FETCH_TIMEOUT_MS
+} from "./client";
 
 class FakeXhr {
   static last: FakeXhr;
@@ -113,5 +122,46 @@ describe("Timeouts (Audit MAIN-FE-002/-004)", () => {
 
     await expect(backendFetch("/api/auth/session")).resolves.toEqual({ authenticated: true });
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("Überlast", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("schickt bei 503 overloaded auf die Überlast-Ansicht und merkt sich die Seite", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { pathname: "/protocols/1", search: "?x=1", assign });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ detail: "überlastet", code: "overloaded" }), { status: 503 }));
+
+    await expect(browserApiFetch("/api/protocols")).rejects.toBeInstanceOf(ApiError);
+    expect(assign).toHaveBeenCalledWith("/overload?from=%2Fprotocols%2F1%3Fx%3D1");
+  });
+
+  it("lässt db_busy und Admin-Aufrufe als normalen Fehler durch", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { pathname: "/", search: "", assign });
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ code: "db_busy" }), { status: 503 }));
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ code: "overloaded" }), { status: 503 }));
+
+    await expect(browserApiFetch("/api/protocols")).rejects.toBeInstanceOf(ApiError);
+    await expect(browserApiFetch("/api/admin/system-status")).rejects.toBeInstanceOf(ApiError);
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it("springt nur auf eigene relative Pfade zurück", () => {
+    expect(safeReturnPath("/protocols?tab=open")).toBe("/protocols?tab=open");
+    expect(safeReturnPath(null)).toBe("/");
+    expect(safeReturnPath("https://evil.example")).toBe("/");
+    expect(safeReturnPath("//evil.example")).toBe("/");
+    expect(safeReturnPath("/\\evil.example")).toBe("/");
+    expect(safeReturnPath("/overload?from=%2F")).toBe("/");
+    // URL-Parser entfernt Tab/Zeilenumbruch: "/\t/evil.example" würde sonst zu "//evil.example".
+    expect(safeReturnPath("/\t/evil.example")).toBe("/");
+    expect(safeReturnPath("/\n/evil.example")).toBe("/");
+    expect(safeReturnPath("/%5cevil.example")).toBe("/%5cevil.example");
   });
 });

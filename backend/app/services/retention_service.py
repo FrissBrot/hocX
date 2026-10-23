@@ -37,6 +37,7 @@ RULES: tuple[RetentionRule, ...] = (
     RetentionRule("backup_event", "created_at", "operations_event_retention_days"),
     RetentionRule("storage_migration_event", "created_at", "operations_event_retention_days"),
     RetentionRule("maintenance_event", "created_at", "operations_event_retention_days"),
+    RetentionRule("overload_rejection", "created_at", "operations_event_retention_days"),
     RetentionRule("identity_verification_request", "decided_at", "identity_request_retention_days", "decided_at IS NOT NULL"),
     RetentionRule("word_import_suggestion_outcome", "created_at", "word_import_outcome_retention_days"),
     # Widerrufene oder abgelaufene Freigabelinks (inkl. share_link_file per Kaskade)

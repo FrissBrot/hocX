@@ -234,6 +234,11 @@
         "title": "Captcha-Endpunkt",
         "detail": "{region, select, eu {EU-Endpunkt (Verarbeitung in der EU)} other {Globaler Endpunkt – für Verarbeitung in der EU FRIENDLY_CAPTCHA_PUZZLE_URL und _VERIFY_URL auf den EU-Endpunkt setzen}}",
         "problem": "Captcha-Endpunkt nicht erreichbar"
+      },
+      "overload": {
+        "title": "Überlast-Schutz",
+        "detail": "{rejected, number} Abweisungen · {users, number} neue Nutzer · {tenants, number} Mandanten · Auslastung bis {pressurePercent, number} % (letzte {minutes, number} Min.)",
+        "problem": "Überlast: neue Nutzer werden abgewiesen"
       }
     },
     "problems": {
@@ -301,7 +306,26 @@
     "containerStates": {
       "exitedOk": "beendet (Init)"
     },
-    "restartCount": "{count, plural, one {# Neustart} other {# Neustarts}}"
+    "restartCount": "{count, plural, one {# Neustart} other {# Neustarts}}",
+    "overload": {
+      "title": "Überlast",
+      "description": "Neue Nutzer, die wegen Überlast die Überlast-Seite gesehen haben, je Mandant (letzte 7 Tage). Die Priorität je Abo stellst du im Preiskatalog ein.",
+      "columns": {
+        "tenant": "Mandant",
+        "plan": "Abo",
+        "rejected": "Abweisungen",
+        "users": "Nutzer",
+        "last": "Zuletzt"
+      },
+      "empty": "In den letzten 7 Tagen wurde niemand wegen Überlast abgewiesen.",
+      "unknownTenant": "Unbekannter Mandant",
+      "noPlan": "Kein Abo",
+      "priority": {
+        "0": "niedrig",
+        "1": "normal",
+        "2": "hoch"
+      }
+    }
   },
   "jobs": {
     "title": "Jobs",
@@ -1099,7 +1123,24 @@
     "delete": "Löschen",
     "deleteConfirm": "„{name}“ endgültig löschen?",
     "deleted": "Paket gelöscht",
-    "deleteFailed": "Das Paket konnte nicht gelöscht werden."
+    "deleteFailed": "Das Paket konnte nicht gelöscht werden.",
+    "loadPriority": {
+      "label": "Priorität bei Überlast",
+      "option": {
+        "0": "Niedrig",
+        "1": "Normal",
+        "2": "Hoch"
+      },
+      "help": {
+        "0": "Wird es knapp, sehen neue Nutzer dieses Abos zuerst die Überlast-Seite. Wer bereits arbeitet, bleibt angemeldet.",
+        "1": "Neue Nutzer werden erst bei voller Auslastung abgewiesen, nach den Abos mit niedriger Priorität.",
+        "2": "Neue Nutzer werden nie vorab abgewiesen und bekommen freie Plätze zuerst."
+      },
+      "badge": {
+        "0": "Niedrige Priorität",
+        "2": "Hohe Priorität"
+      }
+    }
   },
   "catalogImport": {
     "title": "Konfiguration importieren",

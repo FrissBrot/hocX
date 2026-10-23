@@ -154,6 +154,8 @@ class AdminPlanRead(BaseModel):
     description: str | None = None
     is_bookable: bool = True
     is_featured: bool = False
+    # Priorität bei Überlast: 0 niedrig, 1 normal, 2 hoch (app/core/db_admission.py).
+    load_priority: int = 1
     # Anzahl Mandanten mit diesem Plan (Karten auf der Preisseite, Filter der Mandantenliste).
     tenant_count: int = 0
 
@@ -172,6 +174,8 @@ class AdminPlanWrite(BaseModel):
     is_bookable: bool = True
     # "Beliebteste Wahl" auf der oeffentlichen Website; setzt beim Speichern alle anderen zurueck.
     is_featured: bool = False
+    # Wer bei Überlast zuerst die Überlast-Seite sieht: 0 niedrig, 1 normal, 2 hoch (nie vorab).
+    load_priority: int = Field(default=1, ge=0, le=2)
     # Nur bei POST /api/admin/plans ausgewertet: gewuenschter Code. Leer = aus dem Namen erzeugt.
     code: str | None = Field(default=None, pattern=r"^[a-z0-9_]+$")
 
@@ -462,11 +466,25 @@ class SystemHealthEventRead(BaseModel):
     created_at: datetime
 
 
+class OverloadTenantRead(BaseModel):
+    """Abweisungen wegen Überlast je Mandant (overload_rejection, letzte OVERLOAD_HISTORY_DAYS)."""
+
+    tenant_id: str | None = None
+    tenant_name: str | None = None
+    plan_name: str | None = None
+    load_priority: int
+    rejected: int
+    users: int
+    first_at: datetime
+    last_at: datetime
+
+
 class SystemStatusRead(BaseModel):
     snapshot: SystemHealthSnapshot | None = None
     stale: bool
     problems: list[SystemProblemRead]
     events: list[SystemHealthEventRead]
+    overload: list[OverloadTenantRead] = []
 
 
 class NotificationSettingsRead(BaseModel):

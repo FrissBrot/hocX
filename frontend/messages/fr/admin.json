@@ -234,6 +234,11 @@
         "title": "Point de terminaison captcha",
         "detail": "{region, select, eu {Point de terminaison UE (traitement dans l’UE)} other {Point de terminaison global – pour un traitement dans l’UE, régler FRIENDLY_CAPTCHA_PUZZLE_URL et _VERIFY_URL sur le point UE}}",
         "problem": "Point de terminaison captcha injoignable"
+      },
+      "overload": {
+        "title": "Protection contre la surcharge",
+        "detail": "{rejected, number} refus · {users, number} nouveaux utilisateurs · {tenants, number} organisations · charge jusqu’à {pressurePercent, number} % ({minutes, number} dernières min)",
+        "problem": "Surcharge : de nouveaux utilisateurs sont refusés"
       }
     },
     "problems": {
@@ -301,7 +306,26 @@
     "containerStates": {
       "exitedOk": "terminé (init)"
     },
-    "restartCount": "{count, plural, one {# redémarrage} other {# redémarrages}}"
+    "restartCount": "{count, plural, one {# redémarrage} other {# redémarrages}}",
+    "overload": {
+      "title": "Surcharge",
+      "description": "Nouveaux utilisateurs ayant vu la page de surcharge, par organisation (7 derniers jours). La priorité par abonnement se règle dans le catalogue de prix.",
+      "columns": {
+        "tenant": "Organisation",
+        "plan": "Abonnement",
+        "rejected": "Refus",
+        "users": "Utilisateurs",
+        "last": "Dernier"
+      },
+      "empty": "Personne n’a été refusé pour cause de surcharge au cours des 7 derniers jours.",
+      "unknownTenant": "Organisation inconnue",
+      "noPlan": "Aucun abonnement",
+      "priority": {
+        "0": "basse",
+        "1": "normale",
+        "2": "haute"
+      }
+    }
   },
   "jobs": {
     "title": "Tâches",
@@ -1099,7 +1123,24 @@
     "delete": "Supprimer",
     "deleteConfirm": "Supprimer définitivement « {name} » ?",
     "deleted": "Offre supprimée",
-    "deleteFailed": "Impossible de supprimer l’offre."
+    "deleteFailed": "Impossible de supprimer l’offre.",
+    "loadPriority": {
+      "label": "Priorité en cas de surcharge",
+      "option": {
+        "0": "Basse",
+        "1": "Normale",
+        "2": "Haute"
+      },
+      "help": {
+        "0": "Quand la capacité devient insuffisante, les nouveaux utilisateurs de cet abonnement voient en premier la page de surcharge. Les personnes déjà en train de travailler restent connectées.",
+        "1": "Les nouveaux utilisateurs ne sont refusés qu’à pleine charge, après les abonnements à priorité basse.",
+        "2": "Les nouveaux utilisateurs ne sont jamais refusés à l’avance et obtiennent en premier les places libres."
+      },
+      "badge": {
+        "0": "Priorité basse",
+        "2": "Priorité haute"
+      }
+    }
   },
   "catalogImport": {
     "title": "Importer la configuration",

@@ -233,6 +233,13 @@ class Settings(BaseSettings):
     db_admission_limit: int | None = Field(default=None, ge=1, le=100, validation_alias="DB_ADMISSION_LIMIT")
     db_admission_reserve: int = Field(default=4, ge=0, le=50, validation_alias="DB_ADMISSION_RESERVE")
     db_admission_wait_seconds: float = Field(default=20.0, ge=0.5, le=120, validation_alias="DB_ADMISSION_WAIT_SECONDS")
+    # Überlast-Schutz je Abo-Priorität (plan.load_priority, db_admission.py): Ab dieser Auslastung
+    # (Requests in Arbeit + wartend je Platz, geglättet über ~10 s) sehen neue Nutzer von Mandanten
+    # mit niedriger bzw. normaler Priorität die Überlast-Seite. Hohe Priorität wird nie vorab
+    # abgewiesen. Wer in den letzten OVERLOAD_ACTIVE_MINUTES gearbeitet hat, bleibt drin.
+    overload_threshold_low: float = Field(default=0.75, ge=0.1, le=10, validation_alias="OVERLOAD_THRESHOLD_LOW")
+    overload_threshold_normal: float = Field(default=1.0, ge=0.1, le=10, validation_alias="OVERLOAD_THRESHOLD_NORMAL")
+    overload_active_minutes: int = Field(default=15, ge=1, le=240, validation_alias="OVERLOAD_ACTIVE_MINUTES")
     # requirepass im Release-Stack (REDIS_PASSWORD_FILE, MAIN-OPS-005); leer = ohne Passwort.
     redis_password: str | None = None
     # Proxys, deren X-Forwarded-For ausgewertet wird (Traefik im Compose-Netz), siehe

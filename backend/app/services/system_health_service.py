@@ -26,7 +26,7 @@ from app.core.redis_client import get_redis_sync
 from app.models import StoredFile, SystemErrorLog, SystemHealthEvent
 from app.models.document_entities import DocumentJob
 from app.models.entities import PhotoAnalysisJob
-from app.schemas.admin import ContainerStatusRead, HealthCheckRead, HealthStatus, SystemHealthSnapshot
+from app.schemas.admin import ContainerStatusRead, HealthCheckRead, HealthStatus, OverloadTenantRead, SystemHealthSnapshot
 
 _logger = logging.getLogger(__name__)
 
@@ -656,6 +656,67 @@ def _check_runtime(db: Session, now: datetime) -> HealthCheckRead:
     )
 
 
+# Abgewiesene neue Nutzer bei Überlast (db_admission.py, Migration 0151). Ein Fenster von fünf
+# Minuten, damit eine Überlast-Phase nicht zwischen zwei Prüfungen (alle 30 s) und den
+# 15-s-Meldungen der Worker flackernd "behoben" wirkt.
+OVERLOAD_WINDOW = timedelta(minutes=5)
+
+
+def _check_overload(db: Session, now: datetime) -> HealthCheckRead:
+    """Warnung, solange Nutzer wegen Überlast die Überlast-Seite sehen."""
+    row = db.execute(
+        text(
+            "SELECT COALESCE(SUM(rejected), 0) AS rejected, COALESCE(SUM(users), 0) AS users, "
+            "COUNT(DISTINCT tenant_id) AS tenants, COALESCE(MAX(pressure_percent), 0) AS pressure "
+            "FROM overload_rejection WHERE created_at >= :since"
+        ),
+        {"since": now - OVERLOAD_WINDOW},
+    ).one()
+    return HealthCheckRead(
+        key="overload",
+        status="warning" if row.rejected else "ok",
+        params={
+            "minutes": int(OVERLOAD_WINDOW.total_seconds() // 60),
+            "rejected": int(row.rejected),
+            "users": int(row.users),
+            "tenants": int(row.tenants),
+            "pressurePercent": int(row.pressure),
+        },
+    )
+
+
+OVERLOAD_HISTORY_DAYS = 7
+
+
+def overload_by_tenant(db: Session, now: datetime) -> list[OverloadTenantRead]:
+    """Abweisungen der letzten Tage je Mandant und Stufe für /admin/system, neueste zuerst.
+    "users" summiert die Zählung je Meldung - ein Nutzer, der über mehrere Meldungen hinweg
+    abgewiesen wurde, zählt mehrfach (Obergrenze, nicht exakt)."""
+    rows = db.execute(
+        text(
+            "SELECT t.public_id, t.name AS tenant_name, p.name AS plan_name, r.load_priority, "
+            "SUM(r.rejected) AS rejected, SUM(r.users) AS users, MIN(r.created_at) AS first_at, MAX(r.created_at) AS last_at "
+            "FROM overload_rejection r LEFT JOIN tenant t ON t.id = r.tenant_id LEFT JOIN plan p ON p.code = t.plan_code "
+            "WHERE r.created_at >= :since "
+            "GROUP BY t.public_id, t.name, p.name, r.load_priority ORDER BY MAX(r.created_at) DESC LIMIT 100"
+        ),
+        {"since": now - timedelta(days=OVERLOAD_HISTORY_DAYS)},
+    ).all()
+    return [
+        OverloadTenantRead(
+            tenant_id=str(row.public_id) if row.public_id else None,
+            tenant_name=row.tenant_name,
+            plan_name=row.plan_name,
+            load_priority=int(row.load_priority),
+            rejected=int(row.rejected),
+            users=int(row.users),
+            first_at=row.first_at,
+            last_at=row.last_at,
+        )
+        for row in rows
+    ]
+
+
 # Teure Vollzählungen (verwaiste Dateien über alle Referenzen, Belegung des lokalen S3) ändern sich
 # langsam - je Prozess höchstens stündlich rechnen statt bei jedem 30-s-Tick (Concurrency-Audit
 # CONC-024: mit wachsendem Bestand näherten sie sich dem statement_timeout).
@@ -707,6 +768,7 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("render_queue", lambda: _check_render_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("runtime", lambda: _check_runtime(db, now), failure_status="unknown", db=db)
+    checks += _run_check("overload", lambda: _check_overload(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_verification", _check_document_verification)
     checks += _run_check("storage_migration", lambda: _check_storage_migration(db, now), failure_status="unknown", db=db)
     checks += _run_check("local_s3", lambda: _cached_slow_check("local_s3", lambda: _check_local_s3(db)), failure_status="unknown", db=db)

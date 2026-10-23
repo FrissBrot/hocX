@@ -50,6 +50,7 @@ function makeStatus(overrides: Partial<SystemStatus> = {}): SystemStatus {
     stale: false,
     problems: [],
     events: [],
+    overload: [],
     ...overrides,
   };
 }
@@ -121,5 +122,28 @@ describe("AdminSystemStatus", () => {
 
     expect(screen.getByText(/Der Systemstatus ist veraltet/)).toBeInTheDocument();
     expect(screen.getByText(/Die Container-Übersicht ist nicht eingerichtet/)).toBeInTheDocument();
+  });
+
+  it("listet abgewiesene neue Nutzer bei Überlast je Mandant mit Abo und Priorität", () => {
+    render(
+      <AdminSystemStatus
+        initialStatus={makeStatus({
+          overload: [
+            { tenant_id: "t-1", tenant_name: "FC Beispiel", plan_name: "Starter", load_priority: 0, rejected: 12, users: 4, first_at: "2026-10-11T11:00:00Z", last_at: "2026-10-11T11:05:00Z" },
+          ],
+        })}
+      />,
+    );
+
+    const row = screen.getByText("FC Beispiel").closest("tr")!;
+    expect(within(row).getByText("Starter")).toBeInTheDocument();
+    expect(within(row).getByText(/niedrig/)).toBeInTheDocument();
+    expect(within(row).getByText("12")).toBeInTheDocument();
+  });
+
+  it("zeigt einen leeren Hinweis, wenn niemand abgewiesen wurde", () => {
+    render(<AdminSystemStatus initialStatus={makeStatus()} />);
+
+    expect(screen.getByText("In den letzten 7 Tagen wurde niemand wegen Überlast abgewiesen.")).toBeInTheDocument();
   });
 });

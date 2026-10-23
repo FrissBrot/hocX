@@ -142,6 +142,12 @@ Installationen aktualisieren können.
   DB-Verbindungen (Standard 16), der Rest wartet kurz und bekommt erst nach 20 s ein 503
   `db_busy`. Vorher konnte der Server bei rund 250 aktiven Nutzern in einen Stau kippen, in dem
   fast jede Anfrage erst nach Sekunden mit 503 endete. Einstellbar über `DB_ADMISSION_*` (RUNBOOK).
+- **Priorität bei Überlast je Abo:** Jeder Plan hat im Preiskatalog eine Priorität (niedrig,
+  normal, hoch). Wird es knapp, sehen neue Nutzer von Abos mit niedriger Priorität zuerst eine
+  Überlast-Seite, die automatisch weiterleitet, sobald wieder Platz ist. Wer bereits arbeitet,
+  bleibt angemeldet. Wartende Anfragen werden nach Priorität bedient. Jede Abweisung wird
+  protokolliert. Das Adminportal zeigt sie unter System → Überlast je Mandant und meldet sie als
+  Warnung (Migration `0151`, `OVERLOAD_*` im RUNBOOK).
 
 ### Behoben
 

@@ -66,6 +66,7 @@ _CHECK_TITLES_DE = {
     "photo_queue": "Bildanalyse-Warteschlange",
     "document_queue": "Dokumentverarbeitung",
     "runtime": "Auslastung der Dienstprozesse",
+    "overload": "Überlast-Schutz",
     "render_queue": "PDF-Aufträge",
     "document_verification": "Öffentliche Prüfseite",
     "object_storage": "Dateispeicher",
@@ -90,6 +91,7 @@ _CHECK_PROBLEM_TITLES_DE = {
     "photo_queue": "Bildanalyse-Warteschlange staut sich",
     "document_queue": "Dokumentverarbeitung staut sich oder scheitert",
     "runtime": "Dienstprozesse blockiert oder ausgelastet",
+    "overload": "Überlast: neue Nutzer werden abgewiesen",
     "render_queue": "PDF-Aufträge stauen sich oder scheitern",
     "document_verification": "Öffentliche Prüfseite langsam",
     "object_storage": "Dateispeicher nicht erreichbar",
@@ -173,6 +175,12 @@ def _check_message(check) -> str:
                 f"Event-Loop bis {params.get('maxLagMs')} ms blockiert, DB-Pool bis {params.get('poolPeakPercent')} %, "
                 f"Threadpool bis {params.get('threadPeakPercent')} % belegt, {params.get('poolTimeouts')} Pool-Zeitüberschreitungen "
                 f"({params.get('instances')} Prozesse, letzte Minute) - Logs von backend/abgabebox-backend prüfen."
+            )
+        case "overload":
+            return (
+                f"{params.get('rejected')} Anfragen von {params.get('users')} neuen Nutzern aus {params.get('tenants')} Mandanten "
+                f"in den letzten {params.get('minutes')} Minuten abgewiesen (Auslastung bis {params.get('pressurePercent')} %) - "
+                "siehe Adminportal, System, Überlast."
             )
         case "document_verification":
             return f"Prüf-Endpoint der Abgabebox antwortet nach {params.get('latencyMs')} ms - abgabebox-backend und Datenbank prüfen."

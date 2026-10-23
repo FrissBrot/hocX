@@ -190,6 +190,10 @@ class Plan(Base):
     # Auf der oeffentlichen Website als "Beliebteste Wahl" hervorgehoben (0103_plan_is_featured).
     # Hoechstens ein Plan - upsert_plan setzt beim Markieren alle anderen zurueck.
     is_featured: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    # Priorität bei Überlast (0151_overload_priority): 0 niedrig, 1 normal, 2 hoch. Wird es knapp,
+    # sehen neue Nutzer von Mandanten mit niedriger Priorität zuerst die Überlast-Seite
+    # (app/core/db_admission.py).
+    load_priority: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("1"), default=1)
 
 
 class PlanFeature(Base):
@@ -1929,6 +1933,26 @@ class SubmissionUploadFile(Base, TimestampMixin):
     # idempotent). Bounds that periodic sweep to new-since-last-tick rows instead of
     # re-scanning every clean image submission ever uploaded on every tick, forever.
     album_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class OverloadRejection(Base):
+    """Abgewiesene neue Nutzer bei Überlast (0151_overload_priority), je Prozess alle ~15 s
+    zusammengefasst. Plattformdaten ohne RLS wie system_error_log - nur /admin/system liest sie."""
+
+    __tablename__ = "overload_rejection"
+    __table_args__ = (
+        Index("idx_overload_rejection_created", "created_at"),
+        Index("idx_overload_rejection_tenant", "tenant_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    instance: Mapped[str] = mapped_column(Text, nullable=False)
+    tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"))
+    load_priority: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    rejected: Mapped[int] = mapped_column(Integer, nullable=False)
+    users: Mapped[int] = mapped_column(Integer, nullable=False)
+    pressure_percent: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class SubmissionUploadLog(Base):

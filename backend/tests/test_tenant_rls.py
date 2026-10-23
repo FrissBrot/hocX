@@ -41,8 +41,8 @@ from tests.factories import (
     make_tenant,
 )
 
-# Plattformdaten bzw. öffentliche DNS-Daten ohne RLS - siehe Docstring der Migration 0132.
-TABLES_WITHOUT_RLS = {"audit_log", "system_error_log", "tenant_charge", "tenant_domain"}
+# Plattformdaten bzw. öffentliche DNS-Daten ohne RLS - siehe Docstring der Migrationen 0132 und 0151.
+TABLES_WITHOUT_RLS = {"audit_log", "overload_rejection", "system_error_log", "tenant_charge", "tenant_domain"}
 
 
 @contextmanager

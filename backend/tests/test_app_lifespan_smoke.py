@@ -46,9 +46,10 @@ def test_background_loops_start_without_crashing(monkeypatch):
             # schedules onto *this* running loop - asyncio.all_tasks() from right here sees
             # them all, still pending (they haven't had a chance to run yet).
             tasks = [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
-            # Leichte Hintergrund-Loops (core/loops.py BACKEND_LOOPS) + Laufzeitmonitor; die
-            # schweren startet der job-worker (test_job_worker_loops_start_without_crashing).
-            expected = len(BACKEND_LOOPS) + 1
+            # Leichte Hintergrund-Loops (core/loops.py BACKEND_LOOPS) + Laufzeitmonitor +
+            # Überlast-Schutz (db_admission.run_overload_upkeep); die schweren startet der
+            # job-worker (test_job_worker_loops_start_without_crashing).
+            expected = len(BACKEND_LOOPS) + 2
             assert len(tasks) == expected, f"expected {expected} background tasks, found {len(tasks)}"
 
             # Give the event loop real wall-clock time to actually step each task once -

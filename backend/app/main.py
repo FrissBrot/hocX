@@ -6,7 +6,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import select, text
+from sqlalchemy import create_engine, select, text
+from sqlalchemy.pool import NullPool
+from starlette.requests import cookie_parser
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from app.api.routes import activity, admin, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_share, retention, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenant_data_export, tenants, todos, users, word_import
@@ -15,10 +17,21 @@ from app.core.loops import BACKEND_LOOPS
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
 from app.core.objstore_client import StorageUnavailable, StorageWriteFenced
+from app.core.admin_security import parse_admin_session_token
 from app.core.audit_context import AuditContextMiddleware
+from app.core.db_admission import (
+    PRIORITY_LOW,
+    PRIORITY_NORMAL,
+    ActiveUsers,
+    DbAdmissionMiddleware,
+    OverloadGuard,
+    PriorityDirectory,
+    RejectionLog,
+    run_overload_upkeep,
+)
 from app.core.error_log import record_request_error
-from app.core.redis_client import close_redis_pool
-from app.core.security import hash_password
+from app.core.redis_client import close_redis_pool, get_redis
+from app.core.security import hash_password, parse_session_token
 from app.models import AppUser, ElementType, PlatformAdmin, Role, Tenant
 from app.services import traefik_config_service
 from app.services.file_service import FileService, ThumbnailBusy
@@ -196,6 +209,31 @@ def ensure_traefik_dynamic_config() -> None:
         traefik_config_service.regenerate(db)
 
 
+def _scope_cookie(scope, name: str) -> str | None:
+    raw = "; ".join(value.decode("latin-1") for key, value in scope.get("headers", ()) if key == b"cookie")
+    return cookie_parser(raw).get(name) if raw else None
+
+
+def _session_user_id(scope) -> int | None:
+    """Nutzer aus dem signierten Session-Cookie, ohne Datenbank (nur für die Priorität bei
+    Überlast - die eigentliche Prüfung samt Sperre/Widerruf macht get_current_user)."""
+    data = parse_session_token(_scope_cookie(scope, settings.auth_session_cookie))
+    try:
+        return int(data["user_id"]) if data else None
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+OVERLOAD_GUARD = OverloadGuard(
+    directory=PriorityDirectory(),
+    active_users=ActiveUsers(settings.overload_active_minutes * 60, get_redis),
+    rejections=RejectionLog(),
+    thresholds={PRIORITY_LOW: settings.overload_threshold_low, PRIORITY_NORMAL: settings.overload_threshold_normal},
+    identify=_session_user_id,
+    is_admin=lambda scope: parse_admin_session_token(_scope_cookie(scope, settings.admin_session_cookie)) is not None,
+)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     from app.documents.renderer import shutdown_renderer
@@ -216,7 +254,20 @@ async def lifespan(_: FastAPI):
                 runtime_metrics.RuntimeReporter(settings.app_database_url or settings.database_url, settings.process_kind), engine
             )
         )
+        overload_task = asyncio.create_task(
+            run_overload_upkeep(
+                OVERLOAD_GUARD,
+                create_engine(
+                    settings.app_database_url or settings.database_url,
+                    poolclass=NullPool,
+                    hide_parameters=True,
+                    connect_args={"connect_timeout": 3, "application_name": f"hocx-{settings.process_kind}-overload"},
+                ),
+                runtime_metrics.instance_name(settings.process_kind),
+            )
+        )
         yield
+        overload_task.cancel()
         runtime_metrics_task.cancel()
         for task in loop_tasks:
             task.cancel()
@@ -270,11 +321,12 @@ app.add_middleware(
     skip_prefixes=("/api/files/gallery-uploads",),
 )
 
-# Requests je Worker an den DB-Pool binden (Stau aus Threadpool und Pool unter Last, siehe
-# db_admission.py). Innerhalb der Wartung/CORS-Schichten: auch die 503 trägt CORS-Header.
-from app.core.db_admission import DbAdmissionMiddleware
+# Requests je Worker an den DB-Pool binden (Stau aus Threadpool und Pool unter Last) und bei
+# Überlast nach Abo-Priorität annehmen, siehe db_admission.py. Innerhalb der Wartung/CORS-
+# Schichten: auch die 503 trägt CORS-Header.
 app.add_middleware(
     DbAdmissionMiddleware,
+    guard=OVERLOAD_GUARD,
     max_active=settings.db_admission_limit or max(1, settings.db_pool_size + settings.db_max_overflow - settings.db_admission_reserve),
     wait_seconds=settings.db_admission_wait_seconds,
     skip_paths=("/api/health",),

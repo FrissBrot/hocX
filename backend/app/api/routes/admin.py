@@ -328,6 +328,7 @@ def get_system_status(
         stale=system_health_service.is_stale(snapshot, now),
         problems=system_alert_service.current_problems(db, snapshot, now=now),
         events=[SystemHealthEventRead.model_validate(event, from_attributes=True) for event in events],
+        overload=system_health_service.overload_by_tenant(db, now),
     )
 
 
