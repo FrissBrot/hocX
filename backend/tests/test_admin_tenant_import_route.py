@@ -35,3 +35,20 @@ def test_import_runs_in_threadpool_and_cleans_up_staged_upload(db, monkeypatch):
     assert seen["content"] == b"PK-test-bytes"
     assert seen["thread"] != seen["loop_thread"]
     assert not Path(seen["path"]).exists()
+
+
+def test_upload_spool_is_released_before_the_import_runs(db, monkeypatch):
+    """Concurrency-Audit: Starlettes Zwischenspeicher wird nach dem Staging geschlossen, nicht
+    erst nach dem minutenlangen Import (sonst liegt der Upload doppelt auf der Platte)."""
+    seen: dict[str, object] = {}
+    raw = io.BytesIO(b"PK-test-bytes")
+
+    def fake_import_zip(_db, zip_path: Path, new_name: str):
+        seen["spool_closed"] = raw.closed
+        raise ValueError("Testabbruch")
+
+    monkeypatch.setattr(admin_routes.import_service, "import_zip", fake_import_zip)
+    upload = UploadFile(file=raw, filename="export.zip", headers=Headers({"content-type": "application/zip"}))
+    with pytest.raises(HTTPException):
+        asyncio.run(admin_routes.import_tenant(new_name="Neu", file=upload, db=db, current_admin=None))
+    assert seen["spool_closed"] is True

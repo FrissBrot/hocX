@@ -144,3 +144,25 @@ def test_kind_series_groups_more_loosely_than_kind_duplicate(db):
     singleton, series_group = by_size
     assert singleton.images[0].original_name == "far.png"
     assert {image.original_name for image in series_group.images} == {"base.png", "shifted.png"}
+
+
+def test_repeated_grouping_uses_the_cache_and_changes_invalidate_it(db, monkeypatch):
+    """CONC-015: der zweite Aufruf lädt keine Originale mehr; eine geänderte Bildmenge (neues
+    Bild, geänderte Qualitätswerte) ergibt einen neuen Cache-Schlüssel."""
+    from app.services import file_service as module
+
+    tenant = make_tenant(db)
+    sharp = _circle_png_bytes(100, 75, 50)
+    first = _upload_and_group(db, tenant.id, [("sharp.png", sharp), ("copy.png", _blurred(sharp, radius=6))])
+    reads = []
+    original_read = module._read_object
+    monkeypatch.setattr(module, "_read_object", lambda *args: reads.append(args) or original_read(*args))
+    module._similarity_signatures.clear()
+
+    again = service.group_similar_gallery_images(db, tenant.id)
+    assert [[image.id for image in group.images] for group in again] == [[image.id for image in group.images] for group in first]
+    assert reads == []
+
+    groups = _upload_and_group(db, tenant.id, [("other.png", _circle_png_bytes(40, 110, 45))])
+    assert sorted(len(group.images) for group in groups) == [1, 2]
+    assert reads  # neuer Fingerabdruck: neu gerechnet

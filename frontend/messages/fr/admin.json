@@ -170,6 +170,16 @@
         "detail": "{queued, number} en attente · le plus ancien {oldestMinutes, number} min · {failed, number} en échec (24 h)",
         "problem": "Le traitement des documents est en retard ou échoue"
       },
+      "render_queue": {
+        "title": "Tâches PDF",
+        "detail": "{queued, number} en attente · la plus ancienne {oldestMinutes, number} min · {failed, number} échouées (24 h)",
+        "problem": "Les tâches PDF s’accumulent ou échouent"
+      },
+      "runtime": {
+        "title": "Charge des processus de service",
+        "detail": "{instances, number} processus · boucle d’événements max. {maxLagMs, number} ms · pool BD {poolPeakPercent, number} % · pool de threads {threadPeakPercent, number} % · {poolTimeouts, number} dépassements de délai du pool",
+        "problem": "Processus de service bloqués ou saturés"
+      },
       "document_verification": {
         "title": "Page publique de vérification",
         "detail": "Réponse en {latencyMs, number} ms",
@@ -204,6 +214,31 @@
         "title": "S3 local (Garage)",
         "detail": "{reason, select, active {Stockage actif} initial_target {Cible de la première migration} migration {Partie d'une migration en cours} fallback_period {Délai de retour après une migration} pending_operation {Nettoyage en attente} requested {Demandé manuellement} unverified_objects {Objets pas encore vérifiés} not_needed {Inutile, arrêté} other {Statut inconnu}} · {objects, number} objets · {gb, number} Go",
         "problem": "S3 local (Garage) non évaluable"
+      },
+      "orphaned_files": {
+        "title": "Fichiers orphelins",
+        "detail": "{count, number} fichiers sans référence",
+        "problem": "Fichiers orphelins dans le stockage"
+      },
+      "security": {
+        "title": "Événements de sécurité",
+        "detail": "{failedLogins, number} échecs de connexion (15 min) · {exports, number} exports (1 h) · {restores, number} restaurations (24 h)",
+        "problem": "Événements de sécurité inhabituels"
+      },
+      "tenant_offboarding": {
+        "title": "Offboarding",
+        "detail": "{count, number} mandants après la fin du contrat (+{days, number} jours)",
+        "problem": "Mandants après la fin du contrat pas encore supprimés"
+      },
+      "captcha_endpoint": {
+        "title": "Point de terminaison captcha",
+        "detail": "{region, select, eu {Point de terminaison UE (traitement dans l’UE)} other {Point de terminaison global – pour un traitement dans l’UE, régler FRIENDLY_CAPTCHA_PUZZLE_URL et _VERIFY_URL sur le point UE}}",
+        "problem": "Point de terminaison captcha injoignable"
+      },
+      "overload": {
+        "title": "Protection contre la surcharge",
+        "detail": "{rejected, number} refus · {users, number} nouveaux utilisateurs · {tenants, number} organisations · charge jusqu’à {pressurePercent, number} % ({minutes, number} dernières min)",
+        "problem": "Surcharge : de nouveaux utilisateurs sont refusés"
       }
     },
     "problems": {
@@ -271,7 +306,26 @@
     "containerStates": {
       "exitedOk": "terminé (init)"
     },
-    "restartCount": "{count, plural, one {# redémarrage} other {# redémarrages}}"
+    "restartCount": "{count, plural, one {# redémarrage} other {# redémarrages}}",
+    "overload": {
+      "title": "Surcharge",
+      "description": "Nouveaux utilisateurs ayant vu la page de surcharge, par organisation (7 derniers jours). La priorité par abonnement se règle dans le catalogue de prix.",
+      "columns": {
+        "tenant": "Organisation",
+        "plan": "Abonnement",
+        "rejected": "Refus",
+        "users": "Utilisateurs",
+        "last": "Dernier"
+      },
+      "empty": "Personne n’a été refusé pour cause de surcharge au cours des 7 derniers jours.",
+      "unknownTenant": "Organisation inconnue",
+      "noPlan": "Aucun abonnement",
+      "priority": {
+        "0": "basse",
+        "1": "normale",
+        "2": "haute"
+      }
+    }
   },
   "jobs": {
     "title": "Tâches",
@@ -312,7 +366,8 @@
       "photo-analysis-worker": "Worker d'analyse d'images",
       "host": "Serveur (cron)",
       "storage-worker": "Worker de stockage",
-      "document-worker": "Worker de documents"
+      "document-worker": "Worker de documents",
+      "job-worker": "Worker de tâches"
     },
     "interval": {
       "onDemand": "À la demande",
@@ -367,6 +422,10 @@
         "title": "Compléter la qualité d'image",
         "description": "Calcule la netteté et l'exposition des images pour lesquelles elles manquent encore."
       },
+      "thumbnail_backfill": {
+        "title": "Compléter les miniatures",
+        "description": "Crée les miniatures des images qui n'en ont pas encore, surtout pour les dépôts Abgabebox."
+      },
       "photo_album_sync": {
         "title": "Synchroniser les albums",
         "description": "Ajoute les nouvelles images Abgabebox aux albums automatiques et retire celles supprimées."
@@ -389,7 +448,7 @@
       },
       "log_cleanup": {
         "title": "Nettoyer les journaux",
-        "description": "Supprime les anciennes entrées du journal d'audit, du journal des erreurs et de l'historique des tâches."
+        "description": "Supprime les anciennes entrées du journal d'audit, du journal des erreurs, des historiques de tâches et d'événements ainsi que les liens de partage expirés."
       },
       "abgabebox_quarantine_cleanup": {
         "title": "Nettoyer la quarantaine",
@@ -462,6 +521,18 @@
       "document_worker": {
         "title": "Worker de documents",
         "description": "Génère les aperçus PDF et extrait le texte des documents téléversés (signal de vie de la boucle d’interrogation)."
+      },
+      "tenant_data_export": {
+        "title": "Export de l’association",
+        "description": "Crée les exports d’association demandés (ZIP AES avec tableaux, PDF des procès-verbaux et fichiers) et les supprime après 7 jours."
+      },
+      "retention_proposals": {
+        "title": "Délais de conservation",
+        "description": "Crée des propositions selon les délais de chaque association (dépôts, anciens membres, anciennes images de la galerie) et les applique en mode automatique."
+      },
+      "job_worker": {
+        "title": "Worker de tâches",
+        "description": "Exécute les tâches lourdes en arrière-plan (import de galerie, exports PDF, exports de l’association, nouvelles analyses antivirus, nettoyage) - signe de vie chaque minute."
       }
     }
   },
@@ -634,7 +705,9 @@
       "userLimitHelp": "Vide = la limite du plan s'applique. Actuellement {count} utilisateur(s){suffix}",
       "userLimitExceeded": " – limite atteinte ou dépassée.",
       "showOnWebsite": "Afficher comme client sur le site web",
-      "showOnWebsiteHelp": "Apparaît sur le site web public sous « Ils nous font confiance » (nom uniquement). À activer uniquement avec l’accord de l’association."
+      "showOnWebsiteHelp": "Apparaît sur le site web public sous « Ils nous font confiance » (nom uniquement). À activer uniquement avec l’accord de l’association.",
+      "contractEnd": "Fin du contrat",
+      "contractEndHelp": "Vide = sans fin. Après la fin du contrat plus le délai d’export, /admin/system signale que les données du mandant doivent être supprimées."
     },
     "meta": {
       "createdAt": "Créé le",
@@ -947,7 +1020,9 @@
     "exportPasswordTooShort": "Au moins {min, number} caractères.",
     "exportPasswordMismatch": "Les mots de passe ne correspondent pas.",
     "importPasswordLabel": "Mot de passe de l'export",
-    "importPasswordHelp": "Nécessaire uniquement si un mot de passe a été défini lors de l'export."
+    "importPasswordHelp": "Nécessaire uniquement si un mot de passe a été défini lors de l'export.",
+    "exportCredentials": "Inclure les identifiants",
+    "exportCredentialsHint": "Hachages de mots de passe, secrets MFA ainsi que jetons de liens et de calendrier. Uniquement pour un déménagement où tous les accès et liens doivent rester valables. Sans cette option, les comptes importés reçoivent un mot de passe aléatoire et les liens une nouvelle URL."
   },
   "pricing": {
     "title": "Tarifs",
@@ -1048,7 +1123,24 @@
     "delete": "Supprimer",
     "deleteConfirm": "Supprimer définitivement « {name} » ?",
     "deleted": "Offre supprimée",
-    "deleteFailed": "Impossible de supprimer l’offre."
+    "deleteFailed": "Impossible de supprimer l’offre.",
+    "loadPriority": {
+      "label": "Priorité en cas de surcharge",
+      "option": {
+        "0": "Basse",
+        "1": "Normale",
+        "2": "Haute"
+      },
+      "help": {
+        "0": "Quand la capacité devient insuffisante, les nouveaux utilisateurs de cet abonnement voient en premier la page de surcharge. Les personnes déjà en train de travailler restent connectées.",
+        "1": "Les nouveaux utilisateurs ne sont refusés qu’à pleine charge, après les abonnements à priorité basse.",
+        "2": "Les nouveaux utilisateurs ne sont jamais refusés à l’avance et obtiennent en premier les places libres."
+      },
+      "badge": {
+        "0": "Priorité basse",
+        "2": "Priorité haute"
+      }
+    }
   },
   "catalogImport": {
     "title": "Importer la configuration",
@@ -1215,5 +1307,25 @@
     "reactivated": "« {name} » est de nouveau proposé",
     "actionFailed": "L’action a échoué",
     "empty": "Aucun modèle dans cette vue"
+  },
+  "auditLog": {
+    "title": "Journal d’audit",
+    "description": "Événements de sécurité et de modification de tous les mandants. La source est une empreinte hachée du réseau, pas l’adresse IP.",
+    "filterAll": "Tous",
+    "filterFailures": "Échoués",
+    "tenant": "Mandant",
+    "allTenants": "Tous les mandants",
+    "actionPlaceholder": "Action, p. ex. user.login",
+    "colTime": "Moment",
+    "colAction": "Opération",
+    "colActor": "Par",
+    "colSource": "Source",
+    "colOutcome": "Résultat",
+    "loading": "Chargement …",
+    "empty": "Aucune entrée",
+    "outcome": {
+      "success": "Réussi",
+      "failure": "Échoué"
+    }
   }
 }

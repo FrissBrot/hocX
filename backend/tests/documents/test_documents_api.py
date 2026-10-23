@@ -6,6 +6,8 @@ import asyncio
 from datetime import date
 
 import pytest
+
+from tests.render_helpers import render_now
 from fastapi import HTTPException
 
 from app.api.routes import documents as routes
@@ -58,7 +60,7 @@ def setup(db):
 
 def test_render_protocol_and_list_exports(db, setup):
     body = DocumentRequest(protocol_id=setup["protocol"].public_id)
-    result = asyncio.run(routes.render_document(body, db=db, user=setup["reader"]))
+    result = render_now(body, db=db, user=setup["reader"])
     assert result.document_type == "protocol" and result.content_url
     assert result.verify_url.endswith(f"/verify?id={result.id}") and len(result.short_id) == 9
     assert result.template_system_key == "protocol_standard" and result.design_hash and result.content_hash
@@ -68,19 +70,19 @@ def test_render_protocol_and_list_exports(db, setup):
 
 def test_foreign_protocol_and_template_are_not_found(db, setup):
     with pytest.raises(HTTPException) as excinfo:
-        asyncio.run(routes.render_document(DocumentRequest(protocol_id=setup["protocol"].public_id), db=db, user=setup["other_admin"]))
+        render_now(DocumentRequest(protocol_id=setup["protocol"].public_id), db=db, user=setup["other_admin"])
     assert excinfo.value.status_code == 404
     own = DocumentTemplate(tenant_id=setup["tenant"].id, origin="tenant", name="Eigen", document_type="todos")
     db.add(own)
     db.flush()
     with pytest.raises(HTTPException) as excinfo:
-        asyncio.run(routes.render_document(DocumentRequest(document_type="todos", template_id=own.public_id), db=db, user=setup["other_admin"]))
+        render_now(DocumentRequest(document_type="todos", template_id=own.public_id), db=db, user=setup["other_admin"])
     assert excinfo.value.status_code == 404
 
 
 def test_studio_preview_fields_are_rejected_on_export(db, setup):
     with pytest.raises(HTTPException) as excinfo:
-        asyncio.run(routes.render_document(DocumentRequest(document_type="todos", data_mode="sample"), db=db, user=setup["admin"]))
+        render_now(DocumentRequest(document_type="todos", data_mode="sample"), db=db, user=setup["admin"])
     assert excinfo.value.status_code == 422
 
 
@@ -152,10 +154,10 @@ def test_overridden_protocol_title_is_noted_in_the_registry(db, setup):
     from app.documents.service import ExportOptions
     from app.models import DocumentRegistry
 
-    plain = asyncio.run(routes.render_document(DocumentRequest(protocol_id=setup["protocol"].public_id), db=db, user=setup["writer"]))
-    renamed = asyncio.run(routes.render_document(
+    plain = render_now(DocumentRequest(protocol_id=setup["protocol"].public_id), db=db, user=setup["writer"])
+    renamed = render_now(
         DocumentRequest(protocol_id=setup["protocol"].public_id, options=ExportOptions(title="Genehmigtes Protokoll")), db=db, user=setup["writer"],
-    ))
+    )
     flags = dict(db.execute(select(DocumentRegistry.public_id, DocumentRegistry.title_overridden)).all())
     assert flags[plain.id] is False and flags[renamed.id] is True
 
@@ -166,7 +168,7 @@ def test_list_sources_and_list_export_require_writer(db, setup):
         routes.list_source_options("lists", protocol_id=None, db=db, user=setup["reader"])
     assert excinfo.value.status_code == 403
     with pytest.raises(HTTPException) as excinfo:
-        asyncio.run(routes.render_document(DocumentRequest(document_type="list"), db=db, user=setup["reader"]))
+        render_now(DocumentRequest(document_type="list"), db=db, user=setup["reader"])
     assert excinfo.value.status_code == 403
     assert routes.list_source_options("lists", protocol_id=None, db=db, user=setup["writer"]) == []
 
@@ -182,7 +184,7 @@ def test_reader_can_download_own_rendered_pdf(db, setup):
     owner = make_app_user(db, "leser-pdf@example.com", tenant_id=tenant.id, role_code="reader")
     other = make_app_user(db, "anderer-leser@example.com", tenant_id=tenant.id, role_code="reader")
     reader = make_current_user(tenant.id, role="reader", user_id=owner.id)
-    result = asyncio.run(routes.render_document(DocumentRequest(document_type="statistics"), db=db, user=reader))
+    result = render_now(DocumentRequest(document_type="statistics"), db=db, user=reader)
     assert result.content_url
     response = file_routes.get_stored_file_content(result.generated_file_id, db=db, user=reader)
     assert response.status_code == 200

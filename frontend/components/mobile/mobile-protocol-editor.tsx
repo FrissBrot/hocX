@@ -226,7 +226,7 @@ export function MobileProtocolEditor({
     }
   }
 
-  async function uploadPhoto(blockId: string, file: File) {
+  async function uploadPhoto(blockId: string, file: File, includeGps = true) {
     setSheet(null);
     setSaveState("saving");
     try {
@@ -238,6 +238,7 @@ export function MobileProtocolEditor({
       }
       const body = new FormData();
       body.append("file", file);
+      if (!includeGps) body.append("include_gps", "false");
       const created = await browserApiFetch<ProtocolImage>(`/api/protocol-element-blocks/${blockId}/images`, { method: "POST", body });
       const next = [...(imagesByBlock[blockId] ?? []), created].sort((a, b) => a.sort_index - b.sort_index);
       setImagesByBlock((current) => ({ ...current, [blockId]: next }));
@@ -533,7 +534,7 @@ export function MobileProtocolEditor({
           </div>
         </Modal>
       ) : null}
-      {sheet?.kind === "photo" ? <PhotoSheet onPick={(file) => void uploadPhoto(sheet.blockId, file)} onClose={() => setSheet(null)} /> : null}
+      {sheet?.kind === "photo" ? <PhotoSheet onPick={(file, includeGps) => void uploadPhoto(sheet.blockId, file, includeGps)} onClose={() => setSheet(null)} /> : null}
     </div>
   );
 }
@@ -1211,13 +1212,14 @@ function TodosSheet({
   );
 }
 
-function PhotoSheet({ onPick, onClose }: { onPick: (file: File) => void; onClose: () => void }) {
+function PhotoSheet({ onPick, onClose }: { onPick: (file: File, includeGps: boolean) => void; onClose: () => void }) {
   const t = useTranslations("mobile");
   const cameraRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLInputElement>(null);
+  const [includeGps, setIncludeGps] = useState(true);
   const pick = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) onPick(file);
+    if (file) onPick(file, includeGps);
   };
   return (
     <Modal open size="sheet" title={t("editor.addPhoto")} onClose={onClose} className="mobile-sheet">
@@ -1230,6 +1232,10 @@ function PhotoSheet({ onPick, onClose }: { onPick: (file: File) => void; onClose
         <button type="button" className="button-secondary mobile-button-block" onClick={() => libraryRef.current?.click()}>
           {t("editor.chooseFromLibrary")}
         </button>
+        <label className="checkbox-row">
+          <input type="checkbox" checked={includeGps} onChange={(event) => setIncludeGps(event.target.checked)} />
+          {t("editor.includeGps")}
+        </label>
       </div>
     </Modal>
   );

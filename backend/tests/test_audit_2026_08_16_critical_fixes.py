@@ -37,6 +37,7 @@ from app.services.word_import_service import WordImportService
 from tests.factories import make_protocol, make_template, make_tenant
 from tests.test_word_import_e2e import _build_template, _commit_payload_from_analysis
 from tests.word_import_fixtures import default_spec, render_docx
+from tests.render_helpers import render_now
 
 
 # --- S3: cross-tenant template_id in analyze() -----------------------------------
@@ -344,7 +345,7 @@ def test_s1_document_render_rejects_protocol_from_foreign_tenant(db):
     user_a = make_current_user(tenant_a.id, role="admin")
 
     with pytest.raises(HTTPException) as exc_info:
-        _run(documents_route.render_document(DocumentRequest(protocol_id=protocol_b.public_id), db=db, user=user_a))
+        render_now(DocumentRequest(protocol_id=protocol_b.public_id), db=db, user=user_a)
     assert exc_info.value.status_code == 404
 
 
@@ -384,7 +385,7 @@ def test_s2_document_list_rejects_list_definition_from_foreign_tenant(db):
 
     body = DocumentRequest(document_type="list", params={"list_id": str(list_def_b.public_id)})
     with pytest.raises(HTTPException) as exc_info:
-        _run(documents_route.render_document(body, db=db, user=user_a))
+        render_now(body, db=db, user=user_a)
     assert exc_info.value.status_code == 404
 
 

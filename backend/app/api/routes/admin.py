@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi import Path as PathParam
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
@@ -16,10 +16,12 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.config import settings
-from app.core.db import get_db
+from app.core.db import get_db, release_for_stream
 from app.models.entities import AppUser, PlatformAdmin, SystemHealthEvent, Tenant, TenantDomain, UserMfaFactor
 from app.services import export_crypto, public_id_service
 from app.schemas.admin import (
+    AuditLogEntryRead,
+    AuditLogPage,
     AdminDomainPage,
     AdminDomainRead,
     AdminFeatureRead,
@@ -89,6 +91,7 @@ from app.services.tenant_clone_service import TenantCloneService
 from app.services.tenant_cleanup_service import TenantCleanupService
 from app.services.tenant_export_service import TenantExportService
 from app.services.tenant_import_service import TenantImportService
+from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter(dependencies=[Depends(get_current_admin)])
 
@@ -222,8 +225,66 @@ def list_error_logs(
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None
+    # Lesezugriff auf mandantenübergreifende Fehlerdaten nachvollziehbar machen (PRIV-013).
+    audit.log(db, action="admin.error_logs_viewed", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+              details={"offset": offset})
     return error_log_service.list_errors(
         db, tenant_id=internal_tenant_id, error_type=error_type, source=source, limit=min(limit, 200), offset=offset
+    )
+
+
+@router.get("/audit-log", response_model=AuditLogPage)
+def list_audit_log(
+    tenant_id: uuid.UUID | None = None,
+    action: str | None = Query(default=None, max_length=100),
+    outcome: str | None = Query(default=None, pattern="^(success|failure)$"),
+    limit: int = Query(50, gt=0, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    """Sicherheits- und Änderungsereignisse aller Mandanten (PRIV-013). ``action`` filtert nach
+    Präfix (``user.login`` trifft auch ``user.login_failed``)."""
+    params = {
+        "tenant_id": _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None,
+        "action": action.replace("%", "").replace("_", "\\_") + "%" if action else None,
+        "outcome": outcome,
+        "limit": limit,
+        "offset": offset,
+    }
+    filters = """
+        WHERE (CAST(:tenant_id AS bigint) IS NULL OR l.tenant_id = :tenant_id)
+          AND (CAST(:action AS text) IS NULL OR l.action LIKE :action)
+          AND (CAST(:outcome AS text) IS NULL OR l.outcome = :outcome)"""
+    rows = db.execute(
+        text(
+            """
+            SELECT l.id, l.created_at, l.action, l.outcome, t.public_id AS tenant_public_id, t.name AS tenant_name,
+                   COALESCE(u.email, l.actor_email) AS actor_email, u.display_name AS actor_name, l.ip_hash,
+                   l.entity_type, l.entity_id, l.details_json
+            FROM audit_log l
+            LEFT JOIN tenant t ON t.id = l.tenant_id
+            LEFT JOIN app_user u ON u.id = l.actor_user_id"""
+            + filters
+            + """
+            ORDER BY l.created_at DESC, l.id DESC
+            LIMIT :limit OFFSET :offset
+            """
+        ),
+        params,
+    ).all()
+    total = db.scalar(text("SELECT count(*) FROM audit_log l" + filters), params) or 0
+    return AuditLogPage(
+        items=[
+            AuditLogEntryRead(
+                id=row.id, created_at=row.created_at, action=row.action, outcome=row.outcome,
+                tenant_id=row.tenant_public_id, tenant_name=row.tenant_name, actor_email=row.actor_email,
+                actor_name=row.actor_name, ip_hash=row.ip_hash, entity_type=row.entity_type,
+                entity_id=row.entity_id, details=row.details_json or {},
+            )
+            for row in rows
+        ],
+        total=total,
     )
 
 
@@ -267,6 +328,7 @@ def get_system_status(
         stale=system_health_service.is_stale(snapshot, now),
         problems=system_alert_service.current_problems(db, snapshot, now=now),
         events=[SystemHealthEventRead.model_validate(event, from_attributes=True) for event in events],
+        overload=system_health_service.overload_by_tenant(db, now),
     )
 
 
@@ -390,6 +452,19 @@ async def update_tenant(
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_update_tenant_impl, tenant_id=tenant_id, name=name, public_slug=public_slug, profile_image=profile_image, db=db, current_admin=current_admin)
+
+
+async def _update_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    tenant_id: uuid.UUID,
+    name: str | None = Form(default=None),
+    public_slug: str | None = Form(default=None),
+    profile_image: UploadFile | None = File(default=None),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     try:
         tenant = await tenant_service.update_tenant(
@@ -421,7 +496,8 @@ def delete_tenant(tenant_id: uuid.UUID, db: Session = Depends(get_db), current_a
         raise HTTPException(status_code=404, detail="Tenant not found")
     # tenant_id darf hier NICHT gesetzt werden: der Tenant wurde oben bereits geloescht+committed,
     # audit_log.tenant_id hat eine FK auf tenant(id) - welcher Tenant betroffen war steht in entity_id.
-    audit.log(db, action="admin.tenant_deleted", actor_email=current_admin.email, entity_type="tenant", entity_id=internal_tenant_id)
+    audit.log(db, action="admin.tenant_deleted", actor_email=current_admin.email, entity_type="tenant", entity_id=internal_tenant_id,
+              details={"report": deleted})
 
 
 @router.get("/tenants/{tenant_id}/cleanup/preview", response_model=TenantCleanupCounts)
@@ -778,7 +854,7 @@ def export_tenant(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
-        zip_path, filename = export_service.export(db, internal_tenant_id, payload.scope)
+        zip_path, filename = export_service.export(db, internal_tenant_id, payload.scope, include_credentials=payload.include_credentials)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     encrypted_path = zip_path.with_name(zip_path.name + export_crypto.ENCRYPTED_SUFFIX)
@@ -789,14 +865,14 @@ def export_tenant(
     audit.log(
         db, action="admin.tenant_exported", actor_email=current_admin.email, tenant_id=internal_tenant_id,
         entity_type="tenant", entity_id=internal_tenant_id,
-        details={"scope": payload.scope, "encryption": "password" if password else "server"},
+        details={"scope": payload.scope, "encryption": "password" if password else "server", "credentials": payload.include_credentials},
     )
-    return FileResponse(
+    return release_for_stream(db, FileResponse(
         encrypted_path,
         filename=filename + export_crypto.ENCRYPTED_SUFFIX,
         media_type="application/octet-stream",
         background=BackgroundTask(lambda: encrypted_path.unlink(missing_ok=True)),
-    )
+    ))
 
 
 
@@ -816,6 +892,18 @@ async def import_tenant(
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_import_tenant_impl, new_name=new_name, file=file, password=password, db=db, current_admin=current_admin)
+
+
+async def _import_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    new_name: str = Form(...),
+    file: UploadFile = File(...),
+    password: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
     if file.size is not None and file.size > MAX_TENANT_IMPORT_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail=f"Datei zu gross. Maximum {MAX_TENANT_IMPORT_UPLOAD_BYTES // 1024 // 1024} MB")
     # Audit MAIN-BE-010: Upload in Blöcken auf die Platte statt komplett in den RAM, und der
@@ -827,6 +915,9 @@ async def import_tenant(
         max_bytes=MAX_TENANT_IMPORT_UPLOAD_BYTES,
         suffix=".zip",
     )
+    # Starlettes Zwischenspeicher des Uploads lebt sonst bis zum Ende der Antwort - also über
+    # den ganzen, minutenlangen Import: bis 2 GiB doppelt auf der Platte (Concurrency-Audit).
+    await file.close()
     zip_path = tmp_path
     try:
         # Verschlüsselte Exporte (export_crypto.py) erst entschlüsseln; ältere, unverschlüsselte
@@ -837,6 +928,8 @@ async def import_tenant(
                 await run_in_threadpool(export_crypto.decrypt_file, tmp_path, zip_path, password=password or None)
             except export_crypto.ExportDecryptionError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
+            # Verschlüsselte Fassung wird nicht mehr gebraucht - vor dem Entpacken freigeben.
+            tmp_path.unlink(missing_ok=True)
         new_tenant, warnings = await run_in_threadpool(import_service.import_zip, db, zip_path, new_name)
     except HTTPException:
         raise
@@ -867,6 +960,8 @@ def list_tenant_users(
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    audit.log(db, action="admin.tenant_users_viewed", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+              entity_type="tenant", entity_id=internal_tenant_id)
     return tenant_user_service.list_users(db, internal_tenant_id)
 
 
@@ -950,6 +1045,7 @@ def list_users(
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
+    audit.log(db, action="admin.users_viewed", actor_email=current_admin.email, details={"offset": offset, "search": bool(q)})
     return user_service.list_users(db, limit=limit, offset=offset, q=q)
 
 
@@ -967,7 +1063,6 @@ def create_user(
     audit.log(
         db, action="admin.user_created", actor_email=current_admin.email,
         entity_type="user", entity_id=public_id_service.resolve_internal_id(db, AppUser, result.id),
-        details={"email": payload.email},
     )
     return result
 
@@ -982,6 +1077,7 @@ def get_user(
     user = user_service.get_user(db, internal_user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    audit.log(db, action="admin.user_viewed", actor_email=current_admin.email, entity_type="user", entity_id=internal_user_id)
     return user
 
 

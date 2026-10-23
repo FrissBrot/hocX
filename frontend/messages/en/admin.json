@@ -170,6 +170,16 @@
         "detail": "{queued, number} due in the queue · oldest {oldestMinutes, number} min · {failed, number} failed (24 h)",
         "problem": "Document processing is backed up or failing"
       },
+      "render_queue": {
+        "title": "PDF jobs",
+        "detail": "{queued, number} waiting · oldest {oldestMinutes, number} min · {failed, number} failed (24 h)",
+        "problem": "PDF jobs are piling up or failing"
+      },
+      "runtime": {
+        "title": "Service process load",
+        "detail": "{instances, number} processes · event loop max {maxLagMs, number} ms · DB pool {poolPeakPercent, number} % · thread pool {threadPeakPercent, number} % · {poolTimeouts, number} pool timeouts",
+        "problem": "Service processes blocked or saturated"
+      },
       "document_verification": {
         "title": "Public verification page",
         "detail": "Response in {latencyMs, number} ms",
@@ -204,6 +214,31 @@
         "title": "Local S3 (Garage)",
         "detail": "{reason, select, active {Active storage} initial_target {Target of the first migration} migration {Part of a running migration} fallback_period {Fallback period after a migration} pending_operation {Cleanup pending} requested {Requested manually} unverified_objects {Objects not yet verified} not_needed {Not needed, stopped} other {Status unknown}} · {objects, number} objects · {gb, number} GB",
         "problem": "Local S3 (Garage) cannot be evaluated"
+      },
+      "orphaned_files": {
+        "title": "Orphaned files",
+        "detail": "{count, number} files without a reference",
+        "problem": "Orphaned files in storage"
+      },
+      "security": {
+        "title": "Security events",
+        "detail": "{failedLogins, number} failed sign-ins (15 min) · {exports, number} exports (1 h) · {restores, number} restores (24 h)",
+        "problem": "Unusual security events"
+      },
+      "tenant_offboarding": {
+        "title": "Offboarding",
+        "detail": "{count, number} tenants past contract end (+{days, number} days)",
+        "problem": "Tenants past contract end not yet deleted"
+      },
+      "captcha_endpoint": {
+        "title": "Captcha endpoint",
+        "detail": "{region, select, eu {EU endpoint (processing in the EU)} other {Global endpoint – for processing in the EU set FRIENDLY_CAPTCHA_PUZZLE_URL and _VERIFY_URL to the EU endpoint}}",
+        "problem": "Captcha endpoint unreachable"
+      },
+      "overload": {
+        "title": "Overload protection",
+        "detail": "{rejected, number} rejections · {users, number} new users · {tenants, number} organizations · load up to {pressurePercent, number} % (last {minutes, number} min)",
+        "problem": "Overload: new users are being turned away"
       }
     },
     "problems": {
@@ -271,7 +306,26 @@
     "containerStates": {
       "exitedOk": "exited (init)"
     },
-    "restartCount": "{count, plural, one {# restart} other {# restarts}}"
+    "restartCount": "{count, plural, one {# restart} other {# restarts}}",
+    "overload": {
+      "title": "Overload",
+      "description": "New users who saw the overload page because of heavy load, per organization (last 7 days). Set the priority per plan in the price catalog.",
+      "columns": {
+        "tenant": "Organization",
+        "plan": "Plan",
+        "rejected": "Rejections",
+        "users": "Users",
+        "last": "Last"
+      },
+      "empty": "Nobody was turned away because of overload in the last 7 days.",
+      "unknownTenant": "Unknown organization",
+      "noPlan": "No plan",
+      "priority": {
+        "0": "low",
+        "1": "normal",
+        "2": "high"
+      }
+    }
   },
   "jobs": {
     "title": "Jobs",
@@ -312,7 +366,8 @@
       "photo-analysis-worker": "Image analysis worker",
       "host": "Server (cron)",
       "storage-worker": "Storage worker",
-      "document-worker": "Document worker"
+      "document-worker": "Document worker",
+      "job-worker": "Job worker"
     },
     "interval": {
       "onDemand": "On demand",
@@ -367,6 +422,10 @@
         "title": "Backfill image quality",
         "description": "Computes sharpness and exposure for images that are still missing them."
       },
+      "thumbnail_backfill": {
+        "title": "Backfill thumbnails",
+        "description": "Creates thumbnails for images that have none yet, mainly Abgabebox uploads."
+      },
       "photo_album_sync": {
         "title": "Sync albums",
         "description": "Adds new and removes deleted Abgabebox images in the automatic albums."
@@ -389,7 +448,7 @@
       },
       "log_cleanup": {
         "title": "Clean up logs",
-        "description": "Deletes old audit log, error log and job history entries."
+        "description": "Deletes old entries from the audit log, error log, job and event histories, and expired share links."
       },
       "abgabebox_quarantine_cleanup": {
         "title": "Clean up quarantine",
@@ -462,6 +521,18 @@
       "document_worker": {
         "title": "Document worker",
         "description": "Generates PDF views and extracts the text of uploaded documents (heartbeat from the polling loop)."
+      },
+      "tenant_data_export": {
+        "title": "Club export",
+        "description": "Builds requested club exports (AES ZIP with tables, minutes PDFs and files) and deletes them after 7 days."
+      },
+      "retention_proposals": {
+        "title": "Retention periods",
+        "description": "Creates suggestions according to each club’s retention periods (submissions, former members, old gallery images) and applies them when set to automatic."
+      },
+      "job_worker": {
+        "title": "Job worker",
+        "description": "Runs heavy background work (gallery import, PDF exports, organisation exports, virus re-scans, clean-up) - heartbeat every minute."
       }
     }
   },
@@ -634,7 +705,9 @@
       "userLimitHelp": "Empty = plan limit applies. Currently {count} user(s){suffix}",
       "userLimitExceeded": " – limit reached or exceeded.",
       "showOnWebsite": "Show as customer on the website",
-      "showOnWebsiteHelp": "Appears on the public website under “Used by” (name only). Only enable with the organisation’s consent."
+      "showOnWebsiteHelp": "Appears on the public website under “Used by” (name only). Only enable with the organisation’s consent.",
+      "contractEnd": "Contract end",
+      "contractEndHelp": "Empty = no end date. After the contract end plus the export period, /admin/system reports that the tenant’s data must be deleted."
     },
     "meta": {
       "createdAt": "Created on",
@@ -947,7 +1020,9 @@
     "exportPasswordTooShort": "At least {min, number} characters.",
     "exportPasswordMismatch": "The passwords do not match.",
     "importPasswordLabel": "Export password",
-    "importPasswordHelp": "Only needed if a password was set during export."
+    "importPasswordHelp": "Only needed if a password was set during export.",
+    "exportCredentials": "Include credentials",
+    "exportCredentialsHint": "Password hashes, MFA secrets and link and calendar tokens. Only for a move in which all logins and links must keep working. Without this option, imported accounts get a random password and links get a new URL."
   },
   "pricing": {
     "title": "Pricing",
@@ -1048,7 +1123,24 @@
     "delete": "Delete",
     "deleteConfirm": "Permanently delete \"{name}\"?",
     "deleted": "Package deleted",
-    "deleteFailed": "Could not delete the package."
+    "deleteFailed": "Could not delete the package.",
+    "loadPriority": {
+      "label": "Priority under heavy load",
+      "option": {
+        "0": "Low",
+        "1": "Normal",
+        "2": "High"
+      },
+      "help": {
+        "0": "When capacity runs short, new users of this plan are the first to see the overload page. People who are already working stay signed in.",
+        "1": "New users are only turned away at full capacity, after plans with low priority.",
+        "2": "New users are never turned away in advance and get free slots first."
+      },
+      "badge": {
+        "0": "Low priority",
+        "2": "High priority"
+      }
+    }
   },
   "catalogImport": {
     "title": "Import configuration",
@@ -1215,5 +1307,25 @@
     "reactivated": "“{name}” is offered again",
     "actionFailed": "Action failed",
     "empty": "No templates in this view"
+  },
+  "auditLog": {
+    "title": "Audit log",
+    "description": "Security and change events of all tenants. The source is a hashed network fingerprint, not the IP address.",
+    "filterAll": "All",
+    "filterFailures": "Failed",
+    "tenant": "Tenant",
+    "allTenants": "All tenants",
+    "actionPlaceholder": "Action, e.g. user.login",
+    "colTime": "Time",
+    "colAction": "Action",
+    "colActor": "By",
+    "colSource": "Source",
+    "colOutcome": "Result",
+    "loading": "Loading …",
+    "empty": "No entries",
+    "outcome": {
+      "success": "Successful",
+      "failure": "Failed"
+    }
   }
 }

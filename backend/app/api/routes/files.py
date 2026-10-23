@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 
-from app.core.db import get_db
+from app.core.db import get_db, release_for_stream
 from app.core.config import settings
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
@@ -68,6 +68,7 @@ from app.services.upload_lock import acquire_upload_lock
 from starlette.concurrency import run_in_threadpool
 
 from app.gallery_upload_route import GalleryUploadRoute
+from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter(route_class=GalleryUploadRoute)
 service = FileService()
@@ -405,6 +406,46 @@ async def upload_gallery_images(
     # Optionale Browser-Analyse je Datei als JSON-Liste [{sha256, metadata}] - reine Hinweise,
     # angewendet nur bei passendem serverseitigem Hash (siehe _parse_file_hints).
     file_metadata: Annotated[str | None, Form()] = None,
+    # «GPS-Daten des Bildes mitsenden» (Datenschutz-Audit Paket 9.3), Standard an
+    include_gps: Annotated[bool, Form()] = True,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Direkter Bild-Upload fuer die "Fotos"-Galerie (nicht an ein Protokoll/Word-Import/
+    Abgabe gebunden) - unterstuetzt einzelne Bilddateien und .zip-Archive, aus denen nur
+    Bilddateien uebernommen werden (siehe iter_gallery_zip_entries). This request only
+    streams the raw upload(s) to disk and queues a gallery_upload_job - Magic-Byte-Pruefung,
+    Virenscan und das eigentliche Speichern laufen danach im Hintergrund (siehe
+    app/main.py's gallery_upload_ingest_loop und FileService.process_pending_gallery_upload_jobs),
+    damit ein mehrere GB grosses ZIP nicht die ganze Request-Laufzeit ueber im Speicher
+    gehalten werden muss und der Upload-Dialog sofort schliessen kann. Poll GET
+    .../gallery-upload-jobs/{id} fuer den Fortschritt."""
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_upload_gallery_images_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, release_to_shared_albums=release_to_shared_albums, estimated_taken_on=estimated_taken_on, file_metadata=file_metadata, include_gps=include_gps, db=db, user=user)
+
+
+async def _upload_gallery_images_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    files: list[UploadFile] = File(...),
+    tags: str | None = Form(default=None),
+    # Optional target picker: at most one of event_id, (submission_assignment_id +
+    # submission_element_ref) or cycle_config_id - the batch then lands in that Termin's/
+    # Abgabe-Element's/Zyklus' auto-album(s) too (see FileService.process_pending_gallery_upload_jobs).
+    event_id: uuid.UUID | None = Form(default=None),
+    submission_assignment_id: uuid.UUID | None = Form(default=None),
+    submission_element_ref: str | None = Form(default=None),
+    cycle_config_id: uuid.UUID | None = Form(default=None),
+    # Im Upload-Dialog bestaetigt: Fotos, die dabei in ein geteiltes Auto-Album fallen, sofort
+    # freigeben (sonst nur vorgemerkt, siehe photo_album_service.add_items).
+    release_to_shared_albums: Annotated[bool, Form()] = False,
+    # Optionales Schaetzdatum aus dem Upload-Popup - gilt nur fuer Bilder, fuer die der Server
+    # kein echtes Aufnahmedatum findet (siehe FileService.save_gallery_uploads).
+    estimated_taken_on: Annotated[date | None, Form()] = None,
+    # Optionale Browser-Analyse je Datei als JSON-Liste [{sha256, metadata}] - reine Hinweise,
+    # angewendet nur bei passendem serverseitigem Hash (siehe _parse_file_hints).
+    file_metadata: Annotated[str | None, Form()] = None,
+    # «GPS-Daten des Bildes mitsenden» (Datenschutz-Audit Paket 9.3), Standard an
+    include_gps: Annotated[bool, Form()] = True,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -465,6 +506,8 @@ async def upload_gallery_images(
     if estimated_taken_on is not None and image_metadata_service.valid_estimated_date(estimated_taken_on) is None:
         raise HTTPException(status_code=422, detail="Ungültiges geschätztes Aufnahmedatum")
     file_hints = _parse_file_hints(file_metadata)
+    if not include_gps:
+        file_hints = {key: {**hint, "metadata": {k: v for k, v in (hint.get("metadata") or {}).items() if k != "gps"}} for key, hint in file_hints.items()}
 
     # Computed per-request, not as a module-level constant - settings.upload_root must be
     # read fresh each time (tests monkeypatch it; production has no reason to assume it's
@@ -523,6 +566,7 @@ async def upload_gallery_images(
         requested_by=user.user_id,
         estimated_taken_on=estimated_taken_on,
         file_hints=file_hints,
+        include_gps=include_gps,
         # A ZIP's matching entries are only known once the ingest loop opens it; a batch
         # of individually-selected images (no ZIP at all) knows its count immediately.
         total_files=None if has_zip else len(staged_paths) - len(clip_positions),
@@ -544,6 +588,29 @@ async def upload_gallery_images(
 
 @router.post("/files/document-uploads", response_model=DocumentUploadResult, status_code=status.HTTP_201_CREATED)
 async def upload_documents(
+    files: list[UploadFile] = File(...),
+    tags: str | None = Form(default=None),
+    # Same optional Bezug picker as upload_gallery_images (at most one of Termin / Abgabe-
+    # Element / Zyklus) - here it is stored on the file itself and shown in the "Bezug"
+    # column of the Dateien page, instead of routing it into an auto-album.
+    event_id: uuid.UUID | None = Form(default=None),
+    submission_assignment_id: uuid.UUID | None = Form(default=None),
+    submission_element_ref: str | None = Form(default=None),
+    cycle_config_id: uuid.UUID | None = Form(default=None),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Direkter Dokument-Upload fuer die "Dateien"-Seite (PDF, Office/OpenDocument, RTF, Text,
+    ZIP - siehe upload_pipeline._sniff_document_mime; Bilder gehoeren auf die "Fotos"-Seite).
+    Anders als der Galerie-Upload laeuft alles inline: Magic-Byte-Pruefung, Virenscan und
+    Speichern passieren in diesem Request, das Ergebnis (gespeicherte Dateien + Einzelfehler)
+    kommt direkt zurueck."""
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_upload_documents_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, db=db, user=user)
+
+
+async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
     files: list[UploadFile] = File(...),
     tags: str | None = Form(default=None),
     # Same optional Bezug picker as upload_gallery_images (at most one of Termin / Abgabe-
@@ -711,6 +778,21 @@ async def upload_image(
     file: UploadFile,
     title: str | None = Form(default=None),
     caption: str | None = Form(default=None),
+    include_gps: bool = Form(default=True),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_upload_image_impl, protocol_element_block_id=protocol_element_block_id, file=file, title=title, caption=caption, include_gps=include_gps, db=db, user=user)
+
+
+async def _upload_image_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    protocol_element_block_id: uuid.UUID,
+    file: UploadFile,
+    title: str | None = Form(default=None),
+    caption: str | None = Form(default=None),
+    include_gps: bool = Form(default=True),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -728,6 +810,7 @@ async def upload_image(
             title=title,
             caption=caption,
             created_by=user.user_id,
+            include_gps=include_gps,
         )
     except SQLAlchemyError as exc:
         db.rollback()
@@ -761,7 +844,15 @@ def delete_image(
 _WITHOUT_LOCATION = MetadataPolicy(location=False, capture_date=True, camera=True)
 
 
+def _sees_location(user: CurrentUser) -> bool:
+    """GPS erst ab Rolle writer (Datenschutz-Audit Paket 9.4): Leser sehen weder Koordinaten in den
+    Metadaten noch GPS im ausgelieferten Original. Gespeichert bleibt alles unverändert."""
+    return user.current_role in {"writer", "admin"}
+
+
 def _strips_location(db: Session, user: CurrentUser, stored_file: StoredFile) -> bool:
+    if not _sees_location(user):
+        return True
     return user.current_tenant_id is not None and not photo_album_share_service.location_shared_with(
         db, user.current_tenant_id, stored_file.id, stored_file.tenant_id
     )
@@ -822,21 +913,21 @@ def get_stored_file_content(
         no_store = {"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
         if stored_file.mime_type == "video/mp4":
             clean_path = _video_without_metadata(stored_file.storage_path)
-            return FileResponse(
+            return release_for_stream(db, FileResponse(
                 path=clean_path,
                 media_type=stored_file.mime_type,
                 filename=stored_file.original_name,
                 content_disposition_type="inline",
                 headers=no_store,
                 background=BackgroundTask(clean_path.unlink, missing_ok=True),
-            )
+            ))
         content = read_bytes_or_404(MAIN, stored_file.storage_path, detail="File missing on filesystem")
         return Response(
             content=sanitize_image(content, stored_file.mime_type, _WITHOUT_LOCATION),
             media_type=stored_file.mime_type,
             headers={**no_store, **_content_disposition(stored_file.original_name, False)},
         )
-    return object_response(
+    return release_for_stream(db, object_response(
         request,
         MAIN,
         stored_file.storage_path,
@@ -848,7 +939,7 @@ def get_stored_file_content(
         # browser cache can keep this for a long time - saves refetching originals opened again
         # from the Fotos viewer/lightbox within the same session.
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
-    )
+    ))
 
 
 @router.patch("/stored-files/{stored_file_id}/tags", response_model=list[str])
@@ -884,6 +975,8 @@ def get_stored_file_metadata(
     )
     if metadata is None:
         raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
+    if not _sees_location(user):
+        metadata = metadata.model_copy(update={"gps": None})
     return metadata
 
 
@@ -940,13 +1033,13 @@ def get_stored_file_thumbnail(
     thumbnail_path = service.ensure_thumbnail(db, stored_file, settings.storage_root)
     if thumbnail_path is None:
         raise HTTPException(status_code=404, detail="Keine Vorschau verfügbar")
-    return FileResponse(
+    return release_for_stream(db, FileResponse(
         path=thumbnail_path,
         media_type="image/jpeg",
         # Same immutability as get_stored_file_content above - once generated, a thumbnail never
         # changes for a given stored_file id, so it's safe to cache far longer than a day.
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
-    )
+    ))
 
 
 @router.get("/stored-files/{stored_file_id}/download")
@@ -1006,28 +1099,28 @@ def download_stored_file(
                 media_type=stored_file.mime_type,
                 headers={**headers, **_content_disposition(stored_file.original_name, True)},
             )
-        return object_response(
+        return release_for_stream(db, object_response(
             request, MAIN, stored_file.storage_path, media_type=stored_file.mime_type,
             filename=stored_file.original_name, attachment=True, headers=headers,
-        )
+        ))
 
     if not store.exists(MAIN, live_video.storage_path):
         raise HTTPException(status_code=404, detail="File missing on filesystem")
     cleanup_video = _video_without_metadata(live_video.storage_path) if strip_location else None
     if part == "video":
         if cleanup_video is not None:
-            return FileResponse(
+            return release_for_stream(db, FileResponse(
                 path=cleanup_video,
                 media_type="video/mp4",
                 filename=live_video.original_name,
                 content_disposition_type="attachment",
                 headers=headers,
                 background=BackgroundTask(cleanup_video.unlink, missing_ok=True),
-            )
-        return object_response(
+            ))
+        return release_for_stream(db, object_response(
             request, MAIN, live_video.storage_path, media_type="video/mp4",
             filename=live_video.original_name, attachment=True, headers=headers,
-        )
+        ))
 
     # Both: JPEG and MP4 are already compressed, so the ZIP just stores them. Built on disk (not
     # in memory) and removed once the response has been sent.
@@ -1050,14 +1143,14 @@ def download_stored_file(
     finally:
         if cleanup_video is not None:
             cleanup_video.unlink(missing_ok=True)
-    return FileResponse(
+    return release_for_stream(db, FileResponse(
         path=zip_path,
         media_type="application/zip",
         filename=f"{Path(stored_file.original_name).stem}-live.zip",
         content_disposition_type="attachment",
         headers=headers,
         background=BackgroundTask(zip_path.unlink, missing_ok=True),
-    )
+    ))
 
 
 ALBUM_INVITES_PER_HOUR = 30

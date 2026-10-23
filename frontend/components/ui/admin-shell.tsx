@@ -38,6 +38,7 @@ const navGroups: { titleKey: string | null; links: AdminNavLink[] }[] = [
     links: [
       { href: "/admin/system", labelKey: "nav.systemStatus", icon: "system" },
       { href: "/admin/error-logs", labelKey: "nav.errorLogs", icon: "errors" },
+      { href: "/admin/audit", labelKey: "nav.auditLog", icon: "security" },
       { href: "/admin/upload-pipeline", labelKey: "nav.uploadPipeline", icon: "pipeline" },
       { href: "/admin/jobs", labelKey: "nav.jobs", icon: "jobs" },
       { href: "/admin/document-templates", labelKey: "nav.documentTemplates", icon: "documents" },

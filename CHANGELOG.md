@@ -8,6 +8,154 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Datenschutz (Datenschutz-Audit vom 2026-10-21, Paket 1)
+
+- **Statistik:** Bussen und Anwesenheit je Person sehen nur noch Schreibende, Kassier und Admins.
+  Leser sehen dort ihre eigenen Werte, auch in PDF-Diagrammen. Mandanten-Admins können die
+  Ranglisten unter Mandanten-Einstellungen → Datenschutz für alle freigeben (Migration `0138`,
+  standardmässig aus). Finanzzahlen in der Statistik nur noch mit gebuchtem Modul Finanzen.
+- **Fehlerprotokoll:** keine Werte aus SQL-Parametern oder Postgres-Details mehr
+  (`hide_parameters`, Redaktion von E-Mail-Adressen). Der Auslöser wird als Konto-ID gespeichert
+  und beim Anzeigen aufgelöst; nach dem Löschen eines Kontos bleibt keine Adresse zurück
+  (Migration `0139`, leert bestehende Adressen). Fehler werden dem Mandanten des Kontos zugeordnet.
+- **Kalender-Abos** übertragen standardmässig nur Titel und Datum (Migration `0140`, bestehende
+  Abos unverändert).
+- **Offline-Entwürfe** im Browser gehören dem angemeldeten Konto und werden beim Abmelden
+  gelöscht (Rückfrage bei ungesendeten Änderungen).
+- **Freigabelinks:** gelöschte Fotos verschwinden aus Dateilinks; ein Dateilink liefert nur Dateien
+  seines Mandanten.
+- **Fristen** für Upload- und Analyse-Jobs (30 Tage), Abgabebox-Uploadverlauf (90 Tage),
+  Betriebsereignisse (2 Jahre), entschiedene Verifizierungsanträge und Word-Import-Lernsignale
+  (1 Jahr) sowie widerrufene/abgelaufene Freigabelinks (90 Tage); Job `log_cleanup`.
+  Die Prüfkopie zusammengeführter Bussen aus Migration 0116 wird entfernt (Migration `0141`).
+- **Dumps:** Pre-Deploy-, Cron- und Restore-Sicherungen werden mit einem öffentlichen GPG-Schlüssel
+  verschlüsselt (`BACKUP_DUMP_PUBLIC_KEY_PATH`, RUNBOOK Abschnitt 10), Pre-Deploy-Dumps nach
+  30 Tagen entfernt. Unverschlüsselte Dumps gehen nur auf ein rclone-crypt-Remote, alte
+  Offsite-Kopien werden gelöscht.
+- Backends schreiben kein Access-Log mehr (Pfade enthielten Link-Tokens).
+
+### Datenschutz (Paket 2: vollständige Dateilöschung)
+
+- **Protokoll löschen:** ein Dialog zeigt die Bilder des Protokolls; standardmässig werden sie
+  mitgelöscht, abgewählte wandern mit Tag «Protokoll …» in die Galerie. Bilder, die noch ein anderes
+  Protokoll verwendet, bleiben. Erzeugte PDFs verschwinden mit. Vorher blieben alle Bilder liegen.
+- **Abgabe löschen:** gleicher Dialog für eingereichte Dateien und Galeriefotos der Abgabe;
+  behaltene Einreichungen werden aus dem Abgabebox-Speicher in die Galerie übernommen.
+- **Einzelne Einreichungen** lassen sich im Abgabe-Detail löschen (z. B. auf Wunsch der
+  einreichenden Person), samt Vorschau, Dokumenten, Album- und Linkeinträgen.
+- Eine gemeinsame Löschfunktion räumt bei jeder Dateilöschung Objekt, Vorschaubild, Dokumente,
+  Album- und Freigabelink-Einträge ab. `/admin/system` meldet Dateien, die zu nichts mehr gehören.
+
+### Datenschutz (Paket 3: Sicherheitsprotokoll)
+
+- **Audit-Log:** fehlgeschlagene Anmeldungen (App, MFA, Plattform-Admin), Plattform-Logins,
+  hinzugefügte MFA-Faktoren und Einblicke des Plattform-Supports in Mandantendaten werden
+  protokolliert. Statt IP-Adressen steht ein gekürzter, gehashter Netz-Fingerabdruck (`ip_hash`),
+  dazu `outcome` (Migration `0143`). Die App-Rolle darf das Protokoll nicht mehr ändern oder löschen;
+  Aufbewahrung (mindestens 30 Tage) und das Entfernen von E-Mail-Adressen gelöschter Personen bzw.
+  Mandanten laufen über eigene DB-Funktionen.
+- **Verlauf für Mandanten-Admins** unter Mandanten-Einstellungen → Verlauf (nur eigener Mandant,
+  Plattform-Zugriffe als «Plattform-Support»), **Plattform-Ansicht** unter `/admin/audit` (Owner).
+- **Sicherheitsalarme:** neuer Check `security` in `/admin/system` und ntfy (viele fehlgeschlagene
+  Logins, auffällig viele Exporte, Restores, Admin-Änderungen; Schwellen per `SECURITY_*`).
+- Mandanten löschen liefert einen Bericht (Personen, Dateien, Fehler beim Objektlöschen).
+
+### Datenschutz (Paket 4: Löschjournal)
+
+- Endgültige Löschungen (Mandant, Person, Protokoll, Termin, Abgabe, Einreichung, Datei) landen im
+  Löschjournal (Migration `0144`, nur Einfügen für die App-Rolle, Aufbewahrung ≥ 400 Tage). Ein
+  Voll-Restore und eine Mandanten-Kopie wenden sie vor dem Umschalten erneut an, damit gelöschte
+  Daten nicht aus dem Backup zurückkehren. Abschalten nur beim einzelnen Restore mit Begründung.
+- **Behoben:** Termin oder Listeneintrag löschen entfernt jetzt auch die zugehörigen
+  Abgabebox-Einreichungen samt Dateien (blieben vorher verwaist liegen).
+
+### Datenschutz (Paket 5: Datenauskunft)
+
+- **Datenauskunft je Person** (Personen → Menü → Datenauskunft, nur Admin) und **«Meine Daten»** im
+  Profil: passwortgeschützte ZIP-Datei (AES-256) mit `Auskunft.xlsx` (ein Blatt je Bereich),
+  `daten.json` und Lesehinweis. Enthält nur die eigenen Zeilen (Anwesenheit, Bussen, Aufgaben,
+  Termine, Dateien, Sicherheitsereignisse, Erwähnungen in Protokolltexten), keine Zugangsdaten.
+  Abruf wird protokolliert, Selbstauskunft max. 3× pro Stunde. Öffnen mit 7-Zip, Keka oder WinRAR
+  (der macOS-Finder kann AES-ZIP nicht öffnen). Neue Abhängigkeit `pyzipper`.
+
+### Datenschutz (Paket 6: Vereinsexport)
+
+- **Vereinsexport** unter Mandanten-Einstellungen → Datenschutz (Mandanten-Admin, Anmeldung mit
+  Zwei-Faktor-Bestätigung): AES-ZIP für die Weiterarbeit mit `Mitglieder.xlsx`, `Termine.xlsx`,
+  `Anwesenheit.xlsx` (Person × Sitzung), `Bussen.xlsx`, `Finanzen.xlsx` (Blatt je Konto),
+  `Aufgaben.xlsx`, `Listen/`, den PDFs abgeschlossener Protokolle und auf Wunsch `Fotos/`
+  (nach Album bzw. Termin), `Abgaben/` und `Dokumente/` als Originaldateien. Namen statt IDs,
+  Datum TT.MM.JJJJ, keine Zugangsdaten. Gebaut vom neuen Job `tenant_data_export` (Migration
+  `0145`, RLS), danach 7 Tage abrufbar. Abgeschlossene Protokolle ohne gespeichertes PDF werden im
+  Lesehinweis aufgeführt (nicht automatisch erzeugt).
+- **Plattform-Export ohne Zugangsdaten als Standard:** Passwort-Hashes, MFA-Secrets und Link-/Abo-
+  Tokens nur noch mit der neuen Option «Zugangsdaten mitexportieren» (`include_credentials`). Ohne
+  sie erhalten importierte Konten ein zufälliges Passwort und Links neue URLs. Die Mandanten-Kopie
+  aus dem Backup nimmt sie weiterhin mit.
+- Datenauskunft: Passwort-Mindestlänge auch im API-Schema, Rate-Limit für die Admin-Auskunft,
+  temporäre Dateien werden auch bei Fehlern gelöscht (Security-Review).
+
+### Datenschutz (Paket 7: Korrekturweg abgeschlossener Protokolle)
+
+- Abschliessen → zurückstufen → korrigieren → abschliessen: beim erneuten Abschluss verschwinden
+  die Änderungsmarkierungen samt alter Fassung, die PDFs des früheren Abschlusses werden sofort
+  gelöscht und ihre Registereinträge verlieren den Titel (nur der Prüfwert bleibt, die Prüfseite
+  meldet sie als ersetzt). Beschrieben in der Benutzerdoku unter Protokolle.
+
+### Datenschutz (Paket 8: Aufbewahrungsfristen je Verein)
+
+- Neuer Tab **Mandanten-Einstellungen → Aufbewahrung** (Migration `0146`, RLS): Einreichungen der
+  Abgabebox X Monate nach Abgabeschluss löschen, ehemalige Mitglieder X Jahre nach Austritt
+  **deaktivieren** (Login aus, Sitzungen beendet, Daten bleiben), alte Galeriebilder ohne Album und
+  Termin nach X Jahren vorschlagen. Alle Regeln standardmässig aus. Der neue tägliche Job
+  `retention_proposals` legt Vorschläge an; der Admin setzt sie um oder verwirft sie, wahlweise
+  automatisch (Galeriebilder nie automatisch). Löschung über die bestehenden Löschpfade mit
+  Löschjournal und Verlauf.
+- **Offboarding:** Vertragsende je Mandant im Adminportal (Abo); `/admin/system` meldet Mandanten
+  nach Vertragsende plus `TENANT_OFFBOARDING_GRACE_DAYS` (Standard 90) zur Löschung (Check
+  `tenant_offboarding`, gelöscht wird von Hand).
+
+### Datenschutz (Paket 9: Abgabebox-Hinweise, GPS-Wahl, Speicherstandort)
+
+- **Abgabebox:** vor dem Upload stehen der verantwortliche Verein, ein Link zu dessen
+  Datenschutzhinweisen (Mandanten-Einstellungen → Datenschutz, sonst `ABGABEBOX_DEFAULT_PRIVACY_URL`)
+  und ein Hinweis zu Friendly Captcha. Die Abgabebox liest Name und Link nur über die DB-Funktion
+  `abgabebox_privacy_notice()` für den Mandanten ihres Links (Migration `0147`).
+- **Friendly Captcha in der EU:** Puzzle- und Verify-Endpunkt per `FRIENDLY_CAPTCHA_PUZZLE_URL` /
+  `FRIENDLY_CAPTCHA_VERIFY_URL` einstellbar (CSP folgt automatisch); `/admin/system` zeigt, ob der
+  EU- oder der globale Endpunkt aktiv ist.
+- **«GPS-Daten des Bildes mitsenden»** (Standard an) bei Galerie-Upload, Protokollbild (auch mobil)
+  und Abgabebox. Aus: der Server entfernt vor dem Speichern nur die Standortangaben (EXIF-GPS in
+  JPEG/HEIC/WebP/PNG/TIFF, XMP-GPS, Ortsangaben in Live-Photo-Clips) ohne Neukodierung; Datum,
+  Kamera und Bild bleiben, die GPS-Spalten leer. Gespeichert wird mit GPS wie bisher.
+- **GPS erst ab Rolle Schreiber:** Leser sehen keine Koordinaten in den Fotodetails und erhalten
+  Originale ohne Standort.
+- **Datenstandort der Speicherprofile:** Schweiz / EU-EWR / angemessen / Drittland, bei AWS und
+  Hetzner aus der Region abgeleitet, bei S3-kompatibel gewählt. Drittland nur mit
+  Übermittlungsgrundlage und Bestätigung, Migration dorthin fragt erneut nach; optional
+  `STORAGE_ALLOWED_LOCATIONS`. Badge in `/admin/storage`. Neu: serverseitige Verschlüsselung (S3
+  `AES256`) je Profil, im Verbindungstest geprüft.
+
+### Stabilität unter Last (Lasttest vom 2026-10-22)
+
+- **Request-Annahme je Backend-Worker:** höchstens so viele gleichzeitige Requests wie
+  DB-Verbindungen (Standard 16), der Rest wartet kurz und bekommt erst nach 20 s ein 503
+  `db_busy`. Vorher konnte der Server bei rund 250 aktiven Nutzern in einen Stau kippen, in dem
+  fast jede Anfrage erst nach Sekunden mit 503 endete. Einstellbar über `DB_ADMISSION_*` (RUNBOOK).
+- **Priorität bei Überlast je Abo:** Jeder Plan hat im Preiskatalog eine Priorität (niedrig,
+  normal, hoch). Wird es knapp, sehen neue Nutzer von Abos mit niedriger Priorität zuerst eine
+  Überlast-Seite, die automatisch weiterleitet, sobald wieder Platz ist. Wer bereits arbeitet,
+  bleibt angemeldet. Wartende Anfragen werden nach Priorität bedient. Jede Abweisung wird
+  protokolliert. Das Adminportal zeigt sie unter System → Überlast je Mandant und meldet sie als
+  Warnung (Migration `0151`, `OVERLOAD_*` im RUNBOOK).
+
+### Behoben
+
+- **Verlauf:** Aktionen mit mehreren Punkten (z. B. `backup.restore.create`) wurden falsch benannt.
+- **Foto-Analyse:** Der Foto-Worker konnte seit Migration `0134` keine Dateien mehr laden
+  (`permission denied for table submission_assignment`), die Gesichtsanalyse fiel aus. Korrigiert
+  in Migration `0142`.
+
 ### Sicherheit (Security-Audit release/1.2.0 vom 2026-10-17)
 
 - **Mandantenimport:** Album-Freigaben und Vertrauensbeziehungen zu anderen Mandanten werden

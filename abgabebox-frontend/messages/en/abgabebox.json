@@ -76,6 +76,7 @@
     "captchaPlaceholder": "Security check (no FriendlyCaptcha configured – test/dev environment)",
     "submit": "Submit",
     "submitting": "Uploading…",
+    "busyRetry": "Many uploads at the moment – trying again in {seconds, plural, one {# second} other {# seconds}} …",
     "successTitle": "Thank you, submission received",
     "successCount": "{count, plural, one {# file uploaded for this submission.} other {# files uploaded for this submission.}}",
     "uploadMore": "Submit another file",
@@ -104,7 +105,11 @@
       "element": "Document",
       "files": "Files",
       "receivedAt": "Received"
-    }
+    },
+    "includeGps": "Include the image’s GPS data",
+    "privacyResponsible": "{tenant} is responsible for your files.",
+    "privacyLink": "Privacy notice",
+    "privacyCaptcha": "To prevent spam, Friendly Captcha checks your browser without cookies or tracking."
   },
   "language": {
     "label": "Language"

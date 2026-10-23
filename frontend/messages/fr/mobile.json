@@ -175,7 +175,8 @@
     "todoCreated": "Tâche ajoutée au procès-verbal",
     "tools": "Outils",
     "unassigned": "Non attribuée",
-    "you": "{name} (vous)"
+    "you": "{name} (vous)",
+    "includeGps": "Envoyer les données GPS de l’image"
   },
   "protocols": {
     "fab": "Procès-verbal",

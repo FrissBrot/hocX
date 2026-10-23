@@ -1990,6 +1990,9 @@ def _resolve_within_extract_dir(base_dir: Path, relative_name: str) -> Path:
     return target
 
 
+IMPORT_FREE_RESERVE_BYTES = 1024**3
+
+
 def _safe_extract(zf: zipfile.ZipFile, dest_dir: Path) -> None:
     infolist = zf.infolist()
 
@@ -2005,6 +2008,13 @@ def _safe_extract(zf: zipfile.ZipFile, dest_dir: Path) -> None:
         raise ValueError(
             f"Import-Archiv ist entpackt zu gross (> {MAX_IMPORT_ZIP_TOTAL_BYTES // (1024 * 1024)} MB) - Import abgebrochen."
         )
+
+    # Freier Platz für das Entpacken (Concurrency-Audit CONC-021): der Datenträger von /tmp teilen
+    # sich Multipart-Puffer, Uploads und Exporte aller Mandanten - ein voller Datenträger liesse
+    # alle anderen Uploads scheitern, statt dass dieser eine Import sauber abbricht.
+    free_bytes = shutil.disk_usage(dest_dir).free
+    if total_uncompressed + IMPORT_FREE_RESERVE_BYTES > free_bytes:
+        raise ValueError("Zu wenig freier Speicher zum Entpacken des Import-Archivs - Import abgebrochen.")
 
     for member in infolist:
         _resolve_within_extract_dir(dest_dir, member.filename)

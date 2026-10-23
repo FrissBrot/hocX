@@ -89,6 +89,11 @@ services:
       - postgres
       - -c
       - shared_preload_libraries=pg_stat_statements
+      # Verbindungsbudget (Concurrency-Audit CONC-010): Backend 2 x 20, Abgabebox 2 x 8, Worker je 5,
+      # job-worker 8, dazu ungepoolte Kurzverbindungen (Kennzahlen, Fehlerprotokoll, Upload-Lock,
+      # pg_dump/pg_restore) - rund 100. Ohne explizite Angabe galt der Default 100.
+      - -c
+      - max_connections=150
       - -c
       - pg_stat_statements.max=5000
       - -c
@@ -130,6 +135,8 @@ services:
     restart: unless-stopped
     mem_limit: 128m
     cpus: 0.5
+    # Unter dem Containerlimit, noeviction wie Release (Schreibfehler statt OOM-Kill, CONC-011).
+    command: ["redis-server", "--maxmemory", "100mb", "--maxmemory-policy", "noeviction"]
     logging:
       driver: json-file
       options:
@@ -277,7 +284,7 @@ services:
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       # Generiert die Router fuer Mandanten-Custom-Domains, gemeinsam mit Traefik (ro-Mount oben)
       - ./infra/traefik/dynamic:/app/traefik_dynamic
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 75"
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 75 --ws-max-size 65536 --no-access-log"
     healthcheck:
       # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
       # einen simplen Liveness-Check gegen den Health-Endpoint aus app/main.py.
@@ -551,6 +558,8 @@ services:
       FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
       FRIENDLY_CAPTCHA_API_KEY: ${FRIENDLY_CAPTCHA_API_KEY}
       ABGABEBOX_CAPTCHA_SESSION_SECRET: ${ABGABEBOX_CAPTCHA_SESSION_SECRET}
+      FRIENDLY_CAPTCHA_VERIFY_URL: ${FRIENDLY_CAPTCHA_VERIFY_URL:-https://api.friendlycaptcha.com/api/v1/siteverify}
+      ABGABEBOX_DEFAULT_PRIVACY_URL: ${ABGABEBOX_DEFAULT_PRIVACY_URL:-}
       CLAMAV_HOST: clamav
       STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
     networks:
@@ -564,7 +573,7 @@ services:
     volumes:
       - ./abgabebox-backend:/app
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/storage
-    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --no-access-log"
     healthcheck:
       # Kein curl im python:3.13-slim-Image (siehe Audit), analog zum Haupt-Backend oben.
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
@@ -710,6 +719,10 @@ services:
       - path: .env
         required: false
     environment:
+      HOCX_PROCESS_KIND: storage-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
       HOCX_ENVIRONMENT: development
       DATABASE_URL: ${DATABASE_URL}
       APP_DATABASE_URL: ${APP_DATABASE_URL}
@@ -756,6 +769,10 @@ services:
       - path: .env
         required: false
     environment:
+      HOCX_PROCESS_KIND: backup-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
       HOCX_ENVIRONMENT: development
       DATABASE_URL: ${DATABASE_URL}
       AUTH_SECRET: ${AUTH_SECRET}
@@ -816,6 +833,9 @@ services:
       APP_DATABASE_URL: ${APP_DATABASE_URL}
       # Keine Anmelde-/Admin-Secrets: zufällige Werte je Prozess (SECRETLESS_PROCESS_KINDS).
       HOCX_PROCESS_KIND: document-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
       EXPORT_ROOT: /app/storage/exports
@@ -829,6 +849,62 @@ services:
       - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       - ./storage-local/work:/app/storage-local/work
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Schwere Hintergrundarbeit ausserhalb der uvicorn-Worker (Concurrency-Audit Paket 10,
+  # app/workers/job_worker.py) - siehe docker-compose.release.yml.
+  job-worker:
+    build:
+      context: ./backend
+    user: "0:0"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    mem_limit: 3072m
+    cpus: 1.0
+    pids_limit: 512
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOCX_ENVIRONMENT: development
+      DATABASE_URL: ${DATABASE_URL}
+      APP_DATABASE_URL: ${APP_DATABASE_URL}
+      HOCX_PROCESS_KIND: job-worker
+      # Wie beim Backend explizit, damit e2e/tests ihre eigene --env-file durchreichen.
+      # AUTH_SECRET ersetzt der Prozess durch einen Zufallswert (SESSIONLESS_PROCESS_KINDS).
+      ADMIN_AUTH_SECRET: ${ADMIN_AUTH_SECRET}
+      DB_POOL_SIZE: "6"
+      DB_MAX_OVERFLOW: "2"
+      DOCUMENT_RENDER_CONCURRENCY: "2"
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      THUMBNAIL_ROOT: /app/storage-local/thumbnails
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      CLAMAV_HOST: clamav
+    command: ["python", "-m", "app.workers.job_worker"]
+    volumes:
+      - ./backend:/app
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ./storage-local/thumbnails:/app/storage-local/thumbnails
+      - ./storage-local/work:/app/storage-local/work
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
     networks:
       - default
       - storage
@@ -899,6 +975,7 @@ services:
       # falschem 404 zurueck) - hier war der Fix von damals nie nachgezogen worden.
       INTERNAL_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
+      FRIENDLY_CAPTCHA_PUZZLE_URL: ${FRIENDLY_CAPTCHA_PUZZLE_URL:-https://api.friendlycaptcha.com/api/v1/puzzle}
     depends_on:
       - abgabebox-backend
     volumes:

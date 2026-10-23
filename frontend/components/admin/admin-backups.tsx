@@ -548,6 +548,8 @@ function Restore({ t, locale, isOwner, status, onChanged }: { t: TFunc; locale: 
   const [totp, setTotp] = useState("");
   const [skipRescue, setSkipRescue] = useState(false);
   const [skipReason, setSkipReason] = useState("");
+  const [replayErasures, setReplayErasures] = useState(true);
+  const [replayReason, setReplayReason] = useState("");
   const [working, setWorking] = useState(false);
   const [watching, setWatching] = useState<string | null>(status.current_restore?.id ?? null);
   const { get: restoreKeyFor, reset: resetRestoreKey } = useIdempotencyKey();
@@ -619,6 +621,7 @@ function Restore({ t, locale, isOwner, status, onChanged }: { t: TFunc; locale: 
           backup_set_id: setId, kind, target_profile_id: kind === "full" ? profileId : null, source_tenant_id: kind === "tenant_copy" ? tenantId : null,
           new_name: kind === "tenant_copy" ? newName : null, confirmation, totp_code: totp.replace(/\s/g, ""),
           skip_rescue_backup: kind === "full" ? skipRescue : false, skip_rescue_reason: skipRescue ? skipReason : null,
+          replay_erasures: replayErasures, replay_erasures_reason: replayErasures ? null : replayReason,
           idempotency_key: restoreKeyFor(`restore-${setId}`),
         }),
       });
@@ -639,7 +642,7 @@ function Restore({ t, locale, isOwner, status, onChanged }: { t: TFunc; locale: 
   const selectedSet = sets.find((item) => item.id === setId) ?? null;
   const canPreview = setId !== null && (kind === "full" || (tenantId !== null && newName.trim() !== ""));
   const canSubmit = preview !== null && preview.blockers.length === 0 && confirmation.trim() === preview.confirmation_phrase && totp.replace(/\s/g, "").length >= 6
-    && (!skipRescue || skipReason.trim() !== "");
+    && (!skipRescue || skipReason.trim() !== "") && (replayErasures || replayReason.trim() !== "");
 
   return (
     <div className="grid">
@@ -726,6 +729,15 @@ function Restore({ t, locale, isOwner, status, onChanged }: { t: TFunc; locale: 
                       </label>
                     ) : null}
                   </>
+                ) : null}
+                {/* Löschjournal (Datenschutz-Audit PRIV-010): standardmässig an, aus nur mit Begründung */}
+                <label className="checkbox-row"><input type="checkbox" checked={replayErasures} onChange={(event) => setReplayErasures(event.target.checked)} /><span>{t("restore.replayErasures")}</span></label>
+                <p className="field-help">{t("restore.replayErasuresHint")}</p>
+                {!replayErasures ? (
+                  <label className="field-stack">
+                    <span className="field-label">{t("restore.replayErasuresReason")}</span>
+                    <textarea className="input" rows={2} maxLength={500} value={replayReason} onChange={(event) => setReplayReason(event.target.value)} />
+                  </label>
                 ) : null}
                 <div className="two-col">
                   <label className="field-stack">

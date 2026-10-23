@@ -109,7 +109,7 @@ describe("DocumentExportDialog", () => {
     fireEvent.click(await screen.findByRole("button", { name: "PDF erstellen" }));
     await waitFor(() => expect(pdfWindow.location.replace).toHaveBeenCalledWith("/api/stored-files/x/content"));
     expect(api.renderDocument.mock.calls[0][0]).toMatchObject({ document_type: "todos", template_id: "b" });
-    expect(toast).toHaveBeenCalledWith("PDF erstellt (Version v1.0).", "success");
+    expect(toast).toHaveBeenCalledWith("PDF erstellt (Version v1.0).", "success", expect.objectContaining({ onMessageClick: expect.any(Function) }));
     expect(onExported).toHaveBeenCalled();
   });
 

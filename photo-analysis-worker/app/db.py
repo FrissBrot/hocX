@@ -24,7 +24,15 @@ def _resolve_database_url() -> str:
 
 
 def build_engine() -> Engine:
-    return create_engine(_resolve_database_url(), future=True, pool_pre_ping=True)
+    # Ein Prozess, seriell: zwei Verbindungen genügen (Concurrency-Audit CONC-010).
+    return create_engine(
+        _resolve_database_url(), future=True, pool_pre_ping=True, hide_parameters=True, pool_size=2, max_overflow=1,
+        connect_args={"application_name": "hocx-photo-analysis-worker"},
+    )
+
+
+def database_url() -> str:
+    return _resolve_database_url()
 
 
 def claim_next_job(engine: Engine) -> dict | None:

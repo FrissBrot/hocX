@@ -104,7 +104,7 @@ def _read_manifest(zip_path: Path) -> dict:
 
 def _export_import(db, tenant_id: int, scope: str = "full", *, new_name: str = "Import", before_import=None):
     """Export -> (optional hook, e.g. to simulate a fresh target installation) -> import."""
-    zip_path, _ = TenantExportService().export(db, tenant_id, scope)
+    zip_path, _ = TenantExportService().export(db, tenant_id, scope, include_credentials=True)
     try:
         if before_import is not None:
             before_import(zip_path)
@@ -141,7 +141,7 @@ def test_export_bundles_only_own_users_and_nulls_foreign_references(db):
     db.add(template)
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         manifest = _read_manifest(zip_path)
         app_users = {row["email"]: row for row in manifest["tables"]["app_user"]}
@@ -172,7 +172,7 @@ def test_export_import_roundtrip_recreates_core_entities_with_new_ids(db):
     protocol = make_protocol(db, tenant_a.id, template.id, protocol_number="P-42")
     participant = make_participant(db, tenant_a.id, display_name="Anna Muster")
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -229,7 +229,7 @@ def test_export_import_roundtrip_keeps_word_import_document_and_source_file(db, 
     db.add(document)
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant.id, "full", include_credentials=True)
     try:
         manifest = _read_manifest(zip_path)
         assert manifest["tables"]["word_import_document"][0]["original_filename"] == "Sitzung.docx"
@@ -333,7 +333,7 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     ))
     db.flush()
 
-    zip_path, _ = TenantExportService().export(db, tenant.id, "full")
+    zip_path, _ = TenantExportService().export(db, tenant.id, "full", include_credentials=True)
     try:
         manifest = _read_manifest(zip_path)
         assert len(manifest["tables"]["document_asset"]) == 1
@@ -414,7 +414,7 @@ def test_import_skips_invalid_document_studio_content(db):
     brand_service.current_revision(db, brand).tokens_json = {"colors": {"primary": "rot"}}
     db.flush()
 
-    zip_path, _ = TenantExportService().export(db, tenant.id, "full")
+    zip_path, _ = TenantExportService().export(db, tenant.id, "full", include_credentials=True)
     try:
         imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Studio Invalid (Import)")
     finally:
@@ -459,7 +459,7 @@ def test_export_import_roundtrip_restores_all_member_mfa_factors(db):
     ])
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant.id, "full", include_credentials=True)
     try:
         manifest = _read_manifest(zip_path)
         exported = manifest["tables"]["user_mfa_factor"]
@@ -502,7 +502,7 @@ def test_import_never_links_to_an_account_of_another_tenant_with_the_same_email(
     db.add(template)
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -528,7 +528,7 @@ def test_import_creates_the_exported_users_in_the_new_tenant_on_a_fresh_installa
     db.add(template)
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         # Simulate the fresh target installation: the source account isn't there.
         db.delete(creator)
@@ -586,7 +586,7 @@ def test_export_and_import_never_modifies_an_uninvolved_tenant(db):
     bystander_protocol = make_protocol(db, bystander.id, bystander_template.id, protocol_number="BYSTANDER-1")
     bystander_participant = make_participant(db, bystander.id, display_name="Bystander Person")
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -724,7 +724,7 @@ def test_export_import_roundtrip_remaps_matrix_auto_source_list_link(db):
         }],
     )
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, _warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -759,7 +759,7 @@ def test_export_import_roundtrip_remaps_matrix_row_list_entry_link(db):
         }],
     )
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, _warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -800,7 +800,7 @@ def test_export_import_roundtrip_remaps_protocol_block_row_list_entry_link(db):
         },
     )
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, _warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -849,7 +849,7 @@ def test_export_import_roundtrip_keeps_domain_and_same_verification_token(db, mo
     original_token = domain.verification_token
     original_verified_at = domain.verified_at
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure", include_credentials=True)
     try:
         manifest = _read_manifest(zip_path)
         assert manifest["tables"]["tenant_domain"][0]["verification_token"] == original_token
@@ -897,7 +897,7 @@ def test_import_skips_domain_already_claimed_by_another_tenant_on_target(db, mon
     db.add(source_domain)
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure", include_credentials=True)
     try:
         # `domain` is globally unique - drop the source's own row and give the exact same
         # domain to a DIFFERENT tenant, simulating that it's already claimed on the target
@@ -937,7 +937,7 @@ def test_import_skips_domain_reserved_by_the_installation_itself(db, monkeypatch
     ))
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure", include_credentials=True)
     try:
         new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -963,7 +963,7 @@ def test_export_import_roundtrip_remaps_last_word_import_template_id(db):
     db.add(tenant_a)
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure", include_credentials=True)
     try:
         # Must not raise an IntegrityError from a dangling/foreign template id.
         new_tenant, _warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
@@ -999,7 +999,7 @@ def test_export_import_roundtrip_recreates_gallery_image(db, monkeypatch, tmp_pa
     db.add(GalleryImage(tenant_id=tenant_a.id, stored_file_id=stored_file.id))
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -1041,7 +1041,7 @@ def test_export_import_roundtrip_remaps_the_live_photo_clip(db, monkeypatch, tmp
     db.add(GalleryImage(tenant_id=tenant_a.id, stored_file_id=photo.id, live_video_stored_file_id=clip.id))
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -1085,7 +1085,7 @@ def test_export_import_roundtrip_remaps_gallery_image_event_id(db, monkeypatch, 
     db.add(GalleryImage(tenant_id=tenant_a.id, stored_file_id=stored_file.id, event_id=event.id))
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -1664,7 +1664,7 @@ def test_import_keeps_registry_with_original_and_never_imports_identity_verifica
     db.add(DocumentRegistry(tenant_id=tenant.id, sha256="ef" * 32, document_type="todos", title="Pendenzen"))
     db.flush()
 
-    zip_path, _ = TenantExportService().export(db, tenant.id, "full")
+    zip_path, _ = TenantExportService().export(db, tenant.id, "full", include_credentials=True)
     try:
         imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Registerverein (Kopie)")
     finally:

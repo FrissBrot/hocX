@@ -17,6 +17,10 @@ class AssignmentDetailPublic(BaseModel):
     allowed_file_types: list[str]
     max_files_per_element: int | None
     max_file_size_mb: int
+    # Hinweis vor dem Upload (Datenschutz-Audit E2): wer verantwortlich ist und wo die
+    # Datenschutzhinweise stehen
+    tenant_name: str | None = None
+    privacy_notice_url: str | None = None
 
 
 class ElementPublic(BaseModel):

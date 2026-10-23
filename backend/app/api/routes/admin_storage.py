@@ -53,6 +53,9 @@ def _profile_read(db: Session, profile: StorageProfile) -> StorageProfileRead:
         is_builtin=profile.is_builtin, is_active=info["active"], in_use_by_migration=bool(info["open_migration_ids"]),
         pinned_generations=info["pinned_generations"], config_version=profile.config_version,
         last_test_at=profile.last_test_at, last_test_ok=profile.last_test_ok, last_test_error=profile.last_test_error,
+        data_location=profile.data_location, transfer_basis=profile.transfer_basis,
+        location_confirmed_by=profile.location_confirmed_by, location_confirmed_at=profile.location_confirmed_at,
+        server_side_encryption=bool(profile.server_side_encryption),
         created_at=profile.created_at, updated_at=profile.updated_at,
     )
 
@@ -153,7 +156,8 @@ def create_profile(payload: StorageProfileCreate, db: Session = Depends(get_db),
         db.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
-    _audit(db, admin, "admin.storage_profile_created", profile=profile.public_id, name=profile.name, provider=profile.provider)
+    _audit(db, admin, "admin.storage_profile_created", profile=profile.public_id, name=profile.name, provider=profile.provider,
+           data_location=profile.data_location, server_side_encryption=profile.server_side_encryption)
     return _profile_read(db, profile)
 
 
@@ -169,7 +173,8 @@ def update_profile(profile_id: uuid.UUID, payload: StorageProfileUpdate, db: Ses
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     db.commit()
     # Welche Felder geändert wurden, ohne Werte von Zugangsdaten.
-    _audit(db, admin, "admin.storage_profile_updated", profile=profile.public_id, fields=sorted(values))
+    _audit(db, admin, "admin.storage_profile_updated", profile=profile.public_id, fields=sorted(values),
+           data_location=profile.data_location, server_side_encryption=profile.server_side_encryption)
     return _profile_read(db, profile)
 
 
@@ -219,13 +224,16 @@ def list_migrations(db: Session = Depends(get_db), limit: int = Query(20, ge=1, 
 @router.post("/storage/migrations", response_model=StorageMigrationRead, status_code=201)
 def create_migration(payload: StorageMigrationCreate, db: Session = Depends(get_db), admin: CurrentAdmin = Depends(require_admin_write)):
     target = _profile_or_404(db, payload.target_profile_id)
+    if target.data_location == "third_country" and not payload.confirm_third_country:
+        raise HTTPException(status_code=409, detail="Ziel liegt in einem Drittland - Übermittlung erneut bestätigen")
     try:
         migration = sms.create_migration(db, target_profile_id=target.id, options=payload.options, actor_email=admin.email)
     except sms.MigrationError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     db.commit()
-    _audit(db, admin, "admin.storage_migration_created", migration=migration.id, kind=migration.kind, target=target.name)
+    _audit(db, admin, "admin.storage_migration_created", migration=migration.id, kind=migration.kind, target=target.name,
+           data_location=target.data_location, third_country_confirmed=payload.confirm_third_country)
     return _migration_read(db, migration)
 
 

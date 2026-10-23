@@ -14,7 +14,7 @@ Ablauf pro Compile (in einem Worker-Prozess, siehe ``_compile_job``):
    Compile greift also nie aufs Netz zu.
 
 Grenzen wie beim früheren TeX-basierten Compile: Parallelitätslimit (Semaphore + Poolgrösse),
-Wall-Clock-Timeout pro Compile (danach wird der Pool beendet und neu gestartet) und ein
+Wall-Clock-Timeout pro Compile (danach wird nur dieser Worker-Prozess beendet und ersetzt) und ein
 Speicherlimit (``RLIMIT_AS``) pro Worker. Ein CPU-Limit pro Prozess entfällt bewusst: es würde
 sich über die Lebensdauer eines Workers aufsummieren.
 """
@@ -31,8 +31,9 @@ import shutil
 import tempfile
 import threading
 import unicodedata
-from concurrent.futures import ProcessPoolExecutor
-from concurrent.futures.process import BrokenProcessPool
+import queue as queue_module
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -280,6 +281,135 @@ def _compile_job(
 
 
 # ── Pool ─────────────────────────────────────────────────────────────────────
+#
+# Eigene Worker-Prozesse statt ProcessPoolExecutor (Concurrency-Audit CONC-004): ein Executor
+# kann einen einzelnen hängenden Compile nicht beenden - bisher wurde nach einem Timeout der
+# ganze Pool zurückgesetzt und damit jeder parallele Compile (auch anderer Mandanten)
+# abgebrochen. Jetzt wird nur der betroffene Prozess beendet und ersetzt (Muster wie
+# ``services/isolated_parse.py``).
+
+# Prioritäten der Compile-Plätze (kleiner = zuerst): Export vor Vorschau vor Thumbnail.
+PRIORITY_EXPORT = 0
+PRIORITY_PREVIEW = 1
+PRIORITY_THUMBNAIL = 2
+
+# Native Allokationen (Typst, pdfium) gehen nicht immer an das System zurück: Worker nach so
+# vielen Compiles ersetzen, damit sich der Speicher nicht bis zum RLIMIT_AS aufsummiert.
+MAX_COMPILES_PER_WORKER = 50
+_POLL_SECONDS = 0.25
+_ENV_ALLOWLIST = {"PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TMP", "TZ"}
+_mp_context = multiprocessing.get_context("spawn")
+
+
+def _worker_loop(task_queue, result_queue, memory_limit_bytes: int) -> None:
+    """Läuft im Kindprozess: ein Compile pro Auftrag, bis ``None`` kommt oder der Elternprozess
+    den Prozess beendet (Timeout)."""
+    import os
+
+    _init_worker(memory_limit_bytes)
+    # Der Compile braucht keine Zugangsdaten; spawn vererbt aber die ganze Umgebung des
+    # Backends. Nach den Imports auf das Nötigste kürzen - das ist nur Schadensbegrenzung, keine
+    # Isolation: /proc/self/environ, die importierten settings und *_FILE-Secrets bleiben im
+    # Prozess erreichbar. Der eigentliche Schutz ist, dass Typst nur das Compile-Root liest und
+    # Benutzerinhalt nie Code wird (siehe Moduldokumentation).
+    for key in list(os.environ):
+        if key not in _ENV_ALLOWLIST:
+            del os.environ[key]
+    while True:
+        task = task_queue.get()
+        if task is None:
+            return
+        try:
+            result_queue.put(_compile_job(*task))
+        except BaseException as exc:  # noqa: BLE001 - der Prozess darf nicht stumm sterben
+            result_queue.put(CompileResult(ok=False, error=f"{type(exc).__name__}: {exc}"))
+
+
+class _RenderWorker:
+    def __init__(self, memory_limit_bytes: int) -> None:
+        # spawn statt fork: der Backend-Prozess ist multithreaded (uvicorn, Hintergrund-Loops);
+        # ein Fork könnte gehaltene Locks mitkopieren.
+        self.task_queue = _mp_context.Queue()
+        self.result_queue = _mp_context.Queue()
+        self.process = _mp_context.Process(target=_worker_loop, args=(self.task_queue, self.result_queue, memory_limit_bytes), daemon=True)
+        self.process.start()
+        self.compiles = 0
+
+    def kill(self) -> None:
+        self.process.terminate()
+        self.process.join(2)
+        if self.process.is_alive():
+            self.process.kill()
+            self.process.join()
+        for queue in (self.task_queue, self.result_queue):
+            queue.cancel_join_thread()
+            queue.close()
+
+
+class _CompileTimeout(Exception):
+    pass
+
+
+class _WorkerDied(Exception):
+    pass
+
+
+class _CompileSlots:
+    """Begrenzte Compile-Plätze je Event-Loop mit Vorrang: zuerst nach Priorität, dann der
+    Mandant mit den wenigsten laufenden Compiles, dann in Ankunftsreihenfolge. Ein Mandant
+    mit vielen Vorschauen belegt so nicht alle Plätze, während andere warten; ist niemand
+    sonst da, nutzt er alle."""
+
+    def __init__(self, capacity: int) -> None:
+        self.capacity = capacity
+        self.running = 0
+        self._per_tenant: dict[int | None, int] = {}
+        self._waiters: list[tuple[int, int, int | None, asyncio.Future]] = []
+        self._sequence = 0
+
+    def locked(self) -> bool:
+        return self.running >= self.capacity
+
+    def _take(self, tenant_id: int | None) -> None:
+        self.running += 1
+        self._per_tenant[tenant_id] = self._per_tenant.get(tenant_id, 0) + 1
+
+    async def acquire(self, *, priority: int, tenant_id: int | None, timeout: float) -> None:
+        if self.running < self.capacity and not self._waiters:
+            self._take(tenant_id)
+            return
+        future = asyncio.get_running_loop().create_future()
+        self._sequence += 1
+        entry = (priority, self._sequence, tenant_id, future)
+        self._waiters.append(entry)
+        try:
+            await asyncio.wait_for(future, timeout=timeout)
+        except BaseException:
+            if entry in self._waiters:
+                self._waiters.remove(entry)
+            if future.done() and not future.cancelled():
+                # Platz wurde gerade noch zugeteilt - zurückgeben.
+                self.release(tenant_id)
+            raise
+
+    def release(self, tenant_id: int | None) -> None:
+        self.running -= 1
+        remaining = self._per_tenant.get(tenant_id, 1) - 1
+        if remaining > 0:
+            self._per_tenant[tenant_id] = remaining
+        else:
+            self._per_tenant.pop(tenant_id, None)
+        self._dispatch()
+
+    def _dispatch(self) -> None:
+        while self.running < self.capacity and self._waiters:
+            entry = min(self._waiters, key=lambda item: (item[0], self._per_tenant.get(item[2], 0), item[1]))
+            self._waiters.remove(entry)
+            future = entry[3]
+            if future.done():
+                continue
+            self._take(entry[2])
+            future.set_result(None)
 
 
 class DocumentRenderer:
@@ -295,89 +425,119 @@ class DocumentRenderer:
         self.timeout_seconds = timeout_seconds or settings.document_render_timeout_seconds
         self.queue_timeout_seconds = queue_timeout_seconds or settings.document_render_queue_timeout_seconds
         self.memory_limit_bytes = int(memory_limit_mb if memory_limit_mb is not None else settings.document_render_memory_limit_mb) * 1024 * 1024
-        self._executor: ProcessPoolExecutor | None = None
+        self._idle: list[_RenderWorker] = []
         self._lock = threading.Lock()
-        self._semaphores: dict[int, asyncio.Semaphore] = {}
+        self._closed = False
+        self._slots: dict[int, _CompileSlots] = {}
+        # Eigene Threads für das blockierende Warten auf die Worker (nicht der Default-Executor
+        # des Loops, den die Laufzeitkennzahlen als Warteschlange messen).
+        self._threads = ThreadPoolExecutor(max_workers=self.concurrency * 2, thread_name_prefix="typst-wait")
 
-    def _pool(self) -> ProcessPoolExecutor:
-        with self._lock:
-            if self._executor is None:
-                self._executor = ProcessPoolExecutor(
-                    max_workers=self.concurrency,
-                    # spawn statt fork: der Backend-Prozess ist multithreaded (uvicorn,
-                    # Hintergrund-Loops); ein Fork könnte gehaltene Locks mitkopieren.
-                    mp_context=multiprocessing.get_context("spawn"),
-                    initializer=_init_worker,
-                    initargs=(self.memory_limit_bytes,),
-                )
-            return self._executor
+    # ── Worker ──
 
-    def _reset_pool(self) -> None:
-        """Beendet alle Worker (z. B. nach einem Timeout) - der nächste Compile startet neu."""
+    def _checkout(self) -> _RenderWorker:
         with self._lock:
-            executor, self._executor = self._executor, None
-        if executor is None:
-            return
-        for process in list(getattr(executor, "_processes", {}).values()):
+            if self._idle:
+                return self._idle.pop()
+        return _RenderWorker(self.memory_limit_bytes)
+
+    def _checkin(self, worker: _RenderWorker) -> None:
+        with self._lock:
+            if not self._closed and worker.compiles < MAX_COMPILES_PER_WORKER and len(self._idle) < self.concurrency:
+                self._idle.append(worker)
+                return
+        worker.kill()
+
+    def _execute(self, task: tuple) -> CompileResult:
+        """Blockierend (eigener Thread): einen Compile auf einem Worker ausführen. Ein Worker,
+        der nicht rechtzeitig antwortet oder abstürzt, wird beendet und nie wiederverwendet -
+        andere laufende Compiles bleiben unberührt."""
+        worker = self._checkout()
+        worker.task_queue.put(task)
+        deadline = time.monotonic() + self.timeout_seconds
+        while True:
             try:
-                process.terminate()
-            except Exception:  # noqa: BLE001 - Prozess bereits weg
-                pass
-        executor.shutdown(wait=False, cancel_futures=True)
+                result = worker.result_queue.get(timeout=_POLL_SECONDS)
+                break
+            except queue_module.Empty:
+                if not worker.process.is_alive():
+                    exitcode = worker.process.exitcode
+                    worker.kill()
+                    raise _WorkerDied(f"Exitcode {exitcode}") from None
+                if time.monotonic() >= deadline:
+                    worker.kill()
+                    raise _CompileTimeout from None
+        worker.compiles += 1
+        self._checkin(worker)
+        return result
 
     def shutdown(self) -> None:
-        self._reset_pool()
+        with self._lock:
+            self._closed = True
+            idle, self._idle = self._idle, []
+        for worker in idle:
+            worker.kill()
+        self._threads.shutdown(wait=False, cancel_futures=True)
 
-    def _semaphore(self) -> asyncio.Semaphore:
+    # ── Plätze ──
+
+    def _compile_slots(self) -> _CompileSlots:
         loop = asyncio.get_running_loop()
         key = id(loop)
-        if key not in self._semaphores:
-            self._semaphores[key] = asyncio.Semaphore(self.concurrency)
-        return self._semaphores[key]
+        if key not in self._slots:
+            self._slots[key] = _CompileSlots(self.concurrency)
+        return self._slots[key]
 
-    async def _acquire_slot(self) -> asyncio.Semaphore:
+    async def _acquire_slot(self, *, priority: int = PRIORITY_PREVIEW, tenant_id: int | None = None) -> _CompileSlots:
         """Freien Compile-Platz holen; die Warteschlange ist zeitlich begrenzt, damit sich bei
         vielen gleichzeitigen Vorschauen keine Requests unbegrenzt stauen."""
-        semaphore = self._semaphore()
+        slots = self._compile_slots()
         try:
-            await asyncio.wait_for(semaphore.acquire(), timeout=self.queue_timeout_seconds)
+            await slots.acquire(priority=priority, tenant_id=tenant_id, timeout=self.queue_timeout_seconds)
         except asyncio.TimeoutError as exc:
             raise DocumentRenderError("error.busy", detail=f"Kein freier Compile-Platz nach {self.queue_timeout_seconds}s") from exc
-        return semaphore
+        return slots
 
     async def _run(
         self, document_json: str, assets: RenderAssets, fmt: OutputFormat, ppi: float | None, max_pages: int | None = None,
+        *, priority: int = PRIORITY_PREVIEW, tenant_id: int | None = None,
     ) -> CompileResult:
-        semaphore = await self._acquire_slot()
+        slots = await self._acquire_slot(priority=priority, tenant_id=tenant_id)
         release_on_done = False
         try:
             loop = asyncio.get_running_loop()
-            future = loop.run_in_executor(self._pool(), _compile_job, document_json, assets.files, assets.fonts, fmt, ppi, max_pages)
+            future = loop.run_in_executor(self._threads, self._execute, (document_json, assets.files, assets.fonts, fmt, ppi, max_pages))
             try:
                 # shield: ein Abbruch des Requests (Vorschau ersetzt durch neuere) bricht nur das
                 # Warten ab; der Compile-Platz bleibt belegt, bis der Prozess wirklich fertig ist.
-                return await asyncio.wait_for(asyncio.shield(future), timeout=self.timeout_seconds)
+                # Das Warten selbst endet spätestens nach timeout_seconds (_execute).
+                return await asyncio.shield(future)
             except asyncio.CancelledError:
                 release_on_done = True
-                future.add_done_callback(lambda _: semaphore.release())
+                future.add_done_callback(lambda _: slots.release(tenant_id))
                 raise
-            except asyncio.TimeoutError as exc:
-                self._reset_pool()
+            except _CompileTimeout as exc:
                 raise DocumentRenderError("error.timeout", detail=f"Typst-Compile nach {self.timeout_seconds}s abgebrochen") from exc
-            except BrokenProcessPool as exc:
-                # Worker abgestürzt (z. B. Speicherlimit) oder Pool wegen Timeout eines
-                # parallelen Compiles beendet.
-                self._reset_pool()
+            except _WorkerDied as exc:
+                # Worker abgestürzt (z. B. Speicherlimit)
                 raise DocumentRenderError("error.render", detail=f"Typst-Worker beendet: {exc}") from exc
         finally:
             if not release_on_done:
-                semaphore.release()
+                slots.release(tenant_id)
 
-    async def render(self, document: dict, assets: RenderAssets | None = None, *, fmt: OutputFormat = "pdf", max_pages: int | None = None, ppi: float | None = None) -> RenderOutput:
+    async def render(
+        self, document: dict, assets: RenderAssets | None = None, *, fmt: OutputFormat = "pdf", max_pages: int | None = None, ppi: float | None = None,
+        priority: int | None = None, tenant_id: int | None = None,
+    ) -> RenderOutput:
+        """``priority``: Vorrang beim Compile-Platz (Default: PDF = Export, PNG = Vorschau);
+        ``tenant_id``: Fairness zwischen Mandanten beim Warten auf einen Platz."""
         assets = assets or RenderAssets()
-        result = await self._run(_dump(document), assets, fmt, ppi if fmt == "png" else None, max_pages if fmt == "png" else None)
+        if priority is None:
+            priority = PRIORITY_EXPORT if fmt == "pdf" else PRIORITY_PREVIEW
+        slot = {"priority": priority, "tenant_id": tenant_id}
+        result = await self._run(_dump(document), assets, fmt, ppi if fmt == "png" else None, max_pages if fmt == "png" else None, **slot)
         if not result.ok:
-            located = await self._locate_failing_node(document, assets)
+            located = await self._locate_failing_node(document, assets, slot)
             detail = _format_diagnostic(result)
             if located is not None:
                 raise DocumentRenderError("error.block", block_label=located[1], node_id=located[0], detail=detail)
@@ -390,13 +550,15 @@ class DocumentRenderer:
             pages = pages[:max_pages]
         return RenderOutput(pages=list(pages), warnings=result.warnings, page_count=total)
 
-    async def render_pdf(self, document: dict, assets: RenderAssets | None = None) -> RenderOutput:
-        return await self.render(document, assets, fmt="pdf")
+    async def render_pdf(self, document: dict, assets: RenderAssets | None = None, *, tenant_id: int | None = None) -> RenderOutput:
+        return await self.render(document, assets, fmt="pdf", tenant_id=tenant_id)
 
-    async def render_preview(self, document: dict, assets: RenderAssets | None = None, *, max_pages: int | None = None, ppi: float = PREVIEW_PPI) -> RenderOutput:
-        return await self.render(document, assets, fmt="png", max_pages=max_pages or settings.document_preview_max_pages, ppi=ppi)
+    async def render_preview(
+        self, document: dict, assets: RenderAssets | None = None, *, max_pages: int | None = None, ppi: float = PREVIEW_PPI, tenant_id: int | None = None,
+    ) -> RenderOutput:
+        return await self.render(document, assets, fmt="png", max_pages=max_pages or settings.document_preview_max_pages, ppi=ppi, tenant_id=tenant_id)
 
-    async def _locate_failing_node(self, document: dict, assets: RenderAssets) -> tuple[str, str] | None:
+    async def _locate_failing_node(self, document: dict, assets: RenderAssets, slot: dict | None = None) -> tuple[str, str] | None:
         """Kompiliert die Knoten der obersten Ebene (und bei Fachkomponenten deren Blöcke)
         einzeln, um den Verursacher eines Fehlers zu finden: (Knoten-ID, Bezeichnung)."""
         budget = _MAX_DIAGNOSE_COMPILES
@@ -423,10 +585,10 @@ class DocumentRenderer:
                 raise _Abort
             probe = {**document, "title_page": None, "segments": [{"master": None, "nodes": nodes}], "masters": {key: {"header": None, "footer": None, "background": []} for key in document.get("masters", {})}}
             try:
-                result = await self._run(_dump(probe), assets, "pdf", None)
+                result = await self._run(_dump(probe), assets, "pdf", None, **(slot or {}))
             except DocumentRenderError as exc:
-                # Ein Timeout setzt den Pool zurück; weitere Proben würden parallele Compiles
-                # anderer Requests erneut abbrechen. Ohne eindeutigen Befund aufhören.
+                # Probe selbst gescheitert (Timeout, Worker weg, kein Platz): weitere Proben
+                # kosteten nur Zeit und Plätze anderer Requests. Ohne eindeutigen Befund aufhören.
                 raise _Abort from exc
             return not result.ok
 
@@ -470,7 +632,7 @@ _renderer_lock = threading.Lock()
 
 
 def get_renderer() -> DocumentRenderer:
-    """Prozessweiter Renderer (ein Pool pro Backend-Prozess)."""
+    """Prozessweiter Renderer (ein Worker-Pool pro Backend-Prozess)."""
     global _renderer
     with _renderer_lock:
         if _renderer is None:

@@ -685,6 +685,7 @@ export type AdminTenantSummary = {
   discount_percent: number;
   billing_note: string | null;
   billing_start_date: string | null;
+  contract_ends_on: string | null;
   show_on_website: boolean;
 };
 
@@ -780,8 +781,12 @@ export type AdminPlan = {
   description: string | null;
   is_bookable: boolean;
   is_featured: boolean;
+  /** Priorität bei Überlast: 0 niedrig, 1 normal, 2 hoch. */
+  load_priority: LoadPriority;
   tenant_count: number;
 };
+
+export type LoadPriority = 0 | 1 | 2;
 
 export type AdminPlanWrite = {
   name: string;
@@ -794,6 +799,7 @@ export type AdminPlanWrite = {
   description: string | null;
   is_bookable: boolean;
   is_featured: boolean;
+  load_priority: LoadPriority;
   /** Nur beim Anlegen ausgewertet; leer = aus dem Namen erzeugt. */
   code?: string | null;
 };
@@ -823,6 +829,7 @@ export type AdminTenantSubscriptionUpdate = {
   discount_percent: number;
   billing_note: string | null;
   billing_start_date: string | null;
+  contract_ends_on: string | null;
 };
 
 export type AdminTenantCreate = {
@@ -1065,11 +1072,24 @@ export type SystemHealthEvent = {
   created_at: string;
 };
 
+/** Abgewiesene neue Nutzer bei Überlast je Mandant (letzte 7 Tage). */
+export type OverloadTenant = {
+  tenant_id: string | null;
+  tenant_name: string | null;
+  plan_name: string | null;
+  load_priority: LoadPriority;
+  rejected: number;
+  users: number;
+  first_at: string;
+  last_at: string;
+};
+
 export type SystemStatus = {
   snapshot: SystemHealthSnapshot | null;
   stale: boolean;
   problems: SystemProblem[];
   events: SystemHealthEvent[];
+  overload: OverloadTenant[];
 };
 
 export type NotificationSettings = {
@@ -1560,6 +1580,8 @@ export type ProtocolElementBlock = {
   export_visible_snapshot: boolean;
   public_reference_ids?: { lists?: Record<string, string>; finance_accounts?: Record<string, string>; events?: Record<string, string> };
   configuration_snapshot_json: Record<string, unknown>;
+  /** Optimistische Sperre der Blockkonfiguration (409 config_conflict bei veraltetem Stand). */
+  config_version?: number;
   text_content: string | null;
   display_compiled_text: string | null;
   display_snapshot_json: Record<string, unknown> | null;
@@ -1646,6 +1668,8 @@ export type StatisticsOverview = {
   protocols_total: number;
   cycles: { cycle_config_id: string; cycle_config_name: string; cycle_year: number; label: string }[];
   groups_stats: { group_name: string; cycle_config_id: string | null; cycle_year: number | null; session_count: number; session_count_with_participants: number; avg_participants: number }[];
+  /** "own": Bussen/Anwesenheit je Person enthalten nur die eigene Zeile (Leser, PRIV-001). */
+  per_person_scope?: "all" | "own";
 };
 
 // ── Aufgabenpakete ───────────────────────────────────────────────────────
@@ -1816,6 +1840,8 @@ export type MaintenanceOverview = {
 
 export type StorageProvider = "filesystem" | "garage_local" | "aws_s3" | "hetzner" | "s3_compatible";
 
+export type StorageDataLocation = "ch" | "eu_eea" | "adequate" | "third_country";
+
 export type StorageProfile = {
   id: string;
   name: string;
@@ -1840,6 +1866,11 @@ export type StorageProfile = {
   last_test_at: string | null;
   last_test_ok: boolean | null;
   last_test_error: string | null;
+  data_location: StorageDataLocation | null;
+  transfer_basis: string | null;
+  location_confirmed_by: string | null;
+  location_confirmed_at: string | null;
+  server_side_encryption: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -2248,3 +2279,34 @@ export type TenantPortalCharges = {
   overdue: TenantChargeStatusTotals;
   payment_term_days: number;
 };
+
+// ── Audit-Log / Verlauf (Datenschutz-Audit PRIV-013) ─────────────────────
+
+export type ActivityEntry = {
+  created_at: string;
+  action: string;
+  category: string;
+  outcome: "success" | "failure";
+  actor_kind: "user" | "platform" | "system" | "deleted";
+  actor_name: string | null;
+  entity_type: string | null;
+};
+
+export type ActivityPage = { items: ActivityEntry[]; total: number; categories: string[] };
+
+export type AuditLogEntry = {
+  id: number;
+  created_at: string;
+  action: string;
+  outcome: "success" | "failure";
+  tenant_id: string | null;
+  tenant_name: string | null;
+  actor_email: string | null;
+  actor_name: string | null;
+  ip_hash: string | null;
+  entity_type: string | null;
+  entity_id: number | null;
+  details: Record<string, unknown>;
+};
+
+export type AuditLogPage = { items: AuditLogEntry[]; total: number };

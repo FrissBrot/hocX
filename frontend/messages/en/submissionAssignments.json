@@ -238,5 +238,10 @@
   "windowHelp": "Leave a field empty for unlimited on that side. Without both values, the submission stays open until closed manually.",
   "windowLabel": "Time window",
   "windowNoneSentence": "It stays open until closed manually.",
-  "yesterday": "yesterday"
+  "yesterday": "yesterday",
+  "deleteAssignmentTitle": "Delete submission",
+  "deleteFileConfirm": "Permanently delete “{name}”? It also disappears from photos and albums.",
+  "deleteFileAction": "Delete file",
+  "fileDeletedToast": "File deleted",
+  "fileDeleteFailed": "File could not be deleted"
 }

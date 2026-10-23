@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -47,7 +47,8 @@ from app.documents.hashing import content_hash, design_hash
 from app.documents.layout import LayoutJson, TemplateContent, content_json, parse_content
 from app.documents.model import DocumentMeta, RenderInfo
 from app.documents.providers.common import PROTOCOL_STATUS_CODES
-from app.documents.renderer import RenderAssets, get_renderer
+from app.documents.locking import lock_row
+from app.documents.renderer import RenderAssets, RenderOutput, get_renderer
 from app.documents.strings import normalize_language, strings_for
 from app.documents.xmp import DocumentXmp, add_document_xmp
 from app.services import verify_domain_service
@@ -410,24 +411,32 @@ async def _prepare_off_loop(db: Session, user: CurrentUser | None, tenant_id: in
 
 async def preview(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest, *, max_pages: int | None = None) -> PreviewResult:
     """Seiten als PNG: ohne Register-Eintrag, ohne Speicherung, ohne Versionserhöhung."""
-    # Die Vorschau darf nichts verändern (z. B. nachgeführte Mitgliedschaftsblöcke): alles in
-    # einem Savepoint, der am Ende zurückgerollt wird.
-    savepoint = db.begin_nested()
-    try:
-        prepared = await _prepare_off_loop(db, user, tenant_id, request, preview=True)
-        compiled = prepared.compiled
-        output = await get_renderer().render_preview(compiled.data, RenderAssets(files=compiled.files, fonts=compiled.fonts), max_pages=max_pages)
-        return PreviewResult(
-            pages=output.pages,
-            diagnostics=prepared.diagnostics,
-            page_count=output.page_count or len(output.pages),
-            template_id=prepared.template.public_id if prepared.template is not None else None,
-            template_source=prepared.template_source,
-            design_hash=prepared.design_hash,
-        )
-    finally:
-        if savepoint.is_active:
-            savepoint.rollback()
+
+    def prepare_and_release() -> tuple[PreparedDocument, uuid.UUID | None]:
+        # Die Vorschau darf nichts verändern (z. B. nachgeführte Mitgliedschaftsblöcke): alles in
+        # einem Savepoint, der sofort zurückgerollt wird. Danach endet die Transaktion, damit die
+        # Verbindung nicht über Warteschlange und Compile (bis 80 s) belegt bleibt (CONC-003).
+        savepoint = db.begin_nested()
+        try:
+            prepared = prepare(db, user, tenant_id, request, preview=True)
+            template_public_id = prepared.template.public_id if prepared.template is not None else None
+        finally:
+            if savepoint.is_active:
+                savepoint.rollback()
+        db.commit()
+        return prepared, template_public_id
+
+    prepared, template_public_id = await run_in_threadpool(prepare_and_release)
+    compiled = prepared.compiled
+    output = await get_renderer().render_preview(compiled.data, RenderAssets(files=compiled.files, fonts=compiled.fonts), max_pages=max_pages, tenant_id=tenant_id)
+    return PreviewResult(
+        pages=output.pages,
+        diagnostics=prepared.diagnostics,
+        page_count=output.page_count or len(output.pages),
+        template_id=template_public_id,
+        template_source=prepared.template_source,
+        design_hash=prepared.design_hash,
+    )
 
 
 def _filename(title: str, version: str | None) -> str:
@@ -473,17 +482,51 @@ def _discard_pdf(key: str) -> None:
 
 
 async def render(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest) -> RenderResult:
-    export_public_id = _uuid7()
-    # Prüfseite einmal festlegen: Vermerk, QR-Code, XMP und Export müssen dieselbe URL tragen.
-    render_info = verify_render_info(export_public_id, base=verify_domain_service.tenant_verify_base_url(db, tenant_id))
-    prepared = await _prepare_off_loop(db, user, tenant_id, request, render_info=render_info)
-    compiled = prepared.compiled
-    meta = prepared.meta
+    """PDF erzeugen und registrieren. DB-Arbeit (Vorbereitung, Speichern, Register) läuft im
+    Threadpool, nur der Compile wird im Event-Loop erwartet (CONC-001/-003). Ändert sich die
+    Protokollversion zwischen Vorbereitung und Speichern (paralleler Export), wird einmal neu
+    gerendert - sonst trügen zwei PDFs dieselbe Versionsnummer (CONC-019)."""
+    for attempt in range(2):
+        export_public_id = _uuid7()
+        # Prüfseite einmal festlegen: Vermerk, QR-Code, XMP und Export müssen dieselbe URL tragen.
+        render_info = await run_in_threadpool(
+            lambda: verify_render_info(export_public_id, base=verify_domain_service.tenant_verify_base_url(db, tenant_id))
+        )
+        prepared = await _prepare_off_loop(db, user, tenant_id, request, render_info=render_info)
+        compiled = prepared.compiled
+        output = await get_renderer().render_pdf(compiled.data, RenderAssets(files=compiled.files, fonts=compiled.fonts), tenant_id=tenant_id)
+        result = await run_in_threadpool(
+            _finalize_render, db, user, tenant_id, request, prepared, output, export_public_id, render_info, retry_allowed=attempt == 0
+        )
+        if result is not None:
+            return result
+    raise RuntimeError("Protokollversion änderte sich während des Exports wiederholt")
 
-    output = await get_renderer().render_pdf(compiled.data, RenderAssets(files=compiled.files, fonts=compiled.fonts))
+
+def _finalize_render(
+    db: Session,
+    user: CurrentUser | None,
+    tenant_id: int,
+    request: DocumentRequest,
+    prepared: PreparedDocument,
+    output: RenderOutput,
+    export_public_id: uuid.UUID,
+    render_info: RenderInfo,
+    *,
+    retry_allowed: bool,
+) -> RenderResult | None:
+    """Nacharbeit eines Renders im Threadpool. None: Version hat sich inzwischen geändert, der
+    Aufrufer rendert neu."""
+    meta = prepared.meta
+    if prepared.version is not None and prepared.protocol is not None:
+        # Versionsvergabe serialisieren: Sperre bis zum Commit unten, dann mit dem aktuellen Stand
+        # vergleichen.
+        locked = lock_row(db, prepared.protocol)
+        if next_version(db, locked, prepared.content_hash) != prepared.version and retry_allowed:
+            db.rollback()
+            return None
     tenant = db.get(Tenant, tenant_id)
-    pdf = await run_in_threadpool(
-        add_document_xmp,
+    pdf = add_document_xmp(
         output.pdf or b"",
         DocumentXmp(
             document_id=str(export_public_id),
@@ -631,6 +674,37 @@ def _prune_superseded_files(db: Session, export: DocumentExport) -> list[str]:
         )
     ))
     return _release_files(db, older)
+
+
+def supersede_closed_exports(db: Session, protocol: Protocol) -> list[str]:
+    """Erneuter Abschluss nach einer Korrektur (Datenschutz-Audit F, Paket 7): die PDFs des
+    früheren Abschlusses zeigen den alten, ggf. falschen Inhalt. Ihre Dateien werden sofort
+    gelöscht (nicht erst nach der Aufbewahrungsfrist), die Register-Einträge behalten nur den
+    Hash - ohne Titel. Die Prüfseite meldet sie über is_superseded als ersetzt, sobald das neue PDF
+    erzeugt ist. In Dokumentenverwaltung übernommene Versionen bleiben (_without_document_versions).
+    In der Transaktion des Aufrufers; gibt die gelöschten Keys zurück."""
+    previous = select(DocumentRegistry.public_id).where(
+        DocumentRegistry.tenant_id == protocol.tenant_id,
+        DocumentRegistry.source_public_id == protocol.public_id,
+        DocumentRegistry.document_type == "protocol",
+        DocumentRegistry.status_code == "abgeschlossen",
+    )
+    exports = list(db.scalars(
+        select(DocumentExport).where(
+            DocumentExport.protocol_id == protocol.id,
+            DocumentExport.document_type == "protocol",
+            DocumentExport.public_id.in_(previous),
+            DocumentExport.stored_file_id.is_not(None),
+        )
+    ))
+    keys = _release_files(db, exports) if exports else []
+    db.execute(
+        update(DocumentRegistry)
+        .where(DocumentRegistry.public_id.in_(previous), DocumentRegistry.title.is_not(None))
+        .values(title=None)
+        .execution_options(synchronize_session=False)
+    )
+    return keys
 
 
 def _protected_export_ids(db: Session) -> set[int]:

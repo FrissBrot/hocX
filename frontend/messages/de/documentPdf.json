@@ -437,5 +437,130 @@
     "listColumn2": "Verantwortlich",
     "imageCaption": "Beispielbild",
     "yes": "Ja"
+  },
+  "dataExport": {
+    "section": {
+      "person": "Person",
+      "attendance": "Anwesenheit",
+      "membership_changes": "Ein- und Austritte",
+      "fines": "Bussen",
+      "todos": "Aufgaben",
+      "responsibilities": "Verantwortlichkeiten",
+      "events": "Termine",
+      "templates": "Protokollvorlagen",
+      "lists": "Listen",
+      "files": "Hochgeladene Dateien",
+      "security": "Anmeldung und Abos",
+      "activity": "Aktivität",
+      "mentions": "Erwähnungen"
+    },
+    "col": {
+      "first_name": "Vorname",
+      "last_name": "Nachname",
+      "display_name": "Anzeigename",
+      "email": "E-Mail",
+      "role": "Rolle",
+      "login_enabled": "Login aktiv",
+      "is_active": "Aktiv",
+      "joined_at": "Eintritt",
+      "left_at": "Austritt",
+      "preferred_language": "Sprache",
+      "created_at": "Erstellt",
+      "protocol": "Protokoll",
+      "title": "Titel",
+      "date": "Datum",
+      "status": "Status",
+      "type": "Art",
+      "amount": "Betrag",
+      "currency": "Währung",
+      "collected_at": "Kassiert am",
+      "delete_comment": "Löschgrund",
+      "task": "Aufgabe",
+      "due_date": "Fällig",
+      "completed_at": "Erledigt am",
+      "notes": "Notizen",
+      "element": "Traktandum",
+      "location": "Ort",
+      "template": "Vorlage",
+      "exclude_from_attendance": "Nicht in Anwesenheit",
+      "list": "Liste",
+      "position": "Zeile",
+      "name": "Name",
+      "mime_type": "Dateityp",
+      "size_bytes": "Grösse (Bytes)",
+      "taken_at": "Aufgenommen",
+      "kind": "Art",
+      "detail": "Detail",
+      "label": "Bezeichnung",
+      "last_used_at": "Zuletzt verwendet",
+      "action": "Vorgang",
+      "outcome": "Ergebnis",
+      "block": "Abschnitt",
+      "excerpt": "Auszug",
+      "end_date": "Enddatum",
+      "category": "Kategorie",
+      "tag": "Tag",
+      "cancelled": "Abgesagt",
+      "organizers": "Organisation",
+      "leadership": "Leitung",
+      "participants": "Teilnehmende",
+      "description": "Beschreibung",
+      "assignees": "Zuständig"
+    },
+    "file": {
+      "workbook": "Auskunft",
+      "readme": "LIESMICH",
+      "personalPrefix": "Datenauskunft"
+    },
+    "personalReadme": "Datenauskunft für {name} ({tenant}), erstellt am {date}.\\n\\nAuskunft.xlsx enthält je Bereich ein Blatt: Stammdaten, Anwesenheit (nur eigene Zeilen), Bussen, Aufgaben, Verantwortlichkeiten, Termine, Listen, selbst hochgeladene Dateien (Liste), Anmeldefaktoren und Kalender-Abos (ohne Geheimnisse), Aktivität und Erwähnungen in Protokolltexten.\\ndaten.json enthält dieselben Daten maschinenlesbar.\\n\\nErwähnungen werden per Namenssuche gefunden und können unvollständig sein. Protokolle und Kassendaten werden vom Verein aufbewahrt; Fragen dazu richtest du an den Verein.",
+    "tenant": {
+      "prefix": "Vereinsexport",
+      "yes": "ja",
+      "no": "nein",
+      "file": {
+        "members": "Mitglieder",
+        "events": "Termine",
+        "attendance": "Anwesenheit",
+        "fines": "Bussen",
+        "finances": "Finanzen",
+        "todos": "Aufgaben"
+      },
+      "sheet": {
+        "members": "Mitglieder",
+        "events": "Termine",
+        "attendance": "Anwesenheit",
+        "fines": "Bussen",
+        "finances": "Finanzen",
+        "todos": "Aufgaben"
+      },
+      "folder": {
+        "lists": "Listen",
+        "protocols": "Protokolle",
+        "photos": "Fotos",
+        "gallery": "Galerie",
+        "submissions": "Abgaben",
+        "documents": "Dokumente"
+      },
+      "attendance": {
+        "present": "anwesend",
+        "late": "verspätet",
+        "excused": "entschuldigt",
+        "absent": "abwesend"
+      },
+      "fineType": {
+        "late": "Verspätung",
+        "absent": "Abwesenheit"
+      },
+      "fineStatus": {
+        "pending": "offen",
+        "collected": "kassiert",
+        "deleted": "gelöscht"
+      },
+      "withFiles": "Fotos, Abgaben und Dokumente liegen als Originaldateien in den Ordnern Fotos, Abgaben und Dokumente.",
+      "withoutFiles": "Dieser Export enthält keine Fotos, Abgaben und Dokumente (nur Tabellen und Protokoll-PDFs).",
+      "protocolsWithoutPdf": "Abgeschlossene Protokolle ohne gespeichertes PDF (in hocX öffnen und als PDF exportieren):",
+      "missingFiles": "Nicht enthalten, weil im Speicher nicht gefunden: {count} Datei(en)."
+    },
+    "tenantReadme": "Vereinsexport von {tenant}, erstellt am {date}.\\n\\nTabellen (Excel): Mitglieder, Termine, Anwesenheit (Person × Sitzung), Bussen, Finanzen (ein Blatt je Konto), Aufgaben und im Ordner Listen je Liste eine Datei. Namen statt interner Nummern, Datum im Format TT.MM.JJJJ, Beträge als Zahl.\\nProtokolle: das zuletzt erzeugte PDF jedes abgeschlossenen Protokolls.\\n{files}\\n\\nZugangsdaten (Passwörter, Zwei-Faktor-Schlüssel, Links) sind nicht enthalten. Bitte sicher aufbewahren: die Datei enthält Personendaten."
   }
 }

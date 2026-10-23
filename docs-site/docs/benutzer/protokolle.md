@@ -19,6 +19,22 @@ stateDiagram-v2
   z. B. "Verantwortlich"-Namen aus einer Liste) werden beim Abschliessen endgültig
   eingefroren. Export als PDF ist möglich.
 
+## Abgeschlossenes Protokoll korrigieren
+
+Steht in einem abgeschlossenen Protokoll etwas Falsches (z. B. ein Name oder eine Angabe, die
+entfernt werden muss), stufen Admins es auf **durchgeführt** zurück, korrigieren den Text und
+schliessen es wieder ab. Beim erneuten Abschliessen
+
+- verschwinden alle Änderungsmarkierungen samt der alten Fassung,
+- werden die PDFs des früheren Abschlusses sofort gelöscht (nicht erst nach der
+  Aufbewahrungsfrist),
+- behält das Dokumentenregister für diese alten PDFs nur noch den Prüfwert, ohne Titel; die
+  Prüfseite meldet sie als ersetzt, sobald das neue PDF erzeugt ist.
+
+Danach das Protokoll neu als PDF exportieren. Bereits verschickte PDFs lassen sich so nicht
+zurückholen – Empfänger bei Bedarf informieren. In die Dokumentenverwaltung übernommene
+Fassungen bleiben dort, bis sie dort gelöscht werden.
+
 ## Elemente aus der Vorlage neu laden
 
 Wurde die Vorlage geändert, nachdem ein Protokoll erstellt wurde (neue Elemente, andere

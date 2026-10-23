@@ -23,6 +23,8 @@ from app.db import (
     record_job_run,
     write_face_quality_scores_batch,
 )
+from app import runtime_metrics
+from app.db import database_url
 from app.objstore_client import InvalidObjectKey, ObjectNotFound, ObjectStore
 from app.face_quality import load_detector, score_face_quality
 
@@ -99,8 +101,13 @@ def run() -> None:
     detector = load_detector(MODEL_PATH)
     logger.info("photo-analysis-worker started, polling every %ss", POLL_INTERVAL_SECONDS)
     store = build_store(engine)
+    reporter = runtime_metrics.RuntimeReporter(database_url(), "photo-analysis-worker")
+    last_metrics = 0.0
     while True:
         _report(record_heartbeat, engine)
+        if time.monotonic() - last_metrics >= runtime_metrics.REPORT_SECONDS:
+            runtime_metrics.report_sync(reporter, engine)
+            last_metrics = time.monotonic()
         try:
             paused = full_maintenance_active(engine)
         except Exception:

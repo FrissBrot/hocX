@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     # token is what actually stays valid for repeat uploads, not the raw solution itself. Empty
     # default fails closed, same as friendly_captcha_api_key/sitekey above.
     captcha_session_secret: str = Field(default="", validation_alias="ABGABEBOX_CAPTCHA_SESSION_SECRET")
+    # Datenschutzhinweise, wenn der Verein keinen eigenen Link gesetzt hat (Datenschutz-Audit E2)
+    default_privacy_url: str = Field(default="", validation_alias="ABGABEBOX_DEFAULT_PRIVACY_URL")
     captcha_session_ttl_minutes: int = Field(default=120, validation_alias="ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES")
     cors_allow_origin: str = Field(default="https://abgabe.example.com", validation_alias="ABGABEBOX_CORS_ORIGIN")
     # Zentrale Prüfseite (wie DOCUMENT_VERIFY_BASE_URL im Backend). Leer = <ABGABEBOX_CORS_ORIGIN>/verify.
@@ -82,6 +84,11 @@ class Settings(BaseSettings):
     # to 1000 files. Enforced in routes/public.py's upload() before any file is read or scanned,
     # regardless of what max_files_per_element says.
     max_files_per_upload_request: int = Field(default=50, ge=1, le=50, validation_alias="ABGABEBOX_MAX_FILES_PER_UPLOAD_REQUEST")
+    # Gleichzeitig verarbeitete Uploads je uvicorn-Worker (Concurrency-Audit CONC-007). Ein Upload
+    # hält bis 150 MiB im Speicher; 2 je Worker passen in das 1-GiB-Budget des Containers. Weitere
+    # Uploads warten bis upload_slot_wait_seconds auf einen freien Platz, statt sofort 503 zu bekommen.
+    upload_concurrency: int = Field(default=2, ge=1, le=8, validation_alias="ABGABEBOX_UPLOAD_CONCURRENCY")
+    upload_slot_wait_seconds: float = Field(default=120.0, ge=0, le=600, validation_alias="ABGABEBOX_UPLOAD_SLOT_WAIT_SECONDS")
     # Distinguishes genuine local dev/test stacks (where running without a FriendlyCaptcha
     # account is a deliberate, accepted choice - see captcha.py's captcha_enabled()) from a real
     # deployment (audit finding, 2026-08-27: production must fail CLOSED - reject uploads -

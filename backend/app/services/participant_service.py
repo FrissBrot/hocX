@@ -130,6 +130,13 @@ class ParticipantService:
         from app.services.user_service import UserService
         UserService().guard_last_tenant_admin(db, participant, removed=True)
         self._clear_orphaned_list_references(db, tenant_id, {participant_id})
+        # E-Mail und IP-Hash der Person aus dem Audit-Log entfernen, die Einträge bleiben (PRIV-007/013).
+        from app.services.audit_service import AuditService
+
+        AuditService().forget_actors(db, [participant_id])
+        from app.services import erasure_journal
+
+        erasure_journal.record(db, "app_user", participant.public_id, tenant_id=tenant_id)
         self.repository.delete(db, participant)
         db.commit()
         return True
@@ -142,9 +149,14 @@ class ParticipantService:
         ]
         if not participants:
             return 0
+        from app.services.audit_service import AuditService
         from app.services.user_service import UserService
+        from app.services import erasure_journal
+
+        AuditService().forget_actors(db, [participant.id for participant in participants])
         for participant in participants:
             UserService().guard_last_tenant_admin(db, participant, removed=True)
+            erasure_journal.record(db, "app_user", participant.public_id, tenant_id=tenant_id)
             self._clear_orphaned_list_references(db, tenant_id, {participant.id})
             db.delete(participant)
             db.flush()

@@ -437,5 +437,130 @@
     "listColumn2": "Responsable",
     "imageCaption": "Image d’exemple",
     "yes": "Oui"
+  },
+  "dataExport": {
+    "section": {
+      "person": "Personne",
+      "attendance": "Présences",
+      "membership_changes": "Entrées et sorties",
+      "fines": "Amendes",
+      "todos": "Tâches",
+      "responsibilities": "Responsabilités",
+      "events": "Rendez-vous",
+      "templates": "Modèles de PV",
+      "lists": "Listes",
+      "files": "Fichiers téléversés",
+      "security": "Connexion et abonnements",
+      "activity": "Activité",
+      "mentions": "Mentions"
+    },
+    "col": {
+      "first_name": "Prénom",
+      "last_name": "Nom",
+      "display_name": "Nom affiché",
+      "email": "E-mail",
+      "role": "Rôle",
+      "login_enabled": "Connexion active",
+      "is_active": "Actif",
+      "joined_at": "Entrée",
+      "left_at": "Sortie",
+      "preferred_language": "Langue",
+      "created_at": "Créé",
+      "protocol": "Procès-verbal",
+      "title": "Titre",
+      "date": "Date",
+      "status": "Statut",
+      "type": "Type",
+      "amount": "Montant",
+      "currency": "Devise",
+      "collected_at": "Encaissé le",
+      "delete_comment": "Motif de suppression",
+      "task": "Tâche",
+      "due_date": "Échéance",
+      "completed_at": "Terminé le",
+      "notes": "Notes",
+      "element": "Point",
+      "location": "Lieu",
+      "template": "Modèle",
+      "exclude_from_attendance": "Exclu des présences",
+      "list": "Liste",
+      "position": "Ligne",
+      "name": "Nom",
+      "mime_type": "Type de fichier",
+      "size_bytes": "Taille (octets)",
+      "taken_at": "Pris le",
+      "kind": "Type",
+      "detail": "Détail",
+      "label": "Libellé",
+      "last_used_at": "Dernière utilisation",
+      "action": "Opération",
+      "outcome": "Résultat",
+      "block": "Section",
+      "excerpt": "Extrait",
+      "end_date": "Date de fin",
+      "category": "Catégorie",
+      "tag": "Étiquette",
+      "cancelled": "Annulé",
+      "organizers": "Organisation",
+      "leadership": "Direction",
+      "participants": "Participants",
+      "description": "Description",
+      "assignees": "Responsables"
+    },
+    "file": {
+      "workbook": "Rapport de données",
+      "readme": "LISEZMOI",
+      "personalPrefix": "Acces-donnees"
+    },
+    "personalReadme": "Rapport d’accès aux données pour {name} ({tenant}), créé le {date}.\\n\\nRapport de données.xlsx contient une feuille par domaine : données de base, présences (seulement tes lignes), amendes, tâches, responsabilités, rendez-vous, listes, fichiers téléversés (liste), facteurs de connexion et abonnements calendrier (sans secrets), activité et mentions dans les procès-verbaux.\\ndaten.json contient les mêmes données lisibles par machine.\\n\\nLes mentions sont trouvées par recherche du nom et peuvent être incomplètes. Les procès-verbaux et la caisse sont conservés par l’organisation ; adresse tes questions à l’organisation.",
+    "tenant": {
+      "prefix": "Export-association",
+      "yes": "oui",
+      "no": "non",
+      "file": {
+        "members": "Membres",
+        "events": "Rendez-vous",
+        "attendance": "Présences",
+        "fines": "Amendes",
+        "finances": "Finances",
+        "todos": "Tâches"
+      },
+      "sheet": {
+        "members": "Membres",
+        "events": "Rendez-vous",
+        "attendance": "Présences",
+        "fines": "Amendes",
+        "finances": "Finances",
+        "todos": "Tâches"
+      },
+      "folder": {
+        "lists": "Listes",
+        "protocols": "Procès-verbaux",
+        "photos": "Photos",
+        "gallery": "Galerie",
+        "submissions": "Dépôts",
+        "documents": "Documents"
+      },
+      "attendance": {
+        "present": "présent",
+        "late": "en retard",
+        "excused": "excusé",
+        "absent": "absent"
+      },
+      "fineType": {
+        "late": "Retard",
+        "absent": "Absence"
+      },
+      "fineStatus": {
+        "pending": "ouverte",
+        "collected": "encaissée",
+        "deleted": "supprimée"
+      },
+      "withFiles": "Les photos, dépôts et documents figurent comme fichiers originaux dans les dossiers Photos, Dépôts et Documents.",
+      "withoutFiles": "Cet export ne contient ni photos, ni dépôts, ni documents (uniquement les tableaux et les PDF des procès-verbaux).",
+      "protocolsWithoutPdf": "Procès-verbaux clôturés sans PDF enregistré (à ouvrir dans hocX et exporter en PDF) :",
+      "missingFiles": "Non inclus car introuvables dans le stockage : {count} fichier(s)."
+    },
+    "tenantReadme": "Export de l’association {tenant}, créé le {date}.\\n\\nTableaux (Excel) : membres, rendez-vous, présences (personne × séance), amendes, finances (une feuille par compte), tâches et, dans le dossier Listes, un fichier par liste. Noms au lieu de numéros internes, dates au format JJ.MM.AAAA, montants en nombres.\\nProcès-verbaux : le dernier PDF généré de chaque procès-verbal clôturé.\\n{files}\\n\\nLes identifiants (mots de passe, clés à deux facteurs, liens) ne sont pas inclus. À conserver en lieu sûr : le fichier contient des données personnelles."
   }
 }

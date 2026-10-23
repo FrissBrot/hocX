@@ -175,7 +175,8 @@
     "todoCreated": "Todo added to the protocol",
     "tools": "Tools",
     "unassigned": "Unassigned",
-    "you": "{name} (you)"
+    "you": "{name} (you)",
+    "includeGps": "Include the image’s GPS data"
   },
   "protocols": {
     "fab": "Protocol",

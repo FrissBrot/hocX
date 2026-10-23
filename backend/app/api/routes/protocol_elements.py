@@ -1,13 +1,15 @@
 import json
+import logging
 import uuid
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException
+from redis.exceptions import RedisError
 
 from app.core.db import get_db
-from app.core.redis_client import get_redis_sync
+from app.core.redis_client import get_redis_sync, publish_best_effort
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.models import ElementDefinition, Event, Participant, Protocol, ProtocolElement, ProtocolElementBlock, TemplateElement, TemplateElementBlock
 from app.schemas.protocol import (
@@ -25,6 +27,7 @@ from app.services.snapshot_reference_ids import normalize_attendance_entries, sn
 from app.services.autosave_service import AutosaveService, TextConflictError
 from app.services.access_service import AccessService
 from app.services.collaboration_service import conflicting_lock_holder_sync, protocol_channel
+from app.services.protocol_element_service import BlockConfigConflict
 from app.services.protocol_element_service import ProtocolElementService
 from app.services.protocol_service import ProtocolService
 from app.services.responsible_label_service import resolve_display_section_title
@@ -36,19 +39,25 @@ protocol_service = ProtocolService()
 access_service = AccessService()
 
 
-def _broadcast_block_update(protocol_id: int, block: ProtocolElementBlock, user: CurrentUser) -> None:
+def _broadcast_block_update(protocol_id: int, read: ProtocolElementBlockRead, user: CurrentUser) -> None:
     """Same mechanism regular block edits already use (collaboration_ws.py's field_update
     passthrough) - other viewers of this same protocol see the refresh/sync/undo live with
-    no new frontend WS handling needed."""
-    get_redis_sync().publish(
+    no new frontend WS handling needed.
+
+    Sendet dasselbe wie die REST-Antwort (_block_to_read): öffentliche Block- und Nutzer-ID
+    (das Frontend hört auf "block-<public_id>" und filtert eigene Updates über die öffentliche
+    Nutzer-ID), übersetzte Teilnehmer-Referenzen statt interner IDs und config_version, damit
+    die optimistische Sperre der anderen Bearbeiter (CONC-005) nicht auf einem alten Stand
+    bleibt. Vorher kamen diese Updates wegen der internen Block-ID nie an."""
+    publish_best_effort(
         protocol_channel(protocol_id),
         json.dumps({
             "type": "field_update",
-            "field_key": f"block-{block.id}",
-            "patch": {"configuration_snapshot_json": block.configuration_snapshot_json},
-            "user_id": user.user_id,
+            "field_key": f"block-{read.id}",
+            "patch": {"configuration_snapshot_json": read.configuration_snapshot_json, "config_version": read.config_version},
+            "user_id": str(user.user_public_id),
             "display_name": user.display_name,
-        }),
+        }, default=str),
     )
 
 
@@ -77,9 +86,16 @@ def _ensure_block_not_locked_by_other(protocol_id: int, protocol_element_block_i
     proceeds normally when nobody holds it - most writes never acquire a lock at all (matrix
     row/column edits, attendance batch edits, anything outside the click-to-edit text/config
     fields) and must keep working - or when the caller itself is the holder."""
-    holder = conflicting_lock_holder_sync(
-        get_redis_sync(), protocol_id, f"block-{protocol_element_block_id}", user.user_id
-    )
+    try:
+        holder = conflicting_lock_holder_sync(
+            get_redis_sync(), protocol_id, f"block-{protocol_element_block_id}", user.user_id
+        )
+    except RedisError:
+        # Die Feldsperren sind eine Komfortschicht der Live-Bearbeitung, nicht die Quelle der
+        # Wahrheit (dafür gibt es expected_content/config_version). Ist Redis nicht erreichbar,
+        # wird gespeichert statt mit 500 abzubrechen (Concurrency-Audit CONC-011).
+        logging.getLogger(__name__).warning("Feldsperre für Block %s nicht prüfbar (Redis)", protocol_element_block_id, exc_info=True)
+        return
     if holder is not None:
         raise HTTPException(
             status_code=409,
@@ -105,6 +121,7 @@ def _block_to_read(db: Session, block) -> ProtocolElementBlockRead:
         render_type_id=block.render_type_id,
         element_type_code=None,
         render_type_code=None,
+        config_version=block.config_version,
         title_snapshot=block.title_snapshot,
         display_title_snapshot=block.display_title_snapshot,
         description_snapshot=block.description_snapshot,
@@ -190,6 +207,20 @@ def patch_protocol_element_block(
         payload.configuration_snapshot_json = normalize_attendance_entries(db, payload.configuration_snapshot_json, protocol.tenant_id)
     try:
         protocol_element_block = service.update_protocol_element_block(db, existing.id, payload)
+    except BlockConfigConflict as exc:
+        # Erwartet (jemand anderes hat gespeichert): aktuellen Stand mitliefern, der Client lädt
+        # ihn und weist darauf hin (Concurrency-Audit CONC-005).
+        # Kein eigener Rollback: get_db beendet die Transaktion (und die Zeilensperre) beim Fehler.
+        current = _block_to_read(db, exc.block)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "config_conflict",
+                "message": "Der Block wurde inzwischen geändert",
+                "configuration_snapshot_json": current.configuration_snapshot_json,
+                "config_version": current.config_version,
+            },
+        ) from None
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Protocol element block could not be updated") from exc
@@ -225,8 +256,9 @@ def set_block_attendance_status(
         raise HTTPException(status_code=400, detail="Attendance status could not be updated") from exc
     if updated is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
-    _broadcast_block_update(protocol.id, updated, user)
-    return _block_to_read(db, updated)
+    read = _block_to_read(db, updated)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/refresh", response_model=ProtocolElementBlockRead)
@@ -243,8 +275,9 @@ def refresh_block_list_snapshot(
     block = list_snapshot_service.refresh_block_list_snapshot(
         db, block, protocol.tenant_id, keep_undo=True, protocol=protocol, track_changes_active=track_changes_active
     )
-    _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(db, block)
+    read = _block_to_read(db, block)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/sync", response_model=ProtocolElementBlockRead)
@@ -262,8 +295,9 @@ def sync_block_list_snapshot(
     block = list_snapshot_service.refresh_block_list_snapshot(
         db, block, protocol.tenant_id, keep_undo=False, protocol=protocol, track_changes_active=track_changes_active
     )
-    _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(db, block)
+    read = _block_to_read(db, block)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/undo", response_model=ProtocolElementBlockRead)
@@ -277,8 +311,9 @@ def undo_block_list_snapshot(
     updated = list_snapshot_service.undo_block_list_snapshot(db, block)
     if updated is None:
         raise HTTPException(status_code=409, detail="Nothing to undo")
-    _broadcast_block_update(protocol.id, updated, user)
-    return _block_to_read(db, updated)
+    read = _block_to_read(db, updated)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.delete("/protocol-element-blocks/{protocol_element_block_id}", status_code=204)
@@ -344,8 +379,9 @@ def accept_tracked_list_entry(
     require_writer(user)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     block = list_snapshot_service.accept_tracked_list_entry(db, block, entry_id)
-    _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(db, block)
+    read = _block_to_read(db, block)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/rows/{row_id}/accept-tracked-change", response_model=ProtocolElementBlockRead)
@@ -359,8 +395,9 @@ def accept_tracked_row(
     require_writer(user)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     block = list_snapshot_service.accept_tracked_row(db, block, row_id)
-    _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(db, block)
+    read = _block_to_read(db, block)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/text/accept-tracked-changes", response_model=ProtocolTextRead)

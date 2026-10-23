@@ -41,6 +41,10 @@ PRODUCTION_ENVIRONMENT_NAMES = frozenset({"production", "prod"})
 # sich nichts signieren, was das Backend anerkennt, und ein versehentliches Entschlüsseln mit
 # secret_crypto schlägt sichtbar fehl.
 SECRETLESS_PROCESS_KINDS = frozenset({"document-worker"})
+# Prozesse ohne Anmeldesitzungen, die aber ADMIN_AUTH_SECRET für secret_crypto brauchen (z. B.
+# Passwörter der Vereinsexporte): bekommen nur für AUTH_SECRET einen Zufallswert - damit lassen
+# sich keine Session-Cookies signieren (job-worker verarbeitet nicht vertrauenswürdige Uploads).
+SESSIONLESS_PROCESS_KINDS = frozenset({"job-worker"})
 
 
 class Settings(BaseSettings):
@@ -113,6 +117,32 @@ class Settings(BaseSettings):
     docker_api_url: str | None = None
     system_monitor_interval_seconds: int = 30
     health_event_retention_days: int = 90
+    # Fristen für Job-/Ereignistabellen (app/services/retention_service.py, Datenschutz-Audit
+    # PRIV-011). 0 schaltet eine Regel ab.
+    upload_job_retention_days: int = 30
+    submission_upload_log_retention_days: int = 90
+    operations_event_retention_days: int = 730
+    identity_request_retention_days: int = 365
+    word_import_outcome_retention_days: int = 365
+    inactive_share_link_retention_days: int = 90
+    # Löschjournal: länger als jede Backup-Aufbewahrung (Migration 0144 erzwingt >= 400)
+    erasure_journal_retention_days: int = 400
+    # Offboarding (Datenschutz-Audit G): Tage nach Vertragsende, bis /admin/system die Löschung des
+    # Mandanten anmahnt (Exportfenster für den Verein)
+    tenant_offboarding_grace_days: int = 90
+    # Datenstandort der Speicherprofile (Datenschutz-Audit E3): Standort dieses Servers für das
+    # lokale Profil, und optional erlaubte Standorte (z. B. "ch,eu_eea"; leer = alle)
+    hocx_server_location: str = "ch"
+    # Gleicher Wert wie in der Abgabebox (dort wird geprüft); hier nur für den Hinweis in
+    # /admin/system, ob der EU-Endpunkt von Friendly Captcha aktiv ist (Datenschutz-Audit E2)
+    friendly_captcha_verify_url: str = "https://api.friendlycaptcha.com/api/v1/siteverify"
+    storage_allowed_locations: str = ""
+    # Sicherheitsalarme aus dem Audit-Log (system_health_service._check_security, PRIV-022)
+    security_failed_logins_warning: int = 50
+    security_failed_logins_critical: int = 200
+    security_failed_logins_per_account: int = 20
+    security_exports_per_hour: int = 3
+    security_alert_admin_logins: bool = False
     # How often the cycle-snapshot loop checks whether any CycleConfig's reset boundary
     # was crossed since the last snapshot (see main.py's cycle_snapshot_loop and
     # table_snapshot_service.run_due_cycle_snapshots). Daily is enough - a cycle boundary
@@ -144,6 +174,8 @@ class Settings(BaseSettings):
     # per-image (see photo_quality.py's module docstring), so unlike Phase 3 this doesn't
     # need an off-peak time window.
     photo_quality_backfill_interval_minutes: int = 15
+    # Vorschaubilder für Abgabebox-Uploads nachziehen (job-worker, CONC-014)
+    thumbnail_backfill_interval_minutes: int = 5
     # Auto-album sync (main.py's photo_album_sync_loop): folds newly-submitted (and newly
     # removed) abgabebox submission files into their Zyklus/Abgabe/Abgabe-Element albums -
     # same reason as the backfill above, this can't happen inline in the restricted
@@ -166,9 +198,12 @@ class Settings(BaseSettings):
     clamav_host: str = "clamav"
     clamav_port: int = 3310
     redis_url: str = "redis://redis:6379/0"
-    # Dokument-Engine (app/documents): Grenzen für den Typst-Prozess-Pool. Der Timeout gilt
-    # pro Compile (Wall-Clock); bei Überschreitung wird der Pool beendet und neu gestartet.
-    # Pro Uvicorn-Worker (Dockerfile: 2) ein eigener Pool: 2 × 2 Compiles gleichzeitig.
+    # Dokument-Engine (app/documents): Grenzen für den Typst-Worker-Pool. Der Timeout gilt
+    # pro Compile (Wall-Clock); bei Überschreitung wird nur dieser Worker-Prozess beendet.
+    # Pro Uvicorn-Worker (Dockerfile: 2) und im job-worker je ein eigener Pool.
+    # Speicherlimit (RLIMIT_AS) je Typst-Prozess: eine Galerie mit 60 Fotos braucht gemessen
+    # rund 1,7 GB RSS, kleiner geht nicht. Überbucht der Container trotzdem, beendet der
+    # OOM-Killer nur den grössten Typst-Prozess; das trifft nur dessen Compile (CONC-004).
     document_render_concurrency: int = 2
     document_render_timeout_seconds: int = 60
     document_render_memory_limit_mb: int = 3072
@@ -183,6 +218,28 @@ class Settings(BaseSettings):
     abgabebox_internal_url: str = "http://abgabebox-backend:8000"
     # Obergrenze für Request-Bodies ausser Multipart (JSON etc.), MAIN-OPS-013.
     max_request_body_bytes: int = 10 * 1024 * 1024
+    # Gleichzeitige Galerie-Uploads je uvicorn-Worker (CONC-007) und Wartezeit auf einen Platz.
+    gallery_upload_concurrency: int = Field(default=2, ge=1, le=8, validation_alias="GALLERY_UPLOAD_CONCURRENCY")
+    gallery_upload_slot_wait_seconds: float = Field(default=60.0, ge=0, le=600, validation_alias="GALLERY_UPLOAD_SLOT_WAIT_SECONDS")
+    # SQLAlchemy-Pool je Prozess (Concurrency-Audit CONC-010). pool_timeout kurz: bei erschöpftem
+    # Pool lieber nach wenigen Sekunden 503 mit Retry-After (main.py) als 30 s Warten mit
+    # gehaltenem Thread. Worker-Container setzen kleine Werte (docker-compose*.yml).
+    db_pool_size: int = Field(default=12, ge=1, le=50, validation_alias="DB_POOL_SIZE")
+    db_max_overflow: int = Field(default=8, ge=0, le=50, validation_alias="DB_MAX_OVERFLOW")
+    db_pool_timeout_seconds: float = Field(default=5.0, ge=0.5, le=60, validation_alias="DB_POOL_TIMEOUT_SECONDS")
+    # Gleichzeitige HTTP-Requests je uvicorn-Worker (app/core/db_admission.py). Leer = Pool minus
+    # DB_ADMISSION_RESERVE (WebSockets, Hintergrund-Loops, Fehlerprotokoll). Wer keinen Platz bekommt,
+    # wartet ohne Thread und Verbindung bis DB_ADMISSION_WAIT_SECONDS, dann 503 db_busy.
+    db_admission_limit: int | None = Field(default=None, ge=1, le=100, validation_alias="DB_ADMISSION_LIMIT")
+    db_admission_reserve: int = Field(default=4, ge=0, le=50, validation_alias="DB_ADMISSION_RESERVE")
+    db_admission_wait_seconds: float = Field(default=20.0, ge=0.5, le=120, validation_alias="DB_ADMISSION_WAIT_SECONDS")
+    # Überlast-Schutz je Abo-Priorität (plan.load_priority, db_admission.py): Ab dieser Auslastung
+    # (Requests in Arbeit + wartend je Platz, geglättet über ~10 s) sehen neue Nutzer von Mandanten
+    # mit niedriger bzw. normaler Priorität die Überlast-Seite. Hohe Priorität wird nie vorab
+    # abgewiesen. Wer in den letzten OVERLOAD_ACTIVE_MINUTES gearbeitet hat, bleibt drin.
+    overload_threshold_low: float = Field(default=0.75, ge=0.1, le=10, validation_alias="OVERLOAD_THRESHOLD_LOW")
+    overload_threshold_normal: float = Field(default=1.0, ge=0.1, le=10, validation_alias="OVERLOAD_THRESHOLD_NORMAL")
+    overload_active_minutes: int = Field(default=15, ge=1, le=240, validation_alias="OVERLOAD_ACTIVE_MINUTES")
     # requirepass im Release-Stack (REDIS_PASSWORD_FILE, MAIN-OPS-005); leer = ohne Passwort.
     redis_password: str | None = None
     # Proxys, deren X-Forwarded-For ausgewertet wird (Traefik im Compose-Netz), siehe
@@ -263,14 +320,19 @@ class Settings(BaseSettings):
     def is_secretless_process(self) -> bool:
         return self.process_kind.strip().lower() in SECRETLESS_PROCESS_KINDS
 
+    @property
+    def is_sessionless_process(self) -> bool:
+        return self.is_secretless_process or self.process_kind.strip().lower() in SESSIONLESS_PROCESS_KINDS
+
     def apply_process_kind(self) -> None:
-        if self.is_secretless_process:
+        if self.is_sessionless_process:
             self.auth_secret = secrets.token_hex(32)
+        if self.is_secretless_process:
             self.admin_auth_secret = secrets.token_hex(32)
 
     def validate_for_production(self) -> None:
         # Prozesse ohne Sitzungen bekommen ihre Werte aus apply_process_kind, nicht aus der Konfiguration.
-        if not self.is_secretless_process and (self.auth_secret in _INSECURE_DEFAULTS or len(self.auth_secret) < 32):
+        if not self.is_sessionless_process and (self.auth_secret in _INSECURE_DEFAULTS or len(self.auth_secret) < 32):
             print(
                 "FATAL: AUTH_SECRET is insecure or not set. "
                 "Set a random value of at least 32 characters in .env.",

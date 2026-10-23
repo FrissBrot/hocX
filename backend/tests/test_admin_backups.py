@@ -151,7 +151,9 @@ def test_restore_requires_fresh_totp_and_confirmation(db):
     created = client.post("/api/admin/restores", json={**payload, "idempotency_key": "r1"})
     assert created.status_code == 202, created.text
     job = db.get(BackupRestoreJob, uuid.UUID(created.json()["id"]))
-    assert job.options == {"source_tenant_id": 5, "new_name": "Verein (Kopie)"} and job.mfa_verified_at is not None
+    assert job.options == {
+        "source_tenant_id": 5, "new_name": "Verein (Kopie)", "replay_erasures": True, "replay_erasures_reason": None,
+    } and job.mfa_verified_at is not None
     assert "totp_code" not in created.text
     # Wiederholung derselben Anfrage (Netzwerkfehler): derselbe Auftrag, obwohl der Code verbraucht ist.
     again = client.post("/api/admin/restores", json={**payload, "idempotency_key": "r1"})

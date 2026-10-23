@@ -2613,6 +2613,13 @@ class ProtocolService:
                 if stage_from == "vorbereitet" and stage_to == "durchgeführt":
                     self._clear_tracked_changes(db, protocol_id, commit=False)
                 if stage_to == "abgeschlossen":
+                    # Korrekturweg (Datenschutz-Audit F): nach Zurückstufen und Ändern verschwinden
+                    # die Änderungsmarkierungen samt alter Fassung (Baseline) und die PDFs des
+                    # früheren Abschlusses. Beim ersten Abschluss ist beides schon leer.
+                    self._clear_tracked_changes(db, protocol_id, commit=False)
+                    from app.documents.service import supersede_closed_exports
+
+                    supersede_closed_exports(db, updated)
                     self._freeze_responsible_titles(db, protocol_id, updated.tenant_id, commit=False)
                     list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol_id, updated.tenant_id, commit=False)
                     # Todos bleiben danach live bearbeitbar - das Protokoll selbst zeigt ab

@@ -98,28 +98,64 @@ def load_effective_state() -> EffectiveState:
     )
 
 
+# Nach einem Ladefehler (DB weg, Pool erschöpft) so lange den letzten Stand verwenden, statt bei
+# jedem Request erneut zu warten (Concurrency-Audit CONC-001).
+_FAILURE_BACKOFF_SECONDS = 5.0
+_last_failure_at: float | None = None
+_inflight: dict[int, Any] = {}
+
+
+def _usable_cached_state() -> EffectiveState | None:
+    """Gecachter Stand, solange er frisch ist oder ein Ladefehler kurz zurückliegt."""
+    with _cache_lock:
+        cached, failed_at = _cached_state, _last_failure_at
+    now = time.monotonic()
+    if cached is not None and now - cached.loaded_at < settings.maintenance_cache_seconds:
+        return cached
+    if failed_at is not None and now - failed_at < _FAILURE_BACKOFF_SECONDS:
+        return cached or EffectiveState()
+    return None
+
+
 def current_effective_state(*, force: bool = False) -> EffectiveState:
     """Kurz gecachter Wartungszustand. Ist die Datenbank nicht erreichbar, gilt der zuletzt
-    bekannte Zustand weiter (eine aktive Sperre fällt dadurch nie stillschweigend weg)."""
-    global _cached_state
-    with _cache_lock:
-        cached = _cached_state
-    if cached is not None and not force and time.monotonic() - cached.loaded_at < settings.maintenance_cache_seconds:
-        return cached
+    bekannte Zustand weiter (eine aktive Sperre fällt dadurch nie stillschweigend weg).
+    Synchron und potenziell blockierend - im Event-Loop ``effective_state_async`` verwenden."""
+    global _cached_state, _last_failure_at
+    if not force and (usable := _usable_cached_state()) is not None:
+        return usable
     try:
         state = load_effective_state()
     except Exception:
         _logger.warning("Wartungszustand konnte nicht geladen werden - letzter Stand gilt weiter", exc_info=True)
-        return cached or EffectiveState()
+        with _cache_lock:
+            _last_failure_at = time.monotonic()
+            return _cached_state or EffectiveState()
     with _cache_lock:
-        _cached_state = state
+        _cached_state, _last_failure_at = state, None
     return state
 
 
+async def effective_state_async() -> EffectiveState:
+    """Für Middlewares: blockiert den Event-Loop nie. Ein abgelaufener Cache wird einmal je
+    Event-Loop im Threadpool nachgeladen; gleichzeitige Requests warten auf dieselbe Ladung."""
+    import asyncio
+
+    if (usable := _usable_cached_state()) is not None:
+        return usable
+    loop = asyncio.get_running_loop()
+    task = _inflight.get(id(loop))
+    if task is None or task.done():
+        task = loop.create_task(asyncio.to_thread(current_effective_state))
+        _inflight[id(loop)] = task
+    # shield: bricht ein Client ab, läuft die gemeinsame Ladung für die anderen weiter.
+    return await asyncio.shield(task)
+
+
 def invalidate_cache() -> None:
-    global _cached_state
+    global _cached_state, _last_failure_at
     with _cache_lock:
-        _cached_state = None
+        _cached_state, _last_failure_at = None, None
 
 
 # --- Fenster anlegen und Zustände ändern -------------------------------------------------------

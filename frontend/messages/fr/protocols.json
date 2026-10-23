@@ -188,6 +188,7 @@
     "autosaveNotice": "Les modifications sont enregistrées automatiquement.",
     "backToProtocols": "← Retour aux procès-verbaux",
     "changeSaveFailed": "La modification n'a pas pu être enregistrée",
+    "configConflictReloaded": "Quelqu’un d’autre a modifié ce bloc entre-temps – la version actuelle a été chargée. Veuillez refaire votre modification.",
     "ctrlFHint": "Ctrl+F",
     "entryCreateFailed": "L'entrée n'a pas pu être créée",
     "entryDeleteConfirm": "Supprimer définitivement cette entrée ? Cette action est irréversible.",
@@ -479,5 +480,6 @@
   "fineRestoreFailed": "L'amende n'a pas pu être restaurée",
   "locationLabel": "Lieu",
   "organizersLabel": "Organisateurs",
-  "balanceAsOf": "Au {date}"
+  "balanceAsOf": "Au {date}",
+  "includeImageGps": "Envoyer les données GPS de l’image"
 }

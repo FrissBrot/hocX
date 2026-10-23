@@ -38,6 +38,7 @@ class CatalogPlanEntry(_CatalogEntry):
     feature_codes: list[str] = []
     is_bookable: bool = True
     is_featured: bool = False
+    load_priority: int = Field(default=1, ge=0, le=2)
     sort_order: int = 0
 
 

@@ -171,3 +171,31 @@ class DocumentJob(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _now()
     updated_at: Mapped[datetime] = _now()
+
+
+class DocumentRenderJob(Base):
+    """PDF-Export als Auftrag (Migration 0150, services/document_render_jobs.py). Rendert der
+    job-worker; das Frontend fragt den Stand ab und meldet "PDF bereit"."""
+
+    __tablename__ = "document_render_job"
+    __table_args__ = (
+        CheckConstraint("status IN ('queued', 'running', 'done', 'failed')", name="ck_document_render_job_status"),
+        Index("idx_document_render_job_queue", "status", "created_at"),
+        Index("idx_document_render_job_tenant", "tenant_id", text("created_at DESC")),
+        Index("idx_document_render_job_protocol", "protocol_id", postgresql_where=text("protocol_id IS NOT NULL")),
+        Index("idx_document_render_job_export", "export_id", postgresql_where=text("export_id IS NOT NULL")),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    requested_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"))
+    request_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'queued'"), default="queued")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    export_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_export.id", ondelete="SET NULL"))
+    error_status: Mapped[int | None] = mapped_column(Integer)
+    error: Mapped[Any | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = _now()
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

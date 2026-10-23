@@ -134,5 +134,104 @@
   "seatsOf": "sur {limit} places",
   "seatsUnlimited": "places, illimité",
   "seatsFree": "{count, plural, one {# place libre} other {# places libres}}",
-  "noFilesYet": "aucun fichier enregistré"
+  "noFilesYet": "aucun fichier enregistré",
+  "privacy": {
+    "intro": "Définit qui voit quelles données personnelles. S’applique à tous les membres de cette organisation.",
+    "statisticsTitle": "Statistiques",
+    "statisticsPerPersonPublic": "Amendes et présences par personne visibles par tous",
+    "statisticsPerPersonPublicHint": "Désactivé : les membres en lecture ne voient que leurs propres valeurs dans les statistiques. Rédacteurs, caissiers et administrateurs voient toujours tout le monde.",
+    "saved": "Enregistré",
+    "saveFailed": "Échec de l’enregistrement",
+    "export": {
+      "title": "Export de l’association",
+      "description": "Toutes les données de l’association pour la suite du travail : tableaux Excel (membres, rendez-vous, présences, amendes, finances, tâches, listes), les PDF des procès-verbaux clôturés et, sur demande, photos, dépôts et documents en fichiers originaux. Sans identifiants. L’export est créé en arrière-plan puis disponible pendant 7 jours. Nécessite une connexion confirmée par authentification à deux facteurs.",
+      "includeFiles": "Inclure photos, dépôts et documents",
+      "password": "Mot de passe du fichier ZIP",
+      "passwordHelp": "Au moins {min} caractères. Conservé chiffré uniquement jusqu’à la création – sans mot de passe, le fichier ne peut pas être ouvert.",
+      "repeat": "Répéter le mot de passe",
+      "mismatch": "Les mots de passe ne correspondent pas.",
+      "hint": "Chiffré en AES-256. Ouvrir p. ex. avec 7-Zip (Windows), Keka (macOS) ou WinRAR.",
+      "start": "Créer l’export",
+      "queued": "L’export est en cours de création. Vous pouvez quitter la page.",
+      "failed": "L’export n’a pas pu être lancé.",
+      "download": "Télécharger",
+      "expires": "disponible jusqu’au {date}",
+      "missingFiles": "{count, plural, one {# fichier manquait} other {# fichiers manquaient}}",
+      "status": {
+        "queued": "En attente",
+        "running": "En cours",
+        "done": "Prêt",
+        "failed": "Échec",
+        "expired": "Expiré"
+      }
+    },
+    "noticeTitle": "Protection des données",
+    "noticeUrl": "Lien vers votre déclaration de protection des données",
+    "noticeUrlHint": "Avant le dépôt, la boîte de dépôt indique que votre association est responsable et renvoie vers cette page. Vide = déclaration par défaut de la plateforme.",
+    "noticeSave": "Enregistrer le lien"
+  },
+  "activity": {
+    "intro": "Modifications, connexions et accès de la plateforme hocX aux données de cette organisation. Sans adresses IP ni e-mail.",
+    "filterAll": "Tous",
+    "filterFailures": "Échoués",
+    "category": "Domaine",
+    "allCategories": "Tous les domaines",
+    "colTime": "Moment",
+    "colAction": "Opération",
+    "colActor": "Par",
+    "colOutcome": "Résultat",
+    "loading": "Chargement …",
+    "empty": "Aucune entrée",
+    "actor": {
+      "platform": "Plateforme hocX",
+      "system": "Système",
+      "deleted": "Personne supprimée"
+    },
+    "outcome": {
+      "success": "Réussi",
+      "failure": "Échoué"
+    }
+  },
+  "retention": {
+    "intro": "Définissez combien de temps l’association conserve certaines données. Toutes les règles sont désactivées jusqu’à ce que vous les activiez. hocX propose chaque jour les éléments concernés ; vous les confirmez ou les rejetez. Les anciens membres sont seulement désactivés, jamais supprimés.",
+    "rulesTitle": "Délais",
+    "rules": {
+      "submissions_months": {
+        "label": "Supprimer les dépôts de la boîte de dépôt après l’échéance",
+        "hint": "Concerne les dépôts avec échéance. Les fichiers déposés et leurs aperçus sont supprimés."
+      },
+      "former_members_years": {
+        "label": "Désactiver les anciens membres après leur départ",
+        "hint": "La connexion est bloquée et les sessions en cours se terminent. Nom, présences, amendes et procès-verbaux restent inchangés."
+      },
+      "unlinked_gallery_years": {
+        "label": "Proposer les anciennes images de la galerie sans album ni rendez-vous",
+        "hint": "Proposition uniquement – jamais supprimées automatiquement."
+      }
+    },
+    "unit": {
+      "months": "Mois",
+      "years": "Ans"
+    },
+    "autoApply": "Appliquer automatiquement les propositions pour les dépôts et les anciens membres",
+    "autoApplyHint": "Les images de la galerie restent toujours une proposition. Chaque action figure dans l’historique.",
+    "save": "Enregistrer",
+    "saved": "Conservation enregistrée.",
+    "saveFailed": "L’enregistrement a échoué.",
+    "loadFailed": "Impossible de charger les propositions.",
+    "proposalsTitle": "Propositions",
+    "refresh": "Vérifier maintenant",
+    "empty": "Aucune proposition ouverte.",
+    "kind": {
+      "submission_upload": "Dépôts ({count})",
+      "former_member": "Désactiver les anciens membres ({count})",
+      "gallery_image": "Images de la galerie ({count})"
+    },
+    "unnamed": "Sans nom",
+    "selectAll": "Tout sélectionner",
+    "dismiss": "Rejeter",
+    "apply": "Appliquer",
+    "applyConfirm": "{count, plural, one {Appliquer une proposition ?} other {Appliquer # propositions ?}} Les dépôts et images de la galerie sont supprimés définitivement, les membres désactivés.",
+    "decided": "{done} effectuées, {failed} en échec."
+  }
 }

@@ -1,13 +1,15 @@
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from redis.exceptions import RedisError
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.cycle_utils import format_cycle_name
 from app.core.db import get_db
+from app.core.redis_client import get_redis_sync
 from app.core.security import CurrentUser, get_current_user, require_reader
 from app.models.entities import CycleConfig, FinanceAccount, Participant, Protocol
 from app.services import public_id_service
@@ -22,6 +24,7 @@ from app.services.statistics_common import (
     fetch_group_session_rows,
     fetch_group_tagged_cycles,
     fetch_todo_rows,
+    own_person_key,
 )
 
 router = APIRouter()
@@ -103,6 +106,8 @@ class GroupStat(BaseModel):
 
 
 class StatisticsOverview(BaseModel):
+    # "own": Bussen/Anwesenheit je Person enthalten nur die eigene Zeile (Datenschutz-Audit PRIV-001).
+    per_person_scope: Literal["all", "own"] = "all"
     attendance_by_participant: list[AttendanceStat]
     attendance_over_time: list[AttendanceMonth]
     todos: TodoSummary
@@ -119,14 +124,43 @@ class StatisticsOverview(BaseModel):
 # ── Endpoint ─────────────────────────────────────────────────────────────────
 
 
+# Hintergrund-Abfragen offener Diagramme (cached=1) teilen sich das Ergebnis je Mandant und
+# Auswahl für STATS_CACHE_SECONDS (Concurrency-Audit CONC-016: jede offene Protokollseite rechnete
+# alle 15 s alle Anwesenheitsblöcke des Zyklus neu). Explizite Aktualisierungen rechnen frisch.
+STATS_CACHE_SECONDS = 30
+
+
+def _stats_cache_key(user: CurrentUser, cycle_config_id: uuid.UUID | None, cycle_offset: int) -> str:
+    finance = "finance" in user.current_tenant_features
+    return f"hocx:stats:{user.current_tenant_id}:{cycle_config_id or '-'}:{cycle_offset}:{int(finance)}"
+
+
 @router.get("/statistics/overview", response_model=StatisticsOverview)
 def get_statistics_overview(
     cycle_config_id: uuid.UUID | None = None,
     cycle_offset: Annotated[int, Query(ge=-3, le=0)] = 0,
+    cached: bool = False,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_reader(user)
+    key = _stats_cache_key(user, cycle_config_id, cycle_offset)
+    if cached:
+        try:
+            raw = get_redis_sync().get(key)
+        except RedisError:
+            raw = None
+        if raw:
+            return StatisticsOverview.model_validate_json(raw)
+    result = _compute_statistics_overview(db, user, cycle_config_id, cycle_offset)
+    try:
+        get_redis_sync().set(key, result.model_dump_json(), ex=STATS_CACHE_SECONDS)
+    except RedisError:
+        pass  # Cache ist best effort
+    return result
+
+
+def _compute_statistics_overview(db: Session, user: CurrentUser, cycle_config_id: uuid.UUID | None, cycle_offset: int) -> StatisticsOverview:
     tenant_id = user.current_tenant_id
     try:
         bounds = chart_cycle_bounds(db, tenant_id, cycle_config_id, cycle_offset)
@@ -181,6 +215,9 @@ def get_statistics_overview(
     # ── Attendance ───────────────────────────────────────────────────────────
     attendance_blocks = fetch_attendance_blocks(db, tenant_id, bounds)
     monthly_att, per_participant_att = aggregate_attendance(attendance_blocks)
+    # Leser sehen je Person nur sich selbst (PRIV-001), siehe statistics_common.own_person_key.
+    own_key = own_person_key(db, user)
+    sees_everyone = own_key is None
 
     attendance_by_participant = sorted(
         [
@@ -193,6 +230,7 @@ def get_statistics_overview(
                 total=p.counts.total,
             )
             for p in per_participant_att
+            if sees_everyone or p.key == own_key
         ],
         key=lambda x: x.name,
     )
@@ -223,6 +261,7 @@ def get_statistics_overview(
                 currency=r.currency or "", participant_key=r.participant_key,
             )
             for r in fetch_fines_by_participant(db, tenant_id, bounds)
+            if sees_everyone or r.participant_key == own_key
         ],
         key=lambda x: x.count,
         reverse=True,
@@ -239,7 +278,8 @@ def get_statistics_overview(
     ]
 
     # ── Finance by month ─────────────────────────────────────────────────────
-    finance_rows = fetch_finance_by_account_month(db, tenant_id, bounds)
+    # Finanzzahlen nur mit gebuchtem Feature, wie die Finanzseite (require_finance_read).
+    finance_rows = fetch_finance_by_account_month(db, tenant_id, bounds) if "finance" in user.current_tenant_features else []
     account_public_ids = public_id_service.resolve_public_ids(db, FinanceAccount, [r.account_id for r in finance_rows])
 
     finance_by_month = [
@@ -273,4 +313,5 @@ def get_statistics_overview(
         protocols_total=protocols_total,
         cycles=cycles,
         groups_stats=groups_stats,
+        per_person_scope="all" if sees_everyone else "own",
     )

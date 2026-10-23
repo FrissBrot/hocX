@@ -238,5 +238,10 @@
   "windowHelp": "Lascia un campo vuoto per un periodo illimitato su quel lato. Senza entrambi i valori, la consegna resta aperta finché non viene chiusa manualmente.",
   "windowLabel": "Finestra temporale",
   "windowNoneSentence": "Resta aperta finché non viene chiusa manualmente.",
-  "yesterday": "ieri"
+  "yesterday": "ieri",
+  "deleteAssignmentTitle": "Elimina consegna",
+  "deleteFileConfirm": "Eliminare definitivamente «{name}»? Scompare anche da foto e album.",
+  "deleteFileAction": "Elimina file",
+  "fileDeletedToast": "File eliminato",
+  "fileDeleteFailed": "Impossibile eliminare il file"
 }

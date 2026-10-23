@@ -437,5 +437,130 @@
     "listColumn2": "Responsabile",
     "imageCaption": "Immagine di esempio",
     "yes": "Sì"
+  },
+  "dataExport": {
+    "section": {
+      "person": "Persona",
+      "attendance": "Presenze",
+      "membership_changes": "Entrate e uscite",
+      "fines": "Multe",
+      "todos": "Attività",
+      "responsibilities": "Responsabilità",
+      "events": "Appuntamenti",
+      "templates": "Modelli di verbale",
+      "lists": "Liste",
+      "files": "File caricati",
+      "security": "Accesso e abbonamenti",
+      "activity": "Attività recenti",
+      "mentions": "Menzioni"
+    },
+    "col": {
+      "first_name": "Nome",
+      "last_name": "Cognome",
+      "display_name": "Nome visualizzato",
+      "email": "E-mail",
+      "role": "Ruolo",
+      "login_enabled": "Accesso attivo",
+      "is_active": "Attivo",
+      "joined_at": "Entrata",
+      "left_at": "Uscita",
+      "preferred_language": "Lingua",
+      "created_at": "Creato",
+      "protocol": "Verbale",
+      "title": "Titolo",
+      "date": "Data",
+      "status": "Stato",
+      "type": "Tipo",
+      "amount": "Importo",
+      "currency": "Valuta",
+      "collected_at": "Incassato il",
+      "delete_comment": "Motivo dell'eliminazione",
+      "task": "Attività",
+      "due_date": "Scadenza",
+      "completed_at": "Completato il",
+      "notes": "Note",
+      "element": "Punto",
+      "location": "Luogo",
+      "template": "Modello",
+      "exclude_from_attendance": "Escluso dalle presenze",
+      "list": "Lista",
+      "position": "Riga",
+      "name": "Nome",
+      "mime_type": "Tipo di file",
+      "size_bytes": "Dimensione (byte)",
+      "taken_at": "Scattata",
+      "kind": "Tipo",
+      "detail": "Dettaglio",
+      "label": "Etichetta",
+      "last_used_at": "Ultimo utilizzo",
+      "action": "Operazione",
+      "outcome": "Esito",
+      "block": "Sezione",
+      "excerpt": "Estratto",
+      "end_date": "Data di fine",
+      "category": "Categoria",
+      "tag": "Etichetta",
+      "cancelled": "Annullato",
+      "organizers": "Organizzazione",
+      "leadership": "Direzione",
+      "participants": "Partecipanti",
+      "description": "Descrizione",
+      "assignees": "Responsabili"
+    },
+    "file": {
+      "workbook": "Rapporto dati",
+      "readme": "LEGGIMI",
+      "personalPrefix": "Accesso-dati"
+    },
+    "personalReadme": "Rapporto di accesso ai dati per {name} ({tenant}), creato il {date}.\\n\\nRapporto dati.xlsx contiene un foglio per ambito: dati anagrafici, presenze (solo le tue righe), multe, attività, responsabilità, appuntamenti, liste, file caricati (elenco), fattori di accesso e abbonamenti calendario (senza segreti), attività recenti e menzioni nei verbali.\\ndaten.json contiene gli stessi dati in formato leggibile dalle macchine.\\n\\nLe menzioni sono trovate cercando il nome e possono essere incomplete. Verbali e dati di cassa sono conservati dall'organizzazione; rivolgi le domande all'organizzazione.",
+    "tenant": {
+      "prefix": "Export-associazione",
+      "yes": "sì",
+      "no": "no",
+      "file": {
+        "members": "Membri",
+        "events": "Appuntamenti",
+        "attendance": "Presenze",
+        "fines": "Multe",
+        "finances": "Finanze",
+        "todos": "Compiti"
+      },
+      "sheet": {
+        "members": "Membri",
+        "events": "Appuntamenti",
+        "attendance": "Presenze",
+        "fines": "Multe",
+        "finances": "Finanze",
+        "todos": "Compiti"
+      },
+      "folder": {
+        "lists": "Liste",
+        "protocols": "Verbali",
+        "photos": "Foto",
+        "gallery": "Galleria",
+        "submissions": "Consegne",
+        "documents": "Documenti"
+      },
+      "attendance": {
+        "present": "presente",
+        "late": "in ritardo",
+        "excused": "giustificato",
+        "absent": "assente"
+      },
+      "fineType": {
+        "late": "Ritardo",
+        "absent": "Assenza"
+      },
+      "fineStatus": {
+        "pending": "aperta",
+        "collected": "incassata",
+        "deleted": "eliminata"
+      },
+      "withFiles": "Foto, consegne e documenti sono inclusi come file originali nelle cartelle Foto, Consegne e Documenti.",
+      "withoutFiles": "Questo export non contiene foto, consegne o documenti (solo tabelle e PDF dei verbali).",
+      "protocolsWithoutPdf": "Verbali chiusi senza PDF salvato (aprirli in hocX ed esportarli in PDF):",
+      "missingFiles": "Non inclusi perché non trovati nell’archivio: {count} file."
+    },
+    "tenantReadme": "Export dell’associazione {tenant}, creato il {date}.\\n\\nTabelle (Excel): membri, appuntamenti, presenze (persona × seduta), multe, finanze (un foglio per conto), compiti e nella cartella Liste un file per lista. Nomi invece di numeri interni, date nel formato GG.MM.AAAA, importi come numeri.\\nVerbali: l’ultimo PDF generato di ogni verbale chiuso.\\n{files}\\n\\nLe credenziali (password, chiavi a due fattori, link) non sono incluse. Conservare in modo sicuro: il file contiene dati personali."
   }
 }

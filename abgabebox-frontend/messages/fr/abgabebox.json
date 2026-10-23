@@ -76,6 +76,7 @@
     "captchaPlaceholder": "Vérification de sécurité (aucun FriendlyCaptcha configuré – environnement de test/dev)",
     "submit": "Envoyer",
     "submitting": "Envoi en cours…",
+    "busyRetry": "Beaucoup d’envois en ce moment – nouvel essai dans {seconds, plural, one {# seconde} other {# secondes}} …",
     "successTitle": "Merci, dépôt reçu",
     "successCount": "{count, plural, one {# fichier téléversé pour ce dépôt.} other {# fichiers téléversés pour ce dépôt.}}",
     "uploadMore": "Déposer un autre fichier",
@@ -104,7 +105,11 @@
       "element": "Document",
       "files": "Fichiers",
       "receivedAt": "Reçu le"
-    }
+    },
+    "includeGps": "Envoyer les données GPS de l’image",
+    "privacyResponsible": "{tenant} est responsable de vos fichiers.",
+    "privacyLink": "Protection des données",
+    "privacyCaptcha": "Pour éviter le spam, Friendly Captcha vérifie votre navigateur sans cookies ni suivi."
   },
   "language": {
     "label": "Langue"

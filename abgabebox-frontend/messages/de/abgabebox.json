@@ -76,6 +76,7 @@
     "captchaPlaceholder": "Sicherheitscheck (kein FriendlyCaptcha konfiguriert – Test-/Dev-Betrieb)",
     "submit": "Abgeben",
     "submitting": "Wird hochgeladen…",
+    "busyRetry": "Gerade laden viele gleichzeitig hoch – neuer Versuch in {seconds, plural, one {# Sekunde} other {# Sekunden}} …",
     "successTitle": "Danke, Abgabe eingegangen",
     "successCount": "{count, plural, one {# Datei für diese Abgabe hochgeladen.} other {# Dateien für diese Abgabe hochgeladen.}}",
     "uploadMore": "Weitere Datei einreichen",
@@ -104,7 +105,11 @@
       "element": "Dokument",
       "files": "Dateien",
       "receivedAt": "Eingegangen"
-    }
+    },
+    "includeGps": "GPS-Daten des Bildes mitsenden",
+    "privacyResponsible": "Verantwortlich für deine Dateien ist {tenant}.",
+    "privacyLink": "Datenschutzhinweise",
+    "privacyCaptcha": "Zum Schutz vor Spam prüft Friendly Captcha deinen Browser ohne Cookies und ohne Tracking."
   },
   "language": {
     "label": "Sprache"

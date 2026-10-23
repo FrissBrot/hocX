@@ -308,7 +308,7 @@ def configure_restored_database(database_url: str, *, profile: dict[str, Any], g
     Zielprofils und räumt Zustände auf, die nur zur alten Umgebung gehörten (offene Migrationen,
     Storage-Wartungsfenster, Backup-Hold). profile enthält die Spalten aus PROFILE_COLUMNS
     (Zugangsdaten bereits mit STORAGE_CREDENTIALS_KEY verschlüsselt) plus public_id und name."""
-    engine = create_engine(database_url, poolclass=NullPool)
+    engine = create_engine(database_url, poolclass=NullPool, hide_parameters=True)
     now = datetime.now(UTC)
     try:
         with engine.begin() as conn:
@@ -383,7 +383,7 @@ def reference_report(database_url: str, restored_keys: Iterator[tuple[str, str]]
 
     from app.services.storage_migration_service import database_references
 
-    engine = create_engine(database_url, poolclass=NullPool)
+    engine = create_engine(database_url, poolclass=NullPool, hide_parameters=True)
     try:
         with engine.connect() as conn:
             conn.execute(text("CREATE TEMP TABLE restored_key (namespace text, key text, PRIMARY KEY (namespace, key)) ON COMMIT PRESERVE ROWS"))

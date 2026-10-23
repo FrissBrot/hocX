@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.core.db import get_db
+from app.core.db import get_db, release_for_stream
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
 from app.core.storage import object_response
 from app.models import StoredFile
@@ -73,7 +73,7 @@ def get_document_file(
     # Download, nie MIME-Sniffing.
     mime = (stored_file.mime_type or "").lower()
     is_pdf = mime == "application/pdf" or (role == "preview" and mime == "image/png")
-    return object_response(
+    return release_for_stream(db, object_response(
         request,
         namespace_for_stored_file(db, stored_file),
         stored_file.storage_path,
@@ -82,7 +82,7 @@ def get_document_file(
         attachment=download or not is_pdf,
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=3600"},
         not_found_detail="Datei fehlt im Speicher",
-    )
+    ))
 
 
 @router.get("/documents/{document_id}/versions/{version_id}/text", response_model=DocumentText)

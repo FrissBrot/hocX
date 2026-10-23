@@ -4,7 +4,10 @@ set -euo pipefail
 # Spielt einen Dump aus backups/ (backup_db.sh oder Pre-Deploy-Backup von deploy.sh) in die
 # Datenbank der Instanz dieses Checkouts zurueck.
 #
-# Usage: scripts/restore_db.sh <backups/…sql.gz> [--yes]
+# Usage: scripts/restore_db.sh <backups/…sql.gz|…sql.gz.gpg> [--yes]
+#
+# Verschlüsselte Dumps (.sql.gz.gpg, scripts/lib/dump_crypto.sh) brauchen den privaten Schlüssel aus
+# der Notfallmappe: BACKUP_DUMP_PRIVATE_KEY_PATH=<Datei> setzen oder im GPG-Schlüsselbund haben.
 #
 # Warum ein eigenes Skript (Audit MAIN-OPS-002): Die Dumps sind Plain-SQL ohne --clean. Frueher
 # empfahl das RUNBOOK, sie direkt in die laufende, bereits migrierte Datenbank zu pipen. Dabei
@@ -34,6 +37,8 @@ APP_DB_ROLES=(hocx_app hocx_abgabebox hocx_photo_worker)
 source "$REPO_DIR/scripts/lib/env.sh"
 # shellcheck source=scripts/lib/stack.sh
 source "$REPO_DIR/scripts/lib/stack.sh"
+# shellcheck source=scripts/lib/dump_crypto.sh
+source "$REPO_DIR/scripts/lib/dump_crypto.sh"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 fail() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] FEHLER: $*" >&2; exit 1; }
@@ -55,10 +60,19 @@ if [ -z "$DUMP_FILE" ]; then
   exit 64
 fi
 case "$DUMP_FILE" in
-  *.sql.gz) ;;
-  *) fail "Erwartet wird ein gzip-komprimierter Plain-SQL-Dump (*.sql.gz): $DUMP_FILE" ;;
+  *.sql.gz|*.sql.gz.gpg) ;;
+  *) fail "Erwartet wird ein gzip-komprimierter Plain-SQL-Dump (*.sql.gz oder *.sql.gz.gpg): $DUMP_FILE" ;;
 esac
 [ -f "$DUMP_FILE" ] && [ -s "$DUMP_FILE" ] || fail "Dump $DUMP_FILE fehlt oder ist leer."
+if [[ "$DUMP_FILE" == *.gpg ]]; then
+  # Einmal entschlüsseln (bleibt gzip), im geschützten Backup-Ordner, am Ende entfernt.
+  mkdir -p "$BACKUP_DIR"
+  chmod 700 "$BACKUP_DIR"
+  PLAIN_DUMP="$(mktemp "$BACKUP_DIR/.restore-XXXXXX.sql.gz")"
+  trap 'rm -f "$PLAIN_DUMP"' EXIT
+  decrypt_dump_to "$DUMP_FILE" "$PLAIN_DUMP" || fail "Dump $DUMP_FILE konnte nicht entschlüsselt werden (privater Schlüssel?)."
+  DUMP_FILE="$PLAIN_DUMP"
+fi
 gzip -t "$DUMP_FILE" 2> /dev/null || fail "Dump $DUMP_FILE ist kein gueltiges gzip (beschaedigt/abgeschnitten?)."
 
 [ -f "$ENV_FILE" ] || fail "Env-Datei $ENV_FILE fehlt."
@@ -102,9 +116,10 @@ fi
 
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
-SAFETY_FILE="$BACKUP_DIR/$(date +%Y%m%d-%H%M%S)-pre-restore.sql.gz"
+check_dump_encryption || fail "Keine Sicherung ohne Verschlüsselung möglich - nichts verändert (Dienste bleiben gestoppt)."
+SAFETY_FILE="$BACKUP_DIR/$(date +%Y%m%d-%H%M%S)-pre-restore$(dump_suffix)"
 log "Sichere aktuellen Stand: $SAFETY_FILE"
-if ! "${DC[@]}" exec -T db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" | gzip > "$SAFETY_FILE.tmp" \
+if ! "${DC[@]}" exec -T db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" | write_dump "$SAFETY_FILE.tmp" \
   || [ ! -s "$SAFETY_FILE.tmp" ]; then
   rm -f "$SAFETY_FILE.tmp"
   fail "Sicherung des aktuellen Stands fehlgeschlagen - nichts veraendert (Dienste bleiben gestoppt)."

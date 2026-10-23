@@ -2,7 +2,12 @@
   "title": "Backup",
   "description": "Backup esterno cifrato di database e archivio file con BorgBackup sulla Hetzner Storage Box.",
   "loadFailed": "Impossibile caricare lo stato dei backup.",
-  "tabs": { "overview": "Panoramica", "history": "Cronologia", "restore": "Ripristino", "settings": "Impostazioni" },
+  "tabs": {
+    "overview": "Panoramica",
+    "history": "Cronologia",
+    "restore": "Ripristino",
+    "settings": "Impostazioni"
+  },
   "actions": {
     "backupNow": "Avvia backup ora",
     "restoreTest": "Avvia test di ripristino",
@@ -19,7 +24,12 @@
     "disabled": "Il sistema di backup non è ancora configurato (BACKUP_ENABLED). Istruzioni: RUNBOOK, sezione backup.",
     "workerDown": "Il worker di backup non risponde - al momento i backup non vengono eseguiti."
   },
-  "overall": { "ok": "In ordine", "warning": "Avviso", "critical": "Critico", "disabled": "Non configurato" },
+  "overall": {
+    "ok": "In ordine",
+    "warning": "Avviso",
+    "critical": "Critico",
+    "disabled": "Non configurato"
+  },
   "overview": {
     "overall": "Stato generale",
     "problemCount": "{count, plural, =0 {Nessun problema aperto} one {# problema aperto} other {# problemi aperti}}",
@@ -50,8 +60,17 @@
     "lastFailure": "Ultimo backup non riuscito",
     "failureLine": "{time}: {error}"
   },
-  "level": { "created": "creato", "verified": "verificato", "restoreTested": "ripristino testato" },
-  "repository": { "reachable": "raggiungibile", "unreachable": "non raggiungibile", "unknown": "sconosciuto", "checkedAt": "verificato {time}" },
+  "level": {
+    "created": "creato",
+    "verified": "verificato",
+    "restoreTested": "ripristino testato"
+  },
+  "repository": {
+    "reachable": "raggiungibile",
+    "unreachable": "non raggiungibile",
+    "unknown": "sconosciuto",
+    "checkedAt": "verificato {time}"
+  },
   "problems": {
     "disabled": "Il backup esterno non è configurato.",
     "configuration": "La configurazione di backup del worker non è valida - vedere i log del backup-worker.",
@@ -72,19 +91,59 @@
     "verify_overdue": "La verifica d'integrità è in ritardo.",
     "restore_test_overdue": "Il test di ripristino è in ritardo."
   },
-  "kind": { "backup": "Backup", "verify": "Verifica d'integrità", "restore_test": "Test di ripristino", "retention": "Conservazione" },
-  "trigger": { "schedule": "Pianificazione", "manual": "Manuale", "pre_restore": "Punto di salvataggio prima del ripristino", "pre_deploy": "Prima del deployment", "cli": "Riga di comando" },
+  "kind": {
+    "backup": "Backup",
+    "verify": "Verifica d'integrità",
+    "restore_test": "Test di ripristino",
+    "retention": "Conservazione"
+  },
+  "trigger": {
+    "schedule": "Pianificazione",
+    "manual": "Manuale",
+    "pre_restore": "Punto di salvataggio prima del ripristino",
+    "pre_deploy": "Prima del deployment",
+    "cli": "Riga di comando"
+  },
   "state": {
-    "queued": "In attesa", "preparing": "Preparazione", "running": "In corso", "verifying": "Verifica", "completed": "Riuscito",
-    "partial": "Parziale", "failed": "Non riuscito", "cancelled": "Annullato", "interrupted": "Interrotto"
+    "queued": "In attesa",
+    "preparing": "Preparazione",
+    "running": "In corso",
+    "verifying": "Verifica",
+    "completed": "Riuscito",
+    "partial": "Parziale",
+    "failed": "Non riuscito",
+    "cancelled": "Annullato",
+    "interrupted": "Interrotto"
   },
   "restoreState": {
-    "queued": "In attesa", "preparing": "Preparazione", "running": "In corso", "verifying": "Verifica", "cutover": "Commutazione",
-    "completed": "Completato", "failed": "Non riuscito", "cancelled": "Annullato", "interrupted": "Interrotto", "rolled_back": "Ripristinato lo stato precedente"
+    "queued": "In attesa",
+    "preparing": "Preparazione",
+    "running": "In corso",
+    "verifying": "Verifica",
+    "cutover": "Commutazione",
+    "completed": "Completato",
+    "failed": "Non riuscito",
+    "cancelled": "Annullato",
+    "interrupted": "Interrotto",
+    "rolled_back": "Ripristinato lo stato precedente"
   },
-  "setState": { "completed": "completo", "partial": "parziale", "failed": "non riuscito", "invalid": "non valido", "pruned": "rimosso" },
-  "verify": { "unverified": "Non verificato", "verified": "Verificato", "failed": "Verifica non riuscita" },
-  "restoreTest": { "untested": "Ripristino non testato", "passed": "Ripristino testato", "failed": "Test di ripristino non riuscito" },
+  "setState": {
+    "completed": "completo",
+    "partial": "parziale",
+    "failed": "non riuscito",
+    "invalid": "non valido",
+    "pruned": "rimosso"
+  },
+  "verify": {
+    "unverified": "Non verificato",
+    "verified": "Verificato",
+    "failed": "Verifica non riuscita"
+  },
+  "restoreTest": {
+    "untested": "Ripristino non testato",
+    "passed": "Ripristino testato",
+    "failed": "Test di ripristino non riuscito"
+  },
   "phase": {
     "transfer": "Trasferimento dei file",
     "registry_hash": "Calcolo hash degli oggetti esistenti",
@@ -133,18 +192,59 @@
     "partialDetail": "{count, plural, one {# file mancante} other {# file mancanti}}"
   },
   "columns": {
-    "time": "Data", "id": "ID", "kind": "Tipo", "state": "Stato", "duration": "Durata", "database": "Database", "objects": "Oggetti",
-    "newData": "Nuovi trasferiti", "stored": "Nuovo spazio", "verification": "Prova", "error": "Errore", "actions": "Azioni", "event": "Evento",
-    "actor": "Avviato da", "archive": "Punto di ripristino", "tenant": "Mandante", "users": "Utenti", "size": "Dimensione"
+    "time": "Data",
+    "id": "ID",
+    "kind": "Tipo",
+    "state": "Stato",
+    "duration": "Durata",
+    "database": "Database",
+    "objects": "Oggetti",
+    "newData": "Nuovi trasferiti",
+    "stored": "Nuovo spazio",
+    "verification": "Prova",
+    "error": "Errore",
+    "actions": "Azioni",
+    "event": "Evento",
+    "actor": "Avviato da",
+    "archive": "Punto di ripristino",
+    "tenant": "Mandante",
+    "users": "Utenti",
+    "size": "Dimensione"
   },
-  "events": { "title": "{count, plural, one {# evento} other {# eventi}}", "empty": "Nessun evento.", "worker": "Worker" },
+  "events": {
+    "title": "{count, plural, one {# evento} other {# eventi}}",
+    "empty": "Nessun evento.",
+    "worker": "Worker"
+  },
   "event": {
-    "state": "Stato", "requested": "Richiesto", "hold_acquired": "Blocco impostato", "hold_renewed": "Blocco rinnovato", "registry_hashed": "Registro con hash", "cutover_recovery": "Journal dello scambio valutato", "captured": "Acquisito", "pool_written": "Contenuti salvati",
-    "batch_restart": "Lotto ripetuto", "restore_point_written": "Punto scritto", "restore_point_adopted": "Punto acquisito", "resumed": "Ripreso", "retry": "Nuovo tentativo",
-    "index_reconciled": "Indice allineato", "retention": "Conservazione", "gc": "Pulizia", "cancel_requested": "Annullamento richiesto",
-    "rescue_started": "Punto di salvataggio", "rescue_done": "Punto di salvataggio pronto", "rescue_skipped": "Senza punto di salvataggio", "prepared": "Preparato",
-    "database_restored": "Database", "objects_restored": "File", "alembic_upgraded": "Schema", "verified": "Verificato",
-    "cutover_done": "Commutato", "rolled_back": "Stato precedente ripristinato", "collected": "Raccolto"
+    "state": "Stato",
+    "requested": "Richiesto",
+    "hold_acquired": "Blocco impostato",
+    "hold_renewed": "Blocco rinnovato",
+    "registry_hashed": "Registro con hash",
+    "cutover_recovery": "Journal dello scambio valutato",
+    "captured": "Acquisito",
+    "pool_written": "Contenuti salvati",
+    "batch_restart": "Lotto ripetuto",
+    "restore_point_written": "Punto scritto",
+    "restore_point_adopted": "Punto acquisito",
+    "resumed": "Ripreso",
+    "retry": "Nuovo tentativo",
+    "index_reconciled": "Indice allineato",
+    "retention": "Conservazione",
+    "gc": "Pulizia",
+    "cancel_requested": "Annullamento richiesto",
+    "rescue_started": "Punto di salvataggio",
+    "rescue_done": "Punto di salvataggio pronto",
+    "rescue_skipped": "Senza punto di salvataggio",
+    "prepared": "Preparato",
+    "database_restored": "Database",
+    "objects_restored": "File",
+    "alembic_upgraded": "Schema",
+    "verified": "Verificato",
+    "cutover_done": "Commutato",
+    "rolled_back": "Stato precedente ripristinato",
+    "collected": "Raccolto"
   },
   "detail": {
     "title": "{kind}: dettagli",
@@ -165,7 +265,11 @@
     "missing_objects": "{count, plural, one {# file non è stato salvato} other {# file non sono stati salvati}} (assenti nello storage).",
     "dangling_references": "{count, plural, one {# riferimento} other {# riferimenti}} del database puntava(no) già a file mancanti al momento del backup."
   },
-  "duration": { "seconds": "{seconds, number} s", "minutes": "{minutes, number} min", "hours": "{hours, number} h" },
+  "duration": {
+    "seconds": "{seconds, number} s",
+    "minutes": "{minutes, number} min",
+    "hours": "{hours, number} h"
+  },
   "restore": {
     "wizardTitle": "Ripristino",
     "wizardDescription": "Ripristina un mandante come nuova copia o l'intera installazione da un punto di ripristino.",
@@ -199,8 +303,14 @@
     "confirmationLabel": "Digita per confermare: {phrase}",
     "totp": "Codice TOTP attuale",
     "totpHelp": "Conferma recente con l'autenticatore del tuo account amministratore.",
-    "panelTitle": { "full": "Ripristino completo", "tenant_copy": "Ripristino del mandante come copia" },
-    "kindShort": { "full": "Completo", "tenant_copy": "Mandante (copia)" },
+    "panelTitle": {
+      "full": "Ripristino completo",
+      "tenant_copy": "Ripristino del mandante come copia"
+    },
+    "kindShort": {
+      "full": "Completo",
+      "tenant_copy": "Mandante (copia)"
+    },
     "panelDescription": "{archive} · richiesto {time}",
     "cutoverHint": "L'applicazione è in manutenzione e i database vengono scambiati. Questa pagina può essere brevemente non disponibile.",
     "contentsProgress": "{done, number} contenuti ripristinati ({size})",
@@ -209,9 +319,17 @@
     "rolledBack": "Il test dopo la commutazione non è riuscito - lo stato precedente è di nuovo attivo.",
     "importWarnings": "{count, plural, one {# nota d'importazione} other {# note d'importazione}}",
     "historyTitle": "Ripristini precedenti",
-    "historyEmpty": "Nessun ripristino finora."
+    "historyEmpty": "Nessun ripristino finora.",
+    "replayErasures": "Riapplicare le eliminazioni successive al punto di ripristino",
+    "replayErasuresHint": "Persone, file, verbali o mandanti eliminati dopo questo punto di ripristino vengono eliminati di nuovo dopo il ripristino. Disattivare solo in eccezioni motivate.",
+    "replayErasuresReason": "Motivo per cui i dati eliminati devono tornare"
   },
-  "preview": { "schema": "Schema del database", "target": "Destinazione", "size": "Volume di dati", "steps": "Procedura" },
+  "preview": {
+    "schema": "Schema del database",
+    "target": "Destinazione",
+    "size": "Volume di dati",
+    "steps": "Procedura"
+  },
   "schema": {
     "same": "corrisponde a questa versione di hocX",
     "upgrade": "più vecchio - migrato in modo controllato dopo il ripristino",

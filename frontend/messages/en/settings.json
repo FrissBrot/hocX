@@ -2,13 +2,23 @@
   "profileModal": {
     "title": "User profile",
     "description": "Personal settings, language and security for your account.",
-    "tabs": { "profile": "Profile", "security": "Security" },
+    "tabs": {
+      "profile": "Profile",
+      "security": "Security",
+      "data": "My data"
+    },
     "languageLabel": "Language",
     "accordionLabel": "Collapse protocol items automatically",
     "accordionHint": "Only show the active item expanded.",
     "save": "Save profile",
     "logout": "Log out",
-    "saveFailed": "Profile could not be saved."
+    "saveFailed": "Profile could not be saved.",
+    "personalData": {
+      "description": "Download all data hocX has stored about you – as a password-protected ZIP file with an Excel workbook and a machine-readable JSON file.",
+      "download": "Download my data"
+    }
   },
-  "logoutFailed": "Logout failed. Please try again."
+  "logoutFailed": "Logout failed. Please try again.",
+  "logoutPendingConfirm": "There are unsaved changes. Signing out discards them on this device.",
+  "logoutAnyway": "Sign out anyway"
 }

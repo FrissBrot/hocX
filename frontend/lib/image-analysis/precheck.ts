@@ -12,9 +12,10 @@ export type PrecheckContext = "gallery" | "document" | "protocol_image";
 
 export type PrecheckEntry = { index: number; file: Pick<File, "name" | "size" | "type">; analysis: FileAnalysis };
 
-export function clientMetadataPayload(analysis: FileAnalysis) {
+/** includeGps=false: «GPS-Daten des Bildes mitsenden» aus (Datenschutz-Audit Paket 9.3). */
+export function clientMetadataPayload(analysis: FileAnalysis, includeGps = true) {
   const { taken_at, taken_offset, gps, camera_make, camera_model, width, height, orientation } = analysis.metadata;
-  const payload = { taken_at, taken_offset, gps, camera_make, camera_model, width, height, orientation };
+  const payload = { taken_at, taken_offset, gps: includeGps ? gps : undefined, camera_make, camera_model, width, height, orientation };
   return Object.values(payload).some((value) => value !== undefined) ? payload : null;
 }
 
@@ -22,7 +23,7 @@ export function clientMetadataPayload(analysis: FileAnalysis) {
  * Fehler des Endpunkts `null` = alles normal hochladen. */
 export async function precheckUploads(
   entries: PrecheckEntry[],
-  options: { context: PrecheckContext; estimatedTakenOn?: string | null; signal?: AbortSignal },
+  options: { context: PrecheckContext; estimatedTakenOn?: string | null; signal?: AbortSignal; includeGps?: boolean },
 ): Promise<Map<number, UploadPrecheckResult> | null> {
   const hashed = entries.filter((entry) => entry.analysis.sha256);
   const results = new Map<number, UploadPrecheckResult>();
@@ -42,7 +43,7 @@ export async function precheckUploads(
             size: entry.file.size,
             mime_type: entry.file.type ? entry.file.type.slice(0, 100) : null,
             analysis: entry.analysis.analysis,
-            metadata: options.context === "gallery" ? clientMetadataPayload(entry.analysis) : null,
+            metadata: options.context === "gallery" ? clientMetadataPayload(entry.analysis, options.includeGps ?? true) : null,
           })),
         }),
       });
@@ -75,10 +76,10 @@ export function precheckToFileResult(name: string, result: UploadPrecheckResult)
  * dort übernimmt der Server Browser-Werte (Konvertierung nach JPEG). Für alle anderen Formate
  * liest er die Datei selbst - GPS & Co. werden dann gar nicht erst mitgeschickt
  * (Datenminimierung, der Auftrag speichert die Hinweise bis zu seinem Ende). */
-export function fileMetadataHints(analyses: FileAnalysis[]): string | null {
+export function fileMetadataHints(analyses: FileAnalysis[], includeGps = true): string | null {
   const hints = analyses
-    .filter((analysis) => analysis.format === "heic" && analysis.sha256 && clientMetadataPayload(analysis))
-    .map((analysis) => ({ sha256: analysis.sha256, metadata: clientMetadataPayload(analysis) }));
+    .filter((analysis) => analysis.format === "heic" && analysis.sha256 && clientMetadataPayload(analysis, includeGps))
+    .map((analysis) => ({ sha256: analysis.sha256, metadata: clientMetadataPayload(analysis, includeGps) }));
   return hints.length ? JSON.stringify(hints) : null;
 }
 

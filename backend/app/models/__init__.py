@@ -1,4 +1,7 @@
 from app.models.entities import (
+    RetentionProposal,
+    TenantRetentionPolicy,
+    TenantDataExport,
     AppUser,
     AttendanceFine,
     FineTariff,
@@ -54,6 +57,7 @@ from app.models.entities import (
     SystemErrorLog,
     SystemHealthEvent,
     SystemJobRun,
+    SystemRuntimeMetric,
     SystemJobStatus,
     TableSnapshot,
     TaskPackage,
@@ -134,6 +138,7 @@ __all__ = [
     "SystemErrorLog",
     "SystemHealthEvent",
     "SystemJobRun",
+    "SystemRuntimeMetric",
     "SystemJobStatus",
     "TableSnapshot",
     "TaskPackage",
@@ -147,6 +152,9 @@ __all__ = [
     "TenantDomain",
     "TenantTrust",
     "TenantFeature",
+    "RetentionProposal",
+    "TenantDataExport",
+    "TenantRetentionPolicy",
     "TenantStoragePackage",
     "TodoStatus",
     "UserProtocolAccess",
@@ -209,6 +217,7 @@ from app.models.document_entities import (  # noqa: E402 - eigene Datei, siehe M
     DocumentExtraction,
     DocumentFile,
     DocumentJob,
+    DocumentRenderJob,
     DocumentVersion,
 )
 
@@ -217,6 +226,7 @@ __all__ += [
     "DocumentExtraction",
     "DocumentFile",
     "DocumentJob",
+    "DocumentRenderJob",
     "DocumentVersion",
 ]
 

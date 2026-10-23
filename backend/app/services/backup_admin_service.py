@@ -446,6 +446,8 @@ def validate_restore(db: Session, request: Any) -> RestorePreviewRead:
         raise BackupAdminError("confirmation_mismatch", "Die Bestätigung stimmt nicht")
     if request.kind == "full" and request.skip_rescue_backup and not (request.skip_rescue_reason or "").strip():
         raise BackupAdminError("rescue_reason_missing", "Ohne Rettungspunkt ist eine Begründung erforderlich")
+    if not getattr(request, "replay_erasures", True) and not (getattr(request, "replay_erasures_reason", None) or "").strip():
+        raise BackupAdminError("erasure_reason_missing", "Ohne erneutes Anwenden der Löschungen ist eine Begründung erforderlich")
     return plan
 
 
@@ -464,6 +466,8 @@ def create_restore(db: Session, *, request: Any, actor_email: str, plan: Restore
                    "skip_rescue_backup": bool(request.skip_rescue_backup), "skip_rescue_reason": request.skip_rescue_reason}
     else:
         options = {"source_tenant_id": request.source_tenant_id, "new_name": request.new_name.strip()}
+    options["replay_erasures"] = bool(getattr(request, "replay_erasures", True))
+    options["replay_erasures_reason"] = getattr(request, "replay_erasures_reason", None)
     now = datetime.now(UTC)
     job = BackupRestoreJob(kind=request.kind, idempotency_key=key, backup_set_id=backup_set.id, archive_name=backup_set.archive_name,
                            options=options, plan=plan.model_dump(mode="json", exclude={"backup_set"}), requested_by_email=actor_email,

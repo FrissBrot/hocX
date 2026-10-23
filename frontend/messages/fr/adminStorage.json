@@ -118,7 +118,8 @@
     "disabled": "Désactivé",
     "inMigration": "En migration",
     "pinned": "Données en période de repli",
-    "sharedCredentials": "Boîte de dépôt sans identifiants propres"
+    "sharedCredentials": "Boîte de dépôt sans identifiants propres",
+    "encrypted": "Chiffré"
   },
   "test": {
     "ok": "OK",
@@ -236,7 +237,15 @@
     "tlsVerify": "Vérifier le certificat TLS",
     "caBundle": "Certificat CA personnalisé (PEM, facultatif)",
     "caBundleStored": "Un certificat CA est enregistré",
-    "enabled": "Profil activé"
+    "enabled": "Profil activé",
+    "serverSideEncryption": "Chiffrement côté serveur (AES-256)",
+    "serverSideEncryptionHelp": "Chaque objet est stocké chiffré chez le fournisseur ; le test de connexion le vérifie.",
+    "dataLocation": "Emplacement des données",
+    "dataLocationChoose": "Veuillez choisir",
+    "dataLocationHelp": "Déduit de la région pour AWS et Hetzner. Détermine si les données des associations quittent la Suisse ou l’UE.",
+    "transferBasis": "Base du transfert",
+    "transferBasisHelp": "p. ex. clauses contractuelles types et contrat de sous-traitance du …",
+    "locationConfirm": "Transfert à l’étranger vérifié, associations informées"
   },
   "addressing": {
     "auto": "Automatique",
@@ -274,7 +283,8 @@
         "text": "La migration ne peut pas démarrer sans test réussi."
       }
     },
-    "from": "De"
+    "from": "De",
+    "confirmThirdCountry": "La cible se trouve dans un pays tiers – transfert vérifié, associations informées"
   },
   "verifyMode": {
     "full": "Complète (relire le contenu et vérifier le SHA-256)",
@@ -332,5 +342,11 @@
     "lastTestFailed": "Dernier test {time} · échoué",
     "testing": "Test de la connexion …",
     "retest": "Tester à nouveau"
+  },
+  "location": {
+    "ch": "Suisse",
+    "eu_eea": "UE/EEE",
+    "adequate": "Pays adéquat",
+    "third_country": "Pays tiers"
   }
 }

@@ -56,5 +56,8 @@
   "documentBrand": "Corporate design",
   "documentAssets": "Images and fonts",
   "documentComponents": "Components",
-  "documentExports": "Export history"
+  "documentExports": "Export history",
+  "privacy": "Privacy",
+  "activity": "Activity",
+  "retention": "Retention"
 }

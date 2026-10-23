@@ -134,5 +134,104 @@
   "seatsOf": "of {limit} seats",
   "seatsUnlimited": "seats, unlimited",
   "seatsFree": "{count, plural, one {# seat free} other {# seats free}}",
-  "noFilesYet": "no files stored yet"
+  "noFilesYet": "no files stored yet",
+  "privacy": {
+    "intro": "Decide who sees which personal data. Applies to all members of this organisation.",
+    "statisticsTitle": "Statistics",
+    "statisticsPerPersonPublic": "Fines and attendance per person visible to everyone",
+    "statisticsPerPersonPublicHint": "Off: members with read access only see their own figures in the statistics. Writers, treasurers and admins always see everyone.",
+    "saved": "Saved",
+    "saveFailed": "Saving failed",
+    "export": {
+      "title": "Club export",
+      "description": "All club data for further use: Excel tables (members, events, attendance, fines, finances, tasks, lists), the PDFs of closed minutes and optionally photos, submissions and documents as original files. Without credentials. The export is created in the background and can be downloaded for 7 days. Requires a sign-in confirmed with two-factor authentication.",
+      "includeFiles": "Include photos, submissions and documents",
+      "password": "Password for the ZIP file",
+      "passwordHelp": "At least {min} characters. Stored encrypted only until the export is created – without the password the file cannot be opened.",
+      "repeat": "Repeat password",
+      "mismatch": "The passwords do not match.",
+      "hint": "AES-256 encrypted. Open with e.g. 7-Zip (Windows), Keka (macOS) or WinRAR.",
+      "start": "Create export",
+      "queued": "The export is being created. You can leave this page.",
+      "failed": "The export could not be started.",
+      "download": "Download",
+      "expires": "available until {date}",
+      "missingFiles": "{count, plural, one {# file was missing} other {# files were missing}}",
+      "status": {
+        "queued": "Queued",
+        "running": "Being created",
+        "done": "Ready",
+        "failed": "Failed",
+        "expired": "Expired"
+      }
+    },
+    "noticeTitle": "Privacy notice",
+    "noticeUrl": "Link to your privacy notice",
+    "noticeUrlHint": "Before uploading, the upload box shows that your club is responsible and links to this page. Empty = the platform’s default notice.",
+    "noticeSave": "Save link"
+  },
+  "activity": {
+    "intro": "Changes, sign-ins and accesses by the hocX platform to this organisation's data. Without IP or email addresses.",
+    "filterAll": "All",
+    "filterFailures": "Failed",
+    "category": "Area",
+    "allCategories": "All areas",
+    "colTime": "Time",
+    "colAction": "Action",
+    "colActor": "By",
+    "colOutcome": "Result",
+    "loading": "Loading …",
+    "empty": "No entries",
+    "actor": {
+      "platform": "hocX platform",
+      "system": "System",
+      "deleted": "Deleted person"
+    },
+    "outcome": {
+      "success": "Successful",
+      "failure": "Failed"
+    }
+  },
+  "retention": {
+    "intro": "Decide how long the club keeps certain data. All rules are off until you switch them on. hocX suggests matching entries every day; you confirm or dismiss them. Former members are only deactivated, never deleted.",
+    "rulesTitle": "Retention periods",
+    "rules": {
+      "submissions_months": {
+        "label": "Delete upload box submissions after the deadline",
+        "hint": "Applies to submissions with a deadline. The submitted files and their previews are deleted."
+      },
+      "former_members_years": {
+        "label": "Deactivate former members after they leave",
+        "hint": "Login is blocked and running sessions end. Name, attendance, fines and minutes stay unchanged."
+      },
+      "unlinked_gallery_years": {
+        "label": "Suggest old gallery images without album or event",
+        "hint": "Suggestion only – never deleted automatically."
+      }
+    },
+    "unit": {
+      "months": "Months",
+      "years": "Years"
+    },
+    "autoApply": "Apply suggestions for submissions and former members automatically",
+    "autoApplyHint": "Gallery images always remain a suggestion. Every action is listed in the activity log.",
+    "save": "Save",
+    "saved": "Retention saved.",
+    "saveFailed": "Saving failed.",
+    "loadFailed": "Suggestions could not be loaded.",
+    "proposalsTitle": "Suggestions",
+    "refresh": "Check now",
+    "empty": "No open suggestions.",
+    "kind": {
+      "submission_upload": "Submissions ({count})",
+      "former_member": "Deactivate former members ({count})",
+      "gallery_image": "Gallery images ({count})"
+    },
+    "unnamed": "Unnamed",
+    "selectAll": "Select all",
+    "dismiss": "Dismiss",
+    "apply": "Apply",
+    "applyConfirm": "{count, plural, one {Apply one suggestion?} other {Apply # suggestions?}} Submissions and gallery images are deleted permanently, members are deactivated.",
+    "decided": "{done} done, {failed} failed."
+  }
 }

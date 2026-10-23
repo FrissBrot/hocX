@@ -148,9 +148,10 @@ aus `design/tokens.css` und werden per `scripts/sync-document-tokens.py` nach
 
 - Compile-Root: frisches Temp-Verzeichnis mit den Typst-Dateien, `document.json` und Bildern;
   Schriften über einen pro Worker einmal geladenen `typst.Fonts` (keine Systemschriften).
-- Prozess-Pool (`concurrent.futures.ProcessPoolExecutor`) mit Parallelitätslimit,
-  Wall-Clock-Timeout (bei Überschreitung wird der Pool beendet und neu gestartet) und
-  Speicherlimit (`RLIMIT_AS`) pro Worker. Ein CPU-Limit pro Prozess entfällt bewusst: es
+- Eigene Worker-Prozesse (Muster wie `isolated_parse.py`) mit Parallelitätslimit,
+  Wall-Clock-Timeout (bei Überschreitung oder Absturz wird nur der betroffene Prozess beendet und
+  ersetzt, parallele Compiles laufen weiter) und Speicherlimit (`RLIMIT_AS`) pro Worker. Ein
+  Worker wird nach 50 Compiles ersetzt; die Umgebung (Secrets) wird nach den Imports geleert. Ein CPU-Limit pro Prozess entfällt bewusst: es
   summiert sich über die Lebensdauer eines Workers.
 - PDF als PDF/A-2b; Vorschau als PNG (erste N Seiten), ohne Register-Eintrag und Speicherung.
 - Fehler: Schlägt der Compile fehl, wird knotenweise nachkompiliert, um den verursachenden
@@ -319,16 +320,18 @@ Treffer prüft und `{found: false}` erwartet.
 |---|---|---|
 | `DOCUMENT_RENDER_CONCURRENCY` | 2 | Worker-Prozesse (gleichzeitige Compiles) **pro Uvicorn-Worker** |
 | `DOCUMENT_RENDER_TIMEOUT_SECONDS` | 60 | Wall-Clock-Limit pro Compile |
-| `DOCUMENT_RENDER_MEMORY_LIMIT_MB` | 3072 | `RLIMIT_AS` pro Worker |
+| `DOCUMENT_RENDER_MEMORY_LIMIT_MB` | 3072 | `RLIMIT_AS` pro Typst-Prozess |
 | `DOCUMENT_RENDER_QUEUE_TIMEOUT_SECONDS` | 20 | Maximale Wartezeit auf einen freien Compile-Platz, danach HTTP 503 |
 | `DOCUMENT_PREVIEW_MAX_PAGES` | 4 | Seiten in der PNG-Vorschau |
 
-Jeder Uvicorn-Worker (Dockerfile: 2) hat einen eigenen Pool. Gleichzeitig laufen also bis zu
-2 × `DOCUMENT_RENDER_CONCURRENCY` Compiles; das Speicherbudget (`mem_limit` des Backends) muss
+Jeder Uvicorn-Worker (Dockerfile: 2) und der job-worker (PDF-Aufträge) haben je einen eigenen
+Pool. Im Backend laufen also bis zu 2 × `DOCUMENT_RENDER_CONCURRENCY` Vorschau-Compiles; das Speicherbudget (`mem_limit` des Backends) muss
 das tragen. Eine Galerie mit 60 Fotos à 2400 px braucht gemessen rund 1,7 GB RSS pro Compile.
 Vorschau und Thumbnails erzeugen ein PDF und rastern nur die benötigten Seiten über pdfium
 (TYPST-005/STUDIO-015). Die Warteschlange vor dem Pool ist auf
-`DOCUMENT_RENDER_QUEUE_TIMEOUT_SECONDS` begrenzt (danach `error.busy`, HTTP 503); bricht der
+`DOCUMENT_RENDER_QUEUE_TIMEOUT_SECONDS` begrenzt (danach `error.busy`, HTTP 503). Freie Plätze
+gehen zuerst an Exporte, dann an Vorschauen, dann an Thumbnails, innerhalb einer Stufe an den
+Mandanten mit den wenigsten laufenden Compiles; bricht der
 Browser eine Vorschau ab, entfällt ein noch wartender Render, ein laufender belegt seinen Platz bis
 zum Ende. Die Fehlersuche nach einem gescheiterten Compile ist auf 80 Proben und 2 × Timeout
 begrenzt und bricht beim ersten gescheiterten Probe-Compile ab.

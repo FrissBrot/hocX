@@ -56,5 +56,8 @@
   "documentBrand": "Corporate design",
   "documentAssets": "Immagini e caratteri",
   "documentComponents": "Componenti",
-  "documentExports": "Cronologia esportazioni"
+  "documentExports": "Cronologia esportazioni",
+  "privacy": "Protezione dei dati",
+  "activity": "Cronologia",
+  "retention": "Conservazione"
 }

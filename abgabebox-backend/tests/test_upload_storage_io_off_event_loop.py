@@ -19,9 +19,9 @@ STORAGE_CALLS = {"save_to_quarantine", "move_from_quarantine", "delete_object"}
 def _upload_function() -> ast.AsyncFunctionDef:
     tree = ast.parse((REPO_ROOT / "app" / "routes" / "public.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
-        if isinstance(node, ast.AsyncFunctionDef) and node.name == "upload":
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "_upload_impl":
             return node
-    raise AssertionError("async def upload() nicht gefunden")
+    raise AssertionError("async def _upload_impl() nicht gefunden")
 
 
 def test_upload_never_calls_object_storage_directly_on_the_event_loop():
@@ -41,3 +41,16 @@ def test_upload_runs_every_storage_call_through_to_thread():
         and node.args and isinstance(node.args[0], ast.Name)
     }
     assert STORAGE_CALLS <= threaded
+
+
+def test_upload_route_runs_the_whole_pipeline_in_a_worker_thread():
+    """CONC-001: upload() selbst greift nicht auf die DB zu, sondern delegiert an _upload_impl
+    in einem Worker-Thread mit eigenem Event-Loop (app/offload.py)."""
+    tree = ast.parse((REPO_ROOT / "app" / "routes" / "public.py").read_text(encoding="utf-8"))
+    route = next(node for node in ast.walk(tree) if isinstance(node, ast.AsyncFunctionDef) and node.name == "upload")
+    delegated = [
+        node for node in ast.walk(route)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "run_coroutine_in_thread"
+        and node.args and isinstance(node.args[0], ast.Name) and node.args[0].id == "_upload_impl"
+    ]
+    assert delegated

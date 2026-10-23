@@ -44,6 +44,12 @@ class StorageProfile(Base):
     last_test_ok: Mapped[bool | None] = mapped_column(Boolean)
     last_test_error: Mapped[str | None] = mapped_column(Text)
     created_by_email: Mapped[str | None] = mapped_column(Text)
+    # Datenstandort (0147, Datenschutz-Audit E3): ch | eu_eea | adequate | third_country
+    data_location: Mapped[str | None] = mapped_column(Text)
+    transfer_basis: Mapped[str | None] = mapped_column(Text)
+    location_confirmed_by: Mapped[str | None] = mapped_column(Text)
+    location_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    server_side_encryption: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     created_at: Mapped[datetime] = _now()
     updated_at: Mapped[datetime] = _now()
 

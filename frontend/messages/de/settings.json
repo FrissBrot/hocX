@@ -2,13 +2,23 @@
   "profileModal": {
     "title": "Benutzerprofil",
     "description": "Persönliche Einstellungen, Sprache und Sicherheit deines Kontos.",
-    "tabs": { "profile": "Profil", "security": "Sicherheit" },
+    "tabs": {
+      "profile": "Profil",
+      "security": "Sicherheit",
+      "data": "Meine Daten"
+    },
     "languageLabel": "Sprache",
     "accordionLabel": "Protokollpunkte automatisch einklappen",
     "accordionHint": "Nur den aktiven Punkt geöffnet anzeigen.",
     "save": "Profil speichern",
     "logout": "Logout",
-    "saveFailed": "Profil konnte nicht gespeichert werden."
+    "saveFailed": "Profil konnte nicht gespeichert werden.",
+    "personalData": {
+      "description": "Lade alle Daten herunter, die hocX über dich gespeichert hat – als passwortgeschützte ZIP-Datei mit einer Excel-Tabelle und einer maschinenlesbaren JSON-Datei.",
+      "download": "Meine Daten herunterladen"
+    }
   },
-  "logoutFailed": "Abmelden fehlgeschlagen. Bitte erneut versuchen."
+  "logoutFailed": "Abmelden fehlgeschlagen. Bitte erneut versuchen.",
+  "logoutPendingConfirm": "Es gibt noch nicht gespeicherte Änderungen. Beim Abmelden gehen sie auf diesem Gerät verloren.",
+  "logoutAnyway": "Trotzdem abmelden"
 }

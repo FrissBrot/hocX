@@ -7,6 +7,7 @@ import { loadFriendlyChallenge, mountFriendlyCaptcha } from "@/lib/friendly-capt
 
 type Props = {
   sitekey: string;
+  puzzleEndpoint?: string;
   onSolved: (solution: string) => void;
   onExpired?: () => void;
 };
@@ -14,7 +15,7 @@ type Props = {
 // Jede Montage erzeugt ein eigenes FriendlyCaptcha-Widget (siehe lib/friendly-captcha.ts): das
 // Vendor-Skript initialisiert nur beim Laden, ein spaeter (Client-Navigation, Neustart ueber `key`)
 // gemountetes Element bekaeme sonst nie eine Challenge.
-export function CaptchaWidget({ sitekey, onSolved, onExpired }: Props) {
+export function CaptchaWidget({ sitekey, puzzleEndpoint, onSolved, onExpired }: Props) {
   const locale = useLocale();
   const containerRef = useRef<HTMLDivElement>(null);
   // Callbacks per Ref, damit ein neuer Callback (andere Render-Identitaet) das laufende Widget
@@ -38,6 +39,7 @@ export function CaptchaWidget({ sitekey, onSolved, onExpired }: Props) {
         unmount = mountFriendlyCaptcha(container, api, {
           sitekey,
           language: locale,
+          puzzleEndpoint,
           onSolved: (solution) => onSolvedRef.current(solution),
           // Puzzle konnte nicht geholt werden o. ae. - das Widget zeigt selbst einen
           // Neustart-Button; eine eventuell gemerkte Loesung gilt nicht mehr.
@@ -54,7 +56,7 @@ export function CaptchaWidget({ sitekey, onSolved, onExpired }: Props) {
       disposed = true;
       unmount?.();
     };
-  }, [sitekey, locale]);
+  }, [sitekey, locale, puzzleEndpoint]);
 
   if (!sitekey) return null;
 

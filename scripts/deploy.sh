@@ -36,6 +36,8 @@ source "$REPO_DIR/scripts/lib/env_migrate.sh"
 source "$REPO_DIR/scripts/lib/cosign.sh"
 # shellcheck source=scripts/lib/github.sh
 source "$REPO_DIR/scripts/lib/github.sh"
+# shellcheck source=scripts/lib/dump_crypto.sh
+source "$REPO_DIR/scripts/lib/dump_crypto.sh"
 
 case "$ENVIRONMENT" in
   test)
@@ -568,7 +570,7 @@ prepare_thumbnail_dir() {
 # Release-Manifest merkt sich, welche davon das Release hatte - ein Rollback auf ein älteres
 # Release (z. B. 1.1.x ohne Objektspeicher/Backup/Dokumentverarbeitung) stoppt die übrigen,
 # statt sie mit dem neuen Image neben dem alten Backend weiterlaufen zu lassen.
-BACKEND_IMAGE_WORKERS=(storage-worker backup-worker document-worker)
+BACKEND_IMAGE_WORKERS=(storage-worker backup-worker document-worker job-worker)
 
 backend_workers_in_compose() {
   local worker found=()
@@ -801,9 +803,13 @@ run_smoke_checks() {
   if service_exists storage-worker && [ -n "$("${DC[@]}" ps -q --status running storage-worker 2> /dev/null || true)" ]; then
     wait_for_exec storage-worker "Storage-Worker" "python3 -c \"import app.workers.storage_worker\"" || return 1
   fi
+  # Schwere Hintergrundjobs und PDF-Aufträge (Concurrency-Audit Paket 10).
+  if service_exists job-worker && [ -n "$("${DC[@]}" ps -q --status running job-worker 2> /dev/null || true)" ]; then
+    wait_for_exec job-worker "Job-Worker" "python3 -c \"import app.workers.job_worker; app.workers.job_worker.loop_factories()\"" || return 1
+  fi
 }
 
-# Behaelt die neuesten <keep> Pre-Deploy-Dumps (*-pre-*.sql.gz) und loescht aeltere. Der
+# Behaelt die neuesten <keep> Pre-Deploy-Dumps (*-pre-*.sql.gz[.gpg]) und loescht aeltere. Der
 # Zeitstempel am Dateianfang sortiert lexikografisch chronologisch.
 prune_pre_deploy_backups() {
   local dir="$1" keep="$2" file
@@ -811,7 +817,7 @@ prune_pre_deploy_backups() {
     echo "    PRE_DEPLOY_BACKUP_KEEP muss eine positive Zahl sein - keine Rotation." >&2
     return 0
   }
-  find "$dir" -maxdepth 1 -type f -name '*-pre-*.sql.gz' -printf '%f\n' | sort -r | tail -n "+$((keep + 1))" |
+  find "$dir" -maxdepth 1 -type f \( -name '*-pre-*.sql.gz' -o -name '*-pre-*.sql.gz.gpg' \) -printf '%f\n' | sort -r | tail -n "+$((keep + 1))" |
     while IFS= read -r file; do
       rm -f -- "$dir/$file"
       echo "    Altes Pre-Deploy-Backup entfernt: $file"
@@ -826,13 +832,19 @@ capture_current_release
 echo "==> [$ENVIRONMENT] Backup der Datenbank vor dem Update auf $HOCX_VERSION"
 BACKUP_DIR="$PROJECT_DIR/backups"
 mkdir -p "$BACKUP_DIR"
-BACKUP_FILE="$BACKUP_DIR/$(date +%Y%m%d-%H%M%S)-pre-$HOCX_VERSION.sql.gz"
+chmod 700 "$BACKUP_DIR"
+# Verschlüsselt mit dem öffentlichen Schlüssel aus BACKUP_DUMP_PUBLIC_KEY_PATH, sonst gzip mit
+# Warnung (scripts/lib/dump_crypto.sh, Datenschutz-Audit PRIV-009).
+check_dump_encryption || exit 1
+BACKUP_FILE="$BACKUP_DIR/$(date +%Y%m%d-%H%M%S)-pre-$HOCX_VERSION$(dump_suffix)"
 if "${DC[@]}" ps db --status running -q > /dev/null 2>&1 && [ -n "$("${DC[@]}" ps db --status running -q)" ]; then
-  "${DC[@]}" exec -T db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" | gzip > "$BACKUP_FILE"
+  "${DC[@]}" exec -T db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" | write_dump "$BACKUP_FILE"
   echo "    Backup: $BACKUP_FILE"
   # Pre-Deploy-Dumps wuchsen bisher unbegrenzt auf derselben Partition (Audit MAIN-OPS-010).
-  # Die neuesten PRE_DEPLOY_BACKUP_KEEP (Default 10) bleiben fuer Rollbacks erhalten.
+  # Die neuesten PRE_DEPLOY_BACKUP_KEEP (Default 10) bleiben fuer Rollbacks erhalten, aber nicht
+  # länger als PRE_DEPLOY_BACKUP_MAX_DAYS (Default 30, die neueste Datei immer) - PRIV-009.
   prune_pre_deploy_backups "$BACKUP_DIR" "${PRE_DEPLOY_BACKUP_KEEP:-10}"
+  prune_dumps_older_than "$BACKUP_DIR" '*-pre-*.sql.gz*' "${PRE_DEPLOY_BACKUP_MAX_DAYS:-30}"
 else
   echo "    db-Container laeuft noch nicht (erster Deploy) - kein Backup noetig."
 fi

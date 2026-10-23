@@ -76,6 +76,7 @@
     "captchaPlaceholder": "Verifica di sicurezza (nessun FriendlyCaptcha configurato – ambiente di test/sviluppo)",
     "submit": "Invia",
     "submitting": "Caricamento in corso…",
+    "busyRetry": "Molti caricamenti in corso – nuovo tentativo tra {seconds, plural, one {# secondo} other {# secondi}} …",
     "successTitle": "Grazie, consegna ricevuta",
     "successCount": "{count, plural, one {# file caricato per questa consegna.} other {# file caricati per questa consegna.}}",
     "uploadMore": "Consegna un altro file",
@@ -104,7 +105,11 @@
       "element": "Documento",
       "files": "File",
       "receivedAt": "Ricevuto"
-    }
+    },
+    "includeGps": "Invia i dati GPS dell’immagine",
+    "privacyResponsible": "Il responsabile dei tuoi file è {tenant}.",
+    "privacyLink": "Informativa sulla privacy",
+    "privacyCaptcha": "Per evitare lo spam, Friendly Captcha verifica il tuo browser senza cookie e senza tracciamento."
   },
   "language": {
     "label": "Lingua"

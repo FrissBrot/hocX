@@ -167,7 +167,8 @@
       "help": "Facoltativo. Le date di scatto reali non vengono mai sovrascritte.",
       "helpSet": "Vale solo per immagini senza data di scatto ({date}). Le date reali non vengono mai sovrascritte."
     },
-    "largeZipHint": "File ZIP di grandi dimensioni: con una connessione lenta il caricamento può interrompersi dopo un'ora. Meglio dividere l'archivio in più ZIP più piccoli o caricare direttamente le foto."
+    "largeZipHint": "File ZIP di grandi dimensioni: con una connessione lenta il caricamento può interrompersi dopo un'ora. Meglio dividere l'archivio in più ZIP più piccoli o caricare direttamente le foto.",
+    "includeGps": "Invia i dati GPS dell’immagine"
   },
   "shareModal": {
     "actionAriaLabelActive": "Rimuovi l’accesso per {name}",

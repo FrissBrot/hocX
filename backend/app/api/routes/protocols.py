@@ -7,16 +7,16 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from app.core.cycle_utils import format_cycle_name
 from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
-from app.core.db import get_db, SessionLocal
-from app.core.error_log import record_system_error
-from app.core.redis_client import get_redis_sync
+from app.core.db import get_db
+from app.core.redis_client import publish_best_effort
 from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolListCycle, ProtocolRead, ProtocolTemplateSyncRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
-from app.services import protocol_period_service, public_id_service
+from app.schemas.deletion import DeletionPreview, DeletionRequest, DeletionResultRead
+from app.services import deletion_service, document_render_jobs, protocol_period_service, public_id_service
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.collaboration_service import protocol_channel
@@ -36,13 +36,15 @@ event_service = EventService()
 def _broadcast_template_synced(protocol_id: int, user: CurrentUser) -> None:
     """Offene Editoren dieses Protokolls laden nach einem Vorlagen-Abgleich neu (Blöcke
     wurden ersetzt/ergänzt) - gleicher Kanal wie protocol_elements._broadcast_block_update."""
-    get_redis_sync().publish(
+    publish_best_effort(
         protocol_channel(protocol_id),
         json.dumps({
             "type": "field_update",
             "field_key": "template-synced",
             "patch": None,
-            "user_id": user.user_id,
+            # Keine interne ID nach aussen; None statt der öffentlichen ID, weil auch die eigenen
+            # anderen Tabs neu laden sollen (das Frontend filtert eigene Updates über die ID).
+            "user_id": None,
             "display_name": user.display_name,
         }),
     )
@@ -53,27 +55,6 @@ def _get_protocol_or_404(db: Session, protocol_id: uuid.UUID, user: CurrentUser)
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
     return protocol
-
-
-async def _generate_pdf_background(protocol_id: int) -> None:
-    """Erzeugt nach dem Abschliessen das (signierte) Protokoll-PDF über die Dokument-Engine."""
-    from app.documents import service as document_service
-
-    db = SessionLocal()
-    try:
-        protocol = db.get(Protocol, protocol_id)
-        if protocol is None:
-            return
-        await document_service.render(
-            db, None, protocol.tenant_id, document_service.DocumentRequest(protocol_id=protocol.public_id, document_type="protocol")
-        )
-    except Exception as exc:
-        # Runs via BackgroundTasks, outside the request/response cycle the global exception
-        # handlers in main.py watch - without this, a failure here was invisible everywhere.
-        db.rollback()
-        record_system_error(db, exc=exc)
-    finally:
-        db.close()
 
 
 def _cycle_configs_by_template(db: Session, template_ids: set[int]) -> dict[int, CycleConfig]:
@@ -302,13 +283,14 @@ def get_protocol(protocol_id: uuid.UUID, db: Session = Depends(get_db), user: Cu
 def patch_protocol(
     protocol_id: uuid.UUID,
     payload: ProtocolUpdate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
     existing = _get_protocol_or_404(db, protocol_id, user)
     protocol_id = existing.id
+    # Vor dem Update festhalten: existing ist dasselbe Objekt, das update_protocol ändert.
+    previous_status = existing.status
     if payload.session_notes is not None and payload.expected_session_notes is not None:
         # Audit MAIN-BE-011: Protokollzeile bis zum Commit sperren und frisch lesen, damit
         # zwei gleichzeitige Saves mit gleichem erwarteten Stand nicht beide durchgehen.
@@ -333,11 +315,13 @@ def patch_protocol(
         raise HTTPException(status_code=400, detail="Protocol could not be updated") from exc
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
-    if payload.status is not None and payload.status != existing.status:
+    if payload.status is not None and payload.status != previous_status:
         audit.log(db, action="protocol.status_changed", actor=user, entity_type="protocol", entity_id=protocol_id,
-                  details={"from": existing.status, "to": payload.status})
+                  details={"from": previous_status, "to": payload.status})
         if payload.status == "abgeschlossen":
-            background_tasks.add_task(_generate_pdf_background, protocol_id)
+            # Signiertes Protokoll-PDF als dauerhafter Auftrag für den job-worker (CONC-020) statt
+            # als BackgroundTask im Request-Prozess (ging bei Neustart oder belegtem Compile-Platz verloren).
+            document_render_jobs.enqueue_protocol_pdf(db, protocol=protocol)
     return protocol
 
 
@@ -497,24 +481,60 @@ def create_quick_todo(
     }
 
 
+def _delete_protocol_with_files(db: Session, existing: Protocol, user: CurrentUser, delete_file_ids: set[uuid.UUID] | None) -> DeletionResultRead:
+    """Gemeinsamer Ablauf von DELETE (alle Dateien) und POST …/delete (Auswahl) - PRIV-004."""
+    from app.services.file_service import FileService
+
+    service.get_protocol_or_404_not_frozen(db, existing.id)
+    audit_details = {"protocol_number": existing.protocol_number, "title": existing.title, "status": existing.status}
+    protocol_internal_id = existing.id
+    try:
+        result = deletion_service.delete_protocol(db, existing, delete_file_ids=delete_file_ids, actor_user_id=user.user_id, file_service=FileService())
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Protocol could not be deleted") from exc
+    audit.log(
+        db, action="protocol.deleted", actor=user, entity_type="protocol", entity_id=protocol_internal_id,
+        details={**audit_details, "deleted_files": result.deleted_files, "kept_files": result.kept_files},
+    )
+    return DeletionResultRead(deleted_files=result.deleted_files, kept_files=result.kept_files, untouched_files=result.untouched_files)
+
+
+@router.get("/protocols/{protocol_id}/deletion-preview", response_model=DeletionPreview)
+def preview_protocol_deletion(
+    protocol_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Welche Bilder mit dem Protokoll verschwinden würden (Lösch-Dialog, Datenschutz-Audit PRIV-004)."""
+    require_writer(user)
+    existing = _get_protocol_or_404(db, protocol_id, user)
+    return deletion_service.preview_read(deletion_service.protocol_preview(db, existing))
+
+
+@router.post("/protocols/{protocol_id}/delete", response_model=DeletionResultRead)
+def delete_protocol_with_selection(
+    protocol_id: uuid.UUID,
+    payload: DeletionRequest,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Löscht das Protokoll; gewählte Bilder werden mitgelöscht, die übrigen in die Galerie übernommen."""
+    require_writer(user)
+    existing = _get_protocol_or_404(db, protocol_id, user)
+    return _delete_protocol_with_files(db, existing, user, set(payload.delete_file_ids))
+
+
 @router.delete("/protocols/{protocol_id}", response_model=dict[str, str])
 def delete_protocol(
     protocol_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    """Ohne Auswahl: alle Bilder, die nur dieses Protokoll verwendet, werden mitgelöscht."""
     require_writer(user)
     existing = _get_protocol_or_404(db, protocol_id, user)
-    audit_details = {"protocol_number": existing.protocol_number, "title": existing.title, "status": existing.status}
-    try:
-        deleted = service.delete_protocol(db, existing.id)
-    except SQLAlchemyError as exc:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Protocol could not be deleted") from exc
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Protocol not found")
-    audit.log(db, action="protocol.deleted", actor=user, entity_type="protocol", entity_id=existing.id,
-              details=audit_details)
+    _delete_protocol_with_files(db, existing, user, None)
     return {"message": "Protocol deleted"}
 
 

@@ -102,5 +102,10 @@
   "loginTabs": {
     "withoutLogin": "Participants",
     "withLogin": "Participants with login"
+  },
+  "personalData": {
+    "action": "Data access request",
+    "title": "Personal data of {name}",
+    "description": "All data stored in hocX about this person as a password-protected ZIP file (Excel and JSON). The download is recorded in the activity log."
   }
 }

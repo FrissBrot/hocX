@@ -12,10 +12,11 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from PIL import Image
 from sqlalchemy.orm import Session
 
-from app import element_resolver, image_metadata, repository, scanner
+from app import element_resolver, gps_strip, image_metadata, repository, scanner
 from app.captcha import mint_captcha_session_token, verify_captcha, verify_captcha_session_token
 from app.config import settings
-from app.db import get_db, serialized_upload, tenant_upload_lock
+from app.db import UploadLockBusy, get_db, serialized_upload, tenant_upload_lock
+from app.offload import run_coroutine_in_thread
 from app.schemas import AssignmentDetailPublic, AssignmentPublic, CaptchaVerifyResult, ElementPublic, UploadResult
 from app.objstore_client import StorageWriteFenced
 from app.storage import delete_object, move_from_quarantine, save_to_quarantine, tenant_storage_bytes
@@ -199,6 +200,13 @@ def _exceeds_max_files_per_request(file_count: int) -> bool:
 _LINK_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 
 
+def _without_gps(metadata: dict, include_gps: bool) -> dict:
+    """Ohne «GPS mitsenden» bleiben die GPS-Spalten leer, auch wenn ein Format übrig bliebe."""
+    if include_gps:
+        return metadata
+    return {key: value for key, value in metadata.items() if not key.startswith("gps_")}
+
+
 def _get_tenant_or_404(db: Session, link_token: str) -> dict:
     """Resolves the link token (the URL's only credential) to the tenant it belongs to. The
     returned dict carries the link id too, so every later lookup is scoped to what THIS link may
@@ -276,6 +284,7 @@ def list_assignments(link_token: str, db: Session = Depends(get_db)):
 def get_assignment(link_token: str, assignment_slug: str, db: Session = Depends(get_db)):
     tenant = _get_tenant_or_404(db, link_token)
     assignment = _get_assignment_or_404(db, tenant, assignment_slug)
+    notice = repository.get_privacy_notice(db) or {}
     return AssignmentDetailPublic(
         public_slug=assignment["public_slug"],
         title=assignment["title"],
@@ -283,6 +292,8 @@ def get_assignment(link_token: str, assignment_slug: str, db: Session = Depends(
         allowed_file_types=assignment["allowed_file_types"] or [],
         max_files_per_element=assignment["max_files_per_element"],
         max_file_size_mb=assignment["max_file_size_mb"],
+        tenant_name=notice.get("tenant_name"),
+        privacy_notice_url=notice.get("privacy_notice_url") or settings.default_privacy_url or None,
     )
 
 
@@ -318,6 +329,11 @@ async def verify_captcha_for_element(
     captcha_solution: str = Form(...),
     db: Session = Depends(get_db),
 ):
+    # DB-Zugriffe im Worker-Thread (Concurrency-Audit CONC-001), siehe app/offload.py.
+    return await run_coroutine_in_thread(_verify_captcha_impl, request, link_token, assignment_slug, element_ref, captcha_solution, db)
+
+
+async def _verify_captcha_impl(request: Request, link_token: str, assignment_slug: str, element_ref: str, captcha_solution: str, db: Session):  # loop-ok: nur über run_coroutine_in_thread
     """Called once when the upload page loads (widget solves automatically), not per upload -
     see upload() below, which accepts the resulting session token instead of a raw
     captcha_solution so a visitor doesn't have to pass the bot-check again for every file."""
@@ -332,17 +348,16 @@ async def verify_captcha_for_element(
     return CaptchaVerifyResult(session_token=token, expires_in_seconds=settings.captcha_session_ttl_minutes * 60)
 
 
-@router.post(
-    "/public/{link_token}/assignments/{assignment_slug}/elements/{element_ref}/upload",
-    response_model=UploadResult,
-)
-async def upload(
+async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
     request: Request,
     link_token: str,
     assignment_slug: str,
     element_ref: str,
     captcha_session_token: str = Form(...),
     files: list[UploadFile] = File(default_factory=list),
+    # «GPS-Daten des Bildes mitsenden» (Datenschutz-Audit Paket 9.3), Standard an. Aus: Standort
+    # wird vor dem Speichern aus den Dateien entfernt (gps_strip), alles andere bleibt.
+    include_gps: bool = Form(True),
     db: Session = Depends(get_db),
 ):
     tenant = _get_tenant_or_404(db, link_token)
@@ -414,11 +429,35 @@ async def upload(
             _log("validation_failed", f"Dateiinhalt passt nicht zur Endung: .{suffix}")
             raise HTTPException(status_code=400, detail=f"Dateiinhalt passt nicht zur angegebenen Endung '.{suffix}'")
         # Server-derived mime type, never the client-sent Content-Type header - see comment above.
-        contents.append((content, upload_file.filename or "datei", _EXTENSION_MIME_MAP.get(suffix, "application/octet-stream")))
+        mime_type = _EXTENSION_MIME_MAP.get(suffix, "application/octet-stream")
+        if not include_gps:
+            # Vor Duplikat-Prüfung, Hash und Quarantäne: gespeichert wird nur die Fassung ohne Standort.
+            content = await asyncio.to_thread(gps_strip.strip_gps, content, mime_type)
+        contents.append((content, upload_file.filename or "datei", mime_type))
 
     _log("upload_received", f"{len(contents)} Datei(en) empfangen")
 
-    # Hold across checksum lookup, scan and the final database commit.
+    # Virenscan vor dem Upload-Lock des Vereins, aus dem Speicher (Concurrency-Audit CONC-008):
+    # vorher lief ClamAV (bis 60 s je Datei) unter dem Lock, und alle anderen Uploads des Vereins -
+    # auch Galerie und Protokollbilder im Backend - warteten so lange. Reihenfolge der Ablage
+    # bleibt: zuerst Quarantäne, nach sauberem Ergebnis verschieben.
+    # Bekannte identische Einreichungen werden vorab aussortiert (nicht gescannt); unter dem Lock
+    # wird unten erneut geprüft. Nur zwei gleichzeitige identische Einreichungen werden dadurch
+    # ggf. beide gescannt - gespeichert wird weiterhin nur eine.
+    known_checksums = repository.list_checksums_for_element(
+        db, assignment_id=assignment["id"], event_id=element["event_id"], list_entry_id=element["list_entry_id"]
+    )
+    known_checksums = set(known_checksums)
+    to_scan = []
+    for content, _, _ in contents:
+        checksum = hashlib.sha256(content).hexdigest()
+        if checksum not in known_checksums:  # auch Duplikate innerhalb dieser Einreichung
+            known_checksums.add(checksum)
+            to_scan.append(content)
+    prescan = await scanner.scan_many(to_scan, host=settings.clamav_host, port=settings.clamav_port) if to_scan else []
+    scan_by_content = {id(content): status for content, status in zip(to_scan, prescan)}
+
+    # Hold across checksum lookup, quarantine and the final database commit.
     async with serialized_upload(tenant["id"]):
         # Identical submissions are silently acknowledged, before image decoding or ClamAV.
         # Keep the received count stable so the public response does not reveal duplicates.
@@ -561,7 +600,7 @@ async def upload(
                     "file_size_bytes": len(content),
                     "checksum_sha256": checksum,
                     "perceptual_hash": perceptual_hashes[i],
-                    "image_metadata": image_metadata.extract(content) if mime_type in _IMAGE_MIME_TYPES else {},
+                    "image_metadata": _without_gps(image_metadata.extract(content), include_gps) if mime_type in _IMAGE_MIME_TYPES else {},
                     "_content": content,
                 })
 
@@ -576,9 +615,13 @@ async def upload(
         # entire async worker (every tenant, every other in-flight request) for the duration of each
         # scan. scan_many() runs each scan in a worker thread (asyncio.to_thread) with a small bounded
         # concurrency instead of a fully sequential loop - see scanner.py for the full rationale.
-        scan_results = await scanner.scan_many(
-            [f["_content"] for f in quarantine_files], host=settings.clamav_host, port=settings.clamav_port
-        )
+        # Vorab gescannt (s. o.). Selten: eine bei der Vorprüfung bekannte Datei wurde inzwischen
+        # gelöscht und ist jetzt neu - die wird hier nachgescannt.
+        unscanned = [f["_content"] for f in quarantine_files if id(f["_content"]) not in scan_by_content]
+        if unscanned:
+            late = await scanner.scan_many(unscanned, host=settings.clamav_host, port=settings.clamav_port)
+            scan_by_content.update({id(content): status for content, status in zip(unscanned, late)})
+        scan_results = [scan_by_content[id(f["_content"])] for f in quarantine_files]
 
         # Step 3: Infected → delete quarantine files, reject upload.
         if "infected" in scan_results or "error" in scan_results:
@@ -656,3 +699,32 @@ async def upload(
             _log("scan_clean")
         _log("submitted", "Freigegeben")
         return UploadResult(ok=True, files_received=files_received, image_duplicate_warnings=image_duplicate_warnings)
+
+
+@router.post(
+    "/public/{link_token}/assignments/{assignment_slug}/elements/{element_ref}/upload",
+    response_model=UploadResult,
+)
+async def upload(
+    request: Request,
+    link_token: str,
+    assignment_slug: str,
+    element_ref: str,
+    captcha_session_token: str = Form(...),
+    files: list[UploadFile] = File(default_factory=list),
+    # «GPS-Daten des Bildes mitsenden» (Datenschutz-Audit Paket 9.3), Standard an. Aus: Standort
+    # wird vor dem Speichern aus den Dateien entfernt (gps_strip), alles andere bleibt.
+    include_gps: bool = Form(True),
+    db: Session = Depends(get_db),
+):
+    """Öffentlicher Upload. Die ganze Verarbeitung (Prüfsummen, Quarantäne, ClamAV, Commit) läuft
+    in einem Worker-Thread (Concurrency-Audit CONC-001) - sie mischt synchrone DB-Zugriffe mit
+    awaits und blockierte vorher den Event-Loop des ganzen Workers für alle Mandanten."""
+    busy = False
+    try:
+        return await run_coroutine_in_thread(_upload_impl, request=request, link_token=link_token, assignment_slug=assignment_slug, element_ref=element_ref, captcha_session_token=captcha_session_token, files=files, include_gps=include_gps, db=db)
+    except UploadLockBusy:
+        busy = True
+    if busy:
+        # Erwartet (andere Uploads desselben Vereins laufen) - kein Eintrag im Fehlerprotokoll.
+        raise HTTPException(status_code=503, detail="Gerade werden andere Dateien verarbeitet - bitte gleich erneut versuchen", headers={"Retry-After": "10"})

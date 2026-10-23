@@ -8,6 +8,7 @@ import { CaptchaWidget } from "@/components/captcha-widget";
 import { useFlowDone } from "@/components/flow-steps";
 import { publicApiUrl } from "@/lib/api";
 import { validateUploadFiles, SUPPORTED_UPLOAD_EXTENSIONS } from "@/lib/validate-upload";
+import { MAX_BUSY_RETRIES, isRetryableBusy, retryDelaySeconds } from "@/lib/upload-retry";
 
 type Props = {
   linkToken: string;
@@ -20,9 +21,13 @@ type Props = {
   maxFileSizeMb: number;
   alreadyUploadedCount: number;
   sitekey: string;
+  puzzleEndpoint?: string;
+  // Datenschutzhinweis vor dem Upload (Datenschutz-Audit E2)
+  tenantName?: string | null;
+  privacyNoticeUrl?: string | null;
 };
 
-export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTitle, elementLabel, allowedFileTypes, maxFiles, maxFileSizeMb, alreadyUploadedCount, sitekey }: Props) {
+export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTitle, elementLabel, allowedFileTypes, maxFiles, maxFileSizeMb, alreadyUploadedCount, sitekey, puzzleEndpoint, tenantName, privacyNoticeUrl }: Props) {
   const t = useTranslations("abgabebox.upload");
   const locale = useLocale();
   const setFlowDone = useFlowDone();
@@ -32,6 +37,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
   const [captchaVerifying, setCaptchaVerifying] = useState(false);
   const [captchaKey, setCaptchaKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [retryNotice, setRetryNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [done, setDone] = useState(false);
@@ -39,6 +45,8 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
   const [receipt, setReceipt] = useState<{ files: number; at: Date } | null>(null);
   const [online, setOnline] = useState(true);
   const [uploadedSoFar, setUploadedSoFar] = useState(alreadyUploadedCount);
+  // «GPS-Daten des Bildes mitsenden» (Paket 9.3): standardmässig an, aus = Server entfernt den Standort
+  const [includeGps, setIncludeGps] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
   // Welche rohe FriendlyCaptcha-Loesung bereits gegen ein Sitzungs-Token eingetauscht wurde -
   // handleSolved kann mehrfach mit derselben Loesung feuern (Callback + DOM-Fallback im Widget).
@@ -166,15 +174,27 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
     setError(null);
     setWarnings([]);
     try {
-      const formData = new FormData();
-      formData.append("captcha_session_token", captchaSessionToken);
-      files.forEach((file) => formData.append("files", file));
-      const response = await fetch(
-        publicApiUrl(
-          `/api/public/${encodeURIComponent(linkToken)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/upload`
-        ),
-        { method: "POST", body: formData, signal: AbortSignal.timeout(3 * 60 * 60 * 1000) }
+      const uploadUrl = publicApiUrl(
+        `/api/public/${encodeURIComponent(linkToken)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/upload`
       );
+      let response: Response;
+      // Server kurz ausgelastet (503 mit Retry-After, z. B. viele gleichzeitige Uploads kurz vor
+      // einer Frist): selbst erneut senden, die ausgewählten Dateien bleiben erhalten. Wartung
+      // (code "maintenance") wird nicht wiederholt - dafür gibt es das Wartungsbanner.
+      for (let attempt = 0; ; attempt += 1) {
+        const formData = new FormData();
+        formData.append("captcha_session_token", captchaSessionToken);
+        formData.append("include_gps", includeGps ? "true" : "false");
+        files.forEach((file) => formData.append("files", file));
+        response = await fetch(uploadUrl, { method: "POST", body: formData, signal: AbortSignal.timeout(3 * 60 * 60 * 1000) });
+        if (response.status !== 503 || attempt >= MAX_BUSY_RETRIES) break;
+        const busyBody = await response.clone().json().catch(() => null);
+        if (!isRetryableBusy(response.status, busyBody?.code)) break;
+        const waitSeconds = retryDelaySeconds(response.headers.get("Retry-After"));
+        setRetryNotice(t("busyRetry", { seconds: waitSeconds }));
+        await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1000));
+        setRetryNotice(null);
+      }
       if (!response.ok) {
         if (response.status === 429) {
           throw new Error(t("errors.tooManyRequests"));
@@ -337,6 +357,22 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
       )}
 
       {error && <p className="error">{error}</p>}
+      {retryNotice && <p className="muted" role="status">{retryNotice}</p>}
+
+      <label className="upload-gps-option">
+        <input type="checkbox" checked={includeGps} onChange={(event) => setIncludeGps(event.target.checked)} />
+        <span>{t("includeGps")}</span>
+      </label>
+
+      <p className="upload-privacy-note">
+        {tenantName ? t("privacyResponsible", { tenant: tenantName }) : null}{" "}
+        {privacyNoticeUrl?.startsWith("https://") ? (
+          <a href={privacyNoticeUrl} target="_blank" rel="noopener noreferrer">
+            {t("privacyLink")}
+          </a>
+        ) : null}{" "}
+        {sitekey ? t("privacyCaptcha") : null}
+      </p>
 
       <div className="upload-actions">
         {/* Captcha - laeuft einmal beim Laden der Seite, bleibt danach fuer alle weiteren Uploads
@@ -347,7 +383,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
             bleibt. */}
         <div className={`captcha-card${captchaReady ? " captcha-card-ok" : ""}`}>
           {sitekey && !captchaReady && (
-            <CaptchaWidget key={captchaKey} sitekey={sitekey} onSolved={handleSolved} onExpired={() => { exchangedSolutionRef.current = null; }} />
+            <CaptchaWidget key={captchaKey} sitekey={sitekey} puzzleEndpoint={puzzleEndpoint} onSolved={handleSolved} onExpired={() => { exchangedSolutionRef.current = null; }} />
           )}
           <div className="captcha-status-row">
             <span className="captcha-check" aria-hidden="true">

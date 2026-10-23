@@ -987,21 +987,45 @@ export function ProtocolEditor({
     }
   }
 
+  function currentConfigVersion(blockId: string): number | undefined {
+    return elements.flatMap((element) => element.blocks).find((block) => block.id === blockId)?.config_version;
+  }
+
+  // 409 config_conflict: jemand anderes hat die Blockkonfiguration inzwischen gespeichert. Der
+  // Server liefert seinen Stand mit - übernehmen und darauf hinweisen (Concurrency-Audit
+  // CONC-005: vorher überschrieb das ganze JSON still die Änderung der anderen Person).
+  function applyConfigConflict(blockId: string, err: unknown): boolean {
+    if (!(err instanceof ApiError) || err.status !== 409) return false;
+    const detail = err.detail as { code?: string; configuration_snapshot_json?: Record<string, unknown>; config_version?: number } | undefined;
+    if (detail?.code !== "config_conflict" || !detail.configuration_snapshot_json) return false;
+    updateBlockInState(blockId, (block) => ({
+      ...block,
+      configuration_snapshot_json: detail.configuration_snapshot_json!,
+      config_version: detail.config_version,
+    }));
+    setStatus(blockId, "saved");
+    showToast(t("configConflictReloaded"), "info");
+    return true;
+  }
+
   async function saveBlockConfiguration(blockId: string, configurationSnapshotJson: Record<string, unknown>) {
     setStatus(blockId, "saving");
+    const expectedVersion = currentConfigVersion(blockId);
     updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: configurationSnapshotJson }));
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(`/api/protocol-element-blocks/${blockId}`, {
         method: "PATCH",
-        body: JSON.stringify({ configuration_snapshot_json: configurationSnapshotJson }),
+        body: JSON.stringify({ configuration_snapshot_json: configurationSnapshotJson, expected_config_version: expectedVersion }),
       });
       updateBlockInState(blockId, (block) => ({
         ...block,
         configuration_snapshot_json: updated.configuration_snapshot_json,
+        config_version: updated.config_version,
       }));
       setStatus(blockId, "saved");
-      collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json });
+      collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version });
     } catch (err: unknown) {
+      if (applyConfigConflict(blockId, err)) return;
       setStatus(blockId, "error");
       showToast(err instanceof Error ? err.message : t("changeSaveFailed"), "error");
     }
@@ -1035,8 +1059,8 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/attendance/${participantId}`,
         { method: "POST", body: JSON.stringify({ status }) }
       );
-      updateBlockInState(blockId, (b) => ({ ...b, configuration_snapshot_json: updated.configuration_snapshot_json }));
-      collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json });
+      updateBlockInState(blockId, (b) => ({ ...b, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
+      collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version });
     } catch (err: unknown) {
       updateBlockInState(blockId, (b) => ({
         ...b,
@@ -1245,7 +1269,7 @@ export function ProtocolEditor({
     }
   }
 
-  async function uploadImage(protocolElementBlockId: string) {
+  async function uploadImage(protocolElementBlockId: string, includeGps = true) {
     const file = selectedFiles[protocolElementBlockId];
     if (!file) return;
     setStatus(protocolElementBlockId, "saving");
@@ -1259,6 +1283,7 @@ export function ProtocolEditor({
       }
       const body = new FormData();
       body.append("file", file);
+      if (!includeGps) body.append("include_gps", "false");
       const created = await browserApiFetch<ProtocolImage>(`/api/protocol-element-blocks/${protocolElementBlockId}/images`, {
         method: "POST",
         body
@@ -1396,7 +1421,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/list-snapshot/refresh`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
       void refreshElementTitles();
       collab.sendFieldUpdate("element-titles", null);
     } catch (err: unknown) {
@@ -1410,7 +1435,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/list-snapshot/undo`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
       void refreshElementTitles();
       collab.sendFieldUpdate("element-titles", null);
     } catch (err: unknown) {
@@ -1425,7 +1450,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/list-snapshot/entries/${entryId}/accept-tracked-change`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
     } catch (err: unknown) {
       if (err instanceof Error) showToast(err.message);
     }
@@ -1437,7 +1462,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/rows/${rowId}/accept-tracked-change`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
     } catch (err: unknown) {
       if (err instanceof Error) showToast(err.message);
     }
@@ -1454,7 +1479,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/list-snapshot/sync`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
       void refreshElementTitles();
       collab.sendFieldUpdate("element-titles", null);
     } catch {
@@ -1581,11 +1606,13 @@ export function ProtocolEditor({
     const newConfig = { ...(block.configuration_snapshot_json ?? {}), manually_hidden: false };
     updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: true, configuration_snapshot_json: newConfig }));
     try {
-      await browserApiFetch(`/api/protocol-element-blocks/${blockId}`, {
+      const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(`/api/protocol-element-blocks/${blockId}`, {
         method: "PATCH",
-        body: JSON.stringify({ is_visible_snapshot: true, configuration_snapshot_json: newConfig }),
+        body: JSON.stringify({ is_visible_snapshot: true, configuration_snapshot_json: newConfig, expected_config_version: block.config_version }),
       });
+      updateBlockInState(blockId, (b) => ({ ...b, config_version: updated.config_version }));
     } catch (err: unknown) {
+      if (applyConfigConflict(blockId, err)) return;
       updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: false, configuration_snapshot_json: block.configuration_snapshot_json }));
       showToast(err instanceof Error ? err.message : t("eventShowFailed"), "error");
     }

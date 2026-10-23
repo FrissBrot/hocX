@@ -303,7 +303,8 @@ def test_delete_tenant_removes_every_tenant_scoped_row_and_spares_other_tenants(
     # `DELETE FROM template` ran, because word_import_document.template_id (RESTRICT,
     # NOT NULL) still pointed at it.
     deleted = AdminTenantService().delete_tenant(db, tenant_a.id)
-    assert deleted is True
+    # Rückgabe ist seit PRIV-023 ein Löschbericht statt True
+    assert deleted and deleted["stored_files"] >= 0
 
     assert db.get(Tenant, tenant_a.id) is None
 
@@ -329,7 +330,7 @@ def test_delete_tenant_cascades_through_non_tenant_scoped_child_tables(db):
     tenant = make_tenant(db, "Tenant Cascade")
     data = _build_tenant_dataset(db, tenant, "cascade")
 
-    assert AdminTenantService().delete_tenant(db, tenant.id) is True
+    assert AdminTenantService().delete_tenant(db, tenant.id)
 
     assert db.get(Protocol, data["protocol"].id) is None
     assert db.get(ProtocolElement, data["protocol_element_id"]) is None
@@ -351,7 +352,7 @@ def test_delete_tenant_cascades_through_non_tenant_scoped_child_tables(db):
 
 
 def test_delete_tenant_returns_false_for_unknown_tenant(db):
-    assert AdminTenantService().delete_tenant(db, 999_999_999) is False
+    assert AdminTenantService().delete_tenant(db, 999_999_999) is None
 
 
 def test_delete_tenant_route_audits_without_fk_violation(db):

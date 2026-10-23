@@ -47,5 +47,6 @@
   "totalCountSub": "{count} au total",
   "viewByMember": "Par membre",
   "viewByTime": "Dans le temps",
-  "withParticipants": "Avec participants"
+  "withParticipants": "Avec participants",
+  "perPersonOwnHint": "Pour les amendes et les présences par personne, tu ne vois que tes propres valeurs."
 }

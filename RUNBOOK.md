@@ -193,11 +193,15 @@ nicht - dann muss zusätzlich das vor dem Update gezogene Backup eingespielt wer
 zwar **vor** dem Deploy der alten Version:
 
 ```bash
-./scripts/restore_db.sh backups/<timestamp>-pre-vX.Y.Z.sql.gz
+./scripts/restore_db.sh backups/<timestamp>-pre-vX.Y.Z.sql.gz.gpg   # bzw. .sql.gz ohne Dump-Schlüssel
 vim .env   # HOCX_VERSION auf die vorherige Version (…-pre-vX.Y.Z = Stand vor dem Update auf vX.Y.Z)
 ./scripts/deploy.sh prod
 ./scripts/verify_release.sh prod
 ```
+
+Verschlüsselte Dumps (`.sql.gz.gpg`, siehe Abschnitt 10 «Verschlüsselung der Dumps») brauchen den
+privaten Schlüssel aus der Notfallmappe: `BACKUP_DUMP_PRIVATE_KEY_PATH=/pfad/dump-private.asc` vor
+den Aufruf setzen oder den Schlüssel im GPG-Schlüsselbund des Benutzers haben.
 
 `restore_db.sh` fragt zur Bestätigung den Datenbanknamen ab, stoppt `backend`,
 `abgabebox-backend` und `photo-analysis-worker`, sichert den aktuellen Stand als
@@ -379,11 +383,39 @@ und werden bei Ausbleiben nicht gemeldet.
 - **Env-Var**: `RETENTION_DAYS` (Default 14) - Cron-Dumps, die älter sind, werden nach jedem
   Lauf automatisch gelöscht. Pre-Deploy-Dumps rotiert `deploy.sh` selbst: die neuesten
   `PRE_DEPLOY_BACKUP_KEEP` (Default 10, als Shell-Variable beim Aufruf von `deploy.sh`) bleiben.
-- **Schreibt nach**: `backups/<timestamp>-cron.sql.gz` (derselbe Ordner wie die
-  Pre-Deploy-Backups, gut unterscheidbar am `-cron`-Suffix).
+- **Schreibt nach**: `backups/<timestamp>-cron.sql.gz.gpg` (verschlüsselt) bzw. ohne Schlüssel
+  `…-cron.sql.gz` (derselbe Ordner wie die Pre-Deploy-Backups, gut unterscheidbar am
+  `-cron`-Suffix).
 - **Offsite**: Ist `OFFSITE_BACKUP_REMOTE` gesetzt, endet der Lauf mit Exit ≠ 0, wenn die
   rclone-Kopie fehlschlägt oder `rclone` fehlt (das lokale Backup ist dann trotzdem
-  geschrieben). `run_job.sh` meldet den Lauf damit als Fehler statt als Erfolg.
+  geschrieben). `run_job.sh` meldet den Lauf damit als Fehler statt als Erfolg. Ein
+  **unverschlüsselter** Dump geht nur auf ein rclone-Remote vom Typ `crypt`, sonst bricht der Lauf
+  ab. Nach jeder Kopie löscht das Skript Offsite-Dumps, die älter als `OFFSITE_RETENTION_DAYS`
+  (Default = `RETENTION_DAYS`) sind - früher blieben sie unbegrenzt liegen.
+
+#### Verschlüsselung der Dumps (Datenschutz-Audit PRIV-009)
+
+`deploy.sh` (Pre-Deploy), `backup_db.sh` (Cron) und `restore_db.sh` (Sicherung vor dem Restore)
+verschlüsseln Dumps mit einem **öffentlichen** GPG-Schlüssel. Auf dem Server liegt nur dieser; den
+privaten Schlüssel gibt es nur in der Notfallmappe. Wer die Dumps kopiert (Fehlkonfiguration,
+Offsite-Speicher, Hardware-Tausch), kann sie damit nicht lesen. Einmalig auf einem Admin-Rechner
+**ausserhalb** des Servers:
+
+```bash
+export GNUPGHOME="$(mktemp -d)"
+gpg --batch --passphrase '' --pinentry-mode loopback \
+  --quick-gen-key "hocx dumps <ops@example.invalid>" future-default default never
+gpg --armor --export > dump-public.asc                      # auf den Server
+gpg --armor --export-secret-keys > dump-private.asc         # nur in die Notfallmappe
+```
+
+`future-default` erzeugt den nötigen Verschlüsselungs-Unterschlüssel (`ed25519` allein reicht
+nicht). Auf dem Server `dump-public.asc` nach `~/.hocx-backup/dump-public.asc` legen (oder
+`BACKUP_DUMP_PUBLIC_KEY_PATH` in `.env`). Fehlt der Schlüssel, schreiben die Skripte wie bisher
+`.sql.gz` und warnen; `HOCX_REQUIRE_DUMP_ENCRYPTION=true` macht ihn zur Pflicht.
+
+Pre-Deploy-Dumps bleiben höchstens `PRE_DEPLOY_BACKUP_MAX_DAYS` Tage (Default 30, Shell-Variable
+beim Aufruf von `deploy.sh`), der neueste immer.
 - **Empfohlener Cron-Zeitplan**: täglich 03:15 Uhr, mit Logdatei im selben `backups/`-Ordner
   (Pfade an den Checkout anpassen; auf einer über `dev.sh` betriebenen Instanz
   `HOCX_COMPOSE_PROJECT=hocx-dev` voranstellen):
@@ -718,3 +750,51 @@ Störung erneut einreihen: `... document_admin requeue`. Übernahme pausieren:
 überfälliger `document_worker` heisst: Container läuft nicht oder hängt
 (`docker compose logs document-worker`). Aufträge mit abgelaufener Lease übernimmt ein neu
 gestarteter Worker automatisch.
+
+
+## 17. Job-Worker und Lastgrenzen (Concurrency-Audit 1.2)
+
+Hintergrund: `ROBUSTNESS_CONCURRENCY_AUDIT.md` (Befunde CONC-001..024), Lasttests unter `loadtest/`.
+
+**Neuer Dienst `job-worker`** (Backend-Image, `python -m app.workers.job_worker`): Galerie-Ingest,
+PDF-Aufträge, Vereinsexport, Qualitäts-Backfill, Album-Sync, Virenscan-Nachprüfung und die grossen
+Aufräumjobs laufen nicht mehr in den uvicorn-Workern. `deploy.sh` startet und prüft ihn automatisch
+(`BACKEND_IMAGE_WORKERS`); ein Rollback auf ein Release ohne Job-Worker stoppt ihn, das ältere
+Backend führt die Jobs dann wieder selbst aus. Ohne laufenden Job-Worker entstehen keine PDFs aus
+Exporten und keine Galerie-Importe - `/admin/jobs` meldet `job_worker` als überfällig,
+`/admin/system` die Prüfung «PDF-Aufträge».
+
+**PDF-Export als Auftrag**: `POST /api/documents/render` prüft Rechte sofort und antwortet 202 mit
+einem Auftrag (`document_render_job`); der Browser fragt `GET /api/documents/render-jobs/{id}` ab.
+Auch das PDF nach dem Abschliessen eines Protokolls ist ein Auftrag (übersteht Neustarts, wird bei
+«Compile-Platz belegt» oder Timeout bis zu dreimal wiederholt). Hängende Aufträge (> 15 min
+`running`) setzt der Worker automatisch zurück.
+
+**Überwachung**:
+- `/admin/system` → «Auslastung der Dienstprozesse» (`runtime`): Event-Loop-Verzögerung,
+  DB-Pool- und Threadpool-Belegung, Pool-Zeitüberschreitungen aller Prozesse der letzten Minute.
+  Warnung ab 1 s Loop-Lag oder vollem Pool, kritisch ab 10 s.
+- `/admin/system` → «PDF-Aufträge» (`render_queue`): Warteschlange älter als 10 min oder
+  gescheiterte Aufträge (24 h).
+- `pg_stat_activity.application_name` unterscheidet `hocx-backend`, `hocx-job-worker`,
+  `hocx-document-worker`, `hocx-abgabebox-backend` usw.
+
+**Stellschrauben** (Umgebung, Defaults in Klammern):
+
+| Variable | Wirkung |
+|---|---|
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` (12/8, Worker kleiner) | DB-Pool je Prozess; bei Erschöpfung nach `DB_POOL_TIMEOUT_SECONDS` (5) Antwort 503 `db_busy` mit Retry-After |
+| `DB_ADMISSION_LIMIT` (leer = Pool minus `DB_ADMISSION_RESERVE` 4, also 16) / `DB_ADMISSION_WAIT_SECONDS` (20) | gleichzeitige HTTP-Requests je Backend-Worker; der Rest wartet ohne Thread und Verbindung, danach 503 `db_busy`. Verhindert den Stau aus Threadpool und Pool unter Last (`app/core/db_admission.py`). Wer den Pool vergrössert, vergrössert die Annahme mit |
+| `OVERLOAD_THRESHOLD_LOW` (0.75) / `OVERLOAD_THRESHOLD_NORMAL` (1.0) / `OVERLOAD_ACTIVE_MINUTES` (15) | Überlast-Schutz nach Abo: ab dieser geglätteten Auslastung (Requests in Arbeit + wartend je Platz der Request-Annahme) sehen *neue* Nutzer von Abos mit Priorität „niedrig“ bzw. „normal“ die Überlast-Seite; „hoch“ wird nie vorab abgewiesen. Wer in den letzten 15 Minuten gearbeitet hat, bleibt drin. Die Stufe je Abo steht im Adminportal (Preiskatalog), Abweisungen unter System → Überlast und als Warnung `overload` (ntfy) |
+| `GALLERY_UPLOAD_CONCURRENCY` (2) / `GALLERY_UPLOAD_SLOT_WAIT_SECONDS` (60) | gleichzeitige Galerie-Uploads je Backend-Worker, Wartezeit auf einen Platz |
+| `ABGABEBOX_UPLOAD_CONCURRENCY` (2) / `ABGABEBOX_UPLOAD_SLOT_WAIT_SECONDS` (120) | gleichzeitige öffentliche Uploads je Abgabebox-Worker (je bis 150 MiB im Speicher) |
+| `DOCUMENT_RENDER_CONCURRENCY` (2) | Typst-Compiles je Prozess (Backend: Vorschau; Job-Worker: PDF-Aufträge) |
+| `BACKUP_HEAVY_WINDOW_HOURS` (`1-5`) | lokales Zeitfenster (Europe/Zurich) für Backup-Verify und Restore-Test; der Backup-Worker läuft mit niedriger CPU-Priorität |
+
+Teure Monitor-Zählungen (verwaiste Dateien, Belegung des lokalen S3) rechnet `/admin/system` nur noch
+stündlich. Der Admin-Entrypoint hat dieselben Lese-/Schreibfristen (1 h) wie der öffentliche, damit
+grosse Mandantenimporte nicht nach Traefiks Default von 60 s abbrechen; vor dem Entpacken eines
+Imports wird freier Speicher geprüft.
+
+PostgreSQL läuft mit `max_connections=150` (Budget rund 100, siehe Kommentar in der Compose-Datei).
+Wer Pools oder Worker erhöht, rechnet das Budget nach.

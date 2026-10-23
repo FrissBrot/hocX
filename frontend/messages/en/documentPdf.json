@@ -437,5 +437,130 @@
     "listColumn2": "Responsible",
     "imageCaption": "Sample image",
     "yes": "Yes"
+  },
+  "dataExport": {
+    "section": {
+      "person": "Person",
+      "attendance": "Attendance",
+      "membership_changes": "Joins and leaves",
+      "fines": "Fines",
+      "todos": "Tasks",
+      "responsibilities": "Responsibilities",
+      "events": "Events",
+      "templates": "Protocol templates",
+      "lists": "Lists",
+      "files": "Uploaded files",
+      "security": "Sign-in and feeds",
+      "activity": "Activity",
+      "mentions": "Mentions"
+    },
+    "col": {
+      "first_name": "First name",
+      "last_name": "Last name",
+      "display_name": "Display name",
+      "email": "Email",
+      "role": "Role",
+      "login_enabled": "Login enabled",
+      "is_active": "Active",
+      "joined_at": "Joined",
+      "left_at": "Left",
+      "preferred_language": "Language",
+      "created_at": "Created",
+      "protocol": "Protocol",
+      "title": "Title",
+      "date": "Date",
+      "status": "Status",
+      "type": "Type",
+      "amount": "Amount",
+      "currency": "Currency",
+      "collected_at": "Collected on",
+      "delete_comment": "Deletion reason",
+      "task": "Task",
+      "due_date": "Due",
+      "completed_at": "Completed on",
+      "notes": "Notes",
+      "element": "Agenda item",
+      "location": "Location",
+      "template": "Template",
+      "exclude_from_attendance": "Excluded from attendance",
+      "list": "List",
+      "position": "Row",
+      "name": "Name",
+      "mime_type": "File type",
+      "size_bytes": "Size (bytes)",
+      "taken_at": "Taken",
+      "kind": "Kind",
+      "detail": "Detail",
+      "label": "Label",
+      "last_used_at": "Last used",
+      "action": "Action",
+      "outcome": "Result",
+      "block": "Section",
+      "excerpt": "Excerpt",
+      "end_date": "End date",
+      "category": "Category",
+      "tag": "Tag",
+      "cancelled": "Cancelled",
+      "organizers": "Organisers",
+      "leadership": "Leadership",
+      "participants": "Participants",
+      "description": "Description",
+      "assignees": "Assigned to"
+    },
+    "file": {
+      "workbook": "Data report",
+      "readme": "README",
+      "personalPrefix": "Data-access"
+    },
+    "personalReadme": "Data access report for {name} ({tenant}), created on {date}.\\n\\nData report.xlsx has one sheet per area: master data, attendance (own rows only), fines, tasks, responsibilities, events, lists, files you uploaded (list), sign-in factors and calendar feeds (without secrets), activity and mentions in protocol texts.\\ndaten.json contains the same data in machine-readable form.\\n\\nMentions are found by searching for the name and may be incomplete. Protocols and treasury data are kept by the organisation; please direct questions to the organisation.",
+    "tenant": {
+      "prefix": "Club-export",
+      "yes": "yes",
+      "no": "no",
+      "file": {
+        "members": "Members",
+        "events": "Events",
+        "attendance": "Attendance",
+        "fines": "Fines",
+        "finances": "Finances",
+        "todos": "Tasks"
+      },
+      "sheet": {
+        "members": "Members",
+        "events": "Events",
+        "attendance": "Attendance",
+        "fines": "Fines",
+        "finances": "Finances",
+        "todos": "Tasks"
+      },
+      "folder": {
+        "lists": "Lists",
+        "protocols": "Minutes",
+        "photos": "Photos",
+        "gallery": "Gallery",
+        "submissions": "Submissions",
+        "documents": "Documents"
+      },
+      "attendance": {
+        "present": "present",
+        "late": "late",
+        "excused": "excused",
+        "absent": "absent"
+      },
+      "fineType": {
+        "late": "Late",
+        "absent": "Absence"
+      },
+      "fineStatus": {
+        "pending": "open",
+        "collected": "collected",
+        "deleted": "deleted"
+      },
+      "withFiles": "Photos, submissions and documents are included as original files in the folders Photos, Submissions and Documents.",
+      "withoutFiles": "This export contains no photos, submissions or documents (tables and minutes PDFs only).",
+      "protocolsWithoutPdf": "Closed minutes without a stored PDF (open them in hocX and export as PDF):",
+      "missingFiles": "Not included because they were not found in storage: {count} file(s)."
+    },
+    "tenantReadme": "Club export of {tenant}, created on {date}.\\n\\nTables (Excel): members, events, attendance (person × session), fines, finances (one sheet per account), tasks and one file per list in the Lists folder. Names instead of internal numbers, dates as DD.MM.YYYY, amounts as numbers.\\nMinutes: the most recently generated PDF of every closed set of minutes.\\n{files}\\n\\nCredentials (passwords, two-factor keys, links) are not included. Please store securely: the file contains personal data."
   }
 }

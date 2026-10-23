@@ -25,7 +25,8 @@
     "storage": "Archiviazione",
     "backups": "Backup",
     "maintenance": "Manutenzione",
-    "documentTemplates": "Modelli di documento"
+    "documentTemplates": "Modelli di documento",
+    "auditLog": "Registro di audit"
   },
   "logout": "Disconnetti",
   "menuToggleClose": "Chiudi",

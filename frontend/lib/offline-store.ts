@@ -30,6 +30,9 @@ export type OfflineSnapshot = {
 
 const OUTBOX_KEY = "hocx-offline-outbox-v1";
 const DRAFT_PREFIX = "hocx-draft-v1:";
+// Konto, dem Outbox und Entwürfe gehören (Datenschutz-Audit PRIV-019): ein anderes Konto im selben
+// Browser sendet nie die ausstehenden Änderungen seines Vorgängers und sieht dessen Entwürfe nicht.
+const OWNER_KEY = "hocx-offline-owner-v1";
 let snapshot: OfflineSnapshot = { online: true, pending: 0, flushing: false, lastError: null, blocked: 0 };
 const serverSnapshot: OfflineSnapshot = { online: true, pending: 0, flushing: false, lastError: null, blocked: 0 };
 const listeners = new Set<() => void>();
@@ -54,6 +57,24 @@ function readOutbox(): PendingMutation[] {
 function writeOutbox(items: PendingMutation[]) {
   window.localStorage.setItem(OUTBOX_KEY, JSON.stringify(items));
   emit({ pending: items.length, blocked: items.filter((item) => item.blocked).length });
+}
+
+/** Entfernt Outbox, Entwürfe und Besitzer (Logout, Kontowechsel). */
+export function clearOfflineStore() {
+  if (typeof window === "undefined") return;
+  for (const key of Object.keys(window.localStorage)) {
+    if (key === OUTBOX_KEY || key === OWNER_KEY || key.startsWith(DRAFT_PREFIX)) window.localStorage.removeItem(key);
+  }
+  emit({ pending: 0, blocked: 0, lastError: null });
+}
+
+/** Vor dem ersten Senden aufrufen: gehört die Ablage einem anderen Konto, wird sie verworfen. */
+export function bindOfflineStoreToUser(userId: string | null | undefined) {
+  if (typeof window === "undefined" || !userId) return;
+  const owner = window.localStorage.getItem(OWNER_KEY);
+  const hasData = Object.keys(window.localStorage).some((key) => key === OUTBOX_KEY || key.startsWith(DRAFT_PREFIX));
+  if (owner !== userId && (owner !== null || hasData)) clearOfflineStore();
+  window.localStorage.setItem(OWNER_KEY, userId);
 }
 
 export function initializeOfflineStore() {

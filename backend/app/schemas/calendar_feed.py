@@ -12,7 +12,8 @@ class CalendarFeedUpsert(BaseModel):
     calendar_name: str = Field(min_length=1, max_length=200)
     todo_scope: Literal["mine", "all"] = "mine"
     include_completed: bool = False
-    hide_details: bool = False
+    # Datensparsam voreingestellt (PRIV-018): Kalenderanbieter speichern abonnierte Inhalte.
+    hide_details: bool = True
 
 
 class CalendarFeedRead(BaseModel):

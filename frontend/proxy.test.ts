@@ -18,6 +18,31 @@ describe("proxy", () => {
     expect(response.headers.get("location")).toBe("https://app.example.ch/login");
   });
 
+  it("leitet bei Überlast neue Nutzer auf /overload mit Rücksprungziel um", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ code: "overloaded" }), { status: 503 }));
+
+    const response = await proxy(new NextRequest("https://app.example.ch/protocols?tab=open"));
+
+    expect(response.headers.get("location")).toBe("https://app.example.ch/overload?from=%2Fprotocols%3Ftab%3Dopen");
+  });
+
+  it("zeigt die Überlast-Ansicht ohne Sitzungsprüfung", async () => {
+    const fetchSpy = unauthenticatedBackend();
+
+    const response = await proxy(new NextRequest("https://app.example.ch/overload?from=%2Fphotos"));
+
+    expect(response.headers.get("location")).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("behandelt andere 503-Antworten nicht als Überlast", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ code: "db_busy" }), { status: 503 }));
+
+    const response = await proxy(new NextRequest("https://app.example.ch/photos"));
+
+    expect(response.headers.get("location")).toBeNull();
+  });
+
   it("lässt öffentliche Freigabe-Links ohne Login durch", async () => {
     const fetchSpy = unauthenticatedBackend();
 

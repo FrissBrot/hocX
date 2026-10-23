@@ -699,6 +699,12 @@ class MfaService:
             db.commit()
             return self._consume_login_ticket(db, ticket)
         record_failed_attempt(account_lockout_key, period_seconds=_ACCOUNT_TOTP_WINDOW_SECONDS)
+        from app.services.audit_service import AuditService
+
+        AuditService().log(
+            db, action="user.mfa_failed", outcome="failure", tenant_id=context.user.tenant_id,
+            actor_user_id=context.user.id, details={"factor": "totp"},
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Der TOTP-Code ist nicht gültig")
 
     def start_login_passkey_assertion(

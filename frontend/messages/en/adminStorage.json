@@ -118,7 +118,8 @@
     "disabled": "Disabled",
     "inMigration": "In migration",
     "pinned": "Data in fallback period",
-    "sharedCredentials": "Submission box without own credentials"
+    "sharedCredentials": "Submission box without own credentials",
+    "encrypted": "Encrypted"
   },
   "test": {
     "ok": "OK",
@@ -236,7 +237,15 @@
     "tlsVerify": "Verify TLS certificate",
     "caBundle": "Custom CA certificate (PEM, optional)",
     "caBundleStored": "A CA certificate is stored",
-    "enabled": "Profile enabled"
+    "enabled": "Profile enabled",
+    "serverSideEncryption": "Server-side encryption (AES-256)",
+    "serverSideEncryptionHelp": "Every object is stored encrypted at the provider; the connection test checks this.",
+    "dataLocation": "Data location",
+    "dataLocationChoose": "Please choose",
+    "dataLocationHelp": "Derived from the region for AWS and Hetzner. Determines whether club data leaves Switzerland or the EU.",
+    "transferBasis": "Legal basis for the transfer",
+    "transferBasisHelp": "e.g. standard contractual clauses and data processing agreement of …",
+    "locationConfirm": "Transfer abroad reviewed, clubs informed"
   },
   "addressing": {
     "auto": "Automatic",
@@ -274,7 +283,8 @@
         "text": "The migration cannot start without a successful test."
       }
     },
-    "from": "From"
+    "from": "From",
+    "confirmThirdCountry": "The target is in a third country – transfer reviewed, clubs informed"
   },
   "verifyMode": {
     "full": "Full (re-read content and check SHA-256)",
@@ -332,5 +342,11 @@
     "lastTestFailed": "Last tested {time} · failed",
     "testing": "Testing connection …",
     "retest": "Test again"
+  },
+  "location": {
+    "ch": "Switzerland",
+    "eu_eea": "EU/EEA",
+    "adequate": "Adequate country",
+    "third_country": "Third country"
   }
 }

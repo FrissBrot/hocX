@@ -41,8 +41,8 @@ from tests.factories import (
     make_tenant,
 )
 
-# Plattformdaten bzw. öffentliche DNS-Daten ohne RLS - siehe Docstring der Migration 0132.
-TABLES_WITHOUT_RLS = {"audit_log", "system_error_log", "tenant_charge", "tenant_domain"}
+# Plattformdaten bzw. öffentliche DNS-Daten ohne RLS - siehe Docstring der Migrationen 0132 und 0151.
+TABLES_WITHOUT_RLS = {"audit_log", "overload_rejection", "system_error_log", "tenant_charge", "tenant_domain"}
 
 
 @contextmanager
@@ -348,7 +348,8 @@ def test_every_child_table_listed_in_0134_has_row_level_security(db):
     spec = importlib.util.spec_from_file_location("child_table_rls", path)
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
-    tables = set(migration._policies())
+    # Später entfernte Tabellen: 0141 löscht die Prüfkopie der Bussen (PRIV-011).
+    tables = set(migration._policies()) - {"attendance_fine_merged_duplicate"}
 
     enabled = set(
         db.scalars(

@@ -11,6 +11,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
+import { ProtectedExportModal } from "@/components/ui/protected-export-modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -143,6 +144,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
   const [participants, setParticipants] = useState(initialParticipants);
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantSummary | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [exportTarget, setExportTarget] = useState<ParticipantSummary | null>(null);
   const [search, setSearch] = useState("");
   const [loginTab, setLoginTab] = useState<"withoutLogin" | "withLogin">("withoutLogin");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
@@ -530,6 +532,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
                     ariaLabel={t("rowActions", { name: participant.display_name })}
                     items={[
                       { label: t("edit"), onClick: () => void openEdit(participant) },
+                      ...(canAdmin ? [{ label: t("personalData.action"), onClick: () => setExportTarget(participant) }] : []),
                       { label: t("delete"), onClick: () => void deleteParticipant(participant.id), danger: true },
                     ]}
                   />
@@ -719,6 +722,16 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
           </div>
         </ModalSaveForm>
       </Modal>
+      {exportTarget ? (
+        <ProtectedExportModal
+          open
+          title={t("personalData.title", { name: exportTarget.display_name })}
+          description={t("personalData.description")}
+          path={`/api/participants/${exportTarget.id}/personal-data`}
+          fallbackFilename="hocx-data.zip"
+          onClose={() => setExportTarget(null)}
+        />
+      ) : null}
     </div>
   );
 }

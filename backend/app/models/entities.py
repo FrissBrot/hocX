@@ -86,6 +86,9 @@ class Tenant(Base, TimestampMixin):
     # hinweisen. Die Freigabelogik selbst steckt in der View document_verification_public.
     verify_show_identity: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
     verify_show_newer_version: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"), default=True)
+    # Bussen und Anwesenheit je Person in der Statistik für alle Mitglieder sichtbar (0138). Standard
+    # aus: Leser sehen dort nur ihre eigene Zeile, wie in der Bussenliste (Datenschutz-Audit PRIV-001).
+    statistics_per_person_public: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
     # Identität der Organisation durch einen Plattform-Admin bestätigt (Abzeichen auf der
     # Prüfseite). Eine Namensänderung hebt die Bestätigung auf (revoked_*).
     identity_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -97,6 +100,10 @@ class Tenant(Base, TimestampMixin):
     # Abrechnungsperiode (NULL = Erstellungsdatum). billing_charged_until ist der Cursor der
     # Forderungserzeugung - bis hierhin sind alle Perioden abgerechnet (siehe cashflow_service).
     billing_start_date: Mapped[date | None] = mapped_column(Date)
+    # Vertragsende für das Offboarding (0146, Check tenant_offboarding in system_health_service)
+    contract_ends_on: Mapped[date | None] = mapped_column(Date)
+    # Datenschutzhinweise des Vereins für die Abgabebox (0147, abgabebox_privacy_notice())
+    privacy_notice_url: Mapped[str | None] = mapped_column(Text)
     billing_charged_until: Mapped[date | None] = mapped_column(Date)
 
 
@@ -183,6 +190,10 @@ class Plan(Base):
     # Auf der oeffentlichen Website als "Beliebteste Wahl" hervorgehoben (0103_plan_is_featured).
     # Hoechstens ein Plan - upsert_plan setzt beim Markieren alle anderen zurueck.
     is_featured: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    # Priorität bei Überlast (0151_overload_priority): 0 niedrig, 1 normal, 2 hoch. Wird es knapp,
+    # sehen neue Nutzer von Mandanten mit niedriger Priorität zuerst die Überlast-Seite
+    # (app/core/db_admission.py).
+    load_priority: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("1"), default=1)
 
 
 class PlanFeature(Base):
@@ -1229,6 +1240,9 @@ class ProtocolElementBlock(Base, TimestampMixin):
     is_visible_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     export_visible_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     configuration_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    # Zählt jede Änderung von configuration_snapshot_json (Trigger, Migration 0149) - optimistische
+    # Sperre des Konfigurations-PATCH. FetchedValue: nach jedem UPDATE neu laden.
+    config_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), server_onupdate=FetchedValue())
 
 
 Index("idx_protocol_element_block_render", ProtocolElementBlock.protocol_element_id, text("COALESCE(render_order, sort_index)"))
@@ -1921,6 +1935,26 @@ class SubmissionUploadFile(Base, TimestampMixin):
     album_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class OverloadRejection(Base):
+    """Abgewiesene neue Nutzer bei Überlast (0151_overload_priority), je Prozess alle ~15 s
+    zusammengefasst. Plattformdaten ohne RLS wie system_error_log - nur /admin/system liest sie."""
+
+    __tablename__ = "overload_rejection"
+    __table_args__ = (
+        Index("idx_overload_rejection_created", "created_at"),
+        Index("idx_overload_rejection_tenant", "tenant_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    instance: Mapped[str] = mapped_column(Text, nullable=False)
+    tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"))
+    load_priority: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    rejected: Mapped[int] = mapped_column(Integer, nullable=False)
+    users: Mapped[int] = mapped_column(Integer, nullable=False)
+    pressure_percent: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class SubmissionUploadLog(Base):
     __tablename__ = "submission_upload_log"
     __table_args__ = (
@@ -1957,7 +1991,11 @@ class SystemErrorLog(Base):
     )
     source: Mapped[str] = mapped_column(Text, nullable=False)
     tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="SET NULL"))
+    # Veraltet (0139): neue Einträge verweisen über actor_user_id/actor_admin_id auf das Konto, damit
+    # nach dem Löschen einer Person keine E-Mail-Adresse im Protokoll zurückbleibt (PRIV-002).
     actor_email: Mapped[str | None] = mapped_column(Text)
+    actor_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    actor_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
     request_method: Mapped[str | None] = mapped_column(Text)
     request_path: Mapped[str | None] = mapped_column(Text)
     status_code: Mapped[int | None] = mapped_column(Integer)
@@ -1991,6 +2029,18 @@ class SystemJobStatus(Base):
     run_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
     failure_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+
+
+class SystemRuntimeMetric(Base):
+    """Laufzeitkennzahlen je Dienstprozess (core/runtime_metrics.py, Migration 0148). Geschrieben
+    nur über record_runtime_metrics, gelesen von system_health_service._check_runtime."""
+
+    __tablename__ = "system_runtime_metric"
+
+    instance: Mapped[str] = mapped_column(Text, primary_key=True)
+    process_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    reported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    metrics: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
 class SystemJobRun(Base):
@@ -2227,7 +2277,7 @@ class CalendarFeed(Base, TimestampMixin, UpdatedAtMixin):
     token_created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     todo_scope: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'mine'"), default="mine")
     include_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
-    hide_details: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    hide_details: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -2278,6 +2328,8 @@ class GalleryUploadJob(Base, TimestampMixin):
     # own entries keep their in-archive names instead, see iter_gallery_zip_entries).
     staged_paths: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     original_filenames: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    # «GPS-Daten des Bildes mitsenden» (0147, Datenschutz-Audit Paket 9.3)
+    include_gps: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     # At most one of these three targets is ever set - mirrors upload_gallery_images' own
     # mutual-exclusion check.
@@ -2322,3 +2374,74 @@ class GalleryUploadJob(Base, TimestampMixin):
     file_results: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TenantDataExport(Base):
+    """Vereinsexport (Migration 0145, services/data_export/tenant.py): bestellt vom Mandanten-Admin,
+    gebaut vom Job tenant_data_export, 7 Tage abrufbar. password_encrypted nur bis zum Bau."""
+
+    __tablename__ = "tenant_data_export"
+    __table_args__ = (
+        CheckConstraint("status IN ('queued', 'running', 'done', 'failed', 'expired')", name="ck_tenant_data_export_status"),
+        Index("idx_tenant_data_export_tenant", "tenant_id", text("created_at DESC")),
+        Index("idx_tenant_data_export_status", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    requested_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'queued'"))
+    include_files: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    language: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'de'"))
+    password_encrypted: Mapped[str | None] = mapped_column(Text)
+    object_key: Mapped[str | None] = mapped_column(Text)
+    filename: Mapped[str | None] = mapped_column(Text)
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TenantRetentionPolicy(Base):
+    """Aufbewahrungsfristen des Vereins (Migration 0146, services/tenant_retention_service.py).
+    NULL = Regel aus."""
+
+    __tablename__ = "tenant_retention_policy"
+    __table_args__ = (
+        CheckConstraint("submissions_months > 0", name="tenant_retention_policy_submissions_months_check"),
+        CheckConstraint("former_members_years > 0", name="tenant_retention_policy_former_members_years_check"),
+        CheckConstraint("unlinked_gallery_years > 0", name="tenant_retention_policy_unlinked_gallery_years_check"),
+    )
+
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    submissions_months: Mapped[int | None] = mapped_column(SmallInteger)
+    former_members_years: Mapped[int | None] = mapped_column(SmallInteger)
+    unlinked_gallery_years: Mapped[int | None] = mapped_column(SmallInteger)
+    auto_apply: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+
+class RetentionProposal(Base):
+    """Vorschlag des Jobs retention_proposals (Migration 0146). subject_id: submission_upload.id,
+    app_user.id bzw. stored_file.id je nach kind."""
+
+    __tablename__ = "retention_proposal"
+    __table_args__ = (
+        CheckConstraint("kind IN ('submission_upload', 'former_member', 'gallery_image')", name="ck_retention_proposal_kind"),
+        CheckConstraint("status IN ('open', 'applied', 'dismissed')", name="ck_retention_proposal_status"),
+        UniqueConstraint("tenant_id", "kind", "subject_id", name="uq_retention_proposal_subject"),
+        Index("idx_retention_proposal_open", "tenant_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    subject_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    label: Mapped[str | None] = mapped_column(Text)
+    reference_date: Mapped[date | None] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'open'"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decided_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))

@@ -59,8 +59,15 @@ _CHECK_TITLES_DE = {
     "storage": "Speicherplatz",
     "error_rate": "Fehlerrate",
     "scan_backlog": "Virenprüfung im Rückstand",
+    "orphaned_files": "Verwaiste Dateien",
+    "tenant_offboarding": "Offboarding",
+    "captcha_endpoint": "Captcha-Endpunkt",
+    "security": "Sicherheitsereignisse",
     "photo_queue": "Bildanalyse-Warteschlange",
     "document_queue": "Dokumentverarbeitung",
+    "runtime": "Auslastung der Dienstprozesse",
+    "overload": "Überlast-Schutz",
+    "render_queue": "PDF-Aufträge",
     "document_verification": "Öffentliche Prüfseite",
     "object_storage": "Dateispeicher",
     "storage_migration": "Storage-Migration",
@@ -77,8 +84,15 @@ _CHECK_PROBLEM_TITLES_DE = {
     "storage": "Speicherplatz knapp",
     "error_rate": "Viele Einträge im Fehlerprotokoll",
     "scan_backlog": "Virenprüfung im Rückstand",
+    "orphaned_files": "Verwaiste Dateien im Speicher",
+    "tenant_offboarding": "Mandanten nach Vertragsende noch nicht gelöscht",
+    "captcha_endpoint": "Captcha-Endpunkt nicht erreichbar",
+    "security": "Auffällige Sicherheitsereignisse",
     "photo_queue": "Bildanalyse-Warteschlange staut sich",
     "document_queue": "Dokumentverarbeitung staut sich oder scheitert",
+    "runtime": "Dienstprozesse blockiert oder ausgelastet",
+    "overload": "Überlast: neue Nutzer werden abgewiesen",
+    "render_queue": "PDF-Aufträge stauen sich oder scheitern",
     "document_verification": "Öffentliche Prüfseite langsam",
     "object_storage": "Dateispeicher nicht erreichbar",
     "storage_migration": "Storage-Migration braucht Aufmerksamkeit",
@@ -124,12 +138,49 @@ def _check_message(check) -> str:
             return f"{params.get('lastHour')} Fehler in der letzten Stunde, {params.get('lastDay')} in 24 Stunden - siehe Fehlerprotokoll."
         case "scan_backlog":
             return f"{params.get('count')} Dateien warten seit über einer Stunde auf die Virenprüfung."
+        case "security":
+            parts = []
+            if params.get("failedLogins"):
+                parts.append(f"{params.get('failedLogins')} fehlgeschlagene Anmeldungen in 15 Minuten (höchstens {params.get('maxPerAccount')} je Konto)")
+            if params.get("exports"):
+                parts.append(f"{params.get('exports')} Exporte in der letzten Stunde")
+            if params.get("restores"):
+                parts.append(f"{params.get('restores')} Restore(s) in 24 Stunden")
+            if params.get("adminChanges"):
+                parts.append(f"{params.get('adminChanges')} Änderungen an Admin-Konten oder MFA in 24 Stunden")
+            if params.get("adminLogins"):
+                parts.append(f"{params.get('adminLogins')} Plattform-Anmeldungen in der letzten Stunde")
+            return "; ".join(parts) + " - siehe Adminportal, Audit-Log."
+        case "orphaned_files":
+            return f"{params.get('count')} Dateien gehören zu nichts mehr (älter als 1 Tag) - Löschpfad prüfen, Bereinigung im Adminportal (Mandant → Bereinigen)."
+        case "tenant_offboarding":
+            return (
+                f"{params.get('count')} Mandanten haben ihr Vertragsende vor über {params.get('days')} Tagen erreicht - "
+                "Daten löschen (Adminportal → Mandanten)."
+            )
         case "photo_queue":
             return f"{params.get('queued')} Aufträge warten, der älteste seit {params.get('oldestMinutes')} Minuten."
         case "document_queue":
             return (
                 f"{params.get('queued')} Aufträge warten (ältester seit {params.get('oldestMinutes')} Minuten), "
                 f"{params.get('failed')} in 24 h endgültig gescheitert - document-worker prüfen (docker compose logs document-worker)."
+            )
+        case "render_queue":
+            return (
+                f"{params.get('queued')} PDF-Aufträge warten (ältester seit {params.get('oldestMinutes')} Minuten), "
+                f"{params.get('failed')} in 24 h gescheitert - job-worker prüfen (docker compose logs job-worker)."
+            )
+        case "runtime":
+            return (
+                f"Event-Loop bis {params.get('maxLagMs')} ms blockiert, DB-Pool bis {params.get('poolPeakPercent')} %, "
+                f"Threadpool bis {params.get('threadPeakPercent')} % belegt, {params.get('poolTimeouts')} Pool-Zeitüberschreitungen "
+                f"({params.get('instances')} Prozesse, letzte Minute) - Logs von backend/abgabebox-backend prüfen."
+            )
+        case "overload":
+            return (
+                f"{params.get('rejected')} Anfragen von {params.get('users')} neuen Nutzern aus {params.get('tenants')} Mandanten "
+                f"in den letzten {params.get('minutes')} Minuten abgewiesen (Auslastung bis {params.get('pressurePercent')} %) - "
+                "siehe Adminportal, System, Überlast."
             )
         case "document_verification":
             return f"Prüf-Endpoint der Abgabebox antwortet nach {params.get('latencyMs')} ms - abgabebox-backend und Datenbank prüfen."

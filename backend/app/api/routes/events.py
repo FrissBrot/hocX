@@ -18,6 +18,7 @@ from app.services.audit_service import AuditService
 from app.services import photo_event_link_service
 from app.services.task_package_service import sync_packages_after_change
 from app.models.entities import Event
+from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter()
 service = EventService()
@@ -73,6 +74,17 @@ async def preview_events_csv(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_preview_events_csv_impl, file=file, column_map=column_map, db=db, user=user)
+
+
+async def _preview_events_csv_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    file: UploadFile = File(...),
+    column_map: str = Form(default=""),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
     require_writer(user)
     try:
         content = (await file.read()).decode("utf-8-sig")
@@ -83,6 +95,17 @@ async def preview_events_csv(
 
 @router.post("/events/import-csv", response_model=list[EventRead], status_code=status.HTTP_201_CREATED)
 async def import_events_csv(
+    file: UploadFile = File(...),
+    column_map: str = Form(default=""),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_import_events_csv_impl, file=file, column_map=column_map, db=db, user=user)
+
+
+async def _import_events_csv_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
     file: UploadFile = File(...),
     column_map: str = Form(default=""),
     db: Session = Depends(get_db),

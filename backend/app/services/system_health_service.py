@@ -26,7 +26,7 @@ from app.core.redis_client import get_redis_sync
 from app.models import StoredFile, SystemErrorLog, SystemHealthEvent
 from app.models.document_entities import DocumentJob
 from app.models.entities import PhotoAnalysisJob
-from app.schemas.admin import ContainerStatusRead, HealthCheckRead, HealthStatus, SystemHealthSnapshot
+from app.schemas.admin import ContainerStatusRead, HealthCheckRead, HealthStatus, OverloadTenantRead, SystemHealthSnapshot
 
 _logger = logging.getLogger(__name__)
 
@@ -45,6 +45,8 @@ STORAGE_FREE_CRITICAL_PERCENT = 5
 ERRORS_PER_HOUR_WARNING = 20
 ERRORS_PER_HOUR_CRITICAL = 100
 SCAN_BACKLOG_MIN_AGE = timedelta(hours=1)
+# Verwaiste Dateien erst nach einem Tag melden (Uploads committen Zeile und Bezug nicht immer zusammen).
+ORPHAN_MIN_AGE = timedelta(hours=24)
 PHOTO_QUEUE_WARNING_AGE = timedelta(hours=6)
 # Dokumentverarbeitung (document-worker): fällige Aufträge, die so lange warten, bzw. Aufträge,
 # die in diesem Zeitraum endgültig gescheitert sind (nach max_attempts, «Erneut verarbeiten»).
@@ -451,6 +453,102 @@ def _check_scan_backlog(db: Session) -> HealthCheckRead:
     return HealthCheckRead(key="scan_backlog", status="warning" if count else "ok", params={"count": count})
 
 
+_EXPORT_ACTIONS = ("admin.tenant_exported", "tenant.exported", "personal_data.exported")
+_ADMIN_CHANGE_ACTIONS = ("admin.admin_created", "admin.user_mfa_factor_deleted", "user.mfa_factor_deleted")
+
+
+def _check_security(db: Session) -> HealthCheckRead:
+    """Auffällige Ereignisse im Audit-Log (Datenschutz-Audit PRIV-022): viele Fehlversuche beim
+    Anmelden (gesamt und je Konto, 15 min), mehrere Exporte in einer Stunde, Restores und
+    Änderungen an Admin-Konten/MFA (24 h), optional jede Plattform-Anmeldung (1 h)."""
+    from sqlalchemy import text
+
+    failure_window = (
+        "outcome = 'failure' AND action IN ('user.login_failed', 'admin.login_failed', 'user.mfa_failed') "
+        "AND created_at > now() - interval '15 minutes'"
+    )
+    total_failed = db.scalar(text("SELECT count(*) FROM audit_log WHERE " + failure_window)) or 0
+    # Je Konto, sonst je E-Mail eines Admins, sonst je Quelle (IP-Hash)
+    max_per_account = db.scalar(
+        text(
+            "SELECT COALESCE(max(n), 0) FROM (SELECT count(*) AS n FROM audit_log WHERE " + failure_window
+            + " GROUP BY COALESCE(actor_user_id::text, actor_email, ip_hash, '?')) per_account"
+        )
+    ) or 0
+    exports = db.scalar(
+        text("SELECT count(*) FROM audit_log WHERE action = ANY(:actions) AND created_at > now() - interval '1 hour'"),
+        {"actions": list(_EXPORT_ACTIONS)},
+    ) or 0
+    restores = db.scalar(text("SELECT count(*) FROM audit_log WHERE action = 'backup.restore.create' AND created_at > now() - interval '24 hours'")) or 0
+    admin_changes = db.scalar(
+        text("SELECT count(*) FROM audit_log WHERE action = ANY(:actions) AND created_at > now() - interval '24 hours'"),
+        {"actions": list(_ADMIN_CHANGE_ACTIONS)},
+    ) or 0
+    admin_logins = db.scalar(text("SELECT count(*) FROM audit_log WHERE action = 'admin.login' AND created_at > now() - interval '1 hour'")) or 0
+    max_per_account = int(max_per_account)
+
+    status = "ok"
+    if (
+        total_failed >= settings.security_failed_logins_warning
+        or max_per_account >= settings.security_failed_logins_per_account
+        or exports > settings.security_exports_per_hour
+        or restores
+        or admin_changes
+        or (settings.security_alert_admin_logins and admin_logins)
+    ):
+        status = "warning"
+    if total_failed >= settings.security_failed_logins_critical:
+        status = "critical"
+    return HealthCheckRead(
+        key="security",
+        status=status,
+        params={
+            "failedLogins": int(total_failed),
+            "maxPerAccount": max_per_account,
+            "exports": int(exports),
+            "restores": int(restores),
+            "adminChanges": int(admin_changes),
+            "adminLogins": int(admin_logins),
+        },
+    )
+
+
+def _check_orphaned_files(db: Session) -> HealthCheckRead:
+    """Dateien, auf die nichts mehr zeigt (Datenschutz-Audit PRIV-003/004): sie sind in keiner Ansicht
+    erreichbar, liegen aber im Speicher und in Backups. Neue Fälle deuten auf einen Löschpfad, der
+    file_eraser.FileEraser umgeht - z. B. das Löschen eines Termins mit Abgabebox-Einreichungen."""
+    from app.models.document_entities import DocumentFile
+    from app.services.file_eraser import _REFERENCES
+
+    conditions = [~select(column).where(column == StoredFile.id).exists() for column in (*_REFERENCES, DocumentFile.stored_file_id)]
+    count = db.scalar(
+        select(func.count()).select_from(StoredFile).where(StoredFile.created_at < func.now() - ORPHAN_MIN_AGE, *conditions)
+    ) or 0
+    return HealthCheckRead(key="orphaned_files", status="warning" if count else "ok", params={"count": count})
+
+
+def _check_captcha_endpoint() -> HealthCheckRead:
+    """Friendly Captcha der Abgabebox: EU-Endpunkt (Verarbeitung in der EU) oder globaler Endpunkt.
+    Nur ein Hinweis - beides funktioniert, der EU-Endpunkt setzt einen passenden Plan voraus."""
+    from urllib.parse import urlparse
+
+    host = (urlparse(settings.friendly_captcha_verify_url).hostname or "").lower()
+    region = "eu" if host.endswith(".eu") else "global"
+    return HealthCheckRead(key="captcha_endpoint", status="ok", params={"region": region})
+
+
+def _check_tenant_offboarding(db: Session) -> HealthCheckRead:
+    """Mandanten nach Vertragsende plus Exportfenster (Datenschutz-Audit G): ihre Daten gehören
+    gelöscht. Gelöscht wird bewusst von Hand (Adminportal → Mandant löschen), nie automatisch."""
+    from app.services.tenant_retention_service import offboarding_due
+
+    due = offboarding_due(db, grace_days=settings.tenant_offboarding_grace_days)
+    return HealthCheckRead(
+        key="tenant_offboarding", status="warning" if due else "ok",
+        params={"count": len(due), "days": settings.tenant_offboarding_grace_days},
+    )
+
+
 def _check_photo_queue(db: Session, now: datetime) -> HealthCheckRead:
     queued, oldest = db.execute(
         select(func.count(), func.min(PhotoAnalysisJob.created_at)).where(PhotoAnalysisJob.status == "queued")
@@ -499,6 +597,143 @@ def _check_document_verification() -> HealthCheckRead:
     return HealthCheckRead(key="document_verification", status=status, params={"latencyMs": latency_ms})
 
 
+RENDER_QUEUE_WARNING_AGE = timedelta(minutes=10)
+RENDER_FAILED_WINDOW = timedelta(hours=24)
+
+
+def _check_render_queue(db: Session, now: datetime) -> HealthCheckRead:
+    """PDF-Aufträge (document_render_job, job-worker): staut sich die Warteschlange, läuft der
+    job-worker nicht oder kommt nicht nach; gescheiterte Aufträge zeigen Vorlagen- oder
+    Renderprobleme (Details im Fehlerprotokoll)."""
+    queued, oldest = db.execute(
+        text("SELECT count(*), min(created_at) FROM document_render_job WHERE status = 'queued'")
+    ).one()
+    failed = db.scalar(
+        text("SELECT count(*) FROM document_render_job WHERE status = 'failed' AND finished_at >= :since AND error_status >= 500"),
+        {"since": now - RENDER_FAILED_WINDOW},
+    ) or 0
+    oldest_minutes = round((now - oldest).total_seconds() / 60) if oldest else 0
+    stalled = bool(oldest and now - oldest > RENDER_QUEUE_WARNING_AGE)
+    status: HealthStatus = "warning" if stalled or failed else "ok"
+    return HealthCheckRead(key="render_queue", status=status, params={"queued": queued, "oldestMinutes": oldest_minutes, "failed": failed})
+
+
+# Laufzeitkennzahlen der Dienstprozesse (core/runtime_metrics.py, Migration 0148).
+RUNTIME_REPORT_MAX_AGE = timedelta(seconds=60)
+RUNTIME_LAG_WARNING_MS = 1000
+RUNTIME_LAG_CRITICAL_MS = 10000
+
+
+def _check_runtime(db: Session, now: datetime) -> HealthCheckRead:
+    """Event-Loop-Verzögerung und Pool-/Threadpool-Sättigung aller Prozesse der letzten Minute.
+    Ein blockierter Event-Loop oder ein voller Pool trifft alle Mandanten dieses Workers - das
+    soll auffallen, bevor Nutzer Zeitüberschreitungen melden."""
+    rows = db.execute(
+        text("SELECT process_kind, metrics FROM system_runtime_metric WHERE reported_at >= :since"),
+        {"since": now - RUNTIME_REPORT_MAX_AGE},
+    ).all()
+    if not rows:
+        return HealthCheckRead(key="runtime", status="unknown", params={"instances": 0})
+    max_lag = pool_peak = thread_peak = timeouts = 0
+    for row in rows:
+        metrics = row.metrics or {}
+        max_lag = max(max_lag, int(metrics.get("loop_lag_max_ms") or 0))
+        # Abgewiesen wegen Überlast: Pool-Timeout oder kein Platz in der Request-Annahme
+        timeouts += int(metrics.get("pool_timeouts") or 0) + int(metrics.get("admission_timeouts") or 0)
+        if metrics.get("pool_capacity"):
+            pool_peak = max(pool_peak, round(100 * int(metrics.get("pool_checked_out_max") or 0) / int(metrics["pool_capacity"])))
+        if metrics.get("threadpool_total"):
+            thread_peak = max(thread_peak, round(100 * int(metrics.get("threadpool_busy_max") or 0) / int(metrics["threadpool_total"])))
+    status: HealthStatus = "ok"
+    if max_lag >= RUNTIME_LAG_WARNING_MS or pool_peak >= 100 or thread_peak >= 100 or timeouts:
+        status = "warning"
+    if max_lag >= RUNTIME_LAG_CRITICAL_MS:
+        status = "critical"
+    return HealthCheckRead(
+        key="runtime",
+        status=status,
+        params={"instances": len(rows), "maxLagMs": max_lag, "poolPeakPercent": pool_peak, "threadPeakPercent": thread_peak, "poolTimeouts": timeouts},
+    )
+
+
+# Abgewiesene neue Nutzer bei Überlast (db_admission.py, Migration 0151). Ein Fenster von fünf
+# Minuten, damit eine Überlast-Phase nicht zwischen zwei Prüfungen (alle 30 s) und den
+# 15-s-Meldungen der Worker flackernd "behoben" wirkt.
+OVERLOAD_WINDOW = timedelta(minutes=5)
+
+
+def _check_overload(db: Session, now: datetime) -> HealthCheckRead:
+    """Warnung, solange Nutzer wegen Überlast die Überlast-Seite sehen."""
+    row = db.execute(
+        text(
+            "SELECT COALESCE(SUM(rejected), 0) AS rejected, COALESCE(SUM(users), 0) AS users, "
+            "COUNT(DISTINCT tenant_id) AS tenants, COALESCE(MAX(pressure_percent), 0) AS pressure "
+            "FROM overload_rejection WHERE created_at >= :since"
+        ),
+        {"since": now - OVERLOAD_WINDOW},
+    ).one()
+    return HealthCheckRead(
+        key="overload",
+        status="warning" if row.rejected else "ok",
+        params={
+            "minutes": int(OVERLOAD_WINDOW.total_seconds() // 60),
+            "rejected": int(row.rejected),
+            "users": int(row.users),
+            "tenants": int(row.tenants),
+            "pressurePercent": int(row.pressure),
+        },
+    )
+
+
+OVERLOAD_HISTORY_DAYS = 7
+
+
+def overload_by_tenant(db: Session, now: datetime) -> list[OverloadTenantRead]:
+    """Abweisungen der letzten Tage je Mandant und Stufe für /admin/system, neueste zuerst.
+    "users" summiert die Zählung je Meldung - ein Nutzer, der über mehrere Meldungen hinweg
+    abgewiesen wurde, zählt mehrfach (Obergrenze, nicht exakt)."""
+    rows = db.execute(
+        text(
+            "SELECT t.public_id, t.name AS tenant_name, p.name AS plan_name, r.load_priority, "
+            "SUM(r.rejected) AS rejected, SUM(r.users) AS users, MIN(r.created_at) AS first_at, MAX(r.created_at) AS last_at "
+            "FROM overload_rejection r LEFT JOIN tenant t ON t.id = r.tenant_id LEFT JOIN plan p ON p.code = t.plan_code "
+            "WHERE r.created_at >= :since "
+            "GROUP BY t.public_id, t.name, p.name, r.load_priority ORDER BY MAX(r.created_at) DESC LIMIT 100"
+        ),
+        {"since": now - timedelta(days=OVERLOAD_HISTORY_DAYS)},
+    ).all()
+    return [
+        OverloadTenantRead(
+            tenant_id=str(row.public_id) if row.public_id else None,
+            tenant_name=row.tenant_name,
+            plan_name=row.plan_name,
+            load_priority=int(row.load_priority),
+            rejected=int(row.rejected),
+            users=int(row.users),
+            first_at=row.first_at,
+            last_at=row.last_at,
+        )
+        for row in rows
+    ]
+
+
+# Teure Vollzählungen (verwaiste Dateien über alle Referenzen, Belegung des lokalen S3) ändern sich
+# langsam - je Prozess höchstens stündlich rechnen statt bei jedem 30-s-Tick (Concurrency-Audit
+# CONC-024: mit wachsendem Bestand näherten sie sich dem statement_timeout).
+SLOW_CHECK_TTL_SECONDS = 3600
+_slow_check_cache: dict[str, tuple[float, object]] = {}
+
+
+def _cached_slow_check(key: str, fn):
+    now = time.monotonic()
+    cached = _slow_check_cache.get(key)
+    if cached is not None and now - cached[0] < SLOW_CHECK_TTL_SECONDS:
+        return cached[1]
+    result = fn()
+    _slow_check_cache[key] = (now, result)
+    return result
+
+
 def _run_check(key: str, fn, *, failure_status: HealthStatus = "critical", db: Session | None = None) -> list[HealthCheckRead]:
     """Ein Ausfall einer Prüfung ist selbst ein Befund (Dienst nicht erreichbar) - er darf aber
     die übrigen Prüfungen nicht verhindern."""
@@ -525,11 +760,18 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     # Reine DB-Auswertungen: ein Fehler hier ist ein Bug, kein Ausfall - "unknown" statt Alarm.
     checks += _run_check("error_rate", lambda: _check_error_rate(db), failure_status="unknown", db=db)
     checks += _run_check("scan_backlog", lambda: _check_scan_backlog(db), failure_status="unknown", db=db)
+    checks += _run_check("orphaned_files", lambda: _cached_slow_check("orphaned_files", lambda: _check_orphaned_files(db)), failure_status="unknown", db=db)
+    checks += _run_check("tenant_offboarding", lambda: _check_tenant_offboarding(db), failure_status="unknown", db=db)
+    checks += _run_check("captcha_endpoint", _check_captcha_endpoint, failure_status="unknown", db=db)
+    checks += _run_check("security", lambda: _check_security(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)
+    checks += _run_check("render_queue", lambda: _check_render_queue(db, now), failure_status="unknown", db=db)
+    checks += _run_check("runtime", lambda: _check_runtime(db, now), failure_status="unknown", db=db)
+    checks += _run_check("overload", lambda: _check_overload(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_verification", _check_document_verification)
     checks += _run_check("storage_migration", lambda: _check_storage_migration(db, now), failure_status="unknown", db=db)
-    checks += _run_check("local_s3", lambda: _check_local_s3(db), failure_status="unknown", db=db)
+    checks += _run_check("local_s3", lambda: _cached_slow_check("local_s3", lambda: _check_local_s3(db)), failure_status="unknown", db=db)
     checks += _run_check("backup", lambda: _check_backup(db, now), failure_status="unknown", db=db)
     return checks
 

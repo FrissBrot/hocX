@@ -211,6 +211,14 @@ def _verify(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupRestoreJob, v
     report = reference_report(restored_url, restored_keys_from_manifest(view, job.archive_name, metadata, env.config.staging_dir / f"restore-{ctx.job_id.hex}"))
     if report["registry_without_object_count"] != cp.get("missing_objects", 0):
         raise jobs.JobFailure("reference_check_failed", f"{report['registry_without_object_count']} registrierte Objekte ohne wiederhergestellten Inhalt")
+    restored_engine = create_engine(restored_url, poolclass=NullPool, hide_parameters=True)
+    try:
+        with Session(restored_engine) as restored_session:
+            erasures = _replay_erasures(db, ctx, job, metadata, restored_session)
+    finally:
+        restored_engine.dispose()
+    if erasures is not None and erasures["failed"]:
+        raise jobs.JobFailure("erasure_replay_failed", f"{erasures['failed']} Löschungen konnten nicht erneut angewendet werden - siehe Fehlerprotokoll")
     smoke = smoke_test_database(restored_url)
     if not smoke["ok"]:
         raise jobs.JobFailure("smoke_test_failed", f"Anwendungstest gegen die wiederhergestellte Datenbank fehlgeschlagen: {smoke['problems'][:3]}")
@@ -220,8 +228,36 @@ def _verify(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupRestoreJob, v
     jobs.checkpoint(db, ctx, phase="cutover")
 
 
+def _replay_erasures(db: Session, ctx: jobs.JobCtx, job: BackupRestoreJob, metadata: dict[str, Any], target: Session, *,
+                     tenant_id: int | None = None, tenant_public_id: str | None = None) -> dict[str, Any] | None:
+    """Löschungen nach dem Sicherungspunkt erneut anwenden (Löschjournal, Datenschutz-Audit PRIV-010).
+    ``db``: laufende Datenbank (Quelle des Journals), ``target``: wiederhergestellte Datenbank bzw. die
+    laufende Datenbank bei der Mandanten-Kopie. Abschaltbar nur mit Begründung (Restore-Auftrag)."""
+    from app.services import erasure_journal
+
+    options = job.options or {}
+    if not options.get("replay_erasures", True):
+        jobs.event(db, ctx, "erasures_not_replayed", "Löschungen nach dem Sicherungspunkt bewusst NICHT erneut angewendet",
+                   reason=str(options.get("replay_erasures_reason") or ""))
+        db.commit()
+        return None
+    since = datetime.fromisoformat(str(metadata["snapshot_at"]))
+    entries = erasure_journal.entries_since(db, since)
+    if tenant_public_id is not None:
+        entries = [entry for entry in entries if str(entry.tenant_public_id) == str(tenant_public_id)]
+    result = erasure_journal.apply(target, entries, tenant_id=tenant_id, skip_kinds=("tenant",) if tenant_id is not None else ())
+    if tenant_id is None:
+        erasure_journal.copy_entries(target, entries)
+        target.commit()
+    jobs.event(db, ctx, "erasures_replayed",
+               f"{result['applied']} Löschungen nach dem Sicherungspunkt erneut angewendet "
+               f"({result['missing']} bereits weg, {result['failed']} fehlgeschlagen)", **result)
+    db.commit()
+    return result
+
+
 def _insert_window(database_url: str, job_id: uuid.UUID) -> uuid.UUID:
-    engine = create_engine(database_url, poolclass=NullPool)
+    engine = create_engine(database_url, poolclass=NullPool, hide_parameters=True)
     try:
         with engine.begin() as conn:
             return conn.execute(text("""
@@ -701,14 +737,14 @@ def run_tenant_copy(env: RunEnv, db: Session, ctx: jobs.JobCtx) -> str:
             # Verfügbare Objekte des Sicherungspunkts für die Export-Logik: als Hilfstabelle in der
             # temporären DB statt im Speicher (Installationen mit Millionen Objekten).
             jobs.progress(db, ctx, phase="collect")
-            temp_engine = create_engine(temp_url, poolclass=NullPool)
+            temp_engine = create_engine(temp_url, poolclass=NullPool, hide_parameters=True)
             try:
                 load_manifest_table(temp_engine, iter_manifest_slices(view, job.archive_name, metadata, work))
                 with Session(temp_engine) as temp_session, temp_engine.connect() as lookup_conn:
                     if temp_session.get(Tenant, source_tenant_id) is None:
                         raise jobs.JobFailure("tenant_not_in_backup", "Der Mandant ist in diesem Sicherungspunkt nicht enthalten")
                     exporter = HistoricalTenantExport(ManifestLookup(lookup_conn))
-                    manifest, pending = exporter.collect(temp_session, source_tenant_id, "full_abgabebox")
+                    manifest, pending = exporter.collect(temp_session, source_tenant_id, "full_abgabebox", include_credentials=True)
                     available = resolve_manifest_entries(lookup_conn, sorted({(ns, key) for ns, key, _member in pending}))
             finally:
                 temp_engine.dispose()
@@ -755,6 +791,9 @@ def run_tenant_copy(env: RunEnv, db: Session, ctx: jobs.JobCtx) -> str:
                   "excluded_tables": excluded_tables, "source_tenant_id": source_tenant_id, "file_check": check}
         if check["missing"]:
             raise jobs.JobFailure("tenant_files_missing", f"{check['missing']} Dateien des neuen Mandanten fehlen im Speicher")
+        source_public_id = (manifest.get("tables") or {}).get("tenant", {}).get("public_id")
+        erasures = _replay_erasures(db, ctx, job, metadata, db, tenant_id=new_tenant.id, tenant_public_id=source_public_id)
+        result["erasures"] = erasures
         jobs.guarded(db, ctx, result=result)
         db.commit()
     finally:

@@ -170,6 +170,16 @@
         "detail": "{queued, number} fällig in der Warteschlange · älteste {oldestMinutes, number} min · {failed, number} gescheitert (24 h)",
         "problem": "Dokumentverarbeitung staut sich oder scheitert"
       },
+      "render_queue": {
+        "title": "PDF-Aufträge",
+        "detail": "{queued, number} wartend · älteste {oldestMinutes, number} min · {failed, number} gescheitert (24 h)",
+        "problem": "PDF-Aufträge stauen sich oder scheitern"
+      },
+      "runtime": {
+        "title": "Auslastung der Dienstprozesse",
+        "detail": "{instances, number} Prozesse · Event-Loop max. {maxLagMs, number} ms · DB-Pool {poolPeakPercent, number} % · Threadpool {threadPeakPercent, number} % · {poolTimeouts, number} Pool-Zeitüberschreitungen",
+        "problem": "Dienstprozesse blockiert oder ausgelastet"
+      },
       "document_verification": {
         "title": "Öffentliche Prüfseite",
         "detail": "Antwort in {latencyMs, number} ms",
@@ -204,6 +214,31 @@
         "title": "Lokales S3 (Garage)",
         "detail": "{reason, select, active {Aktiver Speicher} initial_target {Ziel der ersten Migration} migration {Teil einer laufenden Migration} fallback_period {Rückfallfrist nach einer Migration} pending_operation {Bereinigung ausstehend} requested {Manuell angefordert} unverified_objects {Noch nicht geprüfte Objekte} not_needed {Nicht benötigt, gestoppt} other {Status unbekannt}} · {objects, number} Objekte · {gb, number} GB",
         "problem": "Lokales S3 (Garage) nicht auswertbar"
+      },
+      "orphaned_files": {
+        "title": "Verwaiste Dateien",
+        "detail": "{count, number} Dateien ohne Bezug",
+        "problem": "Verwaiste Dateien im Speicher"
+      },
+      "security": {
+        "title": "Sicherheitsereignisse",
+        "detail": "{failedLogins, number} Fehlversuche (15 min) · {exports, number} Exporte (1 h) · {restores, number} Restores (24 h)",
+        "problem": "Auffällige Sicherheitsereignisse"
+      },
+      "tenant_offboarding": {
+        "title": "Offboarding",
+        "detail": "{count, number} Mandanten nach Vertragsende (+{days, number} Tage)",
+        "problem": "Mandanten nach Vertragsende noch nicht gelöscht"
+      },
+      "captcha_endpoint": {
+        "title": "Captcha-Endpunkt",
+        "detail": "{region, select, eu {EU-Endpunkt (Verarbeitung in der EU)} other {Globaler Endpunkt – für Verarbeitung in der EU FRIENDLY_CAPTCHA_PUZZLE_URL und _VERIFY_URL auf den EU-Endpunkt setzen}}",
+        "problem": "Captcha-Endpunkt nicht erreichbar"
+      },
+      "overload": {
+        "title": "Überlast-Schutz",
+        "detail": "{rejected, number} Abweisungen · {users, number} neue Nutzer · {tenants, number} Mandanten · Auslastung bis {pressurePercent, number} % (letzte {minutes, number} Min.)",
+        "problem": "Überlast: neue Nutzer werden abgewiesen"
       }
     },
     "problems": {
@@ -271,7 +306,26 @@
     "containerStates": {
       "exitedOk": "beendet (Init)"
     },
-    "restartCount": "{count, plural, one {# Neustart} other {# Neustarts}}"
+    "restartCount": "{count, plural, one {# Neustart} other {# Neustarts}}",
+    "overload": {
+      "title": "Überlast",
+      "description": "Neue Nutzer, die wegen Überlast die Überlast-Seite gesehen haben, je Mandant (letzte 7 Tage). Die Priorität je Abo stellst du im Preiskatalog ein.",
+      "columns": {
+        "tenant": "Mandant",
+        "plan": "Abo",
+        "rejected": "Abweisungen",
+        "users": "Nutzer",
+        "last": "Zuletzt"
+      },
+      "empty": "In den letzten 7 Tagen wurde niemand wegen Überlast abgewiesen.",
+      "unknownTenant": "Unbekannter Mandant",
+      "noPlan": "Kein Abo",
+      "priority": {
+        "0": "niedrig",
+        "1": "normal",
+        "2": "hoch"
+      }
+    }
   },
   "jobs": {
     "title": "Jobs",
@@ -312,7 +366,8 @@
       "photo-analysis-worker": "Bildanalyse-Worker",
       "host": "Server (Cron)",
       "storage-worker": "Storage-Worker",
-      "document-worker": "Dokument-Worker"
+      "document-worker": "Dokument-Worker",
+      "job-worker": "Job-Worker"
     },
     "interval": {
       "onDemand": "Bei Bedarf",
@@ -367,6 +422,10 @@
         "title": "Bildqualität nachberechnen",
         "description": "Berechnet Schärfe und Belichtung für Bilder, bei denen das noch fehlt."
       },
+      "thumbnail_backfill": {
+        "title": "Vorschaubilder nachziehen",
+        "description": "Erzeugt Vorschaubilder für Bilder ohne Vorschau, vor allem für Abgabebox-Uploads."
+      },
       "photo_album_sync": {
         "title": "Alben synchronisieren",
         "description": "Übernimmt neue und entfernte Abgabebox-Bilder in die automatischen Alben."
@@ -389,7 +448,7 @@
       },
       "log_cleanup": {
         "title": "Protokolle aufräumen",
-        "description": "Löscht alte Einträge aus Audit-Log, Fehlerprotokoll und Job-Verlauf."
+        "description": "Löscht alte Einträge aus Audit-Log, Fehlerprotokoll, Job- und Ereignisverläufen sowie abgelaufene Freigabelinks."
       },
       "abgabebox_quarantine_cleanup": {
         "title": "Quarantäne aufräumen",
@@ -462,6 +521,18 @@
       "document_worker": {
         "title": "Dokument-Worker",
         "description": "Erzeugt PDF-Ansichten und extrahiert den Text hochgeladener Dokumente (Lebenszeichen aus der Poll-Schleife)."
+      },
+      "tenant_data_export": {
+        "title": "Vereinsexport",
+        "description": "Erstellt bestellte Vereinsexporte (AES-ZIP mit Tabellen, Protokoll-PDFs und Dateien) und löscht sie nach 7 Tagen."
+      },
+      "retention_proposals": {
+        "title": "Aufbewahrungsfristen",
+        "description": "Legt nach den Fristen der Vereine Vorschläge an (Einreichungen, ehemalige Mitglieder, alte Galeriebilder) und setzt sie bei «automatisch» um."
+      },
+      "job_worker": {
+        "title": "Job-Worker",
+        "description": "Führt schwere Hintergrundarbeit aus (Galerie-Import, PDF-Exporte, Vereinsexporte, Virenscan-Nachprüfung, Aufräumen) - Lebenszeichen jede Minute."
       }
     }
   },
@@ -634,7 +705,9 @@
       "userLimitHelp": "Leer = Plan-Limit gilt. Aktuell {count} Benutzer{suffix}",
       "userLimitExceeded": " – Limit erreicht oder überschritten.",
       "showOnWebsite": "Auf der Website als Kunde anzeigen",
-      "showOnWebsiteHelp": "Erscheint auf der öffentlichen Website unter «Im Einsatz bei» (nur der Name). Nur mit Einverständnis des Vereins aktivieren."
+      "showOnWebsiteHelp": "Erscheint auf der öffentlichen Website unter «Im Einsatz bei» (nur der Name). Nur mit Einverständnis des Vereins aktivieren.",
+      "contractEnd": "Vertragsende",
+      "contractEndHelp": "Leer = unbefristet. Nach Vertragsende plus Exportfrist meldet /admin/system, dass die Daten des Mandanten zu löschen sind."
     },
     "meta": {
       "createdAt": "Erstellt am",
@@ -947,7 +1020,9 @@
     "exportPasswordTooShort": "Mindestens {min, number} Zeichen.",
     "exportPasswordMismatch": "Die Passwörter stimmen nicht überein.",
     "importPasswordLabel": "Export-Passwort",
-    "importPasswordHelp": "Nur nötig, wenn beim Export ein Passwort gesetzt wurde."
+    "importPasswordHelp": "Nur nötig, wenn beim Export ein Passwort gesetzt wurde.",
+    "exportCredentials": "Zugangsdaten mitexportieren",
+    "exportCredentialsHint": "Passwort-Hashes, MFA-Secrets sowie Link- und Kalender-Tokens. Nur für einen Umzug, bei dem alle Logins und Links weiter gelten sollen. Ohne diese Option erhalten importierte Konten ein zufälliges Passwort und Links eine neue URL."
   },
   "pricing": {
     "title": "Preise",
@@ -1048,7 +1123,24 @@
     "delete": "Löschen",
     "deleteConfirm": "„{name}“ endgültig löschen?",
     "deleted": "Paket gelöscht",
-    "deleteFailed": "Das Paket konnte nicht gelöscht werden."
+    "deleteFailed": "Das Paket konnte nicht gelöscht werden.",
+    "loadPriority": {
+      "label": "Priorität bei Überlast",
+      "option": {
+        "0": "Niedrig",
+        "1": "Normal",
+        "2": "Hoch"
+      },
+      "help": {
+        "0": "Wird es knapp, sehen neue Nutzer dieses Abos zuerst die Überlast-Seite. Wer bereits arbeitet, bleibt angemeldet.",
+        "1": "Neue Nutzer werden erst bei voller Auslastung abgewiesen, nach den Abos mit niedriger Priorität.",
+        "2": "Neue Nutzer werden nie vorab abgewiesen und bekommen freie Plätze zuerst."
+      },
+      "badge": {
+        "0": "Niedrige Priorität",
+        "2": "Hohe Priorität"
+      }
+    }
   },
   "catalogImport": {
     "title": "Konfiguration importieren",
@@ -1215,5 +1307,25 @@
     "reactivated": "«{name}» wird wieder angeboten",
     "actionFailed": "Aktion fehlgeschlagen",
     "empty": "Keine Vorlagen in dieser Ansicht"
+  },
+  "auditLog": {
+    "title": "Audit-Log",
+    "description": "Sicherheits- und Änderungsereignisse aller Mandanten. Die Quelle ist ein gehashter Fingerprint des Netzes, nicht die IP-Adresse.",
+    "filterAll": "Alle",
+    "filterFailures": "Fehlgeschlagen",
+    "tenant": "Mandant",
+    "allTenants": "Alle Mandanten",
+    "actionPlaceholder": "Aktion, z. B. user.login",
+    "colTime": "Zeitpunkt",
+    "colAction": "Vorgang",
+    "colActor": "Von",
+    "colSource": "Quelle",
+    "colOutcome": "Ergebnis",
+    "loading": "Wird geladen …",
+    "empty": "Keine Einträge",
+    "outcome": {
+      "success": "Erfolgreich",
+      "failure": "Fehlgeschlagen"
+    }
   }
 }

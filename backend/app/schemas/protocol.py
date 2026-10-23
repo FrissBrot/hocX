@@ -168,6 +168,8 @@ class ProtocolElementBlockRead(BaseModel):
     is_visible_snapshot: bool
     export_visible_snapshot: bool
     configuration_snapshot_json: dict
+    # Optimistische Sperre der Konfiguration (Migration 0149): beim PATCH als expected_config_version mitsenden.
+    config_version: int = 0
     public_reference_ids: dict[str, dict[str, uuid.UUID]] = Field(default_factory=dict)
     text_content: str | None = None
     display_compiled_text: str | None = None
@@ -210,6 +212,10 @@ class ProtocolElementBlockUpdate(BaseModel):
     is_visible_snapshot: bool | None = None
     export_visible_snapshot: bool | None = None
     configuration_snapshot_json: dict | None = None
+    # Stand, von dem der Client ausging (ProtocolElementBlockRead.config_version). Weicht er ab,
+    # antwortet die API 409 config_conflict mit dem aktuellen Stand. Fehlt er (ältere Clients),
+    # wird wie bisher ohne Prüfung geschrieben.
+    expected_config_version: int | None = None
 
 
 class ProtocolElementBlockFromEventCreate(BaseModel):

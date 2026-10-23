@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import random
+import re
+import threading
+import time
 import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from redis.exceptions import RedisError
 from starlette.websockets import WebSocketState
 
 from sqlalchemy import select
@@ -13,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.error_log import record_system_error
-from app.core.redis_client import get_redis
+from app.core.redis_client import get_redis, get_redis_pubsub
 from app.core.security import (
     CurrentUser,
     _has_active_mfa_factor,
@@ -38,6 +44,12 @@ protocol_service = ProtocolService()
 LIST_VERSION_POLL_INTERVAL_SECONDS = 15
 # Wie oft eine offene Verbindung Session und Protokollrecht neu prüft (SEC-007).
 SESSION_REVALIDATE_INTERVAL_SECONDS = 30
+# Feldschlüssel kommen vom Client und werden zu Redis-Schlüsseln (Security-Review Paket 6): nur die
+# Formen des Editors (block-<id>, block-<id>-cell-<zeile>-<spalte>) sperren, nur kurze, einfache
+# Namen broadcasten, und höchstens MAX_LOCKS_PER_CONNECTION Sperren je Verbindung.
+_LOCK_FIELD_KEY = re.compile(r"^block-[0-9A-Za-z-]{1,40}(-cell-[0-9A-Za-z_-]{1,80})?$")
+_BROADCAST_FIELD_KEY = re.compile(r"^[A-Za-z0-9_-]{1,160}$")
+MAX_LOCKS_PER_CONNECTION = 50
 
 
 def _record_ws_error(exc: Exception, user: CurrentUser) -> None:
@@ -47,37 +59,42 @@ def _record_ws_error(exc: Exception, user: CurrentUser) -> None:
     with nothing in system_error_log to show for it."""
     db = SessionLocal()
     try:
-        record_system_error(db, exc=exc, tenant_id=user.current_tenant_id, actor_email=user.email, source="backend")
+        record_system_error(db, exc=exc, tenant_id=user.current_tenant_id, actor_user_id=user.user_id)
     finally:
         db.close()
 
 
 def _authenticate(token: str | None) -> CurrentUser | None:
+    db = SessionLocal()
+    try:
+        return _authenticate_in(db, token)
+    finally:
+        db.close()
+
+
+def _authenticate_in(db: Session, token: str | None) -> CurrentUser | None:
     session_data = parse_session_token(token)
     if session_data is None:
         return None
-    db = SessionLocal()
-    try:
-        user = db.get(AppUser, int(session_data["user_id"]))
-        if user is None or not user.is_active:
+    user = db.get(AppUser, int(session_data["user_id"]))
+    # Wie get_optional_current_user: auch ein gesperrter Login beendet die Verbindung.
+    if user is None or not user.is_active or not user.login_enabled:
+        return None
+    if user.session_revoke_at is not None:
+        token_iat = int(session_data.get("iat", 0))
+        if int(user.session_revoke_at.timestamp()) > token_iat:
             return None
-        if user.session_revoke_at is not None:
-            token_iat = int(session_data.get("iat", 0))
-            if int(user.session_revoke_at.timestamp()) > token_iat:
-                return None
-        current_user = build_current_user(db, user, mfa_verified=bool(session_data.get("mfa")))
-        # Mirrors get_optional_current_user's MFA enforcement (audit finding, 2026-08-25) -
-        # without this, a user who becomes MFA-required (promoted to admin) or whose only
-        # factor is administratively deleted keeps full read/write WebSocket access with
-        # their existing cookie even though the REST path now correctly locks them out.
-        has_mfa_factor = _has_active_mfa_factor(db, user.id)
-        if has_mfa_factor and not current_user.mfa_verified:
-            return None
-        if _requires_mfa(current_user) and (not has_mfa_factor or not current_user.mfa_verified):
-            return None
-        return current_user
-    finally:
-        db.close()
+    current_user = build_current_user(db, user, mfa_verified=bool(session_data.get("mfa")))
+    # Mirrors get_optional_current_user's MFA enforcement (audit finding, 2026-08-25) -
+    # without this, a user who becomes MFA-required (promoted to admin) or whose only
+    # factor is administratively deleted keeps full read/write WebSocket access with
+    # their existing cookie even though the REST path now correctly locks them out.
+    has_mfa_factor = _has_active_mfa_factor(db, user.id)
+    if has_mfa_factor and not current_user.mfa_verified:
+        return None
+    if _requires_mfa(current_user) and (not has_mfa_factor or not current_user.mfa_verified):
+        return None
+    return current_user
 
 
 def _load_and_authorize(protocol_public_id: uuid.UUID, user: CurrentUser) -> int | None:
@@ -88,15 +105,50 @@ def _load_and_authorize(protocol_public_id: uuid.UUID, user: CurrentUser) -> int
     behavior before the public_id migration)."""
     db = SessionLocal()
     try:
-        bind_tenant_scope(db, user.current_tenant_id)
-        protocol_id = public_id_service.resolve_internal_id(db, Protocol, protocol_public_id, tenant_id=user.current_tenant_id)
-        if protocol_id is None:
-            return None
-        if not access_service.can_read_protocol(db, user, protocol_id):
-            return None
-        return protocol_id
+        return _load_and_authorize_in(db, protocol_public_id, user)
     finally:
         db.close()
+
+
+def _load_and_authorize_in(db: Session, protocol_public_id: uuid.UUID, user: CurrentUser) -> int | None:
+    bind_tenant_scope(db, user.current_tenant_id)
+    protocol_id = public_id_service.resolve_internal_id(db, Protocol, protocol_public_id, tenant_id=user.current_tenant_id)
+    if protocol_id is None:
+        return None
+    if not access_service.can_read_protocol(db, user, protocol_id):
+        return None
+    return protocol_id
+
+
+# Revalidierung (SEC-007) je Verbindung alle 30 s kostete zwei DB-Sessions mit mehreren Abfragen;
+# mehrere Tabs desselben Nutzers prüften dasselbe. Jetzt eine Session je Prüfung und ein kurzer
+# Prozess-Cache je (Token, Protokoll): ein entzogenes Recht wirkt spätestens nach
+# SESSION_REVALIDATE_INTERVAL_SECONDS + REVALIDATE_CACHE_SECONDS.
+REVALIDATE_CACHE_SECONDS = 10.0
+_REVALIDATE_CACHE_MAX = 5000
+_revalidate_cache: dict[tuple[str, uuid.UUID], tuple[float, CurrentUser | None, int | None]] = {}
+_revalidate_cache_lock = threading.Lock()
+
+
+def _revalidate(token: str | None, protocol_public_id: uuid.UUID) -> tuple[CurrentUser | None, int | None]:
+    """(aktueller Nutzer oder None, interne Protokoll-ID oder None) - eine DB-Session."""
+    key = (hashlib.sha256((token or "").encode()).hexdigest(), protocol_public_id)
+    now = time.monotonic()
+    with _revalidate_cache_lock:
+        cached = _revalidate_cache.get(key)
+        if cached is not None and now - cached[0] < REVALIDATE_CACHE_SECONDS:
+            return cached[1], cached[2]
+    db = SessionLocal()
+    try:
+        current = _authenticate_in(db, token)
+        protocol_id = _load_and_authorize_in(db, protocol_public_id, current) if current is not None else None
+    finally:
+        db.close()
+    with _revalidate_cache_lock:
+        if len(_revalidate_cache) >= _REVALIDATE_CACHE_MAX:
+            _revalidate_cache.clear()
+        _revalidate_cache[key] = (now, current, protocol_id)
+    return current, protocol_id
 
 
 def _public_user_id_map(user_ids: set[int]) -> dict[int, uuid.UUID]:
@@ -229,7 +281,8 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
     connection_id = uuid.uuid4().hex
     channel = collab.channel(protocol_id)
 
-    pubsub = redis.pubsub()
+    # Eigener Pool ohne socket_timeout: das Abonnement wartet beliebig lange auf Nachrichten.
+    pubsub = get_redis_pubsub().pubsub()
     await pubsub.subscribe(channel)
 
     async def forward_from_redis() -> None:
@@ -244,6 +297,14 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
             pass
         except Exception as exc:
             _record_ws_error(exc, user)
+            # Ohne Weiterleitung bekäme der Client still keine Änderungen der anderen mehr
+            # (z. B. Redis trennt einen langsamen Abonnenten). Schliessen -> der Client verbindet
+            # sich neu und lädt den aktuellen Stand (Concurrency-Audit CONC-012).
+            if websocket.application_state == WebSocketState.CONNECTED:
+                try:
+                    await websocket.close(code=1011)
+                except RuntimeError:
+                    pass
 
     forward_task = asyncio.create_task(forward_from_redis())
 
@@ -290,22 +351,37 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
         der REST-Pfad, der jeden Request neu prüft."""
         nonlocal can_edit
         try:
+            # Zufälliger erster Abstand: nach einem Deploy verbinden sich alle Clients fast
+            # gleichzeitig neu - ohne Versatz prüften sie danach alle im selben Takt.
+            delay = SESSION_REVALIDATE_INTERVAL_SECONDS * random.uniform(0.5, 1.0)
             while True:
-                await asyncio.sleep(SESSION_REVALIDATE_INTERVAL_SECONDS)
+                await asyncio.sleep(delay)
+                delay = SESSION_REVALIDATE_INTERVAL_SECONDS
                 if websocket.application_state != WebSocketState.CONNECTED:
                     break
-                current = await asyncio.to_thread(_authenticate, token)
+                current, current_protocol_id = await asyncio.to_thread(_revalidate, token, protocol_public_id)
                 if current is None or current.user_id != user.user_id:
                     await websocket.close(code=4401)
                     break
-                if await asyncio.to_thread(_load_and_authorize, protocol_public_id, current) != protocol_id:
+                if current_protocol_id != protocol_id:
                     await websocket.close(code=4403)
                     break
                 can_edit = _can_edit(current)
+                try:
+                    await collab.touch(protocol_id, connection_id, user.user_id, user.display_name)
+                except RedisError:
+                    # Präsenz ist Komfort; die Revalidierung (SEC-007) muss weiterlaufen.
+                    pass
         except asyncio.CancelledError:
             pass
         except Exception as exc:
             _record_ws_error(exc, user)
+            # Ohne Revalidierung bliebe die Verbindung trotz Logout/Rechteentzug offen: fail-closed.
+            if websocket.application_state == WebSocketState.CONNECTED:
+                try:
+                    await websocket.close(code=1011)
+                except RuntimeError:
+                    pass
 
     revalidate_task = asyncio.create_task(revalidate_session())
 
@@ -339,10 +415,17 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
                 payload = json.loads(raw)
             except (TypeError, ValueError):
                 continue
-            msg_type = payload.get("type")
-            field_key = payload.get("field_key")
+            msg_type = payload.get("type") if isinstance(payload, dict) else None
+            field_key = payload.get("field_key") if isinstance(payload, dict) else None
+            if field_key is not None and (not isinstance(field_key, str) or not _BROADCAST_FIELD_KEY.match(field_key)):
+                continue
+            if msg_type in ("lock_request", "unlock", "heartbeat") and field_key and not _LOCK_FIELD_KEY.match(field_key):
+                continue
 
             if msg_type == "lock_request" and can_edit and field_key:
+                if await collab.connection_lock_count(protocol_id, connection_id) >= MAX_LOCKS_PER_CONNECTION:
+                    await websocket.send_json({"type": "lock_denied", "field_key": field_key, "holder": None})
+                    continue
                 holder = await collab.try_acquire_lock(protocol_id, field_key, connection_id, user.user_id, user.display_name)
                 if holder is None:
                     await collab.publish(protocol_id, {

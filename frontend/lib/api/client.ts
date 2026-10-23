@@ -89,8 +89,13 @@ export async function browserApiFetch<T>(path: string, options?: BrowserApiFetch
     const body = await response.text();
     // Volle Wartung (serverseitige Sperre): angemeldete Benutzer sehen die Wartungsansicht
     // statt einer Anwendung, deren Aufrufe scheitern. Admin-Aufrufe sind davon nie betroffen.
-    if (response.status === 503 && typeof window !== "undefined" && !path.startsWith("/api/admin") && isFullMaintenance(body)) {
-      window.location.assign("/maintenance");
+    if (response.status === 503 && typeof window !== "undefined" && !path.startsWith("/api/admin")) {
+      const code = errorCode(body);
+      if (code === "maintenance") window.location.assign("/maintenance");
+      // Überlast: neue Nutzer von Abos mit niedriger Priorität warten auf /overload (db_admission.py).
+      if (code === "overloaded" && window.location.pathname !== "/overload") {
+        window.location.assign(overloadPath(`${window.location.pathname}${window.location.search}`));
+      }
     }
     throw errorFromResponse(response.status, body);
   }
@@ -101,12 +106,34 @@ export async function browserApiFetch<T>(path: string, options?: BrowserApiFetch
   return (await response.json()) as T;
 }
 
-function isFullMaintenance(text: string): boolean {
+function errorCode(text: string): string | null {
   try {
-    return JSON.parse(text)?.code === "maintenance";
+    const code = JSON.parse(text)?.code;
+    return typeof code === "string" ? code : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** Überlast-Ansicht mit Rücksprungziel (nur relative Pfade, siehe safeReturnPath). */
+export function overloadPath(from: string): string {
+  return `/overload?from=${encodeURIComponent(from)}`;
+}
+
+/** Rücksprung nach der Überlast-Ansicht: nur eigene, relative Pfade (kein Open Redirect). Der
+ * URL-Parser entfernt Tab/Zeilenumbruch und liest einen Backslash als "/" - daher Steuerzeichen und
+ * Backslashes ablehnen und das Ergebnis zusätzlich gegen die eigene Origin auflösen. */
+export function safeReturnPath(from: string | null | undefined): string {
+  if (!from || !from.startsWith("/") || /[\u0000-\u001f\u007f\\\\]/.test(from)) return "/";
+  const origin = "https://hocx.invalid";
+  let url: URL;
+  try {
+    url = new URL(from, origin);
+  } catch {
+    return "/";
+  }
+  if (url.origin !== origin || url.pathname.startsWith("/overload")) return "/";
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 function errorFromResponse(status: number, text: string): ApiError {
