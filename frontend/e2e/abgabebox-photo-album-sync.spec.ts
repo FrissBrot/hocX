@@ -1,4 +1,4 @@
-import { test, expect, request as playwrightRequest } from "@playwright/test";
+import { test, expect, request as playwrightRequest, type FileChooser } from "@playwright/test";
 import path from "node:path";
 import { authFiles } from "./auth";
 
@@ -22,7 +22,7 @@ import { authFiles } from "./auth";
 // Do not work around a missing captcha token / file selection here (e.g. by driving the upload
 // via a raw API call) - the point of this test is real UI-level coverage of this exact flow.
 test("a public Abgabebox photo upload is folded into its Abgabe-Element auto-album", async ({ page, browser }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const api = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.admin });
   const suffix = `${Date.now()}`;
   let assignmentId: string | undefined;
@@ -79,17 +79,22 @@ test("a public Abgabebox photo upload is folded into its Abgabe-Element auto-alb
       const elementRef = elements[0].element_ref as string;
 
       await publicPage.goto(`/${linkToken}/${assignmentSlug}/${elementRef}`);
-      await publicPage.waitForLoadState("networkidle");
       // A real filechooser interaction (via the visible drop-zone's own click handler),
       // not a direct setInputFiles() on the hidden #files input - see
       // gallery-upload-cycle-target.spec.ts's note on the same input-vs-state quirk.
-      const fileChooserPromise = publicPage.waitForEvent("filechooser");
-      await publicPage.locator(".drop-zone").click();
-      const fileChooser = await fileChooserPromise;
-      await fileChooser.setFiles(path.resolve("e2e/fixtures/photos/sample.png"));
+      // Kein waitForLoadState("networkidle"): im Dev-Stack wird das Netz der Abgabebox nie
+      // still (Wartungsstatus-Abfrage, HMR). Stattdessen klicken, bis die hydrierte Seite den
+      // Dateidialog öffnet.
+      let fileChooser: FileChooser | undefined;
+      await expect(async () => {
+        const fileChooserPromise = publicPage.waitForEvent("filechooser", { timeout: 2_000 });
+        await publicPage.locator(".drop-zone").click();
+        fileChooser = await fileChooserPromise;
+      }).toPass({ timeout: 45_000 });
+      await fileChooser!.setFiles(path.resolve("e2e/fixtures/photos/sample.png"));
       await expect(publicPage.getByRole("button", { name: "Abgeben" })).toBeEnabled();
       await publicPage.getByRole("button", { name: "Abgeben" }).click();
-      await expect(publicPage.getByRole("heading", { name: "Danke, Abgabe eingegangen" })).toBeVisible();
+      await expect(publicPage.getByRole("heading", { name: "Danke, Abgabe eingegangen" })).toBeVisible({ timeout: 30_000 });
     } finally {
       await publicContext.close();
     }

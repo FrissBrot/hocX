@@ -262,7 +262,7 @@ def get_todo_details(
 ):
     """Notizen und verknüpfte Dateien für das Todo-Popup (nicht in Liste/Übersicht/Export)."""
     require_reader(user)
-    todo = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id)
+    todo = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id, tenant_id=user.current_tenant_id)
     if todo is None:
         raise HTTPException(status_code=404, detail="Todo not found")
     access_service.ensure_can_read_todo(db, user, todo.id)
@@ -277,12 +277,12 @@ def put_todo_details(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_writer(user)
-    todo = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    todo = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id, tenant_id=user.current_tenant_id)
     if todo is None:
         raise HTTPException(status_code=404, detail="Todo not found")
     access_service.ensure_can_read_todo(db, user, todo.id)
-    if user.current_tenant_id is None:
-        raise HTTPException(status_code=400, detail="No active tenant")
     try:
         return service.update_details(db, todo, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:

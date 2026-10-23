@@ -1,4 +1,5 @@
 import { test, expect, request as playwrightRequest } from "@playwright/test";
+import { renderPdf } from "./render-pdf";
 
 // Öffentliche Echtheitsprüfung in der Abgabebox: ein exportiertes PDF wird als «Original» erkannt,
 // dieselbe Datei mit einem geänderten Byte als «nicht gefunden». Die Datei verlässt den Browser
@@ -10,9 +11,7 @@ test("verify page recognises the original and rejects a modified copy", async ({
   expect(todoResponse.ok(), await todoResponse.text()).toBeTruthy();
   const todo = await todoResponse.json();
   try {
-    const rendered = await request.post("/api/documents/render", { data: { document_type: "todos", params: { status: "all" } }, timeout: 60_000 });
-    expect(rendered.ok(), await rendered.text()).toBeTruthy();
-    const metadata = await rendered.json();
+    const metadata = await renderPdf(request, { document_type: "todos", params: { status: "all" } });
     const pdf = await (await request.get(metadata.content_url)).body();
     const modified = Buffer.from(pdf);
     modified[modified.length - 10] ^= 0x01;
@@ -80,9 +79,7 @@ test("authenticity settings (light/dark, 1440)", async ({ page }) => {
 test("verify page shows the organisation only when the tenant allows it", async ({ request, browser }) => {
   test.setTimeout(90_000);
   const settings = await (await request.get("/api/document-verification")).json();
-  const rendered = await request.post("/api/documents/render", { data: { document_type: "events" }, timeout: 60_000 });
-  expect(rendered.ok(), await rendered.text()).toBeTruthy();
-  const metadata = await rendered.json();
+  const metadata = await renderPdf(request, { document_type: "events" });
   const pdf = await (await request.get(metadata.content_url)).body();
   const context = await browser.newContext({ baseURL: process.env.E2E_ABGABEBOX_BASE_URL, storageState: undefined });
   const page = await context.newPage();

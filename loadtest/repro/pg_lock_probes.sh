@@ -32,4 +32,4 @@ sleep 1
 echo "   t=1s zweiter Worker: $(docker exec -i "$NAME" psql -U app -d postgres -qAt -c 'SELECT pg_try_advisory_xact_lock(202600015)')"
 sleep 4
 echo "   t=5s zweiter Worker: $(docker exec -i "$NAME" psql -U app -d postgres -qAt -c 'SELECT pg_try_advisory_xact_lock(202600015)')"
-echo "COMMIT;" >&"${LOCK[1]}" 2>/dev/null || true
+{ echo "COMMIT;" >&"${LOCK[1]}"; } 2>/dev/null || true

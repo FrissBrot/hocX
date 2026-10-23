@@ -24,6 +24,11 @@ services:
       # test's timeout, instead of adding a synchronous "run it now" endpoint that
       # wouldn't exist in production and wouldn't prove the actual background loop works.
       PHOTO_ALBUM_SYNC_INTERVAL_MINUTES: "1"
+  job-worker:
+    environment:
+      # Der Album-Sync läuft seit dem Concurrency-Audit (Paket 10) im job-worker, nicht mehr im
+      # Backend - das kurze Intervall für abgabebox-photo-album-sync.spec.ts gehört deshalb hierher.
+      PHOTO_ALBUM_SYNC_INTERVAL_MINUTES: "1"
   frontend:
     ports: !override
       - "127.0.0.1:13000:3000"

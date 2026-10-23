@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { renderPdf } from "./render-pdf";
 
 test("creates a todo and validates Markdown and registered PDF exports", async ({ request }) => {
   const suffix = Date.now();
@@ -11,9 +12,7 @@ test("creates a todo and validates Markdown and registered PDF exports", async (
     expect(markdown.ok(), await markdown.text()).toBeTruthy();
     expect(await markdown.text()).toContain(`E2E Export Todo ${suffix}`);
 
-    const pdf = await request.post("/api/documents/render", { data: { document_type: "todos", params }, timeout: 60_000 });
-    expect(pdf.ok(), await pdf.text()).toBeTruthy();
-    const metadata = await pdf.json();
+    const metadata = await renderPdf(request, { document_type: "todos", params });
     // Jedes PDF ist im Dokumentenregister erfasst und trägt Kurz-ID und Prüf-Link.
     expect(metadata.short_id).toMatch(/^[0-9A-F]{4}-[0-9A-F]{4}$/);
     expect(metadata.verify_url).toContain(`/verify?id=${metadata.id}`);

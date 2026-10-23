@@ -102,10 +102,10 @@ done
 # MAIN-OPS-007: Basis- und Release-Stack verwenden dieselbe Traefik-Version.
 base_traefik="$(grep -m1 -E '^    image: traefik:' docker-compose.yml)"
 release_traefik="$(grep -m1 -E '^    image: traefik:' docker-compose.traefik.yml)"
-test -n "$base_traefik" && test "$base_traefik" = "$release_traefik" || {
+if ! { test -n "$base_traefik" && test "$base_traefik" = "$release_traefik"; }; then
   echo "Traefik-Version weicht ab: '$base_traefik' vs. '$release_traefik'" >&2
   exit 1
-}
+fi
 
 if grep -q 'env_file:' docker-compose.release.yml; then
   echo "Release-Services duerfen nicht die komplette .env erhalten." >&2

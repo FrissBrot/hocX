@@ -63,7 +63,7 @@ case "$DUMP_FILE" in
   *.sql.gz|*.sql.gz.gpg) ;;
   *) fail "Erwartet wird ein gzip-komprimierter Plain-SQL-Dump (*.sql.gz oder *.sql.gz.gpg): $DUMP_FILE" ;;
 esac
-[ -f "$DUMP_FILE" ] && [ -s "$DUMP_FILE" ] || fail "Dump $DUMP_FILE fehlt oder ist leer."
+if ! { [ -f "$DUMP_FILE" ] && [ -s "$DUMP_FILE" ]; }; then fail "Dump $DUMP_FILE fehlt oder ist leer."; fi
 if [[ "$DUMP_FILE" == *.gpg ]]; then
   # Einmal entschlüsseln (bleibt gzip), im geschützten Backup-Ordner, am Ende entfernt.
   mkdir -p "$BACKUP_DIR"

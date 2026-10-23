@@ -1,5 +1,7 @@
 """Entscheidung Worker-Secrets (Audit DOCMGMT-003): der document-worker läuft ohne AUTH_SECRET und
 ADMIN_AUTH_SECRET. Die Produktionsprüfung richtet sich nach der Prozessart."""
+import secrets
+
 import pytest
 
 from app.core.config import Settings
@@ -11,7 +13,7 @@ def _production_env(monkeypatch, **extra: str) -> None:
     monkeypatch.setenv("HOCX_ENVIRONMENT", "production")
     monkeypatch.setenv("AUTH_SECURE_COOKIES", "true")
     monkeypatch.setenv("INITIAL_ADMIN_EMAIL", "admin@example.org")
-    monkeypatch.setenv("INITIAL_ADMIN_PASSWORD", "ein-anderes-Passwort-1")
+    monkeypatch.setenv("INITIAL_ADMIN_PASSWORD", f"Test-{secrets.token_urlsafe(16)}-1")
     for name, value in extra.items():
         monkeypatch.setenv(name, value)
 

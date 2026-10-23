@@ -214,6 +214,8 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           AUTH_SECRET: ci-backend-tests-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
+          # Speicherprofile verschlüsseln Zugangsdaten damit (mind. 32 Zeichen, wie docker-compose.tests.yml).
+          STORAGE_CREDENTIALS_KEY: ci-backend-tests-dummy-storage-key-0123456789
           # These all default to /app/... (docker-compose.yml's WORKDIR), which doesn't
           # exist on a bare runner and can't be created by the unprivileged runner user
           # either, so they point at the checked-out storage/ tree (absolute paths).

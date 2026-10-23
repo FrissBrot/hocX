@@ -5,6 +5,7 @@ import uuid
 import zipfile
 from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from sqlalchemy.orm import Session
@@ -343,7 +344,12 @@ def get_submission_file_content(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_abgabebox_read(user)
-    upload = public_id_service.get_by_public_id(db, SubmissionUpload, upload_id)
+    # Nur Einreichungen von Abgaben des eigenen Mandanten.
+    upload = db.scalars(
+        select(SubmissionUpload)
+        .join(SubmissionAssignment, SubmissionAssignment.id == SubmissionUpload.assignment_id)
+        .where(SubmissionUpload.public_id == upload_id, SubmissionAssignment.tenant_id == user.current_tenant_id)
+    ).first()
     stored_file = public_id_service.get_by_public_id(db, StoredFile, file_id)
     if upload is None or stored_file is None:
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")

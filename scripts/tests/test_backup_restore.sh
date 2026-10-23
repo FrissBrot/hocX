@@ -123,7 +123,10 @@ if command -v gpg > /dev/null 2>&1; then
   : > "$TEST_DIR/rclone.log"
   OFFSITE_BACKUP_REMOTE="remote:bucket" FAKE_RCLONE_TYPE=s3 "$REPO_DIR/scripts/backup_db.sh" > /dev/null 2>&1 \
     || fail "Verschlüsselter Dump darf auf ein normales Remote"
-  encrypted="$(ls "$TEST_DIR/backups/"*-cron.sql.gz.gpg 2> /dev/null | head -n1)"
+  encrypted=""
+  for candidate in "$TEST_DIR/backups/"*-cron.sql.gz.gpg; do
+    [ -e "$candidate" ] && encrypted="$candidate" && break
+  done
   test -n "$encrypted" || fail "Kein verschlüsselter Cron-Dump geschrieben"
   ls "$TEST_DIR/backups/"*-cron.sql.gz > /dev/null 2>&1 && fail "Unverschlüsselte Kopie liegt neben dem verschlüsselten Dump"
   gzip -t "$encrypted" 2> /dev/null && fail "Dump ist nicht verschlüsselt"
@@ -136,7 +139,9 @@ if command -v gpg > /dev/null 2>&1; then
     || fail "Restore eines verschlüsselten Dumps schlug fehl"
   grep -q -- "-- fake dump" "$TEST_DIR/calls.log" || fail "Verschlüsselter Dump kam nicht bei psql an"
   ls "$TEST_DIR/backups/"*-pre-restore.sql.gz.gpg > /dev/null 2>&1 || fail "Sicherung vor dem Restore ist nicht verschlüsselt"
-  ls -a "$TEST_DIR/backups/" | grep -q "^\.restore-" && fail "Entschlüsselte Zwischendatei blieb liegen"
+  for leftover in "$TEST_DIR/backups/".restore-*; do
+    [ -e "$leftover" ] && fail "Entschlüsselte Zwischendatei blieb liegen"
+  done
   if GNUPGHOME="$TEST_DIR/leer-gnupg" "$REPO_DIR/scripts/restore_db.sh" "$encrypted" --yes < /dev/null > /dev/null 2>&1; then
     fail "Verschlüsselter Dump liess sich ohne privaten Schlüssel einspielen"
   fi

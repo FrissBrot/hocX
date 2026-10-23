@@ -74,7 +74,10 @@ fi
 # Images immer zum aktuellen Commit
 sed -i -E "s|^HOCX_BACKEND_IMAGE=.*|HOCX_BACKEND_IMAGE=$LT_PROJECT-backend:$SHA|; s|^HOCX_ABGABEBOX_BACKEND_IMAGE=.*|HOCX_ABGABEBOX_BACKEND_IMAGE=$LT_PROJECT-abgabebox-backend:$SHA|; s|^HOCX_VERSION=.*|HOCX_VERSION=loadtest-$SHA|" .env
 
-set -a; . ./.env; set +a
+set -a
+# shellcheck source=/dev/null
+. ./.env
+set +a
 
 # Secret-Dateien wie deploy.sh (0644 in einem 0700-Verzeichnis)
 mkdir -p .secrets && chmod 700 .secrets

@@ -383,10 +383,10 @@ run_preflight() {
   fi
   mkdir -p "$PROJECT_DIR/backups" "$PROJECT_DIR/.releases" "$PROJECT_DIR/.secrets"
   chmod 700 "$PROJECT_DIR/backups" "$PROJECT_DIR/.releases" "$PROJECT_DIR/.secrets"
-  test -w "$PROJECT_DIR/backups" && test -w "$PROJECT_DIR/.releases" && test -w "$PROJECT_DIR/.secrets" || {
+  if ! { test -w "$PROJECT_DIR/backups" && test -w "$PROJECT_DIR/.releases" && test -w "$PROJECT_DIR/.secrets"; }; then
     echo "Backup-, Release- oder Secrets-Verzeichnis ist nicht beschreibbar." >&2
     return 1
-  }
+  fi
   ensure_cosign
   echo "    Preflight: ok"
 }

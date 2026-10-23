@@ -128,8 +128,9 @@ DEPLOY="$REPO_DIR/scripts/deploy.sh"
 migrate_line="$(grep -n '^  migrate_env_file "\$ENV_FILE"' "$DEPLOY" | head -n 1 | cut -d: -f1)"
 # shellcheck disable=SC2016
 load_line="$(grep -n '^load_env_file "\$ENV_FILE"' "$DEPLOY" | head -n 1 | cut -d: -f1)"
-test -n "$migrate_line" && test -n "$load_line" && test "$migrate_line" -lt "$load_line" \
-  || fail "deploy.sh muss die .env vor dem Laden migrieren"
+if ! { test -n "$migrate_line" && test -n "$load_line" && test "$migrate_line" -lt "$load_line"; }; then
+  fail "deploy.sh muss die .env vor dem Laden migrieren"
+fi
 # shellcheck disable=SC2016
 grep -q 'source "\$REPO_DIR/scripts/lib/env_migrate.sh"' "$DEPLOY" || fail "deploy.sh laedt env_migrate.sh nicht"
 grep -q 'HOCX_PHOTO_ANALYSIS_WORKER_IMAGE' "$DEPLOY" || fail "Worker-Image wird nicht aus der Shell entfernt"

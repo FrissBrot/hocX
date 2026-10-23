@@ -571,8 +571,10 @@ def save_element_position(
     # Audit S11, 2026-08-16 - see get_element_position's identical check above.
     protocol = _get_protocol_or_404(db, protocol_id, user)
     # Nur Elemente dieses Protokolls (Security-Audit SEC-015).
-    element = public_id_service.get_by_public_id(db, ProtocolElement, payload.element_id)
-    if element is None or element.protocol_id != protocol.id:
+    element = db.scalars(
+        select(ProtocolElement).where(ProtocolElement.public_id == payload.element_id, ProtocolElement.protocol_id == protocol.id)
+    ).first()
+    if element is None:
         raise HTTPException(status_code=404, detail="Element not found")
     element_internal_id = element.id
     stmt = (
