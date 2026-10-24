@@ -22,7 +22,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import column as sa_column, create_engine, func, insert, table as sa_table, text, update
 from sqlalchemy.pool import NullPool
 
 from app.backup.manifest import DUMP_PATH, ManifestEntry, parse_rp_name
@@ -300,6 +300,12 @@ PROFILE_COLUMNS = (
     "provider", "endpoint_url", "region", "bucket", "abgabebox_bucket", "prefix", "addressing_style", "access_key_enc",
     "secret_key_enc", "restricted_access_key_enc", "restricted_secret_key_enc", "tls_verify", "ca_bundle_pem",
 )
+# Untypisierte Spalten (sqlalchemy.table/column): die Werte kommen roh aus der Sicherung und gehen
+# ohne TypeDecorator des Modells zurück - wie vorher als gebundene Parameter, nur ohne f-String-SQL.
+_PROFILE_TABLE = sa_table(
+    "storage_profile",
+    *(sa_column(name) for name in ("id", "public_id", "name", *PROFILE_COLUMNS, "is_enabled", "is_builtin", "last_test_ok", "config_version", "updated_at")),
+)
 
 
 def configure_restored_database(database_url: str, *, profile: dict[str, Any], generation: int, fallback_days: int = 14,
@@ -318,19 +324,20 @@ def configure_restored_database(database_url: str, *, profile: dict[str, Any], g
                 row = conn.execute(text("SELECT id FROM storage_profile WHERE provider = 'filesystem'")).first()
             if row is not None:
                 profile_id = int(row.id)
-                assignments = ", ".join(f"{column} = :{column}" for column in PROFILE_COLUMNS)
-                conn.execute(text(f"UPDATE storage_profile SET {assignments}, is_enabled = true, config_version = config_version + 1, updated_at = NOW() WHERE id = :id"),
-                             {**values, "id": profile_id})
+                conn.execute(
+                    update(_PROFILE_TABLE)
+                    .where(_PROFILE_TABLE.c.id == profile_id)
+                    .values(**values, is_enabled=True, config_version=_PROFILE_TABLE.c.config_version + 1, updated_at=func.now())
+                )
             else:
                 name = profile["name"]
                 if conn.execute(text("SELECT 1 FROM storage_profile WHERE name = :n"), {"n": name}).first():
                     name = f"{name} ({note} {now:%Y-%m-%d %H:%M})"
-                columns = ", ".join(PROFILE_COLUMNS)
-                params = ", ".join(f":{column}" for column in PROFILE_COLUMNS)
-                profile_id = int(conn.execute(text(f"""
-                    INSERT INTO storage_profile (public_id, name, {columns}, is_enabled, is_builtin, last_test_ok)
-                    VALUES (:public_id, :name, {params}, true, false, true) RETURNING id
-                """), {**values, "public_id": profile["public_id"], "name": name}).scalar_one())
+                profile_id = int(conn.execute(
+                    insert(_PROFILE_TABLE)
+                    .values(public_id=profile["public_id"], name=name, **values, is_enabled=True, is_builtin=False, last_test_ok=True)
+                    .returning(_PROFILE_TABLE.c.id)
+                ).scalar_one())
             existing = conn.execute(text("SELECT profile_id, status FROM storage_generation WHERE generation = :g"), {"g": generation}).first()
             if existing is not None:
                 # Fortsetzung nach Abbruch: dieselbe Generation ist schon aktiv und auf dieses Profil

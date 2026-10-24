@@ -122,7 +122,7 @@ def acquire_hold(db: Session, hold_id: uuid.UUID) -> tuple[int, int] | None:
     """Setzt den Hold auf die aktive Generation. Das UPDATE wartet (begrenzt) auf alle offenen
     Schreibtransaktionen - danach sichert jeder Schreiber per Copy-on-Write."""
     db.commit()
-    db.execute(text(f"SET LOCAL lock_timeout = '{HOLD_LOCK_TIMEOUT}'"))
+    db.execute(text("SELECT set_config('lock_timeout', :timeout, true)"), {"timeout": HOLD_LOCK_TIMEOUT})
     try:
         row = _update_hold(db, hold_id)
     except OperationalError:
@@ -152,7 +152,7 @@ def release_hold(db: Session, hold_id: uuid.UUID) -> bool:
     ohne lock_timeout - der Backup-Worker hing bis zum Ende der längsten Schreibtransaktion."""
     for attempt in range(RELEASE_HOLD_ATTEMPTS):
         db.commit()
-        db.execute(text(f"SET LOCAL lock_timeout = '{HOLD_LOCK_TIMEOUT}'"))  # sql-ok: Konstante
+        db.execute(text("SELECT set_config('lock_timeout', :timeout, true)"), {"timeout": HOLD_LOCK_TIMEOUT})
         try:
             result = db.execute(text("""
                 UPDATE storage_state SET backup_hold_id = NULL, backup_hold_generation = NULL, backup_hold_since = NULL, updated_at = NOW()

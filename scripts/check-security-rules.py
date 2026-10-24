@@ -245,9 +245,13 @@ def main() -> int:
 
     if args.staged:
         names = (_git("diff", "--cached", "--name-only", "--diff-filter=ACMR") or "").split()
+        # Nur geprüfte Dateitypen lesen - Binärdateien im Diff (Bilder, PDFs) sind kein UTF-8.
+        names = [name for name in names if _relevant(name)]
         files = [(name, _git("show", f":{name}") or "", _git("show", f"HEAD:{name}")) for name in names]
     elif args.base:
         names = (_git("diff", "--name-only", "--diff-filter=ACMR", f"{args.base}...HEAD") or "").split()
+        # Nur geprüfte Dateitypen lesen - Binärdateien im Diff (Bilder, PDFs) sind kein UTF-8.
+        names = [name for name in names if _relevant(name)]
         files = [(name, (ROOT / name).read_text(encoding="utf-8"), _git("show", f"{args.base}:{name}")) for name in names]
     else:
         files = []

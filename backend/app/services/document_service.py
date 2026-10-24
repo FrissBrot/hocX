@@ -355,7 +355,7 @@ def remove_orphaned_generated_files(db: Session, *, limit: int, min_age_minutes:
             select(StoredFile.id)
             .where(
                 StoredFile.storage_path.like(f"{GENERATED_PREFIX}/%"),
-                StoredFile.created_at < func.now() - text(f"interval '{int(min_age_minutes)} minutes'"),
+                StoredFile.created_at < func.now() - func.make_interval(0, 0, 0, 0, 0, int(min_age_minutes)),
                 ~select(DocumentFile.id).where(DocumentFile.stored_file_id == StoredFile.id).exists(),
             )
             .limit(limit)

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import text, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.models import BackupEvent, BackupJob, BackupRestoreJob
@@ -85,23 +85,35 @@ class JobCtx:
 def claim(engine: Any, model: type, owner: str) -> JobCtx | None:
     """Übernimmt höchstens einen Auftrag: neu (queued, fällig) oder unterbrochen (offen mit
     abgelaufener Lease - Worker-Absturz/Neustart). SKIP LOCKED: zwei Worker nie gleichzeitig."""
-    table = model.__tablename__
     open_states = OPEN_RESTORE_STATES if model is BackupRestoreJob else OPEN_JOB_STATES
-    running = ", ".join(f"'{s}'" for s in open_states if s != "queued")
-    order = "created_at" if model is BackupRestoreJob else "CASE kind WHEN 'backup' THEN 0 WHEN 'retention' THEN 1 ELSE 2 END, created_at"
+    running = [state for state in open_states if state != "queued"]
+    order = [model.created_at] if model is BackupRestoreJob else [
+        case((model.kind == "backup", 0), (model.kind == "retention", 1), else_=2), model.created_at,
+    ]
+    now = func.now()
+    candidate = (
+        select(model.id, model.lease_owner.label("previous_owner"))
+        .where(or_(
+            and_(model.state == "queued", or_(model.next_attempt_at.is_(None), model.next_attempt_at <= now)),
+            and_(model.state.in_(running), or_(model.lease_expires_at.is_(None), model.lease_expires_at < now)),
+        ))
+        .order_by(*order)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+        .cte("candidate")
+    )
+    statement = (
+        update(model)
+        .where(model.id == candidate.c.id)
+        .values(
+            lease_owner=owner, lease_expires_at=now + timedelta(seconds=LEASE_SECONDS),
+            fencing_token=model.fencing_token + 1, heartbeat_at=now, updated_at=now,
+            started_at=func.coalesce(model.started_at, now),
+        )
+        .returning(model.id, model.fencing_token, model.state, candidate.c.previous_owner)
+    )
     with engine.begin() as conn:
-        row = conn.execute(text(f"""
-            WITH candidate AS (
-                SELECT id, lease_owner AS previous_owner FROM {table}
-                WHERE ((state = 'queued' AND (next_attempt_at IS NULL OR next_attempt_at <= NOW()))
-                       OR (state IN ({running}) AND (lease_expires_at IS NULL OR lease_expires_at < NOW())))
-                ORDER BY {order} LIMIT 1 FOR UPDATE SKIP LOCKED)
-            UPDATE {table} AS j SET lease_owner = :owner, lease_expires_at = NOW() + make_interval(secs => :lease),
-                   fencing_token = j.fencing_token + 1, heartbeat_at = NOW(), updated_at = NOW(),
-                   started_at = COALESCE(j.started_at, NOW())
-            FROM candidate WHERE j.id = candidate.id
-            RETURNING j.id, j.fencing_token, j.state, candidate.previous_owner
-        """), {"owner": owner, "lease": LEASE_SECONDS}).first()
+        row = conn.execute(statement).first()
     if row is None:
         return None
     # Ein offener Auftrag ohne gültige Lease wurde unterbrochen (Absturz/Neustart) - ausser er hat
@@ -120,13 +132,15 @@ def wait_later(db: Session, ctx: JobCtx, *, seconds: float, reason: str) -> None
 
 
 def renew(ctx: JobCtx) -> bool:
-    table = ctx.model.__tablename__
+    model = ctx.model
+    statement = (
+        update(model)
+        .where(model.id == ctx.job_id, model.fencing_token == ctx.token, model.lease_owner == ctx.owner)
+        .values(lease_expires_at=func.now() + timedelta(seconds=LEASE_SECONDS), heartbeat_at=func.now())
+        .returning(model.cancel_requested)
+    )
     with ctx.engine.begin() as conn:
-        row = conn.execute(text(f"""
-            UPDATE {table} SET lease_expires_at = NOW() + make_interval(secs => :lease), heartbeat_at = NOW()
-            WHERE id = :id AND fencing_token = :token AND lease_owner = :owner
-            RETURNING cancel_requested
-        """), {"id": ctx.job_id, "token": ctx.token, "owner": ctx.owner, "lease": LEASE_SECONDS}).first()
+        row = conn.execute(statement).first()
     if row is None:
         return False
     if row.cancel_requested:
@@ -135,10 +149,13 @@ def renew(ctx: JobCtx) -> bool:
 
 
 def release(ctx: JobCtx) -> None:
-    table = ctx.model.__tablename__
+    model = ctx.model
     with ctx.engine.begin() as conn:
-        conn.execute(text(f"UPDATE {table} SET lease_owner = NULL, lease_expires_at = NULL WHERE id = :id AND fencing_token = :token"),
-                     {"id": ctx.job_id, "token": ctx.token})
+        conn.execute(
+            update(model)
+            .where(model.id == ctx.job_id, model.fencing_token == ctx.token)
+            .values(lease_owner=None, lease_expires_at=None)
+        )
 
 
 def heartbeat_loop(ctx: JobCtx, extra: Callable[[], None] | None = None) -> None:

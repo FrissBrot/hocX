@@ -417,7 +417,7 @@ def _cutover(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupRestoreJob, 
         maintenance_service.transition(db, window, "active", details={"source": "backup_restore"})
     db.commit()
     time.sleep(max(2 * float(os.environ.get("MAINTENANCE_CACHE_SECONDS", "2")), 1) + 3)
-    db.execute(text(f"SET LOCAL lock_timeout = '{CUTOVER_LOCK_TIMEOUT}'"))
+    db.execute(text("SELECT set_config('lock_timeout', :timeout, true)"), {"timeout": CUTOVER_LOCK_TIMEOUT})
     db.execute(text("""
         UPDATE storage_state SET write_fenced = true, fence_reason = :reason, fence_token = fence_token + 1, fenced_at = NOW(), updated_at = NOW()
         WHERE id = 1

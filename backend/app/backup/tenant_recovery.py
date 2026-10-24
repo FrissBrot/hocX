@@ -48,7 +48,8 @@ class HistoricalTenantExport(TenantExportService):
         return (namespace, key) in self._available
 
 
-MANIFEST_TABLE = "_hocx_restore.manifest"
+# Hilfstabelle des Manifests in der temporären Datenbank: _hocx_restore.manifest. Der Name steht
+# wörtlich in den SQL-Texten unten - kein f-String-SQL (SECURITY-RULES 2.3).
 
 
 def load_manifest_table(engine: Any, chunks: Iterable[Iterable[Any]]) -> int:
@@ -61,12 +62,12 @@ def load_manifest_table(engine: Any, chunks: Iterable[Iterable[Any]]) -> int:
         connection = raw.driver_connection
         with connection.cursor() as cursor:
             cursor.execute("CREATE SCHEMA IF NOT EXISTS _hocx_restore")
-            cursor.execute(f"""
-                CREATE UNLOGGED TABLE IF NOT EXISTS {MANIFEST_TABLE} (
+            cursor.execute("""
+                CREATE UNLOGGED TABLE IF NOT EXISTS _hocx_restore.manifest (
                     namespace text NOT NULL, key text NOT NULL, sha256 text NOT NULL, size bigint NOT NULL, pool text NOT NULL,
                     PRIMARY KEY (namespace, key))
             """)
-            with cursor.copy(f"COPY {MANIFEST_TABLE} (namespace, key, sha256, size, pool) FROM STDIN") as copy:
+            with cursor.copy("COPY _hocx_restore.manifest (namespace, key, sha256, size, pool) FROM STDIN") as copy:
                 for chunk in chunks:
                     for entry in chunk:
                         copy.write_row((entry.namespace, entry.key, entry.sha256, entry.size, entry.pool))
@@ -85,7 +86,7 @@ class ManifestLookup:
 
     def __contains__(self, item: object) -> bool:
         namespace, key = item  # type: ignore[misc]
-        return self.conn.execute(text(f"SELECT 1 FROM {MANIFEST_TABLE} WHERE namespace = :ns AND key = :key"),
+        return self.conn.execute(text("SELECT 1 FROM _hocx_restore.manifest WHERE namespace = :ns AND key = :key"),
                                  {"ns": namespace, "key": key}).first() is not None
 
 
@@ -94,8 +95,8 @@ def resolve_manifest_entries(conn: Any, keys: list[tuple[str, str]], *, chunk_si
     found: dict[tuple[str, str], tuple[str, int, str]] = {}
     for start in range(0, len(keys), chunk_size):
         chunk = keys[start:start + chunk_size]
-        rows = conn.execute(text(f"""
-            SELECT m.namespace, m.key, m.sha256, m.size, m.pool FROM {MANIFEST_TABLE} m
+        rows = conn.execute(text("""
+            SELECT m.namespace, m.key, m.sha256, m.size, m.pool FROM _hocx_restore.manifest m
             JOIN jsonb_to_recordset(CAST(:rows AS jsonb)) AS x(ns text, key text) ON m.namespace = x.ns AND m.key = x.key
         """), {"rows": json.dumps([{"ns": ns, "key": key} for ns, key in chunk])}).all()
         for row in rows:

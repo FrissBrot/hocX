@@ -132,19 +132,18 @@ class Ctx:
 def claim(owner: str) -> Ctx | None:
     """Übernimmt höchstens eine Migration, deren Lease frei oder abgelaufen ist (SKIP LOCKED -
     zwei Worker können nie dieselbe Migration gleichzeitig halten)."""
-    runnable = ", ".join(f"'{state}'" for state in sms.RUNNABLE_STATES)
     with engine.begin() as conn:
-        row = conn.execute(text(f"""
+        row = conn.execute(text("""
             UPDATE storage_migration SET lease_owner = :owner, lease_expires_at = NOW() + make_interval(secs => :lease),
                    fencing_token = fencing_token + 1, heartbeat_at = NOW(), updated_at = NOW()
             WHERE id = (
                 SELECT id FROM storage_migration
-                WHERE (state IN ({runnable}) OR (cancel_requested AND state NOT IN ('completed', 'failed', 'cancelled', 'cutting_over', 'observing', 'rollback_required')))
+                WHERE (state = ANY(:runnable) OR (cancel_requested AND state NOT IN ('completed', 'failed', 'cancelled', 'cutting_over', 'observing', 'rollback_required')))
                   AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
                   AND (next_attempt_at IS NULL OR next_attempt_at <= NOW() OR cancel_requested)
                 ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED)
             RETURNING id, fencing_token
-        """), {"owner": owner, "lease": LEASE_SECONDS}).first()
+        """), {"owner": owner, "lease": LEASE_SECONDS, "runnable": list(sms.RUNNABLE_STATES)}).first()
     if row is None:
         return None
     return Ctx(migration_id=row.id, token=row.fencing_token, owner=owner)
@@ -417,7 +416,7 @@ def fence_storage(db: Session, migration: StorageMigration, reason: str) -> int:
     """Setzt das Schreib-Fence. Wartet (begrenzt) auf alle offenen Schreibtransaktionen, die
     storage_begin_write() aufgerufen haben; neue Schreiber warten bzw. sehen danach das Fence."""
     db.commit()
-    db.execute(text(f"SET LOCAL lock_timeout = '{CUTOVER_LOCK_TIMEOUT}'"))
+    db.execute(text("SELECT set_config('lock_timeout', :timeout, true)"), {"timeout": CUTOVER_LOCK_TIMEOUT})
     row = db.execute(text("""
         UPDATE storage_state SET write_fenced = true, fence_reason = :reason, fence_token = fence_token + 1,
                fenced_at = NOW(), updated_at = NOW()
