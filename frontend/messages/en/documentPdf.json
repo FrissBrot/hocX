@@ -108,6 +108,7 @@
     "cancelled": "cancelled",
     "asOf": "As of {date}",
     "responsible": "Responsible",
+    "agendaOther": "Further topics",
     "sessionTodos": "Meeting to-dos",
     "yes": "Yes",
     "scanToOpen": "Scan to open",
@@ -452,7 +453,8 @@
       "files": "Uploaded files",
       "security": "Sign-in and feeds",
       "activity": "Activity",
-      "mentions": "Mentions"
+      "mentions": "Mentions",
+      "agenda_items": "Topics"
     },
     "col": {
       "first_name": "First name",
@@ -505,7 +507,9 @@
       "leadership": "Leadership",
       "participants": "Participants",
       "description": "Description",
-      "assignees": "Assigned to"
+      "assignees": "Assigned to",
+      "text": "Text",
+      "month": "Month"
     },
     "file": {
       "workbook": "Data report",

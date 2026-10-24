@@ -183,6 +183,7 @@
       "location": "Location",
       "login_enabled": "Login enabled",
       "mime_type": "File type",
+      "month": "Month",
       "name": "Name",
       "notes": "Notes",
       "organizers": "Organisers",
@@ -198,10 +199,9 @@
       "taken_at": "Taken",
       "task": "Task",
       "template": "Template",
-      "title": "Title",
-      "type": "Type",
       "text": "Text",
-      "month": "Month"
+      "title": "Title",
+      "type": "Type"
     },
     "file": {
       "personalPrefix": "Data-access",
@@ -211,6 +211,7 @@
     "personalReadme": "Data access report for {name} ({tenant}), created on {date}.\\n\\nData report.xlsx has one sheet per area: master data, attendance (own rows only), fines, tasks, responsibilities, events, lists, files you uploaded (list), sign-in factors and calendar feeds (without secrets), activity and mentions in protocol texts.\\ndaten.json contains the same data in machine-readable form.\\n\\nMentions are found by searching for the name and may be incomplete. Protocols and treasury data are kept by the organisation; please direct questions to the organisation.",
     "section": {
       "activity": "Activity",
+      "agenda_items": "Topics",
       "attendance": "Attendance",
       "events": "Events",
       "files": "Uploaded files",
@@ -222,8 +223,7 @@
       "responsibilities": "Responsibilities",
       "security": "Sign-in and feeds",
       "templates": "Protocol templates",
-      "todos": "Tasks",
-      "agenda_items": "Topics"
+      "todos": "Tasks"
     },
     "tenant": {
       "attendance": {
@@ -396,6 +396,7 @@
     "sessions": "Meetings"
   },
   "label": {
+    "agendaOther": "Further topics",
     "asOf": "As of {date}",
     "attendanceCounts": "{present} present · {late} late · {excused} excused · {absent} absent",
     "byMonth": "By month",
@@ -411,7 +412,6 @@
     "placeDate": "Place, date",
     "responsible": "Responsible",
     "scanToOpen": "Scan to open",
-    "agendaOther": "Further topics",
     "sessionTodos": "Meeting to-dos",
     "signature": "Signature",
     "subtotal": "Subtotal",

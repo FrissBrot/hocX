@@ -108,6 +108,7 @@
     "cancelled": "annullato",
     "asOf": "Situazione al {date}",
     "responsible": "Responsabile",
+    "agendaOther": "Altri argomenti",
     "sessionTodos": "Compiti della seduta",
     "yes": "Sì",
     "scanToOpen": "Scansiona per aprire",
@@ -452,7 +453,8 @@
       "files": "File caricati",
       "security": "Accesso e abbonamenti",
       "activity": "Attività recenti",
-      "mentions": "Menzioni"
+      "mentions": "Menzioni",
+      "agenda_items": "Argomenti"
     },
     "col": {
       "first_name": "Nome",
@@ -505,7 +507,9 @@
       "leadership": "Direzione",
       "participants": "Partecipanti",
       "description": "Descrizione",
-      "assignees": "Responsabili"
+      "assignees": "Responsabili",
+      "text": "Testo",
+      "month": "Mese"
     },
     "file": {
       "workbook": "Rapporto dati",
