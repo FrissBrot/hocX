@@ -177,7 +177,7 @@ def create_tenant_domain(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    internal_id = public_id_service.resolve_internal_id(db, Tenant, tenant_id)
+    internal_id = public_id_service.resolve_internal_id(db, Tenant, tenant_id)  # nosemgrep: public-id-lookup-without-tenant -- require_manageable prüft direkt danach
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
     # Each create/verify/delete triggers a full Traefik dynamic-config rewrite + reload (and

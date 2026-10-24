@@ -78,7 +78,7 @@ def _request_read(db: Session, row: IdentityVerificationRequest, tenant: Tenant)
 
 
 def _tenant_or_404(db: Session, tenant_id: uuid.UUID) -> Tenant:
-    tenant = public_id_service.get_by_public_id(db, Tenant, tenant_id)
+    tenant = public_id_service.get_by_public_id(db, Tenant, tenant_id)  # nosemgrep: public-id-lookup-without-tenant -- Plattform-Admin-Route (get_current_admin), mandantenübergreifend gewollt
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
     return tenant

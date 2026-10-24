@@ -1419,7 +1419,7 @@ def delete_album_share(
     album = db.get(PhotoAlbum, album_id)
     if album is None:
         raise HTTPException(status_code=404, detail="Album nicht gefunden")
-    shared_tenant = public_id_service.get_by_public_id(db, Tenant, tenant_public_id)
+    shared_tenant = public_id_service.get_by_public_id(db, Tenant, tenant_public_id)  # nosemgrep: public-id-lookup-without-tenant -- Partner-Mandant der Freigabe, revoke() prüft acting_tenant_id
     if shared_tenant is None:
         raise HTTPException(status_code=404, detail="Mandant nicht gefunden")
     try:
