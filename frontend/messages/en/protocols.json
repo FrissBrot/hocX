@@ -369,6 +369,7 @@
     "collaborationView": "Collaboration view",
     "collaborationViewSoon": "Collaboration view (coming soon)",
     "createTodo": "Create todo",
+    "createAgendaItem": "Add topic",
     "sessionNotes": "Open session notes"
   },
   "refreshDataAction": "⟳ Refresh data",

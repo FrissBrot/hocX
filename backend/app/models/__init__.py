@@ -1,4 +1,6 @@
 from app.models.entities import (
+    AgendaItem,
+    UserAgendaTemplatePreference,
     RetentionProposal,
     TenantRetentionPolicy,
     TenantDataExport,
@@ -124,6 +126,8 @@ __all__ = [
     "ProtocolTodo",
     "ProtocolTodoAssignee",
     "ProtocolTodoFile",
+    "AgendaItem",
+    "UserAgendaTemplatePreference",
     "RenderType",
     "Role",
     "StoragePackage",

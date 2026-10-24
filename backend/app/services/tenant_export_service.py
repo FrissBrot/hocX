@@ -44,6 +44,7 @@ from app.models import (
     AppUser,
     ProtocolTodoAssignee,
     ProtocolTodoFile,
+    AgendaItem,
     TaskPackage,
     TaskPackageCycle,
     TaskPackageItem,
@@ -570,6 +571,10 @@ class TenantExportService:
             if todo_ids
             else [],
             "protocol_todo_file",
+        )
+        # Anliegen (0153): Bezüge auf Vorlage/-punkt, Protokoll und -element über die ID-Maps des Imports.
+        tables["agenda_item"] = self._rows(
+            db.scalars(select(AgendaItem).where(AgendaItem.tenant_id == tenant_id)).all(), "agenda_item"
         )
         tables["user_template_access"] = self._rows(
             db.scalars(select(UserTemplateAccess).where(UserTemplateAccess.tenant_id == tenant_id)).all(),

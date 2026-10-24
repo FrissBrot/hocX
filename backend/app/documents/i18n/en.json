@@ -199,7 +199,9 @@
       "task": "Task",
       "template": "Template",
       "title": "Title",
-      "type": "Type"
+      "type": "Type",
+      "text": "Text",
+      "month": "Month"
     },
     "file": {
       "personalPrefix": "Data-access",
@@ -220,7 +222,8 @@
       "responsibilities": "Responsibilities",
       "security": "Sign-in and feeds",
       "templates": "Protocol templates",
-      "todos": "Tasks"
+      "todos": "Tasks",
+      "agenda_items": "Topics"
     },
     "tenant": {
       "attendance": {
@@ -408,6 +411,7 @@
     "placeDate": "Place, date",
     "responsible": "Responsible",
     "scanToOpen": "Scan to open",
+    "agendaOther": "Further topics",
     "sessionTodos": "Meeting to-dos",
     "signature": "Signature",
     "subtotal": "Subtotal",

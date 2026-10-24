@@ -44,6 +44,7 @@ import {
   StructuredListEntry,
   TemplateSummary,
   TodoListItem,
+  ProtocolAgendaItem,
 } from "@/types/api";
 import {
   ProtocolEventDraft,
@@ -59,6 +60,9 @@ import {
 } from "@/components/protocol/protocol-editor-shared";
 import { CollaborationStatusPanel } from "@/components/protocol/collaboration-status-panel";
 import { FocusedElementEditor } from "@/components/protocol/focused-element-editor";
+import { AgendaItemsSection } from "@/components/protocol/agenda-items-section";
+import { AgendaQuickCreateModal } from "@/components/protocol/agenda-quick-create-modal";
+import { AgendaPostponeModal } from "@/components/agenda/agenda-item-modal";
 import { ProtocolSearchModal } from "@/components/protocol/protocol-search";
 
 type ProtocolEditorProps = {
@@ -100,6 +104,7 @@ export function ProtocolEditor({
 }: ProtocolEditorProps) {
   const t = useTranslations("protocols.editor");
   const tRoot = useTranslations("protocols");
+  const tAgenda = useTranslations("agenda");
   const tCommon = useTranslations("common");
   const locale = useLocale();
   const router = useRouter();
@@ -176,6 +181,21 @@ export function ProtocolEditor({
   const prevBlockStatusRef = useRef<Record<string, SaveState>>({});
   const collab = useProtocolCollaboration(protocol.id);
   const [showStatusChangeWarning, setShowStatusChangeWarning] = useState(false);
+  // Anliegen (agenda_item): ohne eigenen Block unter ihrem Traktandum, siehe
+  // backend app/services/agenda_item_service.py. Geladen im Client, neu bei Collab-Meldung.
+  const [agendaItems, setAgendaItems] = useState<ProtocolAgendaItem[]>([]);
+  const [agendaCreateOpen, setAgendaCreateOpen] = useState(false);
+  const [agendaPostponeItem, setAgendaPostponeItem] = useState<ProtocolAgendaItem | null>(null);
+  const reloadAgendaItems = useCallback(async () => {
+    try {
+      setAgendaItems(await browserApiFetch<ProtocolAgendaItem[]>(`/api/protocols/${protocol.id}/agenda-items`));
+    } catch {
+      // Best effort: ohne Anliegen bleibt der Editor voll nutzbar.
+    }
+  }, [protocol.id]);
+  useEffect(() => {
+    void reloadAgendaItems();
+  }, [reloadAgendaItems, protocolStatus]);
 
   useEffect(
     () =>
@@ -206,6 +226,10 @@ export function ProtocolEditor({
         }
         if (field_key === "element-titles") {
           void refreshElementTitles();
+          return;
+        }
+        if (field_key === "agenda-items") {
+          void reloadAgendaItems();
           return;
         }
         if (field_key === "track-changes-toggle") {
@@ -538,6 +562,24 @@ export function ProtocolEditor({
     () => visibleElements.find((element) => element.id === selectedElementId) ?? null,
     [selectedElementId, visibleElements]
   );
+  const agendaByElement = useMemo(() => {
+    const visibleIds = new Set(visibleElements.map((element) => element.id));
+    const byElement: Record<string, ProtocolAgendaItem[]> = {};
+    const other: ProtocolAgendaItem[] = [];
+    for (const item of agendaItems) {
+      if (item.protocol_element_id && visibleIds.has(item.protocol_element_id)) {
+        (byElement[item.protocol_element_id] ??= []).push(item);
+      } else {
+        other.push(item);
+      }
+    }
+    return { byElement, other };
+  }, [agendaItems, visibleElements]);
+  const agendaSectionHandlers = {
+    onChanged: (updated: ProtocolAgendaItem) => setAgendaItems((current) => current.map((item) => (item.id === updated.id ? updated : item))),
+    onRemoved: (itemId: string) => setAgendaItems((current) => current.filter((item) => item.id !== itemId)),
+    onPostpone: (item: ProtocolAgendaItem) => setAgendaPostponeItem(item),
+  };
   const listPublicIds = useMemo(() => Object.assign({}, ...elements.flatMap((element) =>
     element.blocks.map((block) => block.public_reference_ids?.lists ?? {})
   )) as Record<string, string>, [elements]);
@@ -1880,9 +1922,22 @@ export function ProtocolEditor({
               pendingTodos={pendingTodos}
               onPendingUpdate={(updated) => setPendingTodos((prev) => prev.map((t) => t.id === updated.id ? { ...t, ...updated } : t))}
               onPendingDone={(todoId) => setPendingTodos((prev) => prev.filter((t) => t.id !== todoId))}
+              agendaSlot={
+                <AgendaItemsSection
+                  items={agendaByElement.byElement[element.id] ?? []}
+                  isReadOnly={isReadOnly}
+                  {...agendaSectionHandlers}
+                />
+              }
             />
             </div>
           ))}
+          <AgendaItemsSection
+            items={agendaByElement.other}
+            isReadOnly={isReadOnly}
+            heading={tAgenda("editor.otherTitle")}
+            {...agendaSectionHandlers}
+          />
         </article>
 
         <aside className="protocol-quicknav">
@@ -1942,6 +1997,25 @@ export function ProtocolEditor({
         </aside>
       </div>
 
+      {agendaCreateOpen && (
+        <AgendaQuickCreateModal
+          protocolId={protocol.id}
+          sections={visibleElements
+            .filter((element) => trimSectionName(element.section_name_snapshot).toLowerCase() !== "sitzungsnotizen") // i18n-ok: fester Elementname aus dem Backend
+            .map((element) => ({ id: element.id, name: element.section_name_snapshot }))}
+          defaultSectionId={selectedElement?.id ?? null}
+          onClose={() => setAgendaCreateOpen(false)}
+          onCreated={(created) => setAgendaItems((current) => [...current.filter((item) => item.id !== created.id), created])}
+        />
+      )}
+      {agendaPostponeItem && (
+        <AgendaPostponeModal
+          item={agendaPostponeItem}
+          onClose={() => setAgendaPostponeItem(null)}
+          onPostponed={() => void reloadAgendaItems()}
+        />
+      )}
+
       {/* Floating session panel — only during active session */}
       {protocolStatus === "vorbereitet" && !forceReadOnly && (
         <SessionPanel
@@ -1968,6 +2042,7 @@ export function ProtocolEditor({
             onNotesHover={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openNotes(false); }}
             onTodosClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openTodo(); }}
             onTodosHover={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openTodo(false); }}
+            onAgendaClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.close(); setAgendaCreateOpen(true); }}
             onHoverLeave={() => {
               sessionPanelRef.current?.scheduleClose();
               scheduleCollabHoverClose();

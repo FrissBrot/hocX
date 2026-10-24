@@ -2316,3 +2316,44 @@ export type AuditLogEntry = {
 };
 
 export type AuditLogPage = { items: AuditLogEntry[]; total: number };
+
+// Anliegen (backend app/schemas/agenda.py)
+export type AgendaScheduleKind = "next_meeting" | "month";
+export type AgendaSchedule = { kind: AgendaScheduleKind; month?: string | null };
+export type AgendaItemState = "waiting" | "scheduled" | "treated";
+export type AgendaProtocolRef = {
+  id: string;
+  protocol_number: string;
+  title?: string | null;
+  protocol_date: string;
+  status: string;
+};
+export type AgendaItem = {
+  id: string;
+  title: string;
+  body?: string | null;
+  template_id: string;
+  template_name: string;
+  template_element_id?: string | null;
+  template_element_name?: string | null;
+  schedule_kind: AgendaScheduleKind;
+  scheduled_month?: string | null;
+  earliest_date: string;
+  postponed_count: number;
+  state: AgendaItemState;
+  protocol?: AgendaProtocolRef | null;
+  is_bound: boolean;
+  can_edit: boolean;
+  created_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+export type ProtocolAgendaItem = {
+  id: string;
+  title: string;
+  body?: string | null;
+  protocol_element_id?: string | null;
+  postponed_count: number;
+  can_edit: boolean;
+};
+export type AgendaTemplateOption = { id: string; name: string; points: { id: string; name: string }[] };

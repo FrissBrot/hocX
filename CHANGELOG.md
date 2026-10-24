@@ -8,46 +8,6 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
-### Geändert
-
-- **Fotos: Duplikate und Ähnliche werden im Hintergrund gruppiert.** Die beiden Tabs rechneten
-  bisher bei jedem Aufruf im Request (bis 1500 Bilder paarweise samt Originalen) und brachen bei
-  grösseren Galerien mit «Ähnliche Fotos konnten nicht geladen werden» ab, weil der Browser nach
-  15 s aufgab. Neu berechnet der `job-worker` (Job `photo_similarity_refresh`, Takt
-  `PHOTO_SIMILARITY_REFRESH_INTERVAL_MINUTES`, Standard 2 Minuten) die Gruppen je Mandant, sobald
-  sich dessen Fotos ändern, und legt sie in `photo_similarity_result` ab (Migration 0152). Die
-  Tabs rufen nur noch das Ergebnis ab, zeigen den Stand der Berechnung und behalten es beim
-  Tabwechsel. Gelöschte Fotos fallen sofort heraus, neue erscheinen nach dem nächsten Lauf. Bis
-  zum ersten Lauf nach dem Update zeigen die Tabs «wird im Hintergrund gruppiert». Obergrenze
-  10 000 Fotos je Mandant (statt 1500 je Filter).
-
-### Behoben (Update auf 1.2.0)
-
-- **Deploy und Rollback brachen ab**: `deploy.sh` schreibt `HOCX_BACKEND_WORKERS` ins
-  Release-Manifest, der Env-Loader lehnte den Schlüssel ab. Ein Test prüft jetzt jeden
-  Manifest-Schlüssel gegen die Allowlist.
-- **Lokales S3 blieb uneingerichtet**: `storage-init` las den Garage-Admin-Token nur aus der
-  Umgebung, Compose übergibt ihn als Secret-Datei (`GARAGE_ADMIN_TOKEN_FILE`). Garage blieb ohne
-  Schlüssel und Buckets (AccessDenied). Eine Teilkonfiguration beendet `storage-init` jetzt mit
-  Fehler, und die Smoke-Checks von `deploy.sh` führen es aus - ein Fehler führt zum Rollback.
-- **`.env`-Migration**: leere Platzhalter aus `.env.example` (`STORAGE_CREDENTIALS_KEY=`) werden
-  ersetzt statt den Schlüssel ein zweites Mal anzuhängen.
-
-### Einfacheres Update
-
-- `deploy.sh` verweigert einen Test-Candidate, dessen Commit der Checkout nicht enthält
-  (neues Image mit altem Stack) - zuerst `./scripts/update_deploy_code.sh --deploy`.
-- `deploy.sh` und `update_deploy_code.sh` prüfen vor jeder Änderung, dass der Checkout dem
-  Deploy-Benutzer gehört, und nennen sonst den `chown`-Befehl für root. Vorher brach das Update
-  mittendrin ab.
-- Optionale, nicht versionierte `docker-compose.local.yml` für host-spezifische Anpassungen
-  (Vorlage `docker-compose.local.example.yml`); wird überall automatisch mitgeladen.
-- `deploy.sh` richtet den Cronjob `storage_controller` selbst ein (`HOCX_MANAGE_CRON=false`
-  schaltet das ab).
-- `verify_release.sh` prüft die Domains per `curl` mit SNI direkt gegen Traefik, ohne DNS;
-  eigene CA über `HOCX_VERIFY_CA_FILE`. Private Hosts überspringen die Checks nicht mehr.
-- `infra/garage/` ist Teil des signierten Deploy-Code-Nachweises.
-
 ## [1.2.0] - 2026-10-23
 
 Feature-Release auf 1.1.13. Fünf Entwicklungszweige sind zusammengeführt und aufeinander
@@ -59,7 +19,9 @@ Vorab-Abgleich beim Upload. Dazu die Audit-Reparaturen aus `main` (Abschnitt «B
 die Umsetzung von vier Audits: **Datenschutz** (DSG/DSGVO: Löschung, Auskunft, Fristen,
 Sicherheitsprotokoll), **Sicherheit** (u. a. Row-Level-Security in PostgreSQL, verschlüsselte
 Exporte), **Stabilität unter Last** (neuer `job-worker`, Überlast-Schutz nach Abo) und
-**Feature-Recovery**. **Breaking Changes** - vor dem Update die Schritte unten lesen.
+**Feature-Recovery**. Neu ausserdem **Anliegen**: Punkte für kommende Sitzungen, die
+automatisch im nächsten Protokoll erscheinen. **Breaking Changes** - vor dem Update die
+Schritte unten lesen.
 
 ### Update von 1.1.13 auf 1.2.0
 
@@ -95,7 +57,7 @@ Exporte), **Stabilität unter Last** (neuer `job-worker`, Überlast-Schutz nach 
    Lastparameter `DB_POOL_*`, `DB_ADMISSION_*`, `OVERLOAD_*` und die Alarmschwellen
    `SECURITY_*` (RUNBOOK Abschnitt 17). `BACKUP_ENABLED=true` erst **nach** dem ersten
    1.2.0-Deploy setzen (vorher läuft kein `backup-worker`, `deploy.sh` bricht sonst ab).
-5. **Migrationen** `0113` bis `0151` laufen automatisch (getestet von 1.1.13 mit Demo- und
+5. **Migrationen** `0113` bis `0153` laufen automatisch (getestet von 1.1.13 mit Demo- und
    Testdaten); neue Dienste `storage-init`, `storage-worker`, `local-s3`, `backup-worker`,
    `document-worker` und `job-worker` startet `deploy.sh` mit `up -d`. Die Smoke-Checks prüfen
    zusätzlich `document-worker`, `storage-worker` und `job-worker`.
@@ -122,6 +84,30 @@ vollständig. Die Variablen `DOCUMENT_SIGNING_*` werden ignoriert und können au
 werden, ebenso das Verzeichnis `.signing/` bzw. `DOCUMENT_SIGNING_DIR` und die Datei
 `.secrets/document_signing_key_password`. Bereits signiert exportierte PDFs bleiben über die
 Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_registry`).
+
+### Update-Werkzeuge (Nachtrag vom 2026-10-24, nach dem ersten Test-Update)
+
+- **Deploy und Rollback brachen ab**: `deploy.sh` schreibt `HOCX_BACKEND_WORKERS` ins
+  Release-Manifest, der Env-Loader lehnte den Schlüssel ab. Ein Test prüft jetzt jeden
+  Manifest-Schlüssel gegen die Allowlist.
+- **Lokales S3 blieb uneingerichtet**: `storage-init` las den Garage-Admin-Token nur aus der
+  Umgebung, Compose übergibt ihn als Secret-Datei (`GARAGE_ADMIN_TOKEN_FILE`). Garage blieb ohne
+  Schlüssel und Buckets (AccessDenied). Eine Teilkonfiguration beendet `storage-init` jetzt mit
+  Fehler, und die Smoke-Checks von `deploy.sh` führen es aus - ein Fehler führt zum Rollback.
+- **`.env`-Migration**: leere Platzhalter aus `.env.example` (`STORAGE_CREDENTIALS_KEY=`) werden
+  ersetzt statt den Schlüssel ein zweites Mal anzuhängen.
+- `deploy.sh` verweigert einen Test-Candidate, dessen Commit der Checkout nicht enthält
+  (neues Image mit altem Stack) - zuerst `./scripts/update_deploy_code.sh --deploy`.
+- `deploy.sh` und `update_deploy_code.sh` prüfen vor jeder Änderung, dass der Checkout dem
+  Deploy-Benutzer gehört, und nennen sonst den `chown`-Befehl für root. Vorher brach das Update
+  mittendrin ab.
+- Optionale, nicht versionierte `docker-compose.local.yml` für host-spezifische Anpassungen
+  (Vorlage `docker-compose.local.example.yml`); wird überall automatisch mitgeladen.
+- `deploy.sh` richtet den Cronjob `storage_controller` selbst ein (`HOCX_MANAGE_CRON=false`
+  schaltet das ab).
+- `verify_release.sh` prüft die Domains per `curl` mit SNI direkt gegen Traefik, ohne DNS;
+  eigene CA über `HOCX_VERIFY_CA_FILE`. Private Hosts überspringen die Checks nicht mehr.
+- `infra/garage/` ist Teil des signierten Deploy-Code-Nachweises.
 
 ### Breaking Changes
 
@@ -159,6 +145,26 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   `PATCH /api/admin/tenants/{id}/storage-quota`,
   `POST /api/submission-assignments/{id}/sync-todos`, `GET /api/tools/word-import/quality-stats`
   und `POST/GET /api/files/analysis-jobs`.
+
+### Neu: Anliegen für kommende Sitzungen
+
+- Neuer Bereich **Arbeiten → Anliegen** (Seite `/agenda`). Ein Anliegen hat Titel und Text und
+  gehört zu einer Protokollvorlage und einem ihrer Traktanden. Das Popup wählt die zuletzt
+  verwendete Vorlage vor (gespeichert je Person). Als Termin gilt entweder *nächste Sitzung* oder
+  ein Monat («ab November 2026»).
+- Das Anliegen erscheint ohne eigenen Block im Vorlagen-Aufbau im nächsten Protokoll der Vorlage,
+  das *geplant* oder *vorbereitet* ist und ab dem Termin datiert. Dort steht es unter seinem
+  Traktandum; ohne passendes Traktandum unter «Weitere Anliegen». Im Editor lassen sich Titel und
+  Text direkt ändern, das Anliegen vertagen (neuer Termin) oder löschen. Den Ersteller zeigt nur
+  die Liste, nicht änderbar.
+- Im Mini-Menü des Editors (Sitzung läuft) erfasst *Anliegen erfassen* ein Anliegen direkt im
+  aktuellen Protokoll, standardmässig unter dem gewählten Traktandum.
+- Beim Wechsel auf *durchgeführt* gehören die angezeigten Anliegen fest zum Protokoll (Liste:
+  *behandelt*). Nach dem Abschluss sind sie schreibgeschützt. Im Protokoll-PDF stehen sie unter
+  ihrem Traktandum.
+- Mit in Mandanten-Export/-Import/-Klon und in der Datenauskunft (selbst erfasste Anliegen).
+  Migration `0153_agenda_item`: Tabellen `agenda_item` und `user_agenda_template_preference`,
+  beide mit RLS. Benutzerdoku: `docs-site/docs/benutzer/anliegen.md`.
 
 ### Neu: Dokument-Engine und Document Studio
 
@@ -523,6 +529,21 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   bleibt angemeldet. Wartende Anfragen werden nach Priorität bedient. Jede Abweisung wird
   protokolliert. Das Adminportal zeigt sie unter System → Überlast je Mandant und meldet sie als
   Warnung (Migration `0151`, `OVERLOAD_*` im RUNBOOK).
+
+### Geändert (Nachtrag vom 2026-10-24)
+
+- **Fotos: Duplikate und Ähnliche werden im Hintergrund gruppiert.** Die beiden Tabs rechneten
+  bisher bei jedem Aufruf im Request (bis 1500 Bilder paarweise samt Originalen) und brachen bei
+  grösseren Galerien mit «Ähnliche Fotos konnten nicht geladen werden» ab, weil der Browser nach
+  15 s aufgab. Neu berechnet der `job-worker` (Job `photo_similarity_refresh`, Takt
+  `PHOTO_SIMILARITY_REFRESH_INTERVAL_MINUTES`, Standard 2 Minuten) die Gruppen je Mandant, sobald
+  sich dessen Fotos ändern, und legt sie in `photo_similarity_result` ab (Migration 0152). Die
+  Tabs rufen nur noch das Ergebnis ab, zeigen den Stand der Berechnung und behalten es beim
+  Tabwechsel. Gelöschte Fotos fallen sofort heraus, neue erscheinen nach dem nächsten Lauf. Bis
+  zum ersten Lauf nach dem Update zeigen die Tabs «wird im Hintergrund gruppiert». Obergrenze
+  10 000 Fotos je Mandant (statt 1500 je Filter).
+- **Seitenleiste:** Das Dokument-Studio steht unter *Konfiguration* statt unter *Arbeiten*
+  (sichtbar ab Schreibrecht).
 
 ### Behoben
 

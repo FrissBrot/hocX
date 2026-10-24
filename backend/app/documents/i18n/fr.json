@@ -199,7 +199,9 @@
       "task": "Tâche",
       "template": "Modèle",
       "title": "Titre",
-      "type": "Type"
+      "type": "Type",
+      "text": "Texte",
+      "month": "Mois"
     },
     "file": {
       "personalPrefix": "Acces-donnees",
@@ -220,7 +222,8 @@
       "responsibilities": "Responsabilités",
       "security": "Connexion et abonnements",
       "templates": "Modèles de PV",
-      "todos": "Tâches"
+      "todos": "Tâches",
+      "agenda_items": "Sujets"
     },
     "tenant": {
       "attendance": {
@@ -408,6 +411,7 @@
     "placeDate": "Lieu, date",
     "responsible": "Responsable",
     "scanToOpen": "Scanner pour ouvrir",
+    "agendaOther": "Autres sujets",
     "sessionTodos": "Tâches de la séance",
     "signature": "Signature",
     "subtotal": "Sous-total",

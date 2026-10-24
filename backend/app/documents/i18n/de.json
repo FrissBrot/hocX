@@ -199,7 +199,9 @@
       "task": "Aufgabe",
       "template": "Vorlage",
       "title": "Titel",
-      "type": "Art"
+      "type": "Art",
+      "text": "Text",
+      "month": "Monat"
     },
     "file": {
       "personalPrefix": "Datenauskunft",
@@ -220,7 +222,8 @@
       "responsibilities": "Verantwortlichkeiten",
       "security": "Anmeldung und Abos",
       "templates": "Protokollvorlagen",
-      "todos": "Aufgaben"
+      "todos": "Aufgaben",
+      "agenda_items": "Anliegen"
     },
     "tenant": {
       "attendance": {
@@ -408,6 +411,7 @@
     "placeDate": "Ort, Datum",
     "responsible": "Verantwortlich",
     "scanToOpen": "Zum Öffnen scannen",
+    "agendaOther": "Weitere Anliegen",
     "sessionTodos": "Sitzungs-Todos",
     "signature": "Unterschrift",
     "subtotal": "Zwischensumme",

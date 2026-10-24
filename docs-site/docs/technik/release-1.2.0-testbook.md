@@ -53,7 +53,7 @@ Office-Dokumenten. Ergebnis, Datum und Version je Fall festhalten.
 
 | ID | Durchführung | Erwartung |
 |---|---|---|
-| REL-M1 | Update nach `CHANGELOG.md` (1.2.0) von 1.1.13: `update_deploy_code.sh`, `deploy.sh test` | Pre-Deploy-Dump angelegt, Secrets ergänzt, Migrationen bis `0151`, alle Dienste laufen, Smoke-Checks inkl. document-/storage-/job-worker grün |
+| REL-M1 | Update nach `CHANGELOG.md` (1.2.0) von 1.1.13: `update_deploy_code.sh`, `deploy.sh test` | Pre-Deploy-Dump angelegt, Secrets ergänzt, Migrationen bis `0153`, alle Dienste laufen, Smoke-Checks inkl. document-/storage-/job-worker grün |
 | REL-M2 | `/admin/system` und `/admin/jobs` | Checks «Öffentliche Prüfseite», «Dateispeicher», «Storage-Migration», «Backup», «Dokumentverarbeitung» bewertet; keine nicht registrierten Jobs |
 | REL-M3 | Fachtestbooks DOC-M1/M2, DVW-M1/M2, PRE-M1, DAT-M3 auf dem Dateisystem, dann Erstmigration auf lokales S3 (STO-M1) und dieselben Fälle erneut | identische Ergebnisse vor und nach der Migration; Studio-Logos und -Schriften in PDFs vorhanden |
 | REL-M4 | `cleanup-legacy-document-templates.sh --dry-run`, dann ohne, **vor** REL-M3-Migration | nur TeX-Code entfernt, Logos/Schriften bleiben; Prüfbericht der Migration ohne Altlasten |

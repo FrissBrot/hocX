@@ -9,7 +9,7 @@ const tenantRoutes = [
   "/", "/connections", "/cycles", "/elements", "/events", "/files", "/finances", "/fines", "/lists",
   "/participants", "/photos", "/protocols", "/settings", "/shared-links", "/statistics",
   "/submission-assignments", "/task-packages", "/templates", "/tenant-settings", "/tenant-settings/abo",
-  "/tenant-settings/domains", "/todos", "/tools", "/tools/import", "/tools/word-import", "/users",
+  "/tenant-settings/domains", "/todos", "/agenda", "/tools", "/tools/import", "/tools/word-import", "/users",
 ];
 const platformAdminRoutes = [
   "/admin", "/admin/admins", "/admin/domains", "/admin/error-logs", "/admin/jobs", "/admin/notifications",

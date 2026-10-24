@@ -199,7 +199,9 @@
       "task": "Attività",
       "template": "Modello",
       "title": "Titolo",
-      "type": "Tipo"
+      "type": "Tipo",
+      "text": "Testo",
+      "month": "Mese"
     },
     "file": {
       "personalPrefix": "Accesso-dati",
@@ -220,7 +222,8 @@
       "responsibilities": "Responsabilità",
       "security": "Accesso e abbonamenti",
       "templates": "Modelli di verbale",
-      "todos": "Attività"
+      "todos": "Attività",
+      "agenda_items": "Argomenti"
     },
     "tenant": {
       "attendance": {
@@ -408,6 +411,7 @@
     "placeDate": "Luogo, data",
     "responsible": "Responsabile",
     "scanToOpen": "Scansiona per aprire",
+    "agendaOther": "Altri argomenti",
     "sessionTodos": "Compiti della seduta",
     "signature": "Firma",
     "subtotal": "Subtotale",

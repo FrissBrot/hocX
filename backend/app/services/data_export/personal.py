@@ -100,6 +100,17 @@ def collect(db: Session, person: AppUser) -> dict[str, list[dict[str, Any]]]:
     for todo in data["todos"]:
         todo.pop("ref", None)
 
+    # Selbst erfasste Anliegen (0153) - die Erstellerin bzw. der Ersteller steht in der Liste.
+    data["agenda_items"] = [dict(row) for row in _rows(db, """
+        SELECT a.title, a.body AS text, t.name AS template, a.scheduled_month AS month, a.created_at,
+               p.protocol_number AS protocol
+        FROM agenda_item a
+        JOIN template t ON t.id = a.template_id
+        LEFT JOIN protocol p ON p.id = a.protocol_id
+        WHERE a.tenant_id = :tenant_id AND a.created_by = :pid
+        ORDER BY a.created_at, a.id
+    """, params)]
+
     data["responsibilities"] = [dict(row) for row in _rows(db, """
         SELECT p.protocol_number AS protocol, p.protocol_date AS date, e.element_title_snapshot AS element
         FROM protocol_element e JOIN protocol p ON p.id = e.protocol_id
@@ -188,6 +199,7 @@ _SECTIONS: dict[str, list[str]] = {
     "fines": ["protocol", "date", "type", "amount", "currency", "status", "collected_at", "delete_comment"],
     "todos": ["task", "due_date", "status", "completed_at", "protocol", "notes"],
     "responsibilities": ["protocol", "date", "element"],
+    "agenda_items": ["title", "text", "template", "month", "protocol", "created_at"],
     "events": ["date", "title", "location", "role"],
     "templates": ["template", "exclude_from_attendance"],
     "lists": ["list", "position"],

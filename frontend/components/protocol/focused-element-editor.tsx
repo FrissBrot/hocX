@@ -3,7 +3,7 @@
 import { useParticipantSelectable } from "@/contexts/participant-date-context";
 import { useParticipantNameSource } from "@/contexts/participant-directory-context";
 
-import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { useConfirm } from "@/contexts/confirm-context";
@@ -157,7 +157,10 @@ export function FocusedElementEditor({
   updateTagColor,
   renameTag,
   sessionNotes,
+  agendaSlot,
 }: {
+  /** Anliegen dieses Abschnitts (AgendaItemsSection), vom Editor gerendert. */
+  agendaSlot?: ReactNode;
   collab: ReturnType<typeof useProtocolCollaboration>;
   trackChangesActive: boolean;
   element: ProtocolElement;
@@ -3454,6 +3457,7 @@ export function FocusedElementEditor({
       {/* Rendered inside the same <section> (not as a sibling) so it shares this element's
           blur/inert/active state in the scrollable document layout, and is included in the
           section's own bounding box for the scroll-spy's centering calculation. */}
+      {agendaSlot}
       <SessionTodosSection
         sectionTag={trimSectionName(element.section_name_snapshot)}
         todos={Object.values(todosByBlock).flat().filter((t) => (t.tags ?? []).includes(trimSectionName(element.section_name_snapshot).toLowerCase()))}

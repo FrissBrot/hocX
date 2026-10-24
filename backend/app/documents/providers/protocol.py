@@ -279,6 +279,7 @@ def element_blocks(ctx: BuildContext, protocol: Protocol, *, element_ref: Any = 
         if not elements:
             raise DocumentNotFoundError("ProtocolElement")
     titles = resolve_display_section_titles_batch(ctx.db, elements, protocol.status, protocol.tenant_id)
+    agenda_by_element, agenda_other = _agenda_blocks(ctx, protocol)
     result: list[ElementModel] = []
     for element in elements:
         if not element.export_visible_snapshot:
@@ -293,6 +294,8 @@ def element_blocks(ctx: BuildContext, protocol: Protocol, *, element_ref: Any = 
             mapped = map_block(ctx, protocol, block)
             if mapped is not None:
                 children.append(mapped)
+        # Anliegen (agenda_item) erscheinen ohne eigenen Block unter ihrem Punkt.
+        children.extend(agenda_by_element.get(element.id, []))
         # Dynamische Sitzungs-Todos: Todos mit dem Abschnittsnamen als Tag.
         tag = trim_section_name(section_title).lower()
         if include_session_todos and tag:
@@ -300,7 +303,32 @@ def element_blocks(ctx: BuildContext, protocol: Protocol, *, element_ref: Any = 
             if rows:
                 children.append(_todo_block(rows, {"title": None, "title_key": "label.sessionTodos", "level": 2}))
         result.append(ElementModel(title=section_title, level=1, children=children))
+    if element_ref is None and agenda_other:
+        result.append(ElementModel(title=None, title_key="label.agendaOther", level=1, children=agenda_other))
     return result
+
+
+def _agenda_blocks(ctx: BuildContext, protocol: Protocol) -> tuple[dict[int, list[RichTextBlock]], list[RichTextBlock]]:
+    """Anliegen des Protokolls je Element; ohne passendes Element in der zweiten Liste."""
+    from app.services.agenda_item_service import AgendaItemService
+
+    agenda = AgendaItemService()
+    items = agenda.items_for_protocol(ctx.db, protocol)
+    placements = agenda.placements(ctx.db, protocol, items)
+    by_element: dict[int, list[RichTextBlock]] = {}
+    other: list[RichTextBlock] = []
+    for item in items:
+        block = RichTextBlock(
+            title=None,
+            level=2,
+            content=[Paragraph(c=[TextSpan(v=item.title, b=True)]), *markdown_to_rich(item.body or "")],
+        )
+        element_id = placements.get(item.id)
+        if element_id is None:
+            other.append(block)
+        else:
+            by_element.setdefault(element_id, []).append(block)
+    return by_element, other
 
 
 # ── Matrix ──────────────────────────────────────────────────────────────────
