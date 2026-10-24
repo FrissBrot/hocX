@@ -1,4 +1,9 @@
 # Dedicated test-host override. Intentionally empty for now: test runs the same release
 # stack as prod, all environment-specific differences come from .env and the compose
 # project name (`hocx-test`).
+#
+# Host-spezifische Anpassungen (eigene Zertifikate, Port-Bindungen, ...) NICHT hier eintragen,
+# sondern in docker-compose.local.yml im Repo-Root (nicht versioniert). deploy.sh,
+# verify_release.sh und die Hilfsskripte laden sie automatisch zuletzt; Vorlage:
+# docker-compose.local.example.yml.
 services: {}

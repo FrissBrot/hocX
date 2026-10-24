@@ -198,4 +198,15 @@ test "$(value_of "$ENV_FILE" EXPORT_ENCRYPTION_KEY)" = "$export_key_first" || fa
 test "$(value_of "$ENV_FILE" STORAGE_CREDENTIALS_KEY)" = "$key_first" || fail "STORAGE_CREDENTIALS_KEY wurde beim zweiten Lauf ueberschrieben"
 test "$(value_of "$ENV_FILE" LOCAL_S3_ACCESS_KEY)" = "$access_first" || fail "LOCAL_S3_ACCESS_KEY wurde beim zweiten Lauf ueberschrieben"
 
+# Leere Platzhalter (z. B. "STORAGE_CREDENTIALS_KEY=" aus .env.example) werden ersetzt statt
+# den Schluessel ein zweites Mal anzuhaengen.
+fresh_env
+printf "STORAGE_CREDENTIALS_KEY=\nLOCAL_S3_ACCESS_KEY=''\nLOCAL_S3_ACCESS_KEY=\n" >> "$ENV_FILE"
+migrate_env_file "$ENV_FILE" > /dev/null
+test "$(grep -c '^STORAGE_CREDENTIALS_KEY=' "$ENV_FILE")" -eq 1 || fail "STORAGE_CREDENTIALS_KEY steht mehrfach in der .env"
+test "$(grep -c '^LOCAL_S3_ACCESS_KEY=' "$ENV_FILE")" -eq 1 || fail "LOCAL_S3_ACCESS_KEY steht mehrfach in der .env"
+test "${#key_first}" -ge 32
+[[ "$(value_of "$ENV_FILE" LOCAL_S3_ACCESS_KEY)" =~ ^GK[0-9a-f]{24}$ ]] || fail "Platzhalter LOCAL_S3_ACCESS_KEY nicht ersetzt"
+test "$(stat -c '%a' "$ENV_FILE")" = 600 || fail ".env hat nach dem Ersetzen nicht Modus 600"
+
 echo "Env-Migration 1.0.x -> 1.1.0: ok"

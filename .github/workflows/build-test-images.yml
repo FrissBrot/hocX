@@ -129,6 +129,7 @@ jobs:
             'docker-compose*.yml' \
             'scripts/**' \
             'infra/traefik/**' \
+            'infra/garage/**' \
             | LC_ALL=C sort -z \
             | xargs -0 sha256sum > deploy-code.manifest
           test -s deploy-code.manifest

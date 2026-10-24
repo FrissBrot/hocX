@@ -68,6 +68,7 @@ case "$ENVIRONMENT" in
     exit 1
     ;;
 esac
+append_local_compose_override "$REPO_DIR" COMPOSE_ARGS || exit 1
 
 if [ "$EUID" -eq 0 ]; then
   echo "Deployments als root sind fuer hocX gesperrt." >&2
@@ -90,6 +91,7 @@ if ! flock -n 9; then
   echo "Ein anderes [$ENVIRONMENT]-Deployment laeuft bereits." >&2
   exit 1
 fi
+require_repo_owned_by_current_user "$REPO_DIR" || exit 1
 
 generate_secret() {
   if ! command -v openssl > /dev/null 2>&1; then
@@ -303,6 +305,7 @@ fi
 # Signaturpruefung allein akzeptiert jedes Image aus build-test-images.yml, auch ungetestete
 # test-*-Kandidaten (Audit MAIN-OPS-016). Die Test-Freigabe erzwingt release.yml.
 require_release_version_for "$ENVIRONMENT" "$HOCX_VERSION" || exit 1
+require_deploy_code_for_version "$REPO_DIR" "$HOCX_VERSION" || exit 1
 if [[ ! "$GHCR_NAMESPACE" =~ ^[a-z0-9][a-z0-9-]{0,38}$ ]]; then
   echo "Ungueltiger GHCR_NAMESPACE: $GHCR_NAMESPACE" >&2
   exit 1
@@ -711,6 +714,46 @@ rollback_apps() {
   return 1
 }
 
+# Richtet einen Host-Cronjob in der crontab des Deploy-Benutzers ein bzw. haelt ihn aktuell
+# (Pfade, Compose-Dateien). Eintraege tragen den Marker "# hocx-managed:<projekt>:<name>" und
+# werden nur ueber diesen erkannt; andere Zeilen bleiben unveraendert. Ein von Hand
+# eingetragener Job (ohne Marker) wird nicht angetastet und auch nicht verdoppelt.
+# HOCX_MANAGE_CRON=false in .env schaltet das ab.
+install_managed_cron() {
+  local name="$1" schedule="$2" command="$3"
+  local marker="# hocx-managed:${PROJECT_NAME}:${name}"
+  local entry="$schedule $command $marker"
+  local current
+
+  if [ "${HOCX_MANAGE_CRON:-true}" = false ]; then
+    echo "    Cron $name: nicht verwaltet (HOCX_MANAGE_CRON=false)"
+    return 0
+  fi
+  if ! command -v crontab > /dev/null 2>&1; then
+    echo "    crontab fehlt - Cron $name bitte von Hand einrichten (RUNBOOK Abschnitt 10)." >&2
+    return 1
+  fi
+  # % ist in crontab-Zeilen ein Sonderzeichen, Zeilenumbrueche wuerden den Eintrag zerlegen.
+  if [[ "$command" == *%* || "$command" == *$'\n'* ]]; then
+    echo "    Cron $name: Befehl enthaelt % oder Zeilenumbruch - bitte von Hand einrichten." >&2
+    return 1
+  fi
+  current="$(crontab -l 2> /dev/null || true)"
+  if grep -Fxq -- "$entry" <<< "$current"; then
+    echo "    Cron $name: ok"
+    return 0
+  fi
+  if grep -Fv -- "$marker" <<< "$current" | grep -Eq "^[^#].*/scripts/run_job\.sh $name "; then
+    echo "    Cron $name: von Hand eingetragen - unveraendert gelassen"
+    return 0
+  fi
+  {
+    [ -z "$current" ] || grep -Fv -- "$marker" <<< "$current" || true
+    printf '%s\n' "$entry"
+  } | crontab - || return 1
+  echo "    Cron $name: eingerichtet ($schedule)"
+}
+
 service_exists() {
   "${DC[@]}" config --services | grep -Fxq "$1"
 }
@@ -802,6 +845,18 @@ run_smoke_checks() {
   fi
   if service_exists storage-worker && [ -n "$("${DC[@]}" ps -q --status running storage-worker 2> /dev/null || true)" ]; then
     wait_for_exec storage-worker "Storage-Worker" "python3 -c \"import app.workers.storage_worker\"" || return 1
+  fi
+  # storage-init beendet sich nach dem Einrichten; ein Fehler (z. B. Secret nicht lesbar) fiel
+  # frueher nicht auf und Garage blieb ohne Schluessel/Buckets. Idempotent erneut ausfuehren.
+  if service_exists storage-init && [ -n "$("${DC[@]}" ps -q --status running local-s3 2> /dev/null || true)" ]; then
+    echo "    Pruefe Lokales S3 (storage-init)"
+    local init_output
+    if ! init_output="$("${DC[@]}" run --rm --no-deps --pull never storage-init 2>&1)"; then
+      printf '%s\n' "$init_output" | tail -n 20 >&2
+      echo "    Lokales S3: Einrichtung fehlgeschlagen" >&2
+      return 1
+    fi
+    echo "    Lokales S3: ok"
   fi
   # Schwere Hintergrundjobs und PDF-Aufträge (Concurrency-Audit Paket 10).
   if service_exists job-worker && [ -n "$("${DC[@]}" ps -q --status running job-worker 2> /dev/null || true)" ]; then
@@ -908,6 +963,11 @@ for ((index = 0; index < ${#COMPOSE_ARGS[@]}; index++)); do
 done
 HOCX_COMPOSE_PROJECT="$PROJECT_NAME" HOCX_COMPOSE_FILES="${controller_files[*]}" HOCX_ENV_FILE="$ENV_FILE" \
   "$PROJECT_DIR/scripts/storage_controller.sh" || echo "    WARNUNG: Storage-Controller meldete einen Fehler (siehe oben)"
+if service_exists local-s3; then
+  install_managed_cron storage_controller '*/5 * * * *' \
+    "$PROJECT_DIR/scripts/run_job.sh storage_controller env HOCX_COMPOSE_PROJECT=$PROJECT_NAME HOCX_COMPOSE_FILES=\"${controller_files[*]}\" HOCX_ENV_FILE=$ENV_FILE $PROJECT_DIR/scripts/storage_controller.sh >> $PROJECT_DIR/backups/storage_controller.log 2>&1" \
+    || echo "    WARNUNG: Cron-Eintrag storage_controller nicht eingerichtet (siehe oben)"
+fi
 
 if [ "$ENVIRONMENT" = test ]; then
   echo "==> [$ENVIRONMENT] Demo-Mandant neu befuellen"
