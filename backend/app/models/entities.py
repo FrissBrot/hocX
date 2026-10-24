@@ -2304,6 +2304,26 @@ class PhotoAnalysisJob(Base, TimestampMixin):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class PhotoSimilarityResult(Base):
+    """Vorberechnete Gruppen der Tabs "Duplikate"/"Ähnliche" je Mandant und Art (Migration 0152).
+    Schreibt der job-worker (FileService.refresh_similarity_results); `groups` sind Listen von
+    public_ids, nur Gruppen mit mindestens zwei Bildern."""
+
+    __tablename__ = "photo_similarity_result"
+    __table_args__ = (
+        CheckConstraint("kind IN ('duplicate', 'series')", name="ck_photo_similarity_result_kind"),
+        CheckConstraint("status IN ('ready', 'incomplete', 'too_many')", name="ck_photo_similarity_result_status"),
+    )
+
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    kind: Mapped[str] = mapped_column(Text, primary_key=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'ready'"), default="ready")
+    fingerprint: Mapped[str] = mapped_column(Text, nullable=False)
+    image_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    groups: Mapped[list[list[str]]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+
 class GalleryUploadJob(Base, TimestampMixin):
     """Backs the "Bilder hochladen" gallery upload window's async ingestion (see
     app/main.py's gallery_upload_ingest_loop and FileService.process_pending_gallery_upload_jobs) -

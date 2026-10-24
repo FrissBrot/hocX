@@ -430,6 +430,10 @@
         "title": "Sincronizzare gli album",
         "description": "Aggiunge le nuove immagini Abgabebox agli album automatici e rimuove quelle eliminate."
       },
+      "photo_similarity_refresh": {
+        "title": "Raggruppare duplicati e foto simili",
+        "description": "Calcola in background i gruppi delle schede «Duplicati» e «Simili» quando cambiano le foto di un'organizzazione."
+      },
       "photo_analysis_worker": {
         "title": "Worker analisi immagini",
         "description": "Container separato che esegue le analisi immagini pianificate. Monitorato tramite il suo segnale di vita ogni pochi secondi."

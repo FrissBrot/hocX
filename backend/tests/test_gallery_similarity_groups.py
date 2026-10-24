@@ -1,8 +1,10 @@
 """Integration test for Phase 2 (photo_similarity.py) wired through the real upload
-pipeline: FileService.group_similar_gallery_images against StoredFile rows created by an
-actual save_gallery_uploads call, so this exercises the real perceptual_hash/sharpness/
-exposure values rather than hand-picked ones (see test_photo_similarity.py for the pure
-clustering-logic unit tests)."""
+pipeline: the job-worker's background grouping (FileService._refresh_tenant_similarity, stored
+in photo_similarity_result) and the read path behind the "Duplikate"/"Ähnliche" tabs
+(FileService.list_similarity_groups, GET /files/similarity-groups) against StoredFile rows
+created by an actual save_gallery_uploads call, so this exercises the real perceptual_hash/
+sharpness/exposure values rather than hand-picked ones (see test_photo_similarity.py for the
+pure clustering-logic unit tests)."""
 
 import asyncio
 import io
@@ -10,7 +12,11 @@ import io
 import pytest
 from PIL import Image, ImageDraw, ImageFilter
 
-from tests.factories import make_tenant
+from sqlalchemy import select
+
+from tests.factories import make_current_user, make_tenant
+from app.api.routes import files as files_routes
+from app.models.entities import PhotoSimilarityResult
 from app.services.file_service import FileService
 
 
@@ -47,7 +53,7 @@ def _blurred(content: bytes, radius: float) -> bytes:
 service = FileService()
 
 
-def _upload_and_group(db, tenant_id: int, files: list[tuple[str, bytes]]):
+def _upload(db, tenant_id: int, files: list[tuple[str, bytes]]):
     # errors may legitimately contain non-blocking "ähnelt einem bereits hochgeladenen
     # Bild"-Hinweise here (that's the tenant-wide perceptual-hash duplicate warning this
     # test's near-identical burst shots are expected to trigger) - every file still gets
@@ -55,114 +61,177 @@ def _upload_and_group(db, tenant_id: int, files: list[tuple[str, bytes]]):
     items, _errors = asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant_id, files=files, tags=[], created_by=None))
     assert len(items) == len(files)
     db.commit()
-    return service.group_similar_gallery_images(db, tenant_id)
+    return items
+
+
+def _names(result):
+    return sorted(sorted(image.original_name for image in group.images) for group in result.groups)
+
+
+def test_tabs_report_pending_until_the_background_job_has_grouped_the_tenant(db):
+    tenant = make_tenant(db)
+    sharp = _circle_png_bytes(100, 75, 50)
+    _upload(db, tenant.id, [("sharp.png", sharp), ("blurred.png", _blurred(sharp, radius=6))])
+
+    pending = service.list_similarity_groups(db, tenant.id, kind="duplicate")
+    assert pending.status == "pending"
+    assert pending.groups == []
+
+    service._refresh_tenant_similarity(db, tenant.id)
+    ready = service.list_similarity_groups(db, tenant.id, kind="duplicate")
+    assert ready.status == "ready"
+    assert ready.computed_at is not None
+    assert len(ready.groups) == 1
 
 
 def test_sharp_and_blurred_burst_shot_group_together_with_the_sharp_one_ranked_first(db):
     tenant = make_tenant(db)
     sharp = _circle_png_bytes(100, 75, 50)
-    blurred = _blurred(sharp, radius=6)
-    different = _circle_png_bytes(40, 110, 45)
-
-    groups = _upload_and_group(
+    _upload(
         db,
         tenant.id,
-        [("sharp.png", sharp), ("blurred.png", blurred), ("different.png", different)],
+        [("sharp.png", sharp), ("blurred.png", _blurred(sharp, radius=6)), ("different.png", _circle_png_bytes(40, 110, 45))],
     )
+    service._refresh_tenant_similarity(db, tenant.id)
 
-    by_size = sorted(groups, key=lambda g: len(g.images))
-    assert [len(g.images) for g in by_size] == [1, 2]
+    result = service.list_similarity_groups(db, tenant.id, kind="duplicate")
 
-    singleton, burst_group = by_size
-    assert singleton.images[0].original_name == "different.png"
+    # Einzelbilder ohne Gegenstück erscheinen in keinem Tab.
+    assert len(result.groups) == 1
+    burst_group = result.groups[0]
     assert [image.original_name for image in burst_group.images] == ["sharp.png", "blurred.png"]
     assert burst_group.best_id == burst_group.images[0].id
 
 
-def test_group_similar_gallery_images_scopes_to_the_given_tenant_only(db):
+def test_grouping_scopes_to_the_given_tenant_only(db):
     tenant_a = make_tenant(db)
     tenant_b = make_tenant(db)
     content = _circle_png_bytes(100, 75, 50)
+    _upload(db, tenant_a.id, [("a.png", content), ("a-blurred.png", _blurred(content, radius=6))])
+    _upload(db, tenant_b.id, [("b.png", content), ("b-blurred.png", _blurred(content, radius=6))])
 
-    asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant_a.id, files=[("a.png", content)], tags=[], created_by=None))
-    asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant_b.id, files=[("b.png", content)], tags=[], created_by=None))
-    db.commit()
+    service._refresh_tenant_similarity(db, tenant_a.id)
 
-    groups_a = service.group_similar_gallery_images(db, tenant_a.id)
-
-    assert len(groups_a) == 1
-    assert [image.original_name for image in groups_a[0].images] == ["a.png"]
-
-
-def test_min_size_excludes_singleton_groups(db):
-    """group_similar_images() legitimately returns a singleton "group" for an image with
-    nothing similar to it - the frontend's "Ähnliche" tab only wants actual near-duplicate
-    series, so min_size=2 must filter those out (the default min_size=1 keeps today's
-    behavior for other callers)."""
-    tenant = make_tenant(db)
-    sharp = _circle_png_bytes(100, 75, 50)
-    blurred = _blurred(sharp, radius=6)
-    different = _circle_png_bytes(40, 110, 45)
-    items, _errors = asyncio.run(service.save_gallery_uploads(
-        db, tenant_id=tenant.id, files=[("sharp.png", sharp), ("blurred.png", blurred), ("different.png", different)], tags=[], created_by=None
-    ))
-    assert len(items) == 3
-    db.commit()
-
-    all_groups = service.group_similar_gallery_images(db, tenant.id, min_size=1)
-    assert len(all_groups) == 2
-
-    multi_only = service.group_similar_gallery_images(db, tenant.id, min_size=2)
-    assert len(multi_only) == 1
-    assert len(multi_only[0].images) == 2
+    assert _names(service.list_similarity_groups(db, tenant_a.id, kind="duplicate")) == [["a-blurred.png", "a.png"]]
+    assert service.list_similarity_groups(db, tenant_b.id, kind="duplicate").status == "pending"
+    stored = db.scalars(select(PhotoSimilarityResult).where(PhotoSimilarityResult.tenant_id == tenant_a.id)).all()
+    assert {result.kind for result in stored} == {"duplicate", "series"}
 
 
 def test_kind_series_groups_more_loosely_than_kind_duplicate(db):
-    """"Duplikate" (kind="duplicate", the default) only clusters near-identical re-encodes;
-    "Ähnliche" (kind="series") uses the looser SERIES_HAMMING_THRESHOLD so a shifted frame of
-    the same scene - not just a re-encode - still lands in the same series. The two shapes
-    below have a real perceptual-hash distance of 10 (measured against
-    SIMILARITY_HAMMING_THRESHOLD=5 / SERIES_HAMMING_THRESHOLD=14): too far apart for
-    "duplicate", close enough for "series". `far` (distance 36 from `base`) stays separate
-    under both - the looser threshold must not turn into "group everything"."""
+    """"Duplikate" (kind="duplicate") only clusters near-identical re-encodes; "Ähnliche"
+    (kind="series") uses the looser SERIES_HAMMING_THRESHOLD so a shifted frame of the same
+    scene - not just a re-encode - still lands in the same series. The two shapes below have
+    a real perceptual-hash distance of 10 (measured against SIMILARITY_HAMMING_THRESHOLD=5 /
+    SERIES_HAMMING_THRESHOLD=14): too far apart for "duplicate", close enough for "series".
+    `far` (distance 36 from `base`) stays separate under both - the looser threshold must not
+    turn into "group everything"."""
     tenant = make_tenant(db)
-    base = _circle_png_bytes(100, 75, 50)
-    shifted = _circle_png_bytes(120, 75, 50)
-    far = _circle_png_bytes(40, 110, 45)
-    items, _errors = asyncio.run(service.save_gallery_uploads(
-        db, tenant_id=tenant.id, files=[("base.png", base), ("shifted.png", shifted), ("far.png", far)], tags=[], created_by=None
-    ))
-    assert len(items) == 3
+    _upload(
+        db,
+        tenant.id,
+        [
+            ("base.png", _circle_png_bytes(100, 75, 50)),
+            ("shifted.png", _circle_png_bytes(120, 75, 50)),
+            ("far.png", _circle_png_bytes(40, 110, 45)),
+        ],
+    )
+    service._refresh_tenant_similarity(db, tenant.id)
+
+    assert service.list_similarity_groups(db, tenant.id, kind="duplicate").groups == []
+    assert _names(service.list_similarity_groups(db, tenant.id, kind="series")) == [["base.png", "shifted.png"]]
+
+
+def test_deleted_photos_drop_out_immediately_without_waiting_for_the_job(db):
+    tenant = make_tenant(db)
+    sharp = _circle_png_bytes(100, 75, 50)
+    items = _upload(db, tenant.id, [("sharp.png", sharp), ("blurred.png", _blurred(sharp, radius=6))])
+    service._refresh_tenant_similarity(db, tenant.id)
+    blurred = next(item for item in items if item.original_name == "blurred.png")
+
+    deleted, errors = service.delete_gallery_images(db, tenant.id, [blurred.id])
     db.commit()
+    assert deleted == [blurred.id] and errors == []
 
-    duplicate_groups = service.group_similar_gallery_images(db, tenant.id, kind="duplicate")
-    assert sorted(len(g.images) for g in duplicate_groups) == [1, 1, 1]
-
-    series_groups = service.group_similar_gallery_images(db, tenant.id, kind="series")
-    by_size = sorted(series_groups, key=lambda g: len(g.images))
-    assert [len(g.images) for g in by_size] == [1, 2]
-    singleton, series_group = by_size
-    assert singleton.images[0].original_name == "far.png"
-    assert {image.original_name for image in series_group.images} == {"base.png", "shifted.png"}
+    # Die Gruppe hat nur noch ein Bild - sie verschwindet, bevor der Job neu rechnet.
+    assert service.list_similarity_groups(db, tenant.id, kind="duplicate").groups == []
 
 
-def test_repeated_grouping_uses_the_cache_and_changes_invalidate_it(db, monkeypatch):
-    """CONC-015: der zweite Aufruf lädt keine Originale mehr; eine geänderte Bildmenge (neues
-    Bild, geänderte Qualitätswerte) ergibt einen neuen Cache-Schlüssel."""
+def test_filters_narrow_the_stored_groups(db):
+    tenant = make_tenant(db)
+    sharp = _circle_png_bytes(100, 75, 50)
+    _upload(db, tenant.id, [("sommerlager.png", sharp), ("sommerlager-2.png", _blurred(sharp, radius=6))])
+    service._refresh_tenant_similarity(db, tenant.id)
+
+    assert len(service.list_similarity_groups(db, tenant.id, kind="duplicate", search="sommerlager").groups) == 1
+    assert service.list_similarity_groups(db, tenant.id, kind="duplicate", search="herbst").groups == []
+
+
+def test_unchanged_photos_are_not_regrouped_and_changes_trigger_a_new_run(db, monkeypatch):
+    """Der Job rechnet nur, wenn sich die Bildmenge geändert hat (Fingerabdruck) - sonst
+    würde er bei jedem Tick alle Originale erneut lesen."""
     from app.services import file_service as module
 
     tenant = make_tenant(db)
     sharp = _circle_png_bytes(100, 75, 50)
-    first = _upload_and_group(db, tenant.id, [("sharp.png", sharp), ("copy.png", _blurred(sharp, radius=6))])
-    reads = []
-    original_read = module._read_object
-    monkeypatch.setattr(module, "_read_object", lambda *args: reads.append(args) or original_read(*args))
+    _upload(db, tenant.id, [("sharp.png", sharp), ("copy.png", _blurred(sharp, radius=6))])
+    service._refresh_tenant_similarity(db, tenant.id)
+    computed = []
+    original_compute = FileService._compute_similarity_groups
+    monkeypatch.setattr(
+        FileService,
+        "_compute_similarity_groups",
+        lambda self, *args: computed.append(1) or original_compute(self, *args),
+    )
     module._similarity_signatures.clear()
 
-    again = service.group_similar_gallery_images(db, tenant.id)
-    assert [[image.id for image in group.images] for group in again] == [[image.id for image in group.images] for group in first]
-    assert reads == []
+    service._refresh_tenant_similarity(db, tenant.id)
+    assert computed == []
 
-    groups = _upload_and_group(db, tenant.id, [("other.png", _circle_png_bytes(40, 110, 45))])
-    assert sorted(len(group.images) for group in groups) == [1, 2]
-    assert reads  # neuer Fingerabdruck: neu gerechnet
+    _upload(db, tenant.id, [("other.png", _circle_png_bytes(40, 110, 45))])
+    service._refresh_tenant_similarity(db, tenant.id)
+    assert computed == [1]
+    stored = db.get(PhotoSimilarityResult, (tenant.id, "duplicate"))
+    assert stored.image_count == 3
+
+
+def test_too_many_photos_are_reported_instead_of_grouped(db, monkeypatch):
+    from app.services import file_service as module
+
+    tenant = make_tenant(db)
+    sharp = _circle_png_bytes(100, 75, 50)
+    _upload(db, tenant.id, [("sharp.png", sharp), ("copy.png", _blurred(sharp, radius=6))])
+    monkeypatch.setattr(module, "MAX_BACKGROUND_GROUPING_IMAGES", 1)
+
+    service._refresh_tenant_similarity(db, tenant.id)
+
+    result = service.list_similarity_groups(db, tenant.id, kind="series")
+    assert result.status == "too_many"
+    assert result.groups == []
+
+
+def test_route_returns_the_stored_groups_for_writers_only(db):
+    from fastapi import HTTPException
+
+    tenant = make_tenant(db)
+    sharp = _circle_png_bytes(100, 75, 50)
+    _upload(db, tenant.id, [("sharp.png", sharp), ("blurred.png", _blurred(sharp, radius=6))])
+    service._refresh_tenant_similarity(db, tenant.id)
+
+    result = files_routes.list_similarity_groups(
+        source=None, album_id=None, search=None, tags=None, kind="duplicate", db=db, user=make_current_user(tenant.id)
+    )
+    assert result.status == "ready"
+    assert len(result.groups) == 1
+
+    other = make_tenant(db)
+    foreign = files_routes.list_similarity_groups(
+        source=None, album_id=None, search=None, tags=None, kind="duplicate", db=db, user=make_current_user(other.id)
+    )
+    assert foreign.status == "pending" and foreign.groups == []
+
+    with pytest.raises(HTTPException) as exc:
+        files_routes.list_similarity_groups(
+            source=None, album_id=None, search=None, tags=None, kind="duplicate", db=db, user=make_current_user(tenant.id, role="reader")
+        )
+    assert exc.value.status_code == 403

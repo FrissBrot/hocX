@@ -201,6 +201,18 @@ async def photo_album_sync_loop() -> None:
     )
 
 
+async def photo_similarity_refresh_loop() -> None:
+    """Berechnet die Gruppen der Tabs "Duplikate"/"Ähnliche" im Hintergrund (FileService.
+    refresh_similarity_results) - die Route liest nur noch das Ergebnis. Liest Originale und
+    vergleicht Pixel, darum im job-worker."""
+    file_service = FileService()
+    await run_advisory_locked_loop(
+        name="photo_similarity_refresh",
+        interval_seconds=settings.photo_similarity_refresh_interval_minutes * 60,
+        task=file_service.refresh_similarity_results,
+    )
+
+
 async def thumbnail_backfill_loop() -> None:
     """Vorschaubilder für Bilder ohne eigene Vorschau nachziehen, vor allem Abgabebox-Uploads
     (FileService.backfill_missing_thumbnails, CONC-014) - sonst erzeugt die erste Galerie-
@@ -328,6 +340,7 @@ JOB_WORKER_LOOPS: tuple[LoopFactory, ...] = (
     photo_quality_backfill_loop,
     thumbnail_backfill_loop,
     photo_album_sync_loop,
+    photo_similarity_refresh_loop,
     gallery_upload_ingest_loop,
     tenant_data_export_loop,
 )

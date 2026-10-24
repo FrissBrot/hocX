@@ -29,6 +29,8 @@ services:
       # Der Album-Sync läuft seit dem Concurrency-Audit (Paket 10) im job-worker, nicht mehr im
       # Backend - das kurze Intervall für abgabebox-photo-album-sync.spec.ts gehört deshalb hierher.
       PHOTO_ALBUM_SYNC_INTERVAL_MINUTES: "1"
+      # Duplikate/Ähnliche werden im Hintergrund gruppiert - im E2E-Stack nicht 2 Minuten warten.
+      PHOTO_SIMILARITY_REFRESH_INTERVAL_MINUTES: "0.25"
   frontend:
     ports: !override
       - "127.0.0.1:13000:3000"

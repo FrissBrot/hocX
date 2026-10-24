@@ -229,6 +229,11 @@
     "ownerMessage": "{count, plural, one {«{albumName}» è condiviso da {owner}. 1 foto sarà quindi visibile a tutti i partecipanti.} other {«{albumName}» è condiviso da {owner}. # foto saranno quindi visibili a tutti i partecipanti.}}",
     "title": "Le foto verranno condivise"
   },
+  "similarity": {
+    "pending": "Le foto vengono raggruppate in background. Il risultato apparirà qui tra pochi minuti.",
+    "tooMany": "Troppe foto per il raggruppamento automatico (al massimo {max, number}).",
+    "computedAt": "Aggiornato al {time} · le nuove foto compaiono dopo pochi minuti."
+  },
   "similarGroups": {
     "bestChoice": "Scelta migliore",
     "bestError": "Impossibile modificare lo stato best-of.",
@@ -243,7 +248,7 @@
     "keepAriaLabel": "Mantieni {name}",
     "keptSuffix": " · mantenuta",
     "loadError": "Impossibile caricare le foto simili.",
-    "loading": "Raggruppamento delle serie in corso…",
+    "loading": "Caricamento delle serie…",
     "openAriaLabel": "Apri {name}",
     "seriesTitle": "Serie delle {time} · {description}",
     "sharpnessCaption": "Nitidezza {score}",
@@ -264,7 +269,7 @@
     "keepOnlyBestDisabledTitle": "Qui possono essere eliminate solo le foto caricate direttamente.",
     "keepSeries": "Mantieni serie",
     "loadError": "Impossibile caricare le foto simili.",
-    "loading": "Raggruppamento delle serie in corso…",
+    "loading": "Caricamento delle serie…",
     "openAriaLabel": "Apri {name}",
     "seriesTitle": "Serie delle {time} · {description}",
     "sharpnessCaption": "Nitidezza {score}",

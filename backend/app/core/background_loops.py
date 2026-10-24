@@ -61,6 +61,7 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "tenant_data_export": 202600027,
     "retention_proposals": 202600028,
     "thumbnail_backfill": 202600029,
+    "photo_similarity_refresh": 202600030,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

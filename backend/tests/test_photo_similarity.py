@@ -258,9 +258,8 @@ def test_verified_duplicates_do_not_merge_through_a_chain():
 
 def test_gallery_tabs_separate_copies_from_different_photos(tmp_path, monkeypatch):
     from types import SimpleNamespace
-    from unittest.mock import Mock
     from app.core.config import settings
-    from app.services.file_service import FileService
+    from app.services.file_service import FileService, _groupable
 
     monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     photo = _photo_like_image()
@@ -273,18 +272,13 @@ def test_gallery_tabs_separate_copies_from_different_photos(tmp_path, monkeypatc
                             sharpness_score=1, exposure_score=1, face_quality_score=None,
                             checksum_sha256=str(i), source="gallery_upload", storage_path=f"{i}.png")
             for i in (1, 2, 3)]
-    repository = Mock()
-    repository.list_tenant_files.return_value = rows
-    repository.list_checksum_and_storage_path.return_value = {
-        row.id: (row.checksum_sha256, row.storage_path) for row in rows
-    }
-    service = FileService(stored_file_repository=repository)
-    monkeypatch.setattr(service, "_build_overview_item", lambda row: row.id)
-    # Nur Gruppenzugehörigkeit prüfen, unabhängig vom API-Ausgabeschema.
-    monkeypatch.setattr("app.services.file_service.SimilarityGroup", lambda **kwargs: kwargs)
-    db = Mock()  # nur für das Freigeben der Verbindung vor dem Rechnen
-    assert [group["images"] for group in service.group_similar_gallery_images(db, 1, min_size=2)] == [[1, 2]]
-    assert [group["images"] for group in service.group_similar_gallery_images(db, 1, min_size=2, kind="series")] == [[1, 2, 3]]
-    repository.list_tenant_files.return_value = rows[:2]
-    assert service.group_similar_gallery_images(db, 1, min_size=2, kind="series") == []
-    assert db.commit.called
+    file_paths = {row.id: (row.checksum_sha256, row.storage_path) for row in rows}
+    service = FileService()
+
+    groups, incomplete = service._compute_similarity_groups(rows, [_groupable(row) for row in rows], file_paths)
+    assert groups == {"duplicate": [[1, 2]], "series": [[1, 2, 3]]}
+    assert incomplete is False
+
+    # Reine Kopien gehören nur unter Duplikate, nicht zusätzlich unter Ähnliche.
+    groups, _ = service._compute_similarity_groups(rows[:2], [_groupable(row) for row in rows[:2]], file_paths)
+    assert groups == {"duplicate": [[1, 2]], "series": []}

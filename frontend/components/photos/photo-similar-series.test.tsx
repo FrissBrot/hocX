@@ -1,16 +1,21 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { FileOverviewItem, SimilarityGroup } from "@/types/api";
+import { ApiError } from "@/lib/api/client";
+import type { FileOverviewItem, SimilarityGroup, SimilarityGroupList } from "@/types/api";
 
 const browserApiFetchMock = vi.fn();
 const showToastMock = vi.fn();
 const confirmMock = vi.fn();
 
-vi.mock("@/lib/api/client", () => ({
-  browserApiBaseUrl: "",
-  browserApiFetch: (...args: unknown[]) => browserApiFetchMock(...args),
-}));
+vi.mock("@/lib/api/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/client")>();
+  return {
+    ApiError: actual.ApiError,
+    browserApiBaseUrl: "",
+    browserApiFetch: (...args: unknown[]) => browserApiFetchMock(...args),
+  };
+});
 
 vi.mock("@/contexts/toast-context", () => ({
   useToast: () => showToastMock,
@@ -21,6 +26,11 @@ vi.mock("@/contexts/confirm-context", () => ({
 }));
 
 import { PhotoSimilarSeries } from "./photo-similar-series";
+import { clearSimilarityGroupsCache, SIMILARITY_PENDING_POLL_MS } from "./use-similarity-groups";
+
+function ready(groups: SimilarityGroup[]): SimilarityGroupList {
+  return { status: "ready", computed_at: "2026-10-24T09:00:00Z", groups };
+}
 
 function makeItem(overrides: Partial<FileOverviewItem> = {}): FileOverviewItem {
   const id = overrides.id ?? `file-${Math.random().toString(36).slice(2)}`;
@@ -64,6 +74,7 @@ function makeGroup(): SimilarityGroup {
 
 describe("PhotoSimilarSeries", () => {
   beforeEach(() => {
+    clearSimilarityGroupsCache();
     browserApiFetchMock.mockReset();
     showToastMock.mockReset();
     confirmMock.mockReset();
@@ -78,7 +89,7 @@ describe("PhotoSimilarSeries", () => {
     group.images.forEach((image, index) => { image.original_name = `serie-${index}.jpg`; });
     const otherGroup = { best_id: "separate", images: [makeItem({ id: "separate" }), makeItem({ id: "separate-other" })] };
     browserApiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(url.startsWith("/api/files/similarity-groups") ? [group, otherGroup] : null)
+      Promise.resolve(url.startsWith("/api/files/similarity-groups") ? ready([group, otherGroup]) : null)
     );
     render(<PhotoSimilarSeries search="" tagFilter={[]} />);
 
@@ -101,7 +112,7 @@ describe("PhotoSimilarSeries", () => {
   it("shows a confirmation naming the number of photos that will be deleted", async () => {
     const group = makeGroup();
     browserApiFetchMock.mockImplementation((url: string) => {
-      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve([group]);
+      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve(ready([group]));
       return Promise.resolve(null);
     });
     confirmMock.mockResolvedValue(false);
@@ -117,7 +128,7 @@ describe("PhotoSimilarSeries", () => {
   it("issues no delete request when the confirmation is cancelled", async () => {
     const group = makeGroup();
     browserApiFetchMock.mockImplementation((url: string) => {
-      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve([group]);
+      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve(ready([group]));
       return Promise.resolve(null);
     });
     confirmMock.mockResolvedValue(false);
@@ -132,7 +143,7 @@ describe("PhotoSimilarSeries", () => {
   it("deletes exactly the non-best images once confirmed", async () => {
     const group = makeGroup();
     browserApiFetchMock.mockImplementation((url: string, options?: { method?: string; body?: string }) => {
-      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve([group]);
+      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve(ready([group]));
       if (url === "/api/files/bulk-delete" && options?.method === "POST") {
         return Promise.resolve({ deleted_ids: JSON.parse(options.body!).file_ids, errors: [] });
       }
@@ -154,7 +165,7 @@ describe("PhotoSimilarSeries", () => {
   it("reports the actually deleted ids to the gallery via onDeleted", async () => {
     const group = makeGroup();
     browserApiFetchMock.mockImplementation((url: string) => {
-      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve([group]);
+      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve(ready([group]));
       if (url === "/api/files/bulk-delete") return Promise.resolve({ deleted_ids: ["other-1"], errors: ["other-2 fehlgeschlagen"] });
       return Promise.resolve(null);
     });
@@ -176,12 +187,12 @@ describe("PhotoSimilarSeries", () => {
     const staleGroup: SimilarityGroup = { best_id: staleBest.id, images: [staleBest, makeItem({ id: "stale-other" })] };
     const freshBest = makeItem({ id: "fresh-best", context_label: "FRESH-LABEL" });
     const freshGroup: SimilarityGroup = { best_id: freshBest.id, images: [freshBest, makeItem({ id: "fresh-other" })] };
-    let resolveStale: (value: SimilarityGroup[]) => void = () => {};
-    let resolveFresh: (value: SimilarityGroup[]) => void = () => {};
-    const stalePromise = new Promise<SimilarityGroup[]>((resolve) => {
+    let resolveStale: (value: SimilarityGroupList) => void = () => {};
+    let resolveFresh: (value: SimilarityGroupList) => void = () => {};
+    const stalePromise = new Promise<SimilarityGroupList>((resolve) => {
       resolveStale = resolve;
     });
-    const freshPromise = new Promise<SimilarityGroup[]>((resolve) => {
+    const freshPromise = new Promise<SimilarityGroupList>((resolve) => {
       resolveFresh = resolve;
     });
     let call = 0;
@@ -199,9 +210,9 @@ describe("PhotoSimilarSeries", () => {
     // The newer (second) request's response lands first; the older (first) request's
     // stale response arrives after it - the opposite of request order, plausible under
     // normal network jitter.
-    resolveFresh([freshGroup]);
+    resolveFresh(ready([freshGroup]));
     await waitFor(() => expect(screen.queryByText(/FRESH-LABEL/)).not.toBeNull());
-    resolveStale([staleGroup]);
+    resolveStale(ready([staleGroup]));
 
     // Give the stale promise's .then a tick to run (and be ignored, if the fix holds)
     // before asserting - without the fix, this is exactly where it would overwrite.
@@ -213,7 +224,7 @@ describe("PhotoSimilarSeries", () => {
 
   it("requests the tight duplicate threshold, not the looser series one", async () => {
     browserApiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(url.startsWith("/api/files/similarity-groups") ? [] : null)
+      Promise.resolve(url.startsWith("/api/files/similarity-groups") ? ready([]) : null)
     );
     render(<PhotoSimilarSeries search="" tagFilter={[]} />);
 
@@ -225,7 +236,7 @@ describe("PhotoSimilarSeries", () => {
   it("keeping the series just dismisses the card without any request", async () => {
     const group = makeGroup();
     browserApiFetchMock.mockImplementation((url: string) => {
-      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve([group]);
+      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve(ready([group]));
       return Promise.resolve(null);
     });
     render(<PhotoSimilarSeries search="" tagFilter={[]} />);
@@ -234,5 +245,96 @@ describe("PhotoSimilarSeries", () => {
 
     await waitFor(() => expect(screen.queryByRole("button", { name: "Serie behalten" })).not.toBeInTheDocument());
     expect(browserApiFetchMock.mock.calls.some(([url]) => url === "/api/files/bulk-delete")).toBe(false);
+  });
+
+  it("shows a hint while the server has not grouped the photos yet and asks again", async () => {
+    vi.useFakeTimers();
+    try {
+      browserApiFetchMock.mockResolvedValueOnce({ status: "pending", computed_at: null, groups: [] });
+      browserApiFetchMock.mockResolvedValueOnce(ready([makeGroup()]));
+      render(<PhotoSimilarSeries search="" tagFilter={[]} />);
+      await act(() => vi.advanceTimersByTimeAsync(0));
+      expect(screen.getByText(/werden im Hintergrund gruppiert/)).toBeInTheDocument();
+
+      await act(() => vi.advanceTimersByTimeAsync(SIMILARITY_PENDING_POLL_MS));
+      expect(browserApiFetchMock).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole("button", { name: "Nur beste behalten" })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("explains when the tenant has too many photos for automatic grouping", async () => {
+    browserApiFetchMock.mockResolvedValue({ status: "too_many", computed_at: "2026-10-24T09:00:00Z", groups: [] });
+    render(<PhotoSimilarSeries search="" tagFilter={[]} />);
+
+    expect(await screen.findByText(/Zu viele Fotos für die automatische Gruppierung/)).toBeInTheDocument();
+  });
+
+  it("shows when the groups were computed", async () => {
+    browserApiFetchMock.mockResolvedValue(ready([makeGroup()]));
+    render(<PhotoSimilarSeries search="" tagFilter={[]} />);
+
+    expect(await screen.findByText(/^Stand .* neue Fotos erscheinen nach wenigen Minuten\.$/)).toBeInTheDocument();
+  });
+
+  it("shows the cached groups immediately when the tab is opened again and refreshes them quietly", async () => {
+    const group = makeGroup();
+    group.images[0].context_label = "CACHED-LABEL";
+    browserApiFetchMock.mockResolvedValueOnce(ready([group]));
+    const first = render(<PhotoSimilarSeries search="" tagFilter={[]} />);
+    expect(await screen.findByText(/CACHED-LABEL/)).toBeInTheDocument();
+    first.unmount();
+
+    let resolveRefresh: (value: SimilarityGroupList) => void = () => {};
+    browserApiFetchMock.mockReturnValueOnce(new Promise<SimilarityGroupList>((resolve) => { resolveRefresh = resolve; }));
+    render(<PhotoSimilarSeries search="" tagFilter={[]} />);
+
+    expect(screen.getByText(/CACHED-LABEL/)).toBeInTheDocument();
+    expect(screen.queryByText("Serien werden geladen…")).not.toBeInTheDocument();
+    expect(browserApiFetchMock).toHaveBeenCalledTimes(2);
+
+    const refreshed = makeGroup();
+    refreshed.images[0].context_label = "REFRESHED-LABEL";
+    resolveRefresh(ready([refreshed]));
+    expect(await screen.findByText(/REFRESHED-LABEL/)).toBeInTheDocument();
+  });
+
+  it("keeps the cached groups when the quiet refresh fails", async () => {
+    const group = makeGroup();
+    group.images[0].context_label = "CACHED-LABEL";
+    browserApiFetchMock.mockResolvedValueOnce(ready([group]));
+    const first = render(<PhotoSimilarSeries search="" tagFilter={[]} />);
+    expect(await screen.findByText(/CACHED-LABEL/)).toBeInTheDocument();
+    first.unmount();
+
+    browserApiFetchMock.mockRejectedValueOnce(new ApiError("timeout", "timeout"));
+    render(<PhotoSimilarSeries search="" tagFilter={[]} />);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.getByText(/CACHED-LABEL/)).toBeInTheDocument();
+    expect(screen.queryByText("Ähnliche Fotos konnten nicht geladen werden.")).not.toBeInTheDocument();
+  });
+
+  it("does not bring back a cleaned group from the cache after switching tabs", async () => {
+    const group = makeGroup();
+    group.images[0].context_label = "CLEANED-LABEL";
+    let refresh: Promise<SimilarityGroupList> = Promise.resolve(ready([group]));
+    browserApiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith("/api/files/similarity-groups")) return refresh;
+      if (url === "/api/files/bulk-delete") return Promise.resolve({ deleted_ids: ["other-1", "other-2"], errors: [] });
+      return Promise.resolve(null);
+    });
+    confirmMock.mockResolvedValue(true);
+    const first = render(<PhotoSimilarSeries search="" tagFilter={[]} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Nur beste behalten" }));
+    await waitFor(() => expect(screen.queryByText(/CLEANED-LABEL/)).not.toBeInTheDocument());
+    first.unmount();
+
+    refresh = new Promise(() => {});
+    render(<PhotoSimilarSeries search="" tagFilter={[]} />);
+
+    expect(screen.queryByText(/CLEANED-LABEL/)).not.toBeInTheDocument();
+    expect(screen.getByText("Keine ähnlichen Fotos gefunden.")).toBeInTheDocument();
   });
 });

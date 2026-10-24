@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import os
 import threading
 import time
@@ -18,6 +17,7 @@ from typing import Callable, Iterator, Literal
 from fastapi import HTTPException, UploadFile
 from PIL import Image
 from sqlalchemy import delete, func, or_, select, text, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session, aliased
 
 from app import scanner
@@ -31,6 +31,7 @@ from app.models.entities import (
     PhotoAlbum,
     PhotoAlbumItem,
     PhotoAnalysisJob,
+    PhotoSimilarityResult,
     SubmissionAssignment,
     SubmissionUploadFile,
     WordImportDocument,
@@ -43,6 +44,7 @@ from app.schemas.files import (
     GpsMetadataRead,
     PhotoAnalysisProgress,
     SimilarityGroup,
+    SimilarityGroupList,
     StoredFileMetadata,
     UploadFileResult,
     UploadPrecheckRequest,
@@ -62,13 +64,14 @@ from app.services import gps_strip, image_metadata_service, photo_event_link_ser
 from app.services.capture_date import effective_capture
 from app.services.photo_quality import compute_quality_scores
 from app.services.photo_similarity import (
+    MAX_BACKGROUND_GROUPING_IMAGES,
     MAX_GROUPING_IMAGES,
     SERIES_HAMMING_THRESHOLD,
-    SIMILARITY_HAMMING_THRESHOLD,
     GroupableImage,
     group_similar_images,
     duplicate_signature,
     same_photo,
+    sort_best_first,
     verified_duplicate_groups,
 )
 from app.services.upload_lock import BACKGROUND_TIMEOUT_SECONDS, UPLOAD_LOCK_NAMESPACE, UploadLockBusy, acquire_upload_lock, acquire_upload_lock_sync
@@ -285,70 +288,45 @@ def _write_atomic(path: Path, content: bytes) -> None:
         temp.unlink(missing_ok=True)
 
 
-# Ähnlichkeitsgruppen (CONC-015): die Gruppierung vergleicht bis 1500 Bilder paarweise und lädt
-# für jedes Kandidatenpaar beide Originale. Jeder Aufruf des Duplikate-Tabs wiederholte das.
-# - Ergebnis-Cache in Redis: Schlüssel aus Mandant, Art und einem Fingerabdruck der gruppierten
-#   Bilder (IDs, Prüfsumme, pHash, Qualitätswerte); jede Änderung daran ergibt einen neuen Schlüssel.
-#   Gespeichert werden nur IDs, Metadaten (Tags, Namen) kommen frisch aus der Abfrage.
+# Ähnlichkeitsgruppen: die Tabs "Duplikate"/"Ähnliche" lesen nur noch das Ergebnis, das der
+# job-worker im Hintergrund berechnet (refresh_similarity_results, Tabelle photo_similarity_result).
+# Im Request liefen sonst bis 1500 Bilder paarweise samt Originalen - länger als der Browser wartete.
+# - Fingerabdruck je Mandant aus IDs, Prüfsumme und pHash der gruppierten Bilder: nur wenn er sich
+#   ändert, rechnet der Job neu. Qualitätswerte gehören nicht dazu - die beste Aufnahme bestimmt der
+#   Abruf mit den aktuellen Werten.
 # - Signatur-Cache je Prozess (LRU): Signaturen hängen nur am Dateiinhalt (Prüfsumme).
-SIMILARITY_RESULT_TTL_SECONDS = 3600
 # So gross wie die erlaubte Gruppierung (je ~49 KB, 128 x 128 x RGB uint8, also bis ~73 MB je
 # Prozess): mit 600 Plätzen und 861 Kandidaten verdrängte der LRU bei jedem Neuaufbau alles
 # (Trefferquote 0), jeder neue Upload kostete im Lasttest 73 s statt Sekundenbruchteilen.
 SIMILARITY_SIGNATURE_CACHE_SIZE = MAX_GROUPING_IMAGES
 _similarity_signatures: "OrderedDict[tuple[int, str | None], tuple[float, object] | None]" = OrderedDict()
 _similarity_signatures_lock = threading.Lock()
+SIMILARITY_KINDS: tuple[Literal["duplicate", "series"], ...] = ("duplicate", "series")
+# Fehlten Originale (Speicher kurz nicht erreichbar), wird höchstens so oft neu versucht.
+SIMILARITY_INCOMPLETE_RETRY = timedelta(hours=1)
+# Ein Tick hört nach dieser Zeit mit dem nächsten Mandanten auf; der Rest folgt im nächsten Tick.
+SIMILARITY_REFRESH_TICK_BUDGET_SECONDS = 240
 
 
-def _similarity_cache_key(tenant_id: int, kind: str, images: list, file_paths: dict) -> str:
-    digest = hashlib.sha256(kind.encode())
+SIMILARITY_LOCAL_SIGNATURES = 512
+
+
+def _groupable(row) -> GroupableImage:
+    return GroupableImage(
+        id=row.id,
+        perceptual_hash=row.perceptual_hash,
+        sharpness_score=row.sharpness_score,
+        exposure_score=row.exposure_score,
+        face_quality_score=row.face_quality_score,
+    )
+
+
+def _similarity_fingerprint(images: list[GroupableImage], file_paths: dict) -> str:
+    digest = hashlib.sha256()
     for image in sorted(images, key=lambda item: item.id):
         checksum = file_paths.get(image.id, (None, None))[0]
-        digest.update(repr((image.id, checksum, image.perceptual_hash, image.sharpness_score, image.exposure_score, image.face_quality_score)).encode())
-    return f"hocx:similarity:{tenant_id}:{digest.hexdigest()}"
-
-
-def _similarity_cache_get(key: str, rows_by_id: dict) -> list[list[int]] | None:
-    from redis.exceptions import RedisError
-
-    from app.core.redis_client import get_redis_sync
-
-    try:
-        raw = get_redis_sync().get(key)
-    except RedisError:
-        return None
-    if raw is None:
-        return None
-    try:
-        groups = json.loads(raw)
-    except ValueError:
-        return None
-    # Nur IDs aus der aktuellen (berechtigten) Abfrage - sonst neu rechnen.
-    if not all(isinstance(group, list) and all(item in rows_by_id for item in group) for group in groups):
-        return None
-    return groups
-
-
-def _similarity_cache_set(key: str, groups: list[list[int]]) -> None:
-    from redis.exceptions import RedisError
-
-    from app.core.redis_client import get_redis_sync
-
-    try:
-        get_redis_sync().set(key, json.dumps(groups), ex=SIMILARITY_RESULT_TTL_SECONDS)
-    except RedisError:
-        pass  # Cache ist optional
-
-
-def _similarity_groups(service: "FileService", id_groups: list[list[int]], rows_by_id: dict, min_size: int) -> list[SimilarityGroup]:
-    return [
-        SimilarityGroup(
-            best_id=rows_by_id[group[0]].public_id,
-            images=[service._build_overview_item(rows_by_id[image_id]) for image_id in group],
-        )
-        for group in id_groups
-        if len(group) >= min_size
-    ]
+        digest.update(repr((image.id, checksum, image.perceptual_hash)).encode())
+    return digest.hexdigest()
 
 
 def _cached_duplicate_signature(stored_file_id: int, checksum: str | None, namespace: str, storage_path: str):
@@ -667,102 +645,184 @@ class FileService:
             live_video_url=self.build_content_url(row.live_video_public_id) if row.live_video_public_id else None,
         )
 
-    def group_similar_gallery_images(
+    def list_similarity_groups(
         self,
         db: Session,
         tenant_id: int,
         *,
+        kind: Literal["duplicate", "series"],
         source: str | None = None,
         search: str | None = None,
         tags: list[str] | None = None,
         file_ids: list[uuid.UUID] | None = None,
-        min_size: int = 1,
-        kind: Literal["duplicate", "series"] = "duplicate",
-    ) -> list[SimilarityGroup]:
-        """Photo-culling Phase 2: clusters the tenant's images (same filters as list_tenant_files,
-        always only_images) by perceptual-hash similarity and ranks each cluster by the Phase 1
-        quality scores - see photo_similarity.py for why this can run synchronously instead of
-        needing the async worker later phases will need. group_similar_images() also returns
-        singleton "groups" (an image with nothing similar to it) per its own docstring;
-        min_size lets a caller that only cares about actual near-duplicate series (the
-        "Duplikate"/"Ähnliche" tabs) filter those out without re-deriving the grouping itself.
-        `kind` picks the clustering threshold: "duplicate" (default, SIMILARITY_HAMMING_THRESHOLD -
-        same shot, additionally verified against normalized pixels) backs the "Duplikate" tab, "series" (the looser
-        SERIES_HAMMING_THRESHOLD - related but distinct shots, e.g. a burst) backs "Ähnliche"."""
-        rows = self.stored_file_repository.list_tenant_files(
-            db,
-            tenant_id,
-            skip=0,
-            limit=MAX_GROUPING_IMAGES + 1,
-            source=source,
-            only_images=True,
-            search=search,
-            tags=tags,
-            file_ids=file_ids,
-        )
-        if len(rows) > MAX_GROUPING_IMAGES:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Zu viele Bilder für die Gruppierung ausgewählt (max. {MAX_GROUPING_IMAGES}) - Filter eingrenzen (z.B. Album, Tag oder Suche).",
+    ) -> SimilarityGroupList:
+        """Tabs "Duplikate"/"Ähnliche": liest die vom job-worker vorberechneten Gruppen
+        (refresh_similarity_results) und filtert sie gegen die aktuellen Bilder - dieselben
+        Filter wie GET /files, gelöschte Bilder fallen sofort heraus, Gruppen mit weniger als
+        zwei verbleibenden Bildern entfallen. Die beste Aufnahme je Gruppe kommt aus den
+        aktuellen Qualitätswerten. Kein Lesen von Originalen im Request."""
+        result = db.get(PhotoSimilarityResult, (tenant_id, kind))
+        if result is None:
+            return SimilarityGroupList(status="pending", groups=[])
+        if result.status == "too_many":
+            return SimilarityGroupList(status="too_many", computed_at=result.computed_at, groups=[])
+        wanted = {uuid.UUID(member) for group in result.groups for member in group}
+        if file_ids is not None:
+            wanted &= set(file_ids)
+        rows = []
+        if wanted:
+            rows = self.stored_file_repository.list_tenant_files(
+                db,
+                tenant_id,
+                skip=0,
+                limit=len(wanted),
+                source=source,
+                only_images=True,
+                search=search,
+                tags=tags,
+                file_ids=list(wanted),
             )
+        rows_by_public_id = {row.public_id: row for row in rows}
+        groups: list[SimilarityGroup] = []
+        for group in result.groups:
+            members = [rows_by_public_id[public_id] for public_id in map(uuid.UUID, group) if public_id in rows_by_public_id]
+            if len(members) < 2:
+                continue
+            by_id = {row.id: row for row in members}
+            ranked = [by_id[image.id] for image in sort_best_first([_groupable(row) for row in members])]
+            groups.append(
+                SimilarityGroup(best_id=ranked[0].public_id, images=[self._build_overview_item(row) for row in ranked])
+            )
+        return SimilarityGroupList(status="ready", computed_at=result.computed_at, groups=groups)
 
-        rows_by_id = {row.id: row for row in rows}
-        groupable = [
-            GroupableImage(
-                id=row.id,
-                perceptual_hash=row.perceptual_hash,
-                sharpness_score=row.sharpness_score,
-                exposure_score=row.exposure_score,
-                face_quality_score=row.face_quality_score,
-            )
-            for row in rows
-        ]
-        threshold = SIMILARITY_HAMMING_THRESHOLD if kind == "duplicate" else SERIES_HAMMING_THRESHOLD
-        signatures = {}
-        incomplete: list[int] = []
+    def refresh_similarity_results(self, db: Session) -> None:
+        """job-worker-Loop photo_similarity_refresh: gruppiert je Mandant alle Bilder für beide
+        Tabs und speichert das Ergebnis in photo_similarity_result. Gerechnet wird nur, wenn sich
+        die Bildmenge (Fingerabdruck) geändert hat; Mandanten ohne Ergebnis zuerst, dann die am
+        längsten nicht aktualisierten. Nach SIMILARITY_REFRESH_TICK_BUDGET_SECONDS folgt der Rest
+        im nächsten Tick."""
+        deadline = time.monotonic() + SIMILARITY_REFRESH_TICK_BUDGET_SECONDS
+        tenant_ids = list(
+            db.scalars(select(StoredFile.tenant_id).where(StoredFile.mime_type.like("image/%")).distinct())
+        )
+        last_computed = dict(
+            db.execute(
+                select(PhotoSimilarityResult.tenant_id, func.min(PhotoSimilarityResult.computed_at)).group_by(
+                    PhotoSimilarityResult.tenant_id
+                )
+            ).all()
+        )
+        db.commit()
+        never = datetime.min.replace(tzinfo=UTC)
+        tenant_ids.sort(key=lambda tenant_id: last_computed.get(tenant_id) or never)
+        for tenant_id in tenant_ids:
+            if time.monotonic() > deadline:
+                break
+            self._refresh_tenant_similarity(db, tenant_id)
+
+    def _refresh_tenant_similarity(self, db: Session, tenant_id: int) -> None:
+        rows = self.stored_file_repository.list_tenant_files(
+            db, tenant_id, skip=0, limit=MAX_BACKGROUND_GROUPING_IMAGES + 1, only_images=True
+        )
+        existing = {
+            result.kind: result
+            for result in db.scalars(select(PhotoSimilarityResult).where(PhotoSimilarityResult.tenant_id == tenant_id))
+        }
+        if len(rows) > MAX_BACKGROUND_GROUPING_IMAGES:
+            if all(existing.get(kind) is not None and existing[kind].status == "too_many" for kind in SIMILARITY_KINDS):
+                db.commit()
+                return
+            self._store_similarity_results(db, tenant_id, "too_many", "too_many", len(rows), {kind: [] for kind in SIMILARITY_KINDS})
+            return
+
+        groupable = [_groupable(row) for row in rows]
         # checksum_sha256/storage_path aren't part of the overview rows list_tenant_files
-        # returns (see _shared_file_overview_columns) - fetched separately, only for the
-        # ids actually being grouped.
-        file_paths = self.stored_file_repository.list_checksum_and_storage_path(db, list(rows_by_id))
-        cache_key = _similarity_cache_key(tenant_id, kind, groupable, file_paths)
-        cached = _similarity_cache_get(cache_key, rows_by_id)
-        if cached is not None:
-            return _similarity_groups(self, cached, rows_by_id, min_size)
-        # Ab hier nur noch Originale lesen und rechnen (bei kaltem Cache bis Minuten): die
-        # DB-Verbindung nicht so lange idle in transaction halten. Bisher nur gelesen, die
-        # Zeilen sind Core-Rows und verfallen nicht.
+        # returns (see _shared_file_overview_columns) - fetched separately.
+        file_paths = self.stored_file_repository.list_checksum_and_storage_path(db, [row.id for row in rows])
+        fingerprint = _similarity_fingerprint(groupable, file_paths)
+        retry_after = datetime.now(UTC) - SIMILARITY_INCOMPLETE_RETRY
+        if all(
+            (result := existing.get(kind)) is not None
+            and result.fingerprint == fingerprint
+            and (result.status == "ready" or result.computed_at > retry_after)
+            for kind in SIMILARITY_KINDS
+        ):
+            db.commit()
+            return
+        # Ab hier nur noch Originale lesen und rechnen (bei kaltem Signatur-Cache bis Minuten): die
+        # DB-Verbindung nicht so lange idle in transaction halten. Die Zeilen sind Core-Rows und
+        # verfallen nicht.
+        db.commit()
+        id_groups, incomplete = self._compute_similarity_groups(rows, groupable, file_paths)
+        public_ids = {row.id: str(row.public_id) for row in rows}
+        groups = {kind: [[public_ids[image_id] for image_id in group] for group in id_groups[kind]] for kind in SIMILARITY_KINDS}
+        self._store_similarity_results(db, tenant_id, "incomplete" if incomplete else "ready", fingerprint, len(rows), groups)
+
+    @staticmethod
+    def _store_similarity_results(
+        db: Session, tenant_id: int, status: str, fingerprint: str, image_count: int, groups: dict[str, list[list[str]]]
+    ) -> None:
+        for kind in SIMILARITY_KINDS:
+            values = {
+                "status": status,
+                "fingerprint": fingerprint,
+                "image_count": image_count,
+                "groups": groups[kind],
+                "computed_at": func.now(),
+            }
+            db.execute(
+                pg_insert(PhotoSimilarityResult)
+                .values(tenant_id=tenant_id, kind=kind, **values)
+                .on_conflict_do_update(index_elements=["tenant_id", "kind"], set_=values)
+            )
         db.commit()
 
-        def matches(a: int, b: int) -> bool:
-            row_a, row_b = rows_by_id[a], rows_by_id[b]
-            checksum_a, path_a = file_paths[a]
-            checksum_b, path_b = file_paths[b]
-            if checksum_a and checksum_a == checksum_b:
-                return True
-            for key, row, path in ((a, row_a, path_a), (b, row_b, path_b)):
-                if key not in signatures:
-                    try:
-                        signatures[key] = _cached_duplicate_signature(key, file_paths[key][0], ABGABEBOX if row.source == "submission_upload" else MAIN, path)
-                    except _SignatureUnavailable:
-                        # Fehlende Originale sind kein Beleg für ein Duplikat - wie bisher.
-                        signatures[key] = None
-                        incomplete.append(key)
-            return same_photo(signatures[a], signatures[b])
+    def _compute_similarity_groups(
+        self, rows: list, groupable: list[GroupableImage], file_paths: dict
+    ) -> tuple[dict[str, list[list[int]]], bool]:
+        """Beide Tabs in einem Durchgang (gemeinsame Pixel-Signaturen). "duplicate": enger
+        pHash-Schwellwert, zusätzlich gegen normalisierte Pixel bestätigt; "series": lockerer
+        Schwellwert, reine Kopien ausgenommen. Liefert nur Gruppen mit mindestens zwei Bildern
+        (beste zuerst) und ob Originale fehlten."""
+        rows_by_id = {row.id: row for row in rows}
+        # Gruppenweise verglichen, darum genügt ein kleiner lokaler LRU (float32, ~196 KB je
+        # Bild); der Prozess-Cache in _cached_duplicate_signature hält uint8 über Ticks hinweg.
+        signatures: OrderedDict[int, object] = OrderedDict()
+        incomplete: list[int] = []
 
-        if kind == "duplicate":
-            groups = verified_duplicate_groups(groupable, matches)
-        else:
-            groups = group_similar_images(groupable, threshold=threshold)
-            # Reine Kopien gehören ausschliesslich unter Duplikate; gemischte
-            # Serien mit tatsächlich unterschiedlichen Aufnahmen unter Ähnliche.
-            groups = [
-                group for group in groups
-                if len(group) == 1 or any(not matches(group[0].id, image.id) for image in group[1:])
-            ]
-        id_groups = [[image.id for image in group] for group in groups]
-        if not incomplete:
-            _similarity_cache_set(cache_key, id_groups)
-        return _similarity_groups(self, id_groups, rows_by_id, min_size)
+        def signature(key: int):
+            if key in signatures:
+                signatures.move_to_end(key)
+                return signatures[key]
+            row = rows_by_id[key]
+            checksum, path = file_paths[key]
+            try:
+                value = _cached_duplicate_signature(key, checksum, ABGABEBOX if row.source == "submission_upload" else MAIN, path)
+            except _SignatureUnavailable:
+                # Fehlende Originale sind kein Beleg für ein Duplikat - wie bisher.
+                value = None
+                incomplete.append(key)
+            signatures[key] = value
+            while len(signatures) > SIMILARITY_LOCAL_SIGNATURES:
+                signatures.popitem(last=False)
+            return value
+
+        def matches(a: int, b: int) -> bool:
+            checksum_a = file_paths[a][0]
+            if checksum_a and checksum_a == file_paths[b][0]:
+                return True
+            return same_photo(signature(a), signature(b))
+
+        duplicates = verified_duplicate_groups(groupable, matches, max_images=MAX_BACKGROUND_GROUPING_IMAGES)
+        series = group_similar_images(groupable, threshold=SERIES_HAMMING_THRESHOLD, max_images=MAX_BACKGROUND_GROUPING_IMAGES)
+        # Reine Kopien gehören ausschliesslich unter Duplikate; gemischte Serien mit tatsächlich
+        # unterschiedlichen Aufnahmen unter Ähnliche.
+        series = [group for group in series if len(group) > 1 and any(not matches(group[0].id, image.id) for image in group[1:])]
+        result = {
+            "duplicate": [[image.id for image in group] for group in duplicates if len(group) >= 2],
+            "series": [[image.id for image in group] for group in series],
+        }
+        return result, bool(incomplete)
 
     def create_pending_analysis_jobs(self, db: Session) -> list[PhotoAnalysisJob]:
         """The only way analysis jobs are queued (the manual "Gesichtsqualität analysieren"

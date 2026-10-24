@@ -47,6 +47,11 @@ SERIES_HAMMING_THRESHOLD = 14
 # its two worker processes. Larger batches need the async worker Phase 3 introduces.
 MAX_GROUPING_IMAGES = 1500
 
+# Obergrenze der Hintergrundgruppierung je Mandant (FileService.refresh_similarity_results,
+# job-worker): der paarweise Hash-Vergleich wächst quadratisch (10 000 Bilder ~50 Mio. Paare,
+# einige Sekunden). Darüber zeigen die Tabs einen Hinweis statt eines Ergebnisses.
+MAX_BACKGROUND_GROUPING_IMAGES = 10000
+
 
 @dataclass(frozen=True)
 class GroupableImage:
@@ -70,24 +75,30 @@ def _quality_rank(image: GroupableImage) -> float:
     return score if score is not None else float("-inf")
 
 
+def sort_best_first(images: list[GroupableImage]) -> list[GroupableImage]:
+    """Dieselbe Reihenfolge wie innerhalb von group_similar_images - für Gruppen, deren beste
+    Aufnahme erst beim Abruf mit den aktuellen Qualitätswerten bestimmt wird."""
+    return sorted(images, key=_quality_rank, reverse=True)
+
+
 def _hash_as_int(perceptual_hash: imagehash.ImageHash) -> int:
     return int("".join("1" if bit else "0" for bit in perceptual_hash.hash.flatten()), 2)
 
 
 def group_similar_images(
-    images: list[GroupableImage], *, threshold: int = SIMILARITY_HAMMING_THRESHOLD
+    images: list[GroupableImage], *, threshold: int = SIMILARITY_HAMMING_THRESHOLD, max_images: int = MAX_GROUPING_IMAGES
 ) -> list[list[GroupableImage]]:
     """Union-find clustering by perceptual-hash Hamming distance. Images without a
     perceptual_hash (a decode failure at upload time - see _compute_perceptual_hash) never
     join a group, each becomes its own singleton. Returns groups in first-seen order (the
     order `images` was given in), each group's images sorted best-first (see _quality_rank).
-    Raises ValueError above MAX_GROUPING_IMAGES - callers should catch this and ask the user
-    to narrow their filter rather than let it silently run long.
+    Raises ValueError above `max_images` (default MAX_GROUPING_IMAGES; the background refresh
+    passes MAX_BACKGROUND_GROUPING_IMAGES) rather than letting it silently run long.
 
     `threshold` picks which "closeness" band this call groups by - SIMILARITY_HAMMING_THRESHOLD
     (default, "Duplikate" tab) or the looser SERIES_HAMMING_THRESHOLD ("Ähnliche" tab)."""
-    if len(images) > MAX_GROUPING_IMAGES:
-        raise ValueError(f"too many images to group synchronously (max {MAX_GROUPING_IMAGES}, got {len(images)})")
+    if len(images) > max_images:
+        raise ValueError(f"too many images to group (max {max_images}, got {len(images)})")
 
     parent = {image.id: image.id for image in images}
 
@@ -162,11 +173,11 @@ def same_photo(a: tuple[float, np.ndarray] | None, b: tuple[float, np.ndarray] |
 
 
 def verified_duplicate_groups(
-    images: list[GroupableImage], matches: Callable[[int, int], bool]
+    images: list[GroupableImage], matches: Callable[[int, int], bool], *, max_images: int = MAX_GROUPING_IMAGES
 ) -> list[list[GroupableImage]]:
     """Jedes Gruppenmitglied muss zu allen anderen passen, ohne Ähnlichkeitsketten."""
     result = []
-    for candidates in group_similar_images(images):
+    for candidates in group_similar_images(images, max_images=max_images):
         partitions = []
         for image in candidates:
             for group in partitions:
