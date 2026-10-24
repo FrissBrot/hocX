@@ -108,7 +108,7 @@
   "bookedTo": "Wird auf <strong>{account}</strong> gebucht",
   "tariffButton": "Bussentarif",
   "tariffTitle": "Bussentarif",
-  "tariffDescription": "Gilt für alle Anwesenheitsblöcke, bei denen «Bussen aktiv» eingeschaltet ist.",
+  "tariffDescription": "Gilt für alle Anwesenheitsblöcke mit «Bussen aktiv», sofern ihre Vorlage keinen eigenen Tarif hat.",
   "tariffAccountLabel": "Bussenkonto",
   "tariffAccountHelp": "Ohne Konto werden keine Bussen erzeugt.",
   "tariffNoAccount": "Kein Konto (keine Bussen)",

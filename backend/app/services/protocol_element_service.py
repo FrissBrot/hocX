@@ -3,6 +3,8 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.documents.locking import lock_row
+
 from app.models import ElementDefinition, Event, EventCategory, Protocol, ProtocolElement, ProtocolElementBlock, Template, TemplateElement, TemplateElementBlock
 from app.repositories.protocol_element_repository import (
     ProtocolElementBlockRepository,
@@ -20,6 +22,14 @@ from app.services.fine_tariff_service import tariff_block_values
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 
 
+class BlockConfigConflict(Exception):
+    """Blockkonfiguration wurde seit dem Stand des Clients geändert (409 config_conflict)."""
+
+    def __init__(self, block: ProtocolElementBlock) -> None:
+        super().__init__("config_conflict")
+        self.block = block
+
+
 class ProtocolElementService:
     def __init__(
         self,
@@ -34,10 +44,11 @@ class ProtocolElementService:
 
         ProtocolService().refresh_membership_blocks(db, protocol_id)
         protocol_row = db.execute(
-            select(Protocol.status, Protocol.tenant_id).where(Protocol.id == protocol_id)
+            select(Protocol.status, Protocol.tenant_id, Protocol.template_id).where(Protocol.id == protocol_id)
         ).one_or_none()
         protocol_status = protocol_row.status if protocol_row else ""
         protocol_tenant_id = protocol_row.tenant_id if protocol_row else None
+        protocol_template_id = protocol_row.template_id if protocol_row else None
         element_rows = self.repository.list_for_protocol(db, protocol_id)
         elements = [row[0] for row in element_rows]
         show_when_empty_by_id = {row[0].id: row[1] for row in element_rows}
@@ -49,12 +60,13 @@ class ProtocolElementService:
         for row in block_rows:
             block = row.ProtocolElementBlock
             config = dict(block.configuration_snapshot_json or {})
-            # Bussen: der Block trägt nur fines_enabled, Konto und Beträge kommen aus dem
-            # zentralen Tarif (fine_tariff_service). attendance-fines.ts liest diese Schlüssel.
+            # Bussen: der Block trägt nur fines_enabled, Konto und Beträge kommen aus dem Tarif
+            # der Vorlage bzw. des Mandanten (fine_tariff_service). attendance-fines.ts liest
+            # diese Schlüssel.
             if row.element_type_code == "attendance":
                 if config.get("fines_enabled") and protocol_tenant_id is not None:
                     if fine_values is None:
-                        fine_values = tariff_block_values(db, protocol_tenant_id)
+                        fine_values = tariff_block_values(db, protocol_tenant_id, protocol_template_id)
                     config.update(fine_values)
                 else:
                     config.update({"fine_account_id": None, "fine_amount_late": 0, "fine_amount_absent": 0})
@@ -76,6 +88,7 @@ class ProtocolElementService:
                     render_type_id=block.render_type_id,
                     element_type_code=row.element_type_code,
                     render_type_code=row.render_type_code,
+                    config_version=block.config_version,
                     title_snapshot=block.title_snapshot,
                     display_title_snapshot=block.display_title_snapshot,
                     description_snapshot=block.description_snapshot,
@@ -88,7 +101,6 @@ class ProtocolElementService:
                     is_required_snapshot=block.is_required_snapshot,
                     is_visible_snapshot=block.is_visible_snapshot,
                     export_visible_snapshot=block.export_visible_snapshot,
-                    latex_template_snapshot=block.latex_template_snapshot,
                     configuration_snapshot_json=config,
                     public_reference_ids=snapshot_reference_ids(db, config, protocol_tenant_id),
                     text_content=row.text_content,
@@ -135,12 +147,20 @@ class ProtocolElementService:
         return True
 
     def update_protocol_element_block(self, db: Session, protocol_element_block_id: int, payload: ProtocolElementBlockUpdate):
+        values = payload.model_dump(exclude_unset=True)
+        expected_version = values.pop("expected_config_version", None)
         protocol_element_block = self.block_repository.get(db, protocol_element_block_id)
         if protocol_element_block is None:
             return None
-        values = payload.model_dump(exclude_unset=True)
         if not values:
             return protocol_element_block
+        if "configuration_snapshot_json" in values:
+            # Optimistische Sperre (Concurrency-Audit CONC-005): Zeile sperren und frisch laden,
+            # dann gegen den Stand des Clients prüfen - sonst überschriebe das Gesamt-JSON still
+            # eine gleichzeitige Änderung (z. B. eine andere Matrixzelle).
+            protocol_element_block = lock_row(db, protocol_element_block)
+            if expected_version is not None and expected_version != protocol_element_block.config_version:
+                raise BlockConfigConflict(protocol_element_block)
         updated = self.block_repository.update(db, protocol_element_block, values)
         self._sync_session_date_marker(db, updated)
         return updated
@@ -149,19 +169,14 @@ class ProtocolElementService:
         self, db: Session, block_id: int, participant_id: int, participant_name: str, status: str
     ) -> ProtocolElementBlock | None:
         """Atomic, single-participant upsert into one attendance block's attendance_entries -
-        reads the block fresh and writes back only this participant's entry, instead of the
-        client sending the whole array back (see focused-element-editor.tsx::
-        handleAttendanceChange). That full-array round trip used to silently lose other
-        participants' just-saved statuses whenever two clicks (by the same person clicking
-        fast through the list, or by two people taking attendance together) were in flight
-        before either response/re-render landed: whichever save's full snapshot arrived last
-        at the server overwrote the other's change with its own (now stale) copy of
-        everyone-else's status. Mirrors ProtocolService.set_attendance_excused's merge
-        pattern, just generalized to any status and scoped to one block instead of every
-        attendance block of the protocol."""
+        reads the block fresh *under a row lock* and writes back only this participant's entry,
+        instead of the client sending the whole array back (see focused-element-editor.tsx::
+        handleAttendanceChange). Ohne die Zeilensperre (Concurrency-Audit CONC-005) lasen zwei
+        gleichzeitige Klicks denselben Stand und der zweite Commit verwarf den ersten."""
         block = self.block_repository.get(db, block_id)
         if block is None:
             return None
+        block = lock_row(db, block)
         config = dict(block.configuration_snapshot_json or {})
         entries = [
             entry for entry in config.get("attendance_entries", []) if entry.get("participant_id") != participant_id

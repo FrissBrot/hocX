@@ -20,6 +20,11 @@ on:
         description: "Zum Schutz vor Fehlklicks exakt DEPLOY eingeben"
         required: true
         type: string
+      allow_critical_vulnerabilities:
+        description: "Nur im Notfall: Images trotz kritischer, behebbarer OS-Schwachstellen freigeben (Trivy). Danach Images neu bauen."
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -136,8 +141,56 @@ jobs:
           path: release-notes.md
           retention-days: 7
 
-  promote:
+  # Security-Audit release/1.2.0, SEC-017: alle Images werden vor der Freigabe gescannt; erst wenn
+  # jeder Scan bestanden hat, startet promote - sonst wäre ein Release teilweise freigegeben.
+  scan-candidate:
     needs: verify-tested-candidate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      matrix:
+        service:
+          - backend
+          - frontend
+          - abgabebox-backend
+          - abgabebox-frontend
+          - docs
+          - photo-analysis-worker
+    steps:
+      - name: Lowercase image owner
+        run: echo "OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      # Kritische Schwachstellen mit verfügbarem Fix stoppen die Freigabe (Abhilfe: Images neu bauen,
+      # Basis-Images aktualisieren). HIGH steht nur in der Summary. Trivy per Digest gepinnt, wie
+      # alle Actions/Images in diesem Repo.
+      - name: Scan candidate image (Trivy)
+        env:
+          IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ needs.verify-tested-candidate.outputs.source_tag }}
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          ALLOW_CRITICAL: ${{ inputs.allow_critical_vulnerabilities }}
+        run: |
+          set -uo pipefail
+          trivy() { docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa "$@"; }
+          {
+            echo "### Trivy: ${{ matrix.service }}"
+            echo '```'
+            trivy image --quiet --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL --format table "$IMAGE"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if ! trivy image --quiet --scanners vuln --ignore-unfixed --severity CRITICAL --exit-code 1 --format table "$IMAGE"; then
+            if [ "$ALLOW_CRITICAL" = "true" ]; then
+              echo "::warning::Kritische Schwachstellen in $IMAGE, Freigabe per allow_critical_vulnerabilities erzwungen"
+            else
+              echo "::error::Kritische, behebbare Schwachstellen in $IMAGE - Images neu bauen oder im Notfall allow_critical_vulnerabilities setzen"
+              exit 1
+            fi
+          fi
+
+  promote:
+    needs: [verify-tested-candidate, scan-candidate]
     runs-on: ubuntu-latest
     environment:
       name: production

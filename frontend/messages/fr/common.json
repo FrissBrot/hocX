@@ -106,5 +106,80 @@
   "profileImage": {
     "invalidType": "Veuillez choisir une image PNG, JPG, GIF ou WebP (le SVG n'est pas pris en charge).",
     "tooLarge": "L'image est trop volumineuse (5 Mo max.)."
+  },
+  "deleteWithFiles": {
+    "selectedCount": "{selected, number} sur {total, number} sélectionnés pour suppression",
+    "selectAll": "Tout sélectionner",
+    "selectNone": "Ne rien sélectionner",
+    "groups": {
+      "protocol_image": "Images de ce procès-verbal",
+      "submission": "Fichiers déposés",
+      "gallery": "Photos de la galerie pour ce dépôt"
+    },
+    "usedElsewhere": "Encore utilisé ailleurs – sera conservé",
+    "keptHint": "{count, plural, one {Un fichier non sélectionné est déplacé} other {# fichiers non sélectionnés sont déplacés}} dans la galerie.",
+    "cancel": "Annuler",
+    "confirm": "{count, plural, =0 {Supprimer, garder les fichiers} one {Supprimer avec un fichier} other {Supprimer avec # fichiers}}",
+    "confirmPlain": "Supprimer"
+  },
+  "auditActions": {
+    "categories": {
+      "admin": "Plateforme",
+      "backup": "Sauvegarde",
+      "calendar_feed": "Abonnement calendrier",
+      "document": "Document",
+      "document_asset": "Ressource de document",
+      "document_brand": "Charte graphique",
+      "document_settings": "Paramètres des documents",
+      "document_template": "Modèle de document",
+      "document_verification": "Vérification d’authenticité",
+      "event": "Rendez-vous",
+      "finance_account": "Compte",
+      "finance_transaction": "Écriture",
+      "fine": "Amende",
+      "fine_tariff": "Tarif des amendes",
+      "identity_verification": "Vérification",
+      "participant": "Personne",
+      "personal_data": "Demande d’accès",
+      "privacy_settings": "Paramètres de confidentialité",
+      "protocol": "Procès-verbal",
+      "retention": "Conservation",
+      "submission_assignment": "Dépôt",
+      "submission_file": "Fichier déposé",
+      "submission_upload": "Envoi",
+      "table_snapshot": "Instantané de tableau",
+      "task_package": "Paquet de tâches",
+      "template": "Modèle de procès-verbal",
+      "tenant": "Organisation",
+      "todo": "Tâche",
+      "user": "Compte"
+    },
+    "verbs": {
+      "loginFailed": "Échec de connexion",
+      "mfaFailed": "Second facteur erroné",
+      "login": "connecté",
+      "viewed": "consulté",
+      "exported": "exporté",
+      "imported": "importé",
+      "deleted": "supprimé",
+      "created": "créé",
+      "updated": "modifié",
+      "restored": "restauré",
+      "collected": "encaissé",
+      "revoked": "retiré",
+      "published": "publié"
+    }
+  },
+  "protectedExport": {
+    "password": "Mot de passe du fichier ZIP",
+    "passwordHelp": "Au moins {min} caractères. Il n’est pas enregistré – sans mot de passe, le fichier ne peut plus être ouvert.",
+    "repeat": "Répéter le mot de passe",
+    "mismatch": "Les mots de passe ne correspondent pas.",
+    "openHint": "Le fichier ZIP est chiffré en AES-256. Ouvrez-le p. ex. avec 7-Zip (Windows), Keka (macOS) ou WinRAR.",
+    "cancel": "Annuler",
+    "download": "Télécharger",
+    "working": "Création …",
+    "done": "Export téléchargé.",
+    "failed": "L’export a échoué."
   }
 }

@@ -193,11 +193,15 @@ nicht - dann muss zusätzlich das vor dem Update gezogene Backup eingespielt wer
 zwar **vor** dem Deploy der alten Version:
 
 ```bash
-./scripts/restore_db.sh backups/<timestamp>-pre-vX.Y.Z.sql.gz
+./scripts/restore_db.sh backups/<timestamp>-pre-vX.Y.Z.sql.gz.gpg   # bzw. .sql.gz ohne Dump-Schlüssel
 vim .env   # HOCX_VERSION auf die vorherige Version (…-pre-vX.Y.Z = Stand vor dem Update auf vX.Y.Z)
 ./scripts/deploy.sh prod
 ./scripts/verify_release.sh prod
 ```
+
+Verschlüsselte Dumps (`.sql.gz.gpg`, siehe Abschnitt 10 «Verschlüsselung der Dumps») brauchen den
+privaten Schlüssel aus der Notfallmappe: `BACKUP_DUMP_PRIVATE_KEY_PATH=/pfad/dump-private.asc` vor
+den Aufruf setzen oder den Schlüssel im GPG-Schlüsselbund des Benutzers haben.
 
 `restore_db.sh` fragt zur Bestätigung den Datenbanknamen ab, stoppt `backend`,
 `abgabebox-backend` und `photo-analysis-worker`, sichert den aktuellen Stand als
@@ -212,9 +216,15 @@ sind Plain-SQL ohne `--clean`; in einer bereits migrierten, gefüllten Datenbank
 `CREATE`/`COPY` an vorhandenen Objekten, `psql` läuft ohne `ON_ERROR_STOP` weiter und meldet
 Erfolg, obwohl ein Mischzustand entsteht.
 
-Die Dateiablage (`storage/`) ist **nicht** Teil des Dumps (siehe Abschnitt 10). Ein Restore
+Die Dateiablage (`storage/`) ist **nicht** Teil des Dumps (siehe Abschnitt 10; mit Borg-Backup
+siehe unten). Ein Restore
 setzt nur die Datenbank zurück; Dateien, die nach dem Dump hochgeladen wurden, bleiben als
 verwaiste Dateien liegen, nach dem Dump gelöschte Dateien fehlen.
+
+Mit aktivem Borg-Backup (Abschnitt 14) gibt es zusätzlich den geschützten Wiederherstellungspunkt
+«Vor Update auf vX.Y.Z», der Datenbank **und** Dateien desselben Zeitpunkts enthält: System →
+Backups → Wiederherstellung → «Vollständige Wiederherstellung» (zuerst die alte Version deployen,
+damit das Schema passt).
 
 **Deshalb**: bei riskanten Schema-Änderungen (Spalte umbenennen/löschen, Typ ändern)
 über zwei Releases gehen statt in einem Schritt - z.B. neue Spalte hinzufügen und
@@ -336,6 +346,11 @@ ignoriert und werden nicht veraendert.
 
 ## 10. Backup- und Cleanup-Cronjobs
 
+> **Ab dem Borg-Backup (Abschnitt 14) abgelöst:** Sobald `BACKUP_ENABLED=true` gesetzt ist,
+> überspringen `backup_db.sh` und `backup_storage.sh` ihren Lauf, und die Jobs `backup_db`/
+> `backup_storage` verschwinden aus der Job-Übersicht. Ihre Cron-Einträge dann entfernen;
+> `cleanup_storage.sh` bleibt. Die Beschreibung unten gilt für Installationen ohne Borg-Backup.
+
 Zwei eigenständige Skripte in `scripts/`, gedacht für periodische Ausführung per Cron
 (zusätzlich zum automatischen Pre-Deploy-Backup, das `deploy.sh` bei jedem Update ohnehin
 macht). Beide sind idempotent, loggen mit Zeitstempel nach stdout/stderr und brechen bei
@@ -368,23 +383,50 @@ und werden bei Ausbleiben nicht gemeldet.
 - **Env-Var**: `RETENTION_DAYS` (Default 14) - Cron-Dumps, die älter sind, werden nach jedem
   Lauf automatisch gelöscht. Pre-Deploy-Dumps rotiert `deploy.sh` selbst: die neuesten
   `PRE_DEPLOY_BACKUP_KEEP` (Default 10, als Shell-Variable beim Aufruf von `deploy.sh`) bleiben.
-- **Schreibt nach**: `backups/<timestamp>-cron.sql.gz` (derselbe Ordner wie die
-  Pre-Deploy-Backups, gut unterscheidbar am `-cron`-Suffix).
+- **Schreibt nach**: `backups/<timestamp>-cron.sql.gz.gpg` (verschlüsselt) bzw. ohne Schlüssel
+  `…-cron.sql.gz` (derselbe Ordner wie die Pre-Deploy-Backups, gut unterscheidbar am
+  `-cron`-Suffix).
 - **Offsite**: Ist `OFFSITE_BACKUP_REMOTE` gesetzt, endet der Lauf mit Exit ≠ 0, wenn die
   rclone-Kopie fehlschlägt oder `rclone` fehlt (das lokale Backup ist dann trotzdem
-  geschrieben). `run_job.sh` meldet den Lauf damit als Fehler statt als Erfolg.
+  geschrieben). `run_job.sh` meldet den Lauf damit als Fehler statt als Erfolg. Ein
+  **unverschlüsselter** Dump geht nur auf ein rclone-Remote vom Typ `crypt`, sonst bricht der Lauf
+  ab. Nach jeder Kopie löscht das Skript Offsite-Dumps, die älter als `OFFSITE_RETENTION_DAYS`
+  (Default = `RETENTION_DAYS`) sind - früher blieben sie unbegrenzt liegen.
+
+#### Verschlüsselung der Dumps (Datenschutz-Audit PRIV-009)
+
+`deploy.sh` (Pre-Deploy), `backup_db.sh` (Cron) und `restore_db.sh` (Sicherung vor dem Restore)
+verschlüsseln Dumps mit einem **öffentlichen** GPG-Schlüssel. Auf dem Server liegt nur dieser; den
+privaten Schlüssel gibt es nur in der Notfallmappe. Wer die Dumps kopiert (Fehlkonfiguration,
+Offsite-Speicher, Hardware-Tausch), kann sie damit nicht lesen. Einmalig auf einem Admin-Rechner
+**ausserhalb** des Servers:
+
+```bash
+export GNUPGHOME="$(mktemp -d)"
+gpg --batch --passphrase '' --pinentry-mode loopback \
+  --quick-gen-key "hocx dumps <ops@example.invalid>" future-default default never
+gpg --armor --export > dump-public.asc                      # auf den Server
+gpg --armor --export-secret-keys > dump-private.asc         # nur in die Notfallmappe
+```
+
+`future-default` erzeugt den nötigen Verschlüsselungs-Unterschlüssel (`ed25519` allein reicht
+nicht). Auf dem Server `dump-public.asc` nach `~/.hocx-backup/dump-public.asc` legen (oder
+`BACKUP_DUMP_PUBLIC_KEY_PATH` in `.env`). Fehlt der Schlüssel, schreiben die Skripte wie bisher
+`.sql.gz` und warnen; `HOCX_REQUIRE_DUMP_ENCRYPTION=true` macht ihn zur Pflicht.
+
+Pre-Deploy-Dumps bleiben höchstens `PRE_DEPLOY_BACKUP_MAX_DAYS` Tage (Default 30, Shell-Variable
+beim Aufruf von `deploy.sh`), der neueste immer.
 - **Empfohlener Cron-Zeitplan**: täglich 03:15 Uhr, mit Logdatei im selben `backups/`-Ordner
   (Pfade an den Checkout anpassen; auf einer über `dev.sh` betriebenen Instanz
   `HOCX_COMPOSE_PROJECT=hocx-dev` voranstellen):
   ```
   15 3 * * * /docker/hocX/scripts/run_job.sh backup_db /docker/hocX/scripts/backup_db.sh >> /docker/hocX/backups/backup_db.log 2>&1
   ```
-- **⚠️ Offenes Risiko: Dateiablage wird nicht gesichert (Audit MAIN-OPS-006).** Der Dump
-  enthält nur die Datenbank. Originaldateien unter `HOCX_STORAGE_PATH` (Uploads,
-  Abgabebox-Dateien, Vorlagen, Mandanten-Importe/-Klone) sichert kein Skript; nach einem
-  Plattenausfall zeigen wiederhergestellte `stored_file`-Zeilen auf fehlende Dateien. Ein
-  Storage-Backup (z. B. restic oder `rclone sync` mit Versionierung) muss der Betreiber
-  zusammen mit dem Offsite-Ziel einrichten.
+- **Dateiablage (Audit MAIN-OPS-006):** Der Dump enthält nur die Datenbank. Uploads,
+  Abgabebox-Dateien, Vorlagen und Mandanten-Importe/-Klone sichert das Borg-Backup
+  (Abschnitt 14) zusammen mit der Datenbank; ohne Borg das Objekt-Backup `backup_storage`
+  (Abschnitt 13). Umfang und Ausnahmen: `docs-site/docs/technik/backup/architektur.md`,
+  Abschnitt «Umfang der Sicherung».
 - **Manuell testen**: `./scripts/backup_db.sh` direkt im Repo-Root ausführen und danach
   `ls -lh backups/` prüfen.
 - **⚠️ Offenes Risiko: kein Offsite-Backup aktiv (Audit I5, 2026-08-16).** `backups/`
@@ -400,7 +442,7 @@ und werden bei Ausbleiben nicht gemeldet.
 
 ### `scripts/cleanup_storage.sh`
 
-- **Zweck**: räumt ausschließlich `storage/exports/` (generierte PDF/LaTeX-Exportdateien)
+- **Zweck**: räumt ausschließlich `storage/exports/` (generierte PDF-Exportdateien)
   nach Alter auf. Bewusst **nicht** angefasst werden `storage/tenant_imports`,
   `storage/tenant_clones` und `storage/abgabebox-uploads` - das sind laut Code- und
   Live-DB-Prüfung permanente Speicherorte für echte Mandantendaten, keine Temp-Dateien
@@ -460,7 +502,8 @@ Im Platform-Admin unter **System**:
 
 - **Systemstatus** (`/admin/system`): Container (Status, Healthcheck, Neustarts, CPU/RAM,
   Version) und Dienste (Postgres, Redis, ClamAV inkl. Signaturalter, Speicherplatz,
-  Fehlerrate, Rückstand der Virenprüfung, Bildanalyse-Warteschlange), offene Probleme und
+  Fehlerrate, Rückstand der Virenprüfung, Bildanalyse-Warteschlange, öffentliche
+  Prüfseite der Dokumente), offene Probleme und
   die letzten Ereignisse. Gesammelt alle 30 s vom Loop `system_monitor` im Backend
   (`app/services/system_health_service.py`, Schwellwerte dort oben).
 - **Jobs** (`/admin/jobs`): alle Hintergrund-Loops, der Bildanalyse-Worker und die
@@ -532,3 +575,227 @@ DNS oder ein abgelaufenes Zertifikat der Website-Domain.
 - „Container-Status nicht verfügbar“: `docker compose ps docker-socket-proxy`, Logs des
   Proxys; läuft das Backend im Netz `docker-api`?
 - Virensignaturen veraltet: Logs des `clamav`-Containers (freshclam) prüfen.
+
+## 13. Öffentliche Prüfseite (Echtheit von PDFs)
+
+hocX signiert keine PDFs. Jedes erzeugte PDF wird mit seinem SHA-256 im Dokumentenregister
+erfasst; die öffentliche Prüfseite `https://<TRAEFIK_ABGABEBOX_DOMAIN>/verify` (Abgabebox)
+vergleicht den im Browser berechneten Hash einer Datei mit dem Register. Es gibt keine
+Zertifikate und keine Schlüssel zu verwalten.
+
+### Konfiguration
+
+- `DOCUMENT_VERIFY_BASE_URL` (optional): Prüf-URL, die in jedem PDF steht (Fusszeile, QR-Code,
+  XMP). Leer = `ABGABEBOX_BASE_URL` + `/verify`. Bewusst die Plattform-Domain, nicht eine
+  Mandanten-Domain - gedruckte Links müssen stabil bleiben. Nach einer Änderung tragen nur neue
+  PDFs die neue Adresse; alte Links funktionieren nur, solange die alte Domain auf die Abgabebox
+  zeigt.
+- Traefik: Router `abgabebox-verify` (30 Anfragen/min, Burst 10, Body 4 KiB) ist Teil der
+  Compose-Labels bzw. der generierten Mandanten-Domain-Router; nichts einzurichten.
+- Die Abgabebox-Rolle `hocx_abgabebox` darf nur die Funktion `verify_document` ausführen
+  (Migration 0117), nicht das Register lesen.
+
+### Systemcheck
+
+`/admin/system` → «Öffentliche Prüfseite»: das Backend fragt den Endpoint intern
+(`ABGABEBOX_INTERNAL_URL`, Standard `http://abgabebox-backend:8000`) mit einem Hash ohne Treffer
+ab und erwartet `{"found": false}`. Kritisch heisst: `abgabebox-backend` nicht erreichbar oder die
+Funktion/Rechte fehlen (Migration 0117 gelaufen? `docker compose logs abgabebox-backend`).
+
+### Organisationen verifizieren (Plattform-Admin)
+
+1. Mandanten-Admins beantragen die Verifizierung unter Dokumente → Echtheitsprüfung.
+2. Offene Anträge: Admin-Panel → **Verifizierungen** (oder Mandant öffnen → Tab «Verifizierung»).
+3. Identität prüfen, z. B. Handelsregister/UID-Register, Statuten, Website mit Impressum, Rückruf
+   an eine unabhängig gefundene Nummer. Erst dann **Bestätigen** und in der Notiz festhalten, wie
+   geprüft wurde. Ablehnen nur mit Begründung (der Mandant sieht sie).
+4. Bei Missbrauch: **Verifizierung entziehen** (sofort wirksam auf der Prüfseite).
+
+Eine Namensänderung des Mandanten hebt die Verifizierung automatisch auf (auch durch einen
+Plattform-Admin). Alle Schritte stehen im Audit-Log (`identity_verification.*`,
+`admin.identity_verification_*`).
+
+### Nach dem Update auf die Dokument-Engine / das Document Studio
+
+Migration `0115` übernimmt die alten Dokumentvorlagen, `0118_document_studio` macht daraus
+Brand-Profile (Hausstile → Profile, Rezepte → Vorlagen, Hausstil-Wahl der Protokollvorlagen →
+Zuweisungen) und entfernt die alten Tabellen. Beides läuft beim Deploy automatisch. Vorher ein
+frisches Backup ziehen: `0115` ist nicht umkehrbar, der Downgrade von `0118` stellt nur die
+Struktur wieder her.
+
+Danach die nicht mehr benutzten Vorlagen-Dateien entfernen (erst mit `--dry-run` ansehen):
+
+```bash
+./scripts/cleanup-legacy-document-templates.sh --dry-run "${HOCX_STORAGE_PATH:-./storage}"
+./scripts/cleanup-legacy-document-templates.sh "${HOCX_STORAGE_PATH:-./storage}"
+```
+
+Hochgeladene Logos, Fussbilder und Schriften bleiben erhalten. Bestehende Dateien bleiben unter
+`document_style_assets/` liegen (der Pfad steht in der Datenbank), neue Uploads landen unter
+`document_assets/`. Beide Verzeichnisse gehören ins Backup.
+
+Kontrolle nach dem Deploy:
+
+1. Backend-Log: `ensure_document_studio` gleicht beim Start die mitgelieferten Vorlagen ab
+   (keine Fehler im Admin-Fehlerlog).
+2. Als Mandanten-Admin **Dokumente → Vorlagen** öffnen: alle Dokumenttypen haben Vorlagen mit
+   Vorschaubild. **Corporate Design** zeigt mindestens ein Standardprofil.
+3. Ein Protokoll exportieren (Export-Dialog, PDF erstellen) und auf `/verify` prüfen: «Original».
+
+Ändert sich nach einem Update die Gestaltung einer mitgelieferten Vorlage, entsteht beim Start
+eine neue Revision. Bestehende Exporte behalten ihre Revision (`document_export.template_revision_id`).
+
+## 14. Dateispeicher (S3) und Wartung
+
+Ausführlich: `docs-site/docs/technik/storage/` (Architektur, Betrieb, lokales S3, Migrationen,
+Wartungsmodus, Backup & Recovery).
+
+**Update auf 1.2**: `deploy.sh` ergänzt die neuen Secrets in `.env`, startet `local-s3`,
+`storage-init` und `storage-worker`. Danach ist weiterhin das Dateisystem aktiv - es wird nichts
+verschoben, bis die Erstmigration gestartet wird.
+
+**Cronjobs ergänzen** (nach `backup_db`; `backup_storage` entfällt mit dem Borg-Backup, Abschnitt 14):
+
+```cron
+30 3 * * * /docker/hocX/scripts/run_job.sh backup_storage env HOCX_COMPOSE_PROJECT=hocx HOCX_COMPOSE_FILES="docker-compose.release.yml docker-compose.clamav.yml docker-compose.traefik.yml" /docker/hocX/scripts/backup_storage.sh >> /docker/hocX/backups/backup_storage.log 2>&1
+*/5 * * * * /docker/hocX/scripts/run_job.sh storage_controller env HOCX_COMPOSE_PROJECT=hocx HOCX_COMPOSE_FILES="docker-compose.release.yml docker-compose.clamav.yml docker-compose.traefik.yml" /docker/hocX/scripts/storage_controller.sh >> /docker/hocX/backups/storage_controller.log 2>&1
+```
+
+**Erste produktive Migration** (Dateisystem → lokales S3):
+
+1. Frisches DB-Backup (`scripts/backup_db.sh`) und Plattenplatz prüfen: das lokale S3 braucht
+   etwa so viel Platz wie `storage/` belegt (die Originale bleiben während der Rückfallfrist liegen).
+2. Wartung ankündigen: System → Wartung → «Wartung planen» (erscheint auf der Anmeldeseite).
+3. System → Storage → Profil «Lokales S3 (Garage)» → «Verbindung testen».
+4. «Migration vorbereiten» → Preflight abwarten → Schätzung prüfen → «Migration starten».
+5. Fortschritt unter System → Storage verfolgen; die Wartung endet automatisch nach
+   bestandener Endprüfung und Beobachtungsphase. Verweist die Datenbank auf fehlende Dateien
+   (abgelaufene Exporte zählen nicht dazu), wartet der Cutover in voller Wartung auf
+   «Umschalten bestätigen» (Liste im Prüfbericht) - Prüfbericht während der Wartung im Blick
+   behalten. Scheitert die Prüfung nach dem Umschalten dreimal in Folge (`rollback_required`):
+   «zur Kenntnis genommen», danach lässt sich die Wartung freigeben, sobald der automatische
+   Healthcheck des aktiven Ziels bestanden ist.
+6. Danach: `docker compose exec backend python -m app.workers.storage_verify --full`.
+
+**Notfall**: Bei Fehlern bleibt die Wartung bestehen und das Dateisystem aktiv. Ursache im
+Migrationsverlauf/Fehlerprotokoll prüfen, Migration fortsetzen oder abbrechen; die Wartung lässt
+sich unter System → Wartung erst beenden, wenn alle Freigabebedingungen erfüllt sind.
+
+## 15. Offsite-Backup (BorgBackup, Hetzner Storage Box)
+
+Ausführlich: `docs-site/docs/technik/backup/` (Architektur, Einrichtung & Betrieb,
+Wiederherstellung, Sicherheit). Kurzfassung:
+
+**Einrichten (einmalig)** – Details und Hetzner-Abnahme in `backup/betrieb.md`:
+
+1. Backup-Schlüssel auf dem Server (`~/.hocx-backup/id_backup`), Wartungsschlüssel **nur** offline.
+2. Host-Key der Box prüfen und als `~/.hocx-backup/known_hosts` ablegen (Fingerprint mit Hetzner
+   vergleichen) – nie ungeprüft akzeptieren.
+3. In `authorized_keys` der Box: Backup-Schlüssel mit `command="borg-1.4 serve --append-only
+   --restrict-to-repository …",restrict`, Wartungsschlüssel ohne `--append-only`. Automatische
+   Snapshots der Box aktivieren.
+4. `.env`: `BACKUP_STORAGEBOX_HOST/USER`, `BACKUP_SSH_KEY_PATH`, `BACKUP_KNOWN_HOSTS_PATH`,
+   `BACKUP_PASSPHRASE` (zufällig, lang), `BACKUP_STORAGEBOX_QUOTA_BYTES`; `BACKUP_ENABLED=false`;
+   `./scripts/deploy.sh prod`.
+5. `docker compose -p hocx exec backup-worker python -m app.backup.cli init --i-understand-this-creates-a-new-repository`,
+   ausgegebene ID als `BACKUP_REPOSITORY_ID` eintragen.
+6. `… python -m app.backup.cli export-key --paper` → mit Passphrase, `.env` und
+   `STORAGE_CREDENTIALS_KEY` in die Notfallmappe (offline, getrennt).
+7. `BACKUP_ENABLED=true`, `./scripts/deploy.sh prod`. Unter System → Backups: erstes Backup
+   erfolgreich, «Restore-Test starten» erfolgreich, Integritätsprüfung erfolgreich.
+8. Cron-Einträge `backup_db` und `backup_storage` entfernen (`crontab -e`). Alte lokale Backups
+   (`backups/*.sql.gz`, `backups/storage/`) erst nach bewusster Entscheidung löschen.
+
+**Betrieb**: Backups alle 6 h (System → Backups → Einstellungen), Integritätsprüfung wöchentlich,
+Restore-Test monatlich; Probleme meldet ntfy (Abschnitt 12). Vor jedem Deploy legt `deploy.sh`
+ein geschütztes Backup an und bricht bei Fehlschlag ab (bewusst überspringen:
+`HOCX_PRE_DEPLOY_BACKUP=skip`). Quartalsweise mit dem Wartungsschlüssel `compact` ausführen
+(gibt durch die Retention freigegebenen Platz frei, siehe `backup/betrieb.md`).
+
+**Notfälle** (Details `backup/restore.md`):
+
+| Situation | Vorgehen |
+|---|---|
+| Mandant versehentlich verändert/gelöscht | System → Backups → Wiederherstellung → «Mandant als Kopie» (neuer Mandant, Original bleibt) |
+| Gesamtzustand muss zurück | «Vollständige Wiederherstellung» (Rettungspunkt, isolierte DB, neue Storage-Generation, Tausch mit automatischem Rücktausch bei Fehler) |
+| Server verloren / Datenbank weg | neuer Server, `.env` aus der Notfallmappe, nur `db` starten, `run --rm --no-deps --entrypoint python backup-worker -m app.backup.cli restore-full …`, dann `swap-database`, Deploy, Wartung freigeben |
+| Storage Box nicht erreichbar | Backups laufen nach Rückkehr automatisch weiter (Retry mit Backoff, Fortsetzung ohne Neuübertragung); Hetzner-Status prüfen |
+| `repository_id_mismatch`, `host_key_mismatch`, `repository_replay` | **nicht** übergehen – möglicher Angriff oder falsches Ziel; Box und Fingerprint manuell prüfen |
+| Worker hängt/abgestürzt | Container startet neu und setzt den Auftrag fort; verwaister Backup-Hold wird automatisch gelöst |
+| Verwaister Borg-Lock nach Absturz | nur wenn sicher kein Worker läuft: `… python -m app.backup.cli break-lock --yes` |
+
+
+## 16. Dokumentverarbeitung (PDF-Ansicht, Textextraktion)
+
+Ausführlich: `docs-site/docs/technik/dokumente.md`.
+
+**Update**: Migration `0115_documents` (neue Tabellen, keine Datenänderung) läuft mit dem
+normalen Deploy (`0116_protocol_export_formats` ist seit der Dokument-Engine ein No-op). Das Backend-Image enthält jetzt LibreOffice, Tesseract und Poppler (grösseres
+Image). `deploy.sh` startet den neuen Dienst `document-worker` automatisch (`up -d`). Keine neuen
+Secrets oder Umgebungsvariablen nötig; Grenzwerte sind optional (`DOCUMENT_*`, siehe Doku).
+
+**Nach dem Deploy**: Der Loop `document_sync` legt Dokumente für bestehende Dateien und Exporte
+in Batches an (alle 2 Minuten, `DOCUMENT_SYNC_BATCH_SIZE`); der Worker verarbeitet sie danach.
+Bei vielen Altdateien läuft das einige Zeit - Fortschritt:
+
+```bash
+docker compose exec backend python -m app.workers.document_admin status
+```
+
+Sofort statt schrittweise: `... document_admin backfill`. Fehlgeschlagene Aufträge nach einer
+Störung erneut einreihen: `... document_admin requeue`. Übernahme pausieren:
+`DOCUMENT_BACKFILL_ENABLED=false` (stoppt auch die Anlage für neue Abgabebox-Uploads).
+
+**Überwachung**: `/admin/jobs` → Kategorie Dokumente (`document_sync`, `document_worker`). Ein
+überfälliger `document_worker` heisst: Container läuft nicht oder hängt
+(`docker compose logs document-worker`). Aufträge mit abgelaufener Lease übernimmt ein neu
+gestarteter Worker automatisch.
+
+
+## 17. Job-Worker und Lastgrenzen (Concurrency-Audit 1.2)
+
+Hintergrund: `ROBUSTNESS_CONCURRENCY_AUDIT.md` (Befunde CONC-001..024), Lasttests unter `loadtest/`.
+
+**Neuer Dienst `job-worker`** (Backend-Image, `python -m app.workers.job_worker`): Galerie-Ingest,
+PDF-Aufträge, Vereinsexport, Qualitäts-Backfill, Album-Sync, Virenscan-Nachprüfung und die grossen
+Aufräumjobs laufen nicht mehr in den uvicorn-Workern. `deploy.sh` startet und prüft ihn automatisch
+(`BACKEND_IMAGE_WORKERS`); ein Rollback auf ein Release ohne Job-Worker stoppt ihn, das ältere
+Backend führt die Jobs dann wieder selbst aus. Ohne laufenden Job-Worker entstehen keine PDFs aus
+Exporten und keine Galerie-Importe - `/admin/jobs` meldet `job_worker` als überfällig,
+`/admin/system` die Prüfung «PDF-Aufträge».
+
+**PDF-Export als Auftrag**: `POST /api/documents/render` prüft Rechte sofort und antwortet 202 mit
+einem Auftrag (`document_render_job`); der Browser fragt `GET /api/documents/render-jobs/{id}` ab.
+Auch das PDF nach dem Abschliessen eines Protokolls ist ein Auftrag (übersteht Neustarts, wird bei
+«Compile-Platz belegt» oder Timeout bis zu dreimal wiederholt). Hängende Aufträge (> 15 min
+`running`) setzt der Worker automatisch zurück.
+
+**Überwachung**:
+- `/admin/system` → «Auslastung der Dienstprozesse» (`runtime`): Event-Loop-Verzögerung,
+  DB-Pool- und Threadpool-Belegung, Pool-Zeitüberschreitungen aller Prozesse der letzten Minute.
+  Warnung ab 1 s Loop-Lag oder vollem Pool, kritisch ab 10 s.
+- `/admin/system` → «PDF-Aufträge» (`render_queue`): Warteschlange älter als 10 min oder
+  gescheiterte Aufträge (24 h).
+- `pg_stat_activity.application_name` unterscheidet `hocx-backend`, `hocx-job-worker`,
+  `hocx-document-worker`, `hocx-abgabebox-backend` usw.
+
+**Stellschrauben** (Umgebung, Defaults in Klammern):
+
+| Variable | Wirkung |
+|---|---|
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` (12/8, Worker kleiner) | DB-Pool je Prozess; bei Erschöpfung nach `DB_POOL_TIMEOUT_SECONDS` (5) Antwort 503 `db_busy` mit Retry-After |
+| `DB_ADMISSION_LIMIT` (leer = Pool + Overflow minus `DB_ADMISSION_RESERVE` 4, also 16; im Release-Stack nur über Pool und Reserve einstellbar) / `DB_ADMISSION_WAIT_SECONDS` (20) | gleichzeitige HTTP-Requests je Backend-Worker; der Rest wartet ohne Thread und Verbindung, danach 503 `db_busy`. Verhindert den Stau aus Threadpool und Pool unter Last (`app/core/db_admission.py`). Wer den Pool vergrössert, vergrössert die Annahme mit |
+| `OVERLOAD_THRESHOLD_LOW` (0.75) / `OVERLOAD_THRESHOLD_NORMAL` (1.0) / `OVERLOAD_ACTIVE_MINUTES` (15) | Überlast-Schutz nach Abo: ab dieser geglätteten Auslastung (Requests in Arbeit + wartend je Platz der Request-Annahme) sehen *neue* Nutzer von Abos mit Priorität „niedrig“ bzw. „normal“ die Überlast-Seite; „hoch“ wird nie vorab abgewiesen. Wer in den letzten 15 Minuten gearbeitet hat, bleibt drin. Die Stufe je Abo steht im Adminportal (Preiskatalog), Abweisungen unter System → Überlast und als Warnung `overload` (ntfy) |
+| `SECURITY_FAILED_LOGINS_WARNING` / `_CRITICAL` (50/200 in 15 min), `SECURITY_FAILED_LOGINS_PER_ACCOUNT` (20 in 15 min), `SECURITY_EXPORTS_PER_HOUR` (3), `SECURITY_ALERT_ADMIN_LOGINS` (false) | Schwellen des Checks «security» in `/admin/system` und ntfy |
+| `GALLERY_UPLOAD_CONCURRENCY` (2) / `GALLERY_UPLOAD_SLOT_WAIT_SECONDS` (60) | gleichzeitige Galerie-Uploads je Backend-Worker, Wartezeit auf einen Platz |
+| `ABGABEBOX_UPLOAD_CONCURRENCY` (2) / `ABGABEBOX_UPLOAD_SLOT_WAIT_SECONDS` (120) | gleichzeitige öffentliche Uploads je Abgabebox-Worker (je bis 150 MiB im Speicher) |
+| `DOCUMENT_RENDER_CONCURRENCY` (2) | Typst-Compiles je Prozess (Backend: Vorschau; Job-Worker: PDF-Aufträge) |
+| `BACKUP_HEAVY_WINDOW_HOURS` (`1-5`) | lokales Zeitfenster (Europe/Zurich) für Backup-Verify und Restore-Test; der Backup-Worker läuft mit niedriger CPU-Priorität |
+
+Teure Monitor-Zählungen (verwaiste Dateien, Belegung des lokalen S3) rechnet `/admin/system` nur noch
+stündlich. Der Admin-Entrypoint hat dieselben Lese-/Schreibfristen (1 h) wie der öffentliche, damit
+grosse Mandantenimporte nicht nach Traefiks Default von 60 s abbrechen; vor dem Entpacken eines
+Imports wird freier Speicher geprüft.
+
+PostgreSQL läuft mit `max_connections=150` (Budget rund 100, siehe Kommentar in der Compose-Datei).
+Wer Pools oder Worker erhöht, rechnet das Budget nach.

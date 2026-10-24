@@ -76,6 +76,7 @@
     "captchaPlaceholder": "Sicherheitscheck (kein FriendlyCaptcha konfiguriert – Test-/Dev-Betrieb)",
     "submit": "Abgeben",
     "submitting": "Wird hochgeladen…",
+    "busyRetry": "Gerade laden viele gleichzeitig hoch – neuer Versuch in {seconds, plural, one {# Sekunde} other {# Sekunden}} …",
     "successTitle": "Danke, Abgabe eingegangen",
     "successCount": "{count, plural, one {# Datei für diese Abgabe hochgeladen.} other {# Dateien für diese Abgabe hochgeladen.}}",
     "uploadMore": "Weitere Datei einreichen",
@@ -104,10 +105,115 @@
       "element": "Dokument",
       "files": "Dateien",
       "receivedAt": "Eingegangen"
-    }
+    },
+    "includeGps": "GPS-Daten des Bildes mitsenden",
+    "privacyResponsible": "Verantwortlich für deine Dateien ist {tenant}.",
+    "privacyLink": "Datenschutzhinweise",
+    "privacyCaptcha": "Zum Schutz vor Spam prüft Friendly Captcha deinen Browser ohne Cookies und ohne Tracking."
   },
   "language": {
     "label": "Sprache"
   },
-  "copyright": "Copyright © {year} hocX Project · Alle Rechte vorbehalten."
+  "copyright": "Copyright © {year} hocX Project · Alle Rechte vorbehalten.",
+  "verify": {
+    "brand": {
+      "subtitle": "Echtheitsprüfung",
+      "headline": "Stammt dieses Dokument wirklich aus hocX?",
+      "lead": "Lege die PDF-Datei ab. Wir vergleichen ihren digitalen Fingerabdruck mit allen Dokumenten, die mit hocX erstellt wurden.",
+      "privacyNote": "Die Datei verlässt dein Gerät nicht - geprüft wird nur ihr Fingerabdruck."
+    },
+    "title": "Echtheit prüfen",
+    "hint": "Prüfe, ob eine PDF-Datei unverändert aus hocX stammt.",
+    "documentHint": "Dokument {id} – lege die PDF-Datei hier ab, um sie zu prüfen.",
+    "dropLabelTouch": "PDF-Datei auswählen",
+    "dropRelease": "Loslassen zum Prüfen",
+    "dropOverlay": "Datei loslassen, um sie zu prüfen",
+    "privacy": "Die Datei wird nicht hochgeladen. Dein Browser berechnet ihren digitalen Fingerabdruck (SHA-256) und schickt nur diesen zur Prüfung.",
+    "checking": "Wird geprüft …",
+    "checkAnother": "Andere Datei prüfen",
+    "originalTitle": "Original",
+    "originalText": "Diese Datei ist eine unveränderte Kopie eines Dokuments, das am {date} mit hocX erstellt wurde.",
+    "fields": {
+      "documentType": "Dokumenttyp",
+      "title": "Titel",
+      "status": "Status beim Erstellen",
+      "version": "Version",
+      "documentId": "Dokument-ID"
+    },
+    "statusLabel": {
+      "geplant": "Entwurf (geplant)",
+      "durchgeführt": "Entwurf (durchgeführt)",
+      "abgeschlossen": "Abgeschlossen"
+    },
+    "docType": {
+      "protocol": "Protokoll",
+      "invitation": "Einladung",
+      "todos": "Pendenzenliste",
+      "events": "Terminplan",
+      "attendance_sheet": "Präsenzliste",
+      "members": "Mitgliederliste",
+      "finance": "Finanzbericht",
+      "statistics": "Jahresbericht",
+      "list": "Liste",
+      "custom": "Dokument",
+      "protocol_excerpt": "Protokollauszug"
+    },
+    "createdBy": "Erstellt im hocX-Konto von {name}.",
+    "verifiedBadge": "Verifizierte Organisation",
+    "verifiedExplanation": "hocX hat bestätigt, dass dieses Konto zur Organisation «{name}» gehört.",
+    "logoAlt": "Logo von {name}",
+    "otherDocument": "Die Datei ist echt, gehört aber zu einem anderen Dokument als der gescannte QR-Code.",
+    "importUnverified": "Importiert, nicht verifiziert: Dieser Eintrag stammt aus einem Datenimport und konnte dabei nicht mit der Originaldatei abgeglichen werden.",
+    "titleOverridden": "Der Titel wurde beim Export abweichend vom Protokoll gesetzt.",
+    "newerVersion": "Es gibt eine neuere Version ({version}) dieses Dokuments.",
+    "notFoundTitle": "Nicht gefunden",
+    "notFoundText": "Diese Datei stimmt mit keinem bei hocX erstellten Dokument überein.",
+    "notFoundHint": "Prüfe immer die Datei, die du ursprünglich erhalten hast.",
+    "error": "Die Prüfung ist gerade nicht möglich. Bitte versuche es gleich nochmal.",
+    "readError": "Die Datei konnte nicht gelesen werden.",
+    "tooLarge": "Die Datei ist zu gross (höchstens {size} MB).",
+    "noCrypto": "Dein Browser unterstützt die Prüfung nicht. Bitte verwende einen aktuellen Browser.",
+    "site": {
+      "label": "Prüfseite von {name}",
+      "eyebrow": "Offizielle Prüfseite",
+      "hint": "Prüfe, ob eine PDF-Datei unverändert von {name} stammt.",
+      "poweredBy": "Prüfung bereitgestellt von hocX"
+    },
+    "domainBadge": "Prüf-Domain verifiziert: {domain}",
+    "domainExplanation": "Die Domain {domain} ist per DNS-Eintrag mit dem hocX-Konto von «{name}» verbunden. Sie belegt nicht die Identität der Organisation – das tut nur die Bestätigung durch hocX.",
+    "foreignDocument": "Dieses Dokument wurde nicht von «{site}» ausgestellt.",
+    "forwarded": "Geprüft wurde der Fingerabdruck der Datei, die du auf der vorherigen Prüfseite ausgewählt hast.",
+    "redirect": {
+      "tenantTitle": "Weiter zur Prüfseite von «{name}»",
+      "tenantText": "«{name}» bestätigt seine Dokumente unter {domain}. Weiterleitung in {seconds, plural, one {# Sekunde} other {# Sekunden}} – die Prüfung läuft dort automatisch, ohne die Datei erneut auszuwählen.",
+      "tenantStayed": "«{name}» bestätigt seine Dokumente auch unter {domain}.",
+      "centralTitle": "Dokument einer anderen Organisation",
+      "centralText": "Dieses Dokument stammt nicht von «{site}». Weiterleitung zur Prüfseite von hocX in {seconds, plural, one {# Sekunde} other {# Sekunden}}.",
+      "centralStayed": "Dieses Dokument stammt nicht von «{site}». Die Prüfseite von hocX zeigt, wer es ausgestellt hat.",
+      "stay": "Hier bleiben",
+      "openTenant": "Prüfseite öffnen",
+      "openCentral": "Zur Prüfseite von hocX"
+    },
+    "checkingHash": "Fingerabdruck wird berechnet …",
+    "fileWithSize": "{name} · {size}",
+    "dropTitle": "PDF hierher ziehen",
+    "dropOr": "oder <choose>Datei auswählen</choose>",
+    "issuedBy": "Herausgegeben von",
+    "hashLabel": "SHA-256 {hash}",
+    "forwardedShort": "Datei von der vorherigen Prüfseite",
+    "notFoundReasons": {
+      "title": "Häufige Gründe",
+      "changed": "Die Datei wurde nach dem Herunterladen verändert.",
+      "resaved": "Erneutes Speichern, «Drucken als PDF» oder Komprimieren verändert die Datei – auch wenn der Inhalt gleich aussieht.",
+      "notHocx": "Das Dokument wurde nicht mit hocX erstellt."
+    }
+  },
+  "maintenance": {
+    "title": "Die Abgabebox wird gerade gewartet",
+    "message": "Abgaben sind während der Wartung nicht möglich. Bitte versuche es später erneut.",
+    "uploadsTitle": "Hochladen ist kurz gesperrt",
+    "uploadsMessage": "Wegen Wartungsarbeiten können gerade keine Dateien angenommen werden. Das dauert in der Regel nur wenige Minuten.",
+    "availableAt": "Voraussichtlich wieder verfügbar: {time} Uhr",
+    "estimating": "Die voraussichtliche Dauer wird ermittelt."
+  }
 }

@@ -10,6 +10,7 @@
     "dashboard": "Dashboard",
     "tenants": "Mandanten",
     "pricing": "Preise",
+    "cashflow": "Cashflow",
     "users": "Benutzer",
     "domains": "Domains",
     "systemStatus": "Systemstatus",
@@ -19,7 +20,13 @@
     "jobs": "Jobs",
     "admins": "Admin-Accounts",
     "sso": "SSO",
-    "security": "Sicherheit"
+    "security": "Sicherheit",
+    "verifications": "Verifizierungen",
+    "storage": "Storage",
+    "backups": "Backups",
+    "maintenance": "Wartung",
+    "documentTemplates": "Dokumentvorlagen",
+    "auditLog": "Audit-Log"
   },
   "logout": "Logout",
   "menuToggleClose": "Schliessen",

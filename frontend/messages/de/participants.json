@@ -102,5 +102,10 @@
   "loginTabs": {
     "withoutLogin": "Teilnehmer",
     "withLogin": "Teilnehmer mit Login"
+  },
+  "personalData": {
+    "action": "Datenauskunft",
+    "title": "Datenauskunft für {name}",
+    "description": "Alle in hocX gespeicherten Daten dieser Person als passwortgeschützte ZIP-Datei (Excel und JSON). Der Abruf wird im Verlauf protokolliert."
   }
 }

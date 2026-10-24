@@ -272,6 +272,9 @@ Die Prüfungen für den Zugang zur Abgabebox per Link stehen im
 Duplikaterkennung, parallele Uploads und die unterschiedlichen Rückmeldungen von App und
 Abgabebox sind im [Upload-Testbook](docs-site/docs/technik/upload-testbook.md) beschrieben.
 
+Backup, Wiederherstellung und Mandanten-Restore (BorgBackup) prüft das
+[Backup-Testbook](docs-site/docs/technik/backup-testbook.md).
+
 ## Lizenz
 
 Copyright © 2026 hocX Project. All rights reserved.

@@ -53,7 +53,8 @@ def test_refresh_is_scoped_to_owning_tenant(db):
     other_tenant_user = make_current_user(tenant_b.id)
     with pytest.raises(HTTPException) as exc_info:
         protocol_elements.refresh_block_list_snapshot(block.public_id, db=db, user=other_tenant_user)
-    assert exc_info.value.status_code == 403
+    # 404 unter Row-Level-Security (Migration 0134): der fremde Block ist dann gar nicht sichtbar.
+    assert exc_info.value.status_code in (403, 404)
 
     same_tenant_user = make_current_user(tenant_a.id)
     result = protocol_elements.refresh_block_list_snapshot(block.public_id, db=db, user=same_tenant_user)

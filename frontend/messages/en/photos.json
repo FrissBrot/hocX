@@ -77,7 +77,10 @@
     "statusActive": "active",
     "statusDeclined": "declined",
     "statusPending": "requested",
-    "unknownTenant": "Tenant {id}"
+    "unknownTenant": "Tenant {id}",
+    "myPhotosPublicLabel": "Show my photos in public links",
+    "myShareError": "The setting could not be saved.",
+    "publicLinksNotAllowed": "The owner does not allow public links for this album."
   },
   "bulkBar": {
     "addTags": "Add tags",
@@ -120,7 +123,7 @@
   "galleryUpload": {
     "browse": "Choose files",
     "cancel": "Cancel",
-    "description": "Images up to 100 MiB, ZIPs and the whole selection up to 10 GiB. Maximum 50 files; up to 10,000 entries and 20 GiB unpacked per ZIP. Images are scanned for viruses.",
+    "description": "Images up to 100 MiB, ZIPs up to 10 GiB, whole folders too. Large selections are split into several jobs automatically; ZIPs up to 10,000 entries and 20 GiB unpacked. Images are checked in your browser first, existing ones are not transferred again, and everything is virus-scanned.",
     "dropActive": "Release to upload",
     "dropHint": "Drag images here",
     "formatsAriaLabel": "Supported formats",
@@ -146,7 +149,26 @@
     "uploadPlain": "Upload",
     "uploadingPercent": "Uploading… {percent}%",
     "uploadingPlain": "Uploading…",
-    "largeZipHint": "Large ZIP file: on a slow connection the upload may stop after one hour. Better split the archive into several smaller ZIPs or upload the photos directly."
+    "browseFolder": "Choose folder",
+    "statusSkipped": "Skipped – already exists",
+    "statusMetadataUpdated": "Skipped · metadata added",
+    "statusWaiting": "Waiting…",
+    "statusFailed": "Failed",
+    "statusReadyNoDate": "Ready · no capture date found",
+    "statusReadyUnchecked": "Ready · capture date will be checked on the server",
+    "analysisProgress": "Checking images… {done} of {total}",
+    "batchProgress": "Part {current} of {total}",
+    "checkingPlain": "Checking…",
+    "estimate": {
+      "missingHint": "{count, plural, one {No capture date was found for 1 image.} other {No capture date was found for # images.}} You can enter an estimated date.",
+      "uncheckedHint": "{count, plural, one {1 image could not be checked in the browser} other {# images could not be checked in the browser}} – the server checks the capture date during upload.",
+      "zipHint": "Images inside ZIP files are checked by the server; the estimated date only applies to images without a capture date.",
+      "label": "Estimated capture date for images without a capture date",
+      "help": "Optional. Real capture dates are never overwritten.",
+      "helpSet": "Only applies to images without a capture date ({date}). Real capture dates are never overwritten."
+    },
+    "largeZipHint": "Large ZIP file: on a slow connection the upload may stop after one hour. Better split the archive into several smaller ZIPs or upload the photos directly.",
+    "includeGps": "Include the image’s GPS data"
   },
   "shareModal": {
     "actionAriaLabelActive": "Remove access for {name}",
@@ -190,7 +212,16 @@
     "title": "Share with another tenant",
     "unknownTenant": "Unknown tenant",
     "withdrawLabel": "Withdraw",
-    "withdrawnToast": "Invitation withdrawn."
+    "withdrawnToast": "Invitation withdrawn.",
+    "shareLocationLabel": "Share location",
+    "shareLocationHelp": "The partner receives this album's photos with GPS data. Can be changed per share later.",
+    "locationShort": "Location",
+    "locationAriaLabel": "Share location with {name}",
+    "locationError": "Could not save the location setting.",
+    "publicLinksShort": "Public links",
+    "publicLinksAriaLabel": "{name} may share this album via public links",
+    "publicLinksError": "The public link setting could not be saved.",
+    "partnerPhotosHidden": "This partner’s photos are not shown in public links."
   },
   "shareRelease": {
     "confirmLabel": "Add and share",
@@ -356,6 +387,30 @@
     "sizeLabel": "Size",
     "tagPlaceholder": "+ Tag",
     "tagsSection": "Tags",
-    "takenLabel": "Taken"
+    "takenUnknown": "Unknown",
+    "estimatedLabel": "Estimated capture date",
+    "estimatedRemove": "Remove",
+    "uploadedLabel": "Uploaded",
+    "locationLabel": "Location",
+    "locationValue": "{latitude}, {longitude}",
+    "altitudeValue": "{meters} m above sea level",
+    "dateBox": {
+      "exifKicker": "Captured · from EXIF",
+      "exifNote": "From the file's camera data",
+      "estimatedNote": "The file has no capture date",
+      "unknownKicker": "Capture date unknown",
+      "unknownNote": "The file has no capture date – sorted by upload date",
+      "change": "Change",
+      "done": "Done"
+    }
+  },
+  "dateMarker": {
+    "estimated": "Estimated capture date",
+    "upload": "Capture date unknown – upload date is used.",
+    "partial": "{label} ({count} of {total} images)",
+    "estimatedShort": "Estimated date",
+    "uploadShort": "Upload date",
+    "estimatedHint": "No capture date in the file – estimated during upload.",
+    "partialShort": "{label} · {count}/{total}"
   }
 }

@@ -13,7 +13,7 @@ per SELECT lesbar - die Spaltenlisten hier bilden also nicht mehr die tatsaechli
 DB-Grants ab, sondern nur die Spalten, die dieser Service kennt/braucht.
 """
 
-from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Integer, MetaData, Table, Text
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, MetaData, SmallInteger, Table, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 metadata = MetaData()
@@ -202,6 +202,20 @@ stored_file_table = Table(
     Column("checksum_sha256", Text),
     Column("perceptual_hash", Text),
     Column("scan_status", Text),
+    # Bild-Metadaten (Migration 0113, siehe app/image_metadata.py) - nur beim INSERT gesetzt.
+    Column("exif_taken_at", DateTime(timezone=True)),
+    Column("exif_taken_offset", Text),
+    Column("exif_taken_source", Text),
+    Column("gps_latitude", Float),
+    Column("gps_longitude", Float),
+    Column("gps_altitude_m", Float),
+    Column("gps_direction_deg", Float),
+    Column("gps_source", Text),
+    Column("camera_make", Text),
+    Column("camera_model", Text),
+    Column("orientation", SmallInteger),
+    Column("metadata_scanned_at", DateTime(timezone=True)),
+    Column("metadata_scan_status", Text),
 )
 
 # system_error_log: nur INSERT-Grant, absichtlich KEIN SELECT - siehe Migration 0039.

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from urllib.parse import urlencode
 
 from sqlalchemy.orm import Session
 
@@ -52,6 +54,13 @@ def peek_bridge_token(token: str, request_host: str | None) -> BridgeToken | Non
     return _parse(get_redis_sync().get(f"{_KEY_PREFIX}{token}"), request_host)
 
 
+def token_predates_session_revoke(session_revoke_at: datetime | None) -> bool:
+    """Wurden die Sessions des Kontos beendet, seit das Token höchstens ausgestellt sein kann
+    (Passwortwechsel, Deaktivierung, MFA-Reset)? Dann darf das Token keine neue Session mehr
+    erzeugen."""
+    return session_revoke_at is not None and session_revoke_at > datetime.now(UTC) - timedelta(seconds=_TTL_SECONDS)
+
+
 def consume_bridge_token(token: str, request_host: str | None) -> BridgeToken | None:
     """Atomically reads and deletes the token so it can never be replayed. A token presented
     on the wrong host is consumed too (and rejected), so a leaked link is dead afterwards."""
@@ -95,7 +104,9 @@ def resolve_bridge_redirect(
         return None
 
     token = create_bridge_token(user_id, target_host, mfa_verified=mfa_verified)
-    return f"https://{target_host}/api/auth/bridge?token={token}"
+    # Token im URL-Fragment (SEC-019): der Browser schickt es an keinen Server, es landet weder in
+    # Access-Logs noch im Referer; die Bestätigungsseite liest es aus und entfernt es aus dem Verlauf.
+    return f"https://{target_host}/auth/bridge#{urlencode({'token': token})}"
 
 
 def resolve_tenant_by_app_domain(db: Session, domain: str) -> Tenant | None:

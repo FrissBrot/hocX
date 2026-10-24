@@ -62,7 +62,7 @@ password_hash column."""
 USER_ID_COLUMNS: dict[str, list[str]] = {
     "template": ["created_by"],
     "protocol": ["created_by"],
-    "stored_file": ["created_by"],
+    "stored_file": ["created_by", "estimated_taken_set_by"],
     "gallery_image": ["created_by"],
     "word_import_document": ["created_by", "imported_by"],
     "protocol_todo": ["assigned_user_id", "created_by"],
@@ -74,6 +74,18 @@ USER_ID_COLUMNS: dict[str, list[str]] = {
     "share_link": ["created_by"],
     "calendar_feed": ["user_id"],
     "photo_album_tenant_share": ["invited_by", "responded_by"],
+    "document_asset": ["created_by"],
+    "document_brand": ["created_by", "updated_by"],
+    "document_brand_revision": ["created_by"],
+    "document_component": ["created_by", "updated_by"],
+    "document_template": ["created_by", "updated_by"],
+    "document_template_revision": ["created_by", "updated_by", "published_by"],
+    "document_template_assignment": ["created_by"],
+    # Ältere Archive (Format 5/6, Dokument-Engine vor dem Document Studio)
+    "document_style_asset": ["created_by"],
+    "document_recipe": ["created_by"],
+    "document_export": ["created_by"],
+    "document_registry": ["created_by"],
 }
 # user_id is part of the primary key on user_template_access/user_protocol_access/
 # user_protocol_scroll - it can never be NULL, so TenantImportService drops those rows
@@ -126,7 +138,17 @@ def coerce_value(column: Any, raw: Any) -> Any:
     return raw
 
 
-FORCED_SECURE_DEFAULTS: dict[str, Any] = {"scan_status": "pending"}
+FORCED_SECURE_DEFAULTS: dict[str, Any] = {
+    "scan_status": "pending",
+    # Bestätigung der Organisation durch einen Plattform-Admin gilt nur auf der Installation, die
+    # sie erteilt hat - ein Archiv (ggf. manipuliert) darf das Abzeichen «Verifizierte
+    # Organisation» der Prüfseite nie mitbringen.
+    "identity_verified_at": None,
+    "identity_verified_by_admin_id": None,
+    "identity_verification_note": None,
+    "identity_verification_revoked_at": None,
+    "identity_verification_revoked_reason": None,
+}
 """Columns that must never be taken from an imported manifest, even though they're ordinary
 non-computed model columns build_row() would otherwise happily copy 1:1. StoredFile.scan_status
 in particular gates whether get_stored_file_content() (routes/files.py) will ever serve the
@@ -252,22 +274,6 @@ class UserIdentityCache:
 # Shared between TenantCloneService (same-DB copy) and TenantImportService (restore from
 # a portable export) - both need to rewrite the participant/list/event ids embedded in
 # these JSONB blobs from an old id space into a newly assigned one.
-
-def remap_document_template_config(config: dict | None, part_map: dict[int, int]) -> dict:
-    config = copy.deepcopy(config or {})
-    slots = config.get("slots")
-    if isinstance(slots, dict):
-        config["slots"] = {k: part_map.get(v, v) for k, v in slots.items()}
-    theme = config.get("theme")
-    if isinstance(theme, dict):
-        font_parts = theme.get("font_parts")
-        if isinstance(font_parts, dict):
-            theme["font_parts"] = {k: part_map.get(v, v) for k, v in font_parts.items()}
-    title_assets = config.get("title_assets")
-    if isinstance(title_assets, dict):
-        config["title_assets"] = {k: part_map.get(v, v) for k, v in title_assets.items()}
-    return config
-
 
 def remap_template_element_config(
     config: dict | None,

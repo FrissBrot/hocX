@@ -106,5 +106,80 @@
   "profileImage": {
     "invalidType": "Bitte ein PNG-, JPG-, GIF- oder WebP-Bild wählen (SVG wird nicht unterstützt).",
     "tooLarge": "Das Bild ist zu gross (maximal 5 MB)."
+  },
+  "deleteWithFiles": {
+    "selectedCount": "{selected, number} von {total, number} zum Löschen ausgewählt",
+    "selectAll": "Alle auswählen",
+    "selectNone": "Keine auswählen",
+    "groups": {
+      "protocol_image": "Bilder in diesem Protokoll",
+      "submission": "Eingereichte Dateien",
+      "gallery": "Galeriefotos zu dieser Abgabe"
+    },
+    "usedElsewhere": "Wird noch anderswo verwendet – bleibt erhalten",
+    "keptHint": "{count, plural, one {Eine nicht ausgewählte Datei wird} other {# nicht ausgewählte Dateien werden}} in die Galerie übernommen.",
+    "cancel": "Abbrechen",
+    "confirm": "{count, plural, =0 {Löschen, Dateien behalten} one {Löschen mit einer Datei} other {Löschen mit # Dateien}}",
+    "confirmPlain": "Löschen"
+  },
+  "auditActions": {
+    "categories": {
+      "admin": "Plattform",
+      "backup": "Backup",
+      "calendar_feed": "Kalender-Abo",
+      "document": "Dokument",
+      "document_asset": "Dokument-Bild",
+      "document_brand": "Erscheinungsbild",
+      "document_settings": "Dokument-Einstellungen",
+      "document_template": "Dokumentvorlage",
+      "document_verification": "Echtheitsprüfung",
+      "event": "Termin",
+      "finance_account": "Konto",
+      "finance_transaction": "Buchung",
+      "fine": "Busse",
+      "fine_tariff": "Bussentarif",
+      "identity_verification": "Verifizierung",
+      "participant": "Person",
+      "personal_data": "Datenauskunft",
+      "privacy_settings": "Datenschutz-Einstellungen",
+      "protocol": "Protokoll",
+      "retention": "Aufbewahrung",
+      "submission_assignment": "Abgabe",
+      "submission_file": "Eingereichte Datei",
+      "submission_upload": "Einreichung",
+      "table_snapshot": "Tabellenstand",
+      "task_package": "Aufgabenpaket",
+      "template": "Protokollvorlage",
+      "tenant": "Verein",
+      "todo": "Aufgabe",
+      "user": "Konto"
+    },
+    "verbs": {
+      "loginFailed": "Anmeldung fehlgeschlagen",
+      "mfaFailed": "Zweiter Faktor falsch",
+      "login": "angemeldet",
+      "viewed": "angesehen",
+      "exported": "exportiert",
+      "imported": "importiert",
+      "deleted": "gelöscht",
+      "created": "angelegt",
+      "updated": "geändert",
+      "restored": "wiederhergestellt",
+      "collected": "kassiert",
+      "revoked": "zurückgezogen",
+      "published": "freigegeben"
+    }
+  },
+  "protectedExport": {
+    "password": "Passwort für die ZIP-Datei",
+    "passwordHelp": "Mindestens {min} Zeichen. Wird nicht gespeichert – ohne Passwort lässt sich die Datei nicht mehr öffnen.",
+    "repeat": "Passwort wiederholen",
+    "mismatch": "Die Passwörter stimmen nicht überein.",
+    "openHint": "Die ZIP-Datei ist mit AES-256 verschlüsselt. Öffnen z. B. mit 7-Zip (Windows), Keka (macOS) oder WinRAR.",
+    "cancel": "Abbrechen",
+    "download": "Herunterladen",
+    "working": "Wird erstellt …",
+    "done": "Export heruntergeladen.",
+    "failed": "Export fehlgeschlagen."
   }
 }

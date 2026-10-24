@@ -86,6 +86,8 @@ export type TenantSummary = {
   created_at?: string | null;
   updated_at?: string | null;
   enabled_features: string[];
+  // Nur in der Antwort auf eine Änderung: die Namensänderung hat die Verifizierung durch hocX aufgehoben
+  identity_verification_revoked?: boolean;
 };
 
 export type TenantSubscriptionFeature = {
@@ -110,13 +112,12 @@ export type TenantSubscription = {
   storage_used_bytes: number;
   storage_quota_bytes: number | null;
   package_storage_bytes: number;
-  storage_quota_manual_override: boolean;
   features: TenantSubscriptionFeature[];
   estimated_monthly_cost_rp: number | null;
   estimated_yearly_cost_rp: number | null;
 };
 
-export type TenantDomainPurpose = "app" | "abgabebox";
+export type TenantDomainPurpose = "app" | "abgabebox" | "verify";
 
 export type TenantDomain = {
   id: string;
@@ -189,7 +190,84 @@ export type SubmissionFile = {
   scan_status: string;
 };
 
-export type FileOverviewSource = "protocol_image" | "word_import" | "submission_upload" | "gallery_upload";
+export type FileOverviewSource = "protocol_image" | "word_import" | "submission_upload" | "gallery_upload" | "protocol_export";
+
+// Logische Dokumente (backend/app/schemas/documents.py): ein Eintrag im Dateien-Tab, dahinter
+// Originaldatei, PDF-Darstellung, extrahierter Inhalt und ggf. mehrere Versionen.
+export type DocumentStatus = "processing" | "ready" | "partial" | "failed";
+export type DocumentJobStatus = "queued" | "running" | "done" | "failed" | "blocked" | "none";
+
+export type DocumentSummary = {
+  id: string;
+  status: DocumentStatus;
+  // Nur während der Verarbeitung: woran sie gerade steht (Virenprüfung, PDF-Ansicht, Text).
+  processing_stage?: "scan" | "pdf" | "text" | null;
+  pdf_status: DocumentJobStatus;
+  extraction_status: string | null;
+  pdf_url: string | null;
+  pdf_download_url: string | null;
+  preview_url?: string | null;
+  version_count: number;
+  current_version_number: number | null;
+  current_version_label: string | null;
+  detail_url: string;
+};
+
+export type DocumentFileRead = {
+  name: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  url: string;
+  download_url: string;
+};
+
+export type DocumentJobState = { status: DocumentJobStatus; result: string | null; attempts: number };
+
+export type DocumentExtractionRead = {
+  status: string;
+  parser: string | null;
+  parser_version: string | null;
+  schema_version: number;
+  page_count: number | null;
+  char_count: number | null;
+  ocr_applied: boolean;
+  warnings: string[];
+  error: string | null;
+  text_url: string | null;
+};
+
+export type DocumentVersionRead = {
+  id: string;
+  version_number: number;
+  label: string | null;
+  created_at: string;
+  is_current: boolean;
+  original: DocumentFileRead | null;
+  pdf: DocumentFileRead | null;
+  preview?: DocumentFileRead | null;
+  pdf_job: DocumentJobState;
+  extract_job: DocumentJobState;
+  extraction: DocumentExtractionRead | null;
+};
+
+export type DocumentDetail = {
+  id: string;
+  display_name: string;
+  source_kind: "upload" | "protocol_export";
+  status: DocumentStatus;
+  created_at: string;
+  updated_at: string;
+  current_version_id: string | null;
+  versions: DocumentVersionRead[];
+  can_reprocess: boolean;
+};
+
+export type DocumentText = {
+  format: "plain" | "markdown" | "json";
+  status: string;
+  text: string | null;
+  content: Record<string, unknown> | null;
+};
 
 export type PhotoAlbumKind = "manual" | "cycle" | "submission" | "submission_element";
 
@@ -232,13 +310,22 @@ export type FileOverviewItem = {
   // uploaded before this field existed whose thumbnail hasn't been regenerated since.
   width: number | null;
   height: number | null;
-  // The photo's logical date for the Fotos page's date-group headers.
+  // The photo's logical date for the Fotos page's date-group headers (central priority:
+  // real capture date, estimated date, upload date - see backend capture_date.py).
   group_date: string | null;
+  // Where group_date comes from: real EXIF date, user estimate, upload-date fallback or the
+  // protocol/word-import date. Drives the subtle date markers in the gallery.
+  date_source?: PhotoDateSource;
+  exif_taken_at?: string | null;
+  // Calendar date only ("YYYY-MM-DD") - never carries a time or time zone.
+  estimated_taken_on?: string | null;
   // Short context label for that date group's header (protocol/word-import/submission/
   // event) - null when there's nothing more specific than the plain date.
   context_label: string | null;
   // Live Photo: content URL of the short MP4 played on hover (null for ordinary photos).
   live_video_url: string | null;
+  // Logisches Dokument (PDF-Ansicht, Status, Versionen) - fehlt/null bei Bildern, ZIPs usw.
+  document?: DocumentSummary | null;
   // Every album this file belongs to (only populated on the unscoped GET /files listing).
   albums: FileAlbumRef[];
   // Best-of ("Stern") state: within the album this item was fetched for when scoped by
@@ -256,6 +343,18 @@ export type AlbumTenantShareStatus = {
   status: "pending" | "accepted" | "declined";
   invited_at: string;
   responded_at: string | null;
+  // Standort (GPS) der Fotos mit diesem Partner teilen (Standard an).
+  share_location: boolean;
+  // Partner darf das Album öffentlich verlinken (setzt der Besitzer, Standard an).
+  partner_public_links: boolean;
+  // Fotos des Partners dürfen in öffentlichen Links erscheinen (setzt der Partner, Standard an).
+  partner_photos_public: boolean;
+};
+
+// Eigene Freigabe in einem Album eines anderen Mandanten (nur für Partner gesetzt).
+export type AlbumMyShare = {
+  public_links_allowed: boolean;
+  my_photos_public: boolean;
 };
 
 export type PhotoAlbum = {
@@ -267,6 +366,7 @@ export type PhotoAlbum = {
   cover_thumbnail_urls: string[];
   owner_tenant_name: string | null;
   shared_with: AlbumTenantShareStatus[];
+  my_share: AlbumMyShare | null;
   // Gerade geteilt (Mandant eingeladen/angenommen oder aktiver Album-Link); Partner-Alben immer.
   is_shared: boolean;
   // Nur für den Besitzer: automatisch einsortierte Fotos, die noch freigegeben werden müssen.
@@ -412,14 +512,64 @@ export type GalleryUploadJob = {
   error: string | null;
 };
 
+export type PhotoDateSource = "exif" | "estimated" | "upload" | "context";
+
+export type MetadataField = "taken_at" | "gps" | "camera" | "dimensions" | "orientation" | "estimated_taken_on";
+
+// Per-file outcome of an upload (see backend UploadFileResult).
+export type UploadFileStatus = "uploaded" | "skipped" | "metadata_updated" | "failed";
+
+export type UploadFileResult = {
+  name: string;
+  status: UploadFileStatus;
+  file_id?: string | null;
+  applied?: MetadataField[];
+  conflicts?: MetadataField[];
+  message?: string | null;
+  // Grund eines Fehlschlags (siehe backend UploadFailureCode) - übersetzt statt Servertext.
+  code?: UploadFailureCode | null;
+  params?: Record<string, string | number>;
+};
+
+export type UploadFailureCode =
+  | "too_large"
+  | "unsupported_format"
+  | "scan_failed"
+  | "infected"
+  | "quota_exceeded"
+  | "heic_unreadable"
+  | "rule_violation";
+
 export type GalleryUploadJobDetail = GalleryUploadJob & {
   imported_items: FileOverviewItem[];
   errors: string[];
+  file_results?: UploadFileResult[];
 };
 
 export type DocumentUploadResult = {
   items: FileOverviewItem[];
   errors: string[];
+  file_results?: UploadFileResult[];
+};
+
+export type UploadPrecheckStatus = "upload_required" | "already_exists" | "metadata_updated" | "fallback_required";
+
+export type UploadPrecheckResult = {
+  client_id: string;
+  status: UploadPrecheckStatus;
+  file_id: string | null;
+  applied: MetadataField[];
+  conflicts: MetadataField[];
+};
+
+export type GpsMetadata = {
+  latitude: number;
+  longitude: number;
+  altitude_m: number | null;
+  direction_deg: number | null;
+  accuracy_m: number | null;
+  timestamp: string | null;
+  source: string | null;
 };
 
 export type StoredFileMetadata = {
@@ -439,6 +589,17 @@ export type StoredFileMetadata = {
   exif_taken_at: string | null;
   exif_camera: string | null;
   uploaded_by_name: string | null;
+  exif_taken_offset?: string | null;
+  exif_taken_source?: string | null;
+  estimated_taken_on?: string | null;
+  estimated_taken_set_at?: string | null;
+  estimated_taken_set_by_name?: string | null;
+  effective_date?: string | null;
+  date_source?: PhotoDateSource;
+  camera_make?: string | null;
+  camera_model?: string | null;
+  gps?: GpsMetadata | null;
+  can_edit_capture_date?: boolean;
 };
 
 export type SubmissionUploadLogEntry = {
@@ -520,10 +681,11 @@ export type AdminTenantSummary = {
   plan_storage_bytes: number | null;
   package_storage_bytes: number;
   effective_storage_quota_bytes: number | null;
-  storage_quota_manual_override: boolean;
   assigned_storage_packages: AdminTenantStoragePackage[];
   discount_percent: number;
   billing_note: string | null;
+  billing_start_date: string | null;
+  contract_ends_on: string | null;
   show_on_website: boolean;
 };
 
@@ -619,8 +781,12 @@ export type AdminPlan = {
   description: string | null;
   is_bookable: boolean;
   is_featured: boolean;
+  /** Priorität bei Überlast: 0 niedrig, 1 normal, 2 hoch. */
+  load_priority: LoadPriority;
   tenant_count: number;
 };
+
+export type LoadPriority = 0 | 1 | 2;
 
 export type AdminPlanWrite = {
   name: string;
@@ -633,6 +799,7 @@ export type AdminPlanWrite = {
   description: string | null;
   is_bookable: boolean;
   is_featured: boolean;
+  load_priority: LoadPriority;
   /** Nur beim Anlegen ausgewertet; leer = aus dem Namen erzeugt. */
   code?: string | null;
 };
@@ -661,6 +828,8 @@ export type AdminTenantSubscriptionUpdate = {
   user_limit_override: number | null;
   discount_percent: number;
   billing_note: string | null;
+  billing_start_date: string | null;
+  contract_ends_on: string | null;
 };
 
 export type AdminTenantCreate = {
@@ -676,7 +845,7 @@ export type AdminTenantPage = {
 };
 
 // User-facing groupings (see storage_service.py's docstring): uploaded images, other uploads,
-// generated PDF/LaTeX exports, and the catch-all "everything else" bucket.
+// generated PDF exports, and the catch-all "everything else" bucket.
 export type StorageCategoryKey = "photos" | "files" | "protocols" | "other";
 
 export type StorageCategoryUsage = {
@@ -755,7 +924,8 @@ export type SystemErrorLogFilterOptions = {
 // with its own member order (audit fix, 2026-09-17: a fifth source added to one but not
 // the other used to compile fine on both sides, and the un-updated view would silently
 // fall through its `?? entry.source` fallback and show the raw enum string instead).
-export type UploadPipelineSource = FileOverviewSource;
+// Ausnahme: Protokollexporte sind keine Uploads und erscheinen in der Pipeline-Ansicht nicht.
+export type UploadPipelineSource = Exclude<FileOverviewSource, "protocol_export">;
 
 export type UploadPipelineFileEntry = {
   id: string;
@@ -797,7 +967,7 @@ export type UploadPipelineOverview = {
 };
 
 export type JobState = "ok" | "running" | "failing" | "overdue" | "never_run";
-export type JobCategory = "virus_scan" | "photo_analysis" | "uploads" | "cleanup" | "maintenance" | "backup";
+export type JobCategory = "virus_scan" | "photo_analysis" | "uploads" | "cleanup" | "maintenance" | "backup" | "storage" | "documents";
 
 export type JobStatusEntry = {
   name: string;
@@ -902,11 +1072,24 @@ export type SystemHealthEvent = {
   created_at: string;
 };
 
+/** Abgewiesene neue Nutzer bei Überlast je Mandant (letzte 7 Tage). */
+export type OverloadTenant = {
+  tenant_id: string | null;
+  tenant_name: string | null;
+  plan_name: string | null;
+  load_priority: LoadPriority;
+  rejected: number;
+  users: number;
+  first_at: string;
+  last_at: string;
+};
+
 export type SystemStatus = {
   snapshot: SystemHealthSnapshot | null;
   stale: boolean;
   problems: SystemProblem[];
   events: SystemHealthEvent[];
+  overload: OverloadTenant[];
 };
 
 export type NotificationSettings = {
@@ -963,7 +1146,6 @@ export type TemplateSummary = {
   cycle_config?: CycleConfigSummary | null;
   version: number;
   status: string;
-  document_template_id?: string | null;
   created_by?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -1170,8 +1352,6 @@ export type ProtocolSummary = {
   tenant_id?: string;
   template_id?: string;
   template_version?: number;
-  document_template_id?: string | null;
-  document_template_version?: number | null;
   protocol_number: string;
   title: string | null;
   protocol_date?: string;
@@ -1203,35 +1383,6 @@ export type NextSessionInfo = {
   entries: NextSessionAttendanceEntry[];
 };
 
-export type DocumentTemplatePart = {
-  id: string;
-  tenant_id: string;
-  code: string;
-  name: string;
-  part_type: string;
-  description: string | null;
-  storage_path: string;
-  version: number;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-};
-
-export type DocumentTemplate = {
-  id: string;
-  tenant_id: string;
-  code: string;
-  name: string;
-  description: string | null;
-  filesystem_path: string;
-  version: number;
-  is_active: boolean;
-  is_default: boolean;
-  configuration_json: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-};
-
 export type ElementDefinitionBlock = {
   // Client-owned opaque id living inside ElementDefinition.configuration_json["blocks"][].id -
   // not a database row/FK, deliberately left as plain number (unaffected by the public_id migration).
@@ -1252,7 +1403,6 @@ export type ElementDefinitionBlock = {
   is_visible: boolean;
   sort_index: number;
   render_order: number | null;
-  latex_template: string | null;
   configuration_json: Record<string, unknown>;
 };
 
@@ -1289,7 +1439,6 @@ export type TemplateElementBlock = {
   behavior_defaults?: Partial<Record<TemplateElementBehaviorField, boolean>>;
   sort_index: number;
   render_order: number | null;
-  latex_template: string | null;
   configuration_json: Record<string, unknown>;
   created_at: string;
 };
@@ -1298,6 +1447,12 @@ export type FineTariff = {
   account_id: string | null;
   amount_late: number;
   amount_absent: number;
+};
+
+// Bussentarif einer Protokollvorlage (0137): override=false -> tenant_tariff gilt.
+export type TemplateFineTariff = FineTariff & {
+  override: boolean;
+  tenant_tariff: FineTariff;
 };
 
 export type TemplateElementBehaviorField = "is_editable" | "is_visible" | "export_visible" | "copy_from_last_protocol" | "title_as_subtitle";
@@ -1350,6 +1505,21 @@ export type ProtocolTodo = {
   task_package_name?: string | null;
   cycle_year?: number | null;
   overridden_fields?: string[];
+};
+
+// Notizen und verknüpfte Dateien eines Todos - nur im Todo-Popup (GET/PUT
+// /api/protocol-todos/{id}/details), bewusst nicht Teil von TodoListItem.
+export type TodoDetailFile = {
+  id: string;
+  original_name: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  content_url: string;
+};
+
+export type TodoDetails = {
+  notes: string;
+  files: TodoDetailFile[];
 };
 
 export type TodoListItem = ProtocolTodo & {
@@ -1408,9 +1578,10 @@ export type ProtocolElementBlock = {
   is_required_snapshot: boolean;
   is_visible_snapshot: boolean;
   export_visible_snapshot: boolean;
-  latex_template_snapshot: string | null;
   public_reference_ids?: { lists?: Record<string, string>; finance_accounts?: Record<string, string>; events?: Record<string, string> };
   configuration_snapshot_json: Record<string, unknown>;
+  /** Optimistische Sperre der Blockkonfiguration (409 config_conflict bei veraltetem Stand). */
+  config_version?: number;
   text_content: string | null;
   display_compiled_text: string | null;
   display_snapshot_json: Record<string, unknown> | null;
@@ -1497,6 +1668,8 @@ export type StatisticsOverview = {
   protocols_total: number;
   cycles: { cycle_config_id: string; cycle_config_name: string; cycle_year: number; label: string }[];
   groups_stats: { group_name: string; cycle_config_id: string | null; cycle_year: number | null; session_count: number; session_count_with_participants: number; avg_participants: number }[];
+  /** "own": Bussen/Anwesenheit je Person enthalten nur die eigene Zeile (Leser, PRIV-001). */
+  per_person_scope?: "all" | "own";
 };
 
 // ── Aufgabenpakete ───────────────────────────────────────────────────────
@@ -1577,3 +1750,563 @@ export type TaskPackagePreview = {
 };
 
 export type TaskPackageTodoDeleteMode = "all" | "future" | "none";
+
+
+// --- Wartung (backend/app/schemas/maintenance.py) ---------------------------------------------
+
+export type PublicMaintenanceStatus = {
+  active: boolean;
+  partial: boolean;
+  block_scope: "all" | "writes" | "uploads" | null;
+  reason_code: string | null;
+  messages: Record<string, string>;
+  affected_features: string[];
+  started_at: string | null;
+  estimate_state: "estimating" | "estimated" | "overdue" | null;
+  estimated_end_at: string | null;
+  remaining_low_seconds: number | null;
+  remaining_high_seconds: number | null;
+  upcoming: { starts_at: string | null; ends_at: string | null; kind: string; reason_code: string; messages: Record<string, string> }[];
+  updated_at: string;
+};
+
+export type MaintenanceState = "scheduled" | "preparing" | "active" | "verifying" | "completed" | "failed" | "overdue" | "cancelled";
+
+export type MaintenanceCondition = { key: string; satisfied: boolean; reason: string; params: Record<string, unknown> };
+
+export type MaintenanceEvent = {
+  id: number;
+  created_at: string;
+  kind: string;
+  actor_email: string | null;
+  from_state: string | null;
+  to_state: string | null;
+  details: Record<string, unknown>;
+};
+
+export type MaintenanceEstimate = {
+  scope?: string;
+  remaining_low_seconds: number;
+  remaining_high_seconds: number;
+  safety_margin_seconds: number;
+  components?: Record<string, number>;
+  rate_bytes_per_second?: number;
+  rate_basis?: string;
+  reserve_basis?: string;
+  confidence?: string;
+};
+
+export type MaintenanceWindow = {
+  id: string;
+  kind: "full" | "partial";
+  block_scope: "all" | "writes" | "uploads";
+  state: MaintenanceState;
+  reason_code: string;
+  affected_features: string[];
+  public_message: Record<string, string>;
+  internal_note: string | null;
+  source_job_type: string | null;
+  source_job_id: string | null;
+  scheduled_start_at: string | null;
+  scheduled_end_at: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  estimate: MaintenanceEstimate | null;
+  estimated_end_at: string | null;
+  original_estimated_end_at: string | null;
+  safety_margin_seconds: number | null;
+  estimate_updated_at: string | null;
+  progress: Record<string, number | string>;
+  release_conditions: { key: string; params?: Record<string, unknown> }[];
+  warnings: unknown[];
+  last_error: string | null;
+  created_by_email: string | null;
+  created_at: string;
+  updated_at: string;
+  conditions: MaintenanceCondition[];
+  events: MaintenanceEvent[];
+};
+
+export type MaintenanceOverview = {
+  blocking: boolean;
+  full_active: boolean;
+  current: MaintenanceWindow[];
+  scheduled: MaintenanceWindow[];
+  history: MaintenanceWindow[];
+  history_total: number;
+};
+
+// --- Storage (backend/app/schemas/storage_admin.py) -------------------------------------------
+
+export type StorageProvider = "filesystem" | "garage_local" | "aws_s3" | "hetzner" | "s3_compatible";
+
+export type StorageDataLocation = "ch" | "eu_eea" | "adequate" | "third_country";
+
+export type StorageProfile = {
+  id: string;
+  name: string;
+  provider: StorageProvider;
+  endpoint_url: string | null;
+  region: string | null;
+  bucket: string | null;
+  abgabebox_bucket: string | null;
+  prefix: string;
+  addressing_style: "auto" | "path" | "virtual";
+  access_key_masked: string | null;
+  has_secret_key: boolean;
+  has_restricted_credentials: boolean;
+  tls_verify: boolean;
+  has_ca_bundle: boolean;
+  is_enabled: boolean;
+  is_builtin: boolean;
+  is_active: boolean;
+  in_use_by_migration: boolean;
+  pinned_generations: number[];
+  config_version: number;
+  last_test_at: string | null;
+  last_test_ok: boolean | null;
+  last_test_error: string | null;
+  data_location: StorageDataLocation | null;
+  transfer_basis: string | null;
+  location_confirmed_by: string | null;
+  location_confirmed_at: string | null;
+  server_side_encryption: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StorageConnectionTest = {
+  ok: boolean;
+  main: Record<string, boolean | number> | null;
+  abgabebox: Record<string, boolean | number> | null;
+  error: string | null;
+  restricted_credentials: boolean;
+};
+
+export type StorageMigrationState =
+  | "pending" | "preflight" | "awaiting_confirmation" | "inventory" | "copying" | "catching_up" | "verifying"
+  | "ready_for_cutover" | "cutting_over" | "observing" | "completed" | "paused" | "retrying" | "failed" | "cancelled"
+  | "rollback_required";
+
+export type StorageMigrationEvent = {
+  id: number;
+  created_at: string;
+  level: "info" | "warning" | "error";
+  kind: string;
+  actor_email: string | null;
+  from_state: string | null;
+  to_state: string | null;
+  message: string | null;
+  details: Record<string, unknown>;
+};
+
+export type StorageMigration = {
+  id: string;
+  kind: "initial" | "live";
+  state: StorageMigrationState;
+  resume_state: string | null;
+  source_profile_name: string;
+  source_provider: StorageProvider;
+  source_generation: number;
+  target_profile_name: string;
+  target_provider: StorageProvider;
+  target_generation: number;
+  requested_by_email: string | null;
+  options: Record<string, unknown>;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  phase_started_at: string | null;
+  heartbeat_at: string | null;
+  checkpoint_at: string | null;
+  worker_active: boolean;
+  total_objects: number;
+  total_bytes: number;
+  copied_objects: number;
+  copied_bytes: number;
+  verified_objects: number;
+  failed_objects: number;
+  status_counts: Record<string, { objects: number; bytes: number }>;
+  current_bps: number | null;
+  average_bps: number | null;
+  eta_seconds: number | null;
+  estimate: { full?: MaintenanceEstimate | null; cutover?: MaintenanceEstimate | null } | null;
+  live_estimate: MaintenanceEstimate | null;
+  last_error: string | null;
+  attempt: number;
+  pause_requested: boolean;
+  cancel_requested: boolean;
+  cutover_confirmed_at: string | null;
+  cutover_committed_at: string | null;
+  needs_cutover_confirmation: boolean;
+  reference_check: { references: number; missing_count: number; unreferenced_count: number } | null;
+  maintenance_window_id: string | null;
+  final_integrity_ok: boolean;
+  events: StorageMigrationEvent[];
+};
+
+export type StorageGeneration = {
+  id: number;
+  profile_id: string;
+  profile_name: string;
+  generation: number;
+  status: "preparing" | "active" | "retained" | "abandoned" | "purge_requested" | "purging" | "purged";
+  object_count: number | null;
+  total_bytes: number | null;
+  created_at: string;
+  activated_at: string | null;
+  deactivated_at: string | null;
+  retain_until: string | null;
+  purge_requested_by: string | null;
+  purged_at: string | null;
+  purge_error: string | null;
+};
+
+export type StorageOverview = {
+  active_profile: StorageProfile;
+  active_generation: number;
+  write_fenced: boolean;
+  fence_reason: string | null;
+  credentials_key_configured: boolean;
+  local_s3: { needed: boolean; reason: string; configured: boolean; requested_until: string | null };
+  open_migration: StorageMigration | null;
+  generations: StorageGeneration[];
+  profiles: StorageProfile[];
+};
+
+// --- Backups (Plattform-Admin, /api/admin/backups, /api/admin/restores) ---------------------------
+
+export type BackupJobState = "queued" | "preparing" | "running" | "verifying" | "completed" | "partial" | "failed" | "cancelled" | "interrupted";
+export type BackupJobKind = "backup" | "verify" | "restore_test" | "retention";
+export type BackupTrigger = "schedule" | "manual" | "pre_restore" | "pre_deploy" | "cli";
+export type RestoreJobState = "queued" | "preparing" | "running" | "verifying" | "cutover" | "completed" | "failed" | "cancelled" | "interrupted" | "rolled_back";
+
+export type BackupProblem = { code: string; severity: "warning" | "critical"; params: Record<string, string | number | null> };
+
+export type BackupSetWarning = { code: string; count: number | null; items: Array<Record<string, string>> };
+
+export type BackupSet = {
+  id: string;
+  archive_name: string;
+  state: "completed" | "partial" | "failed" | "invalid" | "pruned";
+  trigger: BackupTrigger;
+  protected: boolean;
+  protected_reason: string | null;
+  snapshot_at: string;
+  finished_at: string | null;
+  app_version: string | null;
+  alembic_revision: string | null;
+  generation: number | null;
+  profile_name: string | null;
+  profile_provider: string | null;
+  db_dump_bytes: number | null;
+  object_count: number;
+  object_bytes: number;
+  new_object_count: number;
+  new_object_bytes: number;
+  deduplicated_bytes: number | null;
+  duration_seconds: number | null;
+  verify_state: "unverified" | "verified" | "failed";
+  verified_at: string | null;
+  restore_test_state: "untested" | "passed" | "failed";
+  restore_tested_at: string | null;
+  warnings: BackupSetWarning[];
+  tenant_count: number;
+  reconstructed: boolean;
+};
+
+export type BackupTenant = { id: number; public_id: string | null; name: string; users: number; objects: number; bytes: number };
+
+export type BackupJob = {
+  id: string;
+  kind: BackupJobKind;
+  trigger: BackupTrigger;
+  state: BackupJobState;
+  requested_by_email: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  heartbeat_at: string | null;
+  worker_active: boolean;
+  attempt: number;
+  cancel_requested: boolean;
+  progress: Record<string, string | number | null>;
+  error_code: string | null;
+  error_message: string | null;
+  warning_count: number;
+  duration_seconds: number | null;
+  backup_set: BackupSet | null;
+};
+
+export type BackupEvent = {
+  id: number;
+  created_at: string;
+  level: "info" | "warning" | "error";
+  kind: string;
+  actor_email: string | null;
+  message: string | null;
+  details: Record<string, unknown>;
+};
+
+export type BackupJobDetail = BackupJob & { result: Record<string, unknown> | null; events: BackupEvent[]; tenants: BackupTenant[] };
+
+export type BackupJobPage = { items: BackupJob[]; total: number; offset: number; limit: number };
+
+export type BackupRepositoryStatus = {
+  ok: boolean | null;
+  checked_at: string | null;
+  last_ok_at: string | null;
+  error_code: string | null;
+  error: string | null;
+  repository_id: string | null;
+  encryption: string | null;
+  borg_version: string | null;
+  stored_bytes: number | null;
+  original_bytes: number | null;
+  deduplicated_bytes: number | null;
+  quota_bytes: number | null;
+  used_percent: number | null;
+  staging_free_bytes: number | null;
+  staging_total_bytes: number | null;
+  last_gc_at: string | null;
+  last_verify_at: string | null;
+  last_verify_ok: boolean | null;
+  last_restore_test_at: string | null;
+  last_restore_test_ok: boolean | null;
+};
+
+export type RestoreJob = {
+  id: string;
+  kind: "full" | "tenant_copy";
+  state: RestoreJobState;
+  archive_name: string;
+  backup_set_id: string | null;
+  options: Record<string, unknown>;
+  plan: Record<string, unknown>;
+  requested_by_email: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  heartbeat_at: string | null;
+  worker_active: boolean;
+  progress: Record<string, string | number | null>;
+  error_code: string | null;
+  error_message: string | null;
+  result: Record<string, unknown> | null;
+  cancel_requested: boolean;
+  events: BackupEvent[];
+};
+
+export type BackupStatus = {
+  enabled: boolean;
+  overall: "ok" | "warning" | "critical" | "disabled";
+  problems: BackupProblem[];
+  last_success: BackupSet | null;
+  last_failure: BackupJob | null;
+  next_backup_at: string | null;
+  restore_point_count: number;
+  protected_count: number;
+  latest_object_bytes: number | null;
+  latest_db_bytes: number | null;
+  repository: BackupRepositoryStatus;
+  last_verified_at: string | null;
+  last_verified_archive: string | null;
+  last_restore_test_at: string | null;
+  last_restore_test_archive: string | null;
+  current_job: BackupJob | null;
+  current_restore: RestoreJob | null;
+  worker_heartbeat_at: string | null;
+  worker_alive: boolean;
+};
+
+export type BackupSettings = {
+  schedule_enabled: boolean;
+  interval_hours: number;
+  schedule_offset_minutes: number;
+  keep_within_days: number;
+  keep_daily: number;
+  keep_weekly: number;
+  keep_monthly: number;
+  verify_interval_hours: number;
+  verify_sample_objects: number;
+  restore_test_interval_days: number;
+  success_notification: "off" | "daily" | "each";
+  worker_config: Record<string, string | number | boolean | null>;
+  repository: BackupRepositoryStatus;
+  ntfy_configured: boolean;
+  updated_at: string;
+  updated_by_email: string | null;
+};
+
+export type RestorePreview = {
+  kind: "full" | "tenant_copy";
+  backup_set: BackupSet;
+  schema_state: "same" | "upgrade" | "newer" | "unknown";
+  schema_revision: string | null;
+  schema_head: string | null;
+  target_profile_name: string | null;
+  target_profile_provider: string | null;
+  tenant: BackupTenant | null;
+  new_name: string | null;
+  name_conflict: boolean;
+  steps: string[];
+  risks: string[];
+  blockers: string[];
+  confirmation_phrase: string;
+  requires_totp: boolean;
+  estimated_bytes: number;
+};
+
+// Cashflow im Plattform-Adminportal (/admin/cashflow), Beträge in Rappen.
+export type CashflowCostKind = "fixed" | "percent";
+export type CashflowCostStatus = "active" | "planned";
+export type CashflowCostInterval = "monthly" | "yearly" | "once";
+export type TenantChargeStatus = "open" | "paid" | "waived";
+
+export type CashflowCost = {
+  id: string;
+  name: string;
+  kind: CashflowCostKind;
+  amount_rp: number | null;
+  percent_bp: number | null;
+  interval: CashflowCostInterval | null;
+  start_date: string;
+  end_date: string | null;
+  status: CashflowCostStatus;
+  note: string | null;
+  next_due_on: string | null;
+  monthly_equivalent_rp: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CashflowCostWrite = {
+  name: string;
+  kind: CashflowCostKind;
+  amount_rp: number | null;
+  percent_bp: number | null;
+  interval: CashflowCostInterval | null;
+  start_date: string;
+  end_date: string | null;
+  status: CashflowCostStatus;
+  note: string | null;
+};
+
+export type TenantChargeLine = {
+  kind: "plan" | "feature" | "storage_package" | "discount";
+  label: string;
+  amount_rp: number;
+  quantity?: number | null;
+  percent?: number | null;
+};
+
+export type TenantCharge = {
+  id: string;
+  tenant_id: string | null;
+  tenant_name: string;
+  period_start: string;
+  period_end: string;
+  billing_cycle: "monthly" | "yearly";
+  amount_rp: number;
+  lines: TenantChargeLine[];
+  status: TenantChargeStatus;
+  paid_on: string | null;
+  note: string | null;
+  updated_at: string;
+  due_on: string;
+  is_overdue: boolean;
+};
+
+export type TenantChargeStatusTotals = { count: number; amount_rp: number };
+
+export type TenantChargePage = {
+  items: TenantCharge[];
+  total: number;
+  totals: Record<TenantChargeStatus | "overdue", TenantChargeStatusTotals>;
+};
+
+export type CashflowMonth = {
+  month: string;
+  income_rp: number;
+  fixed_rp: number;
+  percent_rp: number;
+  planned_fixed_rp: number;
+  planned_percent_rp: number;
+  open_rp: number;
+  is_future: boolean;
+};
+
+export type CashflowBalance = { income_rp: number; expenses_rp: number; planned_expenses_rp: number };
+
+export type CashflowOverview = {
+  year: number;
+  years: number[];
+  today: string;
+  months: CashflowMonth[];
+  year_to_date: CashflowBalance;
+  all_time: CashflowBalance;
+  run_rate: {
+    income_rp: number;
+    fixed_rp: number;
+    percent_rp: number;
+    planned_fixed_rp: number;
+    planned_percent_rp: number;
+    paying_tenants: number;
+  };
+  open: TenantChargeStatusTotals;
+  waived: TenantChargeStatusTotals;
+  overdue: TenantChargeStatusTotals;
+};
+
+// Forderungen aus Sicht des Mandanten (Abo & Nutzung), ohne interne Notiz.
+export type TenantPortalChargeStatus = "open" | "overdue" | "paid" | "waived";
+
+export type TenantPortalCharge = {
+  id: string;
+  period_start: string;
+  period_end: string;
+  billing_cycle: "monthly" | "yearly";
+  amount_rp: number;
+  lines: TenantChargeLine[];
+  status: TenantPortalChargeStatus;
+  due_on: string;
+  paid_on: string | null;
+};
+
+export type TenantPortalCharges = {
+  items: TenantPortalCharge[];
+  open: TenantChargeStatusTotals;
+  overdue: TenantChargeStatusTotals;
+  payment_term_days: number;
+};
+
+// ── Audit-Log / Verlauf (Datenschutz-Audit PRIV-013) ─────────────────────
+
+export type ActivityEntry = {
+  created_at: string;
+  action: string;
+  category: string;
+  outcome: "success" | "failure";
+  actor_kind: "user" | "platform" | "system" | "deleted";
+  actor_name: string | null;
+  entity_type: string | null;
+};
+
+export type ActivityPage = { items: ActivityEntry[]; total: number; categories: string[] };
+
+export type AuditLogEntry = {
+  id: number;
+  created_at: string;
+  action: string;
+  outcome: "success" | "failure";
+  tenant_id: string | null;
+  tenant_name: string | null;
+  actor_email: string | null;
+  actor_name: string | null;
+  ip_hash: string | null;
+  entity_type: string | null;
+  entity_id: number | null;
+  details: Record<string, unknown>;
+};
+
+export type AuditLogPage = { items: AuditLogEntry[]; total: number };

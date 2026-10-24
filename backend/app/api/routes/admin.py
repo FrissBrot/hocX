@@ -2,13 +2,13 @@ import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi import Path as PathParam
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
@@ -16,10 +16,12 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.admin_security import CurrentAdmin, get_current_admin, require_admin_owner, require_admin_write
 from app.core.config import settings
-from app.core.db import get_db
+from app.core.db import get_db, release_for_stream
 from app.models.entities import AppUser, PlatformAdmin, SystemHealthEvent, Tenant, TenantDomain, UserMfaFactor
-from app.services import public_id_service
+from app.services import export_crypto, public_id_service
 from app.schemas.admin import (
+    AuditLogEntryRead,
+    AuditLogPage,
     AdminDomainPage,
     AdminDomainRead,
     AdminFeatureRead,
@@ -33,7 +35,6 @@ from app.schemas.admin import (
     AdminTenantPage,
     AdminTenantRead,
     AdminTenantStoragePackagesUpdate,
-    AdminTenantStorageQuotaUpdate,
     AdminTenantSubscriptionUpdate,
     AdminTenantWebsiteListingUpdate,
     AdminTenantUserGrant,
@@ -54,6 +55,7 @@ from app.schemas.admin import (
     TenantCleanupCounts,
     TenantCleanupRequest,
     TenantCloneRequest,
+    TenantExportRequest,
     TenantImportResult,
     UploadPipelineOverview,
 )
@@ -78,7 +80,6 @@ from app.services.admin_tenant_service import AdminTenantService
 from app.services.admin_tenant_user_service import AdminTenantUserService
 from app.services.admin_mfa_service import AdminMfaService
 from app.services.admin_user_service import AdminUserService, PlatformAdminService
-from app.services.file_service import _safe_storage_path
 from app.services.mfa_service import MfaService
 from app.services.audit_service import AuditService
 from app.services.catalog_config_service import CatalogChangedError, CatalogConfigService
@@ -90,6 +91,7 @@ from app.services.tenant_clone_service import TenantCloneService
 from app.services.tenant_cleanup_service import TenantCleanupService
 from app.services.tenant_export_service import TenantExportService
 from app.services.tenant_import_service import TenantImportService
+from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter(dependencies=[Depends(get_current_admin)])
 
@@ -135,7 +137,9 @@ def _resolve_factor_id(db: Session, factor_id: uuid.UUID) -> int:
     return internal_id
 
 
-def _expected_origin(request: Request) -> str:
+def _browser_origin(request: Request) -> str:
+    """Origin der Seite, wie der Browser ihn meldet - nur für die Entscheidung, ob auf diesem
+    Host Passkeys angeboten werden (siehe _request_hostname), nie als Prüfwert."""
     origin = request.headers.get("origin")
     if origin:
         return origin
@@ -145,19 +149,29 @@ def _expected_origin(request: Request) -> str:
     return f"https://{host}"
 
 
+def _expected_origin(request: Request) -> str:
+    """Erwarteter WebAuthn-Origin. Mit konfigurierter Admin-Domain fest auf diese gesetzt statt aus
+    dem Origin-Header des Requests übernommen (Security-Audit SEC-021, gleiche Regel wie
+    routes/auth.py) - ein Vergleich mit dem Wert aus demselben Request prüft nichts. Nur lokal
+    (ohne Domain) gilt weiter der Origin des Requests."""
+    if settings.traefik_admin_domain:
+        return f"https://{settings.traefik_admin_domain}"
+    return _browser_origin(request)
+
+
 def _request_hostname(request: Request) -> str | None:
     """WebAuthn's rp.id must match the browser's real page origin - request.url.hostname is
     wrong whenever this request arrived through the frontend's own /api/* rewrite proxy
     (next.config.mjs's rewrites()), which replaces the Host header with its own upstream
     target (the backend container's internal hostname, e.g. "backend") rather than
-    preserving the browser's original one. Reuses _expected_origin's own header-derived
+    preserving the browser's original one. Reuses _browser_origin's own header-derived
     value (the Origin header the browser sends, which passes through that same proxy hop
     unchanged, unlike Host) instead of computing a second, independently-diverging notion
     of "the request's host" (audit fix, 2026-09-17 - this silently broke every admin
     passkey registration ceremony: navigator.credentials.create() rejects a mismatched
     rp.id with a SecurityError before ever reaching an authenticator, with no server-side
     error to notice)."""
-    return urlparse(_expected_origin(request)).hostname
+    return urlparse(_browser_origin(request)).hostname
 
 
 @router.get("/tenants", response_model=AdminTenantPage)
@@ -211,8 +225,66 @@ def list_error_logs(
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None
+    # Lesezugriff auf mandantenübergreifende Fehlerdaten nachvollziehbar machen (PRIV-013).
+    audit.log(db, action="admin.error_logs_viewed", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+              details={"offset": offset})
     return error_log_service.list_errors(
         db, tenant_id=internal_tenant_id, error_type=error_type, source=source, limit=min(limit, 200), offset=offset
+    )
+
+
+@router.get("/audit-log", response_model=AuditLogPage)
+def list_audit_log(
+    tenant_id: uuid.UUID | None = None,
+    action: str | None = Query(default=None, max_length=100),
+    outcome: str | None = Query(default=None, pattern="^(success|failure)$"),
+    limit: int = Query(50, gt=0, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    """Sicherheits- und Änderungsereignisse aller Mandanten (PRIV-013). ``action`` filtert nach
+    Präfix (``user.login`` trifft auch ``user.login_failed``)."""
+    params = {
+        "tenant_id": _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None,
+        "action": action.replace("%", "").replace("_", "\\_") + "%" if action else None,
+        "outcome": outcome,
+        "limit": limit,
+        "offset": offset,
+    }
+    filters = """
+        WHERE (CAST(:tenant_id AS bigint) IS NULL OR l.tenant_id = :tenant_id)
+          AND (CAST(:action AS text) IS NULL OR l.action LIKE :action)
+          AND (CAST(:outcome AS text) IS NULL OR l.outcome = :outcome)"""
+    rows = db.execute(
+        text(
+            """
+            SELECT l.id, l.created_at, l.action, l.outcome, t.public_id AS tenant_public_id, t.name AS tenant_name,
+                   COALESCE(u.email, l.actor_email) AS actor_email, u.display_name AS actor_name, l.ip_hash,
+                   l.entity_type, l.entity_id, l.details_json
+            FROM audit_log l
+            LEFT JOIN tenant t ON t.id = l.tenant_id
+            LEFT JOIN app_user u ON u.id = l.actor_user_id"""
+            + filters
+            + """
+            ORDER BY l.created_at DESC, l.id DESC
+            LIMIT :limit OFFSET :offset
+            """
+        ),
+        params,
+    ).all()
+    total = db.scalar(text("SELECT count(*) FROM audit_log l" + filters), params) or 0
+    return AuditLogPage(
+        items=[
+            AuditLogEntryRead(
+                id=row.id, created_at=row.created_at, action=row.action, outcome=row.outcome,
+                tenant_id=row.tenant_public_id, tenant_name=row.tenant_name, actor_email=row.actor_email,
+                actor_name=row.actor_name, ip_hash=row.ip_hash, entity_type=row.entity_type,
+                entity_id=row.entity_id, details=row.details_json or {},
+            )
+            for row in rows
+        ],
+        total=total,
     )
 
 
@@ -256,6 +328,7 @@ def get_system_status(
         stale=system_health_service.is_stale(snapshot, now),
         problems=system_alert_service.current_problems(db, snapshot, now=now),
         events=[SystemHealthEventRead.model_validate(event, from_attributes=True) for event in events],
+        overload=system_health_service.overload_by_tenant(db, now),
     )
 
 
@@ -379,10 +452,24 @@ async def update_tenant(
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_update_tenant_impl, tenant_id=tenant_id, name=name, public_slug=public_slug, profile_image=profile_image, db=db, current_admin=current_admin)
+
+
+async def _update_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    tenant_id: uuid.UUID,
+    name: str | None = Form(default=None),
+    public_slug: str | None = Form(default=None),
+    profile_image: UploadFile | None = File(default=None),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     try:
         tenant = await tenant_service.update_tenant(
-            db, internal_tenant_id, TenantUpdate(name=name, public_slug=public_slug), profile_image
+            db, internal_tenant_id, TenantUpdate(name=name, public_slug=public_slug), profile_image,
+            admin_email=current_admin.email,
         )
     except SQLAlchemyError as exc:
         db.rollback()
@@ -409,7 +496,8 @@ def delete_tenant(tenant_id: uuid.UUID, db: Session = Depends(get_db), current_a
         raise HTTPException(status_code=404, detail="Tenant not found")
     # tenant_id darf hier NICHT gesetzt werden: der Tenant wurde oben bereits geloescht+committed,
     # audit_log.tenant_id hat eine FK auf tenant(id) - welcher Tenant betroffen war steht in entity_id.
-    audit.log(db, action="admin.tenant_deleted", actor_email=current_admin.email, entity_type="tenant", entity_id=internal_tenant_id)
+    audit.log(db, action="admin.tenant_deleted", actor_email=current_admin.email, entity_type="tenant", entity_id=internal_tenant_id,
+              details={"report": deleted})
 
 
 @router.get("/tenants/{tenant_id}/cleanup/preview", response_model=TenantCleanupCounts)
@@ -458,31 +546,6 @@ def get_tenant_storage(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
     return storage_service.breakdown_for_tenant(db, internal_tenant_id)
-
-
-@router.patch("/tenants/{tenant_id}/storage-quota", response_model=AdminTenantRead)
-def update_tenant_storage_quota(
-    tenant_id: uuid.UUID,
-    payload: AdminTenantStorageQuotaUpdate,
-    db: Session = Depends(get_db),
-    current_admin: CurrentAdmin = Depends(require_admin_write),
-):
-    internal_tenant_id = _resolve_tenant_id(db, tenant_id)
-    quota_bytes = payload.quota_mb * 1024 * 1024 if payload.quota_mb is not None else None
-    tenant = storage_service.set_quota(db, internal_tenant_id, quota_bytes)
-    if tenant is None:
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    if payload.quota_mb is None:
-        # Override wurde entfernt (leeres Feld) - Kontingent wieder aus Plan + Paketen ableiten.
-        tenant_service.recompute_effective_storage_quota(db, internal_tenant_id)
-    audit.log(
-        db, action="admin.tenant_storage_quota_updated", actor_email=current_admin.email, tenant_id=internal_tenant_id,
-        entity_type="tenant", entity_id=internal_tenant_id, details={"quota_mb": payload.quota_mb},
-    )
-    result = tenant_service.get_tenant(db, internal_tenant_id)
-    if result is None:
-        raise HTTPException(status_code=500, detail="Tenant could not be reloaded")
-    return result
 
 
 @router.put("/tenants/{tenant_id}/website-listing", response_model=AdminTenantRead)
@@ -715,6 +778,7 @@ def update_tenant_subscription(
             "billing_cycle": payload.billing_cycle,
             "user_limit_override": payload.user_limit_override,
             "discount_percent": payload.discount_percent,
+            "billing_start_date": payload.billing_start_date.isoformat() if payload.billing_start_date else None,
         },
     )
     return result
@@ -769,10 +833,10 @@ def clone_tenant(
     return result
 
 
-@router.get("/tenants/{tenant_id}/export")
+@router.post("/tenants/{tenant_id}/export")
 def export_tenant(
     tenant_id: uuid.UUID,
-    scope: Literal["structure", "structure_lists", "full", "full_abgabebox"] = "structure",
+    payload: TenantExportRequest,
     db: Session = Depends(get_db),
     # Was get_current_admin (audit finding, 2026-08-25) - a "full"/"full_abgabebox" scope
     # export includes every member's real, immediately-usable password hash (see
@@ -782,21 +846,33 @@ def export_tenant(
     # any tenant.
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
+    """Der Export verlässt den Server nur verschlüsselt (export_crypto.py): mit dem Passwort aus
+    dem Body, sonst mit dem Server-Schlüssel. POST, damit das Passwort nie in einer URL steht."""
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     try:
-        zip_path, filename = export_service.export(db, internal_tenant_id, scope)
+        password = export_crypto.validate_password(payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        zip_path, filename = export_service.export(db, internal_tenant_id, payload.scope, include_credentials=payload.include_credentials)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    encrypted_path = zip_path.with_name(zip_path.name + export_crypto.ENCRYPTED_SUFFIX)
+    try:
+        export_crypto.encrypt_file(zip_path, encrypted_path, password=password)
+    finally:
+        zip_path.unlink(missing_ok=True)
     audit.log(
         db, action="admin.tenant_exported", actor_email=current_admin.email, tenant_id=internal_tenant_id,
-        entity_type="tenant", entity_id=internal_tenant_id, details={"scope": scope},
+        entity_type="tenant", entity_id=internal_tenant_id,
+        details={"scope": payload.scope, "encryption": "password" if password else "server", "credentials": payload.include_credentials},
     )
-    return FileResponse(
-        zip_path,
-        filename=filename,
-        media_type="application/zip",
-        background=BackgroundTask(lambda: zip_path.unlink(missing_ok=True)),
-    )
+    return release_for_stream(db, FileResponse(
+        encrypted_path,
+        filename=filename + export_crypto.ENCRYPTED_SUFFIX,
+        media_type="application/octet-stream",
+        background=BackgroundTask(lambda: encrypted_path.unlink(missing_ok=True)),
+    ))
 
 
 
@@ -812,6 +888,19 @@ MAX_TENANT_IMPORT_UPLOAD_BYTES = 2000 * 1024 * 1024
 async def import_tenant(
     new_name: str = Form(...),
     file: UploadFile = File(...),
+    password: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_import_tenant_impl, new_name=new_name, file=file, password=password, db=db, current_admin=current_admin)
+
+
+async def _import_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    new_name: str = Form(...),
+    file: UploadFile = File(...),
+    password: str | None = Form(default=None),
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
@@ -826,8 +915,24 @@ async def import_tenant(
         max_bytes=MAX_TENANT_IMPORT_UPLOAD_BYTES,
         suffix=".zip",
     )
+    # Starlettes Zwischenspeicher des Uploads lebt sonst bis zum Ende der Antwort - also über
+    # den ganzen, minutenlangen Import: bis 2 GiB doppelt auf der Platte (Concurrency-Audit).
+    await file.close()
+    zip_path = tmp_path
     try:
-        new_tenant, warnings = await run_in_threadpool(import_service.import_zip, db, tmp_path, new_name)
+        # Verschlüsselte Exporte (export_crypto.py) erst entschlüsseln; ältere, unverschlüsselte
+        # ZIP-Exporte bleiben importierbar.
+        if export_crypto.is_encrypted(tmp_path):
+            zip_path = tmp_path.with_name(tmp_path.name + ".zip")
+            try:
+                await run_in_threadpool(export_crypto.decrypt_file, tmp_path, zip_path, password=password or None)
+            except export_crypto.ExportDecryptionError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            # Verschlüsselte Fassung wird nicht mehr gebraucht - vor dem Entpacken freigeben.
+            tmp_path.unlink(missing_ok=True)
+        new_tenant, warnings = await run_in_threadpool(import_service.import_zip, db, zip_path, new_name)
+    except HTTPException:
+        raise
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -836,6 +941,8 @@ async def import_tenant(
         raise HTTPException(status_code=400, detail="Tenant could not be imported") from exc
     finally:
         tmp_path.unlink(missing_ok=True)
+        if zip_path != tmp_path:
+            zip_path.unlink(missing_ok=True)
     result = tenant_service.get_tenant(db, new_tenant.id)
     if result is None:
         raise HTTPException(status_code=500, detail="Imported tenant could not be reloaded")
@@ -853,6 +960,8 @@ def list_tenant_users(
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
+    audit.log(db, action="admin.tenant_users_viewed", actor_email=current_admin.email, tenant_id=internal_tenant_id,
+              entity_type="tenant", entity_id=internal_tenant_id)
     return tenant_user_service.list_users(db, internal_tenant_id)
 
 
@@ -920,15 +1029,12 @@ def update_platform_oidc_config(
 
 
 @router.get("/tenants/{tenant_id}/profile-image")
-def tenant_profile_image(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
+def tenant_profile_image(tenant_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     tenant = tenant_service.get_tenant(db, internal_tenant_id)
     if tenant is None or tenant.profile_image_path is None:
         raise HTTPException(status_code=404, detail="Tenant profile image not found")
-    file_path = _safe_storage_path(settings.storage_root, tenant.profile_image_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Tenant profile image missing")
-    return tenant_profile_image_response(file_path)
+    return tenant_profile_image_response(request, tenant.profile_image_path)
 
 
 @router.get("/users", response_model=AdminUserPage)
@@ -939,6 +1045,7 @@ def list_users(
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_owner),
 ):
+    audit.log(db, action="admin.users_viewed", actor_email=current_admin.email, details={"offset": offset, "search": bool(q)})
     return user_service.list_users(db, limit=limit, offset=offset, q=q)
 
 
@@ -956,7 +1063,6 @@ def create_user(
     audit.log(
         db, action="admin.user_created", actor_email=current_admin.email,
         entity_type="user", entity_id=public_id_service.resolve_internal_id(db, AppUser, result.id),
-        details={"email": payload.email},
     )
     return result
 
@@ -971,6 +1077,7 @@ def get_user(
     user = user_service.get_user(db, internal_user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    audit.log(db, action="admin.user_viewed", actor_email=current_admin.email, entity_type="user", entity_id=internal_user_id)
     return user
 
 

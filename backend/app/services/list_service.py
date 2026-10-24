@@ -175,8 +175,13 @@ class ListService:
         return self._entry_read(db, updated, definition=definition)
 
     def delete_entry(self, db: Session, list_entry_id: int) -> bool:
+        from app.services import deletion_service
+
         entry = self.repository.get_entry(db, list_entry_id)
         if entry is None:
             return False
+        # Einreichungen zu diesem Eintrag samt Dateien löschen (sonst verwaist, PRIV-003).
+        if deletion_service.erase_uploads_of(db, list_entry_id=list_entry_id):
+            entry = self.repository.get_entry(db, list_entry_id)
         self.repository.delete_entry(db, entry)
         return True

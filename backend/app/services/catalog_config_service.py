@@ -126,6 +126,7 @@ PLAN_FIELDS = (
     _Field("feature_codes", "feature_codes", lambda value, _old: sorted(set(value))),
     _Field("is_bookable", "is_bookable"),
     _Field("is_featured", "is_featured"),
+    _Field("load_priority", "load_priority"),
     _Field("sort_order", "sort_order"),
 )
 STORAGE_PACKAGE_FIELDS = (
@@ -199,6 +200,7 @@ class CatalogConfigService:
                 "feature_codes": feature_codes_by_plan.get(p.code, []),
                 "is_bookable": p.is_bookable,
                 "is_featured": p.is_featured,
+                "load_priority": p.load_priority,
                 "sort_order": p.sort_order,
             }
             for p in db.scalars(select(Plan).order_by(Plan.sort_order.asc(), Plan.price_yearly_rp.asc().nulls_first(), Plan.code.asc()))
@@ -575,6 +577,7 @@ class CatalogConfigService:
                     "feature_codes": "Liste der enthaltenen Module, z.B. [\"finance\"]. Standard: [].",
                     "is_bookable": "true = bei neuen Mandanten und auf der Website wählbar, false = nur vom Admin zuweisbar. Standard: true.",
                     "is_featured": "true = auf der Website als 'Beliebteste Wahl' hervorgehoben. Standard: false.",
+                    "load_priority": "Priorität bei Überlast: 0 = niedrig (neue Nutzer sehen zuerst die Überlast-Seite), 1 = normal, 2 = hoch (nie vorab abgewiesen). Standard: 1.",
                     "sort_order": "Ganze Zahl für die Reihenfolge. Standard: 0.",
                 },
                 "storage_packages": {

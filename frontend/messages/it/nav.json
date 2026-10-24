@@ -26,7 +26,6 @@
   "fines": "Multe",
   "protocolTemplates": "Modelli di verbale",
   "elements": "Elementi",
-  "documentLayouts": "Layout documenti",
   "general": "Generale",
   "domains": "Domini",
   "subscriptionAndUsage": "Abbonamento e utilizzo",
@@ -50,5 +49,15 @@
   "sessionReady": "Pronto",
   "sessionLoading": "Caricamento dell'area di lavoro…",
   "connections": "Collegamenti",
-  "taskPackages": "Pacchetti di attività"
+  "taskPackages": "Pacchetti di attività",
+  "documentVerification": "Verifica di autenticità",
+  "documentStudio": "Studio documenti",
+  "documentTemplates": "Modelli",
+  "documentBrand": "Corporate design",
+  "documentAssets": "Immagini e caratteri",
+  "documentComponents": "Componenti",
+  "documentExports": "Cronologia esportazioni",
+  "privacy": "Protezione dei dati",
+  "activity": "Cronologia",
+  "retention": "Conservazione"
 }

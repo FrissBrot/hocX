@@ -10,6 +10,7 @@
     "dashboard": "Tableau de bord",
     "tenants": "Organisations",
     "pricing": "Tarifs",
+    "cashflow": "Trésorerie",
     "users": "Utilisateurs",
     "domains": "Domaines",
     "systemStatus": "État du système",
@@ -19,7 +20,13 @@
     "jobs": "Tâches",
     "admins": "Comptes administrateurs",
     "sso": "SSO",
-    "security": "Sécurité"
+    "security": "Sécurité",
+    "verifications": "Vérifications",
+    "storage": "Stockage",
+    "backups": "Sauvegardes",
+    "maintenance": "Maintenance",
+    "documentTemplates": "Modèles de documents",
+    "auditLog": "Journal d’audit"
   },
   "logout": "Se déconnecter",
   "menuToggleClose": "Fermer",

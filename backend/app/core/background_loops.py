@@ -52,6 +52,15 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "gallery_upload_ingest": 202600015,
     "system_monitor": 202600017,
     "task_package_rollover": 202600018,
+    "maintenance_supervisor": 202600019,
+    "storage_journal_cleanup": 202600020,
+    # 202600026 statt 202600023: diese ID hält storage_migration_service.create_migration als
+    # Transaktions-Lock (gegenseitiges Blockieren bzw. übersprungene Ticks).
+    "document_sync": 202600026,
+    "storage_purge": 202600025,
+    "tenant_data_export": 202600027,
+    "retention_proposals": 202600028,
+    "thumbnail_backfill": 202600029,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht
@@ -62,7 +71,18 @@ EXTERNAL_LOCK_IDS: dict[str, int] = {
     "abgabebox_quarantine_cleanup": 202600016,  # abgabebox-backend: QUARANTINE_CLEANUP_LOCK_ID
 }
 
-_ALL_LOCK_IDS = [*BACKGROUND_LOCK_IDS.values(), *EXTERNAL_LOCK_IDS.values()]
+# Einmalige Advisory-Locks (Startup-Seeds, Storage-Worker), damit auch sie in die
+# Eindeutigkeitsprüfung eingehen.
+RESERVED_LOCK_IDS: dict[str, int] = {
+    "startup_seed_data": 202600004,
+    "startup_local_storage_profile": 202600021,
+    "storage_worker_claim": 202600022,
+    "storage_migration_create": 202600023,  # storage_migration_service.create_migration
+    # Backup-Worker: genau ein Schreiber auf Repository und Inhaltsindex (app/workers/backup_worker.py).
+    "backup_worker_repository": 202600024,
+}
+
+_ALL_LOCK_IDS = [*BACKGROUND_LOCK_IDS.values(), *EXTERNAL_LOCK_IDS.values(), *RESERVED_LOCK_IDS.values()]
 assert len(_ALL_LOCK_IDS) == len(set(_ALL_LOCK_IDS)), "duplicate advisory lock id in BACKGROUND_LOCK_IDS/EXTERNAL_LOCK_IDS"
 
 
@@ -107,8 +127,11 @@ async def run_advisory_locked_loop(
     # Lazy: job_registry importiert BACKGROUND_LOCK_IDS aus diesem Modul.
     from app.core.job_registry import JOBS_BY_NAME
 
+    from app.services.maintenance_service import current_effective_state
+
     lock_id = BACKGROUND_LOCK_IDS[name]
     keep_history = JOBS_BY_NAME[name].keep_history
+    runs_during_maintenance = JOBS_BY_NAME[name].runs_during_maintenance
     # Startversatz: beim Hochfahren tickten sonst alle Loops im selben Moment, jeder mit
     # Lock-Verbindung + Session - bei 11 Loops 22 Verbindungen für einen Pool von 15. Die
     # Nachzügler warteten bis zum 30-s-Pool-Timeout (2026-10-11 im Dev-Stack gemessen: fast
@@ -119,9 +142,18 @@ async def run_advisory_locked_loop(
         (Audit MAIN-BE-018): Checkout und Lock-Abfrage liefen vorher synchron auf dem
         Event-Loop und blockierten bei erschöpftem Pool den ganzen Worker bis zum
         Pool-Timeout."""
+        # Während voller Wartung pausieren alle nicht ausgenommenen Loops (Tick ohne Meldung,
+        # wie ein übersprungener Tick - die Job-Übersicht zeigt die Wartung separat).
+        if not runs_during_maintenance and current_effective_state().full_active:
+            return None
         if should_run is not None and not should_run():
             return None
         with engine.begin() as lock_conn:
+            # Die Lock-Verbindung ist während des Ticks untätig in ihrer Transaktion. Ohne das
+            # beendete PostgreSQL sie nach idle_in_transaction_session_timeout der Rolle (30 min,
+            # Migration 0135) - der Lock wäre frei und der Job liefe auf dem anderen Worker ein
+            # zweites Mal (Concurrency-Audit CONC-006, nachgemessen).
+            lock_conn.execute(text("SET LOCAL idle_in_transaction_session_timeout = 0"))
             acquired = lock_conn.execute(
                 text("SELECT pg_try_advisory_xact_lock(:lock_id)"),
                 {"lock_id": lock_id},

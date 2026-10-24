@@ -47,5 +47,6 @@
   "totalCountSub": "{count} total",
   "viewByMember": "Per member",
   "viewByTime": "Over time",
-  "withParticipants": "With participants"
+  "withParticipants": "With participants",
+  "perPersonOwnHint": "For fines and attendance per person, you only see your own figures."
 }

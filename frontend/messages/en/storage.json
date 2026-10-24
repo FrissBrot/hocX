@@ -2,7 +2,7 @@
   "categoryHints": {
     "photos": "Gallery, protocol images and submission-box images",
     "files": "Word imports, submission-box documents and other uploads",
-    "protocols": "Generated PDF/LaTeX exports",
+    "protocols": "Generated PDF exports",
     "other": "Logos, imports and other files"
   },
   "quotaComposition": {

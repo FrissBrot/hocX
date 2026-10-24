@@ -114,6 +114,14 @@ class AccessService:
         if tenant_id is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
         if user.current_role not in {"admin", "writer", "kassier"}:
+            # Leser dürfen PDFs herunterladen, die sie selbst mit der Dokument-Engine erzeugt
+            # haben (Statistik, Termine, Todos …): das Rendern ist für sie erlaubt, die Inhalte
+            # haben die Blöcke bereits nach ihren Rechten gefiltert.
+            if (
+                user.current_tenant_id == tenant_id
+                and self.repository.is_own_document_export_file(db, stored_file_id=stored_file_id, user_id=user.user_id, tenant_id=tenant_id)
+            ):
+                return
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Stored file not accessible")
         if user.current_tenant_id == tenant_id:
             return

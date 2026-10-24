@@ -46,8 +46,10 @@ from app.api.routes import admin as admin_routes
 from app.core.admin_security import CurrentAdmin, get_current_admin
 from app.db.base import Base
 from app.models.entities import (
+    DocumentAsset,
+    DocumentComponent,
     DocumentTemplate,
-    DocumentTemplatePart,
+    DocumentTemplateAssignment,
     FinanceTransaction,
     GroupEntity,
     Leader,
@@ -174,15 +176,20 @@ def make_leader(db, tenant_id: int, name: str) -> Leader:
     return row
 
 
-def make_document_template(db, tenant_id: int, code: str) -> DocumentTemplate:
-    row = DocumentTemplate(tenant_id=tenant_id, code=code, name="Doc", filesystem_path=f"/tmp/{code}.tex")
-    db.add(row)
+def make_document_studio_data(db, tenant_id: int, code: str, protocol_template_id: int) -> DocumentTemplate:
+    """Brand-Profil, Mandantenvorlage mit Revision, Komponente und Zuweisung (Document Studio)."""
+    from app.documents import brand_service, template_service
+
+    brand = brand_service.create_brand(db, tenant_id, name=f"Brand {code}")
+    template, _revision = template_service.create_template(db, tenant_id, name=f"Vorlage {code}", document_type="protocol")
+    db.add(DocumentComponent(tenant_id=tenant_id, name=f"Komponente {code}", schema_version=1, node_json={"type": "spacer", "id": "s"}))
+    db.add(DocumentTemplateAssignment(tenant_id=tenant_id, document_type="protocol", protocol_template_id=protocol_template_id, brand_id=brand.id))
     db.flush()
-    return row
+    return template
 
 
-def make_document_template_part(db, tenant_id: int, code: str) -> DocumentTemplatePart:
-    row = DocumentTemplatePart(tenant_id=tenant_id, code=code, name="Part", part_type="header", storage_path=f"/tmp/{code}.tex")
+def make_document_asset(db, tenant_id: int, code: str) -> DocumentAsset:
+    row = DocumentAsset(tenant_id=tenant_id, kind="image", name=f"Logo {code}", storage_path=f"document_assets/tenant-{tenant_id}/{code}.png")
     db.add(row)
     db.flush()
     return row
@@ -257,8 +264,8 @@ def _build_tenant_dataset(db, tenant: Tenant, suffix: str) -> dict:
     make_group_entity(db, tenant.id, name=f"Gruppe {suffix}")
     make_leader(db, tenant.id, name=f"Leiter {suffix}")
     domain = make_tenant_domain(db, tenant.id, domain=f"{suffix}.example.com")
-    make_document_template(db, tenant.id, code=f"doc-{suffix}")
-    make_document_template_part(db, tenant.id, code=f"part-{suffix}")
+    make_document_studio_data(db, tenant.id, code=f"doc-{suffix}", protocol_template_id=template.id)
+    make_document_asset(db, tenant.id, code=f"part-{suffix}")
     make_user_template_access(db, user.id, tenant.id, template.id)
     make_user_protocol_access(db, user.id, tenant.id, protocol.id)
 
@@ -296,7 +303,8 @@ def test_delete_tenant_removes_every_tenant_scoped_row_and_spares_other_tenants(
     # `DELETE FROM template` ran, because word_import_document.template_id (RESTRICT,
     # NOT NULL) still pointed at it.
     deleted = AdminTenantService().delete_tenant(db, tenant_a.id)
-    assert deleted is True
+    # Rückgabe ist seit PRIV-023 ein Löschbericht statt True
+    assert deleted and deleted["stored_files"] >= 0
 
     assert db.get(Tenant, tenant_a.id) is None
 
@@ -322,7 +330,7 @@ def test_delete_tenant_cascades_through_non_tenant_scoped_child_tables(db):
     tenant = make_tenant(db, "Tenant Cascade")
     data = _build_tenant_dataset(db, tenant, "cascade")
 
-    assert AdminTenantService().delete_tenant(db, tenant.id) is True
+    assert AdminTenantService().delete_tenant(db, tenant.id)
 
     assert db.get(Protocol, data["protocol"].id) is None
     assert db.get(ProtocolElement, data["protocol_element_id"]) is None
@@ -344,7 +352,7 @@ def test_delete_tenant_cascades_through_non_tenant_scoped_child_tables(db):
 
 
 def test_delete_tenant_returns_false_for_unknown_tenant(db):
-    assert AdminTenantService().delete_tenant(db, 999_999_999) is False
+    assert AdminTenantService().delete_tenant(db, 999_999_999) is None
 
 
 def test_delete_tenant_route_audits_without_fk_violation(db):

@@ -76,6 +76,7 @@
     "captchaPlaceholder": "Security check (no FriendlyCaptcha configured – test/dev environment)",
     "submit": "Submit",
     "submitting": "Uploading…",
+    "busyRetry": "Many uploads at the moment – trying again in {seconds, plural, one {# second} other {# seconds}} …",
     "successTitle": "Thank you, submission received",
     "successCount": "{count, plural, one {# file uploaded for this submission.} other {# files uploaded for this submission.}}",
     "uploadMore": "Submit another file",
@@ -104,10 +105,115 @@
       "element": "Document",
       "files": "Files",
       "receivedAt": "Received"
-    }
+    },
+    "includeGps": "Include the image’s GPS data",
+    "privacyResponsible": "{tenant} is responsible for your files.",
+    "privacyLink": "Privacy notice",
+    "privacyCaptcha": "To prevent spam, Friendly Captcha checks your browser without cookies or tracking."
   },
   "language": {
     "label": "Language"
   },
-  "copyright": "Copyright © {year} hocX Project · All rights reserved."
+  "copyright": "Copyright © {year} hocX Project · All rights reserved.",
+  "verify": {
+    "brand": {
+      "subtitle": "Authenticity check",
+      "headline": "Does this document really come from hocX?",
+      "lead": "Drop the PDF file. We compare its digital fingerprint with every document created with hocX.",
+      "privacyNote": "The file never leaves your device - only its fingerprint is checked."
+    },
+    "title": "Verify authenticity",
+    "hint": "Check whether a PDF file comes unchanged from hocX.",
+    "documentHint": "Document {id} – drop the PDF file here to verify it.",
+    "dropLabelTouch": "Choose PDF file",
+    "dropRelease": "Release to verify",
+    "dropOverlay": "Release the file to verify it",
+    "privacy": "The file is not uploaded. Your browser computes its digital fingerprint (SHA-256) and sends only that for verification.",
+    "checking": "Checking …",
+    "checkAnother": "Check another file",
+    "originalTitle": "Original",
+    "originalText": "This file is an unchanged copy of a document created with hocX on {date}.",
+    "fields": {
+      "documentType": "Document type",
+      "title": "Title",
+      "status": "Status when created",
+      "version": "Version",
+      "documentId": "Document ID"
+    },
+    "statusLabel": {
+      "geplant": "Draft (planned)",
+      "durchgeführt": "Draft (held)",
+      "abgeschlossen": "Final"
+    },
+    "docType": {
+      "protocol": "Minutes",
+      "invitation": "Invitation",
+      "todos": "Task list",
+      "events": "Schedule",
+      "attendance_sheet": "Attendance sheet",
+      "members": "Member list",
+      "finance": "Financial report",
+      "statistics": "Annual report",
+      "list": "List",
+      "custom": "Document",
+      "protocol_excerpt": "Protocol excerpt"
+    },
+    "createdBy": "Created in the hocX account of {name}.",
+    "verifiedBadge": "Verified organisation",
+    "verifiedExplanation": "hocX has confirmed that this account belongs to the organisation “{name}”.",
+    "logoAlt": "Logo of {name}",
+    "otherDocument": "The file is authentic but belongs to a different document than the scanned QR code.",
+    "importUnverified": "Imported, not verified: this entry comes from a data import and could not be checked against the original file at that time.",
+    "titleOverridden": "The title was set differently from the protocol when exporting.",
+    "newerVersion": "There is a newer version ({version}) of this document.",
+    "notFoundTitle": "Not found",
+    "notFoundText": "This file does not match any document created with hocX.",
+    "notFoundHint": "Always check the file you originally received.",
+    "error": "The check is not possible right now. Please try again in a moment.",
+    "readError": "The file could not be read.",
+    "tooLarge": "The file is too large (at most {size} MB).",
+    "noCrypto": "Your browser does not support the check. Please use an up-to-date browser.",
+    "site": {
+      "label": "Verification page of {name}",
+      "eyebrow": "Official verification page",
+      "hint": "Check whether a PDF file comes unchanged from {name}.",
+      "poweredBy": "Verification provided by hocX"
+    },
+    "domainBadge": "Verification domain confirmed: {domain}",
+    "domainExplanation": "The domain {domain} is linked to the hocX account of “{name}” through a DNS record. It does not prove the organisation's identity – only the confirmation by hocX does.",
+    "foreignDocument": "This document was not issued by “{site}”.",
+    "forwarded": "The fingerprint of the file you selected on the previous verification page was checked.",
+    "redirect": {
+      "tenantTitle": "Continue to the verification page of “{name}”",
+      "tenantText": "“{name}” confirms its documents at {domain}. Redirecting in {seconds, plural, one {# second} other {# seconds}} – the check runs there automatically, without selecting the file again.",
+      "tenantStayed": "“{name}” also confirms its documents at {domain}.",
+      "centralTitle": "Document from another organisation",
+      "centralText": "This document was not issued by “{site}”. Redirecting to the hocX verification page in {seconds, plural, one {# second} other {# seconds}}.",
+      "centralStayed": "This document was not issued by “{site}”. The hocX verification page shows who issued it.",
+      "stay": "Stay here",
+      "openTenant": "Open verification page",
+      "openCentral": "Go to the hocX verification page"
+    },
+    "checkingHash": "Calculating fingerprint …",
+    "fileWithSize": "{name} · {size}",
+    "dropTitle": "Drag a PDF here",
+    "dropOr": "or <choose>choose a file</choose>",
+    "issuedBy": "Issued by",
+    "hashLabel": "SHA-256 {hash}",
+    "forwardedShort": "File from the previous verification page",
+    "notFoundReasons": {
+      "title": "Common reasons",
+      "changed": "The file was modified after it was downloaded.",
+      "resaved": "Saving again, “Print to PDF” or compressing changes the file – even if the content looks the same.",
+      "notHocx": "The document was not created with hocX."
+    }
+  },
+  "maintenance": {
+    "title": "The submission box is under maintenance",
+    "message": "Submissions are not possible during maintenance. Please try again later.",
+    "uploadsTitle": "Uploading is briefly locked",
+    "uploadsMessage": "Due to maintenance, files cannot be accepted right now. This usually only takes a few minutes.",
+    "availableAt": "Expected to be available again at {time}",
+    "estimating": "The expected duration is being determined."
+  }
 }

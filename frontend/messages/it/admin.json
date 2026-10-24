@@ -73,35 +73,25 @@
   },
   "system": {
     "title": "Stato del sistema",
-    "description": "Stato di tutti i container e dei servizi da cui dipende hocX. Aggiornato ogni 30 secondi.",
+    "description": "Stato di tutti i container e dei servizi da cui dipende hocX.",
     "notificationsLink": "Notifiche",
-    "allGood": "Tutto a posto - nessun problema aperto.",
-    "problemCount": "{count, plural, one {# problema aperto} other {# problemi aperti}}",
     "staleSince": "Lo stato del sistema non è aggiornato (ultimo aggiornamento {time}). Il monitoraggio nel backend non è attivo.",
     "noData": "Nessun dato finora - il monitoraggio li raccoglie al prossimo passaggio.",
-    "collectedAt": "Aggiornato: {time}",
     "since": "dal {time}",
     "checksTitle": "Servizi",
     "containersTitle": "Container",
-    "composeProject": "Progetto Compose {project}",
     "dockerNotConfigured": "La panoramica dei container non è configurata (manca DOCKER_API_URL, vedi RUNBOOK).",
     "dockerUnavailable": "Stato dei container non disponibile: {error}",
     "containerColumns": {
       "service": "Servizio",
       "status": "Stato",
       "uptime": "Attivo da",
-      "restarts": "Riavvii",
       "cpu": "CPU",
       "memory": "Memoria",
       "version": "Versione"
     },
     "eventsTitle": "Eventi",
     "eventsDescription": "Gli ultimi 50 cambi di stato - gli stessi inviati tramite ntfy.",
-    "eventColumns": {
-      "time": "Data",
-      "kind": "Tipo",
-      "event": "Evento"
-    },
     "noEvents": "Nessun evento finora.",
     "eventKinds": {
       "problem": "Problema",
@@ -131,7 +121,8 @@
       "unhealthy": "Health check non superato",
       "oom_killed": "Terminato (memoria insufficiente)",
       "starting": "Ancora in avvio",
-      "memory_high": "Memoria quasi piena"
+      "memory_high": "Memoria quasi piena",
+      "not_needed": "Fermato, non necessario (i file sono presso un altro fornitore)"
     },
     "checks": {
       "postgres": {
@@ -173,6 +164,81 @@
         "title": "Analisi immagini",
         "detail": "{queued, number} in coda · il più vecchio {oldestMinutes, number} min",
         "problem": "La coda di analisi immagini si accumula"
+      },
+      "document_queue": {
+        "title": "Elaborazione documenti",
+        "detail": "{queued, number} in coda · il più vecchio {oldestMinutes, number} min · {failed, number} non riusciti (24 h)",
+        "problem": "L'elaborazione dei documenti è in ritardo o non riesce"
+      },
+      "render_queue": {
+        "title": "Job PDF",
+        "detail": "{queued, number} in attesa · il più vecchio {oldestMinutes, number} min · {failed, number} falliti (24 h)",
+        "problem": "I job PDF si accumulano o falliscono"
+      },
+      "runtime": {
+        "title": "Carico dei processi di servizio",
+        "detail": "{instances, number} processi · event loop max {maxLagMs, number} ms · pool DB {poolPeakPercent, number} % · pool di thread {threadPeakPercent, number} % · {poolTimeouts, number} timeout del pool",
+        "problem": "Processi di servizio bloccati o saturi"
+      },
+      "document_verification": {
+        "title": "Pagina pubblica di verifica",
+        "detail": "Risposta in {latencyMs, number} ms",
+        "problem": "Pagina pubblica di verifica lenta"
+      },
+      "object_storage": {
+        "title": "Archivio dei file",
+        "detail": "Generazione {generation, number} · tempo di risposta {latencyMs, number} ms",
+        "problem": "Archivio dei file non raggiungibile"
+      },
+      "storage_migration": {
+        "title": "Migrazione dell'archivio",
+        "detail": "{verified, number} di {total, number} oggetti verificati · {dead, number} non riusciti definitivamente",
+        "problem": "La migrazione dell'archivio richiede attenzione"
+      },
+      "backup": {
+        "title": "Backup",
+        "detail": "{state, select, disabled {Non configurato} never {Nessun backup riuscito} other {Ultimo backup riuscito {hours, number} h fa}} · {points, number} punti di ripristino",
+        "problem": "Backup in ritardo o non configurato"
+      },
+      "backup_repository": {
+        "title": "Repository di backup",
+        "detail": "{reachable, select, yes {Storage Box raggiungibile} other {Storage Box non raggiungibile}} · {quota, select, yes {{usedPercent, number} % occupato} other {capacità sconosciuta}}",
+        "problem": "Repository di backup guasto o pieno"
+      },
+      "backup_verification": {
+        "title": "Verifiche dei backup",
+        "detail": "{verified, select, yes {Verificato {verifyDays, number} giorni fa} other {Mai verificato}} · {tested, select, yes {Test di ripristino {testDays, number} giorni fa} other {Nessun test di ripristino}}",
+        "problem": "Verifica o test di ripristino in ritardo"
+      },
+      "local_s3": {
+        "title": "S3 locale (Garage)",
+        "detail": "{reason, select, active {Archivio attivo} initial_target {Destinazione della prima migrazione} migration {Parte di una migrazione in corso} fallback_period {Periodo di ripristino dopo una migrazione} pending_operation {Pulizia in sospeso} requested {Richiesto manualmente} unverified_objects {Oggetti non ancora verificati} not_needed {Non necessario, fermato} other {Stato sconosciuto}} · {objects, number} oggetti · {gb, number} GB",
+        "problem": "S3 locale (Garage) non valutabile"
+      },
+      "orphaned_files": {
+        "title": "File orfani",
+        "detail": "{count, number} file senza riferimento",
+        "problem": "File orfani nell'archivio"
+      },
+      "security": {
+        "title": "Eventi di sicurezza",
+        "detail": "{failedLogins, number} accessi falliti (15 min) · {exports, number} esportazioni (1 h) · {restores, number} ripristini (24 h)",
+        "problem": "Eventi di sicurezza anomali"
+      },
+      "tenant_offboarding": {
+        "title": "Offboarding",
+        "detail": "{count, number} mandanti dopo la fine del contratto (+{days, number} giorni)",
+        "problem": "Mandanti dopo la fine del contratto non ancora eliminati"
+      },
+      "captcha_endpoint": {
+        "title": "Endpoint captcha",
+        "detail": "{region, select, eu {Endpoint UE (trattamento nell’UE)} other {Endpoint globale – per il trattamento nell’UE impostare FRIENDLY_CAPTCHA_PUZZLE_URL e _VERIFY_URL sull’endpoint UE}}",
+        "problem": "Endpoint captcha non raggiungibile"
+      },
+      "overload": {
+        "title": "Protezione dal sovraccarico",
+        "detail": "{rejected, number} rifiuti · {users, number} nuovi utenti · {tenants, number} organizzazioni · carico fino al {pressurePercent, number} % (ultimi {minutes, number} min)",
+        "problem": "Sovraccarico: i nuovi utenti vengono respinti"
       }
     },
     "problems": {
@@ -198,8 +264,67 @@
       }
     },
     "events": {
-      "containerRestart": "Il container {subject} è stato riavviato",
-      "resolved": "Risolto: {text}"
+      "containerRestart": "Il container {subject} è stato riavviato"
+    },
+    "hero": {
+      "label": "Stato generale",
+      "stale": "Stato non aggiornato",
+      "critical": "{critical, plural, one {# problema critico} other {# problemi critici}}{warnings, plural, =0 {} one {, # avviso} other {, # avvisi}}",
+      "warnings": "{count, plural, one {# avviso} other {# avvisi}}, niente di critico",
+      "allGood": "Tutto in ordine"
+    },
+    "liveBadge": "Live · stato al {time}",
+    "staleBadge": "Non aggiornato · stato al {time}",
+    "tally": {
+      "critical": "critici",
+      "warning": "{count, plural, one {avviso} other {avvisi}}",
+      "ok": "OK",
+      "unknown": "sconosciuti"
+    },
+    "noProblems": "Nessun problema aperto.",
+    "filters": {
+      "all": "Tutti",
+      "problems": "Solo anomalie"
+    },
+    "noIssues": "Nessuna anomalia.",
+    "groups": {
+      "infrastructure": "Infrastruttura",
+      "security": "Sicurezza",
+      "processing": "Elaborazione",
+      "backup": "Backup",
+      "other": "Altri"
+    },
+    "groupSummary": "{ok, number}/{total, number} OK",
+    "composeProjectRich": "Progetto Compose <mono>{project}</mono>",
+    "containerSummary": "{count, plural, one {# container} other {# container}} · {restarts, plural, one {# riavvio} other {# riavvii}}",
+    "problemLinks": {
+      "jobs": "Job →",
+      "storage": "Storage →",
+      "backups": "Backup →",
+      "containers": "Container →"
+    },
+    "containerStates": {
+      "exitedOk": "terminato (init)"
+    },
+    "restartCount": "{count, plural, one {# riavvio} other {# riavvii}}",
+    "overload": {
+      "title": "Sovraccarico",
+      "description": "Nuovi utenti che hanno visto la pagina di sovraccarico, per organizzazione (ultimi 7 giorni). La priorità per abbonamento si imposta nel catalogo prezzi.",
+      "columns": {
+        "tenant": "Organizzazione",
+        "plan": "Abbonamento",
+        "rejected": "Rifiuti",
+        "users": "Utenti",
+        "last": "Ultimo"
+      },
+      "empty": "Negli ultimi 7 giorni nessuno è stato respinto per sovraccarico.",
+      "unknownTenant": "Organizzazione sconosciuta",
+      "noPlan": "Nessun abbonamento",
+      "priority": {
+        "0": "bassa",
+        "1": "normale",
+        "2": "alta"
+      }
     }
   },
   "jobs": {
@@ -231,13 +356,18 @@
       "backup": "Backup",
       "cleanup": "Pulizia",
       "maintenance": "Manutenzione",
-      "other": "Altri"
+      "other": "Altri",
+      "storage": "Archiviazione",
+      "documents": "Documenti"
     },
     "service": {
       "backend": "Backend",
       "abgabebox-backend": "Backend Abgabebox",
       "photo-analysis-worker": "Worker analisi immagini",
-      "host": "Server (cron)"
+      "host": "Server (cron)",
+      "storage-worker": "Worker di archiviazione",
+      "document-worker": "Worker documenti",
+      "job-worker": "Worker dei job"
     },
     "interval": {
       "onDemand": "Su richiesta",
@@ -292,6 +422,10 @@
         "title": "Completare la qualità immagine",
         "description": "Calcola nitidezza ed esposizione per le immagini in cui mancano ancora."
       },
+      "thumbnail_backfill": {
+        "title": "Completare le miniature",
+        "description": "Crea le miniature per le immagini che non ne hanno ancora, soprattutto per i caricamenti Abgabebox."
+      },
       "photo_album_sync": {
         "title": "Sincronizzare gli album",
         "description": "Aggiunge le nuove immagini Abgabebox agli album automatici e rimuove quelle eliminate."
@@ -314,7 +448,7 @@
       },
       "log_cleanup": {
         "title": "Pulizia registri",
-        "description": "Elimina le voci vecchie del registro di audit, del registro errori e della cronologia dei job."
+        "description": "Elimina le voci vecchie del registro di audit, del registro errori, delle cronologie di job ed eventi e i link di condivisione scaduti."
       },
       "abgabebox_quarantine_cleanup": {
         "title": "Pulizia quarantena",
@@ -335,6 +469,70 @@
       "task_package_rollover": {
         "title": "Aggiorna pacchetti di attività",
         "description": "Crea ogni giorno le attività del ciclo in corso da tutti i pacchetti attivi (quelle del nuovo ciclo al cambio) e aggiunge le nuove ripetizioni."
+      },
+      "maintenance_supervisor": {
+        "title": "Gestione della manutenzione",
+        "description": "Avvia le manutenzioni pianificate, segnala i ritardi e aggiorna le stime. Non termina mai da solo una manutenzione."
+      },
+      "storage_journal_cleanup": {
+        "title": "Pulizia del journal di archiviazione",
+        "description": "Rimuove le vecchie voci del journal delle modifiche non più necessarie a migrazioni aperte."
+      },
+      "storage_purge": {
+        "title": "Rimozione degli oggetti di archiviazione eliminati",
+        "description": "Rimuove fisicamente dall'archivio i file eliminati non appena l'eliminazione è stata salvata."
+      },
+      "storage_migration_worker": {
+        "title": "Worker di migrazione dell'archivio",
+        "description": "Copia, verifica e cambia l'archivio dei file (segnale dal ciclo di polling)."
+      },
+      "storage_controller": {
+        "title": "Gestione S3 locale",
+        "description": "Cron job dell'host: avvia o ferma il servizio S3 locale secondo necessità, senza eliminare dati."
+      },
+      "backup_storage": {
+        "title": "Backup dei file",
+        "description": "Esegue il backup incrementale degli oggetti della generazione di archiviazione attiva dopo il backup del database e verifica il risultato."
+      },
+      "backup_worker": {
+        "title": "Worker di backup",
+        "description": "Pianifica ed esegue backup, verifiche, test di ripristino e ripristini (container backup-worker)."
+      },
+      "backup_run": {
+        "title": "Backup (Borg)",
+        "description": "Backup cifrato di database e archivio file sulla Storage Box, per impostazione predefinita ogni 6 ore."
+      },
+      "backup_retention": {
+        "title": "Conservazione dei backup",
+        "description": "Rimuove punti e contenuti non più necessari dopo aver verificato tutti i riferimenti."
+      },
+      "backup_verify": {
+        "title": "Verifica d'integrità",
+        "description": "Verifica repository, archivi, dump del database e un campione dei file."
+      },
+      "backup_restore_test": {
+        "title": "Test di ripristino",
+        "description": "Ripristina l'ultimo punto in un database isolato e verifica riferimenti e applicazione."
+      },
+      "document_sync": {
+        "title": "Sincronizza documenti",
+        "description": "Crea i documenti per i caricamenti della casella di consegna e i file esistenti e rimuove i file di documento orfani."
+      },
+      "document_worker": {
+        "title": "Worker documenti",
+        "description": "Genera le anteprime PDF ed estrae il testo dei documenti caricati (segnale di vita dal ciclo di polling)."
+      },
+      "tenant_data_export": {
+        "title": "Export dell’associazione",
+        "description": "Crea gli export dell’associazione richiesti (ZIP AES con tabelle, PDF dei verbali e file) e li elimina dopo 7 giorni."
+      },
+      "retention_proposals": {
+        "title": "Termini di conservazione",
+        "description": "Crea proposte secondo i termini di ogni associazione (consegne, ex membri, vecchie immagini della galleria) e le applica in modalità automatica."
+      },
+      "job_worker": {
+        "title": "Worker dei job",
+        "description": "Esegue i lavori pesanti in background (importazione galleria, esportazioni PDF, esportazioni dell’associazione, nuove scansioni antivirus, pulizia) - segnale di vita ogni minuto."
       }
     }
   },
@@ -482,7 +680,8 @@
       "plan": "Piano e abbonamento",
       "users": "Utenti ({count})",
       "cleanup": "Pulizia",
-      "storage": "Archiviazione"
+      "storage": "Archiviazione",
+      "verification": "Verifica"
     },
     "fields": {
       "tenantName": "Nome organizzazione",
@@ -498,13 +697,17 @@
       "discount": "Sconto",
       "internalNote": "Nota interna",
       "internalNotePlaceholder": "ad es. sconto associazione fino al 2027",
+      "billingStart": "Inizio abbonamento",
+      "billingStartHelp": "Da questa data nascono nel flusso di cassa crediti per periodo di fatturazione. Vuoto = data di creazione ({date}). Una modifica ricrea i crediti aperti.",
       "userLimitOverride": "Sovrascrivi limite utenti",
       "userLimitPlanLimit": "Limite del piano: {limit}",
       "userLimitUnlimited": "Limite del piano: illimitato",
       "userLimitHelp": "Vuoto = vale il limite del piano. Attualmente {count} utenti{suffix}",
       "userLimitExceeded": " – limite raggiunto o superato.",
       "showOnWebsite": "Mostra come cliente sul sito web",
-      "showOnWebsiteHelp": "Compare sul sito web pubblico sotto «Lo usano» (solo il nome). Attivare solo con il consenso dell’associazione."
+      "showOnWebsiteHelp": "Compare sul sito web pubblico sotto «Lo usano» (solo il nome). Attivare solo con il consenso dell’associazione.",
+      "contractEnd": "Fine del contratto",
+      "contractEndHelp": "Vuoto = senza scadenza. Dopo la fine del contratto più il periodo di export, /admin/system segnala che i dati del mandante vanno eliminati."
     },
     "meta": {
       "createdAt": "Creato il",
@@ -779,7 +982,7 @@
     "cloning": "Clonazione…",
     "exportTitleNamed": "Esporta \"{name}\"",
     "exportTitle": "Esporta organizzazione",
-    "exportDescription": "Crea un file ZIP da scaricare, che in seguito potrà essere importato di nuovo nel pannello di amministrazione come nuova organizzazione. Il file contiene dati di accesso (hash delle password, chiavi MFA, token di link e abbonamenti) e va conservato in modo sicuro.",
+    "exportDescription": "Crea un file cifrato da scaricare, che in seguito potrà essere importato di nuovo nel pannello di amministrazione come nuova organizzazione. Contiene credenziali (hash delle password, chiavi MFA, token di link e abbonamento) e va conservato in modo sicuro nonostante la cifratura.",
     "exportStructureOnlyTitle": "Solo struttura",
     "exportStructureOnlyDescription": "Cicli, campi modulo, modelli di documento, liste (solo definizione, senza contenuto), conti, ruoli utente e domini verificati (incl. codice di verifica).",
     "exportStructureListsTitle": "Struttura + contenuto liste",
@@ -788,8 +991,8 @@
     "exportFullDescription": "Inoltre partecipanti, eventi, verbali, multe, attività, file (incl. galleria foto e album), link di condivisione, abbonamenti al calendario e condivisioni di album. Senza Abgabebox.",
     "exportFullAbgabeboxTitle": "Tutto incluso Abgabebox",
     "exportFullAbgabeboxDescription": "Come sopra, inoltre la configurazione Abgabebox, i link Abgabebox e i file caricati. Backup completo dell'organizzazione.",
-    "importDescription": "Crea una nuova organizzazione da un file ZIP esportato precedentemente.",
-    "exportFile": "File di esportazione (.zip)",
+    "importDescription": "Crea una nuova organizzazione da un file esportato precedentemente.",
+    "exportFile": "File di esportazione (.hocxenc o .zip precedente)",
     "uploadingAndProcessing": "Caricamento ed elaborazione del file…",
     "uploadAndImportRunning": "Caricamento e importazione in corso",
     "mayTakeAMoment": "Questo può richiedere un momento in base alla dimensione del file.",
@@ -810,7 +1013,16 @@
     "deleteFailed": "Impossibile eliminare l'organizzazione",
     "importedWithWarnings": "{count, plural, one {Organizzazione importata con # nota} other {Organizzazione importata con # note}}",
     "imported": "Organizzazione importata",
-    "importFailed": "Impossibile importare l'organizzazione"
+    "importFailed": "Impossibile importare l'organizzazione",
+    "exportPasswordLabel": "Password (facoltativa)",
+    "exportPasswordHelp": "Senza password il file è cifrato con la chiave di questo server e può essere importato solo qui. Imposta una password per spostare l'organizzazione su un altro server.",
+    "exportPasswordConfirmLabel": "Ripeti la password",
+    "exportPasswordTooShort": "Almeno {min, number} caratteri.",
+    "exportPasswordMismatch": "Le password non coincidono.",
+    "importPasswordLabel": "Password dell'esportazione",
+    "importPasswordHelp": "Necessaria solo se durante l'esportazione è stata impostata una password.",
+    "exportCredentials": "Includi le credenziali",
+    "exportCredentialsHint": "Hash delle password, segreti MFA e token di link e calendario. Solo per un trasloco in cui tutti gli accessi e i link devono restare validi. Senza questa opzione gli account importati ricevono una password casuale e i link un nuovo URL."
   },
   "pricing": {
     "title": "Prezzi",
@@ -911,7 +1123,24 @@
     "delete": "Elimina",
     "deleteConfirm": "Eliminare definitivamente «{name}»?",
     "deleted": "Pacchetto eliminato",
-    "deleteFailed": "Impossibile eliminare il pacchetto."
+    "deleteFailed": "Impossibile eliminare il pacchetto.",
+    "loadPriority": {
+      "label": "Priorità in caso di sovraccarico",
+      "option": {
+        "0": "Bassa",
+        "1": "Normale",
+        "2": "Alta"
+      },
+      "help": {
+        "0": "Quando la capacità scarseggia, i nuovi utenti di questo abbonamento vedono per primi la pagina di sovraccarico. Chi sta già lavorando resta connesso.",
+        "1": "I nuovi utenti vengono respinti solo a pieno carico, dopo gli abbonamenti con priorità bassa.",
+        "2": "I nuovi utenti non vengono mai respinti in anticipo e ricevono per primi i posti liberi."
+      },
+      "badge": {
+        "0": "Priorità bassa",
+        "2": "Priorità alta"
+      }
+    }
   },
   "catalogImport": {
     "title": "Importa configurazione",
@@ -967,5 +1196,136 @@
     "packageQuantity": "{name} × {count}",
     "rebook": "Riassegna",
     "footnote": "Organizzazioni con un piano o un pacchetto di spazio non prenotabile (evidenziato). «Riassegna» apre le impostazioni dell'organizzazione: modifica il piano nella scheda «Piano e abbonamento» e i pacchetti nella scheda «Archiviazione»."
+  },
+  "verification": {
+    "title": "Verifica delle organizzazioni",
+    "description": "Le organizzazioni confermate ricevono il badge «Organizzazione verificata» sulla pagina pubblica di verifica (se mostrano nome e logo). Viene confermato il nome al momento della richiesta; un cambio di nome revoca la verifica.",
+    "loading": "Caricamento …",
+    "empty": "Nessuna richiesta.",
+    "requestedAs": "Richiesta come «{name}»",
+    "filter": {
+      "pending": "Aperte",
+      "approved": "Confermate",
+      "rejected": "Respinte",
+      "withdrawn": "Ritirate",
+      "all": "Tutte"
+    },
+    "columns": {
+      "organisation": "Organizzazione",
+      "message": "Messaggio",
+      "requested": "Richiesta",
+      "status": "Stato",
+      "actions": "Azioni"
+    },
+    "status": {
+      "pending": "Aperta",
+      "approved": "Confermata",
+      "rejected": "Respinta",
+      "withdrawn": "Ritirata"
+    },
+    "actions": {
+      "approve": "Conferma",
+      "reject": "Respingi",
+      "revoke": "Revoca la verifica"
+    },
+    "modal": {
+      "approveTitle": "Verifica «{name}»",
+      "rejectTitle": "Respingi la richiesta di «{name}»",
+      "revokeTitle": "Revoca la verifica di «{name}»",
+      "approveHint": "Confermare solo dopo aver verificato l’identità (ad es. registro di commercio, statuti, richiamata a un numero noto).",
+      "rejectHint": "L’amministratore del mandante vede il motivo nelle impostazioni.",
+      "revokeHint": "Il badge scompare subito dalla pagina di verifica.",
+      "note": "Nota (come è stato verificato)",
+      "reasonRequired": "Motivo (obbligatorio)",
+      "approvePlaceholder": "ad es. registro di commercio CHE-123.456.789 verificato",
+      "rejectPlaceholder": "ad es. nessuna prova del potere di rappresentanza",
+      "revokePlaceholder": "ad es. segnalazione di abuso",
+      "cancel": "Annulla"
+    },
+    "done": {
+      "approve": "«{name}» è verificata.",
+      "reject": "Richiesta di «{name}» respinta.",
+      "revoke": "Verifica di «{name}» revocata."
+    },
+    "tenant": {
+      "title": "Verifica da parte di hocX",
+      "verified": "Verificata dal {date}",
+      "notVerified": "Non verificata",
+      "by": "da {email}",
+      "note": "Nota: {note}",
+      "hidden": "Il mandante non mostra nome e logo sulla pagina di verifica - il badge quindi non è visibile.",
+      "history": "Richieste",
+      "noRequests": "Nessuna richiesta finora.",
+      "withdrawnByRename": "Ritirata per cambio di nome",
+      "revoked": {
+        "name_changed": "Revocata il {date}: nome cambiato.",
+        "admin": "Revocata il {date}."
+      }
+    },
+    "errors": {
+      "generic": "L’azione non è riuscita.",
+      "verificationAlreadyVerified": "L’organizzazione è già verificata.",
+      "verificationAlreadyPending": "Esiste già una richiesta aperta.",
+      "verificationNoPending": "Non esiste alcuna richiesta aperta.",
+      "verificationNameChanged": "Il nome è cambiato dalla richiesta.",
+      "verificationReasonRequired": "Indica un motivo.",
+      "verificationNotVerified": "L’organizzazione non è verificata."
+    }
+  },
+  "documentTemplates": {
+    "title": "Modelli di documento",
+    "description": "Modelli forniti del Document Studio: quali vengono offerti alle organizzazioni e quale è lo standard della piattaforma per tipo di documento. Il contenuto proviene dal codice e viene aggiornato all’avvio.",
+    "filter": {
+      "active": "Attivi",
+      "archived": "Archiviati",
+      "all": "Tutti"
+    },
+    "columns": {
+      "template": "Modello",
+      "documentType": "Tipo di documento",
+      "revision": "Versione",
+      "usage": "Utilizzo",
+      "status": "Stato",
+      "actions": "Azioni"
+    },
+    "status": {
+      "active": "Offerto",
+      "archived": "Archiviato"
+    },
+    "platformDefault": "Standard della piattaforma",
+    "revision": "Versione {revision, number}",
+    "unpublished": "Non pubblicato",
+    "usage": "{copies, plural, =0 {Nessuna copia} one {# copia} other {# copie}} · {exports, plural, =0 {nessuna esportazione} one {# esportazione} other {# esportazioni}}",
+    "actions": {
+      "makeDefault": "Imposta come standard della piattaforma",
+      "archive": "Archivia",
+      "reactivate": "Offri di nuovo"
+    },
+    "archiveConfirm": "Archiviare «{name}»? Le organizzazioni non potranno più sceglierlo; le assegnazioni a questo modello tornano allo standard della piattaforma. {copies, plural, =0 {} one {La # copia di un’organizzazione viene mantenuta.} other {Le # copie delle organizzazioni vengono mantenute.}}",
+    "madeDefault": "«{name}» è ora lo standard della piattaforma",
+    "archived": "«{name}» archiviato",
+    "reactivated": "«{name}» viene di nuovo offerto",
+    "actionFailed": "Azione non riuscita",
+    "empty": "Nessun modello in questa vista"
+  },
+  "auditLog": {
+    "title": "Registro di audit",
+    "description": "Eventi di sicurezza e di modifica di tutti i mandanti. La fonte è un'impronta hash della rete, non l'indirizzo IP.",
+    "filterAll": "Tutti",
+    "filterFailures": "Non riusciti",
+    "tenant": "Mandante",
+    "allTenants": "Tutti i mandanti",
+    "actionPlaceholder": "Azione, ad es. user.login",
+    "colTime": "Momento",
+    "colAction": "Operazione",
+    "colActor": "Da",
+    "colSource": "Fonte",
+    "colOutcome": "Esito",
+    "loading": "Caricamento …",
+    "empty": "Nessuna voce",
+    "outcome": {
+      "success": "Riuscito",
+      "failure": "Non riuscito"
+    }
   }
 }

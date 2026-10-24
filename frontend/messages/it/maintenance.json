@@ -1,0 +1,33 @@
+{
+  "title": "hocX è in manutenzione",
+  "reasons": {
+    "manual": "Stiamo eseguendo interventi di manutenzione necessari per garantire la stabilità e la sicurezza della piattaforma.",
+    "storage_initial_migration": "Stiamo trasferendo tutti i file in un nuovo archivio più sicuro. Durante questo periodo hocX non è disponibile.",
+    "storage_cutover": "Stiamo completando un cambio di archivio. Ci vorrà solo un momento.",
+    "backup_restore": "Stiamo ripristinando hocX da un backup. Durante questo tempo hocX non è disponibile."
+  },
+  "partial": {
+    "title": "Il salvataggio è temporaneamente limitato",
+    "message": "A causa della manutenzione, al momento non è possibile salvare modifiche o caricamenti. La consultazione funziona ancora.",
+    "hint": "Riprova tra poco."
+  },
+  "estimate": {
+    "availableAt": "Di nuovo disponibile verso le {time}",
+    "remainingRange": "Ancora circa {low}–{high} minuti",
+    "remainingAbout": "{count, plural, one {Ancora circa # minuto} other {Ancora circa # minuti}}",
+    "remainingHours": "Ancora circa {low}–{high} ore",
+    "estimating": "La durata prevista è in fase di calcolo.",
+    "overdue": "La manutenzione richiede più tempo del previsto. Il nuovo orario di completamento è in fase di calcolo."
+  },
+  "autoRefresh": "Questa pagina si aggiorna automaticamente e mostra di nuovo l'accesso non appena la manutenzione è terminata.",
+  "upcoming": {
+    "title": "Manutenzione pianificata",
+    "withEnd": "hocX non sarà disponibile dal {start} fino a circa {end}.",
+    "withoutEnd": "Dal {start} hocX sarà temporaneamente non disponibile per manutenzione.",
+    "when": "{date} · {start} – ca. {end}",
+    "whenOpen": "{date} · dalle {start}",
+    "whenRange": "{start} – ca. {end}"
+  },
+  "ended": "La manutenzione è terminata. Reindirizzamento …",
+  "checking": "Verifica dello stato di manutenzione …"
+}

@@ -44,6 +44,18 @@ class PublicIdModel(BaseModel):
     # unten liest sonst nur mapper.columns - ein Relationsfeld bliebe immer leer).
     _relationship_fields: ClassVar[tuple[str, ...]] = ()
 
+    @classmethod
+    def prime_public_ids(cls, db, rows) -> None:
+        """Vor dem Umwandeln einer ganzen Liste aufrufen: lädt die public_ids aller Fremdschlüssel
+        mit einer Abfrage je Modell in den Session-Cache (public_id_service), statt je Zeile und Feld."""
+        rows = [row for row in rows if hasattr(row, "public_id")]
+        if not rows:
+            return
+        for field, model in cls._fk_models.items():
+            public_id_service.prime_public_ids(db, model, [getattr(row, field, None) for row in rows])
+        for field, model in cls._fk_list_models.items():
+            public_id_service.prime_public_ids(db, model, [i for row in rows for i in (getattr(row, field, None) or [])])
+
     @model_validator(mode="before")
     @classmethod
     def _translate_public_ids(cls, data: Any) -> Any:

@@ -25,7 +25,9 @@ from app.models import (
 # Not re-exported from app.models (the package __init__) like the others above - imported
 # straight from .entities instead, same convention photo_album_service.py already uses.
 from app.models.entities import PhotoAlbumItem
+from app.models.document_entities import Document, DocumentFile, DocumentVersion
 from app.services import public_id_service
+from app.services.capture_date import date_source_sql, effective_capture_date_sql
 
 # Cap for the "list every tag/origin-tag currently in use" suggestion query - this app is
 # per-tenant scout/school data (hundreds to low thousands of files), not enterprise scale,
@@ -57,7 +59,9 @@ class StoredFileRepository:
         """Pending-scan StoredFile rows from any of the three internal upload paths
         (protocol image, gallery upload, word import) - joined through their respective
         origin table's stored_file_id (all three indexed) rather than a storage_path prefix
-        match. Safe to join rather than match by path: each of the three save_* methods
+        match. Includes the Live-Photo clip of a gallery upload (its own StoredFile, linked
+        only via gallery_image.live_video_stored_file_id): without it a clip left pending by a
+        ClamAV outage stayed unplayable forever (Feature-Recovery-Audit FAR-001). Safe to join rather than match by path: each of the three save_* methods
         creates the StoredFile row and its origin row in the same transaction and commits
         them together (see FileService.save_gallery_uploads/save_word_import_document), so
         there's no window where a committed, pending StoredFile row of these three kinds
@@ -74,6 +78,9 @@ class StoredFileRepository:
                     or_(
                         StoredFile.id.in_(select(ProtocolImage.stored_file_id)),
                         StoredFile.id.in_(select(GalleryImage.stored_file_id)),
+                        StoredFile.id.in_(
+                            select(GalleryImage.live_video_stored_file_id).where(GalleryImage.live_video_stored_file_id.is_not(None))
+                        ),
                         StoredFile.id.in_(select(WordImportDocument.stored_file_id)),
                     ),
                 )
@@ -121,7 +128,7 @@ class StoredFileRepository:
 
     @staticmethod
     def _shared_file_overview_columns() -> list:
-        """The 18-column prefix every branch of _files_overview_branches shares - factored
+        """The 20-column prefix every branch of _files_overview_branches shares - factored
         out (audit fix, 2026-09-17) so column position is enforced structurally instead of
         by four independently hand-maintained copies. That matters because union_all below
         matches columns *positionally*, not by label: before this, adding a column to
@@ -149,9 +156,11 @@ class StoredFileRepository:
             StoredFile.face_analyzed_at.label("face_analyzed_at"),
             StoredFile.width.label("width"),
             StoredFile.height.label("height"),
+            StoredFile.exif_taken_at.label("exif_taken_at"),
+            StoredFile.estimated_taken_on.label("estimated_taken_on"),
         ]
 
-    def _files_overview_branches(self, tenant_id: int | None):
+    def _files_overview_branches(self, tenant_id: int | None, *, include_exports: bool = True):
         """The four differently-joined SELECTs behind list_tenant_files/list_tag_sources
         (tenant_id given) and the admin cross-tenant upload-pipeline-status view (tenant_id
         None), each labelling an `origin_tag` expression - a human-readable "where did this
@@ -189,7 +198,7 @@ class StoredFileRepository:
                         ProtocolElementBlock.title_snapshot,
                     ),
                 ).label("origin_tag"),
-                func.coalesce(Protocol.protocol_date, cast(StoredFile.created_at, Date)).label("group_date"),
+                func.coalesce(Protocol.protocol_date, effective_capture_date_sql(StoredFile)).label("group_date"),
                 func.concat(
                     func.coalesce(Protocol.title, func.concat("Protokoll ", Protocol.protocol_number)),
                     " · ",
@@ -201,6 +210,10 @@ class StoredFileRepository:
                 ).label("context_label"),
                 cast(null(), String).label("ref_kind"),
                 cast(null(), PG_UUID(as_uuid=True)).label("live_video_public_id"),
+                case(
+                    (Protocol.protocol_date.is_not(None), literal("context")),
+                    else_=date_source_sql(StoredFile),
+                ).label("date_source"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -223,10 +236,14 @@ class StoredFileRepository:
                 cast(null(), BigInteger).label("upload_id"),
                 cast(null(), PG_UUID(as_uuid=True)).label("upload_public_id"),
                 func.concat("Word-Import: ", WordImportDocument.display_name).label("origin_tag"),
-                func.coalesce(WordImportDocument.protocol_date, cast(StoredFile.created_at, Date)).label("group_date"),
+                func.coalesce(WordImportDocument.protocol_date, effective_capture_date_sql(StoredFile)).label("group_date"),
                 WordImportDocument.display_name.label("context_label"),
                 cast(null(), String).label("ref_kind"),
                 cast(null(), PG_UUID(as_uuid=True)).label("live_video_public_id"),
+                case(
+                    (WordImportDocument.protocol_date.is_not(None), literal("context")),
+                    else_=date_source_sql(StoredFile),
+                ).label("date_source"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -246,10 +263,11 @@ class StoredFileRepository:
                 SubmissionUpload.id.label("upload_id"),
                 SubmissionUpload.public_id.label("upload_public_id"),
                 func.concat("Abgabe: ", SubmissionAssignment.title).label("origin_tag"),
-                cast(StoredFile.created_at, Date).label("group_date"),
+                effective_capture_date_sql(StoredFile).label("group_date"),
                 SubmissionAssignment.title.label("context_label"),
                 cast(null(), String).label("ref_kind"),
                 cast(null(), PG_UUID(as_uuid=True)).label("live_video_public_id"),
+                date_source_sql(StoredFile).label("date_source"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -296,7 +314,9 @@ class StoredFileRepository:
                 # linked Termin's event_date, so a multi-day Termin's photos still land in
                 # one date-section per day (see photo-date-groups.tsx/grouping.ts for the
                 # "Termin, Tag 1/Tag 2/..." header built from this plus ref_date/ref_end_date).
-                func.coalesce(cast(StoredFile.exif_taken_at, Date), cast(StoredFile.created_at, Date)).label("group_date"),
+                # Zentrale Prioritaet (capture_date.py): echtes Aufnahmedatum, sonst geschaetztes,
+                # sonst Uploaddatum.
+                effective_capture_date_sql(StoredFile).label("group_date"),
                 Event.title.label("context_label"),
                 case(
                     (SubmissionAssignment.id.is_not(None), literal("submission_assignment")),
@@ -305,6 +325,7 @@ class StoredFileRepository:
                     else_=cast(null(), String),
                 ).label("ref_kind"),
                 live_video.public_id.label("live_video_public_id"),
+                date_source_sql(StoredFile).label("date_source"),
             )
             .select_from(StoredFile)
             .join(Tenant, Tenant.id == StoredFile.tenant_id)
@@ -318,12 +339,61 @@ class StoredFileRepository:
             .where(*tenant_filter)
         )
 
-        return {
+        branches = {
             "protocol_image": protocol_branch,
             "word_import": word_import_branch,
             "submission_upload": submission_branch,
             "gallery_upload": gallery_branch,
         }
+        if include_exports:
+            branches["protocol_export"] = self._protocol_export_branch(tenant_id)
+        return branches
+
+    def _protocol_export_branch(self, tenant_id: int | None):
+        """Protokollexporte als logische Dokumente (Migration 0115): genau ein Eintrag je
+        (Protokoll, Exportart), nämlich die Datei der aktuellen Version. Ältere Versionen und die
+        übrigen Exportdateien erscheinen nicht - sie stehen in der Versionshistorie des Dokuments.
+        ref_kind trägt die Exportart (protocol/todos/todos_open/events)."""
+        tenant_filter = (StoredFile.tenant_id == tenant_id,) if tenant_id is not None else ()
+        return (
+            select(
+                *self._shared_file_overview_columns(),
+                literal("protocol_export").label("source"),
+                Protocol.id.label("ref_id"),
+                Protocol.public_id.label("ref_public_id"),
+                Protocol.protocol_number.label("ref_label"),
+                Protocol.protocol_date.label("ref_date"),
+                cast(null(), Date).label("ref_end_date"),
+                cast(null(), BigInteger).label("upload_id"),
+                cast(null(), PG_UUID(as_uuid=True)).label("upload_public_id"),
+                func.concat("Protokoll ", Protocol.protocol_number, " – Export").label("origin_tag"),
+                func.coalesce(Protocol.protocol_date, cast(StoredFile.created_at, Date)).label("group_date"),
+                func.coalesce(Protocol.title, func.concat("Protokoll ", Protocol.protocol_number)).label("context_label"),
+                cast(Document.export_kind, String).label("ref_kind"),
+                cast(null(), PG_UUID(as_uuid=True)).label("live_video_public_id"),
+                # Exporte gruppieren nach dem Protokolldatum wie die übrigen Protokollbezüge
+                # (Bild-Metadaten, feature/image-metadata-dedupe).
+                case(
+                    (Protocol.protocol_date.is_not(None), literal("context")),
+                    else_=literal("upload"),
+                ).label("date_source"),
+            )
+            .select_from(StoredFile)
+            .join(Tenant, Tenant.id == StoredFile.tenant_id)
+            .join(DocumentFile, and_(DocumentFile.stored_file_id == StoredFile.id, DocumentFile.role == "original"))
+            .join(DocumentVersion, DocumentVersion.id == DocumentFile.document_version_id)
+            .join(
+                Document,
+                and_(
+                    Document.id == DocumentVersion.document_id,
+                    Document.current_version_id == DocumentVersion.id,
+                    Document.source_kind == "protocol_export",
+                    Document.tenant_id == StoredFile.tenant_id,
+                ),
+            )
+            .join(Protocol, Protocol.id == Document.protocol_id)
+            .where(*tenant_filter)
+        )
 
     def list_tenant_files(
         self,
@@ -350,8 +420,9 @@ class StoredFileRepository:
         joined branch per origin table) so a single paginated/sorted/filtered query can page
         across all of them. only_images/exclude_images back the "Fotos" vs. "Dateien" pages
         (mutually exclusive in practice - the UI never sets both). Deliberately excludes
-        tenant logo and generated PDF exports (protocol_export_cache): neither is something a
-        user "hochgeladen" hat, see project memory for this feature.
+        the tenant logo. Generated protocol exports appear once per logical document (its
+        current version, source "protocol_export", see _protocol_export_branch) - older
+        export files and every other version stay out of the list.
 
         album_id scopes to one album via a JOIN against photo_album_item, rather than the
         caller pre-fetching every one of that album's file ids into Python and passing them
@@ -442,7 +513,13 @@ class StoredFileRepository:
             "group_date": union_query.c.group_date,
         }.get(sort_by, union_query.c.created_at)
         order = sort_column.asc() if sort_dir == "asc" else sort_column.desc()
-        query = query.order_by(order, union_query.c.id.desc()).offset(skip).limit(limit)
+        orderings = [order]
+        if sort_by == "group_date":
+            # Innerhalb eines Tages nach Aufnahmezeit (ein geschaetztes Datum hat keine Uhrzeit,
+            # dort entscheidet die Uploadzeit) - gleiche Richtung wie der Tag selbst.
+            moment = func.coalesce(union_query.c.exif_taken_at, union_query.c.created_at)
+            orderings.append(moment.asc() if sort_dir == "asc" else moment.desc())
+        query = query.order_by(*orderings, union_query.c.id.desc()).offset(skip).limit(limit)
 
         return list(db.execute(query).all())
 
@@ -515,7 +592,7 @@ class StoredFileRepository:
         platform-admin "Datei-Pipeline" overview. Unlike list_tenant_files, this deliberately
         does NOT exclude infected files - surfacing exactly those is the point of an admin
         problem view - and is unscoped by default rather than requiring a tenant_id."""
-        branches = self._files_overview_branches(tenant_id)
+        branches = self._files_overview_branches(tenant_id, include_exports=False)
         selected = [branch for key, branch in branches.items() if source is None or source == key]
         union_query = union_all(*selected).subquery("upload_pipeline_status")
 
@@ -535,7 +612,7 @@ class StoredFileRepository:
         """(source, scan_status, count) across every internally-tracked upload - backs the
         admin overview's badge counts. Unpaginated by design: a handful of source x
         scan_status combinations, not one row per file."""
-        branches = self._files_overview_branches(tenant_id)
+        branches = self._files_overview_branches(tenant_id, include_exports=False)
         union_query = union_all(*branches.values()).subquery("upload_pipeline_status")
         query = select(union_query.c.source, union_query.c.scan_status, func.count().label("count")).group_by(
             union_query.c.source, union_query.c.scan_status

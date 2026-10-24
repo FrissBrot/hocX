@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 
-from app.models.entities import ProtocolTodo, SubmissionAssignment, SubmissionLink, Tenant
+from app.models.entities import ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionLink, Tenant
 from app.schemas.submission import (
     SubmissionAssignmentCreate,
     SubmissionAssignmentUpdate,
@@ -227,9 +227,8 @@ def test_todo_sync_uses_a_link_url_and_needs_a_link(db):
     )
     assignment = db.scalar(select(SubmissionAssignment).where(SubmissionAssignment.public_id == created.id))
 
-    result = service.sync_submission_todos(db, assignment)
-
-    assert result["created"] == 1
+    # Anlegen gleicht schon ab (FAR-010); ein erneuter Abgleich aktualisiert nur.
+    assert service.sync_submission_todos(db, assignment) == {"created": 0, "updated": 1}
     todo = db.scalar(select(ProtocolTodo).where(ProtocolTodo.submission_assignment_id == assignment.id))
     assert f"/{link.token}/fotos/event-{event.public_id}" in todo.reference_link
 
@@ -245,6 +244,90 @@ def test_todo_sync_uses_a_link_url_and_needs_a_link(db):
     assert todo.reference_link is None
     with pytest.raises(ValueError):
         service.sync_submission_todos(db, assignment)
+
+
+def _todos(db, assignment_public_id) -> list[ProtocolTodo]:
+    assignment = db.scalar(select(SubmissionAssignment).where(SubmissionAssignment.public_id == assignment_public_id))
+    return list(db.scalars(select(ProtocolTodo).where(ProtocolTodo.submission_assignment_id == assignment.id)))
+
+
+def test_event_assignment_creates_todos_for_already_existing_events(db):
+    """FAR-010: vorher entstanden Todos nur, wenn ein Termin danach angelegt oder bearbeitet wurde."""
+    from tests.factories import make_participant
+
+    tenant = make_tenant(db)
+    participant = make_participant(db, tenant.id, display_name="Anna Muster")
+    event = _tagged_event(db, tenant.id)
+    event.spezial1_ids = [participant.id]
+    db.flush()
+    link = links.create_link(db, SubmissionLinkCreate(name="Leiter"), tenant_id=tenant.id)
+
+    created = SubmissionService().create_assignment(
+        db, _assignment_payload(link_ids=[link.id], responsible_participant_source="spezial1_ids"), tenant_id=tenant.id
+    )
+
+    [todo] = _todos(db, created.id)
+    assert (todo.assigned_participant_id, todo.tenant_id) == (participant.id, tenant.id)
+
+
+def test_list_assignment_creates_and_follows_todos_per_list_entry(db):
+    """FAR-010: Listen-Abgaben mit Verantwortlichen bekamen nie Todos."""
+    from app.api.routes import lists as list_routes
+    from app.schemas.list_definition import ListEntryCreate
+    from tests.factories import make_current_user, make_list_definition, make_list_entry, make_participant
+
+    tenant = make_tenant(db)
+    anna = make_participant(db, tenant.id, display_name="Anna Muster")
+    ben = make_participant(db, tenant.id, display_name="Ben Beispiel")
+    definition = make_list_definition(db, tenant.id, column_two_title="Verantwortlich", column_two_value_type="participant")
+    make_list_entry(db, definition.id, column_one_value={"text": "Zelt"}, column_two_value={"participant_id": anna.id})
+    link = links.create_link(db, SubmissionLinkCreate(name="Leiter"), tenant_id=tenant.id)
+
+    created = SubmissionService().create_assignment(
+        db,
+        SubmissionAssignmentCreate(
+            title="Material", public_slug="material", source_type="list", list_definition_id=definition.public_id,
+            responsible_participant_source="column_two", link_ids=[link.id],
+        ),
+        tenant_id=tenant.id,
+    )
+    assert [todo.assigned_participant_id for todo in _todos(db, created.id)] == [anna.id]
+
+    # Neuer Listeneintrag über die Route: das Todo folgt automatisch.
+    list_routes.create_entry(
+        definition.public_id,
+        ListEntryCreate(sort_index=1, column_one_value={"text": "Kocher"}, column_two_value={"participant_id": str(ben.public_id)}),
+        db=db,
+        user=make_current_user(tenant.id, role="writer"),
+    )
+    assert sorted(todo.assigned_participant_id for todo in _todos(db, created.id)) == sorted([anna.id, ben.id])
+
+
+def test_unexpected_sync_error_is_logged_and_does_not_block_the_change(db, monkeypatch):
+    """Vorher verschluckte sync_todos_for_event jeden Fehler (except Exception: pass)."""
+    from app.services import submission_service as submission_module
+    from tests.factories import make_participant
+
+    tenant = make_tenant(db)
+    event = _tagged_event(db, tenant.id)
+    event.spezial1_ids = [make_participant(db, tenant.id, display_name="Anna Muster").id]
+    db.flush()
+    link = links.create_link(db, SubmissionLinkCreate(name="Leiter"), tenant_id=tenant.id)
+    logged: list[tuple[str, int | None]] = []
+
+    def broken(self, db, assignment):
+        raise RuntimeError("sync kaputt")
+
+    # record_system_error schreibt über eine eigene Verbindung, die den Testmandanten der
+    # Rollback-Transaktion nicht sieht - hier nur prüfen, dass der Fehler dort ankäme.
+    monkeypatch.setattr(SubmissionService, "sync_submission_todos", broken)
+    monkeypatch.setattr(submission_module, "record_system_error", lambda db, *, exc, tenant_id=None, **_kw: logged.append((str(exc), tenant_id)))
+    created = SubmissionService().create_assignment(
+        db, _assignment_payload(link_ids=[link.id], responsible_participant_source="spezial1_ids"), tenant_id=tenant.id
+    )
+
+    assert created.id is not None
+    assert logged == [("sync kaputt", tenant.id)]
 
 
 # ── Cloning must never carry tokens over ──────────────────────────────────
@@ -300,7 +383,7 @@ def test_reimport_keeps_links_and_assignments_but_never_shares_a_live_token(db):
     SubmissionService().create_assignment(db, _assignment_payload(link_ids=[link.id]), tenant_id=source.id)
     source_tokens = {item.token for item in db.scalars(select(SubmissionLink).where(SubmissionLink.tenant_id == source.id))}
 
-    zip_path, _ = TenantExportService().export(db, source.id, "full_abgabebox")
+    zip_path, _ = TenantExportService().export(db, source.id, "full_abgabebox", include_credentials=True)
     try:
         with zipfile.ZipFile(zip_path) as zf:
             manifest = json.loads(zf.read("manifest.json").decode("utf-8"))
@@ -327,7 +410,7 @@ def test_import_without_links_in_the_archive_creates_a_fresh_default_link(db):
     source = make_tenant(db, "Quelle")
     links.create_link(db, SubmissionLinkCreate(name="Eltern"), tenant_id=source.id)
 
-    zip_path, _ = TenantExportService().export(db, source.id, "full")
+    zip_path, _ = TenantExportService().export(db, source.id, "full", include_credentials=True)
     try:
         imported, _warnings = TenantImportService().import_zip(db, zip_path, "Quelle (Import)")
     finally:
@@ -340,7 +423,7 @@ def test_import_without_links_in_the_archive_creates_a_fresh_default_link(db):
 # ── Isolation: what the restricted public role may and may not do ─────────
 
 
-def _probe_as_abgabebox(db, sql: str, params: dict | None = None):
+def _probe_as_abgabebox(db, sql: str, params: dict | None = None, *, link_token: str | None = None):
     """Runs one statement as the restricted role inside a manually managed SAVEPOINT (the `db`
     fixture already drives its own savepoints, so Session.begin_nested() as a context manager
     would clash with it). Returns (rows, None) on success or (None, error_text) if Postgres
@@ -350,6 +433,8 @@ def _probe_as_abgabebox(db, sql: str, params: dict | None = None):
     connection.execute(text("SAVEPOINT abgabebox_probe"))
     try:
         connection.execute(text("SET LOCAL ROLE hocx_abgabebox"))
+        # Wie abgabebox-backend/app/link_scope.py: ohne Link-Token sieht die Rolle per RLS nichts.
+        connection.execute(text("SELECT set_config('app.abgabebox_link', :token, true)"), {"token": link_token or ""})
         result = connection.execute(text(sql), params or {})
         rows = result.all() if result.returns_rows else []
         return rows, None
@@ -371,11 +456,11 @@ def test_restricted_role_can_resolve_a_token_but_only_read_the_columns_it_needs(
     assert created.link_ids == [link.id]
 
     rows, error = _probe_as_abgabebox(
-        db, "SELECT id, tenant_id, token FROM submission_link WHERE token = :token", {"token": link.token}
+        db, "SELECT id, tenant_id, token FROM submission_link WHERE token = :token", {"token": link.token}, link_token=link.token
     )
     assert error is None
     assert rows[0].tenant_id == tenant.id
-    rows, error = _probe_as_abgabebox(db, "SELECT assignment_id, link_id FROM submission_assignment_link")
+    rows, error = _probe_as_abgabebox(db, "SELECT assignment_id, link_id FROM submission_assignment_link", link_token=link.token)
     assert error is None
     assert len(rows) >= 1
 
@@ -389,6 +474,58 @@ def test_restricted_role_can_resolve_a_token_but_only_read_the_columns_it_needs(
     assert _denied(db, "DELETE FROM submission_link")
     assert _denied(db, "INSERT INTO submission_assignment_link (assignment_id, link_id) VALUES (1, 1)")
     assert _denied(db, "DELETE FROM submission_assignment_link")
+
+
+def test_restricted_role_sees_only_the_tenant_of_its_link(db):
+    """SEC-008 (Migration 0133_abgabebox_rls): die Rolle sieht nur Daten des Mandanten, dem das
+    gesetzte Link-Token gehört - ohne Token nichts, auch nicht die Tokens anderer Links."""
+    tenant, other = make_tenant(db), make_tenant(db)
+    link = links.create_link(db, SubmissionLinkCreate(name="Eltern"), tenant_id=tenant.id)
+    second_link = links.create_link(db, SubmissionLinkCreate(name="Leitende"), tenant_id=tenant.id)
+    other_link = links.create_link(db, SubmissionLinkCreate(name="Fremd"), tenant_id=other.id)
+    own_file = StoredFile(tenant_id=tenant.id, original_name="a.jpg", mime_type="image/jpeg", storage_path="uploads/a.jpg")
+    other_file = StoredFile(tenant_id=other.id, original_name="b.jpg", mime_type="image/jpeg", storage_path="uploads/b.jpg")
+    db.add_all([own_file, other_file])
+    db.flush()
+    file_ids = {"ids": [own_file.id, other_file.id]}
+    file_query = "SELECT id FROM stored_file WHERE id = ANY(:ids)"
+
+    rows, error = _probe_as_abgabebox(db, file_query, file_ids)
+    assert error is None and rows == []
+    rows, error = _probe_as_abgabebox(db, "SELECT token FROM submission_link")
+    assert error is None and rows == []
+
+    rows, error = _probe_as_abgabebox(db, file_query, file_ids, link_token=link.token)
+    assert error is None and [row.id for row in rows] == [own_file.id]
+    rows, error = _probe_as_abgabebox(db, "SELECT token FROM submission_link", link_token=link.token)
+    assert error is None and [row.token for row in rows] == [link.token]
+    assert second_link.token not in [row.token for row in rows]
+
+    rows, error = _probe_as_abgabebox(db, file_query, file_ids, link_token=other_link.token)
+    assert error is None and [row.id for row in rows] == [other_file.id]
+    # Ein erfundenes Token öffnet keinen Mandanten.
+    rows, error = _probe_as_abgabebox(db, file_query, file_ids, link_token="x" * 32)
+    assert error is None and rows == []
+
+
+def test_restricted_role_cannot_write_files_into_another_tenant(db):
+    tenant, other = make_tenant(db), make_tenant(db)
+    link = links.create_link(db, SubmissionLinkCreate(name="Eltern"), tenant_id=tenant.id)
+
+    _rows, error = _probe_as_abgabebox(
+        db,
+        "INSERT INTO stored_file (tenant_id, original_name, mime_type, storage_path) VALUES (:tenant, 'x', 'image/png', 'u/x')",
+        {"tenant": other.id},
+        link_token=link.token,
+    )
+    assert error is not None and "row-level security" in error
+
+
+def test_restricted_role_reads_no_file_metadata_beyond_duplicate_checks(db):
+    for column in ("gps_latitude", "original_name", "storage_path", "camera_model"):
+        assert _denied(db, f"SELECT {column} FROM stored_file")
+    _rows, error = _probe_as_abgabebox(db, "SELECT id, tenant_id, checksum_sha256, perceptual_hash FROM stored_file")
+    assert error is None
 
 
 def test_every_migrated_tenant_has_a_default_link(db):

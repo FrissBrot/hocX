@@ -1,7 +1,7 @@
 """Shared aggregation helpers for the statistics dashboard and the PDF chart generator.
 
 Used by both app/api/routes/statistics.py (/statistics/overview API) and
-app/services/chart_service.py (matplotlib PNGs embedded in exported PDFs). The two call
+app/documents/providers/statistics.py (Diagramme und Kennzahlen der Dokument-Engine). The two call
 sites used to implement the attendance/groups/fines/todo aggregation logic independently
 and had already begun to drift (2026-08-12 audit, findings M4/M10/M11/M12) - keep the
 logic here instead, so a rule change only has to be made in one place.
@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import Row, Date, cast, func, or_, select, text
+from sqlalchemy import Row, Date, cast, func, select, text
 from sqlalchemy.orm import Session
 
 from app.models.entities import (
@@ -102,7 +102,7 @@ class AttendanceCounts:
         return self.present + self.late + self.absent + self.excused
 
     def bump(self, status: str) -> None:
-        # Four-value status, matching export_service's counting: "late" is its own
+        # Four-value status, matching the document engine's attendance block: "late" is its own
         # bucket, not lumped into "absent" (a late arrival is not the same as a no-show).
         if status == "present":
             self.present += 1
@@ -165,13 +165,13 @@ def fetch_todo_rows(db: Session, tenant_id: int, bounds: tuple[date, date] | Non
         select(TodoStatus.code, ProtocolTodo.completed_at)
         # LEFT JOINs - protocol_element_block_id is nullable (standalone todos and
         # submission-assignment/Abgabebox-generated todos have no block), an INNER JOIN
-        # here silently drops both kinds. Those todos carry their own ProtocolTodo.tenant_id
-        # instead, checked in the WHERE below.
+        # here silently drops both kinds. Der Mandant steht seit Migration 0131 in jedem Todo;
+        # der Protocol-Join liefert nur noch das Protokolldatum.
         .outerjoin(ProtocolElementBlock, ProtocolElementBlock.id == ProtocolTodo.protocol_element_block_id)
         .outerjoin(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
         .outerjoin(Protocol, Protocol.id == ProtocolElement.protocol_id)
         .join(TodoStatus, TodoStatus.id == ProtocolTodo.todo_status_id)
-        .where(or_(Protocol.tenant_id == tenant_id, ProtocolTodo.tenant_id == tenant_id))
+        .where(ProtocolTodo.tenant_id == tenant_id)
         .where(*_date_conditions(func.coalesce(Protocol.protocol_date, cast(ProtocolTodo.created_at, Date)), bounds))
     ).all()
 
@@ -248,7 +248,7 @@ def fetch_fines_by_type(db: Session, tenant_id: int, bounds: tuple[date, date] |
 
 def fetch_finance_by_month(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
     """Income/expenses per month, combined across all of the tenant's finance accounts -
-    used by chart_service's "finance_by_month" PNG (one combined bar per month)."""
+    used by the document engine's "finance_by_month" chart (one combined bar per month)."""
     return db.execute(
         text("""
             SELECT to_char(ft.transaction_date, 'YYYY-MM') AS month,
@@ -388,3 +388,25 @@ def aggregate_group_rows(rows: list[Row], cycle_key: str | None = None) -> list[
         v["avg"] = round(v["weighted"] / v["sessions_with_p"], 1) if v["sessions_with_p"] > 0 else 0.0
         result.append(v)
     return sorted(result, key=lambda x: x["sessions"], reverse=True)
+
+
+# ── Sichtbarkeit je Person (Datenschutz-Audit PRIV-001) ─────────────────────────────────────────
+
+# Rollen, die Bussen und Anwesenheit aller Personen sehen - dieselbe Regel wie die Bussenliste
+# (require_all_fines_read). Alle anderen sehen in Ranglisten je Person nur sich selbst, ausser der
+# Mandant gibt sie ausdrücklich frei (tenant.statistics_per_person_public).
+PER_PERSON_ROLES = frozenset({"writer", "kassier", "admin"})
+
+
+def own_person_key(db: Session, user) -> str | None:
+    """None: der Aufrufer sieht alle Personen. Sonst der Gruppierungsschlüssel der eigenen Person
+    (``id:<app_user.id>``, siehe aggregate_attendance/fetch_fines_by_participant) - Teilnehmer und
+    Konto sind seit 0108 dieselbe Identität. Ohne Benutzer (interne Aufrufe) sind alle sichtbar."""
+    if user is None or user.current_role in PER_PERSON_ROLES:
+        return None
+    from app.models.entities import Tenant
+
+    if db.scalar(select(Tenant.statistics_per_person_public).where(Tenant.id == user.current_tenant_id)):
+        return None
+    return f"id:{user.user_id}"
+

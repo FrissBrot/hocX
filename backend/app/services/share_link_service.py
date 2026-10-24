@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models.entities import AppUser, PhotoAlbum, PhotoAlbumItem, ShareLink, ShareLinkFile
+from app.models.entities import AppUser, PhotoAlbum, PhotoAlbumItem, ShareLink, ShareLinkFile, StoredFile
 from app.services import photo_album_share_service
 from app.services.photo_metadata_privacy import MetadataPolicy
 
@@ -109,6 +109,11 @@ def resolve_active(db: Session, token: str) -> ShareLink | None:
     # Partners den Widerruf der Album-Freigabe.
     if link.album_id is not None and link.tenant_id not in photo_album_share_service.accessible_tenant_ids_for_album(db, link.album_id):
         return None
+    # SEC-002: Partner-Links gelten nur, solange der Besitzer öffentliche Links erlaubt.
+    if link.album_id is not None:
+        album = db.get(PhotoAlbum, link.album_id)
+        if album is None or not photo_album_share_service.may_create_public_link(db, album, link.tenant_id):
+            return None
     return link
 
 
@@ -124,12 +129,17 @@ def can_manage(db: Session, link: ShareLink, tenant_id: int) -> bool:
 
 def file_ids_for_link(db: Session, link: ShareLink) -> list[uuid.UUID]:
     if link.album_id is not None:
-        # Noch nicht freigegebene Fotos (share_pending) gehoeren nicht in den oeffentlichen Link.
-        return list(
-            db.scalars(
-                select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == link.album_id, PhotoAlbumItem.share_pending.is_(False))
+        # Noch nicht freigegebene Fotos (share_pending) gehoeren nicht in den oeffentlichen Link,
+        # ebenso Fotos von Partnern, die das fuer ihre Fotos abgeschaltet haben (SEC-002).
+        statement = select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == link.album_id, PhotoAlbumItem.share_pending.is_(False))
+        hidden_tenant_ids = photo_album_share_service.tenants_hidden_from_public_links(db, link.album_id, link.tenant_id)
+        if hidden_tenant_ids:
+            statement = statement.where(
+                ~select(StoredFile.id)
+                .where(StoredFile.public_id == PhotoAlbumItem.file_id, StoredFile.tenant_id.in_(hidden_tenant_ids))
+                .exists()
             )
-        )
+        return list(db.scalars(statement))
     return list(db.scalars(select(ShareLinkFile.file_id).where(ShareLinkFile.share_link_id == link.id)))
 
 

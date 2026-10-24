@@ -13,8 +13,10 @@ Three cumulative scopes, mirroring the three options in the admin panel:
 - "full_abgabebox": full + Abgabebox assignments/links/uploads/uploaded files and the
   albums bound to an Abgabe - a complete backup of the tenant.
 
-The archive therefore holds credentials (password hashes, plaintext TOTP secrets, link and
-calendar-feed tokens) and has to be treated like a database dump.
+Zugangsdaten (Passwort-Hashes, TOTP-Secrets im Klartext, Link- und Kalender-Tokens) kommen nur mit
+``include_credentials=True`` ins Archiv (Datenschutz-Audit Paket 6): dann gilt es wie ein
+Datenbank-Dump. Ohne sie setzt der Import zufällige Passwörter, lässt MFA weg und erzeugt neue
+Link- und Abo-URLs (TenantImportService behandelt fehlende Werte schon so).
 
 Every row keeps its public_id; the import reuses it whenever it is still free on the
 target (see TenantImportService._claim_public_id), so references stored by public_id
@@ -41,13 +43,21 @@ from app.core.secret_crypto import decrypt_secret
 from app.models import (
     AppUser,
     ProtocolTodoAssignee,
+    ProtocolTodoFile,
     TaskPackage,
     TaskPackageCycle,
     TaskPackageItem,
     AttendanceFine,
     CycleConfig,
+    DocumentExport,
+    DocumentRegistry,
+    DocumentAsset,
+    DocumentBrand,
+    DocumentBrandRevision,
+    DocumentComponent,
     DocumentTemplate,
-    DocumentTemplatePart,
+    DocumentTemplateAssignment,
+    DocumentTemplateRevision,
     ElementDefinition,
     Event,
     EventCycle,
@@ -65,7 +75,6 @@ from app.models import (
     ProtocolDisplaySnapshot,
     ProtocolElement,
     ProtocolElementBlock,
-    ProtocolExportCache,
     ProtocolImage,
     ProtocolText,
     ProtocolTodo,
@@ -102,7 +111,7 @@ from app.models.entities import (
     ShareLinkFile,
     submission_assignment_link_table,
 )
-from app.services.file_service import _safe_storage_path
+from app.core.storage import get_object_store, namespace_for_root, write_object_to_zip
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
     USER_ID_COLUMNS,
@@ -119,19 +128,48 @@ from app.services.tenant_transfer_common import (
 # tenant's own users are bundled. TenantImportService still reads version 2.
 # Format 3 also gained (without a version bump - purely additive tables an older importer just
 # ignores) photo albums, table snapshots, links/feeds/shares and tenant settings.
-FORMAT_VERSION = 4
+FORMAT_VERSION = 7  # 7: Document Studio (Brand-Profile, Assets, Vorlagen, Komponenten, Zuweisungen); 6: Dokumentenregister; 5: Dokument-Engine (Hausstile, Stil-Assets, Rezepte, document_export)
 ExportScope = Literal["structure", "structure_lists", "full", "full_abgabebox"]
 
 
 class TenantExportService:
-    def export(self, db: Session, tenant_id: int, scope: ExportScope) -> tuple[Path, str]:
+    def export(self, db: Session, tenant_id: int, scope: ExportScope, *, include_credentials: bool = False) -> tuple[Path, str]:
+        tenant = db.get(Tenant, tenant_id)
+        if tenant is None:
+            raise ValueError("Tenant not found")
+        manifest, pending_files = self.collect(db, tenant_id, scope, include_credentials=include_credentials)
+
+        tmp = tempfile.NamedTemporaryFile(prefix="hocx-export-", suffix=".zip", delete=False)
+        tmp.close()
+        zip_path = Path(tmp.name)
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=None))
+            for namespace, key, member_name in pending_files:
+                # Gestreamt aus dem Objektspeicher; verschwindet ein Objekt zwischen Inventur und
+                # Schreiben, bricht der Export ab statt ein Manifest mit Verweis ins Leere zu liefern.
+                write_object_to_zip(zf, namespace, key, member_name)
+
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "-" for c in tenant.name).strip("-") or "tenant"
+        filename = f"{safe_name}-{scope}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.hocxexport.zip"
+        return zip_path, filename
+
+    def object_exists(self, namespace: str, key: str) -> bool:
+        """Ob eine referenzierte Datei existiert. Der Mandanten-Restore aus dem Backup
+        überschreibt das (historische Quelle: Manifest des Sicherungspunkts statt aktuellem
+        Objektspeicher)."""
+        return get_object_store().exists(namespace, key)
+
+    def collect(
+        self, db: Session, tenant_id: int, scope: ExportScope, *, include_credentials: bool = False
+    ) -> tuple[dict[str, Any], list[tuple[str, str, str]]]:
+        """Manifest (Tabellen) und Liste der Dateien (namespace, key, member_name) - ohne ZIP."""
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
             raise ValueError("Tenant not found")
 
         self._lookup_cache = LookupCodeCache(db)
         self._user_cache = UserIdentityCache(db, tenant_id=tenant_id)
-        self._pending_files: list[tuple[Path, str]] = []
+        self._pending_files: list[tuple[str, str, str]] = []
 
         tables: dict[str, Any] = {}
         tables["tenant"] = self._row(tenant, "tenant")
@@ -177,26 +215,18 @@ class TenantExportService:
         self._export_tenant_settings(db, tenant_id, tables)
         self._export_calendar_feeds(db, tenant_id, tables)
         self._export_tenant_trusts(db, tenant_id, tables)
+        if not include_credentials:
+            _strip_credentials(tables)
 
         manifest = {
             "format_version": FORMAT_VERSION,
             "scope": scope,
+            "include_credentials": include_credentials,
             "exported_at": datetime.now(timezone.utc).isoformat(),
             "source_tenant_name": tenant.name,
             "tables": tables,
         }
-
-        tmp = tempfile.NamedTemporaryFile(prefix="hocx-export-", suffix=".zip", delete=False)
-        tmp.close()
-        zip_path = Path(tmp.name)
-        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=None))
-            for disk_path, member_name in self._pending_files:
-                zf.write(disk_path, member_name)
-
-        safe_name = "".join(c if c.isalnum() or c in "-_" else "-" for c in tenant.name).strip("-") or "tenant"
-        filename = f"{safe_name}-{scope}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.hocxexport.zip"
-        return zip_path, filename
+        return manifest, list(self._pending_files)
 
     # ── generic row/file helpers ─────────────────────────────────────────
 
@@ -214,12 +244,15 @@ class TenantExportService:
         return [self._row(obj, table_name) for obj in objs]
 
     def _register_file(self, root: str, storage_path: str, member_prefix: str) -> str | None:
-        source = _safe_storage_path(root, storage_path)
-        if not source.exists():
+        namespace = namespace_for_root(root)
+        try:
+            if not self.object_exists(namespace, storage_path):
+                return None
+        except ValueError:
             return None
         suffix = Path(storage_path).suffix
         member_name = f"{member_prefix}{suffix}"
-        self._pending_files.append((source, member_name))
+        self._pending_files.append((namespace, storage_path, member_name))
         return member_name
 
     # ── structure scope ──────────────────────────────────────────────────
@@ -233,20 +266,44 @@ class TenantExportService:
             "element_definition",
         )
 
-        parts = db.scalars(select(DocumentTemplatePart).where(DocumentTemplatePart.tenant_id == tenant_id)).all()
-        part_rows = []
-        for part in parts:
-            row = self._row(part, "document_template_part")
-            row["storage_path"] = self._register_file(
-                settings.storage_root, part.storage_path, f"files/document_template_parts/{part.id}"
-            )
-            part_rows.append(row)
-        tables["document_template_part"] = part_rows
-
-        tables["document_template"] = self._rows(
-            db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id == tenant_id)).all(),
-            "document_template",
+        # Document Studio: Assets (mit Datei), Brand-Profile samt Revisionen, wiederverwendbare
+        # Komponenten, Mandantenvorlagen samt Revisionen und Zuweisungen. Systemvorlagen gehören
+        # der Installation und werden nicht exportiert (Verweise darauf per system_key).
+        asset_rows = []
+        for asset in db.scalars(select(DocumentAsset).where(DocumentAsset.tenant_id == tenant_id)).all():
+            row = self._row(asset, "document_asset")
+            row["storage_path"] = self._register_file(settings.storage_root, asset.storage_path, f"files/document_assets/{asset.id}")
+            asset_rows.append(row)
+        tables["document_asset"] = asset_rows
+        brands = db.scalars(select(DocumentBrand).where(DocumentBrand.tenant_id == tenant_id)).all()
+        tables["document_brand"] = self._rows(brands, "document_brand")
+        brand_ids = [brand.id for brand in brands]
+        tables["document_brand_revision"] = self._rows(
+            db.scalars(select(DocumentBrandRevision).where(DocumentBrandRevision.brand_id.in_(brand_ids))).all() if brand_ids else [], "document_brand_revision"
         )
+        tables["document_component"] = self._rows(
+            db.scalars(select(DocumentComponent).where(DocumentComponent.tenant_id == tenant_id)).all(), "document_component"
+        )
+        document_templates = db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id == tenant_id)).all()
+        template_rows = self._rows(document_templates, "document_template")
+        system_keys = {
+            row.id: row.system_key
+            for row in db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id.is_(None))).all()
+        }
+        for row in template_rows:
+            row["source_system_key"] = system_keys.get(row.get("source_template_id"))
+        tables["document_template"] = template_rows
+        document_template_ids = [template.id for template in document_templates]
+        tables["document_template_revision"] = self._rows(
+            db.scalars(select(DocumentTemplateRevision).where(DocumentTemplateRevision.template_id.in_(document_template_ids))).all() if document_template_ids else [],
+            "document_template_revision",
+        )
+        assignment_rows = self._rows(
+            db.scalars(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.tenant_id == tenant_id)).all(), "document_template_assignment"
+        )
+        for row in assignment_rows:
+            row["system_key"] = system_keys.get(row.get("document_template_id"))
+        tables["document_template_assignment"] = assignment_rows
 
         templates = db.scalars(select(Template).where(Template.tenant_id == tenant_id)).all()
         tables["template"] = self._rows(templates, "template")
@@ -508,6 +565,12 @@ class TenantExportService:
             else [],
             "protocol_todo_assignee",
         )
+        tables["protocol_todo_file"] = self._rows(
+            db.scalars(select(ProtocolTodoFile).where(ProtocolTodoFile.protocol_todo_id.in_(todo_ids))).all()
+            if todo_ids
+            else [],
+            "protocol_todo_file",
+        )
         tables["user_template_access"] = self._rows(
             db.scalars(select(UserTemplateAccess).where(UserTemplateAccess.tenant_id == tenant_id)).all(),
             "user_template_access",
@@ -528,11 +591,21 @@ class TenantExportService:
             db.scalars(select(TableSnapshot).where(TableSnapshot.tenant_id == tenant_id)).all(), "table_snapshot"
         )
         self._export_photo_albums(db, tenant_id, tables, include_abgabebox=include_abgabebox)
-        tables["protocol_export_cache"] = self._rows(
-            db.scalars(select(ProtocolExportCache).where(ProtocolExportCache.protocol_id.in_(protocol_ids))).all()
-            if protocol_ids
-            else [],
-            "protocol_export_cache",
+        # Export-Datensätze (Version, Inhalts-Hash) - die PDFs selbst reisen als stored_file mit.
+        export_rows = self._rows(
+            db.scalars(select(DocumentExport).where(DocumentExport.tenant_id == tenant_id)).all(), "document_export"
+        )
+        # Systemvorlagen sind installationsübergreifend nur über system_key auflösbar
+        system_template_keys = {
+            row.id: row.system_key
+            for row in db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id.is_(None))).all()
+        }
+        for row in export_rows:
+            row["system_key"] = system_template_keys.get(row.get("template_id"))
+        tables["document_export"] = export_rows
+        # Dokumentenregister: nach einem Umzug bleiben ausgelieferte PDFs prüfbar.
+        tables["document_registry"] = self._rows(
+            db.scalars(select(DocumentRegistry).where(DocumentRegistry.tenant_id == tenant_id)).all(), "document_registry"
         )
 
     def _export_photo_albums(self, db: Session, tenant_id: int, tables: dict[str, Any], *, include_abgabebox: bool) -> None:
@@ -666,3 +739,21 @@ class TenantExportService:
             }
             for trust in trusts
         ]
+
+
+# Tabelle -> Spalten, die ein Login oder einen Link öffnen. Ohne include_credentials geleert.
+_CREDENTIAL_COLUMNS: dict[str, tuple[str, ...]] = {
+    "app_user": ("password_hash",),
+    "calendar_feed": ("token",),
+    "submission_link": ("token",),
+    "share_link": ("token",),
+}
+
+
+def _strip_credentials(tables: dict[str, Any]) -> None:
+    tables["user_mfa_factor"] = []
+    for table, columns in _CREDENTIAL_COLUMNS.items():
+        for row in tables.get(table) or []:
+            for column in columns:
+                if column in row:
+                    row[column] = None

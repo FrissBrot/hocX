@@ -41,7 +41,8 @@
     "protocol": "Protokoll",
     "wordImport": "Word-Import",
     "submission": "Abgabe",
-    "upload": "Upload"
+    "upload": "Upload",
+    "protocolExport": "Protokollexport"
   },
   "detail": {
     "openOriginal": "Original öffnen",
@@ -71,7 +72,14 @@
     "empty": "Keine Dateien gefunden.",
     "protocolRef": "Protokoll {label}",
     "download": "Download",
-    "share": "Teilen"
+    "share": "Teilen",
+    "openPdf": "PDF öffnen",
+    "processingStage": "Wird verarbeitet · {stage}",
+    "processingStages": {
+      "scan": "Virenprüfung",
+      "pdf": "PDF-Ansicht",
+      "text": "Texterkennung"
+    }
   },
   "view": {
     "title": "Dateien",
@@ -89,14 +97,16 @@
     "dropOverlayTitle": "Zum Hochladen loslassen",
     "dropOverlayHint": "Danach stellst du den Upload ein.",
     "loadError": "Dateien konnten nicht geladen werden.",
-    "uploadedToast": "{count, plural, one {# Datei hochgeladen.} other {# Dateien hochgeladen.}}"
+    "uploadedToast": "{count, plural, one {# Datei hochgeladen.} other {# Dateien hochgeladen.}}",
+    "descriptionLinked": "Alle Nicht-Bild-Dateien – aus Protokollen, Word-Importen, Abgaben und direkten Uploads. Bilder liegen unter <photos>Fotos</photos>."
   },
   "sourceOptions": {
     "all": "Alle Quellen",
     "protocols": "Protokolle",
     "wordImport": "Word-Import",
     "submissions": "Abgaben",
-    "uploads": "Uploads"
+    "uploads": "Uploads",
+    "protocolExports": "Protokollexporte"
   },
   "sortOptions": {
     "newestFirst": "Neueste zuerst",
@@ -128,5 +138,86 @@
     "rulesMaxFiles": "max. {max} Dateien pro Element",
     "elementLabel": "Abgabe-Element",
     "elementPlaceholder": "Element wählen…"
+  },
+  "document": {
+    "title": "Dokument",
+    "status": "Status",
+    "statusLabel": {
+      "processing": "In Verarbeitung",
+      "ready": "Bereit",
+      "partial": "Teilweise verarbeitet",
+      "failed": "Verarbeitung fehlgeschlagen"
+    },
+    "pdf": "PDF-Ansicht",
+    "pdfReady": "Bereit",
+    "text": "Text",
+    "jobStatus": {
+      "queued": "Wartet auf Verarbeitung",
+      "running": "Wird erstellt",
+      "done": "Nicht verfügbar",
+      "failed": "Fehlgeschlagen",
+      "blocked": "Gesperrt (Virenprüfung)",
+      "none": "Nicht verfügbar"
+    },
+    "extractionStatus": {
+      "ready": "Extrahiert",
+      "empty": "Kein Text gefunden",
+      "ocr_required": "Texterkennung (OCR) erforderlich",
+      "unsupported": "Für dieses Format nicht unterstützt",
+      "failed": "Fehlgeschlagen"
+    },
+    "currentVersion": "Aktuelle Version",
+    "versionNumber": "Version {number}",
+    "downloadPdf": "PDF herunterladen",
+    "downloadOriginal": "Originaldatei herunterladen",
+    "showText": "Extrahierten Text anzeigen",
+    "hideText": "Text ausblenden",
+    "textEmpty": "Kein Text vorhanden.",
+    "textLoadError": "Der Text konnte nicht geladen werden.",
+    "reprocess": "Erneut verarbeiten",
+    "reprocessStarted": "Verarbeitung wurde neu gestartet.",
+    "reprocessError": "Verarbeitung konnte nicht neu gestartet werden.",
+    "historyTitle": "Versionen ({count})",
+    "current": "Aktuell",
+    "openPdf": "PDF öffnen",
+    "original": "Original",
+    "previewTitle": "PDF-Vorschau von {name}",
+    "previewProcessing": "Die PDF-Ansicht wird gerade erstellt …",
+    "previewUnavailable": "Für dieses Dokument gibt es keine PDF-Ansicht. Die Originaldatei ist in den Details verfügbar.",
+    "loadError": "Dokumentdetails konnten nicht geladen werden.",
+    "openPdfNewTab": "PDF in neuem Tab öffnen"
+  },
+  "uploadResults": {
+    "title": "Upload-Ergebnis",
+    "summaryImages": "{count, plural, one {1 Bild verarbeitet} other {# Bilder verarbeitet}}: {parts}.",
+    "summaryFiles": "{count, plural, one {1 Datei verarbeitet} other {# Dateien verarbeitet}}: {parts}.",
+    "partUploaded": "{count} hochgeladen",
+    "partSkipped": "{count} übersprungen",
+    "partMetadataUpdated": "{count} übersprungen und Metadaten ergänzt",
+    "partFailed": "{count} fehlgeschlagen",
+    "detailsAction": "Details",
+    "appliedDetail": "Ergänzt: {fields}",
+    "status": {
+      "uploaded": "Hochgeladen",
+      "skipped": "Übersprungen",
+      "metadata_updated": "Übersprungen · Metadaten ergänzt",
+      "failed": "Fehlgeschlagen"
+    },
+    "fields": {
+      "taken_at": "Aufnahmedatum",
+      "gps": "Standort (GPS)",
+      "camera": "Kamera",
+      "dimensions": "Bildmasse",
+      "orientation": "Ausrichtung",
+      "estimated_taken_on": "geschätztes Aufnahmedatum"
+    },
+    "errors": {
+      "too_large": "Zu gross (maximal {max_mb} MB).",
+      "unsupported_format": "Dateiformat wird nicht unterstützt oder passt nicht zur Dateiendung.",
+      "scan_failed": "Konnte nicht auf Schadsoftware geprüft werden.",
+      "infected": "Von der Virenprüfung als infiziert erkannt, nicht gespeichert.",
+      "quota_exceeded": "Speicherkontingent erreicht, nicht gespeichert.",
+      "heic_unreadable": "HEIC-Datei konnte nicht gelesen werden."
+    }
   }
 }

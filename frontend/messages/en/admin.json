@@ -73,35 +73,25 @@
   },
   "system": {
     "title": "System status",
-    "description": "State of all containers and of the services hocX depends on. Refreshes every 30 seconds.",
+    "description": "State of all containers and of the services hocX depends on.",
     "notificationsLink": "Notifications",
-    "allGood": "All good - no open problems.",
-    "problemCount": "{count, plural, one {# open problem} other {# open problems}}",
     "staleSince": "The system status is out of date (last updated {time}). Monitoring in the backend is not running.",
     "noData": "No data yet - monitoring collects on its next run.",
-    "collectedAt": "As of {time}",
     "since": "since {time}",
     "checksTitle": "Services",
     "containersTitle": "Containers",
-    "composeProject": "Compose project {project}",
     "dockerNotConfigured": "The container overview is not set up (DOCKER_API_URL missing, see RUNBOOK).",
     "dockerUnavailable": "Container status unavailable: {error}",
     "containerColumns": {
       "service": "Service",
       "status": "Status",
       "uptime": "Up for",
-      "restarts": "Restarts",
       "cpu": "CPU",
       "memory": "Memory",
       "version": "Version"
     },
     "eventsTitle": "Events",
     "eventsDescription": "The last 50 status changes - the same ones that are sent via ntfy.",
-    "eventColumns": {
-      "time": "Time",
-      "kind": "Type",
-      "event": "Event"
-    },
     "noEvents": "No events yet.",
     "eventKinds": {
       "problem": "Problem",
@@ -131,7 +121,8 @@
       "unhealthy": "Health check failing",
       "oom_killed": "Killed (out of memory)",
       "starting": "Still starting",
-      "memory_high": "Memory almost full"
+      "memory_high": "Memory almost full",
+      "not_needed": "Stopped, not needed (files are stored with another provider)"
     },
     "checks": {
       "postgres": {
@@ -173,6 +164,81 @@
         "title": "Image analysis",
         "detail": "{queued, number} queued · oldest {oldestMinutes, number} min",
         "problem": "Image analysis queue is backing up"
+      },
+      "document_queue": {
+        "title": "Document processing",
+        "detail": "{queued, number} due in the queue · oldest {oldestMinutes, number} min · {failed, number} failed (24 h)",
+        "problem": "Document processing is backed up or failing"
+      },
+      "render_queue": {
+        "title": "PDF jobs",
+        "detail": "{queued, number} waiting · oldest {oldestMinutes, number} min · {failed, number} failed (24 h)",
+        "problem": "PDF jobs are piling up or failing"
+      },
+      "runtime": {
+        "title": "Service process load",
+        "detail": "{instances, number} processes · event loop max {maxLagMs, number} ms · DB pool {poolPeakPercent, number} % · thread pool {threadPeakPercent, number} % · {poolTimeouts, number} pool timeouts",
+        "problem": "Service processes blocked or saturated"
+      },
+      "document_verification": {
+        "title": "Public verification page",
+        "detail": "Response in {latencyMs, number} ms",
+        "problem": "Public verification page slow"
+      },
+      "object_storage": {
+        "title": "File storage",
+        "detail": "Generation {generation, number} · response time {latencyMs, number} ms",
+        "problem": "File storage unreachable"
+      },
+      "storage_migration": {
+        "title": "Storage migration",
+        "detail": "{verified, number} of {total, number} objects verified · {dead, number} permanently failed",
+        "problem": "Storage migration needs attention"
+      },
+      "backup": {
+        "title": "Backup",
+        "detail": "{state, select, disabled {Not set up} never {No successful backup yet} other {Last successful backup {hours, number} h ago}} · {points, number} restore points",
+        "problem": "Backup overdue or not set up"
+      },
+      "backup_repository": {
+        "title": "Backup repository",
+        "detail": "{reachable, select, yes {Storage Box reachable} other {Storage Box unreachable}} · {quota, select, yes {{usedPercent, number} % used} other {capacity unknown}}",
+        "problem": "Backup repository failing or full"
+      },
+      "backup_verification": {
+        "title": "Backup checks",
+        "detail": "{verified, select, yes {Verified {verifyDays, number} days ago} other {Never verified}} · {tested, select, yes {Restore test {testDays, number} days ago} other {No restore test yet}}",
+        "problem": "Backup check or restore test overdue"
+      },
+      "local_s3": {
+        "title": "Local S3 (Garage)",
+        "detail": "{reason, select, active {Active storage} initial_target {Target of the first migration} migration {Part of a running migration} fallback_period {Fallback period after a migration} pending_operation {Cleanup pending} requested {Requested manually} unverified_objects {Objects not yet verified} not_needed {Not needed, stopped} other {Status unknown}} · {objects, number} objects · {gb, number} GB",
+        "problem": "Local S3 (Garage) cannot be evaluated"
+      },
+      "orphaned_files": {
+        "title": "Orphaned files",
+        "detail": "{count, number} files without a reference",
+        "problem": "Orphaned files in storage"
+      },
+      "security": {
+        "title": "Security events",
+        "detail": "{failedLogins, number} failed sign-ins (15 min) · {exports, number} exports (1 h) · {restores, number} restores (24 h)",
+        "problem": "Unusual security events"
+      },
+      "tenant_offboarding": {
+        "title": "Offboarding",
+        "detail": "{count, number} tenants past contract end (+{days, number} days)",
+        "problem": "Tenants past contract end not yet deleted"
+      },
+      "captcha_endpoint": {
+        "title": "Captcha endpoint",
+        "detail": "{region, select, eu {EU endpoint (processing in the EU)} other {Global endpoint – for processing in the EU set FRIENDLY_CAPTCHA_PUZZLE_URL and _VERIFY_URL to the EU endpoint}}",
+        "problem": "Captcha endpoint unreachable"
+      },
+      "overload": {
+        "title": "Overload protection",
+        "detail": "{rejected, number} rejections · {users, number} new users · {tenants, number} organizations · load up to {pressurePercent, number} % (last {minutes, number} min)",
+        "problem": "Overload: new users are being turned away"
       }
     },
     "problems": {
@@ -198,8 +264,67 @@
       }
     },
     "events": {
-      "containerRestart": "Container {subject} was restarted",
-      "resolved": "Resolved: {text}"
+      "containerRestart": "Container {subject} was restarted"
+    },
+    "hero": {
+      "label": "Overall status",
+      "stale": "Status outdated",
+      "critical": "{critical, plural, one {# critical problem} other {# critical problems}}{warnings, plural, =0 {} one {, # warning} other {, # warnings}}",
+      "warnings": "{count, plural, one {# warning} other {# warnings}}, nothing critical",
+      "allGood": "All good"
+    },
+    "liveBadge": "Live · as of {time}",
+    "staleBadge": "Outdated · as of {time}",
+    "tally": {
+      "critical": "critical",
+      "warning": "{count, plural, one {warning} other {warnings}}",
+      "ok": "OK",
+      "unknown": "unknown"
+    },
+    "noProblems": "No open problems.",
+    "filters": {
+      "all": "All",
+      "problems": "Issues only"
+    },
+    "noIssues": "No issues.",
+    "groups": {
+      "infrastructure": "Infrastructure",
+      "security": "Security",
+      "processing": "Processing",
+      "backup": "Backup",
+      "other": "Other"
+    },
+    "groupSummary": "{ok, number}/{total, number} OK",
+    "composeProjectRich": "Compose project <mono>{project}</mono>",
+    "containerSummary": "{count, plural, one {# container} other {# containers}} · {restarts, plural, one {# restart} other {# restarts}}",
+    "problemLinks": {
+      "jobs": "Jobs →",
+      "storage": "Storage →",
+      "backups": "Backups →",
+      "containers": "Containers →"
+    },
+    "containerStates": {
+      "exitedOk": "exited (init)"
+    },
+    "restartCount": "{count, plural, one {# restart} other {# restarts}}",
+    "overload": {
+      "title": "Overload",
+      "description": "New users who saw the overload page because of heavy load, per organization (last 7 days). Set the priority per plan in the price catalog.",
+      "columns": {
+        "tenant": "Organization",
+        "plan": "Plan",
+        "rejected": "Rejections",
+        "users": "Users",
+        "last": "Last"
+      },
+      "empty": "Nobody was turned away because of overload in the last 7 days.",
+      "unknownTenant": "Unknown organization",
+      "noPlan": "No plan",
+      "priority": {
+        "0": "low",
+        "1": "normal",
+        "2": "high"
+      }
     }
   },
   "jobs": {
@@ -231,13 +356,18 @@
       "backup": "Backup",
       "cleanup": "Cleanup",
       "maintenance": "Maintenance",
-      "other": "Other"
+      "other": "Other",
+      "storage": "Storage",
+      "documents": "Documents"
     },
     "service": {
       "backend": "Backend",
       "abgabebox-backend": "Abgabebox backend",
       "photo-analysis-worker": "Image analysis worker",
-      "host": "Server (cron)"
+      "host": "Server (cron)",
+      "storage-worker": "Storage worker",
+      "document-worker": "Document worker",
+      "job-worker": "Job worker"
     },
     "interval": {
       "onDemand": "On demand",
@@ -292,6 +422,10 @@
         "title": "Backfill image quality",
         "description": "Computes sharpness and exposure for images that are still missing them."
       },
+      "thumbnail_backfill": {
+        "title": "Backfill thumbnails",
+        "description": "Creates thumbnails for images that have none yet, mainly Abgabebox uploads."
+      },
       "photo_album_sync": {
         "title": "Sync albums",
         "description": "Adds new and removes deleted Abgabebox images in the automatic albums."
@@ -314,7 +448,7 @@
       },
       "log_cleanup": {
         "title": "Clean up logs",
-        "description": "Deletes old audit log, error log and job history entries."
+        "description": "Deletes old entries from the audit log, error log, job and event histories, and expired share links."
       },
       "abgabebox_quarantine_cleanup": {
         "title": "Clean up quarantine",
@@ -335,6 +469,70 @@
       "task_package_rollover": {
         "title": "Update task packages",
         "description": "Daily creates the tasks of the current cycle from all active task packages (the new cycle’s tasks after a cycle change) and adds new recurrences."
+      },
+      "maintenance_supervisor": {
+        "title": "Maintenance supervisor",
+        "description": "Starts scheduled maintenance, marks overruns and updates estimates. Never ends maintenance by itself."
+      },
+      "storage_journal_cleanup": {
+        "title": "Storage journal cleanup",
+        "description": "Removes old change-journal entries that no open migration still needs."
+      },
+      "storage_purge": {
+        "title": "Purge deleted storage objects",
+        "description": "Physically removes deleted files from storage once the deletion has been committed."
+      },
+      "storage_migration_worker": {
+        "title": "Storage migration worker",
+        "description": "Copies, verifies and switches file storage (heartbeat from the poll loop)."
+      },
+      "storage_controller": {
+        "title": "Local S3 controller",
+        "description": "Host cron job: starts or stops the local S3 service as needed without deleting data."
+      },
+      "backup_storage": {
+        "title": "File backup",
+        "description": "Incrementally backs up the objects of the active storage generation after the database backup and verifies the result."
+      },
+      "backup_worker": {
+        "title": "Backup worker",
+        "description": "Schedules and runs backups, checks, restore tests and restores (separate backup-worker container)."
+      },
+      "backup_run": {
+        "title": "Backup (Borg)",
+        "description": "Encrypted backup of the database and file storage to the Storage Box, every 6 hours by default."
+      },
+      "backup_retention": {
+        "title": "Backup retention",
+        "description": "Removes restore points and unreferenced contents that are no longer needed after checking all references."
+      },
+      "backup_verify": {
+        "title": "Backup integrity check",
+        "description": "Checks the repository, archives, database dump and a sample of file contents."
+      },
+      "backup_restore_test": {
+        "title": "Restore test",
+        "description": "Restores the latest restore point into an isolated database and checks references and the application."
+      },
+      "document_sync": {
+        "title": "Synchronise documents",
+        "description": "Creates documents for drop box uploads and existing files and removes orphaned document files."
+      },
+      "document_worker": {
+        "title": "Document worker",
+        "description": "Generates PDF views and extracts the text of uploaded documents (heartbeat from the polling loop)."
+      },
+      "tenant_data_export": {
+        "title": "Club export",
+        "description": "Builds requested club exports (AES ZIP with tables, minutes PDFs and files) and deletes them after 7 days."
+      },
+      "retention_proposals": {
+        "title": "Retention periods",
+        "description": "Creates suggestions according to each club’s retention periods (submissions, former members, old gallery images) and applies them when set to automatic."
+      },
+      "job_worker": {
+        "title": "Job worker",
+        "description": "Runs heavy background work (gallery import, PDF exports, organisation exports, virus re-scans, clean-up) - heartbeat every minute."
       }
     }
   },
@@ -482,7 +680,8 @@
       "plan": "Plan & subscription",
       "users": "Users ({count})",
       "cleanup": "Cleanup",
-      "storage": "Storage"
+      "storage": "Storage",
+      "verification": "Verification"
     },
     "fields": {
       "tenantName": "Organization name",
@@ -498,13 +697,17 @@
       "discount": "Discount",
       "internalNote": "Internal note",
       "internalNotePlaceholder": "e.g. club discount until 2027",
+      "billingStart": "Subscription start",
+      "billingStartHelp": "From this date, receivables per billing period appear in the cash flow. Empty = creation date ({date}). Changing it recreates the open receivables.",
       "userLimitOverride": "Override user limit",
       "userLimitPlanLimit": "Plan limit: {limit}",
       "userLimitUnlimited": "Plan limit: unlimited",
       "userLimitHelp": "Empty = plan limit applies. Currently {count} user(s){suffix}",
       "userLimitExceeded": " – limit reached or exceeded.",
       "showOnWebsite": "Show as customer on the website",
-      "showOnWebsiteHelp": "Appears on the public website under “Used by” (name only). Only enable with the organisation’s consent."
+      "showOnWebsiteHelp": "Appears on the public website under “Used by” (name only). Only enable with the organisation’s consent.",
+      "contractEnd": "Contract end",
+      "contractEndHelp": "Empty = no end date. After the contract end plus the export period, /admin/system reports that the tenant’s data must be deleted."
     },
     "meta": {
       "createdAt": "Created on",
@@ -779,7 +982,7 @@
     "cloning": "Cloning…",
     "exportTitleNamed": "Export \"{name}\"",
     "exportTitle": "Export organization",
-    "exportDescription": "Creates a ZIP file to download, which can later be imported again in the admin panel as a new organization. The file contains credentials (password hashes, MFA keys, link and subscription tokens) and must be stored securely.",
+    "exportDescription": "Creates an encrypted file to download, which can later be imported again in the admin panel as a new organization. It contains credentials (password hashes, MFA secrets, link and subscription tokens) and must be stored securely despite the encryption.",
     "exportStructureOnlyTitle": "Structure only",
     "exportStructureOnlyDescription": "Cycles, form fields, document templates, lists (definition only, no content), accounts, user roles and verified domains (incl. verification code).",
     "exportStructureListsTitle": "Structure + list content",
@@ -788,8 +991,8 @@
     "exportFullDescription": "Also participants, events, protocols, fines, todos, files (incl. photo gallery and albums), share links, calendar subscriptions and album shares. Without Abgabebox.",
     "exportFullAbgabeboxTitle": "Everything including Abgabebox",
     "exportFullAbgabeboxDescription": "As above, plus Abgabebox configuration, Abgabebox links and uploaded files. Complete backup of the organization.",
-    "importDescription": "Creates a new organization from a previously exported ZIP file.",
-    "exportFile": "Export file (.zip)",
+    "importDescription": "Creates a new organization from a previously exported file.",
+    "exportFile": "Export file (.hocxenc or older .zip)",
     "uploadingAndProcessing": "Uploading and processing file …",
     "uploadAndImportRunning": "Upload and import in progress",
     "mayTakeAMoment": "This may take a moment depending on the file size.",
@@ -810,7 +1013,16 @@
     "deleteFailed": "Organization could not be deleted",
     "importedWithWarnings": "{count, plural, one {Organization imported with # note} other {Organization imported with # notes}}",
     "imported": "Organization imported",
-    "importFailed": "Organization could not be imported"
+    "importFailed": "Organization could not be imported",
+    "exportPasswordLabel": "Password (optional)",
+    "exportPasswordHelp": "Without a password the file is encrypted with this server's key and can only be imported here. Set a password to move the organization to another server.",
+    "exportPasswordConfirmLabel": "Repeat password",
+    "exportPasswordTooShort": "At least {min, number} characters.",
+    "exportPasswordMismatch": "The passwords do not match.",
+    "importPasswordLabel": "Export password",
+    "importPasswordHelp": "Only needed if a password was set during export.",
+    "exportCredentials": "Include credentials",
+    "exportCredentialsHint": "Password hashes, MFA secrets and link and calendar tokens. Only for a move in which all logins and links must keep working. Without this option, imported accounts get a random password and links get a new URL."
   },
   "pricing": {
     "title": "Pricing",
@@ -911,7 +1123,24 @@
     "delete": "Delete",
     "deleteConfirm": "Permanently delete \"{name}\"?",
     "deleted": "Package deleted",
-    "deleteFailed": "Could not delete the package."
+    "deleteFailed": "Could not delete the package.",
+    "loadPriority": {
+      "label": "Priority under heavy load",
+      "option": {
+        "0": "Low",
+        "1": "Normal",
+        "2": "High"
+      },
+      "help": {
+        "0": "When capacity runs short, new users of this plan are the first to see the overload page. People who are already working stay signed in.",
+        "1": "New users are only turned away at full capacity, after plans with low priority.",
+        "2": "New users are never turned away in advance and get free slots first."
+      },
+      "badge": {
+        "0": "Low priority",
+        "2": "High priority"
+      }
+    }
   },
   "catalogImport": {
     "title": "Import configuration",
@@ -967,5 +1196,136 @@
     "packageQuantity": "{name} × {count}",
     "rebook": "Rebook",
     "footnote": "Organizations on a plan or with a storage package that is not bookable (highlighted). \"Rebook\" opens the organization's settings: change the plan in the \"Plan & subscription\" tab and packages in the \"Storage\" tab."
+  },
+  "verification": {
+    "title": "Verification of organisations",
+    "description": "Confirmed organisations get the “Verified organisation” badge on the public verification page (if they show name and logo). The name at the time of the request is confirmed; renaming revokes the verification.",
+    "loading": "Loading …",
+    "empty": "No requests.",
+    "requestedAs": "Requested as “{name}”",
+    "filter": {
+      "pending": "Open",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "withdrawn": "Withdrawn",
+      "all": "All"
+    },
+    "columns": {
+      "organisation": "Organisation",
+      "message": "Message",
+      "requested": "Requested",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "status": {
+      "pending": "Open",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "withdrawn": "Withdrawn"
+    },
+    "actions": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "revoke": "Revoke verification"
+    },
+    "modal": {
+      "approveTitle": "Verify “{name}”",
+      "rejectTitle": "Reject request from “{name}”",
+      "revokeTitle": "Revoke verification of “{name}”",
+      "approveHint": "Only approve once the identity has been checked (e.g. commercial register, articles of association, call back to a known number).",
+      "rejectHint": "The tenant admin sees the reason in the settings.",
+      "revokeHint": "The badge disappears from the verification page immediately.",
+      "note": "Note (how it was checked)",
+      "reasonRequired": "Reason (required)",
+      "approvePlaceholder": "e.g. commercial register CHE-123.456.789 checked",
+      "rejectPlaceholder": "e.g. no proof of authority to represent",
+      "revokePlaceholder": "e.g. report of misuse",
+      "cancel": "Cancel"
+    },
+    "done": {
+      "approve": "“{name}” is verified.",
+      "reject": "Request from “{name}” rejected.",
+      "revoke": "Verification of “{name}” revoked."
+    },
+    "tenant": {
+      "title": "Verification by hocX",
+      "verified": "Verified since {date}",
+      "notVerified": "Not verified",
+      "by": "by {email}",
+      "note": "Note: {note}",
+      "hidden": "The tenant does not show name and logo on the verification page - so the badge is not visible.",
+      "history": "Requests",
+      "noRequests": "No requests yet.",
+      "withdrawnByRename": "Withdrawn by renaming",
+      "revoked": {
+        "name_changed": "Revoked on {date}: name changed.",
+        "admin": "Revoked on {date}."
+      }
+    },
+    "errors": {
+      "generic": "The action failed.",
+      "verificationAlreadyVerified": "The organisation is already verified.",
+      "verificationAlreadyPending": "There is already an open request.",
+      "verificationNoPending": "There is no open request.",
+      "verificationNameChanged": "The name has changed since the request.",
+      "verificationReasonRequired": "Please give a reason.",
+      "verificationNotVerified": "The organisation is not verified."
+    }
+  },
+  "documentTemplates": {
+    "title": "Document templates",
+    "description": "Built-in Document Studio templates: which ones are offered to organisations and which is the platform default per document type. Their content comes from the code and is updated on startup.",
+    "filter": {
+      "active": "Active",
+      "archived": "Archived",
+      "all": "All"
+    },
+    "columns": {
+      "template": "Template",
+      "documentType": "Document type",
+      "revision": "Version",
+      "usage": "Usage",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "status": {
+      "active": "Offered",
+      "archived": "Archived"
+    },
+    "platformDefault": "Platform default",
+    "revision": "Version {revision, number}",
+    "unpublished": "Not published",
+    "usage": "{copies, plural, =0 {No copies} one {# copy} other {# copies}} · {exports, plural, =0 {no exports} one {# export} other {# exports}}",
+    "actions": {
+      "makeDefault": "Make platform default",
+      "archive": "Archive",
+      "reactivate": "Offer again"
+    },
+    "archiveConfirm": "Archive “{name}”? Organisations can no longer choose it; assignments to this template fall back to the platform default. {copies, plural, =0 {} one {The # copy made by an organisation is kept.} other {The # copies made by organisations are kept.}}",
+    "madeDefault": "“{name}” is now the platform default",
+    "archived": "“{name}” archived",
+    "reactivated": "“{name}” is offered again",
+    "actionFailed": "Action failed",
+    "empty": "No templates in this view"
+  },
+  "auditLog": {
+    "title": "Audit log",
+    "description": "Security and change events of all tenants. The source is a hashed network fingerprint, not the IP address.",
+    "filterAll": "All",
+    "filterFailures": "Failed",
+    "tenant": "Tenant",
+    "allTenants": "All tenants",
+    "actionPlaceholder": "Action, e.g. user.login",
+    "colTime": "Time",
+    "colAction": "Action",
+    "colActor": "By",
+    "colSource": "Source",
+    "colOutcome": "Result",
+    "loading": "Loading …",
+    "empty": "No entries",
+    "outcome": {
+      "success": "Successful",
+      "failure": "Failed"
+    }
   }
 }

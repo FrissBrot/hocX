@@ -85,6 +85,24 @@ class FineTariffUpdate(BaseModel):
     amount_absent: Decimal = Field(default=Decimal("0"), ge=0, le=100000)
 
 
+class TemplateFineTariffRead(BaseModel):
+    """Bussentarif einer Protokollvorlage (0137). override=False: der Mandantentarif gilt,
+    tenant_tariff zeigt ihn zur Orientierung mit an."""
+
+    override: bool = False
+    account_id: uuid.UUID | None = None
+    amount_late: FinanceDecimal = Decimal("0")
+    amount_absent: FinanceDecimal = Decimal("0")
+    tenant_tariff: FineTariffRead = FineTariffRead()
+
+
+class TemplateFineTariffUpdate(BaseModel):
+    override: bool = False
+    account_id: uuid.UUID | None = None
+    amount_late: Decimal = Field(default=Decimal("0"), ge=0, le=100000)
+    amount_absent: Decimal = Field(default=Decimal("0"), ge=0, le=100000)
+
+
 class DeleteFinePayload(BaseModel):
     """Optionaler Body für DELETE /fines/{id}. Begründung ist nur für Bussen aus einem
     abgeschlossenen Protokoll nötig; protocol_id ist das Protokoll, in dem gelöscht wird

@@ -1,63 +1,11 @@
 from copy import deepcopy
-from pathlib import Path
 import uuid
 
-import pytest
-from fastapi import HTTPException
 
 from app.api.routes.word_import import _encode_analysis
-from app.models import DocumentTemplate, DocumentTemplatePart
-from app.schemas.document_template import DocumentTemplateCreate, DocumentTemplateUpdate
 from app.schemas.word_import import WordImportAnalysis, WordImportTextMapping, WordImportFormFieldValue
-from app.services.document_template_service import DocumentTemplateService
-from app.services.document_template_config_ids import translate_part_ids
 from app.services.snapshot_reference_ids import snapshot_reference_ids
 from tests.factories import make_tenant, make_list_definition, make_finance_account, make_event
-
-
-def test_document_template_part_references_round_trip_and_materialize(db, tmp_path, monkeypatch):
-    from app.core.config import settings
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
-    tenant = make_tenant(db)
-    source = tmp_path / "custom.tex"
-    source.write_text("% custom preamble")
-    part = DocumentTemplatePart(tenant_id=tenant.id, code="custom", name="Custom", part_type="preamble", storage_path=str(source))
-    db.add(part)
-    db.flush()
-    public_id = str(part.public_id)
-    config = {"slots": {"preamble": public_id}, "theme": {"font_parts": {"font_regular": public_id}},
-              "title_assets": {"header_image_part_id": public_id, "footer_image_part_id": None}}
-    original = deepcopy(config)
-    decoded = translate_part_ids(db, config, tenant_id=tenant.id, decode=True)
-    assert decoded["theme"]["font_parts"]["font_regular"] == part.id
-    assert decoded["title_assets"]["header_image_part_id"] == part.id
-    assert translate_part_ids(db, decoded, tenant_id=tenant.id, decode=False) == original
-    assert config == original
-
-    service = DocumentTemplateService()
-    payload = {"slots": {"preamble": public_id}}
-    result = service.create_document_template(db, DocumentTemplateCreate(name="Custom", configuration_json=payload), tenant_id=tenant.id)
-    assert result.configuration_json == payload
-    assert (Path(result.filesystem_path) / "preamble.tex").read_text() == "% custom preamble"
-    from app.services.public_id_service import get_by_public_id
-    stored = get_by_public_id(db, DocumentTemplate, result.id, tenant_id=tenant.id)
-    assert stored.configuration_json == {"slots": {"preamble": part.id}}
-    updated = service.update_document_template(db, stored.id, DocumentTemplateUpdate(configuration_json=result.configuration_json))
-    assert updated.configuration_json == payload
-    assert service.get_document_template(db, stored.id).configuration_json == payload
-    assert service.list_document_templates(db, tenant.id)[0].configuration_json == payload
-
-
-def test_document_template_rejects_foreign_and_invalid_parts(db):
-    tenant = make_tenant(db)
-    other = make_tenant(db)
-    part = DocumentTemplatePart(tenant_id=other.id, code="foreign", name="Foreign", part_type="preamble", storage_path="/tmp/foreign.tex")
-    db.add(part)
-    db.flush()
-    for value in (str(part.public_id), str(uuid.uuid4()), "invalid", part.id):
-        with pytest.raises(HTTPException) as exc:
-            translate_part_ids(db, {"slots": {"preamble": value}}, tenant_id=tenant.id, decode=True)
-        assert exc.value.status_code == 400
 
 
 def test_snapshot_public_references_preserve_internal_config_and_scope(db):

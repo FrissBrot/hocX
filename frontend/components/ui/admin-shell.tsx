@@ -14,7 +14,7 @@ import { AdminAccountSettings } from "@/components/admin/admin-account-settings"
 import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
-type AdminIconKey = "dashboard" | "tenants" | "pricing" | "users" | "domains" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security";
+type AdminIconKey = "dashboard" | "tenants" | "pricing" | "cashflow" | "users" | "domains" | "verifications" | "documents" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security" | "storage" | "backups" | "maintenance";
 
 type AdminNavLink = { href: string; labelKey: string; icon: AdminIconKey; badge?: "count" };
 
@@ -27,8 +27,10 @@ const navGroups: { titleKey: string | null; links: AdminNavLink[] }[] = [
     links: [
       { href: "/admin/tenants", labelKey: "nav.tenants", icon: "tenants", badge: "count" },
       { href: "/admin/plans", labelKey: "nav.pricing", icon: "pricing" },
+      { href: "/admin/cashflow", labelKey: "nav.cashflow", icon: "cashflow" },
       { href: "/admin/users", labelKey: "nav.users", icon: "users" },
       { href: "/admin/domains", labelKey: "nav.domains", icon: "domains" },
+      { href: "/admin/verifications", labelKey: "nav.verifications", icon: "verifications" },
     ],
   },
   {
@@ -36,8 +38,13 @@ const navGroups: { titleKey: string | null; links: AdminNavLink[] }[] = [
     links: [
       { href: "/admin/system", labelKey: "nav.systemStatus", icon: "system" },
       { href: "/admin/error-logs", labelKey: "nav.errorLogs", icon: "errors" },
+      { href: "/admin/audit", labelKey: "nav.auditLog", icon: "security" },
       { href: "/admin/upload-pipeline", labelKey: "nav.uploadPipeline", icon: "pipeline" },
       { href: "/admin/jobs", labelKey: "nav.jobs", icon: "jobs" },
+      { href: "/admin/document-templates", labelKey: "nav.documentTemplates", icon: "documents" },
+      { href: "/admin/storage", labelKey: "nav.storage", icon: "storage" },
+      { href: "/admin/backups", labelKey: "nav.backups", icon: "backups" },
+      { href: "/admin/maintenance", labelKey: "nav.maintenance", icon: "maintenance" },
       { href: "/admin/notifications", labelKey: "nav.notifications", icon: "notifications" },
     ],
   },
@@ -79,6 +86,13 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
         <circle cx="8" cy="8" r="1.4" />
       </>
     ),
+    cashflow: (
+      <>
+        <path d="M3.5 20.5h17" />
+        <path d="M4 15.5l4.5-4.5 3.5 3 7.5-7.5" />
+        <path d="M15 6.5h4.5V11" />
+      </>
+    ),
     users: (
       <>
         <circle cx="9" cy="8" r="3.5" />
@@ -90,6 +104,18 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
       <>
         <circle cx="12" cy="12" r="8.5" />
         <path d="M3.5 12h17M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5s1.1-6.1 3.4-8.5z" />
+      </>
+    ),
+    verifications: (
+      <>
+        <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z" />
+        <path d="M9 12l2 2 4-4" />
+      </>
+    ),
+    documents: (
+      <>
+        <path d="M7 3.5h7l4 4V20.5H7z" />
+        <path d="M14 3.5v4h4M9.5 12h6M9.5 15.5h6" />
       </>
     ),
     errors: (
@@ -128,6 +154,25 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
       <>
         <circle cx="12" cy="12" r="8.5" />
         <path d="M12 7.5V12l3 2" />
+      </>
+    ),
+    storage: (
+      <>
+        <ellipse cx="12" cy="6" rx="7.5" ry="2.5" />
+        <path d="M4.5 6v6c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5V6" />
+        <path d="M4.5 12v6c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5v-6" />
+      </>
+    ),
+    backups: (
+      <>
+        <path d="M4.5 12a7.5 7.5 0 101.9-5" />
+        <path d="M4.5 4.5V8H8" />
+        <path d="M12 8v4l2.5 1.5" />
+      </>
+    ),
+    maintenance: (
+      <>
+        <path d="M14.5 6.5a4 4 0 00-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 005.3-5.3l-2.4 2.4-2.6-.6-.6-2.6z" />
       </>
     ),
     security: (

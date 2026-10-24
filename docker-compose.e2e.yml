@@ -9,6 +9,7 @@ services:
       - "127.0.0.1:18000:8000"
     environment:
       TRAEFIK_DOMAIN: ""
+      TRAEFIK_ADMIN_DOMAIN: ""
       # The e2e stack publishes the frontend on host port 13000 (see below) while the
       # container itself still listens on 3000, so the browser's Origin header is
       # "http://127.0.0.1:13000" - not covered by main.py's/collaboration_ws.py's static
@@ -22,6 +23,11 @@ services:
       # folds a freshly-submitted Abgabebox photo into its Zyklus/Abgabe album within a
       # test's timeout, instead of adding a synchronous "run it now" endpoint that
       # wouldn't exist in production and wouldn't prove the actual background loop works.
+      PHOTO_ALBUM_SYNC_INTERVAL_MINUTES: "1"
+  job-worker:
+    environment:
+      # Der Album-Sync läuft seit dem Concurrency-Audit (Paket 10) im job-worker, nicht mehr im
+      # Backend - das kurze Intervall für abgabebox-photo-album-sync.spec.ts gehört deshalb hierher.
       PHOTO_ALBUM_SYNC_INTERVAL_MINUTES: "1"
   frontend:
     ports: !override

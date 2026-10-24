@@ -112,19 +112,14 @@ def test_closing_without_opening_refreshes_before_freezing(db, monkeypatch):
 
 
 def test_export_refreshes_without_editor_read(db, tmp_path, monkeypatch):
-    from app.services.export_service import ExportService
+    from app.documents.catalog import BlockSpec
+    from app.documents.compiler import build_blocks
+    from app.documents.context import BuildContext
 
     protocol, attendance, changes, leaver, joiner, remaining = _setup(db)
-    service = ExportService()
-    rendered_configs = []
-
-    def capture_block(db, block, *args):
-        rendered_configs.append(block.configuration_snapshot_json)
-        return "Test"
-
-    monkeypatch.setattr(service, "_render_block", capture_block)
-    service._render_protocol_body(db, protocol.id, tmp_path, protocol.tenant_id)
-    assert attendance.configuration_snapshot_json in rendered_configs
+    blocks = build_blocks(BuildContext(db=db, tenant_id=protocol.tenant_id, language="de", protocol=protocol), [BlockSpec(type="protocol_element")])
+    attendance_block = next(child for block in blocks for child in block.children if child.type == "attendance")
+    assert {entry.name for entry in attendance_block.entries} == {"Eintritt", "Bleibt"}
     assert {e["participant_id"] for e in attendance.configuration_snapshot_json["attendance_entries"]} == {joiner.id, remaining.id}
     assert len(changes.configuration_snapshot_json["entries"]) == 2
 

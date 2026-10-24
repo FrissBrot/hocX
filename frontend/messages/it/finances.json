@@ -108,7 +108,7 @@
   "bookedTo": "Registrata su <strong>{account}</strong>",
   "tariffButton": "Tariffa multe",
   "tariffTitle": "Tariffa multe",
-  "tariffDescription": "Vale per tutti i blocchi presenze con «Multe attive» attivato.",
+  "tariffDescription": "Vale per tutti i blocchi presenze con «Multe attive» attivato, salvo che il loro modello abbia una tariffa propria.",
   "tariffAccountLabel": "Conto multe",
   "tariffAccountHelp": "Senza conto non vengono create multe.",
   "tariffNoAccount": "Nessun conto (nessuna multa)",

@@ -108,7 +108,7 @@
   "bookedTo": "Comptabilisé sur <strong>{account}</strong>",
   "tariffButton": "Barème des amendes",
   "tariffTitle": "Barème des amendes",
-  "tariffDescription": "S’applique à tous les blocs de présence où « Amendes actives » est activé.",
+  "tariffDescription": "S’applique à tous les blocs de présence où « Amendes actives » est activé, sauf si leur modèle a son propre tarif.",
   "tariffAccountLabel": "Compte des amendes",
   "tariffAccountHelp": "Sans compte, aucune amende n’est créée.",
   "tariffNoAccount": "Aucun compte (pas d’amendes)",

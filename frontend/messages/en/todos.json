@@ -83,5 +83,15 @@
   "endOfWeek": "End of week",
   "endOfMonth": "End of month",
   "inTwoWeeks": "In 2 weeks",
-  "fromPackageTitle": "Created from a task package"
+  "fromPackageTitle": "Created from a task package",
+  "notesLabel": "Notes",
+  "notesPlaceholder": "Notes, details, next steps …",
+  "notesEmpty": "No notes",
+  "filesLabel": "Files",
+  "filesSearchPlaceholder": "Search uploaded files …",
+  "filesLoading": "Loading …",
+  "filesNoMatches": "No matching files",
+  "filesEmpty": "No files linked",
+  "removeFile": "Remove {name}",
+  "detailsLoadFailed": "Notes and files could not be loaded"
 }

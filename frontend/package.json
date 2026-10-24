@@ -1,6 +1,6 @@
 {
   "name": "hocx-frontend",
-  "version": "1.1.13",
+  "version": "1.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --port 3000",
@@ -11,16 +11,18 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@tiptap/pm": "^2.11.5",
-    "@tiptap/react": "^2.11.5",
-    "@tiptap/starter-kit": "^2.11.5",
-    "next": "16.3.6",
+    "@dnd-kit/core": "^6.3.1",
+    "@tiptap/core": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/react": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
+    "next": "16.4.2",
     "next-intl": "^4.14.8",
     "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "recharts": "^2.15.4",
-    "tiptap-markdown": "^0.8.10"
+    "tiptap-markdown": "^0.9.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
@@ -38,6 +40,7 @@
   },
   "overrides": {
     "postcss": "8.5.23",
-    "sharp": "0.35.3"
+    "sharp": "0.35.5",
+    "source-map-js": "1.2.2"
   }
 }

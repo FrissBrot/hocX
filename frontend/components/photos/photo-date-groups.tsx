@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { groupPhotosByDate } from "./grouping";
+import { dateMarkersFor, PhotoDateMarker } from "./photo-date-marker";
 import { PhotoTile } from "./photo-tile";
 import { formatWeekdayDate } from "@/lib/utils/format";
 import { FileOverviewItem } from "@/types/api";
@@ -55,6 +56,9 @@ export function PhotoDateGroups({
               <span className="photo-date-context">
                 {group.contextLabel}{group.contextLabel ? " " : null}{t("groupCount", { count: group.items.length })}
               </span>
+              {dateMarkersFor(group.items.map((item) => item.date_source)).map((marker) => (
+                <PhotoDateMarker key={marker.kind} variant="pill" {...marker} />
+              ))}
             </div>
             <button type="button" className="button-secondary button-ghost photo-date-select-all" aria-pressed={group.items.every((item) => selectedIds.has(item.id))} onClick={() => onToggleGroup(group.items.map((item) => item.id))}>
               {group.items.every((item) => selectedIds.has(item.id)) ? t("deselectDay") : t("selectDay")}

@@ -6,7 +6,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.entities import AppUser, DocumentTemplate, Event, Template, Tenant
+from app.models.entities import AppUser, Event, Template, Tenant
 from app.schemas.base import PublicIdModel
 from app.schemas.event import EventRead
 
@@ -32,7 +32,6 @@ class ProtocolCreateFromTemplate(BaseModel):
     # UUIDs as received from the client - the router resolves these to internal ids
     # (see app.services.public_id_service) before calling into ProtocolService.
     template_id: uuid.UUID
-    document_template_id: uuid.UUID | None = None
     protocol_number: str | None = None
     protocol_date: date
     title: str | None = None
@@ -44,7 +43,6 @@ class ProtocolUpdate(BaseModel):
     protocol_date: date | None = None
     event_id: uuid.UUID | None = None
     status: ProtocolStatus | None = None
-    document_template_id: uuid.UUID | None = None
     session_notes: str | None = None
     expected_session_notes: str | None = None
     track_changes_enabled: bool | None = None
@@ -67,7 +65,6 @@ class ProtocolRead(PublicIdModel):
     _fk_models: ClassVar[dict[str, type]] = {
         "tenant_id": Tenant,
         "template_id": Template,
-        "document_template_id": DocumentTemplate,
         "event_id": Event,
         "created_by": AppUser,
     }
@@ -76,8 +73,6 @@ class ProtocolRead(PublicIdModel):
     tenant_id: uuid.UUID
     template_id: uuid.UUID
     template_version: int
-    document_template_id: uuid.UUID | None = None
-    document_template_version: int | None = None
     protocol_number: str
     title: str | None = None
     protocol_date: date
@@ -172,8 +167,9 @@ class ProtocolElementBlockRead(BaseModel):
     is_required_snapshot: bool
     is_visible_snapshot: bool
     export_visible_snapshot: bool
-    latex_template_snapshot: str | None = None
     configuration_snapshot_json: dict
+    # Optimistische Sperre der Konfiguration (Migration 0149): beim PATCH als expected_config_version mitsenden.
+    config_version: int = 0
     public_reference_ids: dict[str, dict[str, uuid.UUID]] = Field(default_factory=dict)
     text_content: str | None = None
     display_compiled_text: str | None = None
@@ -216,6 +212,10 @@ class ProtocolElementBlockUpdate(BaseModel):
     is_visible_snapshot: bool | None = None
     export_visible_snapshot: bool | None = None
     configuration_snapshot_json: dict | None = None
+    # Stand, von dem der Client ausging (ProtocolElementBlockRead.config_version). Weicht er ab,
+    # antwortet die API 409 config_conflict mit dem aktuellen Stand. Fehlt er (ältere Clients),
+    # wird wie bisher ohne Prüfung geschrieben.
+    expected_config_version: int | None = None
 
 
 class ProtocolElementBlockFromEventCreate(BaseModel):
@@ -326,6 +326,27 @@ class TodoListItem(ProtocolTodoRead):
     block_title: str | None = None
     submission_assignment_id: uuid.UUID | None = None
     element_ref: str | None = None
+
+
+class TodoDetailFile(BaseModel):
+    id: uuid.UUID
+    original_name: str
+    mime_type: str | None = None
+    file_size_bytes: int | None = None
+    content_url: str
+
+
+class TodoDetails(BaseModel):
+    """Notizen und verknüpfte Dateien eines Todos - nur für das Todo-Popup, darum bewusst nicht
+    Teil von ProtocolTodoRead (Übersicht, Momentaufnahmen, Exporte)."""
+
+    notes: str = ""
+    files: list[TodoDetailFile] = []
+
+
+class TodoDetailsUpdate(BaseModel):
+    notes: str | None = Field(default=None, max_length=100_000)
+    file_ids: list[uuid.UUID] | None = Field(default=None, max_length=200)
 
 
 class ProtocolImageRead(BaseModel):

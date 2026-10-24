@@ -76,6 +76,7 @@
     "captchaPlaceholder": "Vérification de sécurité (aucun FriendlyCaptcha configuré – environnement de test/dev)",
     "submit": "Envoyer",
     "submitting": "Envoi en cours…",
+    "busyRetry": "Beaucoup d’envois en ce moment – nouvel essai dans {seconds, plural, one {# seconde} other {# secondes}} …",
     "successTitle": "Merci, dépôt reçu",
     "successCount": "{count, plural, one {# fichier téléversé pour ce dépôt.} other {# fichiers téléversés pour ce dépôt.}}",
     "uploadMore": "Déposer un autre fichier",
@@ -104,10 +105,115 @@
       "element": "Document",
       "files": "Fichiers",
       "receivedAt": "Reçu le"
-    }
+    },
+    "includeGps": "Envoyer les données GPS de l’image",
+    "privacyResponsible": "{tenant} est responsable de vos fichiers.",
+    "privacyLink": "Protection des données",
+    "privacyCaptcha": "Pour éviter le spam, Friendly Captcha vérifie votre navigateur sans cookies ni suivi."
   },
   "language": {
     "label": "Langue"
   },
-  "copyright": "Copyright © {year} hocX Project · Tous droits réservés."
+  "copyright": "Copyright © {year} hocX Project · Tous droits réservés.",
+  "verify": {
+    "brand": {
+      "subtitle": "Vérification d’authenticité",
+      "headline": "Ce document provient-il vraiment de hocX ?",
+      "lead": "Déposez le fichier PDF. Nous comparons son empreinte numérique à tous les documents créés avec hocX.",
+      "privacyNote": "Le fichier ne quitte pas votre appareil - seule son empreinte est vérifiée."
+    },
+    "title": "Vérifier l’authenticité",
+    "hint": "Vérifiez qu’un fichier PDF provient de hocX sans modification.",
+    "documentHint": "Document {id} – déposez le fichier PDF ici pour le vérifier.",
+    "dropLabelTouch": "Sélectionner le fichier PDF",
+    "dropRelease": "Relâchez pour vérifier",
+    "dropOverlay": "Relâchez le fichier pour le vérifier",
+    "privacy": "Le fichier n’est pas téléversé. Votre navigateur calcule son empreinte numérique (SHA-256) et n’envoie que celle-ci pour la vérification.",
+    "checking": "Vérification …",
+    "checkAnother": "Vérifier un autre fichier",
+    "originalTitle": "Original",
+    "originalText": "Ce fichier est une copie non modifiée d’un document créé avec hocX le {date}.",
+    "fields": {
+      "documentType": "Type de document",
+      "title": "Titre",
+      "status": "Statut lors de la création",
+      "version": "Version",
+      "documentId": "ID du document"
+    },
+    "statusLabel": {
+      "geplant": "Brouillon (planifié)",
+      "durchgeführt": "Brouillon (tenu)",
+      "abgeschlossen": "Clôturé"
+    },
+    "docType": {
+      "protocol": "Procès-verbal",
+      "invitation": "Convocation",
+      "todos": "Liste des tâches",
+      "events": "Calendrier",
+      "attendance_sheet": "Liste de présence",
+      "members": "Liste des membres",
+      "finance": "Rapport financier",
+      "statistics": "Rapport annuel",
+      "list": "Liste",
+      "custom": "Document",
+      "protocol_excerpt": "Extrait de procès-verbal"
+    },
+    "createdBy": "Créé dans le compte hocX de {name}.",
+    "verifiedBadge": "Organisation vérifiée",
+    "verifiedExplanation": "hocX a confirmé que ce compte appartient à l’organisation « {name} ».",
+    "logoAlt": "Logo de {name}",
+    "otherDocument": "Le fichier est authentique, mais il appartient à un autre document que le code QR scanné.",
+    "importUnverified": "Importé, non vérifié : cette entrée provient d'une importation de données et n'a pas pu être comparée au fichier original à ce moment-là.",
+    "titleOverridden": "Le titre a été défini différemment du procès-verbal lors de l'export.",
+    "newerVersion": "Il existe une version plus récente ({version}) de ce document.",
+    "notFoundTitle": "Introuvable",
+    "notFoundText": "Ce fichier ne correspond à aucun document créé avec hocX.",
+    "notFoundHint": "Vérifiez toujours le fichier que vous avez reçu à l’origine.",
+    "error": "La vérification est impossible pour le moment. Veuillez réessayer dans un instant.",
+    "readError": "Le fichier n’a pas pu être lu.",
+    "tooLarge": "Le fichier est trop volumineux ({size} Mo au maximum).",
+    "noCrypto": "Votre navigateur ne prend pas en charge la vérification. Veuillez utiliser un navigateur récent.",
+    "site": {
+      "label": "Page de vérification de {name}",
+      "eyebrow": "Page de vérification officielle",
+      "hint": "Vérifie si un fichier PDF provient sans modification de {name}.",
+      "poweredBy": "Vérification fournie par hocX"
+    },
+    "domainBadge": "Domaine de vérification confirmé : {domain}",
+    "domainExplanation": "Le domaine {domain} est relié au compte hocX de « {name} » par un enregistrement DNS. Il ne prouve pas l'identité de l'organisation – seule la confirmation par hocX le fait.",
+    "foreignDocument": "Ce document n'a pas été émis par « {site} ».",
+    "forwarded": "L'empreinte du fichier que tu as sélectionné sur la page de vérification précédente a été vérifiée.",
+    "redirect": {
+      "tenantTitle": "Continuer vers la page de vérification de « {name} »",
+      "tenantText": "« {name} » confirme ses documents sur {domain}. Redirection dans {seconds, plural, one {# seconde} other {# secondes}} – la vérification s'y fait automatiquement, sans resélectionner le fichier.",
+      "tenantStayed": "« {name} » confirme aussi ses documents sur {domain}.",
+      "centralTitle": "Document d'une autre organisation",
+      "centralText": "Ce document n'a pas été émis par « {site} ». Redirection vers la page de vérification de hocX dans {seconds, plural, one {# seconde} other {# secondes}}.",
+      "centralStayed": "Ce document n'a pas été émis par « {site} ». La page de vérification de hocX indique qui l'a émis.",
+      "stay": "Rester ici",
+      "openTenant": "Ouvrir la page de vérification",
+      "openCentral": "Vers la page de vérification de hocX"
+    },
+    "checkingHash": "Calcul de l’empreinte …",
+    "fileWithSize": "{name} · {size}",
+    "dropTitle": "Glissez un PDF ici",
+    "dropOr": "ou <choose>choisissez un fichier</choose>",
+    "issuedBy": "Émis par",
+    "hashLabel": "SHA-256 {hash}",
+    "forwardedShort": "Fichier de la page de vérification précédente",
+    "notFoundReasons": {
+      "title": "Raisons fréquentes",
+      "changed": "Le fichier a été modifié après son téléchargement.",
+      "resaved": "Un nouvel enregistrement, « Imprimer en PDF » ou une compression modifient le fichier – même si le contenu semble identique.",
+      "notHocx": "Le document n’a pas été créé avec hocX."
+    }
+  },
+  "maintenance": {
+    "title": "La boîte de dépôt est en maintenance",
+    "message": "Les dépôts ne sont pas possibles pendant la maintenance. Veuillez réessayer plus tard.",
+    "uploadsTitle": "Le téléversement est brièvement bloqué",
+    "uploadsMessage": "En raison de travaux de maintenance, aucun fichier ne peut être accepté pour le moment. Cela ne dure généralement que quelques minutes.",
+    "availableAt": "Disponible à nouveau vers {time}",
+    "estimating": "La durée prévue est en cours de calcul."
+  }
 }

@@ -13,7 +13,10 @@ export are recoverable situations, not reasons to fail the whole import.
 
 from __future__ import annotations
 
+import hashlib
+import contextlib
 import json
+import re
 import secrets
 import shutil
 import tempfile
@@ -30,18 +33,27 @@ from sqlalchemy.orm import Session
 
 from app import scanner
 from app.core.config import settings
+from app.core.storage import MAIN, get_object_store, namespace_for_root, new_object_key
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
 from app.core.security import hash_password
 from app.models import (
     AppUser,
     ProtocolTodoAssignee,
+    ProtocolTodoFile,
     TaskPackage,
     TaskPackageCycle,
     TaskPackageItem,
     AttendanceFine,
     CycleConfig,
+    DocumentExport,
+    DocumentRegistry,
+    DocumentAsset,
+    DocumentBrand,
+    DocumentBrandRevision,
+    DocumentComponent,
     DocumentTemplate,
-    DocumentTemplatePart,
+    DocumentTemplateAssignment,
+    DocumentTemplateRevision,
     ElementDefinition,
     Event,
     EventCycle,
@@ -61,7 +73,6 @@ from app.models import (
     ProtocolDisplaySnapshot,
     ProtocolElement,
     ProtocolElementBlock,
-    ProtocolExportCache,
     ProtocolImage,
     ProtocolText,
     ProtocolTodo,
@@ -104,10 +115,8 @@ from app.services import (
     domain_verification_service,
     share_link_service,
     submission_link_service,
-    tenant_trust_service,
     traefik_config_service,
 )
-from app.services.document_template_service import DocumentTemplateService
 from app.services.element_config import derive_fine_tariff, upgrade_snapshot_config, upgrade_template_element_config
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
@@ -120,7 +129,6 @@ from app.services.tenant_transfer_common import (
     coerce_value,
     new_uuid7,
     remap_block_configuration,
-    remap_document_template_config,
     remap_element_definition_config,
     remap_occurrence_key,
     remap_list_value,
@@ -134,7 +142,7 @@ from app.services.tenant_transfer_common import (
     replace_public_ids,
 )
 
-SUPPORTED_FORMAT_VERSIONS = {2, 3, 4}  # 2: separate user_tenant_role table; 3: role on app_user
+SUPPORTED_FORMAT_VERSIONS = {2, 3, 4, 5, 6, 7}  # 7: Document Studio; 6: Dokumentenregister; 5: Dokument-Engine (Hausstile statt Dokumentvorlagen)  # 2: separate user_tenant_role table; 3: role on app_user
 
 # Zip-bomb guard, same idea as file_service.py's MAX_ZIP_ENTRIES/MAX_ZIP_TOTAL_BYTES for the
 # word-import ZIP upload, just scaled up: a full-tenant export can legitimately contain many
@@ -147,9 +155,6 @@ MAX_IMPORT_ZIP_TOTAL_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB combined uncompresse
 
 
 class TenantImportService:
-    def __init__(self) -> None:
-        self.document_template_service = DocumentTemplateService()
-
     def import_zip(self, db: Session, zip_path: Path, new_name: str) -> tuple[Tenant, list[str]]:
         with tempfile.TemporaryDirectory(prefix="hocx-import-") as extract_dir_str:
             extract_dir = Path(extract_dir_str)
@@ -160,47 +165,86 @@ class TenantImportService:
             if not manifest_path.exists():
                 raise ValueError("Kein manifest.json im Archiv gefunden - kein gültiges hocX-Export-Archiv.")
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if manifest.get("format_version") not in SUPPORTED_FORMAT_VERSIONS:
-                raise ValueError(f"Nicht unterstützte Export-Version: {manifest.get('format_version')!r}")
+            return self.import_manifest(db, manifest, ExtractedDirSource(extract_dir), new_name)
 
-            self.db = db
-            self.extract_dir = extract_dir
-            self.tables: dict[str, Any] = manifest.get("tables", {})
-            self.format_version = manifest["format_version"]
-            self._user_id_map: dict[int, int] = {}
-            self.lookup_cache = LookupCodeCache(db)
-            self.user_cache = UserIdentityCache(db)
-            self.warnings: list[str] = []
-            self._created_tenant_id: int | None = None
-            # old public_id (lowercase) -> newly assigned one, only for the rare rows whose
-            # exported public_id is already taken on this installation (see _claim_uuid).
-            self._public_id_map: dict[str, str] = {}
-            self._taken_public_ids: dict[tuple[type, str], set[str]] = {}
-            # Partner tenants a relation (trust, album share) was restored to - reported once.
-            self._linked_partner_names: set[str] = set()
-            # Exported public_ids of the StoredFile/SubmissionUploadFile rows that actually
-            # made it in (a file can be skipped: missing from the archive, or infected).
-            self._imported_file_public_ids: set[str] = set()
-            # New ids of protocol blocks whose repeat_source points at a todo - remapped in a
-            # second pass once the todos exist (see _remap_todo_repeat_sources).
-            self._todo_repeat_block_ids: list[int] = []
+    def import_manifest(self, db: Session, manifest: dict[str, Any], source: "ImportFileSource", new_name: str) -> tuple[Tenant, list[str]]:
+        """Gemeinsamer Importpfad: ZIP-Upload (ExtractedDirSource) und Mandanten-Restore aus dem
+        Backup (app/backup/tenant_recovery.py, Dateien direkt aus Borg ohne ZIP)."""
+        if manifest.get("format_version") not in SUPPORTED_FORMAT_VERSIONS:
+            raise ValueError(f"Nicht unterstützte Export-Version: {manifest.get('format_version')!r}")
 
+        self.db = db
+        self.source = source
+        self.tables: dict[str, Any] = manifest.get("tables", {})
+        self.format_version = manifest["format_version"]
+        self._user_id_map: dict[int, int] = {}
+        self.lookup_cache = LookupCodeCache(db)
+        self.user_cache = UserIdentityCache(db)
+        self.warnings: list[str] = []
+        # SHA-256 der tatsächlich importierten PDF-Bytes (TYPST-007): nur dafür gilt ein
+        # Register-Eintrag aus dem Archiv als belegt.
+        self._imported_pdf_hashes: set[str] = set()
+        self._created_tenant_id: int | None = None
+        # old public_id (lowercase) -> newly assigned one, only for the rare rows whose
+        # exported public_id is already taken on this installation (see _claim_uuid).
+        self._public_id_map: dict[str, str] = {}
+        self._taken_public_ids: dict[tuple[type, str], set[str]] = {}
+        # Partner tenants a relation (trust, album share) was restored to - reported once.
+        # Exported public_ids of the StoredFile/SubmissionUploadFile rows that actually
+        # made it in (a file can be skipped: missing from the archive, or infected).
+        self._imported_file_public_ids: set[str] = set()
+        # New ids of protocol blocks whose repeat_source points at a todo - remapped in a
+        # second pass once the todos exist (see _remap_todo_repeat_sources).
+        self._todo_repeat_block_ids: list[int] = []
+
+        try:
+            new_tenant = self._run(new_name)
+        except Exception as exc:
+            # The pipeline below commits progressively (one table at a time, matching
+            # TenantCloneService's style) rather than as one big transaction - a failure
+            # partway through would otherwise leave a broken, half-imported tenant sitting
+            # in the tenant list instead of a clean "import failed". Tear it down before the
+            # error propagates - über delete_tenant inkl. Dateien und RESTRICT-Reihenfolge
+            # (Audit MAIN-BE-006); die Originalexception bleibt erhalten.
+            db.rollback()
+            if self._created_tenant_id is not None:
+                from app.services.admin_tenant_service import AdminTenantService
+
+                AdminTenantService().cleanup_partial_tenant(db, self._created_tenant_id, original=exc)
+                # Objekte unter tenant_imports/tenant-<id>/ (ohne Zeile, z. B. nach einem Fehler
+                # zwischen Schreiben und Registrieren) zusätzlich entfernen.
+                self._remove_imported_objects_for(db, self._created_tenant_id)
+            raise
+        return new_tenant, self.warnings
+
+    @property
+    def source(self) -> "ImportFileSource":
+        """Dateiquelle des laufenden Imports. Kompatibilität: wer (wie ältere Aufrufer/Tests) nur
+        extract_dir setzt, bekommt die ZIP-Quelle mit ihrer Pfadprüfung."""
+        current = self.__dict__.get("_source")
+        if current is None and self.__dict__.get("extract_dir") is not None:
+            return ExtractedDirSource(self.__dict__["extract_dir"])
+        if current is None:
+            raise RuntimeError("Keine Dateiquelle für den Import gesetzt")
+        return current
+
+    @source.setter
+    def source(self, value: "ImportFileSource") -> None:
+        self.__dict__["_source"] = value
+
+    @staticmethod
+    def _remove_imported_objects_for(db: Session, tenant_id: int) -> None:
+        from app.core.storage import delete_prefix
+
+        for root in (settings.storage_root, settings.abgabebox_storage_root):
             try:
-                new_tenant = self._run(new_name)
-            except Exception as exc:
-                # The pipeline below commits progressively (one table at a time, matching
-                # TenantCloneService's style) rather than as one big transaction - a failure
-                # partway through would otherwise leave a broken, half-imported tenant sitting
-                # in the tenant list instead of a clean "import failed". Tear it down before the
-                # error propagates - über delete_tenant inkl. Dateien und RESTRICT-Reihenfolge
-                # (Audit MAIN-BE-006); die Originalexception bleibt erhalten.
+                delete_prefix(db, namespace_for_root(root), f"tenant_imports/tenant-{tenant_id}/")
+                db.commit()
+            except Exception as exc:  # noqa: BLE001 - Aufräumen best effort, Fehler sichtbar machen
                 db.rollback()
-                if self._created_tenant_id is not None:
-                    from app.services.admin_tenant_service import AdminTenantService
+                from app.core.error_log import record_system_error
 
-                    AdminTenantService().cleanup_partial_tenant(db, self._created_tenant_id, original=exc)
-                raise
-            return new_tenant, self.warnings
+                record_system_error(db, exc=exc)
 
     def _t(self, name: str) -> list[dict[str, Any]]:
         return self.tables.get(name, [])
@@ -270,6 +314,9 @@ class TenantImportService:
         is kept, so every handed-out URL keeps working after a restore - unless it's already in
         use here: then the source tenant still exists on this installation, and sharing its
         credential would open the source's link for the imported tenant as well."""
+        if token and submission_link_service.is_reserved_token(token):
+            self.warnings.append(f"{label}: Token «{token}» ist reserviert - neuer Link erzeugt.")
+            return generate()
         if token and self.db.scalar(select(model.id).where(model.token == token)) is None:
             return token
         if token:
@@ -312,22 +359,17 @@ class TenantImportService:
     def _restore_file(self, member_path: str | None, *, root: str, new_tenant_id: int, subdir: str) -> str | None:
         if member_path is None:
             return None
-        # SECURITY (audit S4, 2026-08-16): member_path comes straight out of the attacker-
-        # controlled manifest.json inside the uploaded import zip - joining it onto
-        # extract_dir unchecked would let a manifest with e.g. "../../../etc/passwd" or an
-        # absolute path (Path(a) / "/etc/passwd" silently discards "a" entirely, per Python's
-        # Path semantics) read arbitrary files off the server's filesystem into the new
-        # tenant's storage. _safe_extract() already guards the zip's own entries the same way
-        # for the same reason - reuse that exact containment check here.
-        source = _resolve_within_extract_dir(self.extract_dir, member_path)
-        if not source.exists():
+        if not self.source.exists(member_path):
             return None
-        suffix = Path(member_path).suffix
-        target_dir = Path(root) / "tenant_imports" / f"tenant-{new_tenant_id}" / subdir
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / f"{uuid4().hex}{suffix}"
-        shutil.copy2(source, target_path)
-        return str(target_path.relative_to(Path(root).resolve()))
+        # subdir kann Werte aus dem Manifest enthalten (part_type/code) - validate_key schliesst
+        # Traversal-Segmente aus, der Key bleibt unter tenant_imports/tenant-<id>/.
+        try:
+            key = new_object_key("tenant_imports", f"tenant-{new_tenant_id}", *[p for p in subdir.split("/") if p], filename=member_path)
+        except ValueError:
+            return None
+        if not self.source.store(self.db, namespace_for_root(root), key, member_path):
+            return None
+        return key
 
     def _warn_missing_user(self, table_name: str, email: str | None) -> None:
         if email is not None:
@@ -338,6 +380,10 @@ class TenantImportService:
     def _run(self, new_name: str) -> Tenant:
         new_tenant = self._import_tenant_base(new_name)
         self._created_tenant_id = new_tenant.id
+        # Restore-Aufträge merken sich den neuen Mandanten, um nach einem Absturz mitten im
+        # Import aufräumen zu können (app/backup/run_restore.py).
+        if (callback := getattr(self, "on_tenant_created", None)) is not None:
+            callback(new_tenant.id)
         # From here on only the new tenant's own accounts can be referenced by email.
         self.user_cache.tenant_id = new_tenant.id
         self._import_app_users(new_tenant.id)
@@ -350,8 +396,7 @@ class TenantImportService:
         self._import_simple(Leader, self._t("leader"), "leader", {"tenant_id": new_tenant.id})
         participant_map = self._import_participants(new_tenant.id)
         cycle_config_map = self._import_simple(CycleConfig, self._t("cycle_config"), "cycle_config", {"tenant_id": new_tenant.id})
-        part_map = self._import_document_template_parts(new_tenant.id)
-        document_template_map = self._import_document_templates(new_tenant.id, part_map)
+        document_style_map = self._import_document_brands(new_tenant.id)
         event_map = self._import_events(new_tenant.id, group_map, participant_map)
         # Fuer im Editor gewaehlte (als public UUID gespeicherte) Referenzen in Block-Snapshots,
         # siehe remap_block_configuration. Exporte vor Format 2 haben keine public_id-Spalte.
@@ -368,7 +413,6 @@ class TenantImportService:
         )
         template_map, template_element_map, template_element_block_map = self._import_templates(
             new_tenant.id,
-            document_template_map=document_template_map,
             cycle_config_map=cycle_config_map,
             element_definition_map=element_definition_map,
             event_map=event_map,
@@ -396,7 +440,7 @@ class TenantImportService:
             new_tenant.id, stored_file_map, event_map,
             cycle_config_map=cycle_config_map, submission_assignment_map=submission_assignment_map,
         )
-        protocol_map = self._import_protocols(new_tenant.id, template_map, document_template_map, event_map)
+        protocol_map = self._import_protocols(new_tenant.id, template_map, event_map)
         self._import_word_import_documents(
             new_tenant.id, template_map, stored_file_map, protocol_map,
             WordImportIdMaps(
@@ -417,7 +461,8 @@ class TenantImportService:
         self._import_protocol_texts(protocol_element_block_map)
         self._import_protocol_display_snapshots(protocol_element_block_map)
         self._import_protocol_images(protocol_element_block_map, stored_file_map)
-        self._import_protocol_export_caches(protocol_map, stored_file_map)
+        document_template_maps = self._import_document_templates(new_tenant.id, template_map, document_style_map)
+        self._import_document_exports(new_tenant.id, protocol_map, stored_file_map, document_template_maps, document_style_map)
         finance_transaction_map = self._import_finance_transactions(finance_account_map, protocol_map)
         self._import_attendance_fines(protocol_map, participant_map, finance_account_map, finance_transaction_map)
         task_package_item_map = self._import_task_packages(
@@ -429,6 +474,7 @@ class TenantImportService:
             task_package_item_map=task_package_item_map, cycle_config_map=cycle_config_map,
         )
         self._import_protocol_todo_assignees(todo_map, participant_map)
+        self._import_protocol_todo_files(todo_map, stored_file_map)
         self._remap_todo_repeat_sources(todo_map)
         self._restore_todo_snapshots(protocol_map, protocol_element_block_map)
         album_map = self._import_photo_albums(new_tenant.id, cycle_config_map, submission_assignment_map)
@@ -442,11 +488,6 @@ class TenantImportService:
         self._import_user_template_access(new_tenant.id, template_map)
         self._import_user_protocol_access(new_tenant.id, protocol_map)
         self._import_user_protocol_scrolls(protocol_map)
-        if self._linked_partner_names:
-            self.warnings.append(
-                "Hinweis: Beziehungen zu bestehenden Mandanten wiederhergestellt (Vertrauen/Album-Freigaben): "
-                + ", ".join(sorted(self._linked_partner_names))
-            )
         return new_tenant
 
     def _restore_todo_snapshots(self, protocol_map: dict[int, int], protocol_element_block_map: dict[int, int]) -> None:
@@ -672,7 +713,7 @@ class TenantImportService:
         domain already verified on the source (its DNS TXT record already holds this exact
         token) should stay verified on the target rather than forcing the admin through
         domain verification again. `domain` is globally unique across the whole
-        installation (uq_tenant_domain_domain), so a domain already claimed - by hocX
+        installation among active domains (uq_tenant_domain_active_domain, Migration 0129), so a domain already active - by hocX
         itself (settings.traefik_domain/traefik_abgabebox_domain) or by any tenant already
         on this installation, e.g. re-importing an export while the source tenant still
         exists here - is skipped with a warning rather than failing the whole import.
@@ -689,7 +730,7 @@ class TenantImportService:
             if domain in reserved:
                 self.warnings.append(f"Domain '{domain}' ist durch die Installation selbst belegt, wurde nicht importiert.")
                 continue
-            if self.db.query(TenantDomain).filter(TenantDomain.domain == domain).first() is not None:
+            if self.db.query(TenantDomain).filter(TenantDomain.domain == domain, TenantDomain.status == "active").first() is not None:
                 self.warnings.append(f"Domain '{domain}' ist auf dieser Installation bereits vergeben, wurde nicht importiert.")
                 continue
             new_row = self._build(TenantDomain, data, {"tenant_id": new_tenant_id})
@@ -735,44 +776,317 @@ class TenantImportService:
         self.db.commit()
         return id_map
 
-    def _import_document_template_parts(self, new_tenant_id: int) -> dict[int, int]:
-        id_map: dict[int, int] = {}
-        for row in self._t("document_template_part"):
-            data = self._resolve_row("document_template_part", row)
-            new_storage_path = self._restore_file(
-                data.get("storage_path"), root=settings.storage_root, new_tenant_id=new_tenant_id,
-                subdir=f"document_template_parts/{row.get('part_type', 'part')}/{row.get('code', 'code')}",
-            )
-            if new_storage_path is None:
-                self.warnings.append(f"document_template_part '{row.get('code')}' (v{row.get('version')}): Datei fehlte im Export, übersprungen.")
-                continue
-            new_row = self._build(DocumentTemplatePart, data, {"tenant_id": new_tenant_id, "storage_path": new_storage_path})
-            self.db.add(new_row)
+    def _restore_asset(self, new_tenant_id: int, data: dict[str, Any], *, kind: str, category: str) -> DocumentAsset | None:
+        path = self._restore_file(data.get("storage_path"), root=settings.storage_root, new_tenant_id=new_tenant_id, subdir="document_assets")
+        if path is None:
+            self.warnings.append(f"Dokument-Asset '{data.get('name')}': Datei fehlte im Export, übersprungen.")
+            return None
+        asset = self._build(DocumentAsset, {**data, "kind": kind, "category": category}, {"tenant_id": new_tenant_id, "storage_path": path})
+        self.db.add(asset)
+        self.db.flush()
+        return asset
+
+    def _import_document_brands(self, new_tenant_id: int) -> dict[str, int]:
+        """Assets und Brand-Profile (Document Studio). Ältere Archive: Hausstile (Format 5/6)
+        und TeX-basierte Dokumentvorlagen (Format ≤ 4) werden wie in Migration 0118 bzw. 0115
+        in Brand-Profile übersetzt (app.documents.legacy).
+        Rückgabe: "brand:<alte id>", "revision:<alte id>", "style:<alte id>",
+        "template:<alte document_template-id>" → neue ID."""
+        from app.documents import assets as asset_service
+        from app.documents import brand_service
+        from app.documents.legacy import brand_tokens_from_legacy, brand_tokens_from_style, has_custom_slots, legacy_part_refs
+
+        id_map: dict[str, int] = {}
+        default_brand: int | None = None
+        for row in self._t("document_asset"):
+            data = self._resolve_row("document_asset", row)
+            self._restore_asset(new_tenant_id, data, kind=data.get("kind") or "image", category=data.get("category") or ("font" if data.get("kind") == "font" else "image"))
+        for row in self._t("document_brand"):
+            data = self._resolve_row("document_brand", row)
+            brand = self._build(DocumentBrand, data, {"tenant_id": new_tenant_id, "is_default": False})
+            self.db.add(brand)
             self.db.flush()
-            id_map[row["id"]] = new_row.id
+            id_map[f"brand:{row['id']}"] = brand.id
+            if row.get("is_default"):
+                default_brand = brand.id
+        for row in self._t("document_brand_revision"):
+            data = self._resolve_row("document_brand_revision", row)
+            brand_id = id_map.get(f"brand:{data.get('brand_id')}")
+            if brand_id is None:
+                continue
+            revision = self._build(DocumentBrandRevision, data, {"brand_id": brand_id, "tokens_json": self._checked_brand_tokens(new_tenant_id, data)})
+            self.db.add(revision)
+            self.db.flush()
+            id_map[f"revision:{row['id']}"] = revision.id
+
+        # Format 5/6: Hausstile und ihre Assets
+        for row in self._t("document_style_asset"):
+            data = self._resolve_row("document_style_asset", row)
+            self._restore_asset(new_tenant_id, data, kind=data.get("kind") or "image", category="font" if data.get("kind") == "font" else "image")
+        for row in self._t("document_style"):
+            data = self._resolve_row("document_style", row)
+            tokens = brand_tokens_from_style(data.get("style_key"), self._remap_public_refs(data.get("tokens_json") or {}))
+            brand = brand_service.create_brand(self.db, new_tenant_id, name=data.get("name") or "Brand", tokens=self._valid_brand_tokens(new_tenant_id, tokens))
+            id_map[f"style:{row['id']}"] = brand.id
+            if row.get("is_default") and default_brand is None:
+                default_brand = brand.id
+
+        # Format ≤ 4: TeX-Dokumentvorlagen übersetzen, Bild-/Schrift-Parts übernehmen
+        parts = {row["id"]: row for row in self._t("document_template_part")}
+        restored: dict[tuple[int, str], DocumentAsset] = {}
+        lost_slots = False
+        for row in self._t("document_template") if self.format_version <= 4 else []:
+            config = row.get("configuration_json") or {}
+            lost_slots = lost_slots or has_custom_slots(config)
+            role_ids: dict[str, str] = {}
+            for role, part_id in legacy_part_refs(config).items():
+                part = parts.get(part_id)
+                kind = "font" if role.startswith("font_") else "image"
+                if part is None:
+                    continue
+                key = (part_id, kind)
+                if key not in restored:
+                    path = self._restore_file(part.get("storage_path"), root=settings.storage_root, new_tenant_id=new_tenant_id, subdir="document_assets")
+                    if path is None:
+                        continue
+                    content = get_object_store().get_bytes(MAIN, path)
+                    family = None
+                    if kind == "font":
+                        try:
+                            family = asset_service.font_family_of(content)
+                        except Exception:  # noqa: BLE001 - unlesbare Schrift: Brand nutzt Hausschrift
+                            family = None
+                    asset = DocumentAsset(tenant_id=new_tenant_id, kind=kind, category="font" if kind == "font" else ("logo" if role == "logo" else "image"), name=part.get("name") or kind, original_name=Path(path).name, storage_path=path, file_size_bytes=len(content), font_family=family)
+                    self.db.add(asset)
+                    self.db.flush()
+                    restored[key] = asset
+                role_ids[role] = str(restored[key].public_id)
+            tokens = brand_tokens_from_legacy(config, role_ids)
+            brand = brand_service.create_brand(self.db, new_tenant_id, name=row.get("name") or "Brand", tokens=self._valid_brand_tokens(new_tenant_id, tokens))
+            id_map[f"template:{row['id']}"] = brand.id
+            if row.get("is_default") and default_brand is None:
+                default_brand = brand.id
+        if lost_slots:
+            self.warnings.append("Eigener Vorlagen-Code (TeX) wird nicht mehr unterstützt und wurde nicht übernommen; Farben, Schrift, Varianten, Logo und Fussbild sind als Brand-Profil importiert.")
+
+        if default_brand is not None:
+            brand_service._set_default(self.db, new_tenant_id, self.db.get(DocumentBrand, default_brand))
+        self.db.flush()
+        brand_service.ensure_default_brand(self.db, new_tenant_id)
         self.db.commit()
         return id_map
 
-    def _import_document_templates(self, new_tenant_id: int, part_map: dict[int, int]) -> dict[int, int]:
-        id_map: dict[int, int] = {}
-        for row in self._t("document_template"):
+    def _checked_brand_tokens(self, new_tenant_id: int, data: dict[str, Any]) -> dict[str, Any]:
+        """Tokens einer importierten Brand-Revision gegen das Schema prüfen (STUDIO-011). Ungültige
+        Tokens werden durch Standardwerte ersetzt (wie beim Laden, brand_service.tokens_of) und
+        gemeldet, statt erst Bibliothek und Export scheitern zu lassen."""
+        from app.documents.brand import BrandTokens, parse_tokens
+
+        raw = self._remap_public_refs(data.get("tokens_json") or {})
+        try:
+            tokens = parse_tokens(raw)
+        except ValueError as exc:
+            self.warnings.append(f"Brand-Revision {data.get('revision')} eines Brand-Profils war ungültig und wurde durch Standardwerte ersetzt: {exc}")
+            tokens = BrandTokens()
+        return self._valid_brand_tokens(new_tenant_id, tokens).model_dump(mode="json")
+
+    def _valid_brand_tokens(self, new_tenant_id: int, tokens: Any) -> Any:
+        """Asset-Referenzen, deren Datei fehlte, entfernen (sonst lehnt das Brand-Profil sie ab)."""
+        from app.documents import assets as asset_service
+        from app.documents.brand import BrandTokens
+
+        found = asset_service.assets_by_ids(self.db, new_tenant_id, tokens.asset_ids())
+        data = tokens.model_dump(mode="json")
+        for key in ("logo", "logo_alt", "letterhead", "background", "watermark", "footer_image"):
+            value = data["assets"].get(key)
+            if value and uuid.UUID(value) not in found:
+                data["assets"][key] = None
+        data["assets"]["images"] = [item for item in data["assets"].get("images", []) if uuid.UUID(item["asset_id"]) in found]
+        for role in ("body", "heading"):
+            choice = data["typography"][role]
+            choice["asset_ids"] = [value for value in choice.get("asset_ids", []) if uuid.UUID(value) in found]
+            if not choice["asset_ids"] and not choice.get("builtin"):
+                choice["builtin"] = "inter"
+        return BrandTokens.model_validate(data)
+
+    def _import_document_templates(self, new_tenant_id: int, template_map: dict[int, int], brand_map: dict[str, int]) -> dict[str, int]:
+        """Komponenten, Mandantenvorlagen samt Revisionen und Zuweisungen (Format 7). Ältere
+        Archive: Rezepte (Format 5/6) werden zu Mandantenvorlagen (app.documents.legacy), die
+        Hausstil-Wahl einer Protokollvorlage zu einer Brand-Zuweisung.
+        Rückgabe: "template:<alte id>", "revision:<alte id>", "recipe:<alte id>" → neue ID."""
+        from app.documents.layout import TemplateContent, content_json, parse_content
+        from app.documents.legacy import content_from_recipe
+        from app.documents.hashing import json_hash
+        from app.documents import template_service
+
+        id_map: dict[str, int] = {}
+        system = {row.system_key: row.id for row in self.db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id.is_(None))).all()}
+        for row in self._t("document_component"):
+            data = self._resolve_row("document_component", row)
+            try:
+                node = template_service.parse_component_node(self._remap_public_refs(data.get("node_json") or {})).model_dump(mode="json")
+            except ValueError as exc:
+                self.warnings.append(f"Komponente '{data.get('name')}' ist ungültig und wurde nicht übernommen: {exc}")
+                continue
+            self.db.add(self._build(DocumentComponent, data, {"tenant_id": new_tenant_id, "node_json": node}))
+            self.db.flush()
+        templates: dict[int, DocumentTemplate] = {}
+        for row in self._t("document_template") if self.format_version >= 7 else []:
             data = self._resolve_row("document_template", row)
             new_row = self._build(DocumentTemplate, data, {
                 "tenant_id": new_tenant_id,
-                "filesystem_path": "",
-                "configuration_json": remap_document_template_config(data.get("configuration_json"), part_map),
+                "system_key": None,
+                "brand_id": brand_map.get(f"brand:{data['brand_id']}") if data.get("brand_id") else None,
+                "source_template_id": system.get(row.get("source_system_key")) if row.get("source_system_key") else None,
+                "source_revision_id": None,
+                "published_revision_id": None,
+                "origin": data.get("origin") if data.get("origin") in ("tenant", "copy") else "tenant",
+                "is_platform_default": False,
             })
             self.db.add(new_row)
             self.db.flush()
-            id_map[row["id"]] = new_row.id
-        self.db.commit()
-        for new_id in id_map.values():
-            template = self.document_template_service.repository.get(self.db, new_id)
+            id_map[f"template:{row['id']}"] = new_row.id
+            templates[row["id"]] = new_row
+        for row in self._t("document_template_revision") if self.format_version >= 7 else []:
+            data = self._resolve_row("document_template_revision", row)
+            template = templates.get(data.get("template_id"))
             if template is None:
                 continue
-            path = self.document_template_service._materialize_template(self.db, template)
-            self.document_template_service.repository.update(self.db, template, {"filesystem_path": path})
+            try:
+                if data.get("status") not in ("draft", "published", "superseded"):
+                    raise ValueError(f"Status {data.get('status')!r}")
+                checked = content_json(parse_content(self._remap_public_refs(data.get("content_json") or {})))
+            except ValueError as exc:
+                # Ungültige Revision weglassen (sonst 500/422 erst in Bibliothek und Export)
+                self.warnings.append(f"Revision {data.get('revision_no')} der Dokumentvorlage '{template.name}' ist ungültig und wurde nicht übernommen: {exc}")
+                continue
+            new_revision = self._build(DocumentTemplateRevision, data, {
+                "template_id": template.id,
+                "content_json": checked,
+                "brand_revision_id": brand_map.get(f"revision:{data['brand_revision_id']}") if data.get("brand_revision_id") else None,
+            })
+            self.db.add(new_revision)
+            self.db.flush()
+            id_map[f"revision:{row['id']}"] = new_revision.id
+        for row in self._t("document_template") if self.format_version >= 7 else []:
+            if row.get("published_revision_id") and f"revision:{row['published_revision_id']}" in id_map:
+                templates[row["id"]].published_revision_id = id_map[f"revision:{row['published_revision_id']}"]
+        for row in self._t("document_template_assignment"):
+            data = self._resolve_row("document_template_assignment", row)
+            document_template_id = id_map.get(f"template:{data.get('document_template_id')}") if data.get("document_template_id") else None
+            if document_template_id is None and row.get("system_key"):
+                document_template_id = system.get(row["system_key"])
+            brand_id = brand_map.get(f"brand:{data['brand_id']}") if data.get("brand_id") else None
+            protocol_template_id = template_map.get(data["protocol_template_id"]) if data.get("protocol_template_id") else None
+            if (data.get("protocol_template_id") and protocol_template_id is None) or (document_template_id is None and brand_id is None):
+                continue
+            self.db.add(DocumentTemplateAssignment(tenant_id=new_tenant_id, document_type=data["document_type"], protocol_template_id=protocol_template_id, document_template_id=document_template_id, brand_id=brand_id))
+        self.db.flush()
+
+        # Format 5/6: Rezepte → veröffentlichte Mandantenvorlagen
+        for row in self._t("document_recipe"):
+            data = self._resolve_row("document_recipe", row)
+            try:
+                content = TemplateContent.model_validate(content_from_recipe(self._remap_public_refs(data.get("blocks_json") or []), data.get("options_json") or {}))
+                document_type = data.get("document_type") or "custom"
+                template, revision = template_service.create_template(self.db, new_tenant_id, name=data.get("name") or document_type, document_type=document_type if document_type in _document_types() else "custom", content=content)
+            except ValueError as exc:
+                self.warnings.append(f"Dokument-Rezept '{data.get('name')}' konnte nicht übernommen werden: {exc}")
+                continue
+            if data.get("style_id") and f"style:{data['style_id']}" in brand_map:
+                template.brand_id = brand_map[f"style:{data['style_id']}"]
+            revision.status = "published"
+            template.published_revision_id = revision.id
+            self.db.flush()
+            id_map[f"recipe:{row['id']}"] = template.id
+        # Format ≤ 6: Hausstil einer Protokollvorlage → Brand-Zuweisung für Protokolle
+        for row in self._t("template") if self.format_version <= 6 else []:
+            brand_id = brand_map.get(f"style:{row.get('document_style_id')}") if row.get("document_style_id") else brand_map.get(f"template:{row.get('document_template_id')}") if row.get("document_template_id") else None
+            protocol_template_id = template_map.get(row["id"])
+            if brand_id is None or protocol_template_id is None:
+                continue
+            brand = self.db.get(DocumentBrand, brand_id)
+            if brand is not None and not brand.is_default:
+                self.db.add(DocumentTemplateAssignment(tenant_id=new_tenant_id, document_type="protocol", protocol_template_id=protocol_template_id, brand_id=brand_id))
+        self.db.commit()
         return id_map
+
+    def _import_document_exports(self, new_tenant_id: int, protocol_map: dict[int, int], stored_file_map: dict[int, int], template_maps: dict[str, int], brand_map: dict[str, int]) -> None:
+        """Export-Datensätze. Ältere Archive: protocol_export_cache (PDF) → document_export.
+        Vorlagenbezug: Mandantenvorlagen über ihre neue ID, Systemvorlagen über ``system_key``
+        (ab Format 7 mitexportiert; die Revision einer Systemvorlage ist installationsabhängig
+        und bleibt leer). Brand-Revisionen über die beim Brand-Import entstandene Zuordnung."""
+        system = {row.system_key: row.id for row in self.db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id.is_(None))).all()}
+        for row in self._t("document_export"):
+            data = self._resolve_row("document_export", row)
+            if data.get("protocol_id") and protocol_map.get(data["protocol_id"]) is None:
+                continue
+            template_id = template_maps.get(f"template:{data['template_id']}") if data.get("template_id") else None
+            if template_id is None and data.get("recipe_id"):
+                template_id = template_maps.get(f"recipe:{data['recipe_id']}")
+            if template_id is None and row.get("system_key"):
+                template_id = system.get(row["system_key"])
+            self.db.add(self._build(DocumentExport, data, {
+                "tenant_id": new_tenant_id,
+                "protocol_id": protocol_map.get(data["protocol_id"]) if data.get("protocol_id") else None,
+                "template_id": template_id,
+                "template_revision_id": template_maps.get(f"revision:{data['template_revision_id']}") if data.get("template_revision_id") else None,
+                "brand_revision_id": brand_map.get(f"revision:{data['brand_revision_id']}") if data.get("brand_revision_id") else None,
+                "stored_file_id": stored_file_map.get(data["stored_file_id"]) if data.get("stored_file_id") else None,
+            }))
+        for row in self._t("protocol_export_cache"):
+            new_protocol_id = protocol_map.get(row.get("protocol_id"))
+            if new_protocol_id is None or row.get("export_format") != "pdf":
+                continue
+            old_file_id = row.get("generated_file_id")
+            self.db.add(DocumentExport(
+                tenant_id=new_tenant_id,
+                protocol_id=new_protocol_id,
+                document_type="protocol",
+                stored_file_id=stored_file_map.get(old_file_id) if old_file_id else None,
+            ))
+        self.db.commit()
+        self._import_document_registry(new_tenant_id)
+
+    def _import_document_registry(self, new_tenant_id: int) -> None:
+        """Register-Einträge mit ihrer Dokument-ID (sie steht im PDF). Ein Hash gehört
+        installationsweit genau einem Mandanten: liegt er hier schon vor (Archiv in dieselbe
+        Installation zurückgespielt, während das Original noch existiert), behält das Original
+        die Zuordnung und der Eintrag wird übersprungen."""
+        rows = self._t("document_registry")
+        if not rows:
+            return
+        hashes = [str(row.get("sha256") or "").lower() for row in rows]
+        taken = set(self.db.scalars(select(DocumentRegistry.sha256).where(DocumentRegistry.sha256.in_(hashes))).all())
+        skipped = 0
+        unverified = 0
+        for row in rows:
+            data = self._resolve_row("document_registry", row)
+            sha256 = str(data.get("sha256") or "").lower()
+            if not re.fullmatch(r"[0-9a-f]{64}", sha256) or sha256 in taken:
+                skipped += 1
+                continue
+            source = data.get("source_public_id")
+            if source:
+                source = self._public_id_map.get(str(source).lower(), str(source))
+            # TYPST-007: Das Archiv ist nicht vertrauenswürdig. Ohne die PDF mit genau diesem Hash
+            # im Archiv bleibt der Eintrag erhalten (Exporte werden nach Fristablauf gelöscht),
+            # die Prüfseite kennzeichnet ihn aber als «importiert, nicht verifiziert».
+            import_unverified = sha256 not in self._imported_pdf_hashes
+            unverified += import_unverified
+            self.db.add(self._build(DocumentRegistry, data, {
+                "tenant_id": new_tenant_id, "sha256": sha256, "source_public_id": source, "import_unverified": import_unverified,
+            }))
+            taken.add(sha256)
+        if skipped:
+            self.warnings.append(
+                f"Dokumentenregister: {skipped} Einträge übersprungen (Datei ist auf dieser Installation bereits einem Mandanten zugeordnet)."
+            )
+        if unverified:
+            self.warnings.append(
+                f"Dokumentenregister: {unverified} Einträge ohne zugehörige PDF im Archiv - auf der Prüfseite als «importiert, nicht verifiziert» gekennzeichnet."
+            )
+        self.db.commit()
 
     # ── full-scope tables ─────────────────────────────────────────────────
 
@@ -835,7 +1149,7 @@ class TenantImportService:
         return id_map
 
     def _import_templates(
-        self, new_tenant_id: int, *, document_template_map, cycle_config_map, element_definition_map,
+        self, new_tenant_id: int, *, cycle_config_map, element_definition_map,
         event_map, participant_map, list_definition_map, list_entry_map, finance_account_map,
     ) -> tuple[dict[int, int], dict[int, int], dict[int, int]]:
         template_map: dict[int, int] = {}
@@ -843,10 +1157,11 @@ class TenantImportService:
             data = self._resolve_row("template", row)
             new_row = self._build(Template, data, {
                 "tenant_id": new_tenant_id,
-                "document_template_id": document_template_map.get(data["document_template_id"]) if data.get("document_template_id") else None,
                 "next_event_id": event_map.get(data["next_event_id"]) if data.get("next_event_id") else None,
                 "last_event_id": event_map.get(data["last_event_id"]) if data.get("last_event_id") else None,
                 "cycle_config_id": cycle_config_map.get(data["cycle_config_id"]) if data.get("cycle_config_id") else None,
+                # Eigener Bussentarif der Vorlage (0137); ältere Exporte kennen die Spalten nicht.
+                "fine_account_id": finance_account_map.get(data["fine_account_id"]) if data.get("fine_account_id") else None,
             })
             self.db.add(new_row)
             self.db.flush()
@@ -988,8 +1303,8 @@ class TenantImportService:
             data = self._resolve_row("stored_file", row)
             is_abgabebox = row["id"] in abgabebox_ids
             root = settings.abgabebox_storage_root if is_abgabebox else settings.storage_root
-            new_storage_path = self._restore_file(data.get("storage_path"), root=root, new_tenant_id=new_tenant_id, subdir="files")
-            if new_storage_path is None:
+            member = data.get("storage_path")
+            if member is None or not self.source.exists(member):
                 self.warnings.append(f"Datei '{row.get('original_name')}' fehlte im Export, übersprungen.")
                 continue
             # SECURITY (audit S4, 2026-08-16): never trust data["scan_status"] from the
@@ -1000,16 +1315,31 @@ class TenantImportService:
             # trusting an attacker-supplied verdict or sitting at "pending" forever with no
             # sweep ever reaching it (the periodic rescan sweeps are scoped to their own
             # storage-path prefixes, which tenant-import restores don't share).
-            absolute_path = Path(root).resolve() / new_storage_path
-            scan_status = scanner.scan_file(absolute_path, host=settings.clamav_host, port=settings.clamav_port)
+            # Geprüft wird die entpackte Datei, bevor sie überhaupt im Objektspeicher landet.
+            pdf_hash = None
+            with self.source.local_file(member) as source:
+                scan_status = scanner.scan_file(source, host=settings.clamav_host, port=settings.clamav_port)
+                # TYPST-007: Hash der mitgelieferten PDF (genau die importierten Bytes); die lokale
+                # Datei gibt es nur innerhalb dieses Blocks (Borg-Restore: temporäre Kopie).
+                if source.suffix.lower() == ".pdf" or data.get("mime_type") == "application/pdf":
+                    digest = hashlib.sha256()
+                    with source.open("rb") as handle:
+                        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                            digest.update(chunk)
+                    pdf_hash = digest.hexdigest()
             if scan_status == "infected":
-                absolute_path.unlink(missing_ok=True)
                 self.warnings.append(f"Datei '{row.get('original_name')}' wurde von der Virenprüfung als infiziert erkannt und wurde nicht importiert.")
+                continue
+            new_storage_path = self._restore_file(data.get("storage_path"), root=root, new_tenant_id=new_tenant_id, subdir="files")
+            if new_storage_path is None:
+                self.warnings.append(f"Datei '{row.get('original_name')}' fehlte im Export, übersprungen.")
                 continue
             # thumbnail_path NULL (Audit MAIN-BE-003): Thumbnails heissen "<id>.jpg" im global
             # geteilten thumbnail_root - der exportierte Name zeigt hier auf die Vorschau einer
             # beliebigen anderen Datei (oft eines anderen Mandanten). ensure_thumbnail erzeugt
             # die Vorschau beim ersten Abruf neu.
+            if pdf_hash is not None:
+                self._imported_pdf_hashes.add(pdf_hash)
             new_row = self._build(
                 StoredFile,
                 data,
@@ -1084,7 +1414,7 @@ class TenantImportService:
             }))
         self.db.commit()
 
-    def _import_protocols(self, new_tenant_id: int, template_map, document_template_map, event_map) -> dict[int, int]:
+    def _import_protocols(self, new_tenant_id: int, template_map, event_map) -> dict[int, int]:
         id_map: dict[int, int] = {}
         for row in self._t("protocol"):
             data = self._resolve_row("protocol", row)
@@ -1094,7 +1424,6 @@ class TenantImportService:
             new_row = self._build(Protocol, data, {
                 "tenant_id": new_tenant_id,
                 "template_id": new_template_id,
-                "document_template_id": document_template_map.get(data["document_template_id"]) if data.get("document_template_id") else None,
                 "event_id": event_map.get(data["event_id"]) if data.get("event_id") else None,
                 # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - sie wird
                 # nach dem Import der Blöcke umgeschrieben (_restore_todo_snapshots).
@@ -1218,18 +1547,6 @@ class TenantImportService:
             self.db.add(self._build(ProtocolImage, row, {"protocol_element_block_id": new_block_id, "stored_file_id": new_stored_file_id}))
         self.db.commit()
 
-    def _import_protocol_export_caches(self, protocol_map: dict[int, int], stored_file_map: dict[int, int]) -> None:
-        for row in self._t("protocol_export_cache"):
-            new_protocol_id = protocol_map.get(row["protocol_id"])
-            if new_protocol_id is None:
-                continue
-            old_file_id = row.get("generated_file_id")
-            self.db.add(self._build(ProtocolExportCache, row, {
-                "protocol_id": new_protocol_id,
-                "generated_file_id": stored_file_map.get(old_file_id) if old_file_id else None,
-            }))
-        self.db.commit()
-
     def _import_finance_transactions(self, finance_account_map: dict[int, int], protocol_map: dict[int, int]) -> dict[int, int]:
         id_map: dict[int, int] = {}
         for row in self._t("finance_transaction"):
@@ -1317,6 +1634,15 @@ class TenantImportService:
             if todo_id is None or participant_id is None:
                 continue
             self.db.add(ProtocolTodoAssignee(protocol_todo_id=todo_id, participant_id=participant_id, sort_index=row.get("sort_index") or 0))
+        self.db.commit()
+
+    def _import_protocol_todo_files(self, todo_map: dict[int, int], stored_file_map: dict[int, int]) -> None:
+        for row in self._t("protocol_todo_file"):
+            todo_id = todo_map.get(row["protocol_todo_id"])
+            stored_file_id = stored_file_map.get(row["stored_file_id"])
+            if todo_id is None or stored_file_id is None:
+                continue
+            self.db.add(ProtocolTodoFile(protocol_todo_id=todo_id, stored_file_id=stored_file_id, sort_index=row.get("sort_index") or 0))
         self.db.commit()
 
     def _import_protocol_todos(
@@ -1527,69 +1853,64 @@ class TenantImportService:
         self.db.commit()
 
     def _import_tenant_trusts(self, new_tenant_id: int) -> None:
-        for row in self._t("tenant_trust"):
-            partner = self._lookup_tenant_by_public_id(row.get("partner_tenant_public_id"))
-            if partner is None:
-                self.warnings.append("Vertrauensbeziehung zu einem Mandanten, der auf dieser Installation fehlt - übersprungen.")
-                continue
-            tenant_trust_service.establish(self.db, new_tenant_id, partner.id)
-            self._linked_partner_names.add(partner.name)
-        self.db.commit()
+        """Vertrauensbeziehungen werden nie aus dem Archiv übernommen (Security-Audit SEC-001): ein
+        Archiv belegt keine Zustimmung des Partners, und der neue Mandant ist nicht der, dem der
+        Partner vertraut hat. Trust entsteht wie gewohnt, sobald der Partner eine (wieder
+        ausgesprochene) Album-Einladung annimmt - siehe _import_album_shares."""
+        skipped = sum(1 for _ in self._t("tenant_trust"))
+        if skipped:
+            self.warnings.append(
+                f"{skipped} Vertrauensbeziehung(en) zu anderen Mandanten nicht übernommen - sie entstehen neu, "
+                "sobald der Partner eine Album-Einladung annimmt."
+            )
 
     def _import_album_shares(self, new_tenant_id: int, album_map: dict[str, uuid.UUID]) -> None:
-        """Album-Freigaben in both directions. Only restored when the partner tenant (matched by
-        public_id) exists on this installation - otherwise there is nobody to share with."""
-        received_album_ids: set[uuid.UUID] = set()
+        """Album-Freigaben nur als neue, offene Einladungen (Security-Audit SEC-001).
+
+        Ein Archiv belegt keine Zustimmung eines anderen Mandanten - es kann von einem Umzug
+        stammen, aber genauso eine Kopie eines noch bestehenden Mandanten oder manipuliert sein.
+        Deshalb:
+        - eigene Alben, die mit einem Partner geteilt waren: wieder als Einladung (`pending`) an
+          den Partner, der erneut zustimmen muss; Standort-Freigabe wie im Archiv.
+        - Einladungen in Alben anderer Mandanten (`partner_album`) und die dort abgelegten eigenen
+          Fotos (`partner_album_item`) werden verworfen - der Partner kann neu einladen.
+        Gleiche Regel wie beim Mandanten-Restore aus dem Backup (COPY_EXCLUDED_TABLES), dort
+        fallen Freigaben ganz weg."""
+        reinvited: set[str] = set()
+        dropped_received = 0
         for row in self._t("photo_album_tenant_share"):
             data = self._resolve_row("photo_album_tenant_share", row)
+            if data.get("direction") == "partner_album":
+                dropped_received += 1
+                continue
             partner = self._lookup_tenant_by_public_id(data.get("partner_tenant_public_id"))
-            if partner is None:
+            if partner is None or partner.id == new_tenant_id:
                 self.warnings.append("Album-Freigabe mit einem Mandanten, der auf dieser Installation fehlt - übersprungen.")
                 continue
-            if data.get("direction") == "partner_album":
-                # Invited into the partner's album: that album must still exist and belong to it.
-                try:
-                    album_id = uuid.UUID(str(data.get("album_id")))
-                except ValueError:
-                    continue
-                album = self.db.get(PhotoAlbum, album_id)
-                if album is None or album.tenant_id != partner.id:
-                    self.warnings.append(f"Album-Freigabe von '{partner.name}': Album existiert nicht mehr - übersprungen.")
-                    continue
-                share_tenant_id = new_tenant_id
-                received_album_ids.add(album_id)
-            else:
-                album_id = album_map.get(str(data.get("album_id")).lower())
-                if album_id is None:
-                    continue
-                share_tenant_id = partner.id
+            album_id = album_map.get(str(data.get("album_id")).lower())
+            if album_id is None:
+                continue
             self.db.execute(
                 pg_insert(PhotoAlbumTenantShare)
                 .values(
-                    album_id=album_id, tenant_id=share_tenant_id, status=data.get("status") or "pending",
-                    invited_by=data.get("invited_by"), responded_by=data.get("responded_by"),
-                    responded_at=coerce_value(PhotoAlbumTenantShare.__table__.c.responded_at, data.get("responded_at")),
+                    album_id=album_id, tenant_id=partner.id, status="pending", invited_by=None,
+                    share_location=bool(data.get("share_location", True)),
+                    partner_public_links=bool(data.get("partner_public_links", True)),
                 )
                 .on_conflict_do_nothing()
             )
-            self._linked_partner_names.add(partner.name)
-        # Our own photos inside a partner's album.
-        for row in self._t("partner_album_item"):
-            try:
-                album_id = uuid.UUID(str(row.get("album_id")))
-            except ValueError:
-                continue
-            old_file_id = str(row.get("file_id")).lower()
-            if album_id not in received_album_ids or old_file_id not in self._imported_file_public_ids:
-                continue
-            self.db.execute(
-                pg_insert(PhotoAlbumItem)
-                .values(
-                    album_id=album_id, file_id=uuid.UUID(self._public_id_map.get(old_file_id, old_file_id)),
-                    is_best=bool(row.get("is_best")), best_override=row.get("best_override"),
-                    share_pending=bool(row.get("share_pending")),
-                )
-                .on_conflict_do_nothing()
+            reinvited.add(partner.name)
+        dropped_received_items = sum(1 for _ in self._t("partner_album_item"))
+        if dropped_received:
+            self.warnings.append(
+                f"{dropped_received} Freigabe(n) für Alben anderer Mandanten nicht übernommen"
+                + (f" (inkl. {dropped_received_items} dort abgelegter Fotos)" if dropped_received_items else "")
+                + " - der jeweilige Partner muss neu einladen."
+            )
+        if reinvited:
+            self.warnings.append(
+                "Album-Freigaben als neue Einladung an folgende Mandanten verschickt (Zustimmung erneut nötig): "
+                + ", ".join(sorted(reinvited))
             )
         self.db.commit()
 
@@ -1669,6 +1990,9 @@ def _resolve_within_extract_dir(base_dir: Path, relative_name: str) -> Path:
     return target
 
 
+IMPORT_FREE_RESERVE_BYTES = 1024**3
+
+
 def _safe_extract(zf: zipfile.ZipFile, dest_dir: Path) -> None:
     infolist = zf.infolist()
 
@@ -1685,6 +2009,57 @@ def _safe_extract(zf: zipfile.ZipFile, dest_dir: Path) -> None:
             f"Import-Archiv ist entpackt zu gross (> {MAX_IMPORT_ZIP_TOTAL_BYTES // (1024 * 1024)} MB) - Import abgebrochen."
         )
 
+    # Freier Platz für das Entpacken (Concurrency-Audit CONC-021): der Datenträger von /tmp teilen
+    # sich Multipart-Puffer, Uploads und Exporte aller Mandanten - ein voller Datenträger liesse
+    # alle anderen Uploads scheitern, statt dass dieser eine Import sauber abbricht.
+    free_bytes = shutil.disk_usage(dest_dir).free
+    if total_uncompressed + IMPORT_FREE_RESERVE_BYTES > free_bytes:
+        raise ValueError("Zu wenig freier Speicher zum Entpacken des Import-Archivs - Import abgebrochen.")
+
     for member in infolist:
         _resolve_within_extract_dir(dest_dir, member.filename)
     zf.extractall(dest_dir)
+
+
+def _document_types() -> tuple[str, ...]:
+    from app.documents.doc_types import DOCUMENT_TYPE_KEYS
+
+    return DOCUMENT_TYPE_KEYS
+
+
+class ImportFileSource:
+    """Woher die Dateien eines Imports kommen. Pfade (member) stammen aus dem Manifest und sind
+    damit nicht vertrauenswürdig - jede Quelle prüft sie selbst."""
+
+    def exists(self, member: str) -> bool:  # pragma: no cover - Schnittstelle
+        raise NotImplementedError
+
+    def store(self, db: Session, namespace: str, key: str, member: str) -> bool:  # pragma: no cover
+        raise NotImplementedError
+
+    def local_file(self, member: str):  # pragma: no cover - contextmanager -> Path
+        raise NotImplementedError
+
+
+class ExtractedDirSource(ImportFileSource):
+    """Entpacktes ZIP (normaler Import mit 2-GiB-/Eintragsgrenze aus _safe_extract)."""
+
+    def __init__(self, extract_dir: Path) -> None:
+        self.extract_dir = extract_dir
+
+    def _path(self, member: str) -> Path:
+        return _resolve_within_extract_dir(self.extract_dir, member)
+
+    def exists(self, member: str) -> bool:
+        return self._path(member).is_file()
+
+    def store(self, db: Session, namespace: str, key: str, member: str) -> bool:
+        source = self._path(member)
+        if not source.is_file():
+            return False
+        get_object_store().put_file(db, namespace, key, source)
+        return True
+
+    @contextlib.contextmanager
+    def local_file(self, member: str):
+        yield self._path(member)

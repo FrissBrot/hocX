@@ -1,0 +1,7 @@
+{
+  "title": "Nos serveurs sont actuellement surchargés",
+  "message": "De très nombreuses personnes utilisent hocX en ce moment. Afin que personne ne perde son travail en cours, nous ne pouvons pas ouvrir de nouvelles sessions pour l’instant.",
+  "hint": "Merci de réessayer dans quelques minutes. Cette page vérifie régulièrement et te redirige automatiquement dès qu’il y a de nouveau de la place.",
+  "retry": "Réessayer maintenant",
+  "checking": "Vérification …"
+}

@@ -154,6 +154,10 @@ class SubmissionRepository:
         db.commit()
 
     def delete_stored_file(self, db: Session, stored_file: StoredFile) -> None:
+        # Lazy: document_service -> app.core.storage; Repositories bleiben sonst importfrei.
+        from app.services import document_service
+
+        document_service.release_original(db, stored_file.id)
         db.delete(stored_file)
         db.commit()
 

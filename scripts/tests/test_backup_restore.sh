@@ -32,6 +32,10 @@ exit 0
 EOF
 cat > "$TEST_DIR/bin/rclone" <<EOF
 #!/usr/bin/env bash
+echo "\$*" >> "$TEST_DIR/rclone.log"
+case "\$1" in
+  config) [ -n "\${FAKE_RCLONE_TYPE:-}" ] && echo "type = \${FAKE_RCLONE_TYPE}"; exit 0 ;;
+esac
 exit "\${FAKE_RCLONE_EXIT:-0}"
 EOF
 chmod +x "$TEST_DIR/bin/docker" "$TEST_DIR/bin/rclone"
@@ -42,7 +46,9 @@ chmod 600 "$TEST_DIR/test.env"
 export HOCX_ENV_FILE="$TEST_DIR/test.env"
 export HOCX_BACKUP_DIR="$TEST_DIR/backups"
 export HOCX_HOST_MARKER_FILE="$TEST_DIR/no-marker"
-unset OFFSITE_BACKUP_REMOTE HOCX_COMPOSE_PROJECT || true
+unset OFFSITE_BACKUP_REMOTE HOCX_COMPOSE_PROJECT HOCX_REQUIRE_DUMP_ENCRYPTION BACKUP_DUMP_PRIVATE_KEY_PATH || true
+# Ohne Schlüssel (unverschlüsselter Modus), unabhängig vom HOME des Testlaufs.
+export BACKUP_DUMP_PUBLIC_KEY_PATH="$TEST_DIR/kein-schluessel.asc"
 
 marker() {
   rm -f "$TEST_DIR/marker"
@@ -81,13 +87,82 @@ export HOCX_HOST_MARKER_FILE="$TEST_DIR/no-marker"
 # --- Offsite-Fehler: Exit != 0, lokales Backup bleibt ------------------------------------
 rm -rf "$TEST_DIR/backups"
 set +e
-OFFSITE_BACKUP_REMOTE="remote:bucket" FAKE_RCLONE_EXIT=1 "$REPO_DIR/scripts/backup_db.sh" > /dev/null 2>&1
+OFFSITE_BACKUP_REMOTE="remote:bucket" FAKE_RCLONE_TYPE=crypt FAKE_RCLONE_EXIT=1 "$REPO_DIR/scripts/backup_db.sh" > /dev/null 2>&1
 rc=$?
 set -e
 test "$rc" -ne 0 || fail "Fehlgeschlagene Offsite-Kopie endete mit Exit 0"
 ls "$TEST_DIR/backups/"*-cron.sql.gz > /dev/null 2>&1 || fail "Lokales Backup fehlt nach Offsite-Fehler"
-OFFSITE_BACKUP_REMOTE="remote:bucket" "$REPO_DIR/scripts/backup_db.sh" > /dev/null \
+: > "$TEST_DIR/rclone.log"
+OFFSITE_BACKUP_REMOTE="remote:bucket" FAKE_RCLONE_TYPE=crypt "$REPO_DIR/scripts/backup_db.sh" > /dev/null \
   || fail "Erfolgreiche Offsite-Kopie meldet einen Fehler"
+grep -q "^delete remote:bucket --min-age 14d" "$TEST_DIR/rclone.log" || fail "Alte Offsite-Kopien werden nicht entfernt (PRIV-009)"
+
+# --- Unverschlüsselter Dump nie auf ein normales Remote (PRIV-009) ------------------------
+: > "$TEST_DIR/rclone.log"
+if OFFSITE_BACKUP_REMOTE="remote:bucket" FAKE_RCLONE_TYPE=s3 "$REPO_DIR/scripts/backup_db.sh" > /dev/null 2>&1; then
+  fail "Unverschlüsselter Dump wurde auf ein nicht verschlüsselndes Remote kopiert"
+fi
+grep -q "^copy " "$TEST_DIR/rclone.log" && fail "rclone copy trotz Ablehnung aufgerufen"
+
+# --- Pflichtmodus ohne Schlüssel bricht ab -------------------------------------------------
+if HOCX_REQUIRE_DUMP_ENCRYPTION=true "$REPO_DIR/scripts/backup_db.sh" > /dev/null 2>&1; then
+  fail "HOCX_REQUIRE_DUMP_ENCRYPTION=true ohne Schlüssel schrieb trotzdem ein Backup"
+fi
+
+# --- Verschlüsselte Dumps mit öffentlichem Schlüssel ----------------------------------------
+if command -v gpg > /dev/null 2>&1; then
+  KEY_HOME="$TEST_DIR/gnupg"
+  mkdir -p "$KEY_HOME" && chmod 700 "$KEY_HOME"
+  GNUPGHOME="$KEY_HOME" gpg --batch --quiet --passphrase '' --pinentry-mode loopback \
+    --quick-gen-key "hocx-backup-test <backup@example.invalid>" future-default default never 2> /dev/null
+  GNUPGHOME="$KEY_HOME" gpg --batch --armor --export > "$TEST_DIR/dump-public.asc"
+  GNUPGHOME="$KEY_HOME" gpg --batch --armor --pinentry-mode loopback --passphrase '' --export-secret-keys > "$TEST_DIR/dump-private.asc"
+  export BACKUP_DUMP_PUBLIC_KEY_PATH="$TEST_DIR/dump-public.asc"
+
+  rm -rf "$TEST_DIR/backups"
+  : > "$TEST_DIR/rclone.log"
+  OFFSITE_BACKUP_REMOTE="remote:bucket" FAKE_RCLONE_TYPE=s3 "$REPO_DIR/scripts/backup_db.sh" > /dev/null 2>&1 \
+    || fail "Verschlüsselter Dump darf auf ein normales Remote"
+  encrypted=""
+  for candidate in "$TEST_DIR/backups/"*-cron.sql.gz.gpg; do
+    [ -e "$candidate" ] && encrypted="$candidate" && break
+  done
+  test -n "$encrypted" || fail "Kein verschlüsselter Cron-Dump geschrieben"
+  ls "$TEST_DIR/backups/"*-cron.sql.gz > /dev/null 2>&1 && fail "Unverschlüsselte Kopie liegt neben dem verschlüsselten Dump"
+  gzip -t "$encrypted" 2> /dev/null && fail "Dump ist nicht verschlüsselt"
+  plain="$(GNUPGHOME="$KEY_HOME" gpg --quiet --decrypt "$encrypted" 2> /dev/null | gunzip -c)"
+  test "$plain" = "-- fake dump" || fail "Entschlüsselter Dump stimmt nicht"
+
+  # Restore eines verschlüsselten Dumps mit dem privaten Schlüssel aus der Notfallmappe
+  : > "$TEST_DIR/calls.log"
+  BACKUP_DUMP_PRIVATE_KEY_PATH="$TEST_DIR/dump-private.asc" "$REPO_DIR/scripts/restore_db.sh" "$encrypted" --yes < /dev/null > /dev/null 2>&1 \
+    || fail "Restore eines verschlüsselten Dumps schlug fehl"
+  grep -q -- "-- fake dump" "$TEST_DIR/calls.log" || fail "Verschlüsselter Dump kam nicht bei psql an"
+  ls "$TEST_DIR/backups/"*-pre-restore.sql.gz.gpg > /dev/null 2>&1 || fail "Sicherung vor dem Restore ist nicht verschlüsselt"
+  for leftover in "$TEST_DIR/backups/".restore-*; do
+    [ -e "$leftover" ] && fail "Entschlüsselte Zwischendatei blieb liegen"
+  done
+  if GNUPGHOME="$TEST_DIR/leer-gnupg" "$REPO_DIR/scripts/restore_db.sh" "$encrypted" --yes < /dev/null > /dev/null 2>&1; then
+    fail "Verschlüsselter Dump liess sich ohne privaten Schlüssel einspielen"
+  fi
+  export BACKUP_DUMP_PUBLIC_KEY_PATH="$TEST_DIR/kein-schluessel.asc"
+  GNUPGHOME="$KEY_HOME" gpgconf --kill gpg-agent > /dev/null 2>&1 || true
+else
+  echo "gpg fehlt - Verschlüsselungstests übersprungen" >&2
+fi
+
+# --- Altersgrenze: alte Dumps weg, der neueste bleibt immer (PRIV-009) ----------------------
+(
+  # shellcheck source=scripts/lib/dump_crypto.sh
+  source "$REPO_DIR/scripts/lib/dump_crypto.sh"
+  prune_dir="$TEST_DIR/prune"
+  mkdir -p "$prune_dir"
+  touch -d "60 days ago" "$prune_dir/20260101-000000-pre-v1.sql.gz.gpg"
+  touch -d "45 days ago" "$prune_dir/20260115-000000-pre-v2.sql.gz.gpg"
+  prune_dumps_older_than "$prune_dir" '*-pre-*.sql.gz*' 30 > /dev/null
+  test ! -e "$prune_dir/20260101-000000-pre-v1.sql.gz.gpg" || fail "Alter Pre-Deploy-Dump wurde nicht entfernt"
+  test -e "$prune_dir/20260115-000000-pre-v2.sql.gz.gpg" || fail "Neuester Pre-Deploy-Dump wurde entfernt"
+)
 
 # --- Restore: beschaedigter Dump wird vor jeder Aenderung abgelehnt -----------------------
 printf 'kein gzip' > "$TEST_DIR/broken.sql.gz"

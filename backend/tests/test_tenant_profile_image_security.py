@@ -42,7 +42,7 @@ def _png() -> bytes:
 def test_profile_image_rejects_non_images(db, content, filename, content_type):
     tenant = make_tenant(db)
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(apply_tenant_profile_image(tenant, _upload(content, filename, content_type)))
+        asyncio.run(apply_tenant_profile_image(db, tenant, _upload(content, filename, content_type)))
     assert exc.value.status_code == 400
     assert tenant.profile_image_path is None
 
@@ -51,7 +51,7 @@ def test_profile_image_is_reencoded_as_png_regardless_of_filename(db):
     from app.core.config import settings
 
     tenant = make_tenant(db)
-    asyncio.run(apply_tenant_profile_image(tenant, _upload(_png(), "logo.html", "text/html")))
+    asyncio.run(apply_tenant_profile_image(db, tenant, _upload(_png(), "logo.html", "text/html")))
 
     assert tenant.profile_image_path is not None
     assert tenant.profile_image_path.endswith(".png")
@@ -62,10 +62,10 @@ def test_profile_image_is_reencoded_as_png_regardless_of_filename(db):
 
 def test_profile_image_route_sets_fixed_type_and_csp(db):
     tenant = make_tenant(db)
-    asyncio.run(apply_tenant_profile_image(tenant, _upload(_png(), "logo.png", "image/png")))
+    asyncio.run(apply_tenant_profile_image(db, tenant, _upload(_png(), "logo.png", "image/png")))
     db.flush()
 
-    response = tenant_routes.tenant_profile_image(tenant.public_id, db=db)
+    response = tenant_routes.tenant_profile_image(tenant.public_id, request=None, db=db)
 
     assert response.media_type == "image/png"
     assert response.headers["content-security-policy"] == "default-src 'none'; sandbox"
@@ -82,7 +82,7 @@ def test_legacy_profile_image_with_unsafe_suffix_is_served_as_download(db):
     tenant.profile_image_path = str(legacy.relative_to(settings.storage_root))
     db.flush()
 
-    response = tenant_routes.tenant_profile_image(tenant.public_id, db=db)
+    response = tenant_routes.tenant_profile_image(tenant.public_id, request=None, db=db)
 
     assert response.media_type == "application/octet-stream"
     assert response.headers["content-disposition"].startswith("attachment")

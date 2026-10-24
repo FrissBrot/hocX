@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.core.cycle_utils import reset_boundary
 from app.models import (
     AttendanceFine,
-    DocumentTemplate,
     ElementDefinition,
     ElementType,
     Event,
@@ -31,7 +30,6 @@ from app.models import (
     TemplateParticipant,
     TodoStatus,
 )
-from app.services.document_template_service import DocumentTemplateService
 from app.services.access_service import AccessService
 from app.services.block_behavior import resolve_block_behavior
 from app.services.event_filter import event_matches_filter, normalize_event_filter, resolve_cycle_event_ids, sort_and_limit
@@ -245,7 +243,6 @@ def _sync_merge_block_config(old: dict, fresh: dict, element_type_code: str | No
 class ProtocolService:
     def __init__(self, repository: ProtocolRepository | None = None) -> None:
         self.repository = repository or ProtocolRepository()
-        self.document_template_service = DocumentTemplateService()
         self.access_service = AccessService()
 
     def list_protocols(
@@ -1545,8 +1542,6 @@ class ProtocolService:
             if event_id is None:
                 raise ValueError("Event does not belong to current tenant")
 
-        selected_document_template_id = template.document_template_id
-        document_template = db.get(DocumentTemplate, selected_document_template_id) if selected_document_template_id else None
         from app.models import CycleConfig
         cycle_cfg = db.get(CycleConfig, template.cycle_config_id) if template.cycle_config_id else None
         counts = self._sequence_counts(
@@ -1613,9 +1608,6 @@ class ProtocolService:
                 tenant_id=tenant_id,
                 template_id=template.id,
                 template_version=template.version,
-                document_template_id=selected_document_template_id,
-                document_template_version=document_template.version if document_template else None,
-                document_template_path_snapshot=None,
                 protocol_number=protocol_number,
                 title=title,
                 protocol_date=payload.protocol_date,
@@ -1626,7 +1618,7 @@ class ProtocolService:
             try:
                 # SAVEPOINT scoped to just this insert attempt (same pattern as
                 # ParticipantService.import_csv's per-row retry) - a unique-constraint collision
-                # only unwinds the failed Protocol row, not the template/document_template/
+                # only unwinds the failed Protocol row, not the template/
                 # cycle_cfg already read above, so the retry can immediately re-query fresh
                 # counts and try again without disturbing anything else in the session.
                 with db.begin_nested():
@@ -1667,7 +1659,6 @@ class ProtocolService:
 
         db.commit()
         db.refresh(protocol)
-        protocol = self.document_template_service.snapshot_template_for_protocol(db, protocol, selected_document_template_id)
         self.access_service.add_protocol_access_for_template(
             db,
             tenant_id=tenant_id,
@@ -1705,8 +1696,6 @@ class ProtocolService:
         protocol.template_version = template.version
         db.add(protocol)
         db.commit()
-        if template.document_template_id != protocol.document_template_id:
-            self.document_template_service.snapshot_template_for_protocol(db, protocol, template.document_template_id)
         return {**summary, "applied": True}
 
     def _sync_cycle_tokens(self, db: Session, template: Template, protocol_date: date) -> dict[str, str]:
@@ -1904,7 +1893,6 @@ class ProtocolService:
             "allows_multiple_values_snapshot",
             "is_required_snapshot",
             "export_visible_snapshot",
-            "latex_template_snapshot",
         ):
             setattr(old, attr, getattr(fresh, attr))
         if not old_config.get("manually_hidden"):
@@ -2137,7 +2125,6 @@ class ProtocolService:
                 is_required_snapshot=False,
                 is_visible_snapshot=behavior["is_visible"],
                 export_visible_snapshot=behavior["export_visible"],
-                latex_template_snapshot=block.get("latex_template"),
                 configuration_snapshot_json={
                     **block_config,
                     "title_as_subtitle": behavior["title_as_subtitle"],
@@ -2271,7 +2258,7 @@ class ProtocolService:
                         "sort_index": row.get("sort_index"),
                         "row_config": row.get("row_config") if isinstance(row.get("row_config"), dict) else {},
                         "auto_source_field": row.get("auto_source_field"),
-                        # Keep for export_service backward compat
+                        # Für den Dokument-Export (Provider) beibehalten
                         "template_value": self._render_context_text(row.get("template_value") or "", repeat_context) or "",
                         "template_participant_id": self._coerce_optional_int(row.get("template_participant_id")),
                         "template_participant_ids": self._coerce_int_list(row.get("template_participant_ids")),
@@ -2626,6 +2613,13 @@ class ProtocolService:
                 if stage_from == "vorbereitet" and stage_to == "durchgeführt":
                     self._clear_tracked_changes(db, protocol_id, commit=False)
                 if stage_to == "abgeschlossen":
+                    # Korrekturweg (Datenschutz-Audit F): nach Zurückstufen und Ändern verschwinden
+                    # die Änderungsmarkierungen samt alter Fassung (Baseline) und die PDFs des
+                    # früheren Abschlusses. Beim ersten Abschluss ist beides schon leer.
+                    self._clear_tracked_changes(db, protocol_id, commit=False)
+                    from app.documents.service import supersede_closed_exports
+
+                    supersede_closed_exports(db, updated)
                     self._freeze_responsible_titles(db, protocol_id, updated.tenant_id, commit=False)
                     list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol_id, updated.tenant_id, commit=False)
                     # Todos bleiben danach live bearbeitbar - das Protokoll selbst zeigt ab
@@ -2656,17 +2650,8 @@ class ProtocolService:
         values = payload.model_dump(exclude_unset=True)
         # Concurrency precondition consumed by the route; it is not a database column.
         values.pop("expected_session_notes", None)
-        # document_template_id/event_id arrive as public UUIDs - resolve to internal ids,
-        # scoped to this protocol's tenant, before they're used as raw PK/FK values below.
-        document_template_id: int | None = None
-        if "document_template_id" in values:
-            raw_document_template_id = values.pop("document_template_id")
-            if raw_document_template_id is not None:
-                document_template_id = public_id_service.resolve_internal_id(
-                    db, DocumentTemplate, raw_document_template_id, tenant_id=protocol.tenant_id
-                )
-                if document_template_id is None:
-                    raise ValueError("Document template does not belong to current tenant")
+        # event_id arrives as a public UUID - resolve to an internal id, scoped to this
+        # protocol's tenant, before it's used as a raw FK value below.
         if values.get("event_id") is not None:
             # event_id is client-supplied - without this check a writer could re-link an
             # existing protocol to another tenant's Event (see create_from_template above).
@@ -2678,8 +2663,6 @@ class ProtocolService:
         if new_status is not None and new_status != previous_status:
             self._validate_status_transition(previous_status, new_status)
         if not values:
-            if "document_template_id" in payload.model_fields_set:
-                return self.document_template_service.snapshot_template_for_protocol(db, protocol, document_template_id)
             return protocol
         has_status_transition = new_status is not None and new_status != previous_status
         # Vor dem Einfrieren auch ohne vorheriges Öffnen die aktuellen Mitgliedschaften sichern.
@@ -2704,8 +2687,6 @@ class ProtocolService:
             and "protocol_number" not in values
         ):
             self._renumber_for_date_change(db, updated)
-        if "document_template_id" in payload.model_fields_set:
-            return self.document_template_service.snapshot_template_for_protocol(db, updated, document_template_id)
         return updated
 
     def _renumber_for_date_change(self, db: Session, protocol: Protocol) -> None:
@@ -2934,7 +2915,6 @@ class ProtocolService:
             is_required_snapshot=False,
             is_visible_snapshot=behavior["is_visible"],
             export_visible_snapshot=behavior["export_visible"],
-            latex_template_snapshot=event_block_template.get("latex_template"),
             configuration_snapshot_json={
                 **block_config,
                 "title_as_subtitle": behavior["title_as_subtitle"],

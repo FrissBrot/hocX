@@ -77,7 +77,10 @@
     "statusActive": "actif",
     "statusDeclined": "refusé",
     "statusPending": "demandé",
-    "unknownTenant": "Tenant {id}"
+    "unknownTenant": "Tenant {id}",
+    "myPhotosPublicLabel": "Afficher mes photos dans les liens publics",
+    "myShareError": "Le réglage n’a pas pu être enregistré.",
+    "publicLinksNotAllowed": "Le propriétaire n’autorise pas de liens publics pour cet album."
   },
   "bulkBar": {
     "addTags": "Ajouter des tags",
@@ -120,7 +123,7 @@
   "galleryUpload": {
     "browse": "Choisir des fichiers",
     "cancel": "Annuler",
-    "description": "Images jusqu’à 100 Mio, ZIP et sélection totale jusqu’à 10 Gio. 50 fichiers maximum ; jusqu’à 10 000 entrées et 20 Gio décompressés par ZIP. Les images sont analysées contre les virus.",
+    "description": "Images jusqu'à 100 Mio, ZIP jusqu'à 10 Gio, aussi des dossiers entiers. Les grandes sélections sont réparties automatiquement en plusieurs envois ; ZIP jusqu'à 10 000 entrées et 20 Gio décompressés. Les images sont d'abord vérifiées dans le navigateur, celles déjà présentes ne sont pas retransférées, et tout est analysé contre les virus.",
     "dropActive": "Relâchez pour importer",
     "dropHint": "Glissez des images ici",
     "formatsAriaLabel": "Formats pris en charge",
@@ -146,7 +149,26 @@
     "uploadPlain": "Importer",
     "uploadingPercent": "Importation… {percent} %",
     "uploadingPlain": "Importation…",
-    "largeZipHint": "Fichier ZIP volumineux : avec une connexion lente, le téléversement peut s'interrompre après une heure. Divisez plutôt l'archive en plusieurs ZIP plus petits ou téléversez directement les photos."
+    "browseFolder": "Choisir un dossier",
+    "statusSkipped": "Ignorée – déjà présente",
+    "statusMetadataUpdated": "Ignorée · métadonnées complétées",
+    "statusWaiting": "En attente…",
+    "statusFailed": "Échec",
+    "statusReadyNoDate": "Prête · aucune date de prise de vue trouvée",
+    "statusReadyUnchecked": "Prête · la date de prise de vue sera vérifiée sur le serveur",
+    "analysisProgress": "Vérification des images… {done} sur {total}",
+    "batchProgress": "Partie {current} sur {total}",
+    "checkingPlain": "Vérification…",
+    "estimate": {
+      "missingHint": "{count, plural, one {Aucune date de prise de vue trouvée pour 1 image.} other {Aucune date de prise de vue trouvée pour # images.}} Tu peux indiquer une date estimée.",
+      "uncheckedHint": "{count, plural, one {1 image n'a pas pu être vérifiée dans le navigateur} other {# images n'ont pas pu être vérifiées dans le navigateur}} – le serveur vérifie la date de prise de vue lors de l'envoi.",
+      "zipHint": "Les images des fichiers ZIP sont vérifiées par le serveur ; la date estimée ne s'applique qu'aux images sans date de prise de vue.",
+      "label": "Date de prise de vue estimée pour les images sans date",
+      "help": "Facultatif. Les vraies dates de prise de vue ne sont jamais écrasées.",
+      "helpSet": "S'applique uniquement aux images sans date de prise de vue ({date}). Les vraies dates ne sont jamais écrasées."
+    },
+    "largeZipHint": "Fichier ZIP volumineux : avec une connexion lente, le téléversement peut s'interrompre après une heure. Divisez plutôt l'archive en plusieurs ZIP plus petits ou téléversez directement les photos.",
+    "includeGps": "Envoyer les données GPS de l’image"
   },
   "shareModal": {
     "actionAriaLabelActive": "Retirer l’accès de {name}",
@@ -190,7 +212,16 @@
     "title": "Partager avec un autre tenant",
     "unknownTenant": "Tenant inconnu",
     "withdrawLabel": "Retirer",
-    "withdrawnToast": "Invitation retirée."
+    "withdrawnToast": "Invitation retirée.",
+    "shareLocationLabel": "Partager la position",
+    "shareLocationHelp": "Le partenaire reçoit les photos de cet album avec les données GPS. Modifiable ensuite pour chaque partage.",
+    "locationShort": "Position",
+    "locationAriaLabel": "Partager la position avec {name}",
+    "locationError": "Impossible d'enregistrer le réglage de position.",
+    "publicLinksShort": "Liens publics",
+    "publicLinksAriaLabel": "{name} peut partager cet album via des liens publics",
+    "publicLinksError": "Le réglage des liens publics n’a pas pu être enregistré.",
+    "partnerPhotosHidden": "Les photos de ce partenaire n’apparaissent pas dans les liens publics."
   },
   "shareRelease": {
     "confirmLabel": "Ajouter et partager",
@@ -356,6 +387,30 @@
     "sizeLabel": "Taille",
     "tagPlaceholder": "+ Tag",
     "tagsSection": "Tags",
-    "takenLabel": "Prise le"
+    "takenUnknown": "Inconnue",
+    "estimatedLabel": "Date de prise de vue estimée",
+    "estimatedRemove": "Supprimer",
+    "uploadedLabel": "Envoyée",
+    "locationLabel": "Lieu",
+    "locationValue": "{latitude}, {longitude}",
+    "altitudeValue": "{meters} m d'altitude",
+    "dateBox": {
+      "exifKicker": "Prise de vue · depuis EXIF",
+      "exifNote": "D’après les données de l’appareil",
+      "estimatedNote": "Le fichier ne contient pas de date de prise de vue",
+      "unknownKicker": "Date de prise de vue inconnue",
+      "unknownNote": "Le fichier ne contient pas de date de prise de vue – classé à la date d’envoi",
+      "change": "Modifier",
+      "done": "Terminé"
+    }
+  },
+  "dateMarker": {
+    "estimated": "Date de prise de vue estimée",
+    "upload": "Date de prise de vue inconnue – la date d'envoi est utilisée.",
+    "partial": "{label} ({count} sur {total} images)",
+    "estimatedShort": "Date estimée",
+    "uploadShort": "Date d'envoi",
+    "estimatedHint": "Aucune date de prise de vue dans le fichier – estimée lors de l'envoi.",
+    "partialShort": "{label} · {count}/{total}"
   }
 }

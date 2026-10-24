@@ -19,6 +19,7 @@ export type NavIconKey =
   | "cycles"
   | "users"
   | "documents"
+  | "studio"
   | "tenant"
   | "activity"
   | "tools"
@@ -169,6 +170,14 @@ const ICONS: Record<NavIconKey, (props: IconProps) => React.ReactElement> = {
       <path d="M7 3h6.5L18 7.5V20a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z" />
       <path d="M13.5 3v4.2a0.8 0.8 0 00.8.8H18" />
       <path d="M9 13.2h6M9 16.6h6" />
+    </Icon>
+  ),
+  studio: (props) => (
+    <Icon {...props}>
+      <path d="M12 3.5a8.5 8.5 0 100 17c1 0 1.7-.7 1.7-1.6 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.6 1.7-1.6h2a4.1 4.1 0 004.1-4.1C20.5 6.9 16.7 3.5 12 3.5z" />
+      <circle cx="7.6" cy="11.4" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="9.9" cy="7.6" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="14.3" cy="7.6" r="1.1" fill="currentColor" stroke="none" />
     </Icon>
   ),
   tenant: (props) => (

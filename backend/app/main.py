@@ -1,36 +1,44 @@
 import asyncio
 import logging
-import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import select, text
+from sqlalchemy import create_engine, select, text
+from sqlalchemy.pool import NullPool
+from starlette.requests import cookie_parser
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
-from app.api.routes import admin, admin_auth, auth, calendar_feeds, collaboration_ws, cycle_configs, document_templates, events, exports, files, finance, fines, lists, participants, protocol_elements, protocols, public_catalog, public_share, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenants, todos, users, word_import
-from app.core.background_loops import run_advisory_locked_loop
+from app.api.routes import activity, admin, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_share, retention, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenant_data_export, tenants, todos, users, word_import
+from app.core import runtime_metrics
+from app.core.loops import BACKEND_LOOPS
 from app.core.db import SessionLocal, engine
 from app.core.config import settings
-from app.core.error_log import best_effort_actor_from_request, record_system_error
-from app.core.redis_client import close_redis_pool
-from app.core.security import hash_password
+from app.core.objstore_client import StorageUnavailable, StorageWriteFenced
+from app.core.admin_security import parse_admin_session_token
+from app.core.audit_context import AuditContextMiddleware
+from app.core.db_admission import (
+    PRIORITY_LOW,
+    PRIORITY_NORMAL,
+    ActiveUsers,
+    DbAdmissionMiddleware,
+    OverloadGuard,
+    PriorityDirectory,
+    RejectionLog,
+    run_overload_upkeep,
+)
+from app.core.error_log import record_request_error
+from app.core.redis_client import close_redis_pool, get_redis
+from app.core.security import hash_password, parse_session_token
 from app.models import AppUser, ElementType, PlatformAdmin, Role, Tenant
-from app.services import domain_health_check_service, traefik_config_service
-from app.services.admin_error_log_service import AdminErrorLogService
-from app.services.admin_job_status_service import AdminJobStatusService
-from app.services.audit_service import AuditService
-from app.services.submission_service import SubmissionService
-from app.services.document_template_service import DocumentTemplateService
-from app.services.export_service import ExportService
-from app.services.file_service import FileService
+from app.services import traefik_config_service
+from app.services.file_service import FileService, ThumbnailBusy
+from app.services.upload_lock import UploadLockBusy
 from app.services.isolated_parse import shutdown_pool as shutdown_word_import_parse_pool
 from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
-from app.services import photo_album_service, system_alert_service
-from app.services.table_snapshot_service import TableSnapshotService, run_due_cycle_snapshots
-from app.services.task_package_service import run_due_task_packages
+from app.services import storage_profile_service
 
 
 def ensure_roles() -> None:
@@ -110,6 +118,18 @@ def ensure_no_production_demo_data() -> None:
         )
 
 
+def ensure_local_storage_profile() -> None:
+    """Legt das Profil für das lokale Garage-S3 an bzw. hält es aktuell, solange LOCAL_S3_* in
+    der Umgebung steht (docker-compose stellt den Dienst beim ersten Deployment bereit). Unter
+    einem Advisory-Lock, weil mehrere uvicorn-Worker gleichzeitig starten."""
+    if not settings.local_s3_access_key:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("SELECT pg_advisory_xact_lock(202600021)"))
+        with SessionLocal() as db:
+            storage_profile_service.ensure_local_profile(db)
+
+
 def ensure_startup_seed_data() -> None:
     """Runs the idempotent startup seed functions under an advisory lock so that a
     fresh database being seeded by multiple concurrent uvicorn workers (--workers 2)
@@ -167,14 +187,21 @@ def ensure_runtime_columns() -> None:
     pass
 
 
-def ensure_default_document_templates() -> None:
-    service = DocumentTemplateService()
+def ensure_document_studio() -> None:
+    """Systemvorlagen synchronisieren und jedem Mandanten ein Standard-Brand-Profil geben
+    (Document Studio). Advisory-Lock: mehrere Worker starten gleichzeitig."""
+    from app.documents import brand_service
+    from app.documents.system_templates import sync_system_templates
+
     with engine.begin() as conn:
         conn.execute(text("SELECT pg_advisory_xact_lock(202600002)"))
         with SessionLocal() as db:
-            tenants = list(db.scalars(select(Tenant).order_by(Tenant.id.asc())))
-            for tenant in tenants:
-                service.ensure_default_template_for_tenant(db, tenant.id, tenant.name)
+            result = sync_system_templates(db)
+            for tenant in db.scalars(select(Tenant).order_by(Tenant.id.asc())):
+                brand_service.ensure_default_brand(db, tenant.id)
+            db.commit()
+            if result["created"] or result["updated"]:
+                logging.getLogger(__name__).info("Systemvorlagen synchronisiert: %s", result)
 
 
 def ensure_traefik_dynamic_config() -> None:
@@ -182,243 +209,77 @@ def ensure_traefik_dynamic_config() -> None:
         traefik_config_service.regenerate(db)
 
 
-async def domain_health_check_loop() -> None:
-    """Re-checks active custom domains on an interval. Runs in every uvicorn worker (there's no
-    single-instance process in this deployment), so each tick is guarded by a Postgres advisory
-    lock - only the worker that acquires it does the check, the other(s) skip that tick."""
-    await run_advisory_locked_loop(
-        name="domain_health_check",
-        interval_seconds=settings.domain_health_check_interval_minutes * 60,
-        task=domain_health_check_service.run_health_check,
-    )
+def _scope_cookie(scope, name: str) -> str | None:
+    raw = "; ".join(value.decode("latin-1") for key, value in scope.get("headers", ()) if key == b"cookie")
+    return cookie_parser(raw).get(name) if raw else None
 
 
-async def abgabebox_rescan_loop() -> None:
-    """Periodic sweep for submission_upload files stuck in scan_status='pending' (ClamAV was
-    unreachable at upload time - see abgabebox-backend/app/scanner.py's fail-open comment).
-    Same every-worker-but-advisory-locked pattern as domain_health_check_loop above. Stays
-    separate from upload_pipeline_rescan_loop below - unlike the three internal upload paths,
-    abgabebox files that are still pending sit in a quarantine directory the restricted
-    abgabebox DB role can't itself move them out of, so this needs SubmissionService's own
-    move-from-quarantine logic, not FileService's."""
-    await run_advisory_locked_loop(
-        name="abgabebox_rescan",
-        interval_seconds=settings.abgabebox_rescan_interval_minutes * 60,
-        task=SubmissionService().rescan_all_pending,
-    )
-
-
-async def upload_pipeline_rescan_loop() -> None:
-    """Periodic sweep for the three internal upload paths' (protocol image, gallery upload,
-    word import) StoredFile rows stuck in scan_status='pending' (ClamAV was unreachable at
-    upload time). One consolidated loop instead of three near-identical ones - see
-    FileService.rescan_pending_internal_files and the upload-pipeline unification plan."""
-    await run_advisory_locked_loop(
-        name="upload_pipeline_rescan",
-        interval_seconds=settings.upload_pipeline_rescan_interval_minutes * 60,
-        task=FileService().rescan_pending_internal_files,
-    )
-
-
-async def export_cleanup_loop() -> None:
-    """Periodic retention sweep for old generated export files under EXPORT_ROOT/generated
-    (see export_service.py's cleanup_old_generated_exports). Unlike the rescan loops above
-    this isn't a stuck/pending-state repair, just age-based deletion - every export run
-    writes a brand-new uuid-suffixed file and never reuses an old one, so without this the
-    directory grows unbounded on repeated re-exports. Same every-worker-but-advisory-locked
-    pattern as the loops above."""
-    export_service = ExportService()
-    await run_advisory_locked_loop(
-        name="export_cleanup",
-        interval_seconds=settings.export_cleanup_interval_minutes * 60,
-        task=export_service.cleanup_old_generated_exports,
-    )
-
-
-async def log_cleanup_loop() -> None:
-    """Periodic retention sweep for audit_log/system_error_log (audit finding, 2026-08-26:
-    neither table had any cleanup, both grew unbounded forever - unlike the export cleanup
-    loop above, which already existed). Same every-worker-but-advisory-locked pattern."""
-    audit_service = AuditService()
-    error_log_service = AdminErrorLogService()
-    job_status_service = AdminJobStatusService()
-
-    def _cleanup(db) -> None:
-        audit_service.cleanup_old_entries(db, retention_days=settings.audit_log_retention_days)
-        error_log_service.cleanup_old_entries(db, retention_days=settings.error_log_retention_days)
-        job_status_service.cleanup_old_runs(db, retention_days=settings.job_run_retention_days)
-        system_alert_service.cleanup_old_events(db, retention_days=settings.health_event_retention_days)
-
-    await run_advisory_locked_loop(
-        name="log_cleanup",
-        interval_seconds=settings.log_cleanup_interval_minutes * 60,
-        task=_cleanup,
-    )
-
-
-async def cycle_snapshot_loop() -> None:
-    """Daily check (see settings.cycle_snapshot_check_interval_minutes): for every
-    CycleConfig, creates a table_snapshot for the most recently completed cycle if one
-    doesn't exist yet (see table_snapshot_service.run_due_cycle_snapshots for the
-    idempotent/self-healing boundary-crossing logic). Same every-worker-but-advisory-
-    locked pattern as the loops above - lock id comes from the shared BACKGROUND_LOCK_IDS
-    ledger (see app.core.background_loops), which is exactly what a 2026-09-10 incident
-    (this loop's lock id copy-pasted from protocol_image_rescan_loop, never changed,
-    silently starving one of the two loops every tick) argued for."""
-    snapshot_service = TableSnapshotService()
-    await run_advisory_locked_loop(
-        name="cycle_snapshot",
-        interval_seconds=settings.cycle_snapshot_check_interval_minutes * 60,
-        task=lambda db: run_due_cycle_snapshots(db, snapshot_service),
-    )
-
-
-async def task_package_rollover_loop() -> None:
-    """Täglich: legt für jedes aktive Aufgabenpaket die Aufgaben des laufenden Zyklus an
-    (beim Zykluswechsel also die des neuen Zyklus) und ergänzt neue Wiederholungen, z. B.
-    neu erfasste Termine. Idempotent - siehe task_package_service.run_due_task_packages."""
-    await run_advisory_locked_loop(
-        name="task_package_rollover",
-        interval_seconds=settings.task_package_rollover_interval_minutes * 60,
-        task=lambda db: run_due_task_packages(db),
-    )
-
-
-def _photo_analysis_auto_queue_window_is_open() -> bool:
-    hour = datetime.now(timezone.utc).hour
-    start, end = settings.photo_analysis_auto_queue_start_hour, settings.photo_analysis_auto_queue_end_hour
-    if start <= end:
-        return start <= hour < end
-    return hour >= start or hour < end  # window wraps past midnight, e.g. 22..5
-
-
-def _host_load_is_low() -> bool:
+def _session_user_id(scope) -> int | None:
+    """Nutzer aus dem signierten Session-Cookie, ohne Datenbank (nur für die Priorität bei
+    Überlast - die eigentliche Prüfung samt Sperre/Widerruf macht get_current_user)."""
+    data = parse_session_token(_scope_cookie(scope, settings.auth_session_cookie))
     try:
-        load_1min, _, _ = os.getloadavg()
-    except OSError:
-        # Not available on this platform (e.g. Windows) - don't block automatic queuing on
-        # a check that can't run; the request-path/worker resource limits are the actual
-        # backstop against overload either way.
-        return True
-    cpu_count = os.cpu_count() or 1
-    return load_1min <= cpu_count * settings.photo_analysis_auto_queue_max_load_factor
+        return int(data["user_id"]) if data else None
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
-async def photo_analysis_auto_queue_loop() -> None:
-    """Automatically queues Phase 3 (face-quality) analysis for images nobody has manually
-    requested it for yet (see FileService.create_pending_analysis_jobs), but only during a
-    configured low-traffic UTC hour window and only when the host doesn't already look
-    busy - this work competes with live request traffic and the dedicated worker container
-    for the same constrained host (see photo-analysis-worker/README.md), so it must never
-    fire just because it's due. Routes through run_advisory_locked_loop's should_run gate
-    (2026-09-17 audit fix) instead of hand-rolling its own lock/sleep loop - previously this
-    was the one loop that reimplemented that skeleton itself, which is exactly how it ended
-    up missing the to_thread offload and exception isolation every other loop has."""
-    file_service = FileService()
-    await run_advisory_locked_loop(
-        name="photo_analysis_auto_queue",
-        interval_seconds=settings.photo_analysis_auto_queue_interval_minutes * 60,
-        task=file_service.create_pending_analysis_jobs,
-        should_run=lambda: _photo_analysis_auto_queue_window_is_open() and _host_load_is_low(),
-    )
-
-
-async def photo_quality_backfill_loop() -> None:
-    """Fills in sharpness_score/exposure_score for images the abgabebox submission-upload
-    path never computes them for (see FileService.backfill_missing_quality_scores) - cheap
-    enough per image that this runs continuously, not just in an off-peak window like
-    photo_analysis_auto_queue_loop. Same every-worker-but-advisory-locked pattern."""
-    file_service = FileService()
-    await run_advisory_locked_loop(
-        name="photo_quality_backfill",
-        interval_seconds=settings.photo_quality_backfill_interval_minutes * 60,
-        task=file_service.backfill_missing_quality_scores,
-    )
-
-
-async def photo_album_sync_loop() -> None:
-    """Folds newly-submitted (and newly removed) abgabebox submission files into their
-    Zyklus/Abgabe/Abgabe-Element albums - see photo_album_service.sync_submission_uploads
-    for why this can't happen inline in that public upload request. Same every-worker-but-
-    advisory-locked pattern as the loops above."""
-    file_service = FileService()
-    await run_advisory_locked_loop(
-        name="photo_album_sync",
-        interval_seconds=settings.photo_album_sync_interval_minutes * 60,
-        task=lambda db: photo_album_service.sync_submission_uploads(db, file_service),
-    )
-
-
-async def gallery_upload_ingest_loop() -> None:
-    """Processes queued gallery_upload_job rows (see FileService.process_pending_gallery_upload_jobs) -
-    scanning/thumbnailing/StoredFile-creation for the "Bilder hochladen" window, deferred
-    here so a multi-GB ZIP upload request only has to stream bytes to disk and return, not
-    hold the whole batch in memory. Unlike photo_analysis_auto_queue_loop, this is a direct
-    result of a user action (not ambient background work) and runs continuously with a
-    short interval, same as photo_quality_backfill_loop, so a freshly queued upload starts
-    within a few seconds rather than waiting for an off-peak window."""
-    file_service = FileService()
-    await run_advisory_locked_loop(
-        name="gallery_upload_ingest",
-        interval_seconds=5,
-        task=file_service.process_pending_gallery_upload_jobs,
-    )
-
-
-async def system_monitor_loop() -> None:
-    """Systemstatus sammeln (Container, Dienste) und bei Statuswechseln per ntfy benachrichtigen -
-    siehe system_health_service/system_alert_service. Same every-worker-but-advisory-locked
-    pattern as the loops above."""
-    await run_advisory_locked_loop(
-        name="system_monitor",
-        interval_seconds=settings.system_monitor_interval_seconds,
-        task=system_alert_service.run_monitor_tick,
-    )
+OVERLOAD_GUARD = OverloadGuard(
+    directory=PriorityDirectory(),
+    active_users=ActiveUsers(settings.overload_active_minutes * 60, get_redis),
+    rejections=RejectionLog(),
+    thresholds={PRIORITY_LOW: settings.overload_threshold_low, PRIORITY_NORMAL: settings.overload_threshold_normal},
+    identify=_session_user_id,
+    is_admin=lambda scope: parse_admin_session_token(_scope_cookie(scope, settings.admin_session_cookie)) is not None,
+)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    from app.documents.renderer import shutdown_renderer
+
     FileService().ensure_storage()
     warm_up_word_import_parse_pool()
     try:
         ensure_runtime_columns()
         ensure_no_production_demo_data()
         ensure_startup_seed_data()
-        ensure_default_document_templates()
+        ensure_document_studio()
         ensure_traefik_dynamic_config()
-        health_check_task = asyncio.create_task(domain_health_check_loop())
-        rescan_task = asyncio.create_task(abgabebox_rescan_loop())
-        upload_pipeline_rescan_task = asyncio.create_task(upload_pipeline_rescan_loop())
-        export_cleanup_task = asyncio.create_task(export_cleanup_loop())
-        log_cleanup_task = asyncio.create_task(log_cleanup_loop())
-        cycle_snapshot_task = asyncio.create_task(cycle_snapshot_loop())
-        task_package_rollover_task = asyncio.create_task(task_package_rollover_loop())
-        photo_analysis_auto_queue_task = asyncio.create_task(photo_analysis_auto_queue_loop())
-        photo_quality_backfill_task = asyncio.create_task(photo_quality_backfill_loop())
-        photo_album_sync_task = asyncio.create_task(photo_album_sync_loop())
-        gallery_upload_ingest_task = asyncio.create_task(gallery_upload_ingest_loop())
-        system_monitor_task = asyncio.create_task(system_monitor_loop())
+        ensure_local_storage_profile()
+        # Leichte Loops im Backend; die schweren laufen im job-worker (core/loops.py, Paket 10).
+        loop_tasks = [asyncio.create_task(factory()) for factory in BACKEND_LOOPS]
+        runtime_metrics_task = asyncio.create_task(
+            runtime_metrics.run_monitor(
+                runtime_metrics.RuntimeReporter(settings.app_database_url or settings.database_url, settings.process_kind), engine
+            )
+        )
+        overload_task = asyncio.create_task(
+            run_overload_upkeep(
+                OVERLOAD_GUARD,
+                create_engine(
+                    settings.app_database_url or settings.database_url,
+                    poolclass=NullPool,
+                    hide_parameters=True,
+                    connect_args={"connect_timeout": 3, "application_name": f"hocx-{settings.process_kind}-overload"},
+                ),
+                runtime_metrics.instance_name(settings.process_kind),
+            )
+        )
         yield
-        health_check_task.cancel()
-        photo_analysis_auto_queue_task.cancel()
-        photo_quality_backfill_task.cancel()
-        photo_album_sync_task.cancel()
-        gallery_upload_ingest_task.cancel()
-        system_monitor_task.cancel()
-        rescan_task.cancel()
-        upload_pipeline_rescan_task.cancel()
-        export_cleanup_task.cancel()
-        log_cleanup_task.cancel()
-        cycle_snapshot_task.cancel()
-        task_package_rollover_task.cancel()
+        overload_task.cancel()
+        runtime_metrics_task.cancel()
+        for task in loop_tasks:
+            task.cancel()
         await close_redis_pool()
     finally:
         shutdown_word_import_parse_pool()
+        shutdown_renderer()
 
 
 app = FastAPI(
     title=settings.app_name,
-    version="1.1.13",
+    version="1.2.0",
     lifespan=lifespan,
     docs_url=None if settings.is_production else "/docs",
     redoc_url=None,
@@ -427,7 +288,14 @@ app = FastAPI(
 
 from app.upload_admission import UploadAdmissionMiddleware
 from app.services.upload_pipeline import GALLERY_REQUEST_MAX_BYTES
-app.add_middleware(UploadAdmissionMiddleware, path="/api/files/gallery-uploads", max_bytes=GALLERY_REQUEST_MAX_BYTES, storage_dir=settings.upload_root)
+app.add_middleware(
+    UploadAdmissionMiddleware,
+    path="/api/files/gallery-uploads",
+    max_bytes=GALLERY_REQUEST_MAX_BYTES,
+    storage_dir=settings.upload_root,
+    max_active=settings.gallery_upload_concurrency,
+    wait_seconds=settings.gallery_upload_slot_wait_seconds,
+)
 
 # Audit MAIN-SEC-004: Multipart nur mit signierter Session und mit Grössenlimit, bevor
 # Starlette den Body auf die Platte spoolt (Galerie hat oben ihre eigene Admission).
@@ -453,12 +321,44 @@ app.add_middleware(
     skip_prefixes=("/api/files/gallery-uploads",),
 )
 
+# Requests je Worker an den DB-Pool binden (Stau aus Threadpool und Pool unter Last) und bei
+# Überlast nach Abo-Priorität annehmen, siehe db_admission.py. Innerhalb der Wartung/CORS-
+# Schichten: auch die 503 trägt CORS-Header.
+app.add_middleware(
+    DbAdmissionMiddleware,
+    guard=OVERLOAD_GUARD,
+    max_active=settings.db_admission_limit or max(1, settings.db_pool_size + settings.db_max_overflow - settings.db_admission_reserve),
+    wait_seconds=settings.db_admission_wait_seconds,
+    skip_paths=("/api/health",),
+    # Lange Upload-Bodies belegen sonst einen Platz ohne DB-Arbeit; die Galerie hat eine eigene Annahme.
+    skip_prefixes=(
+        "/api/files/gallery-uploads",
+        "/api/files/document-uploads",
+        "/api/tools/word-import/",
+        "/api/admin/tenants/import",
+    ),
+)
+
+from app.core.maintenance_middleware import MaintenanceMiddleware
+# Vor der Upload-Annahme (äussere Schicht): während einer Wartung wird ein grosser Upload sofort
+# abgewiesen, statt erst gepuffert zu werden. CORS liegt noch weiter aussen, damit auch die
+# 503-Antworten die CORS-Header tragen.
+app.add_middleware(MaintenanceMiddleware)
+
+_CORS_ORIGINS = [o for o in [
+    *settings.local_dev_origins,
+    f"https://{settings.traefik_domain}" if settings.traefik_domain else None,
+] if o] + sorted(settings.extra_cors_origin_set)
+
+from app.core.origin_guard import OriginGuardMiddleware
+# Innerhalb von CORS: auch die 403-Antwort trägt CORS-Header (SEC-009, siehe origin_guard.py).
+app.add_middleware(OriginGuardMiddleware, allowed_origins=set(_CORS_ORIGINS))
+# Quelladresse für das Audit-Log (gekürzt und gehasht, Datenschutz-Audit PRIV-013)
+app.add_middleware(AuditContextMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o for o in [
-        *settings.local_dev_origins,
-        f"https://{settings.traefik_domain}" if settings.traefik_domain else None,
-    ] if o] + sorted(settings.extra_cors_origin_set),
+    allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Cookie", "Authorization"],
@@ -471,13 +371,70 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     raw error text (SQL, stack traces, internal paths) ever reaches a customer response.
     FastAPI's own HTTPException/RequestValidationError handlers are more specific and take
     precedence, so normal curated 4xx responses are unaffected by this."""
-    db = SessionLocal()
-    try:
-        tenant_id, actor_email = best_effort_actor_from_request(db, request)
-        record_system_error(db, exc=exc, request=request, tenant_id=tenant_id, actor_email=actor_email, status_code=500)
-    finally:
-        db.close()
+    await record_request_error(request, exc, 500)
     return JSONResponse(status_code=500, content={"detail": "Ein interner Fehler ist aufgetreten."})
+
+
+@app.exception_handler(StorageWriteFenced)
+async def storage_write_fenced_handler(request: Request, exc: StorageWriteFenced) -> JSONResponse:
+    """Persistente Schreibvorgänge sind kurz gesperrt (Cutover/Wartung) - erwartet, kein Fehler
+    für system_error_log. 503 + Retry-After, damit Clients später erneut versuchen."""
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Speichern ist gerade kurz gesperrt (Wartung). Bitte in Kürze erneut versuchen.", "code": "storage_write_fenced"},
+        headers={"Retry-After": str(exc.retry_after_seconds), "Cache-Control": "no-store"},
+    )
+
+
+def _db_busy_response() -> JSONResponse:
+    """Pool erschöpft (Concurrency-Audit CONC-010): nach DB_POOL_TIMEOUT_SECONDS schnell 503 mit
+    Retry-After statt langem Warten - Last, kein Programmfehler, deshalb kein Fehlerprotokoll
+    (gezählt in den Laufzeitkennzahlen, /admin/system)."""
+    runtime_metrics.count("pool_timeouts")
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Der Server ist gerade ausgelastet. Bitte gleich erneut versuchen.", "code": "db_busy"},
+        headers={"Retry-After": "5", "Cache-Control": "no-store"},
+    )
+
+
+@app.exception_handler(SQLAlchemyTimeoutError)
+async def db_pool_timeout_handler(request: Request, exc: SQLAlchemyTimeoutError) -> JSONResponse:
+    return _db_busy_response()
+
+
+@app.exception_handler(ThumbnailBusy)
+async def thumbnail_busy_handler(request: Request, exc: ThumbnailBusy) -> JSONResponse:
+    """Zu viele Vorschaubilder gleichzeitig in Erzeugung (file_service, CONC-014) - erwartet,
+    kein Eintrag im Fehlerprotokoll. Der Thumbnail-Backfill im job-worker holt sie nach."""
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Vorschau wird erzeugt, bitte gleich erneut versuchen.", "code": "thumbnail_busy"},
+        headers={"Retry-After": "5", "Cache-Control": "no-store"},
+    )
+
+
+@app.exception_handler(UploadLockBusy)
+async def upload_lock_busy_handler(request: Request, exc: UploadLockBusy) -> JSONResponse:
+    """Andere Uploads desselben Vereins laufen gerade (Upload-Lock, services/upload_lock.py) -
+    erwartet, kein Eintrag im Fehlerprotokoll. Das Frontend wiederholt nach Retry-After."""
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Gerade werden andere Dateien dieses Vereins verarbeitet. Bitte gleich erneut versuchen.", "code": "upload_busy"},
+        headers={"Retry-After": str(exc.retry_after_seconds), "Cache-Control": "no-store"},
+    )
+
+
+@app.exception_handler(StorageUnavailable)
+async def storage_unavailable_handler(request: Request, exc: StorageUnavailable) -> JSONResponse:
+    """Objektspeicher nicht erreichbar: protokollieren (unerwarteter Betriebsfehler) und 503
+    statt 500 - der Zustand ist vorübergehend, nichts wurde inkonsistent bestätigt."""
+    await record_request_error(request, exc, 503)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Der Dateispeicher ist vorübergehend nicht erreichbar.", "code": "storage_unavailable"},
+        headers={"Retry-After": "30", "Cache-Control": "no-store"},
+    )
 
 
 @app.exception_handler(HTTPException)
@@ -490,13 +447,11 @@ async def logged_http_exception_handler(request: Request, exc: HTTPException):
     carries a chained cause that isn't a ValueError (this codebase's convention for expected,
     already-safe-to-show validation messages), it's an unexpected error worth recording. The
     response itself is untouched - delegates to FastAPI's default handler unchanged."""
+    if isinstance(exc.__cause__, SQLAlchemyTimeoutError):
+        # Route hat den Pool-Timeout als SQLAlchemyError abgefangen und umgewandelt.
+        return _db_busy_response()
     if exc.status_code >= 400 and exc.__cause__ is not None and not isinstance(exc.__cause__, ValueError):
-        db = SessionLocal()
-        try:
-            tenant_id, actor_email = best_effort_actor_from_request(db, request)
-            record_system_error(db, exc=exc.__cause__, request=request, tenant_id=tenant_id, actor_email=actor_email, status_code=exc.status_code)
-        finally:
-            db.close()
+        await record_request_error(request, exc.__cause__, exc.status_code)
     return await http_exception_handler(request, exc)
 
 
@@ -508,9 +463,17 @@ def health() -> dict[str, str]:
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(admin_auth.router, prefix="/api/admin/auth", tags=["admin-auth"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(admin_identity_verification.router, prefix="/api/admin", tags=["admin"])
+app.include_router(admin_document_templates.router, prefix="/api/admin", tags=["admin"])
 app.include_router(tenants.router, prefix="/api", tags=["tenants"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
-app.include_router(document_templates.router, prefix="/api", tags=["document-templates"])
+app.include_router(documents.router, prefix="/api", tags=["documents"])
+app.include_router(document_studio.router, prefix="/api", tags=["document-studio"])
+app.include_router(document_verification.router, prefix="/api", tags=["documents"])
+app.include_router(privacy_settings.router, prefix="/api", tags=["privacy"])
+app.include_router(activity.router, prefix="/api", tags=["privacy"])
+app.include_router(tenant_data_export.router, prefix="/api", tags=["privacy"])
+app.include_router(retention.router, prefix="/api", tags=["privacy"])
 app.include_router(templates.router, prefix="/api", tags=["templates"])
 app.include_router(cycle_configs.router, prefix="/api", tags=["cycle-configs"])
 app.include_router(task_packages.router, prefix="/api", tags=["task-packages"])
@@ -523,12 +486,14 @@ app.include_router(protocols.router, prefix="/api", tags=["protocols"])
 app.include_router(protocol_elements.router, prefix="/api", tags=["protocol-elements"])
 app.include_router(todos.router, prefix="/api", tags=["todos"])
 app.include_router(files.router, prefix="/api", tags=["files"])
+# Logische Dokumente (Dateien-Tab, feature/document-management): GET /api/documents/{uuid}… -
+# bewusst nach dem Router der Dokument-Engine, damit feste Pfade wie /documents/exports vorgehen.
+app.include_router(managed_documents.router, prefix="/api", tags=["managed-documents"])
 app.include_router(share_links.router, prefix="/api", tags=["share-links"])
 app.include_router(public_share.router, prefix="/api", tags=["public-share"])
 app.include_router(public_catalog.router, prefix="/api", tags=["public-catalog"])
 app.include_router(calendar_feeds.router, prefix="/api", tags=["calendar-feeds"])
 app.include_router(storage.router, prefix="/api", tags=["storage"])
-app.include_router(exports.router, prefix="/api", tags=["exports"])
 app.include_router(finance.router, prefix="/api", tags=["finance"])
 app.include_router(fines.router, prefix="/api", tags=["fines"])
 app.include_router(statistics.router, prefix="/api", tags=["statistics"])
@@ -536,3 +501,8 @@ app.include_router(system_status.router, prefix="/api", tags=["system-status"])
 app.include_router(submission_assignments.router, prefix="/api", tags=["submission-assignments"])
 app.include_router(word_import.router, prefix="/api", tags=["word-import"])
 app.include_router(collaboration_ws.router, tags=["collaboration"])
+app.include_router(maintenance_public.router, prefix="/api", tags=["maintenance"])
+app.include_router(admin_storage.router, prefix="/api/admin", tags=["admin-storage"])
+app.include_router(admin_maintenance.router, prefix="/api/admin", tags=["admin-maintenance"])
+app.include_router(admin_backups.router, prefix="/api/admin", tags=["admin-backups"])
+app.include_router(admin_cashflow.router, prefix="/api/admin", tags=["admin-cashflow"])

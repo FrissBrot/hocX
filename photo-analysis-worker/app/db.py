@@ -24,7 +24,15 @@ def _resolve_database_url() -> str:
 
 
 def build_engine() -> Engine:
-    return create_engine(_resolve_database_url(), future=True, pool_pre_ping=True)
+    # Ein Prozess, seriell: zwei Verbindungen genügen (Concurrency-Audit CONC-010).
+    return create_engine(
+        _resolve_database_url(), future=True, pool_pre_ping=True, hide_parameters=True, pool_size=2, max_overflow=1,
+        connect_args={"application_name": "hocx-photo-analysis-worker"},
+    )
+
+
+def database_url() -> str:
+    return _resolve_database_url()
 
 
 def claim_next_job(engine: Engine) -> dict | None:
@@ -56,13 +64,21 @@ def claim_next_job(engine: Engine) -> dict | None:
         return dict(row)
 
 
-def fetch_files(engine: Engine, stored_file_ids: list[int]) -> list[dict]:
+def fetch_files(engine: Engine, stored_file_ids: list[int], *, tenant_id: int | None = None) -> list[dict]:
+    """Dateien eines Auftrags. Mit tenant_id nur Dateien dieses Mandanten (Security-Audit SEC-016):
+    das Backend füllt stored_file_ids bereits mandantengebunden, der Worker prüft es zusätzlich."""
     if not stored_file_ids:
         return []
     with engine.connect() as conn:
         rows = conn.execute(
-            text("SELECT id, storage_path, mime_type FROM stored_file WHERE id = ANY(:ids)"),
-            {"ids": stored_file_ids},
+            # namespace: Abgabebox-Uploads liegen im eigenen Speicherbereich (siehe objstore_client.py).
+            text("""
+                SELECT f.id, f.storage_path, f.mime_type,
+                       CASE WHEN EXISTS (SELECT 1 FROM submission_upload_file s WHERE s.stored_file_id = f.id)
+                            THEN 'abgabebox' ELSE 'main' END AS namespace
+                FROM stored_file f WHERE f.id = ANY(:ids) AND (CAST(:tenant_id AS BIGINT) IS NULL OR f.tenant_id = :tenant_id)
+            """),
+            {"ids": stored_file_ids, "tenant_id": tenant_id},
         ).mappings()
         return [dict(row) for row in rows]
 
@@ -138,3 +154,9 @@ def record_job_run(engine: Engine, *, status: str, started_at, error: str | None
             text("SELECT record_job_run(:job_name, :status, :started_at, NOW(), :error, TRUE)"),
             {"job_name": JOB_NAME, "status": status, "started_at": started_at, "error": error},
         )
+
+
+def full_maintenance_active(engine: Engine) -> bool:
+    """Während voller Wartung (z. B. Erstmigration des Speichers) keine Aufträge übernehmen."""
+    with engine.connect() as conn:
+        return bool(conn.execute(text("SELECT full_active FROM maintenance_effective_state()")).scalar())

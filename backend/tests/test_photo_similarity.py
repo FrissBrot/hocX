@@ -282,7 +282,9 @@ def test_gallery_tabs_separate_copies_from_different_photos(tmp_path, monkeypatc
     monkeypatch.setattr(service, "_build_overview_item", lambda row: row.id)
     # Nur Gruppenzugehörigkeit prüfen, unabhängig vom API-Ausgabeschema.
     monkeypatch.setattr("app.services.file_service.SimilarityGroup", lambda **kwargs: kwargs)
-    assert [group["images"] for group in service.group_similar_gallery_images(None, 1, min_size=2)] == [[1, 2]]
-    assert [group["images"] for group in service.group_similar_gallery_images(None, 1, min_size=2, kind="series")] == [[1, 2, 3]]
+    db = Mock()  # nur für das Freigeben der Verbindung vor dem Rechnen
+    assert [group["images"] for group in service.group_similar_gallery_images(db, 1, min_size=2)] == [[1, 2]]
+    assert [group["images"] for group in service.group_similar_gallery_images(db, 1, min_size=2, kind="series")] == [[1, 2, 3]]
     repository.list_tenant_files.return_value = rows[:2]
-    assert service.group_similar_gallery_images(None, 1, min_size=2, kind="series") == []
+    assert service.group_similar_gallery_images(db, 1, min_size=2, kind="series") == []
+    assert db.commit.called

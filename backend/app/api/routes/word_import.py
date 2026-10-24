@@ -61,21 +61,18 @@ from app.schemas.word_import import (
     WordImportListRowCommit,
     WordImportMatrixCellCommit,
     WordImportNameResolution,
-    WordImportQualityBucket,
-    WordImportQualityStats,
     WordImportTableRoleCommit,
     WordImportTextCommit,
 )
 from app.services import public_id_service
 from app.services.file_service import MAX_UPLOAD_BYTES, MAX_ZIP_TOTAL_BYTES, extract_word_import_files_from_zip
-from app.services.word_import_quality_service import WordImportQualityService
 from app.services.word_import_queue_service import WordImportQueueService
 from app.services.word_import_service import WordImportService
+from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter()
 service = WordImportService()
 queue_service = WordImportQueueService()
-quality_service = WordImportQualityService()
 
 # Ganzer Batch (Summe aller akzeptierten Dateien eines Upload-Requests, ausserhalb von
 # ZIPs - deren eigener Grenzwert ist MAX_ZIP_TOTAL_BYTES): grösszügiger als eine einzelne
@@ -818,6 +815,19 @@ async def analyze_word_import(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_analyze_word_import_impl, file=file, template_id=template_id, protocol_date_hint=protocol_date_hint, table_roles_json=table_roles_json, db=db, user=user)
+
+
+async def _analyze_word_import_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    file: UploadFile = File(...),
+    template_id: uuid.UUID = Form(...),
+    protocol_date_hint: date | None = Form(None),
+    table_roles_json: str | None = Form(None),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
     require_writer(user)
     internal_template_id = _resolve_template_id(db, user.current_tenant_id, template_id)
     if not file.filename or not file.filename.lower().endswith((".docx", ".pdf")):
@@ -906,6 +916,17 @@ def _to_public_summary(
 
 @router.post("/tools/word-import/documents", response_model=PublicWordImportDocumentUploadResult, status_code=status.HTTP_201_CREATED)
 async def ingest_word_import_documents(
+    template_id: uuid.UUID = Form(...),
+    files: list[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_ingest_word_import_documents_impl, template_id=template_id, files=files, db=db, user=user)
+
+
+async def _ingest_word_import_documents_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
     template_id: uuid.UUID = Form(...),
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
@@ -1144,17 +1165,3 @@ def delete_word_import_document(
     if not deleted:
         raise HTTPException(status_code=404, detail="Dokument nicht gefunden")
     return {"message": "Dokument entfernt"}
-
-
-@router.get("/tools/word-import/quality-stats", response_model=WordImportQualityStats)
-def get_word_import_quality_stats(
-    template_id: uuid.UUID | None = None,
-    db: Session = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
-):
-    require_writer(user)
-    internal_template_id = None
-    if template_id is not None:
-        internal_template_id = _resolve_template_id(db, user.current_tenant_id, template_id)
-    buckets = quality_service.accept_rate_stats(db, tenant_id=user.current_tenant_id, template_id=internal_template_id)
-    return WordImportQualityStats(buckets=[WordImportQualityBucket(**bucket) for bucket in buckets])

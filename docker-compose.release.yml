@@ -19,6 +19,11 @@ services:
       - postgres
       - -c
       - shared_preload_libraries=pg_stat_statements
+      # Verbindungsbudget (Concurrency-Audit CONC-010): Backend 2 x 20, Abgabebox 2 x 8, Worker je 5,
+      # job-worker 8, dazu ungepoolte Kurzverbindungen (Kennzahlen, Fehlerprotokoll, Upload-Lock,
+      # pg_dump/pg_restore) - rund 100. Ohne explizite Angabe galt der Default 100.
+      - -c
+      - max_connections=150
       - -c
       - pg_stat_statements.max=5000
       - -c
@@ -66,6 +71,9 @@ services:
     # eine Sitzung als beliebiger Nutzer erzeugen koennen.
     networks:
       - cache
+    # maxmemory unter dem Containerlimit (256m), noeviction: bei Speicherdruck scheitern Schreibbefehle
+    # (Auth-Pfade fail-closed) statt dass der OOM-Killer Redis beendet - eine Verdrängungs-Policy
+    # könnte Login-Sperrzähler und MFA-Flows verdrängen (Security-Review Paket 6).
     # Passwort aus dem Secret (MAIN-OPS-005), nicht als Argument (sonst in der Prozessliste
     # sichtbar): Konfigurationsdatei schreiben, dann wie gewohnt über das Entrypoint-Skript
     # starten, das auf den Benutzer redis wechselt.
@@ -76,7 +84,7 @@ services:
       - -c
       - >-
         umask 027 &&
-        printf 'requirepass %s\n' "$$(cat /run/secrets/redis_password)" > /tmp/redis.conf &&
+        printf 'requirepass %s\nmaxmemory 200mb\nmaxmemory-policy noeviction\n' "$$(cat /run/secrets/redis_password)" > /tmp/redis.conf &&
         chown root:redis /tmp/redis.conf &&
         exec docker-entrypoint.sh redis-server /tmp/redis.conf
     healthcheck:
@@ -121,10 +129,11 @@ services:
   backend:
     image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
     restart: unless-stopped
-    # Zwei Worker und die Bildverarbeitung teilen sich dieses Budget. ZIPs werden
-    # auf Platte gepuffert; im Speicher liegen höchstens vier Bilder à 100 MiB plus Decoder.
-    mem_limit: 6144m
-    cpus: 3.0
+    # Zwei uvicorn-Worker (Requests, WebSockets, leichte Loops, Vorschau-Compiles). Die schwere
+    # Hintergrundarbeit (Galerie-Ingest, PDF-Aufträge, Vereinsexport, Backfill) hat seit dem
+    # Concurrency-Audit (Paket 10) ihr eigenes Budget im Dienst job-worker.
+    mem_limit: 4096m
+    cpus: 2.5
     init: true
     read_only: true
     cap_drop:
@@ -151,7 +160,6 @@ services:
       PHOTO_WORKER_DB_PASSWORD_FILE: /run/secrets/photo_worker_db_password
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
-      LATEX_TEMPLATE_ROOT: /app/storage/latex_templates
       EXPORT_ROOT: /app/storage/exports
       UPLOAD_ROOT: /app/storage/uploads
       THUMBNAIL_ROOT: /app/storage-local/thumbnails
@@ -159,6 +167,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL}
       TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
+      # Erwarteter WebAuthn-Origin der Plattform-Admin-Passkeys (Security-Audit SEC-021).
+      TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
       TRAEFIK_ABGABEBOX_DOMAIN: ${TRAEFIK_ABGABEBOX_DOMAIN}
       ABGABEBOX_BASE_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       CLAMAV_HOST: clamav
@@ -180,6 +190,11 @@ services:
       LOG_CLEANUP_INTERVAL_MINUTES: ${LOG_CLEANUP_INTERVAL_MINUTES:-1440}
       AUDIT_LOG_RETENTION_DAYS: ${AUDIT_LOG_RETENTION_DAYS:-730}
       ERROR_LOG_RETENTION_DAYS: ${ERROR_LOG_RETENTION_DAYS:-90}
+      # Datenschutz-Audit Paket 8/9: Offboarding, Datenstandort, Captcha-Hinweis in /admin/system
+      TENANT_OFFBOARDING_GRACE_DAYS: ${TENANT_OFFBOARDING_GRACE_DAYS:-90}
+      HOCX_SERVER_LOCATION: ${HOCX_SERVER_LOCATION:-ch}
+      STORAGE_ALLOWED_LOCATIONS: ${STORAGE_ALLOWED_LOCATIONS:-}
+      FRIENDLY_CAPTCHA_VERIFY_URL: ${FRIENDLY_CAPTCHA_VERIFY_URL:-https://api.friendlycaptcha.com/api/v1/siteverify}
       PROTOCOL_IMAGE_STORAGE_QUOTA_MB: ${PROTOCOL_IMAGE_STORAGE_QUOTA_MB:-2048}
       AUTH_SESSION_TTL_HOURS: ${AUTH_SESSION_TTL_HOURS:-72}
       AUTH_SESSION_COOKIE: ${AUTH_SESSION_COOKIE:-hocx_session}
@@ -194,6 +209,43 @@ services:
       # ENVIRONMENT=test, and the script itself refuses to run against a
       # HOCX_ENVIRONMENT=production backend - setting this here is inert on prod either way.
       DEMO_TOTP_SEED: ${DEMO_TOTP_SEED:-}
+      # Öffentliche Prüfseite (Abgabebox), steht in jedem PDF; leer = ABGABEBOX_BASE_URL/verify
+      DOCUMENT_VERIFY_BASE_URL: ${DOCUMENT_VERIFY_BASE_URL:-}
+      # Objektspeicher (docs-site/docs/technik/storage/): Profil-Zugangsdaten-Schlüssel und lokales Garage-S3.
+      STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
+      # Schlüssel der Mandanten-Exporte (app/services/export_crypto.py), nur das Backend braucht ihn.
+      EXPORT_ENCRYPTION_KEY_FILE: /run/secrets/export_encryption_key
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      STORAGE_FALLBACK_DAYS: ${STORAGE_FALLBACK_DAYS:-14}
+      # Nur zur Anzeige/Überwachung (Job-Registry, /admin/backups) - Zugang zum Repository hat
+      # ausschliesslich der backup-worker.
+      BACKUP_ENABLED: ${BACKUP_ENABLED:-false}
+      # Gleichzeitige Galerie-Uploads je Worker (Concurrency-Audit, RUNBOOK Abschnitt 17).
+      GALLERY_UPLOAD_CONCURRENCY: ${GALLERY_UPLOAD_CONCURRENCY:-2}
+      GALLERY_UPLOAD_SLOT_WAIT_SECONDS: ${GALLERY_UPLOAD_SLOT_WAIT_SECONDS:-60}
+      # Pool und Request-Annahme je Backend-Worker, Überlast-Schutz nach Abo (RUNBOOK Abschnitt 17).
+      # Die Annahme ergibt sich aus Pool + Overflow minus DB_ADMISSION_RESERVE.
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-12}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-8}
+      DB_POOL_TIMEOUT_SECONDS: ${DB_POOL_TIMEOUT_SECONDS:-5}
+      DB_ADMISSION_RESERVE: ${DB_ADMISSION_RESERVE:-4}
+      DB_ADMISSION_WAIT_SECONDS: ${DB_ADMISSION_WAIT_SECONDS:-20}
+      OVERLOAD_THRESHOLD_LOW: ${OVERLOAD_THRESHOLD_LOW:-0.75}
+      OVERLOAD_THRESHOLD_NORMAL: ${OVERLOAD_THRESHOLD_NORMAL:-1.0}
+      OVERLOAD_ACTIVE_MINUTES: ${OVERLOAD_ACTIVE_MINUTES:-15}
+      # Schwellen des Checks «security» in /admin/system und ntfy (Datenschutz-Audit Paket 3).
+      SECURITY_FAILED_LOGINS_WARNING: ${SECURITY_FAILED_LOGINS_WARNING:-50}
+      SECURITY_FAILED_LOGINS_CRITICAL: ${SECURITY_FAILED_LOGINS_CRITICAL:-200}
+      SECURITY_FAILED_LOGINS_PER_ACCOUNT: ${SECURITY_FAILED_LOGINS_PER_ACCOUNT:-20}
+      SECURITY_EXPORTS_PER_HOUR: ${SECURITY_EXPORTS_PER_HOUR:-3}
+      SECURITY_ALERT_ADMIN_LOGINS: ${SECURITY_ALERT_ADMIN_LOGINS:-false}
+      LOCAL_S3_ENDPOINT: http://local-s3:3900
+      LOCAL_S3_BUCKET: hocx-main
+      LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
+      LOCAL_S3_ACCESS_KEY: ${LOCAL_S3_ACCESS_KEY}
+      LOCAL_S3_SECRET_KEY_FILE: /run/secrets/local_s3_secret_key
+      LOCAL_S3_ABGABEBOX_ACCESS_KEY: ${LOCAL_S3_ABGABEBOX_ACCESS_KEY}
+      LOCAL_S3_ABGABEBOX_SECRET_KEY_FILE: /run/secrets/local_s3_abgabebox_secret_key
     secrets:
       - database_url
       - app_database_url
@@ -203,10 +255,15 @@ services:
       - initial_admin_password
       - abgabebox_db_password
       - photo_worker_db_password
+      - storage_credentials_key
+      - export_encryption_key
+      - local_s3_secret_key
+      - local_s3_abgabebox_secret_key
       - redis_password
     networks:
       - default
       - docker-api
+      - storage
       - cache
     depends_on:
       db:
@@ -223,6 +280,7 @@ services:
       # auch wenn /app/storage spaeter auf ein Netzwerk-/Cloud-Volume umgehaengt wird
       # (siehe FileService.ensure_thumbnail).
       - ./storage-local/thumbnails:/app/storage-local/thumbnails
+      - ./storage-local/work:/app/storage-local/work
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       - ./infra/traefik/dynamic:/app/traefik_dynamic
     healthcheck:
@@ -362,8 +420,14 @@ services:
     environment:
       PHOTO_WORKER_DATABASE_URL_FILE: /run/secrets/photo_worker_database_url
       STORAGE_ROOT: /app/storage
+      ABGABEBOX_STORAGE_ROOT: /app/storage/abgabebox-uploads
+      STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
     secrets:
       - photo_worker_database_url
+      - storage_credentials_key
+    networks:
+      - default
+      - storage
     depends_on:
       backend:
         condition: service_healthy
@@ -443,6 +507,366 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.priority=10"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-website-frontend.service=${ROUTER_PREFIX:-hocx}-frontend"
 
+  # Lokales S3 (Garage) - siehe docker-compose.yml und docs-site/docs/technik/storage/lokales-s3.md.
+  local-s3:
+    image: dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      GARAGE_RPC_SECRET_FILE: /run/secrets/garage_rpc_secret
+      GARAGE_ADMIN_TOKEN_FILE: /run/secrets/garage_admin_token
+      # Compose übernimmt den Modus der Secret-Datei (deploy.sh: 0644 in einem 0700-Verzeichnis,
+      # weil storage-init denselben Token als uid 5000 liest). Garage verweigert sonst den Start
+      # ("File /run/secrets/garage_rpc_secret is world-readable") - gefunden beim Lasttest-Aufbau.
+      GARAGE_ALLOW_WORLD_READABLE_SECRETS: "true"
+    secrets:
+      - garage_rpc_secret
+      - garage_admin_token
+    volumes:
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+      - local_s3_data:/var/lib/garage
+    networks:
+      - storage
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  storage-init:
+    image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
+    restart: "no"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["python3", "/bootstrap/bootstrap.py"]
+    command: []
+    environment:
+      GARAGE_ADMIN_URL: http://127.0.0.1:3903
+      GARAGE_ADMIN_TOKEN_FILE: /run/secrets/garage_admin_token
+      LOCAL_S3_BUCKET: hocx-main
+      LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
+      LOCAL_S3_ACCESS_KEY: ${LOCAL_S3_ACCESS_KEY}
+      LOCAL_S3_SECRET_KEY_FILE: /run/secrets/local_s3_secret_key
+      LOCAL_S3_ABGABEBOX_ACCESS_KEY: ${LOCAL_S3_ABGABEBOX_ACCESS_KEY}
+      LOCAL_S3_ABGABEBOX_SECRET_KEY_FILE: /run/secrets/local_s3_abgabebox_secret_key
+      GARAGE_CAPACITY: ${GARAGE_CAPACITY:-100G}
+    secrets:
+      - garage_admin_token
+      - local_s3_secret_key
+      - local_s3_abgabebox_secret_key
+    volumes:
+      - ./infra/garage/bootstrap.py:/bootstrap/bootstrap.py:ro
+    # Admin-API lauscht nur auf 127.0.0.1 im local-s3-Container (infra/garage/garage.toml).
+    network_mode: "service:local-s3"
+    depends_on:
+      local-s3:
+        condition: service_healthy
+
+  storage-worker:
+    image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
+    restart: unless-stopped
+    mem_limit: 1024m
+    cpus: 1.0
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["python", "-m", "app.workers.storage_worker"]
+    command: []
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
+    environment:
+      HOCX_PROCESS_KIND: storage-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
+      DATABASE_URL_FILE: /run/secrets/database_url
+      APP_DATABASE_URL_FILE: /run/secrets/app_database_url
+      AUTH_SECRET_FILE: /run/secrets/auth_secret
+      ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      STORAGE_FALLBACK_DAYS: ${STORAGE_FALLBACK_DAYS:-14}
+    secrets:
+      - database_url
+      - app_database_url
+      - auth_secret
+      - admin_auth_secret
+      - storage_credentials_key
+    volumes:
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+      # Ziel von scripts/backup_storage.sh (Objekt-Backup, siehe docs technik/storage/backup.md)
+      - ./backups/storage:/app/backups/storage
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Offsite-Backup (BorgBackup -> Hetzner Storage Box), Restore und Restore-Tests
+  # (docs-site/docs/technik/backup/). Einziger Dienst mit Borg-Schlüssel und -Passphrase; das
+  # Backend legt nur Aufträge an. Läuft auch ohne Konfiguration (BACKUP_ENABLED=false) und meldet
+  # dann "nicht eingerichtet". Superuser-DB-Zugang (DATABASE_URL), weil pg_dump alle Tabellen
+  # lesen und ein Voll-Restore Datenbanken anlegen/umbenennen muss.
+  backup-worker:
+    image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
+    restart: unless-stopped
+    # Streams statt Puffer: der Speicher hängt nicht von der Datenmenge ab (Multipart-Teile,
+    # Manifest-Abschnitte, Index-Abfragen); pg_restore/pg_dump laufen als eigene Prozesse.
+    mem_limit: 1536m
+    cpus: 1.5
+    pids_limit: 256
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["python", "-m", "app.workers.backup_worker"]
+    command: []
+    # Private Kopien von SSH-Schlüssel, known_hosts und .pgpass liegen nur im RAM.
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777,size=256m
+    environment:
+      HOCX_PROCESS_KIND: backup-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
+      HOCX_VERSION: ${HOCX_VERSION}
+      DATABASE_URL_FILE: /run/secrets/database_url
+      AUTH_SECRET_FILE: /run/secrets/auth_secret
+      ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      STORAGE_FALLBACK_DAYS: ${STORAGE_FALLBACK_DAYS:-14}
+      REDIS_URL: redis://redis:6379/0
+      TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
+      # Lokales Zeitfenster (Europe/Zurich) für Verify und Restore-Test, Concurrency-Audit CONC-018.
+      BACKUP_HEAVY_WINDOW_HOURS: ${BACKUP_HEAVY_WINDOW_HOURS:-1-5}
+      BACKUP_ENABLED: ${BACKUP_ENABLED:-false}
+      BACKUP_STORAGEBOX_HOST: ${BACKUP_STORAGEBOX_HOST:-}
+      BACKUP_STORAGEBOX_PORT: ${BACKUP_STORAGEBOX_PORT:-23}
+      BACKUP_STORAGEBOX_USER: ${BACKUP_STORAGEBOX_USER:-}
+      BACKUP_REPOSITORY_PATH: ${BACKUP_REPOSITORY_PATH:-hocx-borg}
+      BACKUP_REMOTE_PATH: ${BACKUP_REMOTE_PATH:-borg-1.4}
+      BACKUP_REPOSITORY_ID: ${BACKUP_REPOSITORY_ID:-}
+      BACKUP_SSH_HOST_FINGERPRINT: ${BACKUP_SSH_HOST_FINGERPRINT:-}
+      BACKUP_SSH_KEY_FILE: /run/secrets/backup_ssh_key
+      BACKUP_PASSPHRASE_FILE: /run/secrets/backup_passphrase
+      BACKUP_KNOWN_HOSTS_FILE: /run/secrets/backup_known_hosts
+      BACKUP_WORK_DIR: /backup-work
+      BACKUP_STAGING_MAX_BYTES: ${BACKUP_STAGING_MAX_BYTES:-21474836480}
+      BACKUP_BATCH_MAX_BYTES: ${BACKUP_BATCH_MAX_BYTES:-2147483648}
+      BACKUP_UPLOAD_RATELIMIT_KIB: ${BACKUP_UPLOAD_RATELIMIT_KIB:-0}
+      BACKUP_COMPRESSION: ${BACKUP_COMPRESSION:-auto,zstd,3}
+      BACKUP_STORAGEBOX_QUOTA_BYTES: ${BACKUP_STORAGEBOX_QUOTA_BYTES:-0}
+      BACKUP_TRUST_FILESYSTEM_REGISTRY: ${BACKUP_TRUST_FILESYSTEM_REGISTRY:-false}
+    secrets:
+      - database_url
+      - auth_secret
+      - admin_auth_secret
+      - storage_credentials_key
+      - backup_ssh_key
+      - backup_passphrase
+      - backup_known_hosts
+    volumes:
+      # Borg-Cache, Security-Verzeichnis (Repository-Pinning, Replay-Schutz), Staging für den
+      # Datenbank-Dump und das Restore-Journal - muss Neustarts überdauern.
+      - ./backups/borg-work:/backup-work
+      # Dateisystem-Generation 0 (vor der Erstmigration) und Copy-on-Write-Kopien darin.
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # Die Schleife erneuert die Datei mindestens alle paar Sekunden (auch während langer
+      # Aufträge über den Lease-Heartbeat); 5 Minuten ohne Lebenszeichen = hängt.
+      test: ["CMD", "python3", "-c", "import os, sys, time; sys.exit(0 if time.time() - os.path.getmtime('/tmp/hocx-backup-worker.alive') < 300 else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Dokument-Worker: PDF-Konvertierung (LibreOffice) und Textextraktion, Backend-Image. Verarbeitet
+  # nicht vertrauenswürdige Dateien - read_only, ohne Capabilities, ohne Ports, knappes Budget.
+  # Netz: default (Datenbank) und storage (lokales S3); bei einem externen S3-Profil braucht er
+  # zusätzlich ausgehenden Zugang dorthin. LibreOffice selbst lädt keine externen Inhalte
+  # (siehe app/services/documents/convert.py).
+  document-worker:
+    image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
+    restart: unless-stopped
+    mem_limit: 1536m
+    cpus: 1.0
+    pids_limit: 256
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["python", "-m", "app.workers.document_worker"]
+    command: []
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
+    environment:
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
+      # Keine Anmelde-/Admin-Secrets (app/core/config.py, SECRETLESS_PROCESS_KINDS).
+      HOCX_PROCESS_KIND: document-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
+      APP_DATABASE_URL_FILE: /run/secrets/app_database_url
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
+      STORAGE_WORK_ROOT: /app/storage-local/work
+    # Nur die eingeschränkte App-Rolle (app/core/db.py nutzt APP_DATABASE_URL), nie die
+    # Owner-URL, und keine AUTH_SECRET/ADMIN_AUTH_SECRET: der Dienst verarbeitet nicht
+    # vertrauenswürdige Dateien.
+    secrets:
+      - app_database_url
+      - storage_credentials_key
+    volumes:
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Schwere Hintergrundarbeit ausserhalb der uvicorn-Worker (Concurrency-Audit Paket 10,
+  # app/workers/job_worker.py): Galerie-Ingest, PDF-Aufträge, Vereinsexport, Qualitäts-Backfill,
+  # Album-Sync, Virenscan-Nachprüfung, Aufräumjobs. Überwacht über den Heartbeat job_worker
+  # (/admin/jobs), die Laufzeitkennzahlen und die Prüfung render_queue (/admin/system).
+  job-worker:
+    image: ${HOCX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-backend:${HOCX_VERSION}}
+    restart: unless-stopped
+    mem_limit: 3072m
+    cpus: 1.5
+    pids_limit: 512
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["python", "-m", "app.workers.job_worker"]
+    command: []
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=1g,mode=1777
+    environment:
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-production}
+      HOCX_PROCESS_KIND: job-worker
+      # Nur die App-Rolle hocx_app (app/core/db.py), nie die Owner-URL; kein AUTH_SECRET (Zufallswert,
+      # SESSIONLESS_PROCESS_KINDS) - ADMIN_AUTH_SECRET braucht secret_crypto für Vereinsexporte.
+      DB_POOL_SIZE: "6"
+      DB_MAX_OVERFLOW: "2"
+      # PDF-Aufträge: zwei Compiles gleichzeitig, Speicherlimit je Compile-Prozess.
+      DOCUMENT_RENDER_CONCURRENCY: "2"
+      APP_DATABASE_URL_FILE: /run/secrets/app_database_url
+      ADMIN_AUTH_SECRET_FILE: /run/secrets/admin_auth_secret
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      THUMBNAIL_ROOT: /app/storage-local/thumbnails
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
+      TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
+      TRAEFIK_ABGABEBOX_DOMAIN: ${TRAEFIK_ABGABEBOX_DOMAIN}
+      ABGABEBOX_BASE_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
+      DOCUMENT_VERIFY_BASE_URL: ${DOCUMENT_VERIFY_BASE_URL:-}
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      ABGABEBOX_RESCAN_INTERVAL_MINUTES: ${ABGABEBOX_RESCAN_INTERVAL_MINUTES:-15}
+      WORD_IMPORT_RESCAN_INTERVAL_MINUTES: ${WORD_IMPORT_RESCAN_INTERVAL_MINUTES:-15}
+      EXPORT_CLEANUP_INTERVAL_MINUTES: ${EXPORT_CLEANUP_INTERVAL_MINUTES:-1440}
+      EXPORT_RETENTION_DAYS: ${EXPORT_RETENTION_DAYS:-30}
+      LOG_CLEANUP_INTERVAL_MINUTES: ${LOG_CLEANUP_INTERVAL_MINUTES:-1440}
+      AUDIT_LOG_RETENTION_DAYS: ${AUDIT_LOG_RETENTION_DAYS:-730}
+      ERROR_LOG_RETENTION_DAYS: ${ERROR_LOG_RETENTION_DAYS:-90}
+      PROTOCOL_IMAGE_STORAGE_QUOTA_MB: ${PROTOCOL_IMAGE_STORAGE_QUOTA_MB:-2048}
+      HOCX_SERVER_LOCATION: ${HOCX_SERVER_LOCATION:-ch}
+    secrets:
+      - app_database_url
+      - admin_auth_secret
+      - storage_credentials_key
+    volumes:
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ./storage-local/thumbnails:/app/storage-local/thumbnails
+      - ./storage-local/work:/app/storage-local/work
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   abgabebox-backend:
     image: ${HOCX_ABGABEBOX_BACKEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-backend:${HOCX_VERSION}}
     restart: unless-stopped
@@ -464,6 +888,8 @@ services:
       ABGABEBOX_DATABASE_URL_FILE: /run/secrets/abgabebox_database_url
       ABGABEBOX_STORAGE_ROOT: /app/storage
       ABGABEBOX_CORS_ORIGIN: https://${TRAEFIK_ABGABEBOX_DOMAIN}
+      # Zentrale Prüfseite (Weiterleitung von Mandanten-Prüf-Domains); leer = ABGABEBOX_CORS_ORIGIN/verify
+      DOCUMENT_VERIFY_BASE_URL: ${DOCUMENT_VERIFY_BASE_URL:-}
       # Steuert, ob captcha.py bei fehlenden FriendlyCaptcha-Keys sicher ablehnt
       # (production) oder Uploads ohne Bot-Check zulaesst (dev/test) - siehe
       # abgabebox-backend/app/config.py:_DEV_LIKE_ENVIRONMENTS. HOCX_ENVIRONMENT ist
@@ -475,15 +901,24 @@ services:
       CLAMAV_HOST: clamav
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
       FRIENDLY_CAPTCHA_VERIFY_URL: ${FRIENDLY_CAPTCHA_VERIFY_URL:-https://api.friendlycaptcha.com/api/v1/siteverify}
+      ABGABEBOX_DEFAULT_PRIVACY_URL: ${ABGABEBOX_DEFAULT_PRIVACY_URL:-}
       ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES: ${ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES:-120}
       ABGABEBOX_TENANT_STORAGE_QUOTA_MB: ${ABGABEBOX_TENANT_STORAGE_QUOTA_MB:-2048}
       ABGABEBOX_MAX_FILES_PER_UPLOAD_REQUEST: ${ABGABEBOX_MAX_FILES_PER_UPLOAD_REQUEST:-50}
+      # Gleichzeitige öffentliche Uploads je Worker und Wartezeit auf einen Platz (RUNBOOK Abschnitt 17).
+      ABGABEBOX_UPLOAD_CONCURRENCY: ${ABGABEBOX_UPLOAD_CONCURRENCY:-2}
+      ABGABEBOX_UPLOAD_SLOT_WAIT_SECONDS: ${ABGABEBOX_UPLOAD_SLOT_WAIT_SECONDS:-120}
       ABGABEBOX_QUARANTINE_MAX_AGE_MINUTES: ${ABGABEBOX_QUARANTINE_MAX_AGE_MINUTES:-60}
       ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES: ${ABGABEBOX_QUARANTINE_CLEANUP_INTERVAL_MINUTES:-5}
+      STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
     secrets:
       - abgabebox_database_url
       - friendly_captcha_api_key
       - abgabebox_captcha_session_secret
+      - storage_credentials_key
+    networks:
+      - default
+      - storage
     depends_on:
       db:
         condition: service_healthy
@@ -539,6 +974,18 @@ services:
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.priority=200"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-public-get.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-public-ratelimit,${ROUTER_PREFIX:-hocx}-api-inflight"
+      # Echtheitsprüfung (POST /api/public/verify): eigener Router VOR dem Upload-Router, eigenes
+      # Rate-Limit und 4 KiB Body-Limit (nur Hash plus optionale Dokument-ID).
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && Path(`/api/public/verify`) && Method(`POST`)"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.entrypoints=websecure"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.priority=300"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.service=${ROUTER_PREFIX:-hocx}-abgabebox-backend"
+      - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-verify.middlewares=${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit,${ROUTER_PREFIX:-hocx}-abgabebox-verify-body-limit"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.average=30"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.burst=10"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.${ROUTER_PREFIX:-hocx}-abgabebox-verify-body-limit.buffering.maxRequestBodyBytes=4096"
 
   abgabebox-frontend:
     image: ${HOCX_ABGABEBOX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-abgabebox-frontend:${HOCX_VERSION}}
@@ -564,6 +1011,7 @@ services:
       NEXT_PUBLIC_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       INTERNAL_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
+      FRIENDLY_CAPTCHA_PUZZLE_URL: ${FRIENDLY_CAPTCHA_PUZZLE_URL:-https://api.friendlycaptcha.com/api/v1/puzzle}
     depends_on:
       - abgabebox-backend
     healthcheck:
@@ -637,11 +1085,14 @@ networks:
   # Siehe redis: internes Netz nur zwischen Backend und Redis.
   cache:
     internal: true
+  storage:
+    internal: true
 
 volumes:
   backend_upload_tmp:
   abgabebox_upload_tmp:
   postgres_data:
+  local_s3_data:
 
 secrets:
   # file: statt environment: - Compose kann environment-Secrets seit Docker Compose
@@ -675,5 +1126,24 @@ secrets:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/friendly_captcha_api_key
   abgabebox_captcha_session_secret:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/abgabebox_captcha_session_secret
+  storage_credentials_key:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/storage_credentials_key
+  export_encryption_key:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/export_encryption_key
+  garage_rpc_secret:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/garage_rpc_secret
+  garage_admin_token:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/garage_admin_token
+  local_s3_secret_key:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/local_s3_secret_key
+  local_s3_abgabebox_secret_key:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/local_s3_abgabebox_secret_key
   redis_password:
     file: ${HOCX_SECRETS_DIR:-./.secrets}/redis_password
+  # Backup (deploy.sh schreibt leere Platzhalter, solange nichts konfiguriert ist).
+  backup_ssh_key:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/backup_ssh_key
+  backup_passphrase:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/backup_passphrase
+  backup_known_hosts:
+    file: ${HOCX_SECRETS_DIR:-./.secrets}/backup_known_hosts

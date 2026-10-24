@@ -15,8 +15,10 @@ import {
 } from "@/components/admin/admin-plan-utils";
 import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
 import { Badge } from "@/components/ui/badge";
+import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { Tabs } from "@/components/ui/tabs";
+import { AdminTenantVerificationPanel } from "@/components/admin/admin-identity-verification";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -119,6 +121,8 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     user_limit_override: null,
     discount_percent: 0,
     billing_note: null,
+    billing_start_date: null,
+    contract_ends_on: null,
   });
   const [subscriptionBusy, setSubscriptionBusy] = useState(false);
 
@@ -173,6 +177,8 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
       user_limit_override: tenant.user_limit_override,
       discount_percent: tenant.discount_percent,
       billing_note: tenant.billing_note,
+      billing_start_date: tenant.billing_start_date,
+      contract_ends_on: tenant.contract_ends_on,
     });
     void loadPlanCatalog();
 
@@ -694,6 +700,24 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                     </label>
                   </div>
                   <label className="field-stack">
+                    <span className="field-label">{t("tenantModal.fields.billingStart")}</span>
+                    <DateInput
+                      value={subscriptionForm.billing_start_date ?? ""}
+                      onChange={(value) => setSubscriptionForm((current) => ({ ...current, billing_start_date: value || null }))}
+                    />
+                    <span className="field-help">
+                      {t("tenantModal.fields.billingStartHelp", { date: formatDate(tenant.created_at) })}
+                    </span>
+                  </label>
+                  <label className="field-stack">
+                    <span className="field-label">{t("tenantModal.fields.contractEnd")}</span>
+                    <DateInput
+                      value={subscriptionForm.contract_ends_on ?? ""}
+                      onChange={(value) => setSubscriptionForm((current) => ({ ...current, contract_ends_on: value || null }))}
+                    />
+                    <span className="field-help">{t("tenantModal.fields.contractEndHelp")}</span>
+                  </label>
+                  <label className="field-stack">
                     <span className="field-label">{t("tenantModal.fields.userLimitOverride")}</span>
                     <input
                       type="number"
@@ -993,6 +1017,11 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                 </section>
               </div>
             )
+          },
+          {
+            id: "verifizierung",
+            label: t("tenantModal.tabs.verification"),
+            content: <AdminTenantVerificationPanel tenantId={tenant.id} tenantName={tenant.name} />
           }
         ]}
       />

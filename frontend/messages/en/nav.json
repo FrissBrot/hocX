@@ -26,7 +26,6 @@
   "fines": "Fines",
   "protocolTemplates": "Protocol templates",
   "elements": "Elements",
-  "documentLayouts": "Document layouts",
   "general": "General",
   "domains": "Domains",
   "subscriptionAndUsage": "Plan & usage",
@@ -50,5 +49,15 @@
   "sessionReady": "Ready",
   "sessionLoading": "Loading workspace…",
   "connections": "Connections",
-  "taskPackages": "Task packages"
+  "taskPackages": "Task packages",
+  "documentVerification": "Authenticity check",
+  "documentStudio": "Document Studio",
+  "documentTemplates": "Templates",
+  "documentBrand": "Corporate design",
+  "documentAssets": "Images and fonts",
+  "documentComponents": "Components",
+  "documentExports": "Export history",
+  "privacy": "Privacy",
+  "activity": "Activity",
+  "retention": "Retention"
 }

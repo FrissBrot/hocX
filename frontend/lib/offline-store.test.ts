@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  bindOfflineStoreToUser,
   clearDraft,
+  clearOfflineStore,
   flushOutbox,
   getOfflineSnapshot,
   initializeOfflineStore,
@@ -72,5 +74,37 @@ describe("offline-store", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
     vi.unstubAllGlobals();
+  });
+
+  it("discards another account's outbox and drafts before this account can send them", () => {
+    bindOfflineStoreToUser("user-a");
+    queueMutation({ key: "protocol-text:7", path: "/text/7", method: "PUT", body: '{"content":"geheim"}' });
+    saveDraft("protocol-text:7", "geheim");
+
+    bindOfflineStoreToUser("user-b");
+
+    expect(localStorage.getItem("hocx-offline-outbox-v1")).toBeNull();
+    expect(readDraft("protocol-text:7")).toBeNull();
+    expect(getOfflineSnapshot().pending).toBe(0);
+  });
+
+  it("keeps the own outbox when the same account comes back", () => {
+    bindOfflineStoreToUser("user-a");
+    queueMutation({ key: "protocol-text:7", path: "/text/7", method: "PUT", body: '{"content":"a"}' });
+
+    bindOfflineStoreToUser("user-a");
+
+    expect(getOfflineSnapshot().pending).toBe(1);
+  });
+
+  it("removes everything on logout", () => {
+    bindOfflineStoreToUser("user-a");
+    queueMutation({ key: "protocol-text:7", path: "/text/7", method: "PUT", body: '{"content":"a"}' });
+    saveDraft("session-notes:3", "Notiz");
+
+    clearOfflineStore();
+
+    expect(Object.keys(localStorage).filter((key) => key.startsWith("hocx-"))).toEqual([]);
+    expect(getOfflineSnapshot().pending).toBe(0);
   });
 });

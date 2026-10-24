@@ -2,13 +2,23 @@
   "profileModal": {
     "title": "Profil utilisateur",
     "description": "Paramètres personnels, langue et sécurité de votre compte.",
-    "tabs": { "profile": "Profil", "security": "Sécurité" },
+    "tabs": {
+      "profile": "Profil",
+      "security": "Sécurité",
+      "data": "Mes données"
+    },
     "languageLabel": "Langue",
     "accordionLabel": "Réduire automatiquement les points du procès-verbal",
     "accordionHint": "N'afficher développé que le point actif.",
     "save": "Enregistrer le profil",
     "logout": "Se déconnecter",
-    "saveFailed": "Le profil n'a pas pu être enregistré."
+    "saveFailed": "Le profil n'a pas pu être enregistré.",
+    "personalData": {
+      "description": "Téléchargez toutes les données que hocX a enregistrées à votre sujet – fichier ZIP protégé par mot de passe avec un classeur Excel et un fichier JSON lisible par machine.",
+      "download": "Télécharger mes données"
+    }
   },
-  "logoutFailed": "Échec de la déconnexion. Veuillez réessayer."
+  "logoutFailed": "Échec de la déconnexion. Veuillez réessayer.",
+  "logoutPendingConfirm": "Des modifications ne sont pas encore enregistrées. En te déconnectant, elles seront perdues sur cet appareil.",
+  "logoutAnyway": "Se déconnecter quand même"
 }

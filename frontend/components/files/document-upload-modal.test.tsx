@@ -100,4 +100,44 @@ describe("DocumentUploadModal", () => {
     expect(onUploaded).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it("does not transfer documents the server already has and reports them as skipped", async () => {
+    browserApiFetchMock.mockImplementation((url: string, init?: { body?: string }) => {
+      if (url === "/api/files/upload-precheck") {
+        const files = JSON.parse(init?.body ?? "{}").files as { client_id: string }[];
+        return Promise.resolve({
+          results: files.map((file) => ({ client_id: file.client_id, status: "already_exists", file_id: "known", applied: [], conflicts: [] })),
+        });
+      }
+      return Promise.resolve([]);
+    });
+    const onUploaded = vi.fn();
+    const onClose = vi.fn();
+    render(<DocumentUploadModal tagSuggestions={[]} onClose={onClose} onUploaded={onUploaded} />);
+
+    addFiles([pdf("schon-da.pdf")]);
+    fireEvent.click(screen.getByRole("button", { name: "1 Datei hochladen" }));
+
+    await waitFor(() => expect(onUploaded).toHaveBeenCalled());
+    expect(uploadCalls()).toHaveLength(0);
+    expect(onUploaded.mock.calls[0][0].file_results).toEqual([
+      { name: "schon-da.pdf", status: "skipped", file_id: "known", applied: [], conflicts: [] },
+    ]);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("falls back to the normal upload when the precheck fails", async () => {
+    const result: DocumentUploadResult = { items: [{ id: "f1", tags: [] } as unknown as DocumentUploadResult["items"][number]], errors: [] };
+    browserApiFetchMock.mockImplementation((url: string) =>
+      url === "/api/files/upload-precheck" ? Promise.reject(new Error("offline")) : Promise.resolve(url === "/api/files/document-uploads" ? result : []),
+    );
+    const onUploaded = vi.fn();
+    render(<DocumentUploadModal tagSuggestions={[]} onClose={() => {}} onUploaded={onUploaded} />);
+
+    addFiles([pdf()]);
+    fireEvent.click(screen.getByRole("button", { name: "1 Datei hochladen" }));
+
+    await waitFor(() => expect(onUploaded).toHaveBeenCalledWith(result));
+    expect(uploadCalls()).toHaveLength(1);
+  });
 });

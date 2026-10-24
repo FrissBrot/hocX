@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -105,23 +105,18 @@ class AdminTenantRead(BaseModel):
     plan_storage_bytes: int | None = None
     package_storage_bytes: int = 0
     effective_storage_quota_bytes: int | None = None
-    storage_quota_manual_override: bool = False
     assigned_storage_packages: list[AdminTenantStoragePackageRead] = []
     discount_percent: int = 0
     billing_note: str | None = None
+    # Abo-Start für die Forderungen im Cashflow (0127_cashflow). None = Erstellungsdatum.
+    billing_start_date: date | None = None
+    # Vertragsende für das Offboarding (0146); None = unbefristet
+    contract_ends_on: date | None = None
     show_on_website: bool = False
 
 
 class AdminTenantWebsiteListingUpdate(BaseModel):
     show_on_website: bool
-
-
-class AdminTenantStorageQuotaUpdate(BaseModel):
-    # None = manuellen Override entfernen, Kontingent wird wieder automatisch aus Plan +
-    # Paketen berechnet (Feld ist bewusst ohne Default, damit ein Client es nicht aus
-    # Versehen weglassen kann - anders als bei PATCH /tenants/{id} ist das hier der gesamte
-    # Payload, nicht ein optionales Teilfeld eines groesseren Formulars).
-    quota_mb: int | None = Field(ge=1)
 
 
 class AdminFeatureRead(BaseModel):
@@ -134,7 +129,7 @@ class AdminFeatureRead(BaseModel):
 
 
 class AdminFeatureUpdate(BaseModel):
-    # Full-Replace wie bei AdminTenantStorageQuotaUpdate - der Code selbst (PK) bleibt fest,
+    # Full-Replace wie bei AdminTenantSubscriptionUpdate - der Code selbst (PK) bleibt fest,
     # alles andere wird komplett ersetzt.
     name: str
     description: str | None = None
@@ -142,7 +137,7 @@ class AdminFeatureUpdate(BaseModel):
 
 
 class AdminTenantFeaturesUpdate(BaseModel):
-    # Full-Replace wie bei AdminTenantStorageQuotaUpdate: der gesamte gebuchte Featureumfang,
+    # Full-Replace wie bei AdminTenantSubscriptionUpdate: der gesamte gebuchte Featureumfang,
     # kein Teil-Patch.
     enabled_codes: list[str]
 
@@ -159,13 +154,15 @@ class AdminPlanRead(BaseModel):
     description: str | None = None
     is_bookable: bool = True
     is_featured: bool = False
+    # Priorität bei Überlast: 0 niedrig, 1 normal, 2 hoch (app/core/db_admission.py).
+    load_priority: int = 1
     # Anzahl Mandanten mit diesem Plan (Karten auf der Preisseite, Filter der Mandantenliste).
     tenant_count: int = 0
 
 
 class AdminPlanWrite(BaseModel):
     # Full-Replace, auch fuers Anlegen (PUT /api/admin/plans/{code}, Code kommt aus dem Pfad,
-    # nicht aus dem Body - analog zu AdminTenantStorageQuotaUpdate).
+    # nicht aus dem Body - analog zu AdminTenantSubscriptionUpdate).
     name: str
     price_monthly_rp: int | None = Field(default=None, ge=0)
     price_yearly_rp: int | None = Field(default=None, ge=0)
@@ -177,6 +174,8 @@ class AdminPlanWrite(BaseModel):
     is_bookable: bool = True
     # "Beliebteste Wahl" auf der oeffentlichen Website; setzt beim Speichern alle anderen zurueck.
     is_featured: bool = False
+    # Wer bei Überlast zuerst die Überlast-Seite sieht: 0 niedrig, 1 normal, 2 hoch (nie vorab).
+    load_priority: int = Field(default=1, ge=0, le=2)
     # Nur bei POST /api/admin/plans ausgewertet: gewuenschter Code. Leer = aus dem Namen erzeugt.
     code: str | None = Field(default=None, pattern=r"^[a-z0-9_]+$")
 
@@ -221,6 +220,9 @@ class AdminTenantSubscriptionUpdate(BaseModel):
     user_limit_override: int | None = None
     discount_percent: int = Field(default=0, ge=0, le=100)
     billing_note: str | None = None
+    # Full-Replace wie die übrigen Felder: None = Erstellungsdatum des Mandanten.
+    billing_start_date: date | None = None
+    contract_ends_on: date | None = None
 
 
 class AdminTenantPage(BaseModel):
@@ -256,6 +258,16 @@ class AdminUserPage(BaseModel):
 class TenantCloneRequest(BaseModel):
     new_name: str
     mode: Literal["structure", "full"] = "structure"
+
+
+class TenantExportRequest(BaseModel):
+    scope: Literal["structure", "structure_lists", "full", "full_abgabebox"] = "structure"
+    # Passwort-Hashes, MFA-Secrets und Link-Tokens nur auf ausdrücklichen Wunsch (Umzug, bei dem
+    # alle Logins und Links weiter gelten sollen). Datenschutz-Audit Paket 6.
+    include_credentials: bool = False
+    # Optional: ohne Passwort wird mit dem Server-Schlüssel verschlüsselt (nur auf diesem Server
+    # importierbar, app/services/export_crypto.py). Im Body, nie in der URL.
+    password: str | None = Field(default=None, max_length=1024)
 
 
 class TenantImportResult(BaseModel):
@@ -454,11 +466,25 @@ class SystemHealthEventRead(BaseModel):
     created_at: datetime
 
 
+class OverloadTenantRead(BaseModel):
+    """Abweisungen wegen Überlast je Mandant (overload_rejection, letzte OVERLOAD_HISTORY_DAYS)."""
+
+    tenant_id: str | None = None
+    tenant_name: str | None = None
+    plan_name: str | None = None
+    load_priority: int
+    rejected: int
+    users: int
+    first_at: datetime
+    last_at: datetime
+
+
 class SystemStatusRead(BaseModel):
     snapshot: SystemHealthSnapshot | None = None
     stale: bool
     problems: list[SystemProblemRead]
     events: list[SystemHealthEventRead]
+    overload: list[OverloadTenantRead] = []
 
 
 class NotificationSettingsRead(BaseModel):
@@ -509,3 +535,25 @@ class TenantCleanupCounts(BaseModel):
 class TenantCleanupRequest(BaseModel):
     categories: list[TenantCleanupCategory]
     confirm_name: str
+
+
+class AuditLogEntryRead(BaseModel):
+    """Eintrag im Audit-Log für /admin/audit (Datenschutz-Audit PRIV-013)."""
+
+    id: int
+    created_at: datetime
+    action: str
+    outcome: str
+    tenant_id: uuid.UUID | None = None
+    tenant_name: str | None = None
+    actor_email: str | None = None
+    actor_name: str | None = None
+    ip_hash: str | None = None
+    entity_type: str | None = None
+    entity_id: int | None = None
+    details: dict = {}
+
+
+class AuditLogPage(BaseModel):
+    items: list[AuditLogEntryRead]
+    total: int

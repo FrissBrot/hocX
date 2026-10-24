@@ -47,5 +47,6 @@
   "totalCountSub": "{count} totali",
   "viewByMember": "Per membro",
   "viewByTime": "Nel tempo",
-  "withParticipants": "Con partecipanti"
+  "withParticipants": "Con partecipanti",
+  "perPersonOwnHint": "Per multe e presenze per persona vedi solo i tuoi valori."
 }

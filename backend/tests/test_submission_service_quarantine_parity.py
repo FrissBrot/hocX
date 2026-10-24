@@ -10,21 +10,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.services.submission_service import _move_from_quarantine
+from app.services.submission_service import quarantine_target_key
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "quarantine_path_parity.json"
 
 
-def test_move_from_quarantine_matches_shared_contract(tmp_path):
+def test_move_from_quarantine_matches_shared_contract():
+    # Der Pfad-Vertrag ist seit dem Objektspeicher eine reine Funktion; das Verschieben selbst
+    # (Kopieren + Löschen mit Journal) testet tests/test_object_storage.py.
     cases = json.loads(FIXTURE_PATH.read_text())["cases"]
     for case in cases:
-        quarantine_rel_path = case["input"]
-        source = tmp_path / quarantine_rel_path
-        source.parent.mkdir(parents=True, exist_ok=True)
-        source.write_bytes(b"content")
-
-        result = _move_from_quarantine(quarantine_rel_path, str(tmp_path))
-
-        assert result == case["expected"]
-        assert (tmp_path / result).read_bytes() == b"content"
-        assert not source.exists()
+        assert quarantine_target_key(case["input"]) == case["expected"]

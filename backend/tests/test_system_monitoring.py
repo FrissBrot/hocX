@@ -32,13 +32,13 @@ def _admin() -> CurrentAdmin:
     return CurrentAdmin(admin_id=1, admin_public_id=uuid.uuid4(), email="admin@example.com", display_name="Test Admin", role="owner")
 
 
-def _container(service: str = "backend", **overrides) -> ContainerStatusRead:
+def _container(service: str = "backend", *, one_shot: bool = False, **overrides) -> ContainerStatusRead:
     values = dict(
         name=f"hocx-{service}-1", service=service, container_id="abc123def456", state="running", health="healthy",
         started_at=NOW - timedelta(hours=1), status="ok",
     )
     values.update(overrides)
-    return system_health_service.evaluate_container(ContainerStatusRead(**values))
+    return system_health_service.evaluate_container(ContainerStatusRead(**values), one_shot=one_shot)
 
 
 def _snapshot(*, containers=None, checks=None, collected_at=NOW) -> SystemHealthSnapshot:
@@ -97,6 +97,15 @@ def test_evaluate_container_flags_unhealthy_stopped_oom_and_memory():
     assert (memory.status, memory.reasons) == ("warning", ["memory_high"])
 
 
+def test_evaluate_container_accepts_cleanly_finished_one_shot_service():
+    done = _container("storage-init", one_shot=True, state="exited", health=None, exit_code=0)
+    assert (done.status, done.reasons) == ("ok", [])
+    failed = _container("storage-init", one_shot=True, state="exited", health=None, exit_code=1)
+    assert (failed.status, failed.reasons) == ("critical", ["not_running"])
+    # Dauerdienste bleiben kritisch, auch wenn sie mit Exit 0 enden.
+    assert _container(state="exited", health=None, exit_code=0).reasons == ["not_running"]
+
+
 @pytest.mark.parametrize(
     ("image", "tag"),
     [
@@ -152,6 +161,45 @@ def test_collect_checks_turns_unreachable_services_into_findings(clean_state, mo
     assert checks["clamav"].status == "critical"
     # Ohne Verbindung ist das Signaturalter unbekannt - kein zweiter Alarm.
     assert checks["clamav_signatures"].status == "unknown"
+
+
+class _FakeResponse:
+    def __init__(self, body: bytes):
+        self._body = body
+
+    def read(self):
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+def test_document_verification_check_expects_a_miss_for_the_probe_hash(monkeypatch):
+    sent = {}
+
+    def fake_urlopen(request, timeout):
+        sent.update(url=request.full_url, body=json.loads(request.data), timeout=timeout)
+        return _FakeResponse(b'{"found": false}')
+
+    monkeypatch.setattr(system_health_service.urllib.request, "urlopen", fake_urlopen)
+    check = system_health_service._check_document_verification()
+    assert check.status == "ok" and "latencyMs" in check.params
+    assert sent["url"].endswith("/api/public/verify") and sent["body"] == {"sha256": "0" * 64}
+
+
+def test_document_verification_check_fails_on_unexpected_answer_or_outage(clean_state, monkeypatch):
+    monkeypatch.setattr(system_health_service.urllib.request, "urlopen", lambda *a, **k: _FakeResponse(b'{"found": true}'))
+    checks = {check.key: check for check in system_health_service.collect_checks(clean_state, NOW)}
+    assert checks["document_verification"].status == "critical" and "Unerwartete Antwort" in checks["document_verification"].error
+
+    monkeypatch.setattr(system_health_service.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("refused")))
+    check = system_health_service._run_check("document_verification", system_health_service._check_document_verification)[0]
+    problems = system_alert_service.derive_problems(_snapshot(checks=[check]), JobStatusOverview(items=[], generated_at=NOW), now=NOW)
+    problem = next(item for item in problems if item.key == "check:document_verification")
+    assert problem.severity == "critical" and problem.title == "Öffentliche Prüfseite nicht erreichbar"
 
 
 # ── system_alert_service.derive_problems ─────────────────────────────────────────────────

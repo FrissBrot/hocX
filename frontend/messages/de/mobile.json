@@ -175,7 +175,8 @@
     "todoCreated": "Todo im Protokoll erfasst",
     "tools": "Werkzeuge",
     "unassigned": "Nicht zugewiesen",
-    "you": "{name} (du)"
+    "you": "{name} (du)",
+    "includeGps": "GPS-Daten des Bildes mitsenden"
   },
   "protocols": {
     "fab": "Protokoll",

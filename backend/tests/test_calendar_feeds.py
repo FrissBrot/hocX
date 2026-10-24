@@ -235,7 +235,8 @@ def test_events_feed_contains_own_tenant_events_as_all_day_entries(db):
     tenant = make_tenant(db, "Pfadi Test")
     other = make_tenant(db)
     _, user = _user(db, tenant.id)
-    token = _token(_enable(db, user))
+    # Details ausdrücklich eingeschaltet (Standard seit PRIV-018: nur Titel und Datum).
+    token = _token(_enable(db, user, hide_details=False))
     camp = make_event(db, tenant.id, title="Sommerlager, Teil 1", event_date=TODAY, event_end_date=TODAY + timedelta(days=6))
     camp.location = "Zeltplatz; Wiese"
     camp.description = "Mitbringen:\nSchlafsack"
@@ -258,6 +259,16 @@ def test_events_feed_contains_own_tenant_events_as_all_day_entries(db):
     assert "STATUS:CANCELLED" in ics
     assert "Fremder Termin" not in ics
     assert "Uralt" not in ics
+
+
+def test_new_feed_hides_details_by_default(db):
+    """Datenschutz-Audit PRIV-018: ohne ausdrückliche Wahl nur Titel und Datum."""
+    tenant = make_tenant(db)
+    _, user = _user(db, tenant.id)
+
+    read = _enable(db, user)
+
+    assert read.hide_details is True
 
 
 def test_hide_details_drops_description_and_location(db):

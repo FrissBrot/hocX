@@ -178,11 +178,6 @@
   "deleteEventConfirmNamed": "Delete event \"{title}\" permanently? This removes it from all protocols.",
   "deleteFine": "Delete fine",
   "deleteFineConfirm": "Delete this fine permanently? This cannot be undone.",
-  "fineDeletedLabel": "Deleted",
-  "fineDeletedLater": "Deleted later",
-  "fineDeletedReason": "Reason: {reason}",
-  "restoreFine": "Restore",
-  "fineRestoreFailed": "Fine could not be restored",
   "deleteImageAction": "Delete image",
   "descriptionLabel": "Description",
   "discardNewEventRow": "Discard new event row",
@@ -193,6 +188,7 @@
     "autosaveNotice": "Changes are saved automatically.",
     "backToProtocols": "← Back to the minutes",
     "changeSaveFailed": "Change could not be saved",
+    "configConflictReloaded": "Someone else changed this block in the meantime – the current version has been loaded. Please make your change again.",
     "ctrlFHint": "Ctrl+F",
     "entryCreateFailed": "Entry could not be created",
     "entryDeleteConfirm": "Permanently delete this entry? This cannot be undone.",
@@ -215,6 +211,8 @@
     "offLabel": "Off",
     "onLabel": "On",
     "openOriginalDocument": "Open original document",
+    "createdAtPill": "Created {date}",
+    "templateVersionPill": "Template version {version, number}",
     "orderSaveFailed": "Order could not be saved",
     "otherEditorWarningDescription": "At least one other person is actively editing these minutes right now. The status change will apply for everyone immediately.",
     "otherEditorWarningTitle": "Another person is currently editing",
@@ -241,6 +239,7 @@
     "workflowPreparationMode": "Preparation mode",
     "workflowSessionMode": "Session mode",
     "templateSyncedByOther": "{name} reloaded the elements from the template. The view is being refreshed.",
+    "imageAlreadyExists": "This image already exists and was not uploaded again.",
     "statusChangedByOtherToast": "{name} changed the status to “{status}”.",
     "draftsRestoredToast": "{count, plural, one {# local text draft was} other {# local text drafts were}} restored.",
     "conflictToast": "Conflict: someone else saved this section in the meantime. The current version has been loaded – your last change was not applied, but it is kept as a local draft."
@@ -420,12 +419,6 @@
   },
   "settledLater": "Settled later",
   "showAction": "Show",
-  "snapshotSwitcher": {
-    "current": "Current (editable)",
-    "historical": "{name} {year} (historical)",
-    "label": "View",
-    "missingSnapshot": "⚠ {name} {year} (no snapshot)"
-  },
   "sortLabel": "Sort",
   "status": {
     "abgeschlossen": "Completed",
@@ -480,7 +473,13 @@
   "unknownEvent": "Unknown event",
   "uploadImageAction": "Upload image",
   "valueFallback": "Value",
+  "fineDeletedLabel": "Deleted",
+  "fineDeletedLater": "Deleted later",
+  "fineDeletedReason": "Reason: {reason}",
+  "restoreFine": "Restore",
+  "fineRestoreFailed": "Fine could not be restored",
   "locationLabel": "Location",
   "organizersLabel": "Organisers",
-  "balanceAsOf": "As of {date}"
+  "balanceAsOf": "As of {date}",
+  "includeImageGps": "Include the image’s GPS data"
 }

@@ -16,6 +16,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
+import { useDeleteWithFiles } from "@/components/ui/delete-with-files-modal";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { useProtocolCreation } from "@/lib/hooks/use-protocol-creation";
@@ -33,6 +34,7 @@ export function MobileProtocols({ initialProtocols, templates, readOnly, preferr
   const router = useRouter();
   const openMore = useOpenMore();
   const confirm = useConfirm();
+  const { requestDelete, modal: deleteModal } = useDeleteWithFiles();
   const showToast = useToast();
   const { openOrGeneratePdf } = usePdfExport();
   const [protocols, setProtocols] = useAllPages<ProtocolSummary>("/api/protocols", initialProtocols);
@@ -62,9 +64,15 @@ export function MobileProtocols({ initialProtocols, templates, readOnly, preferr
   }
 
   async function remove(protocol: ProtocolSummary) {
-    if (!(await confirm({ message: t("deleteConfirmMessage"), tone: "danger", confirmLabel: t("delete") }))) return;
     try {
-      await browserApiFetch(`/api/protocols/${protocol.id}`, { method: "DELETE" });
+      // Rückfrage mit Auswahl der Protokollbilder (Datenschutz-Audit PRIV-004).
+      const result = await requestDelete({
+        title: t("deleteProtocol"),
+        message: t("deleteConfirmMessage"),
+        previewUrl: `/api/protocols/${protocol.id}/deletion-preview`,
+        deleteUrl: `/api/protocols/${protocol.id}/delete`,
+      });
+      if (!result) return;
       setProtocols((list) => list.filter((item) => item.id !== protocol.id));
       showToast(t("deleted", { name: protocol.title ?? protocol.protocol_number }), "success");
     } catch (error) {
@@ -94,6 +102,7 @@ export function MobileProtocols({ initialProtocols, templates, readOnly, preferr
 
   return (
     <div className="mobile-page mobile-page-list">
+      {deleteModal}
       <MobileSubHeader title={t("title")} subtitle={t("description")} backLabel={tMobile("tabs.more")} onBack={openMore} />
       <div className="mobile-section">
         <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />

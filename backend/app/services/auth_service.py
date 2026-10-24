@@ -52,6 +52,14 @@ class AuthService:
         password_ok = verify_password(payload.password, user.password_hash if user is not None and user.password_hash else DUMMY_PASSWORD_HASH)
         if user is None or not user.is_active or not password_ok:
             record_failed_login("login-account", payload.email, client_address)
+            # Sicherheitsereignis (PRIV-013): die eingegebene E-Mail wird nicht gespeichert, nur das
+            # Konto, falls es existiert, und die gehashte Quelle (audit_context).
+            _audit.log(
+                db, action="user.login_failed", outcome="failure",
+                tenant_id=user.tenant_id if user is not None else None,
+                actor_user_id=user.id if user is not None else None,
+                details={"reason": "unknown_account" if user is None else ("inactive" if not user.is_active else "password")},
+            )
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-Mail oder Passwort ist ungültig.")
         if not user.login_enabled:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login ist für dieses Konto deaktiviert.")
@@ -85,6 +93,17 @@ class AuthService:
                 db.commit()
         return {"message": "Logged out"}
 
+    @staticmethod
+    def _may_use_bridge(user: AppUser | None) -> bool:
+        """Dieselben Kontoprüfungen wie bei jedem Request (get_optional_current_user), schon beim
+        Einlösen: aktiv, Login erlaubt, keine Session-Beendigung seit Ausstellung des Tokens."""
+        return (
+            user is not None
+            and user.is_active
+            and user.login_enabled
+            and not domain_bridge_service.token_predates_session_revoke(user.session_revoke_at)
+        )
+
     def preview_bridge_token(self, db: Session, token: str, request_host: str | None) -> BridgePreviewRead | None:
         """Für die Bestätigungsseite auf der Ziel-Domain (MAIN-SEC-006): zeigt, als wer man
         angemeldet würde, ohne das Token zu verbrauchen. None bei ungültigem, abgelaufenem
@@ -93,7 +112,7 @@ class AuthService:
         if bridge is None:
             return None
         user = db.get(AppUser, bridge.user_id)
-        if user is None or not user.is_active:
+        if not self._may_use_bridge(user):
             return None
         tenant = db.get(Tenant, user.tenant_id)
         return BridgePreviewRead(
@@ -111,7 +130,7 @@ class AuthService:
             return False
 
         user = db.get(AppUser, bridge.user_id)
-        if user is None or not user.is_active:
+        if not self._may_use_bridge(user):
             return False
 
         issue_session_cookie(response, bridge.user_id, mfa_verified=bridge.mfa_verified)

@@ -27,8 +27,19 @@ export function templateTabs(t: TFunc): RouteTab[] {
   return [
     { href: "/templates", label: t("protocolTemplates") },
     { href: "/elements", label: t("elements") },
-    { href: "/settings", label: t("documentLayouts") },
     { href: "/task-packages", label: t("taskPackages") },
+  ];
+}
+
+// Document Studio: Vorlagen, Corporate Design, Assets, Komponenten, Exporte. Die
+// Echtheitsprüfung liegt in den Mandanten-Einstellungen.
+export function documentStudioTabs(t: TFunc): RouteTab[] {
+  return [
+    { href: "/documents", label: t("documentTemplates") },
+    { href: "/documents/brand", label: t("documentBrand") },
+    { href: "/documents/assets", label: t("documentAssets") },
+    { href: "/documents/components", label: t("documentComponents") },
+    { href: "/documents/exports", label: t("documentExports") },
   ];
 }
 
@@ -38,5 +49,9 @@ export function tenantSettingsTabs(t: TFunc): RouteTab[] {
     { href: "/tenant-settings", label: t("general") },
     { href: "/tenant-settings/domains", label: t("domains") },
     { href: "/tenant-settings/abo", label: t("subscriptionAndUsage") },
+    { href: "/tenant-settings/verification", label: t("documentVerification") },
+    { href: "/tenant-settings/privacy", label: t("privacy") },
+    { href: "/tenant-settings/retention", label: t("retention") },
+    { href: "/tenant-settings/activity", label: t("activity") },
   ];
 }

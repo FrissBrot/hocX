@@ -8,9 +8,11 @@ Problem meldet - eine Stelle, damit Seite und ntfy nie unterschiedlich urteilen.
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import time
+import urllib.request
 from datetime import datetime, timedelta, timezone
 
 import pyclamd
@@ -22,8 +24,9 @@ from app.core.config import settings
 from app.core.error_log import record_system_error
 from app.core.redis_client import get_redis_sync
 from app.models import StoredFile, SystemErrorLog, SystemHealthEvent
+from app.models.document_entities import DocumentJob
 from app.models.entities import PhotoAnalysisJob
-from app.schemas.admin import ContainerStatusRead, HealthCheckRead, HealthStatus, SystemHealthSnapshot
+from app.schemas.admin import ContainerStatusRead, HealthCheckRead, HealthStatus, OverloadTenantRead, SystemHealthSnapshot
 
 _logger = logging.getLogger(__name__)
 
@@ -42,7 +45,13 @@ STORAGE_FREE_CRITICAL_PERCENT = 5
 ERRORS_PER_HOUR_WARNING = 20
 ERRORS_PER_HOUR_CRITICAL = 100
 SCAN_BACKLOG_MIN_AGE = timedelta(hours=1)
+# Verwaiste Dateien erst nach einem Tag melden (Uploads committen Zeile und Bezug nicht immer zusammen).
+ORPHAN_MIN_AGE = timedelta(hours=24)
 PHOTO_QUEUE_WARNING_AGE = timedelta(hours=6)
+# Dokumentverarbeitung (document-worker): fällige Aufträge, die so lange warten, bzw. Aufträge,
+# die in diesem Zeitraum endgültig gescheitert sind (nach max_attempts, «Erneut verarbeiten»).
+DOCUMENT_QUEUE_WARNING_AGE = timedelta(minutes=30)
+DOCUMENT_FAILED_WINDOW = timedelta(hours=24)
 CONTAINER_MEMORY_WARNING_RATIO = 0.9
 _HEALTH_OUTPUT_MAX_LENGTH = 500
 
@@ -105,10 +114,13 @@ def image_tag(image: str | None) -> str | None:
     return name.rsplit(":", 1)[1] if ":" in name else None
 
 
-def evaluate_container(container: ContainerStatusRead) -> ContainerStatusRead:
+def evaluate_container(container: ContainerStatusRead, *, one_shot: bool = False) -> ContainerStatusRead:
     reasons: list[str] = []
     status: HealthStatus = "ok"
-    if container.state != "running":
+    # Einmal-Dienste (restart: "no", z. B. storage-init) laufen beim Start durch und beenden sich;
+    # sauber mit Exit 0 beendet ist ihr Sollzustand, nur ein Fehler-Exit ist ein Problem.
+    finished_cleanly = one_shot and container.state == "exited" and container.exit_code == 0
+    if container.state != "running" and not finished_cleanly:
         reasons.append("not_running")
         status = "critical"
     if container.health == "unhealthy":
@@ -134,6 +146,7 @@ def _container_from_docker(summary: dict, details: dict, stats: dict | None) -> 
     image = details.get("Config", {}).get("Image") or summary.get("Image")
     memory_bytes, memory_limit = _memory(stats)
     name = (summary.get("Names") or [details.get("Name", "")])[0].lstrip("/")
+    restart_policy = ((details.get("HostConfig") or {}).get("RestartPolicy") or {}).get("Name")
     return evaluate_container(
         ContainerStatusRead(
             name=name,
@@ -152,7 +165,8 @@ def _container_from_docker(summary: dict, details: dict, stats: dict | None) -> 
             memory_bytes=memory_bytes,
             memory_limit_bytes=memory_limit,
             status="ok",
-        )
+        ),
+        one_shot=restart_policy in ("", "no"),
     )
 
 
@@ -168,6 +182,39 @@ def collect_containers() -> tuple[str | None, list[ContainerStatusRead]]:
     stats = docker_api.container_stats([summary["Id"] for summary in summaries if summary.get("State") == "running"])
     containers = [_container_from_docker(summary, details[summary["Id"]], stats.get(summary["Id"])) for summary in summaries]
     return project, sorted(containers, key=lambda container: container.service)
+
+
+# Service-Name des lokalen S3 (Garage) in den Compose-Dateien; scripts/storage_controller.sh stoppt
+# ihn, wenn der Speicher woanders liegt (storage_local_s3_decision, Migration 0113).
+LOCAL_S3_SERVICE = "local-s3"
+
+
+def local_s3_decision(db: Session) -> tuple[bool, str]:
+    needed, reason = db.execute(text("SELECT needed, reason FROM storage_local_s3_decision()")).one()
+    return bool(needed), str(reason)
+
+
+def mark_intentionally_stopped_local_s3(db: Session, containers: list[ContainerStatusRead]) -> list[ContainerStatusRead]:
+    """Ein vom Storage-Controller gestopptes lokales S3 ist der Sollzustand, kein Ausfall: ohne diese
+    Ausnahme meldete der Systemstatus (und ntfy) den Container als "läuft nicht", sobald die Dateien
+    bei einem externen Anbieter liegen."""
+    if not any(c.service == LOCAL_S3_SERVICE and c.state != "running" for c in containers):
+        return containers
+    try:
+        needed, _reason = local_s3_decision(db)
+    except Exception:
+        # Im Zweifel als "benötigt" behandeln: lieber ein Alarm zu viel als ein verschwiegener Ausfall.
+        db.rollback()
+        _logger.warning("Bedarf des lokalen S3 nicht ermittelbar", exc_info=True)
+        return containers
+    if needed:
+        return containers
+    return [
+        c.model_copy(update={"status": "ok", "reasons": ["not_needed"]})
+        if c.service == LOCAL_S3_SERVICE and c.state != "running"
+        else c
+        for c in containers
+    ]
 
 
 # ── Dienst-Prüfungen ──────────────────────────────────────────────────────────────────────
@@ -259,6 +306,133 @@ def _check_storage() -> HealthCheckRead:
     )
 
 
+def _check_object_storage() -> HealthCheckRead:
+    """Aktiver Objektspeicher erreichbar? HEAD auf einen nie existierenden Key: "nicht gefunden"
+    heisst erreichbar, ein Verbindungs-/Rechtefehler ist kritisch (Uploads und Downloads stehen)."""
+    from app.core.storage import get_object_store
+
+    store = get_object_store()
+    state = store.active_state(force=True)
+    started = time.monotonic()
+    store.active_backend().head("main", "_hocx-health/probe")
+    return HealthCheckRead(
+        key="object_storage",
+        status="ok",
+        params={"generation": state.config.generation, "latencyMs": round((time.monotonic() - started) * 1000), "fenced": int(state.fenced)},
+    )
+
+
+def _check_local_s3(db: Session) -> list[HealthCheckRead]:
+    """Lokales S3 (Garage): wird es gebraucht und warum, und was liegt dort. Die Zahlen stammen aus
+    der Datenbank (Objektverzeichnis bzw. Generationen), nicht aus Garage selbst - dessen Admin-API
+    ist bewusst nur im Garage-Container erreichbar (infra/garage/garage.toml). Ohne lokales Profil
+    (nie eingerichtet) entfällt die Prüfung."""
+    needed, reason = local_s3_decision(db)
+    if reason == "no_local_profile":
+        return []
+    active = db.execute(
+        text(
+            "SELECT s.active_generation FROM storage_state s JOIN storage_profile p ON p.id = s.active_profile_id "
+            "WHERE p.provider = 'garage_local'"
+        )
+    ).scalar()
+    if active is not None:
+        objects, size = db.execute(
+            text(
+                "SELECT count(*), COALESCE(sum(size_bytes), 0) FROM storage_object "
+                "WHERE generation = :generation AND status = 'active' AND NOT purge_pending"
+            ),
+            {"generation": active},
+        ).one()
+    else:
+        # Nicht mehr aktiv: was eine noch nicht bereinigte Generation (Rückfallfrist) dort belegt.
+        objects, size = db.execute(
+            text(
+                "SELECT COALESCE(sum(g.object_count), 0), COALESCE(sum(g.total_bytes), 0) FROM storage_generation g "
+                "JOIN storage_profile p ON p.id = g.profile_id WHERE p.provider = 'garage_local' AND g.purged_at IS NULL"
+            )
+        ).one()
+    return [
+        HealthCheckRead(
+            key="local_s3",
+            status="ok",
+            params={"needed": int(needed), "reason": reason, "objects": int(objects), "gb": round(int(size) / 1024**3, 2)},
+        )
+    ]
+
+
+def _check_storage_migration(db: Session, now: datetime) -> HealthCheckRead:
+    """Offene Storage-Migration: hängt der Worker, braucht sie einen Eingriff oder ist ein
+    Rollback nötig?"""
+    from app.models import StorageMigration, StorageMigrationObject
+
+    migration = db.scalars(select(StorageMigration).where(StorageMigration.state.notin_(("completed", "failed", "cancelled"))).limit(1)).first()
+    if migration is None:
+        return HealthCheckRead(key="storage_migration", status="ok", params={"verified": 0, "total": 0, "dead": 0})
+    dead = db.scalar(select(func.count()).select_from(StorageMigrationObject).where(
+        StorageMigrationObject.migration_id == migration.id, StorageMigrationObject.status == "dead")) or 0
+    status: HealthStatus = "ok"
+    waiting = migration.state in ("awaiting_confirmation", "paused")
+    heartbeat_age = (now - migration.heartbeat_at).total_seconds() if migration.heartbeat_at else None
+    if dead or migration.state == "retrying" or (not waiting and heartbeat_age is not None and heartbeat_age > 600):
+        status = "warning"
+    if migration.state == "rollback_required":
+        status = "critical"
+    return HealthCheckRead(key="storage_migration", status=status, params={"verified": migration.verified_objects, "total": migration.total_objects, "dead": dead})
+
+
+_BACKUP_CHECK_CODES = {
+    "backup": {"disabled", "configuration", "never_succeeded", "overdue", "schedule_disabled"},
+    "backup_repository": {"repository_unreachable", "repository_id_mismatch", "repository_not_encrypted", "passphrase_wrong",
+                          "host_key_mismatch", "capacity_low", "staging_low"},
+    # Fehlgeschlagene Prüfungen/Restore-Tests melden die Job-Läufe (backup_verify,
+    # backup_restore_test) - hier nur, wenn sie zu lange ausbleiben.
+    "backup_verification": {"verify_overdue", "restore_test_overdue"},
+}
+
+
+def _check_backup(db: Session, now: datetime) -> list[HealthCheckRead]:
+    """Backup-System (docs-site/docs/technik/backup/): Frische der Sicherungen, Repository auf der
+    Storage Box und regelmässige Prüfungen. Bewertung aus backup_admin_service.evaluate - dieselbe
+    wie im Admin-Portal."""
+    from app.models import BackupSet
+    from app.services import backup_admin_service
+
+    overall, problems = backup_admin_service.evaluate(db, now)
+    row = backup_admin_service.settings_row(db)
+    repo = dict(row.repository_status or {})
+    last_ok = db.scalar(select(func.max(BackupSet.snapshot_at)).where(BackupSet.state == "completed"))
+    points = db.scalar(select(func.count()).select_from(BackupSet).where(BackupSet.state.in_(("completed", "partial")))) or 0
+    verified = db.scalar(select(func.max(BackupSet.verified_at)).where(BackupSet.verify_state == "verified"))
+    tested = db.scalar(select(func.max(BackupSet.restore_tested_at)).where(BackupSet.restore_test_state == "passed"))
+    used = repo.get("used_percent")
+
+    def status_for(key: str) -> tuple[HealthStatus, str | None]:
+        relevant = [p for p in problems if p.code in _BACKUP_CHECK_CODES[key]]
+        if not relevant:
+            return ("unknown" if overall == "disabled" else "ok"), None
+        worst: HealthStatus = "critical" if any(p.severity == "critical" for p in relevant) else "warning"
+        return worst, relevant[0].code
+
+    checks: list[HealthCheckRead] = []
+    backup_status, backup_code = status_for("backup")
+    checks.append(HealthCheckRead(key="backup", status=backup_status, params={
+        "state": "disabled" if overall == "disabled" else ("never" if last_ok is None else "ok"),
+        "hours": int((now - last_ok).total_seconds() // 3600) if last_ok else 0, "points": int(points), "code": backup_code,
+    }))
+    repo_status, repo_code = status_for("backup_repository")
+    checks.append(HealthCheckRead(key="backup_repository", status=repo_status if overall != "disabled" else "unknown", params={
+        "reachable": "yes" if repo.get("ok") else "no", "quota": "yes" if isinstance(used, (int, float)) else "no",
+        "usedPercent": used if isinstance(used, (int, float)) else 0, "code": repo_code or repo.get("error_code"),
+    }))
+    verify_status, verify_code = status_for("backup_verification")
+    checks.append(HealthCheckRead(key="backup_verification", status=verify_status if overall != "disabled" else "unknown", params={
+        "verified": "yes" if verified else "no", "verifyDays": int((now - verified).days) if verified else 0,
+        "tested": "yes" if tested else "no", "testDays": int((now - tested).days) if tested else 0, "code": verify_code,
+    }))
+    return checks
+
+
 def _check_error_rate(db: Session) -> HealthCheckRead:
     last_hour = db.scalar(select(func.count()).select_from(SystemErrorLog).where(SystemErrorLog.created_at >= func.now() - timedelta(hours=1))) or 0
     last_day = db.scalar(select(func.count()).select_from(SystemErrorLog).where(SystemErrorLog.created_at >= func.now() - timedelta(days=1))) or 0
@@ -279,6 +453,102 @@ def _check_scan_backlog(db: Session) -> HealthCheckRead:
     return HealthCheckRead(key="scan_backlog", status="warning" if count else "ok", params={"count": count})
 
 
+_EXPORT_ACTIONS = ("admin.tenant_exported", "tenant.exported", "personal_data.exported")
+_ADMIN_CHANGE_ACTIONS = ("admin.admin_created", "admin.user_mfa_factor_deleted", "user.mfa_factor_deleted")
+
+
+def _check_security(db: Session) -> HealthCheckRead:
+    """Auffällige Ereignisse im Audit-Log (Datenschutz-Audit PRIV-022): viele Fehlversuche beim
+    Anmelden (gesamt und je Konto, 15 min), mehrere Exporte in einer Stunde, Restores und
+    Änderungen an Admin-Konten/MFA (24 h), optional jede Plattform-Anmeldung (1 h)."""
+    from sqlalchemy import text
+
+    failure_window = (
+        "outcome = 'failure' AND action IN ('user.login_failed', 'admin.login_failed', 'user.mfa_failed') "
+        "AND created_at > now() - interval '15 minutes'"
+    )
+    total_failed = db.scalar(text("SELECT count(*) FROM audit_log WHERE " + failure_window)) or 0
+    # Je Konto, sonst je E-Mail eines Admins, sonst je Quelle (IP-Hash)
+    max_per_account = db.scalar(
+        text(
+            "SELECT COALESCE(max(n), 0) FROM (SELECT count(*) AS n FROM audit_log WHERE " + failure_window
+            + " GROUP BY COALESCE(actor_user_id::text, actor_email, ip_hash, '?')) per_account"
+        )
+    ) or 0
+    exports = db.scalar(
+        text("SELECT count(*) FROM audit_log WHERE action = ANY(:actions) AND created_at > now() - interval '1 hour'"),
+        {"actions": list(_EXPORT_ACTIONS)},
+    ) or 0
+    restores = db.scalar(text("SELECT count(*) FROM audit_log WHERE action = 'backup.restore.create' AND created_at > now() - interval '24 hours'")) or 0
+    admin_changes = db.scalar(
+        text("SELECT count(*) FROM audit_log WHERE action = ANY(:actions) AND created_at > now() - interval '24 hours'"),
+        {"actions": list(_ADMIN_CHANGE_ACTIONS)},
+    ) or 0
+    admin_logins = db.scalar(text("SELECT count(*) FROM audit_log WHERE action = 'admin.login' AND created_at > now() - interval '1 hour'")) or 0
+    max_per_account = int(max_per_account)
+
+    status = "ok"
+    if (
+        total_failed >= settings.security_failed_logins_warning
+        or max_per_account >= settings.security_failed_logins_per_account
+        or exports > settings.security_exports_per_hour
+        or restores
+        or admin_changes
+        or (settings.security_alert_admin_logins and admin_logins)
+    ):
+        status = "warning"
+    if total_failed >= settings.security_failed_logins_critical:
+        status = "critical"
+    return HealthCheckRead(
+        key="security",
+        status=status,
+        params={
+            "failedLogins": int(total_failed),
+            "maxPerAccount": max_per_account,
+            "exports": int(exports),
+            "restores": int(restores),
+            "adminChanges": int(admin_changes),
+            "adminLogins": int(admin_logins),
+        },
+    )
+
+
+def _check_orphaned_files(db: Session) -> HealthCheckRead:
+    """Dateien, auf die nichts mehr zeigt (Datenschutz-Audit PRIV-003/004): sie sind in keiner Ansicht
+    erreichbar, liegen aber im Speicher und in Backups. Neue Fälle deuten auf einen Löschpfad, der
+    file_eraser.FileEraser umgeht - z. B. das Löschen eines Termins mit Abgabebox-Einreichungen."""
+    from app.models.document_entities import DocumentFile
+    from app.services.file_eraser import _REFERENCES
+
+    conditions = [~select(column).where(column == StoredFile.id).exists() for column in (*_REFERENCES, DocumentFile.stored_file_id)]
+    count = db.scalar(
+        select(func.count()).select_from(StoredFile).where(StoredFile.created_at < func.now() - ORPHAN_MIN_AGE, *conditions)
+    ) or 0
+    return HealthCheckRead(key="orphaned_files", status="warning" if count else "ok", params={"count": count})
+
+
+def _check_captcha_endpoint() -> HealthCheckRead:
+    """Friendly Captcha der Abgabebox: EU-Endpunkt (Verarbeitung in der EU) oder globaler Endpunkt.
+    Nur ein Hinweis - beides funktioniert, der EU-Endpunkt setzt einen passenden Plan voraus."""
+    from urllib.parse import urlparse
+
+    host = (urlparse(settings.friendly_captcha_verify_url).hostname or "").lower()
+    region = "eu" if host.endswith(".eu") else "global"
+    return HealthCheckRead(key="captcha_endpoint", status="ok", params={"region": region})
+
+
+def _check_tenant_offboarding(db: Session) -> HealthCheckRead:
+    """Mandanten nach Vertragsende plus Exportfenster (Datenschutz-Audit G): ihre Daten gehören
+    gelöscht. Gelöscht wird bewusst von Hand (Adminportal → Mandant löschen), nie automatisch."""
+    from app.services.tenant_retention_service import offboarding_due
+
+    due = offboarding_due(db, grace_days=settings.tenant_offboarding_grace_days)
+    return HealthCheckRead(
+        key="tenant_offboarding", status="warning" if due else "ok",
+        params={"count": len(due), "days": settings.tenant_offboarding_grace_days},
+    )
+
+
 def _check_photo_queue(db: Session, now: datetime) -> HealthCheckRead:
     queued, oldest = db.execute(
         select(func.count(), func.min(PhotoAnalysisJob.created_at)).where(PhotoAnalysisJob.status == "queued")
@@ -286,6 +556,182 @@ def _check_photo_queue(db: Session, now: datetime) -> HealthCheckRead:
     oldest_minutes = round((now - oldest).total_seconds() / 60) if oldest else 0
     status: HealthStatus = "warning" if oldest and now - oldest > PHOTO_QUEUE_WARNING_AGE else "ok"
     return HealthCheckRead(key="photo_queue", status=status, params={"queued": queued, "oldestMinutes": oldest_minutes})
+
+
+def _check_document_queue(db: Session, now: datetime) -> HealthCheckRead:
+    """Warteschlange des document-worker (PDF-Ansicht, Textextraktion): staut sie sich, läuft
+    der Worker nicht oder kommt nicht nach; endgültig gescheiterte Aufträge brauchen eine
+    Entscheidung (Datei prüfen, «Erneut verarbeiten», document_admin requeue)."""
+    queued, oldest = db.execute(
+        select(func.count(), func.min(DocumentJob.run_after)).where(DocumentJob.status == "queued", DocumentJob.run_after <= now)
+    ).one()
+    failed = db.scalar(
+        select(func.count()).where(DocumentJob.status == "failed", DocumentJob.updated_at >= now - DOCUMENT_FAILED_WINDOW)
+    ) or 0
+    oldest_minutes = round((now - oldest).total_seconds() / 60) if oldest else 0
+    stalled = bool(oldest and now - oldest > DOCUMENT_QUEUE_WARNING_AGE)
+    status: HealthStatus = "warning" if stalled or failed else "ok"
+    return HealthCheckRead(key="document_queue", status=status, params={"queued": queued, "oldestMinutes": oldest_minutes, "failed": failed})
+
+
+# Hash ohne Treffer (64 Nullen) für den Systemcheck der Prüfseite - nie ein echtes Dokument.
+VERIFY_PROBE_SHA256 = "0" * 64
+VERIFY_LATENCY_WARNING_MS = 2000
+
+
+def _check_document_verification() -> HealthCheckRead:
+    """Öffentliche Prüfseite: Prüf-Endpoint der Abgabebox erreichbar und die Funktion
+    verify_document (Rechte der Rolle hocx_abgabebox) lesbar. Intern ohne Traefik, damit das
+    Rate-Limit nicht zählt. Erwartet 200 {"found": false}."""
+    url = f"{settings.abgabebox_internal_url.rstrip('/')}/api/public/verify"
+    request = urllib.request.Request(
+        url, data=json.dumps({"sha256": VERIFY_PROBE_SHA256}).encode(), headers={"Content-Type": "application/json"}, method="POST"
+    )
+    started = time.monotonic()
+    with urllib.request.urlopen(request, timeout=5) as response:
+        body = json.loads(response.read().decode() or "{}")
+    latency_ms = round((time.monotonic() - started) * 1000)
+    if body != {"found": False}:
+        raise RuntimeError(f"Unerwartete Antwort: {str(body)[:200]}")
+    status: HealthStatus = "warning" if latency_ms > VERIFY_LATENCY_WARNING_MS else "ok"
+    return HealthCheckRead(key="document_verification", status=status, params={"latencyMs": latency_ms})
+
+
+RENDER_QUEUE_WARNING_AGE = timedelta(minutes=10)
+RENDER_FAILED_WINDOW = timedelta(hours=24)
+
+
+def _check_render_queue(db: Session, now: datetime) -> HealthCheckRead:
+    """PDF-Aufträge (document_render_job, job-worker): staut sich die Warteschlange, läuft der
+    job-worker nicht oder kommt nicht nach; gescheiterte Aufträge zeigen Vorlagen- oder
+    Renderprobleme (Details im Fehlerprotokoll)."""
+    queued, oldest = db.execute(
+        text("SELECT count(*), min(created_at) FROM document_render_job WHERE status = 'queued'")
+    ).one()
+    failed = db.scalar(
+        text("SELECT count(*) FROM document_render_job WHERE status = 'failed' AND finished_at >= :since AND error_status >= 500"),
+        {"since": now - RENDER_FAILED_WINDOW},
+    ) or 0
+    oldest_minutes = round((now - oldest).total_seconds() / 60) if oldest else 0
+    stalled = bool(oldest and now - oldest > RENDER_QUEUE_WARNING_AGE)
+    status: HealthStatus = "warning" if stalled or failed else "ok"
+    return HealthCheckRead(key="render_queue", status=status, params={"queued": queued, "oldestMinutes": oldest_minutes, "failed": failed})
+
+
+# Laufzeitkennzahlen der Dienstprozesse (core/runtime_metrics.py, Migration 0148).
+RUNTIME_REPORT_MAX_AGE = timedelta(seconds=60)
+RUNTIME_LAG_WARNING_MS = 1000
+RUNTIME_LAG_CRITICAL_MS = 10000
+
+
+def _check_runtime(db: Session, now: datetime) -> HealthCheckRead:
+    """Event-Loop-Verzögerung und Pool-/Threadpool-Sättigung aller Prozesse der letzten Minute.
+    Ein blockierter Event-Loop oder ein voller Pool trifft alle Mandanten dieses Workers - das
+    soll auffallen, bevor Nutzer Zeitüberschreitungen melden."""
+    rows = db.execute(
+        text("SELECT process_kind, metrics FROM system_runtime_metric WHERE reported_at >= :since"),
+        {"since": now - RUNTIME_REPORT_MAX_AGE},
+    ).all()
+    if not rows:
+        return HealthCheckRead(key="runtime", status="unknown", params={"instances": 0})
+    max_lag = pool_peak = thread_peak = timeouts = 0
+    for row in rows:
+        metrics = row.metrics or {}
+        max_lag = max(max_lag, int(metrics.get("loop_lag_max_ms") or 0))
+        # Abgewiesen wegen Überlast: Pool-Timeout oder kein Platz in der Request-Annahme
+        timeouts += int(metrics.get("pool_timeouts") or 0) + int(metrics.get("admission_timeouts") or 0)
+        if metrics.get("pool_capacity"):
+            pool_peak = max(pool_peak, round(100 * int(metrics.get("pool_checked_out_max") or 0) / int(metrics["pool_capacity"])))
+        if metrics.get("threadpool_total"):
+            thread_peak = max(thread_peak, round(100 * int(metrics.get("threadpool_busy_max") or 0) / int(metrics["threadpool_total"])))
+    status: HealthStatus = "ok"
+    if max_lag >= RUNTIME_LAG_WARNING_MS or pool_peak >= 100 or thread_peak >= 100 or timeouts:
+        status = "warning"
+    if max_lag >= RUNTIME_LAG_CRITICAL_MS:
+        status = "critical"
+    return HealthCheckRead(
+        key="runtime",
+        status=status,
+        params={"instances": len(rows), "maxLagMs": max_lag, "poolPeakPercent": pool_peak, "threadPeakPercent": thread_peak, "poolTimeouts": timeouts},
+    )
+
+
+# Abgewiesene neue Nutzer bei Überlast (db_admission.py, Migration 0151). Ein Fenster von fünf
+# Minuten, damit eine Überlast-Phase nicht zwischen zwei Prüfungen (alle 30 s) und den
+# 15-s-Meldungen der Worker flackernd "behoben" wirkt.
+OVERLOAD_WINDOW = timedelta(minutes=5)
+
+
+def _check_overload(db: Session, now: datetime) -> HealthCheckRead:
+    """Warnung, solange Nutzer wegen Überlast die Überlast-Seite sehen."""
+    row = db.execute(
+        text(
+            "SELECT COALESCE(SUM(rejected), 0) AS rejected, COALESCE(SUM(users), 0) AS users, "
+            "COUNT(DISTINCT tenant_id) AS tenants, COALESCE(MAX(pressure_percent), 0) AS pressure "
+            "FROM overload_rejection WHERE created_at >= :since"
+        ),
+        {"since": now - OVERLOAD_WINDOW},
+    ).one()
+    return HealthCheckRead(
+        key="overload",
+        status="warning" if row.rejected else "ok",
+        params={
+            "minutes": int(OVERLOAD_WINDOW.total_seconds() // 60),
+            "rejected": int(row.rejected),
+            "users": int(row.users),
+            "tenants": int(row.tenants),
+            "pressurePercent": int(row.pressure),
+        },
+    )
+
+
+OVERLOAD_HISTORY_DAYS = 7
+
+
+def overload_by_tenant(db: Session, now: datetime) -> list[OverloadTenantRead]:
+    """Abweisungen der letzten Tage je Mandant und Stufe für /admin/system, neueste zuerst.
+    "users" summiert die Zählung je Meldung - ein Nutzer, der über mehrere Meldungen hinweg
+    abgewiesen wurde, zählt mehrfach (Obergrenze, nicht exakt)."""
+    rows = db.execute(
+        text(
+            "SELECT t.public_id, t.name AS tenant_name, p.name AS plan_name, r.load_priority, "
+            "SUM(r.rejected) AS rejected, SUM(r.users) AS users, MIN(r.created_at) AS first_at, MAX(r.created_at) AS last_at "
+            "FROM overload_rejection r LEFT JOIN tenant t ON t.id = r.tenant_id LEFT JOIN plan p ON p.code = t.plan_code "
+            "WHERE r.created_at >= :since "
+            "GROUP BY t.public_id, t.name, p.name, r.load_priority ORDER BY MAX(r.created_at) DESC LIMIT 100"
+        ),
+        {"since": now - timedelta(days=OVERLOAD_HISTORY_DAYS)},
+    ).all()
+    return [
+        OverloadTenantRead(
+            tenant_id=str(row.public_id) if row.public_id else None,
+            tenant_name=row.tenant_name,
+            plan_name=row.plan_name,
+            load_priority=int(row.load_priority),
+            rejected=int(row.rejected),
+            users=int(row.users),
+            first_at=row.first_at,
+            last_at=row.last_at,
+        )
+        for row in rows
+    ]
+
+
+# Teure Vollzählungen (verwaiste Dateien über alle Referenzen, Belegung des lokalen S3) ändern sich
+# langsam - je Prozess höchstens stündlich rechnen statt bei jedem 30-s-Tick (Concurrency-Audit
+# CONC-024: mit wachsendem Bestand näherten sie sich dem statement_timeout).
+SLOW_CHECK_TTL_SECONDS = 3600
+_slow_check_cache: dict[str, tuple[float, object]] = {}
+
+
+def _cached_slow_check(key: str, fn):
+    now = time.monotonic()
+    cached = _slow_check_cache.get(key)
+    if cached is not None and now - cached[0] < SLOW_CHECK_TTL_SECONDS:
+        return cached[1]
+    result = fn()
+    _slow_check_cache[key] = (now, result)
+    return result
 
 
 def _run_check(key: str, fn, *, failure_status: HealthStatus = "critical", db: Session | None = None) -> list[HealthCheckRead]:
@@ -310,10 +756,23 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
         clamav.append(HealthCheckRead(key="clamav_signatures", status="unknown"))
     checks += clamav
     checks += _run_check("storage", _check_storage)
+    checks += _run_check("object_storage", _check_object_storage)
     # Reine DB-Auswertungen: ein Fehler hier ist ein Bug, kein Ausfall - "unknown" statt Alarm.
     checks += _run_check("error_rate", lambda: _check_error_rate(db), failure_status="unknown", db=db)
     checks += _run_check("scan_backlog", lambda: _check_scan_backlog(db), failure_status="unknown", db=db)
+    checks += _run_check("orphaned_files", lambda: _cached_slow_check("orphaned_files", lambda: _check_orphaned_files(db)), failure_status="unknown", db=db)
+    checks += _run_check("tenant_offboarding", lambda: _check_tenant_offboarding(db), failure_status="unknown", db=db)
+    checks += _run_check("captcha_endpoint", _check_captcha_endpoint, failure_status="unknown", db=db)
+    checks += _run_check("security", lambda: _check_security(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
+    checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)
+    checks += _run_check("render_queue", lambda: _check_render_queue(db, now), failure_status="unknown", db=db)
+    checks += _run_check("runtime", lambda: _check_runtime(db, now), failure_status="unknown", db=db)
+    checks += _run_check("overload", lambda: _check_overload(db, now), failure_status="unknown", db=db)
+    checks += _run_check("document_verification", _check_document_verification)
+    checks += _run_check("storage_migration", lambda: _check_storage_migration(db, now), failure_status="unknown", db=db)
+    checks += _run_check("local_s3", lambda: _cached_slow_check("local_s3", lambda: _check_local_s3(db)), failure_status="unknown", db=db)
+    checks += _run_check("backup", lambda: _check_backup(db, now), failure_status="unknown", db=db)
     return checks
 
 
@@ -335,7 +794,7 @@ def collect_snapshot(db: Session, *, now: datetime | None = None) -> SystemHealt
         docker_available=docker_configured and docker_error is None,
         docker_error=docker_error,
         compose_project=project,
-        containers=containers,
+        containers=mark_intentionally_stopped_local_s3(db, containers),
         checks=collect_checks(db, now),
     )
 

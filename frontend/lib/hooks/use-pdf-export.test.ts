@@ -7,9 +7,9 @@ const { apiFetch, showToast } = vi.hoisted(() => ({
   showToast: vi.fn(),
 }));
 vi.mock("@/lib/api/client", () => ({
+  ApiError: class ApiError extends Error {},
   browserApiBaseUrl: "https://hocx.test",
   browserApiFetch: apiFetch,
-  LONG_RUNNING_TIMEOUT_MS: 300_000,
 }));
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => showToast }));
 
@@ -20,9 +20,10 @@ const protocol = {
 };
 const exported = {
   content_url: "/current.pdf",
-  status: "generated",
-  export_format: "pdf",
+  version_label: "v0.2",
 };
+// POST /api/documents/render liefert einen PDF-Auftrag (job-worker, Concurrency-Audit Paket 10).
+const done = (result: object) => ({ id: "job-1", status: "done", export: result, error_status: null, error: null, created_at: "" });
 
 describe("usePdfExport", () => {
   const pdfWindow = { opener: {}, closed: false, location: { replace: vi.fn() }, close: vi.fn() };
@@ -34,15 +35,17 @@ describe("usePdfExport", () => {
   });
 
   it("generates from saved data even when an older PDF URL exists, on every open", async () => {
-    apiFetch.mockResolvedValueOnce(exported).mockResolvedValueOnce({ ...exported, content_url: "/changed.pdf" });
+    apiFetch.mockResolvedValueOnce(done(exported)).mockResolvedValueOnce(done({ ...exported, content_url: "/changed.pdf" }));
     const onExported = vi.fn();
     const { result } = renderHook(() => usePdfExport());
 
     await act(async () => { await result.current.openOrGeneratePdf(protocol, onExported); });
-    // LaTeX-Kompilierung dauert laenger als der 15-s-Standard (Audit MAIN-FE-004).
-    expect(apiFetch).toHaveBeenCalledWith("/api/protocols/protocol-1/exports/pdf", { method: "POST", timeoutMs: 300_000 });
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/api/documents/render",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ protocol_id: "protocol-1", document_type: "protocol" }) })
+    );
     expect(pdfWindow.location.replace).toHaveBeenLastCalledWith("https://hocx.test/current.pdf");
-    expect(onExported).toHaveBeenCalledWith(exported);
+    expect(onExported).toHaveBeenCalledWith({ content_url: "/current.pdf", version_label: "v0.2", version_major: 0, version_minor: 2 });
 
     await act(async () => { await result.current.openOrGeneratePdf(protocol); });
     expect(apiFetch).toHaveBeenCalledTimes(2);
@@ -51,7 +54,7 @@ describe("usePdfExport", () => {
   });
 
   it("prevents duplicate requests while generation is running", async () => {
-    let finish!: (value: typeof exported) => void;
+    let finish!: (value: ReturnType<typeof done>) => void;
     apiFetch.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     const { result } = renderHook(() => usePdfExport());
     let pending!: Promise<void>;
@@ -61,12 +64,12 @@ describe("usePdfExport", () => {
     });
     expect(result.current.busyByProtocol[protocol.id]).toBe(true);
     expect(apiFetch).toHaveBeenCalledTimes(1);
-    await act(async () => { finish(exported); await pending; });
+    await act(async () => { finish(done(exported)); await pending; });
     expect(result.current.busyByProtocol[protocol.id]).toBe(false);
   });
 
   it("closes the empty tab on failure, never opens the stale PDF, and allows retry", async () => {
-    apiFetch.mockRejectedValueOnce(new Error("Export fehlgeschlagen")).mockResolvedValueOnce(exported);
+    apiFetch.mockRejectedValueOnce(new Error("Export fehlgeschlagen")).mockResolvedValueOnce(done(exported));
     const { result } = renderHook(() => usePdfExport());
     await act(async () => { await result.current.openOrGeneratePdf(protocol); });
     expect(pdfWindow.close).toHaveBeenCalledOnce();
@@ -79,7 +82,7 @@ describe("usePdfExport", () => {
 
   it("provides a link to the fresh PDF if the browser blocks the new tab", async () => {
     vi.mocked(window.open).mockReturnValue(null);
-    apiFetch.mockResolvedValue(exported);
+    apiFetch.mockResolvedValue(done(exported));
     const { result } = renderHook(() => usePdfExport());
     await act(async () => { await result.current.openOrGeneratePdf(protocol); });
     const options = showToast.mock.calls[0][2];
@@ -93,6 +96,6 @@ describe("usePdfExport", () => {
     await act(async () => { await result.current.openOrGeneratePdf(protocol); });
     expect(pdfWindow.close).toHaveBeenCalledOnce();
     expect(pdfWindow.location.replace).not.toHaveBeenCalled();
-    expect(showToast).toHaveBeenCalledWith("Die PDF konnte nicht bereitgestellt werden.", "error");
+    expect(showToast).toHaveBeenCalledWith("Der Export ist fehlgeschlagen.", "error");
   });
 });

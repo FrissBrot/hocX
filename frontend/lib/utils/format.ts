@@ -125,6 +125,29 @@ export function formatDateTime(input: string | null | undefined, locale?: string
   }).format(parsed);
 }
 
+// Aufnahmezeit aus EXIF: das Backend speichert die lokale Kamerazeit "schwebend" als UTC
+// (siehe StoredFile.exif_taken_at) - deshalb in UTC formatieren, sonst verschöbe die
+// App-Zeitzone die Uhrzeit. Ein bekannter Offset wird angehängt ("14.07.2023, 10:30 (+02:00)").
+export function formatCaptureDateTime(input: string | null | undefined, offset?: string | null, locale?: string) {
+  if (!input) {
+    return "";
+  }
+  const parsed = new Date(input);
+  if (Number.isNaN(parsed.getTime())) {
+    return formatDate(input);
+  }
+  const formatted = new Intl.DateTimeFormat(toIntlLocale(locale), {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: "UTC",
+  }).format(parsed);
+  return offset ? `${formatted} (${offset})` : formatted;
+}
+
 export function formatWeekdayDate(input: string | null | undefined, locale?: string) {
   if (!input) {
     return "";

@@ -102,5 +102,10 @@
   "loginTabs": {
     "withoutLogin": "Participants",
     "withLogin": "Participants avec connexion"
+  },
+  "personalData": {
+    "action": "Droit d’accès",
+    "title": "Données personnelles de {name}",
+    "description": "Toutes les données de cette personne enregistrées dans hocX, sous forme de fichier ZIP protégé par mot de passe (Excel et JSON). Le téléchargement est consigné dans l’historique."
   }
 }

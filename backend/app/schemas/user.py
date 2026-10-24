@@ -29,6 +29,9 @@ class TenantRead(BaseModel):
     updated_at: datetime | None = None
     tag_config_json: dict[str, Any] = {}
     enabled_features: list[str] = []
+    # Nur in der Antwort auf eine Änderung: die Namensänderung hat die Bestätigung der
+    # Organisation durch hocX aufgehoben (Hinweis im UI).
+    identity_verification_revoked: bool = False
 
 
 class TenantLookupRead(BaseModel):
@@ -73,11 +76,7 @@ class TenantSubscriptionRead(BaseModel):
     storage_quota_bytes: int | None = None
     # Aufschluesselung des Kontingents (0087_storage_packages): included_storage_bytes oben ist
     # bereits der Plan-Anteil, package_storage_bytes die Summe der zugewiesenen Zusatzpakete.
-    # storage_quota_manual_override zeigt an, dass ein Platform-Admin storage_quota_bytes von
-    # Hand gesetzt hat - dann stimmt included_storage_bytes + package_storage_bytes nicht mehr
-    # mit storage_quota_bytes ueberein, das ist kein Fehler.
     package_storage_bytes: int = 0
-    storage_quota_manual_override: bool = False
     features: list[TenantSubscriptionFeatureRead] = []
     # None, wenn der Plan selbst keinen Preis hat (z.B. 'legacy') und keine zusaetzlichen
     # bepreisten Features gebucht sind - dann gibt es schlicht nichts zu beziffern.
@@ -208,7 +207,7 @@ class TenantUpdate(BaseModel):
 
 
 class TenantDomainCreate(BaseModel):
-    purpose: str = Field(pattern=r"^(app|abgabebox)$")
+    purpose: str = Field(pattern=r"^(app|abgabebox|verify)$")
     domain: str = Field(min_length=1, max_length=253)
 
 

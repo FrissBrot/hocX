@@ -1,11 +1,13 @@
 "use client";
 
+import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBanner } from "@/components/ui/status-banner";
 import { ActionIcon } from "@/components/ui/action-icons";
 import {
   BarChart,
@@ -468,7 +470,8 @@ export function StatisticsView({ data }: Props) {
   }));
 
   const top10Fines = fineCountsByParticipant(data.fines_by_participant).slice(0, 10);
-  const fineTotals = fineTotalsByCurrency(data.fines_by_participant);
+  // Summen aus den Typen: fines_by_participant enthält für Leser nur die eigene Zeile.
+  const fineTotals = fineTotalsByCurrency(data.fines_by_type);
   const top15Attendance = data.attendance_by_participant.slice(0, 15);
 
   const hasCycles = data.cycles.length > 0;
@@ -482,7 +485,9 @@ export function StatisticsView({ data }: Props) {
           <h1 className="page-title">{t("pageTitle")}</h1>
           <p className="muted">{t("pageIntro")}</p>
         </div>
+        <DocumentExportButton context={{ documentType: "statistics" }} />
       </div>
+      {data.per_person_scope === "own" ? <StatusBanner tone="neutral" message={t("perPersonOwnHint")} /> : null}
 
       {/* ── KPI row ── */}
       <div className="stats-kpi-row">

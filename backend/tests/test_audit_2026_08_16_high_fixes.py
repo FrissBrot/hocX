@@ -9,39 +9,55 @@ from tests.factories import (
     make_tenant,
     make_template,
 )
-from tests.test_audit_2026_08_16_critical_fixes import _s2_make_document_template_with_dir
 
 
-# --- S5: export_standalone_pdf/export_global_pdf accepted a foreign-tenant template_id ----
+# --- S5: Exporte akzeptierten Layout-Vorlagen fremder Mandanten -------------------------
+#
+# Früher konnte template_id (Dokumentvorlage) eines fremden Mandanten das Layout liefern.
+# Im Document Studio gilt das für Vorlagen und Brand-Profile: eine fremde ID ergibt «nicht
+# gefunden», weder Vorschau noch Export verwenden fremde Vorlagen, Brand-Profile oder deren
+# Logos/Schriften.
 
 
-def test_export_standalone_pdf_rejects_document_template_from_foreign_tenant(db):
+def _foreign_brand(db, tenant_id: int):
+    from app.documents import brand_service
+
+    return brand_service.create_brand(db, tenant_id, name="Fremd")
+
+
+def test_document_preview_rejects_style_from_foreign_tenant(db):
     import asyncio
 
-    from app.services.export_service import ExportService
+    from app.documents.context import DocumentNotFoundError
+    from app.documents.service import DocumentRequest, preview
 
     tenant_a = make_tenant(db, "Tenant A (S5)")
     tenant_b = make_tenant(db, "Tenant B (S5)")
     protocol_a = make_protocol(db, tenant_a.id, make_template(db, tenant_a.id).id)
-    doc_template_b = _s2_make_document_template_with_dir(db, tenant_b.id, code="s5-foreign")
+    brand_b = _foreign_brand(db, tenant_b.id)
 
-    service = ExportService()
-    with pytest.raises(ValueError, match="Template not found"):
-        asyncio.run(service.export_standalone_pdf(db, protocol_a.id, doc_template_b.id, "todo-list"))
+    with pytest.raises(DocumentNotFoundError):
+        asyncio.run(preview(db, None, tenant_a.id, DocumentRequest(protocol_id=protocol_a.public_id, brand_id=brand_b.public_id)))
 
 
-def test_export_global_pdf_rejects_document_template_from_foreign_tenant(db):
-    import asyncio
-
-    from app.services.export_service import ExportService
+def test_style_override_cannot_load_foreign_assets(db):
+    """Ungespeicherte Brand-Tokens (Live-Vorschau im Brand Studio) mit Asset-IDs eines fremden
+    Mandanten zeigen die fremden Bilder/Schriften nicht: Assets werden immer mandantengebunden
+    aufgelöst."""
+    from app.documents.brand import BrandTokens
+    from app.documents.brand_service import resolve_brand
+    from app.models import DocumentAsset
 
     tenant_a = make_tenant(db, "Tenant A (S5b)")
     tenant_b = make_tenant(db, "Tenant B (S5b)")
-    doc_template_b = _s2_make_document_template_with_dir(db, tenant_b.id, code="s5b-foreign")
-
-    service = ExportService()
-    with pytest.raises(ValueError, match="Template not found"):
-        asyncio.run(service.export_global_pdf(db, tenant_a.id, doc_template_b.id, "todos"))
+    asset_b = DocumentAsset(tenant_id=tenant_b.id, kind="image", name="Fremdes Logo", storage_path="document_assets/x.png")
+    font_b = DocumentAsset(tenant_id=tenant_b.id, kind="font", category="font", name="Fremde Schrift", storage_path="document_assets/x.ttf", font_family="Geheim")
+    db.add_all([asset_b, font_b])
+    db.flush()
+    tokens = BrandTokens.model_validate({"assets": {"logo": str(asset_b.public_id)}, "typography": {"body": {"builtin": None, "asset_ids": [str(font_b.public_id)]}}})
+    resolved = resolve_brand(db, tenant_a.id, None, tokens=tokens)
+    assert resolved.env["logo"] is None and resolved.files == {} and resolved.fonts == {}
+    assert "Geheim" not in resolved.families
 
 
 # --- D2: renumbering cascade ignored cross-template n_cycle_all siblings ------------------

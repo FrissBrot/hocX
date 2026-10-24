@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { formatDateTime } from "@/lib/utils/format";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 
@@ -21,14 +22,15 @@ import { computePopoverPosition, usePopoverDismiss } from "@/components/ui/popov
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
+import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { ApiError, browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { isAlreadyUploaded } from "@/lib/image-analysis/precheck";
 import { clearDraft, discardMutation, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { getCycleYear } from "@/lib/utils/cycle";
 import { protocolStatusVariant } from "@/components/protocol/protocol-status";
 import {
   AttendanceFine,
   AttendanceFineListItem,
-  DocumentTemplate,
   EventSummary,
   FinanceAccount,
   FinanceTransaction,
@@ -73,7 +75,6 @@ type ProtocolEditorProps = {
   availableAccounts: FinanceAccount[];
   initialFinanceTransactions: Record<string, FinanceTransaction[]>;
   initialPendingTodos?: TodoListItem[];
-  documentTemplates?: DocumentTemplate[];
   forceReadOnly?: boolean;
   canViewFines?: boolean;
   accordionEnabled?: boolean;
@@ -93,7 +94,6 @@ export function ProtocolEditor({
   availableAccounts,
   initialFinanceTransactions,
   initialPendingTodos = [],
-  documentTemplates = [],
   forceReadOnly = false,
   canViewFines = true,
   accordionEnabled = true,
@@ -987,21 +987,45 @@ export function ProtocolEditor({
     }
   }
 
+  function currentConfigVersion(blockId: string): number | undefined {
+    return elements.flatMap((element) => element.blocks).find((block) => block.id === blockId)?.config_version;
+  }
+
+  // 409 config_conflict: jemand anderes hat die Blockkonfiguration inzwischen gespeichert. Der
+  // Server liefert seinen Stand mit - übernehmen und darauf hinweisen (Concurrency-Audit
+  // CONC-005: vorher überschrieb das ganze JSON still die Änderung der anderen Person).
+  function applyConfigConflict(blockId: string, err: unknown): boolean {
+    if (!(err instanceof ApiError) || err.status !== 409) return false;
+    const detail = err.detail as { code?: string; configuration_snapshot_json?: Record<string, unknown>; config_version?: number } | undefined;
+    if (detail?.code !== "config_conflict" || !detail.configuration_snapshot_json) return false;
+    updateBlockInState(blockId, (block) => ({
+      ...block,
+      configuration_snapshot_json: detail.configuration_snapshot_json!,
+      config_version: detail.config_version,
+    }));
+    setStatus(blockId, "saved");
+    showToast(t("configConflictReloaded"), "info");
+    return true;
+  }
+
   async function saveBlockConfiguration(blockId: string, configurationSnapshotJson: Record<string, unknown>) {
     setStatus(blockId, "saving");
+    const expectedVersion = currentConfigVersion(blockId);
     updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: configurationSnapshotJson }));
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(`/api/protocol-element-blocks/${blockId}`, {
         method: "PATCH",
-        body: JSON.stringify({ configuration_snapshot_json: configurationSnapshotJson }),
+        body: JSON.stringify({ configuration_snapshot_json: configurationSnapshotJson, expected_config_version: expectedVersion }),
       });
       updateBlockInState(blockId, (block) => ({
         ...block,
         configuration_snapshot_json: updated.configuration_snapshot_json,
+        config_version: updated.config_version,
       }));
       setStatus(blockId, "saved");
-      collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json });
+      collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version });
     } catch (err: unknown) {
+      if (applyConfigConflict(blockId, err)) return;
       setStatus(blockId, "error");
       showToast(err instanceof Error ? err.message : t("changeSaveFailed"), "error");
     }
@@ -1035,8 +1059,8 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/attendance/${participantId}`,
         { method: "POST", body: JSON.stringify({ status }) }
       );
-      updateBlockInState(blockId, (b) => ({ ...b, configuration_snapshot_json: updated.configuration_snapshot_json }));
-      collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json });
+      updateBlockInState(blockId, (b) => ({ ...b, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
+      collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version });
     } catch (err: unknown) {
       updateBlockInState(blockId, (b) => ({
         ...b,
@@ -1245,13 +1269,21 @@ export function ProtocolEditor({
     }
   }
 
-  async function uploadImage(protocolElementBlockId: string) {
+  async function uploadImage(protocolElementBlockId: string, includeGps = true) {
     const file = selectedFiles[protocolElementBlockId];
     if (!file) return;
     setStatus(protocolElementBlockId, "saving");
     try {
+      // Vorab-Abgleich per SHA-256: ein im Mandanten schon vorhandenes Bild würde der Server
+      // ohnehin als Duplikat ablehnen - dann gar nicht erst übertragen.
+      if (await isAlreadyUploaded(file, "protocol_image")) {
+        setStatus(protocolElementBlockId, "error");
+        showToast(t("imageAlreadyExists"), "error");
+        return;
+      }
       const body = new FormData();
       body.append("file", file);
+      if (!includeGps) body.append("include_gps", "false");
       const created = await browserApiFetch<ProtocolImage>(`/api/protocol-element-blocks/${protocolElementBlockId}/images`, {
         method: "POST",
         body
@@ -1389,7 +1421,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/list-snapshot/refresh`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
       void refreshElementTitles();
       collab.sendFieldUpdate("element-titles", null);
     } catch (err: unknown) {
@@ -1403,7 +1435,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/list-snapshot/undo`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
       void refreshElementTitles();
       collab.sendFieldUpdate("element-titles", null);
     } catch (err: unknown) {
@@ -1418,7 +1450,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/list-snapshot/entries/${entryId}/accept-tracked-change`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
     } catch (err: unknown) {
       if (err instanceof Error) showToast(err.message);
     }
@@ -1430,7 +1462,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/rows/${rowId}/accept-tracked-change`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
     } catch (err: unknown) {
       if (err instanceof Error) showToast(err.message);
     }
@@ -1447,7 +1479,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/list-snapshot/sync`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
       void refreshElementTitles();
       collab.sendFieldUpdate("element-titles", null);
     } catch {
@@ -1574,11 +1606,13 @@ export function ProtocolEditor({
     const newConfig = { ...(block.configuration_snapshot_json ?? {}), manually_hidden: false };
     updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: true, configuration_snapshot_json: newConfig }));
     try {
-      await browserApiFetch(`/api/protocol-element-blocks/${blockId}`, {
+      const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(`/api/protocol-element-blocks/${blockId}`, {
         method: "PATCH",
-        body: JSON.stringify({ is_visible_snapshot: true, configuration_snapshot_json: newConfig }),
+        body: JSON.stringify({ is_visible_snapshot: true, configuration_snapshot_json: newConfig, expected_config_version: block.config_version }),
       });
+      updateBlockInState(blockId, (b) => ({ ...b, config_version: updated.config_version }));
     } catch (err: unknown) {
+      if (applyConfigConflict(blockId, err)) return;
       updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: false, configuration_snapshot_json: block.configuration_snapshot_json }));
       showToast(err instanceof Error ? err.message : t("eventShowFailed"), "error");
     }
@@ -1687,6 +1721,7 @@ export function ProtocolEditor({
           >
             {pdfBusyByProtocol[protocol.id] ? "…" : t("exportPdfButton")}
           </button>
+          <DocumentExportButton className="button-ghost" context={{ documentType: "protocol", protocolId: protocol.id }} />
           {!isReadOnly && workflowMeta[protocolStatus]?.ctaLabel && (
             <button
               type="button"
@@ -1703,6 +1738,12 @@ export function ProtocolEditor({
       <div className="status-row">
         <span className="pill">{protocol.protocol_number}</span>
         <span className="pill">{workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus, tRoot)}</span>
+        {protocol.created_at && (
+          <span className="pill">{t("createdAtPill", { date: formatDateTime(protocol.created_at, locale) })}</span>
+        )}
+        {protocol.template_version != null && (
+          <span className="pill">{t("templateVersionPill", { version: protocol.template_version })}</span>
+        )}
         {protocol.import_source_url && (
           <a
             className="pill"
@@ -1839,7 +1880,6 @@ export function ProtocolEditor({
               pendingTodos={pendingTodos}
               onPendingUpdate={(updated) => setPendingTodos((prev) => prev.map((t) => t.id === updated.id ? { ...t, ...updated } : t))}
               onPendingDone={(todoId) => setPendingTodos((prev) => prev.filter((t) => t.id !== todoId))}
-              documentTemplates={documentTemplates}
             />
             </div>
           ))}

@@ -10,8 +10,8 @@ export default async function AdminSystemPage() {
 
   return (
     <AdminShell session={session}>
-      <section className="panel">
-        <AdminSystemStatus initialStatus={status ?? { snapshot: null, stale: true, problems: [], events: [] }} />
+      <section className="admin-page">
+        <AdminSystemStatus initialStatus={status ?? { snapshot: null, stale: true, problems: [], events: [], overload: [] }} />
       </section>
     </AdminShell>
   );

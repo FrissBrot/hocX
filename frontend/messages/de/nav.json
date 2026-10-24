@@ -26,7 +26,6 @@
   "fines": "Bussen",
   "protocolTemplates": "Protokoll-Vorlagen",
   "elements": "Elemente",
-  "documentLayouts": "Dokument-Layouts",
   "general": "Allgemein",
   "domains": "Domains",
   "subscriptionAndUsage": "Abo & Nutzung",
@@ -50,5 +49,15 @@
   "sessionReady": "Bereit",
   "sessionLoading": "Arbeitsbereich wird geladen…",
   "connections": "Verknüpfungen",
-  "taskPackages": "Aufgabenpakete"
+  "taskPackages": "Aufgabenpakete",
+  "documentVerification": "Echtheitsprüfung",
+  "documentStudio": "Dokument-Studio",
+  "documentTemplates": "Vorlagen",
+  "documentBrand": "Corporate Design",
+  "documentAssets": "Bilder und Schriften",
+  "documentComponents": "Komponenten",
+  "documentExports": "Export-Verlauf",
+  "privacy": "Datenschutz",
+  "activity": "Verlauf",
+  "retention": "Aufbewahrung"
 }

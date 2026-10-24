@@ -10,6 +10,18 @@ Monorepo: `frontend/` (Next.js, Hauptapp + Plattform-Admin), `abgabebox-frontend
 - Bestehende Implementierungen und Tests bevorzugt über CCE auffinden; `grep`/`rg` gezielt einsetzen, wenn eine exakte Textsuche sinnvoller ist.
 - Tests zunächst möglichst nah an der Änderung und gezielt ausführen. Breitere Suites und E2E erst verwenden, wenn die Änderung oder Verifikation sie erfordert.
 
+## Sicherheitsregeln (verbindlich)
+
+@SECURITY-RULES.md
+
+Kurzfassung, falls die Datei nicht geladen wurde:
+
+- Jeder Datenzugriff ist auf den Mandanten des Aufrufers gescoped (`get_by_public_id(..., tenant_id=...)`); Schreiben ist strenger als Lesen.
+- Neue Tabelle mit Mandantendaten: `tenant_id NOT NULL` und RLS-Policy im selben Change (Untertabellen über die Elterntabelle).
+- SQL nur mit gebundenen Parametern; keine Geheimnisse in URLs, Logs oder im Repo; zustandsändernd nie per `GET`.
+- `python3 scripts/check-security-rules.py <Dateien>` muss `Sicherheitsregeln: ok` melden (läuft auch als Hook, im Pre-Commit und in der CI). Ausnahmen nur begründet in derselben Zeile markieren.
+- Änderungen an Auth, Mandantenzugriff, öffentlichen Endpunkten, Uploads, Migrationen oder Secrets: vor dem Commit Security-Review des Diffs (Agent `security-reviewer`).
+
 ## Design-Regeln (verbindlich)
 
 @design/DESIGN.md

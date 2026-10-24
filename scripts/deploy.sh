@@ -36,6 +36,8 @@ source "$REPO_DIR/scripts/lib/env_migrate.sh"
 source "$REPO_DIR/scripts/lib/cosign.sh"
 # shellcheck source=scripts/lib/github.sh
 source "$REPO_DIR/scripts/lib/github.sh"
+# shellcheck source=scripts/lib/dump_crypto.sh
+source "$REPO_DIR/scripts/lib/dump_crypto.sh"
 
 case "$ENVIRONMENT" in
   test)
@@ -276,7 +278,9 @@ create_env_file() {
 
 if [ ! -f "$ENV_FILE" ]; then
   create_env_file
-else
+fi
+# Auch direkt nach dem Erzeugen: ergaenzt u. a. die Objektspeicher-Secrets (idempotent).
+if [ -f "$ENV_FILE" ]; then
   echo "==> [$ENVIRONMENT] Env-Datei pruefen"
   migrate_env_file "$ENV_FILE"
 fi
@@ -347,7 +351,8 @@ run_preflight() {
   esac
   for value in "$POSTGRES_PASSWORD" "$APP_DB_PASSWORD" "$AUTH_SECRET" \
     "$ADMIN_AUTH_SECRET" "$INITIAL_ADMIN_PASSWORD" "$ABGABEBOX_DB_PASSWORD" \
-    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "${REDIS_PASSWORD:-}"; do
+    "$ABGABEBOX_CAPTCHA_SESSION_SECRET" "$PHOTO_WORKER_DB_PASSWORD" "$STORAGE_CREDENTIALS_KEY" "$EXPORT_ENCRYPTION_KEY" \
+    "$GARAGE_RPC_SECRET" "$GARAGE_ADMIN_TOKEN" "$LOCAL_S3_SECRET_KEY" "$LOCAL_S3_ABGABEBOX_SECRET_KEY" "${REDIS_PASSWORD:-}"; do
     case "$value" in
       ""|ChangeMe123\!*|change-me*|changeme*|secret|hocx|hocx_app|hocx_abgabebox|hocx_photo_worker|*keep-local-only*)
         echo "Unsicherer Entwicklungs- oder Platzhalterwert in der Release-Konfiguration." >&2
@@ -378,10 +383,10 @@ run_preflight() {
   fi
   mkdir -p "$PROJECT_DIR/backups" "$PROJECT_DIR/.releases" "$PROJECT_DIR/.secrets"
   chmod 700 "$PROJECT_DIR/backups" "$PROJECT_DIR/.releases" "$PROJECT_DIR/.secrets"
-  test -w "$PROJECT_DIR/backups" && test -w "$PROJECT_DIR/.releases" && test -w "$PROJECT_DIR/.secrets" || {
+  if ! { test -w "$PROJECT_DIR/backups" && test -w "$PROJECT_DIR/.releases" && test -w "$PROJECT_DIR/.secrets"; }; then
     echo "Backup-, Release- oder Secrets-Verzeichnis ist nicht beschreibbar." >&2
     return 1
-  }
+  fi
   ensure_cosign
   echo "    Preflight: ok"
 }
@@ -427,8 +432,73 @@ write_secret_files() {
   write_secret_file "$secrets_dir" friendly_captcha_api_key "$FRIENDLY_CAPTCHA_API_KEY"
   write_secret_file "$secrets_dir" abgabebox_captcha_session_secret "$ABGABEBOX_CAPTCHA_SESSION_SECRET"
   write_secret_file "$secrets_dir" cf_dns_api_token "$CF_DNS_API_TOKEN"
+  write_secret_file "$secrets_dir" storage_credentials_key "$STORAGE_CREDENTIALS_KEY"
+  write_secret_file "$secrets_dir" export_encryption_key "$EXPORT_ENCRYPTION_KEY"
+  write_secret_file "$secrets_dir" garage_rpc_secret "$GARAGE_RPC_SECRET"
+  write_secret_file "$secrets_dir" garage_admin_token "$GARAGE_ADMIN_TOKEN"
+  write_secret_file "$secrets_dir" local_s3_secret_key "$LOCAL_S3_SECRET_KEY"
+  write_secret_file "$secrets_dir" local_s3_abgabebox_secret_key "$LOCAL_S3_ABGABEBOX_SECRET_KEY"
   write_secret_file "$secrets_dir" redis_password "$REDIS_PASSWORD"
+  # Backup (docs-site/docs/technik/backup/betrieb.md): Passphrase aus .env, SSH-Schlüssel und
+  # known_hosts als Dateien auf dem Host. Nicht konfiguriert = leere Platzhalter (der
+  # backup-worker meldet dann "nicht eingerichtet" statt dass Compose den Start verweigert).
+  write_secret_file "$secrets_dir" backup_passphrase "${BACKUP_PASSPHRASE:-}"
+  copy_secret_file "$secrets_dir" backup_ssh_key "${BACKUP_SSH_KEY_PATH:-}" || return 1
+  copy_secret_file "$secrets_dir" backup_known_hosts "${BACKUP_KNOWN_HOSTS_PATH:-}" || return 1
   echo "    Secret-Dateien aktuell: $secrets_dir"
+}
+
+copy_secret_file() {
+  local secrets_dir="$1" name="$2" source="$3" mode owner_uid
+  if [ -z "$source" ]; then
+    write_secret_file "$secrets_dir" "$name" ""
+    return 0
+  fi
+  if [ ! -f "$source" ] || [ -L "$source" ]; then
+    echo "$source (fuer $name) muss eine regulaere Datei und darf kein Symlink sein." >&2
+    return 1
+  fi
+  owner_uid="$(stat -c '%u' "$source")"
+  mode="$(stat -c '%a' "$source")"
+  if { [ "$owner_uid" != "$EUID" ] && [ "$owner_uid" != 0 ]; } || (( (8#$mode & 077) != 0 )); then
+    echo "Unsichere Rechte fuer $source: Besitzer $owner_uid, Modus $mode (erwartet: eigener Benutzer, 600)." >&2
+    return 1
+  fi
+  write_secret_file "$secrets_dir" "$name" "$(cat "$source")
+"
+}
+
+# Vor Datenbankmigrationen: geschütztes Backup über den laufenden backup-worker, auf dessen Ende
+# gewartet wird. Ohne erfolgreiches Backup bricht der Deploy ab - ausser HOCX_PRE_DEPLOY_BACKUP=skip
+# ist bewusst gesetzt (dann bleibt der lokale pg_dump oben die einzige Absicherung).
+run_pre_deploy_backup() {
+  if [ "${BACKUP_ENABLED:-false}" != true ]; then
+    echo "    Borg-Backup nicht eingerichtet - nur lokaler Datenbank-Dump."
+    return 0
+  fi
+  if [ "${HOCX_PRE_DEPLOY_BACKUP:-required}" = skip ]; then
+    echo "    WARNUNG: HOCX_PRE_DEPLOY_BACKUP=skip - Deploy ohne vorheriges Offsite-Backup (bewusste Entscheidung)."
+    return 0
+  fi
+  if ! "${DC[@]}" ps backup-worker --status running -q 2>/dev/null | grep -q .; then
+    echo "backup-worker laeuft nicht - kein Backup vor dem Update moeglich." >&2
+    echo "Entweder backup-worker starten oder bewusst HOCX_PRE_DEPLOY_BACKUP=skip setzen." >&2
+    return 1
+  fi
+  # Teilweise erfolgreich (Datenbank-Dump vollstaendig, einzelne Objekte fehlen schon vorher)
+  # blockiert den Deploy nicht; die fehlenden Objekte stehen im Log. Streng: ..._ALLOW_PARTIAL=false.
+  local partial_args=(--accept-partial)
+  if [ "${HOCX_PRE_DEPLOY_BACKUP_ALLOW_PARTIAL:-true}" = false ]; then
+    partial_args=()
+  fi
+  echo "==> [$ENVIRONMENT] Offsite-Backup vor dem Update (geschuetzt, wartet auf Abschluss bzw. ein laufendes Backup)"
+  if ! "${DC[@]}" exec -T backup-worker python -m app.backup.cli enqueue-backup --trigger pre_deploy \
+      --key "$HOCX_VERSION-$(date +%Y%m%d%H%M%S)" --protect --reason "Vor Update auf $HOCX_VERSION" \
+      --wait --timeout "${HOCX_PRE_DEPLOY_BACKUP_TIMEOUT:-7200}" "${partial_args[@]}"; then
+    echo "Offsite-Backup vor dem Update fehlgeschlagen - Update abgebrochen, die laufende App ist unveraendert." >&2
+    echo "Details: Admin-Portal -> System -> Backups. Bewusst ohne Backup: HOCX_PRE_DEPLOY_BACKUP=skip." >&2
+    return 1
+  fi
 }
 
 prepare_runtime_permissions() {
@@ -465,31 +535,49 @@ prepare_runtime_permissions() {
 }
 
 prepare_thumbnail_dir() {
-  # storage-local/thumbnails (ab 1.1.0) liegt bewusst ausserhalb von HOCX_STORAGE_PATH und ist
-  # nicht im Repo. Existiert es nicht, legt Docker den Bind-Mount als root:root an und der
-  # Backend-Nutzer (uid 5000, Gruppe 5001) kann keine Vorschaubilder schreiben. Der
-  # Deploy-Benutzer darf nicht selbst auf Gruppe 5001 chgrp'en; deshalb laeuft die
-  # Berechtigungs-Korrektur in einem kurzlebigen Container aus dem bereits signaturgeprueften
-  # Backend-Image (HOCX_BACKEND_IMAGE stammt aus dem Release-Manifest).
+  # storage-local/thumbnails (ab 1.1.0) und storage-local/work (ab 1.2.0, lokaler Arbeitsbereich
+  # des Objektspeichers) liegen bewusst ausserhalb von HOCX_STORAGE_PATH und sind nicht im Repo.
+  # Existieren sie nicht, legt Docker den Bind-Mount als root:root an und der Backend-Nutzer
+  # (uid 5000, Gruppe 5001) kann dort nicht schreiben. Der Deploy-Benutzer darf nicht selbst auf
+  # Gruppe 5001 chgrp'en; deshalb laeuft die Berechtigungs-Korrektur in einem kurzlebigen
+  # Container aus dem bereits signaturgeprueften Backend-Image (HOCX_BACKEND_IMAGE stammt aus dem
+  # Release-Manifest).
   local base="$PROJECT_DIR/storage-local"
-  local dir="$base/thumbnails"
+  local dir
 
-  echo "==> [$ENVIRONMENT] Thumbnail-Verzeichnis vorbereiten"
-  if [ -L "$base" ] || [ -L "$dir" ]; then
-    echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
-    return 1
-  fi
-  mkdir -p "$dir"
-  if ! find "$dir" \( ! -group 5001 -o ! -perm -g+w -o -perm /007 \) -print -quit | grep -q .; then
-    echo "    Thumbnail-Verzeichnis: ok"
-    return 0
-  fi
-  echo "    Haerte Berechtigungen: $dir"
-  docker run --rm --pull never --network none --user 0:0 \
-    --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add FSETID --cap-add DAC_OVERRIDE \
-    --security-opt no-new-privileges:true --entrypoint sh \
-    -v "$dir:/target" "$HOCX_BACKEND_IMAGE" \
-    -c 'chgrp -R 5001 /target && chmod -R g+rwX,o-rwx /target && find /target -type d -exec chmod g+s {} +'
+  echo "==> [$ENVIRONMENT] Lokale Arbeitsverzeichnisse vorbereiten"
+  for dir in "$base/thumbnails" "$base/work" "$PROJECT_DIR/backups/storage" "$PROJECT_DIR/backups/borg-work"; do
+    if [ -L "$base" ] || [ -L "$dir" ]; then
+      echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
+      return 1
+    fi
+    mkdir -p "$dir"
+    if ! find "$dir" \( ! -group 5001 -o ! -perm -g+w -o -perm /007 \) -print -quit | grep -q .; then
+      echo "    $(basename "$dir"): ok"
+      continue
+    fi
+    echo "    Haerte Berechtigungen: $dir"
+    docker run --rm --pull never --network none --user 0:0 \
+      --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add FSETID --cap-add DAC_OVERRIDE \
+      --security-opt no-new-privileges:true --entrypoint sh \
+      -v "$dir:/target" "$HOCX_BACKEND_IMAGE" \
+      -c 'chgrp -R 5001 /target && chmod -R g+rwX,o-rwx /target && find /target -type d -exec chmod g+s {} +'
+  done
+}
+
+
+# Worker ohne eigenes Image: sie laufen mit dem Backend-Image (HOCX_BACKEND_IMAGE). Das
+# Release-Manifest merkt sich, welche davon das Release hatte - ein Rollback auf ein älteres
+# Release (z. B. 1.1.x ohne Objektspeicher/Backup/Dokumentverarbeitung) stoppt die übrigen,
+# statt sie mit dem neuen Image neben dem alten Backend weiterlaufen zu lassen.
+BACKEND_IMAGE_WORKERS=(storage-worker backup-worker document-worker job-worker)
+
+backend_workers_in_compose() {
+  local worker found=()
+  for worker in "${BACKEND_IMAGE_WORKERS[@]}"; do
+    service_exists "$worker" && found+=("$worker")
+  done
+  echo "${found[*]:-}"
 }
 
 verify_release_images() {
@@ -530,6 +618,7 @@ create_release_manifest() {
     variable="${variable//-/_}"
     printf "%s='%s'\n" "$variable" "$digest_ref" >> "$temp_file"
   done
+  printf "HOCX_BACKEND_WORKERS='%s'\n" "$(backend_workers_in_compose)" >> "$temp_file"
   mv "$temp_file" "$manifest_file"
   chmod 600 "$manifest_file"
   trap - RETURN
@@ -566,6 +655,11 @@ capture_current_release() {
     variable="${variable//-/_}"
     printf "%s='%s'\n" "$variable" "$digest_ref" >> "$temp_file"
   done
+  local worker running_workers=()
+  for worker in "${BACKEND_IMAGE_WORKERS[@]}"; do
+    [ -n "$("${DC[@]}" ps -q "$worker" 2> /dev/null || true)" ] && running_workers+=("$worker")
+  done
+  printf "HOCX_BACKEND_WORKERS='%s'\n" "${running_workers[*]:-}" >> "$temp_file"
   mv "$temp_file" "$current_manifest"
   chmod 600 "$current_manifest"
   trap - RETURN
@@ -578,13 +672,24 @@ rollback_apps() {
   echo "==> [$ENVIRONMENT] Automatischer App-Rollback"
   if [ ! -f "$current_manifest" ]; then
     echo "    Kein vorheriges Release vorhanden; stoppe neu gestartete App-Services." >&2
-    "${DC[@]}" stop backend frontend abgabebox-backend abgabebox-frontend docs photo-analysis-worker || true
+    "${DC[@]}" stop backend frontend abgabebox-backend abgabebox-frontend docs photo-analysis-worker "${BACKEND_IMAGE_WORKERS[@]}" || true
     return 1
   fi
   # Die Image-Variablen des fehlgeschlagenen Releases duerfen das alte Manifest nicht ueberlagern.
   unset HOCX_BACKEND_IMAGE HOCX_FRONTEND_IMAGE HOCX_ABGABEBOX_BACKEND_IMAGE \
-    HOCX_ABGABEBOX_FRONTEND_IMAGE HOCX_DOCS_IMAGE HOCX_PHOTO_ANALYSIS_WORKER_IMAGE
+    HOCX_ABGABEBOX_FRONTEND_IMAGE HOCX_DOCS_IMAGE HOCX_PHOTO_ANALYSIS_WORKER_IMAGE HOCX_BACKEND_WORKERS
   load_env_file "$current_manifest"
+  # Worker mit dem Backend-Image: mit dem alten Image neu starten, wenn das vorherige Release
+  # sie hatte, sonst stoppen (Manifeste vor 1.2.0 kennen HOCX_BACKEND_WORKERS nicht).
+  local worker
+  for worker in "${BACKEND_IMAGE_WORKERS[@]}"; do
+    service_exists "$worker" || continue
+    if [[ " ${HOCX_BACKEND_WORKERS:-} " == *" $worker "* ]]; then
+      services+=("$worker")
+    else
+      "${DC[@]}" stop "$worker" || true
+    fi
+  done
   if [ -n "${HOCX_PHOTO_ANALYSIS_WORKER_IMAGE:-}" ]; then
     services+=(photo-analysis-worker)
   else
@@ -687,9 +792,24 @@ run_smoke_checks() {
       "python3 -c \"from app.face_quality import load_detector; load_detector('/app/models/face_detection_yunet.onnx')\"" \
       || return 1
   fi
+
+  # Worker ohne HTTP-Endpunkt mit dem Backend-Image: Code lädt, Werkzeuge sind im Image. Nach
+  # einem Rollback auf ein Release ohne den Worker ist er gestoppt und wird übersprungen.
+  if service_exists document-worker && [ -n "$("${DC[@]}" ps -q --status running document-worker 2> /dev/null || true)" ]; then
+    wait_for_exec document-worker "Document-Worker" \
+      "python3 -c \"import sys, app.workers.document_worker; from app.services.documents.convert import soffice_binary; from app.services.documents.ocr import ocr_available; sys.exit(0 if soffice_binary() and ocr_available() else 1)\"" \
+      || return 1
+  fi
+  if service_exists storage-worker && [ -n "$("${DC[@]}" ps -q --status running storage-worker 2> /dev/null || true)" ]; then
+    wait_for_exec storage-worker "Storage-Worker" "python3 -c \"import app.workers.storage_worker\"" || return 1
+  fi
+  # Schwere Hintergrundjobs und PDF-Aufträge (Concurrency-Audit Paket 10).
+  if service_exists job-worker && [ -n "$("${DC[@]}" ps -q --status running job-worker 2> /dev/null || true)" ]; then
+    wait_for_exec job-worker "Job-Worker" "python3 -c \"import app.workers.job_worker; app.workers.job_worker.loop_factories()\"" || return 1
+  fi
 }
 
-# Behaelt die neuesten <keep> Pre-Deploy-Dumps (*-pre-*.sql.gz) und loescht aeltere. Der
+# Behaelt die neuesten <keep> Pre-Deploy-Dumps (*-pre-*.sql.gz[.gpg]) und loescht aeltere. Der
 # Zeitstempel am Dateianfang sortiert lexikografisch chronologisch.
 prune_pre_deploy_backups() {
   local dir="$1" keep="$2" file
@@ -697,7 +817,7 @@ prune_pre_deploy_backups() {
     echo "    PRE_DEPLOY_BACKUP_KEEP muss eine positive Zahl sein - keine Rotation." >&2
     return 0
   }
-  find "$dir" -maxdepth 1 -type f -name '*-pre-*.sql.gz' -printf '%f\n' | sort -r | tail -n "+$((keep + 1))" |
+  find "$dir" -maxdepth 1 -type f \( -name '*-pre-*.sql.gz' -o -name '*-pre-*.sql.gz.gpg' \) -printf '%f\n' | sort -r | tail -n "+$((keep + 1))" |
     while IFS= read -r file; do
       rm -f -- "$dir/$file"
       echo "    Altes Pre-Deploy-Backup entfernt: $file"
@@ -712,15 +832,24 @@ capture_current_release
 echo "==> [$ENVIRONMENT] Backup der Datenbank vor dem Update auf $HOCX_VERSION"
 BACKUP_DIR="$PROJECT_DIR/backups"
 mkdir -p "$BACKUP_DIR"
-BACKUP_FILE="$BACKUP_DIR/$(date +%Y%m%d-%H%M%S)-pre-$HOCX_VERSION.sql.gz"
+chmod 700 "$BACKUP_DIR"
+# Verschlüsselt mit dem öffentlichen Schlüssel aus BACKUP_DUMP_PUBLIC_KEY_PATH, sonst gzip mit
+# Warnung (scripts/lib/dump_crypto.sh, Datenschutz-Audit PRIV-009).
+check_dump_encryption || exit 1
+BACKUP_FILE="$BACKUP_DIR/$(date +%Y%m%d-%H%M%S)-pre-$HOCX_VERSION$(dump_suffix)"
 if "${DC[@]}" ps db --status running -q > /dev/null 2>&1 && [ -n "$("${DC[@]}" ps db --status running -q)" ]; then
-  "${DC[@]}" exec -T db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" | gzip > "$BACKUP_FILE"
+  "${DC[@]}" exec -T db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" | write_dump "$BACKUP_FILE"
   echo "    Backup: $BACKUP_FILE"
   # Pre-Deploy-Dumps wuchsen bisher unbegrenzt auf derselben Partition (Audit MAIN-OPS-010).
-  # Die neuesten PRE_DEPLOY_BACKUP_KEEP (Default 10) bleiben fuer Rollbacks erhalten.
+  # Die neuesten PRE_DEPLOY_BACKUP_KEEP (Default 10) bleiben fuer Rollbacks erhalten, aber nicht
+  # länger als PRE_DEPLOY_BACKUP_MAX_DAYS (Default 30, die neueste Datei immer) - PRIV-009.
   prune_pre_deploy_backups "$BACKUP_DIR" "${PRE_DEPLOY_BACKUP_KEEP:-10}"
+  prune_dumps_older_than "$BACKUP_DIR" '*-pre-*.sql.gz*' "${PRE_DEPLOY_BACKUP_MAX_DAYS:-30}"
 else
   echo "    db-Container laeuft noch nicht (erster Deploy) - kein Backup noetig."
+fi
+if "${DC[@]}" ps db --status running -q > /dev/null 2>&1 && [ -n "$("${DC[@]}" ps db --status running -q)" ]; then
+  run_pre_deploy_backup || exit 1
 fi
 
 echo "==> [$ENVIRONMENT] Pull Images ($HOCX_VERSION)"
@@ -770,6 +899,15 @@ if ! run_smoke_checks; then
   rollback_apps || true
   exit 1
 fi
+
+# Lokales S3 in den Sollzustand bringen (z. B. nach einem Wechsel zu externem S3 wieder stoppen,
+# das `up -d` oben hat es gestartet). Stoppt nur, löscht nie Daten.
+controller_files=()
+for ((index = 0; index < ${#COMPOSE_ARGS[@]}; index++)); do
+  [ "${COMPOSE_ARGS[$index]}" = "-f" ] && controller_files+=("${COMPOSE_ARGS[$((index + 1))]}")
+done
+HOCX_COMPOSE_PROJECT="$PROJECT_NAME" HOCX_COMPOSE_FILES="${controller_files[*]}" HOCX_ENV_FILE="$ENV_FILE" \
+  "$PROJECT_DIR/scripts/storage_controller.sh" || echo "    WARNUNG: Storage-Controller meldete einen Fehler (siehe oben)"
 
 if [ "$ENVIRONMENT" = test ]; then
   echo "==> [$ENVIRONMENT] Demo-Mandant neu befuellen"

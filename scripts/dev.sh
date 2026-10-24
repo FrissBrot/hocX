@@ -19,6 +19,7 @@ ENV_FILE="$REPO_DIR/.env"
 # shellcheck source=scripts/lib/env.sh
 source "$REPO_DIR/scripts/lib/env.sh"
 
+# shellcheck disable=SC2119 # bewusst ohne Argument: Standard-Markierung /etc/hocx/environment
 require_unprovisioned_dev_host
 
 usage() {

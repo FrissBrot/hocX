@@ -47,7 +47,7 @@ def _block(db, *, code: str, title: str, sort_index: int = 10, default_content: 
         "default_content": default_content, "copy_from_last_protocol": False,
         "element_type_id": element_type_id(db, code), "render_type_id": render_type_id,
         "is_editable": True, "allows_multiple_values": False, "export_visible": True, "is_visible": True,
-        "sort_index": sort_index, "render_order": sort_index, "latex_template": None,
+        "sort_index": sort_index, "render_order": sort_index,
         "configuration_json": configuration_json or {},
     }
 

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from app.core.db import get_db
+from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, require_admin, require_reader, require_writer
 from app.models.entities import Participant, Template
 from app.schemas.participant import (
@@ -28,6 +29,9 @@ from app.services.template_service import TemplateService
 from app.services.user_service import UserService
 from app.schemas.user import UserUpdate
 from app.schemas.template import TemplateRead
+from app.schemas.data_export import ProtectedExportRequest
+from app.services.data_export import personal as personal_data
+from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter()
 participant_service = ParticipantService()
@@ -165,8 +169,33 @@ def delete_participant(
     return {"message": "Participant deleted"}
 
 
+@router.post("/participants/{participant_id}/personal-data")
+def export_participant_personal_data(
+    participant_id: uuid.UUID,
+    payload: ProtectedExportRequest,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Datenauskunft für eine Person als passwortgeschütztes ZIP (DSG Art. 25, DSGVO Art. 15; PRIV-006).
+    Nur Mandanten-Admins: die Auskunft enthält alle Daten der Person."""
+    require_admin(user)
+    enforce_rate_limit(f"personal-data-export-admin:{user.user_id}", limit=30, period_seconds=3600)
+    participant = _get_participant_or_404(db, participant_id, user)
+    return personal_data.respond(db, participant, password=payload.password, actor=user, self_export=False)
+
+
 @router.post("/participants/import-csv", response_model=ParticipantImportResult, status_code=status.HTTP_200_OK)
 async def import_participants_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_import_participants_csv_impl, file=file, db=db, user=user)
+
+
+async def _import_participants_csv_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),

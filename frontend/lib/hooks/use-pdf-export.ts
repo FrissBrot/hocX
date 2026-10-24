@@ -3,20 +3,28 @@
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useToast } from "@/contexts/toast-context";
-import { browserApiBaseUrl, browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
+import { browserApiBaseUrl } from "@/lib/api/client";
+import { renderDocument } from "@/lib/documents/api";
 
 export type PdfExportResult = {
   content_url?: string | null;
-  status: string;
-  export_format: string;
   version_major?: number | null;
   version_minor?: number | null;
+  version_label?: string | null;
 };
 
-/** Öffnet eine PDF aus dem aktuellen gespeicherten Stand, in Liste und Detailansicht. */
+function parseVersion(label: string | null | undefined): { major: number | null; minor: number | null } {
+  const match = /^v(\d+)\.(\d+)$/.exec(label ?? "");
+  return match ? { major: Number(match[1]), minor: Number(match[2]) } : { major: null, minor: null };
+}
+
+/** Erzeugt das Protokoll-PDF (Dokument-Engine, im Dokumentenregister erfasst) aus dem aktuellen Stand und öffnet es.
+ * Seit dem Concurrency-Audit (Paket 10) ein Auftrag für den job-worker: renderDocument fragt den
+ * Stand ab; ist das PDF fertig, öffnet es sich im vorab geöffneten Tab und eine Meldung (auch nach
+ * einem Seitenwechsel, der Toast-Provider lebt in der App-Shell) öffnet es per Klick. */
 export function usePdfExport() {
+  const t = useTranslations("documentStudio");
   const showToast = useToast();
-  const tCommon = useTranslations("common");
   const [busyByProtocol, setBusyByProtocol] = useState<Record<string, boolean>>({});
   const pendingProtocols = useRef(new Set<string>());
 
@@ -36,25 +44,20 @@ export function usePdfExport() {
       pdfWindow = window.open("about:blank", "_blank");
       if (pdfWindow) pdfWindow.opener = null;
 
-      const result = await browserApiFetch<PdfExportResult>(`/api/protocols/${protocolId}/exports/pdf`, {
-        method: "POST",
-        timeoutMs: LONG_RUNNING_TIMEOUT_MS,
-      });
-      if (!result.content_url) {
-        throw new Error(tCommon("clientErrors.pdfNotProvided"));
+      const result = await renderDocument({ protocol_id: protocolId, document_type: "protocol" });
+      if (!result?.content_url) {
+        throw new Error(t("export.failed"));
       }
-      onExported?.(result);
+      const version = parseVersion(result.version_label);
+      onExported?.({ content_url: result.content_url, version_label: result.version_label, version_major: version.major, version_minor: version.minor });
       const pdfUrl = `${browserApiBaseUrl}${result.content_url}`;
-      if (pdfWindow && !pdfWindow.closed) {
-        pdfWindow.location.replace(pdfUrl);
-      } else {
-        showToast(tCommon("clientErrors.pdfReadyClick"), "success", {
-          onMessageClick: () => window.open(pdfUrl, "_blank", "noopener,noreferrer"),
-        });
-      }
+      if (pdfWindow && !pdfWindow.closed) pdfWindow.location.replace(pdfUrl);
+      showToast(t("export.pdfReady"), "success", {
+        onMessageClick: () => window.open(pdfUrl, "_blank", "noopener,noreferrer"),
+      });
     } catch (error) {
       pdfWindow?.close();
-      showToast(error instanceof Error ? error.message : tCommon("clientErrors.pdfExportFailed"), "error");
+      showToast(error instanceof Error && error.message ? error.message : t("export.failed"), "error");
     } finally {
       pendingProtocols.current.delete(protocolId);
       setBusyByProtocol((current) => ({ ...current, [protocolId]: false }));

@@ -21,6 +21,7 @@ import { SubmissionLinkManager } from "@/components/submission-assignments/submi
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
+import { useDeleteWithFiles } from "@/components/ui/delete-with-files-modal";
 import {
   AssignmentSummary,
   CycleConfigSummary,
@@ -29,6 +30,7 @@ import {
   StructuredListDefinition,
   SubmissionAssignment,
   SubmissionElementStatusEntry,
+  SubmissionFile,
   SubmissionLink,
   SubmissionUploadLogEntry,
 } from "@/types/api";
@@ -266,6 +268,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
   const t = useTranslations("submissionAssignments");
   const showToast = useToast();
   const confirm = useConfirm();
+  const { requestDelete, modal: deleteModal } = useDeleteWithFiles();
   const [assignments, setAssignments] = useState(initialAssignments);
   const [links, setLinks] = useState(initialLinks);
   const [linksModalOpen, setLinksModalOpen] = useState(false);
@@ -443,13 +446,15 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
   }
 
   async function deleteAssignment(id: string) {
-    const ok = await confirm({
-      message: t("deleteAssignmentConfirm"),
-      tone: "danger",
-    });
-    if (!ok) return;
     try {
-      await browserApiFetch(`/api/submission-assignments/${id}`, { method: "DELETE" });
+      // Rückfrage mit Auswahl der eingereichten Dateien (Datenschutz-Audit PRIV-003).
+      const result = await requestDelete({
+        title: t("deleteAssignmentTitle"),
+        message: t("deleteAssignmentConfirm"),
+        previewUrl: `/api/submission-assignments/${id}/deletion-preview`,
+        deleteUrl: `/api/submission-assignments/${id}/delete`,
+      });
+      if (!result) return;
       setAssignments((current) => current.filter((item) => item.id !== id));
       setSummaries((prev) => { const n = { ...prev }; delete n[id]; return n; });
       if (selectedId === id) {
@@ -459,6 +464,20 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       showToast(t("assignmentDeletedToast"), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("assignmentDeleteFailed"), "error");
+    }
+  }
+
+  // Eine eingereichte Datei endgültig löschen, z. B. auf Wunsch der einreichenden Person (PRIV-003).
+  async function deleteSubmittedFile(file: SubmissionFile) {
+    const ok = await confirm({ message: t("deleteFileConfirm", { name: file.original_name }), tone: "danger", confirmLabel: t("delete") });
+    if (!ok || !selectedId) return;
+    try {
+      await browserApiFetch(file.content_url.replace(/\/content$/, ""), { method: "DELETE" });
+      const data = await refreshElements(selectedId);
+      setElementModal((current) => (current ? data.find((el) => el.element_ref === current.element_ref) ?? null : null));
+      showToast(t("fileDeletedToast"), "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("fileDeleteFailed"), "error");
     }
   }
 
@@ -580,6 +599,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
 
   return (
     <div className="grid subm-root">
+      {deleteModal}
       {/* Header — always visible, including ClamAV status */}
       <div className="page-header">
         <div>
@@ -832,6 +852,15 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                           {scanStatusLabel(t)[file.scan_status] ?? file.scan_status}
                         </Badge>
                       )}
+                      <button
+                        type="button"
+                        className="button-icon-soft button-icon-soft-danger"
+                        aria-label={t("deleteFileAction")}
+                        title={t("deleteFileAction")}
+                        onClick={() => void deleteSubmittedFile(file)}
+                      >
+                        <ActionIcon name="delete" />
+                      </button>
                     </div>
                   ))}
                 </div>

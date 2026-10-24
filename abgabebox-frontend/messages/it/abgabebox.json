@@ -76,6 +76,7 @@
     "captchaPlaceholder": "Verifica di sicurezza (nessun FriendlyCaptcha configurato – ambiente di test/sviluppo)",
     "submit": "Invia",
     "submitting": "Caricamento in corso…",
+    "busyRetry": "Molti caricamenti in corso – nuovo tentativo tra {seconds, plural, one {# secondo} other {# secondi}} …",
     "successTitle": "Grazie, consegna ricevuta",
     "successCount": "{count, plural, one {# file caricato per questa consegna.} other {# file caricati per questa consegna.}}",
     "uploadMore": "Consegna un altro file",
@@ -104,10 +105,115 @@
       "element": "Documento",
       "files": "File",
       "receivedAt": "Ricevuto"
-    }
+    },
+    "includeGps": "Invia i dati GPS dell’immagine",
+    "privacyResponsible": "Il responsabile dei tuoi file è {tenant}.",
+    "privacyLink": "Informativa sulla privacy",
+    "privacyCaptcha": "Per evitare lo spam, Friendly Captcha verifica il tuo browser senza cookie e senza tracciamento."
   },
   "language": {
     "label": "Lingua"
   },
-  "copyright": "Copyright © {year} hocX Project · Tutti i diritti riservati."
+  "copyright": "Copyright © {year} hocX Project · Tutti i diritti riservati.",
+  "verify": {
+    "brand": {
+      "subtitle": "Verifica di autenticità",
+      "headline": "Questo documento proviene davvero da hocX?",
+      "lead": "Trascina il file PDF. Confrontiamo la sua impronta digitale con tutti i documenti creati con hocX.",
+      "privacyNote": "Il file non lascia il tuo dispositivo - viene verificata solo la sua impronta."
+    },
+    "title": "Verifica autenticità",
+    "hint": "Verifica se un file PDF proviene da hocX senza modifiche.",
+    "documentHint": "Documento {id} – trascina qui il file PDF per verificarlo.",
+    "dropLabelTouch": "Seleziona il file PDF",
+    "dropRelease": "Rilascia per verificare",
+    "dropOverlay": "Rilascia il file per verificarlo",
+    "privacy": "Il file non viene caricato. Il tuo browser calcola la sua impronta digitale (SHA-256) e invia solo quella per la verifica.",
+    "checking": "Verifica in corso …",
+    "checkAnother": "Verifica un altro file",
+    "originalTitle": "Originale",
+    "originalText": "Questo file è una copia non modificata di un documento creato con hocX il {date}.",
+    "fields": {
+      "documentType": "Tipo di documento",
+      "title": "Titolo",
+      "status": "Stato al momento della creazione",
+      "version": "Versione",
+      "documentId": "ID documento"
+    },
+    "statusLabel": {
+      "geplant": "Bozza (pianificato)",
+      "durchgeführt": "Bozza (svolto)",
+      "abgeschlossen": "Concluso"
+    },
+    "docType": {
+      "protocol": "Verbale",
+      "invitation": "Convocazione",
+      "todos": "Elenco attività",
+      "events": "Calendario",
+      "attendance_sheet": "Foglio presenze",
+      "members": "Elenco membri",
+      "finance": "Rapporto finanziario",
+      "statistics": "Rapporto annuale",
+      "list": "Lista",
+      "custom": "Documento",
+      "protocol_excerpt": "Estratto del verbale"
+    },
+    "createdBy": "Creato nell’account hocX di {name}.",
+    "verifiedBadge": "Organizzazione verificata",
+    "verifiedExplanation": "hocX ha confermato che questo account appartiene all’organizzazione «{name}».",
+    "logoAlt": "Logo di {name}",
+    "otherDocument": "Il file è autentico, ma appartiene a un documento diverso da quello del codice QR scansionato.",
+    "importUnverified": "Importato, non verificato: questa voce proviene da un'importazione di dati e non è stato possibile confrontarla con il file originale in quel momento.",
+    "titleOverridden": "Il titolo è stato impostato diversamente dal verbale durante l'esportazione.",
+    "newerVersion": "Esiste una versione più recente ({version}) di questo documento.",
+    "notFoundTitle": "Non trovato",
+    "notFoundText": "Questo file non corrisponde a nessun documento creato con hocX.",
+    "notFoundHint": "Verifica sempre il file che hai ricevuto originariamente.",
+    "error": "Al momento la verifica non è possibile. Riprova tra poco.",
+    "readError": "Impossibile leggere il file.",
+    "tooLarge": "Il file è troppo grande (al massimo {size} MB).",
+    "noCrypto": "Il tuo browser non supporta la verifica. Usa un browser aggiornato.",
+    "site": {
+      "label": "Pagina di verifica di {name}",
+      "eyebrow": "Pagina di verifica ufficiale",
+      "hint": "Verifica se un file PDF proviene senza modifiche da {name}.",
+      "poweredBy": "Verifica fornita da hocX"
+    },
+    "domainBadge": "Dominio di verifica confermato: {domain}",
+    "domainExplanation": "Il dominio {domain} è collegato all'account hocX di «{name}» tramite un record DNS. Non prova l'identità dell'organizzazione – solo la conferma da parte di hocX lo fa.",
+    "foreignDocument": "Questo documento non è stato emesso da «{site}».",
+    "forwarded": "È stata verificata l'impronta del file selezionato nella pagina di verifica precedente.",
+    "redirect": {
+      "tenantTitle": "Continua alla pagina di verifica di «{name}»",
+      "tenantText": "«{name}» conferma i propri documenti su {domain}. Reindirizzamento tra {seconds, plural, one {# secondo} other {# secondi}} – la verifica avviene lì automaticamente, senza selezionare di nuovo il file.",
+      "tenantStayed": "«{name}» conferma i propri documenti anche su {domain}.",
+      "centralTitle": "Documento di un'altra organizzazione",
+      "centralText": "Questo documento non è stato emesso da «{site}». Reindirizzamento alla pagina di verifica di hocX tra {seconds, plural, one {# secondo} other {# secondi}}.",
+      "centralStayed": "Questo documento non è stato emesso da «{site}». La pagina di verifica di hocX mostra chi l'ha emesso.",
+      "stay": "Resta qui",
+      "openTenant": "Apri la pagina di verifica",
+      "openCentral": "Alla pagina di verifica di hocX"
+    },
+    "checkingHash": "Calcolo dell’impronta …",
+    "fileWithSize": "{name} · {size}",
+    "dropTitle": "Trascina qui un PDF",
+    "dropOr": "oppure <choose>scegli un file</choose>",
+    "issuedBy": "Emesso da",
+    "hashLabel": "SHA-256 {hash}",
+    "forwardedShort": "File dalla pagina di verifica precedente",
+    "notFoundReasons": {
+      "title": "Motivi frequenti",
+      "changed": "Il file è stato modificato dopo il download.",
+      "resaved": "Un nuovo salvataggio, «Stampa in PDF» o la compressione modificano il file – anche se il contenuto sembra uguale.",
+      "notHocx": "Il documento non è stato creato con hocX."
+    }
+  },
+  "maintenance": {
+    "title": "La casella di consegna è in manutenzione",
+    "message": "Durante la manutenzione non è possibile consegnare. Riprova più tardi.",
+    "uploadsTitle": "Il caricamento è temporaneamente bloccato",
+    "uploadsMessage": "A causa della manutenzione, al momento non è possibile accettare file. Di solito ci vogliono solo pochi minuti.",
+    "availableAt": "Di nuovo disponibile verso le {time}",
+    "estimating": "La durata prevista è in fase di calcolo."
+  }
 }

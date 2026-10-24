@@ -27,7 +27,10 @@ import {
   AdminStoragePackageWrite,
   AdminTenantPage,
   AdminTenantSummary,
+  LoadPriority,
 } from "@/types/api";
+
+const LOAD_PRIORITIES: LoadPriority[] = [0, 1, 2];
 
 type Props = {
   initialPlans: AdminPlan[];
@@ -42,6 +45,7 @@ type PlanFormState = {
   description: string;
   isBookable: boolean;
   isFeatured: boolean;
+  loadPriority: LoadPriority;
   priceMonthlyChf: string;
   priceYearlyChf: string;
   userLimit: string;
@@ -162,6 +166,7 @@ function planToForm(plan: AdminPlan): PlanFormState {
     description: plan.description ?? "",
     isBookable: plan.is_bookable,
     isFeatured: plan.is_featured,
+    loadPriority: plan.load_priority,
     priceMonthlyChf: rpToChfInput(plan.price_monthly_rp),
     priceYearlyChf: rpToChfInput(plan.price_yearly_rp),
     userLimit: plan.included_user_limit === null ? "" : String(plan.included_user_limit),
@@ -180,6 +185,7 @@ const emptyPlanForm: PlanFormState = {
   description: "",
   isBookable: true,
   isFeatured: false,
+  loadPriority: 1,
   priceMonthlyChf: "",
   priceYearlyChf: "",
   userLimit: "10",
@@ -308,6 +314,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
         description: planForm.description.trim() === "" ? null : planForm.description.trim(),
         is_bookable: planForm.isBookable,
         is_featured: planForm.isFeatured,
+        load_priority: planForm.loadPriority,
         price_monthly_rp: chfInputToRp(planForm.priceMonthlyChf),
         price_yearly_rp: chfInputToRp(planForm.priceYearlyChf),
         included_user_limit: planForm.userUnlimited || planForm.userLimit.trim() === "" ? null : Number(planForm.userLimit),
@@ -469,6 +476,9 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                       <h2>{plan.name}</h2>
                       <div className="admin-badge-row">
                         {plan.is_featured ? <Badge variant="info">{t("featuredBadge")}</Badge> : null}
+                        {plan.load_priority !== 1 ? (
+                          <Badge variant={plan.load_priority === 0 ? "warning" : "info"}>{t(`loadPriority.badge.${plan.load_priority}`)}</Badge>
+                        ) : null}
                         <Badge variant={plan.is_bookable ? "success" : "neutral"}>{plan.is_bookable ? t("bookable") : t("notBookable")}</Badge>
                       </div>
                     </div>
@@ -696,6 +706,17 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                     {t("featuredOnWebsite")}
                   </label>
                   <span className="field-help">{t("featuredOnWebsiteHelp")}</span>
+                </div>
+                <div className="field-stack">
+                  <span className="field-label">{t("loadPriority.label")}</span>
+                  <div>
+                    <FilterTabs
+                      value={String(planForm.loadPriority)}
+                      onChange={(value) => updatePlanForm({ loadPriority: Number(value) as LoadPriority })}
+                      options={LOAD_PRIORITIES.map((priority) => ({ value: String(priority), label: t(`loadPriority.option.${priority}`) }))}
+                    />
+                  </div>
+                  <span className="field-help">{t(`loadPriority.help.${planForm.loadPriority}`)}</span>
                 </div>
                 <label className="field-stack">
                   <span className="field-label">{t("description2")}</span>

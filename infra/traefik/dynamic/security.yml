@@ -47,3 +47,6 @@ http:
         contentTypeNosniff: true
         frameDeny: true
         referrerPolicy: "strict-origin-when-cross-origin"
+        # Security-Audit SEC-012: keine der Oberflächen nutzt Kamera, Mikrofon, Standort, Zahlungen
+        # oder USB per Browser-API (Fotos kommen über Datei-Inputs). WebAuthn bleibt erlaubt.
+        permissionsPolicy: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()"

@@ -1,0 +1,33 @@
+{
+  "title": "hocX wird gerade gewartet",
+  "reasons": {
+    "manual": "Wir führen derzeit notwendige Wartungsarbeiten durch, um die Stabilität und Sicherheit der Plattform zu gewährleisten.",
+    "storage_initial_migration": "Wir verlegen gerade alle Dateien in einen neuen, sichereren Speicher. Während dieser Zeit ist hocX nicht verfügbar.",
+    "storage_cutover": "Wir schliessen gerade einen Speicherwechsel ab. Das dauert nur einen Moment.",
+    "backup_restore": "Wir stellen gerade einen gesicherten Stand von hocX wieder her. Während dieser Zeit ist hocX nicht verfügbar."
+  },
+  "partial": {
+    "title": "Speichern ist kurz eingeschränkt",
+    "message": "Wegen Wartungsarbeiten können gerade keine Änderungen oder Uploads gespeichert werden. Lesen funktioniert weiterhin.",
+    "hint": "Bitte versuche es in Kürze erneut."
+  },
+  "estimate": {
+    "availableAt": "Voraussichtlich wieder verfügbar: {time} Uhr",
+    "remainingRange": "Voraussichtlich noch {low}–{high} Minuten",
+    "remainingAbout": "{count, plural, one {Voraussichtlich noch etwa # Minute} other {Voraussichtlich noch etwa # Minuten}}",
+    "remainingHours": "Voraussichtlich noch {low}–{high} Stunden",
+    "estimating": "Die voraussichtliche Dauer wird ermittelt.",
+    "overdue": "Die Wartungsarbeiten dauern länger als erwartet. Die neue Fertigstellungszeit wird berechnet."
+  },
+  "autoRefresh": "Diese Seite aktualisiert sich automatisch und zeigt die Anmeldung wieder an, sobald die Wartung beendet ist.",
+  "upcoming": {
+    "title": "Geplante Wartung",
+    "withEnd": "hocX ist von {start} bis voraussichtlich {end} nicht verfügbar.",
+    "withoutEnd": "Ab {start} ist hocX wegen Wartungsarbeiten vorübergehend nicht verfügbar.",
+    "when": "{date} · {start} – ca. {end}",
+    "whenOpen": "{date} · ab {start}",
+    "whenRange": "{start} – ca. {end}"
+  },
+  "ended": "Die Wartung ist beendet. Du wirst weitergeleitet …",
+  "checking": "Wartungsstatus wird geprüft …"
+}

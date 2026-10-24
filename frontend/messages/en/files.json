@@ -41,7 +41,8 @@
     "protocol": "Protocol",
     "wordImport": "Word import",
     "submission": "Submission",
-    "upload": "Upload"
+    "upload": "Upload",
+    "protocolExport": "Protocol export"
   },
   "detail": {
     "openOriginal": "Open original",
@@ -71,7 +72,14 @@
     "empty": "No files found.",
     "protocolRef": "Protocol {label}",
     "download": "Download",
-    "share": "Share"
+    "share": "Share",
+    "openPdf": "Open PDF",
+    "processingStage": "Processing · {stage}",
+    "processingStages": {
+      "scan": "Virus scan",
+      "pdf": "PDF view",
+      "text": "Text extraction"
+    }
   },
   "view": {
     "title": "Files",
@@ -89,14 +97,16 @@
     "dropOverlayTitle": "Release to upload",
     "dropOverlayHint": "You'll set up the upload next.",
     "loadError": "Files could not be loaded.",
-    "uploadedToast": "{count, plural, one {# file uploaded.} other {# files uploaded.}}"
+    "uploadedToast": "{count, plural, one {# file uploaded.} other {# files uploaded.}}",
+    "descriptionLinked": "All non-image files – from protocols, Word imports, submissions and direct uploads. Images are under <photos>Photos</photos>."
   },
   "sourceOptions": {
     "all": "All sources",
     "protocols": "Protocols",
     "wordImport": "Word import",
     "submissions": "Submissions",
-    "uploads": "Uploads"
+    "uploads": "Uploads",
+    "protocolExports": "Protocol exports"
   },
   "sortOptions": {
     "newestFirst": "Newest first",
@@ -128,5 +138,86 @@
     "rulesMaxFiles": "max. {max} files per element",
     "elementLabel": "Submission item",
     "elementPlaceholder": "Choose item…"
+  },
+  "document": {
+    "title": "Document",
+    "status": "Status",
+    "statusLabel": {
+      "processing": "Processing",
+      "ready": "Ready",
+      "partial": "Partially processed",
+      "failed": "Processing failed"
+    },
+    "pdf": "PDF view",
+    "pdfReady": "Ready",
+    "text": "Text",
+    "jobStatus": {
+      "queued": "Waiting for processing",
+      "running": "Being created",
+      "done": "Not available",
+      "failed": "Failed",
+      "blocked": "Blocked (virus scan)",
+      "none": "Not available"
+    },
+    "extractionStatus": {
+      "ready": "Extracted",
+      "empty": "No text found",
+      "ocr_required": "Text recognition (OCR) required",
+      "unsupported": "Not supported for this format",
+      "failed": "Failed"
+    },
+    "currentVersion": "Current version",
+    "versionNumber": "Version {number}",
+    "downloadPdf": "Download PDF",
+    "downloadOriginal": "Download original file",
+    "showText": "Show extracted text",
+    "hideText": "Hide text",
+    "textEmpty": "No text available.",
+    "textLoadError": "The text could not be loaded.",
+    "reprocess": "Process again",
+    "reprocessStarted": "Processing has been restarted.",
+    "reprocessError": "Processing could not be restarted.",
+    "historyTitle": "Versions ({count})",
+    "current": "Current",
+    "openPdf": "Open PDF",
+    "original": "Original",
+    "previewTitle": "PDF preview of {name}",
+    "previewProcessing": "The PDF view is being created …",
+    "previewUnavailable": "There is no PDF view for this document. The original file is available in the details.",
+    "loadError": "Document details could not be loaded.",
+    "openPdfNewTab": "Open PDF in new tab"
+  },
+  "uploadResults": {
+    "title": "Upload result",
+    "summaryImages": "{count, plural, one {1 image processed} other {# images processed}}: {parts}.",
+    "summaryFiles": "{count, plural, one {1 file processed} other {# files processed}}: {parts}.",
+    "partUploaded": "{count} uploaded",
+    "partSkipped": "{count} skipped",
+    "partMetadataUpdated": "{count} skipped with metadata added",
+    "partFailed": "{count} failed",
+    "detailsAction": "Details",
+    "appliedDetail": "Added: {fields}",
+    "status": {
+      "uploaded": "Uploaded",
+      "skipped": "Skipped",
+      "metadata_updated": "Skipped · metadata added",
+      "failed": "Failed"
+    },
+    "fields": {
+      "taken_at": "capture date",
+      "gps": "location (GPS)",
+      "camera": "camera",
+      "dimensions": "dimensions",
+      "orientation": "orientation",
+      "estimated_taken_on": "estimated capture date"
+    },
+    "errors": {
+      "too_large": "Too large (maximum {max_mb} MB).",
+      "unsupported_format": "File format is not supported or does not match the file extension.",
+      "scan_failed": "Could not be scanned for malware.",
+      "infected": "Detected as infected by the virus scan, not saved.",
+      "quota_exceeded": "Storage quota reached, not saved.",
+      "heic_unreadable": "HEIC file could not be read."
+    }
   }
 }

@@ -18,7 +18,7 @@ import type { CalendarFeed, CalendarFeedKind } from "@/types/api";
 
 type Options = Pick<CalendarFeed, "todo_scope" | "include_completed" | "hide_details">;
 
-const DEFAULT_OPTIONS: Options = { todo_scope: "mine", include_completed: false, hide_details: false };
+const DEFAULT_OPTIONS: Options = { todo_scope: "mine", include_completed: false, hide_details: true };
 
 const STATUS_VARIANT: Record<CalendarFeed["status"] | "off", BadgeVariant> = { active: "success", invalid: "danger", off: "neutral" };
 

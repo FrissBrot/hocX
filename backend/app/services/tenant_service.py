@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -8,14 +7,14 @@ from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi import HTTPException, Request, Response, UploadFile, status
 from PIL import Image
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.storage import MAIN, get_object_store, object_response, validate_key
 from app.core.security import CurrentUser, require_admin, require_feature
 from app.models import AppUser, Feature, Plan, PlanFeature, StoragePackage, Tenant, TenantDomain, TenantStoragePackage
 from app.schemas.user import (
@@ -26,8 +25,10 @@ from app.schemas.user import (
     TenantSubscriptionRead,
     TenantUpdate,
 )
-from app.services import domain_verification_service, traefik_config_service
-from app.services.document_template_service import DocumentTemplateService
+from app.schemas.cashflow import TenantPortalCharges
+from app.services import cashflow_service
+from app.services import domain_verification_service, identity_verification_service, traefik_config_service
+from app.services.audit_service import AuditService
 from app.services.storage_service import StorageService
 
 
@@ -57,23 +58,21 @@ TENANT_PROFILE_IMAGE_SECURITY_HEADERS = {
 }
 
 
-def tenant_profile_image_response(file_path: Path) -> FileResponse:
-    """Liefert ein Mandanten-Profilbild mit festem Typ und CSP aus (Audit MAIN-SEC-002).
+def tenant_profile_image_response(request: Request | None, key: str) -> Response:
+    """Liefert ein Mandanten-Profilbild mit festem Typ und CSP aus (Audit MAIN-SEC-002), aus dem
+    Objektspeicher (Namespace «main»).
 
     Die Route ist öffentlich und läuft im Origin der Hauptanwendung bzw. des Admin-Panels;
     ein als Profilbild abgelegtes HTML/SVG darf dort nie als Dokument ausgeführt werden.
     """
-    media_type = TENANT_PROFILE_IMAGE_MEDIA_TYPES.get(file_path.suffix.lower())
+    media_type = TENANT_PROFILE_IMAGE_MEDIA_TYPES.get(Path(key).suffix.lower())
     headers = dict(TENANT_PROFILE_IMAGE_SECURITY_HEADERS)
     if media_type is None:
-        return FileResponse(
-            file_path,
-            media_type="application/octet-stream",
-            headers=headers,
-            content_disposition_type="attachment",
-            filename=file_path.name,
+        return object_response(
+            request, MAIN, key, media_type="application/octet-stream", filename=Path(key).name, attachment=True,
+            headers=headers, not_found_detail="Tenant profile image missing",
         )
-    return FileResponse(file_path, media_type=media_type, headers=headers)
+    return object_response(request, MAIN, key, media_type=media_type, headers=headers, not_found_detail="Tenant profile image missing")
 
 
 def _normalize_tenant_profile_image(content: bytes) -> bytes:
@@ -105,8 +104,10 @@ def _normalize_tenant_profile_image(content: bytes) -> bytes:
     return output.getvalue()
 
 
-async def apply_tenant_profile_image(tenant: Tenant, profile_image: UploadFile) -> None:
-    """Prüft und normalisiert ein hochgeladenes Profilbild und setzt tenant.profile_image_path."""
+async def apply_tenant_profile_image(db: Session, tenant: Tenant, profile_image: UploadFile) -> None:  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
+    """Prüft und normalisiert ein hochgeladenes Profilbild (MAIN-SEC-002), legt es im
+    Objektspeicher ab (Key relativ zu STORAGE_ROOT, Namespace «main») und setzt
+    tenant.profile_image_path."""
     content = await profile_image.read(TENANT_PROFILE_IMAGE_MAX_BYTES + 1)
     if len(content) > TENANT_PROFILE_IMAGE_MAX_BYTES:
         raise HTTPException(
@@ -114,16 +115,14 @@ async def apply_tenant_profile_image(tenant: Tenant, profile_image: UploadFile) 
             detail="Das Profilbild ist zu gross (maximal 5 MB)",
         )
     normalized = _normalize_tenant_profile_image(content)
-    profile_dir = Path(settings.upload_root) / "tenant-profiles"
-    profile_dir.mkdir(parents=True, exist_ok=True)
-    absolute_path = profile_dir / f"tenant-{tenant.id}-{uuid4().hex}.png"
-    absolute_path.write_bytes(normalized)
-    tenant.profile_image_path = os.path.relpath(str(absolute_path), settings.storage_root)
+    upload_prefix = Path(settings.upload_root).resolve().relative_to(Path(settings.storage_root).resolve()).as_posix()
+    key = validate_key(f"{upload_prefix}/tenant-profiles/tenant-{tenant.id}-{uuid4().hex}.png")
+    get_object_store().put_bytes(db, MAIN, key, normalized, content_type="image/png")
+    tenant.profile_image_path = key
 
 
 class TenantService:
     def __init__(self) -> None:
-        self.document_template_service = DocumentTemplateService()
         self.storage_service = StorageService()
 
     def _manageable_tenant_ids(self, actor: CurrentUser) -> set[int]:
@@ -157,6 +156,16 @@ class TenantService:
         if tenant_id not in self._manageable_tenant_ids(actor):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant not accessible")
         return self._read_model(tenant, actor)
+
+    def get_charges(self, db: Session, tenant_id: int, actor: CurrentUser) -> TenantPortalCharges | None:
+        """Forderungen des Betreibers an diesen Mandanten (Cashflow im Adminportal), nur für
+        Mandanten-Admins - wie get_subscription."""
+        tenant = db.get(Tenant, tenant_id)
+        if tenant is None:
+            return None
+        if tenant_id not in self._manageable_tenant_ids(actor):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant not accessible")
+        return cashflow_service.tenant_charges(db, tenant)
 
     def get_subscription(self, db: Session, tenant_id: int, actor: CurrentUser) -> TenantSubscriptionRead | None:
         tenant = db.get(Tenant, tenant_id)
@@ -232,13 +241,12 @@ class TenantService:
             storage_used_bytes=storage_used_bytes,
             storage_quota_bytes=tenant.storage_quota_bytes,
             package_storage_bytes=package_storage_bytes,
-            storage_quota_manual_override=tenant.storage_quota_manual_override,
             features=features,
             estimated_monthly_cost_rp=estimated_monthly_cost_rp,
             estimated_yearly_cost_rp=estimated_yearly_cost_rp,
         )
 
-    async def update_tenant(
+    async def update_tenant(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
         self,
         db: Session,
         tenant_id: int,
@@ -253,18 +261,22 @@ class TenantService:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant cannot be edited by current user")
         require_admin(actor)
 
+        old_name = tenant.name
         if payload.name is not None:
             tenant.name = payload.name
         if payload.public_slug is not None:
             tenant.public_slug = payload.public_slug
 
         if profile_image is not None:
-            await apply_tenant_profile_image(tenant, profile_image)
+            await apply_tenant_profile_image(db, tenant, profile_image)
+            # Logo: nur protokollieren - bestätigt wird die Organisation, nicht ihr Bild
+            AuditService().log(db, action="tenant.profile_image_changed", actor=actor, tenant_id=tenant.id)
+        revoked = identity_verification_service.handle_rename(db, tenant, old_name, actor_email=actor.email)
 
         db.add(tenant)
         db.commit()
         db.refresh(tenant)
-        return self._read_model(tenant, actor)
+        return self._read_model(tenant, actor).model_copy(update={"identity_verification_revoked": revoked})
 
     def require_manageable(self, tenant_id: int, actor: CurrentUser) -> None:
         """Öffentliche Variante für Routen, die vor dem Service z. B. ein Rate-Limit zählen."""
@@ -283,7 +295,7 @@ class TenantService:
             status=row.status,
             verification_token=row.verification_token,
             challenge_record_name=domain_verification_service.challenge_record_name(row.domain),
-            target_host=settings.traefik_domain if row.purpose == "app" else settings.traefik_abgabebox_domain,
+            target_host=traefik_config_service.target_host_for_purpose(row.purpose),
             verified_at=row.verified_at,
             is_healthy=row.is_healthy,
             last_checked_at=row.last_checked_at,
@@ -294,11 +306,19 @@ class TenantService:
         rows = db.query(TenantDomain).filter(TenantDomain.tenant_id == tenant_id).order_by(TenantDomain.purpose.asc()).all()
         return [self._domain_read_model(row) for row in rows]
 
+    def _ensure_domain_not_active_elsewhere(self, db: Session, domain: str, *, excluding_domain_id: int | None = None) -> None:
+        query = db.query(TenantDomain.id).filter(TenantDomain.domain == domain, TenantDomain.status == "active")
+        if excluding_domain_id is not None:
+            query = query.filter(TenantDomain.id != excluding_domain_id)
+        if query.first() is not None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Domain ist bereits vergeben")
+
     def create_domain(
         self, db: Session, tenant_id: int, actor: CurrentUser, payload: TenantDomainCreate
     ) -> TenantDomainRead:
         self._require_manageable(tenant_id, actor)
-        require_feature(actor, "custom_domain")
+        # Prüf-Domain ('verify') hat ein eigenes Feature, unabhängig von custom_domain
+        require_feature(actor, traefik_config_service.FEATURE_BY_PURPOSE[payload.purpose])
 
         domain = domain_verification_service.normalize_domain(payload.domain)
         if not domain_verification_service.is_valid_domain_format(domain):
@@ -306,6 +326,9 @@ class TenantService:
         reserved = {d for d in (settings.traefik_domain, settings.traefik_abgabebox_domain) if d}
         if domain in reserved:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Diese Domain ist bereits durch hocX belegt")
+        # Nur eine aktive (verifizierte) Domain belegt den Namen (Migration 0129, SEC-004); eine
+        # unbestätigte Domain eines anderen Mandanten blockiert nicht mehr.
+        self._ensure_domain_not_active_elsewhere(db, domain)
 
         # Ersetzt einen ggf. vorhandenen (pending oder active) Eintrag fuer denselben Zweck -
         # ein Mandant hat gemaess Vorgabe genau eine Domain pro Zweck.
@@ -346,25 +369,31 @@ class TenantService:
         # downgrade/admin revoke), and still activate it afterwards via this route. Only
         # delete_domain stays deliberately ungated, so an existing domain remains removable after
         # a downgrade.
-        require_feature(actor, "custom_domain")
         row = db.query(TenantDomain).filter(TenantDomain.id == domain_id, TenantDomain.tenant_id == tenant_id).one_or_none()
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Domain nicht gefunden")
+        require_feature(actor, traefik_config_service.FEATURE_BY_PURPOSE[row.purpose])
 
-        target_host = settings.traefik_domain if row.purpose == "app" else settings.traefik_abgabebox_domain
+        target_host = traefik_config_service.target_host_for_purpose(row.purpose)
         if not target_host:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Server-Domain nicht konfiguriert")
 
         ok, message = domain_verification_service.verify_domain(row.domain, row.verification_token, target_host)
         if not ok:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+        self._ensure_domain_not_active_elsewhere(db, row.domain, excluding_domain_id=row.id)
 
         row.status = "active"
         row.verified_at = datetime.now(timezone.utc)
         row.is_healthy = True
         row.last_checked_at = row.verified_at
         db.add(row)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            # Gleichzeitige Verifizierung derselben Domain: der partielle Unique-Index entscheidet.
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Domain ist bereits vergeben") from exc
         db.refresh(row)
 
         traefik_config_service.regenerate(db)

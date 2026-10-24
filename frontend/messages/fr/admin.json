@@ -73,35 +73,25 @@
   },
   "system": {
     "title": "État du système",
-    "description": "État de tous les conteneurs et des services dont hocX dépend. Actualisé toutes les 30 secondes.",
+    "description": "État de tous les conteneurs et des services dont hocX dépend.",
     "notificationsLink": "Notifications",
-    "allGood": "Tout va bien - aucun problème en cours.",
-    "problemCount": "{count, plural, one {# problème en cours} other {# problèmes en cours}}",
     "staleSince": "L'état du système n'est plus à jour (dernière actualisation {time}). La surveillance du backend ne fonctionne pas.",
     "noData": "Pas encore de données - la surveillance les collecte au prochain passage.",
-    "collectedAt": "État : {time}",
     "since": "depuis {time}",
     "checksTitle": "Services",
     "containersTitle": "Conteneurs",
-    "composeProject": "Projet Compose {project}",
     "dockerNotConfigured": "La vue des conteneurs n'est pas configurée (DOCKER_API_URL manquant, voir RUNBOOK).",
     "dockerUnavailable": "État des conteneurs indisponible : {error}",
     "containerColumns": {
       "service": "Service",
       "status": "Statut",
       "uptime": "Actif depuis",
-      "restarts": "Redémarrages",
       "cpu": "CPU",
       "memory": "Mémoire",
       "version": "Version"
     },
     "eventsTitle": "Événements",
     "eventsDescription": "Les 50 derniers changements d'état - les mêmes que ceux envoyés via ntfy.",
-    "eventColumns": {
-      "time": "Date",
-      "kind": "Type",
-      "event": "Événement"
-    },
     "noEvents": "Aucun événement pour l'instant.",
     "eventKinds": {
       "problem": "Problème",
@@ -131,7 +121,8 @@
       "unhealthy": "Le contrôle de santé échoue",
       "oom_killed": "Arrêté (mémoire insuffisante)",
       "starting": "Démarrage en cours",
-      "memory_high": "Mémoire presque pleine"
+      "memory_high": "Mémoire presque pleine",
+      "not_needed": "Arrêté, inutile (les fichiers sont chez un autre fournisseur)"
     },
     "checks": {
       "postgres": {
@@ -173,6 +164,81 @@
         "title": "Analyse d'images",
         "detail": "{queued, number} en file d'attente · le plus ancien {oldestMinutes, number} min",
         "problem": "La file d'analyse d'images s'engorge"
+      },
+      "document_queue": {
+        "title": "Traitement des documents",
+        "detail": "{queued, number} en attente · le plus ancien {oldestMinutes, number} min · {failed, number} en échec (24 h)",
+        "problem": "Le traitement des documents est en retard ou échoue"
+      },
+      "render_queue": {
+        "title": "Tâches PDF",
+        "detail": "{queued, number} en attente · la plus ancienne {oldestMinutes, number} min · {failed, number} échouées (24 h)",
+        "problem": "Les tâches PDF s’accumulent ou échouent"
+      },
+      "runtime": {
+        "title": "Charge des processus de service",
+        "detail": "{instances, number} processus · boucle d’événements max. {maxLagMs, number} ms · pool BD {poolPeakPercent, number} % · pool de threads {threadPeakPercent, number} % · {poolTimeouts, number} dépassements de délai du pool",
+        "problem": "Processus de service bloqués ou saturés"
+      },
+      "document_verification": {
+        "title": "Page publique de vérification",
+        "detail": "Réponse en {latencyMs, number} ms",
+        "problem": "Page publique de vérification lente"
+      },
+      "object_storage": {
+        "title": "Stockage des fichiers",
+        "detail": "Génération {generation, number} · temps de réponse {latencyMs, number} ms",
+        "problem": "Stockage des fichiers inaccessible"
+      },
+      "storage_migration": {
+        "title": "Migration du stockage",
+        "detail": "{verified, number} objets vérifiés sur {total, number} · {dead, number} en échec définitif",
+        "problem": "La migration du stockage requiert de l'attention"
+      },
+      "backup": {
+        "title": "Sauvegarde",
+        "detail": "{state, select, disabled {Non configurée} never {Aucune sauvegarde réussie} other {Dernière sauvegarde réussie il y a {hours, number} h}} · {points, number} points de restauration",
+        "problem": "Sauvegarde en retard ou non configurée"
+      },
+      "backup_repository": {
+        "title": "Dépôt de sauvegarde",
+        "detail": "{reachable, select, yes {Storage Box accessible} other {Storage Box inaccessible}} · {quota, select, yes {{usedPercent, number} % occupé} other {capacité inconnue}}",
+        "problem": "Dépôt de sauvegarde en panne ou plein"
+      },
+      "backup_verification": {
+        "title": "Contrôles de sauvegarde",
+        "detail": "{verified, select, yes {Vérifiée il y a {verifyDays, number} jours} other {Jamais vérifiée}} · {tested, select, yes {Test de restauration il y a {testDays, number} jours} other {Aucun test de restauration}}",
+        "problem": "Vérification ou test de restauration en retard"
+      },
+      "local_s3": {
+        "title": "S3 local (Garage)",
+        "detail": "{reason, select, active {Stockage actif} initial_target {Cible de la première migration} migration {Partie d'une migration en cours} fallback_period {Délai de retour après une migration} pending_operation {Nettoyage en attente} requested {Demandé manuellement} unverified_objects {Objets pas encore vérifiés} not_needed {Inutile, arrêté} other {Statut inconnu}} · {objects, number} objets · {gb, number} Go",
+        "problem": "S3 local (Garage) non évaluable"
+      },
+      "orphaned_files": {
+        "title": "Fichiers orphelins",
+        "detail": "{count, number} fichiers sans référence",
+        "problem": "Fichiers orphelins dans le stockage"
+      },
+      "security": {
+        "title": "Événements de sécurité",
+        "detail": "{failedLogins, number} échecs de connexion (15 min) · {exports, number} exports (1 h) · {restores, number} restaurations (24 h)",
+        "problem": "Événements de sécurité inhabituels"
+      },
+      "tenant_offboarding": {
+        "title": "Offboarding",
+        "detail": "{count, number} mandants après la fin du contrat (+{days, number} jours)",
+        "problem": "Mandants après la fin du contrat pas encore supprimés"
+      },
+      "captcha_endpoint": {
+        "title": "Point de terminaison captcha",
+        "detail": "{region, select, eu {Point de terminaison UE (traitement dans l’UE)} other {Point de terminaison global – pour un traitement dans l’UE, régler FRIENDLY_CAPTCHA_PUZZLE_URL et _VERIFY_URL sur le point UE}}",
+        "problem": "Point de terminaison captcha injoignable"
+      },
+      "overload": {
+        "title": "Protection contre la surcharge",
+        "detail": "{rejected, number} refus · {users, number} nouveaux utilisateurs · {tenants, number} organisations · charge jusqu’à {pressurePercent, number} % ({minutes, number} dernières min)",
+        "problem": "Surcharge : de nouveaux utilisateurs sont refusés"
       }
     },
     "problems": {
@@ -198,8 +264,67 @@
       }
     },
     "events": {
-      "containerRestart": "Le conteneur {subject} a redémarré",
-      "resolved": "Résolu : {text}"
+      "containerRestart": "Le conteneur {subject} a redémarré"
+    },
+    "hero": {
+      "label": "État général",
+      "stale": "État obsolète",
+      "critical": "{critical, plural, one {# problème critique} other {# problèmes critiques}}{warnings, plural, =0 {} one {, # avertissement} other {, # avertissements}}",
+      "warnings": "{count, plural, one {# avertissement} other {# avertissements}}, rien de critique",
+      "allGood": "Tout est en ordre"
+    },
+    "liveBadge": "En direct · état au {time}",
+    "staleBadge": "Obsolète · état au {time}",
+    "tally": {
+      "critical": "critique",
+      "warning": "{count, plural, one {avertissement} other {avertissements}}",
+      "ok": "OK",
+      "unknown": "inconnu"
+    },
+    "noProblems": "Aucun problème ouvert.",
+    "filters": {
+      "all": "Tous",
+      "problems": "Anomalies seulement"
+    },
+    "noIssues": "Aucune anomalie.",
+    "groups": {
+      "infrastructure": "Infrastructure",
+      "security": "Sécurité",
+      "processing": "Traitement",
+      "backup": "Sauvegarde",
+      "other": "Autres"
+    },
+    "groupSummary": "{ok, number}/{total, number} OK",
+    "composeProjectRich": "Projet Compose <mono>{project}</mono>",
+    "containerSummary": "{count, plural, one {# conteneur} other {# conteneurs}} · {restarts, plural, one {# redémarrage} other {# redémarrages}}",
+    "problemLinks": {
+      "jobs": "Jobs →",
+      "storage": "Stockage →",
+      "backups": "Sauvegardes →",
+      "containers": "Conteneurs →"
+    },
+    "containerStates": {
+      "exitedOk": "terminé (init)"
+    },
+    "restartCount": "{count, plural, one {# redémarrage} other {# redémarrages}}",
+    "overload": {
+      "title": "Surcharge",
+      "description": "Nouveaux utilisateurs ayant vu la page de surcharge, par organisation (7 derniers jours). La priorité par abonnement se règle dans le catalogue de prix.",
+      "columns": {
+        "tenant": "Organisation",
+        "plan": "Abonnement",
+        "rejected": "Refus",
+        "users": "Utilisateurs",
+        "last": "Dernier"
+      },
+      "empty": "Personne n’a été refusé pour cause de surcharge au cours des 7 derniers jours.",
+      "unknownTenant": "Organisation inconnue",
+      "noPlan": "Aucun abonnement",
+      "priority": {
+        "0": "basse",
+        "1": "normale",
+        "2": "haute"
+      }
     }
   },
   "jobs": {
@@ -231,13 +356,18 @@
       "backup": "Sauvegarde",
       "cleanup": "Nettoyage",
       "maintenance": "Maintenance",
-      "other": "Autres"
+      "other": "Autres",
+      "storage": "Stockage",
+      "documents": "Documents"
     },
     "service": {
       "backend": "Backend",
       "abgabebox-backend": "Backend Abgabebox",
       "photo-analysis-worker": "Worker d'analyse d'images",
-      "host": "Serveur (cron)"
+      "host": "Serveur (cron)",
+      "storage-worker": "Worker de stockage",
+      "document-worker": "Worker de documents",
+      "job-worker": "Worker de tâches"
     },
     "interval": {
       "onDemand": "À la demande",
@@ -292,6 +422,10 @@
         "title": "Compléter la qualité d'image",
         "description": "Calcule la netteté et l'exposition des images pour lesquelles elles manquent encore."
       },
+      "thumbnail_backfill": {
+        "title": "Compléter les miniatures",
+        "description": "Crée les miniatures des images qui n'en ont pas encore, surtout pour les dépôts Abgabebox."
+      },
       "photo_album_sync": {
         "title": "Synchroniser les albums",
         "description": "Ajoute les nouvelles images Abgabebox aux albums automatiques et retire celles supprimées."
@@ -314,7 +448,7 @@
       },
       "log_cleanup": {
         "title": "Nettoyer les journaux",
-        "description": "Supprime les anciennes entrées du journal d'audit, du journal des erreurs et de l'historique des tâches."
+        "description": "Supprime les anciennes entrées du journal d'audit, du journal des erreurs, des historiques de tâches et d'événements ainsi que les liens de partage expirés."
       },
       "abgabebox_quarantine_cleanup": {
         "title": "Nettoyer la quarantaine",
@@ -335,6 +469,70 @@
       "task_package_rollover": {
         "title": "Mettre à jour les paquets de tâches",
         "description": "Crée chaque jour les tâches du cycle en cours à partir de tous les paquets actifs (celles du nouveau cycle lors d’un changement) et ajoute les nouvelles répétitions."
+      },
+      "maintenance_supervisor": {
+        "title": "Pilotage de la maintenance",
+        "description": "Démarre les maintenances planifiées, signale les dépassements et met à jour les estimations. Ne termine jamais une maintenance de lui-même."
+      },
+      "storage_journal_cleanup": {
+        "title": "Nettoyage du journal de stockage",
+        "description": "Supprime les anciennes entrées du journal des modifications dont aucune migration ouverte n'a plus besoin."
+      },
+      "storage_purge": {
+        "title": "Purge des objets de stockage supprimés",
+        "description": "Supprime physiquement les fichiers supprimés du stockage dès que la suppression est enregistrée."
+      },
+      "storage_migration_worker": {
+        "title": "Worker de migration du stockage",
+        "description": "Copie, vérifie et bascule le stockage des fichiers (signe de vie de la boucle d'interrogation)."
+      },
+      "storage_controller": {
+        "title": "Pilotage du S3 local",
+        "description": "Tâche cron de l'hôte : démarre ou arrête le service S3 local selon les besoins, sans supprimer de données."
+      },
+      "backup_storage": {
+        "title": "Sauvegarde des fichiers",
+        "description": "Sauvegarde de manière incrémentielle les objets de la génération de stockage active après la sauvegarde de la base de données et vérifie le résultat."
+      },
+      "backup_worker": {
+        "title": "Worker de sauvegarde",
+        "description": "Planifie et exécute sauvegardes, vérifications, tests de restauration et restaurations (conteneur backup-worker)."
+      },
+      "backup_run": {
+        "title": "Sauvegarde (Borg)",
+        "description": "Sauvegarde chiffrée de la base et du stockage de fichiers sur la Storage Box, toutes les 6 heures par défaut."
+      },
+      "backup_retention": {
+        "title": "Conservation des sauvegardes",
+        "description": "Supprime les points et contenus devenus inutiles après vérification de toutes les références."
+      },
+      "backup_verify": {
+        "title": "Vérification d'intégrité",
+        "description": "Vérifie le dépôt, les archives, le dump de la base et un échantillon des fichiers."
+      },
+      "backup_restore_test": {
+        "title": "Test de restauration",
+        "description": "Restaure le dernier point dans une base isolée et vérifie références et application."
+      },
+      "document_sync": {
+        "title": "Synchroniser les documents",
+        "description": "Crée les documents pour les dépôts de la boîte de dépôt et les fichiers existants, et supprime les fichiers de documents orphelins."
+      },
+      "document_worker": {
+        "title": "Worker de documents",
+        "description": "Génère les aperçus PDF et extrait le texte des documents téléversés (signal de vie de la boucle d’interrogation)."
+      },
+      "tenant_data_export": {
+        "title": "Export de l’association",
+        "description": "Crée les exports d’association demandés (ZIP AES avec tableaux, PDF des procès-verbaux et fichiers) et les supprime après 7 jours."
+      },
+      "retention_proposals": {
+        "title": "Délais de conservation",
+        "description": "Crée des propositions selon les délais de chaque association (dépôts, anciens membres, anciennes images de la galerie) et les applique en mode automatique."
+      },
+      "job_worker": {
+        "title": "Worker de tâches",
+        "description": "Exécute les tâches lourdes en arrière-plan (import de galerie, exports PDF, exports de l’association, nouvelles analyses antivirus, nettoyage) - signe de vie chaque minute."
       }
     }
   },
@@ -482,7 +680,8 @@
       "plan": "Plan & abonnement",
       "users": "Utilisateurs ({count})",
       "cleanup": "Nettoyage",
-      "storage": "Stockage"
+      "storage": "Stockage",
+      "verification": "Vérification"
     },
     "fields": {
       "tenantName": "Nom de l'organisation",
@@ -498,13 +697,17 @@
       "discount": "Remise",
       "internalNote": "Note interne",
       "internalNotePlaceholder": "p. ex. remise association jusqu'en 2027",
+      "billingStart": "Début de l’abonnement",
+      "billingStartHelp": "Dès cette date, des créances par période de facturation apparaissent dans le flux de trésorerie. Vide = date de création ({date}). Une modification recrée les créances ouvertes.",
       "userLimitOverride": "Remplacer la limite d'utilisateurs",
       "userLimitPlanLimit": "Limite du plan : {limit}",
       "userLimitUnlimited": "Limite du plan : illimitée",
       "userLimitHelp": "Vide = la limite du plan s'applique. Actuellement {count} utilisateur(s){suffix}",
       "userLimitExceeded": " – limite atteinte ou dépassée.",
       "showOnWebsite": "Afficher comme client sur le site web",
-      "showOnWebsiteHelp": "Apparaît sur le site web public sous « Ils nous font confiance » (nom uniquement). À activer uniquement avec l’accord de l’association."
+      "showOnWebsiteHelp": "Apparaît sur le site web public sous « Ils nous font confiance » (nom uniquement). À activer uniquement avec l’accord de l’association.",
+      "contractEnd": "Fin du contrat",
+      "contractEndHelp": "Vide = sans fin. Après la fin du contrat plus le délai d’export, /admin/system signale que les données du mandant doivent être supprimées."
     },
     "meta": {
       "createdAt": "Créé le",
@@ -779,7 +982,7 @@
     "cloning": "Clonage…",
     "exportTitleNamed": "Exporter « {name} »",
     "exportTitle": "Exporter l'organisation",
-    "exportDescription": "Crée un fichier ZIP à télécharger, qui pourra plus tard être réimporté dans le panneau d'administration comme nouvelle organisation. Le fichier contient des données d'accès (empreintes de mots de passe, clés MFA, jetons de liens et d'abonnements) et doit être conservé en lieu sûr.",
+    "exportDescription": "Crée un fichier chiffré à télécharger, qui pourra plus tard être réimporté dans le panneau d'administration comme nouvelle organisation. Il contient des identifiants (empreintes de mots de passe, clés MFA, jetons de lien et d'abonnement) et doit être conservé en lieu sûr malgré le chiffrement.",
     "exportStructureOnlyTitle": "Structure uniquement",
     "exportStructureOnlyDescription": "Cycles, champs de formulaire, modèles de documents, listes (définition seulement, sans contenu), comptes, rôles utilisateurs et domaines vérifiés (avec code de vérification).",
     "exportStructureListsTitle": "Structure + contenu des listes",
@@ -788,8 +991,8 @@
     "exportFullDescription": "En plus : participants, événements, procès-verbaux, amendes, tâches, fichiers (y compris la galerie photo et les albums), liens de partage, abonnements de calendrier et partages d'albums. Sans Abgabebox.",
     "exportFullAbgabeboxTitle": "Tout, y compris Abgabebox",
     "exportFullAbgabeboxDescription": "Comme ci-dessus, plus la configuration Abgabebox, les liens Abgabebox et les fichiers téléversés. Sauvegarde complète de l'organisation.",
-    "importDescription": "Crée une nouvelle organisation à partir d'un fichier ZIP précédemment exporté.",
-    "exportFile": "Fichier d'export (.zip)",
+    "importDescription": "Crée une nouvelle organisation à partir d'un fichier précédemment exporté.",
+    "exportFile": "Fichier d'export (.hocxenc ou ancien .zip)",
     "uploadingAndProcessing": "Téléversement et traitement du fichier…",
     "uploadAndImportRunning": "Téléversement et import en cours",
     "mayTakeAMoment": "Cela peut prendre un moment selon la taille du fichier.",
@@ -810,7 +1013,16 @@
     "deleteFailed": "L'organisation n'a pas pu être supprimée",
     "importedWithWarnings": "{count, plural, one {Organisation importée avec # remarque} other {Organisation importée avec # remarques}}",
     "imported": "Organisation importée",
-    "importFailed": "L'organisation n'a pas pu être importée"
+    "importFailed": "L'organisation n'a pas pu être importée",
+    "exportPasswordLabel": "Mot de passe (facultatif)",
+    "exportPasswordHelp": "Sans mot de passe, le fichier est chiffré avec la clé de ce serveur et ne peut être importé qu'ici. Définissez un mot de passe pour déplacer l'organisation vers un autre serveur.",
+    "exportPasswordConfirmLabel": "Répéter le mot de passe",
+    "exportPasswordTooShort": "Au moins {min, number} caractères.",
+    "exportPasswordMismatch": "Les mots de passe ne correspondent pas.",
+    "importPasswordLabel": "Mot de passe de l'export",
+    "importPasswordHelp": "Nécessaire uniquement si un mot de passe a été défini lors de l'export.",
+    "exportCredentials": "Inclure les identifiants",
+    "exportCredentialsHint": "Hachages de mots de passe, secrets MFA ainsi que jetons de liens et de calendrier. Uniquement pour un déménagement où tous les accès et liens doivent rester valables. Sans cette option, les comptes importés reçoivent un mot de passe aléatoire et les liens une nouvelle URL."
   },
   "pricing": {
     "title": "Tarifs",
@@ -911,7 +1123,24 @@
     "delete": "Supprimer",
     "deleteConfirm": "Supprimer définitivement « {name} » ?",
     "deleted": "Offre supprimée",
-    "deleteFailed": "Impossible de supprimer l’offre."
+    "deleteFailed": "Impossible de supprimer l’offre.",
+    "loadPriority": {
+      "label": "Priorité en cas de surcharge",
+      "option": {
+        "0": "Basse",
+        "1": "Normale",
+        "2": "Haute"
+      },
+      "help": {
+        "0": "Quand la capacité devient insuffisante, les nouveaux utilisateurs de cet abonnement voient en premier la page de surcharge. Les personnes déjà en train de travailler restent connectées.",
+        "1": "Les nouveaux utilisateurs ne sont refusés qu’à pleine charge, après les abonnements à priorité basse.",
+        "2": "Les nouveaux utilisateurs ne sont jamais refusés à l’avance et obtiennent en premier les places libres."
+      },
+      "badge": {
+        "0": "Priorité basse",
+        "2": "Priorité haute"
+      }
+    }
   },
   "catalogImport": {
     "title": "Importer la configuration",
@@ -967,5 +1196,136 @@
     "packageQuantity": "{name} × {count}",
     "rebook": "Réaffecter",
     "footnote": "Organisations avec un plan ou un pack de stockage non réservable (mis en évidence). « Réaffecter » ouvre les paramètres de l'organisation : modifiez le plan dans l'onglet « Plan & abonnement » et les packs dans l'onglet « Stockage »."
+  },
+  "verification": {
+    "title": "Vérification des organisations",
+    "description": "Les organisations confirmées reçoivent le badge « Organisation vérifiée » sur la page publique de vérification (si elles affichent leur nom et leur logo). C’est le nom au moment de la demande qui est confirmé ; un changement de nom révoque la vérification.",
+    "loading": "Chargement …",
+    "empty": "Aucune demande.",
+    "requestedAs": "Demandé sous « {name} »",
+    "filter": {
+      "pending": "Ouvertes",
+      "approved": "Confirmées",
+      "rejected": "Refusées",
+      "withdrawn": "Retirées",
+      "all": "Toutes"
+    },
+    "columns": {
+      "organisation": "Organisation",
+      "message": "Message",
+      "requested": "Demandé",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "status": {
+      "pending": "Ouverte",
+      "approved": "Confirmée",
+      "rejected": "Refusée",
+      "withdrawn": "Retirée"
+    },
+    "actions": {
+      "approve": "Confirmer",
+      "reject": "Refuser",
+      "revoke": "Révoquer la vérification"
+    },
+    "modal": {
+      "approveTitle": "Vérifier « {name} »",
+      "rejectTitle": "Refuser la demande de « {name} »",
+      "revokeTitle": "Révoquer la vérification de « {name} »",
+      "approveHint": "Ne confirmer qu’après avoir vérifié l’identité (p. ex. registre du commerce, statuts, rappel à un numéro connu).",
+      "rejectHint": "L’administrateur du mandant voit le motif dans les paramètres.",
+      "revokeHint": "Le badge disparaît immédiatement de la page de vérification.",
+      "note": "Note (comment c’est vérifié)",
+      "reasonRequired": "Motif (obligatoire)",
+      "approvePlaceholder": "p. ex. registre du commerce CHE-123.456.789 vérifié",
+      "rejectPlaceholder": "p. ex. aucune preuve du pouvoir de représentation",
+      "revokePlaceholder": "p. ex. signalement d’abus",
+      "cancel": "Annuler"
+    },
+    "done": {
+      "approve": "« {name} » est vérifiée.",
+      "reject": "Demande de « {name} » refusée.",
+      "revoke": "Vérification de « {name} » révoquée."
+    },
+    "tenant": {
+      "title": "Vérification par hocX",
+      "verified": "Vérifiée depuis le {date}",
+      "notVerified": "Non vérifiée",
+      "by": "par {email}",
+      "note": "Note : {note}",
+      "hidden": "Le mandant n’affiche pas son nom et son logo sur la page de vérification - le badge n’est donc pas visible.",
+      "history": "Demandes",
+      "noRequests": "Aucune demande pour l’instant.",
+      "withdrawnByRename": "Retirée par un changement de nom",
+      "revoked": {
+        "name_changed": "Révoquée le {date} : nom modifié.",
+        "admin": "Révoquée le {date}."
+      }
+    },
+    "errors": {
+      "generic": "L’action a échoué.",
+      "verificationAlreadyVerified": "L’organisation est déjà vérifiée.",
+      "verificationAlreadyPending": "Une demande est déjà en cours.",
+      "verificationNoPending": "Aucune demande n’est en cours.",
+      "verificationNameChanged": "Le nom a changé depuis la demande.",
+      "verificationReasonRequired": "Veuillez indiquer un motif.",
+      "verificationNotVerified": "L’organisation n’est pas vérifiée."
+    }
+  },
+  "documentTemplates": {
+    "title": "Modèles de documents",
+    "description": "Modèles fournis du Document Studio : lesquels sont proposés aux organisations et lequel est le standard de la plateforme par type de document. Leur contenu provient du code et est mis à jour au démarrage.",
+    "filter": {
+      "active": "Actifs",
+      "archived": "Archivés",
+      "all": "Tous"
+    },
+    "columns": {
+      "template": "Modèle",
+      "documentType": "Type de document",
+      "revision": "Version",
+      "usage": "Utilisation",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "status": {
+      "active": "Proposé",
+      "archived": "Archivé"
+    },
+    "platformDefault": "Standard de la plateforme",
+    "revision": "Version {revision, number}",
+    "unpublished": "Non publié",
+    "usage": "{copies, plural, =0 {Aucune copie} one {# copie} other {# copies}} · {exports, plural, =0 {aucun export} one {# export} other {# exports}}",
+    "actions": {
+      "makeDefault": "Définir comme standard de la plateforme",
+      "archive": "Archiver",
+      "reactivate": "Proposer à nouveau"
+    },
+    "archiveConfirm": "Archiver « {name} » ? Les organisations ne peuvent plus le choisir ; les attributions à ce modèle reviennent au standard de la plateforme. {copies, plural, =0 {} one {La # copie d’une organisation est conservée.} other {Les # copies des organisations sont conservées.}}",
+    "madeDefault": "« {name} » est désormais le standard de la plateforme",
+    "archived": "« {name} » archivé",
+    "reactivated": "« {name} » est de nouveau proposé",
+    "actionFailed": "L’action a échoué",
+    "empty": "Aucun modèle dans cette vue"
+  },
+  "auditLog": {
+    "title": "Journal d’audit",
+    "description": "Événements de sécurité et de modification de tous les mandants. La source est une empreinte hachée du réseau, pas l’adresse IP.",
+    "filterAll": "Tous",
+    "filterFailures": "Échoués",
+    "tenant": "Mandant",
+    "allTenants": "Tous les mandants",
+    "actionPlaceholder": "Action, p. ex. user.login",
+    "colTime": "Moment",
+    "colAction": "Opération",
+    "colActor": "Par",
+    "colSource": "Source",
+    "colOutcome": "Résultat",
+    "loading": "Chargement …",
+    "empty": "Aucune entrée",
+    "outcome": {
+      "success": "Réussi",
+      "failure": "Échoué"
+    }
   }
 }

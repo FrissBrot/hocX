@@ -4,6 +4,7 @@ import { useParticipantSelectable } from "@/contexts/participant-date-context";
 
 import { DragEvent, FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -14,14 +15,15 @@ import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
+import { TemplateFineTariffModal } from "@/components/template/template-fine-tariff-modal";
 import { formatDateRange } from "@/lib/utils/format";
 import { elementTypeLabels } from "@/lib/constants/element-types";
 import { EligibleResponsibleList, eligibleResponsibleList, listParticipantIds, listTextValue } from "@/lib/utils/responsible-lists";
 import {
   CycleConfigSummary,
-  DocumentTemplate,
   ElementDefinition,
   EventSummary,
+  FinanceAccount,
   ParticipantSummary,
   StructuredListDefinition,
   StructuredListEntry,
@@ -44,8 +46,9 @@ type TemplateEditorProps = {
   availableParticipants: ParticipantSummary[];
   availableLists: StructuredListDefinition[];
   initialAssignedParticipants: ParticipantSummary[];
-  availableDocumentTemplates: DocumentTemplate[];
   availableCycleConfigs: CycleConfigSummary[];
+  // Nur mit gebuchten Finanzen (sonst kein Bussentarif, siehe require_feature im Backend).
+  financeAccounts?: FinanceAccount[] | null;
 };
 
 type TemplateCreateState = {
@@ -625,8 +628,8 @@ export function TemplateEditor({
   availableParticipants,
   availableLists,
   initialAssignedParticipants,
-  availableDocumentTemplates,
   availableCycleConfigs,
+  financeAccounts = null,
 }: TemplateEditorProps) {
   const router = useRouter();
   const isParticipantSelectable = useParticipantSelectable();
@@ -647,7 +650,6 @@ export function TemplateEditor({
     title_pattern: initialTemplate.title_pattern ?? "",
     auto_create_next_protocol: Boolean(initialTemplate.auto_create_next_protocol),
     cycle_config_id: initialTemplate.cycle_config_id ? String(initialTemplate.cycle_config_id) : "",
-    document_template_id: initialTemplate.document_template_id ? String(initialTemplate.document_template_id) : "",
   });
   const [newItemForm, setNewItemForm] = useState<TemplateItemForm>({
     ...initialTemplateItemForm
@@ -657,6 +659,7 @@ export function TemplateEditor({
   const [showParticipantModal, setShowParticipantModal] = useState(false);
   const [participantPickerSearch, setParticipantPickerSearch] = useState("");
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showFineTariffModal, setShowFineTariffModal] = useState(false);
   const [showAutoAssignModal, setShowAutoAssignModal] = useState(false);
   const [showResponsibilityModalFor, setShowResponsibilityModalFor] = useState<string | null>(null);
   const [draggedTemplateElementId, setDraggedTemplateElementId] = useState<string | null>(null);
@@ -1217,7 +1220,6 @@ export function TemplateEditor({
           title_pattern: templateMeta.title_pattern || null,
           auto_create_next_protocol: templateMeta.auto_create_next_protocol,
           cycle_config_id: templateMeta.cycle_config_id ? templateMeta.cycle_config_id : null,
-          document_template_id: templateMeta.document_template_id ? templateMeta.document_template_id : null,
         })
       });
       setTemplate(updated);
@@ -1522,9 +1524,22 @@ export function TemplateEditor({
             <button type="button" className="button-ghost button-secondary" onClick={() => setShowParticipantModal(true)}>
               Teilnehmer
             </button>
+            {financeAccounts ? (
+              <button type="button" className="button-ghost button-secondary" onClick={() => setShowFineTariffModal(true)}>
+                {t("fineTariff.button")}
+              </button>
+            ) : null}
           </div>
         }
       />
+      {financeAccounts ? (
+        <TemplateFineTariffModal
+          open={showFineTariffModal}
+          templateId={template.id}
+          accounts={financeAccounts}
+          onClose={() => setShowFineTariffModal(false)}
+        />
+      ) : null}
 
       <Modal
         open={showSettingsModal}
@@ -1591,18 +1606,11 @@ export function TemplateEditor({
           <div className="info-note">
             {t("patternTokensInfo")}
           </div>
-          <label className="field-stack">
+          <div className="field-stack">
             <span className="field-label">{t("pdfLayoutLabel")}</span>
-            <SearchableSelect
-              options={availableDocumentTemplates.filter((dt) => dt.is_active)}
-              getId={(dt) => dt.id}
-              getLabel={(dt) => `${dt.name}${dt.is_default ? " (Standard)" : ""}`}
-              value={templateMeta.document_template_id || null}
-              onChange={(dt) => setTemplateMeta((current) => ({ ...current, document_template_id: dt ? String(dt.id) : "" }))}
-              nullLabel={t("noLayoutAssigned")}
-            />
-            <span className="field-help">{t("pdfLayoutHelp")}</span>
-          </label>
+            <span className="field-help">{t("pdfLayoutStudioHelp")}</span>
+            <Link className="studio-link" href="/documents">{t("pdfLayoutStudioLink")}</Link>
+          </div>
           <div className="table-toolbar-actions">
             <button data-modal-save type="submit" className="button-secondary">{t("saveTemplate")}</button>
           </div>

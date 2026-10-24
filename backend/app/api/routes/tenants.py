@@ -1,6 +1,7 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -9,11 +10,13 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, require_writer
+from app.core.tenant_scope import tenant_scope_suspended
 from app.models import Participant, Tenant, TenantDomain
+from app.schemas.cashflow import TenantPortalCharges
 from app.schemas.user import TenantDomainCreate, TenantDomainRead, TenantLookupRead, TenantRead, TenantSubscriptionRead, TenantUpdate
 from app.services import public_id_service, tenant_trust_service
-from app.services.file_service import _safe_storage_path
 from app.services.tenant_service import TenantService, build_tenant_profile_image_url, tenant_profile_image_response
+from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter()
 service = TenantService()
@@ -30,9 +33,12 @@ def list_tenants(
 def _lookup_read(db: Session, tenant: Tenant, *, trusted: bool) -> TenantLookupRead:
     if not trusted:
         return TenantLookupRead(id=tenant.public_id, trusted=False)
-    participant_count = db.scalar(
-        select(func.count()).select_from(Participant).where(Participant.tenant_id == tenant.id, Participant.is_active.is_(True))
-    )
+    # Nur bei Trust und nur als Zahl: die Konten des anderen Mandanten sind per Row-Level-Security
+    # sonst unsichtbar (app/core/tenant_scope.py).
+    with tenant_scope_suspended(db):  # rls-ok: nur bei Trust und nur als Anzahl
+        participant_count = db.scalar(
+            select(func.count()).select_from(Participant).where(Participant.tenant_id == tenant.id, Participant.is_active.is_(True))
+        )
     return TenantLookupRead(
         id=tenant.public_id,
         trusted=True,
@@ -84,6 +90,19 @@ async def patch_tenant(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_patch_tenant_impl, tenant_id=tenant_id, name=name, public_slug=public_slug, profile_image=profile_image, db=db, user=user)
+
+
+async def _patch_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    tenant_id: uuid.UUID,
+    name: str | None = Form(default=None),
+    public_slug: str | None = Form(default=None),
+    profile_image: UploadFile | None = File(default=None),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
     internal_id = public_id_service.resolve_internal_id(db, Tenant, tenant_id)
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
@@ -114,17 +133,29 @@ def get_tenant_subscription(
     return result
 
 
+@router.get("/tenants/{tenant_id}/charges", response_model=TenantPortalCharges)
+def get_tenant_charges(
+    tenant_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    internal_id = public_id_service.resolve_internal_id(db, Tenant, tenant_id)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    result = service.get_charges(db, internal_id, user)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return result
+
+
 @router.get("/tenants/{tenant_id}/profile-image")
-def tenant_profile_image(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
+def tenant_profile_image(tenant_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
     # Deliberately public (no auth) - this is an organisation logo, not sensitive data, and
     # needs to be renderable on the login page before the visitor has authenticated at all.
     tenant = public_id_service.get_by_public_id(db, Tenant, tenant_id)
     if tenant is None or tenant.profile_image_path is None:
         raise HTTPException(status_code=404, detail="Tenant profile image not found")
-    file_path = _safe_storage_path(settings.storage_root, tenant.profile_image_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Tenant profile image missing")
-    return tenant_profile_image_response(file_path)
+    return tenant_profile_image_response(request, tenant.profile_image_path)
 
 
 @router.get("/tenants/{tenant_id}/domains", response_model=list[TenantDomainRead])
@@ -146,7 +177,7 @@ def create_tenant_domain(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    internal_id = public_id_service.resolve_internal_id(db, Tenant, tenant_id)
+    internal_id = public_id_service.resolve_internal_id(db, Tenant, tenant_id)  # nosemgrep: public-id-lookup-without-tenant -- require_manageable prüft direkt danach
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
     # Each create/verify/delete triggers a full Traefik dynamic-config rewrite + reload (and

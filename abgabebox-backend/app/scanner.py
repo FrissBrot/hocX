@@ -1,15 +1,34 @@
+# GENERIERT aus backend/app/scanner.py - nicht von Hand bearbeiten, siehe scripts/sync-objstore-client.sh
 from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from pathlib import Path
 
 _SCAN_CONCURRENCY = 4
+# Höchstens so viele gleichzeitige ClamAV-Verbindungen je Prozess, über alle Requests und Jobs
+# hinweg (Concurrency-Audit CONC-013). clamd hat MaxThreads 3/MaxQueue 32 für alle Dienste
+# zusammen; 4 je Request und Batch liessen die Warteschlange im Upload-Sturm überlaufen.
+PROCESS_SCAN_SLOTS = threading.BoundedSemaphore(2)
+# Länger auf einen Slot zu warten lohnt nicht: die Datei bleibt dann "pending" (Quarantäne bzw.
+# Nachscan durch upload_pipeline_rescan/abgabebox_rescan), statt einen Thread festzuhalten.
+SLOT_WAIT_SECONDS = 120
 MAX_SCAN_BYTES = 100 * 1024**2
 _logger = logging.getLogger(__name__)
 
 
 def _scan(content, *, host: str, port: int) -> str:
+    if not PROCESS_SCAN_SLOTS.acquire(timeout=SLOT_WAIT_SECONDS):
+        _logger.warning("Kein ClamAV-Slot frei nach %s s - Datei bleibt pending", SLOT_WAIT_SECONDS)
+        return "pending"
+    try:
+        return _scan_unbounded(content, host=host, port=port)
+    finally:
+        PROCESS_SCAN_SLOTS.release()
+
+
+def _scan_unbounded(content, *, host: str, port: int) -> str:
     import pyclamd
     try:
         result = pyclamd.ClamdNetworkSocket(host=host, port=port, timeout=60).scan_stream(content)

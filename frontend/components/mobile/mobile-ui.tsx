@@ -58,14 +58,17 @@ export function MobileSegmented<T extends string>({
   value,
   onChange,
   ariaLabel,
+  compact = false,
 }: {
   options: SegmentOption<T>[];
   value: T;
   onChange: (value: T) => void;
   ariaLabel: string;
+  /** Kleinere Schrift mit Silbentrennung für lange Beschriftungen (z. B. vier Tabs). */
+  compact?: boolean;
 }) {
   return (
-    <div className="mobile-segmented" role="group" aria-label={ariaLabel} style={{ "--mobile-segments": options.length } as CSSProperties}>
+    <div className={`mobile-segmented${compact ? " mobile-segmented-compact" : ""}`} role="group" aria-label={ariaLabel} style={{ "--mobile-segments": options.length } as CSSProperties}>
       {options.map((option) => {
         const active = option.value === value;
         return (

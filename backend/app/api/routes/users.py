@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
+from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user, issue_locale_cookie, issue_session_cookie
 from app.models.entities import AppUser, UserMfaFactor
@@ -18,7 +19,10 @@ from app.schemas.mfa import (
     UserMfaRead,
 )
 from app.schemas.user import UserCreate, UserPasswordChange, UserRead, UserSelfUpdate, UserUpdate
+from app.core.rate_limit import enforce_rate_limit
+from app.schemas.data_export import ProtectedExportRequest
 from app.services import public_id_service
+from app.services.data_export import personal as personal_data
 from app.services.audit_service import AuditService
 from app.services.mfa_service import MfaService
 from app.services.user_service import UserService
@@ -29,7 +33,9 @@ mfa_service = MfaService()
 audit = AuditService()
 
 
-def _expected_origin(request: Request) -> str:
+def _browser_origin(request: Request) -> str:
+    """Origin der Seite, wie der Browser ihn meldet - nur für die Entscheidung, ob auf diesem
+    Host Passkeys angeboten werden (siehe _request_hostname), nie als Prüfwert."""
     origin = request.headers.get("origin")
     if origin:
         return origin
@@ -39,13 +45,23 @@ def _expected_origin(request: Request) -> str:
     return f"https://{host}"
 
 
+def _expected_origin(request: Request) -> str:
+    """Erwarteter WebAuthn-Origin. Mit konfigurierter Hauptdomain fest auf diese gesetzt statt aus
+    dem Origin-Header des Requests übernommen (Security-Audit SEC-021, gleiche Regel wie
+    routes/auth.py) - ein Vergleich mit dem Wert aus demselben Request prüft nichts. Nur lokal
+    (ohne Domain) gilt weiter der Origin des Requests."""
+    if settings.traefik_domain:
+        return f"https://{settings.traefik_domain}"
+    return _browser_origin(request)
+
+
 def _request_hostname(request: Request) -> str | None:
     """See admin.py's identical helper: request.url.hostname is wrong whenever this request
     arrived through the frontend's own /api/* rewrite proxy, which overwrites Host with its
     own upstream target instead of preserving the browser's original one - reuses
-    _expected_origin's own header-derived value (the Origin header, unaffected by that
+    _browser_origin's own header-derived value (the Origin header, unaffected by that
     proxy hop) instead (audit fix, 2026-09-17)."""
-    return urlparse(_expected_origin(request)).hostname
+    return urlparse(_browser_origin(request)).hostname
 
 
 @router.get("", response_model=list[UserRead])
@@ -96,6 +112,20 @@ def patch_me(
     return updated
 
 
+@router.post("/me/personal-data")
+def export_my_personal_data(
+    payload: ProtectedExportRequest,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Selbstauskunft: eigene Daten als passwortgeschütztes ZIP (DSG Art. 25/28; PRIV-006)."""
+    enforce_rate_limit(f"personal-data-export:{user.user_id}", limit=3, period_seconds=3600)
+    person = db.get(AppUser, user.user_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return personal_data.respond(db, person, password=payload.password, actor=user, self_export=True)
+
+
 @router.get("/me/mfa", response_model=UserMfaRead)
 def get_my_mfa(
     request: Request,
@@ -143,6 +173,7 @@ def complete_my_totp_enrollment(
         code=payload.code,
         label=payload.label,
     )
+    audit.log(db, action="user.mfa_factor_added", actor=user, entity_type="user_mfa_factor", details={"factor": "totp"})
     issue_session_cookie(response, user.user_id, mfa_verified=True)
     return mfa_service.get_self_overview(db, user, _request_hostname(request))
 
@@ -176,6 +207,7 @@ def complete_my_passkey_registration(
         label=payload.label,
         credential=payload.credential,
     )
+    audit.log(db, action="user.mfa_factor_added", actor=user, entity_type="user_mfa_factor", details={"factor": "passkey"})
     issue_session_cookie(response, user.user_id, mfa_verified=True)
     return mfa_service.get_self_overview(db, user, _request_hostname(request))
 

@@ -25,8 +25,7 @@ def make_platform_admin(db, email="pricing-admin@example.com") -> PlatformAdmin:
 
 def test_plan_write_rejects_negative_price_and_limit_fields():
     """Hardening fix (audit 2026-09-24): AdminPlanWrite had no lower bound on its price/limit
-    fields, unlike sibling schemas (AdminTenantStorageQuotaUpdate.quota_mb,
-    AdminTenantSubscriptionUpdate.discount_percent). Only reachable by a platform-admin-owner,
+    fields, unlike sibling schemas (AdminTenantSubscriptionUpdate.discount_percent). Only reachable by a platform-admin-owner,
     but should fail validation the same way as everywhere else instead of persisting a negative
     price/limit that then flows into cost/quota calculations."""
     with pytest.raises(ValidationError):

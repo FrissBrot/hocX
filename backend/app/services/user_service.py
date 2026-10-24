@@ -9,6 +9,7 @@ from fastapi import HTTPException, status
 
 from app.core.rate_limit import check_account_lockout, record_failed_attempt
 from app.core.security import CurrentUser, hash_password, require_admin, verify_password
+from app.core.tenant_scope import tenant_scope_suspended
 from app.models import AppUser, Tenant
 from app.services import public_id_service
 from app.services.access_service import AccessService
@@ -249,7 +250,11 @@ class UserService:
         statement = select(AppUser.id).where(AppUser.login_enabled.is_(True), AppUser.email == email.strip().lower())
         if excluding_user_id is not None:
             statement = statement.where(AppUser.id != excluding_user_id)
-        if db.scalar(statement) is not None:
+        # Login-E-Mails sind plattformweit eindeutig: die Prüfung muss auch Konten anderer
+        # Mandanten sehen (Row-Level-Security, app/core/tenant_scope.py) und gibt nur Ja/Nein zurück.
+        with tenant_scope_suspended(db):  # rls-ok: plattformweite Eindeutigkeit, liefert nur Ja/Nein
+            taken = db.scalar(statement) is not None
+        if taken:
             raise HTTPException(status_code=409, detail="Diese E-Mail-Adresse wird bereits für einen Login verwendet")
 
     def delete_user(self, db: Session, user_id: int, actor: CurrentUser) -> bool:

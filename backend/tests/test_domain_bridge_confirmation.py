@@ -33,7 +33,8 @@ def test_get_link_only_redirects_to_the_confirmation_page(db):
     response = auth_routes.bridge(token)
 
     assert response.status_code == 307
-    assert response.headers["location"] == f"/auth/bridge?token={token}"
+    # Token im Fragment (SEC-019): geht an keinen Server und in kein Access-Log.
+    assert response.headers["location"] == f"/auth/bridge#token={token}"
     assert "set-cookie" not in response.headers
     # Token ist noch gültig (nicht verbraucht).
     assert domain_bridge_service.peek_bridge_token(token, TARGET) is not None
@@ -42,7 +43,7 @@ def test_get_link_only_redirects_to_the_confirmation_page(db):
 def test_preview_shows_whose_session_it_would_be(db):
     token, user = _token(db)
 
-    preview = auth_routes.bridge_preview(token, _request(TARGET), db=db)
+    preview = auth_routes.bridge_preview(BridgeRedeemRequest(token=token), _request(TARGET), db=db)
 
     assert (preview.email, preview.tenant_name) == (user.email, "Kunde")
 
@@ -63,7 +64,7 @@ def test_token_is_rejected_on_another_host(db):
     token, _ = _token(db)
 
     with pytest.raises(HTTPException) as exc:
-        auth_routes.bridge_preview(token, _request("andere.example.org"), db=db)
+        auth_routes.bridge_preview(BridgeRedeemRequest(token=token), _request("andere.example.org"), db=db)
     assert exc.value.status_code == 404
     with pytest.raises(HTTPException) as exc:
         auth_routes.redeem_bridge(BridgeRedeemRequest(token=token), _request("andere.example.org"), Response(), db=db)
@@ -77,3 +78,37 @@ def test_cross_site_origin_is_rejected(db):
         auth_routes.redeem_bridge(BridgeRedeemRequest(token=token), _request(TARGET, "https://angreifer.example"), Response(), db=db)
     assert exc.value.status_code == 403
     assert domain_bridge_service.peek_bridge_token(token, TARGET) is not None
+
+
+def test_new_links_carry_the_token_only_in_the_fragment(db, monkeypatch):
+    from urllib.parse import parse_qs, urlsplit
+
+    tenant = make_tenant(db, "Kunde")
+    user = make_app_user(db, email="bridge-url@example.com", tenant_id=tenant.id, role_code="writer")
+    monkeypatch.setattr(settings, "traefik_domain", "haupt.example.org")
+
+    url = domain_bridge_service.resolve_bridge_redirect(db, "anderer.example.org", user.id, tenant.id)
+
+    parts = urlsplit(url)
+    assert (parts.scheme, parts.netloc, parts.path, parts.query) == ("https", "haupt.example.org", "/auth/bridge", "")
+    token = parse_qs(parts.fragment)["token"][0]
+    assert domain_bridge_service.peek_bridge_token(token, "haupt.example.org") is not None
+
+
+@pytest.mark.parametrize("change", ["login_disabled", "sessions_revoked"])
+def test_token_is_rejected_when_the_account_changed_after_issuing(db, change):
+    from datetime import UTC, datetime
+
+    token, user = _token(db)
+    if change == "login_disabled":
+        user.login_enabled = False
+    else:
+        user.session_revoke_at = datetime.now(UTC)
+    db.flush()
+
+    with pytest.raises(HTTPException) as exc:
+        auth_routes.bridge_preview(BridgeRedeemRequest(token=token), _request(TARGET), db=db)
+    assert exc.value.status_code == 404
+    with pytest.raises(HTTPException) as exc:
+        auth_routes.redeem_bridge(BridgeRedeemRequest(token=token), _request(TARGET, f"https://{TARGET}"), Response(), db=db)
+    assert exc.value.status_code == 404

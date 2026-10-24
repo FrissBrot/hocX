@@ -178,11 +178,6 @@
   "deleteEventConfirmNamed": "Supprimer définitivement l'événement « {title} » ? Cela le retire de tous les procès-verbaux.",
   "deleteFine": "Supprimer l'amende",
   "deleteFineConfirm": "Supprimer définitivement cette amende ? Cette action est irréversible.",
-  "fineDeletedLabel": "Supprimée",
-  "fineDeletedLater": "Supprimée plus tard",
-  "fineDeletedReason": "Justification : {reason}",
-  "restoreFine": "Restaurer",
-  "fineRestoreFailed": "L'amende n'a pas pu être restaurée",
   "deleteImageAction": "Supprimer l'image",
   "descriptionLabel": "Description",
   "discardNewEventRow": "Annuler la nouvelle ligne d'événement",
@@ -193,6 +188,7 @@
     "autosaveNotice": "Les modifications sont enregistrées automatiquement.",
     "backToProtocols": "← Retour aux procès-verbaux",
     "changeSaveFailed": "La modification n'a pas pu être enregistrée",
+    "configConflictReloaded": "Quelqu’un d’autre a modifié ce bloc entre-temps – la version actuelle a été chargée. Veuillez refaire votre modification.",
     "ctrlFHint": "Ctrl+F",
     "entryCreateFailed": "L'entrée n'a pas pu être créée",
     "entryDeleteConfirm": "Supprimer définitivement cette entrée ? Cette action est irréversible.",
@@ -215,6 +211,8 @@
     "offLabel": "Désactivé",
     "onLabel": "Activé",
     "openOriginalDocument": "Ouvrir le document original",
+    "createdAtPill": "Créé le {date}",
+    "templateVersionPill": "Version du modèle {version, number}",
     "orderSaveFailed": "L'ordre n'a pas pu être enregistré",
     "otherEditorWarningDescription": "Au moins une autre personne modifie activement ce procès-verbal en ce moment. Le changement de statut s'appliquera immédiatement à tout le monde.",
     "otherEditorWarningTitle": "Une autre personne est en train de modifier",
@@ -241,6 +239,7 @@
     "workflowPreparationMode": "Mode préparation",
     "workflowSessionMode": "Mode séance",
     "templateSyncedByOther": "{name} a rechargé les éléments depuis le modèle. L’affichage est actualisé.",
+    "imageAlreadyExists": "Cette image existe déjà et n'a pas été envoyée une nouvelle fois.",
     "statusChangedByOtherToast": "{name} a changé le statut en « {status} ».",
     "draftsRestoredToast": "{count, plural, one {# brouillon local a été restauré} other {# brouillons locaux ont été restaurés}}.",
     "conflictToast": "Conflit : quelqu'un d'autre a enregistré cette section entre-temps. La version actuelle a été chargée – votre dernière modification n'a pas été appliquée, mais elle est conservée comme brouillon local."
@@ -420,12 +419,6 @@
   },
   "settledLater": "Réglé plus tard",
   "showAction": "Afficher",
-  "snapshotSwitcher": {
-    "current": "Actuel (modifiable)",
-    "historical": "{name} {year} (historique)",
-    "label": "Vue",
-    "missingSnapshot": "⚠ {name} {year} (pas d'instantané)"
-  },
   "sortLabel": "Trier",
   "status": {
     "abgeschlossen": "Terminé",
@@ -480,7 +473,13 @@
   "unknownEvent": "Événement inconnu",
   "uploadImageAction": "Téléverser une image",
   "valueFallback": "Valeur",
+  "fineDeletedLabel": "Supprimée",
+  "fineDeletedLater": "Supprimée plus tard",
+  "fineDeletedReason": "Justification : {reason}",
+  "restoreFine": "Restaurer",
+  "fineRestoreFailed": "L'amende n'a pas pu être restaurée",
   "locationLabel": "Lieu",
   "organizersLabel": "Organisateurs",
-  "balanceAsOf": "Au {date}"
+  "balanceAsOf": "Au {date}",
+  "includeImageGps": "Envoyer les données GPS de l’image"
 }

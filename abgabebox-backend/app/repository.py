@@ -4,11 +4,13 @@ KEIN db.add()/db.refresh() - siehe Kommentar in app/models.py.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 
 from sqlalchemy import func, insert, select, text
 from sqlalchemy.orm import Session
 
+from app.link_scope import bind_link_scope
 from app.models import (
     cycle_config_table,
     event_cycle_table,
@@ -32,8 +34,20 @@ from app.models import (
 def get_link_by_token(db: Session, *, token: str) -> dict | None:
     """The one and only entry point into the public Abgabebox: a valid link token. Everything
     else (tenant, reachable Abgaben) is derived from the returned link and nothing is reachable
-    without one."""
+    without one.
+
+    Bindet die Session zuerst an diesen Link: ab dann sieht die Rolle hocx_abgabebox per
+    Row-Level-Security nur noch Daten dieses Mandanten (app/link_scope.py) - auch die Link-Zeile
+    selbst ist nur mit passendem Token sichtbar."""
+    bind_link_scope(db, token)
     row = db.execute(select(submission_link_table).where(submission_link_table.c.token == token)).mappings().first()
+    return dict(row) if row else None
+
+
+def get_privacy_notice(db: Session) -> dict | None:
+    """Name und Datenschutz-Link des Vereins hinter dem gebundenen Upload-Link (Migration 0147:
+    SECURITY-DEFINER-Funktion, keine Spaltenrechte auf tenant)."""
+    row = db.execute(text("SELECT tenant_name, privacy_notice_url FROM abgabebox_privacy_notice()")).mappings().first()
     return dict(row) if row else None
 
 
@@ -198,14 +212,24 @@ def list_checksums_for_element(
     return {row[0] for row in rows}
 
 
-def list_tenant_image_hashes(db: Session, *, tenant_id: int) -> list[tuple[int, str]]:
-    """(id, perceptual_hash) aller bereits gehashten Bilder eines Mandanten - fuer die
-    mandantenweite Bild-Aehnlichkeitswarnung. Erfasst automatisch Bilder aus beiden
-    Upload-Wegen (Protokoll-Bilder im Haupt-Backend UND Abgabebox-Einreichungen), da beide
-    Services in dieselbe stored_file-Tabelle schreiben."""
+def list_assignment_image_hashes(db: Session, *, assignment_id: int) -> list[tuple[int, str]]:
+    """(id, perceptual_hash) aller bereits gehashten Bilder, die in diese Abgabe eingereicht
+    wurden - fuer die Bild-Aehnlichkeitswarnung. Bewusst nicht mehr mandantenweit
+    (Security-Audit SEC-011): sonst konnte ein anonymer Link-Inhaber pruefen, ob ein bestimmtes
+    Foto irgendwo im Verein (Galerie, Protokoll) vorhanden ist."""
     rows = db.execute(
-        select(stored_file_table.c.id, stored_file_table.c.perceptual_hash).where(
-            stored_file_table.c.tenant_id == tenant_id,
+        select(stored_file_table.c.id, stored_file_table.c.perceptual_hash)
+        .select_from(
+            submission_upload_file_table.join(
+                submission_upload_table,
+                submission_upload_table.c.id == submission_upload_file_table.c.upload_id,
+            ).join(
+                stored_file_table,
+                stored_file_table.c.id == submission_upload_file_table.c.stored_file_id,
+            )
+        )
+        .where(
+            submission_upload_table.c.assignment_id == assignment_id,
             stored_file_table.c.perceptual_hash.is_not(None),
         )
     )
@@ -297,6 +321,8 @@ def insert_full_upload(
                 # Per-file, no longer a single status applied to the whole batch (audit
                 # finding, 2026-08-25) - see routes/public.py's upload().
                 scan_status=f["scan_status"],
+                # Aufnahmedatum/GPS/Kamera, serverseitig gelesen (app/image_metadata.py).
+                **f.get("image_metadata", {}),
             )
             .returning(stored_file_table.c.id)
         )
@@ -324,6 +350,22 @@ def insert_full_upload(
     return upload_id
 
 
+# Personendaten aus Fehlertexten entfernen (Datenschutz-Audit PRIV-002), gleiche Regeln wie
+# backend/app/core/error_log.redact - bewusst kopiert, dieser Dienst importiert nichts aus dem Backend.
+_REDACTIONS = (
+    (re.compile(r"(Key \([^)]*\)=\().*?(\) (?:already exists|is not present|is still referenced|conflicts))"), r"\1<redacted>\2"),
+    (re.compile(r"(Failing row contains \().*(\)\.?)$", re.M), r"\1<redacted>\2"),
+    (re.compile(r"\[parameters: .*?\](?=\n|$)", re.S | re.M), "[parameters: <redacted>]"),
+    (re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"), "<email>"),
+)
+
+
+def redact(text: str) -> str:
+    for pattern, replacement in _REDACTIONS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
 def insert_error_log(
     db: Session,
     *,
@@ -344,8 +386,8 @@ def insert_error_log(
             request_path=request_path,
             status_code=status_code,
             error_type=error_type,
-            error_message=error_message[:4000],
-            traceback=(traceback or "")[:20000] or None,
+            error_message=redact(error_message)[:4000],
+            traceback=redact(traceback or "")[:20000] or None,
         )
     )
     db.commit()
@@ -357,3 +399,21 @@ def get_tenant_storage_usage_bytes(db: Session, *, tenant_id: int) -> int:
 
 def upload_path_referenced(db: Session, path: str) -> bool:
     return bool(db.scalar(text("SELECT public.upload_path_referenced(:path)"), {"path": path}))
+
+
+def verify_document(db: Session, *, sha256: str) -> dict | None:
+    """Öffentliche Prüfung eines PDFs über seinen SHA-256 (Prüfseite /verify).
+
+    Die restricted Rolle darf weder das Dokumentenregister noch die View lesen, nur die
+    SECURITY-DEFINER-Funktion verify_document() aufrufen (Migration 0117): sie liefert höchstens
+    eine Zeile für einen bekannten Hash, und was angezeigt werden darf (Name, Logo, Abzeichen,
+    Hinweis auf neuere Version), entscheidet allein die View dahinter."""
+    row = db.execute(text("SELECT * FROM verify_document(:sha256)"), {"sha256": sha256}).mappings().first()
+    return dict(row) if row else None
+
+
+def verify_site(db: Session, *, domain: str) -> dict | None:
+    """Mandant hinter einer Prüf-Domain (SECURITY-DEFINER-Funktion verify_site, Migration 0126).
+    Liefert nur etwas für eine aktive Prüf-Domain mit gebuchtem Feature und freigegebener Anzeige."""
+    row = db.execute(text("SELECT * FROM verify_site(:domain)"), {"domain": domain}).mappings().first()
+    return dict(row) if row else None

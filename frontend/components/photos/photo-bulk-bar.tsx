@@ -30,7 +30,7 @@ export function PhotoBulkBar({
   // Albumansicht des Besitzers mit noch nicht freigegebenen Fotos in der Auswahl.
   onReleaseSelected?: () => void;
   onSelectAll?: () => void;
-  selectedItems?: { original_name: string; content_url: string }[];
+  selectedItems?: { id: string; original_name: string; content_url: string }[];
 }) {
   const t = useTranslations("photos.bulkBar");
   const confirm = useConfirm();
@@ -142,7 +142,9 @@ export function PhotoBulkBar({
     setBusy(true);
     try {
       for (const item of selectedItems) {
-        const response = await fetch(`${browserApiBaseUrl}${item.content_url}`, { credentials: "include" });
+        // Export-Endpunkt statt Original: trägt ein geschätztes Aufnahmedatum in die
+        // heruntergeladene Kopie ein (das gespeicherte Original bleibt unverändert).
+        const response = await fetch(`${browserApiBaseUrl}/api/stored-files/${item.id}/download?part=image`, { credentials: "include" });
         if (!response.ok) throw new Error();
         const url = URL.createObjectURL(await response.blob());
         const link = document.createElement("a");

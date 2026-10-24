@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.locale_config_generated import LOCALE_COOKIE_NAME, normalize_locale
+from app.core.tenant_scope import bind_tenant_scope
 from app.models import AppUser, Role, Tenant, TenantFeature, UserMfaFactor
 
 
@@ -220,6 +221,8 @@ def get_optional_current_user(
         return None
     if _requires_mfa(current_user) and (not has_mfa_factor or not current_user.mfa_verified):
         return None
+    # Ab hier sieht die Session per Row-Level-Security nur noch Daten dieses Mandanten.
+    bind_tenant_scope(db, current_user.current_tenant_id)
     return current_user
 
 

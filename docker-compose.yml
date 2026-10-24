@@ -89,6 +89,11 @@ services:
       - postgres
       - -c
       - shared_preload_libraries=pg_stat_statements
+      # Verbindungsbudget (Concurrency-Audit CONC-010): Backend 2 x 20, Abgabebox 2 x 8, Worker je 5,
+      # job-worker 8, dazu ungepoolte Kurzverbindungen (Kennzahlen, Fehlerprotokoll, Upload-Lock,
+      # pg_dump/pg_restore) - rund 100. Ohne explizite Angabe galt der Default 100.
+      - -c
+      - max_connections=150
       - -c
       - pg_stat_statements.max=5000
       - -c
@@ -130,6 +135,8 @@ services:
     restart: unless-stopped
     mem_limit: 128m
     cpus: 0.5
+    # Unter dem Containerlimit, noeviction wie Release (Schreibfehler statt OOM-Kill, CONC-011).
+    command: ["redis-server", "--maxmemory", "100mb", "--maxmemory-policy", "noeviction"]
     logging:
       driver: json-file
       options:
@@ -210,7 +217,6 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
-      LATEX_TEMPLATE_ROOT: /app/storage/latex_templates
       EXPORT_ROOT: /app/storage/exports
       UPLOAD_ROOT: /app/storage/uploads
       THUMBNAIL_ROOT: /app/storage-local/thumbnails
@@ -238,9 +244,22 @@ services:
       TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
       ROUTER_PREFIX: hocx
       TRAEFIK_MIDDLEWARE_PREFIX: ""
+      # Objektspeicher (docs-site/docs/technik/storage/): Schlüssel für Profil-Zugangsdaten und lokales Garage-S3.
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      # Schlüssel der Mandanten-Exporte; leer ausserhalb der Produktion = aus AUTH_SECRET abgeleitet.
+      EXPORT_ENCRYPTION_KEY: ${EXPORT_ENCRYPTION_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      LOCAL_S3_ENDPOINT: http://local-s3:3900
+      LOCAL_S3_BUCKET: hocx-main
+      LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
+      LOCAL_S3_ACCESS_KEY: ${LOCAL_S3_ACCESS_KEY:-}
+      LOCAL_S3_SECRET_KEY: ${LOCAL_S3_SECRET_KEY:-}
+      LOCAL_S3_ABGABEBOX_ACCESS_KEY: ${LOCAL_S3_ABGABEBOX_ACCESS_KEY:-}
+      LOCAL_S3_ABGABEBOX_SECRET_KEY: ${LOCAL_S3_ABGABEBOX_SECRET_KEY:-}
     networks:
       - default
       - docker-api
+      - storage
       - cache
     depends_on:
       db:
@@ -256,6 +275,7 @@ services:
       # auch wenn /app/storage spaeter auf ein Netzwerk-/Cloud-Volume umgehaengt wird
       # (siehe FileService.ensure_thumbnail).
       - ./storage-local/thumbnails:/app/storage-local/thumbnails
+      - ./storage-local/work:/app/storage-local/work
       # Zugriff auf die von der Abgabebox geschriebenen Dateien fuer Admin-Downloads
       # und zum Loeschen beim "Wieder aufschalten" (siehe submission_service.py).
       # Read-write, da das Haupt-Backend ohnehin voll vertrauenswuerdig ist - die
@@ -264,7 +284,7 @@ services:
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       # Generiert die Router fuer Mandanten-Custom-Domains, gemeinsam mit Traefik (ro-Mount oben)
       - ./infra/traefik/dynamic:/app/traefik_dynamic
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 75"
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 75 --ws-max-size 65536 --no-access-log"
     healthcheck:
       # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
       # einen simplen Liveness-Check gegen den Health-Endpoint aus app/main.py.
@@ -415,6 +435,11 @@ services:
     environment:
       PHOTO_WORKER_DATABASE_URL: ${PHOTO_WORKER_DATABASE_URL}
       STORAGE_ROOT: /app/storage
+      ABGABEBOX_STORAGE_ROOT: /app/storage/abgabebox-uploads
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+    networks:
+      - default
+      - storage
     depends_on:
       # Waits for the real healthcheck, not just "container started" - backend's `command`
       # runs `alembic upgrade head` before uvicorn, so healthy here means the
@@ -533,7 +558,13 @@ services:
       FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
       FRIENDLY_CAPTCHA_API_KEY: ${FRIENDLY_CAPTCHA_API_KEY}
       ABGABEBOX_CAPTCHA_SESSION_SECRET: ${ABGABEBOX_CAPTCHA_SESSION_SECRET}
+      FRIENDLY_CAPTCHA_VERIFY_URL: ${FRIENDLY_CAPTCHA_VERIFY_URL:-https://api.friendlycaptcha.com/api/v1/siteverify}
+      ABGABEBOX_DEFAULT_PRIVACY_URL: ${ABGABEBOX_DEFAULT_PRIVACY_URL:-}
       CLAMAV_HOST: clamav
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+    networks:
+      - default
+      - storage
     depends_on:
       db:
         condition: service_healthy
@@ -542,7 +573,7 @@ services:
     volumes:
       - ./abgabebox-backend:/app
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/storage
-    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --no-access-log"
     healthcheck:
       # Kein curl im python:3.13-slim-Image (siehe Audit), analog zum Haupt-Backend oben.
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
@@ -604,6 +635,287 @@ services:
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.average=60"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.burst=20"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.period=1m"
+      # Echtheitsprüfung (POST /api/public/verify): eigener Router VOR dem Upload-Router (der
+      # matcht sonst jeden POST unter /api/public mit 151-MiB-Body und In-Flight 2). Der Body ist
+      # nur ein Hash plus optionaler Dokument-ID - 4 KiB reichen weit.
+      - "traefik.http.routers.abgabebox-verify.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && Path(`/api/public/verify`) && Method(`POST`)"
+      - "traefik.http.routers.abgabebox-verify.entrypoints=websecure"
+      - "traefik.http.routers.abgabebox-verify.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.abgabebox-verify.priority=300"
+      - "traefik.http.routers.abgabebox-verify.service=hocx-abgabebox-backend"
+      - "traefik.http.routers.abgabebox-verify.middlewares=abgabebox-verify-ratelimit,abgabebox-verify-body-limit"
+      - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.average=30"
+      - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.burst=10"
+      - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.abgabebox-verify-body-limit.buffering.maxRequestBodyBytes=4096"
+
+  # Lokales S3 (Garage, docs-site/docs/technik/storage/lokales-s3.md). Beim ersten Deployment automatisch
+  # bereitgestellt; nur im internen Netz "storage" erreichbar, keine veröffentlichten Ports.
+  # Ob der Container laufen muss, entscheidet scripts/storage_controller.sh auf dem Host -
+  # gestoppt wird nur, nie gelöscht (Volume local_s3_data bleibt).
+  local-s3:
+    image: dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:-}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-}
+    volumes:
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+      - local_s3_data:/var/lib/garage
+    networks:
+      - storage
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Richtet Layout, Schlüssel und Buckets idempotent ein (infra/garage/bootstrap.py) und beendet sich.
+  storage-init:
+    build:
+      context: ./backend
+    restart: "no"
+    environment:
+      GARAGE_ADMIN_URL: http://127.0.0.1:3903
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-}
+      LOCAL_S3_BUCKET: hocx-main
+      LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
+      LOCAL_S3_ACCESS_KEY: ${LOCAL_S3_ACCESS_KEY:-}
+      LOCAL_S3_SECRET_KEY: ${LOCAL_S3_SECRET_KEY:-}
+      LOCAL_S3_ABGABEBOX_ACCESS_KEY: ${LOCAL_S3_ABGABEBOX_ACCESS_KEY:-}
+      LOCAL_S3_ABGABEBOX_SECRET_KEY: ${LOCAL_S3_ABGABEBOX_SECRET_KEY:-}
+    volumes:
+      - ./infra/garage/bootstrap.py:/bootstrap/bootstrap.py:ro
+    command: ["python3", "/bootstrap/bootstrap.py"]
+    # Admin-API lauscht nur auf 127.0.0.1 im local-s3-Container (infra/garage/garage.toml).
+    network_mode: "service:local-s3"
+    depends_on:
+      local-s3:
+        condition: service_healthy
+
+  # Storage-Migrations-Worker (app/workers/storage_worker.py): gleicher Code wie das Backend,
+  # eigener Prozess mit eigenem Ressourcenbudget. Mehrere Instanzen sind sicher (Lease/Fencing).
+  storage-worker:
+    build:
+      context: ./backend
+    user: "0:0"
+    restart: unless-stopped
+    mem_limit: 1024m
+    cpus: 1.0
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOCX_PROCESS_KIND: storage-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
+      HOCX_ENVIRONMENT: development
+      DATABASE_URL: ${DATABASE_URL}
+      APP_DATABASE_URL: ${APP_DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      ADMIN_AUTH_SECRET: ${ADMIN_AUTH_SECRET}
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+    command: ["python", "-m", "app.workers.storage_worker"]
+    volumes:
+      - ./backend:/app
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+      # Ziel von scripts/backup_storage.sh (Objekt-Backup, siehe docs technik/storage/backup.md)
+      - ./backups/storage:/app/backups/storage
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Backup-Worker (docs-site/docs/technik/backup/). Im Dev-Stack nur mit Profil "backup":
+  #   docker compose --profile backup up -d backup-worker
+  # Repository z. B. lokal: BACKUP_REPOSITORY_URL=/backup-work/dev-repo, BACKUP_PASSPHRASE_FILE in .env.
+  backup-worker:
+    build:
+      context: ./backend
+    user: "0:0"
+    restart: unless-stopped
+    mem_limit: 1536m
+    cpus: 1.0
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOCX_PROCESS_KIND: backup-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
+      HOCX_ENVIRONMENT: development
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      ADMIN_AUTH_SECRET: ${ADMIN_AUTH_SECRET}
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      REDIS_URL: redis://redis:6379/0
+      BACKUP_WORK_DIR: /backup-work
+    command: ["python", "-m", "app.workers.backup_worker"]
+    volumes:
+      - ./backend:/app
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+      - ./backups/borg-work:/backup-work
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    profiles: [backup]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Dokument-Worker (app/workers/document_worker.py): PDF-Konvertierung (LibreOffice) und
+  # Textextraktion hochgeladener Dokumente, gleicher Code wie das Backend. Verarbeitet nicht
+  # vertrauenswürdige Dateien: eigenes, knappes Ressourcenbudget, keine Ports, kein Docker-Socket.
+  # Mehrere Instanzen sind sicher (Lease, FOR UPDATE SKIP LOCKED).
+  document-worker:
+    build:
+      context: ./backend
+    user: "0:0"
+    # Root nur wegen der Bind-Mount-Rechte im Dev-Checkout; ohne Capabilities und ohne
+    # Rechteausweitung, weil hier nicht vertrauenswürdige Dokumente verarbeitet werden.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    mem_limit: 1536m
+    cpus: 1.0
+    pids_limit: 256
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOCX_ENVIRONMENT: development
+      DATABASE_URL: ${DATABASE_URL}
+      APP_DATABASE_URL: ${APP_DATABASE_URL}
+      # Keine Anmelde-/Admin-Secrets: zufällige Werte je Prozess (SECRETLESS_PROCESS_KINDS).
+      HOCX_PROCESS_KIND: document-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+    command: ["python", "-m", "app.workers.document_worker"]
+    volumes:
+      - ./backend:/app
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Schwere Hintergrundarbeit ausserhalb der uvicorn-Worker (Concurrency-Audit Paket 10,
+  # app/workers/job_worker.py) - siehe docker-compose.release.yml.
+  job-worker:
+    build:
+      context: ./backend
+    user: "0:0"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    mem_limit: 3072m
+    cpus: 1.0
+    pids_limit: 512
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOCX_ENVIRONMENT: development
+      DATABASE_URL: ${DATABASE_URL}
+      APP_DATABASE_URL: ${APP_DATABASE_URL}
+      HOCX_PROCESS_KIND: job-worker
+      # Wie beim Backend explizit, damit e2e/tests ihre eigene --env-file durchreichen.
+      # AUTH_SECRET ersetzt der Prozess durch einen Zufallswert (SESSIONLESS_PROCESS_KINDS).
+      ADMIN_AUTH_SECRET: ${ADMIN_AUTH_SECRET}
+      DB_POOL_SIZE: "6"
+      DB_MAX_OVERFLOW: "2"
+      DOCUMENT_RENDER_CONCURRENCY: "2"
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      THUMBNAIL_ROOT: /app/storage-local/thumbnails
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      CLAMAV_HOST: clamav
+    command: ["python", "-m", "app.workers.job_worker"]
+    volumes:
+      - ./backend:/app
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ./storage-local/thumbnails:/app/storage-local/thumbnails
+      - ./storage-local/work:/app/storage-local/work
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   clamav:
     image: clamav/clamav@sha256:9cb27d7660bdf66e9878c832cb433dd8aa152cfbe16f3c2c0084c80b04ae22b4
@@ -663,6 +975,7 @@ services:
       # falschem 404 zurueck) - hier war der Fix von damals nie nachgezogen worden.
       INTERNAL_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
+      FRIENDLY_CAPTCHA_PUZZLE_URL: ${FRIENDLY_CAPTCHA_PUZZLE_URL:-https://api.friendlycaptcha.com/api/v1/puzzle}
     depends_on:
       - abgabebox-backend
     volumes:
@@ -726,7 +1039,11 @@ networks:
   # Siehe traefik-socket-proxy: nur Traefik und sein Proxy.
   traefik-docker-api:
     internal: true
+  # Objektspeicher: nur Backend, Worker, Abgabebox und Foto-Worker erreichen das lokale S3.
+  storage:
+    internal: true
 
 volumes:
   postgres_data:
   clamav_db:
+  local_s3_data:

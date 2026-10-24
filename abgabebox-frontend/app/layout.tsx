@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import { Inter, Source_Serif_4 } from "next/font/google";
-import Script from "next/script";
+import { headers } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { FlowProvider, FlowStepBar, FlowStepList } from "@/components/flow-steps";
+import { BrandIntro, BrandNote, BrandSubtitle } from "@/components/brand-intro";
 import { LanguageSelect } from "@/components/language-select";
+import { MaintenanceBanner } from "@/components/maintenance-banner";
+import { NONCE_HEADER } from "@/lib/csp";
 import "./tokens.css";
 import "./globals.css";
 
@@ -25,16 +28,17 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const locale = await getLocale();
   const messages = await getMessages();
   const t = await getTranslations("abgabebox");
+  // Von proxy.ts pro Request gesetzt (Nonce-CSP, SEC-012).
+  const nonce = (await headers()).get(NONCE_HEADER) ?? undefined;
 
   return (
     <html lang={locale} className={`${inter.variable} ${serif.variable}`} suppressHydrationWarning>
-      <body suppressHydrationWarning>
-        <NextIntlClientProvider locale={locale} messages={messages}>
+      <head>
         {/* Gleiche Theme-Logik wie die Haupt-App (frontend/app/layout.tsx): gespeicherte
             Praeferenz, sonst System. Ohne JS greift der prefers-color-scheme-Block in tokens.css. */}
-        <Script
+        <script
           id="hocx-theme"
-          strategy="beforeInteractive"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `
               (function () {
@@ -51,6 +55,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             `
           }}
         />
+      </head>
+      <body suppressHydrationWarning>
+        <NextIntlClientProvider locale={locale} messages={messages}>
         <FlowProvider>
           <div className="box-shell">
             <aside className="box-brand">
@@ -60,26 +67,26 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                 </span>
                 <span className="box-brand-name">
                   <span className="box-brand-title">hocX</span>
-                  <span className="box-brand-sub">{t("brand.subtitle")}</span>
+                  <span className="box-brand-sub"><BrandSubtitle /></span>
                 </span>
                 <LanguageSelect currentLocale={locale} />
               </div>
               <FlowStepBar />
-              <div className="box-brand-intro">
-                <h2>{t("brand.headline")}</h2>
-                <p>{t("brand.lead")}</p>
-              </div>
+              <BrandIntro />
               <FlowStepList />
               <div className="box-brand-note">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
                   <rect x="5" y="11" width="14" height="9" rx="2" />
                   <path d="M8 11V8a4 4 0 0 1 8 0v3" />
                 </svg>
-                <span>{t("brand.securityNote")}</span>
+                <BrandNote />
               </div>
             </aside>
             <div className="box-main">
-              <main className="box-content">{children}</main>
+              <main className="box-content">
+                <MaintenanceBanner />
+                {children}
+              </main>
               <footer className="page-footer">
                 {t("copyright", { year: new Date().getFullYear() })}
               </footer>

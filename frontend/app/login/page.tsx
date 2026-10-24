@@ -12,6 +12,8 @@ import { browserSupportsPasskeys, createPasskeyCredential, getPasskeyAssertion }
 import { LoginResponse, PasskeyAssertionStart, PasskeyRegistrationStart, PendingMfaLogin, SessionInfo, TotpEnrollmentStart } from "@/types/api";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 import { TotpEnrollCard } from "@/components/security/totp-enroll-card";
+import { MaintenanceNotice } from "@/components/maintenance/maintenance-notice";
+import { useMaintenanceStatus } from "@/lib/maintenance";
 
 type ResolvedTenant = { tenant_id: number; tenant_name: string; profile_image_url: string | null };
 const MFA_CODE_LENGTH = 6;
@@ -77,6 +79,9 @@ export default function LoginPage() {
   const [passkeyLabel, setPasskeyLabel] = useState("");
   const [showMethodChooser, setShowMethodChooser] = useState(false);
   const autoStartedPasskeyTicketRef = useRef<string | null>(null);
+  // Während voller Wartung ist die Anmeldung serverseitig gesperrt (503) - hier nur sichtbar machen.
+  const { status: maintenance } = useMaintenanceStatus();
+  const maintenanceActive = maintenance?.active === true;
   const totpDigitRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const canUsePasskeys = browserSupportsPasskeys();
@@ -726,6 +731,7 @@ export default function LoginPage() {
   return (
     <main className="login-frame">
       <section className={loginPanelClassName}>
+        {maintenance ? <MaintenanceNotice status={maintenance} /> : null}
         {!isVerifyScreen ? (
           <>
             <div className="login-brand">
@@ -748,7 +754,7 @@ export default function LoginPage() {
           </>
         ) : null}
 
-        {!pendingMfa ? renderPasswordStep() : pendingMfa.status === "setup_required" ? renderSetupStep() : renderVerifyStep()}
+        {maintenanceActive ? null : !pendingMfa ? renderPasswordStep() : pendingMfa.status === "setup_required" ? renderSetupStep() : renderVerifyStep()}
 
         {pendingMfa?.status === "setup_required" ? (
           <div className="table-actions table-actions-start">

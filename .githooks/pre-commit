@@ -7,6 +7,10 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 CONFIG="$REPO_ROOT/.gitleaks.toml"
 
+# Sicherheitsregeln (SECURITY-RULES.md): nur neu eingefuehrte Verstoesse in gestagten Dateien.
+# Gilt fuer alle Agents (Claude, Codex, Gemini, ...) und Menschen gleichermassen.
+python3 "$REPO_ROOT/scripts/check-security-rules.py" --staged
+
 if command -v gitleaks >/dev/null 2>&1; then
   gitleaks protect --staged --config "$CONFIG" --redact
   exit $?

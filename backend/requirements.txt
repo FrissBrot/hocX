@@ -9,15 +9,32 @@ pydantic-settings==2.8.1
 python-multipart==0.0.32
 pyclamd==0.4.0
 redis==5.2.1
-matplotlib==3.10.1
 dnspython==2.7.0
 PyYAML==6.0.3
-PyJWT[crypto]==2.12.0
+PyJWT[crypto]==2.15.1
 cryptography==50.0.0
 python-docx==1.1.2
 pdfplumber==0.11.10
 scipy==1.18.0
-Pillow==12.3.0
+Pillow==13.0.0
+# Dokument-Engine (app/documents): Typst-Compiler (QR-Codes über das vendorte Typst-Paket
+# tiaoma), Markdown-Parser, XMP-Ergänzung (pypdf, inkrementell) und XLSX-Export. Versionen
+# fest, damit Dev, CI und Produktion identisch rendern.
+typst==0.15.0
+markdown-it-py==4.2.0
+pypdf==6.21.2
+# Vorschau/Thumbnails: nur die benötigten Seiten aus dem PDF rastern (TYPST-005, STUDIO-015)
+pypdfium2==5.14.0
+openpyxl==3.1.5
+# Zeichenabdeckung der Schriften (PDF/A verbietet fehlende Glyphen, siehe renderer.py)
+fonttools==4.66.1
 pillow-heif==1.7.0
 ImageHash==4.3.2
 
+# S3-Objektspeicher (app/core/objstore_client.py, docs-site/docs/technik/storage/architektur.md)
+boto3==1.43.113
+
+# Passwortgeschützte ZIP-Dateien (AES-256, WinZip-AE-2) für Datenauskunft und Vereinsexport
+# (app/services/personal_data_export_service.py, Datenschutz-Audit Paket 5/6) - lesbar mit 7-Zip,
+# Keka und WinRAR (nicht mit dem eingebauten Entpacker von macOS).
+pyzipper==0.4.0

@@ -91,7 +91,10 @@ nav:
       - Todos: benutzer/todos.md
       - Verknüpfungen (Kalender): benutzer/verknuepfungen.md
       - Abgabebox: benutzer/abgabebox.md
+      - Dateien & Dokumente: benutzer/dateien.md
       - Word-Import: benutzer/word-import.md
+      - Dokumente & Document Studio: benutzer/dokumente.md
+      - Echtheit prüfen: benutzer/echtheit.md
   - Technik & Betrieb:
       - Übersicht: technik/index.md
       - Big Picture: technik/big-picture.md
@@ -99,8 +102,30 @@ nav:
       - Deployment (Dev/Test/Prod): technik/deployment.md
       - Platform-Admin-Panel: technik/admin-panel.md
       - Mandanten Export/Import: technik/export-import.md
+      - Dokument-Engine: technik/dokument-engine.md
+      - Document Studio: technik/document-studio.md
       - Import-Testbook: technik/import-testbook.md
       - Abgabe-Links-Testbook: technik/abgabe-links-testbook.md
       - Upload-Testbook: technik/upload-testbook.md
+      - Backup-Testbook: technik/backup-testbook.md
+      - Dokument-Engine-Testbook: technik/dokument-engine-testbook.md
+      - Objektspeicher-Testbook: technik/storage-testbook.md
+      - Dokumentverwaltung-Testbook: technik/dokumentverwaltung-testbook.md
+      - Release-1.2.0-Testbook: technik/release-1.2.0-testbook.md
       - Sicherheit: technik/sicherheit.md
+      - Dokumentverwaltung: technik/dokumente.md
+      - Dateispeicher (S3) & Wartung:
+          - Übersicht: technik/storage/index.md
+          - Architektur: technik/storage/architektur.md
+          - Installation & Betrieb: technik/storage/betrieb.md
+          - Lokales S3: technik/storage/lokales-s3.md
+          - Migrationen: technik/storage/migration.md
+          - Wartungsmodus: technik/storage/wartung.md
+          - Backup & Recovery (bisher): technik/storage/backup.md
+      - Backup (BorgBackup):
+          - Übersicht: technik/backup/index.md
+          - Architektur: technik/backup/architektur.md
+          - Einrichtung & Betrieb: technik/backup/betrieb.md
+          - Wiederherstellung: technik/backup/restore.md
+          - Sicherheit: technik/backup/sicherheit.md
       - Bekannte offene Punkte: technik/offene-punkte.md

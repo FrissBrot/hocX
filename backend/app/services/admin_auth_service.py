@@ -13,6 +13,9 @@ from app.models import PlatformAdmin
 from app.schemas.admin import AdminLoginRequest, AdminSelfRead, AdminSessionRead
 from app.schemas.mfa import MfaTicketRequest, TotpEnrollmentComplete, TotpEnrollmentStartRead, TotpLoginVerifyRequest
 from app.services.admin_mfa_service import AdminMfaService
+from app.services.audit_service import AuditService
+
+_audit = AuditService()
 
 
 class AdminAuthService:
@@ -32,6 +35,12 @@ class AdminAuthService:
         password_ok = verify_password(payload.password, admin.password_hash if admin is not None else DUMMY_PASSWORD_HASH)
         if admin is None or not admin.is_active or not password_ok:
             record_failed_login("login-admin", payload.email, client_address)
+            # Sicherheitsereignis (PRIV-013): nur bekannte Admin-Konten werden benannt.
+            _audit.log(
+                db, action="admin.login_failed", outcome="failure",
+                actor_email=admin.email if admin is not None else None,
+                details={"reason": "unknown_account" if admin is None else ("inactive" if not admin.is_active else "password")},
+            )
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-Mail oder Passwort ist ungültig.")
 
         # Audit finding, 2026-08-27: a correct password alone used to grant a full,
@@ -44,7 +53,7 @@ class AdminAuthService:
 
     def verify_login_totp(self, db: Session, response: Response, payload: TotpLoginVerifyRequest) -> AdminSessionRead:
         context = self.mfa_service.verify_login_totp(db, ticket=payload.ticket, code=payload.code)
-        return self._finish_login(response, context.admin)
+        return self._finish_login(db, response, context.admin)
 
     def start_login_totp_setup(self, db: Session, payload: MfaTicketRequest) -> TotpEnrollmentStartRead:
         return self.mfa_service.start_login_totp_enrollment(db, payload.ticket)
@@ -55,10 +64,11 @@ class AdminAuthService:
         context = self.mfa_service.complete_login_totp_enrollment(
             db, flow_token=payload.flow_token, code=payload.code, label=payload.label
         )
-        return self._finish_login(response, context.admin)
+        return self._finish_login(db, response, context.admin)
 
-    def _finish_login(self, response: Response, admin: PlatformAdmin) -> AdminSessionRead:
+    def _finish_login(self, db: Session, response: Response, admin: PlatformAdmin) -> AdminSessionRead:
         issue_admin_session_cookie(response, admin.id, mfa_verified=True)
+        _audit.log(db, action="admin.login", actor_email=admin.email, details={"method": "password_totp"})
         return self.session(
             CurrentAdmin(
                 admin_id=admin.id, admin_public_id=admin.public_id, email=admin.email,

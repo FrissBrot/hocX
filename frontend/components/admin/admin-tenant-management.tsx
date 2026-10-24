@@ -23,6 +23,8 @@ type Props = {
   initialPlanFilter?: string;
 };
 
+// Wie export_crypto.MIN_PASSWORD_LENGTH im Backend.
+const EXPORT_PASSWORD_MIN_LENGTH = 12;
 const PAGE_SIZE = 50;
 
 // Ab diesem Anteil wird der Speicherbalken in der Liste als Warnung eingefärbt.
@@ -70,9 +72,13 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportTenant, setExportTenant] = useState<AdminTenantSummary | null>(null);
   const [exportScope, setExportScope] = useState<"structure" | "structure_lists" | "full" | "full_abgabebox">("structure");
+  const [exportPassword, setExportPassword] = useState("");
+  const [exportPasswordConfirm, setExportPasswordConfirm] = useState("");
+  const [exportCredentials, setExportCredentials] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importName, setImportName] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPassword, setImportPassword] = useState("");
   const [importBusy, setImportBusy] = useState(false);
   const [importWarnings, setImportWarnings] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -212,8 +218,15 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
   function openExport(tenant: AdminTenantSummary) {
     setExportTenant(tenant);
     setExportScope("structure");
+    setExportPassword("");
+    setExportPasswordConfirm("");
     setExportModalOpen(true);
   }
+
+  // Ohne Passwort verschlüsselt das Backend mit dem Server-Schlüssel (export_crypto.py); mit
+  // Passwort muss es lang genug und bestätigt sein.
+  const exportPasswordTooShort = exportPassword !== "" && exportPassword.length < EXPORT_PASSWORD_MIN_LENGTH;
+  const exportPasswordMismatch = exportPassword !== "" && exportPassword !== exportPasswordConfirm;
 
   async function submitExport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -228,14 +241,18 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
     // downloadZip/downloadFile already use elsewhere in this codebase.
     try {
       const { browserApiBaseUrl } = await import("@/lib/api/client");
-      const res = await fetch(`${browserApiBaseUrl}/api/admin/tenants/${exportTenant.id}/export?scope=${exportScope}`, {
+      // POST statt GET: das optionale Passwort steht nur im Body, nie in einer URL.
+      const res = await fetch(`${browserApiBaseUrl}/api/admin/tenants/${exportTenant.id}/export`, {
+        method: "POST",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: exportScope, password: exportPassword || null, include_credentials: exportCredentials }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const disposition = res.headers.get("content-disposition") ?? "";
       const filenameMatch = /filename="?([^";]+)"?/i.exec(disposition);
-      const filename = filenameMatch?.[1] ?? `${exportTenant.name}-export.zip`;
+      const filename = filenameMatch?.[1] ?? `${exportTenant.name}-export.zip.hocxenc`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -276,6 +293,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
   function openImport() {
     setImportName("");
     setImportFile(null);
+    setImportPassword("");
     setImportModalOpen(true);
   }
 
@@ -287,6 +305,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
       const formData = new FormData();
       formData.append("new_name", importName);
       formData.append("file", importFile);
+      if (importPassword) formData.append("password", importPassword);
       const result = await browserApiFetch<{ tenant: AdminTenantSummary; warnings: string[] }>(
         "/api/admin/tenants/import",
         // Uploads/entpackt/importiert bis zu MAX_TENANT_IMPORT_UPLOAD_BYTES (2 GB, siehe
@@ -588,11 +607,40 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
               </span>
             </label>
           </div>
+          {/* Datenschutz-Audit Paket 6: Zugangsdaten nur auf ausdrücklichen Wunsch */}
+          <label className="checkbox-row"><input type="checkbox" checked={exportCredentials} onChange={(event) => setExportCredentials(event.target.checked)} /><span>{t("exportCredentials")}</span></label>
+          <p className="field-help">{t("exportCredentialsHint")}</p>
+          <label className="field-stack">
+            <span className="field-label">{t("exportPasswordLabel")}</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={exportPassword}
+              onChange={(event) => setExportPassword(event.target.value)}
+            />
+            <span className="field-help">
+              {exportPasswordTooShort ? t("exportPasswordTooShort", { min: EXPORT_PASSWORD_MIN_LENGTH }) : t("exportPasswordHelp")}
+            </span>
+          </label>
+          {exportPassword ? (
+            <label className="field-stack">
+              <span className="field-label">{t("exportPasswordConfirmLabel")}</span>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={exportPasswordConfirm}
+                onChange={(event) => setExportPasswordConfirm(event.target.value)}
+              />
+              {exportPasswordConfirm && exportPasswordMismatch ? (
+                <span className="field-help">{t("exportPasswordMismatch")}</span>
+              ) : null}
+            </label>
+          ) : null}
           <div className="modal-actions">
             <button type="button" className="button-ghost" onClick={() => setExportModalOpen(false)}>
               {t("cancel")}
             </button>
-            <button type="submit" className="button-primary">
+            <button type="submit" className="button-primary" disabled={exportPasswordTooShort || exportPasswordMismatch}>
               {t("export")}
             </button>
           </div>
@@ -616,11 +664,22 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
             <span className="field-label">{t("exportFile")}</span>
             <input
               type="file"
-              accept=".zip"
+              accept=".hocxenc,.zip"
               onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
               disabled={importBusy}
               required
             />
+          </label>
+          <label className="field-stack">
+            <span className="field-label">{t("importPasswordLabel")}</span>
+            <input
+              type="password"
+              autoComplete="off"
+              value={importPassword}
+              onChange={(event) => setImportPassword(event.target.value)}
+              disabled={importBusy}
+            />
+            <span className="field-help">{t("importPasswordHelp")}</span>
           </label>
           {importBusy ? (
             <div className="tenant-import-status" role="status" aria-live="polite">

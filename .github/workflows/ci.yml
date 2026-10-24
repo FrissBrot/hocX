@@ -27,9 +27,11 @@ jobs:
           bash scripts/tests/test_env.sh
           bash scripts/tests/test_release_config.sh
           python3 -m unittest discover -s scripts/tests -p "test_release_notes.py"
+          python3 -m unittest discover -s scripts/tests -p "test_security_rules.py"
           bash scripts/tests/test_env_migrate.sh
           bash scripts/tests/test_run_job.sh
           bash scripts/tests/test_backup_restore.sh
+          bash scripts/tests/test_legacy_backup_guard.sh
           bash scripts/sync-design-tokens.sh --check
           python3 scripts/check-design-rules.py
 
@@ -54,6 +56,15 @@ jobs:
 
       - name: i18n - t()-Aufrufe loesen existierende Keys auf
         run: python3 scripts/check-i18n-key-resolution.py
+
+      # Dokument-Engine: Typst-Tokens kommen aus design/tokens.css, die festen PDF-Texte aus
+      # frontend/messages/*/documentPdf.json - beide Kopien im Backend werden nie von Hand
+      # bearbeitet.
+      - name: Dokument-Engine - Typst-Tokens aktuell generiert
+        run: python3 scripts/sync-document-tokens.py --check
+
+      - name: Dokument-Engine - PDF-Texte aktuell kopiert
+        run: python3 scripts/sync-document-i18n.py --check
 
   migration-check:
     runs-on: ubuntu-latest
@@ -141,18 +152,48 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements-dev.txt
 
-      # PDF export tests exercise the real LaTeX toolchain, same packages as
-      # backend/Dockerfile(.test) - ubuntu-latest doesn't have these preinstalled.
-      - name: Install LaTeX toolchain
+      # Die Dokument-Engine rendert mit Typst (Python-Paket, Schriften im Repo); die Tests
+      # lesen erzeugte PDFs mit pdftotext/pdfinfo aus - wie backend/Dockerfile.test.
+      - name: Install PDF test tools
         run: |
           sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils
+
+      # Backup-Tests (tests/test_backup_*.py) brauchen borg 1.4 - Ubuntu liefert nur 1.2, auf PyPI
+      # gibt es keine Wheels. Scheitert der Build, werden diese Tests übersprungen (requires_borg)
+      # statt die CI zu blockieren; vollständig laufen sie im Backend-Testimage (scripts/test.sh).
+      - name: Install BorgBackup 1.4 for backup tests
+        run: |
+          sudo apt-get install -y --no-install-recommends libacl1-dev liblz4-dev libzstd-dev libxxhash-dev libssl-dev pkg-config \
+            && pip install "borgbackup==1.4.1" \
+            || echo "borg 1.4 nicht installiert - Borg-Tests werden übersprungen"
+
+      # Backup-Tests (tests/test_backup_*.py) brauchen borg 1.4 - Ubuntu liefert nur 1.2, auf PyPI
+      # gibt es keine Wheels. Scheitert der Build, werden diese Tests übersprungen (requires_borg)
+      # statt die CI zu blockieren; vollständig laufen sie im Backend-Testimage (scripts/test.sh).
+      - name: Install BorgBackup 1.4 for backup tests
+        run: |
+          sudo apt-get install -y --no-install-recommends libacl1-dev liblz4-dev libzstd-dev libxxhash-dev libssl-dev pkg-config \
+            && pip install "borgbackup==1.4.1" \
+            || echo "borg 1.4 nicht installiert - Borg-Tests werden übersprungen"
+
+      # Dokumentverarbeitung (tests/test_document_*.py): LibreOffice, Tesseract und Poppler wie
+      # in backend/Dockerfile(.test) - ohne sie würden Konvertierung, OCR und Vorschau übersprungen.
+      - name: Install document toolchain
+        run: |
           sudo apt-get install -y --no-install-recommends \
-            texlive-latex-base \
-            texlive-latex-recommended \
-            texlive-fonts-recommended \
-            texlive-xetex \
-            texlive-pictures \
-            fonts-lmodern
+            libreoffice-writer-nogui \
+            libreoffice-calc-nogui \
+            libreoffice-impress-nogui \
+            tesseract-ocr \
+            tesseract-ocr-deu \
+            tesseract-ocr-fra \
+            tesseract-ocr-ita \
+            poppler-utils \
+            fonts-liberation \
+            fonts-dejavu-core \
+            fonts-crosextra-carlito \
+            fonts-crosextra-caladea
 
       - name: Run alembic upgrade head against a fresh database
         working-directory: backend
@@ -173,16 +214,12 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           AUTH_SECRET: ci-backend-tests-dummy-secret-0123456789
           ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
+          # Speicherprofile verschlüsseln Zugangsdaten damit (mind. 32 Zeichen, wie docker-compose.tests.yml).
+          STORAGE_CREDENTIALS_KEY: ci-backend-tests-dummy-storage-key-0123456789
           # These all default to /app/... (docker-compose.yml's WORKDIR), which doesn't
           # exist on a bare runner and can't be created by the unprivileged runner user
-          # either - PDF export tests need the real committed tenant-1 templates, not just
-          # a writable empty dir, so these point at the actual checked-out storage/ tree.
-          # Must be absolute: pdflatex runs with -cnf-line=openin_any=p (export_service.py) -
-          # its "paranoid" file-access mode rejects any path containing a '..' component,
-          # which a relative override (e.g. "../storage") would be once combined with the
-          # export's own subdirectory.
+          # either, so they point at the checked-out storage/ tree (absolute paths).
           STORAGE_ROOT: ${{ github.workspace }}/storage
-          LATEX_TEMPLATE_ROOT: ${{ github.workspace }}/storage/latex_templates
           EXPORT_ROOT: ${{ github.workspace }}/storage/exports
           UPLOAD_ROOT: ${{ github.workspace }}/storage/uploads
           # Defaults to /app/storage-local/thumbnails (same unwritable-on-a-runner problem
@@ -191,6 +228,9 @@ jobs:
           # Same for the Traefik dynamic-config dir (default /app/traefik_dynamic) that the
           # app lifespan writes on startup (tests/test_app_lifespan_smoke.py).
           TRAEFIK_DYNAMIC_CONFIG_DIR: ${{ runner.temp }}/traefik_dynamic
+          # Dokument-Engine: Golden-Diffs und Galerie als Artefakte (siehe Upload-Schritte).
+          DOCUMENT_GOLDEN_DIFF_DIR: ${{ runner.temp }}/document-golden-diffs
+          DOCUMENT_GALLERY_OUT: ${{ runner.temp }}/document-gallery.pdf
         # No coverage threshold gate: per hocX.wiki/Bekannte-offene-Punkte, meaningful
         # domain/security test cases matter more than a bare percentage. This is purely
         # for visibility into which areas have no test coverage at all.
@@ -199,6 +239,34 @@ jobs:
       - name: Audit-log coverage report (informational)
         working-directory: backend
         run: python3 scripts/check_audit_coverage.py
+
+      # Jede Fachkomponente hat Modell, Provider, Basis-Komponente und Texte, jeder Eintrag des
+      # Document Studio (Knotentypen, Bibliothek, Bindungen, Systemvorlagen) seine Labels;
+      # Typst-Pakete sind vendored (der Compile greift nie aufs Netz).
+      - name: Dokument-Engine - Katalog vollstaendig
+        env:
+          DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
+          AUTH_SECRET: ci-backend-tests-dummy-secret-0123456789
+          ADMIN_AUTH_SECRET: ci-backend-tests-dummy-admin-secret-0123456789
+        run: python3 scripts/check-document-catalog.py
+
+      # Visuelle Regression: bei Abweichungen Ist- und Differenzbilder zum Ansehen.
+      - name: Upload document golden diffs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: document-golden-diffs
+          path: ${{ runner.temp }}/document-golden-diffs
+          if-no-files-found: ignore
+
+      # Galerie «alle Systemvorlagen mit Beispieldaten» (entsteht im pytest-Lauf oben).
+      - name: Upload document gallery
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: document-gallery
+          path: ${{ runner.temp }}/document-gallery.pdf
+          if-no-files-found: ignore
 
   abgabebox-backend-tests:
     runs-on: ubuntu-latest
@@ -252,9 +320,8 @@ jobs:
           ABGABEBOX_CAPTCHA_SESSION_SECRET: ci-abgabebox-captcha-secret-0123456789
           # Defaults to /app/storage (docker-compose.yml overrides it for the real
           # container) - doesn't exist on a bare runner and the unprivileged runner user
-          # can't create it either. Only needs to be writable, unlike the main backend's
-          # LATEX_TEMPLATE_ROOT, so any real path works - absolute to match that job's
-          # reasoning for the same class of variable rather than for a concrete need here.
+          # can't create it either. Only needs to be writable, so any real path works -
+          # absolute to match the backend job's storage variables.
           ABGABEBOX_STORAGE_ROOT: ${{ github.workspace }}/storage/abgabebox-uploads
         run: python3 -m pytest tests/ -v --cov=app --cov-report=term-missing
 
@@ -413,11 +480,11 @@ jobs:
 
 
   # Non-blocking vulnerability check for Python and Node dependencies.
-  # The repo currently carries known, not-yet-fixed high-severity findings
-  # (Next.js, python-multipart, starlette - tracked separately for a fix),
-  # so this job must never fail the PR check. Instead every step uses
-  # continue-on-error and writes its findings to the job summary, so new
-  # vulnerabilities stay visible without turning every PR red.
+  # Blockierendes Gate (Security-Audit release/1.2.0, SEC-005/006): eine bekannte Schwachstelle
+  # in einer Python-Abhängigkeit oder eine ab HIGH in einer npm-Abhängigkeit lässt den PR-Check
+  # scheitern. Die Funde stehen zusätzlich in der Job-Summary. Ein Fund ohne verfügbaren Fix wird
+  # bewusst und begründet ausgenommen (pip-audit --ignore-vuln, npm overrides), nicht das Gate
+  # abgeschaltet.
   dependency-audit:
     runs-on: ubuntu-latest
     steps:
@@ -436,54 +503,52 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit
 
-      # Audit backend Python dependencies. continue-on-error: true because
-      # known high-severity findings (starlette, python-multipart) already
-      # exist and are tracked/fixed separately - this must warn, not block.
-      - name: Audit backend/requirements.txt (pip-audit)
-        continue-on-error: true
+      - name: Audit Python dependencies (pip-audit)
         run: |
-          echo "## pip-audit: backend/requirements.txt" >> "$GITHUB_STEP_SUMMARY"
-          pip-audit -r backend/requirements.txt -f markdown >> "$GITHUB_STEP_SUMMARY" || true
+          set -o pipefail
+          status=0
+          for requirements in backend/requirements.txt abgabebox-backend/requirements.txt photo-analysis-worker/requirements.txt; do
+            echo "## pip-audit: ${requirements}" >> "$GITHUB_STEP_SUMMARY"
+            pip-audit -r "$requirements" -f markdown --progress-spinner off | tee -a "$GITHUB_STEP_SUMMARY" || status=1
+          done
+          exit "$status"
 
-      # Audit abgabebox-backend Python dependencies, same non-blocking policy.
-      - name: Audit abgabebox-backend/requirements.txt (pip-audit)
-        continue-on-error: true
+      - name: Audit Node dependencies (npm audit)
         run: |
-          echo "## pip-audit: abgabebox-backend/requirements.txt" >> "$GITHUB_STEP_SUMMARY"
-          pip-audit -r abgabebox-backend/requirements.txt -f markdown >> "$GITHUB_STEP_SUMMARY" || true
+          status=0
+          for app in frontend abgabebox-frontend; do
+            echo "## npm audit: ${app}" >> "$GITHUB_STEP_SUMMARY"
+            ( cd "$app" && npm audit --audit-level=high --package-lock-only ) | tee -a "$GITHUB_STEP_SUMMARY"
+            [ "${PIPESTATUS[0]}" -eq 0 ] || status=1
+          done
+          exit "$status"
 
-      # Audit photo-analysis-worker Python dependencies, same non-blocking policy.
-      - name: Audit photo-analysis-worker/requirements.txt (pip-audit)
-        continue-on-error: true
-        run: |
-          echo "## pip-audit: photo-analysis-worker/requirements.txt" >> "$GITHUB_STEP_SUMMARY"
-          pip-audit -r photo-analysis-worker/requirements.txt -f markdown >> "$GITHUB_STEP_SUMMARY" || true
-
-      # Audit frontend Node dependencies. Known high-severity Next.js finding
-      # is tracked separately, so this warns via the summary instead of
-      # failing the build.
-      - name: Audit frontend (npm audit)
-        continue-on-error: true
-        working-directory: frontend
-        run: |
-          echo "## npm audit: frontend" >> "$GITHUB_STEP_SUMMARY"
-          npm audit --audit-level=high || true
-          npm audit --audit-level=high --json > audit-result.json || true
-          echo '```json' >> "$GITHUB_STEP_SUMMARY"
-          cat audit-result.json >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-
-      # Audit abgabebox-frontend Node dependencies, same non-blocking policy.
-      - name: Audit abgabebox-frontend (npm audit)
-        continue-on-error: true
-        working-directory: abgabebox-frontend
-        run: |
-          echo "## npm audit: abgabebox-frontend" >> "$GITHUB_STEP_SUMMARY"
-          npm audit --audit-level=high || true
-          npm audit --audit-level=high --json > audit-result.json || true
-          echo '```json' >> "$GITHUB_STEP_SUMMARY"
-          cat audit-result.json >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+  # Diff-basiert (nur auf Pull-Requests): neue Verstösse gegen SECURITY-RULES.md blockieren, bis sie
+  # behoben oder in derselben Zeile begründet markiert sind - ungescopte public_id-Lookups
+  # (.semgrep/tenant-scope.yml) und die Regeln aus scripts/check-security-rules.py. Dieselbe Prüfung
+  # läuft lokal im Pre-Commit-Hook und für Claude Code nach jeder Dateiänderung.
+  security-lint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - name: Install semgrep
+        run: pip install semgrep==1.181.0
+      - name: Neue ungescopte Lookups suchen
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: semgrep scan --config .semgrep/tenant-scope.yml --baseline-commit "$BASE_SHA" --error --metrics off backend/app
+      - name: Neue Verstösse gegen SECURITY-RULES.md suchen
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/check-security-rules.py --base "$BASE_SHA"
 
   # Scans the PR diff for accidentally committed secrets. Unlike
   # dependency-audit this job is a hard gate (no continue-on-error): a newly

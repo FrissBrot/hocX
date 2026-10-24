@@ -32,15 +32,12 @@ storage/generated/*
 storage/tenant_clones/*
 storage/tenant_imports/*
 
-# Tenant-specific content: ignore all, but keep tenant-1 demo templates
-storage/document_template_parts/tenant-*/
-!storage/document_template_parts/tenant-1/
-!storage/document_template_parts/tenant-1/**
-storage/document_templates/tenant-*/
-!storage/document_templates/tenant-1/
-!storage/document_templates/tenant-1/**
+# Document-Studio-Uploads (Schriften, Logos, Bilder) und Reste früherer Dokument-Engines
+storage/document_assets/
+storage/document_style_assets/
+storage/document_template_parts/
+storage/document_templates/
 
-# Protocol snapshots are generated at runtime (may contain user data)
 storage/document_template_snapshots/
 
 # Keep placeholder files so directories exist after clone
@@ -55,6 +52,8 @@ infra/traefik/dynamic/tenant-domains.yml
 
 # DB backups and abgabebox uploads — real user data, never committed
 backups/
+# ... aber nicht die gleichnamige Admin-Route
+!frontend/app/admin/backups/
 storage/abgabebox-uploads/*
 
 # Generated thumbnails (FileService.ensure_thumbnail) — real tenant images, never committed.
@@ -88,3 +87,9 @@ storage/demo-seed/
 
 # Scratch audit/investigation notes, not living documentation
 .audit-1.1/
+
+# Lasttest: Session-Tokens und Messdaten nie committen (loadtest/README.md)
+loadtest/tokens.json
+loadtest/results/
+loadtest/fixtures/*.jpg
+loadtest/fixtures/*.zip

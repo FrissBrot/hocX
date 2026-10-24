@@ -8,7 +8,13 @@ const publicApiUrl = "";
 export const browserApiBaseUrl = publicApiUrl;
 
 export class ApiError extends Error {
-  constructor(message: string, public readonly kind: "offline" | "timeout" | "backend" | "auth" | "validation" | "conflict", public readonly status?: number) {
+  constructor(
+    message: string,
+    public readonly kind: "offline" | "timeout" | "backend" | "auth" | "validation" | "conflict",
+    public readonly status?: number,
+    /** Strukturiertes `detail` des Backends (z. B. lock_version bei 409, Diagnosen bei 422). */
+    public readonly detail?: unknown
+  ) {
     super(message);
   }
 }
@@ -79,7 +85,20 @@ export async function browserApiFetch<T>(path: string, options?: BrowserApiFetch
     throw new ApiError(clientMessage("unreachable"), "backend");
   }
 
-  if (!response.ok) throw errorFromResponse(response.status, await response.text());
+  if (!response.ok) {
+    const body = await response.text();
+    // Volle Wartung (serverseitige Sperre): angemeldete Benutzer sehen die Wartungsansicht
+    // statt einer Anwendung, deren Aufrufe scheitern. Admin-Aufrufe sind davon nie betroffen.
+    if (response.status === 503 && typeof window !== "undefined" && !path.startsWith("/api/admin")) {
+      const code = errorCode(body);
+      if (code === "maintenance") window.location.assign("/maintenance");
+      // Überlast: neue Nutzer von Abos mit niedriger Priorität warten auf /overload (db_admission.py).
+      if (code === "overloaded" && window.location.pathname !== "/overload") {
+        window.location.assign(overloadPath(`${window.location.pathname}${window.location.search}`));
+      }
+    }
+    throw errorFromResponse(response.status, body);
+  }
 
   if (response.status === 204 || response.headers.get("content-length") === "0") {
     return null as T;
@@ -87,13 +106,47 @@ export async function browserApiFetch<T>(path: string, options?: BrowserApiFetch
   return (await response.json()) as T;
 }
 
+function errorCode(text: string): string | null {
+  try {
+    const code = JSON.parse(text)?.code;
+    return typeof code === "string" ? code : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Überlast-Ansicht mit Rücksprungziel (nur relative Pfade, siehe safeReturnPath). */
+export function overloadPath(from: string): string {
+  return `/overload?from=${encodeURIComponent(from)}`;
+}
+
+/** Rücksprung nach der Überlast-Ansicht: nur eigene, relative Pfade (kein Open Redirect). Der
+ * URL-Parser entfernt Tab/Zeilenumbruch und liest einen Backslash als "/" - daher Steuerzeichen und
+ * Backslashes ablehnen und das Ergebnis zusätzlich gegen die eigene Origin auflösen. */
+export function safeReturnPath(from: string | null | undefined): string {
+  if (!from || !from.startsWith("/") || /[\u0000-\u001f\u007f\\\\]/.test(from)) return "/";
+  const origin = "https://hocx.invalid";
+  let url: URL;
+  try {
+    url = new URL(from, origin);
+  } catch {
+    return "/";
+  }
+  if (url.origin !== origin || url.pathname.startsWith("/overload")) return "/";
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
 function errorFromResponse(status: number, text: string): ApiError {
   let message = text || `Request failed with status ${status}`;
+  let detail: unknown;
   try {
     const json = JSON.parse(text);
     if (json?.detail) {
+      detail = json.detail;
       if (typeof json.detail === "string") {
         message = json.detail;
+      } else if (!Array.isArray(json.detail) && typeof json.detail.message === "string") {
+        message = json.detail.message;
       } else if (Array.isArray(json.detail)) {
         message = json.detail
           .map((e: { msg?: string; loc?: string[] }) => {
@@ -109,7 +162,7 @@ function errorFromResponse(status: number, text: string): ApiError {
   const kind = status === 401 || status === 403 ? "auth"
     : status === 409 ? "conflict"
     : status >= 500 ? "backend" : "validation";
-  return new ApiError(message, kind, status);
+  return new ApiError(message, kind, status, detail);
 }
 
 // POSTs a FormData body like browserApiFetch, but over XMLHttpRequest: fetch() has no

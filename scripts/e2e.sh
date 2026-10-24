@@ -6,6 +6,28 @@ ACTION="${1:-all}"
 ENV_FILE="$REPO_DIR/.env.e2e.example"
 DC=(docker compose -p hocx-e2e --env-file "$ENV_FILE" -f "$REPO_DIR/docker-compose.yml" -f "$REPO_DIR/docker-compose.dev.yml" -f "$REPO_DIR/docker-compose.e2e.yml" --project-directory "$REPO_DIR")
 
+# Objektspeicher-Secrets (lokales Garage-S3) stehen bewusst nicht in .env.e2e.example: Garage
+# verlangt Hex-Werte, die der Secret-Scan zu Recht als Leak meldet. Sie werden pro Stack einmal
+# erzeugt (Formate wie scripts/lib/env_migrate.sh) und mit storage-e2e in stop_stack verworfen.
+# Compose bevorzugt exportierte Variablen vor der --env-file.
+load_storage_secrets() {
+  local secrets_file="$REPO_DIR/storage-e2e/.storage-secrets.env" key
+  if [[ ! -f "$secrets_file" ]]; then
+    mkdir -p "$REPO_DIR/storage-e2e"
+    for key in STORAGE_CREDENTIALS_KEY GARAGE_RPC_SECRET GARAGE_ADMIN_TOKEN LOCAL_S3_ACCESS_KEY \
+      LOCAL_S3_SECRET_KEY LOCAL_S3_ABGABEBOX_ACCESS_KEY LOCAL_S3_ABGABEBOX_SECRET_KEY; do
+      case "$key" in
+        *_ACCESS_KEY) printf '%s=GK%s\n' "$key" "$(openssl rand -hex 12)" ;;
+        *) printf '%s=%s\n' "$key" "$(openssl rand -hex 32)" ;;
+      esac
+    done > "$secrets_file"
+  fi
+  set -a
+  # shellcheck source=/dev/null
+  . "$secrets_file"
+  set +a
+}
+
 wait_for_url() {
   local url="$1"
   for _ in $(seq 1 90); do
@@ -61,6 +83,8 @@ stop_stack() {
   # correctness signal, so it must never fail the run under `set -e`.
   { sudo rm -rf "$REPO_DIR/storage-e2e" 2>/dev/null || rm -rf "$REPO_DIR/storage-e2e"; } || true
 }
+
+load_storage_secrets
 
 case "$ACTION" in
   up) start_stack ;;

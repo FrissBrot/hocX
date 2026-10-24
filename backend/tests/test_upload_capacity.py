@@ -219,3 +219,14 @@ def test_gallery_rejects_unauthenticated_before_parsing(monkeypatch, storage):
     with TestClient(app) as client:
         assert client.post('/api/files/gallery-uploads', files={'files': ('file.zip', b'data')}).status_code == 401
     assert not (storage / 'uploads' / '_multipart').exists()
+
+
+def test_gallery_batch_limit_counts_live_photo_clips(db, storage):
+    """IMGMETA-001: Das Limit je Auftrag gilt für alle Multipart-Dateien inkl. Live-Photo-Clips -
+    das Upload-Popup teilt deshalb nach Dateien (Bild + Clip), nicht nach Fotos auf."""
+    tenant = make_tenant(db)
+    pairs = [(f'IMG_{n}.HEIC', b'x') for n in range(26)] + [(f'IMG_{n}.MOV', b'x') for n in range(26)]
+    with pytest.raises(HTTPException) as error:
+        queue(db, tenant, pairs)
+    assert error.value.status_code == 413
+    assert 'maximal 50' in error.value.detail

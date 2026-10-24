@@ -43,6 +43,8 @@ RETENTION_DAYS="${RETENTION_DAYS:-14}"
 source "$REPO_DIR/scripts/lib/env.sh"
 # shellcheck source=scripts/lib/stack.sh
 source "$REPO_DIR/scripts/lib/stack.sh"
+# shellcheck source=scripts/lib/dump_crypto.sh
+source "$REPO_DIR/scripts/lib/dump_crypto.sh"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 fail() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2; exit 1; }
@@ -57,6 +59,14 @@ load_env_file "$ENV_FILE"
 resolve_hocx_stack "$REPO_DIR" || fail "Host-Markierung ungueltig - kein Backup."
 if [ "$STACK_KIND" = test ]; then
   fail "Dieser Host ist als 'test' provisioniert - dort liegen nur Demo-Daten, kein Backup."
+fi
+
+# Abgelöst durch das Borg-Backup (docs-site/docs/technik/backup/, RUNBOOK Abschnitt 7): sobald
+# es aktiv ist, laeuft dieses Skript nicht mehr unkontrolliert parallel. Bestehende Dumps in
+# backups/ bleiben unangetastet. Bewusst trotzdem ausfuehren: HOCX_LEGACY_BACKUP_FORCE=true.
+if [ "${BACKUP_ENABLED:-false}" = true ] && [ "${HOCX_LEGACY_BACKUP_FORCE:-false}" != true ]; then
+  log "Borg-Backup ist aktiv (BACKUP_ENABLED=true) - lokales Cron-Backup uebersprungen. Cron-Eintrag entfernen (RUNBOOK Abschnitt 7)."
+  exit 0
 fi
 
 : "${POSTGRES_USER:?POSTGRES_USER fehlt in $ENV_FILE}"
@@ -76,13 +86,16 @@ mkdir -p "$BACKUP_DIR"
 # Die pg_dump-Inhalte (Passwort-Hashes, alle Mandantendaten) duerfen nicht world-/group-lesbar
 # im Dateisystem liegen.
 chmod 700 "$BACKUP_DIR"
-BACKUP_FILE="$BACKUP_DIR/$(date +%Y%m%d-%H%M%S)-cron.sql.gz"
+# Mit öffentlichem Schlüssel verschlüsselt (.sql.gz.gpg), sonst wie bisher .sql.gz - siehe
+# scripts/lib/dump_crypto.sh (Datenschutz-Audit PRIV-009).
+check_dump_encryption || fail "Kein Backup ohne Verschlüsselung (HOCX_REQUIRE_DUMP_ENCRYPTION=true)."
+BACKUP_FILE="$BACKUP_DIR/$(date +%Y%m%d-%H%M%S)-cron$(dump_suffix)"
 TMP_FILE="$BACKUP_FILE.tmp"
 
 log "Erstelle Backup: $BACKUP_FILE"
-if ! "${DC[@]}" exec -T db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" | gzip > "$TMP_FILE"; then
+if ! "${DC[@]}" exec -T db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" | write_dump "$TMP_FILE"; then
   rm -f "$TMP_FILE"
-  fail "pg_dump/gzip fehlgeschlagen - kein Backup geschrieben."
+  fail "pg_dump/gzip/gpg fehlgeschlagen - kein Backup geschrieben."
 fi
 
 if [ ! -s "$TMP_FILE" ]; then
@@ -98,7 +111,7 @@ log "Loesche eigene Cron-Backups aelter als $RETENTION_DAYS Tage..."
 # Pre-Deploy-Backups ("-pre-<version>.sql.gz") und beliebige manuelle Sicherheits-Dumps im
 # selben Ordner - ein fuer einen spaeteren Rollback vorgesehenes Backup verschwand damit
 # automatisch nach RETENTION_DAYS, ohne dass das je jemand aktiv entschieden hatte.
-find "$BACKUP_DIR" -maxdepth 1 -type f -name "*-cron.sql.gz" -mtime "+$RETENTION_DAYS" -print -delete
+find "$BACKUP_DIR" -maxdepth 1 -type f \( -name "*-cron.sql.gz" -o -name "*-cron.sql.gz.gpg" \) -mtime "+$RETENTION_DAYS" -print -delete
 
 # Optional offsite copy (audit I5, 2026-08-16): backups/ lives on the same disk/host as
 # the live DB volume, so a disk/host failure loses both simultaneously - there was no
@@ -113,11 +126,25 @@ if [ -n "${OFFSITE_BACKUP_REMOTE:-}" ]; then
   if ! command -v rclone > /dev/null 2>&1; then
     fail "OFFSITE_BACKUP_REMOTE gesetzt, aber 'rclone' ist nicht installiert - Offsite-Kopie fehlt (lokales Backup vorhanden: $BACKUP_FILE)."
   fi
+  # Unverschlüsselte Dumps nur auf ein verschlüsselndes rclone-Remote (Typ crypt), PRIV-009.
+  case "$BACKUP_FILE" in
+    *.gpg) ;;
+    *)
+      if ! rclone config show "${OFFSITE_BACKUP_REMOTE%%:*}" 2> /dev/null | grep -qE '^type *= *crypt'; then
+        fail "Offsite-Kopie verweigert: Dump unverschlüsselt und OFFSITE_BACKUP_REMOTE ist kein rclone-crypt-Remote (lokales Backup vorhanden: $BACKUP_FILE)."
+      fi
+      ;;
+  esac
   log "Kopiere Backup nach OFFSITE_BACKUP_REMOTE=$OFFSITE_BACKUP_REMOTE..."
   if ! rclone copy "$BACKUP_FILE" "$OFFSITE_BACKUP_REMOTE" --quiet; then
     fail "Offsite-Kopie fehlgeschlagen (lokales Backup vorhanden: $BACKUP_FILE)."
   fi
-  log "Offsite-Kopie abgeschlossen."
+  # Offsite ebenfalls mit Frist: früher kopierte rclone nur und löschte nie (PRIV-009).
+  OFFSITE_RETENTION_DAYS="${OFFSITE_RETENTION_DAYS:-$RETENTION_DAYS}"
+  if ! rclone delete "$OFFSITE_BACKUP_REMOTE" --min-age "${OFFSITE_RETENTION_DAYS}d" --include "*-cron.sql.gz*" --quiet; then
+    fail "Alte Offsite-Kopien konnten nicht entfernt werden."
+  fi
+  log "Offsite-Kopie abgeschlossen (Frist ${OFFSITE_RETENTION_DAYS} Tage)."
 else
   log "Kein OFFSITE_BACKUP_REMOTE gesetzt - Backup bleibt lokal (siehe RUNBOOK.md Abschnitt 10)."
 fi

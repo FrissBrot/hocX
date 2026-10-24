@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -11,11 +11,21 @@ from app.models import (
     ProtocolElement,
     ProtocolElementBlock,
     ProtocolTodo,
+    ProtocolTodoFile,
+    StoredFile,
     SubmissionAssignment,
     TodoStatus,
 )
 from app.repositories.protocol_todo_repository import ProtocolTodoRepository
-from app.schemas.protocol import ProtocolTodoCreate, ProtocolTodoRead, ProtocolTodoUpdate, TodoListItem
+from app.schemas.protocol import (
+    ProtocolTodoCreate,
+    ProtocolTodoRead,
+    ProtocolTodoUpdate,
+    TodoDetailFile,
+    TodoDetails,
+    TodoDetailsUpdate,
+    TodoListItem,
+)
 from app.services import public_id_service, task_package_service
 
 # Status codes that count as "closed"/completed for completed_at purposes - mirrors the
@@ -30,7 +40,29 @@ class ProtocolTodoService:
 
     def list_todos(self, db: Session, protocol_element_block_id: int) -> list[ProtocolTodoRead]:
         rows = self.repository.list_for_protocol_block(db, protocol_element_block_id)
+        self._prime_public_ids(db, rows)
         return [self._row_to_todo_read(db, row) for row in rows]
+
+    @staticmethod
+    def _prime_public_ids(db: Session, rows) -> None:
+        """Eine Sammelabfrage je Fremdschlüssel-Typ für die ganze Liste statt einer je Todo und
+        Feld (_common_fields/_row_to_list_item lösen Zeile für Zeile auf)."""
+        todos = [row.ProtocolTodo for row in rows]
+        if not todos:
+            return
+        for model, values in (
+            (ProtocolElementBlock, [t.protocol_element_block_id for t in todos]),
+            (AppUser, [t.assigned_user_id for t in todos] + [t.created_by for t in todos]),
+            (
+                Participant,
+                [t.assigned_participant_id for t in todos]
+                + [participant_id for row in rows for participant_id in (getattr(row, "assignee_ids", None) or [])],
+            ),
+            (Event, [t.due_event_id for t in todos]),
+            (Protocol, [t.closed_in_protocol_id for t in todos] + [getattr(row, "protocol_id", None) for row in rows]),
+            (SubmissionAssignment, [t.submission_assignment_id for t in todos]),
+        ):
+            public_id_service.prime_public_ids(db, model, values)
 
     def _common_fields(self, db: Session, row) -> dict:
         todo = row.ProtocolTodo
@@ -103,20 +135,24 @@ class ProtocolTodoService:
 
     def list_todos_for_tenant(self, db: Session, tenant_id: int, skip: int = 0, limit: int = 100) -> list[TodoListItem]:
         rows = self.repository.list_for_tenant(db, tenant_id, skip=skip, limit=limit)
+        self._prime_public_ids(db, rows)
         return [self._row_to_list_item(db, row) for row in rows]
 
     def list_todos_for_user(self, db: Session, tenant_id: int, user_id: int, skip: int = 0, limit: int = 100) -> list[TodoListItem]:
         rows = self.repository.list_for_user(db, tenant_id, user_id, skip=skip, limit=limit)
+        self._prime_public_ids(db, rows)
         return [self._row_to_list_item(db, row) for row in rows]
 
     def list_todos_for_protocols_or_assigned(
         self, db: Session, tenant_id: int, protocol_ids: list[int], user_id: int, skip: int = 0, limit: int = 100
     ) -> list[TodoListItem]:
         rows = self.repository.list_for_protocols_or_assigned(db, tenant_id, protocol_ids, user_id, skip=skip, limit=limit)
+        self._prime_public_ids(db, rows)
         return [self._row_to_list_item(db, row) for row in rows]
 
     def list_pending_for_protocol(self, db: Session, protocol_id: int, template_id: int, protocol_date) -> list[TodoListItem]:
         rows = self.repository.list_pending_for_protocol(db, protocol_id, template_id, protocol_date)
+        self._prime_public_ids(db, rows)
         return [self._row_to_list_item(db, row) for row in rows]
 
     # --- Momentaufnahme abgeschlossener Protokolle -------------------------------------
@@ -409,3 +445,50 @@ class ProtocolTodoService:
             return False, block_id
         self.repository.delete(db, todo)
         return True, block_id
+
+    # ── Notizen und verknüpfte Dateien (nur Todo-Popup) ──────────────────
+
+    def get_details(self, db: Session, todo: ProtocolTodo) -> TodoDetails:
+        rows = db.execute(
+            select(StoredFile)
+            .join(ProtocolTodoFile, ProtocolTodoFile.stored_file_id == StoredFile.id)
+            .where(ProtocolTodoFile.protocol_todo_id == todo.id)
+            .order_by(ProtocolTodoFile.sort_index, ProtocolTodoFile.created_at)
+        ).scalars().all()
+        return TodoDetails(
+            notes=todo.notes or "",
+            files=[
+                TodoDetailFile(
+                    id=row.public_id,
+                    original_name=row.original_name,
+                    mime_type=row.mime_type,
+                    file_size_bytes=row.file_size_bytes,
+                    content_url=f"/api/stored-files/{row.public_id}/content",
+                )
+                for row in rows
+            ],
+        )
+
+    def update_details(self, db: Session, todo: ProtocolTodo, payload: TodoDetailsUpdate, *, tenant_id: int) -> TodoDetails:
+        """Ersetzt Notizen und/oder die Dateiliste. Verknüpfbar sind nur Dateien des Mandanten;
+        eine fremde oder unbekannte Datei-ID ist ein ValueError (400)."""
+        if payload.notes is not None:
+            todo.notes = payload.notes if payload.notes.strip() else None
+            db.add(todo)
+        if payload.file_ids is not None:
+            public_ids = list(dict.fromkeys(payload.file_ids))
+            internal = dict(
+                db.execute(
+                    select(StoredFile.public_id, StoredFile.id).where(
+                        StoredFile.public_id.in_(public_ids), StoredFile.tenant_id == tenant_id
+                    )
+                ).all()
+            ) if public_ids else {}
+            if len(internal) != len(public_ids):
+                raise ValueError("Unknown file")
+            db.execute(delete(ProtocolTodoFile).where(ProtocolTodoFile.protocol_todo_id == todo.id))
+            for index, public_id in enumerate(public_ids):
+                db.add(ProtocolTodoFile(protocol_todo_id=todo.id, stored_file_id=internal[public_id], sort_index=index))
+        db.commit()
+        db.refresh(todo)
+        return self.get_details(db, todo)

@@ -102,18 +102,31 @@ done
 # MAIN-OPS-007: Basis- und Release-Stack verwenden dieselbe Traefik-Version.
 base_traefik="$(grep -m1 -E '^    image: traefik:' docker-compose.yml)"
 release_traefik="$(grep -m1 -E '^    image: traefik:' docker-compose.traefik.yml)"
-test -n "$base_traefik" && test "$base_traefik" = "$release_traefik" || {
+if ! { test -n "$base_traefik" && test "$base_traefik" = "$release_traefik"; }; then
   echo "Traefik-Version weicht ab: '$base_traefik' vs. '$release_traefik'" >&2
   exit 1
-}
+fi
 
 if grep -q 'env_file:' docker-compose.release.yml; then
   echo "Release-Services duerfen nicht die komplette .env erhalten." >&2
   exit 1
 fi
 
-test "$(grep -c 'read_only: true' docker-compose.release.yml)" -eq 7
-test "$(grep -c 'no-new-privileges:true' docker-compose.release.yml)" -eq 7
+test "$(grep -c 'read_only: true' docker-compose.release.yml)" -eq 13  # +local-s3, storage-init, storage-worker (Objektspeicher), backup-worker, document-worker, job-worker
+
+# Der document-worker verarbeitet nicht vertrauenswürdige Dateien: keine Anmelde-/Admin-Secrets
+# und keine Owner-Datenbank-URL (Audit DOCMGMT-003, Entscheidung Worker-Secrets).
+document_worker_block="$(awk '/^  document-worker:$/{f=1;next} f&&/^  [a-z][a-z0-9-]*:$/{f=0} f&&!/^ *#/' docker-compose.release.yml)"
+test -n "$document_worker_block" || { echo "document-worker fehlt in docker-compose.release.yml" >&2; exit 1; }
+if grep -Eq 'AUTH_SECRET|auth_secret|DATABASE_URL_FILE: /run/secrets/database_url|- database_url$' <<<"$document_worker_block"; then
+  echo "document-worker darf weder AUTH_SECRET/ADMIN_AUTH_SECRET noch die Owner-DB-URL erhalten." >&2
+  exit 1
+fi
+grep -q 'HOCX_PROCESS_KIND: document-worker' <<<"$document_worker_block" || {
+  echo "document-worker braucht HOCX_PROCESS_KIND=document-worker." >&2
+  exit 1
+}
+test "$(grep -c 'no-new-privileges:true' docker-compose.release.yml)" -eq 13  # + job-worker
 
 # Audit finding, 2026-08-27: docker-compose.traefik.yml/docker-compose.clamav.yml (the
 # actual prod Traefik/ClamAV - deploy.sh/verify_release.sh never include the base
@@ -166,5 +179,34 @@ grep -q '^      - "5001"$' docker-compose.release.yml
 grep -q '\./storage-local/thumbnails:/app/storage-local/thumbnails' docker-compose.release.yml
 grep -q 'THUMBNAIL_ROOT: /app/storage-local/thumbnails' docker-compose.release.yml
 grep -q 'PHOTO_WORKER_DB_PASSWORD_FILE: /run/secrets/photo_worker_db_password' docker-compose.release.yml
+
+# Keine Dokumentsignatur mehr: weder Zertifikate noch Signatur-Konfiguration im Release.
+if grep -q 'DOCUMENT_SIGNING\|hocx-signing' docker-compose.release.yml scripts/deploy.sh; then
+  echo "Signatur-Konfiguration ist entfernt (Hash-Prüfung über die Abgabebox)." >&2
+  exit 1
+fi
+grep -q 'DOCUMENT_VERIFY_BASE_URL' docker-compose.release.yml
+
+# Backup (BorgBackup): eigener Worker mit den Borg-Secrets; das Backend bekommt sie nie.
+grep -q '^  backup-worker:$' docker-compose.release.yml
+grep -q 'BACKUP_SSH_KEY_FILE: /run/secrets/backup_ssh_key' docker-compose.release.yml
+if awk '/^  backend:$/,/^  photo-analysis-worker:$/' docker-compose.release.yml | grep -q 'backup_ssh_key\|backup_passphrase'; then
+  echo "Das Backend darf keine Borg-Secrets erhalten." >&2
+  exit 1
+fi
+if grep -q 'app.backup.cli init' scripts/deploy.sh; then
+  echo "deploy.sh darf ein Backup-Repository nie initialisieren." >&2
+  exit 1
+fi
+
+# Worker mit dem Backend-Image (Release 1.2.0): im Release-Manifest vermerkt, beim Rollback auf
+# ein Release ohne sie gestoppt statt mit dem neuen Image weiterlaufend.
+grep -q '^BACKEND_IMAGE_WORKERS=(storage-worker backup-worker document-worker job-worker)$' scripts/deploy.sh
+grep -q 'HOCX_BACKEND_WORKERS=' scripts/deploy.sh
+for worker in storage-worker backup-worker document-worker; do
+  grep -q "^  ${worker}:$" docker-compose.release.yml || { echo "$worker fehlt in docker-compose.release.yml" >&2; exit 1; }
+  awk "/^  ${worker}:\$/{f=1;next} f&&/^  [a-z][a-z0-9-]*:\$/{f=0} f" docker-compose.release.yml | grep -q 'HOCX_BACKEND_IMAGE' \
+    || { echo "$worker muss das Backend-Image nutzen (sonst stimmt der Rollback nicht)" >&2; exit 1; }
+done
 
 echo "release config tests: ok"

@@ -77,7 +77,10 @@
     "statusActive": "aktiv",
     "statusDeclined": "abgelehnt",
     "statusPending": "angefragt",
-    "unknownTenant": "Mandant {id}"
+    "unknownTenant": "Mandant {id}",
+    "myPhotosPublicLabel": "Meine Fotos in öffentlichen Links zeigen",
+    "myShareError": "Einstellung konnte nicht gespeichert werden.",
+    "publicLinksNotAllowed": "Der Besitzer erlaubt für dieses Album keine öffentlichen Links."
   },
   "bulkBar": {
     "addTags": "Tags hinzufügen",
@@ -120,7 +123,7 @@
   "galleryUpload": {
     "browse": "Dateien auswählen",
     "cancel": "Abbrechen",
-    "description": "Bilder bis 100 MiB, ZIPs und gesamte Auswahl bis 10 GiB. Maximal 50 Dateien; im ZIP bis 10 000 Einträge und 20 GiB entpackt. Die Bilder werden virengeprüft.",
+    "description": "Bilder bis 100 MiB, ZIPs bis 10 GiB, auch ganze Ordner. Grosse Auswahlen werden automatisch in mehrere Aufträge geteilt; im ZIP bis 10 000 Einträge und 20 GiB entpackt. Die Bilder werden vorab im Browser geprüft, bereits vorhandene nicht erneut übertragen, und virengeprüft.",
     "dropActive": "Zum Hochladen loslassen",
     "dropHint": "Bilder hierher ziehen",
     "formatsAriaLabel": "Unterstützte Formate",
@@ -146,7 +149,26 @@
     "uploadPlain": "Hochladen",
     "uploadingPercent": "Lädt hoch… {percent} %",
     "uploadingPlain": "Lädt hoch…",
-    "largeZipHint": "Grosse ZIP-Datei: Bei langsamer Verbindung kann der Upload nach einer Stunde abbrechen. Teile das Archiv besser in mehrere kleinere ZIPs auf oder lade die Fotos direkt hoch."
+    "browseFolder": "Ordner auswählen",
+    "statusSkipped": "Übersprungen – bereits vorhanden",
+    "statusMetadataUpdated": "Übersprungen · Metadaten ergänzt",
+    "statusWaiting": "Wartet…",
+    "statusFailed": "Fehlgeschlagen",
+    "statusReadyNoDate": "Bereit · kein Aufnahmedatum gefunden",
+    "statusReadyUnchecked": "Bereit · Aufnahmedatum wird auf dem Server geprüft",
+    "analysisProgress": "Bilder werden geprüft… {done} von {total}",
+    "batchProgress": "Teil {current} von {total}",
+    "checkingPlain": "Prüft…",
+    "estimate": {
+      "missingHint": "{count, plural, one {Für 1 Bild wurde kein Aufnahmedatum gefunden.} other {Für # Bilder wurde kein Aufnahmedatum gefunden.}} Du kannst ein geschätztes Datum angeben.",
+      "uncheckedHint": "{count, plural, one {1 Bild konnte im Browser nicht geprüft werden} other {# Bilder konnten im Browser nicht geprüft werden}} – der Server prüft das Aufnahmedatum beim Hochladen.",
+      "zipHint": "Bilder in ZIP-Dateien prüft der Server; das geschätzte Datum gilt dort nur für Bilder ohne Aufnahmedatum.",
+      "label": "Geschätztes Aufnahmedatum für Bilder ohne Aufnahmedatum",
+      "help": "Optional. Echte Aufnahmedaten werden nie überschrieben.",
+      "helpSet": "Gilt nur für Bilder ohne Aufnahmedatum ({date}). Echte Aufnahmedaten werden nie überschrieben."
+    },
+    "largeZipHint": "Grosse ZIP-Datei: Bei langsamer Verbindung kann der Upload nach einer Stunde abbrechen. Teile das Archiv besser in mehrere kleinere ZIPs auf oder lade die Fotos direkt hoch.",
+    "includeGps": "GPS-Daten des Bildes mitsenden"
   },
   "shareModal": {
     "actionAriaLabelActive": "Freigabe für {name} entfernen",
@@ -190,7 +212,16 @@
     "title": "Mit anderem Mandanten teilen",
     "unknownTenant": "Unbekannter Mandant",
     "withdrawLabel": "Zurückziehen",
-    "withdrawnToast": "Einladung zurückgezogen."
+    "withdrawnToast": "Einladung zurückgezogen.",
+    "shareLocationLabel": "Standort teilen",
+    "shareLocationHelp": "Der Partner erhält Fotos dieses Albums mit GPS-Daten. Später pro Freigabe änderbar.",
+    "locationShort": "Standort",
+    "locationAriaLabel": "Standort mit {name} teilen",
+    "locationError": "Standort-Einstellung konnte nicht gespeichert werden.",
+    "publicLinksShort": "Öffentliche Links",
+    "publicLinksAriaLabel": "{name} darf dieses Album öffentlich verlinken",
+    "publicLinksError": "Einstellung für öffentliche Links konnte nicht gespeichert werden.",
+    "partnerPhotosHidden": "Fotos dieses Partners erscheinen nicht in öffentlichen Links."
   },
   "shareRelease": {
     "confirmLabel": "Hinzufügen und teilen",
@@ -356,6 +387,30 @@
     "sizeLabel": "Grösse",
     "tagPlaceholder": "+ Tag",
     "tagsSection": "Tags",
-    "takenLabel": "Aufgenommen"
+    "takenUnknown": "Unbekannt",
+    "estimatedLabel": "Geschätztes Aufnahmedatum",
+    "estimatedRemove": "Entfernen",
+    "uploadedLabel": "Hochgeladen",
+    "locationLabel": "Standort",
+    "locationValue": "{latitude}, {longitude}",
+    "altitudeValue": "{meters} m ü. M.",
+    "dateBox": {
+      "exifKicker": "Aufgenommen · aus EXIF",
+      "exifNote": "Aus den Kameradaten der Datei",
+      "estimatedNote": "Datei enthält kein Aufnahmedatum",
+      "unknownKicker": "Aufnahmedatum unbekannt",
+      "unknownNote": "Datei enthält kein Aufnahmedatum – einsortiert unter dem Uploaddatum",
+      "change": "Ändern",
+      "done": "Fertig"
+    }
+  },
+  "dateMarker": {
+    "estimated": "Geschätztes Aufnahmedatum",
+    "upload": "Aufnahmedatum unbekannt – Uploaddatum wird verwendet.",
+    "partial": "{label} ({count} von {total} Bildern)",
+    "estimatedShort": "Geschätztes Datum",
+    "uploadShort": "Uploaddatum",
+    "estimatedHint": "Kein Aufnahmedatum in der Datei – beim Hochladen geschätzt.",
+    "partialShort": "{label} · {count}/{total}"
   }
 }

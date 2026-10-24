@@ -22,7 +22,7 @@ const POLL_INTERVAL_MS = 30_000;
 const RUNS_PAGE_SIZE = 20;
 
 // Reihenfolge der Abschnitte; "other" sammelt meldende, aber nicht registrierte Jobs.
-const CATEGORY_ORDER: (JobCategory | "other")[] = ["virus_scan", "photo_analysis", "uploads", "backup", "cleanup", "maintenance", "other"];
+const CATEGORY_ORDER: (JobCategory | "other")[] = ["virus_scan", "photo_analysis", "uploads", "documents", "storage", "backup", "cleanup", "maintenance", "other"];
 const STATE_ORDER: JobState[] = ["failing", "overdue", "never_run", "running", "ok"];
 
 const STATE_VARIANTS: Record<JobState, BadgeVariant> = {

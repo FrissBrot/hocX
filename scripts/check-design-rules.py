@@ -82,7 +82,7 @@ def check_line(path: Path, no: int, line: str, defined: set[str], is_css: bool) 
                 continue  # lokale Paletten (--c0.., --pv-*) werden am Ort definiert
             report(path, no, "farbe", f"Hex-Farbe {m.group(0)} - Token aus design/tokens.css nutzen")
     for m in re.finditer(r"var\((--[a-z0-9-]+),\s*#", code):
-        if m.group(1) in GLOBAL_TOKENS:  # Fallbacks lokaler Variablen (--dt-accent) sind ok
+        if m.group(1) in GLOBAL_TOKENS:  # Fallbacks lokaler Variablen sind ok
             report(path, no, "farbe", f"Hex-Fallback fuer {m.group(1)} - Token ist immer definiert, Fallback entfernen")
 
     # --- undefinierte Variablen ---------------------------------------------------
