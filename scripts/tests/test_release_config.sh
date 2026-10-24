@@ -190,7 +190,9 @@ grep -q 'DOCUMENT_VERIFY_BASE_URL' docker-compose.release.yml
 # Backup (BorgBackup): eigener Worker mit den Borg-Secrets; das Backend bekommt sie nie.
 grep -q '^  backup-worker:$' docker-compose.release.yml
 grep -q 'BACKUP_SSH_KEY_FILE: /run/secrets/backup_ssh_key' docker-compose.release.yml
-if awk '/^  backend:$/,/^  photo-analysis-worker:$/' docker-compose.release.yml | grep -q 'backup_ssh_key\|backup_passphrase'; then
+# awk-Ausgabe erst ganz lesen: `awk | grep -q` scheitert unter pipefail sporadisch (SIGPIPE).
+app_services_block="$(awk '/^  backend:$/,/^  photo-analysis-worker:$/' docker-compose.release.yml)"
+if grep -q 'backup_ssh_key\|backup_passphrase' <<< "$app_services_block"; then
   echo "Das Backend darf keine Borg-Secrets erhalten." >&2
   exit 1
 fi
@@ -205,7 +207,8 @@ grep -q '^BACKEND_IMAGE_WORKERS=(storage-worker backup-worker document-worker jo
 grep -q 'HOCX_BACKEND_WORKERS=' scripts/deploy.sh
 for worker in storage-worker backup-worker document-worker; do
   grep -q "^  ${worker}:$" docker-compose.release.yml || { echo "$worker fehlt in docker-compose.release.yml" >&2; exit 1; }
-  awk "/^  ${worker}:\$/{f=1;next} f&&/^  [a-z][a-z0-9-]*:\$/{f=0} f" docker-compose.release.yml | grep -q 'HOCX_BACKEND_IMAGE' \
+  worker_block="$(awk "/^  ${worker}:\$/{f=1;next} f&&/^  [a-z][a-z0-9-]*:\$/{f=0} f" docker-compose.release.yml)"
+  grep -q 'HOCX_BACKEND_IMAGE' <<< "$worker_block" \
     || { echo "$worker muss das Backend-Image nutzen (sonst stimmt der Rollback nicht)" >&2; exit 1; }
 done
 
