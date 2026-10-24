@@ -5,7 +5,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 RUN mkdocs build --strict
 
-FROM nginxinc/nginx-unprivileged:alpine@sha256:378d0c32f6562f7fd9629170797f57d2b953aa09be983b3daaf4809bb039ca00
+FROM nginxinc/nginx-unprivileged:alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
 USER root
 RUN sed -i 's/8080/80/g' /etc/nginx/conf.d/default.conf
 COPY nginx-gzip.conf /etc/nginx/conf.d/gzip.conf
