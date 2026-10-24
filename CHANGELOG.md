@@ -8,6 +8,33 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Behoben (Update auf 1.2.0)
+
+- **Deploy und Rollback brachen ab**: `deploy.sh` schreibt `HOCX_BACKEND_WORKERS` ins
+  Release-Manifest, der Env-Loader lehnte den Schlüssel ab. Ein Test prüft jetzt jeden
+  Manifest-Schlüssel gegen die Allowlist.
+- **Lokales S3 blieb uneingerichtet**: `storage-init` las den Garage-Admin-Token nur aus der
+  Umgebung, Compose übergibt ihn als Secret-Datei (`GARAGE_ADMIN_TOKEN_FILE`). Garage blieb ohne
+  Schlüssel und Buckets (AccessDenied). Eine Teilkonfiguration beendet `storage-init` jetzt mit
+  Fehler, und die Smoke-Checks von `deploy.sh` führen es aus - ein Fehler führt zum Rollback.
+- **`.env`-Migration**: leere Platzhalter aus `.env.example` (`STORAGE_CREDENTIALS_KEY=`) werden
+  ersetzt statt den Schlüssel ein zweites Mal anzuhängen.
+
+### Einfacheres Update
+
+- `deploy.sh` verweigert einen Test-Candidate, dessen Commit der Checkout nicht enthält
+  (neues Image mit altem Stack) - zuerst `./scripts/update_deploy_code.sh --deploy`.
+- `deploy.sh` und `update_deploy_code.sh` prüfen vor jeder Änderung, dass der Checkout dem
+  Deploy-Benutzer gehört, und nennen sonst den `chown`-Befehl für root. Vorher brach das Update
+  mittendrin ab.
+- Optionale, nicht versionierte `docker-compose.local.yml` für host-spezifische Anpassungen
+  (Vorlage `docker-compose.local.example.yml`); wird überall automatisch mitgeladen.
+- `deploy.sh` richtet den Cronjob `storage_controller` selbst ein (`HOCX_MANAGE_CRON=false`
+  schaltet das ab).
+- `verify_release.sh` prüft die Domains per `curl` mit SNI direkt gegen Traefik, ohne DNS;
+  eigene CA über `HOCX_VERIFY_CA_FILE`. Private Hosts überspringen die Checks nicht mehr.
+- `infra/garage/` ist Teil des signierten Deploy-Code-Nachweises.
+
 ## [1.2.0] - 2026-10-23
 
 Feature-Release auf 1.1.13. Fünf Entwicklungszweige sind zusammengeführt und aufeinander

@@ -1,6 +1,8 @@
 .DS_Store
 .env
 .env.local
+# Host-spezifische Compose-Anpassungen (scripts/lib/env.sh: HOCX_LOCAL_COMPOSE_FILE)
+/docker-compose.local.yml
 .claude/settings.local.json
 .venv/
 __pycache__/

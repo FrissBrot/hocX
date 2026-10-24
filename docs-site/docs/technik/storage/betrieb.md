@@ -12,7 +12,10 @@
 3. `local-s3` startet, `storage-init` richtet Layout, Schlüssel und Buckets idempotent ein,
    das Backend legt das Profil «Lokales S3 (Garage)» an bzw. hält es aktuell.
 4. `storage-worker` startet (gleiches Image wie das Backend).
-5. Am Ende bringt `scripts/storage_controller.sh` das lokale S3 in den Sollzustand.
+5. Die Smoke-Checks führen `storage-init` erneut aus; schlägt die Einrichtung fehl, rollt der
+   Deploy zurück.
+6. Am Ende bringt `scripts/storage_controller.sh` das lokale S3 in den Sollzustand, und der
+   Cron-Eintrag dafür wird eingerichtet bzw. aktualisiert (siehe [Lokales S3](lokales-s3.md)).
 
 !!! warning "STORAGE_CREDENTIALS_KEY sichern"
     Ohne diesen Schlüssel lassen sich gespeicherte S3-Zugangsdaten nicht mehr entschlüsseln.

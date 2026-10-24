@@ -107,4 +107,65 @@ fi
 # shellcheck disable=SC2016
 grep -q 'require_release_version_for "$ENVIRONMENT" "$HOCX_VERSION"' "$REPO_DIR/scripts/deploy.sh"
 
+# Release-Manifeste (.releases/*.env) laufen durch denselben Loader. Jeder Schluessel, den
+# deploy.sh hineinschreibt, muss erlaubt sein - sonst brechen Deploy und Rollback ab
+# (1.2.0: HOCX_BACKEND_WORKERS fehlte in der Allowlist).
+DEPLOY="$REPO_DIR/scripts/deploy.sh"
+manifest_keys="$(grep -oE "printf \"[A-Z_]+=" "$DEPLOY" | sed -E 's/printf "//; s/=$//' | sort -u)"
+for service in $(grep -oE 'for service in [a-z -]+; do' "$DEPLOY" | head -n 1 | sed -E 's/for service in //; s/; do//'); do
+  variable="HOCX_${service^^}_IMAGE"
+  manifest_keys+=$'\n'"${variable//-/_}"
+done
+grep -q HOCX_BACKEND_WORKERS <<< "$manifest_keys" || { echo "Manifest-Schluessel nicht gefunden" >&2; exit 1; }
+while read -r key; do
+  is_allowed_env_key "$key" || { echo "Manifest-Schluessel $key ist nicht erlaubt." >&2; exit 1; }
+done <<< "$manifest_keys"
+
+# Optionaler lokaler Override wird nur angehaengt, wenn er existiert; Symlinks werden abgelehnt.
+override_args=(-f base.yml)
+append_local_compose_override "$TEST_DIR" override_args
+test "${#override_args[@]}" -eq 2
+touch "$TEST_DIR/docker-compose.local.yml"
+append_local_compose_override "$TEST_DIR" override_args
+test "${override_args[*]}" = "-f base.yml -f $TEST_DIR/docker-compose.local.yml"
+rm "$TEST_DIR/docker-compose.local.yml"
+ln -s /dev/null "$TEST_DIR/docker-compose.local.yml"
+if append_local_compose_override "$TEST_DIR" override_args 2> /dev/null; then
+  echo "Symlink als lokaler Override akzeptiert." >&2
+  exit 1
+fi
+rm "$TEST_DIR/docker-compose.local.yml"
+
+# Besitzpruefung: Laufzeitverzeichnisse zaehlen nicht, alles andere schon.
+OWN_DIR="$TEST_DIR/own"
+mkdir -p "$OWN_DIR/storage" "$OWN_DIR/frontend"
+touch "$OWN_DIR/frontend/page.tsx" "$OWN_DIR/storage/upload.bin"
+require_repo_owned_by_current_user "$OWN_DIR"
+if [ "$EUID" -eq 0 ]; then
+  chown 4242 "$OWN_DIR/storage/upload.bin"
+  require_repo_owned_by_current_user "$OWN_DIR"
+  chown 4242 "$OWN_DIR/frontend/page.tsx"
+  if require_repo_owned_by_current_user "$OWN_DIR" 2> /dev/null; then
+    echo "Fremde Datei im Checkout wurde nicht erkannt." >&2
+    exit 1
+  fi
+fi
+# shellcheck disable=SC2016
+grep -q 'require_repo_owned_by_current_user "$REPO_DIR"' "$DEPLOY"
+# shellcheck disable=SC2016
+grep -q 'require_repo_owned_by_current_user "$REPO_DIR"' "$REPO_DIR/scripts/update_deploy_code.sh"
+
+# Candidate-Tags verlangen Deploy-Code, der den gebauten Commit enthaelt.
+if git -C "$REPO_DIR" rev-parse --git-dir > /dev/null 2>&1; then
+  head_sha="$(git -C "$REPO_DIR" rev-parse --short=7 HEAD)"
+  require_deploy_code_for_version "$REPO_DIR" "test-20261024-${head_sha}-r1"
+  if require_deploy_code_for_version "$REPO_DIR" test-20261024-0000000-r1 2> /dev/null; then
+    echo "Unbekannter Candidate-Commit wurde akzeptiert." >&2
+    exit 1
+  fi
+fi
+require_deploy_code_for_version "$REPO_DIR" v1.2.3
+# shellcheck disable=SC2016
+grep -q 'require_deploy_code_for_version "$REPO_DIR" "$HOCX_VERSION"' "$DEPLOY"
+
 echo "env loader tests: ok"

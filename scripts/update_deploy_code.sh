@@ -80,8 +80,12 @@ fi
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "Tracked Worktree-Aenderungen vorhanden; Update wird nicht vermischt." >&2
   git status --short --untracked-files=no >&2
+  echo "Host-spezifische Anpassungen gehoeren in $HOCX_LOCAL_COMPOSE_FILE (nicht versioniert)." >&2
   exit 1
 fi
+# Gehoeren Dateien root (z. B. nach einem `git pull` als root), bricht der Fast-Forward sonst
+# mittendrin ab und hinterlaesst einen halb aktualisierten Checkout.
+require_repo_owned_by_current_user "$REPO_DIR" || exit 1
 
 echo "==> [$HOST_ENVIRONMENT] Hole freigegebenen Deploy-Code von origin/main"
 git fetch --prune origin main
@@ -160,6 +164,8 @@ bash -n \
   "$REPO_DIR/scripts/backup_db.sh" \
   "$REPO_DIR/scripts/restore_db.sh" \
   "$REPO_DIR/scripts/run_job.sh" \
+  "$REPO_DIR/scripts/storage_controller.sh" \
+  "$REPO_DIR/scripts/verify_release.sh" \
   "$REPO_DIR/scripts/update_deploy_code.sh"
 echo "==> Deploy-Code erfolgreich aktualisiert und geprueft"
 

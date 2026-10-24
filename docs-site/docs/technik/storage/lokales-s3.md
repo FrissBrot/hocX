@@ -38,6 +38,12 @@ nichts gelöscht. Unbekannte Gründe oder eine nicht erreichbare Datenbank führ
 Wird das lokale S3 wieder gebraucht (z. B. vor einer Migration zurück), startet der Controller es,
 wartet auf den Healthcheck und führt `storage-init` erneut aus.
 
+Den Cron-Eintrag richtet `deploy.sh` selbst in der crontab des Deploy-Benutzers ein und hält
+ihn aktuell (Projekt, Compose-Dateien inkl. `docker-compose.local.yml`, Pfade). Erkennbar am
+Kommentar `# hocx-managed:<projekt>:storage_controller`; andere Zeilen bleiben unverändert, ein
+von Hand eingetragener Job wird nicht verdoppelt. `HOCX_MANAGE_CRON=false` in `.env` schaltet das
+ab. Auf Prod sieht der Eintrag so aus:
+
 ```cron
-*/5 * * * * /docker/hocX/scripts/run_job.sh storage_controller env HOCX_COMPOSE_PROJECT=hocx HOCX_COMPOSE_FILES="docker-compose.release.yml docker-compose.clamav.yml docker-compose.traefik.yml" /docker/hocX/scripts/storage_controller.sh >> /docker/hocX/backups/storage_controller.log 2>&1
+*/5 * * * * /docker/hocX/scripts/run_job.sh storage_controller env HOCX_COMPOSE_PROJECT=hocx HOCX_COMPOSE_FILES="/docker/hocX/docker-compose.release.yml /docker/hocX/docker-compose.clamav.yml /docker/hocX/docker-compose.traefik.yml" HOCX_ENV_FILE=/docker/hocX/.env /docker/hocX/scripts/storage_controller.sh >> /docker/hocX/backups/storage_controller.log 2>&1 # hocx-managed:hocx:storage_controller
 ```

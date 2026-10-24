@@ -5,12 +5,12 @@ set -euo pipefail
 #
 # Usage: scripts/verify_release.sh <test|prod>
 #
-# Runs container-local health checks plus a small set of externally reachable endpoint
-# checks through Traefik. The script assumes DNS/TLS is already set up for the host's
-# domains (same expectation as RUNBOOK.md / deployment.md) - except on a host running
-# fully private (TRAEFIK_WEBSECURE_BIND != 0.0.0.0, siehe Konfiguration-Wiki), wo die
-# Domains bewusst nicht oeffentlich aufloesen; dort werden die externen Checks
-# uebersprungen, exakt wie es fuer den Admin-Zugang schon immer der Fall war.
+# Runs container-local health checks plus endpoint checks through Traefik. Die Domain-Checks
+# laufen vom Host aus per curl mit dem echten Host-Namen (SNI + Zertifikatspruefung) und
+# brauchen kein DNS: Ist Traefik privat gebunden (TRAEFIK_WEBSECURE_BIND != 0.0.0.0) oder loest
+# die Domain auf dem Host nicht auf, wird sie per --resolve direkt auf Traefik gelenkt.
+# Ein eigenes CA-Zertifikat (z. B. Test-CA eines privaten Test-Hosts) setzt HOCX_VERIFY_CA_FILE
+# in .env (absolut oder relativ zum Repo).
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENVIRONMENT="${1:-}"
@@ -50,6 +50,8 @@ esac
 
 require_host_environment "$ENVIRONMENT"
 
+append_local_compose_override "$REPO_DIR" COMPOSE_ARGS || exit 1
+
 if [ ! -f "$ENV_FILE" ]; then
   echo "Env-Datei $ENV_FILE fehlt." >&2
   exit 1
@@ -79,11 +81,38 @@ probe_from_backend() {
   "${DC[@]}" exec -T backend python3 -c "import urllib.request,sys; resp=urllib.request.urlopen('$url', timeout=10); sys.exit(0 if resp.status < 500 else 1)"
 }
 
+# curl gegen Traefik mit dem echten Host-Namen der URL. Gibt die effektive URL (nach Redirects)
+# aus; HTTP-Fehler (>= 400) und TLS-Fehler lassen den Check scheitern.
+curl_via_traefik() {
+  local url="$1" host bind ca
+  local -a args=(--silent --show-error --fail --location --max-time 15 --output /dev/null --write-out '%{url_effective}')
+  host="${url#https://}"
+  host="${host%%/*}"
+  bind="${TRAEFIK_WEBSECURE_BIND:-0.0.0.0}"
+  if [ "$bind" != 0.0.0.0 ]; then
+    args+=(--resolve "$host:443:$bind")
+  elif ! getent hosts "$host" > /dev/null 2>&1; then
+    args+=(--resolve "$host:443:127.0.0.1")
+  fi
+  ca="${HOCX_VERIFY_CA_FILE:-}"
+  if [ -n "$ca" ]; then
+    [[ "$ca" == /* ]] || ca="$REPO_DIR/$ca"
+    args+=(--cacert "$ca")
+  fi
+  curl "${args[@]}" "$url"
+}
+
+probe_domain() {
+  curl_via_traefik "$1" > /dev/null
+}
+
 # Landet die Website-Domain auf /login, erkennt das Frontend sie nicht als Website (z. B.
 # TRAEFIK_WEBSITE_DOMAIN fehlt im Container) - der reine Statuscode waere trotzdem 200.
-probe_website_from_backend() {
-  local url="$1"
-  "${DC[@]}" exec -T backend python3 -c "import urllib.request,urllib.parse,sys; resp=urllib.request.urlopen('$url', timeout=10); path=urllib.parse.urlparse(resp.url).path; sys.exit(0 if resp.status < 400 and not path.startswith('/login') else 1)"
+probe_website_domain() {
+  local effective path
+  effective="$(curl_via_traefik "$1")" || return 1
+  path="${effective#https://*/}"
+  [[ "/$path" != /login* ]]
 }
 
 check_backend_health() {
@@ -137,31 +166,14 @@ run_check "Frontend antwortet lokal" check_frontend_local
 run_check "Docs antworten lokal" check_docs_local
 run_check "Alembic steht auf head" check_alembic_head
 
-# TRAEFIK_WEBSECURE_BIND != 0.0.0.0 heisst: dieser Host laeuft bewusst rein privat
-# (siehe Konfiguration-Wiki, "Test-Host komplett privat betreiben") - die Domains
-# loesen dann absichtlich nicht oeffentlich auf. Die folgenden Checks probieren einen
-# echten DNS-Lookup aus dem Backend-Container; das kann auf einem privaten Host nie
-# gelingen, genau wie es fuer TRAEFIK_ADMIN_DOMAIN schon immer der Fall war (dafuer
-# gibt es hier bewusst nie einen automatisierten externen Check).
-if [ "${TRAEFIK_WEBSECURE_BIND:-0.0.0.0}" != "0.0.0.0" ]; then
-  note "Traefik ist privat (TRAEFIK_WEBSECURE_BIND=${TRAEFIK_WEBSECURE_BIND}) - externe Domain-Checks werden uebersprungen"
-  note "  Manuell ueber den privaten Tunnel pruefen: https://${TRAEFIK_DOMAIN}/login"
-  note "  Manuell ueber den privaten Tunnel pruefen: https://${TRAEFIK_ABGABEBOX_DOMAIN}/"
-  if [ -n "${TRAEFIK_DOCS_DOMAIN:-}" ]; then
-    note "  Manuell ueber den privaten Tunnel pruefen: https://${TRAEFIK_DOCS_DOMAIN}/"
-  fi
-  if [ -n "${TRAEFIK_WEBSITE_DOMAIN:-}" ]; then
-    note "  Manuell ueber den privaten Tunnel pruefen: https://${TRAEFIK_WEBSITE_DOMAIN}/"
-  fi
-else
-  run_check "Hauptdomain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_DOMAIN}/login"
-  run_check "Abgabebox antwortet via Traefik" probe_from_backend "https://${TRAEFIK_ABGABEBOX_DOMAIN}/"
-  if [ -n "${TRAEFIK_DOCS_DOMAIN:-}" ]; then
-    run_check "Docs-Domain antwortet via Traefik" probe_from_backend "https://${TRAEFIK_DOCS_DOMAIN}/"
-  fi
-  if [ -n "${TRAEFIK_WEBSITE_DOMAIN:-}" ]; then
-    run_check "Website-Domain liefert die Landing Page via Traefik" probe_website_from_backend "https://${TRAEFIK_WEBSITE_DOMAIN}/"
-  fi
+command -v curl > /dev/null 2>&1 || { echo "curl wird fuer die Domain-Checks benoetigt." >&2; exit 1; }
+run_check "Hauptdomain antwortet via Traefik" probe_domain "https://${TRAEFIK_DOMAIN}/login"
+run_check "Abgabebox antwortet via Traefik" probe_domain "https://${TRAEFIK_ABGABEBOX_DOMAIN}/"
+if [ -n "${TRAEFIK_DOCS_DOMAIN:-}" ]; then
+  run_check "Docs-Domain antwortet via Traefik" probe_domain "https://${TRAEFIK_DOCS_DOMAIN}/"
+fi
+if [ -n "${TRAEFIK_WEBSITE_DOMAIN:-}" ]; then
+  run_check "Website-Domain liefert die Landing Page via Traefik" probe_website_domain "https://${TRAEFIK_WEBSITE_DOMAIN}/"
 fi
 
 note "Alle Verify-Checks erfolgreich fuer $HOCX_VERSION"
