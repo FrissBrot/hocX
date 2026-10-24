@@ -41,6 +41,7 @@ from app.models import (
     ProtocolTodo,
     ProtocolTodoAssignee,
     ProtocolTodoFile,
+    AgendaItem,
     StoredFile,
     SubmissionAssignment,
     SubmissionLink,
@@ -315,6 +316,10 @@ class TenantCloneService:
         self._clone_protocol_todo_assignees(db, todo_map=todo_map, participant_map=participant_map)
         self._clone_protocol_todo_files(db, todo_map=todo_map, stored_file_map=stored_file_map)
         self._remap_todo_repeat_sources(db, protocol_element_block_map=protocol_element_block_map, todo_map=todo_map)
+        self._clone_agenda_items(
+            db, source.id, new_tenant.id, template_map=template_map, template_element_map=template_element_map,
+            protocol_map=protocol_map, protocol_element_map=protocol_element_map,
+        )
         self._clone_document_templates(
             db, source.id, new_tenant.id,
             protocol_template_map=template_map,
@@ -1133,6 +1138,30 @@ class TenantCloneService:
             id_map[row.id] = new_row.id
         db.commit()
         return id_map
+
+    def _clone_agenda_items(
+        self,
+        db: Session,
+        source_tenant_id: int,
+        new_tenant_id: int,
+        *,
+        template_map: dict[int, int],
+        template_element_map: dict[int, int],
+        protocol_map: dict[int, int],
+        protocol_element_map: dict[int, int],
+    ) -> None:
+        for row in db.scalars(select(AgendaItem).where(AgendaItem.tenant_id == source_tenant_id)).all():
+            template_id = template_map.get(row.template_id)
+            if template_id is None:
+                continue
+            db.add(_copy_row(row, {
+                "tenant_id": new_tenant_id,
+                "template_id": template_id,
+                "template_element_id": template_element_map.get(row.template_element_id) if row.template_element_id else None,
+                "protocol_id": protocol_map.get(row.protocol_id) if row.protocol_id else None,
+                "protocol_element_id": protocol_element_map.get(row.protocol_element_id) if row.protocol_element_id else None,
+            }))
+        db.commit()
 
     def _clone_task_packages(
         self,

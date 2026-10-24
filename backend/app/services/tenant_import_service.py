@@ -40,6 +40,7 @@ from app.models import (
     AppUser,
     ProtocolTodoAssignee,
     ProtocolTodoFile,
+    AgendaItem,
     TaskPackage,
     TaskPackageCycle,
     TaskPackageItem,
@@ -477,6 +478,7 @@ class TenantImportService:
         self._import_protocol_todo_files(todo_map, stored_file_map)
         self._remap_todo_repeat_sources(todo_map)
         self._restore_todo_snapshots(protocol_map, protocol_element_block_map)
+        self._import_agenda_items(new_tenant.id, template_map, template_element_map, protocol_map, protocol_element_map)
         album_map = self._import_photo_albums(new_tenant.id, cycle_config_map, submission_assignment_map)
         self._import_album_shares(new_tenant.id, album_map)
         self._import_share_links(new_tenant.id, album_map)
@@ -1671,6 +1673,24 @@ class TenantImportService:
             id_map[row["id"]] = new_row.id
         self.db.commit()
         return id_map
+
+    def _import_agenda_items(
+        self, new_tenant_id: int, template_map: dict[int, int], template_element_map: dict[int, int],
+        protocol_map: dict[int, int], protocol_element_map: dict[int, int],
+    ) -> None:
+        for row in self._t("agenda_item"):
+            template_id = template_map.get(row["template_id"])
+            if template_id is None:
+                continue
+            data = self._resolve_row("agenda_item", row)
+            self.db.add(self._build(AgendaItem, data, {
+                "tenant_id": new_tenant_id,
+                "template_id": template_id,
+                "template_element_id": template_element_map.get(data["template_element_id"]) if data.get("template_element_id") else None,
+                "protocol_id": protocol_map.get(data["protocol_id"]) if data.get("protocol_id") else None,
+                "protocol_element_id": protocol_element_map.get(data["protocol_element_id"]) if data.get("protocol_element_id") else None,
+            }))
+        self.db.commit()
 
     def _remap_todo_repeat_sources(self, todo_map: dict[int, int]) -> None:
         """Second pass for blocks bound to a todo ("Wiederholen aus Todo") - the todos are

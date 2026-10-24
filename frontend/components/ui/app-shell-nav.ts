@@ -44,7 +44,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
         { href: "/protocols", labelKey: "protocols", icon: "protocols" },
         ...(isWriter ? [{ href: "/events", labelKey: "events", icon: "events" as const }] : []),
         { href: "/todos", labelKey: "todos", icon: "todos" },
-        { href: "/documents", labelKey: "documentStudio", icon: "studio" },
+        { href: "/agenda", labelKey: "agenda", icon: "agenda" },
         ...(isWriter && hasAbgabebox ? [{ href: "/submission-assignments", labelKey: "submissions", icon: "submissions" as const }] : []),
         ...(hasFinance ? [{ href: "/finances", labelKey: "finances", icon: "finances" as const, match: ["/fines"] }] : []),
       ],
@@ -64,15 +64,25 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
     });
   }
 
+  // Das Dokument-Studio gehört zur Konfiguration, wird aber auch von Schreibenden gepflegt -
+  // die Gruppe erscheint deshalb ab "writer", Vorlagen und Zyklen bleiben Admins vorbehalten.
+  if (isWriter) {
+    groups.push({
+      titleKey: "groups.configuration",
+      links: [
+        ...(isAdmin
+          ? [
+              { href: "/templates", labelKey: "templates", icon: "templates" as const, match: ["/elements", "/task-packages"] },
+              { href: "/cycles", labelKey: "cycles", icon: "cycles" as const },
+            ]
+          : []),
+        { href: "/documents", labelKey: "documentStudio", icon: "studio" },
+      ],
+    });
+  }
+
   if (isAdmin) {
     groups.push(
-      {
-        titleKey: "groups.configuration",
-        links: [
-          { href: "/templates", labelKey: "templates", icon: "templates", match: ["/elements", "/task-packages"] },
-          { href: "/cycles", labelKey: "cycles", icon: "cycles" },
-        ],
-      },
       {
         titleKey: "groups.administration",
         links: [

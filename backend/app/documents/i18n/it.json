@@ -183,6 +183,7 @@
       "location": "Luogo",
       "login_enabled": "Accesso attivo",
       "mime_type": "Tipo di file",
+      "month": "Mese",
       "name": "Nome",
       "notes": "Note",
       "organizers": "Organizzazione",
@@ -198,6 +199,7 @@
       "taken_at": "Scattata",
       "task": "Attività",
       "template": "Modello",
+      "text": "Testo",
       "title": "Titolo",
       "type": "Tipo"
     },
@@ -209,6 +211,7 @@
     "personalReadme": "Rapporto di accesso ai dati per {name} ({tenant}), creato il {date}.\\n\\nRapporto dati.xlsx contiene un foglio per ambito: dati anagrafici, presenze (solo le tue righe), multe, attività, responsabilità, appuntamenti, liste, file caricati (elenco), fattori di accesso e abbonamenti calendario (senza segreti), attività recenti e menzioni nei verbali.\\ndaten.json contiene gli stessi dati in formato leggibile dalle macchine.\\n\\nLe menzioni sono trovate cercando il nome e possono essere incomplete. Verbali e dati di cassa sono conservati dall'organizzazione; rivolgi le domande all'organizzazione.",
     "section": {
       "activity": "Attività recenti",
+      "agenda_items": "Argomenti",
       "attendance": "Presenze",
       "events": "Appuntamenti",
       "files": "File caricati",
@@ -393,6 +396,7 @@
     "sessions": "Sedute"
   },
   "label": {
+    "agendaOther": "Altri argomenti",
     "asOf": "Situazione al {date}",
     "attendanceCounts": "{present} presenti · {late} in ritardo · {excused} giustificati · {absent} assenti",
     "byMonth": "Per mese",

@@ -183,6 +183,7 @@
       "location": "Lieu",
       "login_enabled": "Connexion active",
       "mime_type": "Type de fichier",
+      "month": "Mois",
       "name": "Nom",
       "notes": "Notes",
       "organizers": "Organisation",
@@ -198,6 +199,7 @@
       "taken_at": "Pris le",
       "task": "Tâche",
       "template": "Modèle",
+      "text": "Texte",
       "title": "Titre",
       "type": "Type"
     },
@@ -209,6 +211,7 @@
     "personalReadme": "Rapport d’accès aux données pour {name} ({tenant}), créé le {date}.\\n\\nRapport de données.xlsx contient une feuille par domaine : données de base, présences (seulement tes lignes), amendes, tâches, responsabilités, rendez-vous, listes, fichiers téléversés (liste), facteurs de connexion et abonnements calendrier (sans secrets), activité et mentions dans les procès-verbaux.\\ndaten.json contient les mêmes données lisibles par machine.\\n\\nLes mentions sont trouvées par recherche du nom et peuvent être incomplètes. Les procès-verbaux et la caisse sont conservés par l’organisation ; adresse tes questions à l’organisation.",
     "section": {
       "activity": "Activité",
+      "agenda_items": "Sujets",
       "attendance": "Présences",
       "events": "Rendez-vous",
       "files": "Fichiers téléversés",
@@ -393,6 +396,7 @@
     "sessions": "Séances"
   },
   "label": {
+    "agendaOther": "Autres sujets",
     "asOf": "État au {date}",
     "attendanceCounts": "{present} présents · {late} en retard · {excused} excusés · {absent} absents",
     "byMonth": "Par mois",

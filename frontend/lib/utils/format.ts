@@ -204,6 +204,15 @@ export function formatShortMonthDate(input: string | null | undefined, locale?: 
   return new Intl.DateTimeFormat(toIntlLocale(locale), { day: "numeric", month: "short", year: "numeric", timeZone: APP_TIME_ZONE }).format(parsed);
 }
 
+// Monat und Jahr ("November 2026"), z. B. für den Termin eines Anliegens. `input` ist ein
+// ISO-Datum (Monatserster); gerechnet wird ohne Zeitzone, damit der Monat nie kippt.
+export function formatMonthYear(input: string | null | undefined, locale?: string) {
+  const match = /^(\d{4})-(\d{2})/.exec(String(input ?? ""));
+  if (!match) return "";
+  const parsed = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 15));
+  return new Intl.DateTimeFormat(toIntlLocale(locale), { month: "long", year: "numeric", timeZone: "UTC" }).format(parsed);
+}
+
 export function formatFileSize(bytes: number | null | undefined) {
   if (bytes === null || bytes === undefined || Number.isNaN(bytes)) {
     return "";

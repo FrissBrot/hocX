@@ -369,6 +369,7 @@
     "collaborationView": "Vue collaboration",
     "collaborationViewSoon": "Vue collaboration (bientôt disponible)",
     "createTodo": "Créer une tâche",
+    "createAgendaItem": "Ajouter un sujet",
     "sessionNotes": "Ouvrir les notes de séance"
   },
   "refreshDataAction": "⟳ Actualiser les données",

@@ -4,6 +4,7 @@ export type NavIconKey =
   | "dashboard"
   | "protocols"
   | "todos"
+  | "agenda"
   | "fines"
   | "finances"
   | "statistics"
@@ -66,6 +67,12 @@ const ICONS: Record<NavIconKey, (props: IconProps) => React.ReactElement> = {
     <Icon {...props}>
       <circle cx="12" cy="12" r="8.5" />
       <path d="M8.2 12.3l2.6 2.6 5-5.2" />
+    </Icon>
+  ),
+  agenda: (props) => (
+    <Icon {...props}>
+      <path d="M4.5 6.5a2 2 0 012-2h11a2 2 0 012 2v8a2 2 0 01-2 2H11l-4 3.3v-3.3h-.5a2 2 0 01-2-2v-8z" />
+      <path d="M8.5 9h7M8.5 12.2h4.5" />
     </Icon>
   ),
   fines: (props) => (

@@ -108,6 +108,7 @@
     "cancelled": "abgesagt",
     "asOf": "Stand {date}",
     "responsible": "Verantwortlich",
+    "agendaOther": "Weitere Anliegen",
     "sessionTodos": "Sitzungs-Todos",
     "yes": "Ja",
     "scanToOpen": "Zum Öffnen scannen",
@@ -452,7 +453,8 @@
       "files": "Hochgeladene Dateien",
       "security": "Anmeldung und Abos",
       "activity": "Aktivität",
-      "mentions": "Erwähnungen"
+      "mentions": "Erwähnungen",
+      "agenda_items": "Anliegen"
     },
     "col": {
       "first_name": "Vorname",
@@ -505,7 +507,9 @@
       "leadership": "Leitung",
       "participants": "Teilnehmende",
       "description": "Beschreibung",
-      "assignees": "Zuständig"
+      "assignees": "Zuständig",
+      "text": "Text",
+      "month": "Monat"
     },
     "file": {
       "workbook": "Auskunft",

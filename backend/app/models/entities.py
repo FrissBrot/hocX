@@ -1503,6 +1503,46 @@ class ProtocolTodoFile(Base, TimestampMixin):
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
 
 
+class AgendaItem(Base, TimestampMixin, UpdatedAtMixin):
+    """Anliegen für eine kommende Sitzung (Migration 0153). Wartet ohne protocol_id auf das
+    nächste passende Protokoll seiner Vorlage und wird beim Durchführen fest daran gebunden,
+    siehe app/services/agenda_item_service.py."""
+
+    __tablename__ = "agenda_item"
+    __table_args__ = (
+        CheckConstraint("schedule_kind IN ('next_meeting', 'month')", name="ck_agenda_item_schedule_kind"),
+        Index("idx_agenda_item_tenant", "tenant_id"),
+        Index("idx_agenda_item_protocol", "protocol_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="CASCADE"), nullable=False)
+    template_element_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template_element.id", ondelete="SET NULL"))
+    protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
+    protocol_element_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol_element.id", ondelete="SET NULL"))
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str | None] = mapped_column(Text)
+    schedule_kind: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'next_meeting'"))
+    scheduled_month: Mapped[date | None] = mapped_column(Date)
+    earliest_date: Mapped[date] = mapped_column(Date, nullable=False)
+    postponed_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class UserAgendaTemplatePreference(Base):
+    """Zuletzt im Anliegen-Popup gewählte Vorlage je Person und Mandant (Migration 0153)."""
+
+    __tablename__ = "user_agenda_template_preference"
+
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="SET NULL"))
+
+
 class TaskPackage(Base, TimestampMixin, UpdatedAtMixin):
     """Aufgabenpaket (z. B. "Sommerlager"): Sammlung wiederkehrender Aufgaben, die pro Zyklus
     als Todos erzeugt werden. Siehe app/services/task_package_service.py."""

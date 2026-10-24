@@ -108,6 +108,7 @@
     "cancelled": "annulé",
     "asOf": "État au {date}",
     "responsible": "Responsable",
+    "agendaOther": "Autres sujets",
     "sessionTodos": "Tâches de la séance",
     "yes": "Oui",
     "scanToOpen": "Scanner pour ouvrir",
@@ -452,7 +453,8 @@
       "files": "Fichiers téléversés",
       "security": "Connexion et abonnements",
       "activity": "Activité",
-      "mentions": "Mentions"
+      "mentions": "Mentions",
+      "agenda_items": "Sujets"
     },
     "col": {
       "first_name": "Prénom",
@@ -505,7 +507,9 @@
       "leadership": "Direction",
       "participants": "Participants",
       "description": "Description",
-      "assignees": "Responsables"
+      "assignees": "Responsables",
+      "text": "Texte",
+      "month": "Mois"
     },
     "file": {
       "workbook": "Rapport de données",

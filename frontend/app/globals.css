@@ -26007,3 +26007,78 @@ a.mobile-list-row { color: var(--text); }
   font-size: var(--text-sm);
   color: var(--muted);
 }
+
+/* ── Anliegen (agenda_item): Liste unter «Arbeiten» und Abschnitt im Protokolleditor ── */
+.agenda-item-form {
+  gap: var(--space-4);
+  min-width: 320px;
+}
+.data-table-agenda td {
+  vertical-align: top;
+}
+.data-table-agenda th:last-child,
+.data-table-agenda td:last-child {
+  width: 48px;
+  text-align: right;
+}
+.agenda-row-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.agenda-row-title-text {
+  font-weight: 600;
+}
+.agenda-row-body {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 48ch;
+}
+.agenda-items-list {
+  display: grid;
+}
+.agenda-item-card {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.agenda-item-card:last-child {
+  border-bottom: none;
+}
+.agenda-item-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.agenda-item-card-title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  color: var(--text);
+}
+.agenda-item-card-title:hover:not([readonly]) {
+  border-color: var(--border);
+}
+.agenda-item-card-title:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+@media (max-width: 640px) {
+  .agenda-item-form {
+    min-width: 0;
+  }
+  .agenda-row-body {
+    max-width: 24ch;
+  }
+}

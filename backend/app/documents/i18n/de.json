@@ -183,6 +183,7 @@
       "location": "Ort",
       "login_enabled": "Login aktiv",
       "mime_type": "Dateityp",
+      "month": "Monat",
       "name": "Name",
       "notes": "Notizen",
       "organizers": "Organisation",
@@ -198,6 +199,7 @@
       "taken_at": "Aufgenommen",
       "task": "Aufgabe",
       "template": "Vorlage",
+      "text": "Text",
       "title": "Titel",
       "type": "Art"
     },
@@ -209,6 +211,7 @@
     "personalReadme": "Datenauskunft für {name} ({tenant}), erstellt am {date}.\\n\\nAuskunft.xlsx enthält je Bereich ein Blatt: Stammdaten, Anwesenheit (nur eigene Zeilen), Bussen, Aufgaben, Verantwortlichkeiten, Termine, Listen, selbst hochgeladene Dateien (Liste), Anmeldefaktoren und Kalender-Abos (ohne Geheimnisse), Aktivität und Erwähnungen in Protokolltexten.\\ndaten.json enthält dieselben Daten maschinenlesbar.\\n\\nErwähnungen werden per Namenssuche gefunden und können unvollständig sein. Protokolle und Kassendaten werden vom Verein aufbewahrt; Fragen dazu richtest du an den Verein.",
     "section": {
       "activity": "Aktivität",
+      "agenda_items": "Anliegen",
       "attendance": "Anwesenheit",
       "events": "Termine",
       "files": "Hochgeladene Dateien",
@@ -393,6 +396,7 @@
     "sessions": "Sitzungen"
   },
   "label": {
+    "agendaOther": "Weitere Anliegen",
     "asOf": "Stand {date}",
     "attendanceCounts": "{present} anwesend · {late} verspätet · {excused} entschuldigt · {absent} unentschuldigt",
     "byMonth": "Nach Monat",

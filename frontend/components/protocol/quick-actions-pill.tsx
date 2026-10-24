@@ -8,12 +8,14 @@ type QuickActionsPillProps = {
   onNotesHover: () => void;
   onTodosClick: () => void;
   onTodosHover: () => void;
+  /** Anliegen im aktuellen Protokoll erfassen. */
+  onAgendaClick?: () => void;
   onHoverLeave: () => void;
   onCollabClick?: () => void;
   onCollabHover?: () => void;
 };
 
-export function QuickActionsPill({ onNotesClick, onNotesHover, onTodosClick, onTodosHover, onHoverLeave, onCollabClick, onCollabHover }: QuickActionsPillProps) {
+export function QuickActionsPill({ onNotesClick, onNotesHover, onTodosClick, onTodosHover, onAgendaClick, onHoverLeave, onCollabClick, onCollabHover }: QuickActionsPillProps) {
   const t = useTranslations("protocols.quickActions");
   return (
     <div className="protocol-quick-actions" role="toolbar" aria-label={t("ariaLabel")} onMouseLeave={onHoverLeave}>
@@ -35,6 +37,17 @@ export function QuickActionsPill({ onNotesClick, onNotesHover, onTodosClick, onT
       >
         <NavIcon name="todos" />
       </button>
+      {onAgendaClick && (
+        <button
+          type="button"
+          className="protocol-quick-actions-btn"
+          title={t("createAgendaItem")}
+          aria-label={t("createAgendaItem")}
+          onClick={onAgendaClick}
+        >
+          <NavIcon name="agenda" />
+        </button>
+      )}
       <button
         type="button"
         className="protocol-quick-actions-btn"

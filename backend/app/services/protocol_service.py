@@ -2612,6 +2612,10 @@ class ProtocolService:
                 stage_from, stage_to = self._STATUS_ORDER[idx], self._STATUS_ORDER[idx + 1]
                 if stage_from == "vorbereitet" and stage_to == "durchgeführt":
                     self._clear_tracked_changes(db, protocol_id, commit=False)
+                    # Wartende Anliegen mit diesem Zielprotokoll gehören ab jetzt fest dazu.
+                    from app.services.agenda_item_service import AgendaItemService
+
+                    AgendaItemService().bind_to_protocol(db, updated)
                 if stage_to == "abgeschlossen":
                     # Korrekturweg (Datenschutz-Audit F): nach Zurückstufen und Ändern verschwinden
                     # die Änderungsmarkierungen samt alter Fassung (Baseline) und die PDFs des
