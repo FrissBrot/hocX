@@ -181,6 +181,9 @@ class Settings(BaseSettings):
     # same reason as the backfill above, this can't happen inline in the restricted
     # abgabebox-backend request path.
     photo_album_sync_interval_minutes: int = 15
+    # Duplikate/Ähnliche vorberechnen (job-worker, FileService.refresh_similarity_results) - neue
+    # Fotos erscheinen in den Tabs spätestens nach diesem Takt.
+    photo_similarity_refresh_interval_minutes: float = 2
     # Mirrors the abgabebox subapp's ABGABEBOX_TENANT_STORAGE_QUOTA_MB - protocol-image
     # uploads had only a per-file limit (MAX_UPLOAD_BYTES), no per-tenant total at all
     # (audit finding, 2026-08-25), a real risk given this app's two prior disk-full

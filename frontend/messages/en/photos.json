@@ -229,6 +229,11 @@
     "ownerMessage": "{count, plural, one {“{albumName}” is shared by {owner}. 1 photo will then be visible to everyone involved.} other {“{albumName}” is shared by {owner}. # photos will then be visible to everyone involved.}}",
     "title": "Photos will be shared"
   },
+  "similarity": {
+    "pending": "Photos are being grouped in the background. The result will appear here in a few minutes.",
+    "tooMany": "Too many photos for automatic grouping (at most {max, number}).",
+    "computedAt": "As of {time} · new photos appear after a few minutes."
+  },
   "similarGroups": {
     "bestChoice": "Best pick",
     "bestError": "The best-of status could not be changed.",
@@ -243,7 +248,7 @@
     "keepAriaLabel": "Keep {name}",
     "keptSuffix": " · kept",
     "loadError": "Similar photos could not be loaded.",
-    "loading": "Grouping series…",
+    "loading": "Loading series…",
     "openAriaLabel": "Open {name}",
     "seriesTitle": "Series around {time} · {description}",
     "sharpnessCaption": "Sharpness {score}",
@@ -264,7 +269,7 @@
     "keepOnlyBestDisabledTitle": "Only directly uploaded photos can be deleted here.",
     "keepSeries": "Keep series",
     "loadError": "Similar photos could not be loaded.",
-    "loading": "Grouping series…",
+    "loading": "Loading series…",
     "openAriaLabel": "Open {name}",
     "seriesTitle": "Series around {time} · {description}",
     "sharpnessCaption": "Sharpness {score}",

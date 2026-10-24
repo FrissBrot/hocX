@@ -430,6 +430,10 @@
         "title": "Sync albums",
         "description": "Adds new and removes deleted Abgabebox images in the automatic albums."
       },
+      "photo_similarity_refresh": {
+        "title": "Group duplicates and similar photos",
+        "description": "Computes the groups for the “Duplicates” and “Similar” tabs in the background whenever an organization's photos change."
+      },
       "photo_analysis_worker": {
         "title": "Image analysis worker",
         "description": "Separate container that runs scheduled image analyses. Monitored through its heartbeat every few seconds."

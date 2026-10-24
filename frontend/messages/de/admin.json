@@ -430,6 +430,10 @@
         "title": "Alben synchronisieren",
         "description": "Übernimmt neue und entfernte Abgabebox-Bilder in die automatischen Alben."
       },
+      "photo_similarity_refresh": {
+        "title": "Duplikate und ähnliche Fotos gruppieren",
+        "description": "Berechnet im Hintergrund die Gruppen der Tabs «Duplikate» und «Ähnliche», sobald sich die Fotos eines Mandanten ändern."
+      },
       "photo_analysis_worker": {
         "title": "Bildanalyse-Worker",
         "description": "Eigener Container, der eingeplante Bildanalysen ausführt. Überwacht wird sein Lebenszeichen alle paar Sekunden."

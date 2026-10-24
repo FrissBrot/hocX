@@ -430,6 +430,10 @@
         "title": "Synchroniser les albums",
         "description": "Ajoute les nouvelles images Abgabebox aux albums automatiques et retire celles supprimées."
       },
+      "photo_similarity_refresh": {
+        "title": "Regrouper les doublons et photos similaires",
+        "description": "Calcule en arrière-plan les groupes des onglets « Doublons » et « Similaires » dès que les photos d'une organisation changent."
+      },
       "photo_analysis_worker": {
         "title": "Worker d'analyse d'images",
         "description": "Conteneur séparé qui exécute les analyses d'images planifiées. Surveillé via son signal de vie toutes les quelques secondes."

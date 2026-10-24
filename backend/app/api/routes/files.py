@@ -45,7 +45,7 @@ from app.schemas.files import (
     GalleryUploadJobDetail,
     GalleryUploadJobRead,
     PhotoAnalysisProgress,
-    SimilarityGroup,
+    SimilarityGroupList,
     StoredFileMetadata,
     StoredFileTagsUpdate,
     UploadFileResult,
@@ -215,26 +215,20 @@ def get_file_stats(db: Session = Depends(get_db), user: CurrentUser = Depends(ge
     return service.file_stats(db, user.current_tenant_id)
 
 
-@router.get("/files/similarity-groups", response_model=list[SimilarityGroup])
+@router.get("/files/similarity-groups", response_model=SimilarityGroupList)
 def list_similarity_groups(
     source: FileOverviewSource | None = Query(default=None),
     album_id: uuid.UUID | None = Query(default=None),
     search: str | None = Query(default=None),
     tags: list[str] | None = Query(default=None),
-    min_size: int = Query(default=1, ge=1),
     kind: Literal["duplicate", "series"] = Query(default="duplicate"),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    """Photo-culling Phase 2: clustert die (per Filter eingegrenzten) Bilder des Mandanten
-    nach visueller Ähnlichkeit (Perceptual Hash) und markiert pro Gruppe das nach Schärfe/
-    Belichtung beste Bild. Gleiche Filter wie GET /files, aber immer nur Bilder und ohne
-    Pagination - siehe FileService.group_similar_gallery_images für die Grössenbeschränkung.
-    min_size=2 (die "Duplikate"- und "Ähnliche"-Tabs im Frontend) blendet Einzelbilder ohne
-    ähnliches Gegenstück aus - der Default 1 behält das bisherige Verhalten für andere
-    Aufrufer bei. kind unterscheidet die beiden Tabs: "duplicate" (enger Schwellwert, gleiches
-    Bild in anderem Ausschnitt/Qualität) vs. "series" (lockerer Schwellwert, Fotoserie mit
-    mehreren unterschiedlichen Aufnahmen derselben Szene)."""
+    """Tabs "Duplikate" (kind="duplicate": gleiches Bild in anderem Ausschnitt/Qualität) und
+    "Ähnliche" (kind="series": Fotoserie derselben Szene). Gruppiert wird im Hintergrund
+    (job-worker, FileService.refresh_similarity_results); diese Route liest nur das Ergebnis und
+    filtert es mit denselben Filtern wie GET /files - siehe FileService.list_similarity_groups."""
     require_writer(user)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -245,15 +239,14 @@ def list_similarity_groups(
         if photo_album_share_service.hides_pending_items(album, user.current_tenant_id):
             item_query = item_query.where(PhotoAlbumItem.share_pending.is_(False))
         file_ids = list(db.scalars(item_query))
-    return service.group_similar_gallery_images(
+    return service.list_similarity_groups(
         db,
         user.current_tenant_id,
+        kind=kind,
         source=source,
         search=search,
         tags=tags,
         file_ids=file_ids,
-        min_size=min_size,
-        kind=kind,
     )
 
 

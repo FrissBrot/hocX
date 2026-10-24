@@ -114,6 +114,17 @@ class SimilarityGroup(BaseModel):
     images: list[FileOverviewItem]
 
 
+class SimilarityGroupList(BaseModel):
+    """Abruf der vorberechneten Gruppen (FileService.list_similarity_groups). `pending`: der
+    Hintergrundjob hat für diesen Mandanten noch nichts berechnet; `too_many`: mehr Bilder als
+    MAX_BACKGROUND_GROUPING_IMAGES. `computed_at` ist der Stand der Berechnung - neue Fotos
+    erscheinen nach dem nächsten Lauf, gelöschte fallen sofort heraus."""
+
+    status: Literal["ready", "pending", "too_many"]
+    computed_at: datetime | None = None
+    groups: list[SimilarityGroup]
+
+
 class StoredFileTagsUpdate(BaseModel):
     tags: list[str]
 

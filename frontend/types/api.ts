@@ -468,6 +468,12 @@ export type SimilarityGroup = {
   images: FileOverviewItem[];
 };
 
+export type SimilarityGroupList = {
+  status: "ready" | "pending" | "too_many";
+  computed_at: string | null;
+  groups: SimilarityGroup[];
+};
+
 export type PhotoAnalysisProgress = {
   total_images: number;
   analyzed_images: number;

@@ -229,6 +229,11 @@
     "ownerMessage": "{count, plural, one {„{albumName}“ wird von {owner} geteilt. 1 Foto ist danach für alle Beteiligten sichtbar.} other {„{albumName}“ wird von {owner} geteilt. # Fotos sind danach für alle Beteiligten sichtbar.}}",
     "title": "Fotos werden geteilt"
   },
+  "similarity": {
+    "pending": "Die Fotos werden im Hintergrund gruppiert. Das Ergebnis erscheint hier in wenigen Minuten.",
+    "tooMany": "Zu viele Fotos für die automatische Gruppierung (höchstens {max, number}).",
+    "computedAt": "Stand {time} · neue Fotos erscheinen nach wenigen Minuten."
+  },
   "similarGroups": {
     "bestChoice": "Beste Wahl",
     "bestError": "Best-of-Status konnte nicht geändert werden.",
@@ -243,7 +248,7 @@
     "keepAriaLabel": "{name} behalten",
     "keptSuffix": " · behalten",
     "loadError": "Ähnliche Fotos konnten nicht geladen werden.",
-    "loading": "Serien werden gruppiert…",
+    "loading": "Serien werden geladen…",
     "openAriaLabel": "{name} öffnen",
     "seriesTitle": "Serie um {time} · {description}",
     "sharpnessCaption": "Schärfe {score}",
@@ -264,7 +269,7 @@
     "keepOnlyBestDisabledTitle": "Nur direkt hochgeladene Fotos können hier gelöscht werden.",
     "keepSeries": "Serie behalten",
     "loadError": "Ähnliche Fotos konnten nicht geladen werden.",
-    "loading": "Serien werden gruppiert…",
+    "loading": "Serien werden geladen…",
     "openAriaLabel": "{name} öffnen",
     "seriesTitle": "Serie um {time} · {description}",
     "sharpnessCaption": "Schärfe {score}",

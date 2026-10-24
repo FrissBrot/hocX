@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { useConfirm } from "@/contexts/confirm-context";
@@ -9,6 +9,8 @@ import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatTime } from "@/lib/utils/format";
 import { FileBulkDeleteResult, FileOverviewItem, SimilarityGroup } from "@/types/api";
 import { PhotoViewer } from "./photo-viewer";
+import { SimilarityComputedAt, SimilarityState } from "./similarity-state";
+import { useSimilarityGroups } from "./use-similarity-groups";
 
 export function PhotoSimilarSeries({
   search,
@@ -22,33 +24,10 @@ export function PhotoSimilarSeries({
   const t = useTranslations("photos.similarSeries");
   const confirm = useConfirm();
   const showToast = useToast();
-  const [groups, setGroups] = useState<SimilarityGroup[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { groups, setGroups, status, computedAt, error } = useSimilarityGroups("duplicate", search, tagFilter, t("loadError"));
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [busyGroup, setBusyGroup] = useState<string | null>(null);
   const [viewer, setViewer] = useState<{ groupId: string; index: number } | null>(null);
-  const requestIdRef = useRef(0);
-
-  const tagKey = tagFilter.join(",");
-
-  useEffect(() => {
-    const requestId = ++requestIdRef.current;
-    const params = new URLSearchParams();
-    params.set("min_size", "2");
-    params.set("kind", "duplicate");
-    if (search.trim()) params.set("search", search.trim());
-    tagFilter.forEach((tag) => params.append("tags", tag));
-    browserApiFetch<SimilarityGroup[]>(`/api/files/similarity-groups?${params.toString()}`)
-      .then((data) => {
-        if (requestIdRef.current !== requestId) return;
-        setGroups(data ?? []);
-      })
-      .catch(() => {
-        if (requestIdRef.current !== requestId) return;
-        setError(t("loadError"));
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, tagKey]);
 
   function keepSeries(group: SimilarityGroup) {
     setDismissed((current) => new Set(current).add(group.best_id));
@@ -90,7 +69,14 @@ export function PhotoSimilarSeries({
       });
       setDismissed((current) => new Set(current).add(group.best_id));
       const deletedCount = result?.deleted_ids.length ?? 0;
-      if (result && deletedCount > 0) onDeleted?.(result.deleted_ids);
+      if (result && deletedCount > 0) {
+        // Auch aus dem Cache entfernen - sonst kehrt die Gruppe beim nächsten Tabwechsel zurück.
+        const deletedSet = new Set(result.deleted_ids);
+        setGroups((current) => current
+          ?.map((entry) => ({ ...entry, images: entry.images.filter((image) => !deletedSet.has(image.id)) }))
+          .filter((entry) => entry.images.length >= 2) ?? null);
+        onDeleted?.(result.deleted_ids);
+      }
       if (result?.errors.length) {
         showToast(result.errors.join(" · "), deletedCount > 0 ? "info" : "error");
       } else {
@@ -103,8 +89,7 @@ export function PhotoSimilarSeries({
     }
   }
 
-  if (error) return <p className="form-error-banner">{error}</p>;
-  if (!groups) return <p className="muted">{t("loading")}</p>;
+  if (!groups) return <SimilarityState status={status} error={error} loading={t("loading")} />;
 
   const visible = groups.filter((group) => !dismissed.has(group.best_id));
   const viewerGroup = visible.find((group) => group.best_id === viewer?.groupId);
@@ -114,6 +99,7 @@ export function PhotoSimilarSeries({
       <p className="muted">
         {t("intro")}
       </p>
+      <SimilarityComputedAt computedAt={computedAt} />
       {visible.length === 0 ? (
         <p className="muted">{t("empty")}</p>
       ) : (

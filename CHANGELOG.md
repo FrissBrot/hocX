@@ -8,6 +8,19 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Geändert
+
+- **Fotos: Duplikate und Ähnliche werden im Hintergrund gruppiert.** Die beiden Tabs rechneten
+  bisher bei jedem Aufruf im Request (bis 1500 Bilder paarweise samt Originalen) und brachen bei
+  grösseren Galerien mit «Ähnliche Fotos konnten nicht geladen werden» ab, weil der Browser nach
+  15 s aufgab. Neu berechnet der `job-worker` (Job `photo_similarity_refresh`, Takt
+  `PHOTO_SIMILARITY_REFRESH_INTERVAL_MINUTES`, Standard 2 Minuten) die Gruppen je Mandant, sobald
+  sich dessen Fotos ändern, und legt sie in `photo_similarity_result` ab (Migration 0152). Die
+  Tabs rufen nur noch das Ergebnis ab, zeigen den Stand der Berechnung und behalten es beim
+  Tabwechsel. Gelöschte Fotos fallen sofort heraus, neue erscheinen nach dem nächsten Lauf. Bis
+  zum ersten Lauf nach dem Update zeigen die Tabs «wird im Hintergrund gruppiert». Obergrenze
+  10 000 Fotos je Mandant (statt 1500 je Filter).
+
 ## [1.2.0] - 2026-10-23
 
 Feature-Release auf 1.1.13. Fünf Entwicklungszweige sind zusammengeführt und aufeinander

@@ -16,6 +16,7 @@ import { buildNav, formatRoleLabel, isNavLinkActive, NavLink } from "@/component
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ToastProvider, useToast } from "@/contexts/toast-context";
 import { ConfirmProvider, useConfirm } from "@/contexts/confirm-context";
+import { clearSimilarityGroupsCache } from "@/components/photos/use-similarity-groups";
 import { clearOfflineStore, getOfflineSnapshot } from "@/lib/offline-store";
 import { ProfileModal } from "@/components/ui/profile-modal";
 import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
@@ -227,6 +228,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
     try {
       await browserApiFetch("/api/auth/logout", { method: "POST" });
       clearOfflineStore();
+      clearSimilarityGroupsCache();
       window.sessionStorage.removeItem("hocx-tenant-prompted");
       redirectToLogin(router);
     } catch {
