@@ -25,6 +25,20 @@ env_file_value() {
   )
 }
 
+# Setzt KEY auf VALUE: steht KEY leer in der Datei (z. B. "KEY=" aus .env.example), wird diese
+# Zeile ersetzt - weitere leere Zeilen desselben Schluessels entfallen -, sonst wird KEY
+# angehaengt. Frueher stand der Schluessel danach doppelt in der .env (leer und gesetzt).
+set_empty_env_placeholder() {
+  local env_file="$1" key="$2" value="$3"
+  awk -v key="$key" -v line="$key='$value'" '
+    BEGIN { pattern = "^[[:space:]]*(export[[:space:]]+)?" key "=[[:space:]]*(\x27\x27|\"\")?[[:space:]]*$" }
+    $0 ~ pattern { if (!done) { print line; done = 1 } next }
+    { print }
+    END { if (!done) print line }
+  ' "$env_file" > "$env_file.next"
+  mv "$env_file.next" "$env_file"
+}
+
 migrate_env_file() {
   local env_file="$1"
   local tmp_file backup_file key password photo_url
@@ -106,7 +120,7 @@ migrate_env_file() {
       *_ACCESS_KEY) storage_value="GK$(openssl rand -hex 12)" ;;
       *) storage_value="$(openssl rand -hex 32)" ;;
     esac
-    printf "%s='%s'\n" "$storage_key" "$storage_value" >> "$tmp_file"
+    set_empty_env_placeholder "$tmp_file" "$storage_key" "$storage_value"
     notes+=("ergaenzt: $storage_key (neu erzeugt)")
     changed=true
   done

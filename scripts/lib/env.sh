@@ -72,6 +72,27 @@ require_release_version_for() {
   fi
 }
 
+# Ein Test-Candidate (test-<datum>-<sha>-r<n>) wurde aus einem bestimmten main-Commit gebaut;
+# Compose-Dateien und Skripte dieses Checkouts muessen mindestens so neu sein. Sonst laeuft das
+# neue Image mit altem Stack (fehlende Dienste, Secrets, .env-Migration) - genau so blieb ein
+# Test-Host nach dem Update auf 1.2.0 ohne lokales S3 und STORAGE_CREDENTIALS_KEY.
+require_deploy_code_for_version() {
+  local repo_dir="$1" version="$2" commit
+  [[ "$version" =~ ^test-[0-9]{8}-([0-9a-f]{7,40})-r[0-9]+$ ]] || return 0
+  commit="${BASH_REMATCH[1]}"
+  if ! git -C "$repo_dir" rev-parse --git-dir > /dev/null 2>&1; then
+    echo "WARNUNG: kein Git-Checkout - Deploy-Code-Stand fuer $version nicht pruefbar." >&2
+    return 0
+  fi
+  if git -C "$repo_dir" cat-file -e "$commit^{commit}" 2> /dev/null \
+    && git -C "$repo_dir" merge-base --is-ancestor "$commit" HEAD; then
+    return 0
+  fi
+  echo "Deploy-Code ($(git -C "$repo_dir" rev-parse --short HEAD)) ist aelter als der Candidate $version." >&2
+  echo "Zuerst den Deploy-Code aktualisieren: ./scripts/update_deploy_code.sh --deploy" >&2
+  return 1
+}
+
 require_unprovisioned_dev_host() {
   local marker="${1:-/etc/hocx/environment}"
   local actual
@@ -80,6 +101,57 @@ require_unprovisioned_dev_host() {
   fi
   actual="$(read_host_environment "$marker")" || return 1
   echo "Der Dev-Stack ist auf einem als '$actual' provisionierten Server gesperrt." >&2
+  return 1
+}
+
+# Optionale, nicht versionierte Compose-Datei fuer host-spezifische Anpassungen (eigene
+# Zertifikate, abweichende Port-Bindungen, ...). deploy.sh, verify_release.sh und die
+# Hilfsskripte laden sie zuletzt, wenn sie existiert. So bleibt der versionierte Checkout
+# unveraendert und update_deploy_code.sh blockiert nicht an lokalen Aenderungen.
+HOCX_LOCAL_COMPOSE_FILE=docker-compose.local.yml
+
+# Haengt "-f <repo>/docker-compose.local.yml" an das Array mit dem Namen $2 an, falls die Datei
+# existiert. Symlinks werden abgelehnt (gleiche Regel wie fuer .env).
+append_local_compose_override() {
+  local repo_dir="$1"
+  local -n target_args="$2"
+  local file="$repo_dir/$HOCX_LOCAL_COMPOSE_FILE"
+  if [ -L "$file" ]; then
+    echo "$file darf kein Symlink sein." >&2
+    return 1
+  fi
+  [ -f "$file" ] || return 0
+  target_args+=(-f "$file")
+}
+
+# Laufzeitverzeichnisse, die bewusst anderen Besitzern gehoeren (Container-Nutzer 5000/5001,
+# root fuer Traefiks ACME-Dateien) und deshalb bei der Besitzpruefung ausgelassen werden.
+REPO_RUNTIME_PATHS=(storage storage-local backups infra/traefik/letsencrypt infra/traefik/dynamic .env)
+
+# Bricht ab, wenn Dateien im Checkout (inkl. .git) nicht dem aufrufenden Benutzer gehoeren.
+# Typische Ursache: ein frueheres `git pull` oder Kopieren als root. Ohne diese Pruefung bricht
+# ein Update mitten im Checkout ab und hinterlaesst einen halb aktualisierten Stand.
+require_repo_owned_by_current_user() {
+  local repo_dir="$1"
+  local -a prune=()
+  local path offenders user group
+  for path in "${REPO_RUNTIME_PATHS[@]}"; do
+    prune+=(-path "$repo_dir/$path" -o)
+  done
+  unset 'prune[${#prune[@]}-1]'
+  offenders="$(find "$repo_dir" -xdev \( "${prune[@]}" \) -prune -o ! -user "$EUID" -print 2> /dev/null | head -n 11)"
+  [ -n "$offenders" ] || return 0
+  user="$(id -un)"
+  group="$(id -gn)"
+  echo "Im Checkout gehoeren Dateien nicht $user (Auszug):" >&2
+  printf '%s\n' "$offenders" | head -n 10 | sed 's/^/  /' >&2
+  echo "Einmalig als root korrigieren (Laufzeitverzeichnisse bleiben unberuehrt):" >&2
+  printf '  find %q -xdev \\(' "$repo_dir" >&2
+  for path in "${REPO_RUNTIME_PATHS[@]}"; do
+    [ "$path" = "${REPO_RUNTIME_PATHS[0]}" ] || printf ' -o' >&2
+    printf ' -path %q' "$repo_dir/$path" >&2
+  done
+  printf ' \\) -prune -o ! -user %q -exec chown %q {} +\n' "$user" "$user:$group" >&2
   return 1
 }
 
@@ -121,10 +193,10 @@ is_allowed_env_key() {
     EXPORT_ENCRYPTION_KEY|EXPORT_RETENTION_DAYS|\
     FRIENDLY_CAPTCHA_API_KEY|FRIENDLY_CAPTCHA_PUZZLE_URL|FRIENDLY_CAPTCHA_SITEKEY|FRIENDLY_CAPTCHA_VERIFY_URL|\
     GARAGE_ADMIN_TOKEN|GARAGE_CAPACITY|GARAGE_RPC_SECRET|GHCR_NAMESPACE|HOCX_ABGABEBOX_BACKEND_IMAGE|HOCX_ABGABEBOX_FRONTEND_IMAGE|\
-    HOCX_APP_URL|HOCX_BACKEND_IMAGE|HOCX_COMPOSE_PROJECT|HOCX_DOCS_IMAGE|HOCX_ENVIRONMENT|HOCX_FRONTEND_IMAGE|\
-    HOCX_MIN_FREE_KB|HOCX_PHOTO_ANALYSIS_WORKER_IMAGE|HOCX_REQUIRE_DUMP_ENCRYPTION|HOCX_SIGNING_IDENTITY_REGEXP|\
+    HOCX_APP_URL|HOCX_BACKEND_IMAGE|HOCX_BACKEND_WORKERS|HOCX_COMPOSE_PROJECT|HOCX_DOCS_IMAGE|HOCX_ENVIRONMENT|HOCX_FRONTEND_IMAGE|\
+    HOCX_MANAGE_CRON|HOCX_MIN_FREE_KB|HOCX_PHOTO_ANALYSIS_WORKER_IMAGE|HOCX_REQUIRE_DUMP_ENCRYPTION|HOCX_SIGNING_IDENTITY_REGEXP|\
     HOCX_SERVER_LOCATION|HOCX_SINGLE_TENANT_RESOLUTION|HOCX_STORAGE_PATH|\
-    HOCX_VERSION|\
+    HOCX_VERIFY_CA_FILE|HOCX_VERSION|\
     INITIAL_ADMIN_EMAIL|INITIAL_ADMIN_PASSWORD|INTERNAL_API_URL|LOCAL_S3_ABGABEBOX_ACCESS_KEY|\
     LOCAL_S3_ABGABEBOX_SECRET_KEY|LOCAL_S3_ACCESS_KEY|LOCAL_S3_SECRET_KEY|STORAGE_ALLOWED_LOCATIONS|STORAGE_CREDENTIALS_KEY|STORAGE_FALLBACK_DAYS|NEXT_PUBLIC_API_URL|\
     SECURITY_ALERT_ADMIN_LOGINS|SECURITY_EXPORTS_PER_HOUR|SECURITY_FAILED_LOGINS_CRITICAL|\

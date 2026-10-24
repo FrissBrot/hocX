@@ -69,9 +69,21 @@ vim .env
 # HOCX_VERSION auf den eben gebauten Candidate-Tag setzen, z.B.:
 # HOCX_VERSION=test-20260825-abc1234-r42
 
-./scripts/deploy.sh test
+./scripts/update_deploy_code.sh --deploy   # Skripte/Compose auf den Stand des Candidates, dann deploy.sh test
 ./scripts/verify_release.sh test
 ```
+
+Immer zuerst den Deploy-Code aktualisieren: neue Images brauchen die dazugehörigen Skripte und
+Compose-Dateien (neue Dienste, Secrets, `.env`-Migration). `deploy.sh` bricht deshalb ab, wenn
+der Checkout den Commit eines `test-<datum>-<sha>-r<n>`-Candidates nicht enthält. Ebenso bricht
+es vor jeder Änderung ab, wenn Dateien im Checkout nicht `hocx-deploy` gehören (z. B. nach einem
+`git pull` als root), und gibt den passenden `chown`-Befehl für root aus.
+
+**Host-spezifische Anpassungen** (eigene CA, Port-Bindungen, ...) gehören in
+`docker-compose.local.yml` im Repo-Root (nicht versioniert, Vorlage
+`docker-compose.local.example.yml`), nie in versionierte Dateien: `deploy.sh`,
+`verify_release.sh` und die Hilfsskripte laden sie automatisch zuletzt, und
+`update_deploy_code.sh` bleibt frei von lokalen Änderungen.
 
 `deploy.sh test` macht automatisch: Preflight + exklusiver Deploy-Lock → DB-Backup
 (`backups/`) → Images pullen → Cosign-Signaturen pruefen → Digest-Manifest schreiben →
@@ -84,7 +96,9 @@ jedem Test-Deploy komplett neu auf - Login siehe Skript-Output/-Docstring. Laeuf
 - Backend / Abgabebox-Backend lokal erreichbar
 - Frontend / Docs lokal erreichbar
 - Alembic `current == heads`
-- `https://test...`-Domains antworten ueber Traefik
+- `https://test...`-Domains antworten ueber Traefik (per `curl` vom Host mit dem echten
+  Host-Namen; ohne DNS bzw. bei privater Bindung wird direkt Traefik angesprochen. Eine eigene
+  Test-CA per `HOCX_VERIFY_CA_FILE` in `.env` angeben.)
 
 **Verifizieren** (mit einem Wegwerf-Testaccount, danach wieder löschen):
 - https://test.hocx.ch/login erreichbar, Branding lädt korrekt
@@ -135,7 +149,7 @@ Auf dem Prod-Server:
 
 ```bash
 vim .env   # HOCX_VERSION auf die neue Version setzen
-./scripts/deploy.sh prod
+./scripts/update_deploy_code.sh --deploy
 ./scripts/verify_release.sh prod
 ```
 
@@ -337,7 +351,7 @@ Der Updater akzeptiert nur die fest hinterlegte hocX-GitHub-Remote, den Branch `
 einen sauberen tracked Worktree und einen reinen Fast-Forward auf `origin/main`. Vor dem
 Fast-Forward lädt er den zum Commit gehoerenden CI-Nachweis, prueft dessen keyless
 Cosign-Signatur gegen den festen `build-test-images.yml`-Workflow und verifiziert die
-Hashes aller Deploy-Skripte, Compose- und Traefik-Dateien. Damit reicht ein blosses
+Hashes aller Deploy-Skripte, Compose-, Traefik- und Garage-Dateien. Damit reicht ein blosses
 Manipulieren von Git oder `origin/main` nicht mehr aus. Hierfuer wird dieselbe einmalige
 GitHub-Anmeldung wie fuer den Testnachweis benoetigt; fehlt sie, wird der Token auch hier
 verdeckt abgefragt und geprueft. Der Updater nutzt denselben
@@ -654,11 +668,14 @@ Wartungsmodus, Backup & Recovery).
 `storage-init` und `storage-worker`. Danach ist weiterhin das Dateisystem aktiv - es wird nichts
 verschoben, bis die Erstmigration gestartet wird.
 
-**Cronjobs ergänzen** (nach `backup_db`; `backup_storage` entfällt mit dem Borg-Backup, Abschnitt 14):
+**Cronjob `storage_controller`** richtet `deploy.sh` selbst ein (Marker
+`# hocx-managed:<projekt>:storage_controller` in der crontab von `hocx-deploy`, abschaltbar mit
+`HOCX_MANAGE_CRON=false`). Ein früher von Hand eingetragener `storage_controller`-Job bleibt
+unverändert; ihn entfernen (`crontab -e`), damit der verwaltete Eintrag beim nächsten Deploy
+übernimmt. Ohne Borg-Backup zusätzlich von Hand (`backup_storage` entfällt mit Abschnitt 15):
 
 ```cron
 30 3 * * * /docker/hocX/scripts/run_job.sh backup_storage env HOCX_COMPOSE_PROJECT=hocx HOCX_COMPOSE_FILES="docker-compose.release.yml docker-compose.clamav.yml docker-compose.traefik.yml" /docker/hocX/scripts/backup_storage.sh >> /docker/hocX/backups/backup_storage.log 2>&1
-*/5 * * * * /docker/hocX/scripts/run_job.sh storage_controller env HOCX_COMPOSE_PROJECT=hocx HOCX_COMPOSE_FILES="docker-compose.release.yml docker-compose.clamav.yml docker-compose.traefik.yml" /docker/hocX/scripts/storage_controller.sh >> /docker/hocX/backups/storage_controller.log 2>&1
 ```
 
 **Erste produktive Migration** (Dateisystem → lokales S3):

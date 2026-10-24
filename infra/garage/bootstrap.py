@@ -18,7 +18,6 @@ import urllib.error
 import urllib.request
 
 ADMIN_URL = os.environ.get("GARAGE_ADMIN_URL", "http://127.0.0.1:3903").rstrip("/")
-TOKEN = os.environ.get("GARAGE_ADMIN_TOKEN", "")
 CAPACITY = os.environ.get("GARAGE_CAPACITY", "100G")
 
 
@@ -29,6 +28,10 @@ def _read_secret(name: str) -> str:
         with open(path, encoding="utf-8") as handle:
             value = handle.read().strip()
     return value
+
+
+# Release-Stack: per Compose-Secret (GARAGE_ADMIN_TOKEN_FILE), Dev-Stack: direkt per Umgebung.
+TOKEN = _read_secret("GARAGE_ADMIN_TOKEN")
 
 
 def call(method: str, path: str, body: dict | None = None, *, allow_404: bool = False):
@@ -104,9 +107,16 @@ def main() -> None:
     box_key, box_secret = os.environ.get("LOCAL_S3_ABGABEBOX_ACCESS_KEY", ""), _read_secret("LOCAL_S3_ABGABEBOX_SECRET_KEY")
     main_bucket = os.environ.get("LOCAL_S3_BUCKET", "hocx-main")
     box_bucket = os.environ.get("LOCAL_S3_ABGABEBOX_BUCKET", "hocx-abgabebox")
-    if not TOKEN or not main_key or not main_secret:
-        print("LOCAL_S3_* bzw. GARAGE_ADMIN_TOKEN nicht gesetzt - lokales S3 wird nicht eingerichtet")
+    required = {"GARAGE_ADMIN_TOKEN": TOKEN, "LOCAL_S3_ACCESS_KEY": main_key, "LOCAL_S3_SECRET_KEY": main_secret}
+    missing = [name for name, value in required.items() if not value]
+    if len(missing) == len(required):
+        print("LOCAL_S3_* und GARAGE_ADMIN_TOKEN nicht gesetzt - lokales S3 wird nicht eingerichtet")
         return
+    if missing:
+        # Teilweise konfiguriert ist immer ein Fehler (z. B. Secret-Datei nicht gelesen) - nicht
+        # still beenden, sonst bleibt Garage ohne Schlüssel/Buckets und jeder Zugriff scheitert.
+        print(f"FEHLER: lokales S3 nur teilweise konfiguriert, es fehlt: {', '.join(missing)}", file=sys.stderr)
+        sys.exit(1)
     status = wait_ready()
     ensure_layout(status)
     ensure_key("hocx-backend", main_key, main_secret)

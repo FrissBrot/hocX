@@ -59,4 +59,7 @@ resolve_hocx_stack() {
       STACK_COMPOSE_ARGS+=(--project-directory "$repo_dir")
       ;;
   esac
+  case "$STACK_KIND" in
+    prod|test) append_local_compose_override "$repo_dir" STACK_COMPOSE_ARGS || return 1 ;;
+  esac
 }
