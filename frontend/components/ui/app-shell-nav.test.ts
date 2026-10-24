@@ -58,6 +58,16 @@ describe("formatRoleLabel", () => {
 });
 
 describe("buildNav", () => {
+  it("fuehrt das Dokument-Studio unter Konfiguration, fuer Schreibende ohne Vorlagen und Zyklen", () => {
+    const hrefsOf = (groups: ReturnType<typeof buildNav>, titleKey: string) =>
+      groups.find((group) => group.titleKey === titleKey)?.links.map((link) => link.href) ?? [];
+    const admin = buildNav(adminSession());
+    expect(hrefsOf(admin, "groups.configuration")).toEqual(["/templates", "/cycles", "/documents"]);
+    expect(hrefsOf(admin, "groups.work")).not.toContain("/documents");
+    const writer = buildNav({ ...adminSession(), current_role: "writer" });
+    expect(hrefsOf(writer, "groups.configuration")).toEqual(["/documents"]);
+  });
+
   it("liefert fuer eine Admin-Session alle Gruppen mit uebersetzbaren labelKey/titleKey (keine fertigen Texte)", () => {
     const groups = buildNav(adminSession());
     expect(groups.length).toBeGreaterThan(1);
