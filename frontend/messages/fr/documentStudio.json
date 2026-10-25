@@ -713,6 +713,41 @@
     "todos": "Tâches",
     "year": "Par année"
   },
+  "examples": {
+    "add": "Ajouter",
+    "adding": "Ajout en cours …",
+    "description": "Modèles prêts à l'emploi. «Ajouter» crée le modèle et un profil de marque assorti. Dans l'éditeur, tu peux ensuite passer le modèle à ton propre profil de marque.",
+    "imported": "Exemple ajouté. Le modèle et le profil de marque ont été créés.",
+    "items": {
+      "protocol_band": {
+        "description": "Page de titre avec un bandeau dans la couleur principale, chiffres clés et table des matières, image de pied de page.",
+        "name": "Procès-verbal bandeau"
+      },
+      "protocol_light": {
+        "description": "Page de titre blanche aux lignes fines, chiffres clés et table des matières, image de pied de page.",
+        "name": "Procès-verbal clair"
+      },
+      "protocol_construction": {
+        "description": "Bandeau de titre sombre avec bande de signalisation, données clés, chiffres clés et liste de diffusion.",
+        "name": "Procès-verbal de chantier"
+      },
+      "protocol_tech": {
+        "description": "Beaucoup d'espace blanc, ordre du jour sur la page de titre et participants sous forme de pastilles.",
+        "name": "Procès-verbal tech"
+      },
+      "protocol_law": {
+        "description": "Police à empattements, en-tête centré, points numérotés avec § et signatures.",
+        "name": "Procès-verbal étude"
+      },
+      "protocol_corporate": {
+        "description": "Bandeau de titre, données clés, chiffres clés et points de l'ordre du jour numérotés.",
+        "name": "Procès-verbal corporate"
+      }
+    },
+    "loadFailed": "Les exemples n'ont pas pu être chargés.",
+    "open": "Exemples",
+    "title": "Exemples de mise en page"
+  },
   "export": {
     "brand": "Identité visuelle",
     "brandDefault": "Selon le modèle",

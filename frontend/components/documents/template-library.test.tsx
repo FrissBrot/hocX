@@ -14,6 +14,9 @@ const api = vi.hoisted(() => ({
     deleteTemplate: vi.fn(),
     archive: vi.fn(),
     thumbnailUrl: vi.fn(() => "/thumb.png"),
+    listExamples: vi.fn(),
+    importExample: vi.fn(),
+    exampleThumbnailUrl: vi.fn(() => "/example.png"),
   },
 }));
 const { toast, confirm, push } = vi.hoisted(() => ({ toast: vi.fn(), confirm: vi.fn(), push: vi.fn() }));
@@ -103,5 +106,18 @@ describe("TemplateLibrary", () => {
     expect(screen.queryByRole("button", { name: "Neue Vorlage" })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Aktionen für «Pendenzenliste»" }));
     expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Vorschau"]);
+  });
+  it("offers the design examples only to admins", async () => {
+    api.studioApi.listExamples.mockResolvedValue([{ key: "protocol_tech", document_type: "protocol" }]);
+    api.studioApi.importExample.mockResolvedValue({ id: "new-template" });
+    const { unmount } = render(<TemplateLibrary capabilities={{ ...capabilities, manage_brand: false }} />);
+    await screen.findByText("Vereinsliste");
+    expect(screen.queryByRole("button", { name: "Beispiele" })).not.toBeInTheDocument();
+    unmount();
+
+    render(<TemplateLibrary capabilities={capabilities} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Beispiele" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Hinzufügen" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/documents/templates/new-template"));
   });
 });

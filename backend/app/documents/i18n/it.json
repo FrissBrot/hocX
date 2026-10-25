@@ -396,6 +396,7 @@
     "sessions": "Sedute"
   },
   "label": {
+    "agenda": "Ordine del giorno",
     "agendaOther": "Altri argomenti",
     "asOf": "Situazione al {date}",
     "attendanceCounts": "{present} presenti · {late} in ritardo · {excused} giustificati · {absent} assenti",

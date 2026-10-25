@@ -28,7 +28,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import CurrentUser, get_current_user
 from app.documents import assets as asset_service
-from app.documents import brand_service, permissions, template_service
+from app.documents import brand_service, examples, permissions, template_service
 from app.documents import service as document_service
 from app.documents.brand import BRAND_PRESETS, BrandTokens, color_references
 from app.documents.compiler import validate_template
@@ -641,6 +641,65 @@ async def get_document_template_thumbnail(template_id: uuid.UUID, db: Session = 
             while len(_THUMBNAILS) > _THUMBNAIL_LIMIT:
                 _THUMBNAILS.popitem(last=False)
     return Response(content=cached, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
+
+
+# ── Gestaltungsbeispiele ─────────────────────────────────────────────────────
+
+
+class ExampleRead(BaseModel):
+    key: str
+    document_type: str
+
+
+@router.get("/document-studio/examples", response_model=list[ExampleRead])
+def list_design_examples(user: CurrentUser = Depends(get_current_user)):
+    permissions.require_view(user)
+    return [ExampleRead(key=item.key, document_type=item.document_type) for item in sorted(examples.EXAMPLES, key=lambda item: item.sort_index)]
+
+
+@router.get("/document-studio/examples/{example_key}/thumbnail")
+def get_design_example_thumbnail(example_key: str, user: CurrentUser = Depends(get_current_user)):
+    """Mitgeliefertes Vorschaubild (examples.thumbnail_path), gleich für alle Mandanten."""
+    permissions.require_view(user)
+    example = examples.get_example(example_key)
+    if example is None or not examples.thumbnail_path(example).is_file():
+        raise _not_found(user)
+    return Response(content=examples.thumbnail_path(example).read_bytes(), media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
+
+
+class ExampleImport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Name der neuen Vorlage und ihres Brand-Profils (übersetzter Beispielname aus dem Frontend)
+    name: str = Field(..., min_length=1, max_length=120, pattern=r"\S")
+
+
+@router.post("/document-studio/examples/{example_key}/import", response_model=TemplateDetail, status_code=201)
+async def import_design_example(example_key: str, body: ExampleImport, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    # Asset-Anlage (Virenscan) mischt awaits mit synchronen DB-Zugriffen: im Worker-Thread (CONC-001).
+    return await run_coroutine_in_thread(_import_design_example_impl, example_key=example_key, body=body, db=db, user=user)
+
+
+async def _import_design_example_impl(example_key: str, body: ExampleImport, db: Session, user: CurrentUser):  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    # Legt ein Brand-Profil an: wie das Brand Studio nur für Admins
+    permissions.require_brand(user)
+    example = examples.get_example(example_key)
+    if example is None:
+        raise _not_found(user)
+    try:
+        template, brand = await examples.import_example(db, user.current_tenant_id, example, name=body.name, user_id=user.user_id)
+        db.commit()
+    except asset_service.AssetValidationError as exc:
+        db.rollback()
+        raise _curated(user, str(exc)) from exc
+    except (ValidationError, LayoutValidationError) as exc:
+        db.rollback()
+        raise _validation_error(user, exc) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise http_error(user, exc) from exc
+    audit.log(db, action="document_template.import_example", actor=user, entity_type="document_template", entity_id=template.id, details={"example": example.key, "brand_id": str(brand.public_id)})
+    return _template_detail(db, user, template)
 
 
 # ── Zuweisungen ──────────────────────────────────────────────────────────────
