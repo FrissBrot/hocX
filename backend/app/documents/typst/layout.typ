@@ -310,7 +310,9 @@
     let body = {
       for child in n.children {
         let frame = child.at("frame", default: (x: 0, y: 0, w: none, h: none, rotate: 0))
-        let inner = render-node(ctx, child)
+        let valign = frame.at("valign", default: "top")
+        let rendered = render-node(ctx, child)
+        let inner = if frame.h == none or valign == "top" { rendered } else { align(if valign == "bottom" { bottom } else { horizon }, rendered) }
         let sized = block(width: if frame.w != none { frame.w * 1mm } else { auto }, height: if frame.h != none { frame.h * 1mm } else { auto }, inner)
         let turned = if frame.rotate != 0 { rotate(frame.rotate * 1deg, reflow: false, sized) } else { sized }
         place(top + left, dx: (frame.x + n.offset.at(0)) * 1mm, dy: (frame.y + n.offset.at(1)) * 1mm, turned)

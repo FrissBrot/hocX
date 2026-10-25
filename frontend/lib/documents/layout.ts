@@ -48,7 +48,7 @@ export type Condition =
   | { op: "all" | "any"; items: Condition[] }
   | { op: "not"; item: Condition };
 
-export type Frame = { x: number; y: number; width?: number | null; height?: number | null; rotate?: number; opacity?: number };
+export type Frame = { x: number; y: number; width?: number | null; height?: number | null; rotate?: number; opacity?: number; valign?: "top" | "middle" | "bottom" };
 
 export type TemplateNode = {
   id: string;

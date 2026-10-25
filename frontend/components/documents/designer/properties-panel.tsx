@@ -477,6 +477,15 @@ export function PropertiesPanel() {
           <NumberField key={key} label={t(`props.frame.${key}`)} value={(node.frame?.[key] as number | null) ?? null} min={0} max={1000} step={0.5} suffix={t("brand.unitMm")} onChange={(value) => change({ frame: { ...node.frame!, [key]: value } }, `frame:${key}`)} />
         ))}
         <NumberField label={t("props.frame.rotate")} value={node.frame.rotate ?? 0} min={-180} max={180} suffix="°" onChange={(rotate) => change({ frame: { ...node.frame!, rotate } }, "frame:rotate")} />
+        <Field label={t("props.valign")}>
+          <select value={node.frame.valign ?? "top"} onChange={(event) => change({ frame: { ...node.frame!, valign: event.target.value as "top" | "middle" | "bottom" } })}>
+            {(["top", "middle", "bottom"] as const).map((value) => (
+              <option key={value} value={value}>
+                {t(`props.valignValue.${value}`)}
+              </option>
+            ))}
+          </select>
+        </Field>
       </div>
     </Group>
   ) : null;

@@ -1223,7 +1223,9 @@
     "sample": "Données d’exemple",
     "sampleHint": "Rendu avec du contenu d’exemple, tel que le PDF apparaîtra.",
     "showElement": "Afficher l’élément",
-    "title": "Aperçu"
+    "title": "Aperçu",
+    "draftHint": "L’aperçu montre le brouillon. Les exports PDF utilisent la version publiée jusqu’à la publication du brouillon.",
+    "unpublishedHint": "Ce modèle n’est pas encore publié et n’est pas utilisé pour les exports PDF."
   },
   "props": {
     "addColumn": "+ Colonne",

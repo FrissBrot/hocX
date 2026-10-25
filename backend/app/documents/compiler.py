@@ -352,7 +352,7 @@ class LayoutCompiler:
             out["break"] = True
         if node.frame is not None:
             frame = node.frame
-            out["frame"] = {"x": frame.x, "y": frame.y, "w": frame.width, "h": frame.height, "rotate": frame.rotate, "opacity": frame.opacity}
+            out["frame"] = {"x": frame.x, "y": frame.y, "w": frame.width, "h": frame.height, "rotate": frame.rotate, "opacity": frame.opacity, "valign": frame.valign}
         return out
 
     def _single(self, node: NodeBase, scope: dict[str, Any] | None, area: str, scope_def: BindingDef | None) -> list[dict[str, Any]]:

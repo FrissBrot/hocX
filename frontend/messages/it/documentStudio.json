@@ -1223,7 +1223,9 @@
     "sample": "Dati di esempio",
     "sampleHint": "Reso con contenuti di esempio, come apparirà il PDF.",
     "showElement": "Mostra elemento",
-    "title": "Anteprima"
+    "title": "Anteprima",
+    "draftHint": "L’anteprima mostra la bozza. Le esportazioni PDF usano la versione pubblicata finché la bozza non viene pubblicata.",
+    "unpublishedHint": "Questo modello non è ancora pubblicato e non viene usato per le esportazioni PDF."
   },
   "props": {
     "addColumn": "+ Colonna",

@@ -1223,7 +1223,9 @@
     "sample": "Beispieldaten",
     "sampleHint": "Mit Beispielinhalten gerendert, so wie das PDF aussehen wird.",
     "showElement": "Element anzeigen",
-    "title": "Vorschau"
+    "title": "Vorschau",
+    "draftHint": "Die Vorschau zeigt den Entwurf. PDF-Exporte verwenden die veröffentlichte Version, bis der Entwurf veröffentlicht ist.",
+    "unpublishedHint": "Diese Vorlage ist noch nicht veröffentlicht und wird für PDF-Exporte nicht verwendet."
   },
   "props": {
     "addColumn": "+ Spalte",

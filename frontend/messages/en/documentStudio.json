@@ -1223,7 +1223,9 @@
     "sample": "Sample data",
     "sampleHint": "Rendered with sample content, as the PDF will look.",
     "showElement": "Show element",
-    "title": "Preview"
+    "title": "Preview",
+    "draftHint": "The preview shows the draft. PDF exports use the published version until the draft is published.",
+    "unpublishedHint": "This template has not been published yet and is not used for PDF exports."
   },
   "props": {
     "addColumn": "+ Column",

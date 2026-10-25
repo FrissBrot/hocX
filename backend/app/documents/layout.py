@@ -113,6 +113,8 @@ class Frame(_Strict):
     height: Mm | None = None
     rotate: float = Field(0, ge=-180, le=180)
     opacity: float = Field(1, ge=0, le=1)
+    # Ausrichtung des Inhalts in der Rahmenhöhe, z. B. Fussbild bündig am Seitenende
+    valign: Literal["top", "middle", "bottom"] = "top"
 
 
 class RepeatSpec(_Strict):

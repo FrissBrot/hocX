@@ -31,6 +31,7 @@ export function TemplatePreviewModal({ template, onClose }: { template: Document
   return (
     <Modal className="studio-modal" open onClose={onClose} title={templateDisplayName(t, template)} description={templateDescription(t, template) || undefined} size="wide">
       <p className="field-help">{t("preview.sampleHint")}</p>
+      {template.editable && template.draft_revision && <StatusBanner tone="neutral" message={t(template.published_revision ? "preview.draftHint" : "preview.unpublishedHint")} />}
       {error && <StatusBanner tone="error" message={error} />}
       {!pages && !error && <p className="muted">{t("preview.loading")}</p>}
       <div className="studio-preview-pages">

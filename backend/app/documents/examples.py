@@ -156,7 +156,7 @@ def _footer_image(prefix: str) -> dict[str, Any]:
         f"{prefix}-footer-art",
         label_text(f"{prefix}-address", bind("organization.address"), role="small", style={"text": {"align": "center", "color": "$brand.muted"}}, frame={"x": 0, "y": 256, "width": 210}, visible_if=exists("brand.footer_image")),
         label_text(f"{prefix}-address-plain", bind("organization.address"), role="small", style={"text": {"align": "center", "color": "$brand.muted"}}, frame={"x": 0, "y": 280, "width": 210}, visible_if={"op": "not", "item": exists("brand.footer_image")}),
-        node("image", f"{prefix}-footer-img", source={"kind": "binding", "path": "brand.footer_image"}, fit="contain", style={"width": "210mm"}, frame={"x": 0, "y": 262, "width": 210, "height": 35}, visible_if=exists("brand.footer_image")),
+        node("image", f"{prefix}-footer-img", source={"kind": "binding", "path": "brand.footer_image"}, fit="contain", style={"width": "210mm"}, frame={"x": 0, "y": 262, "width": 210, "height": 35, "valign": "bottom"}, visible_if=exists("brand.footer_image")),
     )
 
 
