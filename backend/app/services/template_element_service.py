@@ -177,6 +177,17 @@ class TemplateElementService:
             overrides = dict(config.get("block_behavior_overrides") or {})
             overrides.update(values)
             config["block_behavior_overrides"] = overrides
+            # Der Element-Schalter gilt für alle Blöcke: eigene Blockwerte für dieselben Felder
+            # entfallen, sonst bliebe ein einzeln übersteuerter Block beim alten Wert.
+            per_block = {
+                block_id: remaining
+                for block_id, entry in (config.get("block_overrides") or {}).items()
+                if (remaining := {field: value for field, value in entry.items() if field not in values})
+            }
+            if per_block:
+                config["block_overrides"] = per_block
+            else:
+                config.pop("block_overrides", None)
         else:
             if payload.block_id is None:
                 raise ValueError("block_id is required when scope is 'block'")
