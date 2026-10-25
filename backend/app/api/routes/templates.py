@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.core.security import CurrentUser, get_current_user, require_admin, require_feature, require_reader
+from app.core.security import CurrentUser, get_current_user, require_admin, require_feature, require_reader, require_writer
 from app.core.db import get_db
 from app.models.entities import ElementDefinition, Template, TemplateElement
 from app.schemas.template import (
@@ -202,7 +202,7 @@ def create_template_element(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     template = _get_template_or_404(db, template_id, user)
     try:
         return template_element_service.create_template_element(db, template.id, payload)
@@ -235,7 +235,7 @@ def patch_template_element(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     internal_id = _ensure_template_element_in_tenant(db, user, template_element_id)
     try:
         template_element = template_element_service.update_template_element(db, internal_id, payload)
@@ -256,7 +256,7 @@ def patch_template_element_behavior(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     internal_id = _ensure_template_element_in_tenant(db, user, template_element_id)
     try:
         template_element = template_element_service.update_block_behavior(db, internal_id, payload)
@@ -270,13 +270,33 @@ def patch_template_element_behavior(
     return template_element
 
 
+@router.post("/template-elements/{template_element_id}/detach", response_model=TemplateElementRead)
+def detach_template_element(
+    template_element_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """«Nur in dieser Vorlage ändern»: das Traktandum bekommt eine eigene Kopie seines Inhalts."""
+    require_writer(user)
+    internal_id = _ensure_template_element_in_tenant(db, user, template_element_id)
+    try:
+        template_element = template_element_service.detach_definition(db, internal_id)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Template element could not be detached") from exc
+    if template_element is None:
+        raise HTTPException(status_code=404, detail="Template element not found")
+    audit.log(db, action="template_element.detach", actor=user, entity_type="template_element", entity_id=internal_id)
+    return template_element
+
+
 @router.delete("/template-elements/{template_element_id}", response_model=dict[str, str])
 def delete_template_element(
     template_element_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     internal_id = _ensure_template_element_in_tenant(db, user, template_element_id)
     deleted = template_element_service.delete_template_element(db, internal_id)
     if not deleted:
@@ -285,9 +305,14 @@ def delete_template_element(
 
 
 @router.get("/element-definitions", response_model=list[ElementDefinitionRead])
-def list_element_definitions(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+def list_element_definitions(
+    library: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """``library=true``: nur die wiederverwendbaren Bausteine (ohne Einzelstücke von Vorlagen)."""
     require_reader(user)
-    return element_definition_service.list_element_definitions(db, tenant_id=user.current_tenant_id)
+    return element_definition_service.list_element_definitions(db, tenant_id=user.current_tenant_id, library_only=library)
 
 
 @router.get("/element-definitions/{element_definition_id}", response_model=ElementDefinitionRead)
@@ -307,7 +332,7 @@ def create_element_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     try:
         return element_definition_service.create_element_definition(db, payload, tenant_id=user.current_tenant_id)
     except ValueError as exc:
@@ -325,7 +350,7 @@ def patch_element_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_writer(user)
     current = _get_element_definition_or_404(db, element_definition_id, user)
     try:
         element_definition = element_definition_service.update_element_definition(db, current.id, payload)

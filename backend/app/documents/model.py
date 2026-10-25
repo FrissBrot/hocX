@@ -218,6 +218,9 @@ class BlockBase(_Strict):
     hide_if_empty: bool = True
     level: int = Field(1, ge=1, le=4)
     empty: bool = False
+    # Darstellung dieses Blocks (Baustein einer Sitzungsvorlage): Übersteuerung je Elementart,
+    # vom Compiler zu Variante und Eckenradius aufgelöst (brand.resolve_appearance)
+    appearance: dict[str, Any] | None = None
 
     def is_empty(self) -> bool:  # pragma: no cover - jede Unterklasse überschreibt
         return False

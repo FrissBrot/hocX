@@ -13,12 +13,20 @@ import type { TemplateContent } from "@/lib/documents/layout";
 const DEBOUNCE_MS = 450;
 const CACHE_SIZE = 20;
 
-type Source = { content: TemplateContent; documentType: string; dataMode: "sample" | "data"; protocolId: string | null; brandId: string | null; needsProtocol: boolean };
+type Source = {
+  content: TemplateContent;
+  documentType: string;
+  dataMode: "sample" | "data";
+  protocolId: string | null;
+  brandId: string | null;
+  needsProtocol: boolean;
+  sessionTemplateId?: string | null;
+};
 
-export function useCanvasData({ content, documentType, dataMode, protocolId, brandId, needsProtocol }: Source): CanvasData | null {
+export function useCanvasData({ content, documentType, dataMode, protocolId, brandId, needsProtocol, sessionTemplateId = null }: Source): CanvasData | null {
   const [data, setData] = useState<CanvasData | null>(null);
   const cache = useRef(new Map<string, CanvasData>());
-  const key = JSON.stringify([content, documentType, dataMode, protocolId, brandId]);
+  const key = JSON.stringify([content, documentType, dataMode, protocolId, brandId, sessionTemplateId]);
 
   useEffect(() => {
     // Echte Daten ohne Protokoll: Beispielwerte wären irreführend, die Fläche zeigt Platzhalter
@@ -33,7 +41,7 @@ export function useCanvasData({ content, documentType, dataMode, protocolId, bra
     }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      previewCanvas({ document_type: documentType, content, data_mode: dataMode, protocol_id: dataMode === "data" ? protocolId : null, brand_id: brandId }, controller.signal)
+      previewCanvas({ document_type: documentType, content, data_mode: dataMode, protocol_id: dataMode === "data" ? protocolId : null, brand_id: brandId, protocol_template_id: sessionTemplateId }, controller.signal)
         .then((result) => {
           cache.current.set(key, result);
           if (cache.current.size > CACHE_SIZE) cache.current.delete(cache.current.keys().next().value as string);

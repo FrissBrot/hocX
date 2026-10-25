@@ -2,13 +2,12 @@
 
 import { useParticipantSelectable } from "@/contexts/participant-date-context";
 
-import { DragEvent, FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
@@ -16,32 +15,33 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { TemplateFineTariffModal } from "@/components/template/template-fine-tariff-modal";
-import { formatDateRange } from "@/lib/utils/format";
-import { elementTypeLabels } from "@/lib/constants/element-types";
+import { SessionDesignView } from "@/components/template/session-design-view";
+import { SessionTemplateWorkspace } from "@/components/template/session-template-studio";
+import type { BlockEditorData } from "@/components/template/element-editor/block-editor";
+import { Tabs } from "@/components/ui/tabs";
+import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { EligibleResponsibleList, eligibleResponsibleList, listParticipantIds, listTextValue } from "@/lib/utils/responsible-lists";
 import {
   CycleConfigSummary,
-  ElementDefinition,
   EventSummary,
   FinanceAccount,
   ParticipantSummary,
   StructuredListDefinition,
   StructuredListEntry,
   TemplateElement,
-  TemplateElementBehaviorField,
-  TemplateElementBlock,
   TemplateSummary,
 } from "@/types/api";
 
 type TemplateBuilderProps = {
   initialTemplates: TemplateSummary[];
   availableCycleConfigs: CycleConfigSummary[];
+  // Anlegen, Duplizieren, Archivieren und Löschen: nur Admins (Schreibende passen Vorlagen an)
+  canManage?: boolean;
 };
 
 type TemplateEditorProps = {
   initialTemplate: TemplateSummary;
   initialElements: TemplateElement[];
-  initialDefinitions: ElementDefinition[];
   availableEvents: EventSummary[];
   availableParticipants: ParticipantSummary[];
   availableLists: StructuredListDefinition[];
@@ -49,7 +49,14 @@ type TemplateEditorProps = {
   availableCycleConfigs: CycleConfigSummary[];
   // Nur mit gebuchten Finanzen (sonst kein Bussentarif, siehe require_feature im Backend).
   financeAccounts?: FinanceAccount[] | null;
+  // Einstellungen, Teilnehmende und Bussentarif: nur Admins; Traktanden und Gestaltung auch Schreibende
+  canManage?: boolean;
+  knownEventTags?: string[];
 };
+
+type StudioView = "editor" | "pdf" | "invitation";
+
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
 type TemplateCreateState = {
   name: string;
@@ -60,10 +67,6 @@ type TemplateCreateState = {
   title_pattern: string;
   auto_create_next_protocol: boolean;
   cycle_config_id: string;
-};
-
-type TemplateItemForm = {
-  element_definition_ids: string[];
 };
 
 type TemplateParticipantAssignmentState = {
@@ -85,14 +88,6 @@ type ResponsibilityConfig = {
   assignments: ResponsibilityAssignment[];
 };
 
-type ResponsibilityDisplayGroup = {
-  key: string;
-  participantIds: string[];
-  listDefinitionId: string | null;
-  listEntryId: string | null;
-  locked: boolean;
-};
-
 const initialTemplateCreate: TemplateCreateState = {
   name: "",
   description: "",
@@ -102,10 +97,6 @@ const initialTemplateCreate: TemplateCreateState = {
   title_pattern: "",
   auto_create_next_protocol: false,
   cycle_config_id: "",
-};
-
-const initialTemplateItemForm: TemplateItemForm = {
-  element_definition_ids: []
 };
 
 function normalizeTemplateParticipantAssignments(participants: ParticipantSummary[]): TemplateParticipantAssignmentState[] {
@@ -124,22 +115,6 @@ function normalizeTemplateParticipantAssignments(participants: ParticipantSummar
 
 function resequenceTemplateElements(items: TemplateElement[]) {
   return items.map((item, index) => ({ ...item, sort_index: (index + 1) * 10 }));
-}
-
-function nextTemplateElementSortIndex(items: TemplateElement[]) {
-  const maxSortIndex = items.reduce((max, item) => Math.max(max, item.sort_index), 0);
-  return maxSortIndex + 10;
-}
-
-function definitionTypeSummary(definition: ElementDefinition) {
-  const labels = Array.from(
-    new Set(
-      definition.blocks
-        .map((block) => String(block.title ?? "").trim())
-        .filter(Boolean)
-    )
-  );
-  return labels.length ? labels.join(", ") : `${definition.blocks.length} Block${definition.blocks.length === 1 ? "" : "e"}`;
 }
 
 function normalizeMatchText(value: string) {
@@ -249,150 +224,7 @@ function rowOptionLabel(
   return names.length ? `${text} -> ${names.join(", ")}` : text;
 }
 
-function ResponsibilityLockIcon({ locked }: { locked: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      {locked ? (
-        <>
-          <path d="M8 10V7.5a4 4 0 1 1 8 0V10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          <rect x="5.5" y="10" width="13" height="10" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-          <circle cx="12" cy="15" r="1.2" fill="currentColor" />
-        </>
-      ) : (
-        <>
-          <path d="M8 10V7.5a4 4 0 1 1 7 2.65" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M14.5 12.5 18 9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          <rect x="5.5" y="10" width="13" height="10" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-          <circle cx="12" cy="15" r="1.2" fill="currentColor" />
-        </>
-      )}
-    </svg>
-  );
-}
-
-function BehaviorEditableIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 20l1-4L15.5 5.5l3 3L8 19l-4 1z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M13.5 7 17 10.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function BehaviorSubtitleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M5 6h14M12 6v9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M8 18h8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function BehaviorHistoryIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 12a8 8 0 1 1 2.6 5.9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M4 17v-5h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function BehaviorEyeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
-  );
-}
-
-function BehaviorExportIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M14 3v5h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function BehaviorInvitationIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="m3 7 9 6 9-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-/** Traktandum erscheint in Einladung und Traktandenliste (Standard an, siehe providers/protocol.py). */
-function invitationVisible(configurationJson: Record<string, unknown> | undefined): boolean {
-  return configurationJson?.invitation_visible !== false;
-}
-
-type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
-
-function behaviorIconFields(t: TFunc): Array<{ field: TemplateElementBehaviorField; label: string; icon: ReactNode }> {
-  return [
-    { field: "is_editable", label: t("editor.behaviorEditable"), icon: <BehaviorEditableIcon /> },
-    { field: "title_as_subtitle", label: t("editor.behaviorTitleAsSubtitle"), icon: <BehaviorSubtitleIcon /> },
-    { field: "copy_from_last_protocol", label: t("editor.behaviorCopyFromLast"), icon: <BehaviorHistoryIcon /> },
-    { field: "is_visible", label: t("editor.behaviorVisibleInEditor"), icon: <BehaviorEyeIcon /> },
-    { field: "export_visible", label: t("editor.behaviorVisibleInExport"), icon: <BehaviorExportIcon /> },
-  ];
-}
-
-function blockDisplayLabel(block: TemplateElementBlock, t: TFunc): string {
-  const title = block.block_title?.trim() || block.title?.trim();
-  if (title) {
-    return title;
-  }
-  return elementTypeLabels(t)[block.element_type_id] ?? t("block");
-}
-
-function blockBehaviorValues(block: TemplateElementBlock): Record<TemplateElementBehaviorField, boolean> {
-  return {
-    is_editable: block.is_editable,
-    is_visible: block.is_visible,
-    export_visible: block.export_visible,
-    copy_from_last_protocol: Boolean(block.copy_from_last_protocol),
-    title_as_subtitle: block.title_as_subtitle,
-  };
-}
-
-function BehaviorIconRow({
-  values,
-  defaults,
-  onToggle,
-}: {
-  values: Record<TemplateElementBehaviorField, boolean>;
-  /** Werte der Elementdefinition - abweichende Schalter werden markiert. */
-  defaults?: Partial<Record<TemplateElementBehaviorField, boolean>>;
-  onToggle: (field: TemplateElementBehaviorField) => void;
-}) {
-  const t = useTranslations("templates");
-  return (
-    <div className="behavior-icon-row">
-      {behaviorIconFields(t).map(({ field, label, icon }) => {
-        const active = values[field];
-        const overridden = defaults !== undefined && field in defaults && defaults[field] !== active;
-        return (
-          <button
-            key={field}
-            type="button"
-            className={`behavior-icon-button${active ? " behavior-icon-button-active" : ""}${overridden ? " behavior-icon-button-overridden" : ""}`}
-            title={overridden ? t("editor.behaviorOverridden", { label }) : label}
-            aria-pressed={active}
-            onClick={() => onToggle(field)}
-          >
-            {icon}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: TemplateBuilderProps) {
+export function TemplateBuilder({ initialTemplates, availableCycleConfigs, canManage = true }: TemplateBuilderProps) {
   const router = useRouter();
   const t = useTranslations("templates.builder");
   const showToast = useToast();
@@ -503,9 +335,11 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
           <h1 className="page-title">{t("pageTitle")}</h1>
           <p className="muted">{t("pageIntro")}</p>
         </div>
-        <button type="button" className={showCreateForm ? "button-ghost" : "button-primary"} onClick={() => setShowCreateForm((current) => !current)}>
-          {showCreateForm ? t("cancel") : t("newTemplateButton")}
-        </button>
+        {canManage ? (
+          <button type="button" className={showCreateForm ? "button-ghost" : "button-primary"} onClick={() => setShowCreateForm((current) => !current)}>
+            {showCreateForm ? t("cancel") : t("newTemplateButton")}
+          </button>
+        ) : null}
       </div>
 
       <Modal
@@ -571,7 +405,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
         </div>
       </div>
 
-      <DataTable className="data-table-lg" columns={[t("colTemplate"), t("colDescription"), t("colVersion"), t("colActions")]}>
+      <DataTable className="data-table-lg" columns={canManage ? [t("colTemplate"), t("colDescription"), t("colVersion"), t("colActions")] : [t("colTemplate"), t("colDescription"), t("colVersion")]}>
         {filteredTemplates.map((template) => (
           <tr key={template.id} className="table-row-clickable" onClick={() => router.push(`/templates/${template.id}`)}>
             <td>
@@ -580,6 +414,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
             </td>
             <td className="table-cell-wrap">{template.description ?? t("noDescription")}</td>
             <td>{template.version}</td>
+            {canManage ? (
             <td>
               <div className="table-actions">
                 <button
@@ -608,6 +443,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
                 }}>{t("delete")}</button>
               </div>
             </td>
+            ) : null}
           </tr>
         ))}
       </DataTable>
@@ -637,20 +473,22 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
 export function TemplateEditor({
   initialTemplate,
   initialElements,
-  initialDefinitions,
   availableEvents,
   availableParticipants,
   availableLists,
   initialAssignedParticipants,
   availableCycleConfigs,
   financeAccounts = null,
+  canManage = true,
+  knownEventTags = [],
 }: TemplateEditorProps) {
   const router = useRouter();
   const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("templates.editor");
-  const tRoot = useTranslations("templates");
+  const tStudio = useTranslations("templates.studio");
   const showToast = useToast();
-  const confirm = useConfirm();
+  const { tagConfig } = useTagConfig();
+  const [view, setView] = useState<StudioView>("editor");
   const [template, setTemplate] = useState(initialTemplate);
   const [elements, setElements] = useState(initialElements);
   const [templateMeta, setTemplateMeta] = useState({
@@ -665,22 +503,12 @@ export function TemplateEditor({
     auto_create_next_protocol: Boolean(initialTemplate.auto_create_next_protocol),
     cycle_config_id: initialTemplate.cycle_config_id ? String(initialTemplate.cycle_config_id) : "",
   });
-  const [newItemForm, setNewItemForm] = useState<TemplateItemForm>({
-    ...initialTemplateItemForm
-  });
-  const [showCreateItem, setShowCreateItem] = useState(false);
-  const [elementPickerSearch, setElementPickerSearch] = useState("");
   const [showParticipantModal, setShowParticipantModal] = useState(false);
   const [participantPickerSearch, setParticipantPickerSearch] = useState("");
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showFineTariffModal, setShowFineTariffModal] = useState(false);
   const [showAutoAssignModal, setShowAutoAssignModal] = useState(false);
   const [showResponsibilityModalFor, setShowResponsibilityModalFor] = useState<string | null>(null);
-  const [draggedTemplateElementId, setDraggedTemplateElementId] = useState<string | null>(null);
-  const [activeTemplateDropIndex, setActiveTemplateDropIndex] = useState<number | null>(null);
-  const [expandedTemplateDropIndex, setExpandedTemplateDropIndex] = useState<number | null>(null);
-  const [expandedBehaviorIds, setExpandedBehaviorIds] = useState<Set<string>>(new Set());
-  const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>({});
   const [responsibilityAutoListId, setResponsibilityAutoListId] = useState("");
   const [responsibilityNameMode, setResponsibilityNameMode] = useState<ResponsibleNameMode>(() => {
     const firstConfiguredElement = initialElements.find((item) => Array.isArray((item.configuration_json?.responsibility as { assignments?: unknown } | undefined)?.assignments));
@@ -747,29 +575,10 @@ export function TemplateEditor({
     () => [...elements].sort((left, right) => left.sort_index - right.sort_index),
     [elements]
   );
-  const filteredElementDefinitions = useMemo(() => {
-    const query = elementPickerSearch.trim().toLowerCase();
-    if (!query) {
-      return initialDefinitions;
-    }
-    return initialDefinitions.filter((definition) => {
-      const haystack = [
-        definition.title,
-        definition.description ?? "",
-        definitionTypeSummary(definition),
-        ...definition.blocks.map((block) => String(block.title ?? "")),
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(query);
-    });
-  }, [elementPickerSearch, initialDefinitions]);
   const responsibilityModalElement = useMemo(
     () => orderedElements.find((item) => item.id === showResponsibilityModalFor) ?? null,
     [orderedElements, showResponsibilityModalFor]
   );
-  const templateDropExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const templateDragPreviewRef = useRef<HTMLElement | null>(null);
   // Monotonic sequence guard for persistTemplateOrder: fast repeated drag/drop or position
   // edits can start a new reorder before an in-flight one's PATCH requests resolve. Only the
   // response belonging to the most-recently-started call is allowed to commit `elements`, so a
@@ -798,25 +607,18 @@ export function TemplateEditor({
     () => eligibleResponsibleLists.find((item) => String(item.definition.id) === manualLinkListId) ?? null,
     [eligibleResponsibleLists, manualLinkListId]
   );
-
-  useEffect(() => {
-    setPositionDrafts(
-      Object.fromEntries(orderedElements.map((item, index) => [item.id, String(index + 1)]))
-    );
-  }, [orderedElements]);
-
-  useEffect(
-    () => () => {
-      if (templateDropExpandTimerRef.current) {
-        clearTimeout(templateDropExpandTimerRef.current);
-      }
-      if (templateDragPreviewRef.current) {
-        templateDragPreviewRef.current.remove();
-        templateDragPreviewRef.current = null;
-      }
-    },
-    []
-  );
+  // Daten für den Baustein-Dialog (Spalten, Zeilen, Terminfilter, Listen)
+  const blockEditorData: BlockEditorData = {
+    participants: availableParticipants,
+    events: availableEvents,
+    lists: availableLists,
+    listEntries: listEntriesByListId,
+    ensureListEntries: (listId: string) => void ensureResponsibleListEntries(listId),
+    knownEventTags,
+    tagConfig,
+    accounts: financeAccounts ?? [],
+    cycleConfigs: availableCycleConfigs,
+  };
 
   useEffect(() => {
     if (!showResponsibilityModalFor || !responsibilityModalElement) {
@@ -889,44 +691,6 @@ export function TemplateEditor({
     });
     setElements((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     return updated;
-  }
-
-  async function toggleInvitationVisible(templateElement: TemplateElement) {
-    try {
-      await patchTemplateElementConfiguration(templateElement.id, { ...templateElement.configuration_json, invitation_visible: !invitationVisible(templateElement.configuration_json) });
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("invitationToggleFailed"), "error");
-    }
-  }
-
-  async function updateBlockBehavior(
-    templateElementId: string,
-    scope: "element" | "block",
-    field: TemplateElementBehaviorField,
-    value: boolean,
-    blockId?: number
-  ) {
-    try {
-      const updated = await browserApiFetch<TemplateElement>(`/api/template-elements/${templateElementId}/behavior`, {
-        method: "PATCH",
-        body: JSON.stringify({ scope, block_id: blockId ?? null, [field]: value }),
-      });
-      setElements((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("settingSaveFailed"), "error");
-    }
-  }
-
-  function toggleBehaviorExpanded(templateElementId: string) {
-    setExpandedBehaviorIds((current) => {
-      const next = new Set(current);
-      if (next.has(templateElementId)) {
-        next.delete(templateElementId);
-      } else {
-        next.add(templateElementId);
-      }
-      return next;
-    });
   }
 
   async function saveElementResponsibility(
@@ -1087,30 +851,6 @@ export function TemplateEditor({
     }
   }
 
-  async function toggleResponsibilityRowLock(templateElementId: string, listDefinitionId: string, listEntryId: string) {
-    try {
-      await saveElementResponsibility(templateElementId, (current) => {
-        const matchingAssignments = current.assignments.filter(
-          (assignment) => assignment.list_definition_id === listDefinitionId && assignment.list_entry_id === listEntryId
-        );
-        if (!matchingAssignments.length) {
-          return current;
-        }
-        const nextLocked = !matchingAssignments.every((assignment) => assignment.locked);
-        return {
-          name_display_mode: responsibilityNameMode,
-          assignments: current.assignments.map((assignment) =>
-            assignment.list_definition_id === listDefinitionId && assignment.list_entry_id === listEntryId
-              ? { ...assignment, locked: nextLocked }
-              : assignment
-          ),
-        };
-      });
-      showToast(t("tableLinkUpdatedToast"), "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("tableLinkUpdateFailed"), "error");
-    }
-  }
 
   async function linkElementToResponsibleRow() {
     if (!responsibilityModalElement || !manualLinkListMeta || !manualLinkEntryId) {
@@ -1170,56 +910,6 @@ export function TemplateEditor({
     return `${listName} · ${rowLabel}`;
   }
 
-  function responsibilityDisplayGroups(templateElement: TemplateElement) {
-    const responsibility = parseResponsibilityConfig(templateElement.configuration_json);
-    const groups: ResponsibilityDisplayGroup[] = [];
-    const groupIndexes = new Map<string, number>();
-    for (const assignment of responsibility.assignments) {
-      const groupKey =
-        assignment.list_definition_id && assignment.list_entry_id
-          ? `linked:${assignment.list_definition_id}:${assignment.list_entry_id}`
-          : `manual:${assignment.participant_id}`;
-      const existingIndex = groupIndexes.get(groupKey);
-      if (existingIndex === undefined) {
-        groupIndexes.set(groupKey, groups.length);
-        groups.push({
-          key: groupKey,
-          participantIds: [assignment.participant_id],
-          listDefinitionId: assignment.list_definition_id,
-          listEntryId: assignment.list_entry_id,
-          locked: assignment.locked,
-        });
-        continue;
-      }
-      groups[existingIndex] = {
-        ...groups[existingIndex],
-        participantIds: [...groups[existingIndex].participantIds, assignment.participant_id],
-        locked: groups[existingIndex].locked && assignment.locked,
-      };
-    }
-    return groups.map((group) => ({
-      ...group,
-      names: group.participantIds
-        .map((participantId) =>
-          participantName(
-            participantsById.get(participantId),
-            responsibility.name_display_mode || responsibilityNameMode,
-            t
-          )
-        )
-        .filter(Boolean)
-        .join(", "),
-      tooltip:
-        group.listDefinitionId && group.listEntryId
-          ? responsibilityLinkTooltip({
-              participant_id: group.participantIds[0] ?? "",
-              list_definition_id: group.listDefinitionId,
-              list_entry_id: group.listEntryId,
-              locked: group.locked,
-            })
-          : "",
-    }));
-  }
 
   function isParticipantResponsible(templateElement: TemplateElement, participantId: string) {
     return parseResponsibilityConfig(templateElement.configuration_json).assignments.some(
@@ -1271,31 +961,6 @@ export function TemplateEditor({
       }
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("participantAssignmentsSaveFailed"), "error");
-    }
-  }
-
-  async function addElementToTemplate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    try {
-      const createdItems = await Promise.all(
-        newItemForm.element_definition_ids.map((elementDefinitionId, index) =>
-          browserApiFetch<TemplateElement>(`/api/templates/${template.id}/elements`, {
-            method: "POST",
-            body: JSON.stringify({
-              element_definition_id: elementDefinitionId,
-              sort_index: nextTemplateElementSortIndex(elements) + index * 10
-            })
-          })
-        )
-      );
-      setElements((current) => [...current, ...createdItems].sort((left, right) => left.sort_index - right.sort_index));
-      setNewItemForm(initialTemplateItemForm);
-      setElementPickerSearch("");
-      setShowCreateItem(false);
-      showToast(t("elementsAddedToast", { count: createdItems.length }), "success");
-      router.refresh();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("elementAddFailed"), "error");
     }
   }
 
@@ -1352,208 +1017,59 @@ export function TemplateEditor({
     }
   }
 
-  async function reorderTemplateItems(sourceId: string, targetId: string) {
-    if (sourceId === targetId) {
-      return;
-    }
-    const sourceIndex = orderedElements.findIndex((item) => item.id === sourceId);
-    const targetIndex = orderedElements.findIndex((item) => item.id === targetId);
-    if (sourceIndex === -1 || targetIndex === -1) {
-      return;
-    }
-    const nextOrdered = [...orderedElements];
-    const [moved] = nextOrdered.splice(sourceIndex, 1);
-    nextOrdered.splice(targetIndex, 0, moved);
-    await persistTemplateOrder(nextOrdered, t("orderSavedToast"));
-  }
-
-  async function moveTemplateItemToPosition(templateElementId: string, requestedPosition: number) {
-    const currentIndex = orderedElements.findIndex((item) => item.id === templateElementId);
-    if (currentIndex === -1) {
-      return;
-    }
-    const clampedIndex = Math.min(Math.max(requestedPosition - 1, 0), orderedElements.length - 1);
-    setPositionDrafts((current) => ({ ...current, [templateElementId]: String(clampedIndex + 1) }));
-    if (currentIndex === clampedIndex) {
-      return;
-    }
-    const nextOrdered = [...orderedElements];
-    const [moved] = nextOrdered.splice(currentIndex, 1);
-    nextOrdered.splice(clampedIndex, 0, moved);
-    await persistTemplateOrder(nextOrdered, `Element auf Position ${clampedIndex + 1} verschoben`);
-  }
-
-  function handlePositionSubmit(templateElementId: string, rawValue: string) {
-    const parsed = Number(rawValue);
-    if (!Number.isFinite(parsed) || parsed < 1) {
-      const currentIndex = orderedElements.findIndex((item) => item.id === templateElementId);
-      setPositionDrafts((current) => ({
-        ...current,
-        [templateElementId]: String(currentIndex >= 0 ? currentIndex + 1 : 1),
-      }));
-      return;
-    }
-    void moveTemplateItemToPosition(templateElementId, Math.trunc(parsed));
-  }
-
-  function clearTemplateDropExpansionTimer() {
-    if (templateDropExpandTimerRef.current) {
-      clearTimeout(templateDropExpandTimerRef.current);
-      templateDropExpandTimerRef.current = null;
-    }
-  }
-
-  function clearTemplateDragPreview() {
-    if (templateDragPreviewRef.current) {
-      templateDragPreviewRef.current.remove();
-      templateDragPreviewRef.current = null;
-    }
-  }
-
-  function resetTemplateDragState() {
-    clearTemplateDropExpansionTimer();
-    clearTemplateDragPreview();
-    setDraggedTemplateElementId(null);
-    setActiveTemplateDropIndex(null);
-    setExpandedTemplateDropIndex(null);
-  }
-
-  function scheduleTemplateDropExpansion(dropIndex: number) {
-    clearTemplateDropExpansionTimer();
-    templateDropExpandTimerRef.current = setTimeout(() => {
-      setExpandedTemplateDropIndex(dropIndex);
-    }, 180);
-  }
-
-  function handleTemplateDragStart(event: DragEvent<HTMLElement>, templateElementId: string) {
-    setDraggedTemplateElementId(templateElementId);
-    setActiveTemplateDropIndex(null);
-    setExpandedTemplateDropIndex(null);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/template-element", String(templateElementId));
-    const rowElement = event.currentTarget.closest(".template-element-row");
-    if (rowElement instanceof HTMLElement) {
-      clearTemplateDragPreview();
-      const preview = rowElement.cloneNode(true) as HTMLElement;
-      preview.style.position = "fixed";
-      preview.style.top = "-1000px";
-      preview.style.left = "-1000px";
-      preview.style.width = `${rowElement.offsetWidth}px`;
-      preview.style.pointerEvents = "none";
-      preview.style.transform = "rotate(-1deg)";
-      preview.style.boxShadow = "0 16px 34px rgba(15, 23, 42, 0.28)";
-      preview.style.opacity = "0.96";
-      preview.classList.add("template-element-drag-preview");
-      document.body.appendChild(preview);
-      templateDragPreviewRef.current = preview;
-      event.dataTransfer.setDragImage(preview, 28, 24);
-    }
-  }
-
-  function handleTemplateDragEnd() {
-    resetTemplateDragState();
-  }
-
-  function templateDropIndexForRow(event: DragEvent<HTMLElement>, rowIndex: number) {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const midpoint = bounds.top + bounds.height / 2;
-    return event.clientY >= midpoint ? rowIndex + 1 : rowIndex;
-  }
-
-  function handleTemplateDropSlotDragOver(event: DragEvent<HTMLElement>, dropIndex: number) {
-    event.preventDefault();
-    if (!draggedTemplateElementId) {
-      return;
-    }
-    event.dataTransfer.dropEffect = "move";
-    const isSameDropTarget = activeTemplateDropIndex === dropIndex;
-    setActiveTemplateDropIndex((current) => (current === dropIndex ? current : dropIndex));
-    if (!isSameDropTarget) {
-      scheduleTemplateDropExpansion(dropIndex);
-      return;
-    }
-    if (expandedTemplateDropIndex !== dropIndex && !templateDropExpandTimerRef.current) {
-      scheduleTemplateDropExpansion(dropIndex);
-    }
-  }
-
-  function handleTemplateRowDragOver(event: DragEvent<HTMLElement>, rowIndex: number) {
-    if (!draggedTemplateElementId) {
-      return;
-    }
-    handleTemplateDropSlotDragOver(event, templateDropIndexForRow(event, rowIndex));
-  }
-
-  async function handleTemplateDropAtIndex(event: DragEvent<HTMLElement>, dropIndex: number) {
-    event.preventDefault();
-    const transferValue = event.dataTransfer.getData("text/template-element");
-    const sourceId = transferValue || draggedTemplateElementId;
-    if (!sourceId) {
-      resetTemplateDragState();
-      return;
-    }
-    const movedItem = orderedElements.find((item) => item.id === sourceId);
-    const sourceIndex = orderedElements.findIndex((item) => item.id === sourceId);
-    resetTemplateDragState();
-    if (!movedItem) {
-      return;
-    }
-    if (sourceIndex === -1) {
-      return;
-    }
-    const nextOrdered = orderedElements.filter((item) => item.id !== sourceId);
-    const rawIndex = Math.min(Math.max(dropIndex, 0), orderedElements.length);
-    const targetIndex = rawIndex > sourceIndex ? rawIndex - 1 : rawIndex;
-    if (targetIndex === sourceIndex) {
-      return;
-    }
-    nextOrdered.splice(targetIndex, 0, movedItem);
-    await persistTemplateOrder(nextOrdered, `Element auf Position ${targetIndex + 1} verschoben`);
-  }
-
-  async function handleTemplateRowDrop(event: DragEvent<HTMLElement>, rowIndex: number) {
-    await handleTemplateDropAtIndex(event, templateDropIndexForRow(event, rowIndex));
-  }
-
-  async function deleteTemplateItem(templateElementId: string) {
-    const ok = await confirm({
-      title: t("removeElementTitle"),
-      message: t("removeElementMessage"),
-      tone: "danger",
-      confirmLabel: t("remove")
-    });
-    if (!ok) return;
-    try {
-      await browserApiFetch(`/api/template-elements/${templateElementId}`, { method: "DELETE" });
-      setElements((current) => current.filter((item) => item.id !== templateElementId));
-      showToast(t("elementRemovedToast"), "success");
-      router.refresh();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("elementRemoveFailed"), "error");
-    }
-  }
-
   return (
-    <div className="grid">
-      <DataToolbar
-        title={template.name}
-        description={t("reorderHint")}
-        actions={
-          <div className="table-toolbar-actions">
-            <button type="button" className="button-ghost button-secondary" onClick={() => setShowSettingsModal(true)}>
-              Einstellungen
-            </button>
-            <button type="button" className="button-ghost button-secondary" onClick={() => setShowParticipantModal(true)}>
-              Teilnehmer
-            </button>
-            {financeAccounts ? (
-              <button type="button" className="button-ghost button-secondary" onClick={() => setShowFineTariffModal(true)}>
-                {t("fineTariff.button")}
+    <div className="session-studio">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{template.name}</h1>
+          <p className="muted">{tStudio("intro")}</p>
+        </div>
+        <div className="table-toolbar-actions">
+          <button type="button" className="button-ghost button-secondary" onClick={() => setShowAutoAssignModal(true)}>
+            {tStudio("responsibleMapping")}
+          </button>
+          {canManage ? (
+            <>
+              <button type="button" className="button-ghost button-secondary" onClick={() => setShowSettingsModal(true)}>
+                {tStudio("settings")}
               </button>
-            ) : null}
-          </div>
-        }
+              <button type="button" className="button-ghost button-secondary" onClick={() => setShowParticipantModal(true)}>
+                {tStudio("participants")}
+              </button>
+              {financeAccounts ? (
+                <button type="button" className="button-ghost button-secondary" onClick={() => setShowFineTariffModal(true)}>
+                  {t("fineTariff.button")}
+                </button>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      </div>
+      <Tabs
+        activeId={view}
+        onChange={(id) => setView(id as StudioView)}
+        tabs={[
+          {
+            id: "editor",
+            label: tStudio("view.editor"),
+            content: (
+              <SessionTemplateWorkspace
+                templateId={template.id}
+                elements={elements}
+                onElementsChange={setElements}
+                onReorder={(next) => persistTemplateOrder(next, t("orderSavedToast"))}
+                onOpenResponsibility={(elementId) => setShowResponsibilityModalFor(elementId)}
+                responsibilityTitle={currentResponsibilityTitle}
+                blockEditorData={blockEditorData}
+                cycleConfigs={availableCycleConfigs}
+              />
+            ),
+          },
+          { id: "pdf", label: tStudio("view.pdf"), content: view === "pdf" ? <SessionDesignView sessionTemplate={template} documentType="protocol" /> : null },
+          { id: "invitation", label: tStudio("view.invitation"), content: view === "invitation" ? <SessionDesignView sessionTemplate={template} documentType="invitation" /> : null },
+        ]}
       />
+
       {financeAccounts ? (
         <TemplateFineTariffModal
           open={showFineTariffModal}
@@ -1627,11 +1143,6 @@ export function TemplateEditor({
           </label>
           <div className="info-note">
             {t("patternTokensInfo")}
-          </div>
-          <div className="field-stack">
-            <span className="field-label">{t("pdfLayoutLabel")}</span>
-            <span className="field-help">{t("pdfLayoutStudioHelp")}</span>
-            <Link className="studio-link" href="/documents">{t("pdfLayoutStudioLink")}</Link>
           </div>
           <div className="table-toolbar-actions">
             <button data-modal-save type="submit" className="button-secondary">{t("saveTemplate")}</button>
@@ -1728,503 +1239,234 @@ export function TemplateEditor({
         </div>
       </Modal>
 
-      <article className="card">
-        <DataToolbar
-          title={t("elementsTitle")}
-          description={t("elementsDescription")}
-          actions={
-            <div className="table-toolbar-actions">
-              <button type="button" className="button-ghost button-secondary" onClick={() => setShowAutoAssignModal(true)}>
-                Verantwortliche-Zuordnung
-              </button>
+      <Modal
+        open={showAutoAssignModal}
+        onClose={() => setShowAutoAssignModal(false)}
+        title={t("responsibilityTitle")}
+        description={t("responsibilityDescription")}
+        size="wide"
+      >
+        <div className="grid">
+          <div className="three-col">
+            <label className="field-stack">
+              <span className="field-label">{t("nameDisplayLabel")}</span>
+              <select
+                value={responsibilityNameMode}
+                disabled={bulkAssignBusy}
+                onChange={(event) => void applyResponsibilityNameMode(event.target.value as ResponsibleNameMode)}
+              >
+                <option value="display_name">{t("displayNameOption")}</option>
+                <option value="first_name">{t("firstNameOption")}</option>
+                <option value="last_name">{t("lastNameOption")}</option>
+              </select>
+              <span className="field-help">{t("nameDisplayHelp")}</span>
+            </label>
+            <label className="field-stack">
+              <span className="field-label">{t("initialListAssignmentLabel")}</span>
+              <SearchableSelect
+                options={eligibleResponsibleLists}
+                getId={(item) => item.definition.id}
+                getLabel={(item) => item.definition.name}
+                value={responsibilityAutoListId || null}
+                disabled={bulkAssignBusy}
+                onChange={(item) => {
+                  const nextValue = item ? item.definition.id : "";
+                  setResponsibilityAutoListId(nextValue);
+                  if (nextValue) {
+                    void autoAssignResponsiblesFromList(nextValue);
+                  }
+                }}
+                nullLabel={t("noListSelected")}
+              />
+              <span className="field-help">{t("initialListAssignmentHelp")}</span>
+            </label>
+            <div className="table-toolbar-actions align-end">
               <button
                 type="button"
-                className="button-secondary"
-                onClick={() => {
-                  setElementPickerSearch("");
-                  setShowCreateItem((current) => !current);
-                }}
+                className="button-ghost button-secondary"
+                disabled={!responsibilityAutoListId || bulkAssignBusy}
+                onClick={() => responsibilityAutoListId && void autoAssignResponsiblesFromList(responsibilityAutoListId)}
               >
-                {showCreateItem ? t("closeForm") : t("addElement")}
+                {bulkAssignBusy ? "…" : t("reconcile")}
               </button>
             </div>
-          }
-        />
-
-        <Modal
-          open={showAutoAssignModal}
-          onClose={() => setShowAutoAssignModal(false)}
-          title={t("responsibilityTitle")}
-          description={t("responsibilityDescription")}
-          size="wide"
-        >
-          <div className="grid">
-            <div className="three-col">
-              <label className="field-stack">
-                <span className="field-label">{t("nameDisplayLabel")}</span>
-                <select
-                  value={responsibilityNameMode}
-                  disabled={bulkAssignBusy}
-                  onChange={(event) => void applyResponsibilityNameMode(event.target.value as ResponsibleNameMode)}
-                >
-                  <option value="display_name">{t("displayNameOption")}</option>
-                  <option value="first_name">{t("firstNameOption")}</option>
-                  <option value="last_name">{t("lastNameOption")}</option>
-                </select>
-                <span className="field-help">{t("nameDisplayHelp")}</span>
-              </label>
-              <label className="field-stack">
-                <span className="field-label">{t("initialListAssignmentLabel")}</span>
-                <SearchableSelect
-                  options={eligibleResponsibleLists}
-                  getId={(item) => item.definition.id}
-                  getLabel={(item) => item.definition.name}
-                  value={responsibilityAutoListId || null}
-                  disabled={bulkAssignBusy}
-                  onChange={(item) => {
-                    const nextValue = item ? item.definition.id : "";
-                    setResponsibilityAutoListId(nextValue);
-                    if (nextValue) {
-                      void autoAssignResponsiblesFromList(nextValue);
-                    }
-                  }}
-                  nullLabel={t("noListSelected")}
-                />
-                <span className="field-help">{t("initialListAssignmentHelp")}</span>
-              </label>
-              <div className="table-toolbar-actions align-end">
-                <button
-                  type="button"
-                  className="button-ghost button-secondary"
-                  disabled={!responsibilityAutoListId || bulkAssignBusy}
-                  onClick={() => responsibilityAutoListId && void autoAssignResponsiblesFromList(responsibilityAutoListId)}
-                >
-                  {bulkAssignBusy ? "…" : t("reconcile")}
-                </button>
-              </div>
-            </div>
-            <div className="info-note">
-              Beim Listenabgleich wird der Freitext der Liste mit dem Elementtitel verglichen. Gefundene Teilnehmende werden einmalig übernommen. Mit dem Schloss fixierst du danach bei Bedarf die Verknüpfung auf eine konkrete Tabellenzeile.
-            </div>
-            <div className="status-row">
-              <span className="pill">
-                {orderedElements.filter((item) => parseResponsibilityConfig(item.configuration_json).assignments.length > 0).length} mit Verantwortlichen
-              </span>
-              <span className="pill">{eligibleResponsibleLists.length} passende Listen</span>
-              {responsibilityAutoListId ? (
-                <span className="pill">
-                  {t("autoListLabel", { name: eligibleResponsibleLists.find((item) => String(item.definition.id) === responsibilityAutoListId)?.definition.name ?? t("unknownList") })}
-                </span>
-              ) : null}
-            </div>
           </div>
-        </Modal>
+          <div className="info-note">
+            Beim Listenabgleich wird der Freitext der Liste mit dem Elementtitel verglichen. Gefundene Teilnehmende werden einmalig übernommen. Mit dem Schloss fixierst du danach bei Bedarf die Verknüpfung auf eine konkrete Tabellenzeile.
+          </div>
+          <div className="status-row">
+            <span className="pill">
+              {orderedElements.filter((item) => parseResponsibilityConfig(item.configuration_json).assignments.length > 0).length} mit Verantwortlichen
+            </span>
+            <span className="pill">{eligibleResponsibleLists.length} passende Listen</span>
+            {responsibilityAutoListId ? (
+              <span className="pill">
+                {t("autoListLabel", { name: eligibleResponsibleLists.find((item) => String(item.definition.id) === responsibilityAutoListId)?.definition.name ?? t("unknownList") })}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </Modal>
 
-        <Modal
-          open={showCreateItem}
-          onClose={() => {
-            setElementPickerSearch("");
-            setShowCreateItem(false);
-          }}
-          title={t("addElementTitle")}
-          description={t("addElementDescription")}
-        >
-          <ModalSaveForm className="grid" onSubmit={addElementToTemplate}>
-            <div className="list-filter-row">
-              <div className="list-filter-search">
-                <SearchInput
-                  value={elementPickerSearch}
-                  onChange={setElementPickerSearch}
-                  placeholder={t("searchElementsPlaceholder")}
-                  aria-label={t("searchElementsPlaceholder")}
-                  autoFocus
-                />
-              </div>
-              <a href="/elements?create=1" target="_blank" rel="noreferrer" className="button-ghost button-secondary">
-                Neues Element erstellen
-              </a>
-            </div>
-            <DataTable
-              columns={["", t("colElement"), t("colTypes"), t("colDescription"), t("colBlocksCount")]}
-              emptyMessage={t("noMatchingElements")}
-            >
-              {filteredElementDefinitions.map((definition) => {
-                const checked = newItemForm.element_definition_ids.includes(String(definition.id));
-                return (
-                  <tr
-                    key={definition.id}
-                    className="table-row-clickable"
-                    onClick={() =>
-                      setNewItemForm((current) => ({
-                        ...current,
-                        element_definition_ids: checked
-                          ? current.element_definition_ids.filter((id) => id !== String(definition.id))
-                          : [...current.element_definition_ids, String(definition.id)],
-                      }))
-                    }
-                  >
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => undefined}
-                        aria-label={`Element ${definition.title} auswaehlen`}
-                      />
-                    </td>
-                    <td>
-                      <strong>{definition.title}</strong>
-                    </td>
-                    <td>{definitionTypeSummary(definition)}</td>
-                    <td>{definition.description ?? t("noDescription")}</td>
-                    <td>{definition.blocks.length}</td>
-                  </tr>
-                );
-              })}
-            </DataTable>
-            <span className="field-help">{t("addElementOrderHint")}</span>
-            <div className="table-toolbar-actions">
-              <button data-modal-save type="submit" className="button-secondary" disabled={newItemForm.element_definition_ids.length === 0}>{t("addSelectedElements")}</button>
-            </div>
-          </ModalSaveForm>
-        </Modal>
+      <Modal
+        open={!!responsibilityModalElement}
+        onClose={() => setShowResponsibilityModalFor(null)}
+        title={responsibilityModalElement ? t("responsibleForNamed", { title: responsibilityModalElement.title }) : t("responsibleTitle")}
+        description={t("assignResponsibilityDescription")}
+        size="fullscreen"
+      >
+        {responsibilityModalElement ? (() => {
+          const responsibility = parseResponsibilityConfig(responsibilityModalElement.configuration_json);
+          const assignments = responsibility.assignments;
+          const availableManualEntries = manualLinkListMeta ? (listEntriesByListId[manualLinkListMeta.definition.id] ?? []) : [];
+          return (
+            <div className="grid section-stack">
+              <article className="card">
+                <div className="eyebrow">{t("titlePreviewLabel")}</div>
+                <h3>{currentResponsibilityTitle(responsibilityModalElement)}</h3>
+                <p className="muted">{t("titlePreviewHelp")}</p>
+                <div className="status-row">
+                  <span className="pill">{assignments.length} zugewiesen</span>
+                  <span className="pill">
+                    {t("displayModeLabel", { mode: responsibilityNameMode === "display_name" ? t("displayNameOption") : responsibilityNameMode === "first_name" ? t("firstNameOption") : t("lastNameOption") })}
+                  </span>
+                </div>
+              </article>
 
-        <Modal
-          open={!!responsibilityModalElement}
-          onClose={() => setShowResponsibilityModalFor(null)}
-          title={responsibilityModalElement ? t("responsibleForNamed", { title: responsibilityModalElement.title }) : t("responsibleTitle")}
-          description={t("assignResponsibilityDescription")}
-          size="fullscreen"
-        >
-          {responsibilityModalElement ? (() => {
-            const responsibility = parseResponsibilityConfig(responsibilityModalElement.configuration_json);
-            const assignments = responsibility.assignments;
-            const availableManualEntries = manualLinkListMeta ? (listEntriesByListId[manualLinkListMeta.definition.id] ?? []) : [];
-            return (
-              <div className="grid section-stack">
-                <article className="card">
-                  <div className="eyebrow">{t("titlePreviewLabel")}</div>
-                  <h3>{currentResponsibilityTitle(responsibilityModalElement)}</h3>
-                  <p className="muted">{t("titlePreviewHelp")}</p>
-                  <div className="status-row">
-                    <span className="pill">{assignments.length} zugewiesen</span>
-                    <span className="pill">
-                      {t("displayModeLabel", { mode: responsibilityNameMode === "display_name" ? t("displayNameOption") : responsibilityNameMode === "first_name" ? t("firstNameOption") : t("lastNameOption") })}
-                    </span>
-                  </div>
-                </article>
-
-                <article className="card">
-                  <div className="eyebrow">{t("currentResponsibleLabel")}</div>
-                  {assignments.length ? (
-                    <div className="responsibility-list">
-                      {assignments.map((assignment) => {
-                        const participant = participantsById.get(assignment.participant_id);
-                        const sourceLabel = assignment.list_definition_id
-                          ? assignment.locked
-                            ? t("linkedFixedToRow")
-                            : t("detectedFromList")
-                          : t("assignedManually");
-                        const lockTitle = responsibilityLinkTooltip(assignment);
-                        return (
-                          <div className="responsibility-card" key={`responsibility-${responsibilityModalElement.id}-${assignment.participant_id}`}>
-                            <div className="responsibility-card-head">
-                              <div>
-                                <strong>{participantName(participant, responsibilityNameMode, t)}</strong>
-                                <div className="muted">{sourceLabel}</div>
-                              </div>
-                              <div className="responsibility-card-actions">
-                                {assignment.list_definition_id && assignment.list_entry_id ? (
-                                  <button
-                                    type="button"
-                                    className={`responsibility-lock-button${assignment.locked ? " responsibility-lock-button-active" : ""}`}
-                                    title={lockTitle}
-                                    onClick={() => void toggleResponsibilityLock(responsibilityModalElement.id, assignment.participant_id)}
-                                  >
-                                    {assignment.locked ? "🔒" : "🔓"}
-                                  </button>
-                                ) : null}
+              <article className="card">
+                <div className="eyebrow">{t("currentResponsibleLabel")}</div>
+                {assignments.length ? (
+                  <div className="responsibility-list">
+                    {assignments.map((assignment) => {
+                      const participant = participantsById.get(assignment.participant_id);
+                      const sourceLabel = assignment.list_definition_id
+                        ? assignment.locked
+                          ? t("linkedFixedToRow")
+                          : t("detectedFromList")
+                        : t("assignedManually");
+                      const lockTitle = responsibilityLinkTooltip(assignment);
+                      return (
+                        <div className="responsibility-card" key={`responsibility-${responsibilityModalElement.id}-${assignment.participant_id}`}>
+                          <div className="responsibility-card-head">
+                            <div>
+                              <strong>{participantName(participant, responsibilityNameMode, t)}</strong>
+                              <div className="muted">{sourceLabel}</div>
+                            </div>
+                            <div className="responsibility-card-actions">
+                              {assignment.list_definition_id && assignment.list_entry_id ? (
                                 <button
                                   type="button"
-                                  className="button-ghost button-secondary"
-                                  onClick={() => void toggleResponsibleParticipant(responsibilityModalElement.id, assignment.participant_id, false)}
+                                  className={`responsibility-lock-button${assignment.locked ? " responsibility-lock-button-active" : ""}`}
+                                  title={lockTitle}
+                                  onClick={() => void toggleResponsibilityLock(responsibilityModalElement.id, assignment.participant_id)}
                                 >
-                                  Entfernen
+                                  {assignment.locked ? "🔒" : "🔓"}
                                 </button>
-                              </div>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="button-ghost button-secondary"
+                                onClick={() => void toggleResponsibleParticipant(responsibilityModalElement.id, assignment.participant_id, false)}
+                              >
+                                Entfernen
+                              </button>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="responsibility-empty">{t("noResponsibleYet")}</div>
-                  )}
-                </article>
-
-                <article className="card">
-                  <div className="eyebrow">{t("linkToTableRow")}</div>
-                  <div className="two-col">
-                    <label className="field-stack">
-                      <span className="field-label">{t("listLabel")}</span>
-                      <SearchableSelect
-                        options={eligibleResponsibleLists}
-                        getId={(item) => item.definition.id}
-                        getLabel={(item) => item.definition.name}
-                        value={manualLinkListId || null}
-                        onChange={(item) => setManualLinkListId(item ? item.definition.id : "")}
-                        placeholder={t("chooseListPlaceholder")}
-                      />
-                    </label>
-                    <label className="field-stack">
-                      <span className="field-label">{t("rowLabel")}</span>
-                      <SearchableSelect
-                        options={manualLinkListMeta ? availableManualEntries : []}
-                        getId={(entry) => entry.id}
-                        getLabel={(entry) => rowOptionLabel(entry, manualLinkListMeta!, participantsById, responsibilityNameMode, t)}
-                        value={manualLinkEntryId || null}
-                        onChange={(entry) => setManualLinkEntryId(entry ? entry.id : "")}
-                        disabled={!manualLinkListMeta || loadingResponsibleListId === manualLinkListMeta.definition.id}
-                        placeholder={
-                          !manualLinkListMeta
-                            ? t("chooseListFirst")
-                            : loadingResponsibleListId === manualLinkListMeta.definition.id
-                            ? t("rowsLoading")
-                            : t("chooseRow")
-                        }
-                      />
-                    </label>
-                  </div>
-                  <div className="table-toolbar-actions">
-                    <button
-                      type="button"
-                      className="button-secondary"
-                      disabled={!manualLinkEntryId}
-                      onClick={() => void linkElementToResponsibleRow()}
-                    >
-                      Zeile verknüpfen
-                    </button>
-                  </div>
-                  <span className="field-help">{t("linkRowHint")}</span>
-                </article>
-
-                <article className="card">
-                  <div className="eyebrow">{t("assignManuallyTitle")}</div>
-                  <label className="field-stack">
-                    <span className="field-label">{t("search")}</span>
-                    <SearchInput value={responsibilitySearch} onChange={setResponsibilitySearch} placeholder={t("searchParticipantsPlaceholder")} />
-                  </label>
-                  <div className="selection-list selection-grid">
-                    {filteredResponsibilityParticipants.map((participant) => {
-                      const checked = isParticipantResponsible(responsibilityModalElement, participant.id);
-                      const linkedAssignment = assignments.find((assignment) => assignment.participant_id === participant.id);
-                      return (
-                        <label
-                          key={`responsibility-participant-${participant.id}`}
-                          className={`selection-card selection-card-checkbox${checked ? " selection-card-active" : ""}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(event) => void toggleResponsibleParticipant(responsibilityModalElement.id, participant.id, event.target.checked)}
-                          />
-                          <div>
-                            <strong>{participantName(participant, responsibilityNameMode, t)}</strong>
-                            <div className="muted">{participant.display_name}</div>
-                            {linkedAssignment?.list_definition_id ? (
-                              <div className="muted">{responsibilityLinkTooltip(linkedAssignment)}</div>
-                            ) : null}
-                          </div>
-                        </label>
+                        </div>
                       );
                     })}
                   </div>
-                  {filteredResponsibilityParticipants.length === 0 ? (
-                    <div className="responsibility-empty">{t("noMatchingParticipants")}</div>
-                  ) : null}
-                </article>
-              </div>
-            );
-          })() : null}
-        </Modal>
+                ) : (
+                  <div className="responsibility-empty">{t("noResponsibleYet")}</div>
+                )}
+              </article>
 
-        <div
-          className={`template-element-list${draggedTemplateElementId ? " template-element-list-dragging" : ""}`}
-          onDragOver={(event) => event.preventDefault()}
-        >
-          {orderedElements.length === 0 && !draggedTemplateElementId ? (
-            <div className="template-element-empty">{t("noElementsYet")}</div>
-          ) : null}
-
-          {orderedElements.map((item, index) => {
-            const responsibility = parseResponsibilityConfig(item.configuration_json);
-            const responsibilityCount = responsibility.assignments.length;
-            const currentPosition = orderedElements.findIndex((entry) => entry.id === item.id) + 1;
-            const displayGroups = responsibilityDisplayGroups(item);
-            return (
-              <div className="template-element-list-item" key={item.id}>
-                <div
-                  className={`template-element-drop-slot${activeTemplateDropIndex === index ? " template-element-drop-slot-active" : ""}${expandedTemplateDropIndex === index ? " template-element-drop-slot-expanded" : ""}`}
-                  onDragOver={(event) => handleTemplateDropSlotDragOver(event, index)}
-                  onDrop={(event) => void handleTemplateDropAtIndex(event, index)}
-                />
-
-                <div
-                  className={`template-element-row${draggedTemplateElementId === item.id ? " template-element-row-dragging" : ""}`}
-                  onDragOver={(event) => handleTemplateRowDragOver(event, index)}
-                  onDrop={(event) => void handleTemplateRowDrop(event, index)}
-                >
-                  <button
-                    type="button"
-                    draggable
-                    className="template-element-drag-handle"
-                    onDragStart={(event) => handleTemplateDragStart(event, item.id)}
-                    onDragEnd={handleTemplateDragEnd}
-                    title={t("dragToReorder")}
-                    aria-label={`Element ${item.title} ziehen`}
-                  >
-                    ⋮⋮
-                  </button>
-
-                  <div className="template-element-row-copy">
-                    <div className="template-element-row-copy-main">
-                      <div className="template-element-title-line">
-                        <strong>{item.title}</strong>
-                        {displayGroups.length ? (
-                          <span className="template-element-inline-responsibility">
-                            (
-                            {displayGroups.map((group, groupIndex) => (
-                              <span className="template-element-inline-responsibility-group" key={`template-element-row-group-${item.id}-${group.key}`}>
-                                {groupIndex > 0 ? <span className="template-element-inline-responsibility-separator">, </span> : null}
-                                <span className="template-element-inline-responsibility-text">{group.names}</span>
-                              </span>
-                            ))}
-                            )
-                          </span>
-                        ) : null}
-                        {displayGroups.some((group) => group.listDefinitionId && group.listEntryId) ? (
-                          <span className="template-element-inline-locks">
-                            {displayGroups
-                              .filter((group) => group.listDefinitionId && group.listEntryId)
-                              .map((group) => (
-                                <button
-                                  key={`template-element-row-lock-${item.id}-${group.key}`}
-                                  type="button"
-                                  className={`template-element-inline-lock${group.locked ? " template-element-inline-lock-locked" : " template-element-inline-lock-unlocked"}`}
-                                  title={group.tooltip}
-                                  onClick={() => void toggleResponsibilityRowLock(item.id, group.listDefinitionId!, group.listEntryId!)}
-                                >
-                                  <ResponsibilityLockIcon locked={group.locked} />
-                                </button>
-                              ))}
-                          </span>
-                        ) : null}
-                      </div>
-                      {item.description ? <span className="muted">{item.description}</span> : null}
-                      <div className="template-element-behavior-row">
-                        <BehaviorIconRow
-                          values={item.behavior}
-                          defaults={item.blocks[0]?.behavior_defaults}
-                          onToggle={(field) => void updateBlockBehavior(item.id, "element", field, !item.behavior[field])}
-                        />
-                        <div className="behavior-icon-row">
-                          <button
-                            type="button"
-                            className={`behavior-icon-button${invitationVisible(item.configuration_json) ? " behavior-icon-button-active" : ""}`}
-                            title={t("invitationVisible")}
-                            aria-label={t("invitationVisible")}
-                            aria-pressed={invitationVisible(item.configuration_json)}
-                            onClick={() => void toggleInvitationVisible(item)}
-                          >
-                            <BehaviorInvitationIcon />
-                          </button>
-                        </div>
-                        {item.blocks.length > 1 ? (
-                          <button
-                            type="button"
-                            className="button-ghost button-secondary behavior-expand-toggle"
-                            onClick={() => toggleBehaviorExpanded(item.id)}
-                            aria-expanded={expandedBehaviorIds.has(item.id)}
-                          >
-                            {expandedBehaviorIds.has(item.id) ? t("collapseBlocks") : t("configureBlocksIndividually", { count: item.blocks.length })}
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="template-element-row-meta">
-                    <span className="pill">{t("blockCount", { count: item.blocks.length })}</span>
-                    {responsibilityCount ? <span className="pill">{responsibilityCount} Verantwortliche</span> : null}
-                  </div>
-
-                  <label className="table-order-field template-element-position-field">
-                    <span className="muted">{t("positionAbbr")}</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={orderedElements.length}
-                      value={positionDrafts[item.id] ?? String(currentPosition)}
-                      onChange={(event) =>
-                        setPositionDrafts((current) => ({ ...current, [item.id]: event.target.value }))
-                      }
-                      onBlur={(event) => handlePositionSubmit(item.id, event.target.value)}
-                      onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          event.currentTarget.blur();
-                        }
-                        if (event.key === "Escape") {
-                          event.preventDefault();
-                          setPositionDrafts((current) => ({ ...current, [item.id]: String(currentPosition) }));
-                        }
-                      }}
-                      aria-label={`Position für ${item.title}`}
+              <article className="card">
+                <div className="eyebrow">{t("linkToTableRow")}</div>
+                <div className="two-col">
+                  <label className="field-stack">
+                    <span className="field-label">{t("listLabel")}</span>
+                    <SearchableSelect
+                      options={eligibleResponsibleLists}
+                      getId={(item) => item.definition.id}
+                      getLabel={(item) => item.definition.name}
+                      value={manualLinkListId || null}
+                      onChange={(item) => setManualLinkListId(item ? item.definition.id : "")}
+                      placeholder={t("chooseListPlaceholder")}
                     />
                   </label>
-
-                  <div className="template-element-row-actions">
-                    <button
-                      type="button"
-                      className="button-secondary button-ghost"
-                      onClick={() => setShowResponsibilityModalFor(item.id)}
-                    >
-                      Verantwortliche
-                    </button>
-                    <button type="button" className="button-secondary button-danger" onClick={() => void deleteTemplateItem(item.id)}>
-                      Entfernen
-                    </button>
-                  </div>
+                  <label className="field-stack">
+                    <span className="field-label">{t("rowLabel")}</span>
+                    <SearchableSelect
+                      options={manualLinkListMeta ? availableManualEntries : []}
+                      getId={(entry) => entry.id}
+                      getLabel={(entry) => rowOptionLabel(entry, manualLinkListMeta!, participantsById, responsibilityNameMode, t)}
+                      value={manualLinkEntryId || null}
+                      onChange={(entry) => setManualLinkEntryId(entry ? entry.id : "")}
+                      disabled={!manualLinkListMeta || loadingResponsibleListId === manualLinkListMeta.definition.id}
+                      placeholder={
+                        !manualLinkListMeta
+                          ? t("chooseListFirst")
+                          : loadingResponsibleListId === manualLinkListMeta.definition.id
+                          ? t("rowsLoading")
+                          : t("chooseRow")
+                      }
+                    />
+                  </label>
                 </div>
+                <div className="table-toolbar-actions">
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    disabled={!manualLinkEntryId}
+                    onClick={() => void linkElementToResponsibleRow()}
+                  >
+                    Zeile verknüpfen
+                  </button>
+                </div>
+                <span className="field-help">{t("linkRowHint")}</span>
+              </article>
 
-                {expandedBehaviorIds.has(item.id) && item.blocks.length > 1 ? (
-                  <div className="template-element-behavior-expanded">
-                    {item.blocks.map((block) => (
-                      <div key={block.id} className="template-element-behavior-expanded-row">
-                        <span className="muted">{blockDisplayLabel(block, tRoot)}</span>
-                        <BehaviorIconRow
-                          values={blockBehaviorValues(block)}
-                          defaults={block.behavior_defaults}
-                          onToggle={(field) =>
-                            void updateBlockBehavior(item.id, "block", field, !blockBehaviorValues(block)[field], block.id)
-                          }
+              <article className="card">
+                <div className="eyebrow">{t("assignManuallyTitle")}</div>
+                <label className="field-stack">
+                  <span className="field-label">{t("search")}</span>
+                  <SearchInput value={responsibilitySearch} onChange={setResponsibilitySearch} placeholder={t("searchParticipantsPlaceholder")} />
+                </label>
+                <div className="selection-list selection-grid">
+                  {filteredResponsibilityParticipants.map((participant) => {
+                    const checked = isParticipantResponsible(responsibilityModalElement, participant.id);
+                    const linkedAssignment = assignments.find((assignment) => assignment.participant_id === participant.id);
+                    return (
+                      <label
+                        key={`responsibility-participant-${participant.id}`}
+                        className={`selection-card selection-card-checkbox${checked ? " selection-card-active" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => void toggleResponsibleParticipant(responsibilityModalElement.id, participant.id, event.target.checked)}
                         />
-                      </div>
-                    ))}
-                  </div>
+                        <div>
+                          <strong>{participantName(participant, responsibilityNameMode, t)}</strong>
+                          <div className="muted">{participant.display_name}</div>
+                          {linkedAssignment?.list_definition_id ? (
+                            <div className="muted">{responsibilityLinkTooltip(linkedAssignment)}</div>
+                          ) : null}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+                {filteredResponsibilityParticipants.length === 0 ? (
+                  <div className="responsibility-empty">{t("noMatchingParticipants")}</div>
                 ) : null}
-              </div>
-            );
-          })}
+              </article>
+            </div>
+          );
+        })() : null}
+      </Modal>
 
-          {orderedElements.length > 0 ? (
-            <div
-              className={`template-element-drop-slot${activeTemplateDropIndex === orderedElements.length ? " template-element-drop-slot-active" : ""}${expandedTemplateDropIndex === orderedElements.length ? " template-element-drop-slot-expanded" : ""}`}
-              onDragOver={(event) => handleTemplateDropSlotDragOver(event, orderedElements.length)}
-              onDrop={(event) => void handleTemplateDropAtIndex(event, orderedElements.length)}
-            />
-          ) : null}
-        </div>
-      </article>
     </div>
   );
 }

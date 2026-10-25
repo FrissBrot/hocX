@@ -1418,6 +1418,10 @@ export type ElementDefinition = {
   title: string;
   description: string | null;
   is_active: boolean;
+  // Wiederverwendbarer Baustein (Bibliothek) oder Einzelstück einer Vorlage
+  is_library?: boolean;
+  // In wie vielen Traktanden von Sitzungsvorlagen verwendet
+  usage_count?: number;
   blocks: ElementDefinitionBlock[];
   created_at: string;
   updated_at: string;
@@ -1474,6 +1478,9 @@ export type TemplateElement = {
   created_at: string;
   blocks: TemplateElementBlock[];
   behavior: Record<TemplateElementBehaviorField, boolean>;
+  // Inhalt stammt aus einem Bibliotheks-Baustein bzw. steckt in mehreren Traktanden
+  definition_is_library?: boolean;
+  definition_usage_count?: number;
 };
 
 export type ProtocolTodo = {

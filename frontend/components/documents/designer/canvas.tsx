@@ -451,7 +451,7 @@ export function NodeView({ entry, area, level, marginTop = 0, cell = false }: No
   const designer = useDesigner();
   const env = useEnv();
   const pageLayer = useContext(PageLayerContext);
-  const { selectedId, select, diagnostics, editable, assets, components } = designer;
+  const { selectedId, select, diagnostics, editable, components } = designer;
   const { node, instance, ghost } = entry;
   const { zoom, look, data } = env;
   const drag = useDraggable({ id: ghost ? `ghost|${node.id}|${instance}` : `node|${node.id}`, disabled: ghost || !editable || node.locked === true, data: { kind: "node", id: node.id } });

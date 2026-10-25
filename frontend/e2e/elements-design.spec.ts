@@ -8,7 +8,7 @@ async function openNewElement(page: Page, typeName: string) {
   const picker = page.getByRole("dialog", { name: "Blocktyp auswählen" });
   // `next dev` kompiliert Routen nach und kann einen offenen Dialog per HMR schliessen.
   await expect(async () => {
-    if (!(await picker.isVisible())) await page.getByRole("button", { name: "Neues Element", exact: true }).click();
+    if (!(await picker.isVisible())) await page.getByRole("button", { name: "Neuer Baustein", exact: true }).click();
     await expect(picker).toBeVisible({ timeout: 5_000 });
     await picker.getByRole("button", { name: new RegExp(`^${typeName}`) }).click({ timeout: 5_000 });
   }).toPass({ timeout: 30_000 });

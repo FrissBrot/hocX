@@ -12,7 +12,7 @@ from fastapi import HTTPException
 
 from app.api.routes import documents as routes
 from app.documents.service import DocumentRequest
-from app.models import DocumentTemplate
+from app.models import DocumentTemplate, Protocol, Template
 from tests.factories import (
     make_app_user,
     make_current_user,
@@ -230,3 +230,19 @@ class _ConnectedRequest:
 
     async def is_disconnected(self) -> bool:
         return False
+
+
+def test_preview_with_session_template_uses_its_agenda_and_latest_session(db, setup):
+    """Vorlagen-Editor: ohne Protokoll-ID die letzte Sitzung der Vorlage; eine fremde
+    Sitzungsvorlage ist nicht auffindbar."""
+    template_id = db.get(Protocol, setup["protocol"].id).template_id
+    template_public_id = db.get(Template, template_id).public_id
+    body = DocumentRequest(document_type="protocol", protocol_template_id=template_public_id)
+    result = asyncio.run(routes.preview_document(body, _ConnectedRequest(), max_pages=1, db=db, user=setup["reader"]))
+    assert result.pages
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(routes.preview_document(body, _ConnectedRequest(), max_pages=1, db=db, user=setup["other_admin"]))
+    assert excinfo.value.status_code == 404
+    with pytest.raises(HTTPException) as excinfo:
+        render_now(body, db=db, user=setup["admin"])
+    assert excinfo.value.status_code == 422

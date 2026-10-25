@@ -1,9 +1,12 @@
 import { MobileCycles } from "@/components/mobile/areas/mobile-admin";
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import { CycleConfigManager } from "@/components/cycles/cycle-config-manager";
 import { AppShell } from "@/components/ui/app-shell";
+import { RouteTabs } from "@/components/ui/route-tabs";
+import { templateAreaTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { CycleConfigSummary } from "@/types/api";
 
@@ -12,6 +15,7 @@ export default async function CyclesPage() {
   if (session.current_role !== "admin") {
     redirect("/");
   }
+  const t = await getTranslations("nav");
   const configs = (await backendFetchWithSession<CycleConfigSummary[]>("/api/cycle-configs")) ?? [];
 
   return (
@@ -20,6 +24,7 @@ export default async function CyclesPage() {
         mobile={<MobileCycles initialConfigs={configs} />}
         desktop={
           <>
+          <RouteTabs tabs={templateAreaTabs(t, true)} activeHref="/cycles" />
           <section className="panel">
             <CycleConfigManager initialConfigs={configs} />
           </section>

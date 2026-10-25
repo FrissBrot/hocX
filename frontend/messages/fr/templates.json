@@ -104,7 +104,7 @@
     "createTitle": "Créer un modèle",
     "createdToast": "Modèle « {name} » créé",
     "currentResponsibleLabel": "Responsables actuels",
-    "cycleHelp": "Les cycles peuvent être gérés sous Structure → Cycles.",
+    "cycleHelp": "Gère les cycles sous Modèles → Cycles.",
     "cycleLabel": "Cycle",
     "delete": "Supprimer",
     "deleteConfirm": "Supprimer définitivement ce modèle ? Cette action est irréversible.",
@@ -152,8 +152,8 @@
     "noResponsibleYet": "Aucun responsable défini pour le moment.",
     "orderSaveFailed": "L'ordre du modèle n'a pas pu être enregistré",
     "orderSavedToast": "Ordre du modèle enregistré",
-    "pageIntro": "Les modèles sont des conteneurs légers : ils choisissent des éléments terminés et déterminent uniquement leur ordre.",
-    "pageTitle": "Modèles",
+    "pageIntro": "Un modèle définit les points, les blocs et la mise en page d’une série de séances – pour l’éditeur, le PDF et l’invitation.",
+    "pageTitle": "Modèles de séance",
     "participantAssignmentsSaveFailed": "Les attributions de participants n'ont pas pu être enregistrées",
     "participantFallback": "Participant",
     "patternTokensHelp": "Jetons : '{n}' = tous les procès-verbaux, '{n_year}' = cette année, '{n_month}' = ce mois, '{n_cycle}' = dans le cycle propre. Jetons de date : '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
@@ -251,7 +251,7 @@
     "createTitle": "Créer un modèle",
     "createdToast": "Modèle « {name} » créé",
     "currentResponsibleLabel": "Responsables actuels",
-    "cycleHelp": "Les cycles peuvent être gérés sous Structure → Cycles.",
+    "cycleHelp": "Gère les cycles sous Modèles → Cycles.",
     "cycleLabel": "Cycle",
     "delete": "Supprimer",
     "deleteConfirm": "Supprimer définitivement ce modèle ? Cette action est irréversible.",
@@ -391,15 +391,15 @@
     "stepperDecrease": "Diminuer {label}",
     "stepperIncrease": "Augmenter {label}",
     "page": {
-      "title": "Éléments",
-      "intro1": "Les éléments regroupent des blocs comme du texte, des tâches, des tableaux ou des listes d’événements. Les modèles sont composés d’éléments.",
-      "intro2": "Les contenus fixes se créent idéalement comme bloc non modifiable.",
-      "newElement": "Nouvel élément",
-      "search": "Rechercher des éléments",
-      "colElement": "Élément",
-      "colBlocks": "Blocs",
+      "title": "Blocs",
+      "intro1": "Points enregistrés avec leurs blocs (texte, tâches, tableaux, listes de rendez-vous …). Insère-les d’un clic dans l’éditeur d’un modèle de séance.",
+      "intro2": "Dans l’éditeur, les modifications d’un bloc enregistré demandent si elles valent partout ou dans un seul modèle.",
+      "newElement": "Nouveau bloc",
+      "search": "Rechercher des blocs",
+      "colElement": "Bloc",
+      "colBlocks": "Contenu",
       "colActions": "Actions",
-      "blockCount": "{count, plural, one {# bloc} other {# blocs}}",
+      "blockCount": "{count, plural, one {# partie} other {# parties}}",
       "duplicate": "Dupliquer",
       "duplicating": "Duplication…"
     },
@@ -918,6 +918,136 @@
       "blockOrderSaved": "L’ordre a été enregistré",
       "blockSaveFailed": "Impossible d’enregistrer le bloc",
       "listEntriesFailed": "Impossible de charger les entrées"
+    }
+  },
+  "studio": {
+    "intro": "Points et blocs de ce modèle de séance. Ce que tu règles ici vaut pour l’éditeur de procès-verbal, le PDF et l’invitation.",
+    "responsibleMapping": "Attribuer les responsables",
+    "settings": "Paramètres",
+    "participants": "Participants",
+    "view": {
+      "editor": "Éditeur de procès-verbal",
+      "pdf": "PDF",
+      "invitation": "Invitation"
+    },
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "remove": "Retirer",
+    "badge": {
+      "notInEditor": "Pas dans l’éditeur",
+      "notInPdf": "Pas dans le PDF",
+      "readOnly": "Lecture seule",
+      "notInInvitation": "Pas dans l’invitation",
+      "shared": "Utilisé dans {count} points"
+    },
+    "catalog": {
+      "title": "Ajouter des blocs",
+      "newTitle": "Nouveau",
+      "newElement": "Nouveau point",
+      "addBlockTo": "Ajouter un bloc à « {title} »",
+      "selectHint": "Choisis un point pour lui ajouter un bloc.",
+      "libraryTitle": "Mes blocs",
+      "libraryHelp": "Points enregistrés avec leurs blocs. Un clic les ajoute à la fin.",
+      "search": "Rechercher des blocs",
+      "libraryEmpty": "Aucun bloc enregistré pour l’instant.",
+      "addFromLibrary": "Insérer « {title} » comme point"
+    },
+    "center": {
+      "title": "Points",
+      "hint": "Voici comment les points apparaissent dans l’éditeur. Un clic sélectionne, un double-clic modifie un bloc.",
+      "emptyTitle": "Pas encore de points",
+      "emptyDescription": "Crée un nouveau point à gauche ou insère un bloc enregistré.",
+      "addBlock": "+ Bloc"
+    },
+    "props": {
+      "title": "Propriétés",
+      "empty": "Choisis un point ou un bloc pour le régler ici.",
+      "elementTitle": "Point",
+      "name": "Titre",
+      "inInvitation": "Afficher dans l’invitation et l’ordre du jour",
+      "inInvitationHelp": "Permet de garder les points internes (p. ex. la caisse) hors de l’invitation.",
+      "responsible": "Responsables",
+      "addBlock": "Ajouter un bloc",
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
+      "reuse": "Réutiliser",
+      "libraryInfo": "Bloc enregistré, utilisé dans {count, plural, one {un point} other {# points}}. Les modifications du contenu demandent si elles s’appliquent partout.",
+      "detach": "Modifier seulement dans ce modèle",
+      "singleInfo": "Appartient uniquement à ce modèle.",
+      "saveToLibrary": "Enregistrer comme bloc",
+      "removeElement": "Retirer le point",
+      "backTo": "← {title}",
+      "editContent": "Modifier le contenu",
+      "visibility": "Où et comment",
+      "appearance": "Présentation dans le PDF",
+      "variant": "Présentation",
+      "corners": "Coins",
+      "inherit": "Comme l’apparence",
+      "appearanceHelp": "Ne vaut que pour ce bloc dans ce modèle, aussi tout de suite pour les procès-verbaux existants.",
+      "removeBlock": "Retirer le bloc"
+    },
+    "switch": {
+      "is_visible": {
+        "label": "Afficher dans l’éditeur",
+        "help": "Désactivé : masqué pendant la rédaction (p. ex. données remplies automatiquement)."
+      },
+      "export_visible": {
+        "label": "Afficher dans le PDF",
+        "help": "Désactivé : visible seulement dans l’éditeur (p. ex. notes internes)."
+      },
+      "is_editable": {
+        "label": "Modifiable pendant la rédaction",
+        "help": "Désactivé : le contenu vient tel quel du modèle."
+      },
+      "copy_from_last_protocol": {
+        "label": "Reprendre du dernier procès-verbal",
+        "help": "Les nouveaux procès-verbaux commencent avec le contenu de la dernière séance."
+      }
+    },
+    "dialog": {
+      "editTitle": "Modifier le bloc « {name} »",
+      "newElementTitle": "Nouveau point",
+      "newBlockTitle": "Nouveau bloc",
+      "newElementDescription": "Titre du point et son premier bloc. Ajoute d’autres blocs ensuite.",
+      "blockDescription": "Bloc dans le point « {title} ».",
+      "createElement": "Créer le point",
+      "createBlock": "Ajouter le bloc"
+    },
+    "scope": {
+      "title": "Où la modification doit-elle s’appliquer ?",
+      "message": "« {title} » est utilisé dans {count} points. Mettre à jour partout ou seulement dans ce modèle ?",
+      "all": "Mettre à jour partout",
+      "here": "Seulement dans ce modèle"
+    },
+    "toast": {
+      "saveFailed": "L’enregistrement a échoué.",
+      "elementAdded": "« {title} » ajouté.",
+      "blockAdded": "Bloc ajouté.",
+      "blockSaved": "Bloc enregistré.",
+      "blockRemoved": "Bloc retiré.",
+      "orderSaved": "Ordre enregistré.",
+      "elementRemoved": "Point retiré.",
+      "renamed": "Titre enregistré.",
+      "savedToLibrary": "« {title} » est maintenant dans « Mes blocs ».",
+      "detached": "Le point a maintenant son propre contenu."
+    },
+    "confirm": {
+      "removeBlock": "Retirer le bloc du point ? Les procès-verbaux existants restent inchangés.",
+      "removeElementTitle": "Retirer le point",
+      "removeElement": "Retirer « {title} » du modèle ? Les procès-verbaux existants restent inchangés."
+    },
+    "design": {
+      "title": {
+        "protocol": "Mise en page du procès-verbal",
+        "invitation": "Mise en page de l’invitation"
+      },
+      "sharedInfo": "Ce modèle utilise la mise en page commune « {name} ». L’aperçu montre tes points avec le contenu de la dernière séance.",
+      "noneInfo": "Il n’y a pas encore de mise en page pour ce document.",
+      "customize": "Mettre en page pour ce modèle",
+      "customized": "Mise en page propre créée.",
+      "customizeFailed": "La mise en page n’a pas pu être créée.",
+      "loadFailed": "La mise en page n’a pas pu être chargée.",
+      "copyName": "{name} – {type}"
     }
   }
 }

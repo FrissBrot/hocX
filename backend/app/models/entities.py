@@ -1097,6 +1097,8 @@ class ElementDefinition(Base, TimestampMixin, UpdatedAtMixin):
     export_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     configuration_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    # Wiederverwendbarer «eigener Baustein» (Bibliothek) oder Einzelstück einer Vorlage (0155)
+    is_library: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"), default=True)
 
 
 class TemplateElement(Base, TimestampMixin):

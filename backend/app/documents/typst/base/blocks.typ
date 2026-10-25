@@ -7,7 +7,7 @@
 #import "rich.typ": render-rich
 #import "table.typ": data-table
 #import "chart.typ": render-chart
-#import "../theme.typ": look
+#import "../theme.typ": look, with-appearance
 
 // Hervorgehobene Fläche (Varianten «box»/«tiles»/«filled»)
 #let surface-box(ctx, radius, body, accent: false) = block(
@@ -373,6 +373,8 @@
 }
 
 #let render-block(ctx, b) = {
+  // Darstellung eines einzelnen Bausteins (Sitzungsvorlage), bereits aufgelöst
+  let ctx = if b.at("appearance", default: none) != none { with-appearance(ctx, b.appearance) } else { ctx }
   if b.type == "protocol_element" {
     block-title(ctx, b)
     if not is-blank(b.at("responsible", default: none)) {

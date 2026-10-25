@@ -104,7 +104,7 @@
     "createTitle": "Crea modello",
     "createdToast": "Modello \"{name}\" creato",
     "currentResponsibleLabel": "Responsabili attuali",
-    "cycleHelp": "I cicli possono essere gestiti in Struttura → Cicli.",
+    "cycleHelp": "Gestisci i cicli in Modelli → Cicli.",
     "cycleLabel": "Ciclo",
     "delete": "Elimina",
     "deleteConfirm": "Eliminare definitivamente questo modello? Questa azione non può essere annullata.",
@@ -152,8 +152,8 @@
     "noResponsibleYet": "Nessun responsabile impostato finora.",
     "orderSaveFailed": "L'ordine del modello non ha potuto essere salvato",
     "orderSavedToast": "Ordine del modello salvato",
-    "pageIntro": "I modelli sono contenitori leggeri: scelgono elementi completi e ne definiscono solo l'ordine.",
-    "pageTitle": "Modelli",
+    "pageIntro": "Un modello definisce punti, blocchi e impaginazione di una serie di sedute – per l’editor del verbale, il PDF e l’invito.",
+    "pageTitle": "Modelli di seduta",
     "participantAssignmentsSaveFailed": "Le assegnazioni dei partecipanti non hanno potuto essere salvate",
     "participantFallback": "Partecipante",
     "patternTokensHelp": "Token: '{n}' = tutti i verbali, '{n_year}' = quest'anno, '{n_month}' = questo mese, '{n_cycle}' = nel proprio ciclo. Token di data: '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
@@ -251,7 +251,7 @@
     "createTitle": "Crea modello",
     "createdToast": "Modello \"{name}\" creato",
     "currentResponsibleLabel": "Responsabili attuali",
-    "cycleHelp": "I cicli possono essere gestiti in Struttura → Cicli.",
+    "cycleHelp": "Gestisci i cicli in Modelli → Cicli.",
     "cycleLabel": "Ciclo",
     "delete": "Elimina",
     "deleteConfirm": "Eliminare definitivamente questo modello? Questa azione non può essere annullata.",
@@ -391,15 +391,15 @@
     "stepperDecrease": "Diminuisci {label}",
     "stepperIncrease": "Aumenta {label}",
     "page": {
-      "title": "Elementi",
-      "intro1": "Gli elementi raggruppano blocchi come testo, attività, tabelle o elenchi di eventi. I modelli sono composti da elementi.",
-      "intro2": "I contenuti fissi si creano meglio come blocco non modificabile.",
-      "newElement": "Nuovo elemento",
-      "search": "Cerca elementi",
-      "colElement": "Elemento",
-      "colBlocks": "Blocchi",
+      "title": "Blocchi",
+      "intro1": "Punti salvati con i loro blocchi (testo, attività, tabelle, elenchi di appuntamenti …). Inseriscili con un clic nell’editor di un modello di seduta.",
+      "intro2": "Nell’editor, le modifiche a un blocco salvato chiedono se devono valere ovunque o solo in un modello.",
+      "newElement": "Nuovo blocco",
+      "search": "Cerca blocchi",
+      "colElement": "Blocco",
+      "colBlocks": "Contenuto",
       "colActions": "Azioni",
-      "blockCount": "{count, plural, one {# blocco} other {# blocchi}}",
+      "blockCount": "{count, plural, one {# parte} other {# parti}}",
       "duplicate": "Duplica",
       "duplicating": "Duplicazione…"
     },
@@ -918,6 +918,136 @@
       "blockOrderSaved": "Ordine salvato",
       "blockSaveFailed": "Impossibile salvare il blocco",
       "listEntriesFailed": "Impossibile caricare le voci"
+    }
+  },
+  "studio": {
+    "intro": "Punti e blocchi di questo modello di seduta. Quello che imposti qui vale per l’editor del verbale, il PDF e l’invito.",
+    "responsibleMapping": "Assegna responsabili",
+    "settings": "Impostazioni",
+    "participants": "Partecipanti",
+    "view": {
+      "editor": "Editor del verbale",
+      "pdf": "PDF",
+      "invitation": "Invito"
+    },
+    "cancel": "Annulla",
+    "save": "Salva",
+    "remove": "Rimuovi",
+    "badge": {
+      "notInEditor": "Non nell’editor",
+      "notInPdf": "Non nel PDF",
+      "readOnly": "Sola lettura",
+      "notInInvitation": "Non nell’invito",
+      "shared": "Usato in {count} punti"
+    },
+    "catalog": {
+      "title": "Aggiungi blocchi",
+      "newTitle": "Nuovo",
+      "newElement": "Nuovo punto",
+      "addBlockTo": "Aggiungi blocco a «{title}»",
+      "selectHint": "Scegli un punto per aggiungergli un blocco.",
+      "libraryTitle": "I miei blocchi",
+      "libraryHelp": "Punti salvati con i loro blocchi. Un clic li aggiunge alla fine.",
+      "search": "Cerca blocchi",
+      "libraryEmpty": "Ancora nessun blocco salvato.",
+      "addFromLibrary": "Inserisci «{title}» come punto"
+    },
+    "center": {
+      "title": "Punti",
+      "hint": "Così appaiono i punti nell’editor del verbale. Un clic seleziona, un doppio clic modifica un blocco.",
+      "emptyTitle": "Ancora nessun punto",
+      "emptyDescription": "Crea un nuovo punto a sinistra o inserisci un blocco salvato.",
+      "addBlock": "+ Blocco"
+    },
+    "props": {
+      "title": "Proprietà",
+      "empty": "Scegli un punto o un blocco per impostarlo qui.",
+      "elementTitle": "Punto",
+      "name": "Titolo",
+      "inInvitation": "Mostra nell’invito e nell’ordine del giorno",
+      "inInvitationHelp": "Così i punti interni (p. es. la cassa) restano fuori dall’invito.",
+      "responsible": "Responsabili",
+      "addBlock": "Aggiungi blocco",
+      "moveUp": "Sposta su",
+      "moveDown": "Sposta giù",
+      "reuse": "Riutilizza",
+      "libraryInfo": "Blocco salvato, usato in {count, plural, one {un punto} other {# punti}}. Le modifiche al contenuto chiedono se valgono ovunque.",
+      "detach": "Modifica solo in questo modello",
+      "singleInfo": "Appartiene solo a questo modello.",
+      "saveToLibrary": "Salva come blocco",
+      "removeElement": "Rimuovi punto",
+      "backTo": "← {title}",
+      "editContent": "Modifica contenuto",
+      "visibility": "Dove e come",
+      "appearance": "Aspetto nel PDF",
+      "variant": "Stile",
+      "corners": "Angoli",
+      "inherit": "Come l’aspetto",
+      "appearanceHelp": "Vale solo per questo blocco in questo modello, subito anche per i verbali esistenti.",
+      "removeBlock": "Rimuovi blocco"
+    },
+    "switch": {
+      "is_visible": {
+        "label": "Mostra nell’editor",
+        "help": "Spento: nascosto durante la verbalizzazione (p. es. dati compilati automaticamente)."
+      },
+      "export_visible": {
+        "label": "Mostra nel PDF",
+        "help": "Spento: visibile solo nell’editor (p. es. note interne)."
+      },
+      "is_editable": {
+        "label": "Modificabile durante la verbalizzazione",
+        "help": "Spento: il contenuto arriva fisso dal modello."
+      },
+      "copy_from_last_protocol": {
+        "label": "Riprendi dall’ultimo verbale",
+        "help": "I nuovi verbali iniziano con il contenuto dell’ultima seduta."
+      }
+    },
+    "dialog": {
+      "editTitle": "Modifica il blocco «{name}»",
+      "newElementTitle": "Nuovo punto",
+      "newBlockTitle": "Nuovo blocco",
+      "newElementDescription": "Titolo del punto e il suo primo blocco. Aggiungi altri blocchi in seguito.",
+      "blockDescription": "Blocco nel punto «{title}».",
+      "createElement": "Crea punto",
+      "createBlock": "Aggiungi blocco"
+    },
+    "scope": {
+      "title": "Dove deve valere la modifica?",
+      "message": "«{title}» è usato in {count} punti. Aggiornare ovunque o solo in questo modello?",
+      "all": "Aggiorna ovunque",
+      "here": "Solo in questo modello"
+    },
+    "toast": {
+      "saveFailed": "Salvataggio non riuscito.",
+      "elementAdded": "«{title}» aggiunto.",
+      "blockAdded": "Blocco aggiunto.",
+      "blockSaved": "Blocco salvato.",
+      "blockRemoved": "Blocco rimosso.",
+      "orderSaved": "Ordine salvato.",
+      "elementRemoved": "Punto rimosso.",
+      "renamed": "Titolo salvato.",
+      "savedToLibrary": "«{title}» è ora in «I miei blocchi».",
+      "detached": "Il punto ha ora un contenuto proprio."
+    },
+    "confirm": {
+      "removeBlock": "Rimuovere il blocco dal punto? I verbali esistenti restano invariati.",
+      "removeElementTitle": "Rimuovi punto",
+      "removeElement": "Rimuovere «{title}» dal modello? I verbali esistenti restano invariati."
+    },
+    "design": {
+      "title": {
+        "protocol": "Impaginazione del verbale",
+        "invitation": "Impaginazione dell’invito"
+      },
+      "sharedInfo": "Questo modello usa l’impaginazione comune «{name}». L’anteprima mostra i tuoi punti con i contenuti dell’ultima seduta.",
+      "noneInfo": "Per questo documento non c’è ancora un’impaginazione.",
+      "customize": "Impagina per questo modello",
+      "customized": "Impaginazione propria creata.",
+      "customizeFailed": "Non è stato possibile creare l’impaginazione.",
+      "loadFailed": "Non è stato possibile caricare l’impaginazione.",
+      "copyName": "{name} – {type}"
     }
   }
 }

@@ -494,3 +494,33 @@ class _ConnectedRequest:
 
     async def is_disconnected(self) -> bool:
         return False
+
+
+def test_session_template_gets_its_own_design_and_writers_publish_it(db, world):
+    """Vorlagen-Editor: eigene Gestaltung je Sitzungsdokument; sie gehört allein dieser
+    Vorlage, Schreibende dürfen sie veröffentlichen, gemeinsame Gestaltungen nicht."""
+    session_template = world["protocol_template"]
+    designs = studio.list_session_designs(session_template.public_id, db=db, user=world["reader"])
+    protocol_design = next(item for item in designs if item.document_type == "protocol")
+    assert protocol_design.owned is False
+    body = studio.SessionDesignCustomize(name="Vorstand – Protokoll")
+    own = studio.customize_session_design(session_template.public_id, "protocol", body, db=db, user=world["writer"])
+    assert own.session_template_id == session_template.public_id and own.published_revision is not None
+    again = studio.customize_session_design(session_template.public_id, "protocol", body, db=db, user=world["writer"])
+    assert again.id == own.id
+    assert next(item for item in studio.list_session_designs(session_template.public_id, db=db, user=world["reader"]) if item.document_type == "protocol").owned
+    # Schreibende veröffentlichen die eigene Gestaltung …
+    studio.save_document_template_draft(own.id, studio.DraftSave(content=SIMPLE, lock_version=None), db=db, user=world["writer"])
+    studio.publish_document_template(own.id, studio.PublishBody(), db=db, user=world["writer"])
+    # … aber keine gemeinsame
+    shared = _create(db, world)
+    with pytest.raises(HTTPException) as excinfo:
+        studio.publish_document_template(shared.id, studio.PublishBody(), db=db, user=world["writer"])
+    assert excinfo.value.status_code == 403
+    # Fremder Mandant: Sitzungsvorlage nicht auffindbar
+    with pytest.raises(HTTPException) as excinfo:
+        studio.list_session_designs(session_template.public_id, db=db, user=world["foreign"])
+    assert excinfo.value.status_code == 404
+    with pytest.raises(HTTPException) as excinfo:
+        studio.customize_session_design(session_template.public_id, "protocol", body, db=db, user=world["reader"])
+    assert excinfo.value.status_code == 403

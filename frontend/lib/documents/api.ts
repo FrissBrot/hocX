@@ -135,6 +135,20 @@ export type DocumentTemplateInfo = {
   draft_revision: RevisionInfo | null;
   created_at: string;
   updated_at: string;
+  // Gestaltung, die allein zu einer Sitzungsvorlage gehört
+  session_template_id?: string | null;
+  session_template_name?: string | null;
+};
+
+/** Geltende Seitengestaltung eines Sitzungsdokuments einer Sitzungsvorlage. */
+export type SessionDesign = {
+  document_type: "protocol" | "invitation" | "agenda";
+  template_id: string;
+  template_name: string;
+  template_origin: "system" | "tenant" | "copy";
+  template_system_key: string | null;
+  source: "protocol_template" | "tenant_default" | "platform_default" | "fallback";
+  owned: boolean;
 };
 
 /** Gestaltungsbeispiel (backend/app/documents/examples.py), Namen über documentStudio.examples.items. */
@@ -214,6 +228,8 @@ export type DocumentRequest = {
   options?: ExportOptions;
   language?: string | null;
   data_mode?: "data" | "sample";
+  // Vorlagen-Editor: Traktanden aus dieser Sitzungsvorlage (Inhalte aus protocol_id bzw. der letzten Sitzung)
+  protocol_template_id?: string | null;
 };
 
 export type DocumentExport = {
@@ -252,6 +268,9 @@ const json = (body: unknown, method = "POST"): RequestInit => ({ method, body: J
 
 export const studioApi = {
   capabilities: () => browserApiFetch<Capabilities>("/api/document-studio/capabilities"),
+  sessionDesigns: (templateId: string) => browserApiFetch<SessionDesign[]>(`/api/document-studio/session-templates/${templateId}/designs`),
+  customizeSessionDesign: (templateId: string, documentType: string, name: string) =>
+    browserApiFetch<DocumentTemplateDetail>(`/api/document-studio/session-templates/${templateId}/designs/${documentType}`, json({ name })),
   catalog: () => browserApiFetch<StudioCatalog>("/api/document-studio/catalog"),
 
   listTemplates: (params: { documentType?: string; includeArchived?: boolean } = {}) => {

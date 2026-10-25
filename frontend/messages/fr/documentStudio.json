@@ -1080,7 +1080,11 @@
     "title": "Modèles",
     "unarchive": "Restaurer",
     "unarchived": "Modèle restauré.",
-    "unpublished": "Non publié"
+    "unpublished": "Non publié",
+    "sessionTitle": "Mise en page commune des documents de séance",
+    "sessionDescription": "S’applique à tous les modèles de séance sans mise en page propre. Crée une mise en page propre dans l’éditeur du modèle sous « PDF ».",
+    "documentsTitle": "Documents",
+    "documentsDescription": "Autres documents comme listes de tâches, listes de rendez-vous, listes de membres et lettres."
   },
   "libraryGroup": {
     "data_events": "Événements",
@@ -1227,7 +1231,8 @@
     "showElement": "Afficher l’élément",
     "title": "Aperçu",
     "draftHint": "L’aperçu montre le brouillon. Les exports PDF utilisent la version publiée jusqu’à la publication du brouillon.",
-    "unpublishedHint": "Ce modèle n’est pas encore publié et n’est pas utilisé pour les exports PDF."
+    "unpublishedHint": "Ce modèle n’est pas encore publié et n’est pas utilisé pour les exports PDF.",
+    "latestSession": "Dernière séance de ce modèle"
   },
   "props": {
     "addColumn": "+ Colonne",

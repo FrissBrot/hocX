@@ -30,12 +30,22 @@ def _dumps(payload: Any) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def _without_design(value: Any) -> Any:
+    """Darstellung einzelner Blöcke (``appearance``) ist Gestaltung, kein Inhalt: aus dem
+    Inhalts-Hash entfernt, damit er für bestehende Protokolle gleich bleibt."""
+    if isinstance(value, dict):
+        return {key: _without_design(item) for key, item in value.items() if key != "appearance"}
+    if isinstance(value, list):
+        return [_without_design(item) for item in value]
+    return value
+
+
 def canonical_content(meta: DocumentMeta, blocks: list[Any], assets: dict[str, bytes] | None = None) -> str:
     # Status (Entwurf/abgeschlossen) zählt nicht als Inhalt: dafür gibt es die getrennten Zähler.
     payload = {
         "schema_version": SCHEMA_VERSION,
         "meta": meta.model_dump(mode="json", exclude={"version", "language", "status"}),
-        "blocks": [block.model_dump(mode="json") for block in blocks],
+        "blocks": [_without_design(block.model_dump(mode="json")) for block in blocks],
         "assets": {path: hashlib.sha256(content).hexdigest() for path, content in sorted((assets or {}).items())},
     }
     return _dumps(payload)

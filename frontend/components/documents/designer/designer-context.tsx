@@ -36,6 +36,8 @@ export type DesignerState = {
   setProtocolId: (id: string | null) => void;
   // Aufgelöste Werte für die Arbeitsfläche (null, solange nicht geladen)
   canvasData: CanvasData | null;
+  // Eingebettet im Vorlagen-Editor: Traktanden aus dieser Sitzungsvorlage
+  sessionTemplateId: string | null;
 };
 
 const DesignerContext = createContext<DesignerState | null>(null);

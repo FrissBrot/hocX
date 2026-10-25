@@ -158,7 +158,7 @@ def test_export_bundles_only_own_users_and_nulls_foreign_references(db):
         assert "foreign@x.example" not in json.dumps(manifest)
         assert manifest["tables"]["template"][0]["created_by"] is None
         assert "user_tenant_role" not in manifest["tables"]
-        assert manifest["format_version"] == 7
+        assert manifest["format_version"] == 8
     finally:
         zip_path.unlink(missing_ok=True)
 

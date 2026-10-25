@@ -22,23 +22,22 @@ export function financeTabs(t: TFunc): RouteTab[] {
   ];
 }
 
-// Admin-only section: every route below redirects non-admins on its own.
-export function templateTabs(t: TFunc): RouteTab[] {
+// Bereich «Vorlagen»: Sitzungsvorlagen, weitere Dokumente, Bausteine, Erscheinungsbild, Bilder
+// und Schriften, Export-Verlauf; Aufgabenpakete und Zyklen nur für Admins (die Routen leiten
+// alle anderen selbst um). Die Echtheitsprüfung liegt in den Mandanten-Einstellungen.
+export function templateAreaTabs(t: TFunc, isAdmin: boolean): RouteTab[] {
   return [
     { href: "/templates", label: t("protocolTemplates") },
-    { href: "/elements", label: t("elements") },
-    { href: "/task-packages", label: t("taskPackages") },
-  ];
-}
-
-// Document Studio: Vorlagen, Corporate Design, Assets, Komponenten, Exporte. Die
-// Echtheitsprüfung liegt in den Mandanten-Einstellungen.
-export function documentStudioTabs(t: TFunc): RouteTab[] {
-  return [
     { href: "/documents", label: t("documentTemplates") },
+    { href: "/elements", label: t("elements") },
     { href: "/documents/brand", label: t("documentBrand") },
     { href: "/documents/assets", label: t("documentAssets") },
-    { href: "/documents/components", label: t("documentComponents") },
+    ...(isAdmin
+      ? [
+          { href: "/task-packages", label: t("taskPackages") },
+          { href: "/cycles", label: t("cycles") },
+        ]
+      : []),
     { href: "/documents/exports", label: t("documentExports") },
   ];
 }

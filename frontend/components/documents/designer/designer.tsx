@@ -39,7 +39,9 @@ const MODE_STORAGE_KEY = "hocx.documentStudio.mode";
 
 type Loaded = { template: DocumentTemplateDetail; catalog: StudioCatalog; capabilities: Capabilities; brands: Brand[]; assets: DocumentAsset[]; components: ReusableComponent[] };
 
-export function TemplateDesigner({ templateId }: { templateId: string }) {
+/** ``sessionTemplateId``: eingebettet im Vorlagen-Editor einer Sitzungsvorlage; die Vorschau zeigt
+ * deren Traktanden mit den Inhalten der letzten Sitzung. */
+export function TemplateDesigner({ templateId, sessionTemplateId = null }: { templateId: string; sessionTemplateId?: string | null }) {
   const t = useTranslations("documentStudio");
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState("");
@@ -52,7 +54,7 @@ export function TemplateDesigner({ templateId }: { templateId: string }) {
   }, [templateId]);
   if (error) return <StatusBanner tone="error" message={error} />;
   if (!loaded) return <p className="muted">{t("common.loading")}</p>;
-  return <DesignerWorkspace key={loaded.template.working_revision_id ?? loaded.template.id} initial={loaded} />;
+  return <DesignerWorkspace key={loaded.template.working_revision_id ?? loaded.template.id} initial={loaded} sessionTemplateId={sessionTemplateId} />;
 }
 
 function readMode(): EditorMode {
@@ -64,7 +66,7 @@ function readMode(): EditorMode {
   }
 }
 
-function DesignerWorkspace({ initial }: { initial: Loaded }) {
+function DesignerWorkspace({ initial, sessionTemplateId }: { initial: Loaded; sessionTemplateId: string | null }) {
   const t = useTranslations("documentStudio");
   const router = useRouter();
   const toast = useToast();
@@ -82,7 +84,8 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
   const [components, setComponents] = useState(initial.components);
   const [saveDiagnostics, setSaveDiagnostics] = useState<Diagnostic[]>(initial.template.diagnostics);
   const [previewDiagnostics, setPreviewDiagnostics] = useState<Diagnostic[]>([]);
-  const [dataMode, setDataMode] = useState<"sample" | "data">("sample");
+  // Im Vorlagen-Editor gleich mit echten Daten (Traktanden der Vorlage, Inhalte der letzten Sitzung)
+  const [dataMode, setDataMode] = useState<"sample" | "data">(sessionTemplateId ? "data" : "sample");
   const [protocolId, setProtocolId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const initialBrandMode = (initial.template.draft_revision ?? initial.template.published_revision)?.brand_mode ?? "follow";
@@ -442,7 +445,8 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
     dataMode,
     protocolId,
     brandId: template.brand_id,
-    needsProtocol: initial.catalog.document_types.find((item) => item.key === template.document_type)?.needs_protocol ?? false,
+    needsProtocol: !sessionTemplateId && (initial.catalog.document_types.find((item) => item.key === template.document_type)?.needs_protocol ?? false),
+    sessionTemplateId,
   });
 
   const diagnostics = useMemo(() => {
@@ -481,6 +485,7 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
     protocolId,
     setProtocolId,
     canvasData,
+    sessionTemplateId,
   };
 
   const status = template.draft_revision ? "draft" : template.published_revision ? "published" : "unpublished";
@@ -510,10 +515,10 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
             zoom={zoom}
             onZoom={setZoom}
             status={status}
-            canPublish={initial.capabilities.publish_templates && editable}
+            canPublish={(initial.capabilities.publish_templates || (initial.capabilities.edit_templates && !!template.session_template_id)) && editable}
             onPublish={() => void publish()}
             onDiscard={editable && template.draft_revision && template.published_revision ? () => void discard() : null}
-            onBack={() => void leave("/documents")}
+            onBack={sessionTemplateId ? undefined : () => void leave("/documents")}
             errorCount={errorCount}
           />
           {!editable && (

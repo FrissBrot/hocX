@@ -6,7 +6,7 @@ import { getTranslations } from "next-intl/server";
 import { TaskPackageManager } from "@/components/task-packages/task-package-manager";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
-import { templateTabs } from "@/components/ui/section-tabs";
+import { templateAreaTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { eligibleResponsibleList } from "@/lib/utils/responsible-lists";
 import {
@@ -49,7 +49,7 @@ export default async function TaskPackagesPage() {
         mobile={<MobileDesktopOnly navKey="taskPackages" backHref="/templates" backNavKey="templates" />}
         desktop={
           <>
-            <RouteTabs tabs={templateTabs(t)} activeHref="/task-packages" />
+            <RouteTabs tabs={templateAreaTabs(t, session.current_role === "admin")} activeHref="/task-packages" />
             <section className="panel">
               <TaskPackageManager
                 initialPackages={taskPackages ?? []}

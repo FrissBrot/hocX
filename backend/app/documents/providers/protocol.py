@@ -294,11 +294,54 @@ def _hidden_from_invitation(ctx: BuildContext, elements: list) -> set[int]:
     return {element.id for element in elements if element.template_element_id in hidden}
 
 
-def element_blocks(ctx: BuildContext, protocol: Protocol, *, element_ref: Any = None, include_session_todos: bool = True, invitation_only: bool = False) -> list[ElementModel]:
+def _template_rows(ctx: BuildContext, template_element_ids: set[int]) -> dict[int, tuple[Any, Any]]:
+    """TemplateElement-ID → (TemplateElement, ElementDefinition) der Vorlage des Protokolls."""
+    from app.models import ElementDefinition, TemplateElement
+
+    if not template_element_ids:
+        return {}
+    rows = ctx.db.execute(
+        select(TemplateElement, ElementDefinition)
+        .join(ElementDefinition, ElementDefinition.id == TemplateElement.element_definition_id)
+        .where(TemplateElement.id.in_(template_element_ids))
+    )
+    return {template_element.id: (template_element, definition) for template_element, definition in rows}
+
+
+def _block_appearance(template_element: Any, block_id: Any) -> dict | None:
+    """Darstellung eines Bausteins aus der Vorlage (TemplateElement.configuration_json.block_appearance)."""
+    if template_element is None or block_id is None:
+        return None
+    entry = ((template_element.configuration_json or {}).get("block_appearance") or {}).get(str(block_id))
+    return dict(entry) if entry else None
+
+
+def _definition_block_id(definition: Any, source_sort_index: Any) -> Any:
+    if definition is None or source_sort_index is None:
+        return None
+    for block in (definition.configuration_json or {}).get("blocks", []):
+        if block.get("sort_index") == source_sort_index:
+            return block.get("id")
+    return None
+
+
+def _apply_appearance(mapped: Any, appearance: dict | None) -> Any:
+    if mapped is not None and appearance:
+        mapped.appearance = appearance
+    return mapped
+
+
+def element_blocks(ctx: BuildContext, protocol: Protocol | None, *, element_ref: Any = None, include_session_todos: bool = True, invitation_only: bool = False) -> list[ElementModel]:
     """Alle exportsichtbaren Elemente (oder eines) eines Protokolls als ``protocol_element``.
-    ``invitation_only``: nur Traktanden, die in Einladung/Traktandenliste erscheinen."""
+    ``invitation_only``: nur Traktanden, die in Einladung/Traktandenliste erscheinen.
+    In der Vorschau des Vorlagen-Editors (``ctx.session_template``) bestimmt die Vorlage
+    Traktanden, Reihenfolge und Sichtbarkeit (session_template_blocks)."""
     from app.services.responsible_label_service import resolve_display_section_titles_batch
 
+    if ctx.session_template is not None and element_ref is None:
+        return session_template_blocks(ctx, protocol, include_session_todos=include_session_todos, invitation_only=invitation_only)
+    if protocol is None:
+        raise DocumentNotFoundError("Protocol")
     elements = repository.list_protocol_elements(ctx.db, protocol.id)
     if element_ref is not None:
         from app.models import ProtocolElement
@@ -312,6 +355,8 @@ def element_blocks(ctx: BuildContext, protocol: Protocol, *, element_ref: Any = 
         elements = [element for element in elements if element.id not in hidden]
     titles = resolve_display_section_titles_batch(ctx.db, elements, protocol.status, protocol.tenant_id)
     agenda_by_element, agenda_other = _agenda_blocks(ctx, protocol)
+    # Darstellung der Bausteine gilt live aus der Vorlage (wie «In Einladung zeigen»)
+    template_rows = _template_rows(ctx, {element.template_element_id for element in elements if element.template_element_id is not None})
     result: list[ElementModel] = []
     for element in elements:
         if not element.export_visible_snapshot:
@@ -319,11 +364,13 @@ def element_blocks(ctx: BuildContext, protocol: Protocol, *, element_ref: Any = 
         section_title = titles.get(element.id) or element.section_name_snapshot
         if trim_section_name(section_title).lower() == SESSION_NOTES_SECTION:
             continue
+        template_element, definition = template_rows.get(element.template_element_id, (None, None))
         children = []
         for block in repository.list_element_blocks(ctx.db, element.id):
             if not block.export_visible_snapshot:
                 continue
-            mapped = map_block(ctx, protocol, block)
+            source = (block.configuration_snapshot_json or {}).get("source_sort_index")
+            mapped = _apply_appearance(map_block(ctx, protocol, block), _block_appearance(template_element, _definition_block_id(definition, source)))
             if mapped is not None:
                 children.append(mapped)
         # Anliegen (agenda_item) erscheinen ohne eigenen Block unter ihrem Punkt.
@@ -336,6 +383,99 @@ def element_blocks(ctx: BuildContext, protocol: Protocol, *, element_ref: Any = 
                 children.append(_todo_block(rows, {"title": None, "title_key": "label.sessionTodos", "level": 2}))
         result.append(ElementModel(title=section_title, level=1, children=children))
     if element_ref is None and agenda_other:
+        result.append(ElementModel(title=None, title_key="label.agendaOther", level=1, children=agenda_other))
+    return result
+
+
+# Bausteine, deren Inhalt nur aus der Konfiguration kommt: in der Vorschau ohne Sitzung echt
+# dargestellt; alle übrigen erscheinen dort als Platzhalter mit ihrem Titel.
+_CONFIG_ONLY_TYPES = frozenset({"bullet_list", "form", "attendance", "entry_exit", "display", "static_text"})
+
+
+def _transient_block(definition: Any, block: dict) -> ProtocolElementBlock:
+    """Protokollblock im Speicher (nie gespeichert) aus einem Vorlagen-Baustein."""
+    return ProtocolElementBlock(
+        id=None,
+        element_definition_id=definition.id,
+        element_type_id=block["element_type_id"],
+        render_type_id=block["render_type_id"],
+        title_snapshot=block.get("title") or "",
+        display_title_snapshot=block.get("title"),
+        description_snapshot=block.get("description"),
+        block_title_snapshot=block.get("block_title"),
+        is_editable_snapshot=True,
+        sort_index=block.get("sort_index", 0),
+        configuration_snapshot_json=dict(block.get("configuration_json") or {}),
+    )
+
+
+def _placeholder_block(block: dict) -> RichTextBlock:
+    title = block.get("block_title") or block.get("title")
+    return RichTextBlock(title=title, level=2, hide_if_empty=False, content=markdown_to_rich(str(block.get("default_content") or "")))
+
+
+def session_template_blocks(ctx: BuildContext, protocol: Protocol | None, *, include_session_todos: bool = True, invitation_only: bool = False) -> list[ElementModel]:
+    """Vorschau im Vorlagen-Editor: Traktanden und Bausteine in Reihenfolge und Sichtbarkeit der
+    Vorlage (ungespeicherte Änderungen sind dort sofort gespeichert), Inhalte aus der gewählten
+    bzw. letzten Sitzung. Bausteine ohne Inhalt in der Sitzung erscheinen als Platzhalter."""
+    from app.models import ElementDefinition, TemplateElement
+    from app.services.block_behavior import resolve_block_behavior
+    from app.services.responsible_label_service import resolve_display_section_titles_batch
+
+    template = ctx.session_template
+    rows = list(ctx.db.execute(
+        select(TemplateElement, ElementDefinition)
+        .join(ElementDefinition, ElementDefinition.id == TemplateElement.element_definition_id)
+        .where(TemplateElement.template_id == template.id, ElementDefinition.tenant_id == template.tenant_id)
+        .order_by(TemplateElement.sort_index.asc(), TemplateElement.id.asc())
+    ))
+    elements = repository.list_protocol_elements(ctx.db, protocol.id) if protocol is not None else []
+    by_template_element = {element.template_element_id: element for element in elements if element.template_element_id is not None}
+    titles = resolve_display_section_titles_batch(ctx.db, elements, protocol.status, protocol.tenant_id) if protocol is not None else {}
+    agenda_by_element, agenda_other = _agenda_blocks(ctx, protocol) if protocol is not None else ({}, [])
+    result: list[ElementModel] = []
+    for template_element, definition in rows:
+        if invitation_only and not invitation_visible(template_element.configuration_json):
+            continue
+        element = by_template_element.get(template_element.id)
+        section_title = (titles.get(element.id) if element is not None else None) or (element.section_name_snapshot if element is not None else definition.title)
+        if trim_section_name(section_title).lower() == SESSION_NOTES_SECTION:
+            continue
+        existing: dict[Any, list[ProtocolElementBlock]] = {}
+        if element is not None:
+            for block in repository.list_element_blocks(ctx.db, element.id):
+                source = (block.configuration_snapshot_json or {}).get("source_sort_index", block.sort_index)
+                existing.setdefault(source, []).append(block)
+        children: list[Any] = []
+        definition_blocks = sorted((definition.configuration_json or {}).get("blocks", []), key=lambda item: (item.get("sort_index", 0), item.get("id", 0)))
+        for block in definition_blocks:
+            if not resolve_block_behavior(template_element.configuration_json, block)["export_visible"]:
+                continue
+            appearance = _block_appearance(template_element, block.get("id"))
+            matches = existing.get(block.get("sort_index"), [])
+            if matches and protocol is not None:
+                for match in matches:
+                    mapped = _apply_appearance(map_block(ctx, protocol, match), appearance)
+                    if mapped is not None:
+                        children.append(mapped)
+                continue
+            code = element_type_code(block["element_type_id"])
+            if code in _CONFIG_ONLY_TYPES or (protocol is not None and code not in {"text", "todo", "image", "session_notes"}):
+                mapped = map_block(ctx, protocol, _transient_block(definition, block)) if protocol is not None or code in _CONFIG_ONLY_TYPES else None
+                if mapped is not None:
+                    mapped.hide_if_empty = False
+                    children.append(_apply_appearance(mapped, appearance))
+                    continue
+            children.append(_apply_appearance(_placeholder_block(block), appearance))
+        if element is not None:
+            children.extend(agenda_by_element.get(element.id, []))
+            tag = trim_section_name(section_title).lower()
+            if include_session_todos and tag and protocol is not None:
+                todo_rows = list(repository.list_todos_by_tag(ctx.db, protocol, tag))
+                if todo_rows:
+                    children.append(_todo_block(todo_rows, {"title": None, "title_key": "label.sessionTodos", "level": 2}))
+        result.append(ElementModel(title=section_title, level=1, children=children))
+    if agenda_other:
         result.append(ElementModel(title=None, title_key="label.agendaOther", level=1, children=agenda_other))
     return result
 
@@ -517,9 +657,15 @@ CONTENT_FILTERS: dict[str, frozenset[str] | None] = {"all": None, "text": _TEXT_
 
 
 def provide_protocol_element(ctx: BuildContext, spec: BlockSpec, params: ProtocolElementParams):
-    protocol = resolve_protocol(ctx, params.protocol_id)
-    if params.protocol_id is None or (ctx.protocol is not None and protocol.id == ctx.protocol.id):
-        _refresh_membership(ctx, protocol)
+    if ctx.session_template is not None and params.protocol_id is None and params.element_id is None:
+        # Vorlagen-Editor: auch ohne bisherige Sitzung (dann nur Platzhalter und Konfiguration)
+        protocol = ctx.protocol
+        if protocol is not None:
+            ctx.ensure_can_read_protocol(protocol.id)
+    else:
+        protocol = resolve_protocol(ctx, params.protocol_id)
+        if params.protocol_id is None or (ctx.protocol is not None and protocol.id == ctx.protocol.id):
+            _refresh_membership(ctx, protocol)
     blocks = element_blocks(ctx, protocol, element_ref=params.element_id, include_session_todos=params.include_session_todos, invitation_only=params.invitation_only)
     if params.titles_only:
         return [BulletListBlock(**spec_fields(spec), items=[block.title or "" for block in blocks if block.title])]

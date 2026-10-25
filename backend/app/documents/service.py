@@ -61,6 +61,7 @@ from app.models import (
     Protocol,
     StorageObject,
     StoredFile,
+    Template,
     Tenant,
 )
 from app.models.document_entities import DocumentFile
@@ -102,9 +103,15 @@ class DocumentRequest(BaseModel):
     options: ExportOptions = Field(default_factory=ExportOptions)
     language: str | None = Field(None, max_length=10)
     data_mode: Literal["data", "sample"] = "data"
+    # Vorlagen-Editor: Traktanden aus dieser Sitzungsvorlage, Inhalte aus ``protocol_id`` bzw.
+    # der letzten Sitzung der Vorlage (nur Vorschau)
+    protocol_template_id: uuid.UUID | None = None
 
     def is_studio_preview(self) -> bool:
-        return self.content is not None or self.revision_id is not None or self.brand_tokens is not None or self.data_mode == "sample"
+        return (
+            self.content is not None or self.revision_id is not None or self.brand_tokens is not None
+            or self.data_mode == "sample" or self.protocol_template_id is not None
+        )
 
 
 @dataclass
@@ -216,6 +223,23 @@ def canonical_protocol_hash(ctx: BuildContext, protocol: Protocol, strings: dict
     return content_hash(meta, blocks, probe.assets.files)
 
 
+def _latest_readable_protocol(db: Session, user: CurrentUser | None, template: Template) -> Protocol | None:
+    """Letzte Sitzung einer Sitzungsvorlage, die der Benutzer lesen darf (Vorschau mit echten Daten)."""
+    from app.services.access_service import AccessService
+
+    access = AccessService()
+    candidates = db.scalars(
+        select(Protocol)
+        .where(Protocol.template_id == template.id, Protocol.tenant_id == template.tenant_id)
+        .order_by(Protocol.protocol_date.desc(), Protocol.id.desc())
+        .limit(20)
+    )
+    for protocol in candidates:
+        if user is None or access.can_read_protocol(db, user, protocol.id):
+            return protocol
+    return None
+
+
 def _resolve_explicit_template(db: Session, tenant_id: int, request: DocumentRequest) -> DocumentTemplate | None:
     if request.template_id is None:
         return None
@@ -245,11 +269,26 @@ def prepare(
         if protocol is None:
             raise DocumentNotFoundError("Protocol")
 
+    session_template = None
+    if request.protocol_template_id is not None:
+        session_template = db.scalar(select(Template).where(Template.public_id == request.protocol_template_id, Template.tenant_id == tenant_id))
+        if session_template is None:
+            raise DocumentNotFoundError("Template")
+        if user is not None:
+            from app.services.access_service import AccessService
+
+            if not AccessService().can_read_template(db, user, session_template.id):
+                raise DocumentNotFoundError("Template")
+        if protocol is None and request.data_mode == "data":
+            protocol = _latest_readable_protocol(db, user, session_template)
+        elif protocol is not None and protocol.template_id != session_template.id:
+            raise DocumentNotFoundError("Protocol")
+
     explicit = _resolve_explicit_template(db, tenant_id, request)
     document_type = request.document_type or (explicit.document_type if explicit is not None else None) or ("protocol" if protocol else "custom")
     doc_type = get_type(document_type)
     sample = request.data_mode == "sample"
-    if doc_type.needs_protocol and protocol is None and not sample:
+    if doc_type.needs_protocol and protocol is None and not sample and session_template is None:
         raise ValueError("protocol_required")
 
     # Fremde oder unbekannte Brand vor allem anderen ablehnen (Security-Audit SEC-018): die
@@ -272,7 +311,7 @@ def prepare(
         template_source = "revision"
     if request.content is None and revision is None:
         resolved = template_service.resolve_template(
-            db, tenant_id, document_type, explicit=explicit, protocol_template_id=protocol.template_id if protocol is not None else None
+            db, tenant_id, document_type, explicit=explicit, protocol_template_id=session_template.id if session_template is not None else protocol.template_id if protocol is not None else None
         )
         template, revision, template_source = resolved.template, resolved.revision, resolved.source
     if request.content is not None:
@@ -283,7 +322,7 @@ def prepare(
 
     language = normalize_language(content.settings.language or request.language or (tenant.document_language if tenant else None))
     strings = strings_for(language)
-    ctx = BuildContext(db=db, tenant_id=tenant_id, language=language, user=user, today=today or date.today(), protocol=protocol, public_base_url=_public_base_url())
+    ctx = BuildContext(db=db, tenant_id=tenant_id, language=language, user=user, today=today or date.today(), protocol=protocol, public_base_url=_public_base_url(), session_template=session_template)
     if protocol is not None:
         ctx.ensure_can_read_protocol(protocol.id)
 

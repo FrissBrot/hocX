@@ -58,14 +58,16 @@ describe("formatRoleLabel", () => {
 });
 
 describe("buildNav", () => {
-  it("fuehrt das Dokument-Studio unter Konfiguration, fuer Schreibende ohne Vorlagen und Zyklen", () => {
+  it("fuehrt einen Bereich «Vorlagen» unter Konfiguration, auch fuer Schreibende", () => {
     const hrefsOf = (groups: ReturnType<typeof buildNav>, titleKey: string) =>
       groups.find((group) => group.titleKey === titleKey)?.links.map((link) => link.href) ?? [];
     const admin = buildNav(adminSession());
-    expect(hrefsOf(admin, "groups.configuration")).toEqual(["/templates", "/cycles", "/documents"]);
+    expect(hrefsOf(admin, "groups.configuration")).toEqual(["/templates"]);
     expect(hrefsOf(admin, "groups.work")).not.toContain("/documents");
     const writer = buildNav({ ...adminSession(), current_role: "writer" });
-    expect(hrefsOf(writer, "groups.configuration")).toEqual(["/documents"]);
+    expect(hrefsOf(writer, "groups.configuration")).toEqual(["/templates"]);
+    const link = admin.find((group) => group.titleKey === "groups.configuration")?.links[0];
+    expect(link?.match).toEqual(expect.arrayContaining(["/documents", "/elements", "/cycles", "/task-packages"]));
   });
 
   it("liefert fuer eine Admin-Session alle Gruppen mit uebersetzbaren labelKey/titleKey (keine fertigen Texte)", () => {

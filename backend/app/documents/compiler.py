@@ -720,8 +720,11 @@ class LayoutCompiler:
         allowed = set(entry.params.model_fields)
         params = {**node.params, **{key: value for key, value in self.input.params.items() if key in allowed}}
         spec = BlockSpec(type=node.component, title=title, hide_if_empty=node.hide_if_empty, level=node.level, params=params)
+        # Vorlagen-Editor: die Traktanden kommen aus der Sitzungsvorlage, auch im Beispielmodus
+        from_session_template = self.ctx.session_template is not None and node.component == "protocol_element"
         if (
             self.input.mode != "sample"
+            and not from_session_template
             and node.component in NEEDS_PROTOCOL
             and self.ctx.protocol is None
             and not params.get("protocol_id")
@@ -730,7 +733,7 @@ class LayoutCompiler:
             self._problem(node.id, "needsProtocol", node.component, severity="warning")
             return None
         try:
-            blocks = run_component(self.ctx, spec, sample=self.input.mode == "sample", strings=self.strings)
+            blocks = run_component(self.ctx, spec, sample=self.input.mode == "sample" and not from_session_template, strings=self.strings)
         except BlockSpecError as exc:
             self._problem(node.id, "invalidParams", exc.detail, exc=exc)
             return self._error_node(node, "invalidParams")
@@ -747,7 +750,7 @@ class LayoutCompiler:
     def _data_output(self, node, blocks, area: str = "body") -> dict[str, Any]:
         self.blocks.extend(blocks)
         out = self._base(node, "data")
-        out["blocks"] = [block.model_dump(mode="json") for block in blocks]
+        out["blocks"] = [self._resolve_block_appearance(block.model_dump(mode="json")) for block in blocks]
         if node.appearance:
             # Vollständig aufgelöst, damit Typst nichts zusammenführen muss
             out["appearance"] = resolve_appearance(self.input.brand.tokens, node.appearance)
@@ -756,6 +759,22 @@ class LayoutCompiler:
             self._block_headings(area, block)
         self._snippet(node.id, area, out, before)
         return out
+
+    def _resolve_block_appearance(self, block: dict[str, Any]) -> dict[str, Any]:
+        """Darstellung einzelner Blöcke (Bausteine einer Sitzungsvorlage) wie die eines
+        data-Knotens vollständig auflösen; Typst übernimmt sie unverändert."""
+        from app.documents.appearance import ElementAppearance
+
+        overrides = block.get("appearance")
+        if overrides:
+            try:
+                parsed = {kind: ElementAppearance.model_validate(item) for kind, item in overrides.items()}
+            except ValueError:
+                parsed = {}
+            block["appearance"] = resolve_appearance(self.input.brand.tokens, parsed) if parsed else None
+        for child in block.get("children") or []:
+            self._resolve_block_appearance(child)
+        return block
 
     def _block_headings(self, area: str, block: dict[str, Any]) -> None:
         """Überschriften der Fachkomponenten (blocks.typ: block-title) für Nummerierung und

@@ -1080,7 +1080,11 @@
     "title": "Modelli",
     "unarchive": "Ripristina",
     "unarchived": "Modello ripristinato.",
-    "unpublished": "Non pubblicato"
+    "unpublished": "Non pubblicato",
+    "sessionTitle": "Impaginazione comune dei documenti di seduta",
+    "sessionDescription": "Vale per tutti i modelli di seduta senza impaginazione propria. Crea un’impaginazione propria nell’editor del modello sotto «PDF».",
+    "documentsTitle": "Documenti",
+    "documentsDescription": "Altri documenti come elenchi di attività, elenchi di appuntamenti, elenchi di membri e lettere."
   },
   "libraryGroup": {
     "data_events": "Appuntamenti",
@@ -1227,7 +1231,8 @@
     "showElement": "Mostra elemento",
     "title": "Anteprima",
     "draftHint": "L’anteprima mostra la bozza. Le esportazioni PDF usano la versione pubblicata finché la bozza non viene pubblicata.",
-    "unpublishedHint": "Questo modello non è ancora pubblicato e non viene usato per le esportazioni PDF."
+    "unpublishedHint": "Questo modello non è ancora pubblicato e non viene usato per le esportazioni PDF.",
+    "latestSession": "Ultima seduta di questo modello"
   },
   "props": {
     "addColumn": "+ Colonna",

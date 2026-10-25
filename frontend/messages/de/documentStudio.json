@@ -1080,7 +1080,11 @@
     "title": "Vorlagen",
     "unarchive": "Wiederherstellen",
     "unarchived": "Vorlage wiederhergestellt.",
-    "unpublished": "Nicht veröffentlicht"
+    "unpublished": "Nicht veröffentlicht",
+    "sessionTitle": "Gemeinsame Gestaltung der Sitzungsdokumente",
+    "sessionDescription": "Gilt für alle Sitzungsvorlagen ohne eigene Gestaltung. Eine eigene Gestaltung legst du im Editor der Vorlage unter «PDF» an.",
+    "documentsTitle": "Dokumente",
+    "documentsDescription": "Weitere Dokumente wie Todo-Listen, Terminlisten, Mitgliederlisten und Briefe."
   },
   "libraryGroup": {
     "data_events": "Termine",
@@ -1227,7 +1231,8 @@
     "showElement": "Element anzeigen",
     "title": "Vorschau",
     "draftHint": "Die Vorschau zeigt den Entwurf. PDF-Exporte verwenden die veröffentlichte Version, bis der Entwurf veröffentlicht ist.",
-    "unpublishedHint": "Diese Vorlage ist noch nicht veröffentlicht und wird für PDF-Exporte nicht verwendet."
+    "unpublishedHint": "Diese Vorlage ist noch nicht veröffentlicht und wird für PDF-Exporte nicht verwendet.",
+    "latestSession": "Letzte Sitzung dieser Vorlage"
   },
   "props": {
     "addColumn": "+ Spalte",

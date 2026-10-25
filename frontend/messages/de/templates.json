@@ -104,7 +104,7 @@
     "createTitle": "Vorlage erstellen",
     "createdToast": "Vorlage \"{name}\" erstellt",
     "currentResponsibleLabel": "Aktuelle Verantwortliche",
-    "cycleHelp": "Zyklen können unter Struktur → Zyklen verwaltet werden.",
+    "cycleHelp": "Zyklen verwaltest du unter Vorlagen → Zyklen.",
     "cycleLabel": "Zyklus",
     "delete": "Löschen",
     "deleteConfirm": "Vorlage endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
@@ -152,8 +152,8 @@
     "noResponsibleYet": "Noch keine Verantwortlichen gesetzt.",
     "orderSaveFailed": "Template-Reihenfolge konnte nicht gespeichert werden",
     "orderSavedToast": "Template-Reihenfolge gespeichert",
-    "pageIntro": "Vorlagen sind schlanke Container: sie wählen fertige Elemente aus und legen nur deren Reihenfolge fest.",
-    "pageTitle": "Vorlagen",
+    "pageIntro": "Eine Vorlage legt Traktanden, Bausteine und Gestaltung einer Sitzungsreihe fest – für den Protokoll-Editor, das PDF und die Einladung.",
+    "pageTitle": "Sitzungsvorlagen",
     "participantAssignmentsSaveFailed": "Teilnehmerzuordnungen konnten nicht gespeichert werden",
     "participantFallback": "Teilnehmer",
     "patternTokensHelp": "Tokens: '{n}' = alle Protokolle, '{n_year}' = in diesem Jahr, '{n_month}' = in diesem Monat, '{n_cycle}' = im eigenen Zyklus. Datums-Tokens: '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
@@ -251,7 +251,7 @@
     "createTitle": "Vorlage erstellen",
     "createdToast": "Vorlage \"{name}\" erstellt",
     "currentResponsibleLabel": "Aktuelle Verantwortliche",
-    "cycleHelp": "Zyklen können unter Struktur → Zyklen verwaltet werden.",
+    "cycleHelp": "Zyklen verwaltest du unter Vorlagen → Zyklen.",
     "cycleLabel": "Zyklus",
     "delete": "Löschen",
     "deleteConfirm": "Vorlage endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
@@ -391,15 +391,15 @@
     "stepperDecrease": "{label} verringern",
     "stepperIncrease": "{label} erhöhen",
     "page": {
-      "title": "Elemente",
-      "intro1": "Elemente bündeln Blöcke wie Text, Todos, Tabellen oder Terminlisten. Vorlagen setzen sich aus Elementen zusammen.",
-      "intro2": "Fixe Inhalte legst du am besten als nicht bearbeitbaren Block an.",
-      "newElement": "Neues Element",
-      "search": "Elemente durchsuchen",
-      "colElement": "Element",
-      "colBlocks": "Blöcke",
+      "title": "Bausteine",
+      "intro1": "Gespeicherte Traktanden mit ihren Bausteinen (Text, Aufgaben, Tabellen, Terminlisten …). Im Editor einer Sitzungsvorlage fügst du sie mit einem Klick ein.",
+      "intro2": "Änderungen an einem gespeicherten Baustein fragen im Editor, ob sie überall oder nur in einer Vorlage gelten sollen.",
+      "newElement": "Neuer Baustein",
+      "search": "Bausteine durchsuchen",
+      "colElement": "Baustein",
+      "colBlocks": "Inhalt",
       "colActions": "Aktionen",
-      "blockCount": "{count, plural, one {# Block} other {# Blöcke}}",
+      "blockCount": "{count, plural, one {# Teil} other {# Teile}}",
       "duplicate": "Duplizieren",
       "duplicating": "Wird dupliziert…"
     },
@@ -918,6 +918,136 @@
       "blockOrderSaved": "Reihenfolge wurde gespeichert",
       "blockSaveFailed": "Block konnte nicht gespeichert werden",
       "listEntriesFailed": "Listeneinträge konnten nicht geladen werden"
+    }
+  },
+  "studio": {
+    "intro": "Traktanden und Bausteine dieser Sitzungsvorlage. Was du hier einstellst, gilt für den Protokoll-Editor, das PDF und die Einladung.",
+    "responsibleMapping": "Verantwortliche zuordnen",
+    "settings": "Einstellungen",
+    "participants": "Teilnehmende",
+    "view": {
+      "editor": "Protokoll-Editor",
+      "pdf": "PDF",
+      "invitation": "Einladung"
+    },
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "remove": "Entfernen",
+    "badge": {
+      "notInEditor": "Nicht im Editor",
+      "notInPdf": "Nicht im PDF",
+      "readOnly": "Nur lesen",
+      "notInInvitation": "Nicht in Einladung",
+      "shared": "In {count} Traktanden verwendet"
+    },
+    "catalog": {
+      "title": "Bausteine hinzufügen",
+      "newTitle": "Neu",
+      "newElement": "Neues Traktandum",
+      "addBlockTo": "Baustein zu «{title}» hinzufügen",
+      "selectHint": "Wähle ein Traktandum, um ihm einen Baustein hinzuzufügen.",
+      "libraryTitle": "Meine Bausteine",
+      "libraryHelp": "Gespeicherte Traktanden mit ihren Bausteinen. Ein Klick fügt sie am Ende ein.",
+      "search": "Bausteine suchen",
+      "libraryEmpty": "Noch keine gespeicherten Bausteine.",
+      "addFromLibrary": "«{title}» als Traktandum einfügen"
+    },
+    "center": {
+      "title": "Traktanden",
+      "hint": "So erscheinen die Traktanden im Protokoll-Editor. Ein Klick wählt aus, ein Doppelklick bearbeitet einen Baustein.",
+      "emptyTitle": "Noch keine Traktanden",
+      "emptyDescription": "Lege links ein neues Traktandum an oder füge einen gespeicherten Baustein ein.",
+      "addBlock": "+ Baustein"
+    },
+    "props": {
+      "title": "Eigenschaften",
+      "empty": "Wähle ein Traktandum oder einen Baustein, um es hier einzustellen.",
+      "elementTitle": "Traktandum",
+      "name": "Titel",
+      "inInvitation": "In Einladung und Traktandenliste zeigen",
+      "inInvitationHelp": "Interne Punkte (z. B. Kasse) lassen sich so aus der Einladung heraushalten.",
+      "responsible": "Verantwortliche",
+      "addBlock": "Baustein hinzufügen",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "reuse": "Wiederverwenden",
+      "libraryInfo": "Gespeicherter Baustein, verwendet in {count, plural, one {einem Traktandum} other {# Traktanden}}. Änderungen am Inhalt fragen, ob sie überall gelten.",
+      "detach": "Nur in dieser Vorlage ändern",
+      "singleInfo": "Gehört nur zu dieser Vorlage.",
+      "saveToLibrary": "Als Baustein speichern",
+      "removeElement": "Traktandum entfernen",
+      "backTo": "← {title}",
+      "editContent": "Inhalt bearbeiten",
+      "visibility": "Wo und wie",
+      "appearance": "Darstellung im PDF",
+      "variant": "Darstellung",
+      "corners": "Ecken",
+      "inherit": "Wie Erscheinungsbild",
+      "appearanceHelp": "Gilt nur für diesen Baustein in dieser Vorlage, sofort auch für bestehende Protokolle.",
+      "removeBlock": "Baustein entfernen"
+    },
+    "switch": {
+      "is_visible": {
+        "label": "Im Protokoll-Editor zeigen",
+        "help": "Aus: beim Protokollieren ausgeblendet (z. B. automatisch gefüllte Angaben)."
+      },
+      "export_visible": {
+        "label": "Im PDF zeigen",
+        "help": "Aus: nur im Editor sichtbar (z. B. interne Notizen)."
+      },
+      "is_editable": {
+        "label": "Beim Protokollieren bearbeitbar",
+        "help": "Aus: Inhalt kommt fest aus der Vorlage."
+      },
+      "copy_from_last_protocol": {
+        "label": "Vom letzten Protokoll übernehmen",
+        "help": "Neue Protokolle starten mit dem Inhalt der letzten Sitzung."
+      }
+    },
+    "dialog": {
+      "editTitle": "Baustein «{name}» bearbeiten",
+      "newElementTitle": "Neues Traktandum",
+      "newBlockTitle": "Neuer Baustein",
+      "newElementDescription": "Titel des Traktandums und sein erster Baustein. Weitere Bausteine fügst du danach hinzu.",
+      "blockDescription": "Baustein im Traktandum «{title}».",
+      "createElement": "Traktandum anlegen",
+      "createBlock": "Baustein hinzufügen"
+    },
+    "scope": {
+      "title": "Wo soll die Änderung gelten?",
+      "message": "«{title}» wird in {count} Traktanden verwendet. Überall aktualisieren oder nur in dieser Vorlage?",
+      "all": "Überall aktualisieren",
+      "here": "Nur in dieser Vorlage"
+    },
+    "toast": {
+      "saveFailed": "Speichern fehlgeschlagen.",
+      "elementAdded": "«{title}» hinzugefügt.",
+      "blockAdded": "Baustein hinzugefügt.",
+      "blockSaved": "Baustein gespeichert.",
+      "blockRemoved": "Baustein entfernt.",
+      "orderSaved": "Reihenfolge gespeichert.",
+      "elementRemoved": "Traktandum entfernt.",
+      "renamed": "Titel gespeichert.",
+      "savedToLibrary": "«{title}» ist jetzt unter «Meine Bausteine».",
+      "detached": "Das Traktandum hat jetzt einen eigenen Inhalt."
+    },
+    "confirm": {
+      "removeBlock": "Baustein aus dem Traktandum entfernen? Bestehende Protokolle bleiben unverändert.",
+      "removeElementTitle": "Traktandum entfernen",
+      "removeElement": "«{title}» aus der Vorlage entfernen? Bestehende Protokolle bleiben unverändert."
+    },
+    "design": {
+      "title": {
+        "protocol": "Gestaltung des Protokolls",
+        "invitation": "Gestaltung der Einladung"
+      },
+      "sharedInfo": "Diese Vorlage verwendet die gemeinsame Gestaltung «{name}». Die Vorschau zeigt deine Traktanden mit den Inhalten der letzten Sitzung.",
+      "noneInfo": "Für dieses Dokument gibt es noch keine Gestaltung.",
+      "customize": "Für diese Vorlage gestalten",
+      "customized": "Eigene Gestaltung angelegt.",
+      "customizeFailed": "Gestaltung konnte nicht angelegt werden.",
+      "loadFailed": "Gestaltung konnte nicht geladen werden.",
+      "copyName": "{name} – {type}"
     }
   }
 }

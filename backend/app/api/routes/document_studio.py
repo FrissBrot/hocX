@@ -50,6 +50,7 @@ from app.models import (
     Template,
 )
 from app.services import public_id_service
+from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.core.offload import run_coroutine_in_thread
 
@@ -192,6 +193,9 @@ class TemplateRead(BaseModel):
     draft_revision: RevisionRead | None
     created_at: datetime
     updated_at: datetime
+    # Gestaltung, die allein zu einer Sitzungsvorlage gehört (Vorlagen-Editor)
+    session_template_id: uuid.UUID | None = None
+    session_template_name: str | None = None
 
 
 class TemplateDetail(TemplateRead):
@@ -207,6 +211,7 @@ class _Prefetched:
     brands: dict[int, DocumentBrand]
     sources: dict[int, DocumentTemplate]
     published: dict[int, DocumentTemplateRevision]
+    owners: dict[int, Template]
     drafts: dict[int, DocumentTemplateRevision]
     names: dict[int, str]
 
@@ -226,10 +231,13 @@ def _prefetch(db: Session, templates: list[DocumentTemplate]) -> _Prefetched:
     } if template_ids else {}
     user_ids = {user_id for revision in (*published.values(), *drafts.values()) for user_id in (revision.created_by, revision.published_by) if user_id}
     names = dict(db.execute(select(AppUser.id, AppUser.display_name).where(AppUser.id.in_(user_ids))).all()) if user_ids else {}
+    owner_ids = template_service.session_owners(db, template_ids)
+    owner_templates = by_id(Template, owner_ids.values())
     return _Prefetched(
         brands=by_id(DocumentBrand, (template.brand_id for template in templates)),
         sources=by_id(DocumentTemplate, (template.source_template_id for template in templates)),
         published=published,
+        owners={template_id: owner_templates[owner_id] for template_id, owner_id in owner_ids.items() if owner_id in owner_templates},
         drafts=drafts,
         names=names,
     )
@@ -243,6 +251,7 @@ def _template_read(
         prefetched = _prefetch(db, [template])
     brand = prefetched.brands.get(template.brand_id) if template.brand_id else None
     source = prefetched.sources.get(template.source_template_id) if template.source_template_id else None
+    owner = prefetched.owners.get(template.id)
     return TemplateRead(
         id=template.public_id,
         name=template.name,
@@ -261,6 +270,8 @@ def _template_read(
         draft_revision=_revision_read(db, prefetched.drafts.get(template.id), prefetched.names),
         created_at=template.created_at,
         updated_at=template.updated_at,
+        session_template_id=owner.public_id if owner is not None else None,
+        session_template_name=owner.name if owner is not None else None,
     )
 
 
@@ -501,7 +512,10 @@ class PublishBody(BaseModel):
 @router.post("/document-templates/{template_id}/publish", response_model=TemplateDetail)
 def publish_document_template(template_id: uuid.UUID, body: PublishBody, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     template = _editable_template(db, user, template_id)
-    permissions.require_publish(user)
+    # Gestaltungen, die allein einer Sitzungsvorlage gehören, veröffentlichen auch Schreibende
+    # (sie passen ihre Vorlage selbst an); alle übrigen nur Admins.
+    if not template_service.session_owners(db, [template.id]):
+        permissions.require_publish(user)
     try:
         revision = template_service.publish(db, template, user_id=user.user_id, note=body.note)
         db.commit()
@@ -717,6 +731,79 @@ async def _import_design_example_impl(example_key: str, body: ExampleImport, db:
         db.rollback()
         raise http_error(user, exc) from exc
     audit.log(db, action="document_template.import_example", actor=user, entity_type="document_template", entity_id=template.id, details={"example": example.key, "brand_id": str(brand.public_id)})
+    return _template_detail(db, user, template)
+
+
+# ── Gestaltung einer Sitzungsvorlage ─────────────────────────────────────────
+
+
+class SessionDesignRead(BaseModel):
+    document_type: str
+    template_id: uuid.UUID
+    template_name: str
+    template_origin: str
+    template_system_key: str | None = None
+    # protocol_template | tenant_default | platform_default | fallback
+    source: str
+    # Gehört allein dieser Sitzungsvorlage (direkt bearbeitbar)
+    owned: bool
+
+
+def _session_template_or_404(db: Session, user: CurrentUser, template_id: uuid.UUID) -> Template:
+    template = public_id_service.get_by_public_id(db, Template, template_id, tenant_id=user.current_tenant_id)
+    # Eingeschränkte Leser sehen nur ihre zugewiesenen Vorlagen (gleiche Antwort wie «fehlt»)
+    if template is None or not AccessService().can_read_template(db, user, template.id):
+        raise _not_found(user)
+    return template
+
+
+@router.get("/document-studio/session-templates/{template_id}/designs", response_model=list[SessionDesignRead])
+def list_session_designs(template_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Geltende Seitengestaltung je Sitzungsdokument (Protokoll, Einladung, Traktandenliste)."""
+    permissions.require_view(user)
+    session_template = _session_template_or_404(db, user, template_id)
+    result: list[SessionDesignRead] = []
+    for document_type in template_service.SESSION_DOCUMENT_TYPES:
+        try:
+            resolved = template_service.resolve_template(db, user.current_tenant_id, document_type, protocol_template_id=session_template.id)
+        except ValueError:
+            continue
+        owner = template_service.session_owners(db, [resolved.template.id]).get(resolved.template.id)
+        result.append(SessionDesignRead(
+            document_type=document_type,
+            template_id=resolved.template.public_id,
+            template_name=resolved.template.name,
+            template_origin=resolved.template.origin,
+            template_system_key=resolved.template.system_key,
+            source=resolved.source,
+            owned=resolved.source == "protocol_template" and owner == session_template.id,
+        ))
+    return result
+
+
+class SessionDesignCustomize(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=160)
+
+
+@router.post("/document-studio/session-templates/{template_id}/designs/{document_type}", response_model=TemplateDetail)
+def customize_session_design(
+    template_id: uuid.UUID, document_type: str, body: SessionDesignCustomize, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user),
+):
+    """Eigene Gestaltung für diese Sitzungsvorlage anlegen (Kopie der geltenden)."""
+    permissions.require_edit(user)
+    session_template = _session_template_or_404(db, user, template_id)
+    try:
+        template = template_service.customize_session_design(db, user.current_tenant_id, session_template, document_type, name=body.name, user_id=user.user_id)
+        db.commit()
+    except template_service.TemplatePublishError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail={"message": text(_lang(user), "apiError.templateInvalid"), "diagnostics": [item.as_dict() for item in exc.diagnostics]}) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise http_error(user, exc) from exc
+    audit.log(db, action="document_template.customize_session", actor=user, entity_type="document_template", entity_id=template.id, details={"document_type": document_type, "session_template": str(template_id)})
     return _template_detail(db, user, template)
 
 

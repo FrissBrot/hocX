@@ -119,7 +119,11 @@ class TemplateService:
         template = self.repository.get(db, template_id)
         if template is None:
             return False
+        single_ids = [definition.id for _element, definition in self.template_element_repository.list_for_template(db, template_id) if not definition.is_library]
         self.repository.delete(db, template)
+        from app.services.element_definition_service import ElementDefinitionService
+
+        ElementDefinitionService().delete_unused_singles(db, single_ids)
         return True
 
     def duplicate_template(self, db: Session, template_id: int, *, new_name: str, created_by: int | None) -> Template | None:
@@ -151,11 +155,19 @@ class TemplateService:
         # Elements stay within the same tenant, so element_definition_id and any participant/list
         # references embedded in configuration_json (e.g. responsibility assignments) remain valid
         # as-is - no remapping needed, unlike a cross-tenant clone.
-        for template_element, _definition in self.template_element_repository.list_for_template(db, template_id):
+        # Einzelstücke (Traktanden ohne Bibliotheks-Baustein) werden mitkopiert, damit die Kopie
+        # unabhängig gestaltet werden kann; Bibliotheks-Bausteine bleiben geteilt.
+        from app.services.element_definition_service import ElementDefinitionService
+
+        definition_service = ElementDefinitionService()
+        for template_element, definition in self.template_element_repository.list_for_template(db, template_id):
+            definition_id = template_element.element_definition_id
+            if not definition.is_library:
+                definition_id = definition_service.copy_element_definition(db, definition, is_library=False).id
             db.add(
                 TemplateElement(
                     template_id=created.id,
-                    element_definition_id=template_element.element_definition_id,
+                    element_definition_id=definition_id,
                     sort_index=template_element.sort_index,
                     section_name=template_element.section_name,
                     section_order=template_element.section_order,

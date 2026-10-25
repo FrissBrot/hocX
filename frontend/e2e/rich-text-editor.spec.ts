@@ -9,7 +9,7 @@ import { test, expect } from "@playwright/test";
 // the editor. Fixed by using a plain <div> wrapper instead of <label>.
 test("rich text field in the create-element form accepts typed input", async ({ page }) => {
   await page.goto("/elements");
-  await page.getByRole("button", { name: "Neues Element" }).click();
+  await page.getByRole("button", { name: "Neuer Baustein" }).click();
 
   // Any block type card exposes the same "Standard- oder Fixinhalt" field.
   await page.locator(".block-type-card").first().click();

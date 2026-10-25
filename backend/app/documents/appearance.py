@@ -74,6 +74,37 @@ def validate_appearance_elements(value: dict[str, ElementAppearance], *, allow_b
     return {kind: item for kind, item in value.items() if not item.is_empty()}
 
 
+# Elementart der Darstellung je Baustein-Typ einer Sitzungsvorlage (Element-Typ-Code). Die
+# Vorlage kann sie pro Baustein übersteuern (TemplateElement.configuration_json.block_appearance).
+APPEARANCE_KIND_BY_ELEMENT_TYPE: dict[str, str] = {
+    "todo": "table",
+    "matrix": "table",
+    "fine_list": "table",
+    "finance_transactions": "table",
+    "event_list": "table",
+    "attendance": "attendance",
+    "session_date": "session_date",
+    "finance_balance": "finance_balance",
+    "form": "form",
+}
+
+
+def validate_block_appearance(value: object) -> dict[str, dict[str, dict[str, str | None]]]:
+    """``{"<block_id>": {"<elementart>": {"variant": …, "corners": …}}}`` prüfen und leere
+    Einträge entfernen (ValueError bei Unbekanntem, wird als 400 gemeldet)."""
+    if not isinstance(value, dict):
+        raise ValueError("block_appearance must be an object")
+    result: dict[str, dict[str, dict[str, str | None]]] = {}
+    for block_id, overrides in value.items():
+        if not str(block_id).isdigit() or not isinstance(overrides, dict):
+            raise ValueError("invalid block_appearance entry")
+        parsed = {kind: ElementAppearance.model_validate(item) for kind, item in overrides.items()}
+        cleaned = validate_appearance_elements(parsed, allow_brand_only=False)
+        if cleaned:
+            result[str(block_id)] = {kind: item.model_dump() for kind, item in cleaned.items()}
+    return result
+
+
 def corner_radius(layout_radius: float, corners: str | None) -> float:
     if corners == "square":
         return 0.0

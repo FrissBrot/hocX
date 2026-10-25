@@ -64,19 +64,14 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
     });
   }
 
-  // Das Dokument-Studio gehört zur Konfiguration, wird aber auch von Schreibenden gepflegt -
-  // die Gruppe erscheint deshalb ab "writer", Vorlagen und Zyklen bleiben Admins vorbehalten.
+  // Ein Ort für alles, woraus Dokumente entstehen: Sitzungsvorlagen, weitere Dokumente,
+  // Bausteine, Erscheinungsbild (Bereichs-Tabs siehe section-tabs.ts::templateAreaTabs).
+  // Schreibende passen Vorlagen selbst an; Aufgabenpakete und Zyklen bleiben Admins vorbehalten.
   if (isWriter) {
     groups.push({
       titleKey: "groups.configuration",
       links: [
-        ...(isAdmin
-          ? [
-              { href: "/templates", labelKey: "templates", icon: "templates" as const, match: ["/elements", "/task-packages"] },
-              { href: "/cycles", labelKey: "cycles", icon: "cycles" as const },
-            ]
-          : []),
-        { href: "/documents", labelKey: "documentStudio", icon: "studio" },
+        { href: "/templates", labelKey: "templates", icon: "templates", match: ["/elements", "/task-packages", "/cycles", "/documents"] },
       ],
     });
   }
