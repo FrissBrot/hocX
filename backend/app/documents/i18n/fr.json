@@ -396,6 +396,7 @@
     "sessions": "Séances"
   },
   "label": {
+    "agenda": "Ordre du jour",
     "agendaOther": "Autres sujets",
     "asOf": "État au {date}",
     "attendanceCounts": "{present} présents · {late} en retard · {excused} excusés · {absent} absents",

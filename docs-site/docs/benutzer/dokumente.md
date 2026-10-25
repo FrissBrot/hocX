@@ -66,6 +66,13 @@ Es gibt drei Arten:
 - **Eigene:** neu angelegte Vorlagen (**Neue Vorlage**, leer oder auf Basis einer bestehenden).
 - **Kopie:** angepasste Kopie einer mitgelieferten Vorlage.
 
+**Beispiele** (nur Admins) öffnet eine Galerie mit sechs fertig gestalteten Protokollen
+(Farbband, Hell, Baustelle, Tech, Kanzlei, Corporate). **Hinzufügen** legt die Vorlage und ein
+passendes Brand-Profil an und öffnet die Vorlage im Designer. Sie sieht zuerst aus wie im
+Beispiel, mit Beispielfarben, Beispiellogo und Beispieladresse. Unter **Dokument** stellst du
+das Brand-Profil auf euer eigenes um. Dann erscheint die Vorlage mit euren Farben, eurem Logo
+und euren Angaben. Das Beispiel-Profil kannst du danach im Brand Studio löschen.
+
 Im Menü (⋮) einer Vorlage: Vorschau, Bearbeiten, Duplizieren, Umbenennen, Versionen, **Als
 Standard festlegen**, Archivieren, Löschen. Über **Standardvorlagen** legen Admins für jeden
 Dokumenttyp und jede Protokollvorlage fest, welche Vorlage und welches Corporate Design gelten.

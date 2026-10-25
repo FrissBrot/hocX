@@ -165,6 +165,28 @@ mit mehreren Varianten (Protokoll: Standard, formell, kompakt, Kurzprotokoll,
 Beschlussprotokoll). `sync_system_templates` gleicht sie beim Start ab (`ensure_document_studio`):
 Änderungen ergeben eine neue Revision, frühere bleiben für bestehende Exporte erhalten.
 
+### Gestaltungsbeispiele (`examples.py`)
+
+Sechs fertig gestaltete Protokolle (Farbband, Hell, Baustelle, Tech, Kanzlei, Corporate) sind
+**keine** Systemvorlagen. Ein Admin holt sie im Studio über **Beispiele** in den Verein
+(`POST /api/document-studio/examples/{key}/import`). Der Import legt an:
+
+- die Beispielbilder aus `example_assets/` als Assets des Mandanten (mit Virenscan),
+- ein Brand-Profil mit Farben, Schriften, Überschriften- und Tabellenstil und den
+  Organisationsangaben des Mockups (nie als Standardprofil; fehlt eines, entsteht zuerst das
+  Standardprofil),
+- eine eigene Vorlage mit Entwurf, verknüpft mit diesem Profil (`document_template.brand_id`).
+
+Der Verein sieht die Vorlage so zuerst wie im Mockup. Stellt er sie im Designer unter
+**Dokument** auf sein eigenes Brand-Profil um, erscheint sie mit seinen Farben, seinem Logo
+und seinen Angaben. Die Beispiele verwenden nur Bausteine und Brand-Referenzen, keine festen
+Farben ausser Weiss. Die Vorschaubilder der Galerie liegen fertig unter
+`example_assets/thumbnails/` (`GET /api/document-studio/examples/{key}/thumbnail`).
+
+Neues Beispiel: Builder und `DesignExample` (CD-Tokens, Bilder) in `examples.py`, Namen und
+Beschreibungen unter `documentStudio.examples.items.<key>` in allen Sprachen, Vorschaubild
+erzeugen (Rendern mit Beispieldaten, erste Seite als PNG mit 48 ppi).
+
 Priorität beim Export:
 
 1. explizit gewählte Vorlage (Export-Dialog)

@@ -713,6 +713,41 @@
     "todos": "To-dos",
     "year": "Per year"
   },
+  "examples": {
+    "add": "Add",
+    "adding": "Adding …",
+    "description": "Ready-made templates. «Add» creates the template and a matching brand profile. In the designer you can then switch the template to your own brand profile.",
+    "imported": "Example added. Template and brand profile have been created.",
+    "items": {
+      "protocol_band": {
+        "description": "Title page with a band in the primary colour, key figures and table of contents, footer image at the bottom.",
+        "name": "Minutes colour band"
+      },
+      "protocol_light": {
+        "description": "White title page with fine lines, key figures and table of contents, footer image at the bottom.",
+        "name": "Minutes light"
+      },
+      "protocol_construction": {
+        "description": "Dark title band with a signal stripe, key facts, key figures and distribution list.",
+        "name": "Minutes site meeting"
+      },
+      "protocol_tech": {
+        "description": "Lots of white space, agenda on the title page and participants as chips.",
+        "name": "Minutes tech"
+      },
+      "protocol_law": {
+        "description": "Serif typeface, centred letterhead, agenda items with § numbers and signatures.",
+        "name": "Minutes law firm"
+      },
+      "protocol_corporate": {
+        "description": "Title band, key facts, key figures and numbered agenda items.",
+        "name": "Minutes corporate"
+      }
+    },
+    "loadFailed": "The examples could not be loaded.",
+    "open": "Examples",
+    "title": "Design examples"
+  },
   "export": {
     "brand": "Corporate design",
     "brandDefault": "As defined by the template",

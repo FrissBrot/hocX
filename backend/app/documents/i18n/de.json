@@ -396,6 +396,7 @@
     "sessions": "Sitzungen"
   },
   "label": {
+    "agenda": "Traktanden",
     "agendaOther": "Weitere Anliegen",
     "asOf": "Stand {date}",
     "attendanceCounts": "{present} anwesend · {late} verspätet · {excused} entschuldigt · {absent} unentschuldigt",

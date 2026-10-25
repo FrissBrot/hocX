@@ -117,7 +117,8 @@
     "upcomingEvents": "Upcoming events",
     "participantCount": "Participants",
     "byMonth": "By month",
-    "openFines": "Open fines"
+    "openFines": "Open fines",
+    "agenda": "Agenda"
   },
   "month": {
     "1": "January",

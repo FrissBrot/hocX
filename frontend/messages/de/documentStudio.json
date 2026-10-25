@@ -713,6 +713,41 @@
     "todos": "Todos",
     "year": "Pro Jahr"
   },
+  "examples": {
+    "add": "Hinzufügen",
+    "adding": "Wird hinzugefügt …",
+    "description": "Fertig gestaltete Vorlagen. «Hinzufügen» legt die Vorlage und ein passendes Brand-Profil an. Im Designer stellst du die Vorlage danach auf euer eigenes Brand-Profil um.",
+    "imported": "Beispiel hinzugefügt. Vorlage und Brand-Profil sind angelegt.",
+    "items": {
+      "protocol_band": {
+        "description": "Titelseite mit Farbband in der Hauptfarbe, Kennzahlen und Inhaltsverzeichnis, Fussbild am Seitenende.",
+        "name": "Protokoll Farbband"
+      },
+      "protocol_light": {
+        "description": "Weisse Titelseite mit feinen Linien, Kennzahlen und Inhaltsverzeichnis, Fussbild am Seitenende.",
+        "name": "Protokoll Hell"
+      },
+      "protocol_construction": {
+        "description": "Dunkles Titelband mit Signalstreifen, Eckdaten, Kennzahlen und Verteiler.",
+        "name": "Protokoll Baustelle"
+      },
+      "protocol_tech": {
+        "description": "Viel Weissraum, Agenda auf der Titelseite und Teilnehmende als Chips.",
+        "name": "Protokoll Tech"
+      },
+      "protocol_law": {
+        "description": "Serifenschrift, zentrierter Briefkopf, Traktanden mit §-Nummern und Unterschriften.",
+        "name": "Protokoll Kanzlei"
+      },
+      "protocol_corporate": {
+        "description": "Titelband, Eckdaten, Kennzahlen und nummerierte Traktanden.",
+        "name": "Protokoll Corporate"
+      }
+    },
+    "loadFailed": "Die Beispiele konnten nicht geladen werden.",
+    "open": "Beispiele",
+    "title": "Gestaltungsbeispiele"
+  },
   "export": {
     "brand": "Corporate Design",
     "brandDefault": "Wie in der Vorlage festgelegt",

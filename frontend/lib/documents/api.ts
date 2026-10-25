@@ -131,6 +131,12 @@ export type DocumentTemplateInfo = {
   updated_at: string;
 };
 
+/** Gestaltungsbeispiel (backend/app/documents/examples.py), Namen über documentStudio.examples.items. */
+export type DesignExample = {
+  key: string;
+  document_type: string;
+};
+
 export type DocumentTemplateDetail = DocumentTemplateInfo & {
   content: TemplateContent;
   working_revision_id: string | null;
@@ -267,6 +273,10 @@ export const studioApi = {
   restoreRevision: (id: string, revisionId: string) => browserApiFetch<DocumentTemplateDetail>(`/api/document-templates/${id}/revisions/${revisionId}/restore`, { method: "POST" }),
   compare: (id: string, from: string, to: string) => browserApiFetch<RevisionDiff>(`/api/document-templates/${id}/compare?from=${from}&to=${to}`),
   thumbnailUrl: (id: string, version: string) => `/api/document-templates/${id}/thumbnail?v=${encodeURIComponent(version)}`,
+
+  listExamples: () => browserApiFetch<DesignExample[]>("/api/document-studio/examples"),
+  importExample: (key: string, name: string) => browserApiFetch<DocumentTemplateDetail>(`/api/document-studio/examples/${encodeURIComponent(key)}/import`, json({ name })),
+  exampleThumbnailUrl: (key: string) => `/api/document-studio/examples/${encodeURIComponent(key)}/thumbnail`,
 
   assignments: () => browserApiFetch<Assignment[]>("/api/document-template-assignments"),
   setAssignment: (body: { document_type: string; protocol_template_id?: string | null; template_id?: string | null; brand_id?: string | null }) =>

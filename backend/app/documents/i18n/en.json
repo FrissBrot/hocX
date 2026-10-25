@@ -396,6 +396,7 @@
     "sessions": "Meetings"
   },
   "label": {
+    "agenda": "Agenda",
     "agendaOther": "Further topics",
     "asOf": "As of {date}",
     "attendanceCounts": "{present} present · {late} late · {excused} excused · {absent} absent",

@@ -713,6 +713,41 @@
     "todos": "Compiti",
     "year": "Per anno"
   },
+  "examples": {
+    "add": "Aggiungi",
+    "adding": "Aggiunta in corso …",
+    "description": "Modelli pronti all'uso. «Aggiungi» crea il modello e un profilo del marchio abbinato. Nell'editor puoi poi passare il modello al tuo profilo del marchio.",
+    "imported": "Esempio aggiunto. Modello e profilo del marchio sono stati creati.",
+    "items": {
+      "protocol_band": {
+        "description": "Pagina del titolo con fascia nel colore principale, cifre chiave e indice, immagine a piè di pagina.",
+        "name": "Verbale fascia colorata"
+      },
+      "protocol_light": {
+        "description": "Pagina del titolo bianca con linee sottili, cifre chiave e indice, immagine a piè di pagina.",
+        "name": "Verbale chiaro"
+      },
+      "protocol_construction": {
+        "description": "Fascia del titolo scura con striscia di segnalazione, dati principali, cifre chiave e lista di distribuzione.",
+        "name": "Verbale di cantiere"
+      },
+      "protocol_tech": {
+        "description": "Molto spazio bianco, ordine del giorno nella pagina del titolo e partecipanti come etichette.",
+        "name": "Verbale tech"
+      },
+      "protocol_law": {
+        "description": "Carattere con grazie, intestazione centrata, trattande con numeri § e firme.",
+        "name": "Verbale studio legale"
+      },
+      "protocol_corporate": {
+        "description": "Fascia del titolo, dati principali, cifre chiave e trattande numerate.",
+        "name": "Verbale corporate"
+      }
+    },
+    "loadFailed": "Non è stato possibile caricare gli esempi.",
+    "open": "Esempi",
+    "title": "Esempi di impaginazione"
+  },
   "export": {
     "brand": "Corporate design",
     "brandDefault": "Come definito nel modello",

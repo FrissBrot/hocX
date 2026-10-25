@@ -117,7 +117,8 @@
     "upcomingEvents": "Nächste Termine",
     "participantCount": "Teilnehmende",
     "byMonth": "Nach Monat",
-    "openFines": "Offene Bussen"
+    "openFines": "Offene Bussen",
+    "agenda": "Traktanden"
   },
   "month": {
     "1": "Januar",

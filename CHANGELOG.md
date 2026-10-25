@@ -181,6 +181,20 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   Migration `0153_agenda_item`: Tabellen `agenda_item` und `user_agenda_template_preference`,
   beide mit RLS. Benutzerdoku: `docs-site/docs/benutzer/anliegen.md`.
 
+### Neu: Gestaltungsbeispiele für Protokolle (Nachtrag vom 2026-10-25)
+
+- Im Document Studio öffnet **Beispiele** (nur Admins) eine Galerie mit sechs fertig
+  gestalteten Protokollen: **Farbband**, **Hell**, **Baustelle**, **Tech**, **Kanzlei** und
+  **Corporate**. Sie haben eigene Titelseiten mit Farbband, Kennzahlen (Anwesende, offene
+  Todos, nächste Sitzung), Inhaltsverzeichnis oder Traktandenliste, Verteiler und Fussbild
+  sowie eigene Kopf- und Fusszeilen.
+- **Hinzufügen** legt die Vorlage und ein passendes Brand-Profil (Farben, Schriften,
+  Beispiellogo, Beispieladresse) an und verknüpft beide. Die Vorlage sieht so zuerst aus wie
+  im Entwurf. Stellt man sie im Designer auf das eigene Brand-Profil um, erscheint sie mit den
+  eigenen Farben, dem Logo und den Angaben des Vereins.
+- Die Beispiele sind keine Systemvorlagen und erscheinen erst nach dem Hinzufügen in der
+  Bibliothek. Gebaut sind sie nur aus den vorhandenen Bausteinen.
+
 ### Neu: Dokument-Engine und Document Studio
 
 - **Document Studio** (Navigation «Dokument-Studio», eigenes Icon zur Unterscheidung von «Dateien»):
