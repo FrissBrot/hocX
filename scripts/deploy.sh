@@ -511,30 +511,31 @@ prepare_runtime_permissions() {
   if [[ "$storage_path" != /* ]]; then
     storage_path="$PROJECT_DIR/${storage_path#./}"
   fi
-  for path in "$storage_path" "$PROJECT_DIR/infra/traefik/dynamic"; do
-    if [ -L "$path" ]; then
-      echo "Runtime-Pfad darf kein Symlink sein: $path" >&2
+  # infra/traefik/dynamic haertet prepare_thumbnail_dir: dort liegt die versionierte
+  # security.yml, die jedes Deploy-Code-Update mit der Gruppe des Deploy-Benutzers neu schreibt.
+  path="$storage_path"
+  if [ -L "$path" ]; then
+    echo "Runtime-Pfad darf kein Symlink sein: $path" >&2
+    return 1
+  fi
+  mkdir -p "$path"
+  case "$(readlink -f "$path")" in
+    /|"$PROJECT_DIR")
+      echo "Unsicherer Runtime-Pfad: $path" >&2
+      return 1
+      ;;
+  esac
+  if find "$path" \( ! -group 5001 -o ! -perm -g+w -o -perm /007 \) -print -quit | grep -q .; then
+    if [ "$EUID" -ne 0 ]; then
+      echo "$path muss fuer die Container-Gruppe 5001 vorbereitet werden." >&2
+      echo "Einmalig als root: chgrp -R 5001 '$path' && chmod -R g+rwX,o-rwx '$path' && find '$path' -type d -exec chmod g+s {} +" >&2
       return 1
     fi
-    mkdir -p "$path"
-    case "$(readlink -f "$path")" in
-      /|"$PROJECT_DIR")
-        echo "Unsicherer Runtime-Pfad: $path" >&2
-        return 1
-        ;;
-    esac
-    if find "$path" \( ! -group 5001 -o ! -perm -g+w -o -perm /007 \) -print -quit | grep -q .; then
-      if [ "$EUID" -ne 0 ]; then
-        echo "$path muss fuer die Container-Gruppe 5001 vorbereitet werden." >&2
-        echo "Einmalig als root: chgrp -R 5001 '$path' && chmod -R g+rwX,o-rwx '$path'" >&2
-        return 1
-      fi
-      echo "    Haerte Berechtigungen: $path"
-      chgrp -R 5001 "$path"
-      chmod -R g+rwX,o-rwx "$path"
-      find "$path" -type d -exec chmod g+s {} +
-    fi
-  done
+    echo "    Haerte Berechtigungen: $path"
+    chgrp -R 5001 "$path"
+    chmod -R g+rwX,o-rwx "$path"
+    find "$path" -type d -exec chmod g+s {} +
+  fi
 }
 
 prepare_thumbnail_dir() {
@@ -545,11 +546,15 @@ prepare_thumbnail_dir() {
   # Gruppe 5001 chgrp'en; deshalb laeuft die Berechtigungs-Korrektur in einem kurzlebigen
   # Container aus dem bereits signaturgeprueften Backend-Image (HOCX_BACKEND_IMAGE stammt aus dem
   # Release-Manifest).
+  # infra/traefik/dynamic gehoert ebenfalls dazu: Git schreibt die versionierte security.yml bei
+  # einem Deploy-Code-Update als hocx-deploy:hocx-deploy 0644 neu, Traefik liest sie aber nur
+  # ueber die Gruppe 5001 (cap_drop:ALL, siehe docker-compose.traefik.yml).
   local base="$PROJECT_DIR/storage-local"
   local dir
 
   echo "==> [$ENVIRONMENT] Lokale Arbeitsverzeichnisse vorbereiten"
-  for dir in "$base/thumbnails" "$base/work" "$PROJECT_DIR/backups/storage" "$PROJECT_DIR/backups/borg-work"; do
+  for dir in "$base/thumbnails" "$base/work" "$PROJECT_DIR/backups/storage" "$PROJECT_DIR/backups/borg-work" \
+    "$PROJECT_DIR/infra/traefik/dynamic"; do
     if [ -L "$base" ] || [ -L "$dir" ]; then
       echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
       return 1
@@ -566,6 +571,31 @@ prepare_thumbnail_dir() {
       -v "$dir:/target" "$HOCX_BACKEND_IMAGE" \
       -c 'chgrp -R 5001 /target && chmod -R g+rwX,o-rwx /target && find /target -type d -exec chmod g+s {} +'
   done
+  prepare_acme_dir
+}
+
+# infra/traefik/letsencrypt gehoert root (Traefik laeuft als root ohne CAP_DAC_OVERRIDE und
+# schreibt dort acme.json mit 0600). 0711 statt 0700: Git (als hocx-deploy) muss die versionierte
+# .gitkeep per Namen erreichen koennen, sonst meldet `git status` beim Deploy-Code-Update
+# "Permission denied". Auflisten kann der Deploy-Benutzer das Verzeichnis weiterhin nicht.
+prepare_acme_dir() {
+  local dir="$PROJECT_DIR/infra/traefik/letsencrypt"
+
+  if [ -L "$dir" ]; then
+    echo "Runtime-Pfad darf kein Symlink sein: $dir" >&2
+    return 1
+  fi
+  mkdir -p "$dir"
+  if [ "$(stat -c '%u:%g:%a' "$dir")" = "0:0:711" ]; then
+    echo "    letsencrypt: ok"
+    return 0
+  fi
+  echo "    Setze Besitz und Rechte: $dir (root, 0711)"
+  docker run --rm --pull never --network none --user 0:0 \
+    --cap-drop ALL --cap-add CHOWN --cap-add FOWNER \
+    --security-opt no-new-privileges:true --entrypoint sh \
+    -v "$dir:/target" "$HOCX_BACKEND_IMAGE" \
+    -c 'chown 0:0 /target && chmod 0711 /target'
 }
 
 

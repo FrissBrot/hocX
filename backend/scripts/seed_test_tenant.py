@@ -31,6 +31,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.secret_crypto import encrypt_secret
 from app.core.security import hash_password
+from app.core.storage import ABGABEBOX, get_object_store
 from app.models.entities import (
     AppUser,
     CycleConfig,
@@ -39,6 +40,7 @@ from app.models.entities import (
     ListDefinition,
     ListEntry,
     Participant,
+    PlatformAdmin,
     ProtocolElement,
     ProtocolElementBlock,
     ProtocolText,
@@ -68,8 +70,9 @@ DEMO_TENANT_SLUG = "jubla"
 DEMO_PASSWORD = "ChangeMe123!"
 SEED_ASSETS_DIR = Path(__file__).resolve().parents[1] / "sql" / "seed_assets"
 
-# Optional: a developer-chosen base32 TOTP secret (see .env.example) enrolled for every demo
-# account below, so the same authenticator entry keeps working across every reseed instead of
+# Optional: a base32 TOTP secret (see .env.example; on test hosts scripts/lib/env_migrate.sh
+# generates one once and keeps it) enrolled for every demo account below and for every platform
+# admin, so the same authenticator entry keeps working across every reseed instead of
 # re-enrolling via QR code each time. Left unset, demo accounts get no MFA factor and go
 # through the normal enroll-on-first-login flow, same as any other new account.
 DEMO_TOTP_SEED = os.environ.get("DEMO_TOTP_SEED", "").strip().replace(" ", "").upper()
@@ -147,12 +150,39 @@ def create_tenant_and_users(db) -> tuple[Tenant, dict[str, AppUser]]:
         db.flush()
         if DEMO_TOTP_SEED:
             db.add(UserMfaFactor(
-                user_id=user.id, factor_type="totp", label="Dev-Seed (DEMO_TOTP_SEED)",
+                user_id=user.id, factor_type="totp", label=DEMO_TOTP_LABEL,
                 secret_encrypted=encrypt_secret(DEMO_TOTP_SEED),
             ))
         users[role_code] = user
     db.flush()
     return tenant, users
+
+
+DEMO_TOTP_LABEL = "Dev-Seed (DEMO_TOTP_SEED)"
+
+
+def ensure_platform_admin_demo_totp(db) -> None:
+    """Gibt jedem Plattform-Admin einen TOTP-Faktor mit DEMO_TOTP_SEED (Admin-Seite).
+
+    Plattform-Admins überleben den Reseed (eigene Tabelle, kein Mandant). Ein vorhandener
+    Dev-Seed-Faktor bekommt den aktuellen Seed, selbst eingerichtete Faktoren bleiben unberührt.
+    """
+    if not DEMO_TOTP_SEED:
+        return
+    for admin in db.query(PlatformAdmin).filter(PlatformAdmin.is_active.is_(True)).all():
+        factor = (
+            db.query(UserMfaFactor)
+            .filter(UserMfaFactor.platform_admin_id == admin.id, UserMfaFactor.factor_type == "totp",
+                    UserMfaFactor.label == DEMO_TOTP_LABEL)
+            .one_or_none()
+        )
+        if factor is None:
+            db.add(UserMfaFactor(platform_admin_id=admin.id, factor_type="totp", label=DEMO_TOTP_LABEL,
+                                 secret_encrypted=encrypt_secret(DEMO_TOTP_SEED)))
+        else:
+            factor.secret_encrypted = encrypt_secret(DEMO_TOTP_SEED)
+            factor.totp_last_counter = None
+    db.flush()
 
 
 def create_template_structure(db, tenant: Tenant, created_by: AppUser) -> Template:
@@ -426,17 +456,27 @@ def create_submission_assignment(db, tenant: Tenant, list_definition: ListDefini
         mime_type = "application/pdf" if file_path.suffix == ".pdf" else "image/jpeg"
         stored_file = StoredFile(
             tenant_id=tenant.id, original_name=file_path.name, mime_type=mime_type,
-            storage_path=f"demo-seed/{file_path.name}", file_size_bytes=len(content), scan_status="clean",
+            storage_path=store_demo_submission_file(db, tenant.id, file_path.name, content, mime_type),
+            file_size_bytes=len(content), scan_status="clean",
         )
         db.add(stored_file)
         db.flush()
 
-        target_dir = Path(settings.abgabebox_storage_root) / "demo-seed"
-        target_dir.mkdir(parents=True, exist_ok=True)
-        (target_dir / file_path.name).write_bytes(content)
-
         db.add(SubmissionUploadFile(upload_id=upload.id, stored_file_id=stored_file.id))
     db.flush()
+
+
+def store_demo_submission_file(db, tenant_id: int, name: str, content: bytes, mime_type: str) -> str:
+    """Legt eine Demo-Abgabe über den Objektspeicher ab und gibt den Schlüssel zurück.
+
+    Der Schlüssel enthält die (bei jedem Lauf neue) Mandanten-ID: Das Löschen des vorherigen
+    Demo-Mandanten hinterlässt für dessen Schlüssel Tombstones, und der Purge-Job entfernt sie
+    kurz darauf physisch. Ein fester Schlüssel wie früher «demo-seed/<name>», direkt auf die
+    Platte geschrieben, verschwand dadurch nach jedem Deploy von 1.2 auf 1.2 wieder.
+    """
+    key = f"demo-seed/tenant-{tenant_id}/{name}"
+    get_object_store().put_bytes(db, ABGABEBOX, key, content, content_type=mime_type)
+    return key
 
 
 def main() -> None:
@@ -474,9 +514,14 @@ def main() -> None:
         create_submission_assignment(db, tenant, list_definition)
         db.commit()
 
+        ensure_platform_admin_demo_totp(db)
+        db.commit()
+
         log(f"Demo tenant '{DEMO_TENANT_NAME}' seeded successfully.")
         log(f"Login: admin@{DEMO_TENANT_SLUG}.hocx.local / writer@{DEMO_TENANT_SLUG}.hocx.local / "
             f"reader@{DEMO_TENANT_SLUG}.hocx.local / kassier@{DEMO_TENANT_SLUG}.hocx.local, password: {DEMO_PASSWORD}")
+        if DEMO_TOTP_SEED:
+            log("TOTP: alle Demo-Konten und Plattform-Admins nutzen DEMO_TOTP_SEED aus der .env")
     except Exception:
         db.rollback()
         raise

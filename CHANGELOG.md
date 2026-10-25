@@ -108,6 +108,21 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
 - `verify_release.sh` prüft die Domains per `curl` mit SNI direkt gegen Traefik, ohne DNS;
   eigene CA über `HOCX_VERIFY_CA_FILE`. Private Hosts überspringen die Checks nicht mehr.
 - `infra/garage/` ist Teil des signierten Deploy-Code-Nachweises.
+- **Traefik-Rechte nach Code-Updates**: Git schreibt die versionierte
+  `infra/traefik/dynamic/security.yml` als Deploy-Benutzer neu, danach brach `deploy.sh` mit
+  «muss für die Container-Gruppe 5001 vorbereitet werden» ab. `deploy.sh` setzt die Gruppe 5001
+  jetzt selbst, ohne root, über einen kurzlebigen Container aus dem geprüften Backend-Image.
+- **`infra/traefik/letsencrypt`** gehört root mit Rechten 0711 statt 0700. Git erreicht die
+  versionierte `.gitkeep` wieder, Traefiks `acme.json` (0600) bleibt geschützt. `deploy.sh` und
+  `provision_deploy_user.sh` setzen die Rechte selbst.
+- **Demo-Mandant (Testumgebung)**: Die Abgabe-Dateien des Demo-Mandanten verschwanden nach
+  jedem weiteren Deploy. Der Seed schrieb sie unter festen Schlüsseln direkt auf die Platte, der
+  Purge-Job entfernte sie über die Tombstones des gelöschten Vorgänger-Mandanten. Sie laufen
+  jetzt über den Objektspeicher (auch bei S3) und liegen unter einem Schlüssel je Mandant.
+- **Fester TOTP-Seed auf Testhosts**: `deploy.sh` erzeugt `DEMO_TOTP_SEED` auf Testhosts einmalig
+  und behält ihn. Der Demo-Seed hinterlegt ihn für alle Demo-Konten und zusätzlich als Faktor
+  «Dev-Seed» für jeden Plattform-Admin. Ein Authenticator-Eintrag reicht damit für Mandant und
+  Admin-Seite, auch nach jedem Neuaufbau.
 
 ### Breaking Changes
 
