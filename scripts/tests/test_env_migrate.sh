@@ -122,6 +122,20 @@ fresh_env
 printf "HOCX_SINGLE_TENANT_RESOLUTION='auto'\n" >> "$ENV_FILE"
 test "$(value_of "$ENV_FILE" HOCX_SINGLE_TENANT_RESOLUTION)" = auto
 
+# --- 6b. DEMO_TOTP_SEED: nur auf Testhosts erzeugt, danach unveraendert ---------------------
+fresh_env
+migrate_env_file "$ENV_FILE" > /dev/null
+test -z "$(value_of "$ENV_FILE" DEMO_TOTP_SEED)" || fail "DEMO_TOTP_SEED darf ausserhalb von test nicht entstehen"
+fresh_env
+grep -Ev '^HOCX_ENVIRONMENT=' "$ENV_FILE" > "$ENV_FILE.next" && mv "$ENV_FILE.next" "$ENV_FILE" && chmod 600 "$ENV_FILE"
+printf "HOCX_ENVIRONMENT='test'\nDEMO_TOTP_SEED=\n" >> "$ENV_FILE"
+migrate_env_file "$ENV_FILE" > /dev/null
+seed="$(value_of "$ENV_FILE" DEMO_TOTP_SEED)"
+[[ "$seed" =~ ^[A-Z2-7]{32}$ ]] || fail "DEMO_TOTP_SEED ist kein base32-Seed: $seed"
+test "$(grep -c '^DEMO_TOTP_SEED=' "$ENV_FILE")" -eq 1 || fail "DEMO_TOTP_SEED steht doppelt in der .env"
+migrate_env_file "$ENV_FILE" > /dev/null
+test "$(value_of "$ENV_FILE" DEMO_TOTP_SEED)" = "$seed" || fail "DEMO_TOTP_SEED wurde neu erzeugt"
+
 # --- 7. deploy.sh: Verdrahtung des Update-Pfads --------------------------------------------
 DEPLOY="$REPO_DIR/scripts/deploy.sh"
 # shellcheck disable=SC2016  # Literale Suchmuster in deploy.sh
@@ -137,6 +151,16 @@ grep -q 'HOCX_PHOTO_ANALYSIS_WORKER_IMAGE' "$DEPLOY" || fail "Worker-Image wird 
 test "$(grep -c 'docs photo-analysis-worker' "$DEPLOY")" -ge 4 \
   || fail "photo-analysis-worker fehlt in Signatur-/Manifest-/Rollback-Listen"
 grep -q '^prepare_thumbnail_dir$' "$DEPLOY" || fail "prepare_thumbnail_dir wird nicht aufgerufen"
+# security.yml wird bei jedem Deploy-Code-Update vom Deploy-Benutzer neu geschrieben; nur der
+# Container-Schritt (ohne root auf dem Host) bringt sie zurueck auf Gruppe 5001.
+sed -n '/^prepare_thumbnail_dir() {/,/^}/p' "$DEPLOY" | grep -q 'infra/traefik/dynamic' \
+  || fail "prepare_thumbnail_dir haertet infra/traefik/dynamic nicht"
+sed -n '/^prepare_runtime_permissions() {/,/^}/p' "$DEPLOY" | grep -v '^ *#' | grep -q 'infra/traefik/dynamic' \
+  && fail "prepare_runtime_permissions verlangt fuer infra/traefik/dynamic wieder root"
+grep -q '"0:0:711"' "$DEPLOY" || fail "deploy.sh setzt letsencrypt nicht auf root 0711"
+# shellcheck disable=SC2016  # Literales Suchmuster
+grep -q 'install -d -m 711 -o root -g root "$REPO_DIR/infra/traefik/letsencrypt"' "$REPO_DIR/scripts/provision_deploy_user.sh" \
+  || fail "provision_deploy_user.sh legt letsencrypt nicht mit 0711 an"
 grep -q 'single_tenant_resolution=auto' "$DEPLOY" || fail "Mandanten-Aufloesung fehlt beim Alembic-Aufruf"
 grep -q 'storage-local/thumbnails' "$REPO_DIR/scripts/provision_deploy_user.sh" \
   || fail "provision_deploy_user.sh legt storage-local/thumbnails nicht an"

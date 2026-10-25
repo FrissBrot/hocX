@@ -140,6 +140,21 @@ migrate_env_file() {
     changed=true
   fi
 
+  # Nur Testumgebung: fester TOTP-Seed fuer die Demo-Konten und die Plattform-Admins
+  # (backend/scripts/seed_test_tenant.py). Einmal erzeugt bleibt er, damit derselbe
+  # Authenticator-Eintrag nach jedem Test-Deploy weiter funktioniert.
+  if [ "$(env_file_value "$env_file" HOCX_ENVIRONMENT)" = test ] && [ -z "$(env_file_value "$tmp_file" DEMO_TOTP_SEED)" ]; then
+    if ! command -v openssl > /dev/null 2>&1 || ! command -v base32 > /dev/null 2>&1; then
+      rm -f "$tmp_file"
+      umask "$umask_before"
+      echo "openssl und base32 werden zum Erzeugen von DEMO_TOTP_SEED benoetigt." >&2
+      return 1
+    fi
+    set_empty_env_placeholder "$tmp_file" DEMO_TOTP_SEED "$(openssl rand 20 | base32 | tr -d '=\n')"
+    notes+=("ergaenzt: DEMO_TOTP_SEED (neu erzeugt, nur Testumgebung)")
+    changed=true
+  fi
+
   # MAIN-OPS-001: deploy.sh hat frueher HOCX_ENVIRONMENT='prod' (Host-Name) geschrieben. Die
   # Anwendung erkennt den Produktionsmodus am kanonischen Wert 'production' (Backend und Frontend
   # akzeptieren 'prod' zwar als Alias, die .env wird aber auf den kanonischen Wert gebracht).
