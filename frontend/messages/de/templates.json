@@ -374,7 +374,9 @@
       "saved": "Bussentarif der Vorlage gespeichert",
       "saveFailed": "Bussentarif konnte nicht gespeichert werden",
       "loadFailed": "Bussentarif konnte nicht geladen werden"
-    }
+    },
+    "invitationVisible": "In Einladung und Traktandenliste",
+    "invitationToggleFailed": "Einstellung konnte nicht gespeichert werden."
   },
   "elementEditor": {
     "advancedShow": "Erweitert",

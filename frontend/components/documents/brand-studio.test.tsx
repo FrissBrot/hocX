@@ -74,6 +74,33 @@ describe("BrandStudio", () => {
     expect(toast).toHaveBeenCalledWith("Gespeichert als Version 4.", "success");
   });
 
+  it("derives the remaining colors from the two main colors until one is changed by hand", async () => {
+    render(<BrandStudio capabilities={capabilities} />);
+    fireEvent.change(await screen.findByLabelText("Hauptfarbe"), { target: { value: "#aa0000" } });
+    await advance(800);
+    await waitFor(() => expect(api.previewDocument.mock.calls.at(-1)![0].brand_tokens.colors).toMatchObject({ primary: "#AA0000", heading: "#AA0000", table_header_background: "#F7E6E6" }));
+
+    fireEvent.change(screen.getByLabelText("Linien"), { target: { value: "#123456" } });
+    expect(screen.getByLabelText("Übrige Farben automatisch ableiten")).not.toBeChecked();
+    fireEvent.change(screen.getByLabelText("Hauptfarbe"), { target: { value: "#00aa00" } });
+    await advance(800);
+    await waitFor(() => expect(api.previewDocument.mock.calls.at(-1)![0].brand_tokens.colors).toMatchObject({ primary: "#00AA00", heading: "#AA0000", border: "#123456" }));
+  });
+
+  it("applies a base style and keeps element overrides on top of it", async () => {
+    render(<BrandStudio capabilities={capabilities} />);
+    fireEvent.click(await screen.findByRole("radio", { name: /Abgerundet/ }));
+    fireEvent.change(screen.getByLabelText("Anwesenheit"), { target: { value: "table" } });
+    await advance(800);
+    await waitFor(() => expect(api.previewDocument.mock.calls.at(-1)![0].brand_tokens).toMatchObject({
+      appearance: { base: "rounded", elements: { attendance: { variant: "table", corners: null } } },
+      layout: { heading_style: "boxed", table_style: "zebra", radius: 4 },
+    }));
+    fireEvent.click(screen.getByRole("radio", { name: /Klassisch/ }));
+    await advance(800);
+    await waitFor(() => expect(api.previewDocument.mock.calls.at(-1)![0].brand_tokens.appearance).toEqual({ base: "classic", elements: { attendance: { variant: "table", corners: null } } }));
+  });
+
   it("reports a parallel change instead of overwriting it", async () => {
     api.studioApi.updateBrand.mockRejectedValue(new ApiError("Konflikt", "conflict", 409, { lock_version: 9 }));
     render(<BrandStudio capabilities={capabilities} />);

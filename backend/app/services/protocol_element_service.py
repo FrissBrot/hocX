@@ -18,6 +18,7 @@ from app.schemas.protocol import (
 )
 from app.services.snapshot_reference_ids import snapshot_reference_ids, translate_attendance_entries, translate_participant_refs
 from app.services import public_id_service
+from app.services.element_config import parse_session_time
 from app.services.fine_tariff_service import tariff_block_values
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 
@@ -202,6 +203,7 @@ class ProtocolElementService:
 
         selected_date = config.get("selected_date")
         parsed_date = date.fromisoformat(selected_date) if isinstance(selected_date, str) and selected_date else None
+        parsed_time = parse_session_time(config.get("selected_time"))
         title = (config.get("session_label") or "Naechste Sitzung").strip() or "Naechste Sitzung"
         tag = (config.get("session_tag") or "next_session").strip() or "next_session"
 
@@ -227,6 +229,7 @@ class ProtocolElementService:
             next_event = Event(
                 tenant_id=protocol.tenant_id,
                 event_date=parsed_date,
+                start_time=parsed_time,
                 event_category_id=int(category_id),
                 tag=tag,
                 title=title,
@@ -238,6 +241,7 @@ class ProtocolElementService:
             template.next_event_id = next_event.id
         else:
             next_event.event_date = parsed_date
+            next_event.start_time = parsed_time
             next_event.tag = tag
             next_event.title = title
             db.add(next_event)

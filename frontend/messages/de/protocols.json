@@ -330,7 +330,8 @@
     "noTodos": "Keine Todos",
     "openEventOverview": "Terminübersicht öffnen",
     "rowLabelPlaceholder": "Zeilenbezeichnung",
-    "unknown": "Unbekannt"
+    "unknown": "Unbekannt",
+    "timeLabel": "Uhrzeit"
   },
   "newBulletPlaceholder": "Neuen Bulletpoint mit dem Button hinzufügen",
   "newBulletPlus": "+ Punkt",
@@ -442,7 +443,8 @@
     "noTodos": "Keine Todos",
     "presentOf": "{present}/{total} anwesend",
     "rowCount": "{count, plural, one {# Zeile} other {# Zeilen}}",
-    "todoCount": "{count, plural, one {# Todo} other {# Todos}}"
+    "todoCount": "{count, plural, one {# Todo} other {# Todos}}",
+    "eventOnAt": "Termin {date}, {time} Uhr"
   },
   "tagLabel": "Tag",
   "tagsPlaceholder": "Tags…",
@@ -482,5 +484,7 @@
   "locationLabel": "Ort",
   "organizersLabel": "Organisatoren",
   "balanceAsOf": "Stand {date}",
-  "includeImageGps": "GPS-Daten des Bildes mitsenden"
+  "includeImageGps": "GPS-Daten des Bildes mitsenden",
+  "timeLabel": "Uhrzeit",
+  "sessionDateTime": "{date}, {time} Uhr"
 }

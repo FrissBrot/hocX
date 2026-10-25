@@ -315,6 +315,20 @@ function BehaviorExportIcon() {
   );
 }
 
+function BehaviorInvitationIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="m3 7 9 6 9-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Traktandum erscheint in Einladung und Traktandenliste (Standard an, siehe providers/protocol.py). */
+function invitationVisible(configurationJson: Record<string, unknown> | undefined): boolean {
+  return configurationJson?.invitation_visible !== false;
+}
+
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
 function behaviorIconFields(t: TFunc): Array<{ field: TemplateElementBehaviorField; label: string; icon: ReactNode }> {
@@ -875,6 +889,14 @@ export function TemplateEditor({
     });
     setElements((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     return updated;
+  }
+
+  async function toggleInvitationVisible(templateElement: TemplateElement) {
+    try {
+      await patchTemplateElementConfiguration(templateElement.id, { ...templateElement.configuration_json, invitation_visible: !invitationVisible(templateElement.configuration_json) });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("invitationToggleFailed"), "error");
+    }
   }
 
   async function updateBlockBehavior(
@@ -2104,6 +2126,18 @@ export function TemplateEditor({
                           defaults={item.blocks[0]?.behavior_defaults}
                           onToggle={(field) => void updateBlockBehavior(item.id, "element", field, !item.behavior[field])}
                         />
+                        <div className="behavior-icon-row">
+                          <button
+                            type="button"
+                            className={`behavior-icon-button${invitationVisible(item.configuration_json) ? " behavior-icon-button-active" : ""}`}
+                            title={t("invitationVisible")}
+                            aria-label={t("invitationVisible")}
+                            aria-pressed={invitationVisible(item.configuration_json)}
+                            onClick={() => void toggleInvitationVisible(item)}
+                          >
+                            <BehaviorInvitationIcon />
+                          </button>
+                        </div>
                         {item.blocks.length > 1 ? (
                           <button
                             type="button"

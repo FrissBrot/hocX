@@ -14,6 +14,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.documents.appearance import APPEARANCE_BASES, APPEARANCE_VARIANTS, AppearanceBase, ElementAppearance, corner_radius, validate_appearance_elements
 from app.documents.layout import Spacing
 from app.documents.model import HEX_COLOR_PATTERN
 
@@ -157,6 +158,35 @@ class BrandOrganization(_Strict):
     place: str = Field("", max_length=120)
 
 
+# ── Erscheinungsbild der Elemente (Grundlagen in appearance.py) ─────────────
+
+
+class BrandAppearance(_Strict):
+    base: AppearanceBase = "classic"
+    elements: dict[str, ElementAppearance] = Field(default_factory=dict)
+
+    @field_validator("elements")
+    @classmethod
+    def _known_elements(cls, value: dict[str, ElementAppearance]) -> dict[str, ElementAppearance]:
+        return validate_appearance_elements(value, allow_brand_only=True)
+
+
+def resolve_appearance(tokens: "BrandTokens", overrides: dict[str, ElementAppearance] | None = None) -> dict[str, dict[str, Any]]:
+    """Darstellung je Elementart: Block-Übersteuerung → Brand-Übersteuerung → Grundstil
+    (Überschriften und Tabellen aus BrandLayout, das der Grundstil vorbelegt)."""
+    layout = tokens.layout
+    base = APPEARANCE_BASES[tokens.appearance.base]["elements"]
+    result: dict[str, dict[str, Any]] = {}
+    for kind in APPEARANCE_VARIANTS:
+        brand_item = tokens.appearance.elements.get(kind) or ElementAppearance()
+        block_item = (overrides or {}).get(kind) or ElementAppearance()
+        default = layout.heading_style if kind == "heading" else layout.table_style if kind == "table" else base[kind]
+        variant = block_item.variant or brand_item.variant or default
+        corners = block_item.corners or brand_item.corners
+        result[kind] = {"variant": variant, "radius": corner_radius(layout.radius, corners)}
+    return result
+
+
 class BrandVerify(_Strict):
     show_url: bool = True
     show_id: bool = True
@@ -164,7 +194,11 @@ class BrandVerify(_Strict):
 
 
 class BrandTokens(_Strict):
+    # Brand Studio leitet alle übrigen Farben aus Haupt- und Zweitfarbe ab, solange gesetzt.
+    # Die abgeleiteten Werte stehen trotzdem ausgeschrieben in ``colors`` (Export liest nur dort).
+    derive_colors: bool = True
     colors: BrandColors = Field(default_factory=BrandColors)
+    appearance: BrandAppearance = Field(default_factory=BrandAppearance)
     typography: BrandTypography = Field(default_factory=BrandTypography)
     assets: BrandAssets = Field(default_factory=BrandAssets)
     layout: BrandLayout = Field(default_factory=BrandLayout)

@@ -55,7 +55,12 @@ export type DataComponentInfo = {
   access: "reader" | "writer" | "finance";
   needs_protocol: boolean;
   params_schema: JsonSchema;
+  /** Elementarten, deren Darstellung ein Block dieser Komponente übersteuern kann */
+  appearance_kinds: string[];
 };
+
+export type AppearanceBaseInfo = { layout: { heading_style: string; table_style: string; radius: number }; elements: Record<string, string> };
+export type AppearanceCatalog = { variants: Record<string, string[]>; brand_only: string[]; corner_kinds: string[]; bases: Record<string, AppearanceBaseInfo> };
 
 export type BindingInfo = {
   path: string;
@@ -72,6 +77,7 @@ export type StudioCatalog = {
   node_types: Record<string, NodeTypeInfo>;
   library: LibraryEntry[];
   data_components: DataComponentInfo[];
+  appearance: AppearanceCatalog;
   bindings: BindingInfo[];
   document_types: DocumentTypeInfo[];
   categories: string[];

@@ -374,7 +374,9 @@
       "saved": "Tarif des amendes du modèle enregistré",
       "saveFailed": "Le tarif des amendes n'a pas pu être enregistré",
       "loadFailed": "Le tarif des amendes n'a pas pu être chargé"
-    }
+    },
+    "invitationVisible": "Dans l’invitation et l’ordre du jour",
+    "invitationToggleFailed": "Le réglage n’a pas pu être enregistré."
   },
   "elementEditor": {
     "advancedShow": "Avancé",

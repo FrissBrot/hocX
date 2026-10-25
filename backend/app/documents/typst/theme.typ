@@ -41,9 +41,13 @@
   )
 }
 
+// Darstellung je Elementart (brand.resolve_appearance): (variant, radius in mm)
+#let appearance-of(brand, kind) = brand.at("appearance", default: (:)).at(kind, default: (variant: none, radius: brand.layout.radius))
+
 #let heading-rule(brand, c) = {
   let t = brand.typography
-  let style = brand.layout.heading_style
+  let heading-look = appearance-of(brand, "heading")
+  let style = if heading-look.variant == none { brand.layout.heading_style } else { heading-look.variant }
   let primary = rgb(brand.colors.primary)
   let heading-color = rgb(brand.colors.heading)
   let secondary = rgb(brand.colors.secondary)
@@ -66,13 +70,14 @@
     } else if style == "bar" {
       block(width: 100%, stroke: (left: 3pt + primary), inset: (left: 0.5em, y: 0.15em), body)
     } else {
-      block(width: 100%, fill: primary.lighten(88%), inset: (x: 0.5em, y: 0.35em), radius: brand.layout.radius * 1mm, body)
+      block(width: 100%, fill: primary.lighten(88%), inset: (x: 0.5em, y: 0.35em), radius: heading-look.radius * 1mm, body)
     }
   }
 }
 
-#let table-style(brand, c) = {
-  let style = brand.layout.table_style
+#let table-style(brand, c, variant: none) = {
+  let style = if variant != none { variant } else { appearance-of(brand, "table").at("variant", default: none) }
+  if style == none { style = brand.layout.table_style }
   let header-bg = rgb(brand.colors.table_header_background)
   let header-fg = rgb(brand.colors.table_header_text)
   let primary = rgb(brand.colors.primary)
@@ -112,5 +117,21 @@
 
 #let make-ctx(doc) = {
   let c = palette(doc.brand)
-  (doc: doc, strings: doc.strings, brand: doc.brand, c: c, theme: make-theme(doc.brand, c))
+  let appearance = doc.brand.at("appearance", default: (:))
+  (doc: doc, strings: doc.strings, brand: doc.brand, c: c, theme: make-theme(doc.brand, c), appearance: appearance)
+}
+
+// Block-Übersteuerung aus dem Designer (data-Knoten mit «appearance»): bereits vollständig
+// aufgelöst, ersetzt die Brand-Werte für die enthaltenen Blöcke.
+#let with-appearance(ctx, appearance) = {
+  if appearance == none { return ctx }
+  let merged = ctx.appearance + appearance
+  let theme = ctx.theme + (table: table-style(ctx.brand, ctx.c, variant: merged.at("table", default: (variant: none)).variant))
+  ctx + (appearance: merged, theme: theme)
+}
+
+// Variante und Radius einer Elementart im aktuellen Kontext
+#let look(ctx, kind, default: none) = {
+  let item = ctx.at("appearance", default: (:)).at(kind, default: none)
+  if item == none { (variant: default, radius: ctx.brand.layout.radius) } else { item }
 }

@@ -484,7 +484,10 @@ export function embeddedBlockSummary(
   }
 
   if (elementTypeId === 10) {
-    return String(config.selected_date ?? "").trim() ? t("summary.eventOn", { date: formatShortDate(String(config.selected_date)) }) : t("summary.noDate");
+    if (!String(config.selected_date ?? "").trim()) return t("summary.noDate");
+    const date = formatShortDate(String(config.selected_date));
+    const time = String(config.selected_time ?? "").trim();
+    return time ? t("summary.eventOnAt", { date, time }) : t("summary.eventOn", { date });
   }
 
   const text = String(embeddedBlock.text_content ?? "").trim();

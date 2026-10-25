@@ -3089,6 +3089,15 @@ export function FocusedElementEditor({
                       onPickerClick={() => setSessionDatePicker({ blockId: block.id, todayIso: new Date().toISOString().slice(0, 10) })}
                     />
                   </div>
+                  <label className="session-date-main session-date-time">
+                    <span className="session-date-label">{t("timeLabel")}</span>
+                    <input
+                      type="time"
+                      value={String(blockConfig.selected_time ?? "")}
+                      readOnly={!blockEditable}
+                      onChange={(event) => { if (blockEditable) patchBlockConfigValue(block.id, "selected_time", event.target.value || null, blockConfig); }}
+                    />
+                  </label>
                   {sessionDatePicker?.blockId === block.id && (() => {
                     // Tag-Filter aus der Elementvorlage (gemeinsamer Terminfilter, nur Tags).
                     const sessionFilter = { ...blockEventFilter(blockConfig, "all"), range: { mode: "all" as const, start_days: 0, end_days: 0 }, cycle: null };

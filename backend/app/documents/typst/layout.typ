@@ -7,6 +7,7 @@
 #import "@preview/tiaoma:0.3.0": qrcode
 #import "lib/core.typ": tr, is-blank
 #import "base/blocks.typ": render-block
+#import "theme.typ": with-appearance
 #import "base/rich.typ": render-rich
 
 // ── Längen und Stil ─────────────────────────────────────────────────────────
@@ -303,7 +304,8 @@
     })
   } else if t == "data" {
     // Fachkomponenten bleiben auf oberster Ebene (Seitenumbrüche, wiederholte Tabellenköpfe)
-    styled(ctx, n, { for b in n.blocks { render-block(ctx, b) } })
+    let block-ctx = with-appearance(ctx, n.at("appearance", default: none))
+    styled(ctx, n, { for b in n.blocks { render-block(block-ctx, b) } })
   } else if t == "layer" {
     let body = {
       for child in n.children {

@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 from app.documents import assets as asset_service
 from app.documents import bindings as binding_registry
 from app.documents.bindings import BindingDef, BindingEnvironment, BindingResolver, UnknownBindingError, format_value
-from app.documents.brand import BrandTokens, resolve_color
+from app.documents.brand import BrandTokens, resolve_appearance, resolve_color
 from app.documents.brand_service import ResolvedBrand
 from app.documents.catalog import CATALOG, NEEDS_PROTOCOL, BlockSpec, validate_spec
 from app.documents.conditions import ConditionError, condition_paths, evaluate
@@ -664,9 +664,15 @@ class LayoutCompiler:
             return self._error_node(node, "referenceNotFound")
         if not blocks:
             return None
+        return self._data_output(node, blocks)
+
+    def _data_output(self, node, blocks) -> dict[str, Any]:
         self.blocks.extend(blocks)
         out = self._base(node, "data")
         out["blocks"] = [block.model_dump(mode="json") for block in blocks]
+        if node.appearance:
+            # Vollständig aufgelöst, damit Typst nichts zusammenführen muss
+            out["appearance"] = resolve_appearance(self.input.brand.tokens, node.appearance)
         return out
 
     def _node_component_ref(self, node, scope, area, scope_def):

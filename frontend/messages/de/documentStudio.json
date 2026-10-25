@@ -129,7 +129,8 @@
     "statistics_sessions_count": "Anzahl Sitzungen",
     "todos_done_count": "Anzahl erledigte Pendenzen",
     "todos_open": "Offene Pendenzen",
-    "todos_open_count": "Anzahl offene Pendenzen"
+    "todos_open_count": "Anzahl offene Pendenzen",
+    "protocol_invitation_elements": "Traktanden der Einladung"
   },
   "bindingField": {
     "assignee": "Zuständig",
@@ -177,6 +178,10 @@
     "actionsFor": "Aktionen für {name}",
     "addColor": "+ Farbe",
     "addImage": "+ Bild",
+    "advanced": "Erweiterte Optionen",
+    "advancedAssets": "Bilder und Hintergründe",
+    "allColors": "Alle Farben",
+    "allColorsHelp": "Wer hier eine abgeleitete Farbe ändert, schaltet die automatische Ableitung aus.",
     "archive": "Archivieren",
     "archived": "Archiviert",
     "archivedDone": "Profil archiviert.",
@@ -213,6 +218,8 @@
     "delete": "Löschen",
     "deleteConfirm": "Profil «{name}» löschen? Vorlagen verwenden danach das Standard-Profil.",
     "deleted": "Profil gelöscht.",
+    "deriveColors": "Übrige Farben automatisch ableiten",
+    "deriveColorsHelp": "Überschriften, Tabellen, Linien und Flächen passen sich Haupt- und Zweitfarbe an.",
     "description": "Corporate Design für alle Dokumente: Farben, Schriften, Logos, Seitenaufbau und Angaben zur Organisation.",
     "discardChanges": "Ungespeicherte Änderungen verwerfen?",
     "documentDefaults": "Standard für neue Dokumente",
@@ -225,18 +232,12 @@
     "fallbacks": "Ersatzschriften",
     "font": {
       "body": "Fliesstext",
+      "both": "Schriftart",
       "heading": "Überschriften"
     },
     "footerText": "Text in der Fusszeile",
     "headerFooter": "Kopf- und Fusszeile",
     "headerFooterHelp": "Für Vorlagen mit Standard-Kopf- und Fusszeile.",
-    "headingStyle": "Stil der Überschriften",
-    "headingStyleValue": {
-      "bar": "Farbbalken",
-      "boxed": "Farbfläche",
-      "plain": "Schlicht",
-      "underline": "Unterstrichen"
-    },
     "headingTransform": "Schreibweise Überschriften",
     "headingWeight": "Stärke der Überschriften",
     "hf": {
@@ -315,15 +316,9 @@
       "size_title": "Titel"
     },
     "switch": "Wechseln",
-    "tableStyle": "Stil der Tabellen",
-    "tableStyleValue": {
-      "grid": "Gitter",
-      "lines": "Linien",
-      "minimal": "Minimal",
-      "zebra": "Abwechselnd eingefärbt"
-    },
     "title": "Brand Studio",
     "typography": "Schrift",
+    "typographyAdvanced": "Schriften und Abstände",
     "unarchive": "Wiederherstellen",
     "unarchived": "Profil wiederhergestellt.",
     "unitMm": "mm",
@@ -1210,7 +1205,8 @@
     "titles_only": "Nur Titel (Traktandenliste)",
     "value": "Wert",
     "value_heading": "Spaltenkopf rechts",
-    "with_place_date": "Feld «Ort, Datum»"
+    "with_place_date": "Feld «Ort, Datum»",
+    "invitation_only": "Nur Traktanden der Einladung"
   },
   "preview": {
     "chooseProtocol": "Protokoll wählen",
@@ -1675,5 +1671,83 @@
     },
     "zoomIn": "Vergrössern",
     "zoomOut": "Verkleinern"
+  },
+  "appearance": {
+    "baseTitle": "Grundstil",
+    "baseHelp": "Gibt allen Elementen eine Darstellung vor. Einzelne Elementarten lassen sich unter «Erweiterte Optionen» anpassen, einzelne Blöcke im Designer.",
+    "base": {
+      "classic": {
+        "name": "Klassisch",
+        "help": "Feine Linien und dezente Ecken."
+      },
+      "rounded": {
+        "name": "Abgerundet",
+        "help": "Weiche Flächen mit runden Ecken, hervorgehobene Kästen."
+      },
+      "bold": {
+        "name": "Kräftig",
+        "help": "Farbbalken, farbige Tabellenköpfe, eckige Flächen."
+      },
+      "minimal": {
+        "name": "Schlicht",
+        "help": "Ohne Flächen und Balken, viel Weissraum."
+      }
+    },
+    "elementsTitle": "Darstellung der Elemente",
+    "elementsHelp": "Weicht vom Grundstil ab. Im Designer lässt sich zusätzlich jeder einzelne Block anpassen.",
+    "inheritBase": "Grundstil ({value})",
+    "inheritBrand": "Wie Profil ({value})",
+    "cornersInherit": "Ecken wie vorgegeben",
+    "cornersFor": "Ecken: {kind}",
+    "corners": {
+      "square": "Eckig",
+      "rounded": "Abgerundet"
+    },
+    "kind": {
+      "heading": "Überschriften",
+      "table": "Tabellen",
+      "attendance": "Anwesenheit",
+      "session_date": "Nächste Sitzung",
+      "finance_balance": "Kontostand",
+      "kpi_tiles": "Kennzahlen",
+      "form": "Formular"
+    },
+    "variant": {
+      "attendance": {
+        "list": "Liste",
+        "compact": "Kompakt nach Status",
+        "table": "Tabelle"
+      },
+      "session_date": {
+        "line": "Zeile",
+        "box": "Hervorgehobener Kasten"
+      },
+      "finance_balance": {
+        "list": "Liste",
+        "tiles": "Kacheln"
+      },
+      "kpi_tiles": {
+        "outlined": "Umrandet",
+        "filled": "Farbfläche"
+      },
+      "form": {
+        "grid": "Zweispaltig",
+        "table": "Tabelle"
+      },
+      "heading": {
+        "bar": "Farbbalken",
+        "boxed": "Farbfläche",
+        "plain": "Schlicht",
+        "underline": "Unterstrichen"
+      },
+      "table": {
+        "grid": "Gitter",
+        "lines": "Linien",
+        "minimal": "Minimal",
+        "zebra": "Abwechselnd eingefärbt"
+      }
+    },
+    "designerTitle": "Darstellung",
+    "designerHelp": "Gilt nur für diesen Block. Leer = wie im Brand-Profil."
   }
 }

@@ -18,7 +18,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.documents import assets as asset_service
-from app.documents.brand import BUILTIN_FONTS, FALLBACK_FONTS, BrandTokens, parse_tokens, preset_tokens
+from app.documents.brand import BUILTIN_FONTS, FALLBACK_FONTS, BrandTokens, parse_tokens, preset_tokens, resolve_appearance
 from app.documents.context import AssetCollector
 from app.documents.hashing import json_hash
 from app.documents.locking import lock_row
@@ -388,5 +388,6 @@ def resolve_brand(db: Session, tenant_id: int, revision: DocumentBrandRevision |
             "border_width": layout.border_width,
             "radius": layout.radius,
         },
+        "appearance": resolve_appearance(tokens),
     }
     return resolved

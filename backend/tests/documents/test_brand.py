@@ -4,7 +4,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.documents.brand import BRAND_PRESETS, BrandTokens, color_references, preset_tokens, resolve_color
+from app.documents.brand import BRAND_PRESETS, BrandTokens, color_references, preset_tokens, resolve_appearance, resolve_color
+from app.documents.layout import DataBlockNode
 
 
 def test_color_references_resolve():
@@ -54,3 +55,38 @@ def test_template_overrides_win_over_brand():
     assert merged.colors.primary == "#FF0000" and merged.colors.secondary == tokens.colors.secondary
     assert merged.typography.body.builtin == "liberation_serif" and merged.typography.body.asset_ids == []
     assert merged.typography.base_size == 12 and str(merged.assets.logo).endswith("0001")
+
+
+# ── Erscheinungsbild: Grundstil → Brand-Übersteuerung → Block-Übersteuerung ──
+
+
+def test_appearance_defaults_follow_base_and_layout():
+    classic = resolve_appearance(BrandTokens())
+    assert classic["session_date"] == {"variant": "line", "radius": 1.5}
+    assert classic["table"]["variant"] == "lines"
+    rounded = resolve_appearance(BrandTokens.model_validate({"appearance": {"base": "rounded"}, "layout": {"radius": 4, "table_style": "zebra"}}))
+    assert rounded["session_date"] == {"variant": "box", "radius": 4}
+    assert rounded["table"]["variant"] == "zebra"
+
+
+def test_appearance_overrides_brand_then_block():
+    tokens = BrandTokens.model_validate({"layout": {"radius": 0}, "appearance": {"elements": {"attendance": {"variant": "compact"}, "session_date": {"corners": "rounded"}}}})
+    brand = resolve_appearance(tokens)
+    assert brand["attendance"]["variant"] == "compact"
+    assert brand["session_date"]["radius"] == 3.0  # abgerundet trotz eckigem Grundstil
+    node = DataBlockNode(component="protocol_element", appearance={"attendance": {"variant": "table"}, "session_date": {"corners": "square"}})
+    block = resolve_appearance(tokens, node.appearance)
+    assert block["attendance"]["variant"] == "table"
+    assert block["session_date"]["radius"] == 0
+
+
+def test_appearance_rejects_unknown_values():
+    with pytest.raises(ValidationError):
+        BrandTokens.model_validate({"appearance": {"elements": {"attendance": {"variant": "pyramid"}}}})
+    with pytest.raises(ValidationError):
+        BrandTokens.model_validate({"appearance": {"elements": {"unknown": {"variant": "x"}}}})
+    # Überschriften gelten global, nicht pro Block
+    with pytest.raises(ValidationError):
+        DataBlockNode(component="protocol_element", appearance={"heading": {"variant": "bar"}})
+    # Leere Übersteuerungen werden nicht gespeichert
+    assert BrandTokens.model_validate({"appearance": {"elements": {"form": {}}}}).appearance.elements == {}

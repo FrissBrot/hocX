@@ -316,7 +316,7 @@ def _invitation_standard() -> dict[str, Any]:
             text("inv-kicker", key("docType.invitation"), role="label", style={"text": {"color": "$brand.primary", "transform": "upper"}}),
             text("inv-title", bind("protocol.title"), role="title"),
             data("session-date", "session_date"),
-            node("section", "agenda", title=txt(key("docType.agenda")), children=[data("agenda-items", "protocol_element", params={"titles_only": True})]),
+            node("section", "agenda", title=txt(key("docType.agenda")), children=[data("agenda-items", "protocol_element", params={"titles_only": True, "invitation_only": True})]),
             _upcoming_events_table("events"),
         ]
     )
@@ -329,7 +329,7 @@ def _invitation_letter() -> dict[str, Any]:
             text("letter-place-date", bind("organization.place"), lit(", "), bind("document.date", date="long"), style={"text": {"align": "right"}, "margin_bottom": 10}),
             text("letter-subject", key("docType.invitation"), lit(": "), bind("protocol.title"), role="heading", level=1),
             data("session-date", "session_date"),
-            node("section", "agenda", title=txt(key("docType.agenda")), level=2, children=[node("list", "agenda-list", marker="number", source="protocol.elements", item=txt(bind("item.title")))]),
+            node("section", "agenda", title=txt(key("docType.agenda")), level=2, children=[node("list", "agenda-list", marker="number", source="protocol.invitation_elements", item=txt(bind("item.title")))]),
             _upcoming_events_table("events"),
             node("spacer", "letter-space", size=10),
             text("letter-closing", bind("organization.name"), role="label"),
@@ -344,7 +344,7 @@ def _agenda_standard() -> dict[str, Any]:
             text("agenda-kicker", key("docType.agenda"), role="label", style={"text": {"color": "$brand.primary", "transform": "upper"}}),
             text("agenda-title", bind("protocol.title"), role="title"),
             node("metadata", "agenda-meta", fields=["number", "date", "place"], layout="inline", style={"margin_bottom": 6, "text": {"color": "$brand.muted"}}),
-            node("list", "agenda-list", marker="number", source="protocol.elements", item=txt(bind("item.title")), style={"text": {"size": 12}}),
+            node("list", "agenda-list", marker="number", source="protocol.invitation_elements", item=txt(bind("item.title")), style={"text": {"size": 12}}),
         ]
     )
 

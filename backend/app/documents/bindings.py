@@ -126,6 +126,11 @@ _DEFINITIONS: list[BindingDef] = [
         "protocol.elements", "list", "protocol", needs_protocol=True, item_fields=_PROTOCOL_ELEMENT_FIELDS,
         sample=[{"title": ("key", f"sample.section{index}"), "responsible": ("key", f"sample.person{index}") if index % 2 else "", "index": index} for index in range(1, 5)],
     ),
+    # Nur Traktanden, die laut Protokollvorlage in Einladung und Traktandenliste erscheinen
+    BindingDef(
+        "protocol.invitation_elements", "list", "protocol", needs_protocol=True, item_fields=_PROTOCOL_ELEMENT_FIELDS,
+        sample=[{"title": ("key", f"sample.section{index}"), "responsible": "", "index": index} for index in range(1, 5)],
+    ),
     BindingDef(
         "protocol.participants", "list", "protocol", needs_protocol=True, item_fields=_PARTICIPANT_FIELDS,
         sample=[{"name": ("key", f"sample.person{index}"), "status": ("key", "attendanceStatus.present" if index < 4 else "attendanceStatus.excused"), "status_code": "present" if index < 4 else "excused"} for index in range(1, 6)],
@@ -372,6 +377,8 @@ def _load_protocol(resolver: BindingResolver) -> dict[str, Any]:
 
     elements = protocol_provider.element_blocks(ctx, protocol, include_session_todos=False)
     element_items = [{"title": block.title or "", "responsible": "", "index": index} for index, block in enumerate(elements, start=1)]
+    invitation_elements = protocol_provider.element_blocks(ctx, protocol, include_session_todos=False, invitation_only=True)
+    invitation_items = [{"title": block.title or "", "responsible": "", "index": index} for index, block in enumerate(invitation_elements, start=1)]
 
     participants: list[dict[str, Any]] = []
     for config in people_provider.protocol_attendance_configs(ctx, protocol):
@@ -384,7 +391,7 @@ def _load_protocol(resolver: BindingResolver) -> dict[str, Any]:
         for block in repository.list_element_blocks(ctx.db, element.id):
             if element_type_code(block.element_type_id) == "session_date":
                 config = block.configuration_snapshot_json or {}
-                next_session = config.get("session_date") or config.get("date") or next_session
+                next_session = config.get("selected_date") or config.get("session_date") or config.get("date") or next_session
                 break
         if next_session:
             break
@@ -407,6 +414,7 @@ def _load_protocol(resolver: BindingResolver) -> dict[str, Any]:
         "excused_count": counts["excused"],
         "absent_count": counts["absent"],
         "elements": element_items,
+        "invitation_elements": invitation_items,
         "participants": participants,
         "open_todos": open_todos,
     }

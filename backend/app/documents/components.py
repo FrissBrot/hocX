@@ -149,7 +149,7 @@ def _component_entries() -> list[LibraryEntry]:
     presets: list[tuple[str, str, dict[str, Any]]] = [
         ("session_info", "session_date", {}),
         ("protocol_sections", "protocol_element", {}),
-        ("agenda_items", "protocol_element", {"params": {"titles_only": True}}),
+        ("agenda_items", "protocol_element", {"params": {"titles_only": True, "invitation_only": True}}),
         ("decisions", "protocol_element", {"params": {"content": "text", "include_session_todos": False, "include_images": False}}),
         ("session_notes", "session_notes", {}),
         ("matrix", "matrix", {}),
@@ -181,7 +181,7 @@ def _component_entries() -> list[LibraryEntry]:
         )
     # Datengebundene Layoutbausteine (Bindungen statt Fachkomponente)
     entries += [
-        LibraryEntry("agenda_numbered", "data_protocol", "advanced", {"type": "list", "marker": "number", "source": "protocol.elements", "item": _t(_bind("item.title"))}, needs_protocol=True),
+        LibraryEntry("agenda_numbered", "data_protocol", "advanced", {"type": "list", "marker": "number", "source": "protocol.invitation_elements", "item": _t(_bind("item.title"))}, needs_protocol=True),
         LibraryEntry("open_tasks_table", "data_tasks", "advanced", {"type": "table", "source": "todos.open", "columns": [
             {"header": _t(_key("col.task")), "width": "fill", "cell": _t(_bind("item.task"))},
             {"header": _t(_key("col.assignee")), "cell": _t(_bind("item.assignee"))},
@@ -217,6 +217,7 @@ def validate_library() -> None:
 def catalog_payload() -> dict[str, Any]:
     from app.documents import bindings
     from app.documents import catalog as data_catalog
+    from app.documents.appearance import appearance_catalog
     from app.documents.doc_types import CATEGORIES, DOCUMENT_TYPES
 
     return {
@@ -244,6 +245,7 @@ def catalog_payload() -> dict[str, Any]:
             for entry in LIBRARY
         ],
         "data_components": data_catalog.catalog_payload(),
+        "appearance": appearance_catalog(),
         "bindings": bindings.catalog_payload(),
         "document_types": [{"key": item.key, "category": item.category, "needs_protocol": item.needs_protocol, "formats": list(item.formats)} for item in DOCUMENT_TYPES.values()],
         "categories": list(CATEGORIES),

@@ -770,10 +770,13 @@ function MobileBlock({
 
   // session_date: Datum der naechsten Sitzung (Anzeige)
   const nextDate = String(blockConfig(block).selected_date ?? "");
+  const nextTime = String(blockConfig(block).selected_time ?? "").trim();
   return (
     <div className="mobile-block">
       {label}
-      <div className="mobile-block-plain">{nextDate ? dateParts.long(nextDate, locale) : "—"}</div>
+      <div className="mobile-block-plain">
+        {nextDate ? (nextTime ? tProtocols("sessionDateTime", { date: dateParts.long(nextDate, locale), time: nextTime }) : dateParts.long(nextDate, locale)) : "—"}
+      </div>
     </div>
   );
 }

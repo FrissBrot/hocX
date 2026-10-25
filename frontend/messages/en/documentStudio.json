@@ -129,7 +129,8 @@
     "statistics_sessions_count": "Number of meetings",
     "todos_done_count": "Number of completed tasks",
     "todos_open": "Open tasks",
-    "todos_open_count": "Number of open tasks"
+    "todos_open_count": "Number of open tasks",
+    "protocol_invitation_elements": "Agenda items of the invitation"
   },
   "bindingField": {
     "assignee": "Assignee",
@@ -177,6 +178,10 @@
     "actionsFor": "Actions for {name}",
     "addColor": "+ Colour",
     "addImage": "+ Image",
+    "advanced": "Advanced options",
+    "advancedAssets": "Images and backgrounds",
+    "allColors": "All colours",
+    "allColorsHelp": "Changing a derived colour here turns off automatic derivation.",
     "archive": "Archive",
     "archived": "Archived",
     "archivedDone": "Profile archived.",
@@ -213,6 +218,8 @@
     "delete": "Delete",
     "deleteConfirm": "Delete profile “{name}”? Templates will then use the default profile.",
     "deleted": "Profile deleted.",
+    "deriveColors": "Derive remaining colours automatically",
+    "deriveColorsHelp": "Headings, tables, lines and surfaces follow the primary and secondary colour.",
     "description": "Corporate design for all documents: colours, fonts, logos, page layout and organisation details.",
     "discardChanges": "Discard unsaved changes?",
     "documentDefaults": "Defaults for documents",
@@ -225,18 +232,12 @@
     "fallbacks": "Fallback fonts",
     "font": {
       "body": "Body text",
+      "both": "Font",
       "heading": "Headings"
     },
     "footerText": "Footer text",
     "headerFooter": "Header and footer",
     "headerFooterHelp": "For templates with the standard header and footer.",
-    "headingStyle": "Heading style",
-    "headingStyleValue": {
-      "bar": "Colour bar",
-      "boxed": "Colour box",
-      "plain": "Plain",
-      "underline": "Underlined"
-    },
     "headingTransform": "Heading case",
     "headingWeight": "Heading weight",
     "hf": {
@@ -315,15 +316,9 @@
       "size_title": "Title"
     },
     "switch": "Switch",
-    "tableStyle": "Table style",
-    "tableStyleValue": {
-      "grid": "Grid",
-      "lines": "Lines",
-      "minimal": "Minimal",
-      "zebra": "Alternating rows"
-    },
     "title": "Brand Studio",
     "typography": "Typography",
+    "typographyAdvanced": "Fonts and spacing",
     "unarchive": "Restore",
     "unarchived": "Profile restored.",
     "unitMm": "mm",
@@ -1210,7 +1205,8 @@
     "titles_only": "Titles only (agenda)",
     "value": "Value",
     "value_heading": "Right column header",
-    "with_place_date": "“Place, date” field"
+    "with_place_date": "“Place, date” field",
+    "invitation_only": "Only agenda items of the invitation"
   },
   "preview": {
     "chooseProtocol": "Choose protocol",
@@ -1675,5 +1671,83 @@
     },
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out"
+  },
+  "appearance": {
+    "baseTitle": "Base style",
+    "baseHelp": "Gives every element its look. Adjust individual element types under “Advanced options” and single blocks in the designer.",
+    "base": {
+      "classic": {
+        "name": "Classic",
+        "help": "Fine lines and subtle corners."
+      },
+      "rounded": {
+        "name": "Rounded",
+        "help": "Soft surfaces with rounded corners, highlighted boxes."
+      },
+      "bold": {
+        "name": "Bold",
+        "help": "Colour bars, coloured table headers, square surfaces."
+      },
+      "minimal": {
+        "name": "Minimal",
+        "help": "No surfaces or bars, plenty of white space."
+      }
+    },
+    "elementsTitle": "Element appearance",
+    "elementsHelp": "Overrides the base style. In the designer, each single block can be adjusted as well.",
+    "inheritBase": "Base style ({value})",
+    "inheritBrand": "As in profile ({value})",
+    "cornersInherit": "Default corners",
+    "cornersFor": "Corners: {kind}",
+    "corners": {
+      "square": "Square",
+      "rounded": "Rounded"
+    },
+    "kind": {
+      "heading": "Headings",
+      "table": "Tables",
+      "attendance": "Attendance",
+      "session_date": "Next meeting",
+      "finance_balance": "Account balance",
+      "kpi_tiles": "Key figures",
+      "form": "Form"
+    },
+    "variant": {
+      "attendance": {
+        "list": "List",
+        "compact": "Compact by status",
+        "table": "Table"
+      },
+      "session_date": {
+        "line": "Line",
+        "box": "Highlighted box"
+      },
+      "finance_balance": {
+        "list": "List",
+        "tiles": "Tiles"
+      },
+      "kpi_tiles": {
+        "outlined": "Outlined",
+        "filled": "Filled"
+      },
+      "form": {
+        "grid": "Two columns",
+        "table": "Table"
+      },
+      "heading": {
+        "bar": "Colour bar",
+        "boxed": "Colour box",
+        "plain": "Plain",
+        "underline": "Underlined"
+      },
+      "table": {
+        "grid": "Grid",
+        "lines": "Lines",
+        "minimal": "Minimal",
+        "zebra": "Alternating rows"
+      }
+    },
+    "designerTitle": "Appearance",
+    "designerHelp": "Applies to this block only. Empty = as in the brand profile."
   }
 }

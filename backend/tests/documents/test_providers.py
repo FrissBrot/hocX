@@ -12,6 +12,7 @@ from app.documents.context import BuildContext, DocumentNotFoundError, DocumentP
 from app.models import ProtocolTodo, TodoStatus
 from tests.factories import (
     make_current_user,
+    make_element_definition,
     make_event,
     make_finance_account,
     make_fine,
@@ -24,6 +25,7 @@ from tests.factories import (
     make_protocol_text,
     make_protocol_todo,
     make_template,
+    make_template_element,
     make_tenant,
 )
 
@@ -238,3 +240,19 @@ def test_unscanned_images_are_not_embedded(db, world, tmp_path, monkeypatch, sca
     assert image.missing is True and not ctx.assets.files
     gallery = build_blocks(ctx, [BlockSpec(type="image_gallery", params={"file_ids": [str(blocked.public_id), str(clean.public_id)]})])[0]
     assert [item.missing for item in gallery.images] == [True, False]
+
+
+def test_invitation_shows_only_agenda_items_marked_for_it(db, world):
+    """Einladung/Traktandenliste: Traktanden mit ausgeschaltetem «In Einladung» (Protokollvorlage)
+    fehlen, im Protokoll selbst bleiben sie."""
+    definition = make_element_definition(db, world["tenant"].id, "Intern", [])
+    hidden = make_template_element(db, world["template"].id, definition.id, 1, "Intern", {"invitation_visible": False})
+    internal = make_protocol_element(db, world["protocol"].id, sort_index=1, section_name="Intern")
+    internal.template_element_id = hidden.id
+    make_protocol_element_block(db, internal.id, {}, element_type_code="text")
+    db.flush()
+    ctx = _ctx(db, world)
+    protocol_titles = [block.title for block in build_blocks(ctx, [BlockSpec(type="protocol_element", hide_if_empty=False)])]
+    agenda = build_blocks(ctx, [BlockSpec(type="protocol_element", params={"titles_only": True, "invitation_only": True})])
+    assert "Intern" in protocol_titles
+    assert agenda[0].items == ["Begrüssung"]

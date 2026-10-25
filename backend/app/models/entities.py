@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Any
 
 from sqlalchemy import (
@@ -22,6 +22,7 @@ from sqlalchemy import (
     SmallInteger,
     Table,
     Text,
+    Time,
     UniqueConstraint,
     text,
 )
@@ -425,6 +426,8 @@ class Event(Base, TimestampMixin, UpdatedAtMixin):
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     event_date: Mapped[date] = mapped_column(Date, nullable=False)
     event_end_date: Mapped[date | None] = mapped_column(Date)
+    # Optionale Uhrzeit (z. B. Beginn der nächsten Sitzung), NULL = ganztägig
+    start_time: Mapped[time | None] = mapped_column(Time)
     event_category_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("event_category.id", ondelete="RESTRICT"), nullable=False)
     tag: Mapped[str | None] = mapped_column(Text)
     title: Mapped[str] = mapped_column(Text, nullable=False)

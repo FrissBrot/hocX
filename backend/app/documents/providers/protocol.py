@@ -10,6 +10,8 @@ import logging
 import re
 from typing import Any
 
+from sqlalchemy import select
+
 from app.core.config import settings
 from app.core.element_types import element_type_code
 from app.documents import repository
@@ -64,6 +66,7 @@ from app.documents.providers import todos as todo_provider
 from app.documents.providers.common import PROTOCOL_STATUS_CODES, spec_fields, text_cell
 from app.documents.richtext import markdown_to_rich, plain_to_rich
 from app.models import FinanceAccount, FinanceTransaction, ListDefinition, Protocol, ProtocolElementBlock, StoredFile
+from app.services.element_config import parse_session_time
 from app.services.event_filter import filter_events, normalize_event_filter
 from app.core.storage import MAIN, InvalidObjectKey, ObjectNotFound, get_object_store
 
@@ -215,8 +218,17 @@ def _chart_block(ctx: BuildContext, config: dict, spec: BlockSpec):
     return statistics_provider.provide_chart(ctx, spec, params)[0]
 
 
+def _session_date_text(config: dict) -> str:
+    """Datum der nächsten Sitzung, mit Uhrzeit falls gesetzt: «TT.MM.JJJJ, HH:MM»."""
+    date_text = format_date(config.get("selected_date"))
+    session_time = parse_session_time(config.get("selected_time"))
+    if date_text and session_time is not None:
+        return f"{date_text}, {session_time.strftime('%H:%M')}"
+    return date_text
+
+
 def _session_date_block(config: dict, fields: dict) -> SessionDateBlock:
-    return SessionDateBlock(**fields, label=str(config.get("session_label") or "").strip() or None, date=format_date(config.get("selected_date")) or None)
+    return SessionDateBlock(**fields, label=str(config.get("session_label") or "").strip() or None, date=_session_date_text(config) or None)
 
 
 def map_block(ctx: BuildContext, protocol: Protocol, block: ProtocolElementBlock) -> Any | None:
@@ -266,8 +278,25 @@ def map_block(ctx: BuildContext, protocol: Protocol, block: ProtocolElementBlock
     return StaticTextBlock(**fields, content=markdown_to_rich(block.description_snapshot or ""))
 
 
-def element_blocks(ctx: BuildContext, protocol: Protocol, *, element_ref: Any = None, include_session_todos: bool = True) -> list[ElementModel]:
-    """Alle exportsichtbaren Elemente (oder eines) eines Protokolls als ``protocol_element``."""
+def invitation_visible(configuration_json: dict | None) -> bool:
+    """Traktandum erscheint in Einladung und Traktandenliste (Schalter in der Protokollvorlage,
+    TemplateElement.configuration_json["invitation_visible"], Standard an)."""
+    return (configuration_json or {}).get("invitation_visible", True) is not False
+
+
+def _hidden_from_invitation(ctx: BuildContext, elements: list) -> set[int]:
+    from app.models import TemplateElement
+
+    template_element_ids = {element.template_element_id for element in elements if element.template_element_id is not None}
+    if not template_element_ids:
+        return set()
+    hidden = {row.id for row in ctx.db.scalars(select(TemplateElement).where(TemplateElement.id.in_(template_element_ids))) if not invitation_visible(row.configuration_json)}
+    return {element.id for element in elements if element.template_element_id in hidden}
+
+
+def element_blocks(ctx: BuildContext, protocol: Protocol, *, element_ref: Any = None, include_session_todos: bool = True, invitation_only: bool = False) -> list[ElementModel]:
+    """Alle exportsichtbaren Elemente (oder eines) eines Protokolls als ``protocol_element``.
+    ``invitation_only``: nur Traktanden, die in Einladung/Traktandenliste erscheinen."""
     from app.services.responsible_label_service import resolve_display_section_titles_batch
 
     elements = repository.list_protocol_elements(ctx.db, protocol.id)
@@ -278,6 +307,9 @@ def element_blocks(ctx: BuildContext, protocol: Protocol, *, element_ref: Any = 
         elements = [element for element in elements if element.id == element_id]
         if not elements:
             raise DocumentNotFoundError("ProtocolElement")
+    if invitation_only:
+        hidden = _hidden_from_invitation(ctx, elements)
+        elements = [element for element in elements if element.id not in hidden]
     titles = resolve_display_section_titles_batch(ctx.db, elements, protocol.status, protocol.tenant_id)
     agenda_by_element, agenda_other = _agenda_blocks(ctx, protocol)
     result: list[ElementModel] = []
@@ -406,7 +438,7 @@ def _embedded_block(ctx: BuildContext, protocol: Protocol, embedded: dict, colum
         return [Paragraph(c=rows)] if rows else []
     if code == "session_date":
         label = str(config.get("session_label") or "").strip()
-        date_text = format_date(config.get("selected_date"))
+        date_text = _session_date_text(config)
         spans: list[Any] = [TextSpan(v=label, key=None if label else "label.nextSession"), TextSpan(v=": ")]
         spans.append(TextSpan(v=date_text) if date_text else TextSpan(v="", key="label.open"))
         return [Paragraph(c=spans)]
@@ -488,7 +520,7 @@ def provide_protocol_element(ctx: BuildContext, spec: BlockSpec, params: Protoco
     protocol = resolve_protocol(ctx, params.protocol_id)
     if params.protocol_id is None or (ctx.protocol is not None and protocol.id == ctx.protocol.id):
         _refresh_membership(ctx, protocol)
-    blocks = element_blocks(ctx, protocol, element_ref=params.element_id, include_session_todos=params.include_session_todos)
+    blocks = element_blocks(ctx, protocol, element_ref=params.element_id, include_session_todos=params.include_session_todos, invitation_only=params.invitation_only)
     if params.titles_only:
         return [BulletListBlock(**spec_fields(spec), items=[block.title or "" for block in blocks if block.title])]
     allowed = CONTENT_FILTERS.get(params.content)

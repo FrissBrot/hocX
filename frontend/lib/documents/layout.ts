@@ -103,7 +103,13 @@ export type TemplateContent = {
 };
 
 // Brand-Profil (backend/app/documents/brand.py), für Formulare im Brand Studio
+/** Übersteuerung einer Elementart (Brand-Profil oder einzelner Block im Designer). */
+export type ElementAppearance = { variant?: string | null; corners?: "square" | "rounded" | null };
+export type AppearanceOverrides = Record<string, ElementAppearance>;
+
 export type BrandTokens = {
+  derive_colors?: boolean;
+  appearance?: { base: string; elements: AppearanceOverrides };
   colors: Record<string, string> & { custom: { key: string; label: string; value: string }[] };
   typography: {
     body: { builtin: string | null; asset_ids: string[] };

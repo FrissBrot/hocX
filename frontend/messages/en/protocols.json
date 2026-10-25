@@ -330,7 +330,8 @@
     "noTodos": "No todos",
     "openEventOverview": "Open event overview",
     "rowLabelPlaceholder": "Row label",
-    "unknown": "Unknown"
+    "unknown": "Unknown",
+    "timeLabel": "Time"
   },
   "newBulletPlaceholder": "Add a new bullet point with the button",
   "newBulletPlus": "+ Bullet",
@@ -442,7 +443,8 @@
     "noTodos": "No todos",
     "presentOf": "{present}/{total} present",
     "rowCount": "{count, plural, one {# row} other {# rows}}",
-    "todoCount": "{count, plural, one {# todo} other {# todos}}"
+    "todoCount": "{count, plural, one {# todo} other {# todos}}",
+    "eventOnAt": "Event on {date} at {time}"
   },
   "tagLabel": "Tag",
   "tagsPlaceholder": "Tags…",
@@ -482,5 +484,7 @@
   "locationLabel": "Location",
   "organizersLabel": "Organisers",
   "balanceAsOf": "As of {date}",
-  "includeImageGps": "Include the image’s GPS data"
+  "includeImageGps": "Include the image’s GPS data",
+  "timeLabel": "Time",
+  "sessionDateTime": "{date}, {time}"
 }

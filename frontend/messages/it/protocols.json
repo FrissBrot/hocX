@@ -330,7 +330,8 @@
     "noTodos": "Nessuna attività",
     "openEventOverview": "Apri panoramica eventi",
     "rowLabelPlaceholder": "Etichetta riga",
-    "unknown": "Sconosciuto"
+    "unknown": "Sconosciuto",
+    "timeLabel": "Ora"
   },
   "newBulletPlaceholder": "Aggiungi un nuovo punto con il pulsante",
   "newBulletPlus": "+ Punto",
@@ -442,7 +443,8 @@
     "noTodos": "Nessuna attività",
     "presentOf": "{present}/{total} presenti",
     "rowCount": "{count, plural, one {# riga} other {# righe}}",
-    "todoCount": "{count, plural, one {# attività} other {# attività}}"
+    "todoCount": "{count, plural, one {# attività} other {# attività}}",
+    "eventOnAt": "Evento del {date}, ore {time}"
   },
   "tagLabel": "Tag",
   "tagsPlaceholder": "Tag…",
@@ -482,5 +484,7 @@
   "locationLabel": "Luogo",
   "organizersLabel": "Organizzatori",
   "balanceAsOf": "Al {date}",
-  "includeImageGps": "Invia i dati GPS dell’immagine"
+  "includeImageGps": "Invia i dati GPS dell’immagine",
+  "timeLabel": "Ora",
+  "sessionDateTime": "{date}, ore {time}"
 }

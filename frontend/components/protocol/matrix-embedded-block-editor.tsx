@@ -1181,6 +1181,7 @@ export function MatrixEmbeddedBlockEditor({
           <div className="matrix-static-value">
             {String(embeddedConfig.session_label ?? "").trim() || "Naechste Sitzung"}
             {String(embeddedConfig.selected_date ?? "").trim() ? `: ${formatShortDate(String(embeddedConfig.selected_date))}` : ""}
+            {String(embeddedConfig.selected_date ?? "").trim() && String(embeddedConfig.selected_time ?? "").trim() ? `, ${String(embeddedConfig.selected_time)}` : ""}
           </div>
         </div>
       );
@@ -1210,6 +1211,19 @@ export function MatrixEmbeddedBlockEditor({
                 updateEmbeddedConfig((current) => ({
                   ...current,
                   selected_date: value || null,
+                }), true)
+              }
+            />
+          </label>
+          <label className="field-stack">
+            <span className="field-label">{t("timeLabel")}</span>
+            <input
+              type="time"
+              value={String(embeddedConfig.selected_time ?? "")}
+              onChange={(event) =>
+                updateEmbeddedConfig((current) => ({
+                  ...current,
+                  selected_time: event.target.value || null,
                 }), true)
               }
             />

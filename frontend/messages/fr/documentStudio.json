@@ -129,7 +129,8 @@
     "statistics_sessions_count": "Nombre de séances",
     "todos_done_count": "Nombre de tâches terminées",
     "todos_open": "Tâches ouvertes",
-    "todos_open_count": "Nombre de tâches ouvertes"
+    "todos_open_count": "Nombre de tâches ouvertes",
+    "protocol_invitation_elements": "Points de l’invitation"
   },
   "bindingField": {
     "assignee": "Responsable",
@@ -177,6 +178,10 @@
     "actionsFor": "Actions pour {name}",
     "addColor": "+ Couleur",
     "addImage": "+ Image",
+    "advanced": "Options avancées",
+    "advancedAssets": "Images et arrière-plans",
+    "allColors": "Toutes les couleurs",
+    "allColorsHelp": "Modifier ici une couleur dérivée désactive la dérivation automatique.",
     "archive": "Archiver",
     "archived": "Archivé",
     "archivedDone": "Profil archivé.",
@@ -213,6 +218,8 @@
     "delete": "Supprimer",
     "deleteConfirm": "Supprimer le profil « {name} » ? Les modèles utiliseront ensuite le profil par défaut.",
     "deleted": "Profil supprimé.",
+    "deriveColors": "Dériver automatiquement les autres couleurs",
+    "deriveColorsHelp": "Les titres, tableaux, lignes et surfaces suivent la couleur principale et la couleur secondaire.",
     "description": "Identité visuelle de tous les documents : couleurs, polices, logos, mise en page et informations sur l’organisation.",
     "discardChanges": "Abandonner les modifications non enregistrées ?",
     "documentDefaults": "Valeurs par défaut des documents",
@@ -225,18 +232,12 @@
     "fallbacks": "Polices de secours",
     "font": {
       "body": "Texte courant",
+      "both": "Police",
       "heading": "Titres"
     },
     "footerText": "Texte du pied de page",
     "headerFooter": "En-tête et pied de page",
     "headerFooterHelp": "Pour les modèles avec en-tête et pied de page standard.",
-    "headingStyle": "Style des titres",
-    "headingStyleValue": {
-      "bar": "Barre de couleur",
-      "boxed": "Encadré coloré",
-      "plain": "Simple",
-      "underline": "Souligné"
-    },
     "headingTransform": "Casse des titres",
     "headingWeight": "Graisse des titres",
     "hf": {
@@ -315,15 +316,9 @@
       "size_title": "Titre"
     },
     "switch": "Changer",
-    "tableStyle": "Style des tableaux",
-    "tableStyleValue": {
-      "grid": "Grille",
-      "lines": "Lignes",
-      "minimal": "Minimal",
-      "zebra": "Lignes alternées"
-    },
     "title": "Brand Studio",
     "typography": "Typographie",
+    "typographyAdvanced": "Polices et espacements",
     "unarchive": "Restaurer",
     "unarchived": "Profil restauré.",
     "unitMm": "mm",
@@ -1210,7 +1205,8 @@
     "titles_only": "Titres seulement (ordre du jour)",
     "value": "Valeur",
     "value_heading": "En-tête de droite",
-    "with_place_date": "Champ « Lieu, date »"
+    "with_place_date": "Champ « Lieu, date »",
+    "invitation_only": "Seulement les points de l’invitation"
   },
   "preview": {
     "chooseProtocol": "Choisir un procès-verbal",
@@ -1675,5 +1671,83 @@
     },
     "zoomIn": "Agrandir",
     "zoomOut": "Réduire"
+  },
+  "appearance": {
+    "baseTitle": "Style de base",
+    "baseHelp": "Donne une apparence à tous les éléments. Les types d’éléments se règlent sous « Options avancées », les blocs individuels dans le designer.",
+    "base": {
+      "classic": {
+        "name": "Classique",
+        "help": "Lignes fines et coins discrets."
+      },
+      "rounded": {
+        "name": "Arrondi",
+        "help": "Surfaces douces aux coins arrondis, encadrés mis en évidence."
+      },
+      "bold": {
+        "name": "Marqué",
+        "help": "Barres de couleur, en-têtes de tableau colorés, surfaces carrées."
+      },
+      "minimal": {
+        "name": "Sobre",
+        "help": "Sans surfaces ni barres, beaucoup d’espace blanc."
+      }
+    },
+    "elementsTitle": "Apparence des éléments",
+    "elementsHelp": "S’écarte du style de base. Dans le designer, chaque bloc peut en plus être adapté.",
+    "inheritBase": "Style de base ({value})",
+    "inheritBrand": "Comme le profil ({value})",
+    "cornersInherit": "Coins par défaut",
+    "cornersFor": "Coins : {kind}",
+    "corners": {
+      "square": "Carrés",
+      "rounded": "Arrondis"
+    },
+    "kind": {
+      "heading": "Titres",
+      "table": "Tableaux",
+      "attendance": "Présences",
+      "session_date": "Prochaine séance",
+      "finance_balance": "Solde",
+      "kpi_tiles": "Chiffres clés",
+      "form": "Formulaire"
+    },
+    "variant": {
+      "attendance": {
+        "list": "Liste",
+        "compact": "Compact par statut",
+        "table": "Tableau"
+      },
+      "session_date": {
+        "line": "Ligne",
+        "box": "Encadré mis en évidence"
+      },
+      "finance_balance": {
+        "list": "Liste",
+        "tiles": "Tuiles"
+      },
+      "kpi_tiles": {
+        "outlined": "Contour",
+        "filled": "Surface colorée"
+      },
+      "form": {
+        "grid": "Deux colonnes",
+        "table": "Tableau"
+      },
+      "heading": {
+        "bar": "Barre de couleur",
+        "boxed": "Encadré coloré",
+        "plain": "Simple",
+        "underline": "Souligné"
+      },
+      "table": {
+        "grid": "Grille",
+        "lines": "Lignes",
+        "minimal": "Minimal",
+        "zebra": "Lignes alternées"
+      }
+    },
+    "designerTitle": "Apparence",
+    "designerHelp": "S’applique uniquement à ce bloc. Vide = comme dans le profil."
   }
 }

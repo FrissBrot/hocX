@@ -374,7 +374,9 @@
       "saved": "Template fine rates saved",
       "saveFailed": "Fine rates could not be saved",
       "loadFailed": "Fine rates could not be loaded"
-    }
+    },
+    "invitationVisible": "In invitation and agenda",
+    "invitationToggleFailed": "Setting could not be saved."
   },
   "elementEditor": {
     "advancedShow": "Advanced",

@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.locale_config_generated import SUPPORTED_LOCALES
+from app.documents.appearance import APPEARANCE_BASES
 
 UNICODE_SAMPLE = "Ħ ẞ Ç ø Ł Ж λ ✓ € £ 😀 👍🏽 🎉 🇨🇭 — „Zitat“ «Guillemets» #set $x$ *a* _b_ @ref <tag> `c` \\ [x] {y}"
 
@@ -267,6 +268,18 @@ def _page_size_content(size: str, orientation: str) -> dict[str, Any]:
     return content
 
 
+def all_blocks_content() -> dict[str, Any]:
+    return {"masters": [system("protocol_compact")["masters"][0]], "body": [{"type": "data_block", "id": "all", "component": "protocol_element"}]}
+
+
+def _override_sample(title: str) -> dict:
+    return {"type": "protocol_element", "title": title, "children": [
+        {"type": "session_date", "level": 2, "date": "14.11.2026, 19:30"},
+        {"type": "attendance", "title": "Anwesenheit", "level": 2, "entries": [{"name": "Anna Muster", "status": "present"}, {"name": "Ben Beispiel", "status": "excused"}]},
+        {**todo_table(3, title="Pendenzen"), "level": 2},
+    ]}
+
+
 def scenarios() -> dict[str, Scenario]:
     items = {
         "protocol_simple": Scenario(system("protocol_standard"), {"protocol": protocol_elements(3)}, is_draft=True),
@@ -283,13 +296,26 @@ def scenarios() -> dict[str, Scenario]:
         "fonts": Scenario(system("protocol_compact"), {"protocol": protocol_elements(2)}, brand={"typography": {"body": {"builtin": "liberation_serif"}, "heading": {"builtin": "noto_sans"}, "base_size": 11.5}, "layout": {"heading_style": "boxed", "table_style": "grid"}}),
         "page_a5": Scenario(_page_size_content("A5", "portrait"), {"protocol": protocol_elements(2)}, pages=2),
         "page_letter_landscape": Scenario(_page_size_content("Letter", "landscape"), {"protocol": protocol_elements(2)}),
-        "all_blocks": Scenario({"masters": [system("protocol_compact")["masters"][0]], "body": [{"type": "data_block", "id": "all", "component": "protocol_element"}]}, {"all": all_data_blocks()}, document_type="custom", pages=6),
+        "all_blocks": Scenario(all_blocks_content(), {"all": all_data_blocks()}, document_type="custom", pages=6),
         "unicode": Scenario({"masters": [system("protocol_compact")["masters"][0]], "body": [
             {"type": "text", "id": "u-title", "role": "title", "content": {"default": [{"t": "text", "v": UNICODE_SAMPLE}]}},
             {"type": "list", "id": "u-list", "items": [UNICODE_SAMPLE, "漢字 かな 한국어"]},
             {"type": "data_block", "id": "u-todos", "component": "todo_table"},
         ]}, {"u-todos": [todo_table(2, prefix=UNICODE_SAMPLE)]}, document_type="custom"),
     }
+    # Grundstile (Brand Studio) auf allen Fachkomponenten; «classic» ist all_blocks
+    for base, definition in APPEARANCE_BASES.items():
+        if base != "classic":
+            items[f"appearance_{base}"] = Scenario(all_blocks_content(), {"all": all_data_blocks()}, document_type="custom", pages=6, brand={"appearance": {"base": base}, "layout": dict(definition["layout"])})
+    # Block-Übersteuerung im Designer: ein Block weicht vom Grundstil des Profils ab
+    items["appearance_block_override"] = Scenario(
+        {"masters": [system("protocol_compact")["masters"][0]], "body": [
+            {"type": "data_block", "id": "plain", "component": "protocol_element"},
+            {"type": "data_block", "id": "styled", "component": "protocol_element", "appearance": {"attendance": {"variant": "table"}, "session_date": {"variant": "box", "corners": "rounded"}, "table": {"variant": "zebra"}}},
+        ]},
+        {"plain": [_override_sample("Grundstil")], "styled": [_override_sample("Übersteuert")]},
+        document_type="custom",
+    )
     for language in sorted(SUPPORTED_LOCALES):
         if language != "de":
             items[f"lang_{language}"] = Scenario(system("protocol_standard"), {"protocol": protocol_elements(2)}, language=language)
@@ -328,10 +354,7 @@ def compile_scenario(scenario: Scenario, *, render_id: str = "0192f0aa-0000-7000
             if fixture is None:
                 return super()._node_data_block(node, scope, area, scope_def)
             blocks = _mark_empty([BLOCK_MODELS[item["type"]].model_validate(item) for item in fixture])
-            self.blocks.extend(blocks)
-            out = self._base(node, "data")
-            out["blocks"] = [block.model_dump(mode="json") for block in blocks]
-            return out
+            return self._data_output(node, blocks)
 
     db = _NoDb()
     tokens = BrandTokens.model_validate(scenario.brand)

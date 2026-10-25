@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
+import { AppearanceEditor } from "@/components/documents/appearance-editor";
 import { AssetPicker } from "@/components/documents/asset-picker";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
@@ -18,23 +19,28 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { locales } from "@/i18n/locale-config.generated";
 import { ApiError } from "@/lib/api/client";
-import { apiErrorMessage, Brand, BrandRevision, Capabilities, DocumentAsset, DocumentTemplateInfo, previewDocument, studioApi } from "@/lib/documents/api";
+import { apiErrorMessage, AppearanceCatalog, Brand, BrandRevision, Capabilities, DocumentAsset, DocumentTemplateInfo, previewDocument, studioApi } from "@/lib/documents/api";
+import { baseVariant, DEFAULT_APPEARANCE_BASE } from "@/lib/documents/appearance";
+import { DERIVED_COLOR_KEYS, deriveBrandColors } from "@/lib/documents/brand-colors";
 import { BrandTokens } from "@/lib/documents/layout";
 import { formatDateTime } from "@/lib/utils/format";
 
 const PREVIEW_DEBOUNCE_MS = 500;
-const COLOR_KEYS = ["primary", "secondary", "accent", "accent_2", "heading", "text", "muted", "background", "surface", "border", "success", "warning", "danger", "info", "watermark", "table_header_background", "table_header_text", "table_zebra"];
+// Einfache Ansicht: nur Haupt- und Zweitfarbe, alles andere unter «Erweiterte Optionen»
+const BASE_COLOR_KEYS = ["primary", "secondary"] as const;
+const COLOR_KEYS = ["accent", "accent_2", "heading", "text", "muted", "background", "surface", "border", "success", "warning", "danger", "info", "watermark", "table_header_background", "table_header_text", "table_zebra"];
 const FONT_KEYS = ["inter", "liberation_sans", "liberation_serif", "noto_sans"];
 const ASSET_ROLES = ["logo", "logo_alt", "letterhead", "background", "watermark", "footer_image"] as const;
+const ADVANCED_ASSET_ROLES = ASSET_ROLES.filter((role) => role !== "logo");
 const SIZE_KEYS = ["base_size", "size_title", "size_subtitle", "size_h1", "size_h2", "size_h3", "size_small"] as const;
 const HEADER_FOOTER_FLAGS = ["header_show_logo", "header_show_title", "header_show_date", "header_line", "footer_show_number", "footer_show_pages", "footer_line"];
 const DOCUMENT_DEFAULTS = ["title_page", "toc", "heading_numbering", "show_metadata", "watermark_draft"] as const;
 
 type Props = { capabilities: Capabilities };
 
-function Section({ title, children, open = false }: { title: string; children: React.ReactNode; open?: boolean }) {
+function Section({ title, children, open = false, className = "studio-brand-section" }: { title: string; children: React.ReactNode; open?: boolean; className?: string }) {
   return (
-    <details className="studio-prop-group studio-brand-section" open={open}>
+    <details className={`studio-prop-group ${className}`} open={open}>
       <summary className="studio-prop-summary">{title}</summary>
       <div className="studio-prop-body">{children}</div>
     </details>
@@ -62,6 +68,7 @@ export function BrandStudio({ capabilities }: Props) {
   const [createName, setCreateName] = useState("");
   const [createPreset, setCreatePreset] = useState("classic_blue");
   const [presets, setPresets] = useState<string[]>([]);
+  const [appearanceCatalog, setAppearanceCatalog] = useState<AppearanceCatalog | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [documentLanguage, setDocumentLanguage] = useState<string | null>(null);
   const canEdit = capabilities.manage_brand;
@@ -84,7 +91,10 @@ export function BrandStudio({ capabilities }: Props) {
   useEffect(() => {
     void studioApi.assets().then(setAssets);
     void studioApi.documentSettings().then((settings) => setDocumentLanguage(settings?.language ?? null));
-    void studioApi.catalog().then((catalog) => setPresets(catalog.brand_presets));
+    void studioApi.catalog().then((catalog) => {
+      setPresets(catalog.brand_presets);
+      setAppearanceCatalog(catalog.appearance ?? null);
+    });
     void studioApi.listTemplates().then((templates) => {
       const usable = (templates ?? []).filter((item) => item.published_revision && item.status === "active");
       setPreviewTemplates(usable);
@@ -125,6 +135,33 @@ export function BrandStudio({ capabilities }: Props) {
       const next = structuredClone(current);
       mutator(next);
       return next;
+    });
+  }
+
+  function setBaseColor(key: (typeof BASE_COLOR_KEYS)[number], value: string) {
+    update((tokens) => {
+      tokens.colors[key] = value.toUpperCase();
+      if (tokens.derive_colors !== false) Object.assign(tokens.colors, deriveBrandColors(tokens.colors.primary, tokens.colors.secondary));
+    });
+  }
+
+  function setDeriveColors(enabled: boolean) {
+    update((tokens) => {
+      tokens.derive_colors = enabled;
+      if (enabled) Object.assign(tokens.colors, deriveBrandColors(tokens.colors.primary, tokens.colors.secondary));
+    });
+  }
+
+  // Grundstil: übernimmt Überschriften, Tabellen und Ecken in den Seitenaufbau; Übersteuerungen
+  // einzelner Elementarten bleiben bestehen.
+  function setAppearanceBase(base: string) {
+    const definition = appearanceCatalog?.bases[base];
+    if (!definition) return;
+    update((tokens) => {
+      tokens.appearance = { base, elements: tokens.appearance?.elements ?? {} };
+      tokens.layout.heading_style = definition.layout.heading_style as BrandTokens["layout"]["heading_style"];
+      tokens.layout.table_style = definition.layout.table_style as BrandTokens["layout"]["table_style"];
+      tokens.layout.radius = definition.layout.radius;
     });
   }
 
@@ -183,6 +220,48 @@ export function BrandStudio({ capabilities }: Props) {
 
   const assetName = (id: string | null | undefined) => (id ? assets.find((asset) => asset.id === id)?.name ?? t("props.imageMissing") : t("brand.noImage"));
   const fontName = (ids: string[]) => ids.map((id) => assets.find((asset) => asset.id === id)?.font_family ?? "?").join(", ");
+
+  // Schriftauswahl; «both» setzt Fliesstext und Überschriften gemeinsam (einfache Ansicht)
+  const fontSelect = (role: "body" | "heading" | "both", label: string) => {
+    const source = draft!.typography[role === "both" ? "body" : role];
+    const roles = role === "both" ? (["body", "heading"] as const) : [role];
+    return (
+      <label className="field-stack">
+        <span className="field-label">{label}</span>
+        <select
+          value={source.asset_ids.length ? "custom" : source.builtin ?? "inter"}
+          onChange={(event) =>
+            event.target.value === "custom"
+              ? setPicker({ role: `font:${role}`, kind: "font" })
+              : update((tokens) => { roles.forEach((item) => { tokens.typography[item] = { builtin: event.target.value, asset_ids: [] }; }); })
+          }
+        >
+          {FONT_KEYS.map((key) => (
+            <option key={key} value={key}>
+              {t(`font.${key}`)}
+            </option>
+          ))}
+          <option value="custom">{source.asset_ids.length ? fontName(source.asset_ids) : t("brand.customFont")}</option>
+        </select>
+      </label>
+    );
+  };
+
+  const assetRole = (role: (typeof ASSET_ROLES)[number], showLabel = true) => (
+    <div key={role} className="studio-asset-role">
+      {showLabel && <span className="field-label">{t(`brand.asset.${role}`)}</span>}
+      <div className="studio-inline-actions">
+        <button type="button" className="button-secondary" onClick={() => setPicker({ role, kind: "image" })}>
+          {assetName(draft!.assets[role])}
+        </button>
+        {draft!.assets[role] && (
+          <button type="button" className="button-ghost" onClick={() => update((tokens) => { tokens.assets[role] = null; })}>
+            {t("brand.remove")}
+          </button>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="grid">
@@ -272,219 +351,43 @@ export function BrandStudio({ capabilities }: Props) {
 
               <Section title={t("brand.colors")} open>
                 <div className="studio-color-grid">
-                  {COLOR_KEYS.map((key) => (
+                  {BASE_COLOR_KEYS.map((key) => (
                     <label key={key} className="studio-color-cell">
-                      <input type="color" value={draft.colors[key]} /* design-ok: Brand-Farbe (Daten) */ onChange={(event) => update((tokens) => { tokens.colors[key] = event.target.value.toUpperCase(); })} />
+                      <input type="color" value={draft.colors[key]} /* design-ok: Brand-Farbe (Daten) */ onChange={(event) => setBaseColor(key, event.target.value)} />
                       <span>{t(`colorRef.${key}`)}</span>
                     </label>
                   ))}
                 </div>
-                <h4 className="studio-subtitle">{t("brand.customColors")}</h4>
-                {draft.colors.custom.map((item, index) => (
-                  <div key={index} className="studio-custom-color">
-                    <input type="color" value={item.value} /* design-ok: Brand-Farbe (Daten) */ aria-label={t("brand.customColorValue")} onChange={(event) => update((tokens) => { tokens.colors.custom[index].value = event.target.value.toUpperCase(); })} />
-                    <input value={item.label} placeholder={t("brand.customColorLabel")} aria-label={t("brand.customColorLabel")} onChange={(event) => update((tokens) => { tokens.colors.custom[index].label = event.target.value; })} />
-                    <input value={item.key} placeholder={t("brand.customColorKey")} aria-label={t("brand.customColorKey")} pattern="[a-z0-9_]+" onChange={(event) => update((tokens) => { tokens.colors.custom[index].key = event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"); })} />
-                    <button type="button" className="button-icon-soft button-icon-soft-danger" aria-label={t("brand.removeColor")} onClick={() => update((tokens) => { tokens.colors.custom.splice(index, 1); })}>
-                      ✕
-                    </button>
-                  </div>
-                ))}
-                <button type="button" className="button-secondary button-ghost" onClick={() => update((tokens) => { tokens.colors.custom.push({ key: `farbe_${tokens.colors.custom.length + 1}`, label: "", value: tokens.colors.primary }); })}>
-                  {t("brand.addColor")}
-                </button>
-              </Section>
-
-              <Section title={t("brand.typography")}>
-                {(["body", "heading"] as const).map((role) => (
-                  <div key={role} className="studio-field-grid">
-                    <label className="field-stack">
-                      <span className="field-label">{t(`brand.font.${role}`)}</span>
-                      <select
-                        value={draft.typography[role].asset_ids.length ? "custom" : draft.typography[role].builtin ?? "inter"}
-                        onChange={(event) =>
-                          event.target.value === "custom"
-                            ? setPicker({ role: `font:${role}`, kind: "font" })
-                            : update((tokens) => { tokens.typography[role] = { builtin: event.target.value, asset_ids: [] }; })
-                        }
-                      >
-                        {FONT_KEYS.map((key) => (
-                          <option key={key} value={key}>
-                            {t(`font.${key}`)}
-                          </option>
-                        ))}
-                        <option value="custom">{draft.typography[role].asset_ids.length ? fontName(draft.typography[role].asset_ids) : t("brand.customFont")}</option>
-                      </select>
-                    </label>
-                  </div>
-                ))}
-                <div className="studio-field-grid">
-                  {SIZE_KEYS.map((key) => (
-                    <label key={key} className="field-stack">
-                      <span className="field-label">{t(`brand.size.${key}`)}</span>
-                      <span className="studio-number">
-                        <input type="number" min={5} max={72} step={0.5} value={draft.typography[key]} onChange={(event) => update((tokens) => { tokens.typography[key] = Number(event.target.value || 0); })} />
-                        <span className="studio-number-suffix">{t("brand.unitPt")}</span>
-                      </span>
-                    </label>
-                  ))}
-                  <label className="field-stack">
-                    <span className="field-label">{t("brand.lineHeight")}</span>
-                    <input type="number" min={1} max={2.5} step={0.05} value={draft.typography.line_height} onChange={(event) => update((tokens) => { tokens.typography.line_height = Number(event.target.value || 1.35); })} />
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("brand.headingWeight")}</span>
-                    <select value={draft.typography.weight_heading} onChange={(event) => update((tokens) => { tokens.typography.weight_heading = event.target.value as "bold"; })}>
-                      <option value="medium">{t("fields.weightValue.medium")}</option>
-                      <option value="bold">{t("fields.weightValue.bold")}</option>
-                    </select>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("brand.letterSpacing")}</span>
-                    <input type="number" min={-1} max={4} step={0.1} value={draft.typography.letter_spacing_heading} onChange={(event) => update((tokens) => { tokens.typography.letter_spacing_heading = Number(event.target.value || 0); })} />
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("brand.headingTransform")}</span>
-                    <select value={draft.typography.heading_transform} onChange={(event) => update((tokens) => { tokens.typography.heading_transform = event.target.value as "none"; })}>
-                      <option value="none">{t("fields.transformValue.none")}</option>
-                      <option value="upper">{t("fields.transformValue.upper")}</option>
-                    </select>
-                  </label>
-                </div>
-                <fieldset className="studio-fieldset">
-                  <legend className="field-label">{t("brand.fallbacks")}</legend>
-                  <div className="studio-param-checks">
-                    {FONT_KEYS.map((key) => (
-                      <label key={key} className="studio-inline-check">
-                        <input type="checkbox" checked={draft.typography.fallbacks.includes(key)} onChange={(event) => update((tokens) => { tokens.typography.fallbacks = event.target.checked ? [...tokens.typography.fallbacks, key].slice(0, 3) : tokens.typography.fallbacks.filter((item) => item !== key); })} />
-                        <span>{t(`font.${key}`)}</span>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-              </Section>
-
-              <Section title={t("brand.assets")}>
-                {ASSET_ROLES.map((role) => (
-                  <div key={role} className="studio-asset-role">
-                    <span className="field-label">{t(`brand.asset.${role}`)}</span>
-                    <div className="studio-inline-actions">
-                      <button type="button" className="button-secondary" onClick={() => setPicker({ role, kind: "image" })}>
-                        {assetName(draft.assets[role])}
-                      </button>
-                      {draft.assets[role] && (
-                        <button type="button" className="button-ghost" onClick={() => update((tokens) => { tokens.assets[role] = null; })}>
-                          {t("brand.remove")}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                <h4 className="studio-subtitle">{t("brand.ownImages")}</h4>
-                {draft.assets.images.map((image, index) => (
-                  <div key={index} className="studio-custom-color">
-                    <span>{assetName(image.asset_id)}</span>
-                    <input value={image.label} placeholder={t("brand.imageLabel")} aria-label={t("brand.imageLabel")} onChange={(event) => update((tokens) => { tokens.assets.images[index].label = event.target.value; })} />
-                    <input value={image.key} aria-label={t("brand.imageKey")} onChange={(event) => update((tokens) => { tokens.assets.images[index].key = event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"); })} />
-                    <button type="button" className="button-icon-soft button-icon-soft-danger" aria-label={t("brand.remove")} onClick={() => update((tokens) => { tokens.assets.images.splice(index, 1); })}>
-                      ✕
-                    </button>
-                  </div>
-                ))}
-                <button type="button" className="button-secondary button-ghost" onClick={() => setPicker({ role: "images", kind: "image" })}>
-                  {t("brand.addImage")}
-                </button>
-              </Section>
-
-              <Section title={t("brand.layout")}>
-                <div className="studio-field-grid">
-                  <label className="field-stack">
-                    <span className="field-label">{t("brand.pageSize")}</span>
-                    <select value={draft.layout.page_size} onChange={(event) => update((tokens) => { tokens.layout.page_size = event.target.value as "A4"; })}>
-                      {["A4", "A5", "Letter"].map((size) => (
-                        <option key={size} value={size}>
-                          {t(`document.sizeValue.${size}`)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("document.orientation")}</span>
-                    <select value={draft.layout.orientation} onChange={(event) => update((tokens) => { tokens.layout.orientation = event.target.value as "portrait"; })}>
-                      <option value="portrait">{t("document.portrait")}</option>
-                      <option value="landscape">{t("document.landscape")}</option>
-                    </select>
-                  </label>
-                  {(["top", "right", "bottom", "left"] as const).map((side) => (
-                    <label key={side} className="field-stack">
-                      <span className="field-label">{t(`brand.margin.${side}`)}</span>
-                      <span className="studio-number">
-                        <input type="number" min={0} max={80} step={0.5} value={draft.layout.margins[side]} onChange={(event) => update((tokens) => { tokens.layout.margins[side] = Number(event.target.value || 0); })} />
-                        <span className="studio-number-suffix">{t("brand.unitMm")}</span>
-                      </span>
-                    </label>
-                  ))}
-                  <label className="field-stack">
-                    <span className="field-label">{t("brand.paragraphGap")}</span>
-                    <input type="number" min={0} max={20} step={0.5} value={draft.layout.paragraph_gap} onChange={(event) => update((tokens) => { tokens.layout.paragraph_gap = Number(event.target.value || 0); })} />
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("brand.sectionGap")}</span>
-                    <input type="number" min={0} max={40} step={0.5} value={draft.layout.section_gap} onChange={(event) => update((tokens) => { tokens.layout.section_gap = Number(event.target.value || 0); })} />
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("brand.headingStyle")}</span>
-                    <select value={draft.layout.heading_style} onChange={(event) => update((tokens) => { tokens.layout.heading_style = event.target.value as "plain"; })}>
-                      {["plain", "underline", "bar", "boxed"].map((value) => (
-                        <option key={value} value={value}>
-                          {t(`brand.headingStyleValue.${value}`)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("brand.tableStyle")}</span>
-                    <select value={draft.layout.table_style} onChange={(event) => update((tokens) => { tokens.layout.table_style = event.target.value as "lines"; })}>
-                      {["lines", "grid", "zebra", "minimal"].map((value) => (
-                        <option key={value} value={value}>
-                          {t(`brand.tableStyleValue.${value}`)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("brand.borderWidth")}</span>
-                    <input type="number" min={0.1} max={4} step={0.1} value={draft.layout.border_width} onChange={(event) => update((tokens) => { tokens.layout.border_width = Number(event.target.value || 0.5); })} />
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("brand.radius")}</span>
-                    <input type="number" min={0} max={10} step={0.5} value={draft.layout.radius} onChange={(event) => update((tokens) => { tokens.layout.radius = Number(event.target.value || 0); })} />
-                  </label>
-                </div>
-                <fieldset className="studio-fieldset">
-                  <legend className="field-label">{t("brand.documentDefaults")}</legend>
-                  <p className="field-help">{t("brand.documentDefaultsHelp")}</p>
-                  {DOCUMENT_DEFAULTS.map((key) => (
-                    <label key={key} className="studio-inline-check">
-                      <input type="checkbox" checked={draft.layout[key]} onChange={(event) => update((tokens) => { tokens.layout[key] = event.target.checked; })} />
-                      <span>{t(`brand.defaultFlag.${key}`)}</span>
-                    </label>
-                  ))}
-                </fieldset>
-              </Section>
-
-              <Section title={t("brand.headerFooter")}>
-                <p className="field-help">{t("brand.headerFooterHelp")}</p>
-                {HEADER_FOOTER_FLAGS.map((key) => (
-                  <label key={key} className="studio-inline-check">
-                    <input type="checkbox" checked={draft.layout.header_footer[key] === true} onChange={(event) => update((tokens) => { tokens.layout.header_footer[key] = event.target.checked; })} />
-                    <span>{t(`brand.hf.${key}`)}</span>
-                  </label>
-                ))}
-                <label className="field-stack">
-                  <span className="field-label">{t("brand.footerText")}</span>
-                  <input value={String(draft.layout.header_footer.footer_text ?? "")} maxLength={300} onChange={(event) => update((tokens) => { tokens.layout.header_footer.footer_text = event.target.value; })} />
+                <label className="studio-inline-check">
+                  <input type="checkbox" checked={draft.derive_colors !== false} onChange={(event) => setDeriveColors(event.target.checked)} />
+                  <span>{t("brand.deriveColors")}</span>
                 </label>
+                <p className="field-help">{t("brand.deriveColorsHelp")}</p>
+              </Section>
+
+              {appearanceCatalog && (
+                <Section title={t("appearance.baseTitle")} open>
+                  <p className="field-help">{t("appearance.baseHelp")}</p>
+                  <div className="studio-variant-list studio-appearance-bases" role="radiogroup" aria-label={t("appearance.baseTitle")}>
+                    {Object.keys(appearanceCatalog.bases).map((base) => {
+                      const active = (draft.appearance?.base ?? DEFAULT_APPEARANCE_BASE) === base;
+                      return (
+                        <button key={base} type="button" role="radio" aria-checked={active} className={active ? "studio-variant studio-variant-active" : "studio-variant"} onClick={() => setAppearanceBase(base)}>
+                          <span className="studio-variant-name">{t(`appearance.base.${base}.name`)}</span>
+                          <span className="field-help">{t(`appearance.base.${base}.help`)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Section>
+              )}
+
+              <Section title={t("brand.typography")} open>
+                {fontSelect("both", t("brand.font.both"))}
+              </Section>
+
+              <Section title={t("brand.asset.logo")} open>
+                {assetRole("logo", false)}
               </Section>
 
               <Section title={t("brand.organization")}>
@@ -501,14 +404,203 @@ export function BrandStudio({ capabilities }: Props) {
                 ))}
               </Section>
 
-              <Section title={t("brand.verify")}>
-                <p className="field-help">{t("brand.verifyHelp")}</p>
-                {(["show_url", "show_id", "show_qr"] as const).map((key) => (
-                  <label key={key} className="studio-inline-check">
-                    <input type="checkbox" checked={draft.verify[key]} onChange={(event) => update((tokens) => { tokens.verify[key] = event.target.checked; })} />
-                    <span>{t(`brand.verifyFlag.${key}`)}</span>
+              <Section title={t("brand.advanced")} className="studio-brand-section studio-brand-advanced">
+                <Section title={t("brand.allColors")}>
+                  <p className="field-help">{t("brand.allColorsHelp")}</p>
+                  <div className="studio-color-grid">
+                    {COLOR_KEYS.map((key) => (
+                      <label key={key} className="studio-color-cell">
+                        <input
+                          type="color"
+                          value={draft.colors[key]} /* design-ok: Brand-Farbe (Daten) */
+                          onChange={(event) =>
+                            update((tokens) => {
+                              tokens.colors[key] = event.target.value.toUpperCase();
+                              if (DERIVED_COLOR_KEYS.includes(key)) tokens.derive_colors = false;
+                            })
+                          }
+                        />
+                        <span>{t(`colorRef.${key}`)}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <h4 className="studio-subtitle">{t("brand.customColors")}</h4>
+                  {draft.colors.custom.map((item, index) => (
+                    <div key={index} className="studio-custom-color">
+                      <input type="color" value={item.value} /* design-ok: Brand-Farbe (Daten) */ aria-label={t("brand.customColorValue")} onChange={(event) => update((tokens) => { tokens.colors.custom[index].value = event.target.value.toUpperCase(); })} />
+                      <input value={item.label} placeholder={t("brand.customColorLabel")} aria-label={t("brand.customColorLabel")} onChange={(event) => update((tokens) => { tokens.colors.custom[index].label = event.target.value; })} />
+                      <input value={item.key} placeholder={t("brand.customColorKey")} aria-label={t("brand.customColorKey")} pattern="[a-z0-9_]+" onChange={(event) => update((tokens) => { tokens.colors.custom[index].key = event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"); })} />
+                      <button type="button" className="button-icon-soft button-icon-soft-danger" aria-label={t("brand.removeColor")} onClick={() => update((tokens) => { tokens.colors.custom.splice(index, 1); })}>
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <button type="button" className="button-secondary button-ghost" onClick={() => update((tokens) => { tokens.colors.custom.push({ key: `farbe_${tokens.colors.custom.length + 1}`, label: "", value: tokens.colors.primary }); })}>
+                    {t("brand.addColor")}
+                  </button>
+                </Section>
+                {appearanceCatalog && (
+                  <Section title={t("appearance.elementsTitle")}>
+                    <p className="field-help">{t("appearance.elementsHelp")}</p>
+                    <AppearanceEditor
+                      catalog={appearanceCatalog}
+                      kinds={Object.keys(appearanceCatalog.variants)}
+                      value={draft.appearance?.elements}
+                      inherited={(kind) => baseVariant(draft, appearanceCatalog, kind)}
+                      inheritLabel={(value) => t("appearance.inheritBase", { value })}
+                      onChange={(elements) => update((tokens) => { tokens.appearance = { base: tokens.appearance?.base ?? DEFAULT_APPEARANCE_BASE, elements }; })}
+                    />
+                  </Section>
+                )}
+                <Section title={t("brand.typographyAdvanced")}>
+                  <div className="studio-field-grid">
+                    {fontSelect("body", t("brand.font.body"))}
+                    {fontSelect("heading", t("brand.font.heading"))}
+                  </div>
+                  <div className="studio-field-grid">
+                    {SIZE_KEYS.map((key) => (
+                      <label key={key} className="field-stack">
+                        <span className="field-label">{t(`brand.size.${key}`)}</span>
+                        <span className="studio-number">
+                          <input type="number" min={5} max={72} step={0.5} value={draft.typography[key]} onChange={(event) => update((tokens) => { tokens.typography[key] = Number(event.target.value || 0); })} />
+                          <span className="studio-number-suffix">{t("brand.unitPt")}</span>
+                        </span>
+                      </label>
+                    ))}
+                    <label className="field-stack">
+                      <span className="field-label">{t("brand.lineHeight")}</span>
+                      <input type="number" min={1} max={2.5} step={0.05} value={draft.typography.line_height} onChange={(event) => update((tokens) => { tokens.typography.line_height = Number(event.target.value || 1.35); })} />
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">{t("brand.headingWeight")}</span>
+                      <select value={draft.typography.weight_heading} onChange={(event) => update((tokens) => { tokens.typography.weight_heading = event.target.value as "bold"; })}>
+                        <option value="medium">{t("fields.weightValue.medium")}</option>
+                        <option value="bold">{t("fields.weightValue.bold")}</option>
+                      </select>
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">{t("brand.letterSpacing")}</span>
+                      <input type="number" min={-1} max={4} step={0.1} value={draft.typography.letter_spacing_heading} onChange={(event) => update((tokens) => { tokens.typography.letter_spacing_heading = Number(event.target.value || 0); })} />
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">{t("brand.headingTransform")}</span>
+                      <select value={draft.typography.heading_transform} onChange={(event) => update((tokens) => { tokens.typography.heading_transform = event.target.value as "none"; })}>
+                        <option value="none">{t("fields.transformValue.none")}</option>
+                        <option value="upper">{t("fields.transformValue.upper")}</option>
+                      </select>
+                    </label>
+                  </div>
+                  <fieldset className="studio-fieldset">
+                    <legend className="field-label">{t("brand.fallbacks")}</legend>
+                    <div className="studio-param-checks">
+                      {FONT_KEYS.map((key) => (
+                        <label key={key} className="studio-inline-check">
+                          <input type="checkbox" checked={draft.typography.fallbacks.includes(key)} onChange={(event) => update((tokens) => { tokens.typography.fallbacks = event.target.checked ? [...tokens.typography.fallbacks, key].slice(0, 3) : tokens.typography.fallbacks.filter((item) => item !== key); })} />
+                          <span>{t(`font.${key}`)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                </Section>
+
+                <Section title={t("brand.advancedAssets")}>
+                  {ADVANCED_ASSET_ROLES.map((role) => assetRole(role))}
+                  <h4 className="studio-subtitle">{t("brand.ownImages")}</h4>
+                  {draft.assets.images.map((image, index) => (
+                    <div key={index} className="studio-custom-color">
+                      <span>{assetName(image.asset_id)}</span>
+                      <input value={image.label} placeholder={t("brand.imageLabel")} aria-label={t("brand.imageLabel")} onChange={(event) => update((tokens) => { tokens.assets.images[index].label = event.target.value; })} />
+                      <input value={image.key} aria-label={t("brand.imageKey")} onChange={(event) => update((tokens) => { tokens.assets.images[index].key = event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"); })} />
+                      <button type="button" className="button-icon-soft button-icon-soft-danger" aria-label={t("brand.remove")} onClick={() => update((tokens) => { tokens.assets.images.splice(index, 1); })}>
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <button type="button" className="button-secondary button-ghost" onClick={() => setPicker({ role: "images", kind: "image" })}>
+                    {t("brand.addImage")}
+                  </button>
+                </Section>
+
+                <Section title={t("brand.layout")}>
+                  <div className="studio-field-grid">
+                    <label className="field-stack">
+                      <span className="field-label">{t("brand.pageSize")}</span>
+                      <select value={draft.layout.page_size} onChange={(event) => update((tokens) => { tokens.layout.page_size = event.target.value as "A4"; })}>
+                        {["A4", "A5", "Letter"].map((size) => (
+                          <option key={size} value={size}>
+                            {t(`document.sizeValue.${size}`)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">{t("document.orientation")}</span>
+                      <select value={draft.layout.orientation} onChange={(event) => update((tokens) => { tokens.layout.orientation = event.target.value as "portrait"; })}>
+                        <option value="portrait">{t("document.portrait")}</option>
+                        <option value="landscape">{t("document.landscape")}</option>
+                      </select>
+                    </label>
+                    {(["top", "right", "bottom", "left"] as const).map((side) => (
+                      <label key={side} className="field-stack">
+                        <span className="field-label">{t(`brand.margin.${side}`)}</span>
+                        <span className="studio-number">
+                          <input type="number" min={0} max={80} step={0.5} value={draft.layout.margins[side]} onChange={(event) => update((tokens) => { tokens.layout.margins[side] = Number(event.target.value || 0); })} />
+                          <span className="studio-number-suffix">{t("brand.unitMm")}</span>
+                        </span>
+                      </label>
+                    ))}
+                    <label className="field-stack">
+                      <span className="field-label">{t("brand.paragraphGap")}</span>
+                      <input type="number" min={0} max={20} step={0.5} value={draft.layout.paragraph_gap} onChange={(event) => update((tokens) => { tokens.layout.paragraph_gap = Number(event.target.value || 0); })} />
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">{t("brand.sectionGap")}</span>
+                      <input type="number" min={0} max={40} step={0.5} value={draft.layout.section_gap} onChange={(event) => update((tokens) => { tokens.layout.section_gap = Number(event.target.value || 0); })} />
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">{t("brand.borderWidth")}</span>
+                      <input type="number" min={0.1} max={4} step={0.1} value={draft.layout.border_width} onChange={(event) => update((tokens) => { tokens.layout.border_width = Number(event.target.value || 0.5); })} />
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">{t("brand.radius")}</span>
+                      <input type="number" min={0} max={10} step={0.5} value={draft.layout.radius} onChange={(event) => update((tokens) => { tokens.layout.radius = Number(event.target.value || 0); })} />
+                    </label>
+                  </div>
+                  <fieldset className="studio-fieldset">
+                    <legend className="field-label">{t("brand.documentDefaults")}</legend>
+                    <p className="field-help">{t("brand.documentDefaultsHelp")}</p>
+                    {DOCUMENT_DEFAULTS.map((key) => (
+                      <label key={key} className="studio-inline-check">
+                        <input type="checkbox" checked={draft.layout[key]} onChange={(event) => update((tokens) => { tokens.layout[key] = event.target.checked; })} />
+                        <span>{t(`brand.defaultFlag.${key}`)}</span>
+                      </label>
+                    ))}
+                  </fieldset>
+                </Section>
+
+                <Section title={t("brand.headerFooter")}>
+                  <p className="field-help">{t("brand.headerFooterHelp")}</p>
+                  {HEADER_FOOTER_FLAGS.map((key) => (
+                    <label key={key} className="studio-inline-check">
+                      <input type="checkbox" checked={draft.layout.header_footer[key] === true} onChange={(event) => update((tokens) => { tokens.layout.header_footer[key] = event.target.checked; })} />
+                      <span>{t(`brand.hf.${key}`)}</span>
+                    </label>
+                  ))}
+                  <label className="field-stack">
+                    <span className="field-label">{t("brand.footerText")}</span>
+                    <input value={String(draft.layout.header_footer.footer_text ?? "")} maxLength={300} onChange={(event) => update((tokens) => { tokens.layout.header_footer.footer_text = event.target.value; })} />
                   </label>
-                ))}
+                </Section>
+
+                <Section title={t("brand.verify")}>
+                  <p className="field-help">{t("brand.verifyHelp")}</p>
+                  {(["show_url", "show_id", "show_qr"] as const).map((key) => (
+                    <label key={key} className="studio-inline-check">
+                      <input type="checkbox" checked={draft.verify[key]} onChange={(event) => update((tokens) => { tokens.verify[key] = event.target.checked; })} />
+                      <span>{t(`brand.verifyFlag.${key}`)}</span>
+                    </label>
+                  ))}
+                </Section>
               </Section>
             </fieldset>
             {canEdit && (
@@ -558,8 +650,10 @@ export function BrandStudio({ capabilities }: Props) {
           onPick={(asset) =>
             update((tokens) => {
               if (picker.role.startsWith("font:")) {
-                const role = picker.role.slice(5) as "body" | "heading";
-                tokens.typography[role] = { builtin: null, asset_ids: [...tokens.typography[role].asset_ids.filter((id) => id !== asset.id), asset.id].slice(-4) };
+                const role = picker.role.slice(5) as "body" | "heading" | "both";
+                const source = tokens.typography[role === "both" ? "body" : role].asset_ids;
+                const choice = { builtin: null, asset_ids: [...source.filter((id) => id !== asset.id), asset.id].slice(-4) };
+                (role === "both" ? (["body", "heading"] as const) : [role]).forEach((item) => { tokens.typography[item] = structuredClone(choice); });
               } else if (picker.role === "images") {
                 tokens.assets.images.push({ key: `bild_${tokens.assets.images.length + 1}`, label: asset.name, asset_id: asset.id });
               } else {

@@ -374,7 +374,9 @@
       "saved": "Tariffa multe del modello salvata",
       "saveFailed": "Impossibile salvare la tariffa multe",
       "loadFailed": "Impossibile caricare la tariffa multe"
-    }
+    },
+    "invitationVisible": "Nell’invito e nell’ordine del giorno",
+    "invitationToggleFailed": "Impossibile salvare l’impostazione."
   },
   "elementEditor": {
     "advancedShow": "Avanzate",

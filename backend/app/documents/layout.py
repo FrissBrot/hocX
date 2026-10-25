@@ -23,6 +23,7 @@ from typing import Annotated, Any, Iterator, Literal, Union, get_args
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.documents.appearance import ElementAppearance, validate_appearance_elements
 from app.documents.conditions import Condition
 
 LAYOUT_SCHEMA_VERSION = 1
@@ -375,6 +376,13 @@ class DataBlockNode(NodeBase):
     title_mode: Literal["none", "auto", "custom"] = "none"
     level: int = Field(1, ge=1, le=4)
     hide_if_empty: bool = True
+    # Darstellung dieses Blocks abweichend vom Brand-Profil (Elementart → Variante/Ecken)
+    appearance: dict[str, ElementAppearance] = Field(default_factory=dict)
+
+    @field_validator("appearance")
+    @classmethod
+    def _known_appearance(cls, value: dict[str, ElementAppearance]) -> dict[str, ElementAppearance]:
+        return validate_appearance_elements(value, allow_brand_only=False)
 
 
 class PageBreakNode(NodeBase):

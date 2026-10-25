@@ -25,6 +25,7 @@ Altformate, die upgrade_block_config auflöst:
 """
 from __future__ import annotations
 
+from datetime import time
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -638,3 +639,15 @@ def _amount(value: Any) -> float:
         return max(0.0, round(float(value or 0), 2))
     except (TypeError, ValueError):
         return 0.0
+
+
+def parse_session_time(value: object) -> time | None:
+    """``selected_time`` des Blocks «Nächste Sitzung» (``HH:MM``) → ``time``; leer oder
+    ungültig = keine Uhrzeit (ganztägig), nie ein Abbruch beim Speichern."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = time.fromisoformat(value.strip())
+    except ValueError:
+        return None
+    return parsed.replace(second=0, microsecond=0, tzinfo=None)

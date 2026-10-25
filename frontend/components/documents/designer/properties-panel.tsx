@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { AppearanceEditor } from "@/components/documents/appearance-editor";
 import { AssetPicker } from "@/components/documents/asset-picker";
 import { ComponentParamForm } from "@/components/documents/designer/component-params";
 import { diagnosticsFor, modeAllows, useDesigner, useSelectedNode } from "@/components/documents/designer/designer-context";
@@ -15,7 +16,8 @@ import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { apiErrorMessage, EditorMode, studioApi } from "@/lib/documents/api";
-import { BoxStyle, duplicateNode, locate, newNodeId, removeNode, repeatScope, TemplateContent, TemplateNode, TextContent } from "@/lib/documents/layout";
+import { brandVariant } from "@/lib/documents/appearance";
+import { AppearanceOverrides, BoxStyle, duplicateNode, locate, newNodeId, removeNode, repeatScope, TemplateContent, TemplateNode, TextContent } from "@/lib/documents/layout";
 
 // Mindestmodus je Eigenschaftsgruppe (Gruppen aus components.py)
 const GROUP_MODE: Record<string, EditorMode> = {
@@ -65,7 +67,7 @@ export function PropertiesPanel() {
   const toast = useToast();
   const confirm = useConfirm();
   const designer = useDesigner();
-  const { content, setContent, select, mode, catalog, diagnostics, editable, assets, setAssets, capabilities, components, setComponents } = designer;
+  const { content, setContent, select, mode, catalog, diagnostics, editable, assets, setAssets, capabilities, components, setComponents, brand } = designer;
   const { node, change } = useSelectedNode();
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
   if (!node) return null;
@@ -167,6 +169,20 @@ export function PropertiesPanel() {
             {modeAllows(mode, "advanced") && <NumberField label={t("props.outlineLevel")} value={(node.level as number) ?? 1} min={1} max={4} onChange={(level) => change({ level })} />}
             {modeAllows(mode, "advanced") && component && (
               <ComponentParamForm schema={component.params_schema} params={(node.params as Record<string, unknown>) ?? {}} onChange={(params) => change({ params }, "params")} />
+            )}
+            {component && component.appearance_kinds.length > 0 && catalog.appearance && (
+              <>
+                <h4 className="studio-subtitle">{t("appearance.designerTitle")}</h4>
+                <p className="field-help">{t("appearance.designerHelp")}</p>
+                <AppearanceEditor
+                  catalog={catalog.appearance}
+                  kinds={component.appearance_kinds}
+                  value={node.appearance as AppearanceOverrides | undefined}
+                  inherited={(kind) => brandVariant(brand.tokens, catalog.appearance, kind)}
+                  inheritLabel={(value) => t("appearance.inheritBrand", { value })}
+                  onChange={(appearance) => change({ appearance })}
+                />
+              </>
             )}
           </>
         );

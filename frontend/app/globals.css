@@ -24197,6 +24197,38 @@ a.mobile-list-row { color: var(--text); }
 .studio-brand-section {
   border-top: 1px solid var(--border);
 }
+/* Grundstil und Elementdarstellung (Brand Studio, Designer) */
+.studio-appearance-bases .studio-variant {
+  justify-items: start;
+  text-align: left;
+}
+.studio-appearance-list {
+  display: grid;
+  gap: var(--space-2);
+}
+.studio-appearance-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+/* Bezeichnung über den beiden Auswahlfeldern (Variante, Ecken) */
+.studio-appearance-row > .field-label {
+  grid-column: 1 / -1;
+}
+.studio-appearance-row > select {
+  min-width: 0;
+}
+
+/* «Erweiterte Optionen»: eingeklappte Gruppe, Unterabschnitte leicht eingerückt */
+.studio-brand-advanced > .studio-prop-summary {
+  color: var(--accent);
+}
+.studio-brand-advanced > .studio-prop-body {
+  gap: 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--border);
+}
 .studio-brand-actions {
   position: sticky;
   bottom: 0;

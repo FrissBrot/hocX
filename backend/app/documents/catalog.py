@@ -75,11 +75,13 @@ class ProtocolElementParams(ProtocolRefParams):
     """Leeres ``element_id`` = alle exportsichtbaren Elemente. ``titles_only`` ergibt eine
     Traktandenliste (nur die Abschnittstitel) statt der Inhalte. ``content`` filtert die Blöcke
     der Elemente: ``text`` (nur Texte, Listen, Formulare - Kurz-/Beschlussprotokoll),
-    ``text_and_todos`` (zusätzlich Aufgaben)."""
+    ``text_and_todos`` (zusätzlich Aufgaben). ``invitation_only``: nur Traktanden, die laut
+    Protokollvorlage in Einladung und Traktandenliste erscheinen."""
 
     element_id: uuid.UUID | None = Field(None, json_schema_extra=_source("protocol_elements"))
     include_session_todos: bool = True
     titles_only: bool = False
+    invitation_only: bool = False
     content: Literal["all", "text", "text_and_todos"] = "all"
     include_images: bool = True
 
@@ -350,6 +352,20 @@ def validate_spec(spec: BlockSpec) -> _Params:
     return entry.params.model_validate(spec.params)
 
 
+# Elementarten (brand.APPEARANCE_VARIANTS), deren Darstellung ein Block dieser Komponente im
+# Designer übersteuern kann. Traktanden enthalten alle Blockarten eines Protokolls.
+_TABLE_COMPONENTS = ("matrix", "attendance_matrix", "member_list", "attendance_sheet", "todo_table", "event_table", "list_table", "finance_transactions", "fines", "stat_table")
+APPEARANCE_KINDS: dict[str, tuple[str, ...]] = {
+    **{name: ("table",) for name in _TABLE_COMPONENTS},
+    "protocol_element": ("table", "attendance", "session_date", "finance_balance", "form"),
+    "attendance": ("attendance",),
+    "session_date": ("session_date",),
+    "finance_balance": ("finance_balance",),
+    "kpi_tiles": ("kpi_tiles",),
+    "form": ("form",),
+}
+
+
 def catalog_payload() -> list[dict[str, Any]]:
     return [
         {
@@ -358,6 +374,7 @@ def catalog_payload() -> list[dict[str, Any]]:
             "access": entry.access,
             "needs_protocol": entry.type in NEEDS_PROTOCOL,
             "params_schema": entry.params.model_json_schema(),
+            "appearance_kinds": list(APPEARANCE_KINDS.get(entry.type, ())),
         }
         for entry in CATALOG.values()
     ]

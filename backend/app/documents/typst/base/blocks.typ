@@ -1,11 +1,23 @@
 // Basis-Komponenten der Fachkomponenten: eine pro Block-Typ (model.py). Farben, Schriften und
 // Tabellenstil kommen aus dem Brand-Profil (ctx.c, ctx.theme); jeder Block-Typ ist so in jeder
 // Vorlage verwendbar. Eingebettet werden sie über data_block-Knoten (layout.typ).
+// Darstellungsvarianten (Grundstil, Brand- und Block-Übersteuerung) liefert look(ctx, art).
 
 #import "../lib/core.typ": colors, space, radius, tr, is-blank, tone-color, status-dot, tag-chip, empty-note
 #import "rich.typ": render-rich
 #import "table.typ": data-table
 #import "chart.typ": render-chart
+#import "../theme.typ": look
+
+// Hervorgehobene Fläche (Varianten «box»/«tiles»/«filled»)
+#let surface-box(ctx, radius, body, accent: false) = block(
+  width: 100%,
+  inset: space.s3,
+  radius: radius * 1mm,
+  fill: ctx.theme.primary.lighten(90%),
+  stroke: if accent { (left: 3pt + ctx.theme.primary) } else { none },
+  body,
+)
 
 // ── Struktur ────────────────────────────────────────────────────────────────
 
@@ -18,13 +30,31 @@
 #let session-date-block(ctx, b) = {
   let label = if is-blank(b.at("label", default: none)) { tr(ctx, "label.nextSession") } else { b.label }
   let value = if is-blank(b.at("date", default: none)) { tr(ctx, "label.open") } else { b.date }
-  block(above: space.s2, below: space.s2)[#text(weight: "bold")[#label:] #value]
+  let style = look(ctx, "session_date", default: "line")
+  if style.variant == "box" {
+    block(above: space.s2, below: space.s2, breakable: false, surface-box(ctx, style.radius, accent: style.radius == 0, {
+      text(size: 0.8em, weight: "bold", fill: ctx.theme.primary)[#upper(label)]
+      linebreak()
+      text(size: 1.25em, weight: "bold")[#value]
+    }))
+  } else {
+    block(above: space.s2, below: space.s2)[#text(weight: "bold")[#label:] #value]
+  }
 }
 
 #let session-notes-block(ctx, b) = render-rich(b.content, ctx)
 
 #let form-block(ctx, b) = {
   let has-header = not is-blank(b.at("label_heading", default: none)) or not is-blank(b.at("value_heading", default: none))
+  if look(ctx, "form", default: "grid").variant == "table" {
+    let style = ctx.theme.table
+    let header = if has-header {
+      (table.header(..(b.at("label_heading", default: ""), b.at("value_heading", default: "")).map(label => table.cell(fill: style.header-fill, text(weight: "bold", fill: style.header-color)[#label]))),)
+    } else { () }
+    set text(size: style.font-size)
+    return table(columns: (auto, 1fr), inset: style.inset, stroke: style.stroke, ..header,
+      ..b.rows.map(row => (text(fill: ctx.c.muted)[#row.label], render-rich(row.value, ctx, compact: true))).flatten())
+  }
   let cells = ()
   if has-header {
     cells.push(text(weight: "bold")[#b.at("label_heading", default: "")])
@@ -85,7 +115,50 @@
 
 // ── Personen ────────────────────────────────────────────────────────────────
 
+#let attendance-counts(ctx, b) = {
+  let counts = (present: 0, late: 0, excused: 0, absent: 0)
+  for entry in b.entries {
+    let status = entry.at("status", default: none)
+    if status != none { counts.insert(status, counts.at(status) + 1) }
+  }
+  counts
+}
+
+// Kompakt: eine Zeile pro Status («Anwesend (3): A, B, C»)
+#let attendance-compact(ctx, b) = {
+  let groups = ("present", "late", "excused", "absent").map(status => (status, b.entries.filter(entry => entry.at("status", default: none) == status)))
+  let open = b.entries.filter(entry => entry.at("status", default: none) == none)
+  for (status, entries) in groups {
+    if entries.len() > 0 {
+      block(above: space.s2, below: space.s2)[#status-dot(ctx, "attendanceStatus." + status) (#entries.len()): #entries.map(entry => entry.name).join(", ")]
+    }
+  }
+  if open.len() > 0 {
+    block(above: space.s2, below: space.s2, text(fill: ctx.c.muted)[– (#open.len()): #open.map(entry => entry.name).join(", ")])
+  }
+}
+
+#let attendance-table(ctx, b) = {
+  let style = ctx.theme.table
+  set text(size: style.font-size)
+  table(columns: (1fr, auto), inset: style.inset, stroke: style.stroke,
+    table.header(repeat: true, ..(tr(ctx, "col.name"), tr(ctx, "col.status")).map(label => table.cell(fill: style.header-fill, text(weight: "bold", fill: style.header-color)[#label]))),
+    ..b.entries.map(entry => {
+      let status = entry.at("status", default: none)
+      ([#entry.name], if status == none { text(fill: ctx.c.muted)[–] } else { status-dot(ctx, "attendanceStatus." + status) })
+    }).flatten())
+}
+
 #let attendance-block(ctx, b) = {
+  let variant = look(ctx, "attendance", default: "list").variant
+  if variant == "compact" or variant == "table" {
+    if variant == "compact" { attendance-compact(ctx, b) } else { attendance-table(ctx, b) }
+    if b.show_counts {
+      let counts = attendance-counts(ctx, b)
+      block(above: space.s3, text(size: 0.9em, fill: ctx.theme.secondary)[#tr(ctx, "label.attendanceCounts", present: counts.present, late: counts.late, excused: counts.excused, absent: counts.absent)])
+    }
+    return
+  }
   let cells = ()
   let counts = (present: 0, late: 0, excused: 0, absent: 0)
   for entry in b.entries {
@@ -223,6 +296,17 @@
 // ── Finanzen ────────────────────────────────────────────────────────────────
 
 #let finance-balance-block(ctx, b) = {
+  let style = look(ctx, "finance_balance", default: "list")
+  if style.variant == "tiles" {
+    let count = calc.min(calc.max(b.balances.len(), 1), 3)
+    return grid(columns: range(count).map(_ => 1fr), column-gutter: space.s3, row-gutter: space.s3,
+      ..b.balances.map(line => surface-box(ctx, style.radius, {
+        text(size: 0.8em, fill: ctx.c.muted)[#line.name]
+        linebreak()
+        text(size: 1.4em, weight: "bold", fill: if line.negative { ctx.c.danger } else { ctx.theme.primary })[#line.amount #line.currency]
+        if not is-blank(line.at("as_of", default: none)) { linebreak(); text(size: 0.75em, fill: ctx.c.muted)[#tr(ctx, "label.asOf", date: line.as_of)] }
+      })))
+  }
   grid(columns: (1fr, auto), column-gutter: 1.2em, row-gutter: 0.5em,
     ..b.balances.map(line => (
       [#line.name#if not is-blank(line.at("as_of", default: none)) { text(size: 0.85em, fill: ctx.c.muted)[ · #tr(ctx, "label.asOf", date: line.as_of)] }],
@@ -234,8 +318,10 @@
 
 #let kpi-tiles-block(ctx, b) = {
   let count = calc.min(calc.max(b.tiles.len(), 1), 4)
+  let style = look(ctx, "kpi_tiles", default: "outlined")
+  let filled = style.variant == "filled"
   grid(columns: range(count).map(_ => 1fr), column-gutter: space.s3, row-gutter: space.s3,
-    ..b.tiles.map(tile => block(width: 100%, inset: space.s3, radius: radius.sm, stroke: 0.6pt + ctx.c.border, fill: ctx.c.panel, {
+    ..b.tiles.map(tile => block(width: 100%, inset: space.s3, radius: style.radius * 1mm, stroke: if filled { none } else { 0.6pt + ctx.c.border }, fill: if filled { ctx.theme.primary.lighten(90%) } else { ctx.c.panel }, {
       text(size: 0.8em, fill: ctx.c.muted)[#if tile.at("label_key", default: none) != none { tr(ctx, tile.label_key) } else { tile.at("label", default: "") }]
       linebreak()
       text(size: 1.6em, weight: "bold", fill: if tile.tone == "default" { ctx.theme.primary } else { tone-color(ctx, tile.tone) })[#tile.value]

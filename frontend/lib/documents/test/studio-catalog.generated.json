@@ -1,5 +1,9 @@
 {
  "brand_tokens": {
+  "appearance": {
+   "base": "classic",
+   "elements": {}
+  },
   "assets": {
    "background": null,
    "footer_image": null,
@@ -30,6 +34,7 @@
    "warning": "#B45309",
    "watermark": "#F1F2F4"
   },
+  "derive_colors": true,
   "layout": {
    "border_width": 0.5,
    "header_footer": {
@@ -98,6 +103,110 @@
   }
  },
  "catalog": {
+  "appearance": {
+   "bases": {
+    "bold": {
+     "elements": {
+      "attendance": "table",
+      "finance_balance": "tiles",
+      "form": "table",
+      "kpi_tiles": "filled",
+      "session_date": "box"
+     },
+     "layout": {
+      "heading_style": "bar",
+      "radius": 0,
+      "table_style": "zebra"
+     }
+    },
+    "classic": {
+     "elements": {
+      "attendance": "list",
+      "finance_balance": "list",
+      "form": "grid",
+      "kpi_tiles": "outlined",
+      "session_date": "line"
+     },
+     "layout": {
+      "heading_style": "underline",
+      "radius": 1.5,
+      "table_style": "lines"
+     }
+    },
+    "minimal": {
+     "elements": {
+      "attendance": "compact",
+      "finance_balance": "list",
+      "form": "grid",
+      "kpi_tiles": "outlined",
+      "session_date": "line"
+     },
+     "layout": {
+      "heading_style": "plain",
+      "radius": 0,
+      "table_style": "minimal"
+     }
+    },
+    "rounded": {
+     "elements": {
+      "attendance": "compact",
+      "finance_balance": "tiles",
+      "form": "grid",
+      "kpi_tiles": "filled",
+      "session_date": "box"
+     },
+     "layout": {
+      "heading_style": "boxed",
+      "radius": 4,
+      "table_style": "zebra"
+     }
+    }
+   },
+   "brand_only": [
+    "heading"
+   ],
+   "corner_kinds": [
+    "heading",
+    "session_date",
+    "finance_balance",
+    "kpi_tiles"
+   ],
+   "variants": {
+    "attendance": [
+     "list",
+     "compact",
+     "table"
+    ],
+    "finance_balance": [
+     "list",
+     "tiles"
+    ],
+    "form": [
+     "grid",
+     "table"
+    ],
+    "heading": [
+     "plain",
+     "underline",
+     "bar",
+     "boxed"
+    ],
+    "kpi_tiles": [
+     "outlined",
+     "filled"
+    ],
+    "session_date": [
+     "line",
+     "box"
+    ],
+    "table": [
+     "lines",
+     "grid",
+     "zebra",
+     "minimal"
+    ]
+   }
+  },
   "bindings": [
    {
     "access": "reader",
@@ -525,6 +634,27 @@
     "group": "protocol",
     "item_fields": [
      {
+      "key": "title",
+      "type": "text"
+     },
+     {
+      "key": "responsible",
+      "type": "text"
+     },
+     {
+      "key": "index",
+      "type": "number"
+     }
+    ],
+    "needs_protocol": true,
+    "path": "protocol.invitation_elements",
+    "type": "list"
+   },
+   {
+    "access": "reader",
+    "group": "protocol",
+    "item_fields": [
+     {
       "key": "name",
       "type": "text"
      },
@@ -780,11 +910,18 @@
   "data_components": [
    {
     "access": "reader",
+    "appearance_kinds": [
+     "table",
+     "attendance",
+     "session_date",
+     "finance_balance",
+     "form"
+    ],
     "group": "protocol",
     "needs_protocol": true,
     "params_schema": {
      "additionalProperties": false,
-     "description": "Leeres ``element_id`` = alle exportsichtbaren Elemente. ``titles_only`` ergibt eine\nTraktandenliste (nur die Abschnittstitel) statt der Inhalte. ``content`` filtert die Blöcke\nder Elemente: ``text`` (nur Texte, Listen, Formulare - Kurz-/Beschlussprotokoll),\n``text_and_todos`` (zusätzlich Aufgaben).",
+     "description": "Leeres ``element_id`` = alle exportsichtbaren Elemente. ``titles_only`` ergibt eine\nTraktandenliste (nur die Abschnittstitel) statt der Inhalte. ``content`` filtert die Blöcke\nder Elemente: ``text`` (nur Texte, Listen, Formulare - Kurz-/Beschlussprotokoll),\n``text_and_todos`` (zusätzlich Aufgaben). ``invitation_only``: nur Traktanden, die laut\nProtokollvorlage in Einladung und Traktandenliste erscheinen.",
      "properties": {
       "content": {
        "default": "all",
@@ -820,6 +957,11 @@
        "title": "Include Session Todos",
        "type": "boolean"
       },
+      "invitation_only": {
+       "default": false,
+       "title": "Invitation Only",
+       "type": "boolean"
+      },
       "protocol_id": {
        "anyOf": [
         {
@@ -847,6 +989,9 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [
+     "session_date"
+    ],
     "group": "protocol",
     "needs_protocol": false,
     "params_schema": {
@@ -900,6 +1045,7 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [],
     "group": "protocol",
     "needs_protocol": true,
     "params_schema": {
@@ -928,6 +1074,9 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [
+     "form"
+    ],
     "group": "forms",
     "needs_protocol": false,
     "params_schema": {
@@ -996,6 +1145,9 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [
+     "table"
+    ],
     "group": "protocol",
     "needs_protocol": true,
     "params_schema": {
@@ -1023,6 +1175,7 @@
    },
    {
     "access": "writer",
+    "appearance_kinds": [],
     "group": "protocol",
     "needs_protocol": false,
     "params_schema": {
@@ -1063,6 +1216,7 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [],
     "group": "protocol",
     "needs_protocol": false,
     "params_schema": {
@@ -1103,6 +1257,7 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [],
     "group": "protocol",
     "needs_protocol": false,
     "params_schema": {
@@ -1147,6 +1302,9 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [
+     "attendance"
+    ],
     "group": "people",
     "needs_protocol": true,
     "params_schema": {
@@ -1175,6 +1333,9 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [
+     "table"
+    ],
     "group": "people",
     "needs_protocol": false,
     "params_schema": {
@@ -1267,6 +1428,9 @@
    },
    {
     "access": "writer",
+    "appearance_kinds": [
+     "table"
+    ],
     "group": "people",
     "needs_protocol": false,
     "params_schema": {
@@ -1313,6 +1477,7 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [],
     "group": "forms",
     "needs_protocol": false,
     "params_schema": {
@@ -1374,6 +1539,9 @@
    },
    {
     "access": "writer",
+    "appearance_kinds": [
+     "table"
+    ],
     "group": "people",
     "needs_protocol": false,
     "params_schema": {
@@ -1440,6 +1608,9 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [
+     "table"
+    ],
     "group": "tasks",
     "needs_protocol": false,
     "params_schema": {
@@ -1542,6 +1713,9 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [
+     "table"
+    ],
     "group": "events",
     "needs_protocol": false,
     "params_schema": {
@@ -1635,6 +1809,7 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [],
     "group": "events",
     "needs_protocol": false,
     "params_schema": {
@@ -1701,6 +1876,7 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [],
     "group": "events",
     "needs_protocol": false,
     "params_schema": {
@@ -1771,7 +1947,10 @@
     "type": "event_agenda"
    },
    {
-    "access": "reader",
+    "access": "writer",
+    "appearance_kinds": [
+     "table"
+    ],
     "group": "lists",
     "needs_protocol": false,
     "params_schema": {
@@ -1884,6 +2063,9 @@
    },
    {
     "access": "finance",
+    "appearance_kinds": [
+     "finance_balance"
+    ],
     "group": "finance",
     "needs_protocol": false,
     "params_schema": {
@@ -1920,6 +2102,9 @@
    },
    {
     "access": "finance",
+    "appearance_kinds": [
+     "table"
+    ],
     "group": "finance",
     "needs_protocol": false,
     "params_schema": {
@@ -2011,6 +2196,9 @@
    },
    {
     "access": "finance",
+    "appearance_kinds": [
+     "table"
+    ],
     "group": "finance",
     "needs_protocol": false,
     "params_schema": {
@@ -2091,6 +2279,9 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [
+     "kpi_tiles"
+    ],
     "group": "statistics",
     "needs_protocol": false,
     "params_schema": {
@@ -2181,6 +2372,7 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [],
     "group": "statistics",
     "needs_protocol": false,
     "params_schema": {
@@ -2283,6 +2475,9 @@
    },
    {
     "access": "reader",
+    "appearance_kinds": [
+     "table"
+    ],
     "group": "statistics",
     "needs_protocol": false,
     "params_schema": {
@@ -3184,6 +3379,7 @@
     "node": {
      "component": "protocol_element",
      "params": {
+      "invitation_only": true,
       "titles_only": true
      },
      "type": "data_block"
@@ -3367,7 +3563,7 @@
     }
    },
    {
-    "access": "reader",
+    "access": "writer",
     "group": "data_lists",
     "key": "list_table",
     "master_only": false,
@@ -3526,7 +3722,7 @@
       ]
      },
      "marker": "number",
-     "source": "protocol.elements",
+     "source": "protocol.invitation_elements",
      "type": "list"
     }
    },

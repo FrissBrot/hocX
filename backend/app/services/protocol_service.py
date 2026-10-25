@@ -101,6 +101,7 @@ _SYNC_USER_CONFIG_KEYS = (
     "attendance_entries",
     "entries",
     "selected_date",
+    "selected_time",
     "session_label",
     "session_tag",
     "linked_list_group_by",
@@ -2375,6 +2376,7 @@ class ProtocolService:
                 protocol_block.configuration_snapshot_json = {
                     **(protocol_block.configuration_snapshot_json or {}),
                     "selected_date": next_event.event_date.isoformat() if next_event else None,
+                    "selected_time": next_event.start_time.strftime("%H:%M") if next_event and next_event.start_time else None,
                     "session_label": next_event.title if next_event else "Naechste Sitzung",
                     "session_tag": next_event.tag if next_event else "next_session",
                 }
