@@ -35,7 +35,7 @@ services:
   traefik:
     # Gleiche Version wie docker-compose.traefik.yml: v3.1 spricht die Docker-API 1.24 fest an
     # und laedt gegen Docker Engine >= 29 keine Router (Audit MAIN-OPS-007).
-    image: traefik:v3.6.1@sha256:fd5932c796f7e2db9fd6bff485ef693d53797f0ee8ad03dc68aa424ea6f21958
+    image: traefik:v3.7.15@sha256:0f6150202bc1fed72a7bd2107460eaa510e5b8a905f3fdb5b84f2c8619c33368
     restart: unless-stopped
     # M28 (Mittel, Audit 2026-08-12): Ceiling gegen einen durchgehenden Container, der den
     # ganzen (knappen) Host mitreisst - keine Zielwerte fuer Normalbetrieb, nur eine Obergrenze.
@@ -71,7 +71,7 @@ services:
       - --configFile=/etc/traefik/traefik.yml
 
   db:
-    image: postgres:16@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+    image: postgres:18@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
     restart: unless-stopped
     mem_limit: 768m
     cpus: 1.0
@@ -654,7 +654,7 @@ services:
   # Ob der Container laufen muss, entscheidet scripts/storage_controller.sh auf dem Host -
   # gestoppt wird nur, nie gelöscht (Volume local_s3_data bleibt).
   local-s3:
-    image: dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690
+    image: dxflrs/garage:v2.4.1@sha256:9c96caa2612d3411acc5b0e6701fb238dbfba33e533a6d7d3d811a4b12d0d020
     restart: unless-stopped
     mem_limit: 512m
     cpus: 1.0
@@ -918,7 +918,7 @@ services:
         max-file: "3"
 
   clamav:
-    image: clamav/clamav@sha256:9cb27d7660bdf66e9878c832cb433dd8aa152cfbe16f3c2c0084c80b04ae22b4
+    image: clamav/clamav@sha256:e19130cdebaeacc71fa46eab3ed6f69941f2f22aa5e08d55e9197f8edf43ce5e
     restart: unless-stopped
     # Das Image prueft per Default nur 1x taeglich auf neue Signaturen. Verpasst clamd beim
     # Containerstart die Reload-Benachrichtigung (Socket noch nicht bereit), bliebe es sonst
