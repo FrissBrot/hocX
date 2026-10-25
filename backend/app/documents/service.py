@@ -48,7 +48,7 @@ from app.documents.layout import LayoutJson, TemplateContent, content_json, pars
 from app.documents.model import DocumentMeta, RenderInfo
 from app.documents.providers.common import PROTOCOL_STATUS_CODES
 from app.documents.locking import lock_row
-from app.documents.renderer import RenderAssets, RenderOutput, get_renderer
+from app.documents.renderer import DocumentRenderError, RenderAssets, RenderOutput, get_renderer
 from app.documents.strings import normalize_language, strings_for
 from app.documents.xmp import DocumentXmp, add_document_xmp
 from app.services import verify_domain_service
@@ -436,6 +436,114 @@ async def preview(db: Session, user: CurrentUser | None, tenant_id: int, request
         template_id=template_public_id,
         template_source=prepared.template_source,
         design_hash=prepared.design_hash,
+    )
+
+
+# Ausschnitte der Arbeitsfläche: höchstens so viele je Anfrage, höchstens so hoch (mm)
+CANVAS_MAX_SNIPPETS = 24
+CANVAS_SNIPPET_MAX_HEIGHT_MM = 600
+# Rand oben/unten je Ausschnitt (Ober-/Unterlängen); die Arbeitsfläche zieht ihn wieder ab
+CANVAS_SNIPPET_PAD_MM = 2
+
+
+@dataclass
+class CanvasResult:
+    hints: dict[str, Any]
+    brand: dict[str, Any]
+    numbering: bool
+    snippets: dict[str, bytes]
+    diagnostics: list[Diagnostic]
+    snippet_pad: float = CANVAS_SNIPPET_PAD_MM
+
+
+def _area_width(content: TemplateContent, area: str) -> float:
+    """Breite des Inhaltsbereichs in mm (Ausschnitte werden in dieser Breite gesetzt)."""
+    width, _ = content.page.dimensions_mm()
+    if area == "title_page":
+        master = content.master(content.title_page.master) if content.title_page.master else None
+    else:
+        master = content.master(content.settings.default_master)
+    if master is not None and master.orientation is not None:
+        short, long = sorted(content.page.dimensions_mm())
+        width = long if master.orientation == "landscape" else short
+    margins = master.margins if master is not None and master.margins is not None else content.page.margins
+    usable = width - margins.left - margins.right
+    if area == "body" and content.page.columns > 1:
+        usable = (usable - content.page.column_gap * (content.page.columns - 1)) / content.page.columns
+    return max(usable, 10)
+
+
+def _heading_counter(headings: list[dict[str, Any]]) -> list[int]:
+    """Stand des Überschriftenzählers (wie Typsts counter(heading)) nach diesen Überschriften,
+    damit die Nummern im Ausschnitt an der richtigen Stelle weiterzählen."""
+    counts: list[int] = []
+    for heading in headings:
+        level = max(1, int(heading.get("level", 1)))
+        while len(counts) < level:
+            counts.append(0)
+        counts = counts[:level]
+        counts[level - 1] += 1
+    return counts
+
+
+def _without_breaks(node: Any) -> Any:
+    """Seitenumbrüche entfernen: ein Ausschnitt ist genau eine Seite."""
+    if isinstance(node, dict):
+        return {key: _without_breaks(value) for key, value in node.items() if key != "break"} if node.get("t") != "pagebreak" else {"t": "stack", "id": node.get("id"), "s": {}, "children": [], "gap": 0}
+    if isinstance(node, list):
+        return [_without_breaks(item) for item in node]
+    return node
+
+
+async def canvas(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest) -> CanvasResult:
+    """Werte für die Arbeitsfläche des Designers: dieselbe Kompilierung wie die Vorschau, aber statt
+    ganzer Seiten die aufgelösten Texte/Sichtbarkeiten (CanvasHints) und Fachkomponenten bzw.
+    Tabellen als einzeln gerenderte SVG-Ausschnitte."""
+
+    def prepare_and_release() -> PreparedDocument:
+        # Wie preview(): nichts verändern, Verbindung vor dem Compile wieder freigeben.
+        savepoint = db.begin_nested()
+        try:
+            prepared = prepare(db, user, tenant_id, request, preview=True)
+        finally:
+            if savepoint.is_active:
+                savepoint.rollback()
+        db.commit()
+        return prepared
+
+    prepared = await run_in_threadpool(prepare_and_release)
+    compiled = prepared.compiled
+    hints = compiled.canvas
+    entries = list(hints.snippets.items())[:CANVAS_MAX_SNIPPETS]
+    snippets: dict[str, bytes] = {}
+    if entries:
+        document = {
+            **compiled.data,
+            "snippets": [
+                {
+                    "width": _area_width(prepared.content, area),
+                    "max_height": CANVAS_SNIPPET_MAX_HEIGHT_MM,
+                    "pad": CANVAS_SNIPPET_PAD_MM,
+                    "headings": _heading_counter(hints.headings[:before]),
+                    "node": _without_breaks(node),
+                }
+                for _, (area, node, before) in entries
+            ],
+        }
+        try:
+            output = await get_renderer().render_svg(document, RenderAssets(files=compiled.files, fonts=compiled.fonts), tenant_id=tenant_id)
+        except DocumentRenderError:
+            # Erwartet bei fehlerhaften Vorlagen: die Vorschau meldet den Fehler am Element, die
+            # Arbeitsfläche zeigt dann ihre Platzhalter.
+            output = None
+        if output is not None and len(output.pages) == len(entries):
+            snippets = {key: page for (key, _), page in zip(entries, output.pages)}
+    return CanvasResult(
+        hints=hints.as_dict(),
+        brand=compiled.data["brand"],
+        numbering=compiled.data["settings"]["numbering"],
+        snippets=snippets,
+        diagnostics=prepared.diagnostics,
     )
 
 

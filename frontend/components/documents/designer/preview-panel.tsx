@@ -21,9 +21,7 @@ type Props = { brandId: string | null; onDiagnostics: (items: Diagnostic[]) => v
 
 export function PreviewPanel({ brandId, onDiagnostics }: Props) {
   const t = useTranslations("documentStudio");
-  const { content, documentType, catalog, select } = useDesigner();
-  const [dataMode, setDataMode] = useState<"sample" | "data">("sample");
-  const [protocolId, setProtocolId] = useState<string | null>(null);
+  const { content, documentType, catalog, select, dataMode, setDataMode, protocolId, setProtocolId } = useDesigner();
   const [protocols, setProtocols] = useState<SourceOption[]>([]);
   const [pages, setPages] = useState<string[]>([]);
   const [pageCount, setPageCount] = useState(0);

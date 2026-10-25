@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import re
 import threading
 import uuid
 from collections import OrderedDict
@@ -35,7 +36,7 @@ from app.documents.compiler import validate_template
 from app.documents.components import catalog_payload
 from app.documents.context import DocumentNotFoundError, DocumentPermissionError
 from app.documents.layout import LayoutJson, LayoutValidationError, TemplateContent, layout_error_of, parse_content
-from app.documents.renderer import PRIORITY_THUMBNAIL, DocumentRenderError, get_renderer
+from app.documents.renderer import FONTS_DIR, PRIORITY_THUMBNAIL, DocumentRenderError, get_renderer
 from app.documents.strings import normalize_language, text
 from app.models import (
     AppUser,
@@ -99,6 +100,23 @@ def _user_name(db: Session, user_id: int | None) -> str | None:
 def get_capabilities(user: CurrentUser = Depends(get_current_user)) -> dict[str, bool]:
     permissions.require_view(user)
     return permissions.capabilities(user)
+
+
+# Mitgelieferte Schriften der Dokument-Engine für die Arbeitsfläche des Designers (dieselben
+# Dateien wie im Typst-Compile, damit Zeilenumbrüche und Breiten übereinstimmen). Nur diese
+# festen Dateinamen, nie ein Pfad aus der Anfrage.
+_BUILTIN_FONT_FILE = re.compile(r"^(Inter|LiberationSans|LiberationSerif|NotoSans)-(Regular|Bold|Italic|BoldItalic)\.ttf$")
+
+
+@router.get("/document-studio/fonts/{file_name}")
+def get_builtin_font(file_name: str, user: CurrentUser = Depends(get_current_user)) -> Response:
+    permissions.require_view(user)
+    if not _BUILTIN_FONT_FILE.fullmatch(file_name):
+        raise _not_found(user)
+    path = FONTS_DIR / file_name
+    if not path.is_file():
+        raise _not_found(user)
+    return Response(content=path.read_bytes(), media_type="font/ttf", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.get("/document-studio/catalog")

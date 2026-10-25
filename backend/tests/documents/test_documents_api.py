@@ -105,6 +105,31 @@ def test_preview_of_unsaved_content_needs_edit_rights(db, setup):
     assert excinfo.value.status_code == 403
 
 
+def test_canvas_returns_hints_brand_and_snippets_with_studio_rights(db, setup):
+    """Arbeitsfläche des Designers: nur mit ungespeichertem Inhalt und Bearbeitungsrecht; liefert
+    aufgelöste Texte, Brand-Werte und Fachkomponenten als SVG-Ausschnitt."""
+    content = {"masters": [{"id": "default"}], "body": [
+        {"type": "text", "id": "t", "content": {"default": [{"t": "bind", "path": "document.number"}]}},
+        {"type": "data_block", "id": "todos", "component": "todo_table"},
+    ]}
+    body = DocumentRequest(document_type="protocol", content=content, data_mode="sample")
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(routes.preview_canvas(body, _ConnectedRequest(), db=db, user=setup["reader"]))
+    assert excinfo.value.status_code == 403
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(routes.preview_canvas(DocumentRequest(protocol_id=setup["protocol"].public_id), _ConnectedRequest(), db=db, user=setup["writer"]))
+    assert excinfo.value.status_code == 422
+    result = asyncio.run(routes.preview_canvas(body, _ConnectedRequest(), db=db, user=setup["writer"]))
+    assert result.hints["texts"]["t@"] == {"inlines": ["2026-03"]}
+    assert result.brand["fonts"]["body"] and result.brand["typography"]["base_size"] > 0
+    assert result.snippets["todos@"].startswith("data:image/svg+xml;base64,") and result.snippet_pad > 0
+    # Fremder Mandant: die Protokoll-ID wird mandantengebunden aufgelöst
+    foreign = DocumentRequest(document_type="protocol", content=content, protocol_id=setup["protocol"].public_id)
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(routes.preview_canvas(foreign, _ConnectedRequest(), db=db, user=setup["other_admin"]))
+    assert excinfo.value.status_code == 404
+
+
 def test_extra_formats(db, setup):
     csv = routes.export_document_format(routes.FormatExportRequest(document_type="todos", format="csv"), db=db, user=setup["reader"])
     assert "Getränke besorgen" in csv.body.decode("utf-8")

@@ -7,7 +7,7 @@
 import { createContext, ReactNode, useCallback, useContext, useMemo } from "react";
 
 import type { BrandView } from "@/components/documents/designer/brand-preview";
-import type { Brand, Capabilities, Diagnostic, DocumentAsset, EditorMode, ReusableComponent, StudioCatalog } from "@/lib/documents/api";
+import type { Brand, CanvasData, Capabilities, Diagnostic, DocumentAsset, EditorMode, ReusableComponent, StudioCatalog } from "@/lib/documents/api";
 import { Area, locate, TemplateContent, TemplateNode, updateNode } from "@/lib/documents/layout";
 
 export type DesignerState = {
@@ -29,6 +29,13 @@ export type DesignerState = {
   editable: boolean;
   activeArea: Area;
   setActiveArea: (area: Area) => void;
+  // Datenquelle der Vorschau und der Arbeitsfläche (Beispielinhalte oder echtes Protokoll)
+  dataMode: "sample" | "data";
+  setDataMode: (mode: "sample" | "data") => void;
+  protocolId: string | null;
+  setProtocolId: (id: string | null) => void;
+  // Aufgelöste Werte für die Arbeitsfläche (null, solange nicht geladen)
+  canvasData: CanvasData | null;
 };
 
 const DesignerContext = createContext<DesignerState | null>(null);

@@ -66,8 +66,27 @@
 #show heading: ctx.theme.heading
 #show link: it => it
 
+// Ausschnitte für die Arbeitsfläche des Designers (service.canvas): je Knoten eine Seite in der
+// Breite seines Bereichs, Höhe nach Inhalt (gekappt), ohne Kopf, Fuss und Hintergrund.
+#let snippets = doc.at("snippets", default: none)
+#if snippets != none {
+  for snippet in snippets {
+    // Oben/unten etwas Rand, damit Ober- und Unterlängen nicht abgeschnitten werden (die
+    // Arbeitsfläche gleicht ihn mit einem negativen Abstand aus).
+    page(width: snippet.width * 1mm, height: auto, margin: (x: 0pt, y: snippet.pad * 1mm), fill: none, header: none, footer: none, background: none, {
+      // Überschriften zählen wie im Dokument weiter (Stand vor diesem Knoten)
+      counter(heading).update(if snippet.headings.len() > 0 { snippet.headings } else { (0,) })
+      let body = block(width: 100%, above: 0pt, below: 0pt, render-node(ctx, snippet.node))
+      context {
+        let size = measure(body, width: snippet.width * 1mm)
+        if size.height > snippet.max_height * 1mm { block(width: 100%, height: snippet.max_height * 1mm, clip: true, body) } else { body }
+      }
+    })
+  }
+}
+
 // Titelseite (eigene Seite, zählt nicht zur Seitennummerierung des Inhalts)
-#if doc.title_page != none {
+#if snippets == none and doc.title_page != none {
   let tp = doc.title_page
   let args = if tp.master != none { page-args(tp.master) } else { page-args(none) + (header: none, footer: none, background: none) }
   if tp.background != none { args.insert("fill", rgb(tp.background)) }
@@ -75,16 +94,18 @@
   counter(page).update(1)
 }
 
-#for (index, segment) in doc.segments.enumerate() {
-  let first-id = if index == 0 { doc.settings.first_page_master } else { none }
-  let last = index == doc.segments.len() - 1
-  page(..page-args(segment.master, first-id: first-id), {
-    if index == 0 { [#metadata("start") <hocx-content-start>] }
-    render-nodes(ctx, segment.nodes)
-    // Prüfvermerk am Ende, falls die Vorlage keinen eigenen enthält (unten auf der letzten Seite)
-    if last and doc.verify.auto {
-      v(1fr, weak: true)
-      block(breakable: false, above: 1.2em, width: 100%, verify-block(ctx, doc.verify.show_url, doc.verify.show_id, doc.verify.show_qr))
-    }
-  })
+#if snippets == none {
+  for (index, segment) in doc.segments.enumerate() {
+    let first-id = if index == 0 { doc.settings.first_page_master } else { none }
+    let last = index == doc.segments.len() - 1
+    page(..page-args(segment.master, first-id: first-id), {
+      if index == 0 { [#metadata("start") <hocx-content-start>] }
+      render-nodes(ctx, segment.nodes)
+      // Prüfvermerk am Ende, falls die Vorlage keinen eigenen enthält (unten auf der letzten Seite)
+      if last and doc.verify.auto {
+        v(1fr, weak: true)
+        block(breakable: false, above: 1.2em, width: 100%, verify-block(ctx, doc.verify.show_url, doc.verify.show_id, doc.verify.show_qr))
+      }
+    })
+  }
 }

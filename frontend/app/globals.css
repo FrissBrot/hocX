@@ -24639,6 +24639,8 @@ a.mobile-list-row { color: var(--text); }
   border: 1px dashed color-mix(in srgb, var(--accent) 35%, transparent);
   pointer-events: none;
 }
+/* Kopf und Fuss wie Typst: Kopf endet bei 70 % des oberen Randes, Fuss beginnt 30 % in den
+   unteren Rand hinein (Höhe setzt canvas.tsx) */
 .studio-page-header,
 .studio-page-footer {
   position: absolute;
@@ -24647,22 +24649,61 @@ a.mobile-list-row { color: var(--text); }
   z-index: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
 }
 .studio-page-header {
   top: 0;
+  justify-content: flex-end;
 }
 .studio-page-footer {
   bottom: 0;
+  justify-content: flex-start;
 }
 .studio-page-slot {
   display: grid;
   min-width: 0;
 }
+/* Inhalt als Spalte: ein flexibler Leerraum füllt wie v(1fr) den Rest der Seite. Klicks gehen
+   durch leere Flächen auf die Seitenebene darunter. */
 .studio-page-content {
   position: relative;
-  display: flow-root;
-  min-height: inherit;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+.studio-page-content-columns {
+  display: block;
+}
+.studio-page-content > .studio-node-tree {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+.studio-page-content > .studio-node-tree > * {
+  flex: none;
+}
+.studio-page-content :is(.studio-node, .studio-drop, .studio-area-label) {
+  pointer-events: auto;
+}
+.studio-page-hidden {
+  opacity: 0.5;
+}
+.studio-auto-verify {
+  flex: none;
+  margin-top: 1.2em;
+  opacity: 0.7;
+}
+/* Seitenverankerte Ebenen (Typst: place relativ zur Seitenecke) */
+.studio-page-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.studio-page-anchored {
+  position: absolute;
+  inset: 0;
+}
+.studio-page-anchored .studio-node {
+  pointer-events: auto;
 }
 .studio-page-background {
   position: absolute;
@@ -24712,7 +24753,6 @@ a.mobile-list-row { color: var(--text); }
 .studio-node {
   position: relative;
   min-width: 0;
-  border-radius: var(--radius-xs);
   outline: 1px dashed transparent;
   outline-offset: 1px;
   cursor: default;
@@ -24800,32 +24840,68 @@ a.mobile-list-row { color: var(--text); }
   touch-action: none;
   user-select: none;
 }
+/* Abstände setzt canvas.tsx als margin-top nach den Typst-Regeln (keine Lücke, kein Kollabieren) */
 .studio-node-stack {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-.studio-node-stack > .studio-drop-gap {
-  margin: calc(-1 * var(--space-1)) 0;
-}
+/* Typst-Spalten «auto» wachsen nicht über ihren Inhalt hinaus */
 .studio-node-row {
+  position: relative;
   display: grid;
+  justify-content: start;
   min-width: 0;
+}
+/* Ablagezone am Ende eines Rasters: ohne Ziehen keine eigene Rasterzeile */
+.studio-node-row > .studio-drop-gap {
+  position: absolute;
 }
 .studio-node-layer {
   position: relative;
-  min-height: 40px;
 }
 .studio-layer-item {
   position: absolute;
+  display: flex;
+  flex-direction: column;
 }
 .studio-node-rich {
   white-space: pre-wrap;
 }
+/* Text wie Typst von Versalhöhe bis Grundlinie (top-edge: cap-height, bottom-edge: baseline) */
+.studio-text {
+  text-box: trim-both cap alphabetic;
+}
+.studio-bound {
+  text-decoration: underline dotted color-mix(in srgb, var(--accent) 55%, transparent);
+  text-underline-offset: 0.2em;
+}
 .studio-node-image {
   display: block;
   max-width: 100%;
+}
+.studio-node-caption {
+  margin-top: 0.3em;
+  font-size: 0.85em;
+}
+/* In Typst gerenderte Ausschnitte (Fachkomponenten, Tabellen, formatierter Text) */
+.studio-node-snippet {
+  display: block;
+  width: 100%;
   height: auto;
+  max-width: none;
+}
+/* Ausgeblendet (Bedingung, leer, deaktiviert): nimmt wie im PDF keinen Platz ein */
+.studio-node-hidden {
+  height: 0;
+  overflow: hidden;
+  outline: none;
+}
+.studio-node-hidden-selected {
+  opacity: 0.45;
+}
+.studio-node-ghost {
+  cursor: pointer;
 }
 .studio-node-placeholder {
   display: grid;
@@ -24855,7 +24931,18 @@ a.mobile-list-row { color: var(--text); }
 }
 .studio-node-toc {
   display: grid;
-  gap: 0.4em;
+}
+.studio-toc-entries {
+  display: grid;
+}
+.studio-toc-entry {
+  display: flex;
+  gap: 0.5em;
+}
+.studio-toc-fill {
+  flex: 1;
+  align-self: flex-end;
+  border-bottom: 1px dotted color-mix(in srgb, currentColor 55%, transparent);
 }
 .studio-toc-line {
   height: 0.5em;
@@ -24866,32 +24953,38 @@ a.mobile-list-row { color: var(--text); }
 }
 .studio-node-qr {
   display: grid;
+  flex: none;
   place-items: center;
-  border: 2px solid currentColor;
-  font-size: 0.75em;
-  font-weight: 700;
+  border: 1px dashed currentColor;
+  border-radius: var(--radius-xs);
+  font-size: 0.6em;
 }
 .studio-node-verify {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
   font-size: 0.8em;
-  opacity: 0.8;
 }
 .studio-node-meta {
   display: grid;
-  gap: 0.2em;
+  grid-template-columns: auto 1fr;
+  gap: 0.6em 1.5em;
+}
+.studio-node-meta-row {
+  display: contents;
 }
 .studio-node-watermark {
-  font-size: 2em;
   font-weight: 700;
-  opacity: 0.25;
   text-align: center;
-}
-.studio-node-watermark-page {
-  font-size: 4em;
-  transform: rotate(-35deg);
+  white-space: nowrap;
 }
 .studio-node-list {
-  margin: 0;
-  padding-left: 1.4em;
+  display: grid;
+}
+.studio-node-list-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.5em;
 }
 .studio-node-table {
   width: 100%;
@@ -24903,14 +24996,35 @@ a.mobile-list-row { color: var(--text); }
   border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
   text-align: left;
 }
-.studio-node-data,
-.studio-node-ref {
+.studio-node-data {
   display: grid;
   gap: 2px;
   padding: 0.6em 0.8em;
   border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
   border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+/* Verweis auf eine Komponente: Inhalt wie im PDF, Kennzeichnung nur als Umriss und Marke */
+.studio-node-ref {
+  position: relative;
+  outline: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.studio-node-ref-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-xs);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-family: system-ui, sans-serif;
+  font-size: var(--text-xs);
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  pointer-events: none;
 }
 .studio-node-data-kind {
   font-size: 0.7em;
@@ -24943,9 +25057,9 @@ a.mobile-list-row { color: var(--text); }
   font-size: var(--text-sm);
 }
 
-/* Ablagezonen (dnd-kit) */
+/* Ablagezonen (dnd-kit): ohne laufendes Ziehen ohne Höhe, damit die Abstände dem PDF entsprechen */
 .studio-drop-gap {
-  height: 4px;
+  height: 0;
 }
 .studio-drop {
   min-height: 8px;

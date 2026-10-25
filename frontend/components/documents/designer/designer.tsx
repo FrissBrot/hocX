@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 
 import { brandView, mm } from "@/components/documents/designer/brand-preview";
 import { Canvas, parseDropId } from "@/components/documents/designer/canvas";
+import { useCanvasData } from "@/components/documents/designer/canvas-data";
 import { DesignerProvider, DesignerState } from "@/components/documents/designer/designer-context";
 import { DocumentPanel } from "@/components/documents/designer/document-panel";
 import { InsertSource, LeftPanel } from "@/components/documents/designer/left-panel";
@@ -81,6 +82,8 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
   const [components, setComponents] = useState(initial.components);
   const [saveDiagnostics, setSaveDiagnostics] = useState<Diagnostic[]>(initial.template.diagnostics);
   const [previewDiagnostics, setPreviewDiagnostics] = useState<Diagnostic[]>([]);
+  const [dataMode, setDataMode] = useState<"sample" | "data">("sample");
+  const [protocolId, setProtocolId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const initialBrandMode = (initial.template.draft_revision ?? initial.template.published_revision)?.brand_mode ?? "follow";
   const [brandMode, setBrandMode] = useState<"follow" | "pinned">(initialBrandMode);
@@ -433,15 +436,26 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [save, history, editable, selectedId, content]);
 
+  const canvasData = useCanvasData({
+    content,
+    documentType: template.document_type,
+    dataMode,
+    protocolId,
+    brandId: template.brand_id,
+    needsProtocol: initial.catalog.document_types.find((item) => item.key === template.document_type)?.needs_protocol ?? false,
+  });
+
   const diagnostics = useMemo(() => {
     const seen = new Set<string>();
-    return [...saveDiagnostics, ...previewDiagnostics].filter((item) => {
+    // Ohne Vorschau (nur Arbeitsfläche) kommen die Hinweise aus der Arbeitsflächen-Antwort
+    const canvasDiagnostics = view === "design" ? (canvasData?.diagnostics ?? []) : [];
+    return [...saveDiagnostics, ...previewDiagnostics, ...canvasDiagnostics].filter((item) => {
       const key = `${item.node_id}|${item.code}|${item.detail}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
-  }, [saveDiagnostics, previewDiagnostics]);
+  }, [saveDiagnostics, previewDiagnostics, canvasData, view]);
 
   const state: DesignerState = {
     content,
@@ -462,6 +476,11 @@ function DesignerWorkspace({ initial }: { initial: Loaded }) {
     editable,
     activeArea,
     setActiveArea,
+    dataMode,
+    setDataMode,
+    protocolId,
+    setProtocolId,
+    canvasData,
   };
 
   const status = template.draft_revision ? "draft" : template.published_revision ? "published" : "unpublished";

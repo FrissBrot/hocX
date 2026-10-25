@@ -415,6 +415,15 @@ def test_catalog_and_thumbnail(db, world):
     assert response.body.startswith(b"\x89PNG")
 
 
+def test_builtin_fonts_for_the_canvas(db, world):
+    response = studio.get_builtin_font("LiberationSans-Bold.ttf", user=world["reader"])
+    assert response.media_type == "font/ttf" and len(response.body) > 10_000
+    for name in ("../config.py", "NotoColorEmoji.ttf", "LiberationSans-Bold.otf", "Inter-Regular.ttf/../x"):
+        with pytest.raises(HTTPException) as excinfo:
+            studio.get_builtin_font(name, user=world["reader"])
+        assert excinfo.value.status_code == 404
+
+
 # --- STUDIO-015: Bibliothek ohne N+1, Thumbnails dauerhaft gecacht -----------------------------
 
 

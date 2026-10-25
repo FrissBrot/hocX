@@ -180,3 +180,43 @@ def test_draft_watermark_is_enforced_without_template_node():
     draft = compile_scenario(Scenario(content, document_type="custom", is_draft=True))
     assert final.data["masters"]["default"]["background"] == []
     assert [node["t"] for node in draft.data["masters"]["default"]["background"]] == ["watermark"]
+
+
+def test_canvas_hints_resolve_texts_visibility_repeats_and_headings():
+    """Arbeitsfläche des Designers: aufgelöste Texte je Inline, ausgeblendete Knoten,
+    Wiederholungen mit Instanz-Schlüsseln, Überschriften und Ausschnitte."""
+    content = {"masters": [{"id": "default"}], "body": [
+        {"type": "text", "id": "t", "content": {"default": [{"t": "text", "v": "Ort: "}, {"t": "bind", "path": "protocol.next_session"}]}},
+        {"type": "text", "id": "hidden", "visible_if": {"op": "eq", "path": "brand.toc", "value": True}, "content": {"default": [{"t": "text", "v": "x"}]}},
+        {"type": "text", "id": "empty", "content": {"default": [{"t": "bind", "path": "brand.footer_text"}]}},
+        {"type": "section", "id": "sec", "title": {"default": [{"t": "text", "v": "Abschnitt"}]}, "children": [
+            {"type": "container", "id": "row", "repeat": {"source": "protocol.elements"}, "children": [
+                {"type": "text", "id": "item", "content": {"default": [{"t": "bind", "path": "item.title"}]}},
+            ]},
+        ]},
+        {"type": "data_block", "id": "data", "component": "protocol_element"},
+    ]}
+    hints = compile_scenario(Scenario(content, document_type="protocol")).canvas
+    assert hints.texts["t@"] == {"inlines": ["Ort: ", "09.04.2026"]}
+    assert hints.hidden["hidden@"] == "condition" and hints.hidden["empty@"] == "empty"
+    assert hints.repeats["row@"] == 4
+    assert hints.texts["item@0"]["inlines"][0] and hints.texts["item@3"]["inlines"][0] != hints.texts["item@0"]["inlines"][0]
+    assert hints.headings[hints.heading_index["sec@"]] == {"level": 1, "text": "Abschnitt", "outlined": True}
+    area, node, before = hints.snippets["data@"]
+    assert area == "body" and node["t"] == "data" and before == 1
+    # Fachkomponenten-Überschriften folgen dem Abschnitt in Dokumentreihenfolge
+    assert len(hints.headings) > 1
+
+
+def test_canvas_hints_mark_hidden_title_page():
+    hints = compile_scenario(Scenario(system("protocol_standard"), {"protocol": []})).canvas
+    assert hints.hidden["title_page@"] == "condition"
+
+
+def test_heading_counter_continues_numbering_in_snippets():
+    from app.documents.service import _heading_counter, _without_breaks
+
+    assert _heading_counter([]) == []
+    assert _heading_counter([{"level": 1}, {"level": 2}, {"level": 2}, {"level": 1}, {"level": 3}]) == [2, 0, 1]
+    node = {"t": "stack", "break": True, "children": [{"t": "pagebreak", "id": "pb"}, {"t": "text", "break": True}]}
+    assert _without_breaks(node) == {"t": "stack", "children": [{"t": "stack", "id": "pb", "s": {}, "children": [], "gap": 0}, {"t": "text"}]}

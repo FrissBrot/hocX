@@ -3,8 +3,10 @@
 // und werden als Laufzeitwerte gesetzt, nicht als UI-Farben.
 
 import type { BrandOverrides, BrandTokens, Length } from "@/components/documents/designer/types";
+import type { DocumentAsset, ResolvedBrand } from "@/lib/documents/api";
 
 export const MM_TO_PX = 96 / 25.4;
+export const PT_TO_PX = 96 / 72;
 
 const FONT_FAMILIES: Record<string, string> = {
   inter: "Inter",
@@ -19,7 +21,18 @@ export type BrandView = {
   bodyFont: string;
   headingFont: string;
   tokens: BrandTokens;
+  // Werte, die der Typst-Compile tatsächlich verwendet (aus der Arbeitsflächen-Antwort, sonst
+  // aus den Tokens abgeleitet)
+  weights: { body: number; heading: number };
+  headingLook: { variant: string; radius: number };
 };
+
+const WEIGHTS: Record<string, number> = { regular: 400, medium: 500, bold: 700 };
+
+/** CSS-Schriftstapel aus Typst-Familiennamen (erste vorhandene gewinnt, wie im Compile). */
+export function fontStack(families: string[]): string {
+  return [...families.map((name) => `"${name.replace(/"/g, "")}"`), "sans-serif"].join(", ");
+}
 
 export function brandView(tokens: BrandTokens, overrides?: BrandOverrides | null): BrandView {
   const colors: Record<string, string> = { ...tokens.colors } as unknown as Record<string, string>;
@@ -30,13 +43,72 @@ export function brandView(tokens: BrandTokens, overrides?: BrandOverrides | null
   }
   const custom = Object.fromEntries(tokens.colors.custom.map((item) => [item.key, item.value]));
   const font = (choice: { builtin: string | null }, override?: string | null) => FONT_FAMILIES[override ?? choice.builtin ?? "inter"] ?? "Inter";
+  const heading = tokens.appearance?.elements?.heading;
   return {
     colors,
     custom,
-    bodyFont: font(tokens.typography.body, overrides?.body_font),
-    headingFont: font(tokens.typography.heading, overrides?.heading_font),
+    bodyFont: fontStack([font(tokens.typography.body, overrides?.body_font)]),
+    headingFont: fontStack([font(tokens.typography.heading, overrides?.heading_font)]),
     tokens: overrides?.base_size ? { ...tokens, typography: { ...tokens.typography, base_size: overrides.base_size } } : tokens,
+    weights: { body: WEIGHTS[tokens.typography.weight_body] ?? 400, heading: WEIGHTS[tokens.typography.weight_heading] ?? 700 },
+    headingLook: { variant: heading?.variant ?? tokens.layout.heading_style, radius: tokens.layout.radius },
   };
+}
+
+/** Brand-Werte des Compiles (inkl. Vorlagen-Übersteuerungen) über die Token-Ansicht legen. */
+export function resolvedBrandView(resolved: ResolvedBrand, fallback: BrandView): BrandView {
+  const { weight_body, weight_heading, ...typography } = resolved.typography;
+  const heading = resolved.appearance.heading;
+  return {
+    colors: { ...fallback.colors, ...resolved.colors },
+    custom: { ...fallback.custom, ...resolved.custom_colors },
+    bodyFont: fontStack(resolved.fonts.body),
+    headingFont: fontStack(resolved.fonts.heading),
+    tokens: {
+      ...fallback.tokens,
+      typography: { ...fallback.tokens.typography, ...typography },
+      layout: { ...fallback.tokens.layout, ...(resolved.layout as Partial<BrandTokens["layout"]>) },
+    },
+    weights: { body: weight_body, heading: weight_heading },
+    headingLook: { variant: heading?.variant ?? resolved.layout.heading_style, radius: heading?.radius ?? resolved.layout.radius },
+  };
+}
+
+// Mitgelieferte Schriften der Dokument-Engine (backend/app/documents/fonts), geladen über
+// /api/document-studio/fonts, damit Zeilenumbrüche und Breiten denen im PDF entsprechen.
+const BUILTIN_FONT_FILES: Record<string, string> = {
+  Inter: "Inter",
+  "Liberation Sans": "LiberationSans",
+  "Liberation Serif": "LiberationSerif",
+  "Noto Sans": "NotoSans",
+};
+const FONT_VARIANTS = [
+  { file: "Regular", weight: "400", style: "normal" },
+  { file: "Bold", weight: "700", style: "normal" },
+  { file: "Italic", weight: "400", style: "italic" },
+  { file: "BoldItalic", weight: "700", style: "italic" },
+];
+const registeredFonts = new Set<string>();
+
+/** Schriften für die Arbeitsfläche registrieren (einmal je Familie und Sitzung). */
+export function registerDocumentFonts(families: string[], assets: DocumentAsset[]) {
+  if (typeof document === "undefined" || typeof FontFace === "undefined" || !document.fonts) return;
+  for (const family of families) {
+    if (registeredFonts.has(family)) continue;
+    const prefix = BUILTIN_FONT_FILES[family];
+    const uploads = assets.filter((asset) => asset.kind === "font" && asset.font_family === family);
+    if (!prefix && uploads.length === 0) continue;
+    registeredFonts.add(family);
+    const faces = prefix
+      ? FONT_VARIANTS.map((variant) => new FontFace(family, `url(/api/document-studio/fonts/${prefix}-${variant.file}.ttf)`, { weight: variant.weight, style: variant.style }))
+      : uploads.map((asset) => new FontFace(family, `url(${asset.content_url})`));
+    for (const face of faces) {
+      document.fonts.add(face);
+      face.load().catch(() => {
+        // Schrift nicht ladbar: die Arbeitsfläche fällt auf die nächste Schrift im Stapel zurück
+      });
+    }
+  }
 }
 
 /** Farbreferenz ($brand.primary, $brand.custom.x, $brand.status.success, #RRGGBB) → CSS-Farbe. */

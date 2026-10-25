@@ -329,6 +329,59 @@ export function previewDocument(request: DocumentRequest, maxPages = 4, signal?:
   });
 }
 
+// ── Arbeitsfläche des Designers ─────────────────────────────────────────────
+
+/** Brand-Werte, wie sie der Typst-Compile verwendet (brand_service.resolve_brand → typst). */
+export type ResolvedBrand = {
+  colors: Record<string, string>;
+  custom_colors: Record<string, string>;
+  fonts: { body: string[]; heading: string[] };
+  typography: {
+    base_size: number;
+    size_title: number;
+    size_subtitle: number;
+    size_h1: number;
+    size_h2: number;
+    size_h3: number;
+    size_small: number;
+    weight_body: number;
+    weight_heading: number;
+    line_height: number;
+    letter_spacing_heading: number;
+    heading_transform: "none" | "upper";
+  };
+  layout: { paragraph_gap: number; section_gap: number; heading_style: string; table_style: string; border_width: number; radius: number };
+  appearance: Record<string, { variant: string | null; radius: number }>;
+};
+
+/** Aufgelöste Werte je Knoteninstanz; Schlüssel `<node_id>@<instanz>` (compiler.CanvasHints). */
+export type CanvasHints = {
+  hidden: Record<string, "condition" | "empty">;
+  texts: Record<string, { inlines?: (string | null)[]; text?: string }>;
+  rows: Record<string, string[] | string[][]>;
+  repeats: Record<string, number>;
+  // Alle Überschriften in Dokumentreihenfolge (Nummerierung, Inhaltsverzeichnis)
+  headings: { level: number; text: string; outlined: boolean }[];
+  heading_index: Record<string, number>;
+};
+
+export type CanvasData = {
+  hints: CanvasHints;
+  brand: ResolvedBrand;
+  numbering: boolean;
+  snippets: Record<string, string>;
+  snippet_pad: number;
+  diagnostics: Diagnostic[];
+};
+
+export function previewCanvas(request: DocumentRequest, signal?: AbortSignal) {
+  return browserApiFetch<CanvasData>("/api/documents/preview/canvas", {
+    method: "POST",
+    body: JSON.stringify(request),
+    signal: signal ?? AbortSignal.timeout(DOCUMENT_TIMEOUT_MS),
+  });
+}
+
 /** PDF-Auftrag (POST /api/documents/render, 202): der job-worker rendert, der Client fragt den Stand ab. */
 export type DocumentRenderJob = {
   id: string;
