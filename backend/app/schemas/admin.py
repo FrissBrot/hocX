@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.base import PublicIdModel
 from app.schemas.mfa import MfaPendingLoginRead
+from app.schemas.role import RoleRef
 from app.schemas.user import UserRead
 
 
@@ -279,13 +280,15 @@ class AdminTenantUserRead(BaseModel):
     user_id: uuid.UUID
     email: str | None
     display_name: str
-    role_code: str
+    roles: list[RoleRef] = Field(default_factory=list)
     login_enabled: bool
     is_active: bool
 
 
 class AdminTenantUserGrant(BaseModel):
-    role_code: str
+    # Plattform-Admin setzt genau eine Standardrolle (ersetzt alle Rollen des Kontos), z. B. im
+    # Notfall "Administrator" - eigene Rollen verwaltet der Mandant selbst.
+    role_code: Literal["admin", "writer", "kassier", "reader"]
 
 
 class SystemErrorLogRead(BaseModel):

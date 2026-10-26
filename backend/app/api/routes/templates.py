@@ -6,7 +6,8 @@ from sqlalchemy import select
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.core.security import CurrentUser, get_current_user, require_admin, require_feature, require_reader, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
 from app.core.db import get_db
 from app.models.entities import ElementDefinition, Template, TemplateElement
 from app.schemas.template import (
@@ -59,7 +60,7 @@ def list_templates(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     return service.list_templates(
         db,
         tenant_id=user.current_tenant_id,
@@ -76,7 +77,7 @@ def create_template(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     try:
         return service.create_template(db, payload, tenant_id=user.current_tenant_id, created_by=user.user_id)
     except ValueError as exc:
@@ -88,7 +89,7 @@ def create_template(
 
 @router.get("/templates/{template_id}", response_model=TemplateRead)
 def get_template(template_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     template = _get_template_or_404(db, template_id, user)
     access_service.ensure_can_read_template(db, user, template.id)
     return template
@@ -101,7 +102,7 @@ def patch_template(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     existing = _get_template_or_404(db, template_id, user)
     try:
         template = service.update_template(db, existing.id, payload)
@@ -122,7 +123,7 @@ def duplicate_template(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     existing = _get_template_or_404(db, template_id, user)
     try:
         duplicate = service.duplicate_template(db, existing.id, new_name=payload.name, created_by=user.user_id)
@@ -140,7 +141,7 @@ def delete_template(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     existing = _get_template_or_404(db, template_id, user)
     try:
         deleted = service.delete_template(db, existing.id)
@@ -155,7 +156,7 @@ def delete_template(
 @router.get("/templates/{template_id}/fine-tariff", response_model=TemplateFineTariffRead)
 def get_template_fine_tariff(template_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Bussentarif der Vorlage (eigener oder Mandantentarif, FAR-002)."""
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     require_feature(user, "finance")
     template = _get_template_or_404(db, template_id, user)
     return fine_tariff_service.read_template_tariff(db, template)
@@ -168,7 +169,7 @@ def update_template_fine_tariff(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     require_feature(user, "finance")
     template = _get_template_or_404(db, template_id, user)
     try:
@@ -189,7 +190,7 @@ def list_template_elements(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     template = _get_template_or_404(db, template_id, user)
     access_service.ensure_can_read_template(db, user, template.id)
     return template_element_service.list_template_elements(db, template.id)
@@ -202,7 +203,7 @@ def create_template_element(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.TEMPLATES_EDIT)
     template = _get_template_or_404(db, template_id, user)
     try:
         return template_element_service.create_template_element(db, template.id, payload)
@@ -235,7 +236,7 @@ def patch_template_element(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.TEMPLATES_EDIT)
     internal_id = _ensure_template_element_in_tenant(db, user, template_element_id)
     try:
         template_element = template_element_service.update_template_element(db, internal_id, payload)
@@ -256,7 +257,7 @@ def patch_template_element_behavior(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.TEMPLATES_EDIT)
     internal_id = _ensure_template_element_in_tenant(db, user, template_element_id)
     try:
         template_element = template_element_service.update_block_behavior(db, internal_id, payload)
@@ -277,7 +278,7 @@ def detach_template_element(
     user: CurrentUser = Depends(get_current_user),
 ):
     """«Nur in dieser Vorlage ändern»: das Traktandum bekommt eine eigene Kopie seines Inhalts."""
-    require_writer(user)
+    require_permission(user, P.TEMPLATES_EDIT)
     internal_id = _ensure_template_element_in_tenant(db, user, template_element_id)
     try:
         template_element = template_element_service.detach_definition(db, internal_id)
@@ -296,7 +297,7 @@ def delete_template_element(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.TEMPLATES_EDIT)
     internal_id = _ensure_template_element_in_tenant(db, user, template_element_id)
     deleted = template_element_service.delete_template_element(db, internal_id)
     if not deleted:
@@ -311,7 +312,7 @@ def list_element_definitions(
     user: CurrentUser = Depends(get_current_user),
 ):
     """``library=true``: nur die wiederverwendbaren Bausteine (ohne Einzelstücke von Vorlagen)."""
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     return element_definition_service.list_element_definitions(db, tenant_id=user.current_tenant_id, library_only=library)
 
 
@@ -321,7 +322,7 @@ def get_element_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     definition = _get_element_definition_or_404(db, element_definition_id, user)
     return element_definition_service.get_element_definition(db, definition.id)
 
@@ -332,7 +333,7 @@ def create_element_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.TEMPLATES_EDIT)
     try:
         return element_definition_service.create_element_definition(db, payload, tenant_id=user.current_tenant_id)
     except ValueError as exc:
@@ -350,7 +351,7 @@ def patch_element_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.TEMPLATES_EDIT)
     current = _get_element_definition_or_404(db, element_definition_id, user)
     try:
         element_definition = element_definition_service.update_element_definition(db, current.id, payload)
@@ -371,7 +372,7 @@ def delete_element_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_EDIT)  # E-10: wer Bausteine anlegt, darf sie auch entfernen
     current = _get_element_definition_or_404(db, element_definition_id, user)
     try:
         deleted = element_definition_service.delete_element_definition(db, current.id)

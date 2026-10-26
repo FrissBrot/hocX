@@ -13,7 +13,7 @@ from app.schemas.admin import AdminFeatureUpdate, AdminPlanWrite, AdminTenantCre
 from app.services.admin_tenant_service import AdminTenantService
 from app.services.tenant_service import TenantService
 
-from tests.factories import make_tenant
+from tests.factories import make_tenant, system_role_permissions
 
 
 def make_platform_admin(db, email="pricing-admin@example.com") -> PlatformAdmin:
@@ -183,7 +183,7 @@ def test_tenant_subscription_view_computes_estimated_cost_including_extra_featur
             current_tenant_public_id=tenant.public_id,
             current_tenant_name=tenant.name,
             current_tenant_profile_image_path=None,
-            current_role="admin",
+            permissions=system_role_permissions("admin"),
             current_tenant_features=frozenset({"finance", "abgabebox"}),
         )
         subscription = tenant_service.get_subscription(db, tenant.id, actor)
@@ -301,7 +301,7 @@ def test_discount_and_note_are_stored_and_reduce_estimated_cost(db):
         current_tenant_public_id=tenant.public_id,
         current_tenant_name=tenant.name,
         current_tenant_profile_image_path=None,
-        current_role="admin",
+        permissions=system_role_permissions("admin"),
         current_tenant_features=frozenset(),
     )
     subscription = tenant_service.get_subscription(db, tenant.id, actor)

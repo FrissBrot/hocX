@@ -60,5 +60,6 @@
   "documentExports": "Historique des exports",
   "privacy": "Protection des données",
   "activity": "Historique",
-  "retention": "Conservation"
+  "retention": "Conservation",
+  "roleManagement": "Rôles"
 }

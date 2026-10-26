@@ -18,16 +18,17 @@ import {
   MobileSwitch,
 } from "@/components/mobile/mobile-ui";
 import { dateParts, todayIso } from "@/components/mobile/mobile-utils";
-import { getRoleOptions } from "@/components/admin/admin-tenant-settings-modal";
 import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
-import { emptyUserForm, isUserFormValid, userFormToPayload, UserFormState } from "@/components/users/user-form-shared";
+import { EffectivePermissions, RoleChecklist } from "@/components/users/role-fields";
+import { defaultRoleIds, emptyUserForm, isUserFormValid, primarySystemRole, userFormToPayload, UserFormState } from "@/components/users/user-form-shared";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatCycleName, getCycleYear } from "@/lib/utils/cycle";
-import type { CycleConfigSummary, ShareLink, UserSummary } from "@/types/api";
+import { rolesLabel } from "@/lib/permissions";
+import type { CycleConfigSummary, RoleRead, ShareLink, UserSummary } from "@/types/api";
 
 // ── Zyklen ──────────────────────────────────────────────────────────────
 
@@ -201,12 +202,17 @@ function CycleSheet({
 
 // ── Benutzer ────────────────────────────────────────────────────────────
 
-export function MobileUsers({ initialUsers }: { initialUsers: UserSummary[] }) {
+type RoleAccess = {
+  roles: RoleRead[];
+  actorPermissions: string[];
+  enabledFeatures: string[];
+};
+
+export function MobileUsers({ initialUsers, roles, actorPermissions, enabledFeatures }: { initialUsers: UserSummary[] } & RoleAccess) {
   const t = useTranslations("users");
-  const tAdmin = useTranslations("admin");
+  const tNav = useTranslations("nav");
   const tMobile = useTranslations("mobile");
   const openMore = useOpenMore();
-  const roleLabel = useMemo(() => new Map(getRoleOptions(tAdmin).map((role) => [role.code, role.label])), [tAdmin]);
   const [users, setUsers] = useState(initialUsers);
   const [tab, setTab] = useState<"active" | "nologin">("nologin");
   const [search, setSearch] = useState("");
@@ -216,7 +222,7 @@ export function MobileUsers({ initialUsers }: { initialUsers: UserSummary[] }) {
   const withoutLogin = users.filter((user) => !user.login_enabled);
   const needle = search.trim().toLowerCase();
   const visible = (tab === "active" ? active : withoutLogin).filter(
-    (user) => !needle || `${user.display_name} ${user.email} ${roleLabel.get(user.role_code) ?? ""}`.toLowerCase().includes(needle)
+    (user) => !needle || `${user.display_name} ${user.email} ${rolesLabel(user.roles, tNav)}`.toLowerCase().includes(needle)
   );
 
   return (
@@ -250,7 +256,7 @@ export function MobileUsers({ initialUsers }: { initialUsers: UserSummary[] }) {
                 }
                 trailing={
                   user.login_enabled ? (
-                    <span className={`mobile-role-pill mobile-role-pill-${user.role_code}`}>{roleLabel.get(user.role_code) ?? user.role_code}</span>
+                    <span className={`mobile-role-pill mobile-role-pill-${primarySystemRole(user.roles)}`}>{rolesLabel(user.roles, tNav)}</span>
                   ) : (
                     <span className="mobile-text-link">{t("enableLogin")}</span>
                   )
@@ -267,6 +273,9 @@ export function MobileUsers({ initialUsers }: { initialUsers: UserSummary[] }) {
       {editing ? (
         <UserSheet
           user={editing === "new" ? null : editing}
+          roles={roles}
+          actorPermissions={actorPermissions}
+          enabledFeatures={enabledFeatures}
           onClose={() => setEditing(null)}
           onMfa={(user) => {
             setEditing(null);
@@ -295,11 +304,14 @@ export function MobileUsers({ initialUsers }: { initialUsers: UserSummary[] }) {
 
 function UserSheet({
   user,
+  roles,
+  actorPermissions,
+  enabledFeatures,
   onClose,
   onSaved,
   onDeleted,
   onMfa,
-}: {
+}: RoleAccess & {
   user: UserSummary | null;
   onClose: () => void;
   onSaved: (user: UserSummary, created: boolean) => void;
@@ -307,12 +319,10 @@ function UserSheet({
   onMfa: (user: UserSummary) => void;
 }) {
   const t = useTranslations("users");
-  const tAdmin = useTranslations("admin");
   const tMobile = useTranslations("mobile");
   const confirm = useConfirm();
   const showToast = useToast();
   const session = useMobileSession();
-  const roles = getRoleOptions(tAdmin).slice().reverse();
   const [form, setForm] = useState<UserFormState>(() =>
     user
       ? {
@@ -327,9 +337,10 @@ function UserSheet({
           login_enabled: user.login_enabled,
 
           tenant_id: user.tenant_id,
-          role_code: user.role_code,
+          role_ids: user.roles.map((role) => role.id),
+          system_role: "reader",
         }
-      : emptyUserForm()
+      : emptyUserForm("", defaultRoleIds(roles))
   );
   const [saving, setSaving] = useState(false);
   const update = (patch: Partial<UserFormState>) => setForm((current) => ({ ...current, ...patch }));
@@ -414,22 +425,8 @@ function UserSheet({
           <span className="field-label">{t("email")}</span>
           <input type="email" inputMode="email" value={form.email} onChange={(event) => update({ email: event.target.value })} />
         </label>
-        <div className="field-stack">
-          <span className="field-label">{t("role")}</span>
-          <div className="mobile-card mobile-group-card">
-            {roles.map((role) => (
-              <button key={role.code} type="button" className="mobile-list-row" aria-pressed={form.role_code === role.code} onClick={() => update({ role_code: role.code })}>
-                <span className={`mobile-check${form.role_code === role.code ? " mobile-check-on" : ""}`} aria-hidden="true">
-                  {form.role_code === role.code ? <MobileIcon name="check" size={14} strokeWidth={3} /> : null}
-                </span>
-                <span className="mobile-row-stack">
-                  <span className="mobile-row-title">{role.label}</span>
-                  <span className="mobile-row-meta mobile-row-meta-wrap">{t(`roleDescriptions.${role.code}`)}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
+        <RoleChecklist roles={roles} value={form.role_ids} actorPermissions={actorPermissions} onChange={(roleIds) => update({ role_ids: roleIds })} />
+        <EffectivePermissions roles={roles} roleIds={form.role_ids} enabledFeatures={enabledFeatures} />
         <label className="field-stack">
           <span className="field-label">{user ? t("newPassword") : t("password")}</span>
           <input type="password" autoComplete="new-password" value={form.password} onChange={(event) => update({ password: event.target.value })} />

@@ -9,7 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models.entities import ShareLink
 from app.schemas.files import ShareLinkCreate, ShareLinkRead
 from app.services import photo_album_share_service, share_link_service
@@ -40,7 +41,7 @@ def _read(link: ShareLink, *, album_name: str | None, file_count: int, created_b
 
 @router.post("/share-links", response_model=ShareLinkRead, status_code=201)
 def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     name = payload.name.strip()
@@ -79,7 +80,7 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
 
 @router.get("/share-links", response_model=list[ShareLinkRead])
 def list_share_links(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return [
@@ -90,7 +91,7 @@ def list_share_links(db: Session = Depends(get_db), user: CurrentUser = Depends(
 
 @router.delete("/share-links/{share_link_id}", status_code=204)
 def revoke_share_link(share_link_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     link = db.get(ShareLink, share_link_id)

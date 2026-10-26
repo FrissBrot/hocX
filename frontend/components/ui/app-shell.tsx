@@ -192,7 +192,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
 
   const tenantName = session?.current_tenant?.name ?? t("defaultTenantName");
   const userInitial = session?.user?.display_name?.slice(0, 1) ?? "U";
-  const roleLabel = formatRoleLabel(session?.current_role, t) || sessionStatus;
+  const roleLabel = formatRoleLabel(session, t) || sessionStatus;
 
   function selectTheme(nextTheme: "light" | "dark" | "auto") {
     setThemePreference(nextTheme);

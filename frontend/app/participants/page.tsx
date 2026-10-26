@@ -6,10 +6,11 @@ import { ParticipantManager } from "@/components/participants/participant-manage
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { ParticipantSummary, TemplateSummary } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 export default async function ParticipantsPage() {
   const session = await requireSession();
-  const canWrite = session.current_role === "admin" || session.current_role === "writer";
+  const canWrite = can(session, "participants.manage");
 
   if (!canWrite) {
     redirect("/");
@@ -30,7 +31,7 @@ export default async function ParticipantsPage() {
             <ParticipantManager
               initialParticipants={participants ?? []}
               templates={templates ?? []}
-              canAdmin={session.current_role === "admin"}
+              canAdmin={can(session, "access.manage")}
               tenantId={session.current_tenant?.id ?? null}
             />
           </section>

@@ -17,14 +17,25 @@ derselben Zeile **begründet** markiert; eine Markierung ohne echten Grund ist e
    `# nosemgrep: public-id-lookup-without-tenant -- <Begründung>`, wenn danach nachweislich eine
    eigene Mandantenprüfung folgt.
 2. **Schreiben ist strenger als Lesen.** Eine Schreibroute nutzt nie nur `ensure_can_read_*`: was ein
-   Partner lesen darf (geteilte Alben), darf er deshalb noch nicht ändern (vgl. SEC-003).
-3. **Rollen und Features** über `require_reader/require_writer/require_admin/require_feature`
-   prüfen, bevor etwas geladen oder geändert wird.
-4. **Fremde Mandanten sind die Ausnahme.** Mandantenübergreifend dürfen nur Plattform-Admin,
+   Partner lesen darf (geteilte Alben), darf er deshalb noch nicht ändern (vgl. SEC-003). Bewusste
+   Ausnahme: ein akzeptierter Partner mit `files.manage` darf in ein geteiltes Album Fotos beitragen
+   und "Beste" markieren, aber nicht einladen oder freigeben (RBAC-Entscheidung E-7).
+3. **Berechtigungen und Features** über `require_permission(user, P.<KEY>)` (`app/core/security.py`,
+   Katalog `permissions/catalog.json`) bzw. `require_feature` prüfen, bevor etwas geladen oder
+   geändert wird - nie über Rollen-Codes (`"admin"`, `"writer"` …). Eine neue Funktion nutzt eine
+   bestehende Permission oder bekommt eine neue im Katalog (`scripts/sync-permission-catalog.py`,
+   Migration ordnet sie den Standardrollen zu). Ressourcenregeln (Mandant, Protokollstatus,
+   Teilnehmer-Zuordnung, eigene Daten) bleiben in `services/access_service.py`.
+   `tests/test_route_permission_inventory.py` schlägt fehl, wenn eine Route keine Prüfung hat.
+   Hintergrund: `docs/RBAC_ARCHITECTURE_PROPOSAL.md`.
+4. **Rollen und Zuweisungen nur über `services/role_service.py`** (keine Rechteausweitung, letzter
+   Administrator, kein Selbstentzug, Mandantensperre) - auch aus dem Plattform-Admin-Panel und
+   aus Importen.
+5. **Fremde Mandanten sind die Ausnahme.** Mandantenübergreifend dürfen nur Plattform-Admin,
    Hintergrundjobs und ausdrücklich dafür gebaute Wege (geteilte Fotoalben, öffentliche Links)
    arbeiten. `tenant_scope_suspended(db)` nur für Prüfungen, die nichts Fremdes zurückgeben (Ja/Nein,
    Anzahl), immer mit `# rls-ok: <Begründung>`.
-5. **Antwort ohne Existenz-Orakel:** fremde und nicht existierende IDs ergeben dieselbe Antwort
+6. **Antwort ohne Existenz-Orakel:** fremde und nicht existierende IDs ergeben dieselbe Antwort
    (meist 404).
 
 ## 2. Datenbank

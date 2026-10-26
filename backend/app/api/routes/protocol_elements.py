@@ -10,7 +10,8 @@ from redis.exceptions import RedisError
 
 from app.core.db import get_db
 from app.core.redis_client import get_redis_sync, publish_best_effort
-from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models import ElementDefinition, Event, Participant, Protocol, ProtocolElement, ProtocolElementBlock, TemplateElement, TemplateElementBlock
 from app.schemas.protocol import (
     AttendanceStatusUpdate,
@@ -147,7 +148,7 @@ def list_protocol_elements(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     protocol = public_id_service.get_by_public_id(db, Protocol, protocol_id, tenant_id=user.current_tenant_id)
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
@@ -162,7 +163,7 @@ def patch_protocol_element(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     element = public_id_service.get_by_public_id(db, ProtocolElement, protocol_element_id)
     if element is None:
         raise HTTPException(status_code=404, detail="Protocol element not found")
@@ -200,7 +201,7 @@ def patch_protocol_element_block(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     _ensure_block_not_locked_by_other(protocol.id, existing.id, user)
     if payload.configuration_snapshot_json is not None:
@@ -240,7 +241,7 @@ def set_block_attendance_status(
     """Single-participant attendance status upsert - see ProtocolElementService.
     set_attendance_status for why this exists instead of routing attendance clicks through
     the generic config PATCH above (full-array overwrite races)."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     _ensure_block_not_locked_by_other(protocol.id, block.id, user)
     participant_internal_id = public_id_service.resolve_internal_id(db, Participant, participant_id, tenant_id=user.current_tenant_id)
@@ -269,7 +270,7 @@ def refresh_block_list_snapshot(
 ):
     """User-initiated refresh: pulls in the list's current data, stashes the block's
     previous snapshot as the one undo step."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     track_changes_active = protocol.status == "geplant" and protocol.track_changes_enabled
     block = list_snapshot_service.refresh_block_list_snapshot(
@@ -289,7 +290,7 @@ def sync_block_list_snapshot(
     """Silent resync called by the frontend right after the protocol itself writes to a
     linked list entry, so the editor never shows a stale hint for a change it just made
     itself. Never touches an existing undo point."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     track_changes_active = protocol.status == "geplant" and protocol.track_changes_enabled
     block = list_snapshot_service.refresh_block_list_snapshot(
@@ -306,7 +307,7 @@ def undo_block_list_snapshot(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     updated = list_snapshot_service.undo_block_list_snapshot(db, block)
     if updated is None:
@@ -322,7 +323,7 @@ def delete_protocol_element_block(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing, _ = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     try:
         found = service.delete_protocol_element_block(db, existing.id)
@@ -340,7 +341,7 @@ def create_protocol_element_block_from_event(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     element = public_id_service.get_by_public_id(db, ProtocolElement, protocol_element_id)
     if element is None:
         raise HTTPException(status_code=404, detail="Protocol element not found")
@@ -376,7 +377,7 @@ def accept_tracked_list_entry(
     is the *frozen snapshot's* copy of a ListEntry id inside configuration_snapshot_json,
     not a live lookup - deliberately left as the internal int the snapshot already stores
     (see the public_id migration's deferred scope for block/snapshot JSON payloads)."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     block = list_snapshot_service.accept_tracked_list_entry(db, block, entry_id)
     read = _block_to_read(db, block)
@@ -392,7 +393,7 @@ def accept_tracked_row(
     user: CurrentUser = Depends(get_current_user),
 ):
     """'Ausblenden' for one row-link ('Zeile aus Liste') form row's red tracked-change highlight."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     block = list_snapshot_service.accept_tracked_row(db, block, row_id)
     read = _block_to_read(db, block)
@@ -407,7 +408,7 @@ def accept_text_tracked_changes(
     user: CurrentUser = Depends(get_current_user),
 ):
     """'Ausblenden' for a text block's red tracked-change highlight (whole block)."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing, _ = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     try:
         result = autosave_service.accept_tracked_changes(db, existing.id)
@@ -426,7 +427,7 @@ def put_protocol_text(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     _ensure_block_not_locked_by_other(protocol.id, block.id, user)
     track_changes_active = bool(protocol.status == "geplant" and protocol.track_changes_enabled)

@@ -9,7 +9,7 @@
     "invite": "+ Teilnehmer einladen"
   },
   "explainRoles": "Rollen erklären",
-  "explainRolesDescription": "Jedes Konto hat pro Mandant genau eine Rolle.",
+  "explainRolesDescription": "Jedes Konto kann mehrere Rollen haben und erhält alle ihre Berechtigungen. Die Rollen verwaltest du unter «Rollen».",
   "tabs": {
     "active": "Teilnehmer mit Login",
     "participants": "Teilnehmer"

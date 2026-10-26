@@ -60,5 +60,6 @@
   "documentExports": "Export history",
   "privacy": "Privacy",
   "activity": "Activity",
-  "retention": "Retention"
+  "retention": "Retention",
+  "roleManagement": "Roles"
 }

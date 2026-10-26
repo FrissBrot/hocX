@@ -4,10 +4,11 @@ import { AppShell } from "@/components/ui/app-shell";
 import { ProtocolBuilder } from "@/components/protocol/protocol-builder";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { ProtocolSummary, TemplateSummary } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 export default async function ProtocolsPage() {
   const session = await requireSession();
-  const canWrite = ["admin", "writer"].includes(session.current_role ?? "");
+  const canWrite = can(session, "meetings.edit");
 
   const [items, templates, preference] = await Promise.all([
     backendFetchWithSession<ProtocolSummary[]>("/api/protocols"),

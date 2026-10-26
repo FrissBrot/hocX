@@ -16,8 +16,9 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.locale_config_generated import LOCALE_COOKIE_NAME, normalize_locale
+from app.core.permissions import CATALOG, P, effective_permissions, requires_mfa
 from app.core.tenant_scope import bind_tenant_scope
-from app.models import AppUser, Role, Tenant, TenantFeature, UserMfaFactor
+from app.models import AppUser, Tenant, TenantFeature, TenantRole, TenantRolePermission, UserMfaFactor, UserRole
 
 
 PASSWORD_SCHEME = "pbkdf2_sha256"
@@ -33,22 +34,42 @@ class CurrentUser:
     display_name: str
     email: str
     preferred_language: str
-    # A user belongs to exactly one tenant with exactly one role (app_user.tenant_id/role_id);
-    # the "current_" prefix is historical from when a session could switch between tenants.
+    # A user belongs to exactly one tenant (app_user.tenant_id); the "current_" prefix is
+    # historical from when a session could switch between tenants.
     current_tenant_id: int
     current_tenant_public_id: uuid.UUID
     current_tenant_name: str
     current_tenant_profile_image_path: str | None
-    current_role: str
     protocol_accordion_enabled: bool = True
     mfa_verified: bool = False
-    # Feature-Gating pro Mandant (orthogonal zur Rolle): welche Features fuer
+    # Feature-Gating pro Mandant (orthogonal zu den Rollen): welche Features fuer
     # current_tenant_id gebucht sind. Leer per Default (deny-by-default) - build_current_user
     # laedt den echten Stand aus tenant_feature.
     current_tenant_features: frozenset[str] = frozenset()
+    # Effektive Berechtigungen (RBAC): Vereinigungsmenge aller Rollen des Kontos inkl. der festen
+    # Implikationen, bei jedem Request frisch aus user_role/tenant_role geladen - Rollenänderungen
+    # wirken damit sofort, auch in laufenden Sessions. Leer = default deny.
+    permissions: frozenset[str] = frozenset()
+    # Interne IDs der zugewiesenen tenant_role-Zeilen (für die Schutzregeln der Rollenverwaltung).
+    role_ids: tuple[int, ...] = ()
+    # Anzeige in der Session (Name bzw. system_key der Standardrolle).
+    roles: tuple["RoleSummary", ...] = ()
 
-    def has_tenant_role(self, *allowed_roles: str) -> bool:
-        return self.current_role in allowed_roles
+    def can(self, permission: P) -> bool:
+        """Funktionsberechtigung: Permission vorhanden und - falls an ein Modul gebunden - das
+        Modul für den Mandanten gebucht. Ressourcenregeln (welcher Datensatz) prüft
+        services/access_service.py zusätzlich."""
+        definition = CATALOG[permission]
+        if definition.feature is not None and definition.feature not in self.current_tenant_features:
+            return False
+        return permission in self.permissions
+
+
+@dataclass(frozen=True)
+class RoleSummary:
+    public_id: uuid.UUID
+    name: str | None
+    system_key: str | None
 
 
 def hash_password(password: str) -> str:
@@ -159,10 +180,33 @@ def parse_session_token(token: str | None) -> dict | None:
     return data
 
 
+def _load_role_rows(db: Session, user_id: int):
+    return db.execute(
+        select(TenantRole.id, TenantRole.public_id, TenantRole.name, TenantRole.system_key, TenantRolePermission.permission_key)
+        .select_from(UserRole)
+        .join(TenantRole, TenantRole.id == UserRole.role_id)
+        .outerjoin(TenantRolePermission, TenantRolePermission.role_id == TenantRole.id)
+        .where(UserRole.user_id == user_id)
+    ).all()
+
+
+def _effective(rows) -> frozenset[str]:
+    return frozenset(str(key) for key in effective_permissions(
+        (row.permission_key for row in rows if row.permission_key is not None),
+        (row.system_key for row in rows),
+    ))
+
+
+def load_role_permissions(db: Session, user_id: int) -> tuple[frozenset[str], tuple[int, ...]]:
+    """Effektive Permissions und Rollen-IDs eines Kontos (eine indexgestützte Abfrage)."""
+    rows = _load_role_rows(db, user_id)
+    return _effective(rows), tuple(sorted({row.id for row in rows}))
+
+
 def build_current_user(db: Session, user: AppUser, *, mfa_verified: bool = False) -> CurrentUser:
-    tenant, role = db.execute(
-        select(Tenant, Role).where(Tenant.id == user.tenant_id, Role.id == user.role_id)
-    ).one()
+    tenant = db.execute(select(Tenant).where(Tenant.id == user.tenant_id)).scalar_one()
+    rows = _load_role_rows(db, user.id)
+    summaries = {row.id: RoleSummary(public_id=row.public_id, name=row.name, system_key=row.system_key) for row in rows}
     tenant_features = frozenset(
         db.scalars(select(TenantFeature.feature_code).where(TenantFeature.tenant_id == tenant.id))
     )
@@ -179,9 +223,11 @@ def build_current_user(db: Session, user: AppUser, *, mfa_verified: bool = False
         current_tenant_public_id=tenant.public_id,
         current_tenant_name=tenant.name,
         current_tenant_profile_image_path=tenant.profile_image_path,
-        current_role=role.code,
         mfa_verified=mfa_verified,
         current_tenant_features=tenant_features,
+        permissions=_effective(rows),
+        role_ids=tuple(sorted(summaries)),
+        roles=tuple(summaries[role_id] for role_id in sorted(summaries)),
     )
 
 
@@ -196,7 +242,7 @@ def _has_active_mfa_factor(db: Session, user_id: int) -> bool:
 
 
 def _requires_mfa(user: CurrentUser) -> bool:
-    return user.current_role == "admin"
+    return requires_mfa(user.permissions)
 
 
 def get_optional_current_user(
@@ -232,67 +278,29 @@ def get_current_user(user: CurrentUser | None = Depends(get_optional_current_use
     return user
 
 
-def require_reader(user: CurrentUser) -> CurrentUser:
-    if user.current_role in {"reader", "kassier", "writer", "admin"}:
-        return user
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Reader role required")
-
-
-def require_writer(user: CurrentUser) -> CurrentUser:
-    if user.current_role in {"writer", "admin"}:
-        return user
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Writer role required")
-
-
 def require_feature(user: CurrentUser, code: str) -> CurrentUser:
-    """Feature-Gating pro Mandant - orthogonal zur Rollenpruefung. Ein 403 hier bedeutet "fuer
-    diesen Mandanten nicht gebucht", nicht "diese Rolle darf das nicht"."""
+    """Feature-Gating pro Mandant - orthogonal zur Berechtigung. Ein 403 hier bedeutet "fuer
+    diesen Mandanten nicht gebucht", nicht "darf das nicht"."""
     if code not in user.current_tenant_features:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Feature '{code}' nicht gebucht")
     return user
 
 
-def require_finance_read(user: CurrentUser) -> CurrentUser:
-    """Every tenant role may inspect finance data, if the tenant has Finanzen booked."""
-    require_feature(user, "finance")
-    if user.current_role in {"reader", "kassier", "writer", "admin"}:
+def require_permission(user: CurrentUser, permission: P) -> CurrentUser:
+    """Zentrale Funktionsberechtigung (SECURITY-RULES §1.3: vor dem Laden/Ändern aufrufen).
+    Ist die Permission an ein Modul gebunden, kommt bei fehlendem Modul dieselbe Meldung wie bei
+    require_feature."""
+    feature = CATALOG[permission].feature
+    if feature is not None:
+        require_feature(user, feature)
+    if permission not in user.permissions:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission required")
+    return user
+
+
+def require_any_permission(user: CurrentUser, *permissions: P) -> CurrentUser:
+    """Mindestens eine der Permissions (z. B. Teilnehmerliste: participants.manage oder
+    meetings.edit). Bewusst ohne Feature-Sonderfall - nur für Permissions ohne Modulbindung."""
+    if any(user.can(permission) for permission in permissions):
         return user
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Finance read access required")
-
-
-def require_finance_write(user: CurrentUser) -> CurrentUser:
-    """Only the dedicated cashier role and tenant admins may mutate finance data, if the tenant
-    has Finanzen booked."""
-    require_feature(user, "finance")
-    if user.current_role in {"kassier", "admin"}:
-        return user
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Finance write access required")
-
-
-def require_abgabebox_read(user: CurrentUser) -> CurrentUser:
-    """Every tenant role may inspect Abgabebox data, if the tenant has Abgabebox booked."""
-    require_feature(user, "abgabebox")
-    if user.current_role in {"reader", "kassier", "writer", "admin"}:
-        return user
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Abgabebox read access required")
-
-
-def require_abgabebox_write(user: CurrentUser) -> CurrentUser:
-    """Only writer/admin may manage Abgaben, if the tenant has Abgabebox booked."""
-    require_feature(user, "abgabebox")
-    if user.current_role in {"writer", "admin"}:
-        return user
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Abgabebox write access required")
-
-
-def require_all_fines_read(user: CurrentUser) -> CurrentUser:
-    """Reader accounts may only use the self-scoped fines listing."""
-    if user.current_role in {"writer", "kassier", "admin"}:
-        return user
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="All-fines read access required")
-
-
-def require_admin(user: CurrentUser) -> CurrentUser:
-    if user.current_role == "admin":
-        return user
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission required")

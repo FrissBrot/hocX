@@ -9,7 +9,7 @@
     "invite": "+ Invita partecipante"
   },
   "explainRoles": "Spiega i ruoli",
-  "explainRolesDescription": "Ogni account ha esattamente un ruolo per organizzazione.",
+  "explainRolesDescription": "Ogni account può avere più ruoli e riceve tutte le loro autorizzazioni. I ruoli si gestiscono in «Ruoli».",
   "tabs": {
     "active": "Partecipanti con accesso",
     "participants": "Partecipanti"

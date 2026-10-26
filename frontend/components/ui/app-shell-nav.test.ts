@@ -6,6 +6,7 @@ import deNav from "@/messages/de/nav.json";
 import enNav from "@/messages/en/nav.json";
 import frNav from "@/messages/fr/nav.json";
 import itNav from "@/messages/it/nav.json";
+import { SYSTEM_ROLE_PERMISSIONS, type SystemRoleKey } from "@/lib/permissions.generated";
 import type { SessionInfo } from "@/types/api";
 
 const CATALOGS: Record<string, Record<string, unknown>> = { de: deNav, en: enNav, fr: frNav, it: itNav };
@@ -27,33 +28,40 @@ function translatorFor(locale: string) {
   return (key: string) => flat[key] ?? key;
 }
 
-function adminSession(): SessionInfo {
+function sessionFor(role: SystemRoleKey): SessionInfo {
   return {
     authenticated: true,
     user: { id: "u1", first_name: "A", last_name: "B", display_name: "A B", email: "a@b.ch", preferred_language: "de", protocol_accordion_enabled: true },
     current_tenant: { id: "t1", name: "Tenant", profile_image_path: null, profile_image_url: null, enabled_features: ["finance", "abgabebox"] },
-    current_role: "admin",
+    permissions: [...SYSTEM_ROLE_PERMISSIONS[role]],
+    roles: [{ id: `r-${role}`, name: null, system_key: role }],
   } as unknown as SessionInfo;
 }
 
+function adminSession(): SessionInfo {
+  return sessionFor("admin");
+}
+
 describe("formatRoleLabel", () => {
-  it.each(locales)("uebersetzt jede bekannte Rolle in '%s', ohne auf die Rollenkonstante zurueckzufallen", (locale) => {
+  it.each(locales)("uebersetzt jede Standardrolle in '%s', ohne auf den Rollenschluessel zurueckzufallen", (locale) => {
     const t = translatorFor(locale);
-    for (const role of ["admin", "writer", "kassier", "reader"]) {
-      const label = formatRoleLabel(role, t);
+    for (const role of ["admin", "writer", "kassier", "reader"] as const) {
+      const label = formatRoleLabel(sessionFor(role), t);
       expect(label).not.toBe(role);
       expect(label.length).toBeGreaterThan(0);
     }
   });
 
-  it("gibt die Rolle selbst zurueck, wenn sie unbekannt ist", () => {
+  it("zeigt eigene Rollennamen und mehrere Rollen alphabetisch", () => {
     const t = translatorFor("de");
-    expect(formatRoleLabel("ghost-role", t)).toBe("ghost-role");
+    const session = { roles: [{ id: "r1", name: "Revisor", system_key: null }, { id: "r2", name: null, system_key: "kassier" }] } as unknown as SessionInfo;
+    expect(formatRoleLabel(session, t)).toBe(`${t("roles.kassier")}, Revisor`);
   });
 
-  it("faellt bei fehlender Rolle auf den Status-Text zurueck", () => {
+  it("faellt ohne Rolle auf den Status-Text zurueck", () => {
     const t = translatorFor("de");
     expect(formatRoleLabel(null, t)).toBe(t("roles.status"));
+    expect(formatRoleLabel({ roles: [] } as unknown as SessionInfo, t)).toBe(t("roles.status"));
   });
 });
 
@@ -64,7 +72,7 @@ describe("buildNav", () => {
     const admin = buildNav(adminSession());
     expect(hrefsOf(admin, "groups.configuration")).toEqual(["/templates"]);
     expect(hrefsOf(admin, "groups.work")).not.toContain("/documents");
-    const writer = buildNav({ ...adminSession(), current_role: "writer" });
+    const writer = buildNav(sessionFor("writer"));
     expect(hrefsOf(writer, "groups.configuration")).toEqual(["/templates"]);
     const link = admin.find((group) => group.titleKey === "groups.configuration")?.links[0];
     expect(link?.match).toEqual(expect.arrayContaining(["/documents", "/elements", "/cycles", "/task-packages"]));
@@ -101,5 +109,16 @@ describe("buildNav", () => {
     expect(isNavLinkActive(dashboardLink, "/")).toBe(true);
     expect(isNavLinkActive(dashboardLink, "/statistics")).toBe(true);
     expect(isNavLinkActive(dashboardLink, "/participants")).toBe(false);
+  });
+
+  it("zeigt Bereiche nur mit der passenden Berechtigung", () => {
+    const hrefs = (role: SystemRoleKey) => buildNav(sessionFor(role)).flatMap((group) => group.links.map((link) => link.href));
+    expect(hrefs("reader")).not.toContain("/participants");
+    expect(hrefs("reader")).not.toContain("/users");
+    expect(hrefs("kassier")).toContain("/finances");
+    expect(hrefs("kassier")).not.toContain("/templates");
+    expect(hrefs("writer")).toContain("/participants");
+    expect(hrefs("writer")).not.toContain("/tenant-settings");
+    expect(hrefs("admin")).toEqual(expect.arrayContaining(["/users", "/tenant-settings", "/tools/import"]));
   });
 });

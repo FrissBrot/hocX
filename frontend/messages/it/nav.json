@@ -60,5 +60,6 @@
   "documentExports": "Cronologia esportazioni",
   "privacy": "Protezione dei dati",
   "activity": "Cronologia",
-  "retention": "Conservazione"
+  "retention": "Conservazione",
+  "roleManagement": "Ruoli"
 }

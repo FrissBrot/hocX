@@ -1,0 +1,149 @@
+{
+  "pageTitle": "Rollen",
+  "pageHint": "Eine Rolle bündelt Berechtigungen. Ein Konto kann mehrere Rollen haben und erhält dann alle ihre Berechtigungen.",
+  "newRole": "Neue Rolle",
+  "empty": "Noch keine Rollen.",
+  "columns": {
+    "name": "Rolle",
+    "permissions": "Berechtigungen",
+    "users": "Konten",
+    "actions": "Aktionen"
+  },
+  "permissionCount": "{count, plural, one {# Berechtigung} other {# Berechtigungen}}",
+  "badges": {
+    "standard": "Standard",
+    "locked": "Fest",
+    "mfa": "MFA"
+  },
+  "edit": "Bearbeiten",
+  "view": "Ansehen",
+  "delete": "Löschen",
+  "cancel": "Abbrechen",
+  "close": "Schliessen",
+  "save": "Speichern",
+  "createTitle": "Rolle erstellen",
+  "editTitle": "Rolle bearbeiten",
+  "viewTitle": "Rolle ansehen",
+  "modalDescription": "Name, Beschreibung und Berechtigungen der Rolle.",
+  "lockedHint": "Die Rolle Admin hat immer alle Berechtigungen, auch künftige, und kann nicht geändert werden.",
+  "exceedsOwn": "Diese Rolle enthält Berechtigungen, die du selbst nicht hast. Du kannst sie deshalb nicht ändern.",
+  "notOwned": "Enthält Berechtigungen, die du selbst nicht hast.",
+  "featureMissing": "Modul nicht gebucht",
+  "impliedBy": "Automatisch enthalten in: {permissions}",
+  "deleteConfirm": "Rolle «{name}» löschen? Das geht nur, wenn sie keinem Konto mehr zugewiesen ist.",
+  "fields": {
+    "name": "Name",
+    "nameHelpSystem": "Leer lassen für die Standardbezeichnung.",
+    "description": "Beschreibung",
+    "permissions": "Berechtigungen"
+  },
+  "toasts": {
+    "created": "Rolle erstellt",
+    "saved": "Rolle gespeichert",
+    "saveFailed": "Rolle konnte nicht gespeichert werden",
+    "deleted": "Rolle gelöscht",
+    "deleteFailed": "Rolle konnte nicht gelöscht werden"
+  },
+  "userRoles": {
+    "label": "Rollen",
+    "help": "Mehrere Rollen möglich. Das Konto erhält alle Berechtigungen der gewählten Rollen.",
+    "mfaWarning": "Mindestens eine gewählte Rolle enthält Administrationsrechte: das Konto muss sich mit MFA anmelden."
+  },
+  "effective": {
+    "title": "Effektive Berechtigungen",
+    "via": "über {roles}",
+    "none": "Keine Berechtigungen. Das Konto sieht nur seine eigenen Daten."
+  },
+  "areas": {
+    "meetings": "Sitzungen & Protokolle",
+    "templates": "Vorlagen",
+    "participants": "Teilnehmende",
+    "finances": "Finanzen",
+    "reports": "Auswertungen",
+    "files": "Dateien & Fotos",
+    "submissions": "Abgabebox",
+    "administration": "Administration"
+  },
+  "permissions": {
+    "meetings": {
+      "read": {
+        "label": "Sitzungen ansehen",
+        "description": "Termine, abgeschlossene Protokolle, Traktanden und Aufgaben ansehen, PDFs exportieren."
+      },
+      "read_drafts": {
+        "label": "Entwürfe ansehen",
+        "description": "Auch noch nicht abgeschlossene Protokolle und deren Dateien ansehen."
+      },
+      "edit": {
+        "label": "Sitzungen bearbeiten",
+        "description": "Termine, Protokolle, Traktanden, Aufgaben und Listen anlegen, bearbeiten und löschen; Word-Import."
+      }
+    },
+    "templates": {
+      "edit": {
+        "label": "Vorlagen gestalten",
+        "description": "Bausteine, Bibliothek und Gestaltung bestehender Sitzungsvorlagen und Dokumente bearbeiten."
+      },
+      "manage": {
+        "label": "Vorlagen verwalten",
+        "description": "Sitzungsvorlagen anlegen und löschen, Zyklen, Aufgabenpakete, Tags und historische Listenstände verwalten."
+      }
+    },
+    "participants": {
+      "manage": {
+        "label": "Teilnehmende verwalten",
+        "description": "Teilnehmende samt Kontaktdaten ansehen, anlegen, bearbeiten, importieren und Vorlagen zuordnen."
+      }
+    },
+    "finances": {
+      "read": {
+        "label": "Kassenbuch ansehen",
+        "description": "Konten, Buchungen und Saldi ansehen."
+      },
+      "manage": {
+        "label": "Finanzen verwalten",
+        "description": "Buchungen, Konten und Bussen erfassen, ändern und löschen."
+      }
+    },
+    "reports": {
+      "personal": {
+        "label": "Personenbezogene Daten aller",
+        "description": "Bussen und Anwesenheit aller Personen sehen. Ohne diese Berechtigung nur die eigenen."
+      }
+    },
+    "files": {
+      "manage": {
+        "label": "Dateien & Fotos verwalten",
+        "description": "Dateien, Fotogalerie und Alben verwalten, öffentliche Freigabelinks und Albumfreigaben."
+      }
+    },
+    "submissions": {
+      "read": {
+        "label": "Abgaben ansehen",
+        "description": "Eingereichte Abgaben und ihre Dateien ansehen."
+      },
+      "manage": {
+        "label": "Abgaben verwalten",
+        "description": "Abgabe-Aufträge und öffentliche Upload-Links anlegen, prüfen und löschen."
+      }
+    },
+    "settings": {
+      "manage": {
+        "label": "Einstellungen verwalten",
+        "description": "Vereinsprofil, Datenschutz, Aufbewahrung, Prüfdomain, Erscheinungsbild, Dokumentvorlagen veröffentlichen, Aktivitätsprotokoll."
+      }
+    },
+    "access": {
+      "manage": {
+        "label": "Benutzer & Rollen verwalten",
+        "description": "Logins, Rollen und Rollenzuweisungen verwalten, MFA anderer zurücksetzen."
+      }
+    },
+    "data": {
+      "export": {
+        "label": "Datenexporte",
+        "description": "Gesamtexport des Vereins und Datenauskunft für andere Personen."
+      }
+    }
+  }
+}

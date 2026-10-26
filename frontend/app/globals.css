@@ -1571,6 +1571,122 @@ input[type="radio"] {
   box-shadow: var(--focus-ring);
 }
 
+/* Rollenverwaltung (RBAC): Rollen eines Kontos ankreuzen, Berechtigungen einer Rolle nach Bereich,
+   effektive Berechtigungen. Gleiche Optik wie .role-picker-option, nur mit sichtbarer Checkbox. */
+.roles-checklist {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.roles-checklist-option,
+.roles-permission-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color var(--dur-base) ease, background var(--dur-base) ease;
+}
+
+.roles-checklist-option:hover,
+.roles-permission-option:hover {
+  border-color: var(--border-strong);
+}
+
+.roles-checklist-option:has(input:checked),
+.roles-permission-option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.roles-checklist-option:has(input:disabled),
+.roles-permission-option:has(input:disabled) {
+  cursor: not-allowed;
+}
+
+.roles-checklist-option:has(input:focus-visible),
+.roles-permission-option:has(input:focus-visible) {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.roles-checklist-option input,
+.roles-permission-option input {
+  margin-top: 3px;
+}
+
+.roles-checklist-text {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.roles-checklist-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.roles-permission-areas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+
+.roles-permission-area {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.roles-area-title {
+  padding: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.roles-effective {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.roles-effective-area {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.roles-effective-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.roles-effective-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.roles-table-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .field-label {
   font-size: var(--text-xs);
   font-weight: 700;

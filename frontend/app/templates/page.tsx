@@ -11,10 +11,11 @@ import { TemplateLibrary } from "@/components/documents/template-library";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import type { Capabilities } from "@/lib/documents/api";
 import { CycleConfigSummary, TemplateSummary } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 export default async function TemplatesPage() {
   const session = await requireSession();
-  if (session.current_role !== "admin" && session.current_role !== "writer") {
+  if (!can(session, "templates.edit")) {
     redirect("/");
   }
   const t = await getTranslations("nav");
@@ -30,9 +31,9 @@ export default async function TemplatesPage() {
         mobile={<MobileTemplates initialTemplates={data ?? []} cycleConfigs={cycleConfigs ?? []} />}
         desktop={
           <>
-          <RouteTabs tabs={templateAreaTabs(t, session.current_role === "admin")} activeHref="/templates" />
+          <RouteTabs tabs={templateAreaTabs(t, can(session, "templates.manage"))} activeHref="/templates" />
           <section className="panel">
-            <TemplateBuilder initialTemplates={data ?? []} availableCycleConfigs={cycleConfigs ?? []} canManage={session.current_role === "admin"} />
+            <TemplateBuilder initialTemplates={data ?? []} availableCycleConfigs={cycleConfigs ?? []} canManage={can(session, "templates.manage")} />
           </section>
           {capabilities ? (
             <section className="panel">

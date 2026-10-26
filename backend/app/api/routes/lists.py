@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models import ElementDefinition, ListDefinition, ListEntry, Protocol, ProtocolElement, ProtocolElementBlock
 from app.schemas.list_definition import (
     ListDefinitionCreate,
@@ -86,7 +87,7 @@ def list_definitions(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     return service.list_definitions(db, tenant_id=user.current_tenant_id)
 
 
@@ -96,7 +97,7 @@ def create_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     try:
         return service.create_definition(db, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:
@@ -128,7 +129,7 @@ def patch_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     current = _get_definition_or_404(db, list_definition_id, user)
     try:
         updated = service.update_definition(db, current.id, payload)
@@ -146,7 +147,7 @@ def delete_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     current = _get_definition_or_404(db, list_definition_id, user)
     if _list_definition_in_use(db, current.id, user.current_tenant_id):
         raise HTTPException(
@@ -169,7 +170,7 @@ def list_entries(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     definition = _get_definition_or_404(db, list_definition_id, user)
     return service.list_entries(db, list_definition_id=definition.id)
 
@@ -181,7 +182,7 @@ def create_entry(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     definition = _get_definition_or_404(db, list_definition_id, user)
     try:
         created = service.create_entry(db, definition.id, payload)
@@ -200,7 +201,7 @@ def patch_entry(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     current = _get_entry_or_404(db, list_entry_id, user)
     try:
         updated = service.update_entry(db, current.id, payload)
@@ -220,7 +221,7 @@ def delete_entry(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     current = _get_entry_or_404(db, list_entry_id, user)
     list_definition_id = current.list_definition_id
     try:

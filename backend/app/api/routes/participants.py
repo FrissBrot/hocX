@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
-from app.core.security import CurrentUser, get_current_user, require_admin, require_reader, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models.entities import Participant, Template
 from app.schemas.participant import (
     ParticipantBulkDelete,
@@ -21,7 +22,7 @@ from app.schemas.participant import (
     ParticipantUpdate,
     TemplateParticipantAssignmentUpdate,
 )
-from app.services import public_id_service
+from app.services import public_id_service, role_service
 from app.services.participant_service import ParticipantService
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
@@ -38,6 +39,14 @@ participant_service = ParticipantService()
 template_service = TemplateService()
 access_service = AccessService()
 audit = AuditService()
+
+
+def _ensure_can_manage_login(db: Session, user: CurrentUser, participant: Participant) -> None:
+    """Konten mit Login (E-Mail, Aktiv, Löschen) nur verwalten, wenn deren Berechtigungen eine
+    Teilmenge der eigenen sind - wie über /users (RBAC-Schutzregel 1, keine Konto-Übernahme
+    bzw. Entfernung Höherberechtigter über die Teilnehmer-Routen)."""
+    if participant.id != user.user_id:
+        role_service.ensure_can_manage_account(db, user, participant.id)
 
 
 def _get_participant_or_404(db: Session, participant_id: uuid.UUID, user: CurrentUser) -> Participant:
@@ -96,7 +105,7 @@ def list_participants(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.PARTICIPANTS_MANAGE)
     return participant_service.list_participants(db, tenant_id=user.current_tenant_id, active_only=active_only, skip=skip, limit=limit)
 
 
@@ -106,7 +115,7 @@ def create_participant(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.PARTICIPANTS_MANAGE)
     try:
         return participant_service.create_participant(db, payload, tenant_id=user.current_tenant_id)
     except ValueError as exc:
@@ -123,13 +132,14 @@ def patch_participant(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.PARTICIPANTS_MANAGE)
     participant = _get_participant_or_404(db, participant_id, user)
     if participant.login_enabled and payload.model_fields_set & {"email", "is_active"}:
-        require_admin(user)
+        require_permission(user, P.ACCESS_MANAGE)
+        _ensure_can_manage_login(db, user, participant)
     try:
-        if payload.model_fields_set & {"login_enabled", "password", "role_code"}:
-            require_admin(user)
+        if payload.model_fields_set & {"login_enabled", "password", "role_ids"}:
+            require_permission(user, P.ACCESS_MANAGE)
             UserService().update_user(db, participant.id, UserUpdate(**payload.model_dump(exclude_unset=True)), user)
             updated = participant
         else:
@@ -150,10 +160,11 @@ def delete_participant(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.PARTICIPANTS_MANAGE)
     participant = _get_participant_or_404(db, participant_id, user)
     if participant.login_enabled:
-        require_admin(user)
+        require_permission(user, P.ACCESS_MANAGE)
+        _ensure_can_manage_login(db, user, participant)
     if participant.id == user.user_id:
         raise HTTPException(status_code=400, detail="You cannot delete your own account")
     try:
@@ -177,8 +188,8 @@ def export_participant_personal_data(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Datenauskunft für eine Person als passwortgeschütztes ZIP (DSG Art. 25, DSGVO Art. 15; PRIV-006).
-    Nur Mandanten-Admins: die Auskunft enthält alle Daten der Person."""
-    require_admin(user)
+    Nur mit data.export: die Auskunft enthält alle Daten der Person."""
+    require_permission(user, P.DATA_EXPORT)
     enforce_rate_limit(f"personal-data-export-admin:{user.user_id}", limit=30, period_seconds=3600)
     participant = _get_participant_or_404(db, participant_id, user)
     return personal_data.respond(db, participant, password=payload.password, actor=user, self_export=False)
@@ -200,7 +211,7 @@ async def _import_participants_csv_impl(  # loop-ok: nur über run_coroutine_in_
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.PARTICIPANTS_MANAGE)
     raw_bytes = await _read_upload_within_limit(file, MAX_PARTICIPANT_CSV_BYTES)
     if raw_bytes is None:
         raise HTTPException(status_code=413, detail=f"Datei zu gross. Maximum {MAX_PARTICIPANT_CSV_BYTES // 1024 // 1024} MB")
@@ -218,12 +229,13 @@ def bulk_delete_participants(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.PARTICIPANTS_MANAGE)
     id_map = public_id_service.resolve_internal_ids(db, Participant, payload.participant_ids, tenant_id=user.current_tenant_id)
     for participant_id in id_map.values():
         participant = db.get(Participant, participant_id)
         if participant.login_enabled:
-            require_admin(user)
+            require_permission(user, P.ACCESS_MANAGE)
+            _ensure_can_manage_login(db, user, participant)
     if user.user_id in id_map.values():
         raise HTTPException(status_code=400, detail="You cannot delete your own account")
     try:
@@ -245,11 +257,11 @@ def list_template_participants(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    # Was require_reader - inconsistent with GET /participants (require_writer) even
+    # Was the read role - inconsistent with GET /participants (participants.manage) even
     # though this returns the same (or more) participant data (audit finding, 2026-08-25):
     # a reader/Kassier role could read full participant details here despite being denied
     # by the base list endpoint.
-    require_writer(user)
+    require_permission(user, P.PARTICIPANTS_MANAGE)
     template = public_id_service.get_by_public_id(db, Template, template_id, tenant_id=user.current_tenant_id)
     if template is None:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -264,7 +276,7 @@ def replace_template_participants(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.PARTICIPANTS_MANAGE)
     template = public_id_service.get_by_public_id(db, Template, template_id, tenant_id=user.current_tenant_id)
     if template is None:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -285,12 +297,12 @@ def list_participant_templates(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    # Deliberately require_reader, not require_writer (audit H6, 2026-08-12) - the
+    # Deliberately meetings.read, not participants.manage (audit H6, 2026-08-12) - the
     # restricted-reader scoping below (a participant-linked reader only ever sees their
     # own template assignments, an unrestricted reader sees the full tenant list) is the
-    # point of this endpoint; gating it behind require_writer would make it unreachable
+    # point of this endpoint; gating it behind participants.manage would make it unreachable
     # for the reader accounts it exists for. See test_audit_2026_08_12_high_fixes_B.py.
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     participant = _get_participant_or_404(db, participant_id, user)
     templates = participant_service.list_templates_for_participant(db, participant.id)
     if access_service.is_restricted_reader(db, user):
@@ -305,7 +317,7 @@ def replace_participant_templates(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.PARTICIPANTS_MANAGE)
     participant = _get_participant_or_404(db, participant_id, user)
     template_id_map = public_id_service.resolve_internal_ids(db, Template, payload.template_ids, tenant_id=user.current_tenant_id)
     if len(template_id_map) != len(set(payload.template_ids)):

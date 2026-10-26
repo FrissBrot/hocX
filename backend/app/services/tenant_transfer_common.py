@@ -11,7 +11,7 @@ completely different hocX installation, instead of a live ORM query.
 Two kinds of references can't just be remapped through an in-memory id_map because they
 point outside the exported tenant's own row set entirely:
 
-- Global lookup tables (role/event_category/element_type/render_type/todo_status) are
+- Global lookup tables (event_category/element_type/render_type/todo_status) are
   static seed data, identical in every installation - but their numeric ids are not
   guaranteed stable across schema versions, so they are exported/imported by `code`,
   not by id (see LOOKUP_COLUMNS).
@@ -41,14 +41,13 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
 from app.services.element_config import upgrade_definition_block
-from app.models import AppUser, ElementType, EventCategory, RenderType, Role, TodoStatus
+from app.models import AppUser, ElementType, EventCategory, RenderType, TodoStatus
 
 LOOKUP_COLUMNS: dict[str, dict[str, type]] = {
     "element_definition": {"element_type_id": ElementType, "render_type_id": RenderType},
     "protocol_element_block": {"element_type_id": ElementType, "render_type_id": RenderType},
     "event": {"event_category_id": EventCategory},
     "protocol_todo": {"todo_status_id": TodoStatus},
-    "app_user": {"role_id": Role},
 }
 
 REDACTED_PASSWORD_HASH_MARKER = "REDACTED:not-a-tenant-member"

@@ -27,6 +27,7 @@ from starlette.concurrency import run_in_threadpool
 from app.api.routes.documents import http_error, render_error
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user
 from app.documents import assets as asset_service
 from app.documents import brand_service, examples, permissions, template_service
@@ -263,7 +264,7 @@ def _template_read(
         system_key=template.system_key,
         source_system_key=source.system_key if source is not None else None,
         status=template.status,
-        editable=template.tenant_id == user.current_tenant_id and user.current_role in {"writer", "admin"},
+        editable=template.tenant_id == user.current_tenant_id and user.can(P.TEMPLATES_EDIT),
         is_default=defaults.get(template.document_type) == template.id,
         brand_id=brand.public_id if brand is not None else None,
         published_revision=_revision_read(db, prefetched.published.get(template.published_revision_id), prefetched.names),

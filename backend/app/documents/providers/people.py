@@ -35,7 +35,8 @@ from app.documents.model import (
     TableRow,
 )
 from app.documents.providers.common import col, sort_key, spec_fields, text_cell
-from app.models import ElementType, Participant, Protocol, ProtocolElement, ProtocolElementBlock, Role, Template, TemplateParticipant
+from app.models import ElementType, Participant, Protocol, ProtocolElement, ProtocolElementBlock, Template, TemplateParticipant
+from app.services import role_service
 
 ATTENDANCE_STATUSES = ("present", "late", "excused", "absent")
 
@@ -179,7 +180,7 @@ def _members(ctx: BuildContext, *, active_only: bool, template_ref: Any = None) 
 
 def provide_member_list(ctx: BuildContext, spec: BlockSpec, params: MemberListParams):
     members = _members(ctx, active_only=params.active_only, template_ref=params.template_id)
-    roles = dict(ctx.db.execute(select(Role.id, Role.code)).all())
+    roles = role_service.role_labels(ctx.db, ctx.tenant_id, [member.id for member in members], ctx.language) if "role" in params.columns else {}
     columns = [col("name", "col.name", width="fill")]
     labels = {"email": "col.email", "role": "col.role", "joined_at": "col.joined", "left_at": "col.left", "status": "col.status"}
     columns += [col(key, labels[key]) for key in params.columns]
@@ -190,8 +191,7 @@ def provide_member_list(ctx: BuildContext, spec: BlockSpec, params: MemberListPa
             if key == "email":
                 cells.append(text_cell(member.email or ""))
             elif key == "role":
-                code = roles.get(member.role_id, "")
-                cells.append(Cell(k="text", v="", note_key=f"role.{code}") if code else text_cell(""))
+                cells.append(text_cell(roles.get(member.id, "")))
             elif key == "joined_at":
                 cells.append(text_cell(format_date(member.joined_at)))
             elif key == "left_at":

@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.core.rate_limit import check_account_lockout, enforce_rate_limit, record_failed_attempt
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
-from app.core.security import CurrentUser, build_current_user, require_admin
+from app.core.permissions import P, requires_mfa
+from app.core.security import CurrentUser, build_current_user, load_role_permissions, require_permission
 from app.core.totp import build_totp_uri, generate_totp_secret, verify_totp_code
 from app.core.webauthn import (
     RegisteredCredential,
@@ -26,7 +27,8 @@ from app.core.webauthn import (
 )
 from app.core.config import settings
 from app.core.redis_client import get_redis_sync
-from app.models import AppUser, Role, UserMfaFactor
+from app.models import AppUser, UserMfaFactor
+from app.services.role_service import ensure_can_manage_account
 from app.schemas.mfa import (
     MfaFactorRead,
     MfaPendingLoginMethodRead,
@@ -94,15 +96,10 @@ class MfaService:
         return db.scalar(select(UserMfaFactor).where(UserMfaFactor.id == factor_id, UserMfaFactor.user_id == user_id))
 
     def user_requires_mfa(self, db: Session, user_id: int) -> bool:
-        """MFA is mandatory for tenant admins."""
-        return bool(
-            db.scalar(
-                select(func.count())
-                .select_from(AppUser)
-                .join(Role, Role.id == AppUser.role_id)
-                .where(AppUser.id == user_id, Role.code == "admin")
-            )
-        )
+        """MFA ist Pflicht, sobald das Konto eine Administrations-Permission hat (requires_mfa im
+        Katalog) - mit den Standardrollen genau die bisherige Regel "nur admin"."""
+        permissions, _ = load_role_permissions(db, user_id)
+        return requires_mfa(permissions)
 
     def can_add_passkey_here(self, request_host: str | None) -> bool:
         if not request_host:
@@ -192,10 +189,12 @@ class MfaService:
         )
 
     def _managed_user(self, db: Session, actor: CurrentUser, user_id: int) -> AppUser:
-        require_admin(actor)
+        require_permission(actor, P.ACCESS_MANAGE)
         user = db.get(AppUser, user_id)
         if user is None or user.tenant_id != actor.current_tenant_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        # Keine Konto-Übernahme Höherberechtigter über einen MFA-Reset (RBAC-Schutzregel E.4.1).
+        ensure_can_manage_account(db, actor, user.id)
         return user
 
     def get_managed_user_overview(self, db: Session, actor: CurrentUser, user_id: int) -> UserMfaRead:

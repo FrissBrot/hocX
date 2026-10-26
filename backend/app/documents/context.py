@@ -183,20 +183,23 @@ class BuildContext:
     # Rechte ------------------------------------------------------------------
 
     def require(self, access: str) -> None:
-        """``reader`` (jede Rolle), ``writer`` (Personendaten wie Mitgliederlisten),
-        ``finance`` (Feature Finanzen gebucht und Leserecht). Ohne Benutzer (interne
-        Aufrufe, Tests) ist alles erlaubt."""
+        """``reader`` (wer exportieren darf), ``writer`` (Personendaten wie Mitgliederlisten,
+        siehe permissions.sees_personal_data), ``finance`` (finances.read inkl. gebuchtem
+        Feature). Ohne Benutzer (interne Aufrufe, Tests) ist alles erlaubt."""
+        from app.core.permissions import P
+        from app.documents.permissions import sees_personal_data
+
         user = self.user
         if user is None:
             return
         if access == "reader":
             return
         if access == "writer":
-            if user.current_role not in {"writer", "admin"}:
+            if not sees_personal_data(user):
                 raise DocumentPermissionError("writer")
             return
         if access == "finance":
-            if "finance" not in user.current_tenant_features or user.current_role not in {"reader", "kassier", "writer", "admin"}:
+            if not user.can(P.FINANCES_READ):
                 raise DocumentPermissionError("finance")
             return
         raise DocumentPermissionError(access)

@@ -19,7 +19,7 @@ from sqlalchemy import select, text as sql
 from sqlalchemy.orm import Session
 
 from app.documents.strings import normalize_language, text
-from app.models import AppUser, Role, Tenant
+from app.models import AppUser, Tenant
 from app.services.data_export import workbook
 from app.services.data_export.archive import EncryptedZip, safe_name
 
@@ -40,7 +40,9 @@ def collect(db: Session, person: AppUser) -> dict[str, list[dict[str, Any]]]:
     """Alle Daten der Person, gegliedert nach Bereich. Werte sind JSON-fähig oder date/datetime."""
     pid, tenant_id = person.id, person.tenant_id
     params = {"pid": pid, "tenant_id": tenant_id, "match": json.dumps([{"participant_id": pid}])}
-    role = db.scalar(select(Role.code).where(Role.id == person.role_id))
+    from app.services.role_service import role_labels
+
+    role = role_labels(db, tenant_id, [pid], person.preferred_language).get(pid, "")
     data: dict[str, list[dict[str, Any]]] = {}
 
     data["person"] = [{

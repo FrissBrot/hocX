@@ -9,7 +9,7 @@
     "invite": "+ Inviter un participant"
   },
   "explainRoles": "Expliquer les rôles",
-  "explainRolesDescription": "Chaque compte a exactement un rôle par organisation.",
+  "explainRolesDescription": "Chaque compte peut avoir plusieurs rôles et reçoit toutes leurs autorisations. Les rôles se gèrent sous « Rôles ».",
   "tabs": {
     "active": "Participants avec connexion",
     "participants": "Participants"

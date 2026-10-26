@@ -31,7 +31,8 @@ from sqlalchemy.engine import make_url  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.db import SessionLocal  # noqa: E402
 from app.core.security import create_session_token, hash_password  # noqa: E402
-from app.models.entities import AppUser, Role, SubmissionAssignment, SubmissionLink, Tenant, TenantFeature  # noqa: E402
+from app.models.entities import AppUser, SubmissionAssignment, SubmissionLink, Tenant, TenantFeature  # noqa: E402
+from app.services import role_service  # noqa: E402
 
 import scripts.seed_test_tenant as demo  # noqa: E402  (backend/scripts, liegt im Image unter /app/scripts)
 
@@ -58,7 +59,7 @@ def _wipe(db) -> None:
     db.commit()
 
 
-def _seed_tenant(db, index: int, writers: int, password_hash: str, writer_role_id: int) -> dict:
+def _seed_tenant(db, index: int, writers: int, password_hash: str) -> dict:
     demo.DEMO_TENANT_NAME = f"{PREFIX}{index:03d}"
     demo.DEMO_TENANT_SLUG = f"lt{index:03d}"
     tenant, users = demo.create_tenant_and_users(db)
@@ -81,10 +82,10 @@ def _seed_tenant(db, index: int, writers: int, password_hash: str, writer_role_i
     db.commit()
 
     accounts = [users["writer"]]
+    writer_role = role_service.system_role(db, tenant.id, "writer")
     for number in range(writers):
         user = AppUser(
             tenant_id=tenant.id,
-            role_id=writer_role_id,
             first_name="Last",
             last_name=f"{index:03d}-{number:03d}",
             display_name=f"Last {index:03d}-{number:03d}",
@@ -94,6 +95,8 @@ def _seed_tenant(db, index: int, writers: int, password_hash: str, writer_role_i
             is_active=True,
         )
         db.add(user)
+        db.flush()
+        role_service.set_user_roles(db, None, user, [writer_role])
         accounts.append(user)
     # Abgabe ohne Dateilimit, damit der Upload-Sturm nicht an max_files_per_element endet.
     assignment = db.scalars(select(SubmissionAssignment).where(SubmissionAssignment.tenant_id == tenant.id)).first()
@@ -124,11 +127,10 @@ def main() -> None:
     _guard()
     password_hash = hash_password(os.urandom(24).hex())  # Konten sind nur per Token nutzbar
     with SessionLocal() as db:
-        writer_role_id = db.scalar(select(Role.id).where(Role.code == "writer"))
         _wipe(db)
         result = {
             "cookie_name": settings.auth_session_cookie,
-            "tenants": [_seed_tenant(db, i, args.writers, password_hash, writer_role_id) for i in range(1, args.tenants + 1)],
+            "tenants": [_seed_tenant(db, i, args.writers, password_hash) for i in range(1, args.tenants + 1)],
         }
     payload = json.dumps(result, indent=2)
     if args.out:

@@ -9,11 +9,12 @@ import { RouteTabs } from "@/components/ui/route-tabs";
 import { tenantSettingsTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { ActivityPage } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 // Verlauf des aktiven Mandanten (nur Mandanten-Admins, Datenschutz-Audit PRIV-013).
 export default async function TenantActivityPage() {
   const session = await requireSession();
-  if (session.current_role !== "admin") {
+  if (!can(session, "settings.manage")) {
     redirect("/");
   }
   const [t, tTenant, state] = await Promise.all([

@@ -98,7 +98,9 @@ test.describe("Historical list import testbook", () => {
     await expect(page.getByText("Schalttag 2024", { exact: true })).toBeVisible();
     const other = await browser.newContext({ storageState: authFiles.tenantTwo });
     try {
-      expect((await other.request.get(`/api/table-snapshots/${seed.cycle.id}/2023/list_entry`)).status()).toBe(404);
+      // Leser des zweiten Mandanten: Listenstände verlangen meetings.edit (E-12), die Prüfung
+      // greift vor der Mandantenauflösung - fremde Daten bleiben so oder so unerreichbar.
+      expect((await other.request.get(`/api/table-snapshots/${seed.cycle.id}/2023/list_entry`)).status()).toBe(403);
     } finally { await other.close(); }
   });
 });

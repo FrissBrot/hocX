@@ -132,6 +132,9 @@ class AccessRepository:
     def tenant_id_for_protocol(self, db: Session, *, protocol_id: int) -> int | None:
         return db.scalar(select(Protocol.tenant_id).where(Protocol.id == protocol_id))
 
+    def tenant_and_status_for_protocol(self, db: Session, *, protocol_id: int):
+        return db.execute(select(Protocol.tenant_id, Protocol.status).where(Protocol.id == protocol_id)).one_or_none()
+
     def tenant_id_for_template(self, db: Session, *, template_id: int) -> int | None:
         return db.scalar(select(Template.tenant_id).where(Template.id == template_id))
 

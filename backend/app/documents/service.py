@@ -35,6 +35,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.core.db import SessionLocal
+from app.core.permissions import P
 from app.core.security import CurrentUser
 from app.core.storage import MAIN, InvalidObjectKey, StorageError, StorageWriteFenced, get_object_store, key_from_legacy_path, validate_key
 from app.documents import brand_service, template_service
@@ -374,7 +375,7 @@ def prepare(
     elif options.watermark == "off":
         # Entwürfe ohne Kennzeichnung nur mit Schreibrecht (STUDIO-007); Leser behalten das
         # Wasserzeichen. user None = Systemaufruf ohne Benutzer.
-        can_write = user is None or user.current_role in {"writer", "admin"}
+        can_write = user is None or user.can(P.MEETINGS_EDIT)
         if not protocol_draft or can_write:
             is_draft = False
 

@@ -152,7 +152,8 @@
       "template": "Modello di verbale",
       "tenant": "Organizzazione",
       "todo": "Attività",
-      "user": "Account"
+      "user": "Account",
+      "role": "Ruolo"
     },
     "verbs": {
       "loginFailed": "Accesso non riuscito",

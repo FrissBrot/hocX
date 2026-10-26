@@ -15,7 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_admin
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models import Tenant
 from app.services.audit_service import AuditService
 
@@ -60,13 +61,13 @@ def _read(tenant: Tenant) -> PrivacySettingsRead:
 
 @router.get("/privacy-settings", response_model=PrivacySettingsRead)
 def get_privacy_settings(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_admin(user)
+    require_permission(user, P.SETTINGS_MANAGE)
     return _read(_tenant(db, user))
 
 
 @router.patch("/privacy-settings", response_model=PrivacySettingsRead)
 def update_privacy_settings(body: PrivacySettingsWrite, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_admin(user)
+    require_permission(user, P.SETTINGS_MANAGE)
     tenant = _tenant(db, user)
     changes = body.model_dump(exclude_none=True)
     if "statistics_per_person_public" in changes:

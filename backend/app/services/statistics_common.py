@@ -22,6 +22,7 @@ from decimal import Decimal
 from sqlalchemy import Row, Date, cast, func, select, text
 from sqlalchemy.orm import Session
 
+from app.core.permissions import P
 from app.models.entities import (
     ElementType,
     Protocol,
@@ -392,17 +393,16 @@ def aggregate_group_rows(rows: list[Row], cycle_key: str | None = None) -> list[
 
 # ── Sichtbarkeit je Person (Datenschutz-Audit PRIV-001) ─────────────────────────────────────────
 
-# Rollen, die Bussen und Anwesenheit aller Personen sehen - dieselbe Regel wie die Bussenliste
-# (require_all_fines_read). Alle anderen sehen in Ranglisten je Person nur sich selbst, ausser der
-# Mandant gibt sie ausdrücklich frei (tenant.statistics_per_person_public).
-PER_PERSON_ROLES = frozenset({"writer", "kassier", "admin"})
+# Bussen und Anwesenheit aller Personen sieht, wer reports.personal hat - dieselbe Regel wie die
+# Bussenliste. Alle anderen sehen in Ranglisten je Person nur sich selbst, ausser der Mandant gibt
+# sie ausdrücklich frei (tenant.statistics_per_person_public).
 
 
 def own_person_key(db: Session, user) -> str | None:
     """None: der Aufrufer sieht alle Personen. Sonst der Gruppierungsschlüssel der eigenen Person
     (``id:<app_user.id>``, siehe aggregate_attendance/fetch_fines_by_participant) - Teilnehmer und
     Konto sind seit 0108 dieselbe Identität. Ohne Benutzer (interne Aufrufe) sind alle sichtbar."""
-    if user is None or user.current_role in PER_PERSON_ROLES:
+    if user is None or user.can(P.REPORTS_PERSONAL):
         return None
     from app.models.entities import Tenant
 

@@ -14,7 +14,8 @@ import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { AdminTenantSummary, AdminUserPage, UserSummary } from "@/types/api";
-import { emptyUserForm, isUserFormValid, userFormToPayload, UserFormState } from "@/components/users/user-form-shared";
+import { emptyUserForm, isUserFormValid, primarySystemRole, userFormToPayload, UserFormState } from "@/components/users/user-form-shared";
+import { rolesLabel } from "@/lib/permissions";
 
 type Props = {
   initialPage: AdminUserPage;
@@ -26,11 +27,12 @@ const PAGE_SIZE = 50;
 export function AdminUserManagement({ initialPage, allTenants }: Props) {
   const t = useTranslations("admin");
   const tUm = useTranslations("admin.userManagement");
+  const tNav = useTranslations("nav");
   const roleOptions = useMemo(() => getRoleOptions(t), [t]);
-  const roleLabel = useMemo(() => {
-    const byCode = new Map(roleOptions.map((role) => [role.code, role.label]));
-    return (roleCode: string) => byCode.get(roleCode) ?? roleCode;
-  }, [roleOptions]);
+  // Rollen anzeigen wie im Mandanten (eigene Namen bzw. Standardbezeichnung); ändern kann das
+  // Plattform-Admin-Panel nur die Standardrolle (eigene Rollen verwaltet der Mandant selbst).
+  const roleLabel = (user: UserSummary) => rolesLabel(user.roles, tNav);
+  const [originalSystemRole, setOriginalSystemRole] = useState<string | null>(null);
   const showToast = useToast();
   const [page, setPage] = useState(initialPage);
   const [offset, setOffset] = useState(0);
@@ -80,6 +82,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
 
   function openNewUser() {
     setUserForm(emptyUserForm(allTenants[0]?.id ?? ""));
+    setOriginalSystemRole(null);
     setFormError(null);
     setUserModalOpen(true);
   }
@@ -97,8 +100,10 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
       login_enabled: user.login_enabled,
 
       tenant_id: user.tenant_id,
-      role_code: user.role_code
+      role_ids: user.roles.map((role) => role.id),
+      system_role: primarySystemRole(user.roles)
     });
+    setOriginalSystemRole(primarySystemRole(user.roles));
     setFormError(null);
     setUserModalOpen(true);
   }
@@ -108,7 +113,9 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
     setFormError(null);
 
     try {
-      const payload = userFormToPayload(userForm);
+      const { system_role, ...rest } = userFormToPayload(userForm, "platform") as ReturnType<typeof userFormToPayload> & { system_role?: string };
+      // Nur bei einer Änderung mitschicken - sonst ersetzt das Speichern eigene Rollen des Kontos.
+      const payload = !userForm.id || system_role !== originalSystemRole ? { ...rest, system_role } : rest;
 
       const saved = userForm.id
         ? await browserApiFetch<UserSummary>(`/api/admin/users/${userForm.id}`, {
@@ -165,7 +172,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
             <td>{user.email}</td>
             <td>{user.tenant_name}</td>
             <td>
-              <span className="pill">{roleLabel(user.role_code)}</span>
+              <span className="pill">{roleLabel(user)}</span>
             </td>
             <td>{user.login_enabled ? tUm("loginActive") : tUm("loginDisabled")}</td>
             <td>
@@ -269,7 +276,7 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
             )}
             <label className="field-stack">
               <span className="field-label">{tUm("role")}</span>
-              <select value={userForm.role_code} onChange={(event) => setUserForm((current) => ({ ...current, role_code: event.target.value }))}>
+              <select value={userForm.system_role} onChange={(event) => setUserForm((current) => ({ ...current, system_role: event.target.value as UserFormState["system_role"] }))}>
                 {roleOptions.map((role) => (
                   <option key={role.code} value={role.code}>
                     {role.label}

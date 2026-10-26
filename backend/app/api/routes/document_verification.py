@@ -19,7 +19,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_admin, require_reader
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.documents.strings import normalize_language, text
 from app.models import Tenant, TenantFeature
 from app.services import identity_verification_service as verification
@@ -118,13 +119,13 @@ def _state_error(user: CurrentUser, exc: verification.VerificationStateError) ->
 
 @router.get("/document-verification", response_model=DocumentVerificationRead)
 def get_document_verification(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     return _read(db, _tenant(db, user))
 
 
 @router.patch("/document-verification", response_model=DocumentVerificationRead)
 def update_document_verification(body: DocumentVerificationWrite, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_admin(user)
+    require_permission(user, P.SETTINGS_MANAGE)
     tenant = _tenant(db, user)
     changes = body.model_dump(exclude_none=True)
     if "show_identity" in changes:
@@ -138,7 +139,7 @@ def update_document_verification(body: DocumentVerificationWrite, db: Session = 
 
 @router.post("/document-verification/request", response_model=DocumentVerificationRead)
 def request_identity_verification(body: VerificationRequestWrite, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_admin(user)
+    require_permission(user, P.SETTINGS_MANAGE)
     tenant = _tenant(db, user)
     try:
         verification.request_verification(db, tenant, actor=user, message=body.message)
@@ -151,7 +152,7 @@ def request_identity_verification(body: VerificationRequestWrite, db: Session = 
 
 @router.delete("/document-verification/request", response_model=DocumentVerificationRead)
 def withdraw_identity_verification(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_admin(user)
+    require_permission(user, P.SETTINGS_MANAGE)
     tenant = _tenant(db, user)
     try:
         verification.withdraw_request(db, tenant, actor=user)

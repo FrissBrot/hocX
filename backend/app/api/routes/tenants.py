@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
-from app.core.security import CurrentUser, get_current_user, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.core.tenant_scope import tenant_scope_suspended
 from app.models import Participant, Tenant, TenantDomain
 from app.schemas.cashflow import TenantPortalCharges
@@ -57,9 +58,9 @@ def lookup_tenant(public_id: uuid.UUID, db: Session = Depends(get_db), user: Cur
     (siehe photo_album_share_service.invite - Vorschau des Zielmandanten vor einer
     Album-Freigabe-Einladung). Ohne Trust (noch nie eine Freigabe angenommen, siehe
     tenant_trust_service) bestaetigt die Antwort nur, dass die ID existiert - kein Name, kein
-    Profilbild. require_writer-geschützt, damit nicht jeder authentifizierte Nutzer beliebige
+    Profilbild. Nur mit files.manage (Album-Freigaben), damit nicht jeder authentifizierte Nutzer beliebige
     Mandanten-IDs durchprobieren kann."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     tenant = public_id_service.get_by_public_id(db, Tenant, public_id)
@@ -75,7 +76,7 @@ def search_trusted_tenants(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Namenssuche - ausschliesslich unter Mandanten, mit denen bereits ein Trust besteht."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return [_lookup_read(db, tenant, trusted=True) for tenant in tenant_trust_service.search_trusted(db, user.current_tenant_id, search)]

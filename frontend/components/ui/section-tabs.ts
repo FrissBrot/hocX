@@ -42,6 +42,15 @@ export function templateAreaTabs(t: TFunc, isAdmin: boolean): RouteTab[] {
   ];
 }
 
+// Benutzerverwaltung (access.manage): Konten und Rollen - beide Routen leiten ohne die
+// Berechtigung selbst um.
+export function userAreaTabs(t: TFunc): RouteTab[] {
+  return [
+    { href: "/users", label: t("users") },
+    { href: "/users/roles", label: t("roleManagement") },
+  ];
+}
+
 // Admin-only section: every route below redirects non-admins on its own.
 export function tenantSettingsTabs(t: TFunc): RouteTab[] {
   return [

@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Any
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_admin, require_reader
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models.entities import Tenant
 from app.schemas.tag_config import TagConfigPatch
 
@@ -11,7 +12,7 @@ router = APIRouter()
 
 @router.get("/tag-config", response_model=dict[str, Any])
 def get_tag_config(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     tenant = db.get(Tenant, user.current_tenant_id)
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
@@ -24,7 +25,7 @@ def patch_tag_config(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     tenant = db.get(Tenant, user.current_tenant_id)
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")

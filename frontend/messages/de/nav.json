@@ -60,5 +60,6 @@
   "documentExports": "Export-Verlauf",
   "privacy": "Datenschutz",
   "activity": "Verlauf",
-  "retention": "Aufbewahrung"
+  "retention": "Aufbewahrung",
+  "roleManagement": "Rollen"
 }

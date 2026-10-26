@@ -74,7 +74,7 @@ löscht Exportobjekte nach `EXPORT_RETENTION_DAYS` – das würde ältere Versio
 - Virenscan: `stored_file.scan_status` (`clean`/`pending`/`infected`/`error`), nachgelagerte
   Rescan-Loops.
 - Zugriff: `access_service.ensure_can_read_stored_file` (Protokollbezug → Protokollrechte,
-  sonst gleicher Mandant + Rolle admin/writer/kassier).
+  sonst gleicher Mandant + `files.manage` oder `meetings.read_drafts`).
 
 ### Bibliotheken
 

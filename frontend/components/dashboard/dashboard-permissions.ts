@@ -1,25 +1,28 @@
-// Rollenbasierte Sichtbarkeit der Dashboard-Kacheln. Bewusst ohne "use client", damit auch
+// Berechtigungsbasierte Sichtbarkeit der Dashboard-Kacheln. Bewusst ohne "use client", damit auch
 // app/page.tsx (Server Component) damit entscheiden kann, welche Daten geladen werden.
-// Rollen und Rechte spiegeln backend/app/core/security.py (require_writer, require_finance_write, ...).
+// Spiegelt die Prüfungen im Backend (require_permission, siehe lib/permissions.ts).
+
+import { can } from "@/lib/permissions";
 
 export type DashboardAccess = {
-  role: string | null;
+  permissions: string[];
   features: string[];
 };
 
-export function dashboardPermissions({ role, features }: DashboardAccess) {
-  const isWriter = role === "admin" || role === "writer";
-  const hasFinance = role !== null && features.includes("finance");
+export function dashboardPermissions({ permissions, features }: DashboardAccess) {
+  const session = { permissions, current_tenant: { enabled_features: features } } as Parameters<typeof can>[0];
+  const isWriter = can(session, "meetings.edit");
   return {
     canWrite: isWriter,
     canExcuse: isWriter,
-    canConfigure: role === "admin",
-    hasFinance,
-    // Reader sehen ueber /api/fines nur ihre eigenen Bussen (siehe backend fines.py).
-    ownFinesOnly: role === "reader",
-    // Kontostaende: fuer die Rollen, die Finanzen auch verbuchen (require_finance_write).
-    showAccounts: hasFinance && (role === "kassier" || role === "admin"),
-    showSubmissions: isWriter && features.includes("abgabebox"),
+    canConfigure: can(session, "templates.manage"),
+    // Eigene Bussen sieht jedes Konto, sobald Finanzen gebucht sind (GET /api/fines).
+    hasFinance: permissions.length > 0 && features.includes("finance"),
+    // Ohne reports.personal liefert /api/fines nur die eigenen Bussen.
+    ownFinesOnly: !can(session, "reports.personal"),
+    // Kontostaende: fuer alle, die Finanzen auch verbuchen (finances.manage).
+    showAccounts: can(session, "finances.manage"),
+    showSubmissions: can(session, "submissions.manage"),
   };
 }
 

@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 from starlette.requests import cookie_parser
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
-from app.api.routes import activity, admin, agenda_items, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_share, retention, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenant_data_export, tenants, todos, users, word_import
+from app.api.routes import activity, admin, agenda_items, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_share, retention, roles, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, task_packages, templates, tenant_data_export, tenants, todos, users, word_import
 from app.core import runtime_metrics
 from app.core.loops import BACKEND_LOOPS
 from app.core.db import SessionLocal, engine
@@ -32,32 +32,13 @@ from app.core.db_admission import (
 from app.core.error_log import record_request_error
 from app.core.redis_client import close_redis_pool, get_redis
 from app.core.security import hash_password, parse_session_token
-from app.models import AppUser, ElementType, PlatformAdmin, Role, Tenant
+from app.models import AppUser, ElementType, PlatformAdmin, Tenant
 from app.services import traefik_config_service
 from app.services.file_service import FileService, ThumbnailBusy
 from app.services.upload_lock import UploadLockBusy
 from app.services.isolated_parse import shutdown_pool as shutdown_word_import_parse_pool
 from app.services.isolated_parse import warm_up_pool as warm_up_word_import_parse_pool
 from app.services import storage_profile_service
-
-
-def ensure_roles() -> None:
-    with SessionLocal() as db:
-        existing = set(db.scalars(select(Role.code)))
-        desired = [
-            (2, "admin", "Tenant administrator"),
-            (3, "writer", "Workspace write access"),
-            (4, "reader", "Read-only access to finalized protocols and own todos/fines"),
-            (5, "kassier", "Reader access plus full finance and fines management"),
-        ]
-        changed = False
-        for role_id, code, description in desired:
-            if code in existing:
-                continue
-            db.add(Role(id=role_id, code=code, description=description))
-            changed = True
-        if changed:
-            db.commit()
 
 
 def ensure_platform_admin_bootstrap() -> None:
@@ -137,7 +118,6 @@ def ensure_startup_seed_data() -> None:
     platform_admin table and both trying to insert the bootstrap admin)."""
     with engine.begin() as conn:
         conn.execute(text("SELECT pg_advisory_xact_lock(202600004)"))
-        ensure_roles()
         ensure_platform_admin_bootstrap()
         ensure_lookup_values()
 
@@ -467,6 +447,7 @@ app.include_router(admin_identity_verification.router, prefix="/api/admin", tags
 app.include_router(admin_document_templates.router, prefix="/api/admin", tags=["admin"])
 app.include_router(tenants.router, prefix="/api", tags=["tenants"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(roles.router, prefix="/api", tags=["roles"])
 app.include_router(documents.router, prefix="/api", tags=["documents"])
 app.include_router(document_studio.router, prefix="/api", tags=["document-studio"])
 app.include_router(document_verification.router, prefix="/api", tags=["documents"])

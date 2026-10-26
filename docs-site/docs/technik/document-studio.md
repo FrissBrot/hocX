@@ -230,13 +230,17 @@ vendorte Pakete) sind unverändert, siehe [Dokument-Engine](dokument-engine.md#r
 
 ## Berechtigungen (`permissions.py`)
 
-| Fähigkeit | Rollen |
+| Fähigkeit | Berechtigung (Standardrollen) |
 |---|---|
-| Exportieren, Vorlagen ansehen | `reader`, `kassier`, `writer`, `admin` |
-| Vorlagen bearbeiten (Entwürfe, Kopien, Komponenten) | `writer`, `admin` |
-| Veröffentlichen, archivieren, löschen, Zuweisungen | `admin` |
-| Brand-Profile und Bilder/Schriften verwalten | `admin` |
+| Exportieren, Vorlagen ansehen | `meetings.read` (alle) |
+| Vorlagen bearbeiten (Entwürfe, Kopien, Komponenten) | `templates.edit` (writer, admin) |
+| Veröffentlichen, archivieren, löschen, Zuweisungen | `settings.manage` (admin) |
+| Brand-Profile und Bilder/Schriften verwalten | `settings.manage` (admin) |
+| Personendaten in Dokumenten (Katalog-Zugriff `writer`) | `participants.manage` oder `meetings.edit` |
+| Entwürfe ohne Wasserzeichen | `meetings.edit` |
 | Systemvorlagen (archivieren, Plattform-Standard) | Plattform-Admin |
+
+Siehe [Rollen & Berechtigungen](../benutzer/rollen.md).
 
 `GET /api/document-studio/capabilities` liefert diese Fähigkeiten an das Frontend. Das blendet
 damit nur aus, die Durchsetzung liegt immer im Backend.

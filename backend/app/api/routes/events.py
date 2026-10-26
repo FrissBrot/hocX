@@ -9,7 +9,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from pydantic import BaseModel
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.schemas.event import EventCreate, EventImportPreview, EventRead, EventUpdate
 from app.services import public_id_service
 from app.services.event_service import EventService
@@ -33,7 +34,7 @@ def list_events(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     return service.list_events(db, tenant_id=user.current_tenant_id, skip=skip, limit=limit)
 
 
@@ -43,7 +44,7 @@ def create_event(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     try:
         created = service.create_event(db, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:
@@ -85,7 +86,7 @@ async def _preview_events_csv_impl(  # loop-ok: nur über run_coroutine_in_threa
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     try:
         content = (await file.read()).decode("utf-8-sig")
         return service.preview_csv(db, content, column_map=_parse_column_map(column_map))
@@ -111,7 +112,7 @@ async def _import_events_csv_impl(  # loop-ok: nur über run_coroutine_in_thread
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     try:
         content = (await file.read()).decode("utf-8-sig")
         created = service.import_csv(db, content, tenant_id=user.current_tenant_id, column_map=_parse_column_map(column_map))
@@ -132,7 +133,7 @@ def patch_event(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     current = public_id_service.get_by_public_id(db, Event, event_id, tenant_id=user.current_tenant_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -155,7 +156,7 @@ def delete_event(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     current = public_id_service.get_by_public_id(db, Event, event_id, tenant_id=user.current_tenant_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -182,7 +183,7 @@ def rename_tag(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     result = db.execute(
         update(Event)
         .where(Event.tenant_id == user.current_tenant_id, Event.tag == payload.old_tag)

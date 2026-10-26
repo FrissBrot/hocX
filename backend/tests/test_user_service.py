@@ -1,5 +1,5 @@
-"""Regression tests for UserService. A user belongs to exactly one tenant with exactly one role
-(app_user.tenant_id/role_id), which is what these tests pin down:
+"""Regression tests for UserService. A user belongs to exactly one tenant and has one or more of
+its roles (user_role), which is what these tests pin down:
 (1) a tenant admin's authority over an account is complete but stops at the tenant border -
     an account of another tenant can't be read, changed (password/email/role/active flag) or
     deleted, and looks like "not found" rather than "forbidden";
@@ -11,11 +11,12 @@ import uuid
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app.core.security import CurrentUser
 from app.schemas.user import UserCreate, UserPasswordChange, UserUpdate
 from app.services.user_service import _PASSWORD_CHANGE_ATTEMPT_LIMIT, UserService
-from tests.factories import make_app_user, make_current_user, make_participant, make_tenant
+from tests.factories import make_app_user, make_current_user, make_participant, make_tenant, system_role_permissions
 
 
 def _admin_actor(tenant, *, user_id: int = 999999) -> CurrentUser:
@@ -34,7 +35,7 @@ def _admin_actor(tenant, *, user_id: int = 999999) -> CurrentUser:
         current_tenant_public_id=tenant.public_id,
         current_tenant_name=tenant.name,
         current_tenant_profile_image_path=None,
-        current_role="admin",
+        permissions=system_role_permissions("admin"),
     )
 
 
@@ -57,10 +58,9 @@ def test_update_user_blocks_demoting_the_last_admin_of_a_tenant(db):
     admin_user = make_app_user(db, email="only-admin@example.com", tenant_id=tenant.id, role_code="admin")
 
     with pytest.raises(HTTPException) as exc_info:
-        UserService().update_user(db, admin_user.id, UserUpdate(role_code="reader"), _admin_actor(tenant))
+        UserService().update_user(db, admin_user.id, UserUpdate(system_role="reader"), _admin_actor(tenant))
     assert exc_info.value.status_code == 409
-    db.refresh(admin_user)
-    assert admin_user.role_id == UserService()._role_id(db, "admin")
+    assert [role.system_key for role in UserService().get_user(db, admin_user.id, _admin_actor(tenant)).roles] == ["admin"]
 
 
 def test_update_user_blocks_deactivating_the_last_admin_of_a_tenant(db):
@@ -77,9 +77,9 @@ def test_update_user_allows_demoting_admin_when_another_admin_remains(db):
     admin_one = make_app_user(db, email="admin-one@example.com", tenant_id=tenant.id, role_code="admin")
     make_app_user(db, email="admin-two@example.com", tenant_id=tenant.id, role_code="admin")
 
-    result = UserService().update_user(db, admin_one.id, UserUpdate(role_code="reader"), _admin_actor(tenant))
+    result = UserService().update_user(db, admin_one.id, UserUpdate(system_role="reader"), _admin_actor(tenant))
 
-    assert result.role_code == "reader"
+    assert [role.system_key for role in result.roles] == ["reader"]
 
 
 def test_an_inactive_admin_does_not_count_as_remaining_admin(db):
@@ -88,7 +88,7 @@ def test_an_inactive_admin_does_not_count_as_remaining_admin(db):
     make_app_user(db, email="inactive-admin@example.com", tenant_id=tenant.id, role_code="admin", is_active=False)
 
     with pytest.raises(HTTPException) as exc_info:
-        UserService().update_user(db, admin_user.id, UserUpdate(role_code="writer"), _admin_actor(tenant))
+        UserService().update_user(db, admin_user.id, UserUpdate(system_role="writer"), _admin_actor(tenant))
     assert exc_info.value.status_code == 409
 
 
@@ -96,8 +96,10 @@ def test_update_user_rejects_unknown_role(db):
     tenant = make_tenant(db, "Unknown Role Tenant")
     user = make_app_user(db, email="unknown-role@example.com", tenant_id=tenant.id)
 
+    with pytest.raises(ValidationError):
+        UserUpdate(system_role="superadmin")
     with pytest.raises(HTTPException) as exc_info:
-        UserService().update_user(db, user.id, UserUpdate(role_code="superadmin"), _admin_actor(tenant))
+        UserService().update_user(db, user.id, UserUpdate(role_ids=[uuid.uuid4()]), _admin_actor(tenant))
     assert exc_info.value.status_code == 400
 
 
@@ -140,7 +142,7 @@ def test_update_user_cannot_touch_an_account_of_another_tenant(db):
     result = UserService().update_user(
         db,
         victim.id,
-        UserUpdate(password="attacker chosen password", email="attacker@example.com", is_active=False, role_code="reader"),
+        UserUpdate(password="attacker chosen password", email="attacker@example.com", is_active=False, system_role="reader"),
         _admin_actor(tenant_a),
     )
 
@@ -235,22 +237,22 @@ def test_create_user_defaults_to_actors_tenant_as_reader(db):
 
     assert result.tenant_id == tenant.public_id
     assert result.tenant_name == "Create Default Tenant"
-    assert result.role_code == "reader"
+    assert [role.system_key for role in result.roles] == ["reader"]
 
 
 def test_create_user_uses_requested_role(db):
     tenant = make_tenant(db, "Create Role Tenant")
 
-    result = UserService().create_user(db, _payload("new-kassier@example.com", role_code="kassier"), _admin_actor(tenant))
+    result = UserService().create_user(db, _payload("new-kassier@example.com", system_role="kassier"), _admin_actor(tenant))
 
-    assert result.role_code == "kassier"
+    assert [role.system_key for role in result.roles] == ["kassier"]
 
 
 def test_create_user_rejects_unknown_role(db):
     tenant = make_tenant(db, "Create Unknown Role Tenant")
 
     with pytest.raises(HTTPException) as exc_info:
-        UserService().create_user(db, _payload("bad-role@example.com", role_code="superadmin"), _admin_actor(tenant))
+        UserService().create_user(db, _payload("bad-role@example.com", role_ids=[uuid.uuid4()]), _admin_actor(tenant))
     assert exc_info.value.status_code == 400
 
 
@@ -271,6 +273,6 @@ def test_admin_create_user_requires_and_uses_the_given_tenant(db):
         service.admin_create_user(db, _payload("platform-no-tenant@example.com"))
     assert exc_info.value.status_code == 422
 
-    result = service.admin_create_user(db, _payload("platform-created@example.com", tenant_id=tenant.public_id, role_code="admin"))
+    result = service.admin_create_user(db, _payload("platform-created@example.com", tenant_id=tenant.public_id, system_role="admin"))
     assert result.tenant_id == tenant.public_id
-    assert result.role_code == "admin"
+    assert [role.system_key for role in result.roles] == ["admin"]

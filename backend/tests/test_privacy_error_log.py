@@ -47,8 +47,8 @@ def test_integrity_error_is_logged_without_personal_data(db):
     try:
         db.execute(
             text(
-                "INSERT INTO app_user (tenant_id, role_id, email, password_hash, login_enabled, first_name, last_name, display_name, is_active) "
-                "SELECT :tenant_id, role_id, :email, 'x', TRUE, :first, 'Name', :display, TRUE FROM app_user WHERE email = :email"
+                "INSERT INTO app_user (tenant_id, email, password_hash, login_enabled, first_name, last_name, display_name, is_active) "
+                "SELECT :tenant_id, :email, 'x', TRUE, :first, 'Name', :display, TRUE FROM app_user WHERE email = :email"
             ),
             # Wie in der App: Werte nur als gebundene Parameter.
             {"tenant_id": tenant.id, "email": "doppelt@example.com", "first": secret_name, "display": f"{secret_name} Name"},

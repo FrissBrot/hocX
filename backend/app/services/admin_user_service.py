@@ -34,7 +34,7 @@ class AdminUserService:
                 def _matches(user: UserRead) -> bool:
                     haystack = (
                         f"{user.display_name} {user.first_name} {user.last_name} {user.email} "
-                        f"{user.tenant_name} {user.role_code}"
+                        f"{user.tenant_name} {' '.join(role.name or role.system_key or '' for role in user.roles)}"
                     ).lower()
                     return query in haystack
 

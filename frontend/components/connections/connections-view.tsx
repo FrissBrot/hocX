@@ -27,12 +27,12 @@ const STATUS_VARIANT: Record<CalendarFeed["status"] | "off", BadgeVariant> = { a
  * Abstaende unterscheiden sich (`mobile`). */
 export function ConnectionsView({
   initialFeeds,
-  role,
+  permissions,
   tenantName,
   mobile = false,
 }: {
   initialFeeds: CalendarFeed[];
-  role: string | null;
+  permissions: string[];
   tenantName: string;
   mobile?: boolean;
 }) {
@@ -45,7 +45,7 @@ export function ConnectionsView({
     setOrigin(window.location.origin);
   }, []);
 
-  const kinds = (["events", "todos"] as CalendarFeedKind[]).filter((kind) => canSubscribeCalendar(role, kind));
+  const kinds = (["events", "todos"] as CalendarFeedKind[]).filter((kind) => canSubscribeCalendar(permissions, kind));
 
   function replaceFeed(kind: CalendarFeedKind, next: CalendarFeed | null) {
     setFeeds((current) => [...current.filter((feed) => feed.kind !== kind), ...(next ? [next] : [])]);

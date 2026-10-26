@@ -28,13 +28,30 @@ from tests.factories import (
 )
 
 
+def test_readers_cannot_read_list_snapshots(db):
+    """E-12: Listenstände wie die Listen-API nur mit meetings.edit (vorher jeder Leser)."""
+    tenant = make_tenant(db)
+    cycle_config = make_cycle_config(db, tenant.id)
+    make_list_definition(db, tenant.id, name="Alice's List")
+    TableSnapshotService().create_snapshot(db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=2024)
+    reader = make_current_user(tenant.id, role="reader")
+
+    for call in (
+        lambda: table_snapshots.list_snapshot_cycles(db=db, user=reader),
+        lambda: table_snapshots.get_snapshot_table(cycle_config.public_id, 2024, "list_definition", db=db, user=reader),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            call()
+        assert exc_info.value.status_code == 403
+
+
 def test_list_snapshot_cycles_and_read(db):
     tenant = make_tenant(db)
     cycle_config = make_cycle_config(db, tenant.id)
     make_list_definition(db, tenant.id, name="Alice's List")
     TableSnapshotService().create_snapshot(db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=2024)
 
-    reader = make_current_user(tenant.id, role="reader")
+    reader = make_current_user(tenant.id, role="writer")
     cycles = table_snapshots.list_snapshot_cycles(db=db, user=reader)
     assert len(cycles) == 1
     assert cycles[0].cycle_year == 2024
@@ -53,7 +70,7 @@ def test_list_snapshot_cycles_flags_ended_period_with_protocol_but_no_snapshot(d
     db.flush()
     make_protocol(db, tenant.id, template.id, protocol_date=date(2020, 6, 1))
 
-    reader = make_current_user(tenant.id, role="reader")
+    reader = make_current_user(tenant.id, role="writer")
     cycles = table_snapshots.list_snapshot_cycles(db=db, user=reader)
 
     assert len(cycles) == 1
@@ -70,7 +87,7 @@ def test_list_snapshot_cycles_does_not_flag_the_still_active_period(db):
     db.flush()
     make_protocol(db, tenant.id, template.id, protocol_date=date.today())
 
-    reader = make_current_user(tenant.id, role="reader")
+    reader = make_current_user(tenant.id, role="writer")
     cycles = table_snapshots.list_snapshot_cycles(db=db, user=reader)
 
     assert cycles == []
@@ -79,7 +96,7 @@ def test_list_snapshot_cycles_does_not_flag_the_still_active_period(db):
 def test_get_snapshot_table_404_when_missing(db):
     tenant = make_tenant(db)
     cycle_config = make_cycle_config(db, tenant.id)
-    reader = make_current_user(tenant.id, role="reader")
+    reader = make_current_user(tenant.id, role="writer")
 
     with pytest.raises(HTTPException) as exc_info:
         table_snapshots.get_snapshot_table(cycle_config.public_id, 2024, "list_definition", db=db, user=reader)
@@ -90,7 +107,7 @@ def test_get_snapshot_table_404_for_cycle_config_from_another_tenant(db):
     tenant_a = make_tenant(db, "Tenant A")
     tenant_b = make_tenant(db, "Tenant B")
     cycle_config_a = make_cycle_config(db, tenant_a.id)
-    reader_b = make_current_user(tenant_b.id, role="reader")
+    reader_b = make_current_user(tenant_b.id, role="writer")
 
     with pytest.raises(HTTPException) as exc_info:
         table_snapshots.get_snapshot_table(cycle_config_a.public_id, 2024, "list_definition", db=db, user=reader_b)
@@ -144,7 +161,7 @@ def test_update_snapshot_row_success_sets_is_edited_and_writes_audit_log(db):
     assert updated["name"] == "Changed"
     assert updated["id"] == definition.id  # id/public_id can't be overwritten by the client
 
-    reader = make_current_user(tenant.id, role="reader")
+    reader = make_current_user(tenant.id, role="writer")
     read_back = table_snapshots.get_snapshot_table(cycle_config.public_id, 2024, "list_definition", db=db, user=reader)
     assert read_back.is_edited is True
     assert read_back.rows[0]["name"] == "Changed"

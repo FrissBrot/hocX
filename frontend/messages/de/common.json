@@ -152,7 +152,8 @@
       "template": "Protokollvorlage",
       "tenant": "Verein",
       "todo": "Aufgabe",
-      "user": "Konto"
+      "user": "Konto",
+      "role": "Rolle"
     },
     "verbs": {
       "loginFailed": "Anmeldung fehlgeschlagen",

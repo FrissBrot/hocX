@@ -6,10 +6,11 @@ import { SubmissionAssignmentManager } from "@/components/submission-assignments
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { CycleConfigSummary, EventSummary, ParticipantSummary, StructuredListDefinition, SubmissionAssignment, SubmissionLink } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 export default async function SubmissionAssignmentsPage() {
   const session = await requireSession();
-  const canWrite = session.current_role === "admin" || session.current_role === "writer";
+  const canWrite = can(session, "submissions.manage");
   const hasAbgabeboxFeature = session.current_tenant?.enabled_features?.includes("abgabebox") ?? false;
 
   if (!canWrite || !hasAbgabeboxFeature) {

@@ -11,7 +11,8 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_admin
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models import CycleConfig, ListDefinition, ListEntry, Participant, TaskPackage, TaskPackageCycle, TaskPackageItem
 from app.schemas.task_package import (
     TaskPackageCreate,
@@ -174,7 +175,7 @@ def list_task_packages(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     rows = db.scalars(
         select(TaskPackage).where(TaskPackage.tenant_id == user.current_tenant_id).order_by(TaskPackage.name)
     ).all()
@@ -188,7 +189,7 @@ def create_task_package(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     package = TaskPackage(
         tenant_id=user.current_tenant_id,
         name=payload.name.strip(),
@@ -215,7 +216,7 @@ def get_task_package(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     return _package_read(db, _get_package(db, package_id, user.current_tenant_id))
 
 
@@ -226,7 +227,7 @@ def update_task_package(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     package = _get_package(db, package_id, user.current_tenant_id)
     values = payload.model_dump(exclude_unset=True)
     if "name" in values and values["name"] is not None:
@@ -257,7 +258,7 @@ def delete_task_package(
 ):
     """todos=all: alle Aufgaben löschen, future: nur Aufgaben ab dem nächsten Zyklus löschen,
     none: Aufgaben behalten (werden zu normalen Todos)."""
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     package = _get_package(db, package_id, user.current_tenant_id)
     internal_id = package.id
     try:
@@ -280,7 +281,7 @@ def sync_task_package(
 ):
     """Instanzen des laufenden Zyklus sofort nachführen (läuft sonst täglich und nach jeder
     Änderung automatisch)."""
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     package = _get_package(db, package_id, user.current_tenant_id)
     try:
         created, updated = packages.sync_package(db, package)
@@ -306,7 +307,7 @@ def create_task_package_item(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     package = _get_package(db, package_id, user.current_tenant_id)
     try:
         values = _item_values(db, payload, user.current_tenant_id)
@@ -337,7 +338,7 @@ def update_task_package_item(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     package = _get_package(db, package_id, user.current_tenant_id)
     item = _get_item(db, package, item_id)
     try:
@@ -368,7 +369,7 @@ def delete_task_package_item(
 ):
     """Entfernt die Aufgabe aus dem Paket. Bereits erzeugte Aufgaben bleiben als normale Todos
     bestehen (FK ON DELETE SET NULL) - das Paket löscht nie selbst Aufgaben."""
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     package = _get_package(db, package_id, user.current_tenant_id)
     item = _get_item(db, package, item_id)
     internal_id = item.id
@@ -389,7 +390,7 @@ def reorder_task_package_items(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     package = _get_package(db, package_id, user.current_tenant_id)
     items = {item.public_id: item for item in packages.list_items(db, package.id)}
     if set(payload.item_ids) != set(items):
@@ -419,7 +420,7 @@ def assign_task_package_cycle(
 ):
     """Weist das Paket einem Zyklus zu. Gilt der Start schon für den laufenden Zyklus, entstehen
     dessen Aufgaben sofort."""
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     package = _get_package(db, package_id, user.current_tenant_id)
     cycle_config = public_id_service.get_by_public_id(db, CycleConfig, payload.cycle_config_id, tenant_id=user.current_tenant_id)
     if cycle_config is None:
@@ -452,7 +453,7 @@ def update_task_package_cycle(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Startjahr ändern. Ein späterer Start löscht keine bereits erzeugten Aufgaben."""
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     package = _get_package(db, package_id, user.current_tenant_id)
     package_cycle = public_id_service.get_by_public_id(db, TaskPackageCycle, package_cycle_id)
     if package_cycle is None or package_cycle.task_package_id != package.id:
@@ -480,7 +481,7 @@ def unassign_task_package_cycle(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     package = _get_package(db, package_id, user.current_tenant_id)
     package_cycle = public_id_service.get_by_public_id(db, TaskPackageCycle, package_cycle_id)
     if package_cycle is None or package_cycle.task_package_id != package.id:
@@ -506,7 +507,7 @@ def preview_task_package(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     package = _get_package(db, package_id, user.current_tenant_id)
     cycle_config = public_id_service.get_by_public_id(db, CycleConfig, cycle_config_id, tenant_id=user.current_tenant_id)
     if cycle_config is None:

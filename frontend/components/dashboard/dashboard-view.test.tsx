@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, expect, it, vi } from "vitest";
 import type { AttendanceFineListItem, NextSessionInfo, ProtocolSummary } from "@/types/api";
 import { DashboardView } from "./dashboard-view";
+import { SYSTEM_ROLE_PERMISSIONS, type SystemRoleKey } from "@/lib/permissions.generated";
 
 const api = vi.hoisted(() => vi.fn());
 const toast = vi.hoisted(() => vi.fn());
@@ -14,7 +15,8 @@ const sessions: NextSessionInfo[] = [0, 1].map((index) => ({
   attendance_block_id: `block-${index}`,
   entries: [{ participant_id: "person", participant_name: "Alex", status: "absent" }],
 }));
-const access = (role: string, features: string[] = []) => ({ role, features });
+// Standardrolle als Abkürzung für ihre Berechtigungen (permissions/catalog.json).
+const access = (role: SystemRoleKey, features: string[] = []) => ({ permissions: [...SYSTEM_ROLE_PERMISSIONS[role]], features });
 function mount(upcomingSessions = sessions, canExcuse = true) {
   render(<DashboardView todos={[]} fines={[]} upcomingSessions={upcomingSessions} access={access(canExcuse ? "writer" : "reader")} hasProtocols />);
 }

@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session
 from app.core.client_ip import client_ip
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
-from app.core.security import CurrentUser, get_current_user, require_reader
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models.entities import AppUser, CalendarFeed
 from app.schemas.calendar_feed import CalendarFeedRead, CalendarFeedUpsert
 from app.services import calendar_feed_service
@@ -26,12 +27,12 @@ audit = AuditService()
 FeedKind = Literal["events", "todos"]
 
 
-def _read(feed: CalendarFeed, app_user: AppUser | None, role: str) -> CalendarFeedRead:
+def _read(feed: CalendarFeed, app_user: AppUser | None, user: CurrentUser) -> CalendarFeedRead:
     # Gleiche Bedingungen wie calendar_feed_service.resolve - "invalid" heisst: der Abruf liefert 404.
     valid = (
         app_user is not None
         and calendar_feed_service.is_token_valid_for(feed, app_user)
-        and calendar_feed_service.can_subscribe(role, feed.kind)
+        and calendar_feed_service.can_subscribe(user, feed.kind)
     )
     return CalendarFeedRead(
         kind=feed.kind,
@@ -56,9 +57,9 @@ def _own_feed_or_404(db: Session, user: CurrentUser, kind: str) -> CalendarFeed:
 
 @router.get("/calendar-feeds", response_model=list[CalendarFeedRead])
 def list_calendar_feeds(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_reader(user)
+    # Eigene Abos ansehen und löschen sind eigene Daten - keine Permission nötig (RBAC R4).
     app_user = db.get(AppUser, user.user_id)
-    return [_read(feed, app_user, user.current_role) for feed in calendar_feed_service.list_for_user(db, user.user_id)]
+    return [_read(feed, app_user, user) for feed in calendar_feed_service.list_for_user(db, user.user_id)]
 
 
 @router.put("/calendar-feeds/{kind}", response_model=CalendarFeedRead)
@@ -69,8 +70,8 @@ def upsert_calendar_feed(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
-    if not calendar_feed_service.can_subscribe(user.current_role, kind):
+    require_permission(user, P.MEETINGS_READ)
+    if not calendar_feed_service.can_subscribe(user, kind):
         raise HTTPException(status_code=403, detail="Kein Zugriff auf diese Kalenderart")
     try:
         feed, created = calendar_feed_service.upsert(
@@ -90,20 +91,20 @@ def upsert_calendar_feed(
     if created:
         response.status_code = 201
         audit.log(db, action="calendar_feed.created", actor=user, entity_type="calendar_feed", entity_id=feed.id, details={"kind": kind})
-    return _read(feed, db.get(AppUser, user.user_id), user.current_role)
+    return _read(feed, db.get(AppUser, user.user_id), user)
 
 
 @router.post("/calendar-feeds/{kind}/regenerate", response_model=CalendarFeedRead)
 def regenerate_calendar_feed(kind: FeedKind, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     feed = calendar_feed_service.regenerate_token(db, _own_feed_or_404(db, user, kind))
     audit.log(db, action="calendar_feed.regenerated", actor=user, entity_type="calendar_feed", entity_id=feed.id, details={"kind": kind})
-    return _read(feed, db.get(AppUser, user.user_id), user.current_role)
+    return _read(feed, db.get(AppUser, user.user_id), user)
 
 
 @router.delete("/calendar-feeds/{kind}", status_code=204)
 def delete_calendar_feed(kind: FeedKind, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_reader(user)
+    # Eigene Abos ansehen und löschen sind eigene Daten - keine Permission nötig (RBAC R4).
     feed = _own_feed_or_404(db, user, kind)
     feed_id = feed.id
     calendar_feed_service.delete(db, feed)

@@ -8,11 +8,12 @@ import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
 import { tenantSettingsTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
+import { can } from "@/lib/permissions";
 
 // Datenschutz-Einstellungen des aktiven Mandanten (nur Mandanten-Admins).
 export default async function TenantPrivacyPage() {
   const session = await requireSession();
-  if (session.current_role !== "admin") {
+  if (!can(session, "settings.manage")) {
     redirect("/");
   }
   const [t, tTenant, state] = await Promise.all([

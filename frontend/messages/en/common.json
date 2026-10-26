@@ -152,7 +152,8 @@
       "template": "Protocol template",
       "tenant": "Organisation",
       "todo": "Task",
-      "user": "Account"
+      "user": "Account",
+      "role": "Role"
     },
     "verbs": {
       "loginFailed": "Sign-in failed",

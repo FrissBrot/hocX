@@ -14,8 +14,26 @@ export type SessionInfo = {
     protocol_accordion_enabled: boolean;
   } | null;
   current_tenant: TenantSummary | null;
-  current_role: string | null;
+  // Effektive Berechtigungen (inkl. Implikationen) und Rollen des Kontos (RBAC) - Prüfung im
+  // Frontend über lib/permissions.ts::can, nie über Rollen-Codes.
+  permissions: string[];
+  roles: RoleRef[];
   bridge_redirect_url: string | null;
+};
+
+export type RoleRef = {
+  id: string;
+  // NULL für unbenannte Standardrollen - angezeigt wird dann nav.roles.<system_key>.
+  name: string | null;
+  system_key: "admin" | "writer" | "kassier" | "reader" | null;
+};
+
+export type RoleRead = RoleRef & {
+  description: string | null;
+  permissions: string[];
+  user_count: number;
+  // Standardrolle Administrator: fest, nicht änderbar, nicht löschbar.
+  locked: boolean;
 };
 
 export type PendingMfaMethod = {
@@ -643,7 +661,7 @@ export type UserSummary = {
   external_identity_json: Record<string, unknown>;
   tenant_id: string;
   tenant_name: string;
-  role_code: string;
+  roles: RoleRef[];
   login_enabled: boolean;
   created_at: string;
   updated_at: string;
@@ -653,7 +671,7 @@ export type AdminTenantUser = {
   user_id: string;
   email: string | null;
   display_name: string;
-  role_code: string;
+  roles: RoleRef[];
   login_enabled: boolean;
   is_active: boolean;
 };

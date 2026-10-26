@@ -8,14 +8,8 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.db import get_db
-from app.core.security import (
-    CurrentUser,
-    get_current_user,
-    require_all_fines_read,
-    require_feature,
-    require_finance_write,
-    require_reader,
-)
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
 from app.models.entities import AttendanceFine, Protocol
 from app.repositories.fines_repository import DuplicateFineError, FineDeleteError, FinesRepository
 from app.schemas.fines import (
@@ -42,14 +36,12 @@ def list_fines(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    """Readers only see fines assigned to their own participant identity.
+    """Ohne reports.personal nur die eigenen Bussen (eigene Daten, keine Permission nötig).
 
-    Writer, kassier and admin may inspect all fines in the current tenant; mutation remains
-    restricted to kassier and admin below.
+    Mit reports.personal alle Bussen des Mandanten; ändern nur mit finances.manage (unten).
     """
-    require_reader(user)
     require_feature(user, "finance")
-    if user.current_role == "reader":
+    if not user.can(P.REPORTS_PERSONAL):
         return repo.list_fines_for_user(db, user.current_tenant_id, user.user_id, skip=skip, limit=limit)
     return repo.list_fines_for_tenant(db, user.current_tenant_id, skip=skip, limit=limit)
 
@@ -77,7 +69,7 @@ def get_fine_tariff(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Zentraler Bussentarif des Mandanten (Konto + Beträge für «zu spät»/«abwesend»)."""
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     require_feature(user, "finance")
     return fine_tariff_service.read_tariff(db, user.current_tenant_id)
 
@@ -88,7 +80,7 @@ def update_fine_tariff(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_write(user)
+    require_permission(user, P.FINANCES_MANAGE)
     require_feature(user, "finance")
     try:
         result = fine_tariff_service.update_tariff(db, user.current_tenant_id, payload)
@@ -108,7 +100,7 @@ def list_pending_fines(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_all_fines_read(user)
+    require_permission(user, P.REPORTS_PERSONAL)
     require_feature(user, "finance")
     internal_id = _resolve_protocol_id(db, protocol_id, user)
     return repo.list_pending_fines_for_protocol(db, internal_id, user.current_tenant_id)
@@ -120,7 +112,7 @@ def list_protocol_fines(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_all_fines_read(user)
+    require_permission(user, P.REPORTS_PERSONAL)
     require_feature(user, "finance")
     internal_id = _resolve_protocol_id(db, protocol_id, user)
     return repo.list_fines_for_protocol(db, internal_id, user.current_tenant_id)
@@ -132,7 +124,7 @@ def create_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_write(user)
+    require_permission(user, P.FINANCES_MANAGE)
     try:
         result = repo.create_fine(db, payload, user.current_tenant_id)
     except DuplicateFineError as exc:
@@ -160,7 +152,7 @@ def delete_fine(
 ):
     """Offene Busse löschen. Im offenen Ursprungsprotokoll hart, sonst mit Begründung
     (Status `deleted`, aufgeführt im Protokoll `protocol_id` bzw. im nächsten offenen)."""
-    require_finance_write(user)
+    require_permission(user, P.FINANCES_MANAGE)
     internal_id = _resolve_fine_id(db, fine_id)
     payload = payload or DeleteFinePayload()
     protocol_context_id = None
@@ -195,7 +187,7 @@ def restore_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_write(user)
+    require_permission(user, P.FINANCES_MANAGE)
     internal_id = _resolve_fine_id(db, fine_id)
     try:
         result = repo.restore_fine(db, internal_id, user.current_tenant_id)
@@ -215,7 +207,7 @@ def collect_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_write(user)
+    require_permission(user, P.FINANCES_MANAGE)
     internal_id = _resolve_fine_id(db, fine_id)
     collecting_protocol_internal_id = None
     if payload.collecting_protocol_id is not None:
@@ -241,7 +233,7 @@ def reopen_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_write(user)
+    require_permission(user, P.FINANCES_MANAGE)
     internal_id = _resolve_fine_id(db, fine_id)
     try:
         result = repo.reopen_fine(db, internal_id, user.current_tenant_id)

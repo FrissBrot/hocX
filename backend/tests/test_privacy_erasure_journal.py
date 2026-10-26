@@ -40,14 +40,14 @@ def test_deleted_person_is_journaled_and_deleted_again_after_restore(db):
     tenant = make_tenant(db, "Journal")
     make_app_user(db, email="journal-admin@example.com", tenant_id=tenant.id, role_code="admin")
     person = make_app_user(db, email="journal@example.com", tenant_id=tenant.id)
-    public_id, role_id = person.public_id, person.role_id
+    public_id = person.public_id
     snapshot = _snapshot(db)
 
     ParticipantService().delete_participant(db, person.id, tenant_id=tenant.id)
     assert len(_journal(db, "app_user", public_id)) == 1
 
     # Wie nach einem Restore: dieselbe Person ist wieder da.
-    db.add(AppUser(public_id=public_id, tenant_id=tenant.id, role_id=role_id, display_name="Zurück", login_enabled=False))
+    db.add(AppUser(public_id=public_id, tenant_id=tenant.id, display_name="Zurück", login_enabled=False))
     db.flush()
     result = erasure_journal.apply(db, erasure_journal.entries_since(db, snapshot))
 
