@@ -37,6 +37,7 @@
   "derive_colors": true,
   "layout": {
    "border_width": 0.5,
+   "empty_blocks": "note",
    "header_footer": {
     "footer_line": true,
     "footer_show_number": true,
@@ -47,6 +48,7 @@
     "header_show_logo": true,
     "header_show_title": true
    },
+   "heading_number_style": "plain",
    "heading_numbering": false,
    "heading_style": "underline",
    "margins": {
@@ -59,6 +61,7 @@
    "page_size": "A4",
    "paragraph_gap": 2.5,
    "radius": 1.5,
+   "responsible_display": "title",
    "section_gap": 6.0,
    "show_metadata": false,
    "table_style": "lines",
@@ -111,7 +114,11 @@
       "finance_balance": "tiles",
       "form": "table",
       "kpi_tiles": "filled",
-      "session_date": "box"
+      "matrix": "table",
+      "quote": "line",
+      "session_date": "box",
+      "toc": "indented",
+      "todo": "table"
      },
      "layout": {
       "heading_style": "bar",
@@ -125,7 +132,11 @@
       "finance_balance": "list",
       "form": "grid",
       "kpi_tiles": "outlined",
-      "session_date": "line"
+      "matrix": "table",
+      "quote": "line",
+      "session_date": "line",
+      "toc": "indented",
+      "todo": "table"
      },
      "layout": {
       "heading_style": "underline",
@@ -139,7 +150,11 @@
       "finance_balance": "list",
       "form": "grid",
       "kpi_tiles": "outlined",
-      "session_date": "line"
+      "matrix": "table",
+      "quote": "line",
+      "session_date": "line",
+      "toc": "indented",
+      "todo": "table"
      },
      "layout": {
       "heading_style": "plain",
@@ -153,7 +168,11 @@
       "finance_balance": "tiles",
       "form": "grid",
       "kpi_tiles": "filled",
-      "session_date": "box"
+      "matrix": "table",
+      "quote": "line",
+      "session_date": "box",
+      "toc": "indented",
+      "todo": "table"
      },
      "layout": {
       "heading_style": "boxed",
@@ -163,19 +182,26 @@
     }
    },
    "brand_only": [
-    "heading"
+    "heading",
+    "quote",
+    "toc"
    ],
    "corner_kinds": [
     "heading",
     "session_date",
     "finance_balance",
-    "kpi_tiles"
+    "kpi_tiles",
+    "matrix",
+    "todo",
+    "quote"
    ],
    "variants": {
     "attendance": [
      "list",
      "compact",
-     "table"
+     "table",
+     "grid",
+     "chips"
     ],
     "finance_balance": [
      "list",
@@ -193,7 +219,19 @@
     ],
     "kpi_tiles": [
      "outlined",
-     "filled"
+     "filled",
+     "plain",
+     "divided"
+    ],
+    "matrix": [
+     "table",
+     "cards",
+     "cards_filled"
+    ],
+    "quote": [
+     "line",
+     "box",
+     "framed"
     ],
     "session_date": [
      "line",
@@ -204,6 +242,16 @@
      "grid",
      "zebra",
      "minimal"
+    ],
+    "toc": [
+     "indented",
+     "leaders",
+     "badges"
+    ],
+    "todo": [
+     "table",
+     "checklist",
+     "status"
     ]
    }
   },
@@ -920,6 +968,8 @@
     "access": "reader",
     "appearance_kinds": [
      "table",
+     "todo",
+     "matrix",
      "attendance",
      "session_date",
      "finance_balance",
@@ -1154,6 +1204,7 @@
    {
     "access": "reader",
     "appearance_kinds": [
+     "matrix",
      "table"
     ],
     "group": "protocol",
@@ -1617,6 +1668,7 @@
    {
     "access": "reader",
     "appearance_kinds": [
+     "todo",
      "table"
     ],
     "group": "tasks",

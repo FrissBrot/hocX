@@ -330,7 +330,30 @@
       "show_qr": "QR-Code anzeigen",
       "show_url": "Prüfadresse anzeigen"
     },
-    "verifyHelp": "Angaben im Prüfvermerk am Ende des Dokuments."
+    "verifyHelp": "Angaben im Prüfvermerk am Ende des Dokuments.",
+    "choice": {
+      "heading_number_style": {
+        "label": "Abschnittsnummer",
+        "help": "Gilt, wenn die Vorlage Überschriften nummeriert.",
+        "plain": "Wie Text",
+        "accent": "Farbige Zahl",
+        "badge": "Zahl auf Farbfläche",
+        "paragraph": "Mit Paragrafzeichen (§)"
+      },
+      "responsible_display": {
+        "label": "Verantwortliche bei Traktanden",
+        "help": "Wo die Verantwortlichen eines Traktandums stehen.",
+        "title": "In Klammern im Titel",
+        "right": "Rechts neben dem Titel",
+        "below": "In einer Zeile darunter"
+      },
+      "empty_blocks": {
+        "label": "Leere Bausteine",
+        "help": "Bausteine und Traktanden ohne Inhalt.",
+        "note": "Hinweis anzeigen",
+        "hide": "Weglassen"
+      }
+    }
   },
   "canvas": {
     "approximateHint": "Die Arbeitsfläche ist eine angenäherte Darstellung. Verbindlich ist die PDF-Vorschau.",
@@ -1720,13 +1743,19 @@
       "session_date": "Nächste Sitzung",
       "finance_balance": "Kontostand",
       "kpi_tiles": "Kennzahlen",
-      "form": "Formular"
+      "form": "Formular",
+      "matrix": "Matrix",
+      "todo": "Pendenzen",
+      "toc": "Inhaltsverzeichnis",
+      "quote": "Zitate und Beschlüsse"
     },
     "variant": {
       "attendance": {
         "list": "Liste",
         "compact": "Kompakt nach Status",
-        "table": "Tabelle"
+        "table": "Tabelle",
+        "grid": "Raster mit Zusammenfassung",
+        "chips": "Namens-Chips"
       },
       "session_date": {
         "line": "Zeile",
@@ -1738,7 +1767,9 @@
       },
       "kpi_tiles": {
         "outlined": "Umrandet",
-        "filled": "Farbfläche"
+        "filled": "Farbfläche",
+        "plain": "Schlicht",
+        "divided": "Eine Zeile mit Trennlinien"
       },
       "form": {
         "grid": "Zweispaltig",
@@ -1755,6 +1786,26 @@
         "lines": "Linien",
         "minimal": "Minimal",
         "zebra": "Abwechselnd eingefärbt"
+      },
+      "matrix": {
+        "table": "Tabelle",
+        "cards": "Karten",
+        "cards_filled": "Karten mit Farbkopf"
+      },
+      "todo": {
+        "table": "Tabelle",
+        "checklist": "Kasten mit Kästchen",
+        "status": "Tabelle mit Status-Pills"
+      },
+      "toc": {
+        "indented": "Eingerückt",
+        "leaders": "Mit Punktlinie",
+        "badges": "Nummern auf Farbfläche"
+      },
+      "quote": {
+        "line": "Linie links",
+        "box": "Hervorgehobener Kasten",
+        "framed": "Zwischen zwei Linien"
       }
     },
     "designerTitle": "Darstellung",

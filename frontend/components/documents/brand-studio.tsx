@@ -35,6 +35,13 @@ const ADVANCED_ASSET_ROLES = ASSET_ROLES.filter((role) => role !== "logo");
 const SIZE_KEYS = ["base_size", "size_title", "size_subtitle", "size_h1", "size_h2", "size_h3", "size_small"] as const;
 const HEADER_FOOTER_FLAGS = ["header_show_logo", "header_show_title", "header_show_date", "header_line", "footer_show_number", "footer_show_pages", "footer_line"];
 const DOCUMENT_DEFAULTS = ["title_page", "toc", "heading_numbering", "show_metadata", "watermark_draft"] as const;
+// Auswahl-Optionen der Darstellung im Dokument (brand.BrandLayout)
+const LAYOUT_CHOICES = {
+  heading_number_style: ["plain", "accent", "badge", "paragraph"],
+  responsible_display: ["title", "right", "below"],
+  empty_blocks: ["note", "hide"],
+} as const;
+type LayoutChoice = keyof typeof LAYOUT_CHOICES;
 
 type Props = { capabilities: Capabilities };
 
@@ -576,6 +583,17 @@ export function BrandStudio({ capabilities }: Props) {
                       </label>
                     ))}
                   </fieldset>
+                  {(Object.keys(LAYOUT_CHOICES) as LayoutChoice[]).map((key) => (
+                    <label key={key} className="field-stack">
+                      <span className="field-label">{t(`brand.choice.${key}.label`)}</span>
+                      <select value={draft.layout[key]} onChange={(event) => update((tokens) => { (tokens.layout as Record<LayoutChoice, string>)[key] = event.target.value; })}>
+                        {LAYOUT_CHOICES[key].map((value) => (
+                          <option key={value} value={value}>{t(`brand.choice.${key}.${value}`)}</option>
+                        ))}
+                      </select>
+                      <span className="field-help">{t(`brand.choice.${key}.help`)}</span>
+                    </label>
+                  ))}
                 </Section>
 
                 <Section title={t("brand.headerFooter")}>

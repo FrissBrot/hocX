@@ -143,6 +143,9 @@ export type BrandTokens = {
     title_page: boolean;
     toc: boolean;
     heading_numbering: boolean;
+    heading_number_style: "plain" | "accent" | "badge" | "paragraph";
+    responsible_display: "title" | "right" | "below";
+    empty_blocks: "note" | "hide";
     show_metadata: boolean;
     watermark_draft: boolean;
   };

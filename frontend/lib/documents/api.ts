@@ -369,7 +369,7 @@ export type ResolvedBrand = {
     letter_spacing_heading: number;
     heading_transform: "none" | "upper";
   };
-  layout: { paragraph_gap: number; section_gap: number; heading_style: string; table_style: string; border_width: number; radius: number };
+  layout: { paragraph_gap: number; section_gap: number; heading_style: string; table_style: string; border_width: number; radius: number; heading_number_style?: string; responsible_display?: string; empty_blocks?: string };
   appearance: Record<string, { variant: string | null; radius: number }>;
 };
 

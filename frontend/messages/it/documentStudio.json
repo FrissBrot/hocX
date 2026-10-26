@@ -330,7 +330,30 @@
       "show_qr": "Mostra codice QR",
       "show_url": "Mostra indirizzo di verifica"
     },
-    "verifyHelp": "Dati nella nota di verifica alla fine del documento."
+    "verifyHelp": "Dati nella nota di verifica alla fine del documento.",
+    "choice": {
+      "heading_number_style": {
+        "label": "Numero di sezione",
+        "help": "Vale se il modello numera i titoli.",
+        "plain": "Come il testo",
+        "accent": "Numero colorato",
+        "badge": "Numero su sfondo colorato",
+        "paragraph": "Con simbolo di paragrafo (§)"
+      },
+      "responsible_display": {
+        "label": "Responsabili dei punti",
+        "help": "Dove compaiono i responsabili di un punto all’ordine del giorno.",
+        "title": "Tra parentesi nel titolo",
+        "right": "A destra del titolo",
+        "below": "Su una riga sotto"
+      },
+      "empty_blocks": {
+        "label": "Blocchi vuoti",
+        "help": "Blocchi e punti senza contenuto.",
+        "note": "Mostra una nota",
+        "hide": "Ometti"
+      }
+    }
   },
   "canvas": {
     "approximateHint": "L’area di lavoro è un’approssimazione. Fa fede l’anteprima PDF.",
@@ -1720,13 +1743,19 @@
       "session_date": "Prossima seduta",
       "finance_balance": "Saldo",
       "kpi_tiles": "Cifre chiave",
-      "form": "Modulo"
+      "form": "Modulo",
+      "matrix": "Matrice",
+      "todo": "Attività",
+      "toc": "Indice",
+      "quote": "Citazioni e decisioni"
     },
     "variant": {
       "attendance": {
         "list": "Elenco",
         "compact": "Compatto per stato",
-        "table": "Tabella"
+        "table": "Tabella",
+        "grid": "Griglia con riepilogo",
+        "chips": "Etichette con nomi"
       },
       "session_date": {
         "line": "Riga",
@@ -1738,7 +1767,9 @@
       },
       "kpi_tiles": {
         "outlined": "Contornato",
-        "filled": "Superficie colorata"
+        "filled": "Superficie colorata",
+        "plain": "Semplice",
+        "divided": "Una riga con separatori"
       },
       "form": {
         "grid": "Due colonne",
@@ -1755,6 +1786,26 @@
         "lines": "Linee",
         "minimal": "Minimale",
         "zebra": "Righe alternate"
+      },
+      "matrix": {
+        "table": "Tabella",
+        "cards": "Schede",
+        "cards_filled": "Schede con intestazione colorata"
+      },
+      "todo": {
+        "table": "Tabella",
+        "checklist": "Riquadro con caselle",
+        "status": "Tabella con etichette di stato"
+      },
+      "toc": {
+        "indented": "Rientrato",
+        "leaders": "Con linea tratteggiata",
+        "badges": "Numeri su sfondo colorato"
+      },
+      "quote": {
+        "line": "Linea a sinistra",
+        "box": "Riquadro evidenziato",
+        "framed": "Tra due linee"
       }
     },
     "designerTitle": "Aspetto",

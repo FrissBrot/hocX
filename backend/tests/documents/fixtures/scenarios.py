@@ -133,6 +133,34 @@ def all_data_blocks() -> list[dict]:
     ]
 
 
+def mockup_elements() -> list[dict]:
+    """Traktanden wie im Jungwacht-Mockup: Verantwortliche, Gruppeneinteilung (Matrix mit
+    Terminzeilen), Sitzungs-Todos, Anwesenheit, Kennzahlen, Beschluss als Zitat, leeres Traktandum."""
+    dates = [{"t": "text", "v": f"{day:02d}.{month:02d}.2026"} for day, month in ((18, 10), (22, 11), (20, 12), (10, 1), (28, 2), (21, 3), (19, 9))]
+    lines = [item for date in dates for item in ({"t": "br"}, date)][1:]
+    groups = ("Nussknacker", "Knochenknacker", "Steibiser", "Rauchmälder")
+    return [
+        {"type": "protocol_element", "title": "Teilnehmer", "children": [
+            {"type": "attendance", "level": 2, "entries": [{"name": name, "status": status} for name, status in (
+                ("Anna Muster", "present"), ("Ben Beispiel", "present"), ("Chloé Exemple", "excused"), ("Dario Esempio", "present"),
+                ("Eva Ohne", "late"), ("Fabio Rossi", "absent"), ("Gina Keller", "present"))]},
+            {"type": "kpi_tiles", "level": 2, "tiles": [{"label_key": "kpi.openTodos", "value": "17"}, {"label_key": "kpi.attendanceRate", "value": "87%"}, {"label": "Nächster Hock", "value": "08.11.2026"}]},
+        ]},
+        {"type": "protocol_element", "title": "Gruppeneinteilung (Lauri, Lukas)", "title_plain": "Gruppeneinteilung", "responsible": "Lauri, Lukas", "children": [
+            {"type": "matrix", "level": 2, "tables": [_table(
+                [("label", "col.name", "left"), *[(f"g{index}", "col.value", "left") for index in range(3)]],
+                [[_text("Leiter"), *[{"k": "rich", "rich": [_p(f"Leitung {name}")]} for name in groups[:3]]],
+                 [_text("Daten"), *[{"k": "rich", "rich": [{"t": "p", "c": lines}]} for _ in range(3)]]],
+            )]},
+        ]},
+        {"type": "protocol_element", "title": "Material (Tim, Rafael)", "title_plain": "Material", "responsible": "Tim, Rafael", "children": [
+            {"type": "richtext", "level": 2, "content": [_p("Wer etwas ausleiht, meldet sich."), {"t": "quote", "c": [_p("Beschluss: Das Luftgewehr wird repariert.")]}]},
+            {**todo_table(4, title=None), "title_key": "label.sessionTodos", "level": 2},
+        ]},
+        {"type": "protocol_element", "title": "Präses", "empty": True, "children": []},
+    ]
+
+
 def block(block_type: str, index: int = 0) -> dict:
     """Fixture-Block eines Typs (``index`` = n-tes Vorkommen, z. B. das zweite Diagramm)."""
     return [item for item in all_data_blocks() if item["type"] == block_type][index]
@@ -307,6 +335,15 @@ def scenarios() -> dict[str, Scenario]:
     for base, definition in APPEARANCE_BASES.items():
         if base != "classic":
             items[f"appearance_{base}"] = Scenario(all_blocks_content(), {"all": all_data_blocks()}, document_type="custom", pages=6, brand={"appearance": {"base": base}, "layout": dict(definition["layout"])})
+    # Darstellungen aus den Protokoll-Mockups (Design-Beispiele «Band» und «Corporate»/«Kanzlei»)
+    items["mockup_club"] = Scenario(system("protocol_formal"), {"protocol": mockup_elements()}, pages=3, brand={
+        "layout": {"heading_number_style": "badge", "responsible_display": "right", "empty_blocks": "hide"},
+        "appearance": {"elements": {"matrix": {"variant": "cards_filled"}, "todo": {"variant": "checklist"}, "attendance": {"variant": "grid"}, "kpi_tiles": {"variant": "plain"}, "toc": {"variant": "leaders"}, "quote": {"variant": "box"}}},
+    })
+    items["mockup_formal"] = Scenario(system("protocol_formal"), {"protocol": mockup_elements()}, pages=3, brand={
+        "layout": {"heading_number_style": "paragraph", "responsible_display": "below"},
+        "appearance": {"elements": {"matrix": {"variant": "cards"}, "todo": {"variant": "status"}, "attendance": {"variant": "chips"}, "kpi_tiles": {"variant": "divided"}, "toc": {"variant": "badges"}, "quote": {"variant": "framed"}}},
+    })
     # Block-Übersteuerung im Designer: ein Block weicht vom Grundstil des Profils ab
     items["appearance_block_override"] = Scenario(
         {"masters": [system("protocol_compact")["masters"][0]], "body": [

@@ -7,7 +7,7 @@
 #import "@preview/tiaoma:0.3.0": qrcode
 #import "lib/core.typ": tr, is-blank
 #import "base/blocks.typ": render-block
-#import "theme.typ": with-appearance
+#import "theme.typ": look, with-appearance
 #import "base/rich.typ": render-rich
 
 // ── Längen und Stil ─────────────────────────────────────────────────────────
@@ -254,7 +254,26 @@
     let spacing = (normal: (size: 1em, above: 0.7em), compact: (size: 0.85em, above: 0.35em), very_compact: (size: 0.8em, above: 0.28em)).at(n.density)
     styled(ctx, n, {
       set text(size: spacing.size)
-      show outline.entry: it => block(above: spacing.above, it)
+      let variant = look(ctx, "toc", default: "indented").variant
+      show outline.entry: it => {
+        if variant == "indented" { return block(above: spacing.above, it) }
+        let primary = ctx.theme.primary
+        let number = it.prefix()
+        let top = it.level == 1
+        let mark = if number == none { [] } else if variant == "badges" and top {
+          box(inset: (x: 0.3em, y: 0.15em), radius: look(ctx, "heading").radius * 1mm, fill: primary, text(fill: ctx.c.on_solid, weight: "bold", size: 0.85em, number))
+        } else {
+          text(fill: primary, weight: if top { "bold" } else { "regular" }, number)
+        }
+        let leader = if variant == "leaders" { box(width: 1fr, repeat(text(fill: ctx.c.border_strong)[.#h(0.25em)])) } else { h(1fr) }
+        block(
+          above: spacing.above,
+          inset: (left: if top { 0pt } else { 2.4em * (it.level - 1) }, y: if variant == "badges" { 0.25em } else { 0pt }),
+          stroke: if variant == "badges" { (bottom: 0.5pt + ctx.c.border) } else { none },
+          width: 100%,
+          link(it.element.location(), [#box(width: 2.4em, mark)#it.body()#h(0.4em)#leader#h(0.4em)#text(fill: ctx.c.muted, it.page())]),
+        )
+      }
       outline(title: if n.show_title { text(fill: ctx.theme.primary)[#tr(ctx, "toc.title")] } else { none }, depth: n.depth, indent: auto)
     })
   } else if t == "metadata" {

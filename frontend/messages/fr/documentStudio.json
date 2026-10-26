@@ -330,7 +330,30 @@
       "show_qr": "Afficher le code QR",
       "show_url": "Afficher l’adresse de vérification"
     },
-    "verifyHelp": "Informations de la mention de vérification en fin de document."
+    "verifyHelp": "Informations de la mention de vérification en fin de document.",
+    "choice": {
+      "heading_number_style": {
+        "label": "Numéro de section",
+        "help": "S’applique lorsque le modèle numérote les titres.",
+        "plain": "Comme le texte",
+        "accent": "Chiffre en couleur",
+        "badge": "Chiffre sur fond coloré",
+        "paragraph": "Avec signe de paragraphe (§)"
+      },
+      "responsible_display": {
+        "label": "Responsables des points",
+        "help": "Emplacement des responsables d’un point de l’ordre du jour.",
+        "title": "Entre parenthèses dans le titre",
+        "right": "À droite du titre",
+        "below": "Sur une ligne en dessous"
+      },
+      "empty_blocks": {
+        "label": "Blocs vides",
+        "help": "Blocs et points sans contenu.",
+        "note": "Afficher une remarque",
+        "hide": "Omettre"
+      }
+    }
   },
   "canvas": {
     "approximateHint": "L’espace de travail est une approximation. L’aperçu PDF fait foi.",
@@ -1720,13 +1743,19 @@
       "session_date": "Prochaine séance",
       "finance_balance": "Solde",
       "kpi_tiles": "Chiffres clés",
-      "form": "Formulaire"
+      "form": "Formulaire",
+      "matrix": "Matrice",
+      "todo": "Tâches",
+      "toc": "Table des matières",
+      "quote": "Citations et décisions"
     },
     "variant": {
       "attendance": {
         "list": "Liste",
         "compact": "Compact par statut",
-        "table": "Tableau"
+        "table": "Tableau",
+        "grid": "Grille avec résumé",
+        "chips": "Pastilles de noms"
       },
       "session_date": {
         "line": "Ligne",
@@ -1738,7 +1767,9 @@
       },
       "kpi_tiles": {
         "outlined": "Contour",
-        "filled": "Surface colorée"
+        "filled": "Surface colorée",
+        "plain": "Sobre",
+        "divided": "Une ligne avec séparateurs"
       },
       "form": {
         "grid": "Deux colonnes",
@@ -1755,6 +1786,26 @@
         "lines": "Lignes",
         "minimal": "Minimal",
         "zebra": "Lignes alternées"
+      },
+      "matrix": {
+        "table": "Tableau",
+        "cards": "Cartes",
+        "cards_filled": "Cartes avec en-tête coloré"
+      },
+      "todo": {
+        "table": "Tableau",
+        "checklist": "Encadré avec cases à cocher",
+        "status": "Tableau avec pastilles de statut"
+      },
+      "toc": {
+        "indented": "En retrait",
+        "leaders": "Avec points de conduite",
+        "badges": "Numéros sur fond coloré"
+      },
+      "quote": {
+        "line": "Ligne à gauche",
+        "box": "Encadré mis en évidence",
+        "framed": "Entre deux lignes"
       }
     },
     "designerTitle": "Apparence",

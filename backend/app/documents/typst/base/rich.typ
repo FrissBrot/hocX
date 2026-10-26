@@ -2,6 +2,7 @@
 // Jeder String wird als Text eingesetzt; es gibt keine Auswertung von Benutzerinhalt.
 
 #import "../lib/core.typ": colors, space, radius, tr
+#import "../theme.typ": look
 
 #let render-inline(nodes, ctx: none) = {
   for node in nodes {
@@ -40,13 +41,25 @@
     } else if node.t == "ol" {
       enum(start: node.start, spacing: gap, ..node.items.map(item => render-rich(item, ctx, compact: true)))
     } else if node.t == "quote" {
-      block(
-        above: gap,
-        below: gap,
-        inset: (left: 0.8em, y: 0.2em),
-        stroke: (left: 2pt + ctx.c.border_strong),
-        text(fill: ctx.c.muted, render-rich(node.c, ctx, compact: compact)),
-      )
+      // Darstellung «quote» (Brand-Profil): Linie, hervorgehobener Kasten (z. B. Beschluss),
+      // zwischen zwei Linien in Akzentfarbe
+      let style = look(ctx, "quote", default: "line")
+      if style.variant == "box" {
+        block(above: gap * 1.5, below: gap * 1.5, width: 100%, inset: (x: 0.9em, y: 0.7em), radius: style.radius * 1mm,
+          fill: ctx.theme.primary.lighten(90%), render-rich(node.c, ctx, compact: true))
+      } else if style.variant == "framed" {
+        block(above: gap * 1.5, below: gap * 1.5, width: 100%, inset: (y: 0.6em),
+          stroke: (top: 0.5pt + ctx.theme.primary, bottom: 0.5pt + ctx.theme.primary),
+          text(style: "italic", render-rich(node.c, ctx, compact: true)))
+      } else {
+        block(
+          above: gap,
+          below: gap,
+          inset: (left: 0.8em, y: 0.2em),
+          stroke: (left: 2pt + ctx.c.border_strong),
+          text(fill: ctx.c.muted, render-rich(node.c, ctx, compact: compact)),
+        )
+      }
     } else if node.t == "code" {
       block(
         above: gap,

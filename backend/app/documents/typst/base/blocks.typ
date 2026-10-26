@@ -4,10 +4,10 @@
 // Darstellungsvarianten (Grundstil, Brand- und Block-Übersteuerung) liefert look(ctx, art).
 
 #import "../lib/core.typ": colors, space, radius, tr, is-blank, tone-color, status-dot, tag-chip, empty-note
-#import "rich.typ": render-rich
-#import "table.typ": data-table
+#import "rich.typ": render-rich, render-inline
+#import "table.typ": data-table, render-cell, header-label
 #import "chart.typ": render-chart
-#import "../theme.typ": heading-above, look, with-appearance
+#import "../theme.typ": heading-above, heading-aside, look, with-appearance
 
 // Hervorgehobene Fläche (Varianten «box»/«tiles»/«filled»)
 #let surface-box(ctx, radius, body, accent: false) = block(
@@ -69,7 +69,61 @@
 
 #let bullet-list-block(ctx, b) = list(..b.items.filter(item => item.trim() != "").map(item => [#item]))
 
+// Ein Absatz mit mindestens vier Zeilen (z. B. Termine einer Matrixzeile) als Liste von Zeilen,
+// sonst none. Für die zweispaltige Darstellung in den Karten.
+#let rich-lines(nodes) = {
+  if nodes.len() != 1 or nodes.at(0).t != "p" { return none }
+  let lines = ((),)
+  for span in nodes.at(0).c {
+    if span.t == "br" { lines.push(()) } else { lines.at(-1).push(span) }
+  }
+  if lines.len() < 4 { none } else { lines }
+}
+
+// Darstellung «cards»: je Matrixspalte eine Karte (Titel, darunter die Zeilen als Abschnitte)
+#let matrix-cards(ctx, b, filled) = {
+  let style = look(ctx, "matrix")
+  let cards = ()
+  for tbl in b.tables {
+    for (index, column) in tbl.columns.enumerate() {
+      if index == 0 { continue }
+      let sections = ()
+      for group in tbl.groups {
+        for row in group.rows {
+          let cell = row.cells.at(index, default: none)
+          if cell != none and cell.at("rich", default: ()).len() > 0 {
+            sections.push((label: row.cells.at(0).at("v", default: ""), rich: cell.rich))
+          }
+        }
+      }
+      cards.push((title: header-label(ctx, column), sections: sections))
+    }
+  }
+  let pad = (x: 0.7em, y: 0.55em)
+  grid(columns: (1fr, 1fr, 1fr), column-gutter: space.s3, row-gutter: space.s3,
+    ..cards.map(card => block(breakable: false, width: 100%, stroke: 0.5pt + ctx.c.border, radius: style.radius * 1mm, clip: true, {
+      block(width: 100%, above: 0pt, below: 0pt, inset: pad, fill: if filled { ctx.theme.primary } else { none },
+        stroke: if filled { none } else { (bottom: 0.5pt + ctx.c.border) },
+        text(weight: "bold", fill: if filled { ctx.c.on_solid } else { ctx.theme.primary })[#card.title])
+      for (position, section) in card.sections.enumerate() {
+        block(width: 100%, above: 0pt, below: 0pt, inset: pad, stroke: if position > 0 { (top: 0.5pt + ctx.c.border.lighten(40%)) } else { none }, {
+          if not is-blank(section.label) { block(above: 0pt, below: 0.35em, text(size: 0.75em, fill: ctx.c.muted)[#section.label]) }
+          let lines = rich-lines(section.rich)
+          if lines != none {
+            set text(size: 0.82em)
+            grid(columns: (1fr, 1fr), column-gutter: 0.6em, row-gutter: 0.3em, ..lines.map(line => render-inline(line, ctx: ctx)))
+          } else {
+            set text(size: 0.9em)
+            render-rich(section.rich, ctx, compact: true)
+          }
+        })
+      }
+    })))
+}
+
 #let matrix-block(ctx, b) = {
+  let variant = look(ctx, "matrix", default: "table").variant
+  if variant == "cards" or variant == "cards_filled" { return matrix-cards(ctx, b, variant == "cards_filled") }
   for table-data in b.tables {
     data-table(ctx, table-data)
     v(space.s3, weak: true)
@@ -149,8 +203,41 @@
     }).flatten())
 }
 
+// Darstellung «grid»: Zusammenfassung oben, Namen dreispaltig mit Markierung
+#let attendance-grid(ctx, b) = {
+  grid(columns: (1fr, 1fr, 1fr), column-gutter: 1.5em,
+    ..b.entries.map(entry => {
+      let status = entry.at("status", default: none)
+      let mark = if status == "present" { text(fill: ctx.theme.primary, weight: "bold")[●] }
+        else if status == none { text(fill: ctx.c.muted)[–] }
+        else { text(size: 0.8em, fill: ctx.c.muted, tr(ctx, "attendanceStatus." + status)) }
+      block(width: 100%, inset: (y: 0.35em), stroke: (bottom: 0.5pt + ctx.c.border), [#entry.name #h(1fr) #mark])
+    }))
+}
+
+// Darstellung «chips»: jede Person als Pill mit Punkt (gefüllt = anwesend)
+#let attendance-chips(ctx, b) = {
+  b.entries.map(entry => {
+    let status = entry.at("status", default: none)
+    let here = status == "present" or status == "late"
+    box(inset: (x: 0.5em, y: 0.22em), radius: 0.8em, stroke: 0.5pt + ctx.c.border, {
+      box(baseline: -0.1em, circle(radius: 0.22em, fill: if here { ctx.c.success } else { none }, stroke: if here { none } else { 0.5pt + ctx.c.muted }))
+      h(0.3em)
+      entry.name
+    })
+  }).join(h(0.3em))
+}
+
 #let attendance-block(ctx, b) = {
   let variant = look(ctx, "attendance", default: "list").variant
+  if variant == "grid" or variant == "chips" {
+    if b.show_counts {
+      let counts = attendance-counts(ctx, b)
+      block(above: 0pt, below: space.s3, text(size: 0.85em, fill: ctx.theme.secondary)[#tr(ctx, "label.attendanceCounts", present: counts.present, late: counts.late, excused: counts.excused, absent: counts.absent)])
+    }
+    if variant == "grid" { attendance-grid(ctx, b) } else { par(leading: 0.9em, attendance-chips(ctx, b)) }
+    return
+  }
   if variant == "compact" or variant == "table" {
     if variant == "compact" { attendance-compact(ctx, b) } else { attendance-table(ctx, b) }
     if b.show_counts {
@@ -316,9 +403,26 @@
 
 // ── Statistik ───────────────────────────────────────────────────────────────
 
+#let kpi-label(ctx, tile) = if tile.at("label_key", default: none) != none { tr(ctx, tile.label_key) } else { tile.at("label", default: "") }
+
 #let kpi-tiles-block(ctx, b) = {
   let count = calc.min(calc.max(b.tiles.len(), 1), 4)
   let style = look(ctx, "kpi_tiles", default: "outlined")
+  let tone(tile) = if tile.tone == "default" { ctx.c.text } else { tone-color(ctx, tile.tone) }
+  // «plain»: nur Label und Wert; «divided»: eine umrandete Zeile mit Trennlinien
+  if style.variant == "plain" or style.variant == "divided" {
+    let cells = b.tiles.map(tile => {
+      text(size: 0.72em, fill: ctx.c.muted, tracking: 0.06em)[#upper(kpi-label(ctx, tile))]
+      linebreak()
+      text(size: 1.5em, fill: tone(tile))[#tile.value]
+      if not is-blank(tile.at("hint", default: none)) { linebreak(); text(size: 0.75em, fill: ctx.c.muted)[#tile.hint] }
+    })
+    if style.variant == "plain" {
+      return grid(columns: range(count).map(_ => 1fr), column-gutter: space.s3, row-gutter: space.s3, ..cells)
+    }
+    return block(width: 100%, stroke: 0.5pt + ctx.c.border, radius: style.radius * 1mm, clip: true,
+      table(columns: range(count).map(_ => 1fr), inset: space.s3, stroke: (x, y) => (left: if x > 0 { 0.5pt + ctx.c.border } else { none }, top: if y > 0 { 0.5pt + ctx.c.border } else { none }), ..cells))
+  }
   let filled = style.variant == "filled"
   grid(columns: range(count).map(_ => 1fr), column-gutter: space.s3, row-gutter: space.s3,
     ..b.tiles.map(tile => block(width: 100%, inset: space.s3, radius: style.radius * 1mm, stroke: if filled { none } else { 0.6pt + ctx.c.border }, fill: if filled { ctx.theme.primary.lighten(90%) } else { ctx.c.panel }, {
@@ -330,6 +434,49 @@
 }
 
 #let chart-block(ctx, b) = render-chart(ctx, b)
+
+// ── Pendenzen ───────────────────────────────────────────────────────────────
+
+#let todo-checklist(ctx, b) = {
+  let style = look(ctx, "todo")
+  let keys = b.table.columns.map(column => column.key)
+  let index-of(name) = keys.position(key => key == name)
+  let status-index = index-of("status")
+  let others = ("assignee", "due").map(index-of).filter(index => index != none)
+  let title = b.at("title", default: none)
+  if is-blank(title) and b.at("title_key", default: none) != none { title = tr(ctx, b.title_key) }
+  let pad = (x: 0.8em, y: 0.45em)
+  block(width: 100%, stroke: 0.5pt + ctx.c.border, radius: style.radius * 1mm, clip: true, {
+    if not is-blank(title) {
+      block(above: 0pt, below: 0pt, inset: (x: pad.x, top: 0.55em, bottom: 0.3em), text(size: 0.75em, weight: "bold", tracking: 0.08em, fill: ctx.theme.primary)[#upper(title)])
+    }
+    for group in b.table.groups {
+      if group.at("label_key", default: none) != none or group.at("label", default: none) != none {
+        block(above: 0pt, below: 0pt, inset: pad, width: 100%, fill: ctx.c.neutral_bg, text(size: 0.85em, weight: "bold")[#if group.at("label_key", default: none) != none { tr(ctx, group.label_key) } else { group.label }])
+      }
+      for row in group.rows {
+        let status = if status-index != none { row.cells.at(status-index).at("status", default: none) } else { none }
+        let done = status == "todoStatus.done"
+        let mark = box(baseline: 0.1em, width: 0.8em, height: 0.8em, radius: 1.5pt,
+          stroke: 0.75pt + if status == "todoStatus.cancelled" { ctx.c.muted } else { ctx.theme.primary },
+          fill: if done { ctx.theme.primary } else { none },
+          if done { align(center + horizon, text(size: 0.6em, fill: ctx.c.on_solid)[✓]) })
+        let task = row.cells.at(index-of("task")).at("v", default: "")
+        block(above: 0pt, below: 0pt, inset: pad, width: 100%, stroke: (top: 0.5pt + ctx.c.border), {
+          set text(fill: if row.at("muted", default: false) { ctx.c.muted } else { ctx.c.text })
+          grid(columns: (1.4em, 1fr, ..others.map(_ => auto)), column-gutter: 1em, mark, [#task], ..others.map(index => render-cell(ctx, row.cells.at(index))))
+        })
+      }
+    }
+  })
+}
+
+#let todo-block(ctx, b) = {
+  let variant = look(ctx, "todo", default: "table").variant
+  if variant == "checklist" { todo-checklist(ctx, b) }
+  else if variant == "status" { data-table(ctx + (status-pills: true), b.table) }
+  else { data-table(ctx, b.table) }
+}
 
 // ── Sonstiges ───────────────────────────────────────────────────────────────
 
@@ -351,7 +498,7 @@
   member_list: member-list-block,
   signature_fields: signature-fields-block,
   attendance_sheet: attendance-sheet-block,
-  todo_table: table-block,
+  todo_table: todo-block,
   event_table: table-block,
   event_calendar_month: event-calendar-month-block,
   event_agenda: event-agenda-block,
@@ -372,19 +519,40 @@
   }
 }
 
+// Titel eines Traktandums mit Verantwortlichen (brand.layout.responsible_display): «title» in
+// Klammern im Titel (Provider), «right» rechts neben dem Titel, «below» in einer Zeile darunter.
+// ``title_plain`` ist der Titel ohne die Namen; fehlt er, stehen die Namen nicht im Titel.
+#let element-title(ctx, b) = {
+  let names = b.at("responsible", default: none)
+  let plain = b.at("title_plain", default: none)
+  let mode = ctx.brand.layout.at("responsible_display", default: "title")
+  if is-blank(names) or (mode == "title" and plain != none) { return block-title(ctx, b) }
+  let title = if plain != none { plain } else { b.at("title", default: none) }
+  if is-blank(title) and b.at("title_key", default: none) != none { title = tr(ctx, b.title_key) }
+  if mode == "right" and not is-blank(title) {
+    heading-aside.update(names)
+    heading(level: b.level, outlined: true)[#title]
+    heading-aside.update(none)
+  } else {
+    if not is-blank(title) { heading(level: b.level, outlined: true)[#title] }
+    block(above: 0pt, below: space.s3, text(size: 0.85em, fill: ctx.c.muted)[#tr(ctx, "label.responsible"): #names])
+  }
+}
+
 #let render-block(ctx, b) = {
   // Darstellung eines einzelnen Bausteins (Sitzungsvorlage), bereits aufgelöst
   let ctx = if b.at("appearance", default: none) != none { with-appearance(ctx, b.appearance) } else { ctx }
+  // Leere Bausteine und Traktanden weglassen statt «Keine Einträge» (brand.layout.empty_blocks)
+  let hide-empty = ctx.brand.layout.at("empty_blocks", default: "note") == "hide"
   if b.type == "protocol_element" {
+    let children = if hide-empty { b.children.filter(child => not child.at("empty", default: false)) } else { b.children }
+    if hide-empty and (b.empty or children.len() == 0) { return }
     let body = {
-      block-title(ctx, b)
-      if not is-blank(b.at("responsible", default: none)) {
-        block(above: 0pt, below: space.s3, text(size: 0.85em, fill: ctx.c.muted)[#tr(ctx, "label.responsible"): #b.responsible])
-      }
-      if b.empty or b.children.len() == 0 {
+      element-title(ctx, b)
+      if b.empty or children.len() == 0 {
         empty-note(ctx, b.type)
       } else {
-        for child in b.children { render-block(ctx, child) }
+        for child in children { render-block(ctx, child) }
       }
     }
     // Ein Traktandum bleibt auf einer Seite, solange es auf eine ganze Seite passt; sonst
@@ -404,7 +572,10 @@
     }))
     v(space.s4, weak: true)
   } else {
-    block-title(ctx, b)
+    if b.empty and hide-empty { return }
+    // Die Pendenzen-Darstellung «checklist» setzt ihren Titel selbst in den Kasten
+    let own-title = b.type == "todo_table" and look(ctx, "todo", default: "table").variant == "checklist" and not b.empty
+    if not own-title { block-title(ctx, b) }
     if b.empty {
       empty-note(ctx, b.type)
     } else {

@@ -106,6 +106,17 @@ def _rich_lines(text: str) -> list[Any]:
     return [Paragraph(c=spans)]
 
 
+def _split_responsible(element: Any, section_title: str) -> tuple[str | None, str | None]:
+    """Titel ohne Verantwortliche und die Namen, wenn ``section_title`` die Form
+    «<element_title_snapshot> (<Namen>)» hat (responsible_label_service)."""
+    plain = str(getattr(element, "element_title_snapshot", None) or "")
+    if plain and section_title.startswith(f"{plain} (") and section_title.endswith(")"):
+        names = section_title[len(plain) + 2:-1].strip()
+        if names:
+            return plain, names
+    return None, None
+
+
 def _todo_block(rows: list[Any], fields: dict) -> TodoTableBlock:
     columns = ["status"]
     if any(getattr(row, "assigned_participant_name", None) for row in rows):
@@ -381,7 +392,8 @@ def element_blocks(ctx: BuildContext, protocol: Protocol | None, *, element_ref:
             rows = list(repository.list_todos_by_tag(ctx.db, protocol, tag))
             if rows:
                 children.append(_todo_block(rows, {"title": None, "title_key": "label.sessionTodos", "level": 2}))
-        result.append(ElementModel(title=section_title, level=1, children=children))
+        title_plain, responsible = _split_responsible(element, section_title)
+        result.append(ElementModel(title=section_title, title_plain=title_plain, responsible=responsible, level=1, children=children))
     if element_ref is None and agenda_other:
         result.append(ElementModel(title=None, title_key="label.agendaOther", level=1, children=agenda_other))
     return result
@@ -474,7 +486,8 @@ def session_template_blocks(ctx: BuildContext, protocol: Protocol | None, *, inc
                 todo_rows = list(repository.list_todos_by_tag(ctx.db, protocol, tag))
                 if todo_rows:
                     children.append(_todo_block(todo_rows, {"title": None, "title_key": "label.sessionTodos", "level": 2}))
-        result.append(ElementModel(title=section_title, level=1, children=children))
+        title_plain, responsible = _split_responsible(element, section_title) if element is not None else (None, None)
+        result.append(ElementModel(title=section_title, title_plain=title_plain, responsible=responsible, level=1, children=children))
     if agenda_other:
         result.append(ElementModel(title=None, title_key="label.agendaOther", level=1, children=agenda_other))
     return result

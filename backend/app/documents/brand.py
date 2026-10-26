@@ -145,6 +145,13 @@ class BrandLayout(_Strict):
     title_page: bool = False
     toc: bool = False
     heading_numbering: bool = False
+    # Darstellung der Abschnittsnummer (nur mit Nummerierung): wie Text, farbige Zahl,
+    # Zahl auf Farbfläche, mit Paragrafzeichen
+    heading_number_style: Literal["plain", "accent", "badge", "paragraph"] = "plain"
+    # Verantwortliche eines Traktandums: in Klammern im Titel, rechts neben dem Titel, darunter
+    responsible_display: Literal["title", "right", "below"] = "title"
+    # Leere Bausteine und Traktanden: Hinweis («Keine Einträge») oder weglassen
+    empty_blocks: Literal["note", "hide"] = "note"
     show_metadata: bool = False
     watermark_draft: bool = True
 

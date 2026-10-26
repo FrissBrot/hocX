@@ -387,6 +387,9 @@ def resolve_brand(db: Session, tenant_id: int, revision: DocumentBrandRevision |
             "table_style": layout.table_style,
             "border_width": layout.border_width,
             "radius": layout.radius,
+            "heading_number_style": layout.heading_number_style,
+            "responsible_display": layout.responsible_display,
+            "empty_blocks": layout.empty_blocks,
         },
         "appearance": resolve_appearance(tokens),
     }

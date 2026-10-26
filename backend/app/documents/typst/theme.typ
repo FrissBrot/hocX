@@ -52,6 +52,10 @@
   if level == 1 { gap * 1.4 } else { gap }
 }
 
+// Text rechts in der nächsten Überschrift (Verantwortliche eines Traktandums, blocks.typ). Steht
+// nicht im Überschriftentext, damit das Inhaltsverzeichnis nur den Titel zeigt.
+#let heading-aside = state("hocx-heading-aside", none)
+
 #let heading-rule(brand, c) = {
   let t = brand.typography
   let heading-look = appearance-of(brand, "heading")
@@ -60,7 +64,7 @@
   let heading-color = rgb(brand.colors.heading)
   let secondary = rgb(brand.colors.secondary)
   let gap = brand.layout.section_gap * 1mm
-  it => {
+  it => context {
     let sizes = (t.size_h1 * 1pt, t.size_h2 * 1pt, t.size_h3 * 1pt, t.base_size * 1pt)
     let body = if t.heading_transform == "upper" { upper(it) } else { it }
     set text(
@@ -71,6 +75,33 @@
       fill: if it.level == 1 { heading-color } else { secondary.darken(10%) },
     )
     set block(above: heading-above(brand, it.level), below: 0.65em, sticky: true)
+    // Abschnittsnummer (brand.layout.heading_number_style) und Text rechts (heading-aside).
+    // Ohne beides setzt Typst die Überschrift selbst («plain»: Nummer wie Text).
+    let number-style = brand.layout.at("heading_number_style", default: "plain")
+    let aside = heading-aside.get()
+    if (it.numbering != none and number-style != "plain") or aside != none {
+      let title = if t.heading_transform == "upper" { upper(it.body) } else { it.body }
+      if it.numbering != none {
+        let number = counter(heading).display(it.numbering)
+        let top = it.level == 1
+        let mark = if number-style == "badge" and top {
+          box(baseline: 0.12em, inset: (x: 0.35em, y: 0.22em), radius: heading-look.radius * 1mm, fill: primary,
+            text(fill: c.on_solid, weight: "bold", size: 0.8em, number))
+        } else if number-style == "paragraph" {
+          text(fill: primary, weight: "regular")[§#h(0.15em)#number]
+        } else if number-style == "accent" {
+          text(fill: primary, weight: "regular", number)
+        } else {
+          number
+        }
+        let aligned = top and number-style == "accent"
+        title = box(width: if aligned { 1.8em } else { auto }, mark) + h(if aligned { 0em } else { 0.45em }) + title
+      }
+      if aside != none {
+        title = title + h(1fr) + text(size: t.base_size * 0.85pt, weight: "regular", tracking: 0pt, fill: c.muted, aside)
+      }
+      body = title
+    }
     if it.level > 1 or style == "plain" {
       block(body)
     } else if style == "underline" {

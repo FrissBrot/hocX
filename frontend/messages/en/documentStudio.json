@@ -330,7 +330,30 @@
       "show_qr": "Show QR code",
       "show_url": "Show verification address"
     },
-    "verifyHelp": "Details in the verification note at the end of the document."
+    "verifyHelp": "Details in the verification note at the end of the document.",
+    "choice": {
+      "heading_number_style": {
+        "label": "Section number",
+        "help": "Applies when the template numbers headings.",
+        "plain": "Like text",
+        "accent": "Coloured number",
+        "badge": "Number on colour",
+        "paragraph": "With section sign (§)"
+      },
+      "responsible_display": {
+        "label": "Responsible people on agenda items",
+        "help": "Where the people responsible for an agenda item appear.",
+        "title": "In brackets in the title",
+        "right": "Right of the title",
+        "below": "On a line below"
+      },
+      "empty_blocks": {
+        "label": "Empty blocks",
+        "help": "Blocks and agenda items without content.",
+        "note": "Show a note",
+        "hide": "Leave out"
+      }
+    }
   },
   "canvas": {
     "approximateHint": "The workspace is an approximation. The PDF preview is binding.",
@@ -1720,13 +1743,19 @@
       "session_date": "Next meeting",
       "finance_balance": "Account balance",
       "kpi_tiles": "Key figures",
-      "form": "Form"
+      "form": "Form",
+      "matrix": "Matrix",
+      "todo": "Tasks",
+      "toc": "Table of contents",
+      "quote": "Quotes and decisions"
     },
     "variant": {
       "attendance": {
         "list": "List",
         "compact": "Compact by status",
-        "table": "Table"
+        "table": "Table",
+        "grid": "Grid with summary",
+        "chips": "Name chips"
       },
       "session_date": {
         "line": "Line",
@@ -1738,7 +1767,9 @@
       },
       "kpi_tiles": {
         "outlined": "Outlined",
-        "filled": "Filled"
+        "filled": "Filled",
+        "plain": "Plain",
+        "divided": "One row with dividers"
       },
       "form": {
         "grid": "Two columns",
@@ -1755,6 +1786,26 @@
         "lines": "Lines",
         "minimal": "Minimal",
         "zebra": "Alternating rows"
+      },
+      "matrix": {
+        "table": "Table",
+        "cards": "Cards",
+        "cards_filled": "Cards with coloured header"
+      },
+      "todo": {
+        "table": "Table",
+        "checklist": "Box with checkboxes",
+        "status": "Table with status pills"
+      },
+      "toc": {
+        "indented": "Indented",
+        "leaders": "With dotted leaders",
+        "badges": "Numbers on colour"
+      },
+      "quote": {
+        "line": "Line on the left",
+        "box": "Highlighted box",
+        "framed": "Between two lines"
       }
     },
     "designerTitle": "Appearance",

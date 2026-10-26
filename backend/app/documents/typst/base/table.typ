@@ -5,7 +5,7 @@
 // Label mit farbigem Punkt. Die Optik (Linien, Kopf, Zebra, Innenabstand) kommt aus
 // ctx.theme.table (aus dem Brand-Profil, siehe theme.typ).
 
-#import "../lib/core.typ": colors, space, radius, tr, tone-color, status-dot, tag-chip
+#import "../lib/core.typ": colors, space, radius, tr, tone-color, status-dot, status-tone, tag-chip
 #import "rich.typ": render-rich
 
 #let column-width(column, index, flexible-index) = {
@@ -47,7 +47,11 @@
 
 #let render-cell(ctx, cell) = {
   let kind = cell.at("k", default: "text")
-  let body = if kind == "status" and cell.at("status", default: none) != none {
+  let body = if kind == "status" and cell.at("status", default: none) != none and ctx.at("status-pills", default: false) {
+    // Pendenzen-Darstellung «status»: Status als Pill statt Punkt
+    let color = tone-color(ctx, status-tone(cell.status))
+    box(inset: (x: 0.45em, y: 0.15em), radius: 0.6em, fill: color.lighten(85%), text(size: 0.85em, weight: "bold", fill: color.darken(25%), tr(ctx, cell.status)))
+  } else if kind == "status" and cell.at("status", default: none) != none {
     status-dot(ctx, cell.status)
     if cell.at("v", default: "") != "" { text(fill: ctx.c.muted)[ (#cell.v)] }
   } else if kind == "tags" {

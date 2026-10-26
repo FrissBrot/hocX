@@ -15,16 +15,23 @@ from pydantic import BaseModel, ConfigDict, Field
 APPEARANCE_VARIANTS: dict[str, tuple[str, ...]] = {
     "heading": ("plain", "underline", "bar", "boxed"),
     "table": ("lines", "grid", "zebra", "minimal"),
-    "attendance": ("list", "compact", "table"),
+    "attendance": ("list", "compact", "table", "grid", "chips"),
     "session_date": ("line", "box"),
     "finance_balance": ("list", "tiles"),
-    "kpi_tiles": ("outlined", "filled"),
+    "kpi_tiles": ("outlined", "filled", "plain", "divided"),
     "form": ("grid", "table"),
+    # Matrix: Tabelle (Tabellenstil) oder je Spalte eine Karte (Gruppeneinteilung)
+    "matrix": ("table", "cards", "cards_filled"),
+    # Pendenzen: Tabelle, Kasten mit Kästchen oder Tabelle mit Status-Pills und «Neu»
+    "todo": ("table", "checklist", "status"),
+    "toc": ("indented", "leaders", "badges"),
+    # Zitate im Rich Text, z. B. für Beschlüsse
+    "quote": ("line", "box", "framed"),
 }
 # Elementarten mit Flächen, bei denen die Ecken sichtbar sind (Wahl «eckig/abgerundet»)
-CORNER_KINDS = ("heading", "session_date", "finance_balance", "kpi_tiles")
+CORNER_KINDS = ("heading", "session_date", "finance_balance", "kpi_tiles", "matrix", "todo", "quote")
 # Nur im Brand-Profil übersteuerbar (globale Regel im Dokument, nicht pro Block)
-BRAND_ONLY_APPEARANCE = frozenset({"heading"})
+BRAND_ONLY_APPEARANCE = frozenset({"heading", "toc", "quote"})
 
 AppearanceBase = Literal["classic", "rounded", "bold", "minimal"]
 
@@ -34,19 +41,19 @@ AppearanceBase = Literal["classic", "rounded", "bold", "minimal"]
 APPEARANCE_BASES: dict[str, dict[str, Any]] = {
     "classic": {
         "layout": {"heading_style": "underline", "table_style": "lines", "radius": 1.5},
-        "elements": {"attendance": "list", "session_date": "line", "finance_balance": "list", "kpi_tiles": "outlined", "form": "grid"},
+        "elements": {"attendance": "list", "session_date": "line", "finance_balance": "list", "kpi_tiles": "outlined", "form": "grid", "matrix": "table", "todo": "table", "toc": "indented", "quote": "line"},
     },
     "rounded": {
         "layout": {"heading_style": "boxed", "table_style": "zebra", "radius": 4},
-        "elements": {"attendance": "compact", "session_date": "box", "finance_balance": "tiles", "kpi_tiles": "filled", "form": "grid"},
+        "elements": {"attendance": "compact", "session_date": "box", "finance_balance": "tiles", "kpi_tiles": "filled", "form": "grid", "matrix": "table", "todo": "table", "toc": "indented", "quote": "line"},
     },
     "bold": {
         "layout": {"heading_style": "bar", "table_style": "zebra", "radius": 0},
-        "elements": {"attendance": "table", "session_date": "box", "finance_balance": "tiles", "kpi_tiles": "filled", "form": "table"},
+        "elements": {"attendance": "table", "session_date": "box", "finance_balance": "tiles", "kpi_tiles": "filled", "form": "table", "matrix": "table", "todo": "table", "toc": "indented", "quote": "line"},
     },
     "minimal": {
         "layout": {"heading_style": "plain", "table_style": "minimal", "radius": 0},
-        "elements": {"attendance": "compact", "session_date": "line", "finance_balance": "list", "kpi_tiles": "outlined", "form": "grid"},
+        "elements": {"attendance": "compact", "session_date": "line", "finance_balance": "list", "kpi_tiles": "outlined", "form": "grid", "matrix": "table", "todo": "table", "toc": "indented", "quote": "line"},
     },
 }
 # Eckenradius «abgerundet», wenn der Grundstil eckig ist (mm)
@@ -77,8 +84,8 @@ def validate_appearance_elements(value: dict[str, ElementAppearance], *, allow_b
 # Elementart der Darstellung je Baustein-Typ einer Sitzungsvorlage (Element-Typ-Code). Die
 # Vorlage kann sie pro Baustein übersteuern (TemplateElement.configuration_json.block_appearance).
 APPEARANCE_KIND_BY_ELEMENT_TYPE: dict[str, str] = {
-    "todo": "table",
-    "matrix": "table",
+    "todo": "todo",
+    "matrix": "matrix",
     "fine_list": "table",
     "finance_transactions": "table",
     "event_list": "table",

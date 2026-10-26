@@ -357,7 +357,9 @@ def validate_spec(spec: BlockSpec) -> _Params:
 _TABLE_COMPONENTS = ("matrix", "attendance_matrix", "member_list", "attendance_sheet", "todo_table", "event_table", "list_table", "finance_transactions", "fines", "stat_table")
 APPEARANCE_KINDS: dict[str, tuple[str, ...]] = {
     **{name: ("table",) for name in _TABLE_COMPONENTS},
-    "protocol_element": ("table", "attendance", "session_date", "finance_balance", "form"),
+    "matrix": ("matrix", "table"),
+    "todo_table": ("todo", "table"),
+    "protocol_element": ("table", "todo", "matrix", "attendance", "session_date", "finance_balance", "form"),
     "attendance": ("attendance",),
     "session_date": ("session_date",),
     "finance_balance": ("finance_balance",),

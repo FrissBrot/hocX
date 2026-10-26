@@ -258,6 +258,9 @@ class ProtocolElementBlock(BlockBase):
 
     type: Literal["protocol_element"] = "protocol_element"
     responsible: str | None = None
+    # Titel ohne die Verantwortlichen in Klammern (``title`` enthält sie); Typst wählt je nach
+    # brand.layout.responsible_display. None = Titel enthält keine Verantwortlichen.
+    title_plain: str | None = None
     children: list["Block"] = Field(default_factory=list)
 
     def is_empty(self) -> bool:
