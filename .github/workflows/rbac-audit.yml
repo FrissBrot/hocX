@@ -1,0 +1,170 @@
+name: RBAC-Audit (wöchentlich)
+
+# Prüft das Berechtigungskonzept (docs/RBAC_ARCHITECTURE_PROPOSAL.md, SECURITY-RULES §1.3/§1.4)
+# jede Woche erneut auf dem Stand von main - auch was über Merges ohne vollständige CI,
+# Abhängigkeits-Updates oder nachträglich gesetzte Ausnahmen hereingekommen ist. Die PR-CI prüft
+# nur neu eingeführte Verstösse; dieser Lauf prüft den ganzen Bestand.
+
+on:
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+
+      - name: Berechtigungskatalog vollständig und generiert
+        run: python3 scripts/sync-permission-catalog.py --check
+
+      - name: Rechte-Übersicht aktuell
+        run: python3 scripts/sync-route-permissions.py --check
+
+      # Ganzes Repo ohne Vergleichsstand: kein Rollen-Code-Vergleich, keine Rollen-Schreibzugriffe
+      # ausserhalb von role_service.py (ausser begründet markiert).
+      - name: RBAC-Regeln im gesamten Bestand
+        run: python3 scripts/check-security-rules.py --all --rules role-code-comparison,role-write-outside-role-service
+
+      # Zur Durchsicht: alle begründeten Ausnahmen und Routen ohne eigene Berechtigung.
+      - name: Ausnahmen in die Job-Summary
+        run: |
+          {
+            echo "## RBAC-Ausnahmen (rbac-ok)"
+            echo '```'
+            git grep -n "rbac-ok" -- backend frontend || echo "keine"
+            echo '```'
+            echo "## Routen ohne eigene Berechtigung (note in permissions/route-map.json)"
+            echo '```'
+            jq -r '.routes | to_entries[] | select(.value.note) | "\(.key): \(.value.note)"' permissions/route-map.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: hocx_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://ci:ci@localhost:5432/hocx_ci
+      REDIS_URL: redis://localhost:6379/0
+      POSTGRES_DB: hocx_ci
+      APP_DB_PASSWORD: ci-rbac-audit-dummy-app-password
+      ABGABEBOX_DB_PASSWORD: ci-rbac-audit-dummy-abgabebox-password
+      PHOTO_WORKER_DB_PASSWORD: ci-rbac-audit-dummy-photo-worker-password
+      AUTH_SECRET: ci-rbac-audit-dummy-secret-0123456789
+      ADMIN_AUTH_SECRET: ci-rbac-audit-dummy-admin-secret-0123456789
+      STORAGE_CREDENTIALS_KEY: ci-rbac-audit-dummy-storage-key-0123456789
+      STORAGE_ROOT: ${{ github.workspace }}/storage
+      EXPORT_ROOT: ${{ github.workspace }}/storage/exports
+      UPLOAD_ROOT: ${{ github.workspace }}/storage/uploads
+      THUMBNAIL_ROOT: ${{ github.workspace }}/storage-local/thumbnails
+      TRAEFIK_DYNAMIC_CONFIG_DIR: ${{ runner.temp }}/traefik_dynamic
+      RBAC_TESTS: >-
+        tests/test_rbac.py
+        tests/test_route_permission_inventory.py
+        tests/test_role_permissions.py
+        tests/test_auth_access.py
+        tests/test_feature_gating.py
+        tests/test_user_service.py
+        tests/test_privacy_statistics.py
+        tests/test_tenant_rls.py
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements-dev.txt
+
+      - name: Migrationen auf frischer Datenbank
+        working-directory: backend
+        run: python3 -m alembic upgrade head
+
+      - name: RBAC-, Rechte- und RLS-Tests
+        working-directory: backend
+        run: python3 -m pytest $RBAC_TESTS -q
+
+      # Dieselben Tests unter der Laufzeitrolle hocx_app mit aktiver Row-Level-Security
+      # (RLS-Testmodus, backend/tests/conftest.py): Rollen-Tabellen bleiben mandantengetrennt.
+      - name: RBAC-Tests im RLS-Testmodus
+        working-directory: backend
+        env:
+          HOCX_TEST_RLS: "1"
+          APP_DATABASE_URL: postgresql+psycopg://hocx_app:ci-rbac-audit-dummy-app-password@localhost:5432/hocx_ci
+        run: python3 -m pytest $RBAC_TESTS -q
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install npm dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright Chromium (+ OS deps)
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Rollen und Rechte im Browser (E2E rbac-roles)
+        env:
+          CI: "true"
+          E2E_USE_HOST_PLAYWRIGHT: "1"
+          E2E_ARGS: rbac-roles.spec.ts
+        run: ./scripts/e2e.sh all
+
+      - name: Upload Playwright diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rbac-playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/playwright/
+          if-no-files-found: ignore
+          retention-days: 14

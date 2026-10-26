@@ -6,7 +6,9 @@ with `@path` syntax as well, resolving paths relative to the referencing file.
 
 The security rules in `SECURITY-RULES.md` (referenced from `CLAUDE.md`) are mandatory. Before
 finishing, `python3 scripts/check-security-rules.py <changed files>` must report
-`Sicherheitsregeln: ok`; the pre-commit hook and CI enforce the same check.
+`Sicherheitsregeln: ok`; the pre-commit hook and CI enforce the same check. When routes or
+permissions change, also run `python3 scripts/sync-route-permissions.py` and
+`python3 scripts/sync-permission-catalog.py --check` (see CLAUDE.md, "Berechtigungen / RBAC").
 
 Keep shared project rules in `CLAUDE.md` and its referenced files, not here.
 

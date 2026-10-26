@@ -27,7 +27,7 @@ from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -92,13 +92,10 @@ from app.models import (
     Tenant,
     TenantDomain,
     TenantFeature,
-    TenantRole,
-    TenantRolePermission,
     TenantStoragePackage,
     UserMfaFactor,
     UserProtocolAccess,
     UserProtocolScroll,
-    UserRole,
     UserTemplateAccess,
     WordImportDocument,
     WordImportProfile,
@@ -568,17 +565,13 @@ class TenantImportService:
         Mandanten an - übernommen werden Name, Beschreibung und Berechtigungen (admin bleibt fest),
         eigene Rollen werden neu angelegt. Unbekannte Berechtigungen (neuere Installation) fallen
         weg. Ältere Formate: nur Standardrollen, siehe _roles_for_user."""
-        from app.core.permissions import ADMIN_ROLE_KEY, P
+        from app.core.permissions import ADMIN_ROLE_KEY
 
         self._role_map: dict[int, int] = {}
-        known = {permission.value for permission in P}
         used_names: set[str] = set()
         for row in self._t("tenant_role"):
             system_key = row.get("system_key")
-            if system_key:
-                role = role_service.system_role(self.db, new_tenant_id, system_key)
-            else:
-                role = TenantRole(tenant_id=new_tenant_id)
+            name = None
             if system_key != ADMIN_ROLE_KEY:
                 name = (row.get("name") or "").strip() or None
                 if name is None and not system_key:
@@ -588,14 +581,14 @@ class TenantImportService:
                     while name.lower() in used_names:
                         name, counter = f"{base} ({counter})", counter + 1
                     used_names.add(name.lower())
-                role.name = name
-                role.description = row.get("description")
-                self.db.add(role)
-                self.db.flush()
-                self.db.execute(delete(TenantRolePermission).where(TenantRolePermission.role_id == role.id))
-                for key in sorted({key for key in row.get("permissions") or [] if key in known}):
-                    self.db.add(TenantRolePermission(role_id=role.id, permission_key=key))
-            self.db.flush()
+            role = role_service.import_role(
+                self.db,
+                new_tenant_id,
+                system_key=system_key,
+                name=name,
+                description=row.get("description"),
+                permissions=row.get("permissions") or [],
+            )
             self._role_map[row["id"]] = role.id
         self.db.commit()
 
@@ -675,9 +668,7 @@ class TenantImportService:
             new_user = self._build(AppUser, row, overrides)
             self.db.add(new_user)
             self.db.flush()
-            for role_id in dict.fromkeys(role_ids):
-                self.db.add(UserRole(tenant_id=new_tenant_id, user_id=new_user.id, role_id=role_id))
-            self.db.flush()
+            role_service.attach_imported_roles(self.db, new_user, role_ids)
             self._user_id_map[row["id"]] = new_user.id
             self.user_cache.set_id(str(row.get("public_id")), new_user.id)
             if self.format_version < 4:

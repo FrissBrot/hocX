@@ -44,8 +44,14 @@ jobs:
 
       # Berechtigungen (RBAC) kommen ausschliesslich aus permissions/catalog.json - die generierten
       # Dateien in frontend/ und backend/ müssen dazu passen.
+      # Prüft zusätzlich Übersetzungen, Migration und Verwendung jeder Berechtigung.
       - name: Berechtigungskatalog ist aktuell generiert
         run: python3 scripts/sync-permission-catalog.py --check
+
+      # Rechte-Übersicht der API (Route -> geprüfte Berechtigung): jede Änderung an einer
+      # Rechteprüfung erscheint als Diff in permissions/route-map.json und wird im PR bewusst geprüft.
+      - name: Rechte-Übersicht ist aktuell
+        run: python3 scripts/sync-route-permissions.py --check
 
       # i18n (siehe CLAUDE.md, Abschnitt "Internationalisierung / i18n"): alle drei Checks
       # beziehen die unterstuetzten Sprachen ausschliesslich aus i18n/locales.json - eine neu

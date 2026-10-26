@@ -1,0 +1,2668 @@
+{
+  "$comment": "GENERATED FILE - do not edit by hand. Regenerate with: python3 scripts/sync-route-permissions.py",
+  "routes": {
+    "GET /api/activity": {
+      "handler": "activity.list_activity",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "GET /api/admin/admins": {
+      "handler": "admin.list_admins",
+      "platform": true
+    },
+    "POST /api/admin/admins": {
+      "handler": "admin.create_admin",
+      "platform": true
+    },
+    "PATCH /api/admin/admins/{admin_id}": {
+      "handler": "admin.update_admin",
+      "platform": true
+    },
+    "GET /api/admin/audit-log": {
+      "handler": "admin.list_audit_log",
+      "platform": true
+    },
+    "POST /api/admin/auth/login": {
+      "handler": "admin_auth.login",
+      "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
+    },
+    "POST /api/admin/auth/logout": {
+      "handler": "admin_auth.logout",
+      "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
+    },
+    "POST /api/admin/auth/mfa/totp/setup/complete": {
+      "handler": "admin_auth.complete_login_totp_setup",
+      "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
+    },
+    "POST /api/admin/auth/mfa/totp/setup/start": {
+      "handler": "admin_auth.start_login_totp_setup",
+      "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
+    },
+    "POST /api/admin/auth/mfa/totp/verify": {
+      "handler": "admin_auth.verify_login_totp",
+      "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
+    },
+    "GET /api/admin/auth/oidc/authorize": {
+      "handler": "admin_auth.oidc_authorize",
+      "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
+    },
+    "GET /api/admin/auth/oidc/callback": {
+      "handler": "admin_auth.oidc_callback",
+      "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
+    },
+    "GET /api/admin/auth/oidc/public-config": {
+      "handler": "admin_auth.get_oidc_public_config",
+      "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
+    },
+    "GET /api/admin/auth/session": {
+      "handler": "admin_auth.session",
+      "note": "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
+    },
+    "GET /api/admin/backups": {
+      "handler": "admin_backups.backup_jobs",
+      "platform": true
+    },
+    "POST /api/admin/backups": {
+      "handler": "admin_backups.create_backup",
+      "platform": true
+    },
+    "POST /api/admin/backups/restore-test": {
+      "handler": "admin_backups.create_restore_test",
+      "platform": true
+    },
+    "GET /api/admin/backups/sets": {
+      "handler": "admin_backups.backup_sets",
+      "platform": true
+    },
+    "GET /api/admin/backups/sets/{set_id}/tenants": {
+      "handler": "admin_backups.backup_set_tenants",
+      "platform": true
+    },
+    "GET /api/admin/backups/settings": {
+      "handler": "admin_backups.backup_settings",
+      "platform": true
+    },
+    "PUT /api/admin/backups/settings": {
+      "handler": "admin_backups.update_backup_settings",
+      "platform": true
+    },
+    "GET /api/admin/backups/status": {
+      "handler": "admin_backups.backup_status",
+      "platform": true
+    },
+    "GET /api/admin/backups/{job_id}": {
+      "handler": "admin_backups.backup_job",
+      "platform": true
+    },
+    "POST /api/admin/backups/{job_id}/cancel": {
+      "handler": "admin_backups.cancel_backup",
+      "platform": true
+    },
+    "POST /api/admin/backups/{job_id}/verify": {
+      "handler": "admin_backups.verify_backup",
+      "platform": true
+    },
+    "GET /api/admin/cashflow/charges": {
+      "handler": "admin_cashflow.list_charges",
+      "platform": true
+    },
+    "PATCH /api/admin/cashflow/charges/{charge_id}": {
+      "handler": "admin_cashflow.update_charge",
+      "platform": true
+    },
+    "POST /api/admin/cashflow/charges/{charge_id}/recalculate": {
+      "handler": "admin_cashflow.recalculate_charge",
+      "platform": true
+    },
+    "GET /api/admin/cashflow/costs": {
+      "handler": "admin_cashflow.list_costs",
+      "platform": true
+    },
+    "POST /api/admin/cashflow/costs": {
+      "handler": "admin_cashflow.create_cost",
+      "platform": true
+    },
+    "DELETE /api/admin/cashflow/costs/{cost_id}": {
+      "handler": "admin_cashflow.delete_cost",
+      "platform": true
+    },
+    "PUT /api/admin/cashflow/costs/{cost_id}": {
+      "handler": "admin_cashflow.update_cost",
+      "platform": true
+    },
+    "PATCH /api/admin/cashflow/costs/{cost_id}/status": {
+      "handler": "admin_cashflow.set_cost_status",
+      "platform": true
+    },
+    "GET /api/admin/cashflow/overview": {
+      "handler": "admin_cashflow.cashflow_overview",
+      "platform": true
+    },
+    "GET /api/admin/catalog/export": {
+      "handler": "admin.export_catalog",
+      "platform": true
+    },
+    "POST /api/admin/catalog/import": {
+      "handler": "admin.apply_catalog_import",
+      "platform": true
+    },
+    "POST /api/admin/catalog/import/preview": {
+      "handler": "admin.preview_catalog_import",
+      "platform": true
+    },
+    "GET /api/admin/document-templates": {
+      "handler": "admin_document_templates.list_system_templates",
+      "platform": true
+    },
+    "POST /api/admin/document-templates/{template_id}/archive": {
+      "handler": "admin_document_templates.archive_system_template",
+      "platform": true
+    },
+    "POST /api/admin/document-templates/{template_id}/platform-default": {
+      "handler": "admin_document_templates.set_platform_default",
+      "platform": true
+    },
+    "GET /api/admin/domains": {
+      "handler": "admin.list_domains",
+      "platform": true
+    },
+    "DELETE /api/admin/domains/{domain_id}": {
+      "handler": "admin.delete_domain",
+      "platform": true
+    },
+    "GET /api/admin/error-logs": {
+      "handler": "admin.list_error_logs",
+      "platform": true
+    },
+    "GET /api/admin/error-logs/filter-options": {
+      "handler": "admin.error_log_filter_options",
+      "platform": true
+    },
+    "GET /api/admin/features": {
+      "handler": "admin.list_features",
+      "platform": true
+    },
+    "PUT /api/admin/features/{code}": {
+      "handler": "admin.update_feature",
+      "platform": true
+    },
+    "GET /api/admin/identity-verification-requests": {
+      "handler": "admin_identity_verification.list_identity_verification_requests",
+      "platform": true
+    },
+    "GET /api/admin/jobs": {
+      "handler": "admin.get_job_status",
+      "platform": true
+    },
+    "GET /api/admin/jobs/{job_name}/runs": {
+      "handler": "admin.list_job_runs",
+      "platform": true
+    },
+    "GET /api/admin/maintenance": {
+      "handler": "admin_maintenance.maintenance_overview",
+      "platform": true
+    },
+    "POST /api/admin/maintenance": {
+      "handler": "admin_maintenance.create_maintenance",
+      "platform": true
+    },
+    "GET /api/admin/maintenance/{window_id}": {
+      "handler": "admin_maintenance.get_maintenance_window",
+      "platform": true
+    },
+    "PATCH /api/admin/maintenance/{window_id}": {
+      "handler": "admin_maintenance.update_maintenance",
+      "platform": true
+    },
+    "POST /api/admin/maintenance/{window_id}/cancel": {
+      "handler": "admin_maintenance.cancel_maintenance",
+      "platform": true
+    },
+    "POST /api/admin/maintenance/{window_id}/release": {
+      "handler": "admin_maintenance.release_maintenance",
+      "platform": true
+    },
+    "POST /api/admin/maintenance/{window_id}/start": {
+      "handler": "admin_maintenance.start_maintenance",
+      "platform": true
+    },
+    "GET /api/admin/mfa": {
+      "handler": "admin.get_my_admin_mfa",
+      "platform": true
+    },
+    "DELETE /api/admin/mfa/factors/{factor_id}": {
+      "handler": "admin.delete_my_admin_mfa_factor",
+      "platform": true
+    },
+    "POST /api/admin/mfa/passkeys/complete": {
+      "handler": "admin.complete_my_admin_passkey_registration",
+      "platform": true
+    },
+    "POST /api/admin/mfa/passkeys/start": {
+      "handler": "admin.start_my_admin_passkey_registration",
+      "platform": true
+    },
+    "POST /api/admin/mfa/totp/complete": {
+      "handler": "admin.complete_my_admin_totp_enrollment",
+      "platform": true
+    },
+    "POST /api/admin/mfa/totp/start": {
+      "handler": "admin.start_my_admin_totp_enrollment",
+      "platform": true
+    },
+    "GET /api/admin/notifications": {
+      "handler": "admin.get_notification_settings",
+      "platform": true
+    },
+    "PUT /api/admin/notifications": {
+      "handler": "admin.update_notification_settings",
+      "platform": true
+    },
+    "POST /api/admin/notifications/status-token": {
+      "handler": "admin.rotate_status_token",
+      "platform": true
+    },
+    "POST /api/admin/notifications/test": {
+      "handler": "admin.send_test_notification",
+      "platform": true
+    },
+    "GET /api/admin/oidc-config": {
+      "handler": "admin.get_platform_oidc_config",
+      "platform": true
+    },
+    "PUT /api/admin/oidc-config": {
+      "handler": "admin.update_platform_oidc_config",
+      "platform": true
+    },
+    "GET /api/admin/plans": {
+      "handler": "admin.list_plans",
+      "platform": true
+    },
+    "POST /api/admin/plans": {
+      "handler": "admin.create_plan",
+      "platform": true
+    },
+    "DELETE /api/admin/plans/{code}": {
+      "handler": "admin.delete_plan",
+      "platform": true
+    },
+    "PUT /api/admin/plans/{code}": {
+      "handler": "admin.upsert_plan",
+      "platform": true
+    },
+    "GET /api/admin/restores": {
+      "handler": "admin_backups.restore_jobs",
+      "platform": true
+    },
+    "POST /api/admin/restores": {
+      "handler": "admin_backups.create_restore",
+      "platform": true
+    },
+    "POST /api/admin/restores/preview": {
+      "handler": "admin_backups.restore_preview",
+      "platform": true
+    },
+    "GET /api/admin/restores/{restore_id}": {
+      "handler": "admin_backups.restore_job",
+      "platform": true
+    },
+    "POST /api/admin/restores/{restore_id}/cancel": {
+      "handler": "admin_backups.cancel_restore",
+      "platform": true
+    },
+    "GET /api/admin/storage-packages": {
+      "handler": "admin.list_storage_packages",
+      "platform": true
+    },
+    "POST /api/admin/storage-packages": {
+      "handler": "admin.create_storage_package",
+      "platform": true
+    },
+    "DELETE /api/admin/storage-packages/{code}": {
+      "handler": "admin.delete_storage_package",
+      "platform": true
+    },
+    "PUT /api/admin/storage-packages/{code}": {
+      "handler": "admin.upsert_storage_package",
+      "platform": true
+    },
+    "POST /api/admin/storage/generations/{generation_id}/purge": {
+      "handler": "admin_storage.purge_generation",
+      "platform": true
+    },
+    "POST /api/admin/storage/local-s3/request": {
+      "handler": "admin_storage.request_local_s3",
+      "platform": true
+    },
+    "GET /api/admin/storage/migrations": {
+      "handler": "admin_storage.list_migrations",
+      "platform": true
+    },
+    "POST /api/admin/storage/migrations": {
+      "handler": "admin_storage.create_migration",
+      "platform": true
+    },
+    "GET /api/admin/storage/migrations/{migration_id}": {
+      "handler": "admin_storage.get_migration",
+      "platform": true
+    },
+    "POST /api/admin/storage/migrations/{migration_id}/accept-missing": {
+      "handler": "admin_storage.accept_missing_objects",
+      "platform": true
+    },
+    "POST /api/admin/storage/migrations/{migration_id}/acknowledge-rollback": {
+      "handler": "admin_storage.acknowledge_rollback",
+      "platform": true
+    },
+    "POST /api/admin/storage/migrations/{migration_id}/cancel": {
+      "handler": "admin_storage.cancel_migration",
+      "platform": true
+    },
+    "POST /api/admin/storage/migrations/{migration_id}/confirm-cutover": {
+      "handler": "admin_storage.confirm_cutover",
+      "platform": true
+    },
+    "GET /api/admin/storage/migrations/{migration_id}/objects": {
+      "handler": "admin_storage.list_migration_objects",
+      "platform": true
+    },
+    "POST /api/admin/storage/migrations/{migration_id}/pause": {
+      "handler": "admin_storage.pause_migration",
+      "platform": true
+    },
+    "GET /api/admin/storage/migrations/{migration_id}/report": {
+      "handler": "admin_storage.download_report",
+      "platform": true
+    },
+    "POST /api/admin/storage/migrations/{migration_id}/resume": {
+      "handler": "admin_storage.resume_migration",
+      "platform": true
+    },
+    "POST /api/admin/storage/migrations/{migration_id}/retry-failed": {
+      "handler": "admin_storage.retry_failed_objects",
+      "platform": true
+    },
+    "POST /api/admin/storage/migrations/{migration_id}/start": {
+      "handler": "admin_storage.start_migration",
+      "platform": true
+    },
+    "GET /api/admin/storage/overview": {
+      "handler": "admin_storage.storage_overview",
+      "platform": true
+    },
+    "GET /api/admin/storage/profiles": {
+      "handler": "admin_storage.list_profiles",
+      "platform": true
+    },
+    "POST /api/admin/storage/profiles": {
+      "handler": "admin_storage.create_profile",
+      "platform": true
+    },
+    "DELETE /api/admin/storage/profiles/{profile_id}": {
+      "handler": "admin_storage.delete_profile",
+      "platform": true
+    },
+    "PATCH /api/admin/storage/profiles/{profile_id}": {
+      "handler": "admin_storage.update_profile",
+      "platform": true
+    },
+    "POST /api/admin/storage/profiles/{profile_id}/test": {
+      "handler": "admin_storage.test_profile",
+      "platform": true
+    },
+    "GET /api/admin/system-status": {
+      "handler": "admin.get_system_status",
+      "platform": true
+    },
+    "GET /api/admin/tenants": {
+      "handler": "admin.list_tenants",
+      "platform": true
+    },
+    "POST /api/admin/tenants": {
+      "handler": "admin.create_tenant",
+      "platform": true
+    },
+    "POST /api/admin/tenants/import": {
+      "handler": "admin.import_tenant",
+      "platform": true
+    },
+    "DELETE /api/admin/tenants/{tenant_id}": {
+      "handler": "admin.delete_tenant",
+      "platform": true
+    },
+    "GET /api/admin/tenants/{tenant_id}": {
+      "handler": "admin.get_tenant",
+      "platform": true
+    },
+    "PATCH /api/admin/tenants/{tenant_id}": {
+      "handler": "admin.update_tenant",
+      "platform": true
+    },
+    "POST /api/admin/tenants/{tenant_id}/cleanup": {
+      "handler": "admin.cleanup_tenant",
+      "platform": true
+    },
+    "GET /api/admin/tenants/{tenant_id}/cleanup/preview": {
+      "handler": "admin.preview_tenant_cleanup",
+      "platform": true
+    },
+    "POST /api/admin/tenants/{tenant_id}/clone": {
+      "handler": "admin.clone_tenant",
+      "platform": true
+    },
+    "POST /api/admin/tenants/{tenant_id}/export": {
+      "handler": "admin.export_tenant",
+      "platform": true
+    },
+    "PUT /api/admin/tenants/{tenant_id}/features": {
+      "handler": "admin.update_tenant_features",
+      "platform": true
+    },
+    "GET /api/admin/tenants/{tenant_id}/identity-verification": {
+      "handler": "admin_identity_verification.get_tenant_identity_verification",
+      "platform": true
+    },
+    "POST /api/admin/tenants/{tenant_id}/identity-verification/approve": {
+      "handler": "admin_identity_verification.approve_identity_verification",
+      "platform": true
+    },
+    "POST /api/admin/tenants/{tenant_id}/identity-verification/reject": {
+      "handler": "admin_identity_verification.reject_identity_verification",
+      "platform": true
+    },
+    "POST /api/admin/tenants/{tenant_id}/identity-verification/revoke": {
+      "handler": "admin_identity_verification.revoke_identity_verification",
+      "platform": true
+    },
+    "GET /api/admin/tenants/{tenant_id}/profile-image": {
+      "handler": "admin.tenant_profile_image",
+      "platform": true
+    },
+    "GET /api/admin/tenants/{tenant_id}/storage": {
+      "handler": "admin.get_tenant_storage",
+      "platform": true
+    },
+    "PUT /api/admin/tenants/{tenant_id}/storage-packages": {
+      "handler": "admin.update_tenant_storage_packages",
+      "platform": true
+    },
+    "PATCH /api/admin/tenants/{tenant_id}/subscription": {
+      "handler": "admin.update_tenant_subscription",
+      "platform": true
+    },
+    "GET /api/admin/tenants/{tenant_id}/users": {
+      "handler": "admin.list_tenant_users",
+      "platform": true
+    },
+    "DELETE /api/admin/tenants/{tenant_id}/users/{user_id}": {
+      "handler": "admin.delete_tenant_user",
+      "platform": true
+    },
+    "PUT /api/admin/tenants/{tenant_id}/users/{user_id}": {
+      "handler": "admin.set_tenant_user_role",
+      "platform": true
+    },
+    "PUT /api/admin/tenants/{tenant_id}/website-listing": {
+      "handler": "admin.update_tenant_website_listing",
+      "platform": true
+    },
+    "GET /api/admin/upload-pipeline-status": {
+      "handler": "admin.get_upload_pipeline_status",
+      "platform": true
+    },
+    "GET /api/admin/users": {
+      "handler": "admin.list_users",
+      "platform": true
+    },
+    "POST /api/admin/users": {
+      "handler": "admin.create_user",
+      "platform": true
+    },
+    "GET /api/admin/users/{user_id}": {
+      "handler": "admin.get_user",
+      "platform": true
+    },
+    "PATCH /api/admin/users/{user_id}": {
+      "handler": "admin.update_user",
+      "platform": true
+    },
+    "GET /api/admin/users/{user_id}/mfa": {
+      "handler": "admin.get_user_mfa",
+      "platform": true
+    },
+    "DELETE /api/admin/users/{user_id}/mfa/factors/{factor_id}": {
+      "handler": "admin.delete_user_mfa_factor",
+      "platform": true
+    },
+    "GET /api/agenda-items": {
+      "handler": "agenda_items.list_agenda_items",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/agenda-items": {
+      "handler": "agenda_items.create_agenda_item",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/agenda-items/template-preference": {
+      "handler": "agenda_items.get_agenda_template_preference",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "PUT /api/agenda-items/template-preference": {
+      "handler": "agenda_items.save_agenda_template_preference",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/agenda-items/templates": {
+      "handler": "agenda_items.list_agenda_templates",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "DELETE /api/agenda-items/{item_id}": {
+      "handler": "agenda_items.delete_agenda_item",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "PATCH /api/agenda-items/{item_id}": {
+      "handler": "agenda_items.update_agenda_item",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/agenda-items/{item_id}/postpone": {
+      "handler": "agenda_items.postpone_agenda_item",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/auth/bridge": {
+      "handler": "auth.bridge",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+    },
+    "POST /api/auth/bridge": {
+      "handler": "auth.redeem_bridge",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+    },
+    "POST /api/auth/bridge/preview": {
+      "handler": "auth.bridge_preview",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+    },
+    "POST /api/auth/login": {
+      "handler": "auth.login",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+    },
+    "POST /api/auth/logout": {
+      "handler": "auth.logout",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+    },
+    "POST /api/auth/mfa/passkeys/assertion/start": {
+      "handler": "auth.start_login_passkey_assertion",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+    },
+    "POST /api/auth/mfa/passkeys/assertion/verify": {
+      "handler": "auth.verify_login_passkey",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+    },
+    "POST /api/auth/mfa/passkeys/setup/complete": {
+      "handler": "auth.complete_login_passkey_setup",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+    },
+    "POST /api/auth/mfa/passkeys/setup/start": {
+      "handler": "auth.start_login_passkey_setup",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+    },
+    "POST /api/auth/mfa/totp/setup/complete": {
+      "handler": "auth.complete_login_totp_setup",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+    },
+    "POST /api/auth/mfa/totp/setup/start": {
+      "handler": "auth.start_login_totp_setup",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+    },
+    "POST /api/auth/mfa/totp/verify": {
+      "handler": "auth.verify_login_totp",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+    },
+    "GET /api/auth/session": {
+      "handler": "auth.session",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+    },
+    "GET /api/auth/tenant-by-domain": {
+      "handler": "auth.tenant_by_domain",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+    },
+    "GET /api/calendar-feeds": {
+      "handler": "calendar_feeds.list_calendar_feeds",
+      "note": "eigene Kalender-Abos"
+    },
+    "DELETE /api/calendar-feeds/{kind}": {
+      "handler": "calendar_feeds.delete_calendar_feed",
+      "note": "eigene Kalender-Abos"
+    },
+    "PUT /api/calendar-feeds/{kind}": {
+      "handler": "calendar_feeds.upsert_calendar_feed",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/calendar-feeds/{kind}/regenerate": {
+      "handler": "calendar_feeds.regenerate_calendar_feed",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/clamav/status": {
+      "handler": "submission_assignments.get_clamav_status",
+      "requires": [
+        "submissions.read"
+      ]
+    },
+    "GET /api/cycle-configs": {
+      "handler": "cycle_configs.list_cycle_configs",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/cycle-configs": {
+      "handler": "cycle_configs.create_cycle_config",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "DELETE /api/cycle-configs/{cycle_config_id}": {
+      "handler": "cycle_configs.delete_cycle_config",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "GET /api/cycle-configs/{cycle_config_id}": {
+      "handler": "cycle_configs.get_cycle_config",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "PUT /api/cycle-configs/{cycle_config_id}": {
+      "handler": "cycle_configs.update_cycle_config",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "GET /api/cycle-configs/{cycle_config_id}/cycles": {
+      "handler": "cycle_configs.list_cycles",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/document-assets": {
+      "handler": "document_studio.list_document_assets",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/document-assets": {
+      "handler": "document_studio.upload_document_asset",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "DELETE /api/document-assets/{asset_id}": {
+      "handler": "document_studio.delete_document_asset",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "PATCH /api/document-assets/{asset_id}": {
+      "handler": "document_studio.update_document_asset",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "GET /api/document-assets/{asset_id}/content": {
+      "handler": "document_studio.get_document_asset_content",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/document-assets/{asset_id}/references": {
+      "handler": "document_studio.get_document_asset_references",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/document-brands": {
+      "handler": "document_studio.list_document_brands",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/document-brands": {
+      "handler": "document_studio.create_document_brand",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "DELETE /api/document-brands/{brand_id}": {
+      "handler": "document_studio.delete_document_brand",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "GET /api/document-brands/{brand_id}": {
+      "handler": "document_studio.get_document_brand",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "PATCH /api/document-brands/{brand_id}": {
+      "handler": "document_studio.update_document_brand",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "POST /api/document-brands/{brand_id}/archive": {
+      "handler": "document_studio.archive_document_brand",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "GET /api/document-brands/{brand_id}/revisions": {
+      "handler": "document_studio.list_document_brand_revisions",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/document-brands/{brand_id}/revisions/{revision_id}/restore": {
+      "handler": "document_studio.restore_document_brand_revision",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "GET /api/document-components": {
+      "handler": "document_studio.list_document_components",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/document-components": {
+      "handler": "document_studio.create_document_component",
+      "requires": [
+        "templates.edit"
+      ]
+    },
+    "DELETE /api/document-components/{component_id}": {
+      "handler": "document_studio.delete_document_component",
+      "requires": [
+        "templates.edit"
+      ]
+    },
+    "PATCH /api/document-components/{component_id}": {
+      "handler": "document_studio.update_document_component",
+      "requires": [
+        "templates.edit"
+      ]
+    },
+    "GET /api/document-settings": {
+      "handler": "documents.get_document_settings",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "PATCH /api/document-settings": {
+      "handler": "documents.update_document_settings",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "GET /api/document-studio/capabilities": {
+      "handler": "document_studio.get_capabilities",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/document-studio/catalog": {
+      "handler": "document_studio.get_studio_catalog",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/document-studio/examples": {
+      "handler": "document_studio.list_design_examples",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/document-studio/examples/{example_key}/import": {
+      "handler": "document_studio.import_design_example",
+      "requires": [
+        "settings.manage"
+      ],
+      "branches": [
+        "templates.edit"
+      ]
+    },
+    "GET /api/document-studio/examples/{example_key}/thumbnail": {
+      "handler": "document_studio.get_design_example_thumbnail",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/document-studio/fonts/{file_name}": {
+      "handler": "document_studio.get_builtin_font",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/document-studio/session-templates/{template_id}/designs": {
+      "handler": "document_studio.list_session_designs",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/document-studio/session-templates/{template_id}/designs/{document_type}": {
+      "handler": "document_studio.customize_session_design",
+      "requires": [
+        "templates.edit"
+      ]
+    },
+    "GET /api/document-template-assignments": {
+      "handler": "document_studio.list_document_template_assignments",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "PUT /api/document-template-assignments": {
+      "handler": "document_studio.set_document_template_assignment",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "GET /api/document-templates": {
+      "handler": "document_studio.list_document_templates",
+      "requires": [
+        "meetings.read"
+      ],
+      "branches": [
+        "templates.edit"
+      ]
+    },
+    "POST /api/document-templates": {
+      "handler": "document_studio.create_document_template",
+      "requires": [
+        "templates.edit"
+      ]
+    },
+    "POST /api/document-templates/validate": {
+      "handler": "document_studio.validate_document_template",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "DELETE /api/document-templates/{template_id}": {
+      "handler": "document_studio.delete_document_template",
+      "requires": [
+        "settings.manage",
+        "templates.edit"
+      ]
+    },
+    "GET /api/document-templates/{template_id}": {
+      "handler": "document_studio.get_document_template",
+      "requires": [
+        "meetings.read"
+      ],
+      "branches": [
+        "templates.edit"
+      ]
+    },
+    "PATCH /api/document-templates/{template_id}": {
+      "handler": "document_studio.update_document_template",
+      "requires": [
+        "settings.manage",
+        "templates.edit"
+      ]
+    },
+    "POST /api/document-templates/{template_id}/archive": {
+      "handler": "document_studio.archive_document_template",
+      "requires": [
+        "settings.manage",
+        "templates.edit"
+      ]
+    },
+    "GET /api/document-templates/{template_id}/compare": {
+      "handler": "document_studio.compare_document_template_revisions",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "DELETE /api/document-templates/{template_id}/draft": {
+      "handler": "document_studio.discard_document_template_draft",
+      "requires": [
+        "templates.edit"
+      ]
+    },
+    "PUT /api/document-templates/{template_id}/draft": {
+      "handler": "document_studio.save_document_template_draft",
+      "requires": [
+        "templates.edit"
+      ]
+    },
+    "POST /api/document-templates/{template_id}/duplicate": {
+      "handler": "document_studio.duplicate_document_template",
+      "requires": [
+        "templates.edit"
+      ]
+    },
+    "POST /api/document-templates/{template_id}/publish": {
+      "handler": "document_studio.publish_document_template",
+      "requires": [
+        "settings.manage",
+        "templates.edit"
+      ]
+    },
+    "GET /api/document-templates/{template_id}/revisions": {
+      "handler": "document_studio.list_document_template_revisions",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/document-templates/{template_id}/revisions/{revision_id}": {
+      "handler": "document_studio.get_document_template_revision",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/document-templates/{template_id}/revisions/{revision_id}/restore": {
+      "handler": "document_studio.restore_document_template_revision",
+      "requires": [
+        "templates.edit"
+      ]
+    },
+    "GET /api/document-templates/{template_id}/thumbnail": {
+      "handler": "document_studio.get_document_template_thumbnail",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/document-verification": {
+      "handler": "document_verification.get_document_verification",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "PATCH /api/document-verification": {
+      "handler": "document_verification.update_document_verification",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "DELETE /api/document-verification/request": {
+      "handler": "document_verification.withdraw_identity_verification",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "POST /api/document-verification/request": {
+      "handler": "document_verification.request_identity_verification",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "POST /api/documents/export": {
+      "handler": "documents.export_document_format",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/documents/exports": {
+      "handler": "documents.list_document_exports",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/documents/preview": {
+      "handler": "documents.preview_document",
+      "requires": [
+        "meetings.read",
+        "settings.manage",
+        "templates.edit"
+      ]
+    },
+    "POST /api/documents/preview/canvas": {
+      "handler": "documents.preview_canvas",
+      "requires": [
+        "meetings.read",
+        "settings.manage",
+        "templates.edit"
+      ]
+    },
+    "POST /api/documents/render": {
+      "handler": "documents.render_document",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/documents/render-jobs/{job_id}": {
+      "handler": "documents.get_render_job",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/documents/sources/{source}": {
+      "handler": "documents.list_source_options",
+      "requires": [
+        "finances.read",
+        "meetings.edit",
+        "meetings.read"
+      ],
+      "requires_any": [
+        [
+          "meetings.edit",
+          "participants.manage"
+        ]
+      ]
+    },
+    "GET /api/documents/{document_id}": {
+      "handler": "managed_documents.get_document",
+      "requires": [
+        "meetings.read"
+      ],
+      "branches": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/documents/{document_id}/reprocess": {
+      "handler": "managed_documents.reprocess_document",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/documents/{document_id}/versions/{version_id}/files/{role}": {
+      "handler": "managed_documents.get_document_file",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/documents/{document_id}/versions/{version_id}/text": {
+      "handler": "managed_documents.get_document_text",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/element-definitions": {
+      "handler": "templates.list_element_definitions",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/element-definitions": {
+      "handler": "templates.create_element_definition",
+      "requires": [
+        "templates.edit"
+      ]
+    },
+    "DELETE /api/element-definitions/{element_definition_id}": {
+      "handler": "templates.delete_element_definition",
+      "requires": [
+        "templates.edit"
+      ]
+    },
+    "GET /api/element-definitions/{element_definition_id}": {
+      "handler": "templates.get_element_definition",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "PATCH /api/element-definitions/{element_definition_id}": {
+      "handler": "templates.patch_element_definition",
+      "requires": [
+        "templates.edit"
+      ]
+    },
+    "GET /api/events": {
+      "handler": "events.list_events",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/events": {
+      "handler": "events.create_event",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/events/import-csv": {
+      "handler": "events.import_events_csv",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/events/import-csv/preview": {
+      "handler": "events.preview_events_csv",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/events/rename-tag": {
+      "handler": "events.rename_tag",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "DELETE /api/events/{event_id}": {
+      "handler": "events.delete_event",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "PATCH /api/events/{event_id}": {
+      "handler": "events.patch_event",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/files": {
+      "handler": "files.list_files",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "GET /api/files/album-pending-releases": {
+      "handler": "files.list_album_pending_releases",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "GET /api/files/album-share-requests": {
+      "handler": "files.list_album_share_requests",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "GET /api/files/albums": {
+      "handler": "files.list_albums",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "POST /api/files/albums": {
+      "handler": "files.create_album",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "POST /api/files/albums/{album_id}/items": {
+      "handler": "files.add_album_items",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "PATCH /api/files/albums/{album_id}/items/{file_id}/best": {
+      "handler": "files.set_album_item_best",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "PATCH /api/files/albums/{album_id}/my-share": {
+      "handler": "files.update_my_album_share",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "POST /api/files/albums/{album_id}/release": {
+      "handler": "files.release_album_items",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "POST /api/files/albums/{album_id}/respond": {
+      "handler": "files.respond_album_share",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "POST /api/files/albums/{album_id}/shares": {
+      "handler": "files.create_album_share",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "DELETE /api/files/albums/{album_id}/shares/{tenant_public_id}": {
+      "handler": "files.delete_album_share",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "PATCH /api/files/albums/{album_id}/shares/{tenant_public_id}": {
+      "handler": "files.update_album_share",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "GET /api/files/analysis-progress": {
+      "handler": "files.get_analysis_progress",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "POST /api/files/bulk-delete": {
+      "handler": "files.bulk_delete_files",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "POST /api/files/bulk-tags": {
+      "handler": "files.bulk_update_file_tags",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "POST /api/files/document-uploads": {
+      "handler": "files.upload_documents",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "GET /api/files/gallery-upload-jobs": {
+      "handler": "files.list_gallery_upload_jobs",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "GET /api/files/gallery-upload-jobs/{job_id}": {
+      "handler": "files.get_gallery_upload_job",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "POST /api/files/gallery-uploads": {
+      "handler": "files.upload_gallery_images",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "GET /api/files/similarity-groups": {
+      "handler": "files.list_similarity_groups",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "GET /api/files/stats": {
+      "handler": "files.get_file_stats",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "GET /api/files/tags": {
+      "handler": "files.list_file_tags",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "POST /api/files/upload-precheck": {
+      "handler": "files.precheck_uploads",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "GET /api/files/upload-target-shared-albums": {
+      "handler": "files.list_upload_target_shared_albums",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "PATCH /api/files/{file_id}/best": {
+      "handler": "files.set_file_best_everywhere",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "GET /api/finance/accounts": {
+      "handler": "finance.list_accounts",
+      "requires": [
+        "finances.read"
+      ]
+    },
+    "POST /api/finance/accounts": {
+      "handler": "finance.create_account",
+      "requires": [
+        "finances.manage"
+      ]
+    },
+    "DELETE /api/finance/accounts/{account_id}": {
+      "handler": "finance.delete_account",
+      "requires": [
+        "finances.manage"
+      ]
+    },
+    "PATCH /api/finance/accounts/{account_id}": {
+      "handler": "finance.update_account",
+      "requires": [
+        "finances.manage"
+      ]
+    },
+    "GET /api/finance/accounts/{account_id}/balance": {
+      "handler": "finance.get_balance_as_of",
+      "requires": [
+        "finances.read"
+      ]
+    },
+    "GET /api/finance/accounts/{account_id}/transactions": {
+      "handler": "finance.list_transactions",
+      "requires": [
+        "finances.read"
+      ]
+    },
+    "POST /api/finance/accounts/{account_id}/transactions": {
+      "handler": "finance.create_transaction",
+      "requires": [
+        "finances.manage"
+      ]
+    },
+    "DELETE /api/finance/transactions/{tx_id}": {
+      "handler": "finance.delete_transaction",
+      "requires": [
+        "finances.manage"
+      ]
+    },
+    "PATCH /api/finance/transactions/{tx_id}": {
+      "handler": "finance.update_transaction",
+      "requires": [
+        "finances.manage"
+      ]
+    },
+    "GET /api/fines": {
+      "handler": "fines.list_fines",
+      "features": [
+        "finance"
+      ],
+      "branches": [
+        "reports.personal"
+      ],
+      "note": "eigene Bussen; alle nur mit reports.personal (im Rumpf)"
+    },
+    "POST /api/fines": {
+      "handler": "fines.create_fine",
+      "requires": [
+        "finances.manage"
+      ]
+    },
+    "GET /api/fines/tariff": {
+      "handler": "fines.get_fine_tariff",
+      "requires": [
+        "meetings.read"
+      ],
+      "features": [
+        "finance"
+      ]
+    },
+    "PUT /api/fines/tariff": {
+      "handler": "fines.update_fine_tariff",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "finance"
+      ]
+    },
+    "DELETE /api/fines/{fine_id}": {
+      "handler": "fines.delete_fine",
+      "requires": [
+        "finances.manage"
+      ]
+    },
+    "POST /api/fines/{fine_id}/collect": {
+      "handler": "fines.collect_fine",
+      "requires": [
+        "finances.manage"
+      ]
+    },
+    "POST /api/fines/{fine_id}/reopen": {
+      "handler": "fines.reopen_fine",
+      "requires": [
+        "finances.manage"
+      ]
+    },
+    "POST /api/fines/{fine_id}/restore": {
+      "handler": "fines.restore_fine",
+      "requires": [
+        "finances.manage"
+      ]
+    },
+    "DELETE /api/list-entries/{list_entry_id}": {
+      "handler": "lists.delete_entry",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "PATCH /api/list-entries/{list_entry_id}": {
+      "handler": "lists.patch_entry",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/lists": {
+      "handler": "lists.list_definitions",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/lists": {
+      "handler": "lists.create_definition",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "DELETE /api/lists/{list_definition_id}": {
+      "handler": "lists.delete_definition",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "PATCH /api/lists/{list_definition_id}": {
+      "handler": "lists.patch_definition",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/lists/{list_definition_id}/entries": {
+      "handler": "lists.list_entries",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/lists/{list_definition_id}/entries": {
+      "handler": "lists.create_entry",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "DELETE /api/participants": {
+      "handler": "participants.bulk_delete_participants",
+      "requires": [
+        "access.manage",
+        "participants.manage"
+      ]
+    },
+    "GET /api/participants": {
+      "handler": "participants.list_participants",
+      "requires": [
+        "participants.manage"
+      ]
+    },
+    "POST /api/participants": {
+      "handler": "participants.create_participant",
+      "requires": [
+        "participants.manage"
+      ]
+    },
+    "POST /api/participants/import-csv": {
+      "handler": "participants.import_participants_csv",
+      "requires": [
+        "participants.manage"
+      ]
+    },
+    "DELETE /api/participants/{participant_id}": {
+      "handler": "participants.delete_participant",
+      "requires": [
+        "access.manage",
+        "participants.manage"
+      ]
+    },
+    "PATCH /api/participants/{participant_id}": {
+      "handler": "participants.patch_participant",
+      "requires": [
+        "access.manage",
+        "participants.manage"
+      ]
+    },
+    "POST /api/participants/{participant_id}/personal-data": {
+      "handler": "participants.export_participant_personal_data",
+      "requires": [
+        "data.export"
+      ]
+    },
+    "GET /api/participants/{participant_id}/templates": {
+      "handler": "participants.list_participant_templates",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "PUT /api/participants/{participant_id}/templates": {
+      "handler": "participants.replace_participant_templates",
+      "requires": [
+        "participants.manage"
+      ]
+    },
+    "GET /api/privacy-settings": {
+      "handler": "privacy_settings.get_privacy_settings",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "PATCH /api/privacy-settings": {
+      "handler": "privacy_settings.update_privacy_settings",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "DELETE /api/protocol-element-blocks/{protocol_element_block_id}": {
+      "handler": "protocol_elements.delete_protocol_element_block",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "PATCH /api/protocol-element-blocks/{protocol_element_block_id}": {
+      "handler": "protocol_elements.patch_protocol_element_block",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/protocol-element-blocks/{protocol_element_block_id}/attendance/{participant_id}": {
+      "handler": "protocol_elements.set_block_attendance_status",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/protocol-element-blocks/{protocol_element_block_id}/images": {
+      "handler": "files.list_images",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/protocol-element-blocks/{protocol_element_block_id}/images": {
+      "handler": "files.upload_image",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/entries/{entry_id}/accept-tracked-change": {
+      "handler": "protocol_elements.accept_tracked_list_entry",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/refresh": {
+      "handler": "protocol_elements.refresh_block_list_snapshot",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/sync": {
+      "handler": "protocol_elements.sync_block_list_snapshot",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/undo": {
+      "handler": "protocol_elements.undo_block_list_snapshot",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/protocol-element-blocks/{protocol_element_block_id}/rows/{row_id}/accept-tracked-change": {
+      "handler": "protocol_elements.accept_tracked_row",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "PUT /api/protocol-element-blocks/{protocol_element_block_id}/text": {
+      "handler": "protocol_elements.put_protocol_text",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/protocol-element-blocks/{protocol_element_block_id}/text/accept-tracked-changes": {
+      "handler": "protocol_elements.accept_text_tracked_changes",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/protocol-element-blocks/{protocol_element_block_id}/todos": {
+      "handler": "todos.list_todos",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/protocol-element-blocks/{protocol_element_block_id}/todos": {
+      "handler": "todos.create_todo",
+      "requires": [
+        "meetings.edit",
+        "meetings.read"
+      ]
+    },
+    "PATCH /api/protocol-elements/{protocol_element_id}": {
+      "handler": "protocol_elements.patch_protocol_element",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/protocol-elements/{protocol_element_id}/blocks/from-event": {
+      "handler": "protocol_elements.create_protocol_element_block_from_event",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "DELETE /api/protocol-images/{image_id}": {
+      "handler": "files.delete_image",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "DELETE /api/protocol-todos/{todo_id}": {
+      "handler": "todos.delete_todo",
+      "requires": [
+        "meetings.edit",
+        "meetings.read"
+      ]
+    },
+    "PATCH /api/protocol-todos/{todo_id}": {
+      "handler": "todos.patch_todo",
+      "requires": [
+        "meetings.edit",
+        "meetings.read"
+      ]
+    },
+    "POST /api/protocol-todos/{todo_id}/accept-tracked-change": {
+      "handler": "todos.accept_todo_tracked_change",
+      "requires": [
+        "meetings.edit",
+        "meetings.read"
+      ]
+    },
+    "GET /api/protocol-todos/{todo_id}/details": {
+      "handler": "todos.get_todo_details",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "PUT /api/protocol-todos/{todo_id}/details": {
+      "handler": "todos.put_todo_details",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/protocol-todos/{todo_id}/due-events": {
+      "handler": "todos.get_todo_due_events",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/protocols": {
+      "handler": "protocols.list_protocols",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/protocols/from-template": {
+      "handler": "protocols.create_protocol_from_template",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/protocols/next-session": {
+      "handler": "protocols.get_next_session",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/protocols/preview": {
+      "handler": "protocols.preview_protocol",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/protocols/template-preference": {
+      "handler": "protocols.get_template_preference",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "PUT /api/protocols/template-preference": {
+      "handler": "protocols.save_template_preference",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/protocols/upcoming-sessions": {
+      "handler": "protocols.get_upcoming_sessions",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "DELETE /api/protocols/{protocol_id}": {
+      "handler": "protocols.delete_protocol",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/protocols/{protocol_id}": {
+      "handler": "protocols.get_protocol",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "PATCH /api/protocols/{protocol_id}": {
+      "handler": "protocols.patch_protocol",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/protocols/{protocol_id}/agenda-items": {
+      "handler": "agenda_items.list_protocol_agenda_items",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/protocols/{protocol_id}/agenda-items": {
+      "handler": "agenda_items.create_protocol_agenda_item",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/protocols/{protocol_id}/attendance/{participant_id}/excuse": {
+      "handler": "protocols.excuse_participant",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/protocols/{protocol_id}/cycle-events": {
+      "handler": "protocols.get_cycle_events",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/protocols/{protocol_id}/delete": {
+      "handler": "protocols.delete_protocol_with_selection",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/protocols/{protocol_id}/deletion-preview": {
+      "handler": "protocols.preview_protocol_deletion",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/protocols/{protocol_id}/elements": {
+      "handler": "protocol_elements.list_protocol_elements",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/protocols/{protocol_id}/fines": {
+      "handler": "fines.list_protocol_fines",
+      "requires": [
+        "reports.personal"
+      ],
+      "features": [
+        "finance"
+      ]
+    },
+    "GET /api/protocols/{protocol_id}/pending-fines": {
+      "handler": "fines.list_pending_fines",
+      "requires": [
+        "reports.personal"
+      ],
+      "features": [
+        "finance"
+      ]
+    },
+    "GET /api/protocols/{protocol_id}/pending-todos": {
+      "handler": "protocols.get_pending_todos",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/protocols/{protocol_id}/period": {
+      "handler": "protocols.get_protocol_period",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/protocols/{protocol_id}/quick-todos": {
+      "handler": "protocols.create_quick_todo",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/protocols/{protocol_id}/revert-status": {
+      "handler": "protocols.revert_protocol_status",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/protocols/{protocol_id}/scroll-position": {
+      "handler": "protocols.get_element_position",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "PUT /api/protocols/{protocol_id}/scroll-position": {
+      "handler": "protocols.save_element_position",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/protocols/{protocol_id}/sync-template": {
+      "handler": "protocols.sync_protocol_with_template",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/public/calendar/{token}.ics": {
+      "handler": "calendar_feeds.get_calendar_feed",
+      "note": "öffentlicher .ics-Abruf: Token + can_subscribe in calendar_feed_service.resolve"
+    },
+    "GET /api/public/customers": {
+      "handler": "public_catalog.list_public_customers",
+      "note": "öffentlicher Preis-/Kundenkatalog der Website"
+    },
+    "GET /api/public/maintenance-status": {
+      "handler": "maintenance_public.maintenance_status",
+      "note": "öffentlicher Wartungsstatus"
+    },
+    "GET /api/public/plans": {
+      "handler": "public_catalog.list_public_plans",
+      "note": "öffentlicher Preis-/Kundenkatalog der Website"
+    },
+    "GET /api/public/share/{token}": {
+      "handler": "public_share.get_public_share",
+      "note": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)"
+    },
+    "GET /api/public/share/{token}/download": {
+      "handler": "public_share.download_public_share_all",
+      "note": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)"
+    },
+    "GET /api/public/share/{token}/files/{file_id}/download": {
+      "handler": "public_share.download_public_share_file",
+      "note": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)"
+    },
+    "GET /api/public/share/{token}/files/{file_id}/thumbnail": {
+      "handler": "public_share.get_public_share_thumbnail",
+      "note": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)"
+    },
+    "GET /api/public/share/{token}/files/{file_id}/view": {
+      "handler": "public_share.view_public_share_file",
+      "note": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)"
+    },
+    "GET /api/retention/policy": {
+      "handler": "retention.get_retention_policy",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "PUT /api/retention/policy": {
+      "handler": "retention.update_retention_policy",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "GET /api/retention/proposals": {
+      "handler": "retention.list_retention_proposals",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "POST /api/retention/proposals/decide": {
+      "handler": "retention.decide_retention_proposals",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "POST /api/retention/proposals/refresh": {
+      "handler": "retention.refresh_retention_proposals",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "GET /api/roles": {
+      "handler": "roles.list_roles",
+      "requires": [
+        "access.manage"
+      ]
+    },
+    "POST /api/roles": {
+      "handler": "roles.create_role",
+      "requires": [
+        "access.manage"
+      ]
+    },
+    "GET /api/roles/catalog": {
+      "handler": "roles.get_permission_catalog",
+      "requires": [
+        "access.manage"
+      ]
+    },
+    "DELETE /api/roles/{role_id}": {
+      "handler": "roles.delete_role",
+      "requires": [
+        "access.manage"
+      ]
+    },
+    "PATCH /api/roles/{role_id}": {
+      "handler": "roles.update_role",
+      "requires": [
+        "access.manage"
+      ]
+    },
+    "GET /api/share-links": {
+      "handler": "share_links.list_share_links",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "POST /api/share-links": {
+      "handler": "share_links.create_share_link",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "DELETE /api/share-links/{share_link_id}": {
+      "handler": "share_links.revoke_share_link",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "GET /api/statistics/overview": {
+      "handler": "statistics.get_statistics_overview",
+      "requires": [
+        "meetings.read"
+      ],
+      "branches": [
+        "finances.read"
+      ]
+    },
+    "GET /api/storage/usage": {
+      "handler": "storage.get_storage_usage",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "PATCH /api/stored-files/{stored_file_id}/capture-date": {
+      "handler": "files.update_stored_file_capture_date",
+      "requires": [
+        "files.manage",
+        "meetings.read"
+      ],
+      "branches": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/stored-files/{stored_file_id}/content": {
+      "handler": "files.get_stored_file_content",
+      "requires": [
+        "meetings.read"
+      ],
+      "branches": [
+        "files.manage",
+        "meetings.edit"
+      ]
+    },
+    "GET /api/stored-files/{stored_file_id}/download": {
+      "handler": "files.download_stored_file",
+      "requires": [
+        "meetings.read"
+      ],
+      "branches": [
+        "files.manage",
+        "meetings.edit"
+      ]
+    },
+    "GET /api/stored-files/{stored_file_id}/metadata": {
+      "handler": "files.get_stored_file_metadata",
+      "requires": [
+        "meetings.read"
+      ],
+      "branches": [
+        "files.manage",
+        "meetings.edit"
+      ]
+    },
+    "PATCH /api/stored-files/{stored_file_id}/tags": {
+      "handler": "files.update_stored_file_tags",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "GET /api/stored-files/{stored_file_id}/thumbnail": {
+      "handler": "files.get_stored_file_thumbnail",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/submission-assignments": {
+      "handler": "submission_assignments.list_assignments",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "POST /api/submission-assignments": {
+      "handler": "submission_assignments.create_assignment",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "DELETE /api/submission-assignments/{assignment_id}": {
+      "handler": "submission_assignments.delete_assignment",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "PATCH /api/submission-assignments/{assignment_id}": {
+      "handler": "submission_assignments.patch_assignment",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "POST /api/submission-assignments/{assignment_id}/delete": {
+      "handler": "submission_assignments.delete_assignment_with_selection",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "GET /api/submission-assignments/{assignment_id}/deletion-preview": {
+      "handler": "submission_assignments.preview_assignment_deletion",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "GET /api/submission-assignments/{assignment_id}/download-zip": {
+      "handler": "submission_assignments.download_all_files_zip",
+      "requires": [
+        "submissions.read"
+      ]
+    },
+    "GET /api/submission-assignments/{assignment_id}/elements": {
+      "handler": "submission_assignments.list_elements",
+      "requires": [
+        "submissions.read"
+      ]
+    },
+    "POST /api/submission-assignments/{assignment_id}/elements/{element_ref}/close": {
+      "handler": "submission_assignments.close_element",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "POST /api/submission-assignments/{assignment_id}/elements/{element_ref}/reopen": {
+      "handler": "submission_assignments.reopen_element",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "POST /api/submission-assignments/{assignment_id}/rescan-pending": {
+      "handler": "submission_assignments.rescan_pending",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "GET /api/submission-assignments/{assignment_id}/summary": {
+      "handler": "submission_assignments.get_assignment_summary",
+      "requires": [
+        "submissions.read"
+      ]
+    },
+    "GET /api/submission-assignments/{assignment_id}/upload-log": {
+      "handler": "submission_assignments.get_upload_log",
+      "requires": [
+        "submissions.read"
+      ]
+    },
+    "GET /api/submission-links": {
+      "handler": "submission_assignments.list_links",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "POST /api/submission-links": {
+      "handler": "submission_assignments.create_link",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "DELETE /api/submission-links/{link_id}": {
+      "handler": "submission_assignments.delete_link",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "PATCH /api/submission-links/{link_id}": {
+      "handler": "submission_assignments.patch_link",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "POST /api/submission-links/{link_id}/regenerate": {
+      "handler": "submission_assignments.regenerate_link",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "DELETE /api/submission-uploads/{upload_id}": {
+      "handler": "submission_assignments.delete_submission_upload",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "DELETE /api/submission-uploads/{upload_id}/files/{file_id}": {
+      "handler": "submission_assignments.delete_submission_file",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "GET /api/submission-uploads/{upload_id}/files/{file_id}/content": {
+      "handler": "submission_assignments.get_submission_file_content",
+      "requires": [
+        "submissions.read"
+      ]
+    },
+    "GET /api/submission-uploads/{upload_id}/files/{file_id}/metadata": {
+      "handler": "submission_assignments.get_submission_file_metadata",
+      "requires": [
+        "submissions.read"
+      ]
+    },
+    "PATCH /api/submission-uploads/{upload_id}/files/{file_id}/tags": {
+      "handler": "submission_assignments.update_submission_file_tags",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "GET /api/submission-uploads/{upload_id}/files/{file_id}/thumbnail": {
+      "handler": "submission_assignments.get_submission_file_thumbnail",
+      "requires": [
+        "submissions.read"
+      ]
+    },
+    "GET /api/system-status/summary": {
+      "handler": "system_status.system_status_summary",
+      "note": "Status-Token (kein Benutzer)"
+    },
+    "GET /api/table-snapshots/cycles": {
+      "handler": "table_snapshots.list_snapshot_cycles",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/table-snapshots/{cycle_config_id}/{cycle_year}/lists/{list_public_id}/reconstruct": {
+      "handler": "table_snapshots.reconstruct_list_period",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/table-snapshots/{cycle_config_id}/{cycle_year}/lists/{list_public_id}/reconstruct-draft": {
+      "handler": "table_snapshots.get_reconstruction_draft",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/table-snapshots/{cycle_config_id}/{cycle_year}/{table_name}": {
+      "handler": "table_snapshots.get_snapshot_table",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "DELETE /api/table-snapshots/{cycle_config_id}/{cycle_year}/{table_name}/rows/{row_public_id}": {
+      "handler": "table_snapshots.delete_snapshot_row",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "PUT /api/table-snapshots/{cycle_config_id}/{cycle_year}/{table_name}/rows/{row_public_id}": {
+      "handler": "table_snapshots.update_snapshot_row",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "GET /api/tag-config": {
+      "handler": "tag_config.get_tag_config",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "PATCH /api/tag-config": {
+      "handler": "tag_config.patch_tag_config",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "GET /api/task-packages": {
+      "handler": "task_packages.list_task_packages",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "POST /api/task-packages": {
+      "handler": "task_packages.create_task_package",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "DELETE /api/task-packages/{package_id}": {
+      "handler": "task_packages.delete_task_package",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "GET /api/task-packages/{package_id}": {
+      "handler": "task_packages.get_task_package",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "PUT /api/task-packages/{package_id}": {
+      "handler": "task_packages.update_task_package",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "POST /api/task-packages/{package_id}/cycles": {
+      "handler": "task_packages.assign_task_package_cycle",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "DELETE /api/task-packages/{package_id}/cycles/{package_cycle_id}": {
+      "handler": "task_packages.unassign_task_package_cycle",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "PATCH /api/task-packages/{package_id}/cycles/{package_cycle_id}": {
+      "handler": "task_packages.update_task_package_cycle",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "POST /api/task-packages/{package_id}/items": {
+      "handler": "task_packages.create_task_package_item",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "POST /api/task-packages/{package_id}/items/reorder": {
+      "handler": "task_packages.reorder_task_package_items",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "DELETE /api/task-packages/{package_id}/items/{item_id}": {
+      "handler": "task_packages.delete_task_package_item",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "PUT /api/task-packages/{package_id}/items/{item_id}": {
+      "handler": "task_packages.update_task_package_item",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "GET /api/task-packages/{package_id}/preview": {
+      "handler": "task_packages.preview_task_package",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "POST /api/task-packages/{package_id}/sync": {
+      "handler": "task_packages.sync_task_package",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "DELETE /api/template-elements/{template_element_id}": {
+      "handler": "templates.delete_template_element",
+      "requires": [
+        "meetings.read",
+        "templates.edit"
+      ]
+    },
+    "PATCH /api/template-elements/{template_element_id}": {
+      "handler": "templates.patch_template_element",
+      "requires": [
+        "meetings.read",
+        "templates.edit"
+      ]
+    },
+    "PATCH /api/template-elements/{template_element_id}/behavior": {
+      "handler": "templates.patch_template_element_behavior",
+      "requires": [
+        "meetings.read",
+        "templates.edit"
+      ]
+    },
+    "POST /api/template-elements/{template_element_id}/detach": {
+      "handler": "templates.detach_template_element",
+      "requires": [
+        "meetings.read",
+        "templates.edit"
+      ]
+    },
+    "GET /api/templates": {
+      "handler": "templates.list_templates",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/templates": {
+      "handler": "templates.create_template",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "DELETE /api/templates/{template_id}": {
+      "handler": "templates.delete_template",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "GET /api/templates/{template_id}": {
+      "handler": "templates.get_template",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "PATCH /api/templates/{template_id}": {
+      "handler": "templates.patch_template",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "POST /api/templates/{template_id}/duplicate": {
+      "handler": "templates.duplicate_template",
+      "requires": [
+        "templates.manage"
+      ]
+    },
+    "GET /api/templates/{template_id}/elements": {
+      "handler": "templates.list_template_elements",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/templates/{template_id}/elements": {
+      "handler": "templates.create_template_element",
+      "requires": [
+        "templates.edit"
+      ]
+    },
+    "GET /api/templates/{template_id}/fine-tariff": {
+      "handler": "templates.get_template_fine_tariff",
+      "requires": [
+        "templates.manage"
+      ],
+      "features": [
+        "finance"
+      ]
+    },
+    "PUT /api/templates/{template_id}/fine-tariff": {
+      "handler": "templates.update_template_fine_tariff",
+      "requires": [
+        "templates.manage"
+      ],
+      "features": [
+        "finance"
+      ]
+    },
+    "GET /api/templates/{template_id}/participants": {
+      "handler": "participants.list_template_participants",
+      "requires": [
+        "participants.manage"
+      ]
+    },
+    "PUT /api/templates/{template_id}/participants": {
+      "handler": "participants.replace_template_participants",
+      "requires": [
+        "participants.manage"
+      ]
+    },
+    "GET /api/tenant-data-exports": {
+      "handler": "tenant_data_export.list_tenant_data_exports",
+      "requires": [
+        "data.export"
+      ]
+    },
+    "POST /api/tenant-data-exports": {
+      "handler": "tenant_data_export.create_tenant_data_export",
+      "requires": [
+        "data.export"
+      ]
+    },
+    "GET /api/tenant-data-exports/{export_id}/download": {
+      "handler": "tenant_data_export.download_tenant_data_export",
+      "requires": [
+        "data.export"
+      ]
+    },
+    "GET /api/tenants": {
+      "handler": "tenants.list_tenants",
+      "note": "TenantService._manageable_tenant_ids (settings.manage)"
+    },
+    "GET /api/tenants/lookup": {
+      "handler": "tenants.lookup_tenant",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "GET /api/tenants/trusted": {
+      "handler": "tenants.search_trusted_tenants",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "PATCH /api/tenants/{tenant_id}": {
+      "handler": "tenants.patch_tenant",
+      "note": "TenantService (settings.manage)"
+    },
+    "GET /api/tenants/{tenant_id}/charges": {
+      "handler": "tenants.get_tenant_charges",
+      "note": "TenantService (settings.manage)"
+    },
+    "GET /api/tenants/{tenant_id}/domains": {
+      "handler": "tenants.list_tenant_domains",
+      "note": "TenantService (settings.manage)"
+    },
+    "POST /api/tenants/{tenant_id}/domains": {
+      "handler": "tenants.create_tenant_domain",
+      "note": "TenantService.require_manageable (settings.manage)"
+    },
+    "DELETE /api/tenants/{tenant_id}/domains/{domain_id}": {
+      "handler": "tenants.delete_tenant_domain",
+      "note": "TenantService.require_manageable (settings.manage)"
+    },
+    "POST /api/tenants/{tenant_id}/domains/{domain_id}/verify": {
+      "handler": "tenants.verify_tenant_domain",
+      "note": "TenantService.require_manageable (settings.manage)"
+    },
+    "GET /api/tenants/{tenant_id}/profile-image": {
+      "handler": "tenants.tenant_profile_image",
+      "note": "Vereinslogo (auch für die Login-Seite)"
+    },
+    "GET /api/tenants/{tenant_id}/subscription": {
+      "handler": "tenants.get_tenant_subscription",
+      "note": "TenantService (settings.manage)"
+    },
+    "GET /api/todos": {
+      "handler": "todos.list_all_todos",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/todos": {
+      "handler": "todos.create_standalone_todo",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/todos/blocks": {
+      "handler": "todos.list_todo_blocks",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/todos/my": {
+      "handler": "todos.list_my_todos",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "POST /api/tools/word-import/analyze": {
+      "handler": "word_import.analyze_word_import",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/tools/word-import/commit": {
+      "handler": "word_import.commit_word_import",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/tools/word-import/documents": {
+      "handler": "word_import.list_word_import_documents",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/tools/word-import/documents": {
+      "handler": "word_import.ingest_word_import_documents",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "DELETE /api/tools/word-import/documents/{document_id}": {
+      "handler": "word_import.delete_word_import_document",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/tools/word-import/documents/{document_id}": {
+      "handler": "word_import.get_word_import_document",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/tools/word-import/documents/{document_id}/commit": {
+      "handler": "word_import.commit_word_import_document",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "PUT /api/tools/word-import/documents/{document_id}/draft": {
+      "handler": "word_import.save_word_import_document_draft",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "POST /api/tools/word-import/documents/{document_id}/reanalyze": {
+      "handler": "word_import.reanalyze_word_import_document",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/tools/word-import/last-template": {
+      "handler": "word_import.get_last_word_import_template",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "PUT /api/tools/word-import/last-template": {
+      "handler": "word_import.set_last_word_import_template",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/users": {
+      "handler": "users.list_users",
+      "note": "UserService (access.manage)"
+    },
+    "POST /api/users": {
+      "handler": "users.create_user",
+      "note": "UserService (access.manage)"
+    },
+    "GET /api/users/me": {
+      "handler": "users.get_me",
+      "note": "eigenes Konto"
+    },
+    "PATCH /api/users/me": {
+      "handler": "users.patch_me",
+      "note": "eigenes Konto"
+    },
+    "GET /api/users/me/mfa": {
+      "handler": "users.get_my_mfa",
+      "note": "eigene MFA"
+    },
+    "DELETE /api/users/me/mfa/factors/{factor_id}": {
+      "handler": "users.delete_my_mfa_factor",
+      "note": "eigene MFA"
+    },
+    "POST /api/users/me/mfa/passkeys/complete": {
+      "handler": "users.complete_my_passkey_registration",
+      "note": "eigene MFA"
+    },
+    "POST /api/users/me/mfa/passkeys/start": {
+      "handler": "users.start_my_passkey_registration",
+      "note": "eigene MFA"
+    },
+    "PATCH /api/users/me/mfa/preferred-method": {
+      "handler": "users.patch_my_preferred_mfa_method",
+      "note": "eigene MFA"
+    },
+    "POST /api/users/me/mfa/totp/complete": {
+      "handler": "users.complete_my_totp_enrollment",
+      "note": "eigene MFA"
+    },
+    "POST /api/users/me/mfa/totp/start": {
+      "handler": "users.start_my_totp_enrollment",
+      "note": "eigene MFA"
+    },
+    "POST /api/users/me/password": {
+      "handler": "users.change_my_password",
+      "note": "eigenes Passwort"
+    },
+    "POST /api/users/me/personal-data": {
+      "handler": "users.export_my_personal_data",
+      "note": "eigene Datenauskunft (rate-limitiert)"
+    },
+    "DELETE /api/users/{user_id}": {
+      "handler": "users.delete_user",
+      "note": "UserService (access.manage)"
+    },
+    "GET /api/users/{user_id}": {
+      "handler": "users.get_user",
+      "note": "UserService (access.manage)"
+    },
+    "PATCH /api/users/{user_id}": {
+      "handler": "users.patch_user",
+      "note": "UserService (access.manage)"
+    },
+    "GET /api/users/{user_id}/mfa": {
+      "handler": "users.get_user_mfa",
+      "note": "MfaService._managed_user (access.manage)"
+    },
+    "DELETE /api/users/{user_id}/mfa/factors/{factor_id}": {
+      "handler": "users.delete_user_mfa_factor",
+      "note": "MfaService._managed_user (access.manage)"
+    },
+    "PUT /api/users/{user_id}/roles": {
+      "handler": "roles.set_user_roles",
+      "requires": [
+        "access.manage"
+      ]
+    },
+    "WEBSOCKET /api/ws/protocols/{protocol_id}": {
+      "handler": "collaboration_ws.protocol_collaboration",
+      "branches": [
+        "meetings.edit"
+      ],
+      "note": "WebSocket: can_read_protocol beim Verbinden und alle 30 s, Schreiben nur mit meetings.edit (_can_edit)"
+    }
+  }
+}

@@ -764,3 +764,15 @@ Schutzregeln, Nebenläufigkeit, RLS, Composite-FK, Mehrfachrollen, Session-Wirku
 Rollen-API), `tests/test_route_permission_inventory.py`, angepasste Bestandstests,
 `frontend/lib/permissions.test.ts`, `frontend/e2e/rbac-roles.spec.ts`.
 
+
+### 12.1 Durchsetzung
+
+Damit das Konzept nicht schleichend aufweicht, gibt es fünf Prüfungen:
+
+| Prüfung | Wo | Was sie verhindert |
+|---|---|---|
+| `check-security-rules.py`: `role-code-comparison`, `role-write-outside-role-service` | Agent-Hook, Pre-Commit, CI | Rechte über Rollen-Codes statt Berechtigungen; Rollen- und Zuweisungsänderungen an den Schutzregeln vorbei (auch der Mandantenimport läuft jetzt über `role_service.import_role`/`attach_imported_roles`). Ausnahme nur mit `# rbac-ok: <Begründung>` |
+| `sync-permission-catalog.py --check` | Pre-Commit, CI | Berechtigungen ohne Übersetzung, ohne Migration oder ohne Prüfung im Backend |
+| `permissions/route-map.json` (`sync-route-permissions.py --check`) | Pre-Commit, CI | Unbemerkt schwächere Prüfungen: jede Änderung zeigt sich als Diff im PR |
+| Agent `security-reviewer` | vor Commits mit Auth-/Rechteänderungen | RBAC-Checkliste (Prüfung vor dem Laden, Ressourcenregeln, `role_service`, neue Berechtigungen) |
+| `.github/workflows/rbac-audit.yml` | wöchentlich auf `main` | Altlasten und Ausnahmen im ganzen Bestand; RBAC-, RLS- und Inventar-Tests auch im RLS-Testmodus; E2E `rbac-roles` |

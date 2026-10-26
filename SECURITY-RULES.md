@@ -26,7 +26,9 @@ derselben Zeile **begründet** markiert; eine Markierung ohne echten Grund ist e
    bestehende Permission oder bekommt eine neue im Katalog (`scripts/sync-permission-catalog.py`,
    Migration ordnet sie den Standardrollen zu). Ressourcenregeln (Mandant, Protokollstatus,
    Teilnehmer-Zuordnung, eigene Daten) bleiben in `services/access_service.py`.
-   `tests/test_route_permission_inventory.py` schlägt fehl, wenn eine Route keine Prüfung hat.
+   `tests/test_route_permission_inventory.py` schlägt fehl, wenn eine Route keine Prüfung hat;
+   `permissions/route-map.json` (`scripts/sync-route-permissions.py`) zeigt jede Änderung an
+   einer Prüfung als Diff. Kein Vergleich mit Rollen-Codes (`# rbac-ok:` nur begründet).
    Hintergrund: `docs/RBAC_ARCHITECTURE_PROPOSAL.md`.
 4. **Rollen und Zuweisungen nur über `services/role_service.py`** (keine Rechteausweitung, letzter
    Administrator, kein Selbstentzug, Mandantensperre) - auch aus dem Plattform-Admin-Panel und
@@ -90,6 +92,9 @@ derselben Zeile **begründet** markiert; eine Markierung ohne echten Grund ist e
 ## 6. Vor dem Abschluss einer Änderung
 
 - `python3 scripts/check-security-rules.py <geänderte Dateien>` meldet `Sicherheitsregeln: ok`.
+- Bei Routen oder Berechtigungen: `python3 scripts/sync-permission-catalog.py --check` und
+  `python3 scripts/sync-route-permissions.py --check` sind ok, der Diff von
+  `permissions/route-map.json` ist gelesen und jede schwächere Prüfung begründet.
 - Tests für Fremd-Mandanten-Fälle der Änderung (fremde ID → abgelehnt, Partner nur lesend …);
   bei Datenbankänderungen zusätzlich `tests/test_tenant_rls.py` und der RLS-Testmodus
   (Wiki [Testprozess](https://github.com/FrissBrot/hocX/wiki/Testprozess#rls-testmodus)).

@@ -76,6 +76,25 @@ class SecurityRulesTests(unittest.TestCase):
         marked = "<div dangerouslySetInnerHTML={{ __html: html }} /> {/* security-ok: bereinigt mit DOMPurify */}\n"
         self.assertEqual(rules(TS, marked), [])
 
+    def test_role_code_comparisons_are_reported(self):
+        self.assertEqual(rules(PY, 'if user.role_code == "admin":\n    pass\n'), ["role-code-comparison"])
+        self.assertEqual(rules(PY, 'ok = role.system_key in ("writer", "kassier")\n'), ["role-code-comparison"])
+        self.assertEqual(rules(PY, 'if source == "admin":\n    pass\n'), [])
+        self.assertEqual(rules(PY, 'if access == "writer":\n    pass\n'), [])
+        self.assertEqual(rules(PY, 'if role.system_key == "reader":  # rbac-ok: Standardrolle als Fallback\n    pass\n'), [])
+        self.assertEqual(rules(TS, 'const isAdmin = session.current_role === "admin";\n'), ["role-code-comparison"])
+        self.assertEqual(rules(TS, 'if (role?.system_key !== "writer") return;\n'), ["role-code-comparison"])
+        self.assertEqual(rules(TS, 'if (binding.access === "writer") return;\n'), [])
+        self.assertEqual(rules("frontend/lib/permissions.ts", 'role.system_key === "admin";\n'), [])
+
+    def test_role_writes_belong_to_role_service(self):
+        self.assertEqual(rules(PY, "db.add(UserRole(tenant_id=t, user_id=u, role_id=r))\n"), ["role-write-outside-role-service"])
+        self.assertEqual(rules(PY, "db.execute(delete(TenantRolePermission).where(x))\n"), ["role-write-outside-role-service"])
+        self.assertEqual(rules(PY, 'db.execute(text("DELETE FROM user_role WHERE user_id = :id"), {"id": 1})\n'), ["role-write-outside-role-service"])
+        self.assertEqual(rules(PY, "rows = db.scalars(select(UserRole.role_id).where(UserRole.user_id == u))\n"), [])
+        self.assertEqual(rules("backend/scripts/seed.py", "db.add(TenantRole(tenant_id=t))\n"), ["role-write-outside-role-service"])
+        self.assertEqual(rules("backend/app/services/role_service.py", "db.add(UserRole(tenant_id=t))\n"), [])
+
     def test_tests_migrations_and_other_paths_are_ignored(self):
         self.assertEqual(rules("backend/tests/test_x.py", "get_by_public_id(db, A, x)\n"), [])
         self.assertEqual(rules("backend/alembic/versions/x.py", 'op.execute(f"DROP {name}")\n'), [])

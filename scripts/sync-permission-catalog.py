@@ -194,9 +194,47 @@ export const SYSTEM_ROLE_PERMISSIONS: Readonly<Record<SystemRoleKey, readonly Pe
 """
 
 
+def consistency_problems(data: dict) -> list[str]:
+    """Was der Katalog allein nicht garantiert (CLAUDE.md, Abschnitt RBAC "Neue Berechtigung"):
+    Übersetzungen in allen Locales, eine Migration, die den Key in die Tabelle permission einfügt,
+    und mindestens eine Verwendung im Backend - eine Berechtigung, die nichts prüft, ist ein
+    Schalter ohne Wirkung und täuscht Mandanten-Admins."""
+    problems: list[str] = []
+    locales = json.loads((ROOT / "i18n/locales.json").read_text(encoding="utf-8"))["locales"]
+    for locale in locales:
+        path = ROOT / f"frontend/messages/{locale}/roles.json"
+        messages = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        for area in data["areas"]:
+            if not messages.get("areas", {}).get(area):
+                problems.append(f"{path.relative_to(ROOT)}: areas.{area} fehlt")
+        for entry in data["permissions"]:
+            group, action = entry["key"].split(".")
+            texts = messages.get("permissions", {}).get(group, {}).get(action, {})
+            for field in ("label", "description"):
+                if not texts.get(field):
+                    problems.append(f"{path.relative_to(ROOT)}: permissions.{entry['key']}.{field} fehlt")
+    migrations = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "backend/alembic/versions").glob("*.py"))
+    backend = "\n".join(
+        path.read_text(encoding="utf-8") for path in (ROOT / "backend/app").rglob("*.py") if path != PY_TARGET
+    )
+    for entry in data["permissions"]:
+        key = entry["key"]
+        if f'"{key}"' not in migrations and f"'{key}'" not in migrations:
+            problems.append(f"{key}: keine Migration fügt den Key in die Tabelle permission ein")
+        if f"P.{key.replace('.', '_').upper()}" not in backend:
+            problems.append(f"{key}: wird im Backend nirgends geprüft (P.{key.replace('.', '_').upper()})")
+    return problems
+
+
 def main() -> int:
     check = "--check" in sys.argv[1:]
     data = load_source()
+    problems = consistency_problems(data)
+    if problems:
+        for problem in problems:
+            print(problem)
+        print("Berechtigungskatalog: unvollständig (siehe CLAUDE.md, Abschnitt Berechtigungen / RBAC)")
+        return 1
     outputs = {TS_TARGET: render_ts(data), PY_TARGET: render_py(data)}
     stale = [path for path, content in outputs.items() if not path.exists() or path.read_text(encoding="utf-8") != content]
     if check:

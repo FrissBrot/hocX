@@ -10,6 +10,8 @@ Aufruf:
   scripts/check-security-rules.py DATEI...          # gegen HEAD
   scripts/check-security-rules.py --staged          # gestagte Dateien, Index gegen HEAD
   scripts/check-security-rules.py --base REF        # alle seit REF geänderten Dateien
+  scripts/check-security-rules.py --all --rules R1,R2  # ganzes Repo ohne Vergleichsstand,
+                                                    # nur diese Regeln (wöchentlicher RBAC-Audit)
 
 Ausnahmen werden in derselben Zeile begründet markiert, z. B.
   # nosemgrep: public-id-lookup-without-tenant -- <Begründung>
@@ -18,10 +20,15 @@ Ausnahmen werden in derselben Zeile begründet markiert, z. B.
   {/* security-ok: <Begründung> */}
   # loop-ok: <Begründung>       (DB-Zugriff in async def, der den Event-Loop nicht blockiert)
   # stream-ok: <Begründung>     (Streaming-Antwort, deren Route die Session nicht hält)
+  # rbac-ok: <Begründung>       (bewusster Bezug auf eine Standardrolle bzw. Rollentabelle)
 
 Zusätzlich zu SECURITY-RULES.md zwei Regeln aus dem Concurrency-Audit (CONC-001/-002): ein
 synchroner DB-Zugriff in einer async-Funktion blockiert den Event-Loop des ganzen Workers, und
 eine Streaming-Antwort hält die Session der Route (get_db) bis zum letzten Byte.
+
+RBAC (SECURITY-RULES §1.3/§1.4, docs/RBAC_ARCHITECTURE_PROPOSAL.md): Rechte werden über
+Berechtigungen geprüft, nie über Rollen-Codes, und Rollen/Zuweisungen schreibt nur
+services/role_service.py.
 """
 
 from __future__ import annotations
@@ -52,6 +59,8 @@ RULE_TEXT = {
     "secret-in-url": "Token/Passwort in einer URL-Query (gehört in Body oder Header)",
     "blocking-db-in-async": "synchroner DB-Zugriff in async def (blockiert den Event-Loop) - per run_in_threadpool/asyncio.to_thread ausführen",
     "stream-response-holds-db": "Streaming-/Datei-Antwort mit Depends(get_db) ohne release_for_stream(db, ...) (Verbindung bis zum letzten Byte belegt)",
+    "role-code-comparison": "Vergleich mit einem Rollen-Code (\"admin\", \"writer\" …) - Rechte über require_permission/user.can(P.X) bzw. can(session, \"x.y\") prüfen",
+    "role-write-outside-role-service": "Rollen/Rollenzuweisungen ausserhalb von services/role_service.py geschrieben (Schutzregeln werden umgangen)",
 }
 MARKERS = {
     "public-id-lookup-without-tenant": ("nosemgrep: public-id-lookup-without-tenant", "tenant-scope-ok"),
@@ -62,11 +71,31 @@ MARKERS = {
     "secret-in-url": ("security-ok",),
     "blocking-db-in-async": ("loop-ok",),
     "stream-response-holds-db": ("stream-ok",),
+    "role-code-comparison": ("rbac-ok",),
+    "role-write-outside-role-service": ("rbac-ok",),
 }
 
 OFFLOAD_CALLS = {"run_in_threadpool", "to_thread", "run_in_executor"}
 STREAM_RESPONSES = {"object_response", "FileResponse", "StreamingResponse"}
 DB_NAMES = {"db", "session"}
+
+ROLE_CODES = {"admin", "writer", "kassier", "reader"}
+ROLE_TABLE_MODELS = {"TenantRole", "TenantRolePermission", "UserRole"}
+ROLE_SUBJECT = re.compile(r"role|system_key|systemkey", re.IGNORECASE)
+ROLE_SQL_WRITE = re.compile(r"\b(insert\s+into|update|delete\s+from)\s+(user_role|tenant_role|tenant_role_permission)\b", re.IGNORECASE)
+# Hier sind Rollen-Codes und Rollentabellen das Thema selbst.
+RBAC_HOME = (
+    "backend/app/services/role_service.py",
+    "backend/app/core/permissions.py",
+    "backend/app/core/permissions_generated.py",
+    "frontend/lib/permissions.ts",
+    "frontend/lib/permissions.generated.ts",
+)
+TS_ROLE_COMPARISON = re.compile(
+    r"""(?:(?:role|system_?key)\w*(?:\??\.\w+)*\s*[!=]==?\s*["'](?:admin|writer|kassier|reader)["'])"""
+    r"""|(?:["'](?:admin|writer|kassier|reader)["']\s*[!=]==?\s*\w*(?:role|system_?key))""",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -138,7 +167,38 @@ def _holds_db_dependency(function: ast.FunctionDef | ast.AsyncFunctionDef) -> bo
     return False
 
 
-def _python_findings(source: str) -> list[Finding]:
+def _role_codes(node: ast.AST) -> bool:
+    if isinstance(node, ast.Constant):
+        return node.value in ROLE_CODES
+    if isinstance(node, ast.Tuple | ast.List | ast.Set):
+        return any(isinstance(item, ast.Constant) and item.value in ROLE_CODES for item in node.elts)
+    return False
+
+
+def _rbac_findings(tree: ast.Module, add) -> None:
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Compare):
+            operands = [node.left, *node.comparators]
+            if any(_role_codes(operand) for operand in operands) and any(
+                not _role_codes(operand) and ROLE_SUBJECT.search(ast.unparse(operand)) for operand in operands
+            ):
+                add("role-code-comparison", node)
+        if isinstance(node, ast.Call):
+            name = _call_name(node)
+            if name in ROLE_TABLE_MODELS:
+                add("role-write-outside-role-service", node)
+            elif name in {"delete", "insert", "update"} and node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in ROLE_TABLE_MODELS:
+                add("role-write-outside-role-service", node)
+            elif name in {"text", "execute", "exec_driver_sql"} and node.args:
+                literal = node.args[0]
+                value = literal.value if isinstance(literal, ast.Constant) and isinstance(literal.value, str) else (
+                    "".join(part.value for part in literal.values if isinstance(part, ast.Constant)) if isinstance(literal, ast.JoinedStr) else ""
+                )
+                if ROLE_SQL_WRITE.search(value):
+                    add("role-write-outside-role-service", node)
+
+
+def _python_findings(source: str, path: str = "") -> list[Finding]:
     try:
         tree = ast.parse(source)
     except SyntaxError:
@@ -189,10 +249,12 @@ def _python_findings(source: str) -> list[Finding]:
                     and inner.cause is None
                 ):
                     add("http-exception-without-cause", inner)
+    if path.startswith("backend/") and path not in RBAC_HOME:
+        _rbac_findings(tree, add)
     return findings
 
 
-def _ts_findings(source: str) -> list[Finding]:
+def _ts_findings(source: str, path: str = "") -> list[Finding]:
     lines = source.splitlines()
     findings: list[Finding] = []
     for number, text in enumerate(lines, start=1):
@@ -200,19 +262,26 @@ def _ts_findings(source: str) -> list[Finding]:
             findings.append(Finding("dangerously-set-inner-html", number, text.strip()))
         if SECRET_QUERY.search(text) and ("`" in text or '"/' in text) and not _marked(lines, number, "secret-in-url"):
             findings.append(Finding("secret-in-url", number, text.strip()))
+        if (
+            path.startswith("frontend/")
+            and path not in RBAC_HOME
+            and TS_ROLE_COMPARISON.search(text)
+            and not _marked(lines, number, "role-code-comparison")
+        ):
+            findings.append(Finding("role-code-comparison", number, text.strip()))
     return findings
 
 
 def _relevant(path: str) -> str | None:
-    if path.endswith(".py") and path.startswith(PY_ROOTS):
+    if path.endswith(".py") and path.startswith((*PY_ROOTS, "backend/scripts/")):
         return "py"
     if path.endswith((".ts", ".tsx")) and path.startswith(TS_ROOTS) and not any(skip in path for skip in TS_SKIP):
         return "ts"
     return None
 
 
-def _findings(kind: str, source: str) -> list[Finding]:
-    return _python_findings(source) if kind == "py" else _ts_findings(source)
+def _findings(kind: str, source: str, path: str = "") -> list[Finding]:
+    return _python_findings(source, path) if kind == "py" else _ts_findings(source, path)
 
 
 def _git(*args: str) -> str | None:
@@ -224,8 +293,8 @@ def new_findings(path: str, current: str, baseline: str | None) -> list[Finding]
     kind = _relevant(path)
     if kind is None:
         return []
-    found = _findings(kind, current)
-    remaining = Counter(finding.key for finding in _findings(kind, baseline)) if baseline else Counter()
+    found = _findings(kind, current, path)
+    remaining = Counter(finding.key for finding in _findings(kind, baseline, path)) if baseline else Counter()
     new: list[Finding] = []
     for finding in found:
         if remaining[finding.key] > 0:
@@ -240,10 +309,20 @@ def main() -> int:
     parser.add_argument("files", nargs="*")
     parser.add_argument("--staged", action="store_true")
     parser.add_argument("--base")
+    parser.add_argument("--all", action="store_true")
+    parser.add_argument("--rules")
     parser.add_argument("--exit-code", type=int, default=1)
     args = parser.parse_args()
+    only = set(args.rules.split(",")) if args.rules else None
+    if only and only - RULE_TEXT.keys():
+        parser.error(f"unbekannte Regeln: {sorted(only - RULE_TEXT.keys())}")
+    if args.all and not only:
+        parser.error("--all nur zusammen mit --rules (der Altbestand anderer Regeln ist nicht bereinigt)")
 
-    if args.staged:
+    if args.all:
+        names = [name for name in (_git("ls-files") or "").split() if _relevant(name)]
+        files = [(name, (ROOT / name).read_text(encoding="utf-8"), None) for name in names if (ROOT / name).is_file()]
+    elif args.staged:
         names = (_git("diff", "--cached", "--name-only", "--diff-filter=ACMR") or "").split()
         # Nur geprüfte Dateitypen lesen - Binärdateien im Diff (Bilder, PDFs) sind kein UTF-8.
         names = [name for name in names if _relevant(name)]
@@ -264,7 +343,12 @@ def main() -> int:
             if path.is_file():
                 files.append((name, path.read_text(encoding="utf-8"), _git("show", f"HEAD:{name}")))
 
-    problems = [(name, finding) for name, current, baseline in files for finding in new_findings(name, current, baseline)]
+    problems = [
+        (name, finding)
+        for name, current, baseline in files
+        for finding in new_findings(name, current, baseline)
+        if only is None or finding.rule in only
+    ]
     if not problems:
         print("Sicherheitsregeln: ok")
         return 0

@@ -107,6 +107,20 @@ alle Berechtigungen. Details: `docs/RBAC_ARCHITECTURE_PROPOSAL.md`.
   Standardrollen hinzu (auch in `hocx_seed_tenant_roles`), Übersetzungen `roles.permissions.<bereich>.<aktion>.label/description`
   in allen Locales.
 - Rollen ändern/zuweisen nur über `services/role_service.py` (Schutzregeln, Savepoint-Guard).
+- Durchgesetzt wird das automatisch:
+  - `check-security-rules.py` (Hook, Pre-Commit, CI) meldet Rollen-Code-Vergleiche
+    (`role-code-comparison`) und Schreibzugriffe auf Rollentabellen ausserhalb von `role_service.py`
+    (`role-write-outside-role-service`). Ausnahme nur begründet mit `# rbac-ok: <Begründung>`.
+  - `sync-permission-catalog.py --check` verlangt zu jedem Key Übersetzungen in allen Locales, eine
+    Migration und mindestens eine Prüfung im Backend.
+  - `tests/test_route_permission_inventory.py` schlägt fehl, wenn eine Route keine Prüfung hat.
+- **Rechte-Übersicht:** `permissions/route-map.json` (Route → geprüfte Berechtigung) wird generiert
+  und eingecheckt. Nach jeder Änderung an Routen oder Prüfungen `python3 scripts/sync-route-permissions.py`
+  ausführen; CI und Pre-Commit prüfen mit `--check`. Den Diff dieser Datei vor dem Commit bewusst
+  lesen: eine wegfallende `requires`-Prüfung oder eine neue `note`-Ausnahme gehört begründet in die
+  Commit-Nachricht.
+- Wöchentlich prüft `.github/workflows/rbac-audit.yml` den Stand von `main` erneut (RBAC-, RLS- und
+  Inventar-Tests, E2E `rbac-roles`, Übersicht und Katalog).
 
 ## Zentrale Fehlererfassung (verbindlich)
 

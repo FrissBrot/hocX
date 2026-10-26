@@ -4,7 +4,9 @@ Vor jeder Aufgabe `CLAUDE.md` in diesem Verzeichnis lesen und befolgen - es ist 
 Quelle der Projektregeln für alle Agents - samt der dort mit `@pfad` eingebundenen Dateien,
 insbesondere **`SECURITY-RULES.md`** (Sicherheitsregeln, verbindlich) und `design/DESIGN.md`.
 Vor dem Abschluss: `python3 scripts/check-security-rules.py <geänderte Dateien>` muss
-`Sicherheitsregeln: ok` melden.
+`Sicherheitsregeln: ok` melden. Bei Routen oder Berechtigungen zusätzlich
+`python3 scripts/sync-route-permissions.py` (Rechte-Übersicht) und
+`python3 scripts/sync-permission-catalog.py --check` (siehe CLAUDE.md, Berechtigungen / RBAC).
 
 ## Context Engine (CCE)
 

@@ -279,6 +279,15 @@ def set_user_roles(db: Session, actor: CurrentUser | None, user: AppUser, roles:
     return True
 
 
+def attach_imported_roles(db: Session, user: AppUser, role_ids: Iterable[int]) -> None:
+    """Mandantenimport: Rollen eines frisch importierten Kontos im neuen Mandanten. Ohne Akteur
+    und ohne Schutzregeln - der Mandant entsteht gerade erst; role_ids stammen aus import_role
+    bzw. system_role desselben Mandanten (der zusammengesetzte Fremdschlüssel erzwingt das)."""
+    for role_id in dict.fromkeys(role_ids):
+        db.add(UserRole(tenant_id=user.tenant_id, user_id=user.id, role_id=role_id))
+    db.flush()
+
+
 # ── Rollen anlegen, ändern, löschen ─────────────────────────────────────────────────────────
 
 
@@ -393,3 +402,26 @@ def delete_role(db: Session, actor: CurrentUser, role: TenantRole) -> None:
     # Eine Rolle ohne Zuweisungen kann niemandem Rechte nehmen - Schutzregeln 2/3 greifen hier nicht.
     db.delete(role)
     db.flush()
+
+
+# ── Mandantenimport ─────────────────────────────────────────────────────────────────────────
+
+
+def import_role(
+    db: Session, tenant_id: int, *, system_key: str | None, name: str | None, description: str | None, permissions: Iterable[str]
+) -> TenantRole:
+    """Übernimmt eine Rolle aus einem Mandantenexport in einen neu angelegten Mandanten. Die
+    Standardrollen hat der Trigger schon angelegt (admin bleibt fest und unverändert), eigene
+    Rollen entstehen neu. Unbekannte Berechtigungen (Export einer neueren Installation) fallen
+    weg; gespeichert wird die Menge inkl. Implikationen wie bei create_role."""
+    role = system_role(db, tenant_id, system_key) if system_key else TenantRole(tenant_id=tenant_id)
+    if system_key == ADMIN_ROLE_KEY:
+        return role
+    role.name = name
+    role.description = description
+    db.add(role)
+    db.flush()
+    known = {permission.value for permission in P}
+    _replace_permissions(db, role, frozenset(str(key) for key in expand([key for key in permissions if key in known])))
+    db.flush()
+    return role
