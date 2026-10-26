@@ -18,11 +18,10 @@ export function googleSubscribeUrl(path: string, origin: string): string {
   return `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(appleSubscribeUrl(path, origin))}`;
 }
 
-/** Spiegelt calendar_feed_service.can_subscribe: Termine nur fuer writer/admin (wie die
- * Termine-Seite selbst), Todos fuer alle Rollen. */
-export function canSubscribeCalendar(role: string | null | undefined, kind: CalendarFeedKind): boolean {
-  if (kind === "events") return role === "admin" || role === "writer";
-  return role === "admin" || role === "writer" || role === "kassier" || role === "reader";
+/** Spiegelt calendar_feed_service.can_subscribe: beide Abos mit meetings.read - dieselbe
+ * Berechtigung wie die Termin- und Aufgabenlisten selbst. */
+export function canSubscribeCalendar(permissions: readonly string[] | null | undefined, kind: CalendarFeedKind): boolean {
+  return (kind === "events" || kind === "todos") && (permissions ?? []).includes("meetings.read");
 }
 
 export const CONNECTIONS_HREF = "/connections";

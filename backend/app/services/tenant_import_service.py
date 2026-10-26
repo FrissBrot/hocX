@@ -27,7 +27,7 @@ from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -77,7 +77,6 @@ from app.models import (
     ProtocolImage,
     ProtocolText,
     ProtocolTodo,
-    Role,
     StoragePackage,
     StoredFile,
     SubmissionAssignment,
@@ -93,10 +92,13 @@ from app.models import (
     Tenant,
     TenantDomain,
     TenantFeature,
+    TenantRole,
+    TenantRolePermission,
     TenantStoragePackage,
     UserMfaFactor,
     UserProtocolAccess,
     UserProtocolScroll,
+    UserRole,
     UserTemplateAccess,
     WordImportDocument,
     WordImportProfile,
@@ -114,6 +116,7 @@ from app.models.entities import (
 from app.services import (
     calendar_feed_service,
     domain_verification_service,
+    role_service,
     share_link_service,
     submission_link_service,
     traefik_config_service,
@@ -143,7 +146,7 @@ from app.services.tenant_transfer_common import (
     replace_public_ids,
 )
 
-SUPPORTED_FORMAT_VERSIONS = {2, 3, 4, 5, 6, 7, 8}  # 8: Baustein-Bibliothek (ältere Archive: is_library = TRUE); 7: Document Studio; 6: Dokumentenregister; 5: Dokument-Engine (Hausstile statt Dokumentvorlagen)  # 2: separate user_tenant_role table; 3: role on app_user
+SUPPORTED_FORMAT_VERSIONS = {2, 3, 4, 5, 6, 7, 8, 9}  # 9: Rollen je Mandant (RBAC); 8: Baustein-Bibliothek (ältere Archive: is_library = TRUE); 7: Document Studio; 6: Dokumentenregister; 5: Dokument-Engine (Hausstile statt Dokumentvorlagen)  # 2: separate user_tenant_role table; 3: role on app_user
 
 # Zip-bomb guard, same idea as file_service.py's MAX_ZIP_ENTRIES/MAX_ZIP_TOTAL_BYTES for the
 # word-import ZIP upload, just scaled up: a full-tenant export can legitimately contain many
@@ -387,6 +390,7 @@ class TenantImportService:
             callback(new_tenant.id)
         # From here on only the new tenant's own accounts can be referenced by email.
         self.user_cache.tenant_id = new_tenant.id
+        self._import_roles(new_tenant.id)
         self._import_app_users(new_tenant.id)
         self._import_user_mfa_factors()
         self._import_tenant_domains(new_tenant.id)
@@ -559,6 +563,57 @@ class TenantImportService:
             return None
         return {row["user_id"]: row["role_id"] for row in self._t("user_tenant_role") if row.get("user_id")}
 
+    def _import_roles(self, new_tenant_id: int) -> None:
+        """Format 9+: Rollen des Mandanten. Die Standardrollen legt der Trigger beim Anlegen des
+        Mandanten an - übernommen werden Name, Beschreibung und Berechtigungen (admin bleibt fest),
+        eigene Rollen werden neu angelegt. Unbekannte Berechtigungen (neuere Installation) fallen
+        weg. Ältere Formate: nur Standardrollen, siehe _roles_for_user."""
+        from app.core.permissions import ADMIN_ROLE_KEY, P
+
+        self._role_map: dict[int, int] = {}
+        known = {permission.value for permission in P}
+        used_names: set[str] = set()
+        for row in self._t("tenant_role"):
+            system_key = row.get("system_key")
+            if system_key:
+                role = role_service.system_role(self.db, new_tenant_id, system_key)
+            else:
+                role = TenantRole(tenant_id=new_tenant_id)
+            if system_key != ADMIN_ROLE_KEY:
+                name = (row.get("name") or "").strip() or None
+                if name is None and not system_key:
+                    name = "Rolle"
+                if name is not None:
+                    base, counter = name, 2
+                    while name.lower() in used_names:
+                        name, counter = f"{base} ({counter})", counter + 1
+                    used_names.add(name.lower())
+                role.name = name
+                role.description = row.get("description")
+                self.db.add(role)
+                self.db.flush()
+                self.db.execute(delete(TenantRolePermission).where(TenantRolePermission.role_id == role.id))
+                for key in sorted({key for key in row.get("permissions") or [] if key in known}):
+                    self.db.add(TenantRolePermission(role_id=role.id, permission_key=key))
+            self.db.flush()
+            self._role_map[row["id"]] = role.id
+        self.db.commit()
+
+    def _roles_for_user(self, row: dict[str, Any], tenant_id: int, legacy_code: str | None) -> list[int]:
+        """Interne tenant_role-IDs für ein importiertes Konto: Format 9+ über role_refs, ältere
+        Formate über den Rollencode (Standardrolle; unbekannt -> reader mit Warnung)."""
+        if self.format_version >= 9:
+            mapped = [self._role_map[ref] for ref in row.get("role_refs") or [] if ref in self._role_map]
+            if mapped:
+                return mapped
+            return [role_service.system_role(self.db, tenant_id, "reader").id]
+        code = legacy_code or "reader"
+        try:
+            return [role_service.system_role(self.db, tenant_id, code).id]
+        except RuntimeError:
+            self.warnings.append(f"Benutzer '{row.get('email')}': Rolle {code!r} unbekannt - als 'reader' importiert.")
+            return [role_service.system_role(self.db, tenant_id, "reader").id]
+
     def _import_app_users(self, new_tenant_id: int) -> None:
         """Creates a login-capable account (password_hash included) in the new tenant for every
         exported user, so the tenant's members can log in on the target immediately and every
@@ -583,12 +638,8 @@ class TenantImportService:
                 # not a member of the exported tenant. There is no tenant to put it in.
                 continue
             role_code = legacy_roles[email] if legacy_roles is not None else row.get("role_id")
-            try:
-                role_id = self.lookup_cache.id_for(Role, role_code)
-            except ValueError:
-                role_id = self.lookup_cache.id_for(Role, "reader")
-                self.warnings.append(f"Benutzer '{email}': Rolle {role_code!r} unbekannt - als 'reader' importiert.")
-            overrides: dict[str, Any] = {"tenant_id": new_tenant_id, "role_id": role_id, "login_enabled": login_enabled}
+            role_ids = self._roles_for_user(row, new_tenant_id, role_code)
+            overrides: dict[str, Any] = {"tenant_id": new_tenant_id, "login_enabled": login_enabled}
             if login_enabled and email:
                 overrides["email"] = email.strip().lower()
             if not login_enabled:
@@ -624,6 +675,9 @@ class TenantImportService:
             new_user = self._build(AppUser, row, overrides)
             self.db.add(new_user)
             self.db.flush()
+            for role_id in dict.fromkeys(role_ids):
+                self.db.add(UserRole(tenant_id=new_tenant_id, user_id=new_user.id, role_id=role_id))
+            self.db.flush()
             self._user_id_map[row["id"]] = new_user.id
             self.user_cache.set_id(str(row.get("public_id")), new_user.id)
             if self.format_version < 4:
@@ -635,13 +689,14 @@ class TenantImportService:
             return dict(self._user_id_map)
         # Alte Archive enthielten Stammdaten und Zugang als getrennte Zeilen.
         id_map: dict[int, int] = {}
-        reader_role = self.lookup_cache.id_for(Role, "reader")
         for row in self._t("participant"):
             user_id = self.user_cache.id_for(row.get("app_user_id"))
             user = self.db.get(AppUser, user_id) if user_id is not None else None
             if user is None:
-                user = self._build(AppUser, row, {"tenant_id": tenant_id, "role_id": reader_role, "login_enabled": False, "password_hash": None})
+                user = self._build(AppUser, row, {"tenant_id": tenant_id, "login_enabled": False, "password_hash": None})
                 self.db.add(user)
+                self.db.flush()
+                role_service.assign_default_role(self.db, user)
             else:
                 for field in ("first_name", "last_name", "display_name", "email", "is_active", "joined_at", "left_at"):
                     if field in row:

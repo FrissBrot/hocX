@@ -33,7 +33,8 @@ class ParticipantCreate(ParticipantBase):
 class ParticipantUpdate(BaseModel):
     login_enabled: bool | None = None
     password: str | None = Field(default=None, min_length=12)
-    role_code: str | None = None
+    # Rollen setzen (nur mit access.manage, siehe routes/participants.py).
+    role_ids: list[uuid.UUID] | None = Field(default=None, max_length=50)
     first_name: str | None = None
     last_name: str | None = None
     display_name: str | None = None

@@ -11,10 +11,11 @@ import {
   StructuredListDefinition,
   StructuredListEntry,
 } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 export default async function ListsPage() {
   const session = await requireSession();
-  const canWrite = session.current_role === "admin" || session.current_role === "writer";
+  const canWrite = can(session, "meetings.edit");
 
   if (!canWrite) {
     redirect("/");

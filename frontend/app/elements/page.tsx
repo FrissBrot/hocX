@@ -11,13 +11,14 @@ import { templateAreaTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import type { Capabilities } from "@/lib/documents/api";
 import { ElementDefinition, EventSummary, FinanceAccount, ParticipantSummary, StructuredListDefinition } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 export default async function ElementsPage({ searchParams }: { searchParams: Promise<{ create?: string }> }) {
   const { create } = await searchParams;
   const session = await requireSession();
   const t = await getTranslations("nav");
-  const canAdmin = session.current_role === "admin";
-  if (!canAdmin && session.current_role !== "writer") {
+  const canAdmin = can(session, "templates.manage");
+  if (!can(session, "templates.edit")) {
     redirect("/");
   }
   // Bausteine: nur die Bibliothek (Einzelstücke gehören ihrer Sitzungsvorlage)
@@ -37,7 +38,7 @@ export default async function ElementsPage({ searchParams }: { searchParams: Pro
         mobile={<MobileDesktopOnly navKey="elements" backHref="/templates" backNavKey="templates" />}
         desktop={
           <>
-          <RouteTabs tabs={templateAreaTabs(t, session.current_role === "admin")} activeHref="/elements" />
+          <RouteTabs tabs={templateAreaTabs(t, canAdmin)} activeHref="/elements" />
           <section className="panel">
             <ElementDefinitionManager
               initialDefinitions={definitions ?? []}

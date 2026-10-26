@@ -20,6 +20,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.error_log import record_system_error
 from app.core.redis_client import get_redis, get_redis_pubsub
+from app.core.permissions import P
 from app.core.security import (
     CurrentUser,
     _has_active_mfa_factor,
@@ -168,7 +169,7 @@ def _public_list_id_map(list_ids: set[int]) -> dict[int, uuid.UUID]:
 
 
 def _can_edit(user: CurrentUser) -> bool:
-    return user.current_role in {"writer", "admin"}
+    return user.can(P.MEETINGS_EDIT)
 
 
 def _field_update_requires_lock(field_key: str) -> bool:

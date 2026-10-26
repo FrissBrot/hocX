@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.rate_limit import check_login_lockout, record_failed_login
+from app.schemas.role import RoleRef
 from app.core.security import CurrentUser, DUMMY_PASSWORD_HASH, build_current_user, issue_locale_cookie, issue_session_cookie, verify_password
 from app.models import AppUser, Tenant
 from app.schemas.mfa import (
@@ -272,7 +273,8 @@ class AuthService:
                 protocol_accordion_enabled=user.protocol_accordion_enabled,
             ),
             current_tenant=current_tenant,
-            current_role=user.current_role,
+            permissions=sorted(user.permissions),
+            roles=[RoleRef(id=role.public_id, name=role.name, system_key=role.system_key) for role in user.roles],
         )
 
     def _finish_login(

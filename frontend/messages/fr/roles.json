@@ -1,0 +1,149 @@
+{
+  "pageTitle": "Rôles",
+  "pageHint": "Un rôle regroupe des autorisations. Un compte peut avoir plusieurs rôles et reçoit alors toutes leurs autorisations.",
+  "newRole": "Nouveau rôle",
+  "empty": "Aucun rôle pour l’instant.",
+  "columns": {
+    "name": "Rôle",
+    "permissions": "Autorisations",
+    "users": "Comptes",
+    "actions": "Actions"
+  },
+  "permissionCount": "{count, plural, one {# autorisation} other {# autorisations}}",
+  "badges": {
+    "standard": "Standard",
+    "locked": "Fixe",
+    "mfa": "MFA"
+  },
+  "edit": "Modifier",
+  "view": "Afficher",
+  "delete": "Supprimer",
+  "cancel": "Annuler",
+  "close": "Fermer",
+  "save": "Enregistrer",
+  "createTitle": "Créer un rôle",
+  "editTitle": "Modifier le rôle",
+  "viewTitle": "Afficher le rôle",
+  "modalDescription": "Nom, description et autorisations du rôle.",
+  "lockedHint": "Le rôle Admin a toujours toutes les autorisations, y compris futures, et ne peut pas être modifié.",
+  "exceedsOwn": "Ce rôle contient des autorisations que vous n’avez pas vous-même. Vous ne pouvez donc pas le modifier.",
+  "notOwned": "Contient des autorisations que vous n’avez pas vous-même.",
+  "featureMissing": "Module non souscrit",
+  "impliedBy": "Inclus automatiquement dans : {permissions}",
+  "deleteConfirm": "Supprimer le rôle « {name} » ? Ce n’est possible que s’il n’est plus attribué à aucun compte.",
+  "fields": {
+    "name": "Nom",
+    "nameHelpSystem": "Laisser vide pour le nom standard.",
+    "description": "Description",
+    "permissions": "Autorisations"
+  },
+  "toasts": {
+    "created": "Rôle créé",
+    "saved": "Rôle enregistré",
+    "saveFailed": "Le rôle n’a pas pu être enregistré",
+    "deleted": "Rôle supprimé",
+    "deleteFailed": "Le rôle n’a pas pu être supprimé"
+  },
+  "userRoles": {
+    "label": "Rôles",
+    "help": "Plusieurs rôles possibles. Le compte reçoit toutes les autorisations des rôles choisis.",
+    "mfaWarning": "Au moins un rôle choisi contient des droits d’administration : le compte doit se connecter avec la MFA."
+  },
+  "effective": {
+    "title": "Autorisations effectives",
+    "via": "via {roles}",
+    "none": "Aucune autorisation. Le compte ne voit que ses propres données."
+  },
+  "areas": {
+    "meetings": "Séances & procès-verbaux",
+    "templates": "Modèles",
+    "participants": "Participants",
+    "finances": "Finances",
+    "reports": "Évaluations",
+    "files": "Fichiers & photos",
+    "submissions": "Boîte de dépôt",
+    "administration": "Administration"
+  },
+  "permissions": {
+    "meetings": {
+      "read": {
+        "label": "Voir les séances",
+        "description": "Voir les événements, procès-verbaux clôturés, points de l’ordre du jour et tâches, exporter des PDF."
+      },
+      "read_drafts": {
+        "label": "Voir les brouillons",
+        "description": "Voir aussi les procès-verbaux pas encore clôturés et leurs fichiers."
+      },
+      "edit": {
+        "label": "Modifier les séances",
+        "description": "Créer, modifier et supprimer événements, procès-verbaux, points de l’ordre du jour, tâches et listes ; import Word."
+      }
+    },
+    "templates": {
+      "edit": {
+        "label": "Concevoir les modèles",
+        "description": "Modifier les blocs, la bibliothèque et la mise en page des modèles de séance et documents existants."
+      },
+      "manage": {
+        "label": "Gérer les modèles",
+        "description": "Créer et supprimer des modèles de séance, gérer cycles, paquets de tâches, tags et états historiques des listes."
+      }
+    },
+    "participants": {
+      "manage": {
+        "label": "Gérer les participants",
+        "description": "Voir, créer, modifier et importer les participants avec leurs coordonnées et les attribuer aux modèles."
+      }
+    },
+    "finances": {
+      "read": {
+        "label": "Voir le livre de caisse",
+        "description": "Voir les comptes, écritures et soldes."
+      },
+      "manage": {
+        "label": "Gérer les finances",
+        "description": "Saisir, modifier et supprimer écritures, comptes et amendes."
+      }
+    },
+    "reports": {
+      "personal": {
+        "label": "Données personnelles de tous",
+        "description": "Voir les amendes et présences de toutes les personnes. Sans cette autorisation, seulement les siennes."
+      }
+    },
+    "files": {
+      "manage": {
+        "label": "Gérer fichiers & photos",
+        "description": "Gérer fichiers, galerie photo et albums, liens de partage publics et partages d’albums."
+      }
+    },
+    "submissions": {
+      "read": {
+        "label": "Voir les dépôts",
+        "description": "Voir les dépôts reçus et leurs fichiers."
+      },
+      "manage": {
+        "label": "Gérer les dépôts",
+        "description": "Créer, vérifier et supprimer des demandes de dépôt et des liens de téléversement publics."
+      }
+    },
+    "settings": {
+      "manage": {
+        "label": "Gérer les paramètres",
+        "description": "Profil de l’organisation, protection des données, conservation, domaine de vérification, identité visuelle, publication des modèles de documents, journal d’activité."
+      }
+    },
+    "access": {
+      "manage": {
+        "label": "Gérer utilisateurs & rôles",
+        "description": "Gérer les connexions, rôles et attributions de rôles, réinitialiser la MFA d’autres personnes."
+      }
+    },
+    "data": {
+      "export": {
+        "label": "Exports de données",
+        "description": "Export complet de l’organisation et droit d’accès pour d’autres personnes."
+      }
+    }
+  }
+}

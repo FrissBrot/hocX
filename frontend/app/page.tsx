@@ -12,7 +12,7 @@ import { AttendanceFineListItem, NextSessionInfo, ProtocolSummary, TodoListItem 
 export default async function HomePage() {
   const session = await requireSession();
   const t = await getTranslations("nav");
-  const access = { role: session.current_role ?? null, features: session.current_tenant?.enabled_features ?? [] };
+  const access = { permissions: session.permissions ?? [], features: session.current_tenant?.enabled_features ?? [] };
   const permissions = dashboardPermissions(access);
 
   // Bussen nur laden, wenn Finanzen gebucht sind (sonst 403). Limit 200 = Backend-Maximum, damit

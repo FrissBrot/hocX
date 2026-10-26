@@ -27,6 +27,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import type { ParticipantSummary, TemplateSummary } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 type ImportResult = { imported: ParticipantSummary[]; duplicates: string[]; errors: string[] };
 type StatusFilter = "active" | "inactive" | "all";
@@ -216,7 +217,7 @@ function ParticipantSheet({
 }) {
   const t = useTranslations("participants");
   const tUsers = useTranslations("users");
-  const canAdmin = useMobileSession()?.current_role === "admin";
+  const canAdmin = can(useMobileSession(), "access.manage");
   const tMobile = useTranslations("mobile");
   const confirm = useConfirm();
   const showToast = useToast();

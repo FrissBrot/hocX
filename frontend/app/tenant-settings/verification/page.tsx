@@ -8,12 +8,13 @@ import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
 import { tenantSettingsTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
+import { can } from "@/lib/permissions";
 
 // Echtheitsprüfung (Prüfseite, Verifizierung durch hocX). Die API arbeitet immer auf dem aktiven
 // Mandanten, daher hier kein ?tenantId wie bei den übrigen Tabs.
 export default async function TenantVerificationPage() {
   const session = await requireSession();
-  if (session.current_role !== "admin") {
+  if (!can(session, "settings.manage")) {
     redirect("/");
   }
   const [t, tTenant, state] = await Promise.all([

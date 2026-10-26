@@ -28,7 +28,7 @@ def _snapshot(db):
 
 def _read(db, tenant, cycle):
     return get_snapshot_table(cycle.public_id, 2025, "list_entry", db=db,
-                              user=make_current_user(tenant.id, role="reader")).rows[0]["column_two_value_json"]
+                              user=make_current_user(tenant.id, role="writer")).rows[0]["column_two_value_json"]
 
 
 def test_old_snapshot_internal_id_resolves_departed_participant(db):

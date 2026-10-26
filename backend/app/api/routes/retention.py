@@ -13,7 +13,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_admin
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.services import tenant_retention_service as retention
 from app.services.audit_service import AuditService
 
@@ -67,13 +68,13 @@ def _policy_read(policy) -> RetentionPolicyRead:
 
 @router.get("/retention/policy", response_model=RetentionPolicyRead)
 def get_retention_policy(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_admin(user)
+    require_permission(user, P.SETTINGS_MANAGE)
     return _policy_read(retention.get_policy(db, user.current_tenant_id))
 
 
 @router.put("/retention/policy", response_model=RetentionPolicyRead)
 def update_retention_policy(payload: RetentionPolicyUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_admin(user)
+    require_permission(user, P.SETTINGS_MANAGE)
     policy = retention.save_policy(db, user.current_tenant_id, payload.model_dump())
     AuditService().log(db, action="retention.policy_updated", actor=user, entity_type="tenant", entity_id=user.current_tenant_id, details=payload.model_dump())
     return _policy_read(policy)
@@ -81,7 +82,7 @@ def update_retention_policy(payload: RetentionPolicyUpdate, db: Session = Depend
 
 @router.get("/retention/proposals", response_model=list[RetentionProposalRead])
 def list_retention_proposals(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_admin(user)
+    require_permission(user, P.SETTINGS_MANAGE)
     return [
         RetentionProposalRead(id=p.id, kind=p.kind, label=p.label, reference_date=p.reference_date, created_at=p.created_at)
         for p in retention.list_open(db, user.current_tenant_id)
@@ -91,7 +92,7 @@ def list_retention_proposals(db: Session = Depends(get_db), user: CurrentUser = 
 @router.post("/retention/proposals/refresh", response_model=list[RetentionProposalRead])
 def refresh_retention_proposals(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Vorschläge sofort berechnen statt auf den nächtlichen Job zu warten (setzt nichts um)."""
-    require_admin(user)
+    require_permission(user, P.SETTINGS_MANAGE)
     retention.refresh_proposals(db, user.current_tenant_id)
     db.commit()
     return list_retention_proposals(db, user)
@@ -99,5 +100,5 @@ def refresh_retention_proposals(db: Session = Depends(get_db), user: CurrentUser
 
 @router.post("/retention/proposals/decide", response_model=RetentionDecisionResult)
 def decide_retention_proposals(payload: RetentionDecision, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_admin(user)
+    require_permission(user, P.SETTINGS_MANAGE)
     return RetentionDecisionResult(**retention.decide(db, user.current_tenant_id, payload.ids, action=payload.action, user_id=user.user_id))

@@ -20,11 +20,10 @@ describe("calendar-feeds", () => {
     expect(url.searchParams.get("cid")).toBe("webcal://hocx.example.ch/api/public/calendar/abc_DEF-123.ics");
   });
 
-  it("bietet Termine nur Schreibenden an, Todos allen Rollen", () => {
-    expect(canSubscribeCalendar("writer", "events")).toBe(true);
-    expect(canSubscribeCalendar("reader", "events")).toBe(false);
-    expect(canSubscribeCalendar("kassier", "events")).toBe(false);
-    expect(canSubscribeCalendar("reader", "todos")).toBe(true);
+  it("bietet beide Abos an, wer Sitzungen ansehen darf (meetings.read)", () => {
+    expect(canSubscribeCalendar(["meetings.read"], "events")).toBe(true);
+    expect(canSubscribeCalendar(["meetings.read"], "todos")).toBe(true);
+    expect(canSubscribeCalendar(["finances.read"], "events")).toBe(false);
     expect(canSubscribeCalendar(null, "todos")).toBe(false);
   });
 });

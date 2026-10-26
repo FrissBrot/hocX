@@ -16,7 +16,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db, release_for_stream
-from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.core.storage import object_response
 from app.models import StoredFile
 from app.models.document_entities import DocumentExtraction, DocumentFile
@@ -39,9 +40,9 @@ def _ensure_clean(stored_file: StoredFile) -> None:
 
 @router.get("/documents/{document_id}", response_model=DocumentDetail)
 def get_document(document_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     document = document_read_service.get_document_for_user(db, user, document_id)
-    return document_read_service.build_detail(db, document, can_write=user.current_role in {"admin", "writer"})
+    return document_read_service.build_detail(db, document, can_write=user.can(P.MEETINGS_EDIT))
 
 
 @router.get("/documents/{document_id}/versions/{version_id}/files/{role}")
@@ -54,7 +55,7 @@ def get_document_file(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     document = document_read_service.get_document_for_user(db, user, document_id)
     version = document_read_service.get_version(db, document, version_id)
     stored_file = db.scalar(
@@ -93,7 +94,7 @@ def get_document_text(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     document = document_read_service.get_document_for_user(db, user, document_id)
     version = document_read_service.get_version(db, document, version_id)
     original = document_read_service.original_of(db, version.id)
@@ -118,7 +119,7 @@ def reprocess_document(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Fehlgeschlagene/gesperrte Verarbeitung der aktuellen Version erneut einreihen."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     document = document_read_service.get_document_for_user(db, user, document_id)
     try:
         requeued = document_service.requeue_failed(db, document)

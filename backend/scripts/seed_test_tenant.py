@@ -62,7 +62,7 @@ from app.services.admin_tenant_service import AdminTenantService
 from app.services.file_service import FileService
 from app.services.list_service import ListService
 from app.services.protocol_service import ProtocolService
-from app.services import submission_link_service
+from app.services import role_service, submission_link_service
 from app.services.submission_service import SubmissionService
 
 DEMO_TENANT_NAME = "Jubla Sonnenberg"
@@ -77,7 +77,7 @@ SEED_ASSETS_DIR = Path(__file__).resolve().parents[1] / "sql" / "seed_assets"
 # through the normal enroll-on-first-login flow, same as any other new account.
 DEMO_TOTP_SEED = os.environ.get("DEMO_TOTP_SEED", "").strip().replace(" ", "").upper()
 
-# element_type/render_type/role/todo_status/event_category ids: fixed lookup rows from
+# element_type/render_type/todo_status/event_category ids: fixed lookup rows from
 # sql/baseline_lookup_data.sql, always present regardless of environment.
 ELEMENT_TYPE_TEXT = 1
 ELEMENT_TYPE_TODO = 2
@@ -85,10 +85,6 @@ ELEMENT_TYPE_IMAGE = 3
 RENDER_TYPE_PARAGRAPH = 2
 RENDER_TYPE_TODO_LIST = 3
 RENDER_TYPE_IMAGE = 4
-ROLE_ADMIN = 1
-ROLE_WRITER = 2
-ROLE_READER = 3
-ROLE_KASSIER = 4
 TODO_STATUS_OPEN = 1
 TODO_STATUS_DONE = 3
 EVENT_CATEGORY_GROUP_SESSION = 2
@@ -137,7 +133,6 @@ def create_tenant_and_users(db) -> tuple[Tenant, dict[str, AppUser]]:
     for first_name, last_name, role_code in LEADERS:
         user = AppUser(
             tenant_id=tenant.id,
-            role_id={"admin": ROLE_ADMIN, "writer": ROLE_WRITER, "reader": ROLE_READER, "kassier": ROLE_KASSIER}[role_code],
             first_name=first_name,
             last_name=last_name,
             display_name=f"{first_name} {last_name}",
@@ -148,6 +143,8 @@ def create_tenant_and_users(db) -> tuple[Tenant, dict[str, AppUser]]:
         )
         db.add(user)
         db.flush()
+        # Standardrollen legt der Trigger beim Anlegen des Mandanten an (Migration 0156_rbac).
+        role_service.set_user_roles(db, None, user, [role_service.system_role(db, tenant.id, role_code)])
         if DEMO_TOTP_SEED:
             db.add(UserMfaFactor(
                 user_id=user.id, factor_type="totp", label=DEMO_TOTP_LABEL,
@@ -274,11 +271,13 @@ def create_participants(db, tenant: Tenant) -> list[Participant]:
     for name in PARTICIPANTS:
         first_name, last_name = name.split(" ", 1)
         participant = Participant(
-            tenant_id=tenant.id, role_id=ROLE_READER, first_name=first_name, last_name=last_name, display_name=name,
+            tenant_id=tenant.id, first_name=first_name, last_name=last_name, display_name=name,
             is_active=True,
             joined_at=date.today() - timedelta(days=365 * 2),
         )
         db.add(participant)
+        db.flush()
+        role_service.assign_default_role(db, participant)
         participants.append(participant)
     db.flush()
     return participants

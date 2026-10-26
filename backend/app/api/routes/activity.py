@@ -16,7 +16,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_admin
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 
 router = APIRouter()
 
@@ -59,7 +60,7 @@ def list_activity(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.SETTINGS_MANAGE)
     # audit_log hat keine RLS (Plattform-Tabelle): der Mandantenfilter steht hier ausdrücklich.
     params = {"tenant_id": user.current_tenant_id, "category": category, "outcome": outcome, "limit": limit, "offset": offset}
     rows = db.execute(

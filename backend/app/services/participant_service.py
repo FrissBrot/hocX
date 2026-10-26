@@ -6,9 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.locale_config_generated import DEFAULT_LOCALE
-from app.models import ListDefinition, ListEntry, Participant, Role, Template
+from app.models import ListDefinition, ListEntry, Participant, Template
 from app.repositories.participant_repository import ParticipantRepository
 from app.schemas.participant import ParticipantCreate, ParticipantImportResult, ParticipantUpdate
+from app.services import role_service
 from app.services.access_service import AccessService
 
 
@@ -16,12 +17,6 @@ class ParticipantService:
     def __init__(self, repository: ParticipantRepository | None = None) -> None:
         self.repository = repository or ParticipantRepository()
         self.access_service = AccessService()
-
-    def _reader_role_id(self, db: Session) -> int:
-        role_id = db.scalar(select(Role.id).where(Role.code == "reader"))
-        if role_id is None:
-            raise ValueError("Reader role missing")
-        return int(role_id)
 
     def list_participants(self, db: Session, *, tenant_id: int, active_only: bool = False, skip: int = 0, limit: int = 100) -> list[Participant]:
         return self.repository.list(db, tenant_id=tenant_id, active_only=active_only, skip=skip, limit=limit)
@@ -39,7 +34,6 @@ class ParticipantService:
     def create_participant(self, db: Session, payload: ParticipantCreate, *, tenant_id: int) -> Participant:
         participant = Participant(
             tenant_id=tenant_id,
-            role_id=self._reader_role_id(db),
             login_enabled=False,
             preferred_language=DEFAULT_LOCALE,
             first_name=payload.first_name,
@@ -52,6 +46,8 @@ class ParticipantService:
         )
         try:
             created = self.repository.create(db, participant, commit=False)
+            # Neue Personen bekommen die Standardrolle "Mitglied" (reader), wie bisher.
+            role_service.assign_default_role(db, created)
         except Exception:
             # Fehlgeschlagene Erstellung darf keinen halbfertigen Datensatz hinterlassen.
             db.rollback()
@@ -69,7 +65,6 @@ class ParticipantService:
         if not values:
             return participant
         from app.services.user_service import UserService
-        UserService().guard_last_tenant_admin(db, participant, is_active=payload.is_active)
         if participant.login_enabled:
             email = values.get("email", participant.email)
             if not email or not email.strip():
@@ -81,8 +76,12 @@ class ParticipantService:
         if joined_at and left_at and left_at < joined_at:
             raise ValueError("left_at must not be before joined_at")
         try:
-            updated = self.repository.update(db, participant, values, commit=False)
-            self.access_service.sync_user_access_from_participants(db, user_id=updated.id, tenant_id=tenant_id)
+            # Deaktivieren darf den letzten Administrator nicht treffen (role_service.admin_guard).
+            with role_service.admin_guard(db, tenant_id, None):
+                updated = self.repository.update(db, participant, values, commit=False)
+                self.access_service.sync_user_access_from_participants(db, user_id=updated.id, tenant_id=tenant_id)
+        except HTTPException:
+            raise
         except Exception:
             db.rollback()
             raise
@@ -127,8 +126,7 @@ class ParticipantService:
         participant = self.repository.get(db, participant_id)
         if participant is None or participant.tenant_id != tenant_id:
             return False
-        from app.services.user_service import UserService
-        UserService().guard_last_tenant_admin(db, participant, removed=True)
+        role_service.ensure_not_last_admin_removed(db, tenant_id, [participant_id])
         self._clear_orphaned_list_references(db, tenant_id, {participant_id})
         # E-Mail und IP-Hash der Person aus dem Audit-Log entfernen, die Einträge bleiben (PRIV-007/013).
         from app.services.audit_service import AuditService
@@ -150,12 +148,11 @@ class ParticipantService:
         if not participants:
             return 0
         from app.services.audit_service import AuditService
-        from app.services.user_service import UserService
         from app.services import erasure_journal
 
+        role_service.ensure_not_last_admin_removed(db, tenant_id, [participant.id for participant in participants])
         AuditService().forget_actors(db, [participant.id for participant in participants])
         for participant in participants:
-            UserService().guard_last_tenant_admin(db, participant, removed=True)
             erasure_journal.record(db, "app_user", participant.public_id, tenant_id=tenant_id)
             self._clear_orphaned_list_references(db, tenant_id, {participant.id})
             db.delete(participant)
@@ -194,7 +191,6 @@ class ParticipantService:
                     continue
                 participant = Participant(
                     tenant_id=tenant_id,
-                    role_id=self._reader_role_id(db),
                     login_enabled=False,
                     preferred_language=DEFAULT_LOCALE,
                     first_name=first_name,
@@ -211,6 +207,7 @@ class ParticipantService:
                 with db.begin_nested():
                     db.add(participant)
                     db.flush()
+                    role_service.assign_default_role(db, participant)
                     db.refresh(participant)
                 imported.append(participant)
                 existing_names.add(display_name.lower())

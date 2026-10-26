@@ -1,0 +1,149 @@
+{
+  "pageTitle": "Ruoli",
+  "pageHint": "Un ruolo raggruppa autorizzazioni. Un account può avere più ruoli e riceve allora tutte le loro autorizzazioni.",
+  "newRole": "Nuovo ruolo",
+  "empty": "Ancora nessun ruolo.",
+  "columns": {
+    "name": "Ruolo",
+    "permissions": "Autorizzazioni",
+    "users": "Account",
+    "actions": "Azioni"
+  },
+  "permissionCount": "{count, plural, one {# autorizzazione} other {# autorizzazioni}}",
+  "badges": {
+    "standard": "Standard",
+    "locked": "Fisso",
+    "mfa": "MFA"
+  },
+  "edit": "Modifica",
+  "view": "Visualizza",
+  "delete": "Elimina",
+  "cancel": "Annulla",
+  "close": "Chiudi",
+  "save": "Salva",
+  "createTitle": "Crea ruolo",
+  "editTitle": "Modifica ruolo",
+  "viewTitle": "Visualizza ruolo",
+  "modalDescription": "Nome, descrizione e autorizzazioni del ruolo.",
+  "lockedHint": "Il ruolo Admin ha sempre tutte le autorizzazioni, anche future, e non può essere modificato.",
+  "exceedsOwn": "Questo ruolo contiene autorizzazioni che tu non hai. Per questo non puoi modificarlo.",
+  "notOwned": "Contiene autorizzazioni che tu non hai.",
+  "featureMissing": "Modulo non prenotato",
+  "impliedBy": "Incluso automaticamente in: {permissions}",
+  "deleteConfirm": "Eliminare il ruolo «{name}»? È possibile solo se non è più assegnato a nessun account.",
+  "fields": {
+    "name": "Nome",
+    "nameHelpSystem": "Lasciare vuoto per il nome standard.",
+    "description": "Descrizione",
+    "permissions": "Autorizzazioni"
+  },
+  "toasts": {
+    "created": "Ruolo creato",
+    "saved": "Ruolo salvato",
+    "saveFailed": "Impossibile salvare il ruolo",
+    "deleted": "Ruolo eliminato",
+    "deleteFailed": "Impossibile eliminare il ruolo"
+  },
+  "userRoles": {
+    "label": "Ruoli",
+    "help": "Sono possibili più ruoli. L’account riceve tutte le autorizzazioni dei ruoli scelti.",
+    "mfaWarning": "Almeno un ruolo scelto contiene diritti di amministrazione: l’account deve accedere con MFA."
+  },
+  "effective": {
+    "title": "Autorizzazioni effettive",
+    "via": "tramite {roles}",
+    "none": "Nessuna autorizzazione. L’account vede solo i propri dati."
+  },
+  "areas": {
+    "meetings": "Sedute & verbali",
+    "templates": "Modelli",
+    "participants": "Partecipanti",
+    "finances": "Finanze",
+    "reports": "Valutazioni",
+    "files": "File & foto",
+    "submissions": "Casella di consegna",
+    "administration": "Amministrazione"
+  },
+  "permissions": {
+    "meetings": {
+      "read": {
+        "label": "Vedere le sedute",
+        "description": "Vedere eventi, verbali conclusi, punti all’ordine del giorno e compiti, esportare PDF."
+      },
+      "read_drafts": {
+        "label": "Vedere le bozze",
+        "description": "Vedere anche i verbali non ancora conclusi e i loro file."
+      },
+      "edit": {
+        "label": "Modificare le sedute",
+        "description": "Creare, modificare ed eliminare eventi, verbali, punti all’ordine del giorno, compiti e liste; importazione Word."
+      }
+    },
+    "templates": {
+      "edit": {
+        "label": "Progettare i modelli",
+        "description": "Modificare blocchi, libreria e impaginazione di modelli di seduta e documenti esistenti."
+      },
+      "manage": {
+        "label": "Gestire i modelli",
+        "description": "Creare ed eliminare modelli di seduta, gestire cicli, pacchetti di compiti, tag e stati storici delle liste."
+      }
+    },
+    "participants": {
+      "manage": {
+        "label": "Gestire i partecipanti",
+        "description": "Vedere, creare, modificare e importare i partecipanti con i dati di contatto e assegnarli ai modelli."
+      }
+    },
+    "finances": {
+      "read": {
+        "label": "Vedere il libro cassa",
+        "description": "Vedere conti, registrazioni e saldi."
+      },
+      "manage": {
+        "label": "Gestire le finanze",
+        "description": "Registrare, modificare ed eliminare registrazioni, conti e multe."
+      }
+    },
+    "reports": {
+      "personal": {
+        "label": "Dati personali di tutti",
+        "description": "Vedere multe e presenze di tutte le persone. Senza questa autorizzazione solo i propri."
+      }
+    },
+    "files": {
+      "manage": {
+        "label": "Gestire file & foto",
+        "description": "Gestire file, galleria fotografica e album, link di condivisione pubblici e condivisioni di album."
+      }
+    },
+    "submissions": {
+      "read": {
+        "label": "Vedere le consegne",
+        "description": "Vedere le consegne ricevute e i loro file."
+      },
+      "manage": {
+        "label": "Gestire le consegne",
+        "description": "Creare, verificare ed eliminare richieste di consegna e link di caricamento pubblici."
+      }
+    },
+    "settings": {
+      "manage": {
+        "label": "Gestire le impostazioni",
+        "description": "Profilo dell’organizzazione, protezione dei dati, conservazione, dominio di verifica, immagine coordinata, pubblicazione dei modelli di documento, registro attività."
+      }
+    },
+    "access": {
+      "manage": {
+        "label": "Gestire utenti & ruoli",
+        "description": "Gestire accessi, ruoli e assegnazioni di ruoli, reimpostare la MFA di altre persone."
+      }
+    },
+    "data": {
+      "export": {
+        "label": "Esportazioni di dati",
+        "description": "Esportazione completa dell’organizzazione e diritto d’accesso per altre persone."
+      }
+    }
+  }
+}

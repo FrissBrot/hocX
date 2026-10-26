@@ -46,12 +46,15 @@ def setup(db):
     todo_block = make_protocol_element_block(db, element.id, {}, element_type_code="todo", sort_index=1)
     make_protocol_todo(db, todo_block.id, task="Getränke besorgen", tenant_id=tenant.id)
     make_event(db, tenant.id, title="Sommerfest", event_date=date(2099, 7, 4))
-    users = {role: make_app_user(db, email=f"{role}@api.example", tenant_id=tenant.id, role_code=role) for role in ("reader", "writer", "admin")}
+    users = {role: make_app_user(db, email=f"{role}@api.example", tenant_id=tenant.id, role_code=role) for role in ("reader", "kassier", "writer", "admin")}
     return {
         "tenant": tenant,
         "other": other,
         "protocol": protocol,
         "reader": make_current_user(tenant.id, role="reader", user_id=users["reader"].id),
+        # Liest Entwürfe (meetings.read_drafts), bearbeitet aber nichts - der Protokollentwurf
+        # oben ist für einen reinen Leser seit RBAC S-2 auch per ID nicht mehr lesbar.
+        "kassier": make_current_user(tenant.id, role="kassier", user_id=users["kassier"].id),
         "writer": make_current_user(tenant.id, role="writer", user_id=users["writer"].id),
         "admin": make_current_user(tenant.id, role="admin", user_id=users["admin"].id),
         "other_admin": make_current_user(other.id, role="admin", user_id=users["admin"].id),
@@ -60,7 +63,7 @@ def setup(db):
 
 def test_render_protocol_and_list_exports(db, setup):
     body = DocumentRequest(protocol_id=setup["protocol"].public_id)
-    result = render_now(body, db=db, user=setup["reader"])
+    result = render_now(body, db=db, user=setup["kassier"])
     assert result.document_type == "protocol" and result.content_url
     assert result.verify_url.endswith(f"/verify?id={result.id}") and len(result.short_id) == 9
     assert result.template_system_key == "protocol_standard" and result.design_hash and result.content_hash
@@ -87,7 +90,7 @@ def test_studio_preview_fields_are_rejected_on_export(db, setup):
 
 
 def test_preview_returns_png_data_urls_and_diagnostics(db, setup):
-    result = asyncio.run(routes.preview_document(DocumentRequest(protocol_id=setup["protocol"].public_id), _ConnectedRequest(), max_pages=1, db=db, user=setup["reader"]))
+    result = asyncio.run(routes.preview_document(DocumentRequest(protocol_id=setup["protocol"].public_id), _ConnectedRequest(), max_pages=1, db=db, user=setup["kassier"]))
     assert result.pages and result.pages[0].startswith("data:image/png;base64,")
     assert result.template_source == "platform_default" and result.diagnostics == []
 
@@ -137,7 +140,7 @@ def test_extra_formats(db, setup):
     assert "Getränke besorgen" in markdown.body.decode("utf-8")
     ics = routes.export_document_format(routes.FormatExportRequest(document_type="events", format="ics"), db=db, user=setup["reader"])
     assert "BEGIN:VCALENDAR" in ics.body.decode("utf-8") and "Sommerfest" in ics.body.decode("utf-8")
-    xlsx = routes.export_document_format(routes.FormatExportRequest(protocol_id=setup["protocol"].public_id, format="xlsx"), db=db, user=setup["reader"])
+    xlsx = routes.export_document_format(routes.FormatExportRequest(protocol_id=setup["protocol"].public_id, format="xlsx"), db=db, user=setup["kassier"])
     assert xlsx.body[:2] == b"PK"
     with pytest.raises(HTTPException) as excinfo:
         routes.export_document_format(routes.FormatExportRequest(document_type="form", format="csv"), db=db, user=setup["reader"])
@@ -162,15 +165,24 @@ def test_sources_are_tenant_scoped(db, setup):
 
 
 def test_readers_cannot_export_protocol_drafts_without_watermark(db, setup):
-    """STUDIO-007: «Wasserzeichen aus» bei Protokollentwürfen nur mit Schreibrecht."""
+    """STUDIO-007: «Wasserzeichen aus» bei Protokollentwürfen nur mit Schreibrecht (meetings.edit);
+    wer Entwürfe nur lesen darf (meetings.read_drafts), behält das Wasserzeichen."""
     from app.documents import service
     from app.documents.service import ExportOptions
 
     request = DocumentRequest(protocol_id=setup["protocol"].public_id, options=ExportOptions(watermark="off"))
-    as_reader = service.prepare(db, setup["reader"], setup["tenant"].id, request)
+    as_kassier = service.prepare(db, setup["kassier"], setup["tenant"].id, request)
     as_writer = service.prepare(db, setup["writer"], setup["tenant"].id, request)
-    assert as_reader.compiled.data["flags"]["draft"] is True
+    assert as_kassier.compiled.data["flags"]["draft"] is True
     assert as_writer.compiled.data["flags"]["draft"] is False
+
+
+def test_plain_readers_cannot_export_protocol_drafts_at_all(db, setup):
+    """RBAC S-2: ohne meetings.read_drafts sind Entwürfe auch per ID nicht lesbar - auch nicht als
+    PDF (vorher blendete nur die Protokollliste sie aus)."""
+    with pytest.raises(HTTPException) as excinfo:
+        render_now(DocumentRequest(protocol_id=setup["protocol"].public_id), db=db, user=setup["reader"])
+    assert excinfo.value.status_code == 403
 
 
 def test_overridden_protocol_title_is_noted_in_the_registry(db, setup):

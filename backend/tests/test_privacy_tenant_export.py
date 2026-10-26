@@ -19,6 +19,7 @@ from app.models import TenantDataExport
 from app.services.data_export import tenant as tenant_export
 from app.services.tenant_export_service import TenantExportService
 from tests.factories import (
+    system_role_permissions,
     make_app_user,
     make_current_user,
     make_event,
@@ -71,7 +72,7 @@ def test_export_needs_admin_with_mfa_and_only_one_at_a_time(db):
         routes.create_tenant_data_export(request, db, dataclasses.replace(user, mfa_verified=False))
     assert no_mfa.value.status_code == 403
     with pytest.raises(HTTPException) as writer:
-        routes.create_tenant_data_export(request, db, dataclasses.replace(user, current_role="writer"))
+        routes.create_tenant_data_export(request, db, dataclasses.replace(user, permissions=system_role_permissions("writer")))
     assert writer.value.status_code == 403
 
     created = routes.create_tenant_data_export(request, db, user)

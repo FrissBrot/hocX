@@ -105,7 +105,7 @@ setup("creates reproducible role and tenant sessions", async () => {
       email: tenantTwoEmail,
       password: process.env.E2E_USER_PASSWORD ?? "ChangeMe123!",
       tenant_id: regional.id,
-      role_code: "reader",
+      system_role: "reader",
       login_enabled: true,
     },
   });
@@ -114,6 +114,8 @@ setup("creates reproducible role and tenant sessions", async () => {
   const tenantContext = await authenticate(tenantTwoEmail, authFiles.tenantTwo);
   const session = await (await tenantContext.get("/api/auth/session")).json();
   expect(session.current_tenant.id).toBe(regional.id);
-  expect(session.current_role).toBe("reader");
+  expect(session.roles.map((role: { system_key: string | null }) => role.system_key)).toEqual(["reader"]);
+  expect(session.permissions).toContain("meetings.read");
+  expect(session.permissions).not.toContain("meetings.edit");
   await tenantContext.dispose();
 });

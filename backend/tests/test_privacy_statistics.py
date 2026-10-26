@@ -129,3 +129,34 @@ def test_only_admins_change_the_switch(db):
     assert get_privacy_settings(db=db, user=admin_user).statistics_per_person_public is False
     result = update_privacy_settings(PrivacySettingsWrite(statistics_per_person_public=True), db=db, user=admin_user)
     assert result.statistics_per_person_public is True
+
+
+class _FakeRedis:
+    def __init__(self):
+        self.values: dict[str, str] = {}
+
+    def get(self, key):
+        return self.values.get(key)
+
+    def set(self, key, value, ex=None):
+        self.values[key] = value
+
+
+def test_cached_overview_never_leaks_between_visibility_scopes(db, monkeypatch):
+    """Der Diagramm-Cache (cached=1) darf einem Leser nie das Ergebnis eines Admins liefern und
+    umgekehrt: der Schlüssel enthält die Sicht des Aufrufers."""
+    import app.api.routes.statistics as statistics_route
+
+    fake = _FakeRedis()
+    monkeypatch.setattr(statistics_route, "get_redis_sync", lambda: fake)
+    tenant, reader, other = _setup(db)
+    admin_user = make_current_user(tenant.id, role="admin", user_id=other.id)
+    reader_user = make_current_user(tenant.id, role="reader", user_id=reader.id)
+
+    admin_view = get_statistics_overview(cached=True, db=db, user=admin_user)
+    reader_view = get_statistics_overview(cached=True, db=db, user=reader_user)
+
+    assert admin_view.per_person_scope == "all"
+    assert reader_view.per_person_scope == "own"
+    assert [row.name for row in reader_view.attendance_by_participant] == ["Lea Leser"]
+    assert len(fake.values) == 2

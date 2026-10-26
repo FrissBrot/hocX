@@ -17,10 +17,11 @@ import {
   StructuredListEntry,
   TaskPackage,
 } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 export default async function TaskPackagesPage() {
   const session = await requireSession();
-  if (session.current_role !== "admin") {
+  if (!can(session, "templates.manage")) {
     redirect("/");
   }
   const t = await getTranslations("nav");
@@ -49,7 +50,7 @@ export default async function TaskPackagesPage() {
         mobile={<MobileDesktopOnly navKey="taskPackages" backHref="/templates" backNavKey="templates" />}
         desktop={
           <>
-            <RouteTabs tabs={templateAreaTabs(t, session.current_role === "admin")} activeHref="/task-packages" />
+            <RouteTabs tabs={templateAreaTabs(t, can(session, "templates.manage"))} activeHref="/task-packages" />
             <section className="panel">
               <TaskPackageManager
                 initialPackages={taskPackages ?? []}

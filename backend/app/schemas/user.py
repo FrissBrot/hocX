@@ -7,6 +7,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.locale_config_generated import SUPPORTED_LOCALES
+from app.schemas.role import RoleRef
+
+# Standardrollen je Mandant (tenant_role.system_key, permissions/catalog.json).
+SystemRoleKey = Literal["admin", "writer", "kassier", "reader"]
 
 
 def _validate_preferred_language(value: str | None) -> str | None:
@@ -100,7 +104,10 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str | None = Field(default=None, min_length=12)
-    role_code: str = "reader"
+    # Rollen des Mandanten (public_id). system_role: genau eine Standardrolle (Plattform-Admin-
+    # Panel). Ohne beides: Standardrolle reader ("Mitglied").
+    role_ids: list[uuid.UUID] | None = Field(default=None, max_length=50)
+    system_role: SystemRoleKey | None = None
     # Only the platform-admin panel picks the tenant; a tenant admin always creates users in
     # their own tenant (a differing tenant_id is rejected there).
     tenant_id: uuid.UUID | None = None
@@ -126,7 +133,9 @@ class UserUpdate(BaseModel):
     is_active: bool | None = None
     password: str | None = Field(default=None, min_length=12)
     external_identity_json: dict[str, Any] | None = None
-    role_code: str | None = None
+    # Setzt die Rollen vollständig (siehe UserCreate).
+    role_ids: list[uuid.UUID] | None = Field(default=None, max_length=50)
+    system_role: SystemRoleKey | None = None
     login_enabled: bool | None = None
 
     _validate_preferred_language = field_validator("preferred_language")(_validate_preferred_language)
@@ -154,7 +163,7 @@ class UserRead(UserBase):
     id: uuid.UUID
     tenant_id: uuid.UUID
     tenant_name: str
-    role_code: str
+    roles: list[RoleRef] = Field(default_factory=list)
     login_enabled: bool = True
     created_at: datetime
     updated_at: datetime
@@ -185,7 +194,10 @@ class SessionRead(BaseModel):
     authenticated: bool
     user: SessionUserRead | None = None
     current_tenant: TenantRead | None = None
-    current_role: str | None = None
+    # Effektive Berechtigungen (inkl. Implikationen, ohne Feature-Filter - das Frontend prüft
+    # Feature und Permission gemeinsam, siehe frontend/lib/permissions.ts) und Rollen des Kontos.
+    permissions: list[str] = Field(default_factory=list)
+    roles: list[RoleRef] = Field(default_factory=list)
     bridge_redirect_url: str | None = None
 
 

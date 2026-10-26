@@ -8,11 +8,12 @@ import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
 import { tenantSettingsTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
+import { can } from "@/lib/permissions";
 
 // Aufbewahrungsfristen des aktiven Mandanten (nur Mandanten-Admins, Datenschutz-Audit Paket 8).
 export default async function TenantRetentionPage() {
   const session = await requireSession();
-  if (session.current_role !== "admin") {
+  if (!can(session, "settings.manage")) {
     redirect("/");
   }
   const [t, tTenant, state] = await Promise.all([

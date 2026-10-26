@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models.entities import Event, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo, Template
 from app.schemas.protocol import (
     ProtocolTodoCreate,
@@ -49,7 +50,7 @@ def create_standalone_todo(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Create a todo not tied to any protocol block."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     try:
         todo = service.create_standalone_todo(db, user.current_tenant_id, payload, actor_user_id=user.user_id)
     except (SQLAlchemyError, ValueError) as exc:
@@ -66,9 +67,10 @@ def list_todo_blocks(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    """Return all protocol todo blocks available to the tenant."""
-    require_reader(user)
-    return service.list_todo_blocks(db, user.current_tenant_id)
+    """Aufgabenblöcke der Protokolle, die der Benutzer lesen darf (dieselbe Regel wie die
+    Protokollliste - vorher sahen eingeschränkte Leser hier Titel aller Protokolle, S-3)."""
+    require_permission(user, P.MEETINGS_READ)
+    return service.list_todo_blocks(db, user.current_tenant_id, visible=access_service.protocol_visibility(db, user))
 
 
 @router.get("/todos", response_model=list[TodoListItem])
@@ -81,7 +83,7 @@ def list_all_todos(
     """Every role sees all tenant todos, except restricted readers (participant-linked or
     otherwise scoped accounts) who only see todos from protocols they have access to, plus
     anything directly assigned to them."""
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     if access_service._is_restricted_reader(db, user):
         protocol_ids = access_service.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
         return service.list_todos_for_protocols_or_assigned(db, user.current_tenant_id, protocol_ids, user.user_id, skip=skip, limit=limit)
@@ -96,7 +98,7 @@ def list_my_todos(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Always returns only todos assigned to the current user."""
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     return service.list_todos_for_user(db, user.current_tenant_id, user.user_id, skip=skip, limit=limit)
 
 
@@ -106,7 +108,7 @@ def list_todos(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id)
     if block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
@@ -129,7 +131,7 @@ def create_todo(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id)
     if block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
@@ -153,7 +155,7 @@ def get_todo_due_events(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Return upcoming events for due-date selection, filtered by the template's todo_due_event_tag."""
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     todo = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id)
     if todo is None:
         raise HTTPException(status_code=404, detail="Todo not found")
@@ -221,7 +223,7 @@ def patch_todo(
     # editing the same todo concurrently therefore remains last-write-wins, same as before
     # this pass; a real fix would need the frontend to start locking todos as its own
     # field_key first.
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Todo not found")
@@ -261,7 +263,7 @@ def get_todo_details(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Notizen und verknüpfte Dateien für das Todo-Popup (nicht in Liste/Übersicht/Export)."""
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     todo = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id, tenant_id=user.current_tenant_id)
     if todo is None:
         raise HTTPException(status_code=404, detail="Todo not found")
@@ -276,7 +278,7 @@ def put_todo_details(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     todo = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id, tenant_id=user.current_tenant_id)
@@ -298,7 +300,7 @@ def accept_todo_tracked_change(
 ):
     """'Ausblenden' for one todo's red tracked-change highlight - keeps the todo, just
     stops marking it as changed/added/pending-delete."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Todo not found")
@@ -329,7 +331,7 @@ def delete_todo(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Todo not found")

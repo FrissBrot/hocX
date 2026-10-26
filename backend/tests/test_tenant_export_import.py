@@ -58,7 +58,6 @@ from app.models.entities import (
     DocumentTemplateAssignment,
     DocumentTemplateRevision,
     ProtocolTodo,
-    Role,
     StoredFile,
     SubmissionAssignment,
     SubmissionUploadLog,
@@ -146,10 +145,12 @@ def test_export_bundles_only_own_users_and_nulls_foreign_references(db):
         manifest = _read_manifest(zip_path)
         app_users = {row["email"]: row for row in manifest["tables"]["app_user"]}
 
-        # The tenant's own user travels with real hash and role code (so they can log in on
-        # the target installation); the source's tenant id is dropped.
+        # The tenant's own user travels with real hash and role references (so they can log in
+        # on the target installation); the source's tenant id is dropped.
         assert app_users["member@a.example"]["password_hash"] == member.password_hash
-        assert app_users["member@a.example"]["role_id"] == "writer"
+        roles_by_id = {row["id"]: row for row in manifest["tables"]["tenant_role"]}
+        assert [roles_by_id[ref]["system_key"] for ref in app_users["member@a.example"]["role_refs"]] == ["writer"]
+        assert "role_id" not in app_users["member@a.example"]
         assert "tenant_id" not in app_users["member@a.example"]
 
         # Another tenant's user is not part of this export at all - neither credentials nor
@@ -158,7 +159,7 @@ def test_export_bundles_only_own_users_and_nulls_foreign_references(db):
         assert "foreign@x.example" not in json.dumps(manifest)
         assert manifest["tables"]["template"][0]["created_by"] is None
         assert "user_tenant_role" not in manifest["tables"]
-        assert manifest["format_version"] == 8
+        assert manifest["format_version"] == 9
     finally:
         zip_path.unlink(missing_ok=True)
 
@@ -541,9 +542,15 @@ def test_import_creates_the_exported_users_in_the_new_tenant_on_a_fresh_installa
     restored = db.scalar(select(AppUser).where(AppUser.email == "restorable@example.com"))
     assert restored.tenant_id == new_tenant.id
     assert restored.password_hash == creator.password_hash
-    assert db.get(Role, restored.role_id).code == "kassier"
+    assert _system_keys(db, restored.id) == ["kassier"]
     imported_template = db.scalar(select(Template).where(Template.tenant_id == new_tenant.id))
     assert imported_template.created_by == restored.id
+
+
+def _system_keys(db, user_id: int) -> list[str | None]:
+    from app.models import TenantRole, UserRole
+
+    return sorted(db.scalars(select(TenantRole.system_key).join(UserRole, UserRole.role_id == TenantRole.id).where(UserRole.user_id == user_id)))
 
 
 def test_import_reads_version_2_archives_with_a_separate_user_tenant_role_table(db, tmp_path):
@@ -569,7 +576,7 @@ def test_import_reads_version_2_archives_with_a_separate_user_tenant_role_table(
 
     member = db.scalar(select(AppUser).where(AppUser.email == "v2-member@example.com"))
     assert member.tenant_id == new_tenant.id
-    assert db.get(Role, member.role_id).code == "admin"
+    assert _system_keys(db, member.id) == ["admin"]
     # A user that was only referenced as metadata was never a member: no tenant to put them in.
     assert db.scalar(select(AppUser).where(AppUser.email == "v2-metadata@example.com")) is None
 

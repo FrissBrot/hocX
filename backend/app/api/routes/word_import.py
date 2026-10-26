@@ -9,7 +9,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models import (
     Event,
     ListDefinition,
@@ -828,7 +829,7 @@ async def _analyze_word_import_impl(  # loop-ok: nur über run_coroutine_in_thre
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     internal_template_id = _resolve_template_id(db, user.current_tenant_id, template_id)
     if not file.filename or not file.filename.lower().endswith((".docx", ".pdf")):
         raise HTTPException(status_code=400, detail="Nur .docx- oder .pdf-Dateien werden unterstützt")
@@ -873,7 +874,7 @@ def commit_word_import(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     internal_payload = _decode_commit(db, user.current_tenant_id, payload)
     try:
         result = service.commit(db, tenant_id=user.current_tenant_id, user_id=user.user_id, payload=internal_payload)
@@ -932,7 +933,7 @@ async def _ingest_word_import_documents_impl(  # loop-ok: nur über run_coroutin
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     internal_template_id = _resolve_template_id(db, user.current_tenant_id, template_id)
     if len(files) > MAX_WORD_IMPORT_BATCH_FILES:
         raise HTTPException(
@@ -1004,7 +1005,7 @@ def get_last_word_import_template(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     tenant = db.get(Tenant, user.current_tenant_id)
     internal_template_id = tenant.last_word_import_template_id if tenant else None
     template_public_id = (
@@ -1021,7 +1022,7 @@ def set_last_word_import_template(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     tenant = db.get(Tenant, user.current_tenant_id)
     if tenant is None:
         raise HTTPException(status_code=404, detail="Mandant nicht gefunden")
@@ -1048,7 +1049,7 @@ def list_word_import_documents(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     rows = queue_service.list_documents(db, tenant_id=user.current_tenant_id, status=status_filter)
     return [_to_public_summary(db, document, template_name, duplicates) for document, template_name, duplicates in rows]
 
@@ -1059,7 +1060,7 @@ def get_word_import_document(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     internal_document_id = _resolve_document_id(db, user.current_tenant_id, document_id)
     document = queue_service.get_document(db, tenant_id=user.current_tenant_id, document_id=internal_document_id)
     if document is None:
@@ -1087,7 +1088,7 @@ def save_word_import_document_draft(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     internal_document_id = _resolve_document_id(db, user.current_tenant_id, document_id)
     document = queue_service.get_document(db, tenant_id=user.current_tenant_id, document_id=internal_document_id)
     if document is None:
@@ -1107,7 +1108,7 @@ def reanalyze_word_import_document(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     internal_document_id = _resolve_document_id(db, user.current_tenant_id, document_id)
     document = queue_service.get_document(db, tenant_id=user.current_tenant_id, document_id=internal_document_id)
     if document is None:
@@ -1130,7 +1131,7 @@ def commit_word_import_document(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     internal_document_id = _resolve_document_id(db, user.current_tenant_id, document_id)
     document = queue_service.get_document(db, tenant_id=user.current_tenant_id, document_id=internal_document_id)
     if document is None:
@@ -1155,7 +1156,7 @@ def delete_word_import_document(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     internal_document_id = _resolve_document_id(db, user.current_tenant_id, document_id)
     try:
         deleted = queue_service.delete_document(db, tenant_id=user.current_tenant_id, document_id=internal_document_id)

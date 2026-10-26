@@ -9,10 +9,11 @@ import { RouteTabs } from "@/components/ui/route-tabs";
 import { templateAreaTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { CycleConfigSummary } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 export default async function CyclesPage() {
   const session = await requireSession();
-  if (session.current_role !== "admin") {
+  if (!can(session, "templates.manage")) {
     redirect("/");
   }
   const t = await getTranslations("nav");

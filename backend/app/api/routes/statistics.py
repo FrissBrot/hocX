@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from app.core.cycle_utils import format_cycle_name
 from app.core.db import get_db
 from app.core.redis_client import get_redis_sync
-from app.core.security import CurrentUser, get_current_user, require_reader
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models.entities import CycleConfig, FinanceAccount, Participant, Protocol
 from app.services import public_id_service
 from app.services.statistics_common import (
@@ -130,9 +131,13 @@ class StatisticsOverview(BaseModel):
 STATS_CACHE_SECONDS = 30
 
 
-def _stats_cache_key(user: CurrentUser, cycle_config_id: uuid.UUID | None, cycle_offset: int) -> str:
-    finance = "finance" in user.current_tenant_features
-    return f"hocx:stats:{user.current_tenant_id}:{cycle_config_id or '-'}:{cycle_offset}:{int(finance)}"
+def _stats_cache_key(user: CurrentUser, cycle_config_id: uuid.UUID | None, cycle_offset: int, own_key: str | None) -> str:
+    # Der Schlüssel enthält die Sicht des Aufrufers (alle Personen oder nur die eigene, PRIV-001):
+    # sonst bekäme ein Leser das von einem Admin berechnete Ergebnis mit allen Personen aus dem
+    # Cache (und umgekehrt ein Admin das gefilterte eines Lesers).
+    finance = user.can(P.FINANCES_READ)
+    scope = own_key or "all"
+    return f"hocx:stats:{user.current_tenant_id}:{cycle_config_id or '-'}:{cycle_offset}:{int(finance)}:{scope}"
 
 
 @router.get("/statistics/overview", response_model=StatisticsOverview)
@@ -143,8 +148,8 @@ def get_statistics_overview(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
-    key = _stats_cache_key(user, cycle_config_id, cycle_offset)
+    require_permission(user, P.MEETINGS_READ)
+    key = _stats_cache_key(user, cycle_config_id, cycle_offset, own_person_key(db, user))
     if cached:
         try:
             raw = get_redis_sync().get(key)
@@ -278,8 +283,8 @@ def _compute_statistics_overview(db: Session, user: CurrentUser, cycle_config_id
     ]
 
     # ── Finance by month ─────────────────────────────────────────────────────
-    # Finanzzahlen nur mit gebuchtem Feature, wie die Finanzseite (require_finance_read).
-    finance_rows = fetch_finance_by_account_month(db, tenant_id, bounds) if "finance" in user.current_tenant_features else []
+    # Finanzzahlen nur mit finances.read (inkl. gebuchtem Feature), wie die Finanzseite.
+    finance_rows = fetch_finance_by_account_month(db, tenant_id, bounds) if user.can(P.FINANCES_READ) else []
     account_public_ids = public_id_service.resolve_public_ids(db, FinanceAccount, [r.account_id for r in finance_rows])
 
     finance_by_month = [

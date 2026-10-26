@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.core.cycle_utils import get_cycle_year
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_admin, require_reader, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models.entities import CycleConfig, Protocol, TableSnapshot, Template
 from app.schemas.table_snapshot import (
     TableSnapshotCycleSummary,
@@ -67,7 +68,7 @@ def list_snapshot_cycles(
     (or an incomplete) snapshot yet (has_snapshot=False) - a genuine gap the picker
     should flag with a warning and offer to reconstruct. The currently active,
     not-yet-ended period is never listed as a gap - it isn't historical yet."""
-    require_reader(user)
+    require_permission(user, P.MEETINGS_EDIT)  # Listenstände wie die Listen-API nur für Schreibende (E-12)
     tenant_id = user.current_tenant_id
     cycle_configs = list(db.scalars(select(CycleConfig).where(CycleConfig.tenant_id == tenant_id)))
     if not cycle_configs:
@@ -121,7 +122,7 @@ def get_snapshot_table(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_EDIT)  # Listenstände wie die Listen-API nur für Schreibende (E-12)
     _require_known_table(table_name)
     cfg = _get_owned_cycle_config(db, cycle_config_id, user.current_tenant_id)
     snapshot = db.scalar(
@@ -160,7 +161,7 @@ def get_reconstruction_draft(
     cycle_config, or the live list) is nearest by cycle year - see
     build_reconstruction_draft. The frontend shows this as an editable draft; the user's
     edits are posted back via reconstruct_list_period below."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     cfg = _get_owned_cycle_config(db, cycle_config_id, user.current_tenant_id)
     draft = build_reconstruction_draft(
         db, tenant_id=user.current_tenant_id, cycle_config=cfg, cycle_year=cycle_year, list_public_id=str(list_public_id)
@@ -190,7 +191,7 @@ def reconstruct_list_period(
 
     Not a manual/on-demand snapshot trigger: it can only ever fill an already-identified
     gap for this one list, never freshly capture a period that already has this list."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     cfg = _get_owned_cycle_config(db, cycle_config_id, user.current_tenant_id)
 
     current_cycle_year = get_cycle_year(date.today(), cfg.reset_month, cfg.reset_day)
@@ -248,7 +249,7 @@ def update_snapshot_row(
     requires the client to explicitly pass confirm_historical_edit=true - the API-level
     half of the "only with an explicit warning" requirement (the UI half is a
     confirmation modal that must be shown before this call is ever made)."""
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     _require_known_table(table_name)
     if payload.confirm_historical_edit is not True:
         raise HTTPException(status_code=400, detail="confirm_historical_edit must be true to edit historical data")
@@ -304,7 +305,7 @@ def delete_snapshot_row(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Same guard as update_snapshot_row, for removing a row from a historical view."""
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     _require_known_table(table_name)
     if payload.confirm_historical_edit is not True:
         raise HTTPException(status_code=400, detail="confirm_historical_edit must be true to edit historical data")

@@ -152,7 +152,8 @@
       "template": "Modèle de procès-verbal",
       "tenant": "Organisation",
       "todo": "Tâche",
-      "user": "Compte"
+      "user": "Compte",
+      "role": "Rôle"
     },
     "verbs": {
       "loginFailed": "Échec de connexion",

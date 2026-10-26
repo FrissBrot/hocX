@@ -23,6 +23,7 @@ from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
+from app.core.permissions import P
 from app.core.security import CurrentUser, build_current_user
 from app.models.entities import AppUser, CalendarFeed, Event, Protocol
 from app.schemas.protocol import TodoListItem
@@ -31,16 +32,17 @@ from app.services.protocol_todo_service import ProtocolTodoService
 
 KINDS = ("events", "todos")
 TODO_SCOPES = ("mine", "all")
-# Todos: gleiche Rollen wie require_reader (GET /todos). Termine: wie die Oberflaeche (Termine-Seite,
-# Mobile-Tab und Navigation nur fuer writer/admin) - ein Abo soll keinen neuen Zugang oeffnen.
-_ALLOWED_ROLES = {
-    "events": frozenset({"writer", "admin"}),
-    "todos": frozenset({"reader", "kassier", "writer", "admin"}),
+# Beide Abos mit meetings.read - dieselbe Berechtigung wie GET /events und GET /todos, ein Abo öffnet
+# also keinen neuen Zugang (E-11: Termine vorher nur für writer/admin, obwohl alle sie lesen durften).
+_REQUIRED_PERMISSION = {
+    "events": P.MEETINGS_READ,
+    "todos": P.MEETINGS_READ,
 }
 
 
-def can_subscribe(role: str | None, kind: str) -> bool:
-    return role in _ALLOWED_ROLES.get(kind, frozenset())
+def can_subscribe(user: CurrentUser, kind: str) -> bool:
+    permission = _REQUIRED_PERMISSION.get(kind)
+    return permission is not None and user.can(permission)
 
 # 24 Bytes = 192 Bit Entropie, gleiches Mass wie share_link_service.generate_token().
 _TOKEN_BYTES = 24
@@ -175,7 +177,7 @@ def resolve(db: Session, token: str) -> tuple[CalendarFeed, CurrentUser] | None:
     if not is_token_valid_for(feed, app_user):
         return None
     user = build_current_user(db, app_user)
-    if not can_subscribe(user.current_role, feed.kind):
+    if not can_subscribe(user, feed.kind):
         return None
     return feed, user
 

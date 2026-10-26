@@ -4,10 +4,11 @@ import { MobileTodos } from "@/components/mobile/mobile-todos";
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 export default async function TodosPage() {
   const session = await requireSession();
-  const canEdit = ["admin", "writer"].includes(session.current_role ?? "");
+  const canEdit = can(session, "meetings.edit");
 
   // Every role sees all tenant todos now (backend scopes restricted readers server-side);
   // participant lookups are only needed for the writer/admin edit & assignment UI.

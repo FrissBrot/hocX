@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db, release_for_stream
 from app.core.rate_limit import enforce_rate_limit
-from app.core.security import CurrentUser, get_current_user, require_admin
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.core.storage import MAIN, object_response
 from app.models import TenantDataExport
 from app.services.audit_service import AuditService
@@ -54,14 +55,14 @@ def _read(job: TenantDataExport) -> TenantDataExportRead:
 
 
 def _require_export_admin(user: CurrentUser) -> None:
-    require_admin(user)
+    require_permission(user, P.DATA_EXPORT)
     if not user.mfa_verified:
         raise HTTPException(status_code=403, detail="Für den Vereinsexport ist eine Anmeldung mit Zwei-Faktor-Bestätigung nötig")
 
 
 @router.get("/tenant-data-exports", response_model=list[TenantDataExportRead])
 def list_tenant_data_exports(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_admin(user)
+    require_permission(user, P.DATA_EXPORT)
     return [_read(job) for job in tenant_export.list_exports(db, user.current_tenant_id)]
 
 

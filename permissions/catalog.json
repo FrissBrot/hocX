@@ -1,0 +1,32 @@
+{
+  "$comment": "Einzige Quelle der Berechtigungen (RBAC). Generiert per python3 scripts/sync-permission-catalog.py nach backend/app/core/permissions_generated.py und frontend/lib/permissions.generated.ts. Neue Berechtigung: hier ergänzen, Sync laufen lassen, Migration fügt sie in die Tabelle permission ein und ordnet sie den Standardrollen zu (siehe docs/RBAC_ARCHITECTURE_PROPOSAL.md, Abschnitt G). Labels/Beschreibungen sind i18n-Keys (roles.permissions.<key>), keine Texte hier.",
+  "areas": ["meetings", "templates", "participants", "finances", "reports", "files", "submissions", "administration"],
+  "permissions": [
+    {"key": "meetings.read", "area": "meetings", "feature": null, "requires_mfa": false, "implies": []},
+    {"key": "meetings.read_drafts", "area": "meetings", "feature": null, "requires_mfa": false, "implies": ["meetings.read"]},
+    {"key": "meetings.edit", "area": "meetings", "feature": null, "requires_mfa": false, "implies": ["meetings.read_drafts"]},
+    {"key": "templates.edit", "area": "templates", "feature": null, "requires_mfa": false, "implies": ["meetings.read"]},
+    {"key": "templates.manage", "area": "templates", "feature": null, "requires_mfa": false, "implies": ["templates.edit"]},
+    {"key": "participants.manage", "area": "participants", "feature": null, "requires_mfa": false, "implies": []},
+    {"key": "finances.read", "area": "finances", "feature": "finance", "requires_mfa": false, "implies": []},
+    {"key": "finances.manage", "area": "finances", "feature": "finance", "requires_mfa": false, "implies": ["finances.read"]},
+    {"key": "reports.personal", "area": "reports", "feature": null, "requires_mfa": false, "implies": []},
+    {"key": "files.manage", "area": "files", "feature": null, "requires_mfa": false, "implies": []},
+    {"key": "submissions.read", "area": "submissions", "feature": "abgabebox", "requires_mfa": false, "implies": []},
+    {"key": "submissions.manage", "area": "submissions", "feature": "abgabebox", "requires_mfa": false, "implies": ["submissions.read"]},
+    {"key": "settings.manage", "area": "administration", "feature": null, "requires_mfa": true, "implies": []},
+    {"key": "access.manage", "area": "administration", "feature": null, "requires_mfa": true, "implies": []},
+    {"key": "data.export", "area": "administration", "feature": null, "requires_mfa": true, "implies": []}
+  ],
+  "system_roles": [
+    {"key": "admin", "all_permissions": true, "permissions": []},
+    {"key": "writer", "all_permissions": false, "permissions": [
+      "meetings.read", "meetings.read_drafts", "meetings.edit", "templates.edit", "participants.manage",
+      "finances.read", "reports.personal", "files.manage", "submissions.read", "submissions.manage"
+    ]},
+    {"key": "kassier", "all_permissions": false, "permissions": [
+      "meetings.read", "meetings.read_drafts", "finances.read", "finances.manage", "reports.personal", "submissions.read"
+    ]},
+    {"key": "reader", "all_permissions": false, "permissions": ["meetings.read", "finances.read", "submissions.read"]}
+  ]
+}

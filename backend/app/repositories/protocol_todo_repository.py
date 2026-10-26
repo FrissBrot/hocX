@@ -305,6 +305,8 @@ class ProtocolTodoRepository:
                 Protocol.protocol_number.label("protocol_number"),
                 Protocol.title.label("protocol_title"),
                 Protocol.protocol_date.label("protocol_date"),
+                Protocol.id.label("protocol_internal_id"),
+                Protocol.status.label("protocol_status"),
             )
             .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
             .join(Protocol, Protocol.id == ProtocolElement.protocol_id)

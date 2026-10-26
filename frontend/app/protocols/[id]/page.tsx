@@ -19,12 +19,13 @@ import {
   TemplateSummary,
   TodoListItem,
 } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 export default async function ProtocolDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await requireSession();
-  const isRestricted = ["reader", "kassier"].includes(session.current_role ?? "");
-  const canViewFines = ["kassier", "writer", "admin"].includes(session.current_role ?? "");
+  const isRestricted = !can(session, "meetings.edit");
+  const canViewFines = can(session, "reports.personal");
   const protocol = await backendFetchWithSession<ProtocolSummary>(`/api/protocols/${id}`);
 
   if (!protocol) {

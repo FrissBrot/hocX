@@ -242,14 +242,17 @@ def _sheet(lang: str, section: str, columns: list[str], rows: list[list[Any]]) -
 
 def _members(db: Session, tenant_id: int, lang: str) -> workbook.Sheet:
     rows = _rows(db, """
-        SELECT u.first_name, u.last_name, u.display_name, u.email, r.code AS role, u.is_active, u.joined_at, u.left_at
-        FROM app_user u LEFT JOIN role r ON r.id = u.role_id
+        SELECT u.id, u.first_name, u.last_name, u.display_name, u.email, u.is_active, u.joined_at, u.left_at
+        FROM app_user u
         WHERE u.tenant_id = :t ORDER BY u.last_name, u.first_name, u.id
     """, {"t": tenant_id})
+    from app.services.role_service import role_labels
+
+    roles = role_labels(db, tenant_id, [r["id"] for r in rows], lang)
     columns = ["first_name", "last_name", "display_name", "email", "role", "is_active", "joined_at", "left_at"]
     yes, no = _t(lang, "tenant.yes"), _t(lang, "tenant.no")
     return _sheet(lang, "members", columns, [
-        [r["first_name"], r["last_name"], r["display_name"], r["email"], r["role"], yes if r["is_active"] else no, _fmt_date(r["joined_at"]), _fmt_date(r["left_at"])]
+        [r["first_name"], r["last_name"], r["display_name"], r["email"], roles.get(r["id"], ""), yes if r["is_active"] else no, _fmt_date(r["joined_at"]), _fmt_date(r["left_at"])]
         for r in rows
     ])
 

@@ -9,7 +9,7 @@
     "invite": "+ Invite participant"
   },
   "explainRoles": "Explain roles",
-  "explainRolesDescription": "Each account has exactly one role per organization.",
+  "explainRolesDescription": "Each account can have several roles and receives all of their permissions. Roles are managed under “Roles”.",
   "tabs": {
     "active": "Participants with login",
     "participants": "Participants"

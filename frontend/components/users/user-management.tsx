@@ -3,9 +3,8 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { getRoleOptions } from "@/components/admin/admin-tenant-settings-modal";
 import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
-import { formatRoleLabel } from "@/components/ui/app-shell-nav";
+import { EffectivePermissions, RoleChecklist } from "@/components/users/role-fields";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabs } from "@/components/ui/filter-tabs";
@@ -14,32 +13,22 @@ import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
-import { UserSummary } from "@/types/api";
-import { emptyUserForm, isUserFormValid, userFormToPayload, UserFormState } from "@/components/users/user-form-shared";
+import { RoleRead, UserSummary } from "@/types/api";
+import { roleName, rolesLabel } from "@/lib/permissions";
+import { defaultRoleIds, emptyUserForm, isUserFormValid, userFormToPayload, UserFormState } from "@/components/users/user-form-shared";
 
 type Props = {
   initialUsers: UserSummary[];
+  roles: RoleRead[];
+  // Eigene effektive Berechtigungen - Rollen darüber hinaus sind gesperrt (keine Rechteausweitung).
+  actorPermissions: string[];
+  enabledFeatures: string[];
 };
 
-function getRoleDescriptions(t: (key: string) => string): { code: string; description: string }[] {
-  return [
-    { code: "admin", description: t("roleDescriptions.admin") },
-    { code: "writer", description: t("roleDescriptions.writer") },
-    { code: "kassier", description: t("roleDescriptions.kassier") },
-    { code: "reader", description: t("roleDescriptions.reader") },
-  ];
-}
-
-export function UserManagement({ initialUsers }: Props) {
+export function UserManagement({ initialUsers, roles, actorPermissions, enabledFeatures }: Props) {
   const tNav = useTranslations("nav");
   const t = useTranslations("users");
-  const tAdmin = useTranslations("admin");
-  const roleOptions = useMemo(() => getRoleOptions(tAdmin), [tAdmin]);
-  const roleDescriptions = useMemo(() => getRoleDescriptions(t), [t]);
-  const roleLabel = useMemo(() => {
-    const byCode = new Map(roleOptions.map((role) => [role.code, role.label]));
-    return (roleCode: string) => byCode.get(roleCode) ?? roleCode;
-  }, [roleOptions]);
+  const roleLabel = (user: UserSummary) => rolesLabel(user.roles, tNav);
   const showToast = useToast();
   const confirm = useConfirm();
   const [users, setUsers] = useState(initialUsers);
@@ -65,13 +54,13 @@ export function UserManagement({ initialUsers }: Props) {
       if (!query) {
         return true;
       }
-      const haystack = `${user.display_name} ${user.first_name} ${user.last_name} ${user.email} ${roleLabel(user.role_code)}`.toLowerCase();
+      const haystack = `${user.display_name} ${user.first_name} ${user.last_name} ${user.email} ${roleLabel(user)}`.toLowerCase();
       return haystack.includes(query);
     });
   }, [search, tabUsers]);
 
   function openNewUser() {
-    setUserForm(emptyUserForm());
+    setUserForm(emptyUserForm("", defaultRoleIds(roles)));
     setFormError(null);
     setUserModalOpen(true);
   }
@@ -89,7 +78,8 @@ export function UserManagement({ initialUsers }: Props) {
       login_enabled: user.login_enabled,
 
       tenant_id: user.tenant_id,
-      role_code: user.role_code
+      role_ids: user.roles.map((role) => role.id),
+      system_role: "reader"
     });
     setFormError(null);
     setUserModalOpen(true);
@@ -232,7 +222,7 @@ export function UserManagement({ initialUsers }: Props) {
               <td>{user.first_name} {user.last_name}</td>
               <td>{user.email}</td>
               <td>
-                <span className="pill">{roleLabel(user.role_code)}</span>
+                <span className="pill">{roleLabel(user)}</span>
               </td>
               <td>
                 <div className="table-actions table-actions-start">
@@ -270,7 +260,7 @@ export function UserManagement({ initialUsers }: Props) {
               </td>
               <td>{user.email ?? <span className="muted">–</span>}</td>
               <td>
-                <span className="pill">{roleLabel(user.role_code)}</span>
+                <span className="pill">{roleLabel(user)}</span>
               </td>
               <td>
                 <div className="table-actions table-actions-start">
@@ -289,10 +279,10 @@ export function UserManagement({ initialUsers }: Props) {
 
       <Modal open={rolesModalOpen} onClose={() => setRolesModalOpen(false)} title={t("explainRoles")} description={t("explainRolesDescription")}>
         <div className="grid">
-          {roleDescriptions.map((role) => (
-            <div key={role.code} className="field-stack">
-              <span className="field-label">{formatRoleLabel(role.code, tNav)}</span>
-              <span className="muted">{role.description}</span>
+          {roles.map((role) => (
+            <div key={role.id} className="field-stack">
+              <span className="field-label">{roleName(role, tNav)}</span>
+              <span className="muted">{role.description ?? (role.system_key ? t(`roleDescriptions.${role.system_key}`) : "")}</span>
             </div>
           ))}
         </div>
@@ -340,22 +330,14 @@ export function UserManagement({ initialUsers }: Props) {
             </label>
           </div>
 
-          <div className="field-stack" role="radiogroup" aria-label={t("role")}>
-            <span className="field-label">{t("role")}</span>
-            <div className="role-picker">
-              {roleOptions.map((role) => (
-                <label key={role.code} className="role-picker-option">
-                  <input
-                    type="radio"
-                    name="role_code"
-                    value={role.code}
-                    checked={userForm.role_code === role.code}
-                    onChange={(event) => setUserForm((current) => ({ ...current, role_code: event.target.value }))}
-                  />
-                  {role.label}
-                </label>
-              ))}
-            </div>
+          <div className="two-col">
+            <RoleChecklist
+              roles={roles}
+              value={userForm.role_ids}
+              actorPermissions={actorPermissions}
+              onChange={(roleIds) => setUserForm((current) => ({ ...current, role_ids: roleIds }))}
+            />
+            <EffectivePermissions roles={roles} roleIds={userForm.role_ids} enabledFeatures={enabledFeatures} />
           </div>
 
           <div className="two-col">

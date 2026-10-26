@@ -6,10 +6,11 @@ import { FilesView } from "@/components/files/files-view";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { FileOverviewItem } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 export default async function FilesPage() {
   const session = await requireSession();
-  const canView = ["admin", "writer"].includes(session.current_role ?? "");
+  const canView = can(session, "files.manage");
 
   if (!canView) {
     redirect("/");

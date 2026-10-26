@@ -55,9 +55,10 @@ class GalleryMultipartParser(MultiPartParser):
 def authorize_gallery_upload(request: Request) -> None:
     # Vor dem ersten Dateibyte prüfen; die normalen Dependencies prüfen am Ende erneut.
     from app.core.db import SessionLocal
-    from app.core.security import get_current_user, get_optional_current_user, require_writer
+    from app.core.permissions import P
+    from app.core.security import get_current_user, get_optional_current_user, require_permission
     with SessionLocal() as db:
-        require_writer(get_current_user(get_optional_current_user(request, db=db, session_cookie=None)))
+        require_permission(get_current_user(get_optional_current_user(request, db=db, session_cookie=None)), P.FILES_MANAGE)
 
 
 class GalleryUploadRoute(APIRoute):

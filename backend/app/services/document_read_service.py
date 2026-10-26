@@ -11,7 +11,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.security import CurrentUser, require_abgabebox_read
+from app.core.permissions import P
+from app.core.security import CurrentUser, require_permission
 from app.models import StoredFile, SubmissionUploadFile
 from app.models.document_entities import (
     DOCUMENT_SOURCE_PROTOCOL_EXPORT,
@@ -113,7 +114,7 @@ def get_document_for_user(db: Session, user: CurrentUser, document_id: uuid.UUID
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dokument nicht gefunden")
     if db.scalar(select(SubmissionUploadFile.id).where(SubmissionUploadFile.stored_file_id == original.id).limit(1)) is not None:
         # Abgabebox-Dokumente zusätzlich nur mit gebuchter Abgabebox (wie die Abgabe-Dateiroute).
-        require_abgabebox_read(user)
+        require_permission(user, P.SUBMISSIONS_READ)
     access_service.ensure_can_read_stored_file(db, user, original.id)
     return document
 

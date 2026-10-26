@@ -25,6 +25,8 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { formatDate, formatFileSize } from "@/lib/utils/format";
 import { CATEGORY_COLORS, categoryHints, formatPercent, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
 import { PROFILE_IMAGE_ACCEPT, profileImageProblem } from "@/lib/utils/profile-image";
+import { primarySystemRole } from "@/components/users/user-form-shared";
+import { rolesLabel } from "@/lib/permissions";
 import {
   AdminFeature,
   AdminPlan,
@@ -84,6 +86,7 @@ type SettingsTab = "stammdaten" | "abo" | "benutzer" | "aufraeumen" | "speicher"
 
 export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Props) {
   const t = useTranslations("admin");
+  const tNav = useTranslations("nav");
   const tCommon = useTranslations("common");
   const storageHints = categoryHints(useTranslations("storage"));
   const roleOptions = useMemo(() => getRoleOptions(t), [t]);
@@ -426,15 +429,17 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     }
   }
 
+  // Setzt genau eine Standardrolle (ersetzt alle Rollen des Kontos, z. B. "Admin" im Notfall);
+  // eigene Rollen verwaltet der Mandant selbst.
   async function changeUserRole(userId: string, roleCode: string) {
     if (!tenant) return;
     const previous = tenantUsers;
-    setTenantUsers((current) => current.map((u) => (u.user_id === userId ? { ...u, role_code: roleCode } : u)));
     try {
-      await browserApiFetch(`/api/admin/tenants/${tenant.id}/users/${userId}`, {
+      const updated = await browserApiFetch<AdminTenantUser>(`/api/admin/tenants/${tenant.id}/users/${userId}`, {
         method: "PUT",
         body: JSON.stringify({ role_code: roleCode })
       });
+      setTenantUsers((current) => current.map((u) => (u.user_id === userId ? updated : u)));
       showToast(t("tenantModal.toasts.roleChanged"), "success");
     } catch (error) {
       setTenantUsers(previous);
@@ -824,13 +829,14 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                           </td>
                           <td className="muted">{u.email}</td>
                           <td>
-                            <select value={u.role_code} onChange={(event) => changeUserRole(u.user_id, event.target.value)} aria-label={t("tenantModal.table.roleAria", { name: u.display_name })}>
+                            <select value={primarySystemRole(u.roles)} onChange={(event) => changeUserRole(u.user_id, event.target.value)} aria-label={t("tenantModal.table.roleAria", { name: u.display_name })}>
                               {roleOptions.map((r) => (
                                 <option key={r.code} value={r.code}>
                                   {r.label}
                                 </option>
                               ))}
                             </select>
+                            <div className="muted admin-cell-sub">{rolesLabel(u.roles, tNav)}</div>
                           </td>
                           <td>
                             <button type="button" className="button-ghost" onClick={() => setMfaModalUser(u)}>

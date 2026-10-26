@@ -1,0 +1,149 @@
+{
+  "pageTitle": "Roles",
+  "pageHint": "A role bundles permissions. An account can have several roles and then receives all of their permissions.",
+  "newRole": "New role",
+  "empty": "No roles yet.",
+  "columns": {
+    "name": "Role",
+    "permissions": "Permissions",
+    "users": "Accounts",
+    "actions": "Actions"
+  },
+  "permissionCount": "{count, plural, one {# permission} other {# permissions}}",
+  "badges": {
+    "standard": "Default",
+    "locked": "Fixed",
+    "mfa": "MFA"
+  },
+  "edit": "Edit",
+  "view": "View",
+  "delete": "Delete",
+  "cancel": "Cancel",
+  "close": "Close",
+  "save": "Save",
+  "createTitle": "Create role",
+  "editTitle": "Edit role",
+  "viewTitle": "View role",
+  "modalDescription": "Name, description and permissions of the role.",
+  "lockedHint": "The Admin role always has all permissions, including future ones, and cannot be changed.",
+  "exceedsOwn": "This role contains permissions you do not have yourself. You therefore cannot change it.",
+  "notOwned": "Contains permissions you do not have yourself.",
+  "featureMissing": "Module not booked",
+  "impliedBy": "Included automatically in: {permissions}",
+  "deleteConfirm": "Delete role “{name}”? This is only possible if no account still has it.",
+  "fields": {
+    "name": "Name",
+    "nameHelpSystem": "Leave empty for the default name.",
+    "description": "Description",
+    "permissions": "Permissions"
+  },
+  "toasts": {
+    "created": "Role created",
+    "saved": "Role saved",
+    "saveFailed": "Role could not be saved",
+    "deleted": "Role deleted",
+    "deleteFailed": "Role could not be deleted"
+  },
+  "userRoles": {
+    "label": "Roles",
+    "help": "Several roles are possible. The account receives all permissions of the selected roles.",
+    "mfaWarning": "At least one selected role contains administration rights: the account must sign in with MFA."
+  },
+  "effective": {
+    "title": "Effective permissions",
+    "via": "via {roles}",
+    "none": "No permissions. The account only sees its own data."
+  },
+  "areas": {
+    "meetings": "Meetings & minutes",
+    "templates": "Templates",
+    "participants": "Participants",
+    "finances": "Finances",
+    "reports": "Reports",
+    "files": "Files & photos",
+    "submissions": "Submission box",
+    "administration": "Administration"
+  },
+  "permissions": {
+    "meetings": {
+      "read": {
+        "label": "View meetings",
+        "description": "View events, finalized minutes, agenda items and tasks, export PDFs."
+      },
+      "read_drafts": {
+        "label": "View drafts",
+        "description": "Also view minutes that are not finalized yet, and their files."
+      },
+      "edit": {
+        "label": "Edit meetings",
+        "description": "Create, edit and delete events, minutes, agenda items, tasks and lists; Word import."
+      }
+    },
+    "templates": {
+      "edit": {
+        "label": "Design templates",
+        "description": "Edit building blocks, library and design of existing meeting templates and documents."
+      },
+      "manage": {
+        "label": "Manage templates",
+        "description": "Create and delete meeting templates, manage cycles, task packages, tags and historical list states."
+      }
+    },
+    "participants": {
+      "manage": {
+        "label": "Manage participants",
+        "description": "View, create, edit and import participants including contact details, and assign them to templates."
+      }
+    },
+    "finances": {
+      "read": {
+        "label": "View cash book",
+        "description": "View accounts, transactions and balances."
+      },
+      "manage": {
+        "label": "Manage finances",
+        "description": "Record, change and delete transactions, accounts and fines."
+      }
+    },
+    "reports": {
+      "personal": {
+        "label": "Personal data of everyone",
+        "description": "See fines and attendance of all persons. Without this permission only your own."
+      }
+    },
+    "files": {
+      "manage": {
+        "label": "Manage files & photos",
+        "description": "Manage files, photo gallery and albums, public share links and album shares."
+      }
+    },
+    "submissions": {
+      "read": {
+        "label": "View submissions",
+        "description": "View submitted items and their files."
+      },
+      "manage": {
+        "label": "Manage submissions",
+        "description": "Create, review and delete submission requests and public upload links."
+      }
+    },
+    "settings": {
+      "manage": {
+        "label": "Manage settings",
+        "description": "Organization profile, privacy, retention, verification domain, design, publishing document templates, activity log."
+      }
+    },
+    "access": {
+      "manage": {
+        "label": "Manage users & roles",
+        "description": "Manage logins, roles and role assignments, reset other users' MFA."
+      }
+    },
+    "data": {
+      "export": {
+        "label": "Data exports",
+        "description": "Full export of the organization and data access requests for other persons."
+      }
+    }
+  }
+}

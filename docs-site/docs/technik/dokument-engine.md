@@ -403,9 +403,9 @@ geladenen Schriften werden durch `�` ersetzt, weil PDF/A fehlende Glyphen verb
 
 ## API
 
-| Endpunkt | Zweck | Rolle |
+| Endpunkt | Zweck | Rolle (Berechtigung) |
 |---|---|---|
-| `POST /api/documents/render` | PDF erzeugen (Vorlage wählen, versionieren, registrieren, speichern); `content_url` lädt bei Protokollbezug jede Person mit Leserecht auf das Protokoll, sonst admin/writer/kassier und die Person, die das PDF erzeugt hat | reader |
+| `POST /api/documents/render` | PDF erzeugen (Vorlage wählen, versionieren, registrieren, speichern); `content_url` lädt bei Protokollbezug jede Person mit Leserecht auf das Protokoll, sonst `files.manage`/`meetings.read_drafts` und die Person, die das PDF erzeugt hat | reader |
 | `POST /api/documents/preview` | PNG-Vorschau der ersten Seiten (auch ungespeicherte Vorlagen, Beispieldaten), nichts wird gespeichert | reader |
 | `POST /api/documents/export` | CSV, XLSX, ICS, Markdown aus denselben Daten | reader |
 | `GET /api/documents/exports` | Export-Historie (`document_export`, mit Vorlage und Design-Hash) | reader |

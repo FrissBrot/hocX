@@ -12,7 +12,7 @@ from app.api.routes import calendar_feeds as routes
 from app.models.entities import CalendarFeed, ProtocolTodo, TodoStatus
 from app.schemas.calendar_feed import CalendarFeedUpsert
 from app.services import calendar_feed_service
-from tests.factories import make_app_user, make_current_user, make_event, make_participant, make_tenant, make_template, role_id_by_code
+from tests.factories import make_app_user, make_current_user, make_event, make_participant, make_tenant, make_template
 
 
 class _FakeClient:
@@ -358,28 +358,46 @@ def test_all_todos_feed_respects_restricted_reader_scope(db):
     assert "Interna Leitung" not in ics
 
 
-def test_readers_may_subscribe_to_todos_but_not_to_events(db):
-    """Termine sind in der Oberflaeche nur fuer writer/admin sichtbar - das Abo oeffnet keinen
-    zusaetzlichen Zugang."""
+def test_readers_may_subscribe_to_todos_and_events(db):
+    """Beide Abos brauchen meetings.read - dieselbe Berechtigung wie GET /events und GET /todos,
+    das Abo oeffnet also keinen zusaetzlichen Zugang (RBAC-Entscheidung E-11: Termine vorher nur
+    fuer writer/admin)."""
     tenant = make_tenant(db)
     _, reader = _user(db, tenant.id, role="reader")
 
-    with pytest.raises(HTTPException) as exc_info:
-        _enable(db, reader, "events")
-    assert exc_info.value.status_code == 403
+    assert _enable(db, reader, "events").status == "active"
     assert _enable(db, reader, "todos").status == "active"
 
 
-def test_events_feed_stops_when_the_owner_is_downgraded_to_reader(db):
+def test_subscribing_needs_meetings_read(db):
+    tenant = make_tenant(db)
+    _, user = _user(db, tenant.id, role="reader")
+    without = make_current_user(tenant.id, user_id=user.user_id, permissions=frozenset({"finances.read"}))
+
+    with pytest.raises(HTTPException) as exc_info:
+        _enable(db, without, "events")
+    assert exc_info.value.status_code == 403
+
+
+def test_events_feed_stops_when_the_owner_loses_meetings_read(db):
     tenant = make_tenant(db)
     app_user, user = _user(db, tenant.id, role="writer")
     token = _token(_enable(db, user, "events"))
 
-    app_user.role_id = role_id_by_code(db, "reader")
+    # Rolle ohne meetings.read (z. B. eine reine Kassen-Rolle) - das Abo wird sofort ungültig.
+    from app.models import TenantRole, TenantRolePermission
+    role = TenantRole(tenant_id=tenant.id, name="Nur Kasse")
+    db.add(role)
+    db.flush()
+    db.add(TenantRolePermission(role_id=role.id, permission_key="finances.read"))
+    from app.models import UserRole
+    from sqlalchemy import delete
+    db.execute(delete(UserRole).where(UserRole.user_id == app_user.id))
+    db.add(UserRole(tenant_id=tenant.id, user_id=app_user.id, role_id=role.id))
     db.flush()
 
     with pytest.raises(HTTPException) as exc_info:
         _fetch(db, token)
     assert exc_info.value.status_code == 404
-    reader = make_current_user(tenant.id, role="reader", user_id=app_user.id)
-    assert routes.list_calendar_feeds(db, reader)[0].status == "invalid"
+    downgraded = make_current_user(tenant.id, user_id=app_user.id, permissions=frozenset({"finances.read"}))
+    assert routes.list_calendar_feeds(db, downgraded)[0].status == "invalid"

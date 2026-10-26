@@ -23,7 +23,8 @@ from starlette.concurrency import run_in_threadpool
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.locale_config_generated import SUPPORTED_LOCALES
-from app.core.security import CurrentUser, get_current_user, require_admin, require_reader, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_any_permission, require_permission
 from app.documents import exports as extra_formats
 from app.documents import permissions
 from app.documents import service as document_service
@@ -391,7 +392,7 @@ def get_document_settings(db: Session = Depends(get_db), user: CurrentUser = Dep
 
 @router.patch("/document-settings", response_model=DocumentSettings)
 def update_document_settings(body: DocumentSettings, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_admin(user)
+    require_permission(user, P.SETTINGS_MANAGE)
     tenant = db.get(Tenant, user.current_tenant_id)
     if body.language is not None and body.language not in SUPPORTED_LOCALES:
         raise HTTPException(status_code=422, detail=text(_lang(user), "apiError.invalidBlock", detail="language"))
@@ -422,15 +423,17 @@ def list_source_options(
 ):
     """Optionen für Referenzfelder (``x-source`` im Katalog-Schema), mandantengebunden und mit
     denselben Rechten wie die Blöcke, die sie füllen."""
-    from app.core.security import require_finance_read
     from app.documents.context import format_date
     from app.models import CycleConfig, Event, FinanceAccount, ListDefinition, Participant, ProtocolElement, ProtocolElementBlock, Template
 
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     tenant_id = user.current_tenant_id
     if source not in SOURCES:
         raise HTTPException(status_code=404, detail=text(_lang(user), "apiError.notFound"))
     if source == "participants":
+        # Wie GET /participants: die Personenliste nur für Teilnehmerpflege und Protokollführung
+        # (E-12, vorher für jeden Leser).
+        require_any_permission(user, P.PARTICIPANTS_MANAGE, P.MEETINGS_EDIT)
         rows = db.scalars(select(Participant).where(Participant.tenant_id == tenant_id, Participant.is_active.is_(True)).order_by(Participant.display_name))
         return [SourceOption(id=row.public_id, label=row.display_name) for row in rows]
     if source == "protocols":
@@ -471,12 +474,12 @@ def list_source_options(
         return [SourceOption(id=row.public_id, label=row.name) for row in rows if access_service.can_read_template(db, user, row.id)]
     if source == "lists":
         # Wie die Listen-API und der Block list_table: nur Schreibende.
-        require_writer(user)
+        require_permission(user, P.MEETINGS_EDIT)
         rows = db.scalars(select(ListDefinition).where(ListDefinition.tenant_id == tenant_id, ListDefinition.is_active.is_(True)).order_by(ListDefinition.name))
         return [SourceOption(id=row.public_id, label=row.name) for row in rows]
     if source == "events":
         rows = db.scalars(select(Event).where(Event.tenant_id == tenant_id, Event.is_session_marker.is_(False)).order_by(Event.event_date.desc()).limit(500))
         return [SourceOption(id=row.public_id, label=row.title, detail=format_date(row.event_date)) for row in rows]
-    require_finance_read(user)
+    require_permission(user, P.FINANCES_READ)
     rows = db.scalars(select(FinanceAccount).where(FinanceAccount.tenant_id == tenant_id).order_by(FinanceAccount.name))
     return [SourceOption(id=row.public_id, label=row.name) for row in rows]

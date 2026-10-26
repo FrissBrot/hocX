@@ -16,7 +16,8 @@ from starlette.background import BackgroundTask
 
 from app.core.config import settings
 from app.core.db import get_db, release_for_stream
-from app.core.security import CurrentUser, get_current_user, require_abgabebox_read, require_abgabebox_write
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models.entities import SubmissionAssignment, SubmissionUpload, StoredFile
 from app.schemas.files import StoredFileMetadata, StoredFileTagsUpdate
 from app.schemas.submission import (
@@ -63,7 +64,7 @@ def list_links(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     return link_service.list_links(db, tenant_id=user.current_tenant_id)
 
 
@@ -73,7 +74,7 @@ def create_link(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     try:
         return link_service.create_link(db, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:
@@ -89,7 +90,7 @@ def patch_link(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     link = _get_link_or_404(db, link_id, user)
     try:
         return link_service.update_link(db, link, payload)
@@ -106,7 +107,7 @@ def regenerate_link(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Issues a new token - the old URL stops working immediately."""
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     link = _get_link_or_404(db, link_id, user)
     try:
         result = link_service.regenerate_token(db, link)
@@ -124,7 +125,7 @@ def delete_link(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     link = _get_link_or_404(db, link_id, user)
     affected = link_service.assignments_for_link(db, link)
     try:
@@ -142,7 +143,7 @@ def list_assignments(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     return service.list_assignments(db, tenant_id=user.current_tenant_id)
 
 
@@ -152,7 +153,7 @@ def create_assignment(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     try:
         return service.create_assignment(db, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:
@@ -168,7 +169,7 @@ def patch_assignment(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     current = _get_assignment_or_404(db, assignment_id, user)
     try:
         updated = service.update_assignment(db, current.id, payload)
@@ -203,7 +204,7 @@ def preview_assignment_deletion(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Eingereichte Dateien und Galeriefotos der Abgabe für den Lösch-Dialog (PRIV-003)."""
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     current = _get_assignment_or_404(db, assignment_id, user)
     return deletion_service.preview_read(deletion_service.assignment_preview(db, current))
 
@@ -216,7 +217,7 @@ def delete_assignment_with_selection(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Löscht die Abgabe; gewählte Dateien werden mitgelöscht, die übrigen in die Galerie übernommen."""
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     current = _get_assignment_or_404(db, assignment_id, user)
     return _delete_assignment_with_files(db, current, user, set(payload.delete_file_ids))
 
@@ -228,7 +229,7 @@ def delete_assignment(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Ohne Auswahl: alle eingereichten Dateien und Galeriefotos der Abgabe werden mitgelöscht."""
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     current = _get_assignment_or_404(db, assignment_id, user)
     _delete_assignment_with_files(db, current, user, None)
     return {"message": "Abgabe geloescht"}
@@ -249,7 +250,7 @@ def delete_submission_upload(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Eine Einreichung samt Dateien endgültig löschen (z. B. auf Wunsch der einreichenden Person)."""
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     upload = _get_own_upload_or_404(db, upload_id, user)
     rows = [(upload_file, stored_file) for upload_file, stored_file in service.repository.list_upload_files(db, upload_id=upload.id)]
     upload_internal_id = upload.id
@@ -275,7 +276,7 @@ def delete_submission_file(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Eine eingereichte Datei endgültig löschen; eine dadurch leere Einreichung verschwindet mit."""
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     upload = _get_own_upload_or_404(db, upload_id, user)
     rows = [(upload_file, stored_file) for upload_file, stored_file in service.repository.list_upload_files(db, upload_id=upload.id) if stored_file.public_id == file_id]
     if not rows:
@@ -296,7 +297,7 @@ def list_elements(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_read(user)
+    require_permission(user, P.SUBMISSIONS_READ)
     assignment = _get_assignment_or_404(db, assignment_id, user)
     return service.get_assignment_elements(db, assignment)
 
@@ -308,7 +309,7 @@ def reopen_element(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     assignment = _get_assignment_or_404(db, assignment_id, user)
     try:
         return service.reopen_element(db, assignment, element_ref)
@@ -325,7 +326,7 @@ def close_element(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     assignment = _get_assignment_or_404(db, assignment_id, user)
     try:
         return service.close_element(db, assignment, element_ref)
@@ -343,7 +344,7 @@ def get_submission_file_content(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_read(user)
+    require_permission(user, P.SUBMISSIONS_READ)
     # Nur Einreichungen von Abgaben des eigenen Mandanten.
     upload = db.scalars(
         select(SubmissionUpload)
@@ -395,7 +396,7 @@ def get_submission_file_thumbnail(
     """Small JPEG preview for the "Dateien" grid - same access rules as
     get_submission_file_content. Generated lazily on first request since abgabebox-backend's
     restricted DB role never sets thumbnail_path itself (see FileService.ensure_thumbnail)."""
-    require_abgabebox_read(user)
+    require_permission(user, P.SUBMISSIONS_READ)
     upload_public = public_id_service.get_by_public_id(db, SubmissionUpload, upload_id)
     stored_file_public = public_id_service.get_by_public_id(db, StoredFile, file_id)
     if upload_public is None or stored_file_public is None:
@@ -436,7 +437,7 @@ def update_submission_file_tags(
     unabhaengig von abgabebox-backends eigener restricted Rolle, die diesen Endpoint nie
     aufruft (Tags werden ausschliesslich von Mandanten-Writern auf der "Dateien"-Seite
     gesetzt, nie beim Hochladen selbst)."""
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     upload_public = public_id_service.get_by_public_id(db, SubmissionUpload, upload_id)
     stored_file_public = public_id_service.get_by_public_id(db, StoredFile, file_id)
     if upload_public is None or stored_file_public is None:
@@ -457,7 +458,7 @@ def get_submission_file_metadata(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_read(user)
+    require_permission(user, P.SUBMISSIONS_READ)
     upload_public = public_id_service.get_by_public_id(db, SubmissionUpload, upload_id)
     stored_file_public = public_id_service.get_by_public_id(db, StoredFile, file_id)
     if upload_public is None or stored_file_public is None:
@@ -478,7 +479,7 @@ def get_submission_file_metadata(
 def get_clamav_status(
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_read(user)
+    require_permission(user, P.SUBMISSIONS_READ)
     try:
         import pyclamd
         cd = pyclamd.ClamdNetworkSocket(host=settings.clamav_host, port=settings.clamav_port, timeout=5)
@@ -494,7 +495,7 @@ def get_assignment_summary(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_read(user)
+    require_permission(user, P.SUBMISSIONS_READ)
     assignment = _get_assignment_or_404(db, assignment_id, user)
     counts = service.repository.count_submissions_summary(db, assignment_id=assignment.id)
     total = None
@@ -518,7 +519,7 @@ def rescan_pending(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_write(user)
+    require_permission(user, P.SUBMISSIONS_MANAGE)
     assignment = _get_assignment_or_404(db, assignment_id, user)
     return service.rescan_pending(db, assignment.id)
 
@@ -530,7 +531,7 @@ def get_upload_log(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_read(user)
+    require_permission(user, P.SUBMISSIONS_READ)
     assignment = _get_assignment_or_404(db, assignment_id, user)
     return service.get_upload_log(db, assignment_id=assignment.id, element_ref=element_ref)
 
@@ -541,7 +542,7 @@ def download_all_files_zip(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_abgabebox_read(user)
+    require_permission(user, P.SUBMISSIONS_READ)
     assignment = _get_assignment_or_404(db, assignment_id, user)
 
     elements = service.get_assignment_elements(db, assignment)

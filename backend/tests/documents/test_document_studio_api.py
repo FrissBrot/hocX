@@ -275,9 +275,9 @@ def test_assignment_priority_and_export_uses_it(db, world):
     )
     resolved = template_service.resolve_template(db, tenant_id, "protocol", protocol_template_id=world["protocol_template"].id)
     assert resolved.source == "protocol_template" and resolved.template.public_id == created.id
-    result = render_now(DocumentRequest(protocol_id=world["protocol"].public_id), db=db, user=world["reader"])
+    result = render_now(DocumentRequest(protocol_id=world["protocol"].public_id), db=db, user=world["writer"])
     assert result.template_id == created.id
-    explicit = render_now(DocumentRequest(protocol_id=world["protocol"].public_id, template_id=compact.public_id), db=db, user=world["reader"])
+    explicit = render_now(DocumentRequest(protocol_id=world["protocol"].public_id, template_id=compact.public_id), db=db, user=world["writer"])
     assert explicit.template_id == compact.public_id
     with pytest.raises(HTTPException) as excinfo:
         studio.set_document_template_assignment(studio.AssignmentWrite(document_type="todos", template_id=compact.public_id), db=db, user=world["admin"])

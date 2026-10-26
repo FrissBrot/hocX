@@ -1,4 +1,7 @@
+from collections.abc import Callable
 from datetime import datetime, timezone
+from types import SimpleNamespace
+from typing import Any
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -119,8 +122,12 @@ class ProtocolTodoService:
             block_title=row.block_title,
         )
 
-    def list_todo_blocks(self, db: Session, tenant_id: int) -> list[dict]:
+    def list_todo_blocks(self, db: Session, tenant_id: int, *, visible: Callable[[Any], bool] | None = None) -> list[dict]:
+        """``visible`` filtert nach Protokoll (Objekt mit ``id``/``status``), siehe
+        AccessService.protocol_visibility."""
         rows = self.repository.list_todo_blocks(db, tenant_id)
+        if visible is not None:
+            rows = [row for row in rows if visible(SimpleNamespace(id=row.protocol_internal_id, status=row.protocol_status))]
         return [
             {
                 "block_id": row.block_id,

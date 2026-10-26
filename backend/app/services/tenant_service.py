@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.storage import MAIN, get_object_store, object_response, validate_key
-from app.core.security import CurrentUser, require_admin, require_feature
+from app.core.permissions import P
+from app.core.security import CurrentUser, require_feature, require_permission
 from app.models import AppUser, Feature, Plan, PlanFeature, StoragePackage, Tenant, TenantDomain, TenantStoragePackage
 from app.schemas.user import (
     TenantDomainCreate,
@@ -126,8 +127,8 @@ class TenantService:
         self.storage_service = StorageService()
 
     def _manageable_tenant_ids(self, actor: CurrentUser) -> set[int]:
-        """The one tenant the actor administers (none unless they are an admin of it)."""
-        return {actor.current_tenant_id} if actor.current_role == "admin" else set()
+        """The one tenant the actor administers (none without settings.manage)."""
+        return {actor.current_tenant_id} if actor.can(P.SETTINGS_MANAGE) else set()
 
     def _read_model(self, tenant: Tenant, actor: CurrentUser) -> TenantRead:
         # actor.current_tenant_features already reflects tenant_feature for this exact tenant
@@ -259,7 +260,7 @@ class TenantService:
             return None
         if tenant_id not in self._manageable_tenant_ids(actor):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant cannot be edited by current user")
-        require_admin(actor)
+        require_permission(actor, P.SETTINGS_MANAGE)
 
         old_name = tenant.name
         if payload.name is not None:
@@ -285,7 +286,7 @@ class TenantService:
     def _require_manageable(self, tenant_id: int, actor: CurrentUser) -> None:
         if tenant_id not in self._manageable_tenant_ids(actor):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant not accessible")
-        require_admin(actor)
+        require_permission(actor, P.SETTINGS_MANAGE)
 
     def _domain_read_model(self, row: TenantDomain) -> TenantDomainRead:
         return TenantDomainRead(

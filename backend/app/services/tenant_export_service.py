@@ -42,6 +42,9 @@ from app.core.config import settings
 from app.core.secret_crypto import decrypt_secret
 from app.models import (
     AppUser,
+    TenantRole,
+    TenantRolePermission,
+    UserRole,
     ProtocolTodoAssignee,
     ProtocolTodoFile,
     AgendaItem,
@@ -129,7 +132,10 @@ from app.services.tenant_transfer_common import (
 # tenant's own users are bundled. TenantImportService still reads version 2.
 # Format 3 also gained (without a version bump - purely additive tables an older importer just
 # ignores) photo albums, table snapshots, links/feeds/shares and tenant settings.
-FORMAT_VERSION = 8  # 8: Baustein-Bibliothek (element_definition.is_library); 7: Document Studio (Brand-Profile, Assets, Vorlagen, Komponenten, Zuweisungen); 6: Dokumentenregister; 5: Dokument-Engine (Hausstile, Stil-Assets, Rezepte, document_export)
+# Bumped 8 -> 9: Rollen je Mandant (RBAC, Migration 0156): tenant_role (inkl. Berechtigungen) und an
+# jedem app_user "role_refs" (exportierte tenant_role-IDs) statt role_id als Code. Ältere Formate
+# importiert TenantImportService weiter (Code -> Standardrolle).
+FORMAT_VERSION = 9  # 9: Rollen je Mandant; 8: Baustein-Bibliothek (element_definition.is_library); 7: Document Studio (Brand-Profile, Assets, Vorlagen, Komponenten, Zuweisungen); 6: Dokumentenregister; 5: Dokument-Engine (Hausstile, Stil-Assets, Rezepte, document_export)
 ExportScope = Literal["structure", "structure_lists", "full", "full_abgabebox"]
 
 
@@ -188,12 +194,32 @@ class TenantExportService:
         # move/restore, and the members keep the login they already have (see
         # TenantImportService._import_app_users). Every user belongs to exactly one tenant, so
         # there is nobody else to bundle - references to any other tenant's user were already
-        # exported as NULL by UserIdentityCache. The role is exported as a code (LOOKUP_COLUMNS);
-        # tenant_id is dropped, the import assigns the new tenant.
+        # exported as NULL by UserIdentityCache. Roles travel as tenant_role rows (with their
+        # permissions) plus "role_refs" on each user; tenant_id is dropped, the import assigns the
+        # new tenant.
+        roles = db.scalars(select(TenantRole).where(TenantRole.tenant_id == tenant_id).order_by(TenantRole.id)).all()
+        role_permissions: dict[int, list[str]] = {}
+        for role_id, key in db.execute(
+            select(TenantRolePermission.role_id, TenantRolePermission.permission_key)
+            .where(TenantRolePermission.role_id.in_([role.id for role in roles]))
+            .order_by(TenantRolePermission.permission_key)
+        ):
+            role_permissions.setdefault(role_id, []).append(key)
+        role_rows = self._rows(roles, "tenant_role")
+        for row in role_rows:
+            row.pop("tenant_id", None)
+            row["permissions"] = role_permissions.get(row["id"], [])
+        tables["tenant_role"] = role_rows
         users = db.scalars(select(AppUser).where(AppUser.tenant_id == tenant_id).order_by(AppUser.id)).all()
+        user_role_refs: dict[int, list[int]] = {}
+        for user_id, role_id in db.execute(
+            select(UserRole.user_id, UserRole.role_id).where(UserRole.tenant_id == tenant_id).order_by(UserRole.role_id)
+        ):
+            user_role_refs.setdefault(user_id, []).append(role_id)
         user_rows = self._rows(users, "app_user")
         for row in user_rows:
             row.pop("tenant_id", None)
+            row["role_refs"] = user_role_refs.get(row["id"], [])
         tables["app_user"] = user_rows
 
         # MFA belongs to the user rather than directly to the tenant. TOTP ciphertext is tied

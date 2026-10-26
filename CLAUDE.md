@@ -91,6 +91,23 @@ Verbindliche Regeln:
 9. Bei UI-Reviews explizit auf i18n-Vollständigkeit achten (fehlende Keys, hart codierte Strings,
    fehlende Pluralregeln).
 
+## Berechtigungen / RBAC (verbindlich)
+
+hocX prüft Rechte über systemseitig definierte Berechtigungen, nicht über Rollen-Codes. Ein Konto hat
+eine oder mehrere Rollen seines Mandanten (`tenant_role`, `user_role`); vier Standardrollen
+(`admin`, `writer`, `kassier`, `reader`) legt ein Trigger für jeden Mandanten an, `admin` hat immer
+alle Berechtigungen. Details: `docs/RBAC_ARCHITECTURE_PROPOSAL.md`.
+
+- Quelle der Berechtigungen ist ausschliesslich `permissions/catalog.json` → `python3 scripts/sync-permission-catalog.py`
+  (generiert `backend/app/core/permissions_generated.py` und `frontend/lib/permissions.generated.ts`, nie von Hand
+  editieren; CI prüft mit `--check`).
+- Backend: `require_permission(user, P.X)` im Routenrumpf, `user.can(P.X)` für Verzweigungen. Frontend nur zur
+  Benutzerführung: `can(session, "x.y")` aus `frontend/lib/permissions.ts`. Nie `"admin"`/`"writer"` vergleichen.
+- Neue Berechtigung: Katalog ergänzen, Sync, Migration fügt sie in `permission` ein und den passenden
+  Standardrollen hinzu (auch in `hocx_seed_tenant_roles`), Übersetzungen `roles.permissions.<bereich>.<aktion>.label/description`
+  in allen Locales.
+- Rollen ändern/zuweisen nur über `services/role_service.py` (Schutzregeln, Savepoint-Guard).
+
 ## Zentrale Fehlererfassung (verbindlich)
 
 Unerwartete Backend-Fehler laufen in `system_error_log` zusammen und werden ausschliesslich im Platform-Admin-Panel angezeigt (`backend/app/core/error_log.py`, Tabelle `system_error_log`; für `abgabebox-backend` analog über `insert_error_log` in `abgabebox-backend/app/repository.py`). Das passiert **automatisch**, aber nur solange der folgende Kettenmechanismus nicht unterbrochen wird:

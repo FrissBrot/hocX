@@ -15,6 +15,7 @@ import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { browserApiFetch } from "@/lib/api/client";
 import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import type { SessionInfo, TodoListItem } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 type ThemePreference = "light" | "dark" | "auto";
 
@@ -60,8 +61,7 @@ type Tab = { key: TabKey; href: string | null; icon: MobileIconName; labelKey: s
 // Nur die Bereiche aus dem Mobile-Design. Alle anderen Seiten bleiben per Link erreichbar,
 // tauchen in der mobilen Navigation aber bewusst nicht auf (nicht fuers Handy optimiert).
 function buildTabs(session: SessionInfo | null): Tab[] {
-  const role = session?.current_role ?? null;
-  const isWriter = role === "admin" || role === "writer";
+  const isWriter = can(session, "meetings.edit");
   return [
     { key: "overview", href: "/", icon: "overview", labelKey: "tabs.overview" },
     ...(isWriter ? [{ key: "events" as const, href: "/events", icon: "calendar" as const, labelKey: "tabs.events" }] : []),
@@ -199,7 +199,7 @@ function MobileMorePanel({
   const tNav = useTranslations("nav");
   const pathname = usePathname();
   const name = session?.user?.display_name ?? "…";
-  const subtitle = [session?.current_tenant?.name, formatRoleLabel(session?.current_role, tNav)].filter(Boolean).join(" · ");
+  const subtitle = [session?.current_tenant?.name, formatRoleLabel(session, tNav)].filter(Boolean).join(" · ");
   const themes: [ThemePreference, string][] = [
     ["light", tNav("themeLight")],
     ["dark", tNav("themeDark")],

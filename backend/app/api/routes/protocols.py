@@ -11,7 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from app.core.cycle_utils import format_cycle_name
-from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.core.db import get_db
 from app.core.redis_client import publish_best_effort
 from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolListCycle, ProtocolRead, ProtocolTemplateSyncRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
@@ -54,6 +55,14 @@ def _get_protocol_or_404(db: Session, protocol_id: uuid.UUID, user: CurrentUser)
     protocol = public_id_service.get_by_public_id(db, Protocol, protocol_id, tenant_id=user.current_tenant_id)
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
+    return protocol
+
+
+def _get_readable_protocol_or_404(db: Session, protocol_id: uuid.UUID, user: CurrentUser) -> Protocol:
+    """Wie _get_protocol_or_404, zusätzlich mit den Ressourcenregeln für Leser (Entwürfe,
+    Teilnehmer-Zuordnung) - für alle lesenden Unterrouten eines Protokolls (RBAC-Analyse S-3)."""
+    protocol = _get_protocol_or_404(db, protocol_id, user)
+    access_service.ensure_can_read_protocol(db, user, protocol.id)
     return protocol
 
 
@@ -155,10 +164,10 @@ def list_protocols(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
-    # Unrestricted readers may only see finalized protocols; restricted readers are further
-    # scoped below via restrict_to_assigned. Kassier/writer/admin see everything, all statuses.
-    if user.current_role == "reader" and not access_service._is_restricted_reader(db, user):
+    require_permission(user, P.MEETINGS_READ)
+    # Ohne meetings.read_drafts nur abgeschlossene Protokolle; eingeschränkte Leser zusätzlich nur
+    # zugewiesene (restrict_to_assigned). Mit meetings.read_drafts alles, jeder Status.
+    if not access_service.sees_all_protocols(user) and not access_service._is_restricted_reader(db, user):
         status_filter = "abgeschlossen"
         q = None
     protocols = service.list_protocols(
@@ -180,7 +189,7 @@ class TemplatePreferencePayload(BaseModel):
 
 @router.get("/protocols/template-preference", response_model=TemplatePreferencePayload)
 def get_template_preference(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     row = db.get(UserProtocolTemplatePreference, (user.user_id, user.current_tenant_id))
     template = db.get(Template, row.template_id) if row and row.template_id else None
     return {"template_id": template.public_id if template and template.tenant_id == user.current_tenant_id else None}
@@ -189,7 +198,7 @@ def get_template_preference(db: Session = Depends(get_db), user: CurrentUser = D
 @router.put("/protocols/template-preference", status_code=status.HTTP_204_NO_CONTENT)
 def save_template_preference(payload: TemplatePreferencePayload, db: Session = Depends(get_db),
                              user: CurrentUser = Depends(get_current_user)):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     template_id = None
     if payload.template_id is not None:
         template_id = public_id_service.resolve_internal_id(db, Template, payload.template_id, tenant_id=user.current_tenant_id)
@@ -204,7 +213,7 @@ def save_template_preference(payload: TemplatePreferencePayload, db: Session = D
 @router.get("/protocols/preview", response_model=dict[str, str | None])
 def preview_protocol(template_id: uuid.UUID, protocol_date: date,
                      db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     template = public_id_service.get_by_public_id(db, Template, template_id, tenant_id=user.current_tenant_id)
     if template is None:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -217,7 +226,7 @@ def create_protocol_from_template(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     try:
         protocol_id = service.create_from_template(db, payload, tenant_id=user.current_tenant_id, created_by=user.user_id)
     except ValueError as exc:
@@ -232,13 +241,18 @@ def create_protocol_from_template(
 
 @router.get("/protocols/next-session", response_model=NextSessionRead)
 def get_next_session(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
+    if access_service._is_restricted_reader(db, user):
+        # Wie upcoming-sessions: eingeschränkte Leser nur zugewiesene Protokolle (S-3).
+        protocol_ids = access_service.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
+        sessions = service.get_upcoming_sessions_attendance(db, user.current_tenant_id, protocol_ids=protocol_ids)
+        return sessions[0] if sessions else NextSessionRead()
     return service.get_next_session_attendance(db, user.current_tenant_id)
 
 
 @router.get("/protocols/upcoming-sessions", response_model=list[NextSessionRead])
 def get_upcoming_sessions(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     protocol_ids = None
     if access_service._is_restricted_reader(db, user):
         protocol_ids = access_service.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
@@ -253,7 +267,7 @@ def excuse_participant(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     protocol = _get_protocol_or_404(db, protocol_id, user)
     participant_internal_id = public_id_service.resolve_internal_id(db, Participant, participant_id, tenant_id=user.current_tenant_id)
     if participant_internal_id is None:
@@ -273,7 +287,7 @@ def excuse_participant(
 
 @router.get("/protocols/{protocol_id}", response_model=ProtocolRead)
 def get_protocol(protocol_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     protocol = _get_protocol_or_404(db, protocol_id, user)
     access_service.ensure_can_read_protocol(db, user, protocol.id)
     return _build_protocol_reads(db, [protocol])[0]
@@ -286,7 +300,7 @@ def patch_protocol(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing = _get_protocol_or_404(db, protocol_id, user)
     protocol_id = existing.id
     # Vor dem Update festhalten: existing ist dasselbe Objekt, das update_protocol ändert.
@@ -338,7 +352,7 @@ def revert_protocol_status(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing = _get_protocol_or_404(db, protocol_id, user)
     prev = _PREVIOUS_STATUS.get(existing.status)
     if prev is None:
@@ -364,7 +378,7 @@ def sync_protocol_with_template(
 ):
     """Elemente eines offenen Protokolls aus der aktuellen Vorlage neu laden, erfasste Daten
     bleiben erhalten. Mit dry_run=true nur die Übersicht der Änderungen."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing = _get_protocol_or_404(db, protocol_id, user)
     access_service.ensure_can_read_protocol(db, user, existing.id)
     try:
@@ -390,8 +404,8 @@ def get_pending_todos(
 ):
     """Open session todos from earlier protocols of the same template. Abgeschlossene
     Protokolle zeigen den Stand beim Abschluss (Momentaufnahme)."""
-    require_reader(user)
-    protocol = _get_protocol_or_404(db, protocol_id, user)
+    require_permission(user, P.MEETINGS_READ)
+    protocol = _get_readable_protocol_or_404(db, protocol_id, user)
     snapshot = todo_service.frozen_snapshot(protocol)
     if snapshot is not None:
         return todo_service.snapshot_pending(snapshot)
@@ -410,8 +424,8 @@ def get_protocol_period(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Datum des vorherigen Protokolls und Zyklusgrenzen (Finanz- und Bussenblöcke)."""
-    require_reader(user)
-    protocol = _get_protocol_or_404(db, protocol_id, user)
+    require_permission(user, P.MEETINGS_READ)
+    protocol = _get_readable_protocol_or_404(db, protocol_id, user)
     return protocol_period_service.protocol_period(db, protocol)
 
 
@@ -435,8 +449,8 @@ def get_cycle_events(
     cycle_config_id/cycle_offset: Termine eines bestimmten Zyklus relativ zum
     Protokolldatum (Zyklus-Filter automatischer Matrix-Spalten), überschreibt scope.
     """
-    require_reader(user)
-    protocol = _get_protocol_or_404(db, protocol_id, user)
+    require_permission(user, P.MEETINGS_READ)
+    protocol = _get_readable_protocol_or_404(db, protocol_id, user)
     try:
         items, total, cycle = event_service.list_for_protocol_cycle(
             db, protocol=protocol, scope=scope, search=search, skip=skip, limit=limit,
@@ -455,7 +469,7 @@ def create_quick_todo(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Create a session todo, auto-creating the Sitzungsnotizen element+block if needed."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing = _get_protocol_or_404(db, protocol_id, user)
     # Same freeze guard as todos.py's create_todo/patch_todo/delete_todo - a frozen
     # (abgeschlossen) protocol must not gain new blocks/todos after the fact.
@@ -507,7 +521,7 @@ def preview_protocol_deletion(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Welche Bilder mit dem Protokoll verschwinden würden (Lösch-Dialog, Datenschutz-Audit PRIV-004)."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing = _get_protocol_or_404(db, protocol_id, user)
     return deletion_service.preview_read(deletion_service.protocol_preview(db, existing))
 
@@ -520,7 +534,7 @@ def delete_protocol_with_selection(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Löscht das Protokoll; gewählte Bilder werden mitgelöscht, die übrigen in die Galerie übernommen."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing = _get_protocol_or_404(db, protocol_id, user)
     return _delete_protocol_with_files(db, existing, user, set(payload.delete_file_ids))
 
@@ -532,7 +546,7 @@ def delete_protocol(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Ohne Auswahl: alle Bilder, die nur dieses Protokoll verwendet, werden mitgelöscht."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing = _get_protocol_or_404(db, protocol_id, user)
     _delete_protocol_with_files(db, existing, user, None)
     return {"message": "Protocol deleted"}
@@ -548,12 +562,12 @@ def get_element_position(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
-    # Audit S11, 2026-08-16: only require_reader (any tenant) was checked before, no
+    require_permission(user, P.MEETINGS_READ)
+    # Audit S11, 2026-08-16: only the read role (any tenant) was checked before, no
     # protocol-tenant scoping - the (user_id, protocol_id) key limits blast radius (can only
     # ever affect this user's own remembered scroll position), but a fremde protocol_id
     # should still 404 rather than silently succeed.
-    protocol = _get_protocol_or_404(db, protocol_id, user)
+    protocol = _get_readable_protocol_or_404(db, protocol_id, user)
     row = db.get(UserProtocolScroll, (user.user_id, protocol.id))
     if row is None:
         return {"element_id": None}
@@ -567,9 +581,9 @@ def save_element_position(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     # Audit S11, 2026-08-16 - see get_element_position's identical check above.
-    protocol = _get_protocol_or_404(db, protocol_id, user)
+    protocol = _get_readable_protocol_or_404(db, protocol_id, user)
     # Nur Elemente dieses Protokolls (Security-Audit SEC-015).
     element = db.scalars(
         select(ProtocolElement).where(ProtocolElement.public_id == payload.element_id, ProtocolElement.protocol_id == protocol.id)

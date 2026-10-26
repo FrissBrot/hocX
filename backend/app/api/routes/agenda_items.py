@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.redis_client import publish_best_effort
-from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models.entities import (
     AgendaItem,
     Protocol,
@@ -112,12 +113,7 @@ def _broadcast(protocol_ids: set[int], user: CurrentUser) -> None:
 def _protocol_visibility(db: Session, user: CurrentUser):
     """Welche Protokolle die Liste nennen darf - wie die Protokollliste: eingeschränkte Leser nur
     ihre zugewiesenen, übrige Leser nur abgeschlossene (Security-Review 2026-10-24)."""
-    if user.current_role != "reader":
-        return lambda protocol: True
-    if access_service.is_restricted_reader(db, user):
-        allowed = set(access_service.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id))
-        return lambda protocol: protocol.id in allowed
-    return lambda protocol: protocol.status == "abgeschlossen"
+    return access_service.protocol_visibility(db, user)
 
 
 def _build_reads(db: Session, items: list[AgendaItem], user: CurrentUser) -> list[AgendaItemRead]:
@@ -198,20 +194,20 @@ def _write_error(exc: Exception, fallback: str) -> HTTPException:
 
 @router.get("/agenda-items", response_model=list[AgendaItemRead])
 def list_agenda_items(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     items = service.list_for_tenant(db, user.current_tenant_id, template_ids=_readable_template_ids(db, user))
     return _build_reads(db, items, user)
 
 
 @router.get("/agenda-items/templates", response_model=list[AgendaTemplateOption])
 def list_agenda_templates(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     return service.templates_with_points(db, user.current_tenant_id, template_ids=_readable_template_ids(db, user))
 
 
 @router.get("/agenda-items/template-preference", response_model=AgendaTemplatePreference)
 def get_agenda_template_preference(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     row = db.get(UserAgendaTemplatePreference, (user.user_id, user.current_tenant_id))
     template = db.get(Template, row.template_id) if row and row.template_id else None
     if template is None or template.tenant_id != user.current_tenant_id or template.status != "active":
@@ -225,7 +221,7 @@ def save_agenda_template_preference(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     template_id = _get_template_or_404(db, payload.template_id, user).id if payload.template_id else None
     db.execute(
         pg_insert(UserAgendaTemplatePreference)
@@ -241,7 +237,7 @@ def create_agenda_item(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     template = _get_template_or_404(db, payload.template_id, user)
     point_id = _resolve_point(db, template, payload.template_element_id)
     try:
@@ -270,7 +266,7 @@ def update_agenda_item(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     item = _get_item_or_404(db, item_id, user, for_write=True)
     fields = set(payload.model_fields_set)
     template = _get_template_or_404(db, payload.template_id, user) if payload.template_id else None
@@ -308,7 +304,7 @@ def postpone_agenda_item(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     item = _get_item_or_404(db, item_id, user, for_write=True)
     before = _affected_protocol_ids(db, item)
     try:
@@ -328,7 +324,7 @@ def delete_agenda_item(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     item = _get_item_or_404(db, item_id, user, for_write=True)
     before = _affected_protocol_ids(db, item)
     internal_id = item.id
@@ -377,7 +373,7 @@ def list_protocol_agenda_items(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     protocol = _get_protocol_or_404(db, protocol_id, user)
     return _protocol_reads(db, protocol, service.items_for_protocol(db, protocol))
 
@@ -393,7 +389,7 @@ def create_protocol_agenda_item(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     protocol = _get_protocol_or_404(db, protocol_id, user)
     element = None
     if payload.protocol_element_id is not None:

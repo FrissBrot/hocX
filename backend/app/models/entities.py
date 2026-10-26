@@ -15,6 +15,7 @@ from sqlalchemy import (
     FetchedValue,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -255,12 +256,61 @@ class TenantStoragePackage(Base):
     added_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
 
 
-class Role(Base):
-    __tablename__ = "role"
+class Permission(Base):
+    """Systemdefinierte Permission-Keys (Quelle: permissions/catalog.json, Migration 0156_rbac).
+    Nur für die referenzielle Integrität von tenant_role_permission; Bezeichnungen sind i18n-Keys."""
 
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    code: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    __tablename__ = "permission"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+
+
+class TenantRole(Base, TimestampMixin, UpdatedAtMixin):
+    """Rolle eines Mandanten. system_key markiert die vier Standardrollen (admin, writer, kassier,
+    reader); deren name bleibt NULL, solange der Mandant sie nicht umbenennt - die Oberfläche
+    übersetzt sie dann. Die Standardrolle admin hat keine tenant_role_permission-Zeilen und bekommt
+    beim Laden immer alle Permissions (core/permissions.py)."""
+
+    __tablename__ = "tenant_role"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_tenant_role_tenant_id"),
+        CheckConstraint("system_key IN ('admin', 'writer', 'kassier', 'reader')", name="ck_tenant_role_system_key"),
+        Index("uq_tenant_role_system_key", "tenant_id", "system_key", unique=True, postgresql_where=text("system_key IS NOT NULL")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
+    system_key: Mapped[str | None] = mapped_column(Text)
+
+
+class TenantRolePermission(Base):
+    __tablename__ = "tenant_role_permission"
+
+    role_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant_role.id", ondelete="CASCADE"), primary_key=True)
+    permission_key: Mapped[str] = mapped_column(Text, ForeignKey("permission.key", ondelete="CASCADE"), primary_key=True)
+
+
+class UserRole(Base):
+    """Konto -> Rolle (mehrere je Konto). Die zusammengesetzten Fremdschlüssel über tenant_id
+    verhindern in der Datenbank, dass ein Konto eine Rolle eines anderen Mandanten bekommt."""
+
+    __tablename__ = "user_role"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id", "user_id"], ["app_user.tenant_id", "app_user.id"], ondelete="CASCADE", name="fk_user_role_user"),
+        ForeignKeyConstraint(["tenant_id", "role_id"], ["tenant_role.tenant_id", "tenant_role.id"], ondelete="RESTRICT", name="fk_user_role_role"),
+        Index("idx_user_role_role", "role_id"),
+        Index("idx_user_role_tenant", "tenant_id"),
+    )
+
+    tenant_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    role_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
 
 
 class Participant(Base, TimestampMixin, UpdatedAtMixin):
@@ -272,7 +322,7 @@ class Participant(Base, TimestampMixin, UpdatedAtMixin):
             "preferred_mfa_factor_type IN ('totp', 'webauthn')",
             name="ck_app_user_preferred_mfa_factor_type",
         ),
-        Index("idx_app_user_tenant_role", "tenant_id", "role_id"),
+        UniqueConstraint("tenant_id", "id", name="uq_app_user_tenant_id"),
         Index("idx_app_user_email", "email"),
     )
 
@@ -280,10 +330,10 @@ class Participant(Base, TimestampMixin, UpdatedAtMixin):
     public_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
     )
-    # A user belongs to exactly one tenant with exactly one role. Deleting the tenant deletes
-    # its users (every other FK into app_user is CASCADE or SET NULL, so this never blocks).
+    # A user belongs to exactly one tenant; roles come from user_role (several per account, see
+    # TenantRole). Deleting the tenant deletes its users (every other FK into app_user is CASCADE
+    # or SET NULL, so this never blocks).
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
-    role_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("role.id", ondelete="RESTRICT"), nullable=False)
     first_name: Mapped[str | None] = mapped_column(Text)
     last_name: Mapped[str | None] = mapped_column(Text)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
