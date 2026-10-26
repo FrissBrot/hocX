@@ -791,41 +791,18 @@ class ProtocolService:
         rendered = self._format_pattern(template.title_pattern, counts=counts, protocol_date=protocol_date)
         return rendered or fallback or protocol_date.strftime("%d.%m.%Y")
 
-    def _responsible_participant_name(self, participant: Participant | None, *, mode: str, fallback_id: int | None = None) -> str:
-        if participant is None:
-            return f"Teilnehmer {fallback_id}" if fallback_id else ""
-        if mode == "first_name":
-            return (participant.first_name or "").strip() or participant.display_name
-        if mode == "last_name":
-            return (participant.last_name or "").strip() or participant.display_name
-        return participant.display_name
-
-    def _template_element_responsible_label(self, db: Session, configuration_json: dict | None) -> str:
-        template_config = configuration_json or {}
-        responsibility = template_config.get("responsibility")
+    def _template_element_responsible_label(self, db: Session, configuration_json: dict | None, tenant_id: int | None) -> str:
+        """Verantwortliche aus der Vorlage; mit einer Tabellenzeile verknüpfte Zuweisungen lesen den
+        aktuellen Wert der Zeile (wie resolve_display_section_title im Protokoll)."""
+        responsibility = (configuration_json or {}).get("responsibility")
         if not isinstance(responsibility, dict):
             return ""
         assignments = responsibility.get("assignments")
         if not isinstance(assignments, list):
             return ""
-        mode = str(responsibility.get("name_display_mode") or "display_name")
-        names: list[str] = []
-        seen_ids: set[int] = set()
-        for assignment in assignments:
-            if not isinstance(assignment, dict):
-                continue
-            try:
-                participant_id = int(assignment.get("participant_id") or 0)
-            except (TypeError, ValueError):
-                participant_id = 0
-            if not participant_id or participant_id in seen_ids:
-                continue
-            seen_ids.add(participant_id)
-            participant = db.get(Participant, participant_id)
-            participant_name = self._responsible_participant_name(participant, mode=mode, fallback_id=participant_id)
-            if participant_name:
-                names.append(participant_name)
-        return ", ".join(names)
+        return resolve_responsible_label(
+            db, assignments, str(responsibility.get("name_display_mode") or "display_name"), live=True, tenant_id=tenant_id
+        )
 
     def _payload_key(
         self,
@@ -2007,7 +1984,7 @@ class ProtocolService:
         image_type_id = type_ids.get("image")
         entry_exit_type_id = type_ids.get("entry_exit")
         legacy_repeat_config = template_element.configuration_json or {}
-        responsible_label = self._template_element_responsible_label(db, legacy_repeat_config)
+        responsible_label = self._template_element_responsible_label(db, legacy_repeat_config, tenant_id)
         element_title = self._render_context_text(definition.title, {"tokens": cycle_tokens}) if cycle_tokens else definition.title
         section_title = f"{element_title} ({responsible_label})" if responsible_label else element_title
         responsibility_config = legacy_repeat_config.get("responsibility")

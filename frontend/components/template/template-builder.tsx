@@ -196,16 +196,43 @@ function participantName(participant: ParticipantSummary | undefined, mode: Resp
   return participant.display_name;
 }
 
+// Verantwortliche wie im Backend (responsible_label_service._resolve_ids_for_assignments):
+// Zuweisungen mit Tabellenzeile lesen den aktuellen Wert der Zeile, sobald deren Einträge geladen
+// sind; sonst (oder ohne Zeile) gilt die beim Zuweisen gespeicherte Person.
+function liveResponsibleParticipantIds(
+  assignments: ResponsibilityAssignment[],
+  eligibleLists: EligibleResponsibleList[],
+  listEntriesByListId: Record<string, StructuredListEntry[]>
+) {
+  const ids: string[] = [];
+  for (const assignment of assignments) {
+    let resolved = [assignment.participant_id];
+    if (assignment.list_definition_id && assignment.list_entry_id) {
+      const meta = eligibleLists.find((item) => item.definition.id === assignment.list_definition_id);
+      const entry = listEntriesByListId[assignment.list_definition_id]?.find((item) => item.id === assignment.list_entry_id);
+      if (meta && entry) {
+        resolved = listParticipantIds(entry, meta.participantColumn, meta.participantValueType);
+      }
+    }
+    for (const id of resolved) {
+      if (!ids.includes(id)) ids.push(id);
+    }
+  }
+  return ids;
+}
+
 function titleWithResponsibility(
   item: TemplateElement,
   participantsById: Map<string, ParticipantSummary>,
   fallbackMode: ResponsibleNameMode,
+  eligibleLists: EligibleResponsibleList[],
+  listEntriesByListId: Record<string, StructuredListEntry[]>,
   t: TFunc
 ) {
   const responsibility = parseResponsibilityConfig(item.configuration_json);
   const mode = responsibility.name_display_mode || fallbackMode;
-  const names = responsibility.assignments
-    .map((assignment) => participantName(participantsById.get(assignment.participant_id), mode, t))
+  const names = liveResponsibleParticipantIds(responsibility.assignments, eligibleLists, listEntriesByListId)
+    .map((participantId) => participantName(participantsById.get(participantId), mode, t))
     .filter(Boolean);
   return names.length ? `${item.title} (${names.join(", ")})` : item.title;
 }
@@ -667,6 +694,56 @@ export function TemplateEditor({
     });
   }, [responsibilityModalElement]);
 
+  // Tabellen hinter den Verantwortlichen aller Traktanden: beim Öffnen und bei jeder Rückkehr in
+  // den Tab frisch laden, damit die Namen Änderungen an der Tabelle folgen (wie im Protokoll).
+  const responsibleListIdsKey = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          elements.flatMap((item) =>
+            parseResponsibilityConfig(item.configuration_json).assignments
+              .filter((assignment) => assignment.list_definition_id && assignment.list_entry_id)
+              .map((assignment) => assignment.list_definition_id as string)
+          )
+        )
+      )
+        .sort()
+        .join(","),
+    [elements]
+  );
+
+  useEffect(() => {
+    const listIds = responsibleListIdsKey ? responsibleListIdsKey.split(",") : [];
+    if (listIds.length === 0) return;
+    let cancelled = false;
+    async function reload() {
+      const loaded = await Promise.all(
+        listIds.map((listId) =>
+          browserApiFetch<StructuredListEntry[]>(`/api/lists/${listId}/entries`)
+            .then((entries) => [listId, entries ?? []] as const)
+            .catch(() => null) // best-effort: bis zum nächsten Laden gilt die gespeicherte Person
+        )
+      );
+      if (cancelled) return;
+      setListEntriesByListId((current) => {
+        const next = { ...current };
+        for (const item of loaded) if (item) next[item[0]] = item[1];
+        return next;
+      });
+    }
+    function onVisibility() {
+      if (document.visibilityState === "visible") void reload();
+    }
+    void reload();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onVisibility);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onVisibility);
+    };
+  }, [responsibleListIdsKey]);
+
   async function ensureResponsibleListEntries(listDefinitionId: string) {
     if (listEntriesByListId[listDefinitionId]) {
       return listEntriesByListId[listDefinitionId];
@@ -713,7 +790,7 @@ export function TemplateEditor({
   }
 
   function currentResponsibilityTitle(item: TemplateElement) {
-    return titleWithResponsibility(item, participantsById, responsibilityNameMode, t);
+    return titleWithResponsibility(item, participantsById, responsibilityNameMode, eligibleResponsibleLists, listEntriesByListId, t);
   }
 
   async function applyResponsibilityNameMode(nextMode: ResponsibleNameMode) {

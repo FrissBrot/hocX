@@ -296,12 +296,15 @@ export function ProtocolEditor({
   // known content_version so the stale-hint comparison in focused-element-editor.tsx picks
   // it up on the next render, even while this protocol stays open without a reload. Never
   // touches list_snapshot data itself - that only ever changes via an explicit refresh/sync.
+  // Die Verantwortlichen in den Traktandentiteln dagegen liest das Backend live aus der
+  // Tabelle (resolve_display_section_title) - deshalb hier die Titel neu laden.
   useEffect(
     () =>
       collab.onListChanged(({ list_definition_id, content_version }) => {
         setLists((current) =>
           current.map((list) => (list.id === list_definition_id ? { ...list, content_version } : list))
         );
+        void refreshElementTitles();
       }),
     [collab.onListChanged]
   );

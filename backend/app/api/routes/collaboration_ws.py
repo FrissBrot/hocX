@@ -34,6 +34,7 @@ from app.services import list_snapshot_service, public_id_service
 from app.services.access_service import AccessService
 from app.services.collaboration_service import CollaborationService
 from app.services.protocol_service import ProtocolService
+from app.services.responsible_label_service import responsible_list_definition_ids
 
 router = APIRouter()
 access_service = AccessService()
@@ -189,7 +190,8 @@ def _field_update_requires_lock(field_key: str) -> bool:
 def _referenced_list_ids(protocol_id: int) -> set[int]:
     db = SessionLocal()
     try:
-        return list_snapshot_service.referenced_list_definition_ids(db, protocol_id)
+        # Verknüpfte Tabellenblöcke und die Tabellen hinter den Verantwortlichen der Traktanden
+        return list_snapshot_service.referenced_list_definition_ids(db, protocol_id) | responsible_list_definition_ids(db, protocol_id)
     finally:
         db.close()
 
