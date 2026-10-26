@@ -44,6 +44,14 @@
 // Darstellung je Elementart (brand.resolve_appearance): (variant, radius in mm)
 #let appearance-of(brand, kind) = brand.at("appearance", default: (:)).at(kind, default: (variant: none, radius: brand.layout.radius))
 
+// Abstand über einer Überschrift; auch für Blöcke, die mit einer Überschrift beginnen
+// (blocks.typ: zusammengehaltene Traktanden), weil Typst den Abstand des ersten Kinds nicht
+// nach aussen weitergibt.
+#let heading-above(brand, level) = {
+  let gap = brand.layout.section_gap * 1mm
+  if level == 1 { gap * 1.4 } else { gap }
+}
+
 #let heading-rule(brand, c) = {
   let t = brand.typography
   let heading-look = appearance-of(brand, "heading")
@@ -62,7 +70,7 @@
       tracking: t.letter_spacing_heading * 1pt,
       fill: if it.level == 1 { heading-color } else { secondary.darken(10%) },
     )
-    set block(above: if it.level == 1 { gap * 1.4 } else { gap }, below: 0.65em, sticky: true)
+    set block(above: heading-above(brand, it.level), below: 0.65em, sticky: true)
     if it.level > 1 or style == "plain" {
       block(body)
     } else if style == "underline" {

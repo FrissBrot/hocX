@@ -7,7 +7,7 @@
 #import "rich.typ": render-rich
 #import "table.typ": data-table
 #import "chart.typ": render-chart
-#import "../theme.typ": look, with-appearance
+#import "../theme.typ": heading-above, look, with-appearance
 
 // Hervorgehobene Fläche (Varianten «box»/«tiles»/«filled»)
 #let surface-box(ctx, radius, body, accent: false) = block(
@@ -376,15 +376,33 @@
   // Darstellung eines einzelnen Bausteins (Sitzungsvorlage), bereits aufgelöst
   let ctx = if b.at("appearance", default: none) != none { with-appearance(ctx, b.appearance) } else { ctx }
   if b.type == "protocol_element" {
-    block-title(ctx, b)
-    if not is-blank(b.at("responsible", default: none)) {
-      block(above: 0pt, below: space.s3, text(size: 0.85em, fill: ctx.c.muted)[#tr(ctx, "label.responsible"): #b.responsible])
+    let body = {
+      block-title(ctx, b)
+      if not is-blank(b.at("responsible", default: none)) {
+        block(above: 0pt, below: space.s3, text(size: 0.85em, fill: ctx.c.muted)[#tr(ctx, "label.responsible"): #b.responsible])
+      }
+      if b.empty or b.children.len() == 0 {
+        empty-note(ctx, b.type)
+      } else {
+        for child in b.children { render-block(ctx, child) }
+      }
     }
-    if b.empty or b.children.len() == 0 {
-      empty-note(ctx, b.type)
-    } else {
-      for child in b.children { render-block(ctx, child) }
-    }
+    // Ein Traktandum bleibt auf einer Seite, solange es auf eine ganze Seite passt; sonst
+    // bricht es normal um (ein unteilbarer Block, der grösser als die Seite ist, liefe über).
+    // ``size`` ist der ganze Inhaltsbereich der Seite bzw. Spalte, nicht der Restplatz.
+    // Abstände wie ohne Hülle: Am Anfang und Ende eines Blocks verfallen der Abstand der
+    // ersten Überschrift und der nachlaufende ``v`` des letzten Bausteins, deshalb trägt die
+    // Hülle den Überschriftenabstand und der ``v`` steht ausserhalb (ein expliziter ``v``
+    // übersteuert wie bisher den Abstand über der nächsten Überschrift).
+    let titled = not is-blank(b.at("title", default: none)) or b.at("title_key", default: none) != none
+    block(width: 100%, above: if titled { heading-above(ctx.brand, b.level) } else { auto }, layout(size => {
+      if measure(block(width: size.width, body)).height <= size.height {
+        block(breakable: false, width: 100%, body)
+      } else {
+        body
+      }
+    }))
+    v(space.s4, weak: true)
   } else {
     block-title(ctx, b)
     if b.empty {
