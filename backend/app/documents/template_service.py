@@ -502,6 +502,50 @@ def set_assignment(
     return assignment
 
 
+# ── Gestaltung einer Sitzungsvorlage ─────────────────────────────────────────
+#
+# Im Vorlagen-Editor gehört zu jeder Sitzungsvorlage ihre Seitengestaltung je Sitzungsdokument
+# (Protokoll, Einladung, Traktandenliste). Gespeichert wird das wie bisher als Zuweisung mit
+# ``protocol_template_id``; eine Dokumentvorlage, die nur über solche Zuweisungen einer einzigen
+# Sitzungsvorlage verwendet wird, «gehört» dieser Vorlage (Schreibende dürfen sie veröffentlichen).
+
+SESSION_DOCUMENT_TYPES: tuple[str, ...] = ("protocol", "invitation", "agenda")
+
+
+def session_owners(db: Session, template_ids: list[int]) -> dict[int, int]:
+    """Dokumentvorlage → Sitzungsvorlage, der sie allein gehört (eine Abfrage für viele)."""
+    if not template_ids:
+        return {}
+    scopes: dict[int, set[int | None]] = {}
+    for document_template_id, protocol_template_id in db.execute(
+        select(DocumentTemplateAssignment.document_template_id, DocumentTemplateAssignment.protocol_template_id).where(
+            DocumentTemplateAssignment.document_template_id.in_(template_ids)
+        )
+    ):
+        scopes.setdefault(document_template_id, set()).add(protocol_template_id)
+    return {template_id: next(iter(owners)) for template_id, owners in scopes.items() if len(owners) == 1 and None not in owners}
+
+
+def customize_session_design(
+    db: Session, tenant_id: int, protocol_template: Template, document_type: str, *, name: str, user_id: int | None
+) -> DocumentTemplate:
+    """Eigene Gestaltung eines Sitzungsdokuments für genau diese Sitzungsvorlage: Kopie der
+    bisher geltenden Gestaltung, veröffentlicht und dieser Vorlage zugewiesen. Gehört die
+    geltende Gestaltung schon allein dieser Vorlage, bleibt es bei ihr."""
+    if document_type not in SESSION_DOCUMENT_TYPES:
+        raise TemplateStateError("apiError.assignmentScope")
+    if protocol_template.tenant_id != tenant_id:
+        raise TemplateStateError("apiError.notFound")
+    resolved = resolve_template(db, tenant_id, document_type, protocol_template_id=protocol_template.id)
+    if resolved.source == "protocol_template" and session_owners(db, [resolved.template.id]).get(resolved.template.id) == protocol_template.id:
+        return resolved.template
+    copy, _revision = duplicate_template(db, tenant_id, resolved.template, name=name, user_id=user_id)
+    publish(db, copy, user_id=user_id)
+    brand = db.get(DocumentBrand, resolved.brand_id) if resolved.brand_id else None
+    set_assignment(db, tenant_id, document_type=document_type, template=copy, brand=brand, protocol_template=protocol_template, user_id=user_id)
+    return copy
+
+
 @dataclass
 class ResolvedTemplate:
     template: DocumentTemplate

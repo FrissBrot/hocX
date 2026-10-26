@@ -119,6 +119,23 @@ def test_preview_returns_limited_png_pages(renderer):
     assert all(page.startswith(b"\x89PNG") for page in output.pages)
 
 
+def test_canvas_snippets_render_one_svg_per_node(renderer):
+    """Ausschnitte der Arbeitsfläche: je Fachkomponente/Tabelle eine SVG-Seite in Bereichsbreite."""
+    from app.documents.service import CANVAS_SNIPPET_PAD_MM, _heading_counter, _without_breaks
+
+    compiled = compile_scenario(scenarios()["all_blocks"])
+    entries = list(compiled.canvas.snippets.values())[:3]
+    assert entries
+    document = {**compiled.data, "snippets": [
+        {"width": 170, "max_height": 600, "pad": CANVAS_SNIPPET_PAD_MM, "headings": _heading_counter(compiled.canvas.headings[:before]), "node": _without_breaks(node)}
+        for _, node, before in entries
+    ]}
+    output = asyncio.run(renderer.render_svg(document, compiled_assets(compiled)))
+    assert len(output.pages) == len(entries)
+    assert all(page.lstrip().startswith(b"<svg") for page in output.pages)
+    assert b'width="481.' in output.pages[0]  # 170 mm
+
+
 def test_failing_node_is_named_with_id(renderer):
     content = {
         "masters": [{"id": "default"}],

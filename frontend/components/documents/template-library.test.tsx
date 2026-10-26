@@ -107,7 +107,7 @@ describe("TemplateLibrary", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Aktionen für «Pendenzenliste»" }));
     expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Vorschau"]);
   });
-  it("offers the design examples only to admins", async () => {
+  it("offers the design examples only to admins, with the shared meeting document designs", async () => {
     api.studioApi.listExamples.mockResolvedValue([{ key: "protocol_tech", document_type: "protocol" }]);
     api.studioApi.importExample.mockResolvedValue({ id: "new-template" });
     const { unmount } = render(<TemplateLibrary capabilities={{ ...capabilities, manage_brand: false }} />);
@@ -115,7 +115,7 @@ describe("TemplateLibrary", () => {
     expect(screen.queryByRole("button", { name: "Beispiele" })).not.toBeInTheDocument();
     unmount();
 
-    render(<TemplateLibrary capabilities={capabilities} />);
+    render(<TemplateLibrary capabilities={capabilities} scope="session" />);
     fireEvent.click(await screen.findByRole("button", { name: "Beispiele" }));
     fireEvent.click(await screen.findByRole("button", { name: "Hinzufügen" }));
     await waitFor(() => expect(push).toHaveBeenCalledWith("/documents/templates/new-template"));

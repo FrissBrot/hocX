@@ -6,14 +6,18 @@ from app.schemas.template import TemplateElementBehaviorUpdate, TemplateElementC
 from app.services import public_id_service
 from app.services.block_behavior import block_defaults, BEHAVIOR_FIELDS, resolve_block_behavior, resolve_element_wide_behavior
 from app.services.block_config_ids import decode_block_config, encode_block_config
+from app.services.element_definition_service import ElementDefinitionService
+from app.documents.appearance import validate_block_appearance
 
 
 class TemplateElementService:
     def __init__(self, repository: TemplateElementRepository | None = None) -> None:
         self.repository = repository or TemplateElementRepository()
 
-    def _read_model(self, db: Session, row) -> TemplateElementRead:
+    def _read_model(self, db: Session, row, usage_count: int | None = None) -> TemplateElementRead:
         template_element, definition = row
+        if usage_count is None:
+            usage_count = ElementDefinitionService.usage_counts(db, [definition.id]).get(definition.id, 1)
         config = definition.configuration_json or {}
         # Both configs are stored with internal ints embedded (linked_list_id, ...) -
         # encode to public ids for this API response, see block_config_ids.py.
@@ -54,10 +58,14 @@ class TemplateElementService:
             created_at=template_element.created_at,
             blocks=blocks,
             behavior=resolve_element_wide_behavior(template_element_config, raw_blocks),
+            definition_is_library=definition.is_library,
+            definition_usage_count=usage_count,
         )
 
     def list_template_elements(self, db: Session, template_id: int) -> list[TemplateElementRead]:
-        return [self._read_model(db, row) for row in self.repository.list_for_template(db, template_id)]
+        rows = self.repository.list_for_template(db, template_id)
+        counts = ElementDefinitionService.usage_counts(db, [definition.id for _element, definition in rows])
+        return [self._read_model(db, row, counts.get(row[1].id, 1)) for row in rows]
 
     def get_template_element(self, db: Session, template_element_id: int):
         row = self.repository.get_with_definition(db, template_element_id)
@@ -150,14 +158,33 @@ class TemplateElementService:
                 db, values["configuration_json"], tenant_id=template.tenant_id if template else 0
             )
             self._validate_linked_lists(db, values["configuration_json"], tenant_id=template.tenant_id if template else None)
+            if "block_appearance" in values["configuration_json"]:
+                values["configuration_json"]["block_appearance"] = validate_block_appearance(values["configuration_json"]["block_appearance"])
         updated = self.repository.update(db, entity, values)
         return self.get_template_element(db, updated.id)
+
+    def detach_definition(self, db: Session, template_element_id: int):
+        """Traktandum bekommt eine eigene Kopie seines Inhalts («nur in dieser Vorlage ändern»).
+        Die Kopie gehört nicht zur Bibliothek; Block-IDs bleiben gleich, die Übersteuerungen
+        des Traktandums gelten also unverändert weiter."""
+        entity = self.repository.get(db, template_element_id)
+        if entity is None:
+            return None
+        source = db.get(ElementDefinition, entity.element_definition_id)
+        copy = ElementDefinitionService().copy_element_definition(db, source, is_library=False)
+        entity.element_definition_id = copy.id
+        db.add(entity)
+        db.commit()
+        ElementDefinitionService().delete_unused_singles(db, [source.id])
+        return self.get_template_element(db, template_element_id)
 
     def delete_template_element(self, db: Session, template_element_id: int) -> bool:
         entity = self.repository.get(db, template_element_id)
         if entity is None:
             return False
+        definition_id = entity.element_definition_id
         self.repository.delete(db, entity)
+        ElementDefinitionService().delete_unused_singles(db, [definition_id])
         return True
 
     def update_block_behavior(self, db: Session, template_element_id: int, payload: TemplateElementBehaviorUpdate):
@@ -177,6 +204,17 @@ class TemplateElementService:
             overrides = dict(config.get("block_behavior_overrides") or {})
             overrides.update(values)
             config["block_behavior_overrides"] = overrides
+            # Der Element-Schalter gilt für alle Blöcke: eigene Blockwerte für dieselben Felder
+            # entfallen, sonst bliebe ein einzeln übersteuerter Block beim alten Wert.
+            per_block = {
+                block_id: remaining
+                for block_id, entry in (config.get("block_overrides") or {}).items()
+                if (remaining := {field: value for field, value in entry.items() if field not in values})
+            }
+            if per_block:
+                config["block_overrides"] = per_block
+            else:
+                config.pop("block_overrides", None)
         else:
             if payload.block_id is None:
                 raise ValueError("block_id is required when scope is 'block'")

@@ -69,6 +69,7 @@ export function BlockEditor({
   elementTitle,
   onElementTitleChange,
   showHelp,
+  hideBehavior = false,
 }: {
   mode: "create" | "edit";
   form: BlockForm;
@@ -81,6 +82,8 @@ export function BlockEditor({
   /** Nur beim Anlegen eines neuen Elements: Elementtitel hier mitpflegen. */
   onElementTitleChange?: (title: string) => void;
   showHelp: boolean;
+  /** Im Vorlagen-Editor stehen die Schalter (Sichtbarkeit, Bearbeitbarkeit) direkt am Baustein. */
+  hideBehavior?: boolean;
 }) {
   const t = useTranslations("templates.elementEditor");
   const tTypes = useTranslations("templates");
@@ -650,6 +653,7 @@ export function BlockEditor({
             {form.description.trim() ? <p className="field-help">{form.description}</p> : null}
           </div>
         </section>
+        {hideBehavior ? null : (
         <section className="element-create-behavior">
           <h3>{t("behavior.title")}</h3>
           <div className="element-create-options">
@@ -665,6 +669,7 @@ export function BlockEditor({
           </div>
           <p className="muted">{t("behavior.templateHint")}</p>
         </section>
+        )}
         <section className="element-create-cycle-hints">
           <h3>{t("cycleTokens.title")}</h3>
           <div className="element-create-cycle-tokens">

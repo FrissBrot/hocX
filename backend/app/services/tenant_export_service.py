@@ -129,7 +129,7 @@ from app.services.tenant_transfer_common import (
 # tenant's own users are bundled. TenantImportService still reads version 2.
 # Format 3 also gained (without a version bump - purely additive tables an older importer just
 # ignores) photo albums, table snapshots, links/feeds/shares and tenant settings.
-FORMAT_VERSION = 7  # 7: Document Studio (Brand-Profile, Assets, Vorlagen, Komponenten, Zuweisungen); 6: Dokumentenregister; 5: Dokument-Engine (Hausstile, Stil-Assets, Rezepte, document_export)
+FORMAT_VERSION = 8  # 8: Baustein-Bibliothek (element_definition.is_library); 7: Document Studio (Brand-Profile, Assets, Vorlagen, Komponenten, Zuweisungen); 6: Dokumentenregister; 5: Dokument-Engine (Hausstile, Stil-Assets, Rezepte, document_export)
 ExportScope = Literal["structure", "structure_lists", "full", "full_abgabebox"]
 
 

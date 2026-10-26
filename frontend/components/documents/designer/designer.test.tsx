@@ -9,6 +9,7 @@ import { TemplateDesigner } from "./designer";
 
 const api = vi.hoisted(() => ({
   previewDocument: vi.fn(),
+  previewCanvas: vi.fn(),
   studioApi: {
     getTemplate: vi.fn(),
     catalog: vi.fn(),
@@ -80,7 +81,8 @@ function canvasNode(name: string) {
 describe("TemplateDesigner", () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    [toast, confirm, push, api.previewDocument, ...Object.values(api.studioApi)].forEach((fn) => fn.mockReset());
+    [toast, confirm, push, api.previewDocument, api.previewCanvas, ...Object.values(api.studioApi)].forEach((fn) => fn.mockReset());
+    api.previewCanvas.mockReturnValue(new Promise(() => undefined));
     try {
       window.localStorage.clear();
     } catch {
@@ -376,5 +378,38 @@ describe("TemplateDesigner", () => {
     expect(document.activeElement).toBe(items[1]);
     fireEvent.keyDown(items[1], { key: "Home" });
     expect(document.activeElement).toBe(items[0]);
+  });
+
+  it("shows resolved values, hides elements missing from the PDF and numbers headings like the preview", async () => {
+    const resolved = {
+      colors: { primary: "#174B7A", secondary: "#4A5D4C", heading: "#174B7A", text: "#111111", muted: "#666666", background: "#FFFFFF", border: "#DDDDDD", watermark: "#EEEEEE" },
+      custom_colors: {},
+      fonts: { body: ["Liberation Sans", "Noto Sans"], heading: ["Liberation Sans"] },
+      typography: { base_size: 10, size_title: 24, size_subtitle: 14, size_h1: 16, size_h2: 13, size_h3: 11, size_small: 8, weight_body: 400, weight_heading: 700, line_height: 1.4, letter_spacing_heading: 0, heading_transform: "none" },
+      layout: { paragraph_gap: 2, section_gap: 6, heading_style: "plain", table_style: "lines", border_width: 0.5, radius: 1 },
+      appearance: {},
+    };
+    api.previewCanvas.mockResolvedValue({
+      hints: {
+        hidden: { "intro@": "condition" },
+        texts: { "inner-1@": { text: "Eins aus den Daten" } },
+        rows: {},
+        repeats: {},
+        headings: [{ level: 1, text: "Abschnitt", outlined: true }],
+        heading_index: { "sec@": 0 },
+      },
+      brand: resolved,
+      numbering: true,
+      snippets: {},
+      snippet_pad: 2,
+      diagnostics: [],
+    });
+    await renderDesigner();
+    await advance(600);
+    const canvas = within(screen.getByRole("main", { name: "Arbeitsfläche" }));
+    await waitFor(() => expect(canvas.getByText("Eins aus den Daten")).toBeInTheDocument());
+    expect(api.previewCanvas.mock.calls[0][0]).toMatchObject({ data_mode: "sample", document_type: "todos" });
+    expect(canvasNode("Einleitung")).toHaveClass("studio-node-hidden");
+    expect(canvasNode("Abschnitt").querySelector(".studio-heading")).toHaveTextContent("1 Abschnitt");
   });
 });

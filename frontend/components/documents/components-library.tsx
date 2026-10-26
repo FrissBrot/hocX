@@ -28,7 +28,7 @@ export function ComponentsLibrary({ capabilities }: { capabilities: Capabilities
     <div className="grid">
       <div className="page-header">
         <div>
-          <h1 className="page-title">{t("components.title")}</h1>
+          <h2 className="page-title">{t("components.title")}</h2>
           <p className="muted">{t("components.description")}</p>
         </div>
       </div>

@@ -55,7 +55,8 @@ _MAX_DIAGNOSE_COMPILES = 80
 # ... und höchstens so viele Compile-Timeouts an Gesamtzeit.
 _DIAGNOSE_TIME_FACTOR = 2
 
-OutputFormat = Literal["pdf", "png"]
+# svg: Ausschnitte der Arbeitsfläche im Designer (service.canvas), eine Datei je Seite
+OutputFormat = Literal["pdf", "png", "svg"]
 
 
 @dataclass
@@ -527,28 +528,35 @@ class DocumentRenderer:
 
     async def render(
         self, document: dict, assets: RenderAssets | None = None, *, fmt: OutputFormat = "pdf", max_pages: int | None = None, ppi: float | None = None,
-        priority: int | None = None, tenant_id: int | None = None,
+        priority: int | None = None, tenant_id: int | None = None, locate: bool = True,
     ) -> RenderOutput:
         """``priority``: Vorrang beim Compile-Platz (Default: PDF = Export, PNG = Vorschau);
-        ``tenant_id``: Fairness zwischen Mandanten beim Warten auf einen Platz."""
+        ``tenant_id``: Fairness zwischen Mandanten beim Warten auf einen Platz; ``locate``: bei
+        einem Fehler den verursachenden Knoten suchen (viele weitere Compiles)."""
         assets = assets or RenderAssets()
         if priority is None:
             priority = PRIORITY_EXPORT if fmt == "pdf" else PRIORITY_PREVIEW
         slot = {"priority": priority, "tenant_id": tenant_id}
         result = await self._run(_dump(document), assets, fmt, ppi if fmt == "png" else None, max_pages if fmt == "png" else None, **slot)
         if not result.ok:
-            located = await self._locate_failing_node(document, assets, slot)
+            located = await self._locate_failing_node(document, assets, slot) if locate else None
             detail = _format_diagnostic(result)
             if located is not None:
                 raise DocumentRenderError("error.block", block_label=located[1], node_id=located[0], detail=detail)
             raise DocumentRenderError("error.render", detail=detail)
         if fmt == "pdf":
             return RenderOutput(pdf=result.output if isinstance(result.output, bytes) else None, warnings=result.warnings)
+        if fmt == "svg":
+            pages = result.output if isinstance(result.output, list) else [result.output] if result.output else []
+            return RenderOutput(pages=list(pages), warnings=result.warnings, page_count=len(pages))
         pages = result.output if isinstance(result.output, list) else [result.output] if result.output else []
         total = result.page_count if result.page_count is not None else len(pages)
         if max_pages is not None:
             pages = pages[:max_pages]
         return RenderOutput(pages=list(pages), warnings=result.warnings, page_count=total)
+
+    async def render_svg(self, document: dict, assets: RenderAssets | None = None, *, tenant_id: int | None = None) -> RenderOutput:
+        return await self.render(document, assets, fmt="svg", priority=PRIORITY_PREVIEW, tenant_id=tenant_id, locate=False)
 
     async def render_pdf(self, document: dict, assets: RenderAssets | None = None, *, tenant_id: int | None = None) -> RenderOutput:
         return await self.render(document, assets, fmt="pdf", tenant_id=tenant_id)

@@ -102,6 +102,8 @@ class ElementDefinitionBase(BaseModel):
     title: str
     description: str | None = None
     is_active: bool = True
+    # In der Baustein-Bibliothek (wiederverwendbar) oder nur Teil einer Vorlage
+    is_library: bool = True
     blocks: list[ElementDefinitionBlockCreate] = Field(default_factory=list)
 
 
@@ -113,6 +115,7 @@ class ElementDefinitionUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
     is_active: bool | None = None
+    is_library: bool | None = None
     blocks: list[ElementDefinitionBlockCreate] | None = None
 
 
@@ -126,6 +129,9 @@ class ElementDefinitionRead(BaseModel):
     title: str
     description: str | None = None
     is_active: bool
+    is_library: bool = True
+    # In wie vielen Vorlagen-Traktanden die Definition steckt (Rückfrage «überall oder nur hier»)
+    usage_count: int = 0
     blocks: list[ElementDefinitionBlockRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
@@ -184,6 +190,9 @@ class TemplateElementRead(BaseModel):
     created_at: datetime
     blocks: list[TemplateElementBlockRead] = Field(default_factory=list)
     behavior: dict[str, bool] = Field(default_factory=dict)
+    # Inhalt (Elementdefinition) ist ein Bibliotheks-Baustein bzw. in mehreren Traktanden verwendet
+    definition_is_library: bool = True
+    definition_usage_count: int = 1
 
 
 class TemplateElementBehaviorUpdate(BaseModel):

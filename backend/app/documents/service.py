@@ -48,7 +48,7 @@ from app.documents.layout import LayoutJson, TemplateContent, content_json, pars
 from app.documents.model import DocumentMeta, RenderInfo
 from app.documents.providers.common import PROTOCOL_STATUS_CODES
 from app.documents.locking import lock_row
-from app.documents.renderer import RenderAssets, RenderOutput, get_renderer
+from app.documents.renderer import DocumentRenderError, RenderAssets, RenderOutput, get_renderer
 from app.documents.strings import normalize_language, strings_for
 from app.documents.xmp import DocumentXmp, add_document_xmp
 from app.services import verify_domain_service
@@ -61,6 +61,7 @@ from app.models import (
     Protocol,
     StorageObject,
     StoredFile,
+    Template,
     Tenant,
 )
 from app.models.document_entities import DocumentFile
@@ -102,9 +103,15 @@ class DocumentRequest(BaseModel):
     options: ExportOptions = Field(default_factory=ExportOptions)
     language: str | None = Field(None, max_length=10)
     data_mode: Literal["data", "sample"] = "data"
+    # Vorlagen-Editor: Traktanden aus dieser Sitzungsvorlage, Inhalte aus ``protocol_id`` bzw.
+    # der letzten Sitzung der Vorlage (nur Vorschau)
+    protocol_template_id: uuid.UUID | None = None
 
     def is_studio_preview(self) -> bool:
-        return self.content is not None or self.revision_id is not None or self.brand_tokens is not None or self.data_mode == "sample"
+        return (
+            self.content is not None or self.revision_id is not None or self.brand_tokens is not None
+            or self.data_mode == "sample" or self.protocol_template_id is not None
+        )
 
 
 @dataclass
@@ -216,6 +223,23 @@ def canonical_protocol_hash(ctx: BuildContext, protocol: Protocol, strings: dict
     return content_hash(meta, blocks, probe.assets.files)
 
 
+def _latest_readable_protocol(db: Session, user: CurrentUser | None, template: Template) -> Protocol | None:
+    """Letzte Sitzung einer Sitzungsvorlage, die der Benutzer lesen darf (Vorschau mit echten Daten)."""
+    from app.services.access_service import AccessService
+
+    access = AccessService()
+    candidates = db.scalars(
+        select(Protocol)
+        .where(Protocol.template_id == template.id, Protocol.tenant_id == template.tenant_id)
+        .order_by(Protocol.protocol_date.desc(), Protocol.id.desc())
+        .limit(20)
+    )
+    for protocol in candidates:
+        if user is None or access.can_read_protocol(db, user, protocol.id):
+            return protocol
+    return None
+
+
 def _resolve_explicit_template(db: Session, tenant_id: int, request: DocumentRequest) -> DocumentTemplate | None:
     if request.template_id is None:
         return None
@@ -245,11 +269,26 @@ def prepare(
         if protocol is None:
             raise DocumentNotFoundError("Protocol")
 
+    session_template = None
+    if request.protocol_template_id is not None:
+        session_template = db.scalar(select(Template).where(Template.public_id == request.protocol_template_id, Template.tenant_id == tenant_id))
+        if session_template is None:
+            raise DocumentNotFoundError("Template")
+        if user is not None:
+            from app.services.access_service import AccessService
+
+            if not AccessService().can_read_template(db, user, session_template.id):
+                raise DocumentNotFoundError("Template")
+        if protocol is None and request.data_mode == "data":
+            protocol = _latest_readable_protocol(db, user, session_template)
+        elif protocol is not None and protocol.template_id != session_template.id:
+            raise DocumentNotFoundError("Protocol")
+
     explicit = _resolve_explicit_template(db, tenant_id, request)
     document_type = request.document_type or (explicit.document_type if explicit is not None else None) or ("protocol" if protocol else "custom")
     doc_type = get_type(document_type)
     sample = request.data_mode == "sample"
-    if doc_type.needs_protocol and protocol is None and not sample:
+    if doc_type.needs_protocol and protocol is None and not sample and session_template is None:
         raise ValueError("protocol_required")
 
     # Fremde oder unbekannte Brand vor allem anderen ablehnen (Security-Audit SEC-018): die
@@ -272,7 +311,7 @@ def prepare(
         template_source = "revision"
     if request.content is None and revision is None:
         resolved = template_service.resolve_template(
-            db, tenant_id, document_type, explicit=explicit, protocol_template_id=protocol.template_id if protocol is not None else None
+            db, tenant_id, document_type, explicit=explicit, protocol_template_id=session_template.id if session_template is not None else protocol.template_id if protocol is not None else None
         )
         template, revision, template_source = resolved.template, resolved.revision, resolved.source
     if request.content is not None:
@@ -283,7 +322,7 @@ def prepare(
 
     language = normalize_language(content.settings.language or request.language or (tenant.document_language if tenant else None))
     strings = strings_for(language)
-    ctx = BuildContext(db=db, tenant_id=tenant_id, language=language, user=user, today=today or date.today(), protocol=protocol, public_base_url=_public_base_url())
+    ctx = BuildContext(db=db, tenant_id=tenant_id, language=language, user=user, today=today or date.today(), protocol=protocol, public_base_url=_public_base_url(), session_template=session_template)
     if protocol is not None:
         ctx.ensure_can_read_protocol(protocol.id)
 
@@ -436,6 +475,114 @@ async def preview(db: Session, user: CurrentUser | None, tenant_id: int, request
         template_id=template_public_id,
         template_source=prepared.template_source,
         design_hash=prepared.design_hash,
+    )
+
+
+# Ausschnitte der Arbeitsfläche: höchstens so viele je Anfrage, höchstens so hoch (mm)
+CANVAS_MAX_SNIPPETS = 24
+CANVAS_SNIPPET_MAX_HEIGHT_MM = 600
+# Rand oben/unten je Ausschnitt (Ober-/Unterlängen); die Arbeitsfläche zieht ihn wieder ab
+CANVAS_SNIPPET_PAD_MM = 2
+
+
+@dataclass
+class CanvasResult:
+    hints: dict[str, Any]
+    brand: dict[str, Any]
+    numbering: bool
+    snippets: dict[str, bytes]
+    diagnostics: list[Diagnostic]
+    snippet_pad: float = CANVAS_SNIPPET_PAD_MM
+
+
+def _area_width(content: TemplateContent, area: str) -> float:
+    """Breite des Inhaltsbereichs in mm (Ausschnitte werden in dieser Breite gesetzt)."""
+    width, _ = content.page.dimensions_mm()
+    if area == "title_page":
+        master = content.master(content.title_page.master) if content.title_page.master else None
+    else:
+        master = content.master(content.settings.default_master)
+    if master is not None and master.orientation is not None:
+        short, long = sorted(content.page.dimensions_mm())
+        width = long if master.orientation == "landscape" else short
+    margins = master.margins if master is not None and master.margins is not None else content.page.margins
+    usable = width - margins.left - margins.right
+    if area == "body" and content.page.columns > 1:
+        usable = (usable - content.page.column_gap * (content.page.columns - 1)) / content.page.columns
+    return max(usable, 10)
+
+
+def _heading_counter(headings: list[dict[str, Any]]) -> list[int]:
+    """Stand des Überschriftenzählers (wie Typsts counter(heading)) nach diesen Überschriften,
+    damit die Nummern im Ausschnitt an der richtigen Stelle weiterzählen."""
+    counts: list[int] = []
+    for heading in headings:
+        level = max(1, int(heading.get("level", 1)))
+        while len(counts) < level:
+            counts.append(0)
+        counts = counts[:level]
+        counts[level - 1] += 1
+    return counts
+
+
+def _without_breaks(node: Any) -> Any:
+    """Seitenumbrüche entfernen: ein Ausschnitt ist genau eine Seite."""
+    if isinstance(node, dict):
+        return {key: _without_breaks(value) for key, value in node.items() if key != "break"} if node.get("t") != "pagebreak" else {"t": "stack", "id": node.get("id"), "s": {}, "children": [], "gap": 0}
+    if isinstance(node, list):
+        return [_without_breaks(item) for item in node]
+    return node
+
+
+async def canvas(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest) -> CanvasResult:
+    """Werte für die Arbeitsfläche des Designers: dieselbe Kompilierung wie die Vorschau, aber statt
+    ganzer Seiten die aufgelösten Texte/Sichtbarkeiten (CanvasHints) und Fachkomponenten bzw.
+    Tabellen als einzeln gerenderte SVG-Ausschnitte."""
+
+    def prepare_and_release() -> PreparedDocument:
+        # Wie preview(): nichts verändern, Verbindung vor dem Compile wieder freigeben.
+        savepoint = db.begin_nested()
+        try:
+            prepared = prepare(db, user, tenant_id, request, preview=True)
+        finally:
+            if savepoint.is_active:
+                savepoint.rollback()
+        db.commit()
+        return prepared
+
+    prepared = await run_in_threadpool(prepare_and_release)
+    compiled = prepared.compiled
+    hints = compiled.canvas
+    entries = list(hints.snippets.items())[:CANVAS_MAX_SNIPPETS]
+    snippets: dict[str, bytes] = {}
+    if entries:
+        document = {
+            **compiled.data,
+            "snippets": [
+                {
+                    "width": _area_width(prepared.content, area),
+                    "max_height": CANVAS_SNIPPET_MAX_HEIGHT_MM,
+                    "pad": CANVAS_SNIPPET_PAD_MM,
+                    "headings": _heading_counter(hints.headings[:before]),
+                    "node": _without_breaks(node),
+                }
+                for _, (area, node, before) in entries
+            ],
+        }
+        try:
+            output = await get_renderer().render_svg(document, RenderAssets(files=compiled.files, fonts=compiled.fonts), tenant_id=tenant_id)
+        except DocumentRenderError:
+            # Erwartet bei fehlerhaften Vorlagen: die Vorschau meldet den Fehler am Element, die
+            # Arbeitsfläche zeigt dann ihre Platzhalter.
+            output = None
+        if output is not None and len(output.pages) == len(entries):
+            snippets = {key: page for (key, _), page in zip(entries, output.pages)}
+    return CanvasResult(
+        hints=hints.as_dict(),
+        brand=compiled.data["brand"],
+        numbering=compiled.data["settings"]["numbering"],
+        snippets=snippets,
+        diagnostics=prepared.diagnostics,
     )
 
 

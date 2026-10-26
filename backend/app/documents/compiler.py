@@ -99,6 +99,33 @@ class CompileInput:
 
 
 @dataclass
+class CanvasHints:
+    """Was die Arbeitsfläche des Designers braucht, um der Typst-Ausgabe nahezukommen: aufgelöste
+    Texte, ausgeblendete Knoten, Anzahl Wiederholungen, Gliederung und die kompilierten
+    Fachkomponenten/Tabellen (als Ausschnitt gerendert, siehe service.canvas).
+
+    Schlüssel sind ``<node_id>@<instanz>``; die Instanz ist der Pfad der Wiederholungs-Indizes
+    (``""`` ausserhalb von Wiederholungen, ``"0"``, ``"1.2"`` …)."""
+
+    hidden: dict[str, str] = field(default_factory=dict)
+    texts: dict[str, Any] = field(default_factory=dict)
+    rows: dict[str, Any] = field(default_factory=dict)
+    repeats: dict[str, int] = field(default_factory=dict)
+    # Alle Überschriften in Dokumentreihenfolge (Nummerierung, Inhaltsverzeichnis) und je
+    # Überschriften-Knoten (Abschnitt, Text mit Rolle «heading») sein Index darin
+    headings: list[dict[str, Any]] = field(default_factory=list)
+    heading_index: dict[str, int] = field(default_factory=dict)
+    # Schlüssel → (Bereich, kompilierter Knoten, Anzahl Überschriften davor)
+    snippets: dict[str, tuple[str, dict[str, Any], int]] = field(default_factory=dict)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "hidden": self.hidden, "texts": self.texts, "rows": self.rows, "repeats": self.repeats,
+            "headings": self.headings, "heading_index": self.heading_index,
+        }
+
+
+@dataclass
 class CompiledDocument:
     data: dict[str, Any]
     files: dict[str, bytes]
@@ -107,6 +134,7 @@ class CompiledDocument:
     diagnostics: list[Diagnostic]
     template_asset_checksums: dict[str, str]
     used_bindings: set[str]
+    canvas: CanvasHints = field(default_factory=CanvasHints)
 
 
 # ── Hilfen ───────────────────────────────────────────────────────────────────
@@ -149,6 +177,9 @@ class LayoutCompiler:
         self._component_stack: list[str] = []
         self._repeat_total = 0
         self._has_verify_note = False
+        self.canvas = CanvasHints()
+        # Wiederholungs-Indizes des aktuell kompilierten Knotens (Schlüssel der CanvasHints)
+        self._instance: list[int] = []
         env = BindingEnvironment(document=data.document_env, brand=data.brand.env, organization=data.brand.organization)
         self.resolver = BindingResolver(self.ctx, env, strings=data.strings, mode=data.mode)
 
@@ -200,14 +231,23 @@ class LayoutCompiler:
         except UnknownBindingError:
             return None
 
-    def spans(self, content: TextContent | None, scope: dict[str, Any] | None, node_id: str | None, scope_def: BindingDef | None = None) -> list[dict[str, Any]]:
+    def _key(self, node_id: str) -> str:
+        return f"{node_id}@{'.'.join(str(index) for index in self._instance)}"
+
+    def spans(
+        self, content: TextContent | None, scope: dict[str, Any] | None, node_id: str | None, scope_def: BindingDef | None = None, *, record: str | None = None,
+    ) -> list[dict[str, Any]]:
         if content is None:
             return []
-        inlines = content.translations.get(self.input.meta.language) or content.default
+        translated = content.translations.get(self.input.meta.language)
+        inlines = translated or content.default
         result: list[dict[str, Any]] = []
+        # Text je Inline (Arbeitsfläche): nur für den Standardtext, den der Designer bearbeitet
+        texts: list[str | None] = []
         for inline in inlines:
             if inline.t == "br":
                 result.append({"br": True})
+                texts.append(None)
                 continue
             if inline.t == "text":
                 text = inline.v
@@ -223,8 +263,14 @@ class LayoutCompiler:
                     self._problem(node_id, "bindingTypeMismatch", inline.path, severity="warning")
                     raw = None
                 text = format_value(raw, value_type or "text", inline.format, self.strings) or inline.fallback
+            texts.append(text or "")
             if text:
                 result.append({"v": text, "b": inline.b, "i": inline.i} if (inline.b or inline.i) else {"v": text})
+        if record is not None:
+            if translated:
+                self.canvas.texts[record] = {"text": "".join(span.get("v", "\n") for span in result)}
+            else:
+                self.canvas.texts[record] = {"inlines": texts}
         return result
 
     def _inline_type(self, path: str, scope_def: BindingDef | None) -> str | None:
@@ -311,16 +357,25 @@ class LayoutCompiler:
             items = self.value(node.repeat.source, scope, node.id) if definition is not None else None
             items = items if isinstance(items, list) else []
             if not items:
+                self.canvas.repeats[self._key(node.id)] = 0
                 if node.repeat.empty_text:
                     return [{"t": "text", "id": node.id, "role": "paragraph", "spans": [{"v": node.repeat.empty_text, "i": True}], "s": {}}]
+                self.canvas.hidden[self._key(node.id)] = "empty"
                 return []
             result = []
-            for item in items[: node.repeat.limit]:
+            count = 0
+            for index, item in enumerate(items[: node.repeat.limit]):
                 self._repeat_total += 1
                 if self._repeat_total > MAX_REPEAT_TOTAL:
                     self._problem(node.id, "repeatLimit", str(MAX_REPEAT_TOTAL))
                     break
-                result.extend(self._single(node, item if isinstance(item, dict) else {"value": item}, area, definition))
+                self._instance.append(index)
+                try:
+                    result.extend(self._single(node, item if isinstance(item, dict) else {"value": item}, area, definition))
+                finally:
+                    self._instance.pop()
+                count += 1
+            self.canvas.repeats[self._key(node.id)] = count
             return result
         return self._single(node, scope, area, scope_def)
 
@@ -357,6 +412,7 @@ class LayoutCompiler:
 
     def _single(self, node: NodeBase, scope: dict[str, Any] | None, area: str, scope_def: BindingDef | None) -> list[dict[str, Any]]:
         if not self._visible(node, scope):
+            self.canvas.hidden[self._key(node.id)] = "condition"
             return []
         handler = getattr(self, f"_node_{node.type}", None)
         if handler is None:  # pragma: no cover - jeder Knotentyp hat einen Handler (Test)
@@ -370,6 +426,7 @@ class LayoutCompiler:
             self._problem(node.id, "invalidNode", str(exc), exc=exc)
             return [self._error_node(node, "invalidNode")]
         if compiled is None:
+            self.canvas.hidden[self._key(node.id)] = "empty"
             return []
         return compiled if isinstance(compiled, list) else [compiled]
 
@@ -412,15 +469,27 @@ class LayoutCompiler:
 
     def _node_section(self, node, scope, area, scope_def):
         out = self._children(node, "section", scope, area, scope_def, gap=node.gap, level=node.level, outlined=node.outlined)
-        out["title"] = self.spans(node.title, scope, node.id, scope_def)
+        out["title"] = self.spans(node.title, scope, node.id, scope_def, record=self._key(node.id))
         if not out["children"] and not out["title"]:
             return None
+        if out["title"]:
+            self._heading(area, node.level, "".join(span.get("v", " ") for span in out["title"]), node.outlined, self._key(node.id))
         return out
 
+    def _heading(self, area: str, level: int, text: str, outlined: bool = True, key: str | None = None) -> None:
+        # Kopf/Fuss erscheinen auf jeder Seite; ihre Überschriften zählen hier nicht mit
+        if area == "master":
+            return
+        if key is not None:
+            self.canvas.heading_index[key] = len(self.canvas.headings)
+        self.canvas.headings.append({"level": level, "text": text, "outlined": outlined})
+
     def _node_text(self, node, scope, area, scope_def):
-        spans = self.spans(node.content, scope, node.id, scope_def)
+        spans = self.spans(node.content, scope, node.id, scope_def, record=self._key(node.id))
         if not spans:
             return None
+        if node.role == "heading":
+            self._heading(area, node.level, "".join(span.get("v", " ") for span in spans), True, self._key(node.id))
         out = self._base(node, "text")
         out.update(role=node.role, level=node.level, spans=spans)
         return out
@@ -432,6 +501,7 @@ class LayoutCompiler:
             return None
         out = self._base(node, "rich")
         out["content"] = [item.model_dump(mode="json") for item in content]
+        self._snippet(node.id, area, out)
         return out
 
     def _image_path(self, node: Any, scope) -> str | None:
@@ -524,6 +594,7 @@ class LayoutCompiler:
         rows = [[self.strings.get(labels[key], key), str(values[key])] for key in node.fields if values.get(key)]
         if not rows:
             return None
+        self.canvas.rows[self._key(node.id)] = rows
         out = self._base(node, "metadata")
         out.update(rows=rows, layout=node.layout)
         return out
@@ -593,6 +664,7 @@ class LayoutCompiler:
         entries = [entry for entry in entries if entry]
         if not entries:
             return None
+        self.canvas.rows[self._key(node.id)] = ["".join(span.get("v", " ") for span in entry) for entry in entries]
         out = self._base(node, "list")
         out.update(marker=node.marker, items=entries)
         return out
@@ -626,7 +698,13 @@ class LayoutCompiler:
         )
         if not rows and not node.empty_text:
             return None
+        self._snippet(node.id, area, out)
         return out
+
+    def _snippet(self, node_id: str, area: str, out: dict[str, Any], headings_before: int | None = None) -> None:
+        if area != "master":
+            before = len(self.canvas.headings) if headings_before is None else headings_before
+            self.canvas.snippets.setdefault(self._key(node_id), (area, out, before))
 
     def _node_data_block(self, node, scope, area, scope_def):
         entry = CATALOG.get(node.component)
@@ -642,8 +720,11 @@ class LayoutCompiler:
         allowed = set(entry.params.model_fields)
         params = {**node.params, **{key: value for key, value in self.input.params.items() if key in allowed}}
         spec = BlockSpec(type=node.component, title=title, hide_if_empty=node.hide_if_empty, level=node.level, params=params)
+        # Vorlagen-Editor: die Traktanden kommen aus der Sitzungsvorlage, auch im Beispielmodus
+        from_session_template = self.ctx.session_template is not None and node.component == "protocol_element"
         if (
             self.input.mode != "sample"
+            and not from_session_template
             and node.component in NEEDS_PROTOCOL
             and self.ctx.protocol is None
             and not params.get("protocol_id")
@@ -652,7 +733,7 @@ class LayoutCompiler:
             self._problem(node.id, "needsProtocol", node.component, severity="warning")
             return None
         try:
-            blocks = run_component(self.ctx, spec, sample=self.input.mode == "sample", strings=self.strings)
+            blocks = run_component(self.ctx, spec, sample=self.input.mode == "sample" and not from_session_template, strings=self.strings)
         except BlockSpecError as exc:
             self._problem(node.id, "invalidParams", exc.detail, exc=exc)
             return self._error_node(node, "invalidParams")
@@ -664,16 +745,45 @@ class LayoutCompiler:
             return self._error_node(node, "referenceNotFound")
         if not blocks:
             return None
-        return self._data_output(node, blocks)
+        return self._data_output(node, blocks, area)
 
-    def _data_output(self, node, blocks) -> dict[str, Any]:
+    def _data_output(self, node, blocks, area: str = "body") -> dict[str, Any]:
         self.blocks.extend(blocks)
         out = self._base(node, "data")
-        out["blocks"] = [block.model_dump(mode="json") for block in blocks]
+        out["blocks"] = [self._resolve_block_appearance(block.model_dump(mode="json")) for block in blocks]
         if node.appearance:
             # Vollständig aufgelöst, damit Typst nichts zusammenführen muss
             out["appearance"] = resolve_appearance(self.input.brand.tokens, node.appearance)
+        before = len(self.canvas.headings)
+        for block in out["blocks"]:
+            self._block_headings(area, block)
+        self._snippet(node.id, area, out, before)
         return out
+
+    def _resolve_block_appearance(self, block: dict[str, Any]) -> dict[str, Any]:
+        """Darstellung einzelner Blöcke (Bausteine einer Sitzungsvorlage) wie die eines
+        data-Knotens vollständig auflösen; Typst übernimmt sie unverändert."""
+        from app.documents.appearance import ElementAppearance
+
+        overrides = block.get("appearance")
+        if overrides:
+            try:
+                parsed = {kind: ElementAppearance.model_validate(item) for kind, item in overrides.items()}
+            except ValueError:
+                parsed = {}
+            block["appearance"] = resolve_appearance(self.input.brand.tokens, parsed) if parsed else None
+        for child in block.get("children") or []:
+            self._resolve_block_appearance(child)
+        return block
+
+    def _block_headings(self, area: str, block: dict[str, Any]) -> None:
+        """Überschriften der Fachkomponenten (blocks.typ: block-title) für Nummerierung und
+        Inhaltsverzeichnis der Arbeitsfläche."""
+        title = block.get("title") or (self.strings.get(block["title_key"]) if block.get("title_key") else None)
+        if title and block.get("type") != "heading":
+            self._heading(area, block.get("level", 1), title)
+        for child in block.get("children") or []:
+            self._block_headings(area, child)
 
     def _node_component_ref(self, node, scope, area, scope_def):
         from app.models import DocumentComponent
@@ -727,7 +837,9 @@ class LayoutCompiler:
         masters = {master.id: self.master(master) for master in content.masters}
 
         title_page = None
-        if content.title_page.enabled and self._title_page_visible():
+        if content.title_page.enabled and not self._title_page_visible():
+            self.canvas.hidden["title_page@"] = "condition"
+        elif content.title_page.enabled:
             title_page = {
                 "master": content.title_page.master,
                 "background": self.color(content.title_page.background, None) if content.title_page.background else None,
@@ -785,6 +897,7 @@ class LayoutCompiler:
             diagnostics=self.diagnostics,
             template_asset_checksums=self.template_asset_checksums,
             used_bindings=set(self.resolver.used),
+            canvas=self.canvas,
         )
 
     def _title_page_visible(self) -> bool:

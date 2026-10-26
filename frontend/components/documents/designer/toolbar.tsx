@@ -34,7 +34,8 @@ type Props = {
   canPublish: boolean;
   onPublish: () => void;
   onDiscard: (() => void) | null;
-  onBack: () => void;
+  // Fehlt im Vorlagen-Editor (eingebetteter Designer)
+  onBack?: () => void;
   errorCount: number;
 };
 
@@ -44,9 +45,11 @@ export function Toolbar(props: Props) {
   return (
     <header className="studio-toolbar" aria-label={t("toolbar.title")}>
       <div className="studio-toolbar-group">
-        <button type="button" className="button-ghost" onClick={props.onBack}>
-          {t("toolbar.back")}
-        </button>
+        {props.onBack ? (
+          <button type="button" className="button-ghost" onClick={props.onBack}>
+            {t("toolbar.back")}
+          </button>
+        ) : null}
         <input className="studio-toolbar-name" value={props.name} maxLength={160} aria-label={t("toolbar.name")} disabled={!editable} onChange={(event) => props.onRename(event.target.value)} />
         <span className="studio-save-state" aria-live="polite">
           {t(`toolbar.saveState.${props.saveState}`)}

@@ -104,7 +104,7 @@
     "createTitle": "Create template",
     "createdToast": "Template \"{name}\" created",
     "currentResponsibleLabel": "Current responsible",
-    "cycleHelp": "Cycles can be managed under Structure → Cycles.",
+    "cycleHelp": "Manage cycles under Templates → Cycles.",
     "cycleLabel": "Cycle",
     "delete": "Delete",
     "deleteConfirm": "Delete this template permanently? This cannot be undone.",
@@ -152,8 +152,8 @@
     "noResponsibleYet": "No responsible persons set yet.",
     "orderSaveFailed": "Template order could not be saved",
     "orderSavedToast": "Template order saved",
-    "pageIntro": "Templates are lean containers: they pick finished elements and only determine their order.",
-    "pageTitle": "Templates",
+    "pageIntro": "A template defines the agenda items, building blocks and design of a meeting series – for the protocol editor, the PDF and the invitation.",
+    "pageTitle": "Meeting templates",
     "participantAssignmentsSaveFailed": "Participant assignments could not be saved",
     "participantFallback": "Participant",
     "patternTokensHelp": "Tokens: '{n}' = all protocols, '{n_year}' = this year, '{n_month}' = this month, '{n_cycle}' = within the own cycle. Date tokens: '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
@@ -251,7 +251,7 @@
     "createTitle": "Create template",
     "createdToast": "Template \"{name}\" created",
     "currentResponsibleLabel": "Current responsible",
-    "cycleHelp": "Cycles can be managed under Structure → Cycles.",
+    "cycleHelp": "Manage cycles under Templates → Cycles.",
     "cycleLabel": "Cycle",
     "delete": "Delete",
     "deleteConfirm": "Delete this template permanently? This cannot be undone.",
@@ -391,15 +391,15 @@
     "stepperDecrease": "Decrease {label}",
     "stepperIncrease": "Increase {label}",
     "page": {
-      "title": "Elements",
-      "intro1": "Elements bundle blocks such as text, todos, tables or event lists. Templates are built from elements.",
-      "intro2": "Fixed content works best as a block that is not editable in the protocol.",
-      "newElement": "New element",
-      "search": "Search elements",
-      "colElement": "Element",
-      "colBlocks": "Blocks",
+      "title": "Building blocks",
+      "intro1": "Saved agenda items with their building blocks (text, tasks, tables, event lists …). Insert them with one click in the editor of a meeting template.",
+      "intro2": "In the editor, changes to a saved building block ask whether they should apply everywhere or only in one template.",
+      "newElement": "New building block",
+      "search": "Search building blocks",
+      "colElement": "Building block",
+      "colBlocks": "Content",
       "colActions": "Actions",
-      "blockCount": "{count, plural, one {# block} other {# blocks}}",
+      "blockCount": "{count, plural, one {# part} other {# parts}}",
       "duplicate": "Duplicate",
       "duplicating": "Duplicating…"
     },
@@ -918,6 +918,136 @@
       "blockOrderSaved": "Order was saved",
       "blockSaveFailed": "Block could not be saved",
       "listEntriesFailed": "List entries could not be loaded"
+    }
+  },
+  "studio": {
+    "intro": "Agenda items and building blocks of this meeting template. What you set here applies to the protocol editor, the PDF and the invitation.",
+    "responsibleMapping": "Assign responsible persons",
+    "settings": "Settings",
+    "participants": "Participants",
+    "view": {
+      "editor": "Protocol editor",
+      "pdf": "PDF",
+      "invitation": "Invitation"
+    },
+    "cancel": "Cancel",
+    "save": "Save",
+    "remove": "Remove",
+    "badge": {
+      "notInEditor": "Not in editor",
+      "notInPdf": "Not in PDF",
+      "readOnly": "Read only",
+      "notInInvitation": "Not in invitation",
+      "shared": "Used in {count} agenda items"
+    },
+    "catalog": {
+      "title": "Add building blocks",
+      "newTitle": "New",
+      "newElement": "New agenda item",
+      "addBlockTo": "Add building block to “{title}”",
+      "selectHint": "Select an agenda item to add a building block to it.",
+      "libraryTitle": "My building blocks",
+      "libraryHelp": "Saved agenda items with their building blocks. One click adds them at the end.",
+      "search": "Search building blocks",
+      "libraryEmpty": "No saved building blocks yet.",
+      "addFromLibrary": "Insert “{title}” as agenda item"
+    },
+    "center": {
+      "title": "Agenda items",
+      "hint": "This is how the agenda items appear in the protocol editor. Click to select, double-click to edit a building block.",
+      "emptyTitle": "No agenda items yet",
+      "emptyDescription": "Create a new agenda item on the left or insert a saved building block.",
+      "addBlock": "+ Building block"
+    },
+    "props": {
+      "title": "Properties",
+      "empty": "Select an agenda item or building block to configure it here.",
+      "elementTitle": "Agenda item",
+      "name": "Title",
+      "inInvitation": "Show in invitation and agenda",
+      "inInvitationHelp": "Keeps internal items (e.g. treasury) out of the invitation.",
+      "responsible": "Responsible",
+      "addBlock": "Add building block",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "reuse": "Reuse",
+      "libraryInfo": "Saved building block, used in {count, plural, one {one agenda item} other {# agenda items}}. Content changes ask whether they apply everywhere.",
+      "detach": "Change only in this template",
+      "singleInfo": "Belongs to this template only.",
+      "saveToLibrary": "Save as building block",
+      "removeElement": "Remove agenda item",
+      "backTo": "← {title}",
+      "editContent": "Edit content",
+      "visibility": "Where and how",
+      "appearance": "Appearance in the PDF",
+      "variant": "Style",
+      "corners": "Corners",
+      "inherit": "As in appearance",
+      "appearanceHelp": "Applies only to this building block in this template, also to existing protocols right away.",
+      "removeBlock": "Remove building block"
+    },
+    "switch": {
+      "is_visible": {
+        "label": "Show in protocol editor",
+        "help": "Off: hidden while taking minutes (e.g. automatically filled data)."
+      },
+      "export_visible": {
+        "label": "Show in PDF",
+        "help": "Off: visible in the editor only (e.g. internal notes)."
+      },
+      "is_editable": {
+        "label": "Editable while taking minutes",
+        "help": "Off: content comes fixed from the template."
+      },
+      "copy_from_last_protocol": {
+        "label": "Carry over from last protocol",
+        "help": "New protocols start with the content of the last meeting."
+      }
+    },
+    "dialog": {
+      "editTitle": "Edit building block “{name}”",
+      "newElementTitle": "New agenda item",
+      "newBlockTitle": "New building block",
+      "newElementDescription": "Title of the agenda item and its first building block. Add more building blocks afterwards.",
+      "blockDescription": "Building block in the agenda item “{title}”.",
+      "createElement": "Create agenda item",
+      "createBlock": "Add building block"
+    },
+    "scope": {
+      "title": "Where should the change apply?",
+      "message": "“{title}” is used in {count} agenda items. Update everywhere or only in this template?",
+      "all": "Update everywhere",
+      "here": "Only in this template"
+    },
+    "toast": {
+      "saveFailed": "Saving failed.",
+      "elementAdded": "“{title}” added.",
+      "blockAdded": "Building block added.",
+      "blockSaved": "Building block saved.",
+      "blockRemoved": "Building block removed.",
+      "orderSaved": "Order saved.",
+      "elementRemoved": "Agenda item removed.",
+      "renamed": "Title saved.",
+      "savedToLibrary": "“{title}” is now in “My building blocks”.",
+      "detached": "The agenda item now has its own content."
+    },
+    "confirm": {
+      "removeBlock": "Remove the building block from the agenda item? Existing protocols stay unchanged.",
+      "removeElementTitle": "Remove agenda item",
+      "removeElement": "Remove “{title}” from the template? Existing protocols stay unchanged."
+    },
+    "design": {
+      "title": {
+        "protocol": "Protocol design",
+        "invitation": "Invitation design"
+      },
+      "sharedInfo": "This template uses the shared design “{name}”. The preview shows your agenda items with the content of the last meeting.",
+      "noneInfo": "There is no design for this document yet.",
+      "customize": "Design for this template",
+      "customized": "Own design created.",
+      "customizeFailed": "The design could not be created.",
+      "loadFailed": "The design could not be loaded.",
+      "copyName": "{name} – {type}"
     }
   }
 }

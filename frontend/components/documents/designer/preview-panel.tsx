@@ -21,9 +21,7 @@ type Props = { brandId: string | null; onDiagnostics: (items: Diagnostic[]) => v
 
 export function PreviewPanel({ brandId, onDiagnostics }: Props) {
   const t = useTranslations("documentStudio");
-  const { content, documentType, catalog, select } = useDesigner();
-  const [dataMode, setDataMode] = useState<"sample" | "data">("sample");
-  const [protocolId, setProtocolId] = useState<string | null>(null);
+  const { content, documentType, catalog, select, dataMode, setDataMode, protocolId, setProtocolId, sessionTemplateId } = useDesigner();
   const [protocols, setProtocols] = useState<SourceOption[]>([]);
   const [pages, setPages] = useState<string[]>([]);
   const [pageCount, setPageCount] = useState(0);
@@ -33,13 +31,14 @@ export function PreviewPanel({ brandId, onDiagnostics }: Props) {
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
   const cache = useRef(new Map<string, { pages: string[]; count: number; diagnostics: Diagnostic[] }>());
   const hiddenPages = Math.max(0, pageCount - pages.length);
-  const needsProtocol = catalog.document_types.find((item) => item.key === documentType)?.needs_protocol ?? false;
+  // Im Vorlagen-Editor wählt das Backend ohne Auswahl die letzte Sitzung der Vorlage
+  const needsProtocol = !sessionTemplateId && (catalog.document_types.find((item) => item.key === documentType)?.needs_protocol ?? false);
 
   useEffect(() => {
     if (dataMode === "data" && protocols.length === 0) void loadSource("protocols").then(setProtocols);
   }, [dataMode, protocols.length]);
 
-  const key = JSON.stringify([content, dataMode, protocolId, brandId, documentType]);
+  const key = JSON.stringify([content, dataMode, protocolId, brandId, documentType, sessionTemplateId]);
   useEffect(() => {
     if (dataMode === "data" && needsProtocol && !protocolId) {
       setPages([]);
@@ -57,7 +56,7 @@ export function PreviewPanel({ brandId, onDiagnostics }: Props) {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setState("loading");
-      previewDocument({ document_type: documentType, content, data_mode: dataMode, protocol_id: dataMode === "data" ? protocolId : null, brand_id: brandId }, 12, controller.signal)
+      previewDocument({ document_type: documentType, content, data_mode: dataMode, protocol_id: dataMode === "data" ? protocolId : null, brand_id: brandId, protocol_template_id: sessionTemplateId }, 12, controller.signal)
         .then((result) => {
           cache.current.set(key, { pages: result.pages, count: result.page_count, diagnostics: result.diagnostics });
           if (cache.current.size > 30) cache.current.delete(cache.current.keys().next().value as string);
@@ -92,7 +91,7 @@ export function PreviewPanel({ brandId, onDiagnostics }: Props) {
             <option value="data">{t("preview.realData")}</option>
           </select>
           {dataMode === "data" && (
-            <SearchableSelect options={protocols} getId={(item) => item.id} getLabel={(item) => (item.detail ? `${item.label} · ${item.detail}` : item.label)} value={protocolId} onChange={(item) => setProtocolId(item?.id ?? null)} placeholder={t("preview.chooseProtocol")} nullLabel={t("preview.noProtocol")} />
+            <SearchableSelect options={protocols} getId={(item) => item.id} getLabel={(item) => (item.detail ? `${item.label} · ${item.detail}` : item.label)} value={protocolId} onChange={(item) => setProtocolId(item?.id ?? null)} placeholder={t("preview.chooseProtocol")} nullLabel={sessionTemplateId ? t("preview.latestSession") : t("preview.noProtocol")} />
           )}
           <span className="studio-zoom">
             <button type="button" className="button-icon-soft button-icon-soft-sm" aria-label={t("toolbar.zoomOut")} onClick={() => setZoom((value) => Math.max(0.5, value - 0.25))}>

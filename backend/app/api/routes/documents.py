@@ -261,6 +261,54 @@ async def preview_document(
     )
 
 
+class CanvasRead(BaseModel):
+    """Werte für die Arbeitsfläche des Designers (service.canvas)."""
+
+    hints: dict[str, Any]
+    brand: dict[str, Any]
+    numbering: bool
+    # Schlüssel <node_id>@<instanz> → SVG als data-URL
+    snippets: dict[str, str]
+    # Rand oben/unten je Ausschnitt in mm (die Arbeitsfläche zieht ihn ab)
+    snippet_pad: float
+    diagnostics: list[DiagnosticRead]
+
+
+@router.post("/documents/preview/canvas", response_model=CanvasRead)
+async def preview_canvas(
+    body: DocumentRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Nur für den Designer: aufgelöste Texte und Ausschnitte statt ganzer Seiten."""
+    permissions.require_view(user)
+    if body.content is None:
+        raise http_error(user, ValueError("previewOnly"))
+    check_preview_rights(user, body)
+    work = asyncio.ensure_future(document_service.canvas(db, user, user.current_tenant_id, body))  # loop-ok: canvas lagert DB-Arbeit selbst aus
+    watcher = asyncio.ensure_future(_until_disconnected(request))
+    try:
+        await asyncio.wait({work, watcher}, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        watcher.cancel()
+    if not work.done():
+        work.cancel()
+        return Response(status_code=499)
+    try:
+        result = work.result()
+    except (DocumentPermissionError, DocumentNotFoundError, ValueError) as exc:
+        raise http_error(user, exc) from exc
+    return CanvasRead(
+        hints=result.hints,
+        brand=result.brand,
+        numbering=result.numbering,
+        snippets={key: "data:image/svg+xml;base64," + base64.b64encode(svg).decode("ascii") for key, svg in result.snippets.items()},
+        snippet_pad=result.snippet_pad,
+        diagnostics=[DiagnosticRead(**item.as_dict()) for item in result.diagnostics],
+    )
+
+
 class FormatExportRequest(DocumentRequest):
     format: Literal["csv", "xlsx", "ics", "markdown"] = "csv"
 

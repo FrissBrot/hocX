@@ -337,6 +337,7 @@
     "body": "Content",
     "componentMissing": "Component not found",
     "dataComponent": "Data from hocX",
+    "disabledNode": "disabled",
     "dragHandle": "Move “{name}”",
     "dropBody": "Drag elements from the library here or click them.",
     "dropFooter": "Footer empty",
@@ -348,6 +349,7 @@
     "emptyText": "Enter text",
     "footer": "Footer (every page)",
     "header": "Header (every page)",
+    "hiddenNode": "hidden",
     "noImage": "No image selected",
     "pageBreak": "Page break",
     "reusable": "Component: {name}",
@@ -1078,7 +1080,11 @@
     "title": "Templates",
     "unarchive": "Restore",
     "unarchived": "Template restored.",
-    "unpublished": "Not published"
+    "unpublished": "Not published",
+    "sessionTitle": "Shared design of meeting documents",
+    "sessionDescription": "Applies to all meeting templates without their own design. Create an own design in the template editor under “PDF”.",
+    "documentsTitle": "Documents",
+    "documentsDescription": "Further documents such as to-do lists, event lists, member lists and letters."
   },
   "libraryGroup": {
     "data_events": "Events",
@@ -1225,7 +1231,8 @@
     "showElement": "Show element",
     "title": "Preview",
     "draftHint": "The preview shows the draft. PDF exports use the published version until the draft is published.",
-    "unpublishedHint": "This template has not been published yet and is not used for PDF exports."
+    "unpublishedHint": "This template has not been published yet and is not used for PDF exports.",
+    "latestSession": "Last meeting of this template"
   },
   "props": {
     "addColumn": "+ Column",

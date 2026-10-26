@@ -3,6 +3,9 @@
 // Template Library: alle Vorlagen des Mandanten und von hocX als Galerie. Suchen, nach
 // Kategorie filtern, Vorschau öffnen, erstellen, duplizieren, umbenennen, bearbeiten,
 // veröffentlichen, archivieren, als Standard festlegen, Revisionen vergleichen/wiederherstellen.
+// ``scope``: «documents» = weitere Dokumente (Todo-Liste, Termine, Briefe …), «session» =
+// Standardgestaltung der Sitzungsdokumente (Protokoll, Einladung, Traktandenliste); Gestaltungen,
+// die allein einer Sitzungsvorlage gehören, erscheinen nur in deren Editor.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -25,9 +28,9 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { apiErrorMessage, Capabilities, DocumentTemplateInfo, DocumentTypeInfo, studioApi } from "@/lib/documents/api";
 
-type Props = { capabilities: Capabilities };
+type Props = { capabilities: Capabilities; scope?: "documents" | "session" };
 
-export function TemplateLibrary({ capabilities }: Props) {
+export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
   const t = useTranslations("documentStudio");
   const router = useRouter();
   const toast = useToast();
@@ -67,9 +70,13 @@ export function TemplateLibrary({ capabilities }: Props) {
     });
   }, []);
 
+  const sessionTypes = useMemo(() => new Set(types.filter((type) => type.needs_protocol).map((type) => type.key)), [types]);
+  const scopeTypes = useMemo(() => types.filter((type) => (scope === "session") === sessionTypes.has(type.key)), [types, scope, sessionTypes]);
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return (templates ?? []).filter((item) => {
+      if ((scope === "session") !== sessionTypes.has(item.document_type)) return false;
+      if (item.session_template_id) return false;
       if (category !== "all" && item.category !== category) return false;
       if (!needle) return true;
       const haystack = `${templateDisplayName(t, item)} ${templateDescription(t, item)} ${t(`docType.${item.document_type}`)}`.toLowerCase();
@@ -77,13 +84,14 @@ export function TemplateLibrary({ capabilities }: Props) {
     });
     // t/toast sind während der Lebensdauer der Komponente unveränderlich
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templates, category, query]);
+  }, [templates, category, query, scope, sessionTypes]);
 
   const byType = useMemo(() => {
     const groups = new Map<string, DocumentTemplateInfo[]>();
     for (const item of filtered) groups.set(item.document_type, [...(groups.get(item.document_type) ?? []), item]);
-    return types.filter((type) => groups.has(type.key)).map((type) => ({ type, items: groups.get(type.key) ?? [] }));
-  }, [filtered, types]);
+    return scopeTypes.filter((type) => groups.has(type.key)).map((type) => ({ type, items: groups.get(type.key) ?? [] }));
+  }, [filtered, scopeTypes]);
+  const scopeCategories = useMemo(() => categories.filter((key) => scopeTypes.some((type) => type.category === key)), [categories, scopeTypes]);
 
   async function run(action: () => Promise<unknown>, success: string) {
     try {
@@ -141,17 +149,24 @@ export function TemplateLibrary({ capabilities }: Props) {
   return (
     <div className="grid">
       <div className="page-header">
-        <div>
-          <h1 className="page-title">{t("library.title")}</h1>
-          <p className="muted">{t("library.description")}</p>
-        </div>
+        {scope === "session" ? (
+          <div>
+            <h2 className="page-title">{t("library.sessionTitle")}</h2>
+            <p className="muted">{t("library.sessionDescription")}</p>
+          </div>
+        ) : (
+          <div>
+            <h1 className="page-title">{t("library.documentsTitle")}</h1>
+            <p className="muted">{t("library.documentsDescription")}</p>
+          </div>
+        )}
         <div className="studio-header-actions">
           {capabilities.publish_templates && (
             <button type="button" className="button-secondary" onClick={() => setAssignmentsOpen(true)}>
               {t("assignments.open")}
             </button>
           )}
-          {capabilities.manage_brand && capabilities.edit_templates && (
+          {scope === "session" && capabilities.manage_brand && capabilities.edit_templates && (
             <button type="button" className="button-secondary" onClick={() => setExamplesOpen(true)}>
               {t("examples.open")}
             </button>
@@ -167,7 +182,7 @@ export function TemplateLibrary({ capabilities }: Props) {
       <div className="list-filter-row">
         <FilterTabs
           variant="chips"
-          options={[{ value: "all", label: t("category.all") }, ...categories.map((key) => ({ value: key, label: t(`category.${key}`) }))]}
+          options={[{ value: "all", label: t("category.all") }, ...scopeCategories.map((key) => ({ value: key, label: t(`category.${key}`) }))]}
           value={category}
           onChange={setCategory}
         />
@@ -218,13 +233,13 @@ export function TemplateLibrary({ capabilities }: Props) {
         <TemplateCreateModal
           open={createOpen}
           onClose={() => setCreateOpen(false)}
-          types={types}
+          types={scopeTypes}
           templates={templates ?? []}
           onCreated={(created) => router.push(`/documents/templates/${created.id}`)}
         />
       )}
       {examplesOpen && <ExamplesModal onClose={() => setExamplesOpen(false)} onImported={(created) => router.push(`/documents/templates/${created.id}`)} />}
-      {assignmentsOpen && <AssignmentsModal open={assignmentsOpen} onClose={() => { setAssignmentsOpen(false); load(); }} types={types} templates={templates ?? []} />}
+      {assignmentsOpen && <AssignmentsModal open={assignmentsOpen} onClose={() => { setAssignmentsOpen(false); load(); }} types={scopeTypes} templates={templates ?? []} />}
       {preview && <TemplatePreviewModal template={preview} onClose={() => setPreview(null)} />}
       {revisionsOf && <RevisionsModal template={revisionsOf} onClose={() => setRevisionsOf(null)} onRestored={() => router.push(`/documents/templates/${revisionsOf.id}`)} />}
       <Modal className="studio-modal" open={!!renaming} onClose={() => setRenaming(null)} title={t("library.renameTitle")}>

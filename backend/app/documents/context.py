@@ -176,6 +176,9 @@ class BuildContext:
     protocol: Any | None = None
     public_base_url: str | None = None
     assets: AssetCollector = field(default_factory=AssetCollector)
+    # Vorschau im Vorlagen-Editor: Traktanden und Bausteine kommen aus der Konfiguration dieser
+    # Sitzungsvorlage (Reihenfolge, Sichtbarkeit, Darstellung), Inhalte aus ``protocol``.
+    session_template: Any | None = None
 
     # Rechte ------------------------------------------------------------------
 

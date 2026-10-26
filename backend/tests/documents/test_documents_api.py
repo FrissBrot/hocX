@@ -12,7 +12,7 @@ from fastapi import HTTPException
 
 from app.api.routes import documents as routes
 from app.documents.service import DocumentRequest
-from app.models import DocumentTemplate
+from app.models import DocumentTemplate, Protocol, Template
 from tests.factories import (
     make_app_user,
     make_current_user,
@@ -103,6 +103,31 @@ def test_preview_of_unsaved_content_needs_edit_rights(db, setup):
     with pytest.raises(HTTPException) as excinfo:
         asyncio.run(routes.preview_document(DocumentRequest(document_type="custom", brand_tokens={}), _ConnectedRequest(), max_pages=1, db=db, user=setup["writer"]))
     assert excinfo.value.status_code == 403
+
+
+def test_canvas_returns_hints_brand_and_snippets_with_studio_rights(db, setup):
+    """Arbeitsfläche des Designers: nur mit ungespeichertem Inhalt und Bearbeitungsrecht; liefert
+    aufgelöste Texte, Brand-Werte und Fachkomponenten als SVG-Ausschnitt."""
+    content = {"masters": [{"id": "default"}], "body": [
+        {"type": "text", "id": "t", "content": {"default": [{"t": "bind", "path": "document.number"}]}},
+        {"type": "data_block", "id": "todos", "component": "todo_table"},
+    ]}
+    body = DocumentRequest(document_type="protocol", content=content, data_mode="sample")
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(routes.preview_canvas(body, _ConnectedRequest(), db=db, user=setup["reader"]))
+    assert excinfo.value.status_code == 403
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(routes.preview_canvas(DocumentRequest(protocol_id=setup["protocol"].public_id), _ConnectedRequest(), db=db, user=setup["writer"]))
+    assert excinfo.value.status_code == 422
+    result = asyncio.run(routes.preview_canvas(body, _ConnectedRequest(), db=db, user=setup["writer"]))
+    assert result.hints["texts"]["t@"] == {"inlines": ["2026-03"]}
+    assert result.brand["fonts"]["body"] and result.brand["typography"]["base_size"] > 0
+    assert result.snippets["todos@"].startswith("data:image/svg+xml;base64,") and result.snippet_pad > 0
+    # Fremder Mandant: die Protokoll-ID wird mandantengebunden aufgelöst
+    foreign = DocumentRequest(document_type="protocol", content=content, protocol_id=setup["protocol"].public_id)
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(routes.preview_canvas(foreign, _ConnectedRequest(), db=db, user=setup["other_admin"]))
+    assert excinfo.value.status_code == 404
 
 
 def test_extra_formats(db, setup):
@@ -205,3 +230,19 @@ class _ConnectedRequest:
 
     async def is_disconnected(self) -> bool:
         return False
+
+
+def test_preview_with_session_template_uses_its_agenda_and_latest_session(db, setup):
+    """Vorlagen-Editor: ohne Protokoll-ID die letzte Sitzung der Vorlage; eine fremde
+    Sitzungsvorlage ist nicht auffindbar."""
+    template_id = db.get(Protocol, setup["protocol"].id).template_id
+    template_public_id = db.get(Template, template_id).public_id
+    body = DocumentRequest(document_type="protocol", protocol_template_id=template_public_id)
+    result = asyncio.run(routes.preview_document(body, _ConnectedRequest(), max_pages=1, db=db, user=setup["reader"]))
+    assert result.pages
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(routes.preview_document(body, _ConnectedRequest(), max_pages=1, db=db, user=setup["other_admin"]))
+    assert excinfo.value.status_code == 404
+    with pytest.raises(HTTPException) as excinfo:
+        render_now(body, db=db, user=setup["admin"])
+    assert excinfo.value.status_code == 422
