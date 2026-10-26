@@ -702,6 +702,14 @@
    },
    {
     "access": "reader",
+    "group": "protocol",
+    "item_fields": [],
+    "needs_protocol": true,
+    "path": "protocol.new_todos_count",
+    "type": "number"
+   },
+   {
+    "access": "reader",
     "group": "todos",
     "item_fields": [
      {

@@ -101,3 +101,28 @@ def test_catalog_payload_lists_every_binding():
     payload = bindings.catalog_payload()
     assert {item["path"] for item in payload} == set(bindings.REGISTRY)
     assert next(item for item in payload if item["path"] == "finance.accounts")["access"] == "finance"
+
+
+def test_new_todos_count_counts_every_todo_of_this_protocol(monkeypatch):
+    """Neue Pendenzen: alle in diesem Protokoll erfassten, auch erledigte; offene Liste unverändert."""
+    from app.documents import repository
+    from app.documents.providers import people as people_provider
+    from app.documents.providers import protocol as protocol_provider
+    from app.documents.providers import todos as todo_provider
+
+    def todo(protocol_id: int, status: str) -> SimpleNamespace:
+        return SimpleNamespace(protocol_id=protocol_id, todo_status_code=status, resolved_due_date=None, assigned_participant_name=None)
+
+    rows = [todo(7, "open"), todo(7, "done"), todo(7, "in_progress"), todo(8, "open")]
+    monkeypatch.setattr(todo_provider, "list_tenant_todo_rows", lambda ctx: rows)
+    monkeypatch.setattr(todo_provider, "task_text", lambda row: "")
+    monkeypatch.setattr(todo_provider, "protocol_label", lambda row: "")
+    monkeypatch.setattr(protocol_provider, "element_blocks", lambda *args, **kwargs: [])
+    monkeypatch.setattr(protocol_provider, "protocol_status_code", lambda protocol: "held")
+    monkeypatch.setattr(people_provider, "protocol_attendance_configs", lambda ctx, protocol: [])
+    monkeypatch.setattr(repository, "list_protocol_elements", lambda db, protocol_id: [])
+    protocol = SimpleNamespace(id=7, template_id=1, event_id=None, title="P", protocol_number="2026-03", protocol_date=date(2026, 3, 12))
+    ctx = BuildContext(db=SimpleNamespace(get=lambda model, ident: None), tenant_id=1, language="de", protocol=protocol)
+    resolver = BindingResolver(ctx, BindingEnvironment(), strings=STRINGS)
+    assert resolver.resolve("protocol.new_todos_count") == 3
+    assert len(resolver.resolve("protocol.open_todos")) == 2

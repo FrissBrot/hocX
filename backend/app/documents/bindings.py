@@ -139,6 +139,8 @@ _DEFINITIONS: list[BindingDef] = [
         "protocol.open_todos", "list", "protocol", needs_protocol=True, item_fields=_TODO_FIELDS,
         sample=[{"task": ("key", f"sample.task{index}"), "assignee": ("key", f"sample.person{index}"), "due": date(2026, 4, index * 3), "status": ("key", "todoStatus.open"), "protocol": "2026-03"} for index in range(1, 4)],
     ),
+    # In diesem Protokoll erfasste Pendenzen, unabhängig vom heutigen Status
+    BindingDef("protocol.new_todos_count", "number", "protocol", needs_protocol=True, sample=4),
     # Aufgaben des Mandanten (sichtbare: eingeschränkte Leser nur ihre Protokolle)
     BindingDef(
         "todos.open", "list", "todos", item_fields=_TODO_FIELDS,
@@ -396,8 +398,8 @@ def _load_protocol(resolver: BindingResolver) -> dict[str, Any]:
         if next_session:
             break
 
-    rows = [row for row in todo_provider.list_tenant_todo_rows(ctx) if getattr(row, "protocol_id", None) == protocol.id and todo_provider.is_open(row)]
-    open_todos = [_todo_item(strings, row) for row in todo_provider.sort_rows(rows)]
+    protocol_rows = [row for row in todo_provider.list_tenant_todo_rows(ctx) if getattr(row, "protocol_id", None) == protocol.id]
+    open_todos = [_todo_item(strings, row) for row in todo_provider.sort_rows([row for row in protocol_rows if todo_provider.is_open(row)])]
 
     return {
         "title": protocol.title or protocol.protocol_number,
@@ -417,6 +419,7 @@ def _load_protocol(resolver: BindingResolver) -> dict[str, Any]:
         "invitation_elements": invitation_items,
         "participants": participants,
         "open_todos": open_todos,
+        "new_todos_count": len(protocol_rows),
     }
 
 

@@ -113,6 +113,7 @@
     "protocol_elements": "Points",
     "protocol_event_title": "Événement",
     "protocol_excused_count": "Nombre d’excusés",
+    "protocol_new_todos_count": "Nombre de nouvelles tâches",
     "protocol_next_session": "Prochaine séance",
     "protocol_number": "Numéro",
     "protocol_open_todos": "Tâches ouvertes",
