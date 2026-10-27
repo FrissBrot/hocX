@@ -41,3 +41,25 @@ for (const theme of ["light", "dark"]) {
     await page.screenshot({ path: `test-results/pickers-color-${theme}-1440.png` });
   });
 }
+
+// Abgabebox: Sprachwahl mit derselben Liste (abgabebox-frontend/components/ui/select.tsx)
+for (const colorScheme of ["light", "dark"] as const) {
+  test(`Abgabebox: Sprachwahl im hocX-Look (${colorScheme})`, async ({ browser }) => {
+    const context = await browser.newContext({ baseURL: process.env.E2E_ABGABEBOX_BASE_URL, storageState: undefined, colorScheme, viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await page.goto("/verify");
+      const select = page.getByRole("combobox").first();
+      await expect(select).toBeVisible({ timeout: 60_000 });
+      await select.click();
+      const list = page.getByRole("listbox");
+      await expect(list).toBeVisible();
+      await expect(list.getByRole("option")).not.toHaveCount(0);
+      await page.screenshot({ path: `test-results/pickers-abgabebox-${colorScheme}-1440.png` });
+      await page.keyboard.press("Escape");
+      await expect(list).toBeHidden();
+    } finally {
+      await context.close();
+    }
+  });
+}

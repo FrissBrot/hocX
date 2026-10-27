@@ -50,7 +50,7 @@ Bewusst feste Ausnahmen (mit `design-ok`-Kommentar in derselben Zeile): QR-Code-
 - `window.confirm/alert/prompt`. Stattdessen `useConfirm()` / `useToast()`
 - Eigene Overlays/Modals mit `position: fixed`. Stattdessen `Modal`
 - Handgebaute Dropdowns mit Inline-Styles (Abschnitt 5)
-- Rohes `<select>`, `<input type="date|time|color">` in `frontend/`: `Select`, `DateInput`, `TimeInput`, `ColorInput` (der Checker meldet es)
+- Rohes `<select>`, `<input type="date|time|color">` in `frontend/` und `abgabebox-frontend/`: `Select`, `DateInput`, `TimeInput`, `ColorInput` (der Checker meldet es)
 - Neue `@media`-Breakpoints außer 640/900
 
 ## 4. Standardbausteine
@@ -67,7 +67,7 @@ Alle in `frontend/components/ui/` (Import: `@/components/ui/<name>`). Erst hier 
 | Status direkt ändern | `PillMenu` | Badge, das ein Menü öffnet |
 | Auswahl aus Liste (Einzel) | `SearchableSelect` | Standard für Auswahl mit Suche, 73 Verwendungen |
 | Auswahl aus Liste (Mehrfach) | `SearchableMultiSelect` | |
-| Kurze feste Auswahl (<7 Optionen, ohne Suche) | `Select` | Echtes `<select>` mit hocX-Liste statt OS-Liste; API wie natives Select (`value`, `onChange`, `<option>`/`<optgroup>`). Auf Touch-Geräten bleibt die native Auswahl |
+| Kurze feste Auswahl (<7 Optionen, ohne Suche) | `Select` | Echtes `<select>` mit hocX-Liste statt OS-Liste; API wie natives Select (`value`, `onChange`, `<option>`/`<optgroup>`). Auf Touch-Geräten bleibt die native Auswahl. Die Abgabebox führt eine identische Kopie (`abgabebox-frontend/components/ui/select.tsx`, der Checker vergleicht beide) |
 | Uhrzeit | `TimeInput` | Wert `HH:MM`, Eingabe per Tastatur, Liste im Viertelstunden-Takt |
 | Farbe (Daten, z. B. Brand-Farben) | `ColorInput` | Popover mit Fläche, Farbton, Hex und `swatches`; nie `<input type="color">` |
 | Aktionen einer Zeile/Karte | `ActionMenu` (`items: {label, onClick, danger?}[]`) | Kebab-Menü statt vieler Buttons |

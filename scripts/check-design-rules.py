@@ -36,6 +36,7 @@ NATIVE_PICKER_FILES = {
     "frontend/components/ui/date-input.tsx",
     "frontend/components/ui/time-input.tsx",
     "frontend/components/ui/color-input.tsx",
+    "abgabebox-frontend/components/ui/select.tsx",
 }
 
 SPACE_SCALE = {4, 8, 12, 16, 24, 32}
@@ -149,15 +150,32 @@ def check_line(path: Path, no: int, line: str, defined: set[str], is_css: bool) 
         if re.search(r"\bwindow\.(confirm|alert|prompt)\(|(?<![\w.])(?:alert|prompt)\(", code):
             report(path, no, "dialog", "Native Dialoge vermeiden - useConfirm()/useToast() nutzen")
         # Natives Auswahl-/Datums-/Zeit-/Farbfeld zeigt die Oberflaeche des Betriebssystems:
-        # Select, DateInput, TimeInput, ColorInput nutzen (nur Hauptanwendung; die Bausteine
-        # selbst kapseln das native Element)
-        if r.startswith("frontend/") and r not in NATIVE_PICKER_FILES and not code.lstrip().startswith(("//", "*")):
+        # Select, DateInput, TimeInput, ColorInput nutzen (die Bausteine selbst kapseln das
+        # native Element; die Abgabebox hat bisher nur Select)
+        if r.startswith(("frontend/", "abgabebox-frontend/")) and r not in NATIVE_PICKER_FILES and not code.lstrip().startswith(("//", "*")):
             if re.search(r"<select\b", code):
                 report(path, no, "auswahl", "Natives <select> - Select aus @/components/ui/select nutzen")
             m = re.search(r"type=[\"'{]+(date|time|datetime-local|color)[\"'}]", code)
             if m:
                 component = {"date": "DateInput", "datetime-local": "DateInput + TimeInput", "time": "TimeInput", "color": "ColorInput"}[m.group(1)]
                 report(path, no, "auswahl", f"Natives type=\"{m.group(1)}\" - {component} nutzen")
+
+
+# Bausteine, die die Abgabebox als Kopie der (dort getesteten) Hauptanwendung fuehrt: muessen
+# gleich bleiben, bis auf Kommentarzeilen am Dateianfang (Herkunftshinweis).
+SHARED_COPIES = {
+    "abgabebox-frontend/components/ui/select.tsx": "frontend/components/ui/select.tsx",
+}
+
+
+def check_shared_copies() -> None:
+    def body(path: Path) -> list[str]:
+        lines = path.read_text().splitlines()
+        return [line for line in lines if not line.startswith("// Auswahlfeld im hocX-Look")]
+
+    for copy, source in SHARED_COPIES.items():
+        if body(ROOT / copy) != body(ROOT / source):
+            report(ROOT / copy, 1, "kopie", f"weicht von {source} ab - Aenderungen in beiden Apps gleich machen")
 
 
 def main() -> int:
@@ -173,6 +191,7 @@ def main() -> int:
         for no, line in enumerate(path.read_text().splitlines(), 1):
             check_line(path, no, line, defined, is_css)
 
+    check_shared_copies()
     if violations:
         print("\n".join(violations))
         print(f"\n{len(violations)} Design-Regelverstoesse - siehe design/DESIGN.md")

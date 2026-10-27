@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
+import { Select } from "@/components/ui/select";
 import { locales, localeConfig, localeCookieName, type Locale } from "@/i18n/locale-config.generated";
 
 // Oeffentliche, anonyme Seite ohne Login - die Sprachwahl wirkt daher rein ueber den
@@ -21,13 +22,13 @@ export function LanguageSelect({ currentLocale }: { currentLocale: string }) {
   return (
     <label className="page-header-language">
       <span className="sr-only">{t("label")}</span>
-      <select value={currentLocale} onChange={(event) => changeLocale(event.target.value as Locale)}>
+      <Select aria-label={t("label")} value={currentLocale} onChange={(event) => changeLocale(event.target.value as Locale)}>
         {locales.map((code) => (
           <option key={code} value={code}>
             {localeConfig[code].nativeLabel}
           </option>
         ))}
-      </select>
+      </Select>
     </label>
   );
 }
