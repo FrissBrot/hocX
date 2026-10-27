@@ -980,11 +980,9 @@
       "editContent": "Modifier le contenu",
       "visibility": "Où et comment",
       "appearance": "Présentation dans le PDF",
-      "variant": "Présentation",
-      "corners": "Coins",
-      "inherit": "Comme l’apparence",
-      "appearanceHelp": "Ne vaut que pour ce bloc dans ce modèle, aussi tout de suite pour les procès-verbaux existants.",
-      "removeBlock": "Retirer le bloc"
+      "appearanceHelp": "Ce bloc se met en forme dans la mise en page PDF de ce modèle : dans l'éditeur, sous «Contenu du procès-verbal».",
+      "removeBlock": "Retirer le bloc",
+      "openDesign": "Ouvrir la mise en page PDF"
     },
     "switch": {
       "is_visible": {

@@ -30,27 +30,6 @@ import { elementTypeLabels } from "@/lib/constants/element-types";
 import { elementType } from "@/lib/element-types/registry";
 import type { CycleConfigSummary, ElementDefinition, ElementDefinitionBlock, TemplateElement, TemplateElementBlock } from "@/types/api";
 
-// Darstellung je Baustein-Typ (backend/app/documents/appearance.py: APPEARANCE_KIND_BY_ELEMENT_TYPE)
-const APPEARANCE_KIND: Record<string, string> = {
-  todo: "table",
-  matrix: "table",
-  fine_list: "table",
-  finance_transactions: "table",
-  event_list: "table",
-  attendance: "attendance",
-  session_date: "session_date",
-  finance_balance: "finance_balance",
-  form: "form",
-};
-const APPEARANCE_VARIANTS: Record<string, string[]> = {
-  table: ["lines", "grid", "zebra", "minimal"],
-  attendance: ["list", "compact", "table"],
-  session_date: ["line", "box"],
-  finance_balance: ["list", "tiles"],
-  form: ["grid", "table"],
-};
-const CORNER_KINDS = new Set(["session_date", "finance_balance"]);
-
 type Selection = { kind: "element"; id: string } | { kind: "block"; elementId: string; blockId: number } | null;
 type ScopeChoice = "all" | "here";
 type BlockSession = { mode: "create" | "edit"; elementId: string | null; elementTitle: string; form: BlockForm };
@@ -64,6 +43,8 @@ type Props = {
   responsibilityTitle: (element: TemplateElement) => string;
   blockEditorData: BlockEditorData;
   cycleConfigs: CycleConfigSummary[];
+  /** Darstellung im PDF: im Designer der eigenen Gestaltung (Knoten «Protokollinhalt») */
+  onOpenDesign?: () => void;
 };
 
 function invitationVisible(config: Record<string, unknown>) {
@@ -98,7 +79,7 @@ function resequence(blocks: ElementDefinitionBlock[]) {
   return blocks.map((block, index) => ({ ...block, sort_index: (index + 1) * 10, render_order: (index + 1) * 10 }));
 }
 
-export function SessionTemplateWorkspace({ templateId, elements, onElementsChange, onReorder, onOpenResponsibility, responsibilityTitle, blockEditorData, cycleConfigs }: Props) {
+export function SessionTemplateWorkspace({ templateId, elements, onElementsChange, onReorder, onOpenResponsibility, responsibilityTitle, blockEditorData, cycleConfigs, onOpenDesign }: Props) {
   const t = useTranslations("templates.studio");
   const tTypes = useTranslations("templates");
   const tEditor = useTranslations("templates.elementEditor");
@@ -196,23 +177,6 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("toast.saveFailed"), "error");
     }
-  }
-
-  function blockAppearance(element: TemplateElement, block: TemplateElementBlock): { kind: string | null; variant: string; corners: string } {
-    const kind = APPEARANCE_KIND[elementType(block.element_type_id).code] ?? null;
-    const stored = ((element.configuration_json.block_appearance as Record<string, Record<string, { variant?: string | null; corners?: string | null }>> | undefined) ?? {})[String(block.id)] ?? {};
-    const entry = kind ? stored[kind] ?? {} : {};
-    return { kind, variant: entry.variant ?? "", corners: entry.corners ?? "" };
-  }
-
-  async function setAppearance(element: TemplateElement, block: TemplateElementBlock, next: { variant: string; corners: string }) {
-    const kind = APPEARANCE_KIND[elementType(block.element_type_id).code];
-    if (!kind) return;
-    const all = { ...((element.configuration_json.block_appearance as Record<string, unknown>) ?? {}) };
-    const value = { variant: next.variant || null, corners: next.corners || null };
-    if (!value.variant && !value.corners) delete all[String(block.id)];
-    else all[String(block.id)] = { [kind]: value };
-    await patchElementConfig(element, { ...element.configuration_json, block_appearance: all });
   }
 
   // ── Traktanden ────────────────────────────────────────────────────────────
@@ -506,10 +470,9 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
               block={selectedBlock}
               typeLabel={typeLabels[selectedBlock.element_type_id] ?? ""}
               name={blockName(selectedBlock)}
-              appearance={blockAppearance(selectedElement, selectedBlock)}
               onEdit={() => startEditBlock(selectedElement, selectedBlock)}
               onBehavior={(field, value) => void setBehavior(selectedElement, selectedBlock, field, value)}
-              onAppearance={(next) => void setAppearance(selectedElement, selectedBlock, next)}
+              onOpenDesign={onOpenDesign}
               onMove={(delta) => void moveBlock(selectedElement, selectedBlock, delta)}
               onRemove={() => void removeBlock(selectedElement, selectedBlock)}
               onBack={() => setSelection({ kind: "element", id: selectedElement.id })}
@@ -649,10 +612,9 @@ function BlockProperties({
   block,
   typeLabel,
   name,
-  appearance,
   onEdit,
   onBehavior,
-  onAppearance,
+  onOpenDesign,
   onMove,
   onRemove,
   onBack,
@@ -661,16 +623,14 @@ function BlockProperties({
   block: TemplateElementBlock;
   typeLabel: string;
   name: string;
-  appearance: { kind: string | null; variant: string; corners: string };
   onEdit: () => void;
   onBehavior: (field: BehaviorField, value: boolean) => void;
-  onAppearance: (next: { variant: string; corners: string }) => void;
+  onOpenDesign?: () => void;
   onMove: (delta: -1 | 1) => void;
   onRemove: () => void;
   onBack: () => void;
 }) {
   const t = useTranslations("templates.studio");
-  const tStudio = useTranslations("documentStudio");
   const info = elementType(block.element_type_id);
   const switches: { field: BehaviorField; shown: boolean }[] = [
     { field: "is_visible", shown: true },
@@ -700,31 +660,13 @@ function BlockProperties({
           </label>
         ))}
       </fieldset>
-      {appearance.kind ? (
+      {onOpenDesign ? (
         <fieldset className="studio-fieldset">
           <legend>{t("props.appearance")}</legend>
-          <label className="field-stack">
-            <span className="field-label">{t("props.variant")}</span>
-            <select value={appearance.variant} onChange={(event) => onAppearance({ variant: event.target.value, corners: appearance.corners })}>
-              <option value="">{t("props.inherit")}</option>
-              {(APPEARANCE_VARIANTS[appearance.kind] ?? []).map((variant) => (
-                <option key={variant} value={variant}>
-                  {tStudio(`appearance.variant.${appearance.kind}.${variant}`)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {CORNER_KINDS.has(appearance.kind) ? (
-            <label className="field-stack">
-              <span className="field-label">{t("props.corners")}</span>
-              <select value={appearance.corners} onChange={(event) => onAppearance({ variant: appearance.variant, corners: event.target.value })}>
-                <option value="">{t("props.inherit")}</option>
-                <option value="square">{tStudio("appearance.corners.square")}</option>
-                <option value="rounded">{tStudio("appearance.corners.rounded")}</option>
-              </select>
-            </label>
-          ) : null}
           <span className="field-help">{t("props.appearanceHelp")}</span>
+          <button type="button" className="button-secondary" onClick={onOpenDesign}>
+            {t("props.openDesign")}
+          </button>
         </fieldset>
       ) : null}
       <div className="session-studio-actions">

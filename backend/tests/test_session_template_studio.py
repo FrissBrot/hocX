@@ -82,14 +82,13 @@ def test_duplicating_a_template_copies_single_definitions(db, world):
     assert db.get(ElementDefinition, copied.element_definition_id).is_library is False
 
 
-def test_block_appearance_is_validated(db, world):
+def test_block_appearance_is_no_longer_stored_on_the_template(db, world):
+    """Die Darstellung einzelner Bausteine gehört zur Gestaltung (Designer), nicht zur
+    Sitzungsvorlage: alte Einträge werden beim Speichern entfernt."""
     service = TemplateElementService()
-    good = {"block_appearance": {"1": {"table": {"variant": "zebra", "corners": None}}}}
-    updated = service.update_template_element(db, world["first_element"].id, TemplateElementUpdate(configuration_json=good))
-    assert updated.configuration_json["block_appearance"] == {"1": {"table": {"variant": "zebra", "corners": None}}}
-    for bad in ({"1": {"table": {"variant": "neon"}}}, {"1": {"heading": {"variant": "bar"}}}, {"x": {}}):
-        with pytest.raises(ValueError):
-            service.update_template_element(db, world["first_element"].id, TemplateElementUpdate(configuration_json={"block_appearance": bad}))
+    stale = {"block_appearance": {"1": {"table": {"variant": "zebra"}}}, "invitation_visible": False}
+    updated = service.update_template_element(db, world["first_element"].id, TemplateElementUpdate(configuration_json=stale))
+    assert "block_appearance" not in updated.configuration_json and updated.configuration_json["invitation_visible"] is False
 
 
 def test_writers_shape_agenda_items_but_not_template_settings(db, world):
@@ -121,12 +120,12 @@ def test_detach_of_a_foreign_agenda_item_is_not_found(db, world):
 
 def test_preview_follows_the_template_configuration(db, world):
     """Ohne Sitzung: Traktanden in Reihenfolge der Vorlage, im PDF ausgeblendete Bausteine fehlen,
-    Bausteine ohne Inhalt erscheinen als Platzhalter, Darstellung und Einladungsfilter gelten."""
+    Bausteine ohne Inhalt erscheinen als Platzhalter, jeder Baustein kennt seine Herkunft
+    (Schlüssel der Darstellung im Designer), der Einladungsfilter gilt."""
     tenant = world["tenant"]
     definition = make_element_definition(db, tenant.id, "Finanzen", [_text_block(1, "Bericht"), _todo_block(2), _text_block(3, "Intern")])
     make_template_element(db, world["first"].id, definition.id, 5, "Finanzen", configuration_json={
         "block_overrides": {"3": {"export_visible": False}},
-        "block_appearance": {"2": {"table": {"variant": "grid"}}},
         "invitation_visible": False,
     })
     ctx = BuildContext(db=db, tenant_id=tenant.id, language="de", session_template=world["first"])
@@ -134,7 +133,8 @@ def test_preview_follows_the_template_configuration(db, world):
     assert [element.title for element in elements] == ["Finanzen", "Begrüssung"]
     finance = elements[0]
     assert [child.title for child in finance.children] == ["Bericht", "Aufgaben"]
-    assert finance.children[1].appearance == {"table": {"variant": "grid"}}
+    finance_element = db.query(TemplateElement).filter(TemplateElement.template_id == world["first"].id, TemplateElement.sort_index == 5).one()
+    assert [child.source for child in finance.children] == [f"{finance_element.public_id}:1", f"{finance_element.public_id}:2"]
     assert all(isinstance(child, RichTextBlock) and child.hide_if_empty is False for child in finance.children)
     assert [element.title for element in session_template_blocks(ctx, None, invitation_only=True)] == ["Begrüssung"]
 
@@ -142,7 +142,7 @@ def test_preview_follows_the_template_configuration(db, world):
 def test_block_appearance_is_not_part_of_the_content_hash():
     meta = DocumentMeta(document_type="protocol", title="P", language="de")
     plain = RichTextBlock(title="Text")
-    styled = RichTextBlock(title="Text", appearance={"table": {"variant": "grid"}})
+    styled = RichTextBlock(title="Text", appearance={"table": {"variant": "grid"}}, source="00000000-0000-0000-0000-000000000001:2")
     assert content_hash(meta, [plain]) == content_hash(meta, [styled])
 
 

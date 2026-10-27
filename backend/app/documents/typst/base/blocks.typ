@@ -19,11 +19,26 @@
   body,
 )
 
+// Fläche um einen Baustein je Variante: «note»/«tiles»-artig getönt, «accent» mit Linie links,
+// «framed»/«card» (Bilder, Diagramme) mit Rahmen. «plain» bzw. unbekannt: ohne Fläche.
+#let variant-surface(ctx, kind, body, default: "plain") = {
+  let style = look(ctx, kind, default: default)
+  if style.variant == "note" or (style.variant == "card" and kind == "image") {
+    surface-box(ctx, style.radius, body)
+  } else if style.variant == "accent" {
+    block(width: 100%, inset: (left: space.s3, y: space.s1), stroke: (left: 2pt + ctx.theme.primary), body)
+  } else if style.variant == "framed" or style.variant == "card" {
+    block(width: 100%, inset: space.s3, radius: style.radius * 1mm, stroke: 0.5pt + ctx.c.border, body)
+  } else {
+    body
+  }
+}
+
 // ── Struktur ────────────────────────────────────────────────────────────────
 
-#let richtext-block(ctx, b) = render-rich(b.content, ctx)
+#let richtext-block(ctx, b) = variant-surface(ctx, "text", render-rich(b.content, ctx))
 
-#let static-text-block(ctx, b) = render-rich(b.content, ctx)
+#let static-text-block(ctx, b) = variant-surface(ctx, "static_text", render-rich(b.content, ctx))
 
 // ── Protokoll ───────────────────────────────────────────────────────────────
 
@@ -67,7 +82,19 @@
   grid(columns: (auto, 1fr), column-gutter: 1.2em, row-gutter: 0.55em, ..cells)
 }
 
-#let bullet-list-block(ctx, b) = list(..b.items.filter(item => item.trim() != "").map(item => [#item]))
+#let bullet-list-block(ctx, b) = {
+  let items = b.items.filter(item => item.trim() != "").map(item => [#item])
+  let variant = look(ctx, "bullet_list", default: "bullets").variant
+  if variant == "numbers" {
+    enum(numbering: n => text(weight: "bold", fill: ctx.theme.primary)[#n.], ..items)
+  } else if variant == "dashes" {
+    list(marker: text(fill: ctx.c.muted)[–], ..items)
+  } else if variant == "checks" {
+    list(marker: box(baseline: 0.1em, width: 0.75em, height: 0.75em, radius: 1.5pt, stroke: 0.75pt + ctx.theme.primary), ..items)
+  } else {
+    list(..items)
+  }
+}
 
 // Ein Absatz mit mindestens vier Zeilen (z. B. Termine einer Matrixzeile) als Liste von Zeilen,
 // sonst none. Für die zweispaltige Darstellung in den Karten.
@@ -137,8 +164,12 @@
       list(..items.map(item => [#item.name#if not is-blank(item.at("date", default: none)) [ (#item.date)]]))
     }
   }
-  group("label.joins", b.joins)
-  group("label.leaves", b.leaves)
+  if look(ctx, "entry_exit", default: "list").variant == "columns" {
+    grid(columns: (1fr, 1fr), column-gutter: space.s4, group("label.joins", b.joins), group("label.leaves", b.leaves))
+  } else {
+    group("label.joins", b.joins)
+    group("label.leaves", b.leaves)
+  }
 }
 
 #let image-figure(ctx, image-ref, max-width: 82%) = {
@@ -156,14 +187,14 @@
   }
 }
 
-#let image-block(ctx, b) = image-figure(ctx, b.image)
+#let image-block(ctx, b) = variant-surface(ctx, "image", image-figure(ctx, b.image))
 
 #let image-gallery-block(ctx, b) = {
   if b.columns <= 1 {
-    for image-ref in b.images { image-figure(ctx, image-ref) }
+    for image-ref in b.images { variant-surface(ctx, "image", image-figure(ctx, image-ref)) }
   } else {
     grid(columns: range(b.columns).map(_ => 1fr), column-gutter: space.s4, row-gutter: space.s4,
-      ..b.images.map(image-ref => image-figure(ctx, image-ref, max-width: 100%)))
+      ..b.images.map(image-ref => variant-surface(ctx, "image", image-figure(ctx, image-ref, max-width: 100%))))
   }
 }
 
@@ -433,7 +464,7 @@
     })))
 }
 
-#let chart-block(ctx, b) = render-chart(ctx, b)
+#let chart-block(ctx, b) = variant-surface(ctx, "chart", render-chart(ctx, b))
 
 // ── Pendenzen ───────────────────────────────────────────────────────────────
 

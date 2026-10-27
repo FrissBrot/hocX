@@ -6,7 +6,7 @@ import pytest
 
 from app.documents.compiler import CompileError, validate_template
 from app.documents.layout import TemplateContent
-from tests.documents.fixtures.scenarios import Scenario, compile_scenario, system
+from tests.documents.fixtures.scenarios import Scenario, _p, compile_scenario, system, todo_table
 
 
 def _find(nodes, node_id):
@@ -220,3 +220,44 @@ def test_heading_counter_continues_numbering_in_snippets():
     assert _heading_counter([{"level": 1}, {"level": 2}, {"level": 2}, {"level": 1}, {"level": 3}]) == [2, 0, 1]
     node = {"t": "stack", "break": True, "children": [{"t": "pagebreak", "id": "pb"}, {"t": "text", "break": True}]}
     assert _without_breaks(node) == {"t": "stack", "children": [{"t": "stack", "id": "pb", "s": {}, "children": [], "gap": 0}, {"t": "text"}]}
+
+
+_SOURCE = "00000000-0000-4000-8000-000000000001"
+
+
+def test_block_appearance_styles_single_building_blocks_over_the_node():
+    """Darstellung einzelner Bausteine (Designer): Schlüssel ist die Herkunft in der
+    Sitzungsvorlage; sie liegt über der Darstellung des Knotens und ersetzt nur, was sie setzt."""
+    element = {"type": "protocol_element", "title": "Finanzen", "children": [
+        {**todo_table(1), "source": f"{_SOURCE}:1"},
+        {**todo_table(1), "source": f"{_SOURCE}:2"},
+        {"type": "richtext", "level": 2, "source": f"{_SOURCE}:3", "content": [_p("Bericht")]},
+    ]}
+    content = {"masters": [{"id": "default"}], "body": [{
+        "type": "data_block", "id": "all", "component": "protocol_element",
+        "appearance": {"todo": {"variant": "status", "corners": "square"}},
+        "block_appearance": {
+            f"{_SOURCE}:1": {"todo": {"variant": "checklist"}},
+            f"{_SOURCE}:3": {"text": {"variant": "note", "corners": "rounded"}},
+            # Baustein, den es (nicht mehr) gibt: bleibt wirkungslos
+            f"{_SOURCE}:9": {"todo": {"variant": "table"}},
+        },
+    }]}
+    compiled = compile_scenario(Scenario(content, {"all": [element]}, brand={"layout": {"radius": 0}}))
+    children = _find(_body(compiled), "all")["blocks"][0]["children"]
+    first, second, text = children
+    assert first["appearance"]["todo"] == {"variant": "checklist", "radius": 0.0}
+    assert second["appearance"] is None
+    assert text["appearance"]["text"]["variant"] == "note" and text["appearance"]["text"]["radius"] > 0
+    # Andere Elementarten im Baustein folgen weiter dem Knoten
+    assert first["appearance"]["table"]["variant"] == "lines"
+
+
+def test_block_appearance_keys_are_validated():
+    base = {"masters": [{"id": "default"}], "body": [{"type": "data_block", "id": "all", "component": "protocol_element"}]}
+    for bad in ({"1": {"todo": {"variant": "checklist"}}}, {f"{_SOURCE}:1": {"todo": {"variant": "neon"}}}, {f"{_SOURCE}:1": {"heading": {"variant": "bar"}}}):
+        content = {**base, "body": [{**base["body"][0], "block_appearance": bad}]}
+        with pytest.raises(ValueError):
+            TemplateContent.model_validate(content)
+    cleaned = TemplateContent.model_validate({**base, "body": [{**base["body"][0], "block_appearance": {f"{_SOURCE}:1": {"todo": {"variant": None}}}}]})
+    assert cleaned.body[0].block_appearance == {}

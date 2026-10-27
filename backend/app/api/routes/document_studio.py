@@ -377,6 +377,43 @@ def get_document_template(template_id: uuid.UUID, db: Session = Depends(get_db),
     return _template_detail(db, user, _template_or_404(db, user, template_id))
 
 
+class ProtocolStructureBlock(BaseModel):
+    key: str
+    title: str
+    element_type: str
+    element_type_id: int
+    appearance_kinds: list[str]
+
+
+class ProtocolStructureElement(BaseModel):
+    id: uuid.UUID
+    title: str
+    blocks: list[ProtocolStructureBlock]
+
+
+class ProtocolStructureRead(BaseModel):
+    # Gehört die Gestaltung allein einer Sitzungsvorlage, lassen sich deren Bausteine einzeln
+    # gestalten (DataBlockNode.block_appearance); sonst bleibt die Liste leer.
+    owned: bool
+    session_template_name: str | None = None
+    elements: list[ProtocolStructureElement] = Field(default_factory=list)
+
+
+@router.get("/document-templates/{template_id}/protocol-structure", response_model=ProtocolStructureRead)
+def get_protocol_structure(template_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Traktanden und Bausteine der Sitzungsvorlage, der diese Gestaltung gehört (Designer)."""
+    from app.documents.providers.protocol import session_template_structure
+
+    permissions.require_view(user)
+    template = _template_or_404(db, user, template_id)
+    owner_id = template_service.session_owners(db, [template.id]).get(template.id)
+    owner = db.get(Template, owner_id) if owner_id is not None else None
+    # Fremde oder nicht lesbare Sitzungsvorlagen: wie ohne eigene Gestaltung
+    if owner is None or owner.tenant_id != user.current_tenant_id or not AccessService().can_read_template(db, user, owner.id):
+        return ProtocolStructureRead(owned=False)
+    return ProtocolStructureRead(owned=True, session_template_name=owner.name, elements=session_template_structure(db, owner))
+
+
 class TemplateMetaUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

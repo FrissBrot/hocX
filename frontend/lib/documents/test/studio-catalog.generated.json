@@ -108,15 +108,73 @@
  "catalog": {
   "appearance": {
    "bases": {
+    "alpin": {
+     "elements": {
+      "attendance": "grid",
+      "bullet_list": "bullets",
+      "chart": "card",
+      "entry_exit": "columns",
+      "finance_balance": "tiles",
+      "form": "grid",
+      "image": "card",
+      "kpi_tiles": "filled",
+      "matrix": "cards_filled",
+      "quote": "box",
+      "session_date": "box",
+      "static_text": "note",
+      "text": "plain",
+      "toc": "leaders",
+      "todo": "checklist"
+     },
+     "layout": {
+      "heading_number_style": "badge",
+      "heading_style": "underline",
+      "radius": 2,
+      "responsible_display": "right",
+      "table_style": "lines"
+     }
+    },
+    "atlas": {
+     "elements": {
+      "attendance": "grid",
+      "bullet_list": "bullets",
+      "chart": "card",
+      "entry_exit": "columns",
+      "finance_balance": "tiles",
+      "form": "grid",
+      "image": "framed",
+      "kpi_tiles": "filled",
+      "matrix": "cards_filled",
+      "quote": "box",
+      "session_date": "box",
+      "static_text": "accent",
+      "text": "plain",
+      "toc": "badges",
+      "todo": "status"
+     },
+     "layout": {
+      "heading_number_style": "badge",
+      "heading_style": "bar",
+      "radius": 1.5,
+      "responsible_display": "right",
+      "table_style": "lines"
+     }
+    },
     "bold": {
      "elements": {
       "attendance": "table",
+      "bullet_list": "bullets",
+      "chart": "plain",
+      "entry_exit": "list",
       "finance_balance": "tiles",
       "form": "table",
+      "image": "plain",
       "kpi_tiles": "filled",
       "matrix": "table",
       "quote": "line",
       "session_date": "box",
+      "static_text": "plain",
+      "text": "plain",
       "toc": "indented",
       "todo": "table"
      },
@@ -124,17 +182,24 @@
       "heading_style": "bar",
       "radius": 0,
       "table_style": "zebra"
-     }
+     },
+     "legacy": true
     },
     "classic": {
      "elements": {
       "attendance": "list",
+      "bullet_list": "bullets",
+      "chart": "plain",
+      "entry_exit": "list",
       "finance_balance": "list",
       "form": "grid",
+      "image": "plain",
       "kpi_tiles": "outlined",
       "matrix": "table",
       "quote": "line",
       "session_date": "line",
+      "static_text": "plain",
+      "text": "plain",
       "toc": "indented",
       "todo": "table"
      },
@@ -144,15 +209,73 @@
       "table_style": "lines"
      }
     },
+    "fokus": {
+     "elements": {
+      "attendance": "chips",
+      "bullet_list": "dashes",
+      "chart": "card",
+      "entry_exit": "columns",
+      "finance_balance": "tiles",
+      "form": "grid",
+      "image": "card",
+      "kpi_tiles": "divided",
+      "matrix": "cards",
+      "quote": "box",
+      "session_date": "box",
+      "static_text": "note",
+      "text": "plain",
+      "toc": "leaders",
+      "todo": "checklist"
+     },
+     "layout": {
+      "heading_number_style": "accent",
+      "heading_style": "plain",
+      "radius": 3,
+      "responsible_display": "right",
+      "table_style": "minimal"
+     }
+    },
+    "kreide": {
+     "elements": {
+      "attendance": "grid",
+      "bullet_list": "dashes",
+      "chart": "plain",
+      "entry_exit": "list",
+      "finance_balance": "list",
+      "form": "grid",
+      "image": "plain",
+      "kpi_tiles": "plain",
+      "matrix": "cards",
+      "quote": "framed",
+      "session_date": "line",
+      "static_text": "accent",
+      "text": "plain",
+      "toc": "leaders",
+      "todo": "checklist"
+     },
+     "layout": {
+      "heading_number_style": "accent",
+      "heading_style": "plain",
+      "radius": 1.5,
+      "responsible_display": "right",
+      "table_style": "minimal"
+     }
+    },
     "minimal": {
      "elements": {
       "attendance": "compact",
+      "bullet_list": "bullets",
+      "chart": "plain",
+      "entry_exit": "list",
       "finance_balance": "list",
       "form": "grid",
+      "image": "plain",
       "kpi_tiles": "outlined",
       "matrix": "table",
       "quote": "line",
       "session_date": "line",
+      "static_text": "plain",
+      "text": "plain",
       "toc": "indented",
       "todo": "table"
      },
@@ -160,17 +283,24 @@
       "heading_style": "plain",
       "radius": 0,
       "table_style": "minimal"
-     }
+     },
+     "legacy": true
     },
     "rounded": {
      "elements": {
       "attendance": "compact",
+      "bullet_list": "bullets",
+      "chart": "plain",
+      "entry_exit": "list",
       "finance_balance": "tiles",
       "form": "grid",
+      "image": "plain",
       "kpi_tiles": "filled",
       "matrix": "table",
       "quote": "line",
       "session_date": "box",
+      "static_text": "plain",
+      "text": "plain",
       "toc": "indented",
       "todo": "table"
      },
@@ -178,6 +308,59 @@
       "heading_style": "boxed",
       "radius": 4,
       "table_style": "zebra"
+     },
+     "legacy": true
+    },
+    "siegel": {
+     "elements": {
+      "attendance": "compact",
+      "bullet_list": "numbers",
+      "chart": "plain",
+      "entry_exit": "list",
+      "finance_balance": "list",
+      "form": "table",
+      "image": "framed",
+      "kpi_tiles": "divided",
+      "matrix": "table",
+      "quote": "framed",
+      "session_date": "line",
+      "static_text": "plain",
+      "text": "plain",
+      "toc": "leaders",
+      "todo": "table"
+     },
+     "layout": {
+      "heading_number_style": "paragraph",
+      "heading_style": "plain",
+      "radius": 0,
+      "responsible_display": "below",
+      "table_style": "lines"
+     }
+    },
+    "signal": {
+     "elements": {
+      "attendance": "table",
+      "bullet_list": "numbers",
+      "chart": "card",
+      "entry_exit": "columns",
+      "finance_balance": "tiles",
+      "form": "table",
+      "image": "framed",
+      "kpi_tiles": "filled",
+      "matrix": "table",
+      "quote": "box",
+      "session_date": "box",
+      "static_text": "note",
+      "text": "plain",
+      "toc": "badges",
+      "todo": "status"
+     },
+     "layout": {
+      "heading_number_style": "accent",
+      "heading_style": "boxed",
+      "radius": 0,
+      "responsible_display": "right",
+      "table_style": "grid"
      }
     }
    },
@@ -193,7 +376,11 @@
     "kpi_tiles",
     "matrix",
     "todo",
-    "quote"
+    "quote",
+    "text",
+    "static_text",
+    "image",
+    "chart"
    ],
    "variants": {
     "attendance": [
@@ -202,6 +389,20 @@
      "table",
      "grid",
      "chips"
+    ],
+    "bullet_list": [
+     "bullets",
+     "numbers",
+     "dashes",
+     "checks"
+    ],
+    "chart": [
+     "plain",
+     "card"
+    ],
+    "entry_exit": [
+     "list",
+     "columns"
     ],
     "finance_balance": [
      "list",
@@ -216,6 +417,11 @@
      "underline",
      "bar",
      "boxed"
+    ],
+    "image": [
+     "plain",
+     "framed",
+     "card"
     ],
     "kpi_tiles": [
      "outlined",
@@ -237,11 +443,21 @@
      "line",
      "box"
     ],
+    "static_text": [
+     "plain",
+     "note",
+     "accent"
+    ],
     "table": [
      "lines",
      "grid",
      "zebra",
      "minimal"
+    ],
+    "text": [
+     "plain",
+     "note",
+     "accent"
     ],
     "toc": [
      "indented",
@@ -973,7 +1189,13 @@
      "attendance",
      "session_date",
      "finance_balance",
-     "form"
+     "form",
+     "text",
+     "static_text",
+     "bullet_list",
+     "image",
+     "chart",
+     "entry_exit"
     ],
     "group": "protocol",
     "needs_protocol": true,
@@ -1103,7 +1325,9 @@
    },
    {
     "access": "reader",
-    "appearance_kinds": [],
+    "appearance_kinds": [
+     "text"
+    ],
     "group": "protocol",
     "needs_protocol": true,
     "params_schema": {
@@ -1234,7 +1458,9 @@
    },
    {
     "access": "writer",
-    "appearance_kinds": [],
+    "appearance_kinds": [
+     "entry_exit"
+    ],
     "group": "protocol",
     "needs_protocol": false,
     "params_schema": {
@@ -1275,7 +1501,9 @@
    },
    {
     "access": "reader",
-    "appearance_kinds": [],
+    "appearance_kinds": [
+     "image"
+    ],
     "group": "protocol",
     "needs_protocol": false,
     "params_schema": {
@@ -1316,7 +1544,9 @@
    },
    {
     "access": "reader",
-    "appearance_kinds": [],
+    "appearance_kinds": [
+     "image"
+    ],
     "group": "protocol",
     "needs_protocol": false,
     "params_schema": {
@@ -2432,7 +2662,9 @@
    },
    {
     "access": "reader",
-    "appearance_kinds": [],
+    "appearance_kinds": [
+     "chart"
+    ],
     "group": "statistics",
     "needs_protocol": false,
     "params_schema": {

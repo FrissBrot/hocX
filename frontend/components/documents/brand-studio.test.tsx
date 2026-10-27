@@ -89,16 +89,20 @@ describe("BrandStudio", () => {
 
   it("applies a base style and keeps element overrides on top of it", async () => {
     render(<BrandStudio capabilities={capabilities} />);
-    fireEvent.click(await screen.findByRole("radio", { name: /Abgerundet/ }));
-    fireEvent.change(screen.getByLabelText("Anwesenheit"), { target: { value: "table" } });
+    // Frühere Grundstile stehen nur noch Profilen zur Wahl, die sie nutzen
+    expect(await screen.findByRole("radio", { name: /Signal/ })).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /Abgerundet/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: /Signal/ }));
+    fireEvent.change(screen.getByLabelText("Anwesenheit"), { target: { value: "chips" } });
     await advance(800);
+    // Ein Design übernimmt auch Abschnittsnummer und Verantwortliche in den Seitenaufbau
     await waitFor(() => expect(api.previewDocument.mock.calls.at(-1)![0].brand_tokens).toMatchObject({
-      appearance: { base: "rounded", elements: { attendance: { variant: "table", corners: null } } },
-      layout: { heading_style: "boxed", table_style: "zebra", radius: 4 },
+      appearance: { base: "signal", elements: { attendance: { variant: "chips", corners: null } } },
+      layout: { heading_style: "boxed", table_style: "grid", radius: 0, heading_number_style: "accent", responsible_display: "right" },
     }));
     fireEvent.click(screen.getByRole("radio", { name: /Klassisch/ }));
     await advance(800);
-    await waitFor(() => expect(api.previewDocument.mock.calls.at(-1)![0].brand_tokens.appearance).toEqual({ base: "classic", elements: { attendance: { variant: "table", corners: null } } }));
+    await waitFor(() => expect(api.previewDocument.mock.calls.at(-1)![0].brand_tokens.appearance).toEqual({ base: "classic", elements: { attendance: { variant: "chips", corners: null } } }));
   });
 
   it("reports a parallel change instead of overwriting it", async () => {

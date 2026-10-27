@@ -359,12 +359,17 @@ APPEARANCE_KINDS: dict[str, tuple[str, ...]] = {
     **{name: ("table",) for name in _TABLE_COMPONENTS},
     "matrix": ("matrix", "table"),
     "todo_table": ("todo", "table"),
-    "protocol_element": ("table", "todo", "matrix", "attendance", "session_date", "finance_balance", "form"),
+    "protocol_element": ("table", "todo", "matrix", "attendance", "session_date", "finance_balance", "form", "text", "static_text", "bullet_list", "image", "chart", "entry_exit"),
     "attendance": ("attendance",),
     "session_date": ("session_date",),
     "finance_balance": ("finance_balance",),
     "kpi_tiles": ("kpi_tiles",),
     "form": ("form",),
+    "session_notes": ("text",),
+    "entry_exit": ("entry_exit",),
+    "image": ("image",),
+    "image_gallery": ("image",),
+    "chart": ("chart",),
 }
 
 

@@ -750,7 +750,8 @@ class LayoutCompiler:
     def _data_output(self, node, blocks, area: str = "body") -> dict[str, Any]:
         self.blocks.extend(blocks)
         out = self._base(node, "data")
-        out["blocks"] = [self._resolve_block_appearance(block.model_dump(mode="json")) for block in blocks]
+        block_overrides = getattr(node, "block_appearance", None) or {}
+        out["blocks"] = [self._resolve_block_appearance(block.model_dump(mode="json"), getattr(node, "appearance", None), block_overrides) for block in blocks]
         if node.appearance:
             # Vollständig aufgelöst, damit Typst nichts zusammenführen muss
             out["appearance"] = resolve_appearance(self.input.brand.tokens, node.appearance)
@@ -760,20 +761,15 @@ class LayoutCompiler:
         self._snippet(node.id, area, out, before)
         return out
 
-    def _resolve_block_appearance(self, block: dict[str, Any]) -> dict[str, Any]:
-        """Darstellung einzelner Blöcke (Bausteine einer Sitzungsvorlage) wie die eines
-        data-Knotens vollständig auflösen; Typst übernimmt sie unverändert."""
-        from app.documents.appearance import ElementAppearance
+    def _resolve_block_appearance(self, block: dict[str, Any], node_overrides: dict[str, Any] | None = None, block_overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Darstellung einzelner Bausteine (DataBlockNode.block_appearance, Schlüssel ``source``)
+        über die des Knotens legen und vollständig auflösen; Typst übernimmt sie unverändert."""
+        from app.documents.appearance import merge_overrides
 
-        overrides = block.get("appearance")
-        if overrides:
-            try:
-                parsed = {kind: ElementAppearance.model_validate(item) for kind, item in overrides.items()}
-            except ValueError:
-                parsed = {}
-            block["appearance"] = resolve_appearance(self.input.brand.tokens, parsed) if parsed else None
+        own = (block_overrides or {}).get(block.get("source") or "")
+        block["appearance"] = resolve_appearance(self.input.brand.tokens, merge_overrides(node_overrides, own)) if own else None
         for child in block.get("children") or []:
-            self._resolve_block_appearance(child)
+            self._resolve_block_appearance(child, node_overrides, block_overrides)
         return block
 
     def _block_headings(self, area: str, block: dict[str, Any]) -> None:

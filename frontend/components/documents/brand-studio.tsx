@@ -159,16 +159,15 @@ export function BrandStudio({ capabilities }: Props) {
     });
   }
 
-  // Grundstil: übernimmt Überschriften, Tabellen und Ecken in den Seitenaufbau; Übersteuerungen
+  // Grundstil/Design: übernimmt Überschriften, Tabellen und Ecken in den Seitenaufbau; Übersteuerungen
   // einzelner Elementarten bleiben bestehen.
   function setAppearanceBase(base: string) {
     const definition = appearanceCatalog?.bases[base];
     if (!definition) return;
     update((tokens) => {
       tokens.appearance = { base, elements: tokens.appearance?.elements ?? {} };
-      tokens.layout.heading_style = definition.layout.heading_style as BrandTokens["layout"]["heading_style"];
-      tokens.layout.table_style = definition.layout.table_style as BrandTokens["layout"]["table_style"];
-      tokens.layout.radius = definition.layout.radius;
+      // Designs geben zusätzlich Abschnittsnummer und Verantwortliche vor (appearance.py)
+      Object.assign(tokens.layout, definition.layout as Partial<BrandTokens["layout"]>);
     });
   }
 
@@ -378,10 +377,17 @@ export function BrandStudio({ capabilities }: Props) {
                   <div className="studio-variant-list studio-appearance-bases" role="radiogroup" aria-label={t("appearance.baseTitle")}>
                     {Object.keys(appearanceCatalog.bases).map((base) => {
                       const active = (draft.appearance?.base ?? DEFAULT_APPEARANCE_BASE) === base;
+                      // Frühere Grundstile nur für Profile, die sie noch nutzen
+                      if (appearanceCatalog.bases[base].legacy && !active) return null;
                       return (
                         <button key={base} type="button" role="radio" aria-checked={active} className={active ? "studio-variant studio-variant-active" : "studio-variant"} onClick={() => setAppearanceBase(base)}>
                           <span className="studio-variant-name">{t(`appearance.base.${base}.name`)}</span>
                           <span className="field-help">{t(`appearance.base.${base}.help`)}</span>
+                          {appearanceCatalog.bases[base].legacy && (
+                            <Badge variant="neutral" className="studio-variant-badge">
+                              {t("appearance.legacyBase")}
+                            </Badge>
+                          )}
                         </button>
                       );
                     })}

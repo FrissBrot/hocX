@@ -24147,6 +24147,10 @@ a.mobile-list-row { color: var(--text); }
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
+/* Design-Galerie im Dialog «Neue Vorlage»: grössere Kacheln mit Vorschaubild */
+.studio-design-list {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+}
 .studio-variant-badge {
   position: absolute;
   top: var(--space-1);
@@ -24412,6 +24416,11 @@ a.mobile-list-row { color: var(--text); }
 }
 .studio-appearance-row > select {
   min-width: 0;
+}
+/* Im schmalen Eigenschaften-Panel des Designers: Variante und Ecken untereinander, damit die
+   geerbte Option («Wie Protokollinhalt (…)») lesbar bleibt */
+.studio-properties .studio-appearance-row {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* «Erweiterte Optionen»: eingeklappte Gruppe, Unterabschnitte leicht eingerückt */
@@ -24807,6 +24816,40 @@ a.mobile-list-row { color: var(--text); }
 .studio-tree-row:focus-within .studio-tree-actions,
 .studio-tree-row-selected .studio-tree-actions {
   display: inline-flex;
+}
+
+/* Bausteine des Protokollinhalts (Darstellung je Baustein) */
+.studio-tree-group {
+  display: grid;
+  gap: 2px;
+}
+.studio-tree-group-title {
+  padding: var(--space-1) var(--space-2) 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.studio-tree-hint {
+  margin: 0;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-5);
+}
+.studio-block-list {
+  padding-left: 0;
+}
+.studio-block-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.studio-block-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 /* Arbeitsfläche */

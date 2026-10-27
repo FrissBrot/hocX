@@ -7,7 +7,6 @@ from app.services import public_id_service
 from app.services.block_behavior import block_defaults, BEHAVIOR_FIELDS, resolve_block_behavior, resolve_element_wide_behavior
 from app.services.block_config_ids import decode_block_config, encode_block_config
 from app.services.element_definition_service import ElementDefinitionService
-from app.documents.appearance import validate_block_appearance
 
 
 class TemplateElementService:
@@ -158,8 +157,9 @@ class TemplateElementService:
                 db, values["configuration_json"], tenant_id=template.tenant_id if template else 0
             )
             self._validate_linked_lists(db, values["configuration_json"], tenant_id=template.tenant_id if template else None)
-            if "block_appearance" in values["configuration_json"]:
-                values["configuration_json"]["block_appearance"] = validate_block_appearance(values["configuration_json"]["block_appearance"])
+            # Darstellung einzelner Bausteine gehört seit dem Designer zur Gestaltung
+            # (DataBlockNode.block_appearance), nicht mehr zur Sitzungsvorlage
+            values["configuration_json"].pop("block_appearance", None)
         updated = self.repository.update(db, entity, values)
         return self.get_template_element(db, updated.id)
 

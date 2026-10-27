@@ -8,6 +8,7 @@ Eigenes Modul, weil brand.py und layout.py es beide brauchen.
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -27,33 +28,79 @@ APPEARANCE_VARIANTS: dict[str, tuple[str, ...]] = {
     "toc": ("indented", "leaders", "badges"),
     # Zitate im Rich Text, z. B. für Beschlüsse
     "quote": ("line", "box", "framed"),
+    # Freitext und feste Texte/Anzeigen: Fliesstext, Hinweis-Kasten oder mit Akzentlinie links
+    "text": ("plain", "note", "accent"),
+    "static_text": ("plain", "note", "accent"),
+    "bullet_list": ("bullets", "numbers", "dashes", "checks"),
+    # Bilder: frei, mit Rahmen oder als Karte (Fläche, Bildunterschrift darin)
+    "image": ("plain", "framed", "card"),
+    "chart": ("plain", "card"),
+    # Ein- und Austritte: untereinander oder nebeneinander
+    "entry_exit": ("list", "columns"),
 }
 # Elementarten mit Flächen, bei denen die Ecken sichtbar sind (Wahl «eckig/abgerundet»)
-CORNER_KINDS = ("heading", "session_date", "finance_balance", "kpi_tiles", "matrix", "todo", "quote")
+CORNER_KINDS = ("heading", "session_date", "finance_balance", "kpi_tiles", "matrix", "todo", "quote", "text", "static_text", "image", "chart")
 # Nur im Brand-Profil übersteuerbar (globale Regel im Dokument, nicht pro Block)
 BRAND_ONLY_APPEARANCE = frozenset({"heading", "toc", "quote"})
 
-AppearanceBase = Literal["classic", "rounded", "bold", "minimal"]
+# Designs (Design-Beispiele in examples.py, im Brand Studio als Grundstil wählbar) und die
+# früheren abstrakten Grundstile, die nur noch für bestehende Profile gelten (``legacy``).
+DESIGN_KEYS = ("alpin", "kreide", "signal", "fokus", "siegel", "atlas")
+AppearanceBase = Literal["classic", "alpin", "kreide", "signal", "fokus", "siegel", "atlas", "rounded", "bold", "minimal"]
 
 # Grundstile. ``layout`` sind die Werte, die das Brand Studio bei der Wahl in BrandLayout
-# übernimmt (Überschriften, Tabellen, Ecken); ``elements`` die Darstellung der übrigen
-# Elementarten. «classic» entspricht der bisherigen Darstellung (bestehende Profile).
+# übernimmt (Überschriften, Tabellen, Ecken, Abschnittsnummer, Verantwortliche); ``elements``
+# legt für jede übrige Elementart eine Darstellung fest. «classic» entspricht der bisherigen
+# Darstellung (bestehende Profile).
 APPEARANCE_BASES: dict[str, dict[str, Any]] = {
     "classic": {
         "layout": {"heading_style": "underline", "table_style": "lines", "radius": 1.5},
-        "elements": {"attendance": "list", "session_date": "line", "finance_balance": "list", "kpi_tiles": "outlined", "form": "grid", "matrix": "table", "todo": "table", "toc": "indented", "quote": "line"},
+        "elements": {"attendance": "list", "session_date": "line", "finance_balance": "list", "kpi_tiles": "outlined", "form": "grid", "matrix": "table", "todo": "table", "toc": "indented", "quote": "line", "text": "plain", "static_text": "plain", "bullet_list": "bullets", "image": "plain", "chart": "plain", "entry_exit": "list"},
+    },
+    # Vollflächiges Band in der Hauptfarbe, Karten mit Farbkopf, Kästchen-Pendenzen
+    "alpin": {
+        "layout": {"heading_style": "underline", "table_style": "lines", "radius": 2, "heading_number_style": "badge", "responsible_display": "right"},
+        "elements": {"attendance": "grid", "session_date": "box", "finance_balance": "tiles", "kpi_tiles": "filled", "form": "grid", "matrix": "cards_filled", "todo": "checklist", "toc": "leaders", "quote": "box", "text": "plain", "static_text": "note", "bullet_list": "bullets", "image": "card", "chart": "card", "entry_exit": "columns"},
+    },
+    # Weiss mit feinen Linien, Akzent nur in Nummern und Kästchen
+    "kreide": {
+        "layout": {"heading_style": "plain", "table_style": "minimal", "radius": 1.5, "heading_number_style": "accent", "responsible_display": "right"},
+        "elements": {"attendance": "grid", "session_date": "line", "finance_balance": "list", "kpi_tiles": "plain", "form": "grid", "matrix": "cards", "todo": "checklist", "toc": "leaders", "quote": "framed", "text": "plain", "static_text": "accent", "bullet_list": "dashes", "image": "plain", "chart": "plain", "entry_exit": "list"},
+    },
+    # Kontrastreich und eckig: Farbflächen, Gitter-Tabellen, Status-Pills
+    "signal": {
+        "layout": {"heading_style": "boxed", "table_style": "grid", "radius": 0, "heading_number_style": "accent", "responsible_display": "right"},
+        "elements": {"attendance": "table", "session_date": "box", "finance_balance": "tiles", "kpi_tiles": "filled", "form": "table", "matrix": "table", "todo": "status", "toc": "badges", "quote": "box", "text": "plain", "static_text": "note", "bullet_list": "numbers", "image": "framed", "chart": "card", "entry_exit": "columns"},
+    },
+    # Viel Weissraum, runde Ecken, Namens-Chips
+    "fokus": {
+        "layout": {"heading_style": "plain", "table_style": "minimal", "radius": 3, "heading_number_style": "accent", "responsible_display": "right"},
+        "elements": {"attendance": "chips", "session_date": "box", "finance_balance": "tiles", "kpi_tiles": "divided", "form": "grid", "matrix": "cards", "todo": "checklist", "toc": "leaders", "quote": "box", "text": "plain", "static_text": "note", "bullet_list": "dashes", "image": "card", "chart": "card", "entry_exit": "columns"},
+    },
+    # Zurückhaltend und formell: Linien, §-Nummern, Verantwortliche unter dem Titel
+    "siegel": {
+        "layout": {"heading_style": "plain", "table_style": "lines", "radius": 0, "heading_number_style": "paragraph", "responsible_display": "below"},
+        "elements": {"attendance": "compact", "session_date": "line", "finance_balance": "list", "kpi_tiles": "divided", "form": "table", "matrix": "table", "todo": "table", "toc": "leaders", "quote": "framed", "text": "plain", "static_text": "plain", "bullet_list": "numbers", "image": "framed", "chart": "plain", "entry_exit": "list"},
+    },
+    # Farbbalken, Nummern auf Farbfläche, Status-Pills
+    "atlas": {
+        "layout": {"heading_style": "bar", "table_style": "lines", "radius": 1.5, "heading_number_style": "badge", "responsible_display": "right"},
+        "elements": {"attendance": "grid", "session_date": "box", "finance_balance": "tiles", "kpi_tiles": "filled", "form": "grid", "matrix": "cards_filled", "todo": "status", "toc": "badges", "quote": "box", "text": "plain", "static_text": "accent", "bullet_list": "bullets", "image": "framed", "chart": "card", "entry_exit": "columns"},
     },
     "rounded": {
+        "legacy": True,
         "layout": {"heading_style": "boxed", "table_style": "zebra", "radius": 4},
-        "elements": {"attendance": "compact", "session_date": "box", "finance_balance": "tiles", "kpi_tiles": "filled", "form": "grid", "matrix": "table", "todo": "table", "toc": "indented", "quote": "line"},
+        "elements": {"attendance": "compact", "session_date": "box", "finance_balance": "tiles", "kpi_tiles": "filled", "form": "grid", "matrix": "table", "todo": "table", "toc": "indented", "quote": "line", "text": "plain", "static_text": "plain", "bullet_list": "bullets", "image": "plain", "chart": "plain", "entry_exit": "list"},
     },
     "bold": {
+        "legacy": True,
         "layout": {"heading_style": "bar", "table_style": "zebra", "radius": 0},
-        "elements": {"attendance": "table", "session_date": "box", "finance_balance": "tiles", "kpi_tiles": "filled", "form": "table", "matrix": "table", "todo": "table", "toc": "indented", "quote": "line"},
+        "elements": {"attendance": "table", "session_date": "box", "finance_balance": "tiles", "kpi_tiles": "filled", "form": "table", "matrix": "table", "todo": "table", "toc": "indented", "quote": "line", "text": "plain", "static_text": "plain", "bullet_list": "bullets", "image": "plain", "chart": "plain", "entry_exit": "list"},
     },
     "minimal": {
+        "legacy": True,
         "layout": {"heading_style": "plain", "table_style": "minimal", "radius": 0},
-        "elements": {"attendance": "compact", "session_date": "line", "finance_balance": "list", "kpi_tiles": "outlined", "form": "grid", "matrix": "table", "todo": "table", "toc": "indented", "quote": "line"},
+        "elements": {"attendance": "compact", "session_date": "line", "finance_balance": "list", "kpi_tiles": "outlined", "form": "grid", "matrix": "table", "todo": "table", "toc": "indented", "quote": "line", "text": "plain", "static_text": "plain", "bullet_list": "bullets", "image": "plain", "chart": "plain", "entry_exit": "list"},
     },
 }
 # Eckenradius «abgerundet», wenn der Grundstil eckig ist (mm)
@@ -81,34 +128,60 @@ def validate_appearance_elements(value: dict[str, ElementAppearance], *, allow_b
     return {kind: item for kind, item in value.items() if not item.is_empty()}
 
 
-# Elementart der Darstellung je Baustein-Typ einer Sitzungsvorlage (Element-Typ-Code). Die
-# Vorlage kann sie pro Baustein übersteuern (TemplateElement.configuration_json.block_appearance).
-APPEARANCE_KIND_BY_ELEMENT_TYPE: dict[str, str] = {
-    "todo": "todo",
-    "matrix": "matrix",
-    "fine_list": "table",
-    "finance_transactions": "table",
-    "event_list": "table",
-    "attendance": "attendance",
-    "session_date": "session_date",
-    "finance_balance": "finance_balance",
-    "form": "form",
+# Elementarten, deren Darstellung ein Baustein einer Sitzungsvorlage (Element-Typ-Code) im
+# Designer übersteuern kann (Knoten «Protokollinhalt», layout.DataBlockNode.block_appearance).
+APPEARANCE_KINDS_BY_ELEMENT_TYPE: dict[str, tuple[str, ...]] = {
+    "todo": ("todo", "table"),
+    "matrix": ("matrix", "table"),
+    "fine_list": ("table",),
+    "finance_transactions": ("table",),
+    "event_list": ("table",),
+    "attendance": ("attendance",),
+    "session_date": ("session_date",),
+    "finance_balance": ("finance_balance",),
+    "form": ("form",),
+    "text": ("text",),
+    "static_text": ("static_text",),
+    "display": ("static_text",),
+    "bullet_list": ("bullet_list",),
+    "image": ("image",),
+    "chart": ("chart",),
+    "entry_exit": ("entry_exit",),
 }
 
+# Schlüssel eines Bausteins: ``<TemplateElement.public_id>:<Block-ID der Elementdefinition>``
+BLOCK_SOURCE_PATTERN = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9]{1,9}$"
+MAX_BLOCK_OVERRIDES = 500
 
-def validate_block_appearance(value: object) -> dict[str, dict[str, dict[str, str | None]]]:
-    """``{"<block_id>": {"<elementart>": {"variant": …, "corners": …}}}`` prüfen und leere
-    Einträge entfernen (ValueError bei Unbekanntem, wird als 400 gemeldet)."""
-    if not isinstance(value, dict):
-        raise ValueError("block_appearance must be an object")
-    result: dict[str, dict[str, dict[str, str | None]]] = {}
-    for block_id, overrides in value.items():
-        if not str(block_id).isdigit() or not isinstance(overrides, dict):
-            raise ValueError("invalid block_appearance entry")
-        parsed = {kind: ElementAppearance.model_validate(item) for kind, item in overrides.items()}
-        cleaned = validate_appearance_elements(parsed, allow_brand_only=False)
+
+def block_source(template_element_public_id: object, block_id: object) -> str | None:
+    if template_element_public_id is None or block_id is None:
+        return None
+    return f"{template_element_public_id}:{block_id}"
+
+
+def validate_block_overrides(value: dict[str, dict[str, ElementAppearance]]) -> dict[str, dict[str, ElementAppearance]]:
+    """Darstellung einzelner Bausteine prüfen (ValueError bei Unbekanntem) und leere Einträge
+    entfernen."""
+    if len(value) > MAX_BLOCK_OVERRIDES:
+        raise ValueError("Zu viele Baustein-Darstellungen")
+    result: dict[str, dict[str, ElementAppearance]] = {}
+    for key, overrides in value.items():
+        if not re.match(BLOCK_SOURCE_PATTERN, key):
+            raise ValueError(f"Ungültiger Baustein: {key}")
+        cleaned = validate_appearance_elements(overrides, allow_brand_only=False)
         if cleaned:
-            result[str(block_id)] = {kind: item.model_dump() for kind, item in cleaned.items()}
+            result[key] = cleaned
+    return result
+
+
+def merge_overrides(outer: dict[str, ElementAppearance] | None, inner: dict[str, ElementAppearance] | None) -> dict[str, ElementAppearance]:
+    """Übersteuerung eines Bausteins (``inner``) über die des Knotens (``outer``) legen, je
+    Elementart und Feld (Variante, Ecken)."""
+    result = dict(outer or {})
+    for kind, item in (inner or {}).items():
+        base = result.get(kind) or ElementAppearance()
+        result[kind] = ElementAppearance(variant=item.variant or base.variant, corners=item.corners or base.corners)
     return result
 
 

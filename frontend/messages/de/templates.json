@@ -980,11 +980,9 @@
       "editContent": "Inhalt bearbeiten",
       "visibility": "Wo und wie",
       "appearance": "Darstellung im PDF",
-      "variant": "Darstellung",
-      "corners": "Ecken",
-      "inherit": "Wie Erscheinungsbild",
-      "appearanceHelp": "Gilt nur für diesen Baustein in dieser Vorlage, sofort auch für bestehende Protokolle.",
-      "removeBlock": "Baustein entfernen"
+      "appearanceHelp": "Gestaltet wird der Baustein in der PDF-Gestaltung dieser Vorlage: im Designer unter «Protokollinhalt».",
+      "removeBlock": "Baustein entfernen",
+      "openDesign": "PDF-Gestaltung öffnen"
     },
     "switch": {
       "is_visible": {

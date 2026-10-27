@@ -980,11 +980,9 @@
       "editContent": "Modifica contenuto",
       "visibility": "Dove e come",
       "appearance": "Aspetto nel PDF",
-      "variant": "Stile",
-      "corners": "Angoli",
-      "inherit": "Come l’aspetto",
-      "appearanceHelp": "Vale solo per questo blocco in questo modello, subito anche per i verbali esistenti.",
-      "removeBlock": "Rimuovi blocco"
+      "appearanceHelp": "Questo blocco si impagina nell'impaginazione PDF di questo modello: nell'editor, sotto «Contenuto del verbale».",
+      "removeBlock": "Rimuovi blocco",
+      "openDesign": "Apri l'impaginazione PDF"
     },
     "switch": {
       "is_visible": {

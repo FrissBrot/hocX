@@ -524,7 +524,11 @@
     "startFrom": "Ausgangspunkt",
     "startFromHelp": "Die gewählte Vorlage wird kopiert; ohne Auswahl entsteht eine leere Vorlage.",
     "submit": "Erstellen und öffnen",
-    "title": "Neue Vorlage"
+    "title": "Neue Vorlage",
+    "design": "Design",
+    "designHelp": "Das Design gestaltet Titelseite, Kopf- und Fusszeile und alle Elemente einheitlich und legt ein passendes Brand-Profil an. Einzelne Elemente und Bausteine lassen sich danach im Designer anders darstellen.",
+    "noDesign": "Ohne Design",
+    "noDesignHelp": "Leer oder Kopie einer bestehenden Vorlage"
   },
   "data": {
     "help": "Datenfelder aus hocX einfügen. Beim Export werden sie mit den Rechten der exportierenden Person gefüllt."
@@ -735,39 +739,32 @@
     "year": "Pro Jahr"
   },
   "examples": {
-    "add": "Hinzufügen",
-    "adding": "Wird hinzugefügt …",
-    "description": "Fertig gestaltete Vorlagen. «Hinzufügen» legt die Vorlage und ein passendes Brand-Profil an. Im Designer stellst du die Vorlage danach auf euer eigenes Brand-Profil um.",
-    "imported": "Beispiel hinzugefügt. Vorlage und Brand-Profil sind angelegt.",
     "items": {
-      "protocol_band": {
+      "alpin": {
         "description": "Titelseite mit Farbband in der Hauptfarbe, Kennzahlen und Inhaltsverzeichnis, Fussbild am Seitenende.",
-        "name": "Protokoll Farbband"
+        "name": "Alpin"
       },
-      "protocol_light": {
+      "kreide": {
         "description": "Weisse Titelseite mit feinen Linien, Kennzahlen und Inhaltsverzeichnis, Fussbild am Seitenende.",
-        "name": "Protokoll Hell"
+        "name": "Kreide"
       },
-      "protocol_construction": {
+      "signal": {
         "description": "Dunkles Titelband mit Signalstreifen, Eckdaten, Kennzahlen und Verteiler.",
-        "name": "Protokoll Baustelle"
+        "name": "Signal"
       },
-      "protocol_tech": {
+      "fokus": {
         "description": "Viel Weissraum, Agenda auf der Titelseite und Teilnehmende als Chips.",
-        "name": "Protokoll Tech"
+        "name": "Fokus"
       },
-      "protocol_law": {
+      "siegel": {
         "description": "Serifenschrift, zentrierter Briefkopf, Traktanden mit §-Nummern und Unterschriften.",
-        "name": "Protokoll Kanzlei"
+        "name": "Siegel"
       },
-      "protocol_corporate": {
+      "atlas": {
         "description": "Titelband, Eckdaten, Kennzahlen und nummerierte Traktanden.",
-        "name": "Protokoll Corporate"
+        "name": "Atlas"
       }
-    },
-    "loadFailed": "Die Beispiele konnten nicht geladen werden.",
-    "open": "Beispiele",
-    "title": "Gestaltungsbeispiele"
+    }
   },
   "export": {
     "brand": "Corporate Design",
@@ -1714,6 +1711,30 @@
         "name": "Klassisch",
         "help": "Feine Linien und dezente Ecken."
       },
+      "alpin": {
+        "name": "Alpin",
+        "help": "Vollflächige Farbflächen, Karten mit Farbkopf, Pendenzen mit Kästchen."
+      },
+      "kreide": {
+        "name": "Kreide",
+        "help": "Weiss mit feinen Linien, Akzentfarbe nur in Nummern und Kästchen."
+      },
+      "signal": {
+        "name": "Signal",
+        "help": "Kontrastreich und eckig: Farbflächen, Gitter-Tabellen, Status-Pills."
+      },
+      "fokus": {
+        "name": "Fokus",
+        "help": "Viel Weissraum, runde Ecken, Teilnehmende als Chips."
+      },
+      "siegel": {
+        "name": "Siegel",
+        "help": "Formell: feine Linien, §-Nummern, Verantwortliche unter dem Titel."
+      },
+      "atlas": {
+        "name": "Atlas",
+        "help": "Farbbalken, Nummern auf Farbfläche, Pendenzen mit Status-Pills."
+      },
       "rounded": {
         "name": "Abgerundet",
         "help": "Weiche Flächen mit runden Ecken, hervorgehobene Kästen."
@@ -1748,7 +1769,13 @@
       "matrix": "Matrix",
       "todo": "Pendenzen",
       "toc": "Inhaltsverzeichnis",
-      "quote": "Zitate und Beschlüsse"
+      "quote": "Zitate und Beschlüsse",
+      "text": "Text",
+      "static_text": "Feste Texte und Anzeigen",
+      "bullet_list": "Aufzählungen",
+      "image": "Bilder",
+      "chart": "Diagramme",
+      "entry_exit": "Ein- und Austritte"
     },
     "variant": {
       "attendance": {
@@ -1807,9 +1834,55 @@
         "line": "Linie links",
         "box": "Hervorgehobener Kasten",
         "framed": "Zwischen zwei Linien"
+      },
+      "text": {
+        "plain": "Fliesstext",
+        "note": "Hinweis-Kasten",
+        "accent": "Mit Akzentlinie"
+      },
+      "static_text": {
+        "plain": "Fliesstext",
+        "note": "Hinweis-Kasten",
+        "accent": "Mit Akzentlinie"
+      },
+      "bullet_list": {
+        "bullets": "Punkte",
+        "numbers": "Nummern",
+        "dashes": "Striche",
+        "checks": "Kästchen"
+      },
+      "image": {
+        "plain": "Ohne Rahmen",
+        "framed": "Mit Rahmen",
+        "card": "Karte"
+      },
+      "chart": {
+        "plain": "Ohne Rahmen",
+        "card": "Mit Rahmen"
+      },
+      "entry_exit": {
+        "list": "Untereinander",
+        "columns": "Nebeneinander"
       }
     },
     "designerTitle": "Darstellung",
-    "designerHelp": "Gilt nur für diesen Block. Leer = wie im Brand-Profil."
+    "designerHelp": "Gilt nur für diesen Block. Leer = wie im Brand-Profil.",
+    "legacyBase": "Früherer Grundstil"
+  },
+  "blockAppearance": {
+    "title": "Baustein",
+    "listTitle": "Bausteine einzeln gestalten",
+    "listHelp": "Ein Baustein übernimmt die Darstellung dieses Blocks. Wähle einen Baustein, um ihn anders darzustellen.",
+    "listLabel": "Bausteine der Sitzungsvorlage",
+    "notOwned": "Bausteine lassen sich einzeln gestalten, sobald die Sitzungsvorlage eine eigene Gestaltung hat (im Vorlagen-Editor unter «PDF»).",
+    "empty": "Die Sitzungsvorlage hat noch keine Bausteine, die im PDF erscheinen.",
+    "overridden": "Eigene Darstellung",
+    "inElement": "Traktandum: {element}",
+    "help": "Gilt nur für diesen Baustein. Leer = wie der Protokollinhalt.",
+    "inherit": "Wie Protokollinhalt ({value})",
+    "noOptions": "Für diesen Baustein gibt es keine Darstellungsoptionen.",
+    "missing": "Diesen Baustein gibt es in der Sitzungsvorlage nicht mehr.",
+    "back": "Zum Protokollinhalt",
+    "reset": "Zurücksetzen"
   }
 }

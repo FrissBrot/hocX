@@ -66,12 +66,14 @@ Es gibt drei Arten:
 - **Eigene:** neu angelegte Vorlagen (**Neue Vorlage**, leer oder auf Basis einer bestehenden).
 - **Kopie:** angepasste Kopie einer mitgelieferten Vorlage.
 
-**Beispiele** (nur Admins) öffnet eine Galerie mit sechs fertig gestalteten Protokollen
-(Farbband, Hell, Baustelle, Tech, Kanzlei, Corporate). **Hinzufügen** legt die Vorlage und ein
-passendes Brand-Profil an und öffnet die Vorlage im Designer. Sie sieht zuerst aus wie im
-Beispiel, mit Beispielfarben, Beispiellogo und Beispieladresse. Unter **Dokument** stellst du
-das Brand-Profil auf euer eigenes um. Dann erscheint die Vorlage mit euren Farben, eurem Logo
-und euren Angaben. Das Beispiel-Profil kannst du danach im Brand Studio löschen.
+**Neue Vorlage** zeigt für Protokolle eine Galerie mit sechs **Designs** (nur Admins): Alpin,
+Kreide, Signal, Fokus, Siegel und Atlas. Ein Design gestaltet das ganze Protokoll einheitlich:
+Titelseite, Kopf- und Fusszeile, Überschriften, Tabellen und alle Elemente. Es legt die
+Vorlage und ein passendes Brand-Profil an und öffnet die Vorlage im Designer. Sie sieht zuerst
+aus wie im Design, mit Beispielfarben, Beispiellogo und Beispieladresse. Unter **Dokument**
+stellst du das Brand-Profil auf euer eigenes um. Dann erscheint die Vorlage mit euren Farben,
+eurem Logo und euren Angaben. Das Beispiel-Profil kannst du danach im Brand Studio löschen.
+**Ohne Design** startet leer oder mit einer Kopie einer bestehenden Vorlage.
 
 Im Menü (⋮) einer Vorlage: Vorschau, Bearbeiten, Duplizieren, Umbenennen, Versionen, **Als
 Standard festlegen**, Archivieren, Löschen. Über **Standardvorlagen** legen Admins für jeden
@@ -132,6 +134,23 @@ Eigenschaftenbereich.
 Alle Modi bearbeiten dieselbe Vorlage. Beim Wechseln geht nichts verloren, Einstellungen aus
 einem höheren Modus bleiben erhalten und wirken weiter.
 
+### Darstellung der Elemente und Bausteine
+
+Wie Pendenzen, Anwesenheit, Matrix, Texte, Bilder und die übrigen Elemente aussehen, gibt das
+**Design** des Brand-Profils vor (siehe Corporate Design). Davon abweichen lässt sich auf zwei
+Ebenen, jeweils in der Gruppe **Darstellung** der Eigenschaften:
+
+- **Ein Element im Dokument**, z. B. der Knoten «Protokollinhalt»: gilt für alle Pendenzen,
+  Tabellen usw. darin.
+- **Ein einzelner Baustein** eines Protokolls: Gehört die PDF-Gestaltung einer Sitzungsvorlage
+  (im Vorlagen-Editor unter **PDF**), zeigt der Designer deren Traktanden und Bausteine in der
+  **Struktur** unter «Protokollinhalt» und in dessen Eigenschaften unter **Bausteine einzeln
+  gestalten**. Ein Klick auf einen Baustein öffnet seine Darstellung. Leer heisst «wie der
+  Protokollinhalt», **Zurücksetzen** entfernt die eigene Einstellung. Bausteine mit eigener
+  Darstellung tragen ein ◆.
+
+Wie alles im Designer wird die Darstellung erst mit **Veröffentlichen** für Exporte wirksam.
+
 ### Bedingungen und Wiederholen
 
 - **Sichtbarkeit** (Erweitert): Ein Element erscheint nur, wenn eine Bedingung zutrifft, z. B.
@@ -181,6 +200,12 @@ Zeilenabstand), Logos und Bilder (Logo, helles Logo, Briefkopf, Hintergrund, Was
 Fussbild), Seitenaufbau (Standardformat, Ränder, Abstände, Stil von Überschriften und Tabellen),
 Standards für neue Dokumente, Kopf- und Fusszeile, Angaben zur Organisation (Name, Adresse,
 Kontakt, Website, Ort) und welche Angaben der Prüfvermerk zeigt.
+
+Das **Design** (Alpin, Kreide, Signal, Fokus, Siegel, Atlas oder Klassisch) gibt allen Elementen
+eine Darstellung vor: Überschriften, Tabellen, Abschnittsnummern, Pendenzen, Anwesenheit,
+Matrix, Kennzahlen, Texte, Aufzählungen, Bilder, Diagramme und mehr. Unter **Erweiterte
+Optionen** lässt sich jede Elementart abweichend darstellen. Profile mit einem früheren
+Grundstil (Abgerundet, Kräftig, Schlicht) behalten ihn, bis ein Design gewählt wird.
 
 Rechts zeigt eine Vorschau sofort, wie eine Vorlage mit den ungespeicherten Werten aussieht.
 **Speichern** erzeugt eine neue Version des Profils. Frühere Versionen lassen sich unter

@@ -19,6 +19,7 @@ from typing import Any, Callable
 
 from sqlalchemy.orm import Session
 
+from app.documents.appearance import APPEARANCE_BASES
 from app.documents.brand import BrandTokens
 from app.documents.layout import TemplateContent
 from app.documents.system_templates import bind, content, data, exists, key, lit, node, text, txt, when
@@ -481,69 +482,65 @@ class DesignExample:
 
 EXAMPLES: tuple[DesignExample, ...] = (
     DesignExample(
-        "protocol_band", "protocol", _protocol_band,
+        "alpin", "protocol", _protocol_band,
         {
             "colors": _colors("#0A600B", "#4A5D4C", "#E2001A", "#0A600B", text="#1A1D21", muted="#4A5D4C", surface="#EDF4EA", border="#CFDCCB", table_header_background="#EDF4EA", table_header_text="#0A600B"),
             "typography": _typography("liberation_sans"),
-            "layout": {"heading_style": "underline", "table_style": "lines", "heading_number_style": "badge", "responsible_display": "right", "empty_blocks": "hide"},
-            "appearance": {"elements": {"matrix": {"variant": "cards_filled"}, "todo": {"variant": "checklist"}, "attendance": {"variant": "grid"}, "toc": {"variant": "leaders"}, "quote": {"variant": "box"}}},
+            "layout": {"empty_blocks": "hide"},
+            "appearance": {"base": "alpin"},
             "organization": _CLUB_ORGANIZATION,
         },
         images={"logo": "club-logo.png", "footer_image": "club-footer.png"},
         sort_index=1,
     ),
     DesignExample(
-        "protocol_light", "protocol", _protocol_light,
+        "kreide", "protocol", _protocol_light,
         {
             "colors": _colors("#0A600B", "#4A5D4C", "#E2001A", "#0A600B", text="#1A1D21", muted="#6B7A6D", surface="#F4F6F3", border="#E6EAE4", table_header_background="#FFFFFF", table_header_text="#6B7A6D"),
             "typography": _typography("liberation_sans"),
-            "layout": {"heading_style": "plain", "table_style": "minimal", "heading_number_style": "accent", "responsible_display": "right", "empty_blocks": "hide"},
-            "appearance": {"elements": {"matrix": {"variant": "cards"}, "todo": {"variant": "checklist"}, "attendance": {"variant": "grid"}, "kpi_tiles": {"variant": "plain"}, "toc": {"variant": "leaders"}, "quote": {"variant": "framed"}}},
+            "layout": {"empty_blocks": "hide"},
+            "appearance": {"base": "kreide"},
             "organization": _CLUB_ORGANIZATION,
         },
         images={"logo": "club-logo.png", "footer_image": "club-footer.png"},
         sort_index=2,
     ),
     DesignExample(
-        "protocol_construction", "protocol", _protocol_construction,
+        "signal", "protocol", _protocol_construction,
         {
             "colors": _colors("#161616", "#6B6B6B", "#F2B705", "#161616", text="#161616", muted="#6B6B6B", surface="#F3F2EF", border="#D8D6D1", table_header_background="#F3F2EF", table_header_text="#161616"),
             "typography": _typography("liberation_sans", heading_transform="upper"),
-            "layout": {"heading_style": "boxed", "table_style": "grid", "heading_number_style": "accent", "responsible_display": "right"},
-            "appearance": {"elements": {"todo": {"variant": "status"}, "attendance": {"variant": "table"}, "kpi_tiles": {"variant": "filled"}, "matrix": {"variant": "table"}, "quote": {"variant": "box"}}},
+            "appearance": {"base": "signal"},
             "organization": {"name": "Bergmann Bau AG", "address": "Seestrasse 5 · 6300 Zug", "website": "bergmann-bau.ch", "place": "Zug"},
         },
         sort_index=3,
     ),
     DesignExample(
-        "protocol_tech", "protocol", _protocol_tech,
+        "fokus", "protocol", _protocol_tech,
         {
             "colors": _colors("#4B4FD8", "#6A6F7C", "#2E9E6A", "#14161B", text="#14161B", muted="#6A6F7C", surface="#F3F3FD", border="#E0E1E6", table_header_background="#F3F3FD", table_header_text="#14161B"),
             "typography": _typography("inter"),
-            "layout": {"heading_style": "plain", "table_style": "minimal", "heading_number_style": "accent", "responsible_display": "right"},
-            "appearance": {"elements": {"todo": {"variant": "checklist"}, "attendance": {"variant": "chips"}, "kpi_tiles": {"variant": "divided"}, "quote": {"variant": "box"}}},
+            "appearance": {"base": "fokus"},
             "organization": {"name": "lumio GmbH", "address": "Hardturmstrasse 101 · 8005 Zürich", "website": "lumio.ch", "place": "Zürich"},
         },
         sort_index=4,
     ),
     DesignExample(
-        "protocol_law", "protocol", _protocol_law,
+        "siegel", "protocol", _protocol_law,
         {
             "colors": _colors("#7A1F2B", "#6E655D", "#7A1F2B", "#221E1B", text="#221E1B", muted="#6E655D", surface="#F4EFE8", border="#E3DDD4", table_header_background="#F4EFE8", table_header_text="#7A1F2B"),
             "typography": _typography("liberation_serif", base_size=10.5),
-            "layout": {"heading_style": "plain", "table_style": "lines", "heading_number_style": "paragraph", "responsible_display": "below"},
-            "appearance": {"elements": {"attendance": {"variant": "compact"}, "quote": {"variant": "framed"}, "todo": {"variant": "table"}}},
+            "appearance": {"base": "siegel"},
             "organization": {"name": "Keller & Partner", "address": "Bahnhofstrasse 40 · 8001 Zürich", "website": "kellerpartner.ch", "place": "Zürich"},
         },
         sort_index=5,
     ),
     DesignExample(
-        "protocol_corporate", "protocol", _protocol_corporate,
+        "atlas", "protocol", _protocol_corporate,
         {
             "colors": _colors("#17325C", "#5A6B82", "#17325C", "#17325C", text="#18202B", muted="#5A6B82", surface="#EEF2F8", border="#D9DFE7", table_header_background="#EEF2F8", table_header_text="#17325C"),
             "typography": _typography("noto_sans"),
-            "layout": {"heading_style": "bar", "table_style": "lines", "heading_number_style": "badge", "responsible_display": "right"},
-            "appearance": {"elements": {"todo": {"variant": "status"}, "attendance": {"variant": "grid"}, "kpi_tiles": {"variant": "filled"}, "toc": {"variant": "badges"}, "quote": {"variant": "box"}}},
+            "appearance": {"base": "atlas"},
             "organization": {"name": "Aarwerk AG", "address": "Industriestrasse 12 · 5000 Aarau", "website": "aarwerk.ch", "place": "Aarau"},
         },
         images={"logo": "corporate-mark.png"},
@@ -563,8 +560,11 @@ def build_example_content(example: DesignExample) -> TemplateContent:
 
 
 def example_tokens(example: DesignExample, images: dict[str, str] | None = None) -> BrandTokens:
-    """CD des Beispiels; ``images`` setzt die Asset-IDs der importierten Beispielbilder."""
-    raw = {**example.tokens, "assets": dict(images or {})}
+    """CD des Beispiels; ``images`` setzt die Asset-IDs der importierten Beispielbilder. Der
+    Seitenaufbau (Überschriften, Tabellen, Ecken …) kommt aus dem Design (APPEARANCE_BASES),
+    ``tokens["layout"]`` enthält nur Abweichungen davon."""
+    layout = {**APPEARANCE_BASES[example.key]["layout"], **example.tokens.get("layout", {})}
+    raw = {**example.tokens, "layout": layout, "assets": dict(images or {})}
     return BrandTokens.model_validate(raw)
 
 

@@ -18,7 +18,7 @@ from app.api.routes import documents as routes
 from app.documents import template_service
 from app.documents.service import DocumentRequest
 from app.models import DocumentTemplate, DocumentTemplateRevision
-from tests.factories import make_app_user, make_current_user, make_protocol, make_template, make_tenant
+from tests.factories import make_app_user, make_current_user, make_element_definition, make_protocol, make_template, make_template_element, make_tenant
 from tests.render_helpers import render_now
 
 SIMPLE = {"masters": [{"id": "default"}], "body": [{"type": "text", "id": "t", "content": {"default": [{"t": "text", "v": "Erster Stand"}]}}]}
@@ -524,3 +524,30 @@ def test_session_template_gets_its_own_design_and_writers_publish_it(db, world):
     with pytest.raises(HTTPException) as excinfo:
         studio.customize_session_design(session_template.public_id, "protocol", body, db=db, user=world["reader"])
     assert excinfo.value.status_code == 403
+
+
+def test_protocol_structure_lists_the_building_blocks_of_the_owning_session_template(db, world):
+    """Designer: Bausteine einzeln gestalten geht nur in einer Gestaltung, die allein einer
+    Sitzungsvorlage gehört; ausgeblendete Bausteine und Sitzungsnotizen fehlen."""
+    session_template = world["protocol_template"]
+    tenant_id = session_template.tenant_id
+    definition = make_element_definition(db, tenant_id, "Finanzen", [
+        {"id": 1, "title": "Bericht", "sort_index": 10, "element_type_id": 1, "render_type_id": 2, "configuration_json": {}},
+        {"id": 2, "title": "Aufgaben", "sort_index": 20, "element_type_id": 2, "render_type_id": 3, "configuration_json": {}},
+        {"id": 3, "title": "Intern", "sort_index": 30, "element_type_id": 1, "render_type_id": 2, "configuration_json": {}},
+    ])
+    element = make_template_element(db, session_template.id, definition.id, 50, "Finanzen", configuration_json={"block_overrides": {"3": {"export_visible": False}}})
+    shared = _create(db, world)
+    assert studio.get_protocol_structure(shared.id, db=db, user=world["reader"]).owned is False
+
+    own = studio.customize_session_design(session_template.public_id, "protocol", studio.SessionDesignCustomize(name="Eigen"), db=db, user=world["writer"])
+    structure = studio.get_protocol_structure(own.id, db=db, user=world["reader"])
+    assert structure.owned and structure.session_template_name == session_template.name
+    finance = next(item for item in structure.elements if item.id == element.public_id)
+    assert [(block.key, block.title, block.appearance_kinds) for block in finance.blocks] == [
+        (f"{element.public_id}:1", "Bericht", ["text"]),
+        (f"{element.public_id}:2", "Aufgaben", ["todo", "table"]),
+    ]
+    with pytest.raises(HTTPException) as excinfo:
+        studio.get_protocol_structure(own.id, db=db, user=world["foreign"])
+    assert excinfo.value.status_code == 404

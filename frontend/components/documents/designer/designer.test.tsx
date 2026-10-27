@@ -23,6 +23,7 @@ const api = vi.hoisted(() => ({
     duplicateTemplate: vi.fn(),
     discardDraft: vi.fn(),
     createComponent: vi.fn(),
+    protocolStructure: vi.fn(),
   },
 }));
 const { toast, confirm, push } = vi.hoisted(() => ({ toast: vi.fn(), confirm: vi.fn(), push: vi.fn() }));
@@ -94,6 +95,7 @@ describe("TemplateDesigner", () => {
     api.studioApi.brands.mockResolvedValue([brand]);
     api.studioApi.assets.mockResolvedValue([]);
     api.studioApi.components.mockResolvedValue([]);
+    api.studioApi.protocolStructure.mockResolvedValue({ owned: false, session_template_name: null, elements: [] });
     api.previewDocument.mockResolvedValue({ pages: ["data:image/png;base64,AAA"], page_count: 1, diagnostics: [], template_id: null, template_source: null, design_hash: null });
     api.studioApi.saveDraft.mockImplementation(async (_id: string, body: { lock_version: number | null }) => ({ revision: revision({ lock_version: (body.lock_version ?? 3) + 1 }), diagnostics: [] }));
   });
@@ -327,6 +329,42 @@ describe("TemplateDesigner", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Daten" }));
     expect(screen.getAllByRole("button", { name: "«Gesamtsaldo» einfügen" })[0]).toBeDisabled();
     expect(screen.getAllByRole("button", { name: "«Name der Organisation» einfügen" })[0]).toBeEnabled();
+  });
+
+  it("styles a single building block of the minutes content and resets it", async () => {
+    const key = "11111111-1111-4111-8111-111111111111:2";
+    api.studioApi.getTemplate.mockResolvedValue(detail({ document_type: "protocol", content: { ...contentFixture(), body: [{ id: "proto", type: "data_block", component: "protocol_element", params: {}, title_mode: "none", level: 1, hide_if_empty: true, appearance: {} }] } }));
+    api.studioApi.protocolStructure.mockResolvedValue({
+      owned: true,
+      session_template_name: "Vorstand",
+      elements: [{ id: "11111111-1111-4111-8111-111111111111", title: "Finanzen", blocks: [
+        { key: "11111111-1111-4111-8111-111111111111:1", title: "Bericht", element_type: "text", element_type_id: 1, appearance_kinds: ["text"] },
+        { key, title: "", element_type: "todo", element_type_id: 2, appearance_kinds: ["todo", "table"] },
+      ] }],
+    });
+    await renderDesigner();
+    fireEvent.click(screen.getByRole("tab", { name: "Struktur" }));
+    const left = screen.getByRole("complementary", { name: "Bausteine" });
+    expect(within(left).getByText("Finanzen")).toBeInTheDocument();
+    // Ohne eigenen Titel: Name des Bausteintyps
+    fireEvent.click(await within(left).findByRole("button", { name: "Todo" }));
+    const panel = screen.getByRole("complementary", { name: "Eigenschaften" });
+    expect(within(panel).getByText("Traktandum: Finanzen")).toBeInTheDocument();
+    fireEvent.change(within(panel).getByRole("combobox", { name: "Pendenzen" }), { target: { value: "checklist" } });
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalled());
+    expect(api.studioApi.saveDraft.mock.calls.at(-1)![1].content.body[0].block_appearance).toEqual({ [key]: { todo: { variant: "checklist", corners: null } } });
+    expect(within(left).getByTitle("Eigene Darstellung")).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole("button", { name: "Zurücksetzen" }));
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft.mock.calls.at(-1)![1].content.body[0].block_appearance).toEqual({}));
+  });
+
+  it("explains why building blocks cannot be styled in a shared design", async () => {
+    api.studioApi.getTemplate.mockResolvedValue(detail({ document_type: "protocol", content: { ...contentFixture(), body: [{ id: "proto", type: "data_block", component: "protocol_element", params: {}, title_mode: "none", level: 1, hide_if_empty: true, appearance: {} }] } }));
+    await renderDesigner();
+    fireEvent.click(screen.getByRole("tab", { name: "Struktur" }));
+    expect(await screen.findAllByText(/eigene Gestaltung hat/)).not.toHaveLength(0);
   });
 
   it("edits the text of the selected element in the properties panel", async () => {

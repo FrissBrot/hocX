@@ -981,6 +981,12 @@
         "document_designer"
       ]
     },
+    "GET /api/document-templates/{template_id}/protocol-structure": {
+      "handler": "document_studio.get_protocol_structure",
+      "requires": [
+        "meetings.read"
+      ]
+    },
     "POST /api/document-templates/{template_id}/publish": {
       "handler": "document_studio.publish_document_template",
       "requires": [

@@ -1,7 +1,8 @@
 "use client";
 
 // Übersteuerung der Elementdarstellung: im Brand Studio gegenüber dem Grundstil, im Designer
-// für einen einzelnen Block gegenüber dem Brand-Profil. Leer = geerbter Wert.
+// für einen einzelnen Block gegenüber dem Brand-Profil und für einen Baustein des
+// Protokollinhalts gegenüber dem Block. Leer = geerbter Wert.
 
 import { useTranslations } from "next-intl";
 
@@ -18,9 +19,10 @@ type Props = {
   /** Beschriftung der geerbten Option, z. B. «Grundstil: Linien» */
   inheritLabel: (value: string) => string;
   onChange: (value: AppearanceOverrides) => void;
+  disabled?: boolean;
 };
 
-export function AppearanceEditor({ catalog, kinds, value, inherited, inheritLabel, onChange }: Props) {
+export function AppearanceEditor({ catalog, kinds, value, inherited, inheritLabel, onChange, disabled = false }: Props) {
   const t = useTranslations("documentStudio");
   return (
     <div className="studio-appearance-list">
@@ -32,6 +34,7 @@ export function AppearanceEditor({ catalog, kinds, value, inherited, inheritLabe
             <span className="field-label">{kindLabel}</span>
             <select
               aria-label={kindLabel}
+              disabled={disabled}
               value={current?.variant ?? ""}
               onChange={(event) => onChange(setAppearance(value, kind, { variant: event.target.value || null }))}
             >
@@ -45,6 +48,7 @@ export function AppearanceEditor({ catalog, kinds, value, inherited, inheritLabe
             {catalog.corner_kinds.includes(kind) ? (
               <select
                 aria-label={t("appearance.cornersFor", { kind: kindLabel })}
+                disabled={disabled}
                 value={current?.corners ?? ""}
                 onChange={(event) => onChange(setAppearance(value, kind, { corners: (event.target.value || null) as "square" | "rounded" | null }))}
               >

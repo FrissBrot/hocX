@@ -524,7 +524,11 @@
     "startFrom": "Starting point",
     "startFromHelp": "The selected template is copied; without a selection an empty template is created.",
     "submit": "Create and open",
-    "title": "New template"
+    "title": "New template",
+    "design": "Design",
+    "designHelp": "The design styles the title page, header, footer and all elements consistently and creates a matching brand profile. Individual elements and blocks can then be styled differently in the designer.",
+    "noDesign": "No design",
+    "noDesignHelp": "Blank or a copy of an existing template"
   },
   "data": {
     "help": "Insert data fields from hocX. On export they are filled with the permissions of the person exporting."
@@ -735,39 +739,32 @@
     "year": "Per year"
   },
   "examples": {
-    "add": "Add",
-    "adding": "Adding …",
-    "description": "Ready-made templates. «Add» creates the template and a matching brand profile. In the designer you can then switch the template to your own brand profile.",
-    "imported": "Example added. Template and brand profile have been created.",
     "items": {
-      "protocol_band": {
+      "alpin": {
         "description": "Title page with a band in the primary colour, key figures and table of contents, footer image at the bottom.",
-        "name": "Minutes colour band"
+        "name": "Alpin"
       },
-      "protocol_light": {
+      "kreide": {
         "description": "White title page with fine lines, key figures and table of contents, footer image at the bottom.",
-        "name": "Minutes light"
+        "name": "Kreide"
       },
-      "protocol_construction": {
+      "signal": {
         "description": "Dark title band with a signal stripe, key facts, key figures and distribution list.",
-        "name": "Minutes site meeting"
+        "name": "Signal"
       },
-      "protocol_tech": {
+      "fokus": {
         "description": "Lots of white space, agenda on the title page and participants as chips.",
-        "name": "Minutes tech"
+        "name": "Fokus"
       },
-      "protocol_law": {
+      "siegel": {
         "description": "Serif typeface, centred letterhead, agenda items with § numbers and signatures.",
-        "name": "Minutes law firm"
+        "name": "Siegel"
       },
-      "protocol_corporate": {
+      "atlas": {
         "description": "Title band, key facts, key figures and numbered agenda items.",
-        "name": "Minutes corporate"
+        "name": "Atlas"
       }
-    },
-    "loadFailed": "The examples could not be loaded.",
-    "open": "Examples",
-    "title": "Design examples"
+    }
   },
   "export": {
     "brand": "Corporate design",
@@ -1714,6 +1711,30 @@
         "name": "Classic",
         "help": "Fine lines and subtle corners."
       },
+      "alpin": {
+        "name": "Alpin",
+        "help": "Solid colour areas, cards with coloured headers, to-dos with checkboxes."
+      },
+      "kreide": {
+        "name": "Kreide",
+        "help": "White with fine lines, accent colour only in numbers and checkboxes."
+      },
+      "signal": {
+        "name": "Signal",
+        "help": "High contrast and square: colour areas, grid tables, status pills."
+      },
+      "fokus": {
+        "name": "Fokus",
+        "help": "Plenty of white space, rounded corners, participants as chips."
+      },
+      "siegel": {
+        "name": "Siegel",
+        "help": "Formal: fine lines, § numbers, responsible persons below the title."
+      },
+      "atlas": {
+        "name": "Atlas",
+        "help": "Colour bars, numbers on colour, to-dos with status pills."
+      },
       "rounded": {
         "name": "Rounded",
         "help": "Soft surfaces with rounded corners, highlighted boxes."
@@ -1748,7 +1769,13 @@
       "matrix": "Matrix",
       "todo": "Tasks",
       "toc": "Table of contents",
-      "quote": "Quotes and decisions"
+      "quote": "Quotes and decisions",
+      "text": "Text",
+      "static_text": "Fixed texts and displays",
+      "bullet_list": "Bullet lists",
+      "image": "Images",
+      "chart": "Charts",
+      "entry_exit": "Joins and leaves"
     },
     "variant": {
       "attendance": {
@@ -1807,9 +1834,55 @@
         "line": "Line on the left",
         "box": "Highlighted box",
         "framed": "Between two lines"
+      },
+      "text": {
+        "plain": "Plain text",
+        "note": "Note box",
+        "accent": "With accent line"
+      },
+      "static_text": {
+        "plain": "Plain text",
+        "note": "Note box",
+        "accent": "With accent line"
+      },
+      "bullet_list": {
+        "bullets": "Bullets",
+        "numbers": "Numbers",
+        "dashes": "Dashes",
+        "checks": "Checkboxes"
+      },
+      "image": {
+        "plain": "No frame",
+        "framed": "Framed",
+        "card": "Card"
+      },
+      "chart": {
+        "plain": "No frame",
+        "card": "Framed"
+      },
+      "entry_exit": {
+        "list": "Stacked",
+        "columns": "Side by side"
       }
     },
     "designerTitle": "Appearance",
-    "designerHelp": "Applies to this block only. Empty = as in the brand profile."
+    "designerHelp": "Applies to this block only. Empty = as in the brand profile.",
+    "legacyBase": "Former base style"
+  },
+  "blockAppearance": {
+    "title": "Building block",
+    "listTitle": "Style building blocks individually",
+    "listHelp": "A building block takes over the appearance of this block. Choose a building block to display it differently.",
+    "listLabel": "Building blocks of the meeting template",
+    "notOwned": "Building blocks can be styled individually once the meeting template has its own design (in the template editor under «PDF»).",
+    "empty": "The meeting template has no building blocks that appear in the PDF yet.",
+    "overridden": "Own appearance",
+    "inElement": "Agenda item: {element}",
+    "help": "Applies to this building block only. Empty = like the minutes content.",
+    "inherit": "Like minutes content ({value})",
+    "noOptions": "There are no appearance options for this building block.",
+    "missing": "This building block no longer exists in the meeting template.",
+    "back": "Back to minutes content",
+    "reset": "Reset"
   }
 }

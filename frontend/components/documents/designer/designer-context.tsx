@@ -7,7 +7,7 @@
 import { createContext, ReactNode, useCallback, useContext, useMemo } from "react";
 
 import type { BrandView } from "@/components/documents/designer/brand-preview";
-import type { Brand, CanvasData, Capabilities, Diagnostic, DocumentAsset, EditorMode, ReusableComponent, StudioCatalog } from "@/lib/documents/api";
+import type { Brand, CanvasData, Capabilities, Diagnostic, DocumentAsset, EditorMode, ProtocolStructure, ReusableComponent, StudioCatalog } from "@/lib/documents/api";
 import { Area, locate, TemplateContent, TemplateNode, updateNode } from "@/lib/documents/layout";
 
 export type DesignerState = {
@@ -38,7 +38,15 @@ export type DesignerState = {
   canvasData: CanvasData | null;
   // Eingebettet im Vorlagen-Editor: Traktanden aus dieser Sitzungsvorlage
   sessionTemplateId: string | null;
+  // Bausteine der Sitzungsvorlage, der die Gestaltung gehört (null, solange nicht geladen)
+  protocolStructure: ProtocolStructure | null;
+  // Ausgewählter Baustein im Knoten «Protokollinhalt» (Darstellung je Baustein); schliesst die
+  // Auswahl eines Knotens aus
+  selectedBlock: SelectedBlock | null;
+  selectBlock: (block: SelectedBlock | null) => void;
 };
+
+export type SelectedBlock = { nodeId: string; key: string };
 
 const DesignerContext = createContext<DesignerState | null>(null);
 

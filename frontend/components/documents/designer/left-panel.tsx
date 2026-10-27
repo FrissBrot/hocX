@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { useTranslations } from "next-intl";
 
+import { isProtocolContent, ProtocolBlockList } from "@/components/documents/designer/block-appearance-panel";
 import { modeAllows, useDesigner } from "@/components/documents/designer/designer-context";
 import { bindingLabel, groupBindings } from "@/components/documents/studio-labels";
 import { SearchInput } from "@/components/ui/search-input";
@@ -117,6 +118,7 @@ function TreeItems({ nodes, depth }: { nodes: TemplateNode[]; depth: number }) {
               )}
             </div>
             {node.children?.length ? <TreeItems nodes={node.children} depth={depth + 1} /> : null}
+            {isProtocolContent(node) ? <ProtocolBlockList node={node} nested /> : null}
           </li>
         );
       })}

@@ -980,11 +980,9 @@
       "editContent": "Edit content",
       "visibility": "Where and how",
       "appearance": "Appearance in the PDF",
-      "variant": "Style",
-      "corners": "Corners",
-      "inherit": "As in appearance",
-      "appearanceHelp": "Applies only to this building block in this template, also to existing protocols right away.",
-      "removeBlock": "Remove building block"
+      "appearanceHelp": "This building block is styled in the PDF design of this template: in the designer under «Minutes content».",
+      "removeBlock": "Remove building block",
+      "openDesign": "Open PDF design"
     },
     "switch": {
       "is_visible": {

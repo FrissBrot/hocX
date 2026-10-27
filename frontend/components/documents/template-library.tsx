@@ -13,7 +13,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { AssignmentsModal } from "@/components/documents/assignments-modal";
-import { ExamplesModal } from "@/components/documents/examples-modal";
 import { RevisionsModal } from "@/components/documents/revisions-modal";
 import { templateDescription, templateDisplayName } from "@/components/documents/studio-labels";
 import { TemplateCreateModal } from "@/components/documents/template-create-modal";
@@ -45,7 +44,6 @@ export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [assignmentsOpen, setAssignmentsOpen] = useState(false);
-  const [examplesOpen, setExamplesOpen] = useState(false);
   const [preview, setPreview] = useState<DocumentTemplateInfo | null>(null);
   const [revisionsOf, setRevisionsOf] = useState<DocumentTemplateInfo | null>(null);
   const [renaming, setRenaming] = useState<DocumentTemplateInfo | null>(null);
@@ -170,11 +168,6 @@ export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
               {t("assignments.open")}
             </button>
           )}
-          {scope === "session" && capabilities.manage_brand && capabilities.edit_templates && (
-            <button type="button" className="button-secondary" onClick={() => setExamplesOpen(true)}>
-              {t("examples.open")}
-            </button>
-          )}
           {capabilities.edit_templates && (
             <button type="button" className="button-primary" onClick={() => setCreateOpen(true)}>
               {t("library.create")}
@@ -239,10 +232,10 @@ export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
           onClose={() => setCreateOpen(false)}
           types={scopeTypes}
           templates={templates ?? []}
+          canUseDesigns={capabilities.manage_brand}
           onCreated={(created) => router.push(`/documents/templates/${created.id}`)}
         />
       )}
-      {examplesOpen && <ExamplesModal onClose={() => setExamplesOpen(false)} onImported={(created) => router.push(`/documents/templates/${created.id}`)} />}
       {assignmentsOpen && <AssignmentsModal open={assignmentsOpen} onClose={() => { setAssignmentsOpen(false); load(); }} types={scopeTypes} templates={templates ?? []} />}
       {preview && <TemplatePreviewModal template={preview} onClose={() => setPreview(null)} />}
       {revisionsOf && <RevisionsModal template={revisionsOf} onClose={() => setRevisionsOf(null)} onRestored={() => router.push(`/documents/templates/${revisionsOf.id}`)} />}

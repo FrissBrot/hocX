@@ -181,19 +181,28 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   Migration `0153_agenda_item`: Tabellen `agenda_item` und `user_agenda_template_preference`,
   beide mit RLS. Benutzerdoku: `docs-site/docs/benutzer/anliegen.md`.
 
-### Neu: Gestaltungsbeispiele für Protokolle (Nachtrag vom 2026-10-25)
+### Neu: Designs für Protokolle (Nachtrag vom 2026-10-25, ergänzt 2026-10-27)
 
-- Im Document Studio öffnet **Beispiele** (nur Admins) eine Galerie mit sechs fertig
-  gestalteten Protokollen: **Farbband**, **Hell**, **Baustelle**, **Tech**, **Kanzlei** und
-  **Corporate**. Sie haben eigene Titelseiten mit Farbband, Kennzahlen (Anwesende, offene
-  Todos, nächste Sitzung), Inhaltsverzeichnis oder Traktandenliste, Verteiler und Fussbild
-  sowie eigene Kopf- und Fusszeilen.
-- **Hinzufügen** legt die Vorlage und ein passendes Brand-Profil (Farben, Schriften,
-  Beispiellogo, Beispieladresse) an und verknüpft beide. Die Vorlage sieht so zuerst aus wie
-  im Entwurf. Stellt man sie im Designer auf das eigene Brand-Profil um, erscheint sie mit den
-  eigenen Farben, dem Logo und den Angaben des Vereins.
-- Die Beispiele sind keine Systemvorlagen und erscheinen erst nach dem Hinzufügen in der
-  Bibliothek. Gebaut sind sie nur aus den vorhandenen Bausteinen.
+- Sechs fertig gestaltete Designs: **Alpin**, **Kreide**, **Signal**, **Fokus**, **Siegel** und
+  **Atlas**. Jedes gestaltet das ganze Dokument einheitlich: Titelseite (Farbband, Kennzahlen,
+  Inhaltsverzeichnis oder Traktandenliste, Verteiler, Fussbild), Kopf- und Fusszeilen,
+  Überschriften, Tabellen und die Darstellung **aller** Elemente.
+- Gewählt wird das Design beim Anlegen: **Neue Vorlage** zeigt für Protokolle eine
+  Design-Galerie (Admins). Das Design legt die Vorlage und ein passendes Brand-Profil (Farben,
+  Schriften, Beispiellogo, Beispieladresse) an. Stellt man die Vorlage im Designer auf das
+  eigene Brand-Profil um, erscheint sie mit den Farben, dem Logo und den Angaben des Vereins.
+  Der frühere Dialog **Beispiele** entfällt.
+- Im Brand Studio sind die sechs Designs die Grundstile. Die bisherigen Grundstile
+  «Abgerundet», «Kräftig» und «Schlicht» bleiben für Profile erhalten, die sie nutzen, stehen
+  aber nicht mehr zur Wahl.
+- Neue Darstellungen für Text, feste Texte und Anzeigen (Hinweis-Kasten, Akzentlinie),
+  Aufzählungen (Nummern, Striche, Kästchen), Bilder (Rahmen, Karte), Diagramme (Rahmen) und Ein-
+  und Austritte (nebeneinander). Damit hat jeder Baustein eines Protokolls eine Darstellung.
+- **Bausteine einzeln gestalten:** In der PDF-Gestaltung einer Sitzungsvorlage listet der
+  Designer unter «Protokollinhalt» deren Traktanden und Bausteine. Ein Baustein übernimmt die
+  Darstellung des Dokuments und lässt sich je Elementart abweichend darstellen. Die Einstellung
+  gehört zur Gestaltung (Entwurf, Vorschau, Veröffentlichen). Die Darstellungs-Auswahl im
+  Sitzungsvorlagen-Editor entfällt; dort führt ein Link in die PDF-Gestaltung.
 
 ### Neu: Dokument-Engine und Document Studio
 

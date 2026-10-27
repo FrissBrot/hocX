@@ -14,6 +14,7 @@ from sqlalchemy import select
 from app.api.routes import document_studio as studio
 from app.documents import brand_service, service
 from app.documents.compiler import validate_template
+from app.documents.appearance import APPEARANCE_BASES, APPEARANCE_VARIANTS, DESIGN_KEYS
 from app.documents.examples import ASSET_DIR, EXAMPLES, build_example_content, example_tokens, thumbnail_path
 from app.documents.layout import all_node_lists, iter_nodes
 from app.documents.service import DocumentRequest
@@ -76,6 +77,20 @@ def test_example_brand_images_and_thumbnail_are_bundled(example):
     assert thumbnail_path(example).read_bytes().startswith(b"\x89PNG")
 
 
+@pytest.mark.parametrize("example", EXAMPLES, ids=lambda item: item.key)
+def test_example_is_a_design_with_every_element_kind(example):
+    """Jedes Beispiel ist ein Design: Grundstil mit eigener Darstellung für jede Elementart,
+    Seitenaufbau aus dem Design."""
+    base = APPEARANCE_BASES[example.key]
+    assert example.key in DESIGN_KEYS and not base.get("legacy")
+    assert set(base["elements"]) == set(APPEARANCE_VARIANTS) - {"heading", "table"}
+    for kind, variant in base["elements"].items():
+        assert variant in APPEARANCE_VARIANTS[kind], (example.key, kind)
+    tokens = example_tokens(example)
+    assert tokens.appearance.base == example.key and not tokens.appearance.elements
+    assert tokens.layout.heading_style == base["layout"]["heading_style"] and tokens.layout.radius == base["layout"]["radius"]
+
+
 def test_examples_are_not_system_templates(db):
     assert not {item.key for item in EXAMPLES} & set(SYSTEM_TEMPLATE_KEYS)
     assert db.scalar(select(DocumentTemplate.id).where(DocumentTemplate.system_key.in_([item.key for item in EXAMPLES]))) is None
@@ -93,14 +108,14 @@ def world(db):
     }
 
 
-def _import(db, user, key="protocol_band", name="Protokoll Farbband"):
+def _import(db, user, key="alpin", name="Alpin"):
     return asyncio.run(studio._import_design_example_impl(key, studio.ExampleImport(name=name), db=db, user=user))
 
 
 def test_list_and_thumbnail_for_every_reader(db, world):
     listed = studio.list_design_examples(user=world["reader"])
     assert [item.key for item in listed] == [item.key for item in sorted(EXAMPLES, key=lambda item: item.sort_index)]
-    response = studio.get_design_example_thumbnail("protocol_tech", user=world["reader"])
+    response = studio.get_design_example_thumbnail("fokus", user=world["reader"])
     assert response.media_type == "image/png" and response.body.startswith(b"\x89PNG")
     with pytest.raises(HTTPException) as excinfo:
         studio.get_design_example_thumbnail("../system_templates", user=world["reader"])
@@ -115,7 +130,7 @@ def test_import_creates_template_linked_to_its_own_brand(db, world):
     assert imported.draft_revision is not None and imported.published_revision is None
 
     brand = db.scalar(select(DocumentBrand).where(DocumentBrand.public_id == imported.brand_id))
-    assert brand.tenant_id == tenant_id and brand.name == "Protokoll Farbband" and not brand.is_default
+    assert brand.tenant_id == tenant_id and brand.name == "Alpin" and not brand.is_default
     default = brand_service.default_brand(db, tenant_id)
     assert default is not None and default.id != brand.id
 

@@ -524,7 +524,11 @@
     "startFrom": "Punto di partenza",
     "startFromHelp": "Il modello scelto viene copiato; senza scelta si crea un modello vuoto.",
     "submit": "Crea e apri",
-    "title": "Nuovo modello"
+    "title": "Nuovo modello",
+    "design": "Design",
+    "designHelp": "Il design impagina in modo uniforme la pagina del titolo, l'intestazione, il piè di pagina e tutti gli elementi e crea un profilo del marchio abbinato. Singoli elementi e blocchi possono poi essere presentati diversamente nell'editor.",
+    "noDesign": "Senza design",
+    "noDesignHelp": "Vuoto o copia di un modello esistente"
   },
   "data": {
     "help": "Inserisci campi dati da hocX. All’esportazione vengono compilati con i diritti di chi esporta."
@@ -735,39 +739,32 @@
     "year": "Per anno"
   },
   "examples": {
-    "add": "Aggiungi",
-    "adding": "Aggiunta in corso …",
-    "description": "Modelli pronti all'uso. «Aggiungi» crea il modello e un profilo del marchio abbinato. Nell'editor puoi poi passare il modello al tuo profilo del marchio.",
-    "imported": "Esempio aggiunto. Modello e profilo del marchio sono stati creati.",
     "items": {
-      "protocol_band": {
+      "alpin": {
         "description": "Pagina del titolo con fascia nel colore principale, cifre chiave e indice, immagine a piè di pagina.",
-        "name": "Verbale fascia colorata"
+        "name": "Alpin"
       },
-      "protocol_light": {
+      "kreide": {
         "description": "Pagina del titolo bianca con linee sottili, cifre chiave e indice, immagine a piè di pagina.",
-        "name": "Verbale chiaro"
+        "name": "Kreide"
       },
-      "protocol_construction": {
+      "signal": {
         "description": "Fascia del titolo scura con striscia di segnalazione, dati principali, cifre chiave e lista di distribuzione.",
-        "name": "Verbale di cantiere"
+        "name": "Signal"
       },
-      "protocol_tech": {
+      "fokus": {
         "description": "Molto spazio bianco, ordine del giorno nella pagina del titolo e partecipanti come etichette.",
-        "name": "Verbale tech"
+        "name": "Fokus"
       },
-      "protocol_law": {
+      "siegel": {
         "description": "Carattere con grazie, intestazione centrata, trattande con numeri § e firme.",
-        "name": "Verbale studio legale"
+        "name": "Siegel"
       },
-      "protocol_corporate": {
+      "atlas": {
         "description": "Fascia del titolo, dati principali, cifre chiave e trattande numerate.",
-        "name": "Verbale corporate"
+        "name": "Atlas"
       }
-    },
-    "loadFailed": "Non è stato possibile caricare gli esempi.",
-    "open": "Esempi",
-    "title": "Esempi di impaginazione"
+    }
   },
   "export": {
     "brand": "Corporate design",
@@ -1714,6 +1711,30 @@
         "name": "Classico",
         "help": "Linee sottili e angoli discreti."
       },
+      "alpin": {
+        "name": "Alpin",
+        "help": "Superfici a tinta piena, schede con intestazione colorata, pendenze con caselle."
+      },
+      "kreide": {
+        "name": "Kreide",
+        "help": "Bianco con linee sottili, colore d'accento solo su numeri e caselle."
+      },
+      "signal": {
+        "name": "Signal",
+        "help": "Contrastato e squadrato: superfici colorate, tabelle a griglia, etichette di stato."
+      },
+      "fokus": {
+        "name": "Fokus",
+        "help": "Molto spazio bianco, angoli arrotondati, partecipanti come etichette."
+      },
+      "siegel": {
+        "name": "Siegel",
+        "help": "Formale: linee sottili, numeri §, responsabili sotto il titolo."
+      },
+      "atlas": {
+        "name": "Atlas",
+        "help": "Barre colorate, numeri su fondo colorato, pendenze con etichette di stato."
+      },
       "rounded": {
         "name": "Arrotondato",
         "help": "Superfici morbide con angoli arrotondati, riquadri evidenziati."
@@ -1748,7 +1769,13 @@
       "matrix": "Matrice",
       "todo": "Attività",
       "toc": "Indice",
-      "quote": "Citazioni e decisioni"
+      "quote": "Citazioni e decisioni",
+      "text": "Testo",
+      "static_text": "Testi fissi e visualizzazioni",
+      "bullet_list": "Elenchi puntati",
+      "image": "Immagini",
+      "chart": "Grafici",
+      "entry_exit": "Entrate e uscite"
     },
     "variant": {
       "attendance": {
@@ -1807,9 +1834,55 @@
         "line": "Linea a sinistra",
         "box": "Riquadro evidenziato",
         "framed": "Tra due linee"
+      },
+      "text": {
+        "plain": "Testo semplice",
+        "note": "Riquadro",
+        "accent": "Con linea d'accento"
+      },
+      "static_text": {
+        "plain": "Testo semplice",
+        "note": "Riquadro",
+        "accent": "Con linea d'accento"
+      },
+      "bullet_list": {
+        "bullets": "Punti",
+        "numbers": "Numeri",
+        "dashes": "Trattini",
+        "checks": "Caselle"
+      },
+      "image": {
+        "plain": "Senza cornice",
+        "framed": "Con cornice",
+        "card": "Scheda"
+      },
+      "chart": {
+        "plain": "Senza cornice",
+        "card": "Con cornice"
+      },
+      "entry_exit": {
+        "list": "Uno sotto l'altro",
+        "columns": "Affiancati"
       }
     },
     "designerTitle": "Aspetto",
-    "designerHelp": "Vale solo per questo blocco. Vuoto = come nel profilo."
+    "designerHelp": "Vale solo per questo blocco. Vuoto = come nel profilo.",
+    "legacyBase": "Stile di base precedente"
+  },
+  "blockAppearance": {
+    "title": "Blocco",
+    "listTitle": "Impaginare i blocchi singolarmente",
+    "listHelp": "Un blocco riprende la presentazione di questo elemento. Scegli un blocco per presentarlo diversamente.",
+    "listLabel": "Blocchi del modello di seduta",
+    "notOwned": "I blocchi possono essere impaginati singolarmente non appena il modello di seduta ha una propria impaginazione (nell'editor del modello, sotto «PDF»).",
+    "empty": "Il modello di seduta non ha ancora blocchi che compaiono nel PDF.",
+    "overridden": "Presentazione propria",
+    "inElement": "Trattanda: {element}",
+    "help": "Vale solo per questo blocco. Vuoto = come il contenuto del verbale.",
+    "inherit": "Come il contenuto del verbale ({value})",
+    "noOptions": "Per questo blocco non ci sono opzioni di presentazione.",
+    "missing": "Questo blocco non esiste più nel modello di seduta.",
+    "back": "Torna al contenuto del verbale",
+    "reset": "Reimposta"
   }
 }

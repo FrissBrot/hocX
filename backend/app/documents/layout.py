@@ -23,7 +23,7 @@ from typing import Annotated, Any, Iterator, Literal, Union, get_args
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.documents.appearance import ElementAppearance, validate_appearance_elements
+from app.documents.appearance import ElementAppearance, validate_appearance_elements, validate_block_overrides
 from app.documents.conditions import Condition
 
 LAYOUT_SCHEMA_VERSION = 1
@@ -380,11 +380,20 @@ class DataBlockNode(NodeBase):
     hide_if_empty: bool = True
     # Darstellung dieses Blocks abweichend vom Brand-Profil (Elementart → Variante/Ecken)
     appearance: dict[str, ElementAppearance] = Field(default_factory=dict)
+    # Darstellung einzelner Bausteine (nur «Protokollinhalt» einer Gestaltung, die einer
+    # Sitzungsvorlage gehört): Baustein-Schlüssel (appearance.block_source) → Elementart →
+    # Variante/Ecken, über ``appearance`` gelegt
+    block_appearance: dict[str, dict[str, ElementAppearance]] = Field(default_factory=dict)
 
     @field_validator("appearance")
     @classmethod
     def _known_appearance(cls, value: dict[str, ElementAppearance]) -> dict[str, ElementAppearance]:
         return validate_appearance_elements(value, allow_brand_only=False)
+
+    @field_validator("block_appearance")
+    @classmethod
+    def _known_block_appearance(cls, value: dict[str, dict[str, ElementAppearance]]) -> dict[str, dict[str, ElementAppearance]]:
+        return validate_block_overrides(value)
 
 
 class PageBreakNode(NodeBase):

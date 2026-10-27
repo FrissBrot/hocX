@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { AppearanceEditor } from "@/components/documents/appearance-editor";
+import { isProtocolContent, ProtocolBlockList } from "@/components/documents/designer/block-appearance-panel";
 import { AssetPicker } from "@/components/documents/asset-picker";
 import { ComponentParamForm } from "@/components/documents/designer/component-params";
 import { diagnosticsFor, modeAllows, useDesigner, useSelectedNode } from "@/components/documents/designer/designer-context";
@@ -182,6 +183,13 @@ export function PropertiesPanel() {
                   inheritLabel={(value) => t("appearance.inheritBrand", { value })}
                   onChange={(appearance) => change({ appearance })}
                 />
+              </>
+            )}
+            {isProtocolContent(node) && (
+              <>
+                <h4 className="studio-subtitle">{t("blockAppearance.listTitle")}</h4>
+                <p className="field-help">{t("blockAppearance.listHelp")}</p>
+                <ProtocolBlockList node={node} />
               </>
             )}
           </>

@@ -524,7 +524,11 @@
     "startFrom": "Point de départ",
     "startFromHelp": "Le modèle choisi est copié ; sans choix, un modèle vide est créé.",
     "submit": "Créer et ouvrir",
-    "title": "Nouveau modèle"
+    "title": "Nouveau modèle",
+    "design": "Design",
+    "designHelp": "Le design met en forme de manière uniforme la page de titre, l'en-tête, le pied de page et tous les éléments, et crée un profil de marque assorti. Les éléments et blocs peuvent ensuite être présentés autrement dans l'éditeur.",
+    "noDesign": "Sans design",
+    "noDesignHelp": "Vide ou copie d'un modèle existant"
   },
   "data": {
     "help": "Insérez des champs de données de hocX. À l’export, ils sont remplis avec les droits de la personne qui exporte."
@@ -735,39 +739,32 @@
     "year": "Par année"
   },
   "examples": {
-    "add": "Ajouter",
-    "adding": "Ajout en cours …",
-    "description": "Modèles prêts à l'emploi. «Ajouter» crée le modèle et un profil de marque assorti. Dans l'éditeur, tu peux ensuite passer le modèle à ton propre profil de marque.",
-    "imported": "Exemple ajouté. Le modèle et le profil de marque ont été créés.",
     "items": {
-      "protocol_band": {
+      "alpin": {
         "description": "Page de titre avec un bandeau dans la couleur principale, chiffres clés et table des matières, image de pied de page.",
-        "name": "Procès-verbal bandeau"
+        "name": "Alpin"
       },
-      "protocol_light": {
+      "kreide": {
         "description": "Page de titre blanche aux lignes fines, chiffres clés et table des matières, image de pied de page.",
-        "name": "Procès-verbal clair"
+        "name": "Kreide"
       },
-      "protocol_construction": {
+      "signal": {
         "description": "Bandeau de titre sombre avec bande de signalisation, données clés, chiffres clés et liste de diffusion.",
-        "name": "Procès-verbal de chantier"
+        "name": "Signal"
       },
-      "protocol_tech": {
+      "fokus": {
         "description": "Beaucoup d'espace blanc, ordre du jour sur la page de titre et participants sous forme de pastilles.",
-        "name": "Procès-verbal tech"
+        "name": "Fokus"
       },
-      "protocol_law": {
+      "siegel": {
         "description": "Police à empattements, en-tête centré, points numérotés avec § et signatures.",
-        "name": "Procès-verbal étude"
+        "name": "Siegel"
       },
-      "protocol_corporate": {
+      "atlas": {
         "description": "Bandeau de titre, données clés, chiffres clés et points de l'ordre du jour numérotés.",
-        "name": "Procès-verbal corporate"
+        "name": "Atlas"
       }
-    },
-    "loadFailed": "Les exemples n'ont pas pu être chargés.",
-    "open": "Exemples",
-    "title": "Exemples de mise en page"
+    }
   },
   "export": {
     "brand": "Identité visuelle",
@@ -1714,6 +1711,30 @@
         "name": "Classique",
         "help": "Lignes fines et coins discrets."
       },
+      "alpin": {
+        "name": "Alpin",
+        "help": "Aplats de couleur, cartes à en-tête coloré, tâches avec cases à cocher."
+      },
+      "kreide": {
+        "name": "Kreide",
+        "help": "Blanc aux lignes fines, couleur d'accent seulement pour les numéros et les cases."
+      },
+      "signal": {
+        "name": "Signal",
+        "help": "Contrasté et anguleux : aplats de couleur, tableaux quadrillés, pastilles de statut."
+      },
+      "fokus": {
+        "name": "Fokus",
+        "help": "Beaucoup d'espace blanc, coins arrondis, participants sous forme de pastilles."
+      },
+      "siegel": {
+        "name": "Siegel",
+        "help": "Formel : lignes fines, numéros §, responsables sous le titre."
+      },
+      "atlas": {
+        "name": "Atlas",
+        "help": "Barres de couleur, numéros sur fond coloré, tâches avec pastilles de statut."
+      },
       "rounded": {
         "name": "Arrondi",
         "help": "Surfaces douces aux coins arrondis, encadrés mis en évidence."
@@ -1748,7 +1769,13 @@
       "matrix": "Matrice",
       "todo": "Tâches",
       "toc": "Table des matières",
-      "quote": "Citations et décisions"
+      "quote": "Citations et décisions",
+      "text": "Texte",
+      "static_text": "Textes fixes et affichages",
+      "bullet_list": "Listes à puces",
+      "image": "Images",
+      "chart": "Graphiques",
+      "entry_exit": "Entrées et sorties"
     },
     "variant": {
       "attendance": {
@@ -1807,9 +1834,55 @@
         "line": "Ligne à gauche",
         "box": "Encadré mis en évidence",
         "framed": "Entre deux lignes"
+      },
+      "text": {
+        "plain": "Texte courant",
+        "note": "Encadré",
+        "accent": "Avec ligne d'accent"
+      },
+      "static_text": {
+        "plain": "Texte courant",
+        "note": "Encadré",
+        "accent": "Avec ligne d'accent"
+      },
+      "bullet_list": {
+        "bullets": "Puces",
+        "numbers": "Numéros",
+        "dashes": "Tirets",
+        "checks": "Cases"
+      },
+      "image": {
+        "plain": "Sans cadre",
+        "framed": "Avec cadre",
+        "card": "Carte"
+      },
+      "chart": {
+        "plain": "Sans cadre",
+        "card": "Avec cadre"
+      },
+      "entry_exit": {
+        "list": "L'un sous l'autre",
+        "columns": "Côte à côte"
       }
     },
     "designerTitle": "Apparence",
-    "designerHelp": "S’applique uniquement à ce bloc. Vide = comme dans le profil."
+    "designerHelp": "S’applique uniquement à ce bloc. Vide = comme dans le profil.",
+    "legacyBase": "Ancien style de base"
+  },
+  "blockAppearance": {
+    "title": "Bloc",
+    "listTitle": "Mettre en forme les blocs individuellement",
+    "listHelp": "Un bloc reprend la présentation de cet élément. Choisis un bloc pour le présenter autrement.",
+    "listLabel": "Blocs du modèle de séance",
+    "notOwned": "Les blocs peuvent être mis en forme individuellement dès que le modèle de séance a sa propre mise en page (dans l'éditeur de modèle, sous «PDF»).",
+    "empty": "Le modèle de séance n'a pas encore de blocs qui apparaissent dans le PDF.",
+    "overridden": "Présentation propre",
+    "inElement": "Point de l'ordre du jour : {element}",
+    "help": "S'applique uniquement à ce bloc. Vide = comme le contenu du procès-verbal.",
+    "inherit": "Comme le contenu du procès-verbal ({value})",
+    "noOptions": "Ce bloc n'a pas d'options de présentation.",
+    "missing": "Ce bloc n'existe plus dans le modèle de séance.",
+    "back": "Retour au contenu du procès-verbal",
+    "reset": "Réinitialiser"
   }
 }

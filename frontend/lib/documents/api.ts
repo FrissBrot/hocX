@@ -59,7 +59,13 @@ export type DataComponentInfo = {
   appearance_kinds: string[];
 };
 
-export type AppearanceBaseInfo = { layout: { heading_style: string; table_style: string; radius: number }; elements: Record<string, string> };
+// Grundstil bzw. Design: ``layout`` übernimmt das Brand Studio in den Seitenaufbau, ``legacy`` =
+// früherer Grundstil, nur noch für Profile, die ihn schon nutzen
+export type AppearanceBaseInfo = {
+  layout: { heading_style: string; table_style: string; radius: number; heading_number_style?: string; responsible_display?: string };
+  elements: Record<string, string>;
+  legacy?: boolean;
+};
 export type AppearanceCatalog = { variants: Record<string, string[]>; brand_only: string[]; corner_kinds: string[]; bases: Record<string, AppearanceBaseInfo> };
 
 export type BindingInfo = {
@@ -152,6 +158,15 @@ export type SessionDesign = {
 };
 
 /** Gestaltungsbeispiel (backend/app/documents/examples.py), Namen über documentStudio.examples.items. */
+// Traktanden und Bausteine der Sitzungsvorlage, der eine Gestaltung gehört (Darstellung je
+// Baustein im Designer, Knoten «Protokollinhalt»: block_appearance[key])
+export type ProtocolStructureBlock = { key: string; title: string; element_type: string; element_type_id: number; appearance_kinds: string[] };
+export type ProtocolStructure = {
+  owned: boolean;
+  session_template_name: string | null;
+  elements: { id: string; title: string; blocks: ProtocolStructureBlock[] }[];
+};
+
 export type DesignExample = {
   key: string;
   document_type: string;
@@ -299,6 +314,7 @@ export const studioApi = {
   compare: (id: string, from: string, to: string) => browserApiFetch<RevisionDiff>(`/api/document-templates/${id}/compare?from=${from}&to=${to}`),
   thumbnailUrl: (id: string, version: string) => `/api/document-templates/${id}/thumbnail?v=${encodeURIComponent(version)}`,
 
+  protocolStructure: (templateId: string) => browserApiFetch<ProtocolStructure>(`/api/document-templates/${encodeURIComponent(templateId)}/protocol-structure`),
   listExamples: () => browserApiFetch<DesignExample[]>("/api/document-studio/examples"),
   importExample: (key: string, name: string) => browserApiFetch<DocumentTemplateDetail>(`/api/document-studio/examples/${encodeURIComponent(key)}/import`, json({ name })),
   exampleThumbnailUrl: (key: string) => `/api/document-studio/examples/${encodeURIComponent(key)}/thumbnail`,

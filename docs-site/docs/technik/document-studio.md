@@ -165,27 +165,61 @@ mit mehreren Varianten (Protokoll: Standard, formell, kompakt, Kurzprotokoll,
 Beschlussprotokoll). `sync_system_templates` gleicht sie beim Start ab (`ensure_document_studio`):
 Änderungen ergeben eine neue Revision, frühere bleiben für bestehende Exporte erhalten.
 
-### Gestaltungsbeispiele (`examples.py`)
+### Designs (`examples.py`, `appearance.py`)
 
-Sechs fertig gestaltete Protokolle (Farbband, Hell, Baustelle, Tech, Kanzlei, Corporate) sind
-**keine** Systemvorlagen. Ein Admin holt sie im Studio über **Beispiele** in den Verein
-(`POST /api/document-studio/examples/{key}/import`). Der Import legt an:
+Sechs Designs (Alpin, Kreide, Signal, Fokus, Siegel, Atlas; Schlüssel `alpin` … `atlas`) sind
+**keine** Systemvorlagen. Ein Design besteht aus zwei Teilen:
+
+- **Grundstil** in `appearance.APPEARANCE_BASES[<key>]`: `layout` (Überschriften, Tabellen,
+  Ecken, Abschnittsnummer, Verantwortliche; das Brand Studio übernimmt die Werte bei der Wahl)
+  und `elements` mit einer Variante für **jede** Elementart aus `APPEARANCE_VARIANTS` ausser
+  `heading`/`table` (`test_examples.py` prüft die Vollständigkeit). Die früheren Grundstile
+  `rounded`, `bold`, `minimal` tragen `legacy: True` und stehen nur Profilen zur Wahl, die sie
+  schon nutzen.
+- **Beispielvorlage** in `examples.EXAMPLES`: Titelseite, Seitenvorlagen und CD-Tokens
+  (Farben, Schriften, Organisation, Beispielbilder). `appearance.base` ist der Schlüssel des
+  Designs, `tokens["layout"]` enthält nur Abweichungen vom Grundstil (`example_tokens`).
+
+Gewählt wird ein Design im Dialog **Neue Vorlage** (nur mit Brand-Recht;
+`POST /api/document-studio/examples/{key}/import`). Der Import legt an:
 
 - die Beispielbilder aus `example_assets/` als Assets des Mandanten (mit Virenscan),
-- ein Brand-Profil mit Farben, Schriften, Überschriften- und Tabellenstil und den
-  Organisationsangaben des Mockups (nie als Standardprofil; fehlt eines, entsteht zuerst das
+- ein Brand-Profil mit den CD-Tokens (nie als Standardprofil; fehlt eines, entsteht zuerst das
   Standardprofil),
 - eine eigene Vorlage mit Entwurf, verknüpft mit diesem Profil (`document_template.brand_id`).
 
 Der Verein sieht die Vorlage so zuerst wie im Mockup. Stellt er sie im Designer unter
 **Dokument** auf sein eigenes Brand-Profil um, erscheint sie mit seinen Farben, seinem Logo
-und seinen Angaben. Die Beispiele verwenden nur Bausteine und Brand-Referenzen, keine festen
+und seinen Angaben. Die Designs verwenden nur Bausteine und Brand-Referenzen, keine festen
 Farben ausser Weiss. Die Vorschaubilder der Galerie liegen fertig unter
 `example_assets/thumbnails/` (`GET /api/document-studio/examples/{key}/thumbnail`).
 
-Neues Beispiel: Builder und `DesignExample` (CD-Tokens, Bilder) in `examples.py`, Namen und
-Beschreibungen unter `documentStudio.examples.items.<key>` in allen Sprachen, Vorschaubild
-erzeugen (Rendern mit Beispieldaten, erste Seite als PNG mit 48 ppi).
+Neues Design: Grundstil in `APPEARANCE_BASES` und den Schlüssel in `DESIGN_KEYS`/`AppearanceBase`,
+Builder und `DesignExample` in `examples.py`, Namen und Beschreibungen unter
+`documentStudio.examples.items.<key>` und `documentStudio.appearance.base.<key>` in allen
+Sprachen, Vorschaubild erzeugen (Rendern mit Beispieldaten, erste Seite als PNG mit 48 ppi),
+Golden-Szenario `appearance_<key>` mit `scripts/update-document-goldens.sh` anlegen.
+
+### Darstellung: Vererbung
+
+Typst bekommt je Block nur das aufgelöste Ergebnis (`brand.resolve_appearance`: Variante und
+Eckenradius je Elementart). Von allgemein nach speziell:
+
+1. Grundstil bzw. Design (`BrandTokens.appearance.base`)
+2. Brand-Profil je Elementart (`BrandTokens.appearance.elements`)
+3. Knoten der Vorlage (`DataBlockNode.appearance`)
+4. einzelner Baustein (`DataBlockNode.block_appearance`, nur im Knoten «Protokollinhalt»)
+
+Für Stufe 4 setzt der Protokoll-Provider an jedem Block die Herkunft in der Sitzungsvorlage
+(`source = "<TemplateElement.public_id>:<Block-ID der Elementdefinition>"`,
+`appearance.block_source`). Der Compiler legt `block_appearance[source]` je Feld über die
+Übersteuerung des Knotens (`appearance.merge_overrides`). `appearance` und `source` zählen nicht
+zum Inhalts-Hash (`hashing._without_design`). Die Schlüssel sind nur in einer Gestaltung
+eindeutig, die allein einer Sitzungsvorlage gehört (`template_service.session_owners`). Der
+Designer lädt deren Traktanden und Bausteine über
+`GET /api/document-templates/{id}/protocol-structure` (`owned: false` für gemeinsame
+Gestaltungen). Welche Elementarten ein Baustein übersteuern kann, steht in
+`appearance.APPEARANCE_KINDS_BY_ELEMENT_TYPE`.
 
 Priorität beim Export:
 

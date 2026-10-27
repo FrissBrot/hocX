@@ -15,6 +15,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.element_types import element_type_code
 from app.documents import repository
+from app.documents.appearance import block_source
 from app.documents.catalog import (
     BlockSpec,
     ChartParams,
@@ -319,14 +320,6 @@ def _template_rows(ctx: BuildContext, template_element_ids: set[int]) -> dict[in
     return {template_element.id: (template_element, definition) for template_element, definition in rows}
 
 
-def _block_appearance(template_element: Any, block_id: Any) -> dict | None:
-    """Darstellung eines Bausteins aus der Vorlage (TemplateElement.configuration_json.block_appearance)."""
-    if template_element is None or block_id is None:
-        return None
-    entry = ((template_element.configuration_json or {}).get("block_appearance") or {}).get(str(block_id))
-    return dict(entry) if entry else None
-
-
 def _definition_block_id(definition: Any, source_sort_index: Any) -> Any:
     if definition is None or source_sort_index is None:
         return None
@@ -336,9 +329,11 @@ def _definition_block_id(definition: Any, source_sort_index: Any) -> Any:
     return None
 
 
-def _apply_appearance(mapped: Any, appearance: dict | None) -> Any:
-    if mapped is not None and appearance:
-        mapped.appearance = appearance
+def _with_source(mapped: Any, template_element: Any, block_id: Any) -> Any:
+    """Herkunft des Bausteins in der Sitzungsvorlage: Schlüssel seiner Darstellung im Designer
+    (DataBlockNode.block_appearance, vom Compiler angewendet)."""
+    if mapped is not None and template_element is not None:
+        mapped.source = block_source(template_element.public_id, block_id)
     return mapped
 
 
@@ -381,7 +376,7 @@ def element_blocks(ctx: BuildContext, protocol: Protocol | None, *, element_ref:
             if not block.export_visible_snapshot:
                 continue
             source = (block.configuration_snapshot_json or {}).get("source_sort_index")
-            mapped = _apply_appearance(map_block(ctx, protocol, block), _block_appearance(template_element, _definition_block_id(definition, source)))
+            mapped = _with_source(map_block(ctx, protocol, block), template_element, _definition_block_id(definition, source))
             if mapped is not None:
                 children.append(mapped)
         # Anliegen (agenda_item) erscheinen ohne eigenen Block unter ihrem Punkt.
@@ -426,6 +421,42 @@ def _placeholder_block(block: dict) -> RichTextBlock:
     return RichTextBlock(title=title, level=2, hide_if_empty=False, content=markdown_to_rich(str(block.get("default_content") or "")))
 
 
+def session_template_structure(db: Any, template: Any) -> list[dict[str, Any]]:
+    """Traktanden und exportierte Bausteine einer Sitzungsvorlage für den Designer: je Baustein
+    Schlüssel (block_source), Titel, Element-Typ und die Elementarten, deren Darstellung er
+    übersteuern kann. Sitzungsnotizen erscheinen nie im PDF und fehlen deshalb."""
+    from app.documents.appearance import APPEARANCE_KINDS_BY_ELEMENT_TYPE
+    from app.models import ElementDefinition, TemplateElement
+    from app.services.block_behavior import resolve_block_behavior
+
+    rows = db.execute(
+        select(TemplateElement, ElementDefinition)
+        .join(ElementDefinition, ElementDefinition.id == TemplateElement.element_definition_id)
+        .where(TemplateElement.template_id == template.id, ElementDefinition.tenant_id == template.tenant_id)
+        .order_by(TemplateElement.sort_index.asc(), TemplateElement.id.asc())
+    )
+    result: list[dict[str, Any]] = []
+    for template_element, definition in rows:
+        title = definition.title
+        if trim_section_name(title).lower() == SESSION_NOTES_SECTION:
+            continue
+        blocks = []
+        definition_blocks = sorted((definition.configuration_json or {}).get("blocks", []), key=lambda item: (item.get("sort_index", 0), item.get("id", 0)))
+        for block in definition_blocks:
+            code = element_type_code(block["element_type_id"])
+            if code == "session_notes" or not resolve_block_behavior(template_element.configuration_json, block)["export_visible"]:
+                continue
+            blocks.append({
+                "key": block_source(template_element.public_id, block.get("id")),
+                "title": block.get("block_title") or block.get("title") or "",
+                "element_type": code,
+                "element_type_id": block["element_type_id"],
+                "appearance_kinds": list(APPEARANCE_KINDS_BY_ELEMENT_TYPE.get(code, ())),
+            })
+        result.append({"id": template_element.public_id, "title": title, "blocks": blocks})
+    return result
+
+
 def session_template_blocks(ctx: BuildContext, protocol: Protocol | None, *, include_session_todos: bool = True, invitation_only: bool = False) -> list[ElementModel]:
     """Vorschau im Vorlagen-Editor: Traktanden und Bausteine in Reihenfolge und Sichtbarkeit der
     Vorlage (ungespeicherte Änderungen sind dort sofort gespeichert), Inhalte aus der gewählten
@@ -463,11 +494,10 @@ def session_template_blocks(ctx: BuildContext, protocol: Protocol | None, *, inc
         for block in definition_blocks:
             if not resolve_block_behavior(template_element.configuration_json, block)["export_visible"]:
                 continue
-            appearance = _block_appearance(template_element, block.get("id"))
             matches = existing.get(block.get("sort_index"), [])
             if matches and protocol is not None:
                 for match in matches:
-                    mapped = _apply_appearance(map_block(ctx, protocol, match), appearance)
+                    mapped = _with_source(map_block(ctx, protocol, match), template_element, block.get("id"))
                     if mapped is not None:
                         children.append(mapped)
                 continue
@@ -476,9 +506,9 @@ def session_template_blocks(ctx: BuildContext, protocol: Protocol | None, *, inc
                 mapped = map_block(ctx, protocol, _transient_block(definition, block)) if protocol is not None or code in _CONFIG_ONLY_TYPES else None
                 if mapped is not None:
                     mapped.hide_if_empty = False
-                    children.append(_apply_appearance(mapped, appearance))
+                    children.append(_with_source(mapped, template_element, block.get("id")))
                     continue
-            children.append(_apply_appearance(_placeholder_block(block), appearance))
+            children.append(_with_source(_placeholder_block(block), template_element, block.get("id")))
         if element is not None:
             children.extend(agenda_by_element.get(element.id, []))
             tag = trim_section_name(section_title).lower()

@@ -11,10 +11,11 @@ import { useTranslations } from "next-intl";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 
+import { BlockAppearancePanel } from "@/components/documents/designer/block-appearance-panel";
 import { brandView, mm } from "@/components/documents/designer/brand-preview";
 import { Canvas, parseDropId } from "@/components/documents/designer/canvas";
 import { useCanvasData } from "@/components/documents/designer/canvas-data";
-import { DesignerProvider, DesignerState } from "@/components/documents/designer/designer-context";
+import { DesignerProvider, DesignerState, SelectedBlock } from "@/components/documents/designer/designer-context";
 import { DocumentPanel } from "@/components/documents/designer/document-panel";
 import { InsertSource, LeftPanel } from "@/components/documents/designer/left-panel";
 import { PreviewPanel } from "@/components/documents/designer/preview-panel";
@@ -25,7 +26,7 @@ import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { ApiError } from "@/lib/api/client";
-import { apiErrorMessage, Brand, Capabilities, Diagnostic, DocumentAsset, DocumentTemplateDetail, EditorMode, ReusableComponent, studioApi, StudioCatalog } from "@/lib/documents/api";
+import { apiErrorMessage, Brand, Capabilities, Diagnostic, DocumentAsset, DocumentTemplateDetail, EditorMode, ProtocolStructure, ReusableComponent, studioApi, StudioCatalog } from "@/lib/documents/api";
 import { useHistory } from "@/lib/documents/history";
 import { Area, BrandTokens, duplicateNode, insertNode, locate, moveNode, moveWithinParent, pageDimensions, removeNode, TemplateContent, TemplateNode, withFreshIds } from "@/lib/documents/layout";
 
@@ -74,7 +75,18 @@ function DesignerWorkspace({ initial, sessionTemplateId }: { initial: Loaded; se
   const [template, setTemplate] = useState(initial.template);
   const history = useHistory<TemplateContent>(initial.template.content);
   const content = history.value;
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedIdState] = useState<string | null>(null);
+  const [selectedBlock, setSelectedBlock] = useState<SelectedBlock | null>(null);
+  const [protocolStructure, setProtocolStructure] = useState<ProtocolStructure | null>(null);
+  // Knoten und Baustein schliessen sich aus: rechts steht immer genau eine Auswahl
+  const setSelectedId = useCallback((id: string | null) => {
+    setSelectedBlock(null);
+    setSelectedIdState(id);
+  }, []);
+  const selectBlock = useCallback((block: SelectedBlock | null) => {
+    setSelectedIdState(null);
+    setSelectedBlock(block);
+  }, []);
   const [mode, setModeState] = useState<EditorMode>("simple");
   const [view, setView] = useState<ViewMode>("split");
   const [zoom, setZoom] = useState(0.8);
@@ -108,6 +120,13 @@ function DesignerWorkspace({ initial, sessionTemplateId }: { initial: Loaded; se
   const editable = template.editable;
 
   useEffect(() => setModeState(readMode()), []);
+  // Bausteine der Sitzungsvorlage für die Darstellung je Baustein (nur bei eigener Gestaltung)
+  useEffect(() => {
+    studioApi
+      .protocolStructure(initial.template.id)
+      .then((loaded) => setProtocolStructure(loaded ?? null))
+      .catch(() => setProtocolStructure({ owned: false, session_template_name: null, elements: [] }));
+  }, [initial.template.id]);
   const setMode = (next: EditorMode) => {
     setModeState(next);
     try {
@@ -489,6 +508,9 @@ function DesignerWorkspace({ initial, sessionTemplateId }: { initial: Loaded; se
     setProtocolId,
     canvasData,
     sessionTemplateId,
+    protocolStructure,
+    selectedBlock,
+    selectBlock,
   };
 
   const status = template.draft_revision ? "draft" : template.published_revision ? "published" : "unpublished";
@@ -552,7 +574,9 @@ function DesignerWorkspace({ initial, sessionTemplateId }: { initial: Loaded; se
               {view !== "design" && <PreviewPanel brandId={template.brand_id} onDiagnostics={setPreviewDiagnostics} />}
             </main>
             <aside className="studio-right" aria-label={t("props.title")}>
-              {selectedId && locate(content, selectedId) ? (
+              {selectedBlock && locate(content, selectedBlock.nodeId) ? (
+                <BlockAppearancePanel />
+              ) : selectedId && locate(content, selectedId) ? (
                 <PropertiesPanel />
               ) : (
                 <DocumentPanel brandId={template.brand_id} brandMode={brandMode} onBrandChange={(id) => void changeBrand(id)} onBrandModeChange={setBrandMode} brandLocked={!!template.published_revision && !initial.capabilities.publish_templates} />

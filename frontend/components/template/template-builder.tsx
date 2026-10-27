@@ -1139,6 +1139,7 @@ export function TemplateEditor({
                 responsibilityTitle={currentResponsibilityTitle}
                 blockEditorData={blockEditorData}
                 cycleConfigs={availableCycleConfigs}
+                onOpenDesign={() => setView("pdf")}
               />
             ),
           },
