@@ -822,6 +822,11 @@ input[type="file"] {
   color: var(--muted);
   cursor: pointer;
 }
+.upload-gps-option input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 
 .upload-privacy-note {
   margin: var(--space-2) 0 var(--space-3);

@@ -928,7 +928,7 @@ button:disabled {
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
   border: 1.5px solid var(--border-strong, var(--border));
-  background: var(--bg);
+  background-color: var(--bg);
   color: var(--text);
   font-family: inherit;
   font-size: var(--text-md);
@@ -1488,6 +1488,95 @@ input[type="radio"] {
   min-height: 0;
   margin: 0;
   padding: 0;
+}
+
+/* Grundoptik der nativen Steuerelemente (Dropdown, Checkbox/Radio, Farbwähler), auch ausserhalb
+   von .grid, .modal-content, Studio usw. Ohne diese Regeln erscheinen sie in neueren Bereichen
+   im Browser-Standard (grauer System-Select, blaue Checkbox, Farbfeld mit Systemrahmen).
+   :where() hat Spezifität 0: jede Kontext- oder Feature-Klasse gewinnt weiterhin. Feature-Regeln
+   für Selects setzen deshalb `background-color` statt `background`, sonst verschwindet der Pfeil. */
+:where(select) {
+  max-width: 100%;
+  min-height: 36px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--panel-solid);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color var(--dur-base) ease, box-shadow var(--dur-base) ease;
+}
+:where(select:not([multiple]):not([size])) {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: var(--space-6);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+:where(select:hover:not(:focus):not(:disabled)) {
+  border-color: var(--border-strong);
+}
+:where(select:focus) {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+:where(select:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+:where(select option) {
+  background-color: var(--panel-solid);
+  color: var(--text);
+}
+
+:where(input[type="checkbox"], input[type="radio"]) {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+:where(input[type="checkbox"]:disabled, input[type="radio"]:disabled) {
+  cursor: not-allowed;
+}
+
+/* Farbwähler: feste Grösse statt der Feldbreite aus .grid input, Farbfeld ohne Systemrahmen. */
+input[type="color"] {
+  flex-shrink: 0;
+  width: 44px;
+  min-width: 44px;
+  height: 36px;
+  min-height: 36px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--panel-solid);
+  cursor: pointer;
+  transition: border-color var(--dur-base) ease, box-shadow var(--dur-base) ease;
+}
+input[type="color"]:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+input[type="color"]:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: var(--radius-xs);
+}
+input[type="color"]::-moz-color-swatch {
+  border: none;
+  border-radius: var(--radius-xs);
 }
 
 .checkbox-row {
@@ -5360,20 +5449,20 @@ input[type="radio"] {
 .structured-list-table-flat input,
 .structured-list-table-flat textarea,
 .structured-list-table-flat select {
-  background: transparent;
+  background-color: transparent;
   border-color: transparent;
   box-shadow: none;
 }
 .structured-list-table-flat input:hover,
 .structured-list-table-flat textarea:hover,
 .structured-list-table-flat select:hover {
-  background: color-mix(in srgb, var(--panel-solid) 80%, transparent);
+  background-color: color-mix(in srgb, var(--panel-solid) 80%, transparent);
   border-color: var(--border);
 }
 .structured-list-table-flat input:focus,
 .structured-list-table-flat textarea:focus,
 .structured-list-table-flat select:focus {
-  background: color-mix(in srgb, var(--panel-solid) 92%, transparent);
+  background-color: color-mix(in srgb, var(--panel-solid) 92%, transparent);
   border-color: var(--accent);
   box-shadow: var(--focus-ring);
 }
@@ -7368,7 +7457,7 @@ input[type="radio"] {
 }
 .gallery-upload-fields label { display: grid; gap: var(--space-2); min-width: 0; }
 .gallery-upload-fields input, .gallery-upload-fields select { width: 100%; min-width: 0; height: 42px; padding: var(--space-2) var(--space-3); font-size: var(--text-base); font-weight: 400; border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-md); }
-.gallery-upload-modal .gallery-upload-fields input, .gallery-upload-modal .gallery-upload-fields select { background: var(--panel-solid); }
+.gallery-upload-modal .gallery-upload-fields input, .gallery-upload-modal .gallery-upload-fields select { background-color: var(--panel-solid); }
 
 /* Dropzone */
 .gallery-upload-dropzone {
@@ -12973,7 +13062,7 @@ input[type="radio"] {
    Import daher keine Variante automatisch anhand von Treffern auswählen konnte. */
 .word-import-select-warning {
   border-color: color-mix(in srgb, var(--warning) 45%, var(--border-strong) 55%);
-  background: var(--warning-bg);
+  background-color: var(--warning-bg);
   color: var(--warning-fg);
 }
 
@@ -22096,10 +22185,10 @@ a.mobile-list-row { color: var(--text); }
   font-size: var(--text-base);
   font-weight: 500;
   color: var(--muted);
-  background: transparent;
+  background-color: transparent;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-1) var(--space-6) var(--space-1) var(--space-2);
   cursor: pointer;
   transition: color var(--dur-fast) var(--ease-out);
 }
@@ -23813,18 +23902,7 @@ a.mobile-list-row { color: var(--text); }
   border-color: var(--accent);
   box-shadow: var(--focus-ring);
 }
-.studio-designer input[type="color"],
-.studio-modal input[type="color"],
-.studio-brand-layout input[type="color"] {
-  width: 44px;
-  min-width: 44px;
-  height: 36px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--panel-solid);
-  cursor: pointer;
-}
+/* Farbwähler: Grundoptik siehe input[type="color"] oben. */
 
 /* Gemeinsame Bausteine */
 .studio-header-actions {
